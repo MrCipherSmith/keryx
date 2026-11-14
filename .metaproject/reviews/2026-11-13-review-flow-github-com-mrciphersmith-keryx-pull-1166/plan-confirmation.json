@@ -1,0 +1,18 @@
+{
+  "planKey": "7bed077d27606a2b",
+  "dispatches": 62,
+  "minutes": [
+    32,
+    80
+  ],
+  "quote": "Подтверждаешь план раунда 2 по PR 1166: 10 ревьюеров, 10 slices (fix 1, new 5, second-look 4), 62 диспатча в плане, 32-80 минут? Slice-03 и slice-05 (код main из merge) я не диспатчу, итого ~44 диспатча, их покрытие ты снимешь при закрытии.: yes",
+  "confirmedVia": "host-question",
+  "at": "2026-11-13T07:19:06.692Z",
+  "hostQuestion": {
+    "source": "claude-code",
+    "ref": "confirm-plan-r2b",
+    "questionText": "Подтверждаешь план раунда 2 по PR 1166: 10 ревьюеров, 10 slices (fix 1, new 5, second-look 4), 62 диспатча в плане, 32-80 минут? Slice-03 и slice-05 (код main из merge) я не диспатчу, итого ~44 диспатча, их покрытие ты снимешь при закрытии.",
+    "answerText": "yes",
+    "time": "2026-11-13T07:19:06.692Z"
+  }
+}

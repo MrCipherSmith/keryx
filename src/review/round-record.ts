@@ -156,7 +156,7 @@ export type PackageHashes = { manifestSha256: string; findingsSha256: string | n
 export const MANIFEST_IDENTITY_FIELDS = ["schemaVersion", "reviewId", "mode", "target", "flow", "createdAt", "operatorGate", "roundRecord"] as const;
 
 /** JSON with object keys sorted at every level: one spelling per value, whatever order a writer used. */
-function canonicalJson(value: unknown): string {
+export function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
   if (value !== null && typeof value === "object") {
     const entries = Object.entries(value).filter(([, item]) => item !== undefined).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));

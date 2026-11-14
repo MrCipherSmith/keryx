@@ -1,0 +1,56 @@
+STATUS: DONE
+
+```json keryx:verifications
+{
+  "status": "DONE",
+  "verifier": "review-verifier",
+  "summary": "1 finding (SEC-1), 1 executed, confirmed; the hole predates the PR (pre-existing), and flow 488 narrows it rather than widening it",
+  "verifications": [
+    {
+      "finding": "SEC-1",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/verify-SEC-1-1.txt: keryx review verify-run --finding SEC-1 -- bun test research-evidence/sec1-probe.test.ts --timeout 30000 (source kept as sec1-probe.test.ts.txt) -> 4 pass, 0 fail. Control: unverified major, plain completeManagedReview(dir, ref, {}) refused on item 4. (a) same package plus a hand-written manifest.json readiness_waivers [{item:verifier,...}] -> status closed, verdict READY, verifier waived. (b) PR-bound package with writeRoundRecord stamp, PR head moved: control refused on item 7; after editing manifest.json target.head to the PR head, roundRecordTampered returned undefined and complete closed READY, head pass, head_override undefined. (c) findings.json major with verification:{} -> closed, 'all verified'. PRE-EXISTING, not introduced or widened: git diff 66ee001 HEAD leaves readiness.ts:479-485 (waiver map -> waived, no provenance) and verifierCheck's record(finding.verification) test unchanged; round-record.ts is not in the diff (stamp hashes round.json/prior_findings.json only, also at base); the head gate compared manifest target.head at base too. At base each gate was weaker: verifier passed on a report.md 'Not verified: N' line, head passed on a report.md first line naming the SHA and saying the PR moved, and any waiver of files-covered/blast-radius/reviewers/ledger dropped ALL research errors (base managed.ts waivedRadius); this PR removes the first two and scopes the third per item (packageResearchErrorsTagged). The mechanism is real; its location_class is pre-existing (out of diff), not in-diff."
+    }
+  ],
+  "stats": { "confirmed": 1, "refuted": 0, "unverifiable": 0, "not_checked": 0 }
+}
+```
+
+# Verification Report
+
+## Method mix
+- execution: 1 (SEC-1)
+- site-check: 0
+- reasoning (capped to unverifiable): 0
+- not checked: 0
+
+The ARCH-1 entry already in research-evidence/verifications.json was kept, and the SEC-1 claim was appended to it. The stats there now read confirmed 2.
+
+## Confirmed
+**[SEC-1] Operator-only gates trust agent-writable package JSON.** The probe reproduced all three paths. A plain `completeManagedReview(dir, ref, {})` (no flags, no TTY, no card, no --answered-by) closes the round READY in each case:
+- (a) A hand-added `readiness_waivers` entry in manifest.json makes item `verifier` waived.
+- (b) A rewritten `target.head` makes item `head` pass against a moved PR. `roundRecordTampered` returns undefined, and no `head_override` is recorded.
+- (c) `"verification": {}` on a major in findings.json passes item 4 as "all verified".
+
+Evidence: research-evidence/verify-SEC-1-1.txt (4 pass, 0 fail). The probe source is research-evidence/sec1-probe.test.ts.txt.
+
+## Pre-existing, not a defect of this diff
+The verdict confirms the mechanism. It does not confirm that the PR introduced it. Checked with `git diff 66ee001 HEAD`:
+- readiness.ts:479-485 (waiver lookup, which marks any manifest entry waived without checking provenance) is unchanged from base.
+- `verifierCheck`'s `record(finding.verification) === undefined` test is unchanged from base.
+- src/review/round-record.ts is not in the diff. At base too, the stamp hashed only round.json and prior_findings.json. `MANIFEST_IDENTITY_FIELDS` (which includes target) is used only by the post-close round registry, not by `roundRecordTampered`. No manifest or findings digest or signature covers these fields before close.
+- The head gate read manifest `target.head` at base too.
+
+At base every one of these gates was easier to bypass than at head:
+- `verifier` passed on a report.md `Not verified: N` line.
+- `head` passed on a report.md first line that named the reviewed SHA and said the PR moved.
+- Any waiver of files-covered, blast-radius, reviewers or ledger dropped ALL research errors (`waivedRadius` in base managed.ts).
+
+The PR removes the first two and scopes the third per item (`packageResearchErrorsTagged`). The forged-JSON route is the same one that existed at base, so the PR narrows the hole rather than widening it.
+
+Recommended handling for the orchestrator: keep SEC-1 as a real finding, but classify it location_class pre-existing (out-of-diff) rather than in-diff. A follow-up issue should cover operator-decision provenance: confirmedVia "terminal", registry-backed waivers, `target` in the round stamp, and a verifier-produced verification. This verifier cannot change the severity or the class itself.
+
+Successor question (prose only): does any test build a package where a waiver, head or verification was written into the JSON directly and expect the close to refuse? None does today. round-trip.test.ts writes `verification` by hand to pass item 4, which pins the permissive behaviour.
+
+Routing audit: graph_used: no (not-relevant: bounded single-finding verification at named sites); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg; raw git diff with a keryx:raw marker, because the exact base-vs-head lines were the evidence); raw_rg_used: no.

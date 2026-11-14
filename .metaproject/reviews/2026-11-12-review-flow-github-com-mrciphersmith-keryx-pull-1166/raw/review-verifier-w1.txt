@@ -1,0 +1,41 @@
+STATUS: DONE
+
+```json keryx:verifications
+{
+  "status": "DONE",
+  "verifier": "review-verifier",
+  "summary": "1 finding, 1 executed, confirmed",
+  "verifications": [
+    {
+      "finding": "ARCH-1",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/verify-ARCH-1-1.txt: keryx review verify-run --finding ARCH-1 -- bun test research-evidence/arch1-probe.test.ts (source kept as arch1-probe.test.ts.txt) -> 2 pass, 0 fail. For a ready ingestReady package with manifest.artifacts.research=\"elsewhere.json\": completeManagedReview refused 'Cannot complete managed review; invalid research artifact locator', status stayed draft, then publishReview without partial returned posted=true partial=false readiness=READY posts=1. Same with artifacts.reviewerDispatch deleted: complete refused 'research.json records a reviewer dispatch but manifest.json does not declare it', publish posted=true partial=false READY. Code: publish.ts:175 calls evaluateCloseGates with no beforeReadiness; the research gate exists only in managed.ts:1113-1125; publishReview (publish.ts:165-189) and runPublish (commands/review.ts:4881-4917) have no closed-status precondition; computeReadiness reads research.json by fixed path (readiness.ts:448) and ledgerCheck runs only researchErrors (readiness.ts:316)."
+    }
+  ],
+  "stats": { "confirmed": 1, "refuted": 0, "unverifiable": 0, "not_checked": 0 }
+}
+```
+
+# Verification Report
+
+## Method mix
+- execution: 1
+- site-check: 0
+- reasoning (capped to unverifiable): 0
+- not checked: 0
+
+## Refuted
+None.
+
+## Confirmed
+[ARCH-1] `review publish` skips the research-error gate that `review complete` enforces. Publish does not require a closed package: neither `publishReview` (src/review/publish.ts:165-189) nor `runPublish` (src/commands/review.ts:4881-4917) checks `manifest.status`. The `review_publish` tool path in src/commands/operator-confirm-review.ts:210/245 also calls `publishReview`. Its closed-status checks (lines 801 and 869) belong to the complete flow. The only gate publish runs is `evaluateCloseGates` at publish.ts:175, called without `beforeReadiness`. The research gate (`packageResearchErrorsTagged`) lives only in that callback, at managed.ts:1113-1125. Readiness does not cover the gap: it reads `research.json` by a fixed path (readiness.ts:448), and `ledgerCheck` runs `researchErrors` alone (readiness.ts:316).
+
+Reproduced with `keryx review verify-run --package <PKG> --finding ARCH-1 -- "bun test ./<PKG>/research-evidence/arch1-probe.test.ts --timeout 30000"`, which exited 0 with 2 pass and 0 fail. The output is saved in research-evidence/verify-ARCH-1-1.txt. Both cases start from a fully ready fixture (`ingestReady`):
+- `artifacts.research = "elsewhere.json"`: complete refused with "invalid research artifact locator" and the status stayed draft. Publish without `--partial` then gave posted=true, partial=false, readiness=READY, 1 post.
+- `artifacts.reviewerDispatch` deleted: complete refused with "research.json records a reviewer dispatch but manifest.json does not declare it". Publish then gave posted=true, partial=false, readiness=READY.
+
+The probe source is kept as research-evidence/arch1-probe.test.ts.txt. It was renamed after the run so the suite does not collect it. No source files were edited.
+
+## Unverifiable
+None.

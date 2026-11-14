@@ -1,0 +1,92 @@
+{
+  "judge": "review-premise",
+  "source": "follow-up-issue",
+  "branch": "worktree-review-process-audit",
+  "base_sha": "66ee00117",
+  "findings": [
+    {
+      "id": "A-01",
+      "url": "docs/analysis/review-process-audit-2026-11-12.md",
+      "reviewer": "process-audit-2026-11-12",
+      "severity": "major",
+      "source": "follow-up-issue",
+      "file": "src/review/readiness.ts",
+      "line": 235,
+      "quote": "if (stated !== null && Number(stated[1]) >= unverified.length) return ok(",
+      "problem": "The readiness item `verifier` passes unverified blocker/major findings when report.md, a file the reviewing agent writes, contains `Not verified: N` with N at least the unverified count. No operator act is involved, so on a host without operator cards the agent alone satisfies the gate.",
+      "suggested_fix": "Treat the unverified state as a readiness waiver that needs an operator card or a TTY, instead of accepting the report line."
+    },
+    {
+      "id": "A-02",
+      "url": "docs/analysis/review-process-audit-2026-11-12.md",
+      "reviewer": "process-audit-2026-11-12",
+      "severity": "major",
+      "source": "follow-up-issue",
+      "file": "src/review/complete-head-gate.ts",
+      "line": 58,
+      "quote": "if (names && SAYS_SO.test(first)) return { warnings: unusable };",
+      "problem": "The moved-head / merged-PR gate of `review complete` passes when the first line of report.md names the reviewed SHA and says the PR moved. The agent writes that line, so the agent alone can close a round whose PR moved or merged.",
+      "suggested_fix": "Require an operator waiver (card or TTY) to close a round on a moved or merged head."
+    },
+    {
+      "id": "A-03",
+      "url": "docs/analysis/review-process-audit-2026-11-12.md",
+      "reviewer": "process-audit-2026-11-12",
+      "severity": "major",
+      "source": "follow-up-issue",
+      "file": "src/review/managed.ts",
+      "line": 1055,
+      "quote": "manifest = { ...stored, target: { ...stored.target, head } };",
+      "problem": "`review complete --head <sha>` replaces the reviewed head recorded at `review start` with any 7-40 hex string, with only a warning. Passing the PR's current head makes the moved-head check in complete-head-gate.ts report no movement.",
+      "suggested_fix": "Accept --head only when it equals the recorded head or is an ancestor of it; refuse otherwise, naming both SHAs."
+    },
+    {
+      "id": "A-04",
+      "url": "docs/analysis/review-process-audit-2026-11-12.md",
+      "reviewer": "process-audit-2026-11-12",
+      "severity": "major",
+      "source": "follow-up-issue",
+      "file": "src/review/managed.ts",
+      "line": 1107,
+      "quote": "const researchProblems = waivedRadius ? [] : await packageResearchErrors(packageDir, manifest.artifacts, researchFindings);",
+      "problem": "A readiness waiver of any one of files-covered, blast-radius, reviewers or ledger empties the whole research-error list. The comment above says the waiver replaces the refusal 'for it', but every research error is dropped, including ones unrelated to the waived item.",
+      "suggested_fix": "Filter research errors by the item each belongs to and drop only those of waived items."
+    },
+    {
+      "id": "A-05",
+      "url": "docs/analysis/review-process-audit-2026-11-12.md",
+      "reviewer": "process-audit-2026-11-12",
+      "severity": "major",
+      "source": "follow-up-issue",
+      "file": "src/review/publish.ts",
+      "line": 153,
+      "quote": "const readiness = await computeReadiness(packageDir, options.readiness ?? {});",
+      "problem": "publishReview recomputes readiness but never runs the gates that live only on the complete path: the round-record tamper check (managed.ts:1039) and the evidence-level check (managed.ts:1075-1082). A package that `review complete` refuses can still be posted to GitHub.",
+      "suggested_fix": "One shared gate evaluation used by both complete and publish."
+    },
+    {
+      "id": "A-06",
+      "url": "docs/analysis/review-process-audit-2026-11-12.md",
+      "reviewer": "process-audit-2026-11-12",
+      "severity": "minor",
+      "source": "follow-up-issue",
+      "file": "src/review/completion-host.ts",
+      "line": 28,
+      "quote": "reported provenance, not a cryptographic attestation",
+      "problem": "An operator decision recorded through the host's own question tool (confirmedVia host-question) is the model's report of the operator's answer, yet the published review body does not tell readers that keryx did not verify it.",
+      "suggested_fix": "State in the published body which decisions were recorded via host-question and that keryx did not verify them."
+    },
+    {
+      "id": "A-07",
+      "url": "docs/analysis/review-process-audit-2026-11-12.md",
+      "reviewer": "process-audit-2026-11-12",
+      "severity": "major",
+      "source": "follow-up-issue",
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "line": 118,
+      "quote": "On `spawn_subagent` pass its tier as `model_tier` on every reviewer",
+      "problem": "The orchestrator skill tells keryx shell to pass `model_tier` (light|standard|deep) on reviewer dispatches. spawn_subagent ignores model_tier (src/harness/tool/builtin/spawn-subagent-tool.ts:1497-1498) and accepts model_class (light|standard|expert|frontier), which no review skill names. Every reviewer therefore runs on the routing default, not on the tier `keryx review tier` computed.",
+      "suggested_fix": "Switch the skill to model_class with a tier mapping and add a contract test that fails when a review skill names a spawn field the tool ignores."
+    }
+  ]
+}

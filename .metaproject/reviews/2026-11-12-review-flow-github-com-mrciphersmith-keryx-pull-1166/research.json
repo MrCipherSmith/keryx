@@ -1,0 +1,554 @@
+{
+  "version": 1,
+  "scopeReviewed": true,
+  "rawReconciled": true,
+  "obligations": [
+    {
+      "id": "review-architecture-w1:F-001",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-001 (The PR moves the moved-head escape out of report text: SKILL.md now says the report's first line 'un) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-architecture-w1:F-001",
+      "evidence": "raw/review-architecture-w1.txt#sha256:d8106445652e",
+      "reason": "reported by review-architecture as F-001; the same finding is canonical 2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-architecture-w1:F-001"
+    },
+    {
+      "id": "review-architecture-w1:F-002",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-002 (The new dispatch line maps tier `deep` to model_class `expert`. Step 6 in the same file still tells ) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-architecture-w1:F-002",
+      "evidence": "raw/review-architecture-w1.txt#sha256:d8106445652e",
+      "reason": "reported by review-architecture as F-002; the same finding is canonical 2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-architecture-w1:F-002"
+    },
+    {
+      "id": "review-architecture-w2:F-001",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding F-001 (The rule that maps a review tier to a spawn model class (light->light, standard->standard, deep->exp) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-architecture-w2:F-001",
+      "evidence": "raw/review-architecture-w2.txt#sha256:160a6556cf9c",
+      "reason": "reported by review-architecture as F-001; the same finding is canonical 2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-architecture-w2:F-001"
+    },
+    {
+      "id": "review-architecture-w2:F-002",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding F-002 (SPAWN_SUBAGENT_IGNORED_FIELDS is exported as the list of fields the tool accepts and ignores, and th) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-architecture-w2:F-002",
+      "evidence": "raw/review-architecture-w2.txt#sha256:160a6556cf9c",
+      "reason": "reported by review-architecture as F-002; the same finding is canonical 2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-architecture-w2:F-002"
+    },
+    {
+      "id": "review-architecture-w2:F-003",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding F-003 (head_override.confirmedVia enumerates tui-card, remote-card and host-question, but the only writer () real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-architecture-w2:F-003",
+      "evidence": "raw/review-architecture-w2.txt#sha256:160a6556cf9c",
+      "reason": "reported by review-architecture as F-003; the same finding is canonical 2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-architecture-w2:F-003"
+    },
+    {
+      "id": "review-architecture-w2:F-004",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding F-004 (The new JSDoc + constant were inserted between the existing 'Create the `spawn_subagent` tool bound ) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-architecture-w2:F-004",
+      "evidence": "raw/review-architecture-w2.txt#sha256:160a6556cf9c",
+      "reason": "reported by review-architecture as F-004; the same finding is canonical 2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-architecture-w2:F-004"
+    },
+    {
+      "id": "review-architecture-w3:ARCH-1",
+      "source": "raw/review-architecture-w3.txt",
+      "question": "Is review-architecture finding ARCH-1 (The shared close gate does not hold all of the close refusals. close-gates.ts says 'Both commands no) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-architecture-w3:ARCH-1",
+      "evidence": "raw/review-architecture-w3.txt#sha256:2f294e645d93",
+      "reason": "reported by review-architecture as ARCH-1; the same finding is canonical 2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-architecture-w3:ARCH-1"
+    },
+    {
+      "id": "review-architecture-w3:ARCH-2",
+      "source": "raw/review-architecture-w3.txt",
+      "question": "Is review-architecture finding ARCH-2 (research.ts now encodes readiness item ids (`ledger`, `reviewers`, `files-covered`, `blast-radius`) ) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-architecture-w3:ARCH-2",
+      "evidence": "raw/review-architecture-w3.txt#sha256:2f294e645d93",
+      "reason": "reported by review-architecture as ARCH-2; the same finding is canonical 2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-architecture-w3:ARCH-2"
+    },
+    {
+      "id": "review-architecture-w3:ARCH-3",
+      "source": "raw/review-architecture-w3.txt",
+      "question": "Is review-architecture finding ARCH-3 (`hostQuestionNotice` re-implements the research.json coverage-waiver lookup (`dispatch.coverageWaive) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-architecture-w3:ARCH-3",
+      "evidence": "raw/review-architecture-w3.txt#sha256:2f294e645d93",
+      "reason": "reported by review-architecture as ARCH-3; the same finding is canonical 2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-architecture-w3:ARCH-3"
+    },
+    {
+      "id": "review-degradation-w1:F-001",
+      "source": "raw/review-degradation-w1.txt",
+      "question": "Is review-degradation finding F-001 (Step 6 (SKILL.md:104, unchanged) defines the review tier as relative: '`standard` = your session mod) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-degradation-w1:F-001",
+      "evidence": "raw/review-degradation-w1.txt#sha256:da6b13283773",
+      "reason": "reported by review-degradation as F-001; the same finding is canonical 2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-degradation-w1:F-001"
+    },
+    {
+      "id": "review-degradation-w2:F-001",
+      "source": "raw/review-degradation-w2.txt",
+      "question": "Is review-degradation finding F-001 (`keryx review --help` (the `--head:` block, directly below the help lines this slice edits for --hea) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-degradation-w2:F-001",
+      "evidence": "raw/review-degradation-w2.txt#sha256:4bf31fe4eec5",
+      "reason": "reported by review-degradation as F-001; the same finding is canonical 2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-degradation-w2:F-001"
+    },
+    {
+      "id": "review-degradation-w2:F-002",
+      "source": "raw/review-degradation-w2.txt",
+      "question": "Is review-degradation finding F-002 (The new export and its JSDoc sit between the existing JSDoc \"Create the `spawn_subagent` tool bound ) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-degradation-w2:F-002",
+      "evidence": "raw/review-degradation-w2.txt#sha256:4bf31fe4eec5",
+      "reason": "reported by review-degradation as F-002; the same finding is canonical 2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-degradation-w2:F-002"
+    },
+    {
+      "id": "review-degradation-w2:F-003",
+      "source": "raw/review-degradation-w2.txt",
+      "question": "Is review-degradation finding F-003 (Pre-existing: the bundled rule model-selection.mdc still says `spawn_subagent` takes a `model_tier` ) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-degradation-w2:F-003",
+      "evidence": "raw/review-degradation-w2.txt#sha256:4bf31fe4eec5",
+      "reason": "reported by review-degradation as F-003; the same finding is canonical 2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-degradation-w2:F-003"
+    },
+    {
+      "id": "review-degradation-w3:DEG-1",
+      "source": "raw/review-degradation-w3.txt",
+      "question": "Is review-degradation finding DEG-1 (The change removed both callers of `withoutPartialHeader`: managed.ts no longer passes `report: with) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-degradation-w3:DEG-1",
+      "evidence": "raw/review-degradation-w3.txt#sha256:4d76292ec12e",
+      "reason": "reported by review-degradation as DEG-1; the same finding is canonical 2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-degradation-w3:DEG-1"
+    },
+    {
+      "id": "review-degradation-w3:DEG-2",
+      "source": "raw/review-degradation-w3.txt",
+      "question": "Is review-degradation finding DEG-2 (The diff adds src/review/close-gates.test-helpers.ts, which exports HEAD, MOVED, PR, EVIDENCE, the `) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-degradation-w3:DEG-2",
+      "evidence": "raw/review-degradation-w3.txt#sha256:4d76292ec12e",
+      "reason": "reported by review-degradation as DEG-2; the same finding is canonical 2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-degradation-w3:DEG-2"
+    },
+    {
+      "id": "review-logic-w1:F-001",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-001 (T6's title still states the ancestor rule, but the operator decision (journal: A-03 answered 'Operat) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-logic-w1:F-001",
+      "evidence": "raw/review-logic-w1.txt#sha256:db863f12e76a",
+      "reason": "reported by review-logic as F-001; the same finding is canonical 2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-logic-w1:F-001"
+    },
+    {
+      "id": "review-logic-w2:F-001",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is review-logic finding F-001 (This diff rewrote item 4 to say a report line no longer passes it, but left item 7 unchanged. After ) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-logic-w2:F-001",
+      "evidence": "raw/review-logic-w2.txt#sha256:7dfc3176636b",
+      "reason": "reported by review-logic as F-001; the same finding is canonical 2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-logic-w2:F-001"
+    },
+    {
+      "id": "review-logic-w2:F-002",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is review-logic finding F-002 (With `model_class` omitted, spawn-subagent-tool.ts:1610-1612 runs `runProductionRoutingClassificatio) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-logic-w2:F-002",
+      "evidence": "raw/review-logic-w2.txt#sha256:7dfc3176636b",
+      "reason": "reported by review-logic as F-002; the same finding is canonical 2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-logic-w2:F-002"
+    },
+    {
+      "id": "review-logic-w3:F-001",
+      "source": "raw/review-logic-w3.txt",
+      "question": "Is review-logic finding F-001 (runComplete validates --head-reason only for an empty value and for a missing TTY; it never checks t) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-logic-w3:F-001",
+      "evidence": "raw/review-logic-w3.txt#sha256:c8702afd8d49",
+      "reason": "reported by review-logic as F-001; the same finding is canonical 2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-logic-w3:F-001"
+    },
+    {
+      "id": "review-logic-w3:F-002",
+      "source": "raw/review-logic-w3.txt",
+      "question": "Is review-logic finding F-002 (Flow 488 removed the report-first-line escape from the head gate (complete-head-gate.ts no longer ma) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-logic-w3:F-002",
+      "evidence": "raw/review-logic-w3.txt#sha256:c8702afd8d49",
+      "reason": "reported by review-logic as F-002; the same finding is canonical 2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-logic-w3:F-002"
+    },
+    {
+      "id": "review-logic-w4:F-001",
+      "source": "raw/review-logic-w4.txt",
+      "question": "Is review-logic finding F-001 (Items 4 (verifier) and 7 (head) used to accept an agent-written escape: a `Not verified: N` line, or) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-logic-w4:F-001",
+      "evidence": "raw/review-logic-w4.txt#sha256:4b95c084ba26",
+      "reason": "reported by review-logic as F-001; the same finding is canonical 2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-logic-w4:F-001"
+    },
+    {
+      "id": "review-logic-w4:F-002",
+      "source": "raw/review-logic-w4.txt",
+      "question": "Is review-logic finding F-002 (`headReason` is read only inside the branch where the recorded head is a non-empty string different ) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-logic-w4:F-002",
+      "evidence": "raw/review-logic-w4.txt#sha256:4b95c084ba26",
+      "reason": "reported by review-logic as F-002; the same finding is canonical 2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-logic-w4:F-002"
+    },
+    {
+      "id": "review-performance-w3:PERF-001",
+      "source": "raw/review-performance-w3.txt",
+      "question": "Is review-performance finding PERF-001 (Before flow 488, a waiver of files-covered/blast-radius/reviewers/ledger skipped packageResearchErro) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-performance-w3:PERF-001",
+      "evidence": "raw/review-performance-w3.txt#sha256:7cbe4490ed5e",
+      "reason": "reported by review-performance as PERF-001; the same finding is canonical 2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-performance-w3:PERF-001"
+    },
+    {
+      "id": "review-security-code-w1:F-001",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is review-security-code finding F-001 (The Effect criterion states that no completion or publish gate can be satisfied by agent-written tex) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-security-code-w1:F-001",
+      "evidence": "raw/review-security-code-w1.txt#sha256:050fcc52d809",
+      "reason": "reported by review-security-code as F-001; the same finding is canonical 2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-security-code-w1:F-001"
+    },
+    {
+      "id": "review-security-code-w2:F-001",
+      "source": "raw/review-security-code-w2.txt",
+      "question": "Is review-security-code finding F-001 (The operator-reason requirement for `review complete --head` applies only when a head was recorded a) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-security-code-w2:F-001",
+      "evidence": "raw/review-security-code-w2.txt#sha256:f82171c68b27",
+      "reason": "reported by review-security-code as F-001; the same finding is canonical 2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-security-code-w2:F-001"
+    },
+    {
+      "id": "review-security-code-w2:F-002",
+      "source": "raw/review-security-code-w2.txt",
+      "question": "Is review-security-code finding F-002 (On the host-question path the operator answers only a plain `yes` (validateCompletionHost); the `--h) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-security-code-w2:F-002",
+      "evidence": "raw/review-security-code-w2.txt#sha256:f82171c68b27",
+      "reason": "reported by review-security-code as F-002; the same finding is canonical 2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-security-code-w2:F-002"
+    },
+    {
+      "id": "review-security-code-w3:SEC-1",
+      "source": "raw/review-security-code-w3.txt",
+      "question": "Is review-security-code finding SEC-1 (The operator-only gates this PR introduces are enforced only at the CLI-flag layer. The checks that ) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-security-code-w3:SEC-1",
+      "evidence": "raw/review-security-code-w3.txt#sha256:1b270ffdecb3",
+      "reason": "reported by review-security-code as SEC-1; the same finding is canonical 2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-security-code-w3:SEC-1"
+    },
+    {
+      "id": "review-security-code-w3:SEC-2",
+      "source": "raw/review-security-code-w3.txt",
+      "question": "Is review-security-code finding SEC-2 (Outside keryx shell (for example a Claude Code or Codex Bash tool, where none of these env markers i) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-security-code-w3:SEC-2",
+      "evidence": "raw/review-security-code-w3.txt#sha256:1b270ffdecb3",
+      "reason": "reported by review-security-code as SEC-2; the same finding is canonical 2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-security-code-w3:SEC-2"
+    },
+    {
+      "id": "review-testing-practices-w1:F-001",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-001 (After flow 488, `completeManagedReview(..., { head: MOVED })` with recorded head HEAD and no `headRe) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-testing-practices-w1:F-001",
+      "evidence": "raw/review-testing-practices-w1.txt#sha256:22b557f22cfc",
+      "reason": "reported by review-testing-practices as F-001; the same finding is canonical 2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-testing-practices-w1:F-001"
+    },
+    {
+      "id": "review-testing-practices-w1:F-002",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-002 (The docs added in this slice say a head relabel may come from `--answered-by` (cli-reference, review) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-testing-practices-w1:F-002",
+      "evidence": "raw/review-testing-practices-w1.txt#sha256:22b557f22cfc",
+      "reason": "reported by review-testing-practices as F-002; the same finding is canonical 2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-testing-practices-w1:F-002"
+    },
+    {
+      "id": "review-testing-practices-w1:F-003",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-003 (review-spawn-field-contract.test.ts scans `src/gdskills/bundled/skills/review` (REVIEW_SKILLS_ROOT) ) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-testing-practices-w1:F-003",
+      "evidence": "raw/review-testing-practices-w1.txt#sha256:22b557f22cfc",
+      "reason": "reported by review-testing-practices as F-003; the same finding is canonical 2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-testing-practices-w1:F-003"
+    },
+    {
+      "id": "review-testing-practices-w2:TP-1",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding TP-1 (AC4 scopes each research error to the readiness items that can waive it. Tests pin only the `ledger`) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-testing-practices-w2:TP-1",
+      "evidence": "raw/review-testing-practices-w2.txt#sha256:8ca5d2141204",
+      "reason": "reported by review-testing-practices as TP-1; the same finding is canonical 2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-testing-practices-w2:TP-1"
+    },
+    {
+      "id": "review-testing-practices-w2:TP-2",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding TP-2 (`verifyHeavyFindings` is the fixture that makes item 4 pass without a waiver, and its verification r) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-testing-practices-w2:TP-2",
+      "evidence": "raw/review-testing-practices-w2.txt#sha256:8ca5d2141204",
+      "reason": "reported by review-testing-practices as TP-2; the same finding is canonical 2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-testing-practices-w2:TP-2"
+    },
+    {
+      "id": "review-testing-practices-w2:TP-3",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding TP-3 (hostQuestionNotice (AC6) has four sources. The publish.test.ts AC6 block drives the readiness waiver) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-testing-practices-w2:TP-3",
+      "evidence": "raw/review-testing-practices-w2.txt#sha256:8ca5d2141204",
+      "reason": "reported by review-testing-practices as TP-3; the same finding is canonical 2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-testing-practices-w2:TP-3"
+    },
+    {
+      "id": "review-testing-practices-w2:TP-4",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding TP-4 (This test is named \"a first line that names the reviewed SHA and says the PR moved no longer lets it) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-testing-practices-w2:TP-4",
+      "evidence": "raw/review-testing-practices-w2.txt#sha256:8ca5d2141204",
+      "reason": "reported by review-testing-practices as TP-4; the same finding is canonical 2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-testing-practices-w2:TP-4"
+    },
+    {
+      "id": "review-testing-practices-w2:fu1",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is the parent follow-up from review-testing-practices done or ruled out, and where is that recorded? review-logic / review-security-code: readiness.ts verifierCheck counts any object in `finding.verification` as verified (`record(finding.verification) === undefined`). If findings.json can be written ",
+      "status": "finding",
+      "evidence": "research-evidence/verify-SEC-1-1.txt case (c): a major finding with \"verification\": {} in findings.json closes READY with 'all verified' (keryx review verify-run, 4 pass)",
+      "reason": "The follow-up asked whether verifierCheck counts any object as a verification; it does, and that is part (c) of review-security-code-w3:SEC-1, confirmed by execution and carried there.",
+      "finding": "review-security-code-w3:SEC-1"
+    }
+  ],
+  "dispatch": {
+    "version": 1,
+    "mode": "all",
+    "depth": "full",
+    "selected": [
+      "review-architecture",
+      "review-degradation",
+      "review-highload",
+      "review-logic",
+      "review-performance",
+      "review-regression",
+      "review-security-code",
+      "review-testing-practices"
+    ],
+    "unresolvedRules": [],
+    "runs": [
+      {
+        "reviewer": "review-architecture",
+        "executionId": "review-architecture:2f294e645d93",
+        "rawEvidence": "raw/review-architecture-w3.txt#sha256:2f294e645d93",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-architecture/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02",
+          "slice-03",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-degradation",
+        "executionId": "review-degradation:4d76292ec12e",
+        "rawEvidence": "raw/review-degradation-w3.txt#sha256:4d76292ec12e",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-degradation/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02",
+          "slice-03",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-highload",
+        "executionId": "review-highload:04a2bcf14245",
+        "rawEvidence": "raw/review-highload-w3.txt#sha256:04a2bcf14245",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-highload/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02",
+          "slice-03",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-logic",
+        "executionId": "review-logic:4b95c084ba26",
+        "rawEvidence": "raw/review-logic-w4.txt#sha256:4b95c084ba26",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-logic/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-performance",
+        "executionId": "review-performance:7cbe4490ed5e",
+        "rawEvidence": "raw/review-performance-w3.txt#sha256:7cbe4490ed5e",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-performance/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02",
+          "slice-03",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-regression",
+        "executionId": "review-regression:cd320234a30d",
+        "rawEvidence": "raw/review-regression-w3.txt#sha256:cd320234a30d",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-regression/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02",
+          "slice-03",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-security-code",
+        "executionId": "review-security-code:1b270ffdecb3",
+        "rawEvidence": "raw/review-security-code-w3.txt#sha256:1b270ffdecb3",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-security-code/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02",
+          "slice-03",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-testing-practices",
+        "executionId": "review-testing-practices:8ca5d2141204",
+        "rawEvidence": "raw/review-testing-practices-w2.txt#sha256:8ca5d2141204",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-03",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      }
+    ]
+  },
+  "usage": {
+    "dispatches": 24,
+    "known": 0,
+    "unknown": 24,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "complete": false
+  },
+  "setAside": [
+    "raw/review-premise-w1.txt",
+    "raw/review-verifier-w1.txt",
+    "raw/review-verifier-w2.txt"
+  ]
+}

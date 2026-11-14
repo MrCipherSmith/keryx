@@ -1,0 +1,67 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-degradation",
+  "slices": ["slice-03"],
+  "summary": "slice-03 (docs, review.ts CLI flag plumbing for --head-reason, orchestrator skill model_tier->model_class, spawn-subagent IGNORED_FIELDS export, new spawn-field contract test) read in full. No blocker or major: the behaviour deltas in the slice (--head relabel now needs the operator's quote; the report's first line no longer lifts the head gate; reviewers now get model_class) are the ones the PR description names. Two minor findings: a stale --help paragraph (and the matching JSDoc) that still promises the report first-line escape the PR removed, and a JSDoc separated from createSpawnSubagentTool by the new export. One pre-existing note. Verified clean: (1) runComplete --head-reason plumbing: COMPLETE_FLAGS, parseDispositions skip list, the TTY check gated on hostQuestion, and pass-through to completeReviewGated; consumer completeManagedReviewLocked (src/review/managed.ts:1048-1084) requires a quote of at least 8 characters only when --head differs from the recorded head and binds the relabel into the host-question digest (completion-host.ts requestedHeadOverride); non-TTY refusal is tested in complete-head-relabel.test.ts:68-75. (2) The other completeReviewGated caller, the review_complete card (src/commands/operator-confirm-review.ts:860), never passed head before or after, so it is unaffected. (3) spawn_subagent: the only code change swaps input.model_tier for input[SPAWN_SUBAGENT_IGNORED_FIELDS[0]] (same key, same notice). The graph's dependents of spawn-subagent-tool.ts (26 files from keryx gdgraph affected with the package graph, 0 dropped by any cap) only gain one new export, which is read by review-spawn-field-contract.test.ts alone. (4) model_class is refused for runtime kind external (spawn-subagent-tool.ts:1521), but no review-orchestrator text spawns an external runtime (searched for kind external and runtime: {), so the switch to model_class opens no refusal path for reviewers. (5) The contract test would fail on the original bug: the orchestrator line names spawn_subagent and `model_tier` on the same line, and the test pins that case. It scans only src/gdskills/bundled/skills/review. The bundled and installed orchestrator SKILL.md:118 are both updated. Every other model_tier in review skills is YAML frontmatter, not a spawn instruction. (6) Doc claims checked against head code: the head gate no longer reads report.md (complete-head-gate.ts:33-54). A waiver writes the `Partial review:` header (readiness.ts:555). head_override in the schema matches HeadOverride as written in managed.ts:1063. Not traced: managed.ts, readiness.ts, publish.ts and close-gates.ts bodies beyond the consumer reads above, because they belong to other slices. Graph cap: none applied, nothing dropped. Evidence level: static only, did not run tests (allowed_tools read-only).",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "degradation_class": "debt",
+      "evidence_kind": "base-diff",
+      "file": "src/commands/review.ts",
+      "line": null,
+      "quote": "  is not the pull request's head still needs the report's first line to name it\n  and say the PR moved.",
+      "problem": "`keryx review --help` (the `--head:` block, directly below the help lines this slice edits for --head-reason) still says a head that is not the PR's head is accepted when the report's first line names it and says the PR moved. That is the escape this PR removes. On head, completeHeadGate (src/review/complete-head-gate.ts:33-54) no longer reads report.md at all, and only an operator waiver of `head` lifts the refusal. The help also never mentions --head-reason, which a differing --head now requires. The JSDoc of CompleteManagedReviewOptions.head says the same thing (src/review/managed.ts:959-963: \"a head that is not the PR's head still needs the report to name it and say the PR moved\"). On base both texts matched the code; on head they describe a removed path.",
+      "impact": "An agent or operator who follows `keryx review --help` writes the first-line attestation, runs complete, and is refused. The error does name `--waive head`, so no result is lost. But the top-level help now teaches the agent-writable escape the PR set out to retire, and it hides the new operator step.",
+      "suggested_fix": "Rewrite the paragraph to match printCompleteHelp and cli-reference.md: a head that is not the PR's head fails readiness item `head` and is lifted only by the operator's `--waive head \"<quote>\"`. A --head that differs from the recorded head needs --head-reason. Update the managed.ts:959-963 JSDoc the same way.",
+      "evidence": "base-diff: complete-head-gate.ts on head (lines 22-54) returns `refusal` for a merged or moved PR with no report input. The slice's own diff removes the first-line exemption from the cli-reference.md, guide, SKILL.md and report-template texts but not from review.ts:5681-5685 or managed.ts:959-963. Read with keryx ctx rg \"first line|say the PR moved\" over src/commands, src/review, docs and the orchestrator skill: these two sites are the only stale ones left. Refute: printCompleteHelp (review.ts, in this slice) is updated, which shows the omission is not deliberate.",
+      "confidence": "high",
+      "reviewer": "review-degradation",
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": ["src/commands/review.ts:5683-5685", "src/review/managed.ts:959-963"],
+        "enumeration_method": "keryx ctx rg -n --all \"first line|names it and say|say the PR moved|says so\" over src/commands/review.ts, src/review/managed.ts, src/review/readiness.ts, the review-orchestrator skill dir, cli-reference.md and review-with-a-record.md; each hit was read, and only these two still describe the report first-line escape as live."
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "degradation_class": "debt",
+      "evidence_kind": "base-diff",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "line": null,
+      "quote": "export const SPAWN_SUBAGENT_IGNORED_FIELDS = [\"model_tier\"] as const;",
+      "problem": "The new export and its JSDoc sit between the existing JSDoc \"Create the `spawn_subagent` tool bound to a live shell host…\" (the per-turn ledger contract) and `export function createSpawnSubagentTool`. That orphans the factory's doc. TypeScript attaches every leading /** */ block to the next declaration, so both comments now document SPAWN_SUBAGENT_IGNORED_FIELDS, and createSpawnSubagentTool has none. On base the comment was directly above the function.",
+      "impact": "Editor hover and generated docs lose the description of the factory's per-turn ledger/resetBudget contract and show it on an unrelated constant. Nothing breaks at runtime.",
+      "suggested_fix": "Move `SPAWN_SUBAGENT_IGNORED_FIELDS` and its JSDoc above the \"Create the `spawn_subagent` tool…\" comment, for example next to the other module constants, so the factory's JSDoc is directly above `createSpawnSubagentTool` again.",
+      "evidence": "base-diff: the slice hunk @@ 1048,1094 @@ shows the `+/** Schema fields … */` and `+export const SPAWN_SUBAGENT_IGNORED_FIELDS` lines inserted after the closing ` */` of the factory JSDoc and before `export function createSpawnSubagentTool`. On head, the factory JSDoc starts at line 1059 and the export is at line 1073 (keryx ctx rg).",
+      "confidence": "high",
+      "reviewer": "review-degradation",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "degradation_class": "debt",
+      "file": "src/gdskills/bundled/rules/core/model-selection.mdc",
+      "line": null,
+      "quote": "  optional `model_tier` input and does the rest in code: it builds the tier map",
+      "problem": "Pre-existing: the bundled rule model-selection.mdc still says `spawn_subagent` takes a `model_tier` input and resolves it in code (lines 201-206). That is the same wrong instruction this PR fixes in the orchestrator skill, but here it is in a rule. The new contract test scans only src/gdskills/bundled/skills/review, so it does not see rules. Even with a wider root it would miss this one: `spawn_subagent` is on line 201 and `model_tier` on line 202, and the scanner matches per line.",
+      "impact": "An agent that reads the rule (the orchestrator tells it not to for tiering, but other skills load it) can still pass the ignored field. Not caused by this PR.",
+      "suggested_fix": "In a follow-up, update model-selection.mdc lines 201-206 to model_class, widen the contract test's root to src/gdskills/bundled (rules included), and match by paragraph instead of by line.",
+      "evidence": "Read model-selection.mdc:198-210 on head; it is not in the PR diff (git diff --stat base..head -- src lists no rules file).",
+      "confidence": "medium",
+      "reviewer": "review-degradation",
+      "location_class": "pre-existing"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 1 }
+}
+```
+
+One check on the slice came back clean: the --head-reason plumbing, its single non-card consumer, the spawn_subagent export and the contract test add no behaviour change beyond the one the description states. The two minor findings are stale documentation: the `keryx review --help` --head paragraph (with the matching managed.ts JSDoc) and the orphaned createSpawnSubagentTool JSDoc. F-003 is pre-existing.

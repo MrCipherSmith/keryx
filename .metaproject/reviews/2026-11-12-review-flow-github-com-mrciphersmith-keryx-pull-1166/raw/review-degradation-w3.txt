@@ -1,0 +1,48 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-degradation",
+  "slices": ["slice-04"],
+  "summary": "slice-04 read in full (2018 lines). Nothing in it is worse than base in behaviour, defaults or speed in a way that can be shown. Every behaviour change the diff makes is one the flow 488 description names: the `Not verified: N` escape removed, the report-first-line head escape removed, the head gate turned into readiness item 7, --head relabels gated on --head-reason, scoped research-error waivers, and publish running the tamper and evidence checks. Two minor debt items: an export left with no caller, and a second copy of the head-gate test fixture. Consumers were found by search (`search-derived`); I did not run `keryx gdgraph affected`, so the graph's consumer list and its cap were not consulted. Verified clean: (1) completeHeadGate new signature: callers are managed.ts:1088 and readiness.ts headCheck:352 only (search over src/). Tracker calls per close stay at one: managed passes headGate into waiveReadiness and evaluateCloseGates, and readiness.ts:349 reuses it. The test still asserts probe.calls == [PR]. (2) ReadinessOptions.headGate replacing headChecked: there is no remaining `headChecked` reader in src/ or the skills. operator-confirm-review.ts:184/323 (review_waive_readiness card, review_complete card) pass prLookup, so item `head` fails there and a `head` waiver is accepted rather than refused as 'already passes' (readiness.ts:591). (3) packageResearchErrorsTagged: its tags match the readiness checks that report each error. researchErrors goes to `ledger` (ledgerCheck at readiness.ts:316 calls the same researchErrors). packageCoverageErrors goes to `reviewers` (reviewersCheck through coverageGateOf at readiness.ts:194). coverageGateErrors goes to `files-covered`/`blast-radius` (both from computeCoverage, coverage-complete.ts:242 and readiness.ts:149). A waiver therefore lifts only an error whose item really fails. packageResearchErrors keeps its string[] contract. (4) evaluateCloseGates: the order is tamper, then evidence, then beforeReadiness, then readiness. At base the tamper and evidence checks ran before the coverage waiver write. They now run after it, inside the try, and writer.rollback() at managed.ts:1155 takes the write back, as the waiver-scope test shows (readiness_waivers stays undefined). roundRecordTampered hashes only round.json and prior_findings.json (round-record.ts:276-281). Complete writes neither, so publish after complete is not falsely refused. failingItems(...).length > 0 is equivalent to verdict !== READY (readiness.ts:488/491). (5) publish.ts: the new refusals on publish (tamper, evidence level, even with --partial) are AC5 and pinned by publish-gate-parity.test.ts. hostQuestionNotice adds one research.json read and one premiseRecords read per publish, which is negligible. (6) The verifier escape removal has no remaining consumer: the only other `Not verified` readers are parity.ts follow-up lines, a different marker that the diff leaves untouched. The orchestrator SKILL.detail.md:773 is updated. The managed manifest schema does not restrict head_override (no schema in src/ names readiness_waivers or head_override). No bundled skill tells an agent to run `review complete --head`, so --head-reason breaks no documented flow. (7) Tests: complete-waiver-scope.test.ts would fail on base. At base, waiving `ledger` emptied every research error, so the mismatch and locator cases would have closed. readiness-verifier-waiver.test.ts would also fail on base, because the `Not verified: 1` line passed item 4 there.",
+  "findings": [
+    {
+      "id": "DEG-1",
+      "severity": "minor",
+      "degradation_class": "debt",
+      "evidence_kind": "base-diff",
+      "file": "src/review/readiness.ts",
+      "line": null,
+      "quote": "export const withoutPartialHeader = (report: string): string => report.split(/\\r?\\n/).filter((line) => !PARTIAL_LINE.test(line)).join(\"\\n\");",
+      "problem": "The change removed both callers of `withoutPartialHeader`: managed.ts no longer passes `report: withoutPartialHeader(reportText)` to completeHeadGate, and readiness.ts headCheck no longer does either. The function is still exported, and its doc comment ('for checks that read the report's own first line') describes a check that no longer exists. A search of src/ finds only the definition.",
+      "impact": "Dead export left over from the removed first-line escape. A later reader may take it for a live part of the head gate.",
+      "suggested_fix": "Delete `withoutPartialHeader` and its comment from readiness.ts. Keep `PARTIAL_LINE`, which writePartialHeader still uses.",
+      "evidence": "base-diff: at base, managed.ts:416 and readiness.ts headCheck called withoutPartialHeader(...). The slice-04 hunks remove both calls and drop the import in managed.ts. `keryx ctx rg withoutPartialHeader src/` on head finds only readiness.ts:551.",
+      "confidence": "high",
+      "reviewer": "review-degradation",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "DEG-2",
+      "severity": "minor",
+      "degradation_class": "debt",
+      "evidence_kind": "base-diff",
+      "file": "src/review/complete-head-gate.test.ts",
+      "line": null,
+      "quote": "function lookup(pr: { state?: string; headSha?: string } | null): PrLookup & { calls: string[] } {",
+      "problem": "The diff adds src/review/close-gates.test-helpers.ts, which exports HEAD, MOVED, PR, EVIDENCE, the `ready` research ledger, `ingestReady` and `lookup`. complete-head-gate.test.ts, which the same diff edits heavily, keeps its own private copies of each one: HEAD, MOVED, EVIDENCE, PR, `ready`, `ingest` and the same `lookup` body. The fixture now exists twice.",
+      "impact": "If the ready-package shape changes (for example a new readiness item that the fixture must satisfy), both copies need the same edit. If one is missed, one test file silently tests a different package than the other.",
+      "suggested_fix": "Have complete-head-gate.test.ts import HEAD, MOVED, PR and lookup from ./close-gates.test-helpers. Replace its `ingest` with `ingestReady(dir, report, target, \"head-gate\")`.",
+      "evidence": "base-diff: close-gates.test-helpers.ts is new in this diff (lines 11-39: HEAD, MOVED, PR, EVIDENCE, ready, ingestReady, lookup). complete-head-gate.test.ts on head, lines 10-32, still defines `ready`, HEAD, MOVED, EVIDENCE, PR, `ingest` and `lookup` with identical bodies.",
+      "confidence": "high",
+      "reviewer": "review-degradation",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 0 }
+}
+```
+
+Summary: no degradation against base. Every behaviour change in slice-04 is one the flow 488 description states, and the tests that pin those changes would fail on base. Two minor debt items: the dead `withoutPartialHeader` export, and the head-gate test fixture duplicated between close-gates.test-helpers.ts and complete-head-gate.test.ts. I found consumers by search and did not consult the graph's `affected` list, so it is not stated whether a cap dropped any consumers.

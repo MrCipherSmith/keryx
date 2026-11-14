@@ -1,0 +1,275 @@
+[
+  {
+    "id": "w1-mc-01",
+    "file": "src/review/close-gates.ts",
+    "anchor": "if (research.length > 0) throw new Error(`${REFUSAL} ${research.join(\"; \")}`);",
+    "replacement": "",
+    "kind": "behavior"
+  },
+  {
+    "id": "w1-mc-02",
+    "file": "src/review/close-gates.ts",
+    "anchor": "error.items.length === 0 || (input.relaxReadiness !== true && !error.items.some((item) => waived.has(item)))",
+    "replacement": "(input.relaxReadiness !== true && !error.items.some((item) => waived.has(item)))",
+    "kind": "behavior"
+  },
+  {
+    "id": "w1-mc-03",
+    "file": "src/review/close-gates.ts",
+    "anchor": "closedPublish ? { coverage: false } : {}",
+    "replacement": "{}",
+    "kind": "behavior"
+  },
+  {
+    "id": "w1-mc-04",
+    "file": "src/review/close-gates.ts",
+    "anchor": "partitionWaivers(manifest).sealed.map",
+    "replacement": "(manifest.readiness_waivers ?? []).map",
+    "kind": "behavior"
+  },
+  {
+    "id": "w1-mc-05",
+    "file": "src/review/seals.ts",
+    "anchor": "if (!filled(verification.verdict) || !filled(verification.method) || !filled(verification.evidence)) return \"a verification without verdict, method and evidence\";",
+    "replacement": "",
+    "kind": "behavior"
+  },
+  {
+    "id": "w1-mc-06",
+    "file": "src/review/seals.ts",
+    "anchor": "if (manifest.seals?.verifications?.[key] !== sealVerification(key, finding.verification)) return",
+    "replacement": "if (false) return",
+    "kind": "behavior"
+  },
+  {
+    "id": "w1-mc-07",
+    "file": "src/review/readiness.ts",
+    "anchor": "const { sealed, unsealed } = partitionWaivers(manifest);\n  const waivers = new Map(sealed.map",
+    "replacement": "const { sealed, unsealed } = { sealed: manifest.readiness_waivers ?? [], unsealed: [] };\n  const waivers = new Map(sealed.map",
+    "kind": "behavior"
+  },
+  {
+    "id": "w1-mc-08",
+    "file": "src/review/readiness.ts",
+    "anchor": "const unsealedNote = unsealedItems.has(spec.id) ?",
+    "replacement": "const unsealedNote = false ?",
+    "kind": "presentation"
+  },
+  {
+    "id": "w1-mc-09",
+    "file": "src/review/managed.ts",
+    "anchor": "if (options.headReason !== undefined && headOverride === undefined) {",
+    "replacement": "if (false) {",
+    "kind": "behavior"
+  },
+  {
+    "id": "w1-mc-10",
+    "file": "src/review/managed.ts",
+    "anchor": "const quote = (options.headReason ?? \"\").replace(/-{0,2}head-reason/gi, \"\").trim();",
+    "replacement": "const quote = \"x\";",
+    "kind": "behavior"
+  },
+  {
+    "id": "w1-mc-11",
+    "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+    "anchor": "export const SPAWN_SUBAGENT_IGNORED_FIELDS = [\"model_tier\"] as const;",
+    "replacement": "export const SPAWN_SUBAGENT_IGNORED_FIELDS = [] as const;",
+    "kind": "behavior"
+  },
+  {
+    "id": "w2-mc-seals-target-at-ingest",
+    "file": "src/review/managed.ts",
+    "anchor": "manifest.seals = { ...withVerificationSeals(undefined, applied), target: sealTarget(manifest.target) };",
+    "replacement": "manifest.seals = { ...withVerificationSeals(undefined, applied) };",
+    "kind": "behavior"
+  },
+  {
+    "id": "w2-mc-seals-legacy-package-gate",
+    "file": "src/review/managed.ts",
+    "anchor": "const seals = stored.seals !== undefined || options.head !== undefined",
+    "replacement": "const seals = stored.seals !== undefined",
+    "kind": "behavior"
+  },
+  {
+    "id": "w2-mc-seals-head-override-seal",
+    "file": "src/review/managed.ts",
+    "anchor": "...(headOverride === undefined ? {} : { headOverride: sealHeadOverride(headOverride) })",
+    "replacement": "...{}",
+    "kind": "behavior"
+  },
+  {
+    "id": "w2-mc-seals-target-refresh-on-close",
+    "file": "src/review/managed.ts",
+    "anchor": "{ ...(manifest.seals ?? {}), target: sealTarget(manifest.target), ",
+    "replacement": "{ ...(manifest.seals ?? {}), ",
+    "kind": "behavior"
+  },
+  {
+    "id": "w2-mc-close-gates-seal-problems",
+    "file": "src/review/close-gates.ts",
+    "anchor": "import { partitionWaivers, sealProblems } from \"./seals\";",
+    "replacement": "import { partitionWaivers } from \"./seals\"; const sealProblems = (..._a: unknown[]): string[] => [];",
+    "kind": "behavior"
+  },
+  {
+    "id": "w4-M1",
+    "file": "src/review/managed.ts",
+    "anchor": "carriedVerification.has(key) && carriedVerification.get(key) !== finding.verification",
+    "replacement": "true",
+    "kind": "behavior"
+  },
+  {
+    "id": "w4-M2",
+    "file": "src/review/seals.ts",
+    "anchor": "!filled(verification.method) || ",
+    "replacement": "",
+    "kind": "behavior"
+  },
+  {
+    "id": "w4-M3",
+    "file": "src/review/seals.ts",
+    "anchor": " || !filled(verification.evidence)",
+    "replacement": "",
+    "kind": "behavior"
+  },
+  {
+    "id": "w4-M4",
+    "file": "src/review/readiness.ts",
+    "anchor": ".filter(([item]) => !(ids as string[]).includes(item))",
+    "replacement": "",
+    "kind": "behavior"
+  },
+  {
+    "id": "w4-M5",
+    "file": "src/review/managed.ts",
+    "anchor": "stored.seals !== undefined || options.head !== undefined",
+    "replacement": "true",
+    "kind": "behavior"
+  },
+  {
+    "id": "w4-M6",
+    "file": "src/review/close-gates.ts",
+    "anchor": "closedPublish ? { coverage: false } : {}",
+    "replacement": "{}",
+    "kind": "behavior"
+  },
+  {
+    "id": "w4-M7",
+    "file": "src/review/close-gates.ts",
+    "anchor": "input.relaxReadiness !== true && ",
+    "replacement": "",
+    "kind": "behavior"
+  },
+  {
+    "id": "w4-M8",
+    "file": "src/review/close-gates.ts",
+    "anchor": "error.items.length === 0 || ",
+    "replacement": "false || ",
+    "kind": "behavior"
+  },
+  {
+    "id": "w4-M9",
+    "file": "src/review/seals.ts",
+    "anchor": "manifest.seals !== undefined && isPrBound(manifest.target) && ",
+    "replacement": "isPrBound(manifest.target) && ",
+    "kind": "behavior"
+  },
+  {
+    "id": "w4-M10",
+    "file": "src/review/managed.ts",
+    "anchor": "options.headReason !== undefined && headOverride === undefined",
+    "replacement": "false",
+    "kind": "behavior"
+  },
+  {
+    "id": "w4-M11",
+    "file": "src/review/readiness.ts",
+    "anchor": "entry.problem !== \"no verification\"",
+    "replacement": "true",
+    "kind": "presentation"
+  },
+  {
+    "id": "w4-M12",
+    "file": "src/review/close-gates.ts",
+    "anchor": "partitionWaivers(manifest).sealed",
+    "replacement": "(manifest.readiness_waivers ?? [])",
+    "kind": "behavior"
+  },
+  {
+    "id": "w6-mc-w6-01",
+    "file": "src/review/complete-head-gate.ts",
+    "anchor": "const moved = reviewed !== null && prHead !== null && !sameCommit(reviewed, prHead);",
+    "replacement": "const moved = false;",
+    "kind": "behavior"
+  },
+  {
+    "id": "w6-mc-w6-02",
+    "file": "src/review/complete-head-gate.ts",
+    "anchor": "const merged = typeof pr.state === \"string\" && pr.state.toUpperCase() === \"MERGED\";",
+    "replacement": "const merged = false;",
+    "kind": "behavior"
+  },
+  {
+    "id": "w6-mc-w6-03",
+    "file": "src/review/managed.ts",
+    "anchor": "if (options.headReason !== undefined && headOverride === undefined) {",
+    "replacement": "if (false) {",
+    "kind": "behavior"
+  },
+  {
+    "id": "w6-mc-w6-04",
+    "file": "src/review/managed.ts",
+    "anchor": "if (quote.length < 8 || !/[\\p{L}\\p{N}]/u.test(quote)) {",
+    "replacement": "if (false) {",
+    "kind": "behavior"
+  },
+  {
+    "id": "w6-mc-w6-05",
+    "file": "src/review/managed.ts",
+    "anchor": "typeof recordedHead === \"string\" && recordedHead !== \"\" && ",
+    "replacement": "typeof recordedHead === \"string\" && ",
+    "kind": "behavior"
+  },
+  {
+    "id": "w6-mc-w6-06",
+    "file": "src/review/close-gates.ts",
+    "anchor": "if (failingItems(readiness).length > 0 && input.relaxReadiness !== true) throw",
+    "replacement": "if (false) throw",
+    "kind": "behavior"
+  },
+  {
+    "id": "w6-mc-w6-07",
+    "file": "src/review/close-gates.ts",
+    "anchor": "if (tampered !== undefined) throw new Error(`${REFUSAL} ${tampered}`);",
+    "replacement": "",
+    "kind": "behavior"
+  },
+  {
+    "id": "w6-mc-w6-08",
+    "file": "src/review/close-gates.ts",
+    "anchor": ".filter((error) => error.items.length === 0 || (input.relaxReadiness !== true && !error.items.some((item) => waived.has(item))))",
+    "replacement": ".filter((error) => error.items.length === 0)",
+    "kind": "behavior"
+  },
+  {
+    "id": "w6-mc-w6-09",
+    "file": "src/review/close-gates.ts",
+    "anchor": "const closedPublish = input.action === \"publish\" && manifest.status === \"closed\";",
+    "replacement": "const closedPublish = false;",
+    "kind": "behavior"
+  },
+  {
+    "id": "w6-mc-w6-10",
+    "file": "src/review/readiness.ts",
+    "anchor": "return problem === undefined ? [] : [{ id: String(finding.global_id ?? finding.id), problem }];",
+    "replacement": "return [];",
+    "kind": "behavior"
+  },
+  {
+    "id": "w6-mc-w6-11",
+    "file": "src/review/readiness.ts",
+    "anchor": "const waivers = new Map(sealed.map((waiver) => [waiver.item, waiver]));",
+    "replacement": "const waivers = new Map([...sealed, ...unsealed].map((waiver) => [waiver.item, waiver]));",
+    "kind": "behavior"
+  }
+]

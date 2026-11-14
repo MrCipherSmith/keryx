@@ -1,0 +1,51 @@
+STATUS: DONE
+
+```json REVIEW_RESULT
+{
+  "reviewer": "review-style",
+  "slices": ["slice-01"],
+  "status": "DONE",
+  "verdict": "APPROVE_WITH_SUGGESTIONS",
+  "summary": "All twelve prior findings are closed at head b076a85a6354 when read against the code. The fix lines are tidy; one info-level duplicate manifest read was added in close-gates.ts.",
+  "prior_dispositions": [
+    {"id": "review-architecture-w1:F-001", "disposition": "closed"},
+    {"id": "review-logic-w2:F-001", "disposition": "closed"},
+    {"id": "review-degradation-w2:F-001", "disposition": "closed"},
+    {"id": "review-logic-w3:F-002", "disposition": "closed"},
+    {"id": "review-degradation-w2:F-003", "disposition": "closed"},
+    {"id": "review-architecture-w2:F-004", "disposition": "closed"},
+    {"id": "review-degradation-w2:F-002", "disposition": "closed"},
+    {"id": "review-architecture-w3:ARCH-1", "disposition": "closed"},
+    {"id": "review-testing-practices-w1:F-001", "disposition": "closed"},
+    {"id": "review-testing-practices-w2:TP-2", "disposition": "closed"},
+    {"id": "review-logic-w4:F-001", "disposition": "closed"},
+    {"id": "review-security-code-w3:SEC-1", "disposition": "closed"}
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "src/review/close-gates.ts",
+      "line": 65,
+      "quote": "const sealed = sealProblems(await readManifest(packageDir));",
+      "title": "evaluateCloseGates reads manifest.json twice per call",
+      "evidence": "close-gates.ts:65 reads the manifest for the seal check; researchRefusals (line 50, called at line 77) reads it again with readManifest. beforeReadiness (line 76) can rewrite the manifest in between (waiver recording), so the second read is deliberate for `review complete`, but the first read is not needed again for publish.",
+      "impact": "Readability only: a reader must work out why the manifest is read twice and whether the two reads may differ. No functional defect found.",
+      "suggested_fix": "Add a one-line comment at the second read saying it re-reads after beforeReadiness recorded waivers, or pass the first read in where no hook ran.",
+      "confidence": "medium"
+    }
+  ]
+}
+```
+
+Dispositions, judged against code at head:
+
+- review-architecture-w1:F-001 / review-logic-w2:F-001: SKILL.detail.md item 7 now reads "the head recorded at `review start` is still the PR head ... only the operator's `head` waiver lifts it". Closed.
+- review-degradation-w2:F-001 / review-logic-w3:F-002: the `--head:` help block in src/commands/review.ts now names readiness item `head`, the operator waiver and `--head-reason`. A search of src for "the report to name" finds no match, so the managed.ts JSDoc is gone too. Closed.
+- review-degradation-w2:F-003: model-selection.mdc now says `spawn_subagent` takes `model_class`, accepts `model_tier` and ignores it. Closed.
+- review-architecture-w2:F-004 / review-degradation-w2:F-002: the constant sits before the "Create the `spawn_subagent` tool" JSDoc, so the factory's doc block is back above it. The consumer now filters the whole `SPAWN_SUBAGENT_IGNORED_FIELDS` list (spawn-subagent-tool.ts:1508), which also settles the related w2:F-002. Closed.
+- review-architecture-w3:ARCH-1: `researchRefusals` runs inside `evaluateCloseGates` (close-gates.ts:77), so publish and complete share one research gate. Closed.
+- review-testing-practices-w1:F-001: the test passes `headReason` and asserts the `--waive head` repair text (complete-head-gate.test.ts:166-170), so it reaches readiness item `head`. Closed.
+- review-testing-practices-w2:TP-2: the fixture has verdict, method, evidence and a seal. seals.test.ts:106 pins `verification: {}` as failing. Closed.
+- review-logic-w4:F-001: a closed package that depended on the old escapes still reads NOT READY. This is a recorded operator decision (seals.ts header comment) and is disclosed as breaking in CHANGELOG.md. By law 4 it is no longer a defect. Closed.
+- review-security-code-w3:SEC-1: waivers, verifications and the target are now checked against sha256 seals (seals.ts, readiness.ts, close-gates.ts). Closed. The seals are tamper evidence, not a signature, and seals.ts says so.

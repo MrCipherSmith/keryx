@@ -1059,6 +1059,14 @@ const parentShellPolicy = shellParentProfile;
 const childReadOnlyPolicy = shellChildReadOnlyProfile;
 
 /**
+ * Schema fields `spawn_subagent` still accepts but never acts on. A skill that
+ * tells a model to pass one of these has instructed a no-op; the review-skill
+ * contract test reads this list, and the tool names every one present in its
+ * migration notice.
+ */
+export const SPAWN_SUBAGENT_IGNORED_FIELDS = ["model_tier"] as const;
+
+/**
  * Create the `spawn_subagent` tool bound to a live shell host.
  *
  * The child ledger (tool-call + runtime pool shared by every spawn) is
@@ -1497,9 +1505,10 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "routing-invalid", task });
         return { status: "Error", output: `spawn_subagent refused: routing settings are invalid: ${error instanceof Error ? error.message : String(error)}`, isError: true };
       }
-      const legacyTierMigrationNotice = input.model_tier !== undefined
-        ? `ignored model_tier ${String(input.model_tier)} because model routing chooses the child's model; migrate the caller to model_class`
-        : undefined;
+      const ignoredFields = SPAWN_SUBAGENT_IGNORED_FIELDS.filter((field) => input[field] !== undefined);
+      const legacyTierMigrationNotice = ignoredFields.length === 0
+        ? undefined
+        : `ignored ${ignoredFields.map((field) => `${field} ${String(input[field])}`).join(", ")} because model routing chooses the child's model; migrate the caller to model_class`;
       if (input.model_class !== undefined && !isModelClass(input.model_class)) {
         emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "routing-invalid", task });
         return { status: "Error", output: "spawn_subagent model_class must be light, standard, expert, or frontier", isError: true };

@@ -1,0 +1,61 @@
+// SEC-1 probe (review-verifier, wave C). Not part of the suite: renamed to .txt after the run.
+// Each case forges an operator decision by a plain file write, then runs a plain `review complete` (no flags).
+
+import { afterEach, beforeEach, expect, test } from "bun:test";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+const SRC = "/Users/tsaitler.aleksandr/goodea/keryx/.claude/worktrees/review-process-audit/src/review";
+const { HEAD, MOVED, PR, UNVERIFIED_MAJOR, ingestReady, lookup, writeFindings } = await import(`${SRC}/close-gates.test-helpers.ts`);
+const { completeManagedReview } = await import(`${SRC}/managed.ts`);
+const { writeRoundRecord, roundRecordTampered } = await import(`${SRC}/round-record.ts`);
+
+let dir = "";
+beforeEach(async () => { dir = await mkdtemp(path.join(os.tmpdir(), "keryx-sec1-probe-")); });
+afterEach(async () => { await rm(dir, { recursive: true, force: true }); });
+
+const manifestFile = (ref: string) => path.join(path.resolve(dir, ref), "manifest.json");
+const editManifest = async (ref: string, edit: (m: Record<string, any>) => void) => {
+  const m = JSON.parse(await readFile(manifestFile(ref), "utf8"));
+  edit(m);
+  await writeFile(manifestFile(ref), JSON.stringify(m, null, 2));
+};
+
+test("(control) unverified major: plain complete refuses", async () => {
+  const ref = await ingestReady(dir, "# Review\nRequest changes.", { kind: "pr", ref: PR, head: HEAD });
+  await writeFindings(dir, ref, [UNVERIFIED_MAJOR]);
+  const err = await completeManagedReview(dir, ref, {}).catch((e: Error) => e);
+  expect(err).toBeInstanceOf(Error);
+  console.log("control refusal:", String((err as Error).message).slice(0, 160));
+});
+
+test("(a) forged readiness_waivers entry closes READY with no flag", async () => {
+  const ref = await ingestReady(dir, "# Review\nRequest changes.", { kind: "pr", ref: PR, head: HEAD });
+  await writeFindings(dir, ref, [UNVERIFIED_MAJOR]);
+  await editManifest(ref, (m) => { m.readiness_waivers = [{ item: "verifier", operator_quote: "operator accepts this for the round", time: new Date().toISOString() }]; });
+  const done = await completeManagedReview(dir, ref, {});
+  console.log("(a) status:", done.manifest.status, "verdict:", done.readiness?.verdict, "verifier:", done.readiness?.items.find((i: any) => i.id === "verifier")?.status);
+  expect(done.manifest.status).toBe("closed");
+});
+
+test("(b) rewritten target.head passes the head gate, and the round stamp does not notice", async () => {
+  const ref = await ingestReady(dir, "# Review\nApprove.", { kind: "pr", ref: PR, head: HEAD });
+  await writeFindings(dir, ref, []);
+  await writeRoundRecord(path.resolve(dir, ref), { round: 1 } as any, []);
+  const moved = await completeManagedReview(dir, ref, { prLookup: lookup({ headSha: MOVED }) }).catch((e: Error) => e);
+  console.log("(b) control with moved PR head:", moved instanceof Error ? `refused: ${moved.message.slice(0, 160)}` : "closed");
+  expect(moved).toBeInstanceOf(Error);
+  await editManifest(ref, (m) => { m.target.head = MOVED; });
+  console.log("(b) roundRecordTampered after editing target.head:", roundRecordTampered(path.resolve(dir, ref)));
+  const done = await completeManagedReview(dir, ref, { prLookup: lookup({ headSha: MOVED }) });
+  console.log("(b) status:", done.manifest.status, "verdict:", done.readiness?.verdict, "head:", done.readiness?.items.find((i: any) => i.id === "head")?.status, "head_override:", done.manifest.head_override);
+  expect(done.manifest.status).toBe("closed");
+});
+
+test("(c) an empty verification object on a major passes item 4", async () => {
+  const ref = await ingestReady(dir, "# Review\nRequest changes.", { kind: "pr", ref: PR, head: HEAD });
+  await writeFindings(dir, ref, [{ ...UNVERIFIED_MAJOR, verification: {} }]);
+  const done = await completeManagedReview(dir, ref, {});
+  console.log("(c) status:", done.manifest.status, "verifier:", done.readiness?.items.find((i: any) => i.id === "verifier")?.evidence);
+  expect(done.manifest.status).toBe("closed");
+});

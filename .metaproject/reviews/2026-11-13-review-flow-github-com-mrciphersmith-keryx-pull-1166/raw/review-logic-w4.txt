@@ -1,0 +1,22 @@
+STATUS: DONE
+
+```json REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "slices": ["slice-09"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "docs/docs/cli-reference.md",
+      "line": 5112,
+      "quote": "`review complete` and its `--waive` and `--waive-coverage` flags refuse these flags and stay on the terminal and card path",
+      "evidence": "The unchanged paragraph says `review complete` refuses `--answered-by` and stays on the terminal and card path. The text this PR adds in the same file says a differing `--head` needs `--head-reason` from a terminal or `--answered-by` from a host question. The code agrees with the new text: runComplete reads reviewCompletionHostAnswer(args) and passes hostQuestion (src/commands/review.ts:4935, 4954, 4971), and completeManagedReviewLocked validates it (src/review/managed.ts:1087-1101).",
+      "impact": "Two paragraphs of the CLI reference give opposite answers on whether a host question can carry a close, a waiver or a head relabel. An operator or agent following the first paragraph is told to avoid a path the second says works.",
+      "suggested_fix": "Reword the sentence at line 5112 to say which `review complete` flags accept `--answered-by` (`--head-reason`, `--waive`, `--waive-coverage`) and under what conditions, matching the code at head.",
+      "confidence": "medium"
+    }
+  ]
+}
+```

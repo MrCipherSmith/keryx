@@ -1,0 +1,33 @@
+// Round 2 verification repros for PR 1166 (executed against the worktree's src at head b076a85a6).
+import { describe, expect, test } from "bun:test";
+import { sealProblems, sealTarget, sealWaiver } from "/Users/tsaitler.aleksandr/goodea/keryx/.claude/worktrees/review-process-audit/src/review/seals.ts";
+
+const target = { kind: "pr", ref: "https://github.com/MrCipherSmith/keryx/pull/1166", head: "b076a85a6354" } as never;
+
+describe("cluster A: pre-seal package that takes a waiver", () => {
+  test("a manifest with no seals passes sealProblems (legacy)", () => {
+    expect(sealProblems({ target } as never)).toEqual([]);
+  });
+  test("readiness.ts:613 writes seals = { readinessWaivers } on a seal-less manifest; sealProblems then refuses the untouched target", () => {
+    const waiver = { item: "pr-files", operator_quote: "operator words here", time: "2026-11-13T00:00:00.000Z" };
+    const manifest = { target, readiness_waivers: [waiver], seals: { ...(undefined ?? {}), readinessWaivers: { "pr-files": sealWaiver(waiver as never) } } };
+    const problems = sealProblems(manifest as never);
+    console.log("A problems:", JSON.stringify(problems));
+    expect(problems.length).toBe(1);
+    expect(problems[0]).toContain("does not match the seal keryx wrote");
+  });
+});
+
+describe("cluster B: deleting seals and rewriting target.head", () => {
+  test("a sealed manifest with a rewritten head is refused", () => {
+    const sealed = { target, seals: { target: sealTarget(target) } };
+    const tampered = { ...sealed, target: { ...(target as object), head: "ffffffffffff" } };
+    expect(sealProblems(tampered as never).length).toBe(1);
+  });
+  test("the same rewrite with `seals` deleted passes sealProblems", () => {
+    const tampered = { target: { ...(target as object), head: "ffffffffffff" } };
+    const problems = sealProblems(tampered as never);
+    console.log("B problems:", JSON.stringify(problems));
+    expect(problems).toEqual([]);
+  });
+});

@@ -1,0 +1,9 @@
+[
+  {
+    "id": "review-testing-practices-w2:fu1",
+    "status": "finding",
+    "finding": "review-security-code-w3:SEC-1",
+    "evidence": "research-evidence/verify-SEC-1-1.txt case (c): a major finding with \"verification\": {} in findings.json closes READY with 'all verified' (keryx review verify-run, 4 pass)",
+    "reason": "The follow-up asked whether verifierCheck counts any object as a verification; it does, and that is part (c) of review-security-code-w3:SEC-1, confirmed by execution and carried there."
+  }
+]

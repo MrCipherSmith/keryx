@@ -5,12 +5,16 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import type { ManagedReviewTarget } from "./types";
 import { reviewCommand } from "../commands/review";
 import { buildRoundBlock, mentionsFindingId, minorSection, partialPublishHeader, PUBLISHED_BODY_LIMIT, publishReview, reviewEvent, ROUND_BLOCK_LIMIT, type PostResult, type ReviewEvent } from "./publish";
 import { parseRoundBlocks, renderRoundBlock } from "./pr-comments";
 import { quoteSha256 } from "./round-record";
 import { computeReadiness } from "./readiness";
 import type { VerdictFinding } from "./verdict";
+import { sealVerificationsAsIngest } from "./close-gates.test-helpers";
+import { heldFinding, premiseAnswer } from "./premise-fixtures";
+import { heavyFindingsSeal, sealHeadOverride, sealTarget } from "./seals";
 
 const minor = (id: string, problem = "a small thing"): VerdictFinding => ({ id, reviewer: "review-style", severity: "minor", problem, location: "src/a.ts:1", verification: "none" });
 
@@ -23,16 +27,20 @@ let cwd: string;
 const write = (name: string, value: unknown): void => writeFileSync(path.join(pkg, name), typeof value === "string" ? value : JSON.stringify(value, null, 2));
 
 function makePackage(options: { ready: boolean; kind?: string }): void {
+  const target = { kind: (options.kind ?? "pr") as ManagedReviewTarget["kind"], ref: options.kind === "path" ? "src" : PR };
+  const findings = options.ready ? [] : [{ id: "f-1", severity: "major", title: "unverified claim" }];
   write("manifest.json", {
     schemaVersion: 1,
     reviewId: "pr7932-r1",
     mode: "review-flow",
     status: "draft",
-    target: { kind: options.kind ?? "pr", ref: options.kind === "path" ? "src" : PR },
+    target,
     artifacts: { scope: "scope.md", coverage: "coverage.md", report: "report.md", findings: "findings.json", learning: "learning.md", decisions: "decisions.md" },
     coverage: [],
+    // As `review ingest` writes it: a package with no target seal (pull request) or no blocker/major record is refused (seals.ts).
+    seals: { target: sealTarget(target), heavyFindings: heavyFindingsSeal(findings) },
   });
-  write("findings.json", options.ready ? [] : [{ id: "f-1", severity: "major", title: "unverified claim" }]);
+  write("findings.json", findings);
   write("report.md", "# Review\n\nRequest changes.\n");
   write("coverage.md", "# Reviewer Coverage\n\nreviewer: review-logic\nstatus: run\nreason: read the diff\n");
 }
@@ -112,16 +120,76 @@ describe("publishReview", () => {
     expect(body.replace(/\n<!-- keryx:round .* -->\n$/, "")).toBe("# Review\n\nRequest changes.\n");
   });
 
+  describe("flow 488 AC6: a decision recorded from the agent's host question is said not to be verified by keryx", () => {
+    const hostQuestion = { source: "claude-code", ref: "q-1", questionText: "Complete?", answerText: "yes", time: "2026-11-12T09:00:00Z" };
+    const withManifest = (extra: Record<string, unknown>): void => {
+      makePackage({ ready: true });
+      write("manifest.json", { ...JSON.parse(readFileSync(path.join(pkg, "manifest.json"), "utf8")), ...extra });
+    };
+
+    test("a readiness waiver confirmed via host-question puts the notice in the posted body, naming the waiver", async () => {
+      withManifest({ readiness_waivers: [{ item: "verifier", operator_quote: "the operator accepts it", time: "2026-11-12T09:00:00Z", confirmedVia: "host-question", hostQuestion }] });
+      const io = seams();
+      await publishReview(pkg, { post: io.post, confirm: io.confirm });
+      const body = io.posts[0]!.body;
+      expect(body).toContain("Decisions recorded from the agent's host question");
+      expect(body).toContain("readiness waiver of verifier");
+      expect(body).toContain("keryx did not verify the operator's answer");
+      expect(io.shown[0]).toContain("keryx did not verify the operator's answer");
+    });
+
+    test("a head override and a coverage waiver confirmed via host-question are named too", async () => {
+      // The override as `review complete --head --head-reason --answered-by` writes it: with keryx's seal (flow 488 AC9).
+      const headOverride = { from: "a".repeat(40), to: "b".repeat(40), operator_quote: "the operator moved it", time: "2026-11-12T09:00:00Z", confirmedVia: "host-question" as const };
+      withManifest({ head_override: headOverride, seals: { target: sealTarget({ kind: "pr", ref: PR }), headOverride: sealHeadOverride(headOverride), heavyFindings: heavyFindingsSeal([]) } });
+      write("research.json", { dispatch: { coverageWaiver: { operatorQuote: "skip them", time: "2026-11-12T09:00:00Z", files: ["a.ts"], confirmedVia: "host-question", hostQuestion } } });
+      const io = seams();
+      await publishReview(pkg, { post: io.post, confirm: io.confirm });
+      expect(io.posts[0]!.body).toContain("head change aaaaaaa to bbbbbbb");
+      expect(io.posts[0]!.body).toContain("coverage waiver");
+      expect(io.posts[0]!.body).toContain("keryx did not verify the operator's answer");
+    });
+
+    test("a top-level research.coverageWaiver is not a waiver: nothing writes that shape, so it is not named (review round 3, ARCH-W5-1)", async () => {
+      makePackage({ ready: true });
+      write("research.json", { coverageWaiver: { operatorQuote: "skip them", time: "2026-11-12T09:00:00Z", files: ["a.ts"], confirmedVia: "host-question", hostQuestion } });
+      const io = seams();
+      await publishReview(pkg, { partial: true, post: io.post, confirm: io.confirm });
+      expect(io.posts[0]!.body).not.toContain("coverage waiver");
+    });
+
+    test("a premise decision confirmed via host-question is named, with the count (review TP-3)", async () => {
+      makePackage({ ready: true });
+      const held = heldFinding({ severity: "minor" });
+      write("findings.json", [held]);
+      write("operator-decisions.json", { schemaVersion: 1, decisions: [premiseAnswer(held, { confirmedVia: "host-question", hostQuestion: hostQuestion as never })] });
+      const io = seams();
+      await publishReview(pkg, { partial: true, post: io.post, confirm: io.confirm });
+      expect(io.posts[0]!.body).toContain("1 premise decision(s)");
+      expect(io.posts[0]!.body).toContain("keryx did not verify the operator's answer");
+    });
+
+    test("a waiver pressed on a card or typed at a terminal carries no such notice", async () => {
+      withManifest({ readiness_waivers: [{ item: "verifier", operator_quote: "the operator accepts it", time: "2026-11-12T09:00:00Z", confirmedVia: "tui-card" }] });
+      const io = seams();
+      await publishReview(pkg, { post: io.post, confirm: io.confirm });
+      expect(io.posts[0]!.body).not.toContain("host question");
+      expect(io.posts[0]!.body).not.toContain("did not verify");
+    });
+  });
+
   test("flow 458: the round block round-trips publish -> parse, and published.json records head and review id", async () => {
     makePackage({ ready: true });
     const manifest = JSON.parse(readFileSync(path.join(pkg, "manifest.json"), "utf8"));
-    write("manifest.json", { ...manifest, target: { ...manifest.target, head: "abcdef1234567" } });
+    const target = { ...manifest.target, head: "abcdef1234567" };
+    write("manifest.json", { ...manifest, target, seals: { ...manifest.seals, target: sealTarget(target) } });
     write("round.json", { v: 1, round: 3 });
     write("report.md", "# Review\n\nF-1 at `src/a.ts:12` still swallows the error.\n");
     write("findings.json", [
       { id: "F-1", reviewer: "review-logic", severity: "minor", problem: "swallows", file: "src/a.ts", line: 12, quote: "catch (e) { /* SECRET-QUOTE */ }", disposition: { state: "acted-on" } },
       { id: "F-2", reviewer: "review-logic", severity: "major", problem: "not in the body", file: "src/hidden.ts", line: 4, verification: { verdict: "confirmed", method: "reproduction", evidence: "ran it", verifier: "review-verifier" } },
     ]);
+    await sealVerificationsAsIngest(pkg);
     const io = seams();
     await publishReview(pkg, { event: "COMMENT", post: io.post, confirm: io.confirm, now: () => new Date("2026-10-16T00:00:00Z") });
     const body = io.posts[0]!.body;

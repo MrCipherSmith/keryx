@@ -1,0 +1,36 @@
+STATUS: DONE
+```json REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "slices": ["slice-04"],
+  "summary": "The ARCH-1 move is sound: the research gate now lives in evaluateCloseGates, runs after the waiver hook and before the checklist, and both complete and publish reach it. The SEC-1 seal module is cleanly layered (seals.ts depends only on types, record, round-record and complete-head-gate, with no import cycle; research.ts takes readiness ids as a type-only import). One design defect in the seal model: 'seals present' and 'target sealed' are conflated, so a pre-seal package that gets a card waiver becomes unclosable. One info observation on legacy detection.",
+  "findings": [
+    {
+      "id": "ARCH-4",
+      "reviewer": "review-architecture",
+      "severity": "minor",
+      "file": "src/review/seals.ts",
+      "line": 87,
+      "quote": "if (manifest.seals !== undefined && isPrBound(manifest.target) && manifest.seals.target !== sealTarget(manifest.target)) {",
+      "problem": "sealProblems treats the mere presence of `manifest.seals` as 'this package has a target seal', and the header says a package with no seals at all predates them. But waiveReadiness writes `seals: { ...(manifest.seals ?? {}), readinessWaivers }` (readiness.ts:613) with no `target` entry, and it can run on its own: the operator card review_waive_readiness calls it (operator-confirm-review.ts:373) and does not close the package. On a PR-bound package created before this change, that write turns `seals` from undefined into `{ readinessWaivers }`. The next `review complete` or `review publish` then reaches evaluateCloseGates -> sealProblems, finds `seals.target` undefined !== sealTarget(target), and refuses with 'manifest.json target ... does not match the seal keryx wrote'. The refusal comes before the --head path, so the repair it names (--head <sha> --head-reason) cannot clear it, and the operator's own sanctioned act (the card waiver) is what trips it. Found by reading; not run.",
+      "impact": "An in-flight PR-bound package from before this release, once the operator waives an item through the card, can no longer be completed or published by any keryx command. Only hand-editing manifest.json clears it, which is the path the seals exist to refuse. It fails closed, so no gate is bypassed. The population is packages started before the upgrade.",
+      "suggested_fix": "Decide 'legacy' on `seals?.target === undefined`, not on `seals === undefined`: in sealProblems check the target only when `manifest.seals?.target !== undefined`. Alternatively have waiveReadiness seal the current target when it writes the first seal, the way the test helper close-gates.test-helpers.ts does (`manifest.seals?.target ?? sealTarget(manifest.target)`). Add a test: a package with no seals, a waiver through waiveReadiness, then completeManagedReview closes.",
+      "confidence": "medium"
+    },
+    {
+      "id": "ARCH-5",
+      "reviewer": "review-architecture",
+      "severity": "info",
+      "file": "src/review/seals.ts",
+      "line": 78,
+      "quote": "`review complete` and `review publish`. A package with no seals at all predates them, and its target is not checked.",
+      "problem": "The legacy exemption for the target check is keyed on the absence of `manifest.seals`, a field the same agent that could forge a target can delete. Removing the whole `seals` key skips the target comparison entirely, which is cheaper than recomputing the digest. The header of seals.ts states the level honestly ('evidence that a file was edited outside keryx, not a signature'; a recomputed digest is not stopped), and the legacy leniency is a stated choice, so this is not reported as a defect. It is noted because deletion and recomputation are both one edit, and nothing in the stamp ties 'sealed' to the package: a package keryx created after this release carries `roundRecord`/`operatorGate` (start/attach), and an ingest package carries neither.",
+      "impact": "None beyond what the module already concedes. Would matter only if the seals are later described as stopping a deliberate edit rather than showing an accidental or naive one.",
+      "suggested_fix": "If the exemption is meant to cover only genuinely old packages, record a seal-format marker (for example `seals.v`) at creation and treat its absence on a post-release package as tampering. Otherwise state in the CHANGELOG entry that removing `seals` is equivalent to a legacy package.",
+      "confidence": "medium"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 }
+}
+```

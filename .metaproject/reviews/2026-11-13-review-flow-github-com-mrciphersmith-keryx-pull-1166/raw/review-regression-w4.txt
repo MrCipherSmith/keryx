@@ -1,0 +1,35 @@
+STATUS: DONE
+
+```json REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "slices": ["slice-04"],
+  "summary": "Scope B over slice-04 (src/review seals, close gates, readiness, managed complete). Walked the computed set: the cap dropped files (recorded as test-consumer drops in blast-radius.json, plus most TUI dependents behind modal-host/agent-commands, which do not read manifest seals); the review-side dependents src/review/publish.ts, src/review/readiness.ts consumers and src/flow/review-gate.ts were read. One regression found: a package that predates the seals and receives a readiness waiver gets a seals object without a target seal, and sealProblems then refuses every later close or publish of it. The graph does not carry the on-disk manifest handoff between waive and publish, so that edge was followed by reading waiveReadiness and sealProblems directly. Seals-on-ingest, --head/--head-reason sealing, verification sealing and the research gate moved into close-gates were checked against ingest re-runs and flow-move/round-record/run-profile manifest writers (all spread the manifest and keep seals) and showed no further break. The src/session and help-groups files in this slice are merge content and were not reviewed.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "file": "src/review/seals.ts",
+      "line": 87,
+      "quote": "if (manifest.seals !== undefined && isPrBound(manifest.target) && manifest.seals.target !== sealTarget(manifest.target)) {",
+      "problem": "sealProblems treats any manifest that carries a seals object as one whose target seal must exist. waiveReadiness (src/review/readiness.ts:613) now writes `seals: { ...(manifest.seals ?? {}), readinessWaivers }` and never a target seal. On a pull-request package written before flow 488 (no seals at all, which seals.ts and the CHANGELOG say is tolerated) the first operator waiver therefore turns `seals` from undefined into `{ readinessWaivers }`, and from then on `manifest.seals.target` is undefined and never equals the target digest. completeManagedReview does not repair it: it seals the target only when `stored.seals !== undefined || options.head !== undefined` (managed.ts:1148), so a close of such a package by `--waive` alone records `seals` without a target.",
+      "evidence": "Trigger: a PR-bound package created by an older keryx (manifest has no `seals`), then `keryx review complete <review> --waive <item> \"<quote>\"`, or the review_waive_readiness card followed by `review complete`. Outcome A (close by --waive in one call): evaluateCloseGates runs sealProblems on the on-disk manifest before beforeReadiness (close-gates.ts:65 vs :76), so the close succeeds; the closed manifest holds seals.readinessWaivers only; `keryx review publish` then calls evaluateCloseGates (publish.ts:175), sealProblems fires on the missing target seal and publish refuses with 'manifest.json target (head ...) does not match the seal keryx wrote'. Outcome B (card waive, then complete): the second command refuses at close-gates.ts:66 for the same reason. The message blames editing manifest.json, which the operator did not do, and its stated repair (`complete --head <sha> --head-reason`) is itself refused by the same earlier check. Before this change neither command refused such a package.",
+      "impact": "In-flight and recently closed PR review packages from before the upgrade that took a readiness waiver can no longer be completed or published; the refusal is false tamper evidence and has no operator repair short of hand-editing manifest.json, which is what the seal is meant to catch.",
+      "suggested_fix": "Make the target check apply only when a target seal was ever written: guard on `manifest.seals?.target !== undefined`, or have waiveReadiness leave `seals.target` absent and sealProblems skip an absent one; alternatively have waiveReadiness/complete seal the current target when it creates the first seals object on a legacy package. Add a test: ingest a package, strip `seals`, waive one item, close, then publish.",
+      "confidence": "high",
+      "reviewer": "review-regression",
+      "class_scope": {
+        "sites": [
+          "src/review/publish.ts:175",
+          "src/review/close-gates.ts:65",
+          "src/review/readiness.ts:613",
+          "src/review/managed.ts:1148"
+        ],
+        "enumeration_method": "every writer of manifest.seals (rg seals over src/review, src/commands, src/flow, src/tui: readiness.ts waiveReadiness, managed.ts ingest and complete) against every reader of sealProblems (close-gates.ts, reached from managed.ts complete and publish.ts); only waiveReadiness can create a seals object without a target seal, and both close-gates callers (complete and publish) read it. Names changed files src/review/readiness.ts waiveReadiness and src/review/seals.ts sealProblems."
+      }
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 0, "info": 0 }
+}
+```

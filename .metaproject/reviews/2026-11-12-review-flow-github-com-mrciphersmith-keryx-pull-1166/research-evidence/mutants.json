@@ -1,0 +1,226 @@
+[
+  {
+    "id": "w1-M-01",
+    "file": "src/commands/review.ts",
+    "anchor": "if (headReason !== undefined && (headReason.value === undefined || headReason.value.trim() === \"\")) {",
+    "replacement": "if (false) {",
+    "kind": "behavior"
+  },
+  {
+    "id": "w1-M-02",
+    "file": "src/commands/review.ts",
+    "anchor": "if (headReason !== undefined && hostQuestion === undefined && !isTerminal()) {",
+    "replacement": "if (false) {",
+    "kind": "behavior"
+  },
+  {
+    "id": "w1-M-03",
+    "file": "src/commands/review.ts",
+    "anchor": "if (headReason !== undefined && hostQuestion === undefined && !isTerminal()) {",
+    "replacement": "if (headReason !== undefined && !isTerminal()) {",
+    "kind": "behavior"
+  },
+  {
+    "id": "w1-M-04",
+    "file": "src/commands/review.ts",
+    "anchor": "if ([\"--waive-coverage\", \"--head\", \"--head-reason\", \"--waive\", \"--answered-by\", \"--answer-text\", \"--question-text\"].includes(token.name)) {",
+    "replacement": "if ([\"--waive-coverage\", \"--head\", \"--waive\", \"--answered-by\", \"--answer-text\", \"--question-text\"].includes(token.name)) {",
+    "kind": "behavior"
+  },
+  {
+    "id": "w1-M-05",
+    "file": "src/commands/review.ts",
+    "anchor": "...(headReason?.value === undefined ? {} : { headReason: headReason.value }) });",
+    "replacement": "});",
+    "kind": "behavior"
+  },
+  {
+    "id": "w1-M-06",
+    "file": "src/review/managed.ts",
+    "anchor": "if (quote.length < 8 || !/[\\p{L}\\p{N}]/u.test(quote)) {",
+    "replacement": "if (quote.length === 0) {",
+    "kind": "behavior"
+  },
+  {
+    "id": "w1-M-07",
+    "file": "src/review/managed.ts",
+    "anchor": "const quote = (options.headReason ?? \"\").replace(/-{0,2}head-reason/gi, \"\").trim();",
+    "replacement": "const quote = (options.headReason ?? \"\").trim();",
+    "kind": "behavior"
+  },
+  {
+    "id": "w1-M-08",
+    "file": "src/review/managed.ts",
+    "anchor": "...(options.hostQuestion === undefined ? {} : { confirmedVia: \"host-question\" as const }) };",
+    "replacement": "};",
+    "kind": "behavior"
+  },
+  {
+    "id": "w1-M-09",
+    "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+    "anchor": "const legacyTierMigrationNotice = input[SPAWN_SUBAGENT_IGNORED_FIELDS[0]] !== undefined",
+    "replacement": "const legacyTierMigrationNotice = false",
+    "kind": "behavior"
+  },
+  {
+    "id": "w1-M-10",
+    "file": "src/commands/review.ts",
+    "anchor": "--head is the pull request head the round must match; a --head that differs from the head recorded at review start needs",
+    "replacement": "--head is the pull request head the round must match. A",
+    "kind": "presentation"
+  },
+  {
+    "id": "w2-M-01",
+    "file": "src/review/close-gates.ts",
+    "anchor": "  if (tampered !== undefined) throw new Error(`Cannot complete managed review; ${tampered}`);",
+    "replacement": "",
+    "kind": "behavior"
+  },
+  {
+    "id": "w2-M-02",
+    "file": "src/review/close-gates.ts",
+    "anchor": "    if (input.manifest.report_fields?.includes(REPORT_FIELD_EVIDENCE_LEVEL)) {",
+    "replacement": "    if (false) {",
+    "kind": "behavior"
+  },
+  {
+    "id": "w2-M-03",
+    "file": "src/review/close-gates.ts",
+    "anchor": "  if (failingItems(readiness).length > 0 && input.relaxReadiness !== true) throw",
+    "replacement": "  if (failingItems(readiness).length > 0) throw",
+    "kind": "behavior"
+  },
+  {
+    "id": "w2-M-04",
+    "file": "src/review/close-gates.ts",
+    "anchor": "input.action === \"publish\" ? \"publish\" : \"complete the review\"",
+    "replacement": "\"complete the review\"",
+    "kind": "presentation"
+  },
+  {
+    "id": "w2-M-05",
+    "file": "src/review/complete-head-gate.ts",
+    "anchor": "  return { warnings: unusable, refusal: what };",
+    "replacement": "  return { warnings: unusable };",
+    "kind": "behavior"
+  },
+  {
+    "id": "w2-M-06",
+    "file": "src/review/managed.ts",
+    "anchor": "      if (quote.length < 8 || !/[\\p{L}\\p{N}]/u.test(quote)) {",
+    "replacement": "      if (quote.length < 8) {",
+    "kind": "behavior"
+  },
+  {
+    "id": "w2-M-07",
+    "file": "src/review/managed.ts",
+    "anchor": "      const quote = (options.headReason ?? \"\").replace(/-{0,2}head-reason/gi, \"\").trim();",
+    "replacement": "      const quote = (options.headReason ?? \"\").trim();",
+    "kind": "behavior"
+  },
+  {
+    "id": "w2-M-08",
+    "file": "src/review/managed.ts",
+    "anchor": "...(options.hostQuestion === undefined ? {} : { confirmedVia: \"host-question\" as const }) };",
+    "replacement": "};",
+    "kind": "behavior"
+  },
+  {
+    "id": "w2-M-09",
+    "file": "src/review/managed.ts",
+    "anchor": "{ target: manifest.target, ...(headOverride === undefined ? {} : { head_override: headOverride }) }",
+    "replacement": "{ target: manifest.target }",
+    "kind": "behavior"
+  },
+  {
+    "id": "w2-M-10",
+    "file": "src/review/managed.ts",
+    "anchor": "          .filter((error) => !error.items.some((item) => waivedItems.has(item)))",
+    "replacement": "          .filter((error) => !(error.items.length > 0 && waivedItems.size > 0))",
+    "kind": "behavior"
+  },
+  {
+    "id": "w2-M-11",
+    "file": "src/review/research.ts",
+    "anchor": "      ...tagged(completeness, [\"files-covered\", \"blast-radius\"]),",
+    "replacement": "      ...untagged(completeness),",
+    "kind": "behavior"
+  },
+  {
+    "id": "w2-M-12",
+    "file": "src/review/research.ts",
+    "anchor": "      ...tagged(dispatch, [\"reviewers\"]),",
+    "replacement": "      ...untagged(dispatch),",
+    "kind": "behavior"
+  },
+  {
+    "id": "w2-M-13",
+    "file": "src/review/research.ts",
+    "anchor": "      ...tagged(coverage, [\"reviewers\"]),",
+    "replacement": "      ...untagged(coverage),",
+    "kind": "behavior"
+  },
+  {
+    "id": "w2-M-14",
+    "file": "src/review/research.ts",
+    "anchor": "      ...untagged(mismatch),",
+    "replacement": "      ...tagged(mismatch, [\"ledger\"]),",
+    "kind": "behavior"
+  },
+  {
+    "id": "w2-M-15",
+    "file": "src/review/readiness.ts",
+    "anchor": "  let gate = options.headGate;",
+    "replacement": "  let gate: HeadGateResult | undefined = undefined;",
+    "kind": "behavior"
+  },
+  {
+    "id": "w2-M-16",
+    "file": "src/review/readiness.ts",
+    "anchor": "  if (gate.refusal === undefined) return ok(",
+    "replacement": "  if (true) return ok(",
+    "kind": "behavior"
+  },
+  {
+    "id": "w2-M-17",
+    "file": "src/review/publish.ts",
+    "anchor": "  if (premiseCount > 0) named.push(`${premiseCount} premise decision(s)`);",
+    "replacement": "",
+    "kind": "behavior"
+  },
+  {
+    "id": "w2-M-18",
+    "file": "src/review/publish.ts",
+    "anchor": "(research?.dispatch?.coverageWaiver ?? research?.coverageWaiver)?.confirmedVia",
+    "replacement": "research?.dispatch?.coverageWaiver?.confirmedVia",
+    "kind": "behavior"
+  },
+  {
+    "id": "w2-M-19",
+    "file": "src/review/publish.ts",
+    "anchor": "  if (manifest.head_override?.confirmedVia === \"host-question\") named.push(",
+    "replacement": "  if (false) named.push(",
+    "kind": "behavior"
+  },
+  {
+    "id": "w2-M-20",
+    "file": "src/review/publish.ts",
+    "anchor": "relaxReadiness: options.partial === true",
+    "replacement": "relaxReadiness: true",
+    "kind": "behavior"
+  },
+  {
+    "id": "w2-M-21",
+    "file": "src/review/completion-host.ts",
+    "anchor": "    ...(context.headOverride === undefined ? {} : { requestedHeadOverride: context.headOverride }), snapshot,",
+    "replacement": "    snapshot,",
+    "kind": "behavior"
+  },
+  {
+    "id": "w2-M-22",
+    "file": "src/review/readiness.ts",
+    "anchor": "  const unverified = heavy.filter((finding) => record(finding.verification) === undefined);",
+    "replacement": "  const unverified = heavy.filter((finding) => record(finding.verification)?.method === undefined);",
+    "kind": "behavior"
+  }
+]

@@ -1,0 +1,60 @@
+STATUS: DONE_WITH_CONCERNS
+
+Security review of slice-04 (flow 488, PR 1166, base 66ee001, head e9ac925). The PR closes the report.md escapes: a first line that says the PR moved no longer lifts item `head`, and a `Not verified: N` line no longer lifts item `verifier`. The CLI flags `--waive`, `--waive-coverage` and `--head-reason` are refused without a TTY unless `--answered-by` is given. The question was whether an agent can still satisfy the new operator-only gates by itself. It can, without any flag. The gates read the operator's decision back from package JSON that the agent can write directly (manifest.json, findings.json), and nothing checks where that data came from. A forged entry also looks exactly like a terminal waiver, so the AC6 publish notice does not flag it.
+
+```json
+REVIEW_RESULT
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-security-code",
+  "summary": "The report.md escapes are closed, but the operator-only gates (head, verifier, the research-error filter, the head relabel) trust agent-writable package JSON without checking where it came from. An agent with file-write access can add a readiness_waivers entry or rewrite target.head in manifest.json, or attach a stub verification object in findings.json. A plain `review complete` / `review publish` then passes, with no TTY, card or --answered-by, and the publish notice says nothing. The --answered-by self-attestation that remains outside keryx shell is a deliberate, disclosed design (info).",
+  "slices": ["slice-04"],
+  "findings": [
+    {
+      "id": "SEC-1",
+      "severity": "major",
+      "reviewer": "review-security-code",
+      "location_class": "in-diff",
+      "file": "src/review/readiness.ts",
+      "line": null,
+      "quote": "if (waiver !== undefined) return { ...spec, status: \"waived\", evidence: verdict.evidence, repair: verdict.repair, waiver: { operatorQuote: waiver.operator_quote, time: waiver.time } };",
+      "problem": "The operator-only gates this PR introduces are enforced only at the CLI-flag layer. The checks that decide the close read the operator's decision back from package files the agent can write itself, and nothing establishes where an entry came from. (1) computeReadiness marks any item `waived` when manifest.json `readiness_waivers` holds an entry for it. It does not look at confirmedVia, a card press or a host question, and terminal waivers carry no confirmedVia either, so a hand-written entry cannot be told apart from a TTY one. (2) managed.ts filters research errors by the same unauthenticated list: `const waivedItems = new Set((manifest.readiness_waivers ?? []).map((waiver) => waiver.item));`. (3) The new `--head-reason` requirement applies only on the `options.head` path (`const quote = (options.headReason ?? \"\").replace(/-{0,2}head-reason/gi, \"\").trim();`). The head gate compares whatever `target.head` manifest.json holds (`const moved = reviewed !== null && prHead !== null && !sameCommit(reviewed, prHead);`), and roundRecordTampered hashes only round.json and prior_findings.json, not `target`. (4) verifierCheck accepts any object as a verifier's result: `const unverified = heavy.filter((finding) => record(finding.verification) === undefined);`, so `\"verification\": {}` in findings.json passes item 4. The new doc comment says the opposite: 'only the verifier's result, or the operator's waiver, lifts it'.",
+      "impact": "Attack vector: an agent in the session (attacker = the agent that the operator-only gates are meant to bind) uses its file-write tool on .metaproject/reviews/<pkg>/. It appends {\"item\":\"head\",\"operator_quote\":\"operator accepts the moved head\",\"time\":\"...\"} (or item verifier / ledger / reviewers / files-covered) to manifest.json readiness_waivers. Or it sets target.head to the PR's current head, or adds \"verification\":{} to each blocker/major in findings.json. It then runs plain `keryx review complete <pkg>` or `keryx review publish <pkg>`. No TTY, card or --answered-by is involved, so none of the new refusals in runComplete fire. The round closes as READY, or publishes to the PR as a full review with no 'Partial review' header, even though the PR moved or the blocker/major findings were never verified. hostQuestionNotice names only confirmedVia === \"host-question\" entries, so the forged decision reaches GitHub without any provenance notice. The edit is the same kind of agent write the PR removes from report.md, moved to manifest.json/findings.json, and AC1/AC3 as described ('relabelling the reviewed head is the operator's act, not the agent's') do not hold.",
+      "suggested_fix": "Bind operator decisions to a record the agent cannot write as plain package JSON, and verify it in evaluateCloseGates, which complete and publish now share. (a) Stamp every waiver and head_override with an explicit confirmedVia, including a new \"terminal\" value for the TTY path. Then treat an entry without a known confirmedVia, or without its card press or host question, as not waived, and name it as unprovenanced. (b) Record each operator decision in the local round registry outside the repository (as round-registry.ts already does for finished rounds), keyed by package and the sha256 of its entry, and have computeReadiness count a waiver only when the registry holds it. (c) Add `target` (with head) to the round stamp written at `review start`, and refuse in roundRecordTampered when it changes other than through the `--head`/`--head-reason` path that records head_override. (d) Make verifierCheck require a verification whose verifier and verdict match a result the verifier dispatch actually produced (a raw/ file or a dispatch run), not any object.",
+      "evidence": "Head reads: src/review/readiness.ts:479-485 (waivers map → status waived, no provenance check); src/review/managed.ts:1119 (waivedItems from manifest filters research errors); src/review/managed.ts:1059 (head-reason enforced only when options.head is set); src/review/complete-head-gate.ts:48-49 (gate uses manifest target.head); src/review/round-record.ts:104-145 (stamp hashes round.json and prior_findings.json only; MANIFEST_IDENTITY_FIELDS at :156 is for the post-close registry and explicitly excludes readiness waivers); src/review/readiness.ts:238 (verification = any record); src/commands/review.ts:4950-4960 (the TTY refusals key off CLI flags only, so a direct file edit never reaches them); src/review/publish.ts:69-72 (notice only for host-question entries). Test round-trip.test.ts in this slice writes `verification` into findings.json by hand to pass item 4, which is the same move an agent would make.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "src/review/readiness.ts:484 (readiness_waivers → waived, any entry)",
+          "src/review/managed.ts:1119 (research-error filter from readiness_waivers)",
+          "src/review/complete-head-gate.ts:49 (head gate trusts manifest target.head; relabel reason enforced only at managed.ts:1059 for the --head flag)",
+          "src/review/readiness.ts:238 (verifier item accepts any verification object in findings.json)",
+          "src/review/publish.ts:69 (provenance notice keys off confirmedVia === host-question, so a forged entry with no confirmedVia is silent)",
+          "src/commands/operator-confirm-review.ts:373 (card path writes the same manifest list; correct writer, but the reader cannot tell it from a forged entry)"
+        ],
+        "enumeration_method": "keryx ctx rg -l readiness_waivers over src (non-test): 6 files (completion-host, publish, managed, readiness, types, operator-confirm-review), each read for readers versus writers. keryx ctx rg for waiveReadiness( callers (3) and for the head-reason/isTerminal refusals in src/commands/review.ts. Read roundRecordTampered/writeRoundRecord for which manifest fields are hashed at start."
+      }
+    },
+    {
+      "id": "SEC-2",
+      "severity": "info",
+      "reviewer": "review-security-code",
+      "location_class": "pre-existing",
+      "publication": "question",
+      "file": "src/review/managed.ts",
+      "line": null,
+      "quote": "if (process.env[\"KERYX_TOOL_CALL\"] === \"1\" || process.env[\"KERYX_UNATTENDED\"] === \"1\" || isAutonomousEnv(process.env) || readRunProfile(packageDir)?.mode === \"unattended\") {",
+      "problem": "Outside keryx shell (for example a Claude Code or Codex Bash tool, where none of these env markers is set and the run profile is attended), `--answered-by` lets the agent satisfy `--waive head`, `--waive verifier` and `--head-reason` alone. It passes `--answer-text yes` and a `--question-text` that validateCompletionHost prints verbatim in its own refusal ('ask the current question verbatim'). This is the flow 467 design ('reported provenance, not a cryptographic attestation'), and this PR's AC6 notice discloses it in the published body, so by law 4 it is not reported as a defect. The residual gap: the notice appears only in the published body, not in `review complete` output or report.md. Dispositions recorded under a host-question completion (completionConfirmations) are not named either.",
+      "impact": "No new path beyond the documented design. A reader of a closed but unpublished package, or of the flow-complete review gate, sees host-question waivers only by inspecting confirmedVia in manifest.json.",
+      "suggested_fix": "Optional: print the same host-question notice in `review complete` output and in the report.md partial header. Settle whether a known agent-shell marker (for example the host's own env variable) should be treated like KERYX_TOOL_CALL for --answered-by.",
+      "evidence": "src/commands/review-operator.ts:575-584 (reviewCompletionHostAnswer builds the HostQuestion from CLI flags); src/review/completion-host.ts validateCompletionHost (plain yes plus verbatim question, question echoed in the refusal); src/commands/review.ts:4954 (head-reason TTY refusal skipped when hostQuestion is present); src/review/run-profile.ts:41-43 (isAutonomousEnv = answers-file env only).",
+      "confidence": "high"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 0, "info": 1 }
+}
+```
+
+Clean areas checked: injection (no shell or SQL built from input in the slice; the quote-stripping regexes are fixed literals); path traversal (packageDir comes from resolveReviewPackagePath, and the new code joins only fixed basenames); secrets (none); crypto (sha256 snapshot binding in completion-host is unchanged, and headOverride is now included in the bound question, which is correct); publish ordering (evaluateCloseGates now runs the tamper and evidence checks before `--partial` can relax readiness, which is correct); the waiver-scope tagging (integrity errors carry no items, so no waiver drops them, which is correct).
+
+graph_context: unavailable (missing_graph not consulted; bounded slice review, navigation via keryx ctx rg). Routing audit: graph_used: no (not-relevant: bounded slice), wiki_used: no (not-relevant), ctx_used: yes (keryx ctx rg), raw_rg_used: no.

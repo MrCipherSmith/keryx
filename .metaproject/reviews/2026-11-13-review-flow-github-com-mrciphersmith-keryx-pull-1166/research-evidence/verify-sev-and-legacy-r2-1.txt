@@ -1,0 +1,20 @@
+# keryx review verify-run
+finding: sev-and-legacy-r2
+command: bun test /private/tmp/claude-502/-Users-tsaitler-aleksandr--claude-spares-spare-RGG1DI/24c35b9d-7964-4a40-a9a6-b3e3b97d14b7/scratchpad/r2-repro2.test.ts --timeout 30000
+cwd: /Users/tsaitler.aleksandr/goodea/keryx/.claude/worktrees/review-process-audit
+time: 2026-11-13T07:42:51.746Z
+exit: 0
+
+--- stdout ---
+bun test v1.4.4 (38afee6c8)
+SEC-2 control: fail 1 of 1 blocker/major finding(s) carry no verification keryx recorded
+SEC-2 edited: pass 0 blocker/major finding(s), all verified
+DEG-1: fail {"number":4,"id":"verifier","title":"the verifier checked every blocker and major finding, or the operator waived it","status":"fail","evidence":"1 of 1 blocker/major finding(s) carry no verification keryx recorded; findings.json holds f-1 (a verification keryx did not record (no matching seal: it was not applied by `keryx review ingest --verifications`)), which is not honoured","repair":"run the verifier (review-verifier) on them, or the operator waives it: in keryx shell call the review_waive_readiness tool with item verifier; in a terminal run keryx review complete ../../../../../../../private/var/folders/jf/64tx6_916wv1vk7_ffp27mdm0000gp/T/r2-llGL6l/.metaproject/reviews/deg1 --waive verifier \"<operator quote>\""}
+--- stderr ---
+
+../../../../../../../private/tmp/claude-502/-Users-tsaitler-aleksandr--claude-spares-spare-RGG1DI/24c35b9d-7964-4a40-a9a6-b3e3b97d14b7/scratchpad/r2-repro2.test.ts:
+
+ 3 pass
+ 0 fail
+ 3 expect() calls
+Ran 3 tests across 1 file. [153.00ms]

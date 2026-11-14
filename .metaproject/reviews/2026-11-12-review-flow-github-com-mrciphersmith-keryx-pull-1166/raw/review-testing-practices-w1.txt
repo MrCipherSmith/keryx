@@ -1,0 +1,75 @@
+STATUS: DONE
+
+Mutation pass: SKIPPED. The payload grants `allowed_tools: read-only` and `exec_budget_s: 0`, so no suite was run and no mutation result is reported. Cap: 0 of 10 proposed mutants run; all 10 are listed in `mutant_candidates` for the main session to run (none are previous-round gates; this is round 1).
+
+Reading summary for slice-03. The new `--head-reason` path is well pinned for a read-only pass: `src/review/complete-head-relabel.test.ts` drives the managed refusal (both SHAs named, manifest untouched), the too-short and flag-name quotes, the recorded `head_override`, the equal-head and absent-head no-override cases, and the CLI terminal gate in both directions (`isTerminal: () => false` refused, `true` passes). `src/commands/review.test.ts` was updated correctly: the strict case now passes `--head-reason` so it reaches readiness item `head` and asserts `--waive head`, rather than failing on the relabel quote. `review-spawn-field-contract.test.ts` derives accepted and ignored names from the tool's own schema and exported constant, and has positive controls (the old offending sentence is flagged) beside the per-file scan. The `model_tier` migration notice is pinned in `spawn-subagent-routing.test.ts:307`.
+
+```json
+{
+  "REVIEW_RESULT": {
+    "reviewer": "review-testing-practices",
+    "status": "DONE",
+    "slices": ["slice-03"],
+    "findings": [
+      {
+        "id": "F-001",
+        "severity": "minor",
+        "title": "Head-gate test now fails on the relabel quote, not on the PR-head gate it names",
+        "path": "src/review/complete-head-gate.test.ts",
+        "line": 177,
+        "quote": "test(\"--head does not loosen the gate: a head that is not the PR's head still fails, and the manifest stays as it was\", async () => {",
+        "problem": "After flow 488, `completeManagedReview(..., { head: MOVED })` with recorded head HEAD and no `headReason` is refused at managed.ts:1060-1061 (the relabel-quote check) before readiness item `head` is ever evaluated; the test's new assertion `toContain(\"--head-reason\")` confirms it rides that path. The test's name claims the PR-head gate is not loosened, but deleting the PR-head readiness check would leave this test green. It now duplicates complete-head-relabel.test.ts:17 instead of pinning its titled behaviour. The claim is pinned only at the CLI layer (review.test.ts:250-254) and by the waiver-positive test at line 189, which never shows a refusal at the managed layer.",
+        "impact": "Reads as managed-layer coverage of 'a non-PR head still fails' that it no longer provides; the next edit to the head readiness item is protected only by the CLI test.",
+        "suggested_fix": "Pass `headReason: REASON` in this test so it clears the relabel check and reaches readiness, and assert the refusal names item `head` / `--waive head` (as review.test.ts:254 does), keeping the manifest-unchanged assertions.",
+        "evidence": "complete-head-gate.test.ts:178-186 (no headReason; asserts \"--head-reason\"); managed.ts:1057-1061 throws on quote.length < 8 before any readiness evaluation; complete-head-relabel.test.ts:17-28 asserts the same refusal.",
+        "confidence": "high",
+        "location_class": "in-diff"
+      },
+      {
+        "id": "F-002",
+        "severity": "info",
+        "title": "Host-question path for --head-reason is not driven by any test; publish fixture is hand-built",
+        "path": "src/commands/review.ts",
+        "line": 4954,
+        "quote": "if (headReason !== undefined && hostQuestion === undefined && !isTerminal()) {",
+        "problem": "The docs added in this slice say a head relabel may come from `--answered-by` (cli-reference, review-with-a-record 'Relabelled head'), and the producer records `confirmedVia: \"host-question\"` only when `options.hostQuestion` is set (managed.ts:1063). No test found runs `complete --head <other> --head-reason ... --answered-by ...`: the tests that mention `head_override` either use a terminal (complete-head-relabel.test.ts:68-76, review.test.ts:243) or hand-build the manifest (publish.test.ts:134 sets `confirmedVia: \"host-question\"` directly). By reading, deleting the `hostQuestion === undefined &&` conjunct, or the confirmedVia spread at managed.ts:1063, would leave the suite green. This is a prediction (no suite was run), so it is info.",
+        "impact": "The provenance marking that publish.ts:70 surfaces for host-question relabels is exercised only from a fixture, not from the producer that must emit it.",
+        "suggested_fix": "Add one CLI test with `isTerminal: () => false` and a valid `--answered-by claude-code:<id> --answer-text ... --question-text ...` plus `--head <other> --head-reason ...`, asserting the close succeeds and the manifest's `head_override.confirmedVia` is `host-question`. Running mutants M-03 and M-08 settles whether it is needed.",
+        "evidence": "keryx ctx rg for head-reason|head_override across src: only publish.test.ts:134 carries confirmedVia on head_override; no test file combines --answered-by with --head-reason.",
+        "confidence": "medium",
+        "location_class": "in-diff"
+      },
+      {
+        "id": "F-003",
+        "severity": "info",
+        "title": "Spawn-field contract test scans review skills only; a user guide still names model_tier as a spawn_subagent input",
+        "path": "docs/docs/guides/agent-catalog.md",
+        "line": 16,
+        "quote": "into ordinary `spawn_subagent` inputs (`task`, `mode`, `model_tier`, ...).",
+        "problem": "review-spawn-field-contract.test.ts scans `src/gdskills/bundled/skills/review` (REVIEW_SKILLS_ROOT) only, which matches AC7's stated scope. The same ignored field is still documented as a spawn input at docs/docs/guides/agent-catalog.md:16 and :145 (and docs/requirements/.../W2-agent-catalog.md:215). Not a skill instruction, so not the AC7 defect class; noted so the scope boundary is a stated choice.",
+        "impact": "None at runtime; a reader of the guide is told to pass a field the tool ignores.",
+        "suggested_fix": "Either update the guide to `model_class`, or widen the scanner's root to the docs guides if that is in scope for a later flow.",
+        "evidence": "keryx ctx rg 'spawn_subagent.*model_tier|model_tier.*spawn_subagent' over src/gdskills and docs; all other `model_tier` hits under bundled review skills are frontmatter (line 3, 27 files).",
+        "confidence": "high",
+        "location_class": "pre-existing"
+      }
+    ],
+    "mutant_candidates": [
+      { "id": "M-01", "file": "src/commands/review.ts", "anchor": "if (headReason !== undefined && (headReason.value === undefined || headReason.value.trim() === \"\")) {", "replacement": "if (false) {", "kind": "behavior" },
+      { "id": "M-02", "file": "src/commands/review.ts", "anchor": "if (headReason !== undefined && hostQuestion === undefined && !isTerminal()) {", "replacement": "if (false) {", "kind": "behavior" },
+      { "id": "M-03", "file": "src/commands/review.ts", "anchor": "if (headReason !== undefined && hostQuestion === undefined && !isTerminal()) {", "replacement": "if (headReason !== undefined && !isTerminal()) {", "kind": "behavior" },
+      { "id": "M-04", "file": "src/commands/review.ts", "anchor": "if ([\"--waive-coverage\", \"--head\", \"--head-reason\", \"--waive\", \"--answered-by\", \"--answer-text\", \"--question-text\"].includes(token.name)) {", "replacement": "if ([\"--waive-coverage\", \"--head\", \"--waive\", \"--answered-by\", \"--answer-text\", \"--question-text\"].includes(token.name)) {", "kind": "behavior" },
+      { "id": "M-05", "file": "src/commands/review.ts", "anchor": "...(headReason?.value === undefined ? {} : { headReason: headReason.value }) });", "replacement": "});", "kind": "behavior" },
+      { "id": "M-06", "file": "src/review/managed.ts", "anchor": "if (quote.length < 8 || !/[\\p{L}\\p{N}]/u.test(quote)) {", "replacement": "if (quote.length === 0) {", "kind": "behavior" },
+      { "id": "M-07", "file": "src/review/managed.ts", "anchor": "const quote = (options.headReason ?? \"\").replace(/-{0,2}head-reason/gi, \"\").trim();", "replacement": "const quote = (options.headReason ?? \"\").trim();", "kind": "behavior" },
+      { "id": "M-08", "file": "src/review/managed.ts", "anchor": "...(options.hostQuestion === undefined ? {} : { confirmedVia: \"host-question\" as const }) };", "replacement": "};", "kind": "behavior" },
+      { "id": "M-09", "file": "src/harness/tool/builtin/spawn-subagent-tool.ts", "anchor": "const legacyTierMigrationNotice = input[SPAWN_SUBAGENT_IGNORED_FIELDS[0]] !== undefined", "replacement": "const legacyTierMigrationNotice = false", "kind": "behavior" },
+      { "id": "M-10", "file": "src/commands/review.ts", "anchor": "--head is the pull request head the round must match; a --head that differs from the head recorded at review start needs", "replacement": "--head is the pull request head the round must match. A", "kind": "presentation" }
+    ]
+  }
+}
+```
+
+Mutation table: none run (read-only payload, exec_budget_s 0). Not reached: 10 of 10 candidates (M-01..M-10). By reading only (not results): M-02, M-04, M-05, M-06, M-07, M-09 appear pinned by complete-head-relabel.test.ts, review.test.ts:237-254 and spawn-subagent-routing.test.ts:307; M-01, M-03, M-08 appear unpinned.
+
+Routing audit: graph_used: no (narrow slice review; payload carried no layers block), wiki_used: no (not-relevant: test-practice review of a bounded slice), ctx_used: yes (keryx ctx rg for every search), raw_rg_used: no.

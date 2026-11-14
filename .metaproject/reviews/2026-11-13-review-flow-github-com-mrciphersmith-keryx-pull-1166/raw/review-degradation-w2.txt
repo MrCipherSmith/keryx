@@ -1,0 +1,61 @@
+STATUS: DONE
+```json REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-degradation",
+  "slices": ["slice-02"],
+  "summary": "slice-02 (kind new) read in full; the merged-from-main files named in the dispatch (flow 487, remote-control.md, cli-reference/commands-by-task/drive-keryx-remotely docs, agent-commands/shell-* tests) were skipped. The slice's own substance is the CHANGELOG Unreleased entry, the manifest `seals` schema, flow 488 AC9 and the operator-confirm test fixture, so the seal mechanism they describe (src/review/seals.ts, close-gates.ts, managed.ts complete path, readiness.ts waiveReadiness, publish.ts) was traced at head b076a85a6354. Graph layer not queried: the changed shared exports sit outside this slice; consumers of sealProblems/evaluateCloseGates were enumerated by `keryx ctx rg` (search-derived): close-gates.ts, managed.ts:1125, publish.ts:175. Findings: F-001 major (a pre-seal PR-bound package that the operator waives through keryx gets a partial `seals` object with no target seal, after which every close gate refuses it, `publish --partial` included; this is the CHANGELOG's own documented repair path); F-002 minor (CHANGELOG under-describes the AC9 break that seals.ts says it documents); F-003 minor (AC9 added without a verify marker, kind `unclassified`). Verified clean: package.json override bumps (hono ^4.13.18, @hono/node-server ^2.1.8) only raise floors, version 0.4.27 comes from the merged release; the `seals` schema (additionalProperties false; target, headOverride, readinessWaivers, verifications) matches every writer found (managed.ts:521, managed.ts:1149, readiness.ts:613); operator-confirm-review-tools.test.ts now builds the PR target through createManagedReviewPackage instead of rewriting manifest.json, which is the correct fixture under the seal (a direct rewrite is now refused by design) and still asserts the card head, evidence level and closed status; model-selection.mdc spawn paragraph matches the model_class/ignored model_tier contract; flow 490 T11/T12 and the 488 journal/flow.json are bookkeeping; gdgraph/testing artifacts and the review-note memory file are generated. Not checked: whether `keryx flow complete` refuses an `unclassified` AC kind (F-003 says what would settle it).",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "reviewer": "review-degradation",
+      "degradation_class": "behaviour-delta",
+      "evidence_kind": "consumer-trace",
+      "file": "src/review/readiness.ts",
+      "line": 613,
+      "quote": "seals: { ...(manifest.seals ?? {}), readinessWaivers }",
+      "problem": "A package written before the seals (no `manifest.seals`) is meant to have its target left unchecked (seals.ts:78, :87 `manifest.seals !== undefined && ...`). But keryx's own waiver path turns it into a package that does have seals and no target seal: waiveReadiness writes `seals: { readinessWaivers }` with no `target` (readiness.ts:613), and the close keeps exactly that when `stored.seals` was undefined and no `--head` was given (managed.ts:1148-1150: `stored.seals !== undefined || options.head !== undefined ? {..., target: sealTarget(...)} : manifest.seals`). From then on sealProblems sees `seals` defined, a PR-bound target and `seals.target` undefined, and pushes 'manifest.json target ... does not match the seal keryx wrote' (seals.ts:87-90). evaluateCloseGates throws on that before the evidence, research and readiness steps, and before `relaxReadiness` is consulted (close-gates.ts:65-66), so `review publish` refuses the package and `review publish --partial` refuses it too (publish.ts:175). On base, the same --waive close leaves a package that publish accepts.",
+      "impact": "The CHANGELOG's documented repair for a package closed through the removed escapes (CHANGELOG.md:8: `keryx review complete <package> --waive verifier|head \"<their words>\"`, or publish with `--partial`) leaves a PR-bound pre-seal package that can never be published. The waiver is still recorded, but publish refuses outright, and the refusal tells the operator their manifest was edited outside keryx, which is false. The same happens to any round that was in flight across the upgrade and is closed with `--waive`, or waived through the review_waive_readiness card. In the card case `review complete` itself then refuses at close-gates.ts:65. The only escapes are knowing to repeat `--head <recorded sha>` at close (which makes managed.ts:1148 seal the target) or editing manifest.json by hand, which is exactly what the seals forbid.",
+      "suggested_fix": "Keep the 'no seals = target unchecked' state consistent. Either key the target check on `manifest.seals?.target !== undefined` rather than on `manifest.seals !== undefined` (seals.ts:87), or have waiveReadiness and the close seal the current target whenever they create `seals` on a package that had none (readiness.ts:613; managed.ts:1148: also seal when `manifest.seals !== undefined`). Add a test: build a PR-bound package with no `seals`, run `completeManagedReview` with `waiveReadiness`, then assert that `publishManagedReview` (and `--partial`) is not refused with the target-seal message.",
+      "evidence": "Consumer trace at head b076a85a6354: readiness.ts:609-613 (waiver seal written, `...(manifest.seals ?? {})` adds no target); managed.ts:1131-1135 (beforeReadiness calls waiveReadiness, then reloads manifest from disk, now with seals {readinessWaivers}); managed.ts:1148-1153 (stored.seals undefined, options.head undefined, so `seals = manifest.seals` with no target is written to the closed manifest); seals.ts:87 (target check gated only on `manifest.seals !== undefined`); close-gates.ts:65-66 (sealProblems throws before relaxReadiness is read at :57/:80); publish.ts:175 (publish calls evaluateCloseGates). Refute attempts: seals.ts:14-16 and :78 state that pre-seal packages keep their target unchecked, so the refusal contradicts the stated design and is not a deliberate choice (law 4). close-gates.test-helpers.ts:54 and readiness.test.ts:71 always add `target: manifest.seals?.target ?? sealTarget(...)` to fixtures, so no test reaches the partial-seal state. A search for 'predat|before the seals|no seals|legacy' in src/review found no test of a pre-seal package being waived. Base: on main, close-gates.ts and seals.ts do not exist and publish ran readiness alone, so a --waive close was publishable.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": ["src/review/readiness.ts:613", "src/review/managed.ts:1148", "src/review/seals.ts:87", "src/review/close-gates.ts:65"],
+        "enumeration_method": "keryx ctx rg 'seals\\b|sealTarget|sealWaiver|sealHeadOverride|withVerificationSeals' over src/review and src/commands (search-derived; the graph was not asked because these exports are outside slice-02): every writer of manifest.seals is managed.ts:521 (ingest, always seals the target, so it is not affected), managed.ts:1149 (close, seals the target only on the stored-seals or --head branch) and readiness.ts:613 (waiver, never seals the target). The one reader of seals.target is seals.ts:87, reached through close-gates.ts:65 by managed.ts:1125 (complete) and publish.ts:175 (publish)."
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "reviewer": "review-degradation",
+      "degradation_class": "diff-vs-description",
+      "evidence_kind": "base-diff",
+      "file": "CHANGELOG.md",
+      "line": 8,
+      "quote": "**Breaking for packages closed through the removed escapes.**",
+      "problem": "seals.ts:14-15 says that waivers and verifications in packages written before the seals are no longer honoured, and that 'the flow 488 CHANGELOG entry says so'. The Unreleased entry does not say it. It describes only packages closed on a `Not verified: N` line or a first-line head statement, and it never mentions the seals: a pre-seal package's operator waivers (any item) recorded with `--waive` or the card, its ingest-applied verifications, and a manifest edited by hand (head_override, target.head) are now not honoured by complete, publish or readiness.",
+      "impact": "An operator who upgrades finds packages that were closed legitimately, with real operator waivers or verifier results, reading NOT READY and refused by publish. The release notes give no cause or repair for that, and they list the repair that F-001 shows dead-ends for PR-bound packages.",
+      "suggested_fix": "Extend the Breaking bullet: packages written before this release carry no seals, so their readiness waivers and verifier results are not honoured until they are re-recorded through `review complete --waive` / `review ingest --verifications`; direct edits of manifest.json or findings.json are refused. Once F-001 is fixed, make the stated repair match the code.",
+      "evidence": "Read CHANGELOG.md:5-8 at head (the two Unreleased bullets, no mention of seals or of pre-seal waivers and verifications) against seals.ts:14-16 (the comment that claims the CHANGELOG documents it) and against readiness.ts:488 and seals.ts:52-74 (unsealed waivers and verifications are not honoured). Refute attempt: the operator accepted the NOT READY outcome (seals.ts:15; journal SEC-1 decision 'Закрыть в этом PR'), so the behaviour itself is a recorded decision and is not filed here; only the description gap is.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "reviewer": "review-degradation",
+      "degradation_class": "debt",
+      "evidence_kind": "base-diff",
+      "file": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/acceptance-criteria.md",
+      "line": 22,
+      "quote": "- AC9: An operator decision the close gates honour",
+      "problem": "AC9 was added through `flow ac update` with no `[verify: ...]` marker, so flow.json records it as `\"AC9\": { \"kind\": \"unclassified\" }`. The same file's contract (lines 7-9) requires every criterion to end with an exec, invariant, judged or none marker. AC1-AC7 each carry `[verify: exec ...]` and AC8 carries `[verify: judged]`. The criterion itself asks for a test that edits each file directly and asserts the refusal, and src/review/seals.test.ts ('seals keep hand-written gate inputs out (SEC-1)') looks like that check, but nothing binds AC9 to it.",
+      "impact": "AC9 is the one criterion the round-1 scope widening added, and the flow cannot confirm it mechanically. Either `flow complete` stops on an unclassified AC, or AC9 is confirmed with nothing executable behind it.",
+      "suggested_fix": "`keryx flow ac update 488 AC9` with the same text plus `[verify: exec \\`bun test src/review/seals.test.ts\\`]`, so acKinds records AC9 as exec.",
+      "evidence": "Read slice-02.diff: acceptance-criteria.md hunk (AC9 added with no marker; AC1-AC8 all marked) and flow.json hunk (`\"AC9\": {\"kind\": \"unclassified\"}` beside exec/judged kinds). Not settled: whether `keryx flow complete` refuses an unclassified kind. Check: `keryx flow status 488` or a dry `keryx flow complete 488`.",
+      "confidence": "medium"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 2, "info": 0 }
+}
+```

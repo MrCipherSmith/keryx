@@ -1,0 +1,17 @@
+{
+  "reviewer": "review-logic",
+  "wave": 9,
+  "waves": 10,
+  "slices": [
+    "slice-05"
+  ],
+  "slicePaths": [
+    {
+      "id": "slice-05",
+      "path": "/Users/tsaitler.aleksandr/goodea/keryx/.claude/worktrees/review-process-audit/.metaproject/reviews/2026-11-13-review-flow-github-com-mrciphersmith-keryx-pull-1166/slices/slice-05.diff",
+      "bytes": 140406
+    }
+  ],
+  "result": "raw/review-logic-w9.txt",
+  "definition": ".metaproject/skills/gdskills/review/review-logic/SKILL.md"
+}

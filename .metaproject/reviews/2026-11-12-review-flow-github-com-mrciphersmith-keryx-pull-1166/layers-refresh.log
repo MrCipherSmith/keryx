@@ -1,0 +1,12 @@
+graph: ok @e9ac925 = head (PR head e9ac925), 4002 nodes, 15080 edges, built 2026-11-12T12:19:56.026Z
+wiki: ok @e9ac925, divergence none, 16 page(s) would refresh (dry run), 26 page(s) with stale prose
+memory: ok @e9ac925, divergence none, 61 entries
+graph: ok @e9ac925 = head (PR head e9ac925), 4002 nodes, 15080 edges, built 2026-11-12T12:19:56.026Z
+wiki: ok @2741745, divergence differs (1 commit(s), 0 wiki/memory path(s)), 16 page(s) would refresh (dry run), 26 page(s) with stale prose
+memory: ok @2741745, divergence differs (1 commit(s), 0 wiki/memory path(s)), 61 entries
+graph: ok @e9ac925 = head (PR head e9ac925), 4002 nodes, 15080 edges, built 2026-11-12T12:19:56.026Z
+wiki: ok @2741745, divergence differs (1 commit(s), 0 wiki/memory path(s)), 16 page(s) would refresh (dry run), 26 page(s) with stale prose
+memory: ok @2741745, divergence differs (1 commit(s), 0 wiki/memory path(s)), 61 entries
+graph: ok @e9ac925 = head (PR head e9ac925), 4002 nodes, 15080 edges, built 2026-11-12T12:19:56.026Z
+wiki: ok @2741745, divergence differs (1 commit(s), 0 wiki/memory path(s)), 16 page(s) would refresh (dry run), 26 page(s) with stale prose
+memory: ok @2741745, divergence differs (1 commit(s), 0 wiki/memory path(s)), 61 entries

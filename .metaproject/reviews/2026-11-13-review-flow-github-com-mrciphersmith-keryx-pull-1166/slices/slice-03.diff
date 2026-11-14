@@ -1,0 +1,2209 @@
+--- src/commands/agent-commands.ts
+@@ 34,74 @@
+ 
+ /** A registry entry: one command, plus what it means in each mode it exists in. */
+ export interface AgentSlashCommand {
+   /** The slash token, e.g. `/help`. */
+   name: string;
+   /** Description for every listed mode that has no `modeDescriptions` override. */
+   description: string;
+   /** The modes this command is available in. Never empty. */
+   modes: readonly ShellMode[];
+   /**
+    * Per-mode description overrides, for commands whose SEMANTICS differ between
+    * the surfaces (flow 112 risk R4) — not for cosmetic rewording. Present only
+    * on `/model`, `/connect` and `/exit`.
+    */
+   modeDescriptions?: Readonly<Partial<Record<ShellMode, string>>>;
+ }
+ 
+ const CHAT_ONLY: readonly ShellMode[] = ["chat"];
+ const AGENT_ONLY: readonly ShellMode[] = ["agent"];
+ const BOTH: readonly ShellMode[] = ["chat", "agent"];
++export const HISTORY_COMMAND = "/history";
+ 
+ /**
+  * The commands, in menu order. Filtering this list to `agent` reproduces the
+  * pre-flow-112 agent menu's SET and ORDER exactly — but not verbatim: four
+  * descriptions were sharpened when the registry became mode-aware (`/model`,
+  * `/connect` and `/exit`, which now spell out the agent-mode behaviour their
+  * `modeDescriptions` carry, plus `/compact`, which names its `[focus]` argument).
+  */
+ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
+   { name: "/help", description: "Show available commands", modes: BOTH },
+   {
+     name: "/model",
+     description: "Switch the model",
+     modes: BOTH,
+     modeDescriptions: {
+       // Two genuinely different commands behind one token (R4).
+       agent: "Switch the model (interactive picker)",
+       chat: "Switch the active model for later turns — /model <name>",
+     },
+   },
+
+--- src/commands/agent-commands.ts
+@@ 161,203 @@
+     // TUI-only, same reasoning as /workspace: the sidebar badge, mouse
+     // click, and list+detail modal (with its [a]/[y] accept) all need the
+     // OpenTUI surface.
+     modes: AGENT_ONLY,
+   },
+   {
+     // The managed pull request reviews and what the review bot's findings came to. The modal and
+     // the sidebar row need the OpenTUI surface; the readline agent REPL prints the same numbers as text.
+     name: "/reviews",
+     description: "Managed pull request reviews: findings by outcome, precision, resolved before merge",
+     modes: AGENT_ONLY,
+   },
+   {
+     // Flow 376: the Telegram topic for this session. Turning it on is TUI-only (the modal, the
+     // sidebar row); the readline agent REPL prints the status as text.
+     name: "/remote-control",
+     description: "Drive this session from a Telegram topic: /remote-control [name|off|status]. Off by default. Shows the review cards (review_confirm_plan, review_decide_premise, review_waive_readiness, review_waive_coverage, review_complete) waiting for a press",
+     modes: AGENT_ONLY,
+   },
+   {
+-    // Flow 399: post the session's last messages to the remote-control topic. Needs remote control
+-    // on; the readline agent REPL has no topic and says so.
+-    name: "/history",
+-    description: "Post the last messages of this session to the Telegram topic: /history [N], 1 to 20",
+-    modes: AGENT_ONLY,
++    name: HISTORY_COMMAND,
++    description: "View the session conversation · Ctrl+Shift+H in the full-screen shell",
++    modes: BOTH,
+   },
+   {
+     // Flow 377: the machine's Telegram connection. Connect needs the hidden token entry of the
+     // full-screen shell; the readline agent REPL prints the state and says where to connect.
+     name: "/channels",
+     description: "Connect, test or disconnect Telegram for this machine: /channels [status]",
+     modes: AGENT_ONLY,
+   },
+   {
+     // Flow 403: the GitHub work intake. The full-screen shell opens a modal; the readline REPL prints
+     // the same status as text.
+     name: "/intake",
+     description: "GitHub work intake: cards waiting for a decision, pause, poll by hand: /intake [status|list|pause|resume|poll]",
+     modes: AGENT_ONLY,
+   },
+   {
+     // Flow 395: how replies are written for Telegram (tables, lists, the fallback chain). Also a
+     // row of /settings and a line of /channels; works in the readline REPL as text.
+     name: "/rendering",
+     description: "How Telegram replies are written: /rendering [auto|rich|html|plain]",
+
+--- src/commands/agent-commands.ts
+@@ 205,250 @@
+   },
+   {
+     // Flow 396: the saved defaults for a turn that came from Telegram (mode, run limit, approval wait).
+     // It never changes the shell's own mode; the full-screen shell also updates its running copy.
+     name: "/remote-policy",
+     description: "Telegram defaults: /remote-policy [mode ask|trust] [limit none|<minutes>] [wait <minutes>]. Never changes the shell's /mode",
+     modes: AGENT_ONLY,
+   },
+   {
+     // Flow 393: the operator's view of the working memory. Both are plain text, so they run in the
+     // readline REPL and the full-screen shell alike.
+     name: "/trail",
+     description: "The tool calls this session recorded: /trail [count] [tool=NAME] [file=TEXT] [from=STEP] [to=STEP]",
+     modes: AGENT_ONLY,
+   },
+   {
+     name: "/notes",
+     description: "The notes the model keeps for itself: /notes [key]",
+     modes: AGENT_ONLY,
+   },
++  {
++    // Flow 487: dump the tool-call diagnostics (in-flight calls, stage ages, dock queue) to a file.
++    name: "/diag",
++    description: "Dump the tool-call diagnostics (in-flight calls, stage ages, dock queue) to a file: /diag",
++    modes: AGENT_ONLY,
++  },
+   {
+     // Flow 362: TUI-only, same reasoning as /governance — the list modal needs
+     // the OpenTUI surface. Reads the index; never rebuilds it.
+     name: "/product",
+     description: "Intents closed in code that nobody looked back at, with their outcome criteria",
+     modes: AGENT_ONLY,
+   },
+   {
+     // Flow 300: TUI-only, same reasoning as /review — the sidebar section, the
+     // background run and the report modal all need the OpenTUI surface.
+     name: "/governance",
+     description: "Flows with summary and effect — check and complete them; the governance report",
+     modes: AGENT_ONLY,
+   },
+   {
+     // Flow 300: TUI-only — the sidebar section and the list+detail modal with
+     // run-now (`keryx trigger run <name>` in a child process).
+     name: "/triggers",
+     description: "Declared triggers: last outcome, spend, reservations — run one now",
+     modes: AGENT_ONLY,
+
+--- src/commands/agent-commands.ts
+@@ 706,749 @@
+  * open. Pure.
+  */
+ export function filterCommands(query: string, mode: ShellMode): SlashCommandOption[] {
+   const q = query.toLowerCase();
+   if (!q.startsWith("/")) {
+     return [];
+   }
+   const needle = q.slice(1);
+   return commandsForMode(mode).filter((c) => c.name.slice(1).toLowerCase().startsWith(needle));
+ }
+ 
+ /** The first whitespace-delimited token of `line`, with `/quit` mapped to `/exit`. */
+ function commandToken(line: string): string {
+   const token = line.trim().split(/\s+/)[0] ?? "";
+   if (token === "/interrapt") {
+     return "/interrupt";
+   }
+   return token === "/quit" ? "/exit" : token;
+ }
+ 
++export function isHistoryCommand(line: string): boolean {
++  return commandToken(line) === HISTORY_COMMAND;
++}
++
+ /** Look a token up across ALL modes, ignoring availability. Pure. */
+ function findAnyMode(line: string): AgentSlashCommand | undefined {
+   const token = commandToken(line);
+   return AGENT_SLASH_COMMANDS.find((c) => c.name === token);
+ }
+ 
+ /**
+  * Resolve a submitted line's FIRST token to a command available in `mode`.
+  * `/quit` aliases `/exit`; a token that is unknown — or known but belonging to
+  * another mode — returns `undefined`. Use {@link describeUnavailableCommand} to
+  * tell those two cases apart. Pure.
+  */
+ export function findAgentCommand(line: string, mode: ShellMode): AgentSlashCommand | undefined {
+   const command = findAnyMode(line);
+   // /clear is a first-class command (alias behavior handled by the shell).
+   return command !== undefined && isCommandInMode(command, mode) ? command : undefined;
+ }
+ 
+ /**
+  * An explanatory message when `line`'s token is a REAL command that this mode
+
+--- src/commands/agent.ts
+@@ 31,71 @@
+ import { isTrustRoutineCommand, isTrustRoutineTool, recordBunfigBaseline } from "../lib/trust-routine-command";
+ import { DEFAULT_PERMISSION_MODE, resolveApprovalDecision, resolveQuestionAnswerer, type PermissionMode } from "./permission-mode";
+ import { AUTOMATIC_REVIEW_NOTE, AutomaticReviewRun, describeAutomaticReviewTurn, isAutomaticReviewRequest } from "./automatic-review";
+ import {
+   ENV_AGENT_MAX_ROUNDS,
+   MAX_AGENT_MAX_ROUNDS,
+   extendsWithoutAsking,
+   resolveAgentMaxRounds,
+ } from "./round-limit";
+ 
+ export {
+   DEFAULT_MAX_ROUNDS,
+   describeRoundLimit,
+   ENV_AGENT_MAX_ROUNDS,
+   MAX_AGENT_MAX_ROUNDS,
+   resolveAgentMaxRounds,
+ } from "./round-limit";
+ import { redactSensitiveText } from "../security/redact";
+ import { randomBytes } from "node:crypto";
+ import { basename } from "node:path";
++import { callDiagnostics } from "../lib/call-diagnostics";
+ import { runWithCallWatchdog, type CallStage } from "./call-watchdog";
+ import { aliasHookToolName, derivePolicyProfileId, type ShellHookContext } from "./agent-hooks";
+ import { tightenOutcome } from "../harness/hooks/compose";
+ import { IMPACT_EVIDENCE_HOOK_ID } from "../harness/hooks/builtins";
+ import { extractFilePathsFromToolInput } from "../harness/hooks/runtime";
+ import type { HookFireResult } from "../harness/hooks/runtime";
+ import type { PolicyOutcome } from "../harness/policy/types";
+ import type { InteractiveTool, InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
+ import type { ToolRisk } from "../harness/tool/types";
+ import {
+   parseSubmitResultInput,
+   SUBMIT_RESULT_TOOL_DEFINITION,
+   SUBMIT_RESULT_TOOL_NAME,
+   type SubmittedResult,
+ } from "../harness/tool/builtin/submit-result-tool";
+ import type { McpRuntime } from "../mcp-servers/runtime";
+ import { parseAskUserInput, selfAnswerAskUser, type AskUserFn, type AskUserRequest } from "../harness/tool/builtin/ask-user-tool";
+ import { isIrreversible, loadDecisionsConfig } from "../decisions/service";
+ import { askFloor } from "../review/arbiter-floor";
+ import type { JobRegistry, TaskCompletion } from "../harness/tool/builtin/background-job-registry";
+
+--- src/commands/agent.ts
+@@ 5708,5778 @@
+     denyMessage = `${toolName} refused by hook ${hookId}: ${reason}`;
+   }
+   return { decision, hookTightened: true, hookAsked, ...(denyMessage !== undefined ? { denyMessage } : {}) };
+ }
+ 
+ /** Resolve, gate (risk + approval + permission mode), validate, and invoke a call → a content result. */
+ /**
+  * `spawn_subagent` is the one call whose stall parks the whole turn, so it runs under a watchdog that
+  * names the stage it was stuck in; every other tool goes straight through.
+  */
+ async function executeCall(...args: Parameters<typeof executeCallUnbounded>): Promise<InteractiveToolResult> {
+   const call = args[0];
+   tracePhase(`tool ${call.name} dispatch`);
+   const result = await executeCallTraced(...args);
+   tracePhase(`tool ${call.name} returned isError=${result.isError === true}`);
+   return result;
+ }
+ 
+ function executeCallTraced(...args: Parameters<typeof executeCallUnbounded>): Promise<InteractiveToolResult> {
+   const call = args[0];
+-  if (call.name !== "spawn_subagent") return executeCallUnbounded(...args);
++  if (call.name !== "spawn_subagent") return executeCallRegistered(call.id, call.name, () => executeCallUnbounded(...args));
+   return runWithCallWatchdog(
+     call.name,
+     (signal, stage) => {
+       const next = [...args] as unknown as Parameters<typeof executeCallUnbounded>;
+       next[9] = signal;
+       next[18] = stage;
+       return executeCallUnbounded(...next);
+     },
+-    { signal: args[9] },
++    { signal: args[9], callId: call.id },
+   );
+ }
+ 
++/** Every non-watchdogged tool still shows up in the in-flight registry so a stall dump names it. */
++async function executeCallRegistered(
++  id: string,
++  name: string,
++  run: () => Promise<InteractiveToolResult>,
++): Promise<InteractiveToolResult> {
++  // Not watched: a plain tool never reports stages, so its stay in "start" is its whole legitimate run.
++  const key = callDiagnostics.begin(id, name, { watched: false });
++  let kind: "ok" | "error" = "error";
++  try {
++    const result = await run();
++    kind = result.isError === true ? "error" : "ok";
++    return result;
++  } finally {
++    callDiagnostics.end(key, kind);
++  }
++}
++
+ /** Whether a `false` from `approver` is a person's refusal: someone sits behind it, the turn is still current, and the turn was not interrupted. */
+ function personRefused(approver: object, signal: AbortSignal | undefined): boolean {
+   const { attended, current } = approver as ApproverProvenance;
+   return attended !== false && signal?.aborted !== true && (current?.() ?? true);
+ }
+ 
+ async function executeCallUnbounded(
+   call: PendingCall,
+   toolByName: Map<string, InteractiveTool>,
+   requestApproval: AgentIO["requestApproval"],
+   permissionMode: AgentIO["permissionMode"],
+   readOnly: AgentIO["readOnly"],
+   onAutoApproved: AgentIO["onAutoApproved"],
+   hasInvocationCapacity: () => boolean,
+   reserveInvocation: () => boolean,
+   maxToolCalls?: number,
+   // Flow 266 (D-15): the turn's abort signal, handed to the tool itself. The
+   // loop already checked abort BETWEEN calls; a tool that waits needs it DURING
+   // one, or the operator's stop cannot reach it.
+   signal?: AbortSignal,
+
+--- src/commands/call-watchdog.ts
+@@ 1,136 @@
+ import { composeAbortSignals } from "../lib/abort-compose";
++import { callDiagnostics, type DiagOutcome } from "../lib/call-diagnostics";
+ import { tracePhase } from "../lib/phase-trace";
+ 
+ export type CallStage = { current: string };
+ 
+ export const ENV_CALL_WATCHDOG_MS = "KERYX_SPAWN_CALL_WATCHDOG_MS";
+ 
+ /** Past the 8 min spawn backstop: only a stall outside `invoke()` can still reach this. */
+ export const DEFAULT_CALL_WATCHDOG_MS = 12 * 60_000;
+ 
+ /** How long a tool that ignores the abort signal is given before the call is answered anyway. */
+ export const ABORT_GRACE_MS = 10_000;
+ 
+ /** Stage names whose wait belongs to a human, so the clock does not run on them. */
+ const HUMAN_STAGES: ReadonlySet<string> = new Set(["approval"]);
+ 
+ export function resolveCallWatchdogMs(env: Record<string, string | undefined> = process.env): number {
+   const raw = env[ENV_CALL_WATCHDOG_MS];
+   if (raw === undefined || raw.trim() === "") return DEFAULT_CALL_WATCHDOG_MS;
+   const n = Number(raw);
+   return Number.isFinite(n) && n >= 0 ? Math.floor(n) : DEFAULT_CALL_WATCHDOG_MS;
+ }
+ 
+ type CallResult = { output: string; isError: boolean };
+ 
+ /**
+  * Answer a tool call that cannot finish. A call that never settles parks the whole parent turn
+  * (the archive writes the assistant message only after every result), and one that ignores the
+  * operator's Esc cannot be stopped; both leave the session unrecoverable but for a kill.
+  */
+ export async function runWithCallWatchdog<T extends CallResult>(
+   name: string,
+   run: (signal: AbortSignal | undefined, stage: CallStage) => Promise<T>,
+-  options: { signal?: AbortSignal | undefined; capMs?: number; abortGraceMs?: number } = {},
++  options: { signal?: AbortSignal | undefined; capMs?: number; abortGraceMs?: number; callId?: string } = {},
+ ): Promise<T | CallResult> {
+   const capMs = options.capMs ?? resolveCallWatchdogMs();
++  const callId = options.callId;
++  // Concurrent calls of one tool interleave in the trace; the id tells them apart.
++  const tag = callId === undefined ? name : `${name}#${callId}`;
+   let currentStage = "start";
++  // The registry's key for this call (the id, or a suffixed one if the id was already in flight).
++  let diagKey: string | undefined;
+   const stage: CallStage = {
+     get current(): string {
+       return currentStage;
+     },
+     set current(next: string) {
+       currentStage = next;
+-      tracePhase(`${name} stage ${next}`);
++      tracePhase(`${tag} stage ${next}`);
++      if (diagKey !== undefined) callDiagnostics.stage(diagKey, next);
+     },
+   };
+-  tracePhase(`${name} call start (watchdog ${capMs}ms)`);
+-  if (capMs <= 0) return run(options.signal, stage);
++  tracePhase(`${tag} call start (watchdog ${capMs}ms)`);
++  if (callId !== undefined) diagKey = callDiagnostics.begin(callId, name);
++  if (capMs <= 0) {
++    let kind: DiagOutcome = "error";
++    try {
++      const result = await run(options.signal, stage);
++      kind = result.isError ? "error" : "ok";
++      return result;
++    } finally {
++      if (diagKey !== undefined) callDiagnostics.end(diagKey, kind);
++    }
++  }
+ 
+   const graceMs = options.abortGraceMs ?? ABORT_GRACE_MS;
+   const inner = new AbortController();
+   const composed = composeAbortSignals(options.signal, inner.signal);
+   let timer: ReturnType<typeof setTimeout> | undefined;
+   let graceTimer: ReturnType<typeof setTimeout> | undefined;
+   let onAbort: (() => void) | undefined;
++  let firedKind = undefined as DiagOutcome | undefined;
+ 
+   const stalled = new Promise<CallResult>((resolve) => {
+     const arm = (): void => {
+       timer = setTimeout(() => {
+         if (HUMAN_STAGES.has(stage.current)) {
++          callDiagnostics.event("approval.rearm", tag);
+           arm();
+           return;
+         }
+-        tracePhase(`${name} watchdog fired at stage ${stage.current}`);
++        tracePhase(`${tag} watchdog fired at stage ${stage.current}`);
++        callDiagnostics.event("watchdog.fired", `${tag} stage=${stage.current}`);
++        firedKind = "watchdog";
+         resolve({
+           output:
+             `${name} did not finish within ${capMs}ms and was abandoned by the harness watchdog ` +
+             `(stuck at stage "${stage.current}"; tune with ${ENV_CALL_WATCHDOG_MS}). Retry on a smaller slice instead of waiting.`,
+           isError: true,
+         });
+         try {
+           inner.abort(new Error(`${name} watchdog`));
+         } catch {
+           // an abort listener that throws must not undo the answer already given
+         }
+       }, capMs);
+     };
+     arm();
+     if (options.signal !== undefined) {
+       onAbort = (): void => {
+         graceTimer = setTimeout(
+-          () =>
++          () => {
++            firedKind = "aborted";
++            callDiagnostics.event("abort.abandoned", `${tag} stage=${stage.current}`);
+             resolve({
+               output: `${name} was cancelled by the operator and did not stop on its own (stage "${stage.current}"); the call was abandoned.`,
+               isError: true,
+-            }),
++            });
++          },
+           graceMs,
+         );
+       };
+       if (options.signal.aborted) onAbort();
+       else options.signal.addEventListener("abort", onAbort, { once: true });
+     }
+   });
+ 
+   const running = run(composed.signal, stage);
++  let kind: DiagOutcome = "error";
+   try {
+     const outcome = await Promise.race([running, stalled]);
+-    tracePhase(`${name} call settled`);
++    kind = firedKind ?? (outcome.isError ? "error" : "ok");
++    tracePhase(`${tag} call settled`);
+     return outcome;
+   } finally {
++    if (diagKey !== undefined) callDiagnostics.end(diagKey, kind);
+     if (timer !== undefined) clearTimeout(timer);
+     if (graceTimer !== undefined) clearTimeout(graceTimer);
+     if (onAbort !== undefined) options.signal?.removeEventListener("abort", onAbort);
+     composed.dispose();
+     void running.catch(() => {
+       // abandoned call; its outcome is ignored once the watchdog has answered
+     });
+   }
+ }
+
+--- src/commands/shell-types.ts
+@@ 1,39 @@
+ import type { BusClient } from "../bus/client";
+ import type { PresenceSurface } from "../bus/schema";
+-import type { ProviderPort } from "../harness/provider/types";
++import type { NormalizedMessage, ProviderPort } from "../harness/provider/types";
+ import type { OpenLeasedSessionOptions, OpenLeasedSessionResult, SessionLeaseHandle } from "../session/lease";
+ 
+ /** Async line source + write sink; no real stdio is reached by `runShell`. */
+ export interface ShellIO {
+   lines: AsyncIterable<string>;
+   write: (s: string) => void;
+   /**
+    * OPTIONAL rich-rendering hooks (flow 031). They let a TTY wrapper tell
+    * assistant token deltas (still `write`) apart from system text and see turn
+    * boundaries, so it can render a spinner + markdown.
+    */
+   /** The optional callback aborts the current model stream without closing the shell. */
+   onTurnStart?: (interrupt?: () => void) => void;
+   onTurnEnd?: (full: string) => void;
+   onSystem?: (text: string) => void;
++  onConversationReady?: (read: () => readonly NormalizedMessage[], resumed: boolean, directory?: string) => void;
+   /** Flush queued asynchronous notices only while terminal output is safe. */
+   onSafeBoundary?: () => void;
+ }
+ 
+ /** Optional per-project session wiring for chat/agent REPLs. */
+ export interface ShellSessionOpts {
+   cwd: string;
+   continueLast?: boolean;
+   resumeId?: string;
+   /** When false, skip persistence (tests default). Default true when object set. */
+   enabled?: boolean;
+   /** With `resumeId`: fork the session and lease the fork (`--fork`). */
+   fork?: boolean;
+   /** With `resumeId`: reclaim a STALE holder's lease (`--take-over`). */
+   takeOver?: boolean;
+   /**
+    * Written by the REPL with the session lease it currently holds, so a caller
+    * outside the loop (the readline SIGINT/SIGTERM handler) can release it.
+    */
+   leaseBox?: { current: SessionLeaseHandle | undefined };
+
+--- src/commands/shell.ts
+@@ 120,200 @@
+ import { buildSettingsRows, formatSettingsTable } from "../tui/settings-model";
+ import { loadSettingsSnapshot } from "../tui/settings-state";
+ import { applyThemeId, formatThemeList, getThemeId, parseThemeId, persistThemeId, themeLabel } from "../tui/theme";
+ import { estimateContextTokens, launchTuiAgentShell } from "../tui/tui-shell";
+ import { launchTuiChatShell } from "../tui/chat-shell";
+ import { findFlowItem, formatFlowDetailText, formatFlowListText, isFlowsCommand } from "../tui/flow-inspector";
+ import { loadInspectorFlows, loadInspectorWorkspaces } from "../tui/inspector-sources";
+ import { approvalsSlashText } from "./approvals";
+ import { permissionsSlashText } from "./permissions-command";
+ import { remotePolicyText } from "./remote-policy-command";
+ import { defaultExternalDiffDeps, externalDiffSlashText } from "../tui/external-diff-modal";
+ import { buildDoctorReport, formatDoctorReport } from "./doctor";
+ import { renderSetupSlash } from "./setup-guide";
+ import { computeBotMetrics } from "../review/bot/metrics";
+ import { parseReviewSystem, resetOperatorDenials, setReviewSystem, type ReviewSystem } from "../review/review-system";
+ import { createReviewAgentHost } from "./review-agents-runtime/host";
+ import { keryxConfigDir } from "../lib/config-dir";
+ import { selfAnsweredLine } from "../lib/terminal-safe";
+ import { loadReviewDepth } from "../tui/review-panel";
+ import { isReviewLayersCommand, isReviewParityCommand, isReviewReadinessCommand, isReviewsCommand, renderReviewLayersText, renderReviewParityText, renderReviewReadinessText, renderReviewsText } from "../tui/reviews-inspector";
+-import { isHistoryCommand, isRemoteControlCommand, readlineHistoryText, readlineRemoteControlText } from "../tui/remote-control-surface";
++import { isRemoteControlCommand, readlineRemoteControlText } from "../tui/remote-control-surface";
++import { conversationHistoryText } from "../tui/conversation-history";
+ import { ChannelsClient } from "../remote/channels-client";
+ import { loadRemoteConfig } from "../remote/config";
+ import { isChannelsCommand, loadChannelsSnapshot, readlineChannelsText } from "../tui/channels-surface";
+ import { isIntakeCommand, readlineIntakeText } from "../tui/intake-surface";
+ import {
+   buildSessionInfoSnapshot,
+   formatSessionInfoText,
+   isSessionInfoCommand,
+ } from "../tui/session-info";
+ import { loadSessionLimits, startSessionLimits } from "./model-limits";
+ import { applySavedApiKeys, envWithSavedApiKeys, loadShellConfig, saveShellConfig } from "../lib/shell-config";
+ import { formatReasoningOneLiner, resolveThinkDisplayMode } from "../tui/reasoning-display";
+ import { parseShellExecCommand, shellPermissionsFingerprint } from "../lib/shell-permissions";
+ import { extractPatchText } from "../lib/patch-risk";
+ import { describeElicitationPrompt, MCP_ELICITATION_TOOL_PREFIX } from "../mcp-client/elicitation";
+ import { getProjectPermissionMode, setProjectPermissionMode } from "../lib/permission-mode-config";
+ import {
+   DEFAULT_PERMISSION_MODE,
+   isPermissionMode,
+   PERMISSION_MODES,
+   type PermissionMode,
+ } from "./permission-mode";
+ import {
+   collapseToolOutput,
+   colorEnabled,
+   indentBlock,
+   renderDiff,
+   renderMarkdown,
+   style,
+   summarizeToolArgs,
+ } from "../lib/ui";
+ import { blockLabel, looksLikeUnifiedDiff } from "../lib/md-blocks";
+ import {
+   checkVersion,
+   formatVersionUpdateAdvisory,
+   type VersionCheckResult,
+ } from "../lib/version-check";
+ import packageJson from "../../package.json" with { type: "json" };
+-import { commandsForMode, describeUnavailableCommand, parseDemoteCommand, removedCommandHint } from "./agent-commands";
++import { commandsForMode, describeUnavailableCommand, isHistoryCommand, parseDemoteCommand, removedCommandHint } from "./agent-commands";
+ // Flow 303 (AC7): grouped `/help` text for the readline surfaces — reached
+ // ONLY through this core facade (see the zone note in
+ // `src/standard/help-groups.ts`), never `../standard/help-groups` directly.
+ // `renderGroupedNamedHelp` groups by the shared table but takes ITS
+ // descriptions from the caller, so chat/agent wording keeps coming from
+ // `AGENT_SLASH_COMMANDS` (mode-resolved by `commandsForMode`), never a second,
+ // independently-drifting copy in `help-groups.ts`.
+ import { renderGroupedNamedHelp } from "../standard/service";
+ // Flow 266 (AC8): the demote EFFECT lives with the registry, not with either
+ // shell, so both dispatch into the same rule instead of growing two.
+ import { demoteTask } from "../harness/tool/builtin/background-job-registry";
+ import { runTasksCommand } from "../tui/tasks-command";
+ import { frameSubmittedLine, herdrCoreSectionFromEnv, keyboardApprovalLine, looksLikeHcMessage } from "../tui/hc-message";
+ import { formatUsageLine } from "../tui/usage-format";
+ import {
+   type AgentDeps,
+   type AgentIO,
+   buildAgentSystemInstruction,
+   generateControlNonce,
+   DEFAULT_MAX_OUTPUT_TOKENS,
+
+--- src/commands/shell.ts
+@@ 225,267 @@
+   openLeasedSession,
+   releaseSessionLease,
+   SessionLeasedError,
+   type SessionLeaseHandle,
+   gateBoxByLease,
+   LOST_LEASE_COMPACT_REFUSAL,
+   switchLeasedSession,
+   switchPreservedSession,
+   watchLeaseLoss,
+ } from "../session/lease";
+ import {
+   describeLeasedSession,
+   describeSkippedSession,
+   type LeasedChoice,
+   leasedChoiceRows,
+ } from "../session/lease-choice";
+ import { closeSlateSession, mintTimestampAttemptId, type SlateSessionRef } from "../session/slate-lifecycle";
+ import { detachSlateSession } from "../session/slate-lifecycle";
+ import { runGoalCommand } from "./goal-command";
+ import { journaledAskUser } from "../tui/ask-user-bridge";
++import { callDiagnostics } from "../lib/call-diagnostics";
++import { composerDockDiagnostics } from "../tui/composer-choice";
++import { isDiagCommand, maybeDumpOnInterrupt, runDiagCommand } from "../tui/diag-command";
+ 
+ 
+ let resolvedKeryxPath: string | undefined;
+ /** The keryx executable, looked up once per process so the herdr-core prompt section never changes between turns. */
+ function startupKeryxPath(): string {
+   resolvedKeryxPath ??= Bun.which("keryx") ?? "keryx";
+   return resolvedKeryxPath;
+ }
+ 
+ export type { ShellDeps, ShellIO, ShellSessionOpts } from "./shell-types";
+ 
+ /** A short, trusted system instruction assembled by the (trusted) shell itself. */
+ const SYSTEM_INSTRUCTION =
+   "You are the keryx interactive shell assistant. Be economical with output tokens: " +
+   "lead with the conclusion, give the shortest correct answer, prefer bullet points over " +
+   "prose, and omit preamble and restated context.";
+ 
+ /** Static guidance for `/connect` — never reads/echoes an actual credential. */
+ const CONNECT_GUIDANCE = [
+   "To use Anthropic (claude-*) models, set the ANTHROPIC_API_KEY environment",
+
+--- src/commands/shell.ts
+@@ 297,344 @@
+  */
+ const READLINE_AGENT_COMMANDS: readonly string[] = [
+   "/help",
+   "/expand",
+   "/search-provider",
+   "/search-connect",
+   "/new",
+   "/goal",
+   "/clear",
+   "/compact",
+   "/rewind",
+   "/status",
+   "/flows",
+   "/approvals",
+   "/permissions",
+   "/external-diff",
+   "/doctor",
+   "/setup",
+   "/reviews",
+   "/remote-control",
++  "/history",
+   "/channels",
+   "/intake",
+   "/rendering",
+   "/remote-policy",
+   "/trail",
+   "/notes",
++  "/diag",
+   "/theme",
+   "/settings",
+   "/mode",
+   "/reasoning",
+   "/plan",
+   "/mcp",
+   "/exit",
+ ];
+ 
+ /**
+  * Agent-REPL help: registry-derived command list, grouped the same way
+  * `keryx help` and the TUI's `/help` modal group everything (AC7), plus the
+  * agent-specific preamble.
+  */
+ export function readlineAgentHelpText(): string {
+   return (
+     "Agent mode — describe a task; tools: get_cwd, list_dir, read_file, search_code, " +
+     "graph_affected, memory_search, web_fetch, web_search, shell_exec (approval).\n" +
+     renderGroupedNamedHelp(commandsForMode("agent").filter((c) => READLINE_AGENT_COMMANDS.includes(c.name))) +
+     "Sessions are per-project: keryx shell -c | -r [id] | keryx sessions list\n"
+
+--- src/commands/shell.ts
+@@ 833,929 @@
+   // `timeoutMs` overrides; `{}` (the default) reproduces today's request
+   // byte-for-byte (AC3).
+   let modelParams = deps.initial.modelParams ?? {};
+   const parentRunId = deps.idSeq();
+ 
+   // Every NON-token line goes through `onSystem` when a rich wrapper supplies it,
+   // else falls back to `write` (byte-identical to the pre-flow-031 behavior).
+   const system = (text: string): void => {
+     if (io.onSystem !== undefined) {
+       io.onSystem(text);
+     } else {
+       io.write(text);
+     }
+   };
+ 
+   const sessionCwd = deps.session?.cwd ?? process.cwd();
+   const sessionsOn = deps.session !== undefined && deps.session.enabled !== false;
+   let live: SessionHandle | undefined;
+   let history: NormalizedMessage[] = [];
+   let archive: NormalizedMessage[] = [];
++  const readConversation = (): readonly NormalizedMessage[] => archive.length > 0 ? archive : history;
++  const resetConversation = (): void => {
++    history = [];
++    archive = [];
++    io.onConversationReady?.(readConversation, false, live?.dir);
++  };
++  let resumed = false;
+   // The session lease this loop holds (specification §6). Mirrored into the
+   // caller's `leaseBox` so a signal handler outside the loop can release it.
+   let lease: SessionLeaseHandle | undefined;
+   // Review F1: once another shell takes this session's lease, this loop stops
+   // saving it (every persist below goes through `leaseWatch.canPersist()`) and
+   // says so once.
+   const leaseWatch = watchLeaseLoss((message) => system(message));
+   const holdLease = (next: SessionLeaseHandle | undefined): void => {
+     lease = next;
+     leaseWatch.track(next);
+     if (deps.session?.leaseBox !== undefined) deps.session.leaseBox.current = next;
+   };
+   const openLeased = deps.session?.openLeased ?? openLeasedSession;
+   if (sessionsOn) {
+     try {
+       const opened = openLeased(leasedOpenOptions(deps.session, sessionCwd, providerName, modelName));
+       holdLease(opened.lease);
+       if (opened.skipped !== undefined) {
+         system(describeSkippedSession(opened.skipped));
+       }
+       live = opened.handle;
+       history = opened.history;
+       archive = opened.archive.length > 0 ? [...opened.archive] : [...opened.history];
+       if (opened.archiveDegraded !== undefined) {
+         // Said out loud. A resume that quietly drops the archive reports a
+         // shorter conversation than the session has, and the operator has no
+         // way to tell that from a session that was genuinely that short.
+         system(`Archive unavailable — resumed from the active context (${opened.archiveDegraded})\n`);
+       }
+       if (opened.resumed) {
++        resumed = true;
+         system(
+           `Resumed session ${shortSessionId(live.summary.id)} · ${live.summary.title} (${history.length} context msgs)\n`,
+         );
+       }
+     } catch (cause) {
+       // Another shell holds the session: the top level decides (fork, view,
+       // cancel, take over, or exit 1 without a TTY). Never a silent new session.
+       if (cause instanceof SessionLeasedError) {
+         throw cause;
+       }
+       const fresh = openFreshLeasedSession(openLeased, sessionCwd, providerName, modelName);
+       holdLease(fresh?.lease);
+       live = fresh?.handle ?? createSession({ cwd: sessionCwd, provider: providerName, model: modelName });
+       history = [];
+       archive = [];
+       system(`${cause instanceof Error ? cause.message : String(cause)}\nStarting a new session.\n`);
+     }
+   }
++  io.onConversationReady?.(readConversation, resumed, live?.dir);
+   const releaseLease = (): void => {
+     releaseSessionLease(lease);
+     holdLease(undefined);
+   };
+ 
+   // Flow 273 T6: join the bus once the session lease is settled (specification
+   // §5.1). A bus failure of any kind prints one line and never stops the shell
+   // (§5.2) — there is no persistent session to join a bus for otherwise.
+   let busWorking = false;
+   const busStatus = (): { status: "idle" | "working" | "blocked"; activity: string } => ({
+     status: busWorking ? "working" : "idle",
+     activity: live?.summary.title ?? "keryx chat",
+   });
+   let bus: BusClient | undefined;
+   if (sessionsOn && live !== undefined) {
+     try {
+       const joined = await joinBus({
+         cwd: sessionCwd,
+         sessionId: live.summary.id,
+         surface: deps.session?.busSurface ?? "readline",
+
+--- src/commands/shell.ts
+@@ 1130,1189 @@
+         }
+         applyThemeId(next);
+         persistThemeId(next);
+         system(`Theme: ${themeLabel(next)}\n`);
+         continue;
+       }
+       if (command === "/clear" || command === "/new") {
+         if (sessionsOn) {
+           // §6.2: lease the new session first, release the current one after.
+           // A refusal keeps the current session and its lease.
+           try {
+             const next = switchLeasedSession(lease, () =>
+               openLeased({ cwd: sessionCwd, provider: providerName, model: modelName }),
+             );
+             holdLease(next.lease);
+             live = next.handle;
+           } catch (cause) {
+             system(`${cause instanceof Error ? cause.message : String(cause)}\nKept the current session.\n`);
+             continue;
+           }
+-          history = [];
+-          archive = [];
++          resetConversation();
+           // AC8: presence.sessionId follows every in-process session switch.
+           // review r1 F5: the client already reports a write failure through
+           // `onError` and never rejects; this catch is a defensive second
+           // layer so a failure can never escape into the REPL regardless.
+           try {
+             await bus?.setSession(live.summary.id);
+           } catch (cause) {
+             system(busErrorLine(cause));
+           }
+           system(`New session ${shortSessionId(live.summary.id)} (previous kept on disk)\n`);
+         } else {
+-          history.length = 0;
++          resetConversation();
+         }
+         continue;
+       }
++      if (isHistoryCommand(command)) {
++        system(conversationHistoryText(readConversation()));
++        continue;
++      }
+       if (command === "/compact") {
+         if (live === undefined) {
+           system("No persistent session in this mode.\n");
+           continue;
+         }
+         if (!leaseWatch.canPersist()) {
+           system(LOST_LEASE_COMPACT_REFUSAL);
+           continue;
+         }
+         const focus = argument.trim();
+         const packed = compactSession(live, history, archive, {
+           keepLastUserTurns: 3,
+           ...(focus.length > 0 ? { focus } : {}),
+           provider: providerName,
+           model: modelName,
+         });
+         live = packed.handle;
+         history = packed.context;
+         if (packed.result.noop) {
+           system("Nothing to compact (context already small).\n");
+
+--- src/commands/shell.ts
+@@ 2914,2973 @@
+         } catch {
+           agentIo.onSystem?.("The managed reviews could not be read.\n");
+         }
+       } else if (isReviewReadinessCommand(line)) {
+         try {
+           agentIo.onSystem?.(renderReviewReadinessText(await loadReviewDepth(sessionCwd)));
+         } catch {
+           agentIo.onSystem?.("The managed reviews could not be read.\n");
+         }
+       } else if (isReviewsCommand(command)) {
+         // Same numbers as `keryx review metrics` and the TUI's /reviews modal, as text.
+         try {
+           agentIo.onSystem?.(renderReviewsText(await computeBotMetrics(sessionCwd), await loadReviewDepth(sessionCwd)));
+         } catch {
+           agentIo.onSystem?.("The managed reviews could not be read.\n");
+         }
+       } else if (isRemoteControlCommand(command)) {
+         // Flow 376: the readline shell has no remote control; status as text, enabling explained.
+         agentIo.onSystem?.(readlineRemoteControlText(line));
+       } else if (isHistoryCommand(command)) {
+-        // Flow 399: no topic here; the text says where `/history` works.
+-        agentIo.onSystem?.(readlineHistoryText(line));
++        agentIo.onSystem?.(conversationHistoryText(archive.length > 0 ? archive : history));
+       } else if (isChannelsCommand(command)) {
+         // Flow 377: the state as text; Connect needs the hidden token entry of the full-screen shell.
+         agentIo.onSystem?.(readlineChannelsText(line, await loadChannelsSnapshot(new ChannelsClient())));
+       } else if (isIntakeCommand(command)) {
+         // Flow 403: the same status and cards as the full-screen modal, as text; a decision is a Telegram button.
+         agentIo.onSystem?.(await readlineIntakeText(line, { root: sessionCwd }));
+       } else if (isRenderingCommand(command)) {
+         // Flow 395: same text as the full-screen shell and the /settings row, no modal needed.
+         agentIo.onSystem?.(runRenderingCommand(rest));
+       } else if (command === "/remote-policy") {
+         // Flow 396: the saved Telegram defaults. This shell has no bridge, so it edits the file only.
+         agentIo.onSystem?.(remotePolicyText(rest, { ...(configDir !== undefined ? { dir: configDir } : {}) }));
+       } else if (isTrailCommand(command)) {
+         // Flow 393: the Trail of the live session, the same list the model reads with slate_trail.
+         agentIo.onSystem?.(await runTrailCommand(rest, slateSession?.dir));
+       } else if (isNotesCommand(command)) {
+         agentIo.onSystem?.(await runNotesCommand(rest, slateSession?.dir));
++      } else if (isDiagCommand(command)) {
++        agentIo.onSystem?.(runDiagCommand());
+       } else if (isSessionInfoCommand(command)) {
+         const cwd = sessionCwd;
+         const [workspaces, flows] = await Promise.all([
+           loadInspectorWorkspaces(cwd),
+           loadInspectorFlows(cwd),
+         ]);
+         agentIo.onSystem?.(
+           formatSessionInfoText(
+             buildSessionInfoSnapshot({
+               summary: live?.summary,
+               selection: { provider: deps.providerId, model: deps.modelId },
+               version: packageJson.version,
+               usage: lastUsage,
+               estimateTokens: estimateContextTokens(history),
+               limits: await loadSessionLimits({
+                 provider: deps.providerId,
+                 model: deps.modelId,
+               }),
+               sessionText: history.map((message) => message.content).join("\n"),
+               workspaces,
+
+--- src/commands/shell.ts
+@@ 3836,3915 @@
+  * given, the picker is skipped: the model is `--model Y` if given, otherwise
+  * that provider's first detected model.
+  */
+ export interface ShellCommandRuntime {
+   checkVersion?: () => Promise<VersionCheckResult>;
+   cacheDir?: string;
+   isTty?: boolean;
+   launchAgent?: typeof launchTuiAgentShell;
+   launchChat?: typeof launchTuiChatShell;
+ }
+ 
+ 
+ /** What {@link makeSignalShutdown} tears down; each part injectable for tests. */
+ export interface SignalShutdownParts {
+   readonly busBox: { current: BusClient | undefined };
+   readonly leaseBox: { current: SessionLeaseHandle | undefined };
+   readonly jobRegistryBox: { current: Pick<JobRegistry, "sweepAll"> | undefined };
+   readonly closeMcp: () => Promise<void> | undefined;
+   readonly closeReadline: () => void;
+   readonly abortTurn?: () => void;
++  /** Flow 487: runs once, first, before the turn is aborted, so a stuck call can still be described. Must not throw. */
++  readonly beforeAbort?: () => void;
+   readonly releaseLease: (lease: SessionLeaseHandle | undefined) => void;
+   readonly exit: (code: number) => void;
+   readonly preserve?: () => Promise<void>;
+   readonly cleanupTimeoutMs?: number;
+   /** Shared by every handler of one process so SIGINT/SIGTERM/SIGHUP do not each start a shutdown. */
+   readonly guard?: { startedAt: number | undefined };
+   /** A signal arriving this long after the first one forces the exit instead of being ignored. */
+   readonly forceGraceMs?: number;
+ }
+ 
+ /**
+  * The readline SIGINT/SIGTERM handler: exit, but CLOSE FIRST.
+  *
+  * Synchronously, first: the bus presence and the lease must both be gone even
+  * if the closes below hang until the grace timeout (specification §5.4, §6,
+  * AC7). Bus first, so a peer never sees presence outlive the lease it names.
+  * Then every tracked background job is swept (process-group SIGTERM→SIGKILL,
+  * flow 352) — the same call EOF and `/exit` make — before the MCP runtime
+  * closes and the process exits.
+  */
+ export function makeSignalShutdown(parts: SignalShutdownParts, code: number): () => void {
+   const state = parts.guard ?? { startedAt: undefined as number | undefined };
+   const release = (): void => {
+     parts.busBox.current?.leave();
+     parts.busBox.current = undefined;
+     parts.releaseLease(parts.leaseBox.current);
+     parts.leaseBox.current = undefined;
+   };
+   return (): void => {
+     if (state.startedAt !== undefined) {
+       if (Date.now() - state.startedAt >= (parts.forceGraceMs ?? 1000)) {
+         release();
+         parts.exit(code);
+       }
+       return;
+     }
+     state.startedAt = Date.now();
++    try { parts.beforeAbort?.(); } catch { /* diagnostics never delay the shutdown */ }
+     parts.abortTurn?.();
+     if (parts.preserve === undefined) release();
+     void (async (): Promise<void> => {
+       let failed = false;
+       if (parts.preserve !== undefined) {
+         try { await parts.preserve(); } catch { failed = true; }
+         release();
+       }
+       let timer: ReturnType<typeof setTimeout> | undefined;
+       try {
+         await Promise.race([
+           Promise.allSettled([
+             Promise.resolve().then(() => parts.jobRegistryBox.current?.sweepAll()),
+             Promise.resolve().then(() => parts.closeMcp()),
+           ]),
+           new Promise<void>((resolve) => { timer = setTimeout(resolve, parts.cleanupTimeoutMs ?? 10_000); }),
+         ]);
+       } finally {
+         if (timer !== undefined) clearTimeout(timer);
+       }
+
+--- src/commands/shell.ts
+@@ 4082,4131 @@
+     const oauthFetch = (input: string, init?: RequestInit) => globalThis.fetch(input, init);
+     const http = { fetch: oauthFetch, signal: AbortSignal.timeout(GRANT_REFRESH_TIMEOUT_MS) };
+     const warnings = await refreshSavedGrants(http, runtime.cacheDir, providerArg === undefined ? undefined : [providerArg]);
+     for (const warning of warnings) process.stderr.write(`keryx: ${warning}\n`);
+   }
+   const surface = chooseShellSurface(flags, runtime.isTty ?? process.stdout.isTTY === true);
+   // R700-01 fix (flow 319): shared across the TUI attempt AND the readline
+   // fallback below — built at most once per process (`getShellHooks` caches
+   // it) and its notices consumed at most once (`takeNotices()`, from
+   // `agent-hooks.ts`). Before this fix each branch called
+   // `buildShellHookRuntime` separately: a TUI session that starts, prints
+   // its "gate stays on"/"not trusted" notices, then hits an unrelated
+   // exception deep in the session and falls through to the readline shell
+   // (the broad `catch { return false; }` in `tui-shell.ts`'s
+   // `launchTuiAgentShell`) rebuilt the SAME hook config and printed the
+   // SAME notices a second time — the operator saw every line twice for no
+   // reason tied to the hooks themselves. One shared, lazily-built context
+   // with a consume-once notices getter fixes both the redundant rebuild and
+   // the redundant print, without changing what a single surface prints.
+   const shellHookSessionId = randomUUID();
++  // Flow 487: always-on tool-call diagnostics. In memory until a call stalls (or /diag), then one
++  // NDJSON dump per session under <config>/diagnostics. The timer is unref'd: it never keeps the
++  // process alive.
++  callDiagnostics.start({ sessionId: shellHookSessionId });
++  callDiagnostics.probe("dock", () => composerDockDiagnostics());
++  callDiagnostics.probe("env", () => ({
++    version: packageJson.version,
++    spawnCallWatchdogMs: process.env.KERYX_SPAWN_CALL_WATCHDOG_MS ?? null,
++    phaseTrace: process.env.KERYX_PHASE_TRACE !== undefined,
++  }));
+   let shellHooks: ShellHookContext | undefined;
+   const getShellHooks = (): ShellHookContext | undefined => {
+     if (shellHooks === undefined) {
+       shellHooks = buildShellHookRuntime({
+         projectRoot: resolveProjectRoot(process.cwd()),
+         sessionId: shellHookSessionId,
+         runId: randomUUID(),
+         interactive: true,
+         profileId: "monitored-trusted-local",
+         ...(runtime.cacheDir === undefined ? {} : { configDir: runtime.cacheDir }),
+       });
+     }
+     return shellHooks;
+   };
+   if (surface !== "readline") {
+     const cwd = process.cwd();
+     const tuiProviderFactory = realMakeProvider(() => {});
+     // Search credentials stay inside the controller/transport boundary. The
+     // model only sees the read-only `web_search` tool and its redacted result.
+     const searchProviderController = createDefaultSearchProviderController();
+
+--- src/commands/shell.ts
+@@ 4622,4666 @@
+   // no handler at all, so Node's default disposition did the same thing
+   // faster. This interface is created without an `output`, so it is not in
+   // terminal mode and readline raises no SIGINT of its own — there is no
+   // confirmation flow here to preserve, and the observable outcome is
+   // unchanged apart from the cleanup.
+   //
+   // `close()` is bounded (see `CLOSE_GRACE_MS`), so this cannot turn Ctrl-C
+   // into a hang.
+   const readlineAbort = new AbortController();
+   const signalGuard: { startedAt: number | undefined } = { startedAt: undefined };
+   const closeAndExit = (code: number): (() => void) =>
+     makeSignalShutdown(
+       {
+         guard: signalGuard,
+         busBox,
+         leaseBox,
+         jobRegistryBox,
+         preserve: async () => { await finalizerBox.current?.(); },
+         closeMcp: () => readlineMcp?.close(),
+         closeReadline: () => rl.close(),
++        beforeAbort: () => {
++          // Flow 487: Ctrl-C here is the only interrupt the readline shell has; dump what a long wait left.
++          const note = maybeDumpOnInterrupt();
++          if (note !== undefined) process.stderr.write(note);
++        },
+         abortTurn: () => readlineAbort.abort("shell shutdown"),
+         releaseLease: releaseSessionLease,
+         exit: (c) => process.exit(c),
+       },
+       code,
+     );
+   process.on("SIGINT", closeAndExit(130));
+   // SIGTERM too. Only SIGINT was handled, so `kill <pid>` — what a
+   // supervisor, a CI job or a terminal-closing window manager sends — took
+   // the default disposition and left one child process per connected
+   // server behind.
+   process.on("SIGTERM", closeAndExit(143));
+   process.on("SIGHUP", closeAndExit(129));
+   // A SINGLE shared line iterator so the picker and the REPL consume stdin in
+   // sequence (two independent iterators would race over the same readline).
+   const lineIterator = rl[Symbol.asyncIterator]();
+   // `--print` supplies the one line the REPL would have read, so the turn runs
+   // through the same loop a person drives. The iterator ends immediately after,
+   // which is what makes the process exit rather than wait for a second turn.
+   const oneShotPrompt = flags.printPrompt;
+
+--- src/flow/verify-exec-files.test.ts
+@@ 2,60 @@
+ // `bun test` skips a missing file when the command also names other test files, so the gate passes without running it.
+ 
+ import { expect, test } from "bun:test";
+ import { existsSync, readdirSync, readFileSync } from "node:fs";
+ import path from "node:path";
+ 
+ const REPO_ROOT = path.resolve(import.meta.dir, "..", "..");
+ const FLOWS_DIR = path.join(REPO_ROOT, ".metaproject", "flows");
+ const EXEC_LINE = /\[verify:\s*exec\s+`([^`]+)`/g;
+ const TEST_FILE = /(?:^|\s)((?:\.\/)?[\w./@-]+\.test\.tsx?)(?=\s|$)/g;
+ 
+ // Flow 375 froze verify commands for board tests that were never written under these names.
+ // Frozen criteria are not edited here; the operator decides whether to write the tests or re-seal the criteria.
+ const KNOWN_MISSING: Record<string, readonly string[]> = {
+   "375-2026-10-01-product-board": [
+     "src/product/board.test.ts",
+     "src/product/board-stale.test.ts",
+     "src/product/board-model.test.ts",
+     "src/product/board-dashboard.test.ts",
+   ],
++  // Flows 489–491 (review audit, 2026-11-12) are planned but not started: their verify lines name the tests the
++  // implementing flow writes. Drop each entry when that test lands; the stale-list test below enforces it.
++  "489-2026-11-12-review-audit-p1-signal-cost": [
++    "src/review/readiness-usage.test.ts",
++    "src/review/report-cost-line.test.ts",
++    "src/gdskills/review-severity-rubric.test.ts",
++    "src/gdskills/review-finding-template.test.ts",
++    "src/review/report-bounded.test.ts",
++  ],
++  "490-2026-11-12-review-audit-p2-architecture": [
++    "src/review/round-state.test.ts",
++    "src/review/round-e2e.test.ts",
++    "src/review/jev-config.test.ts",
++    "src/review/host-port.test.ts",
++  ],
++  "491-2026-11-12-review-audit-p3-product": [
++    "src/commands/review-default.test.ts",
++    "src/docs/review-glossary.test.ts",
++  ],
+ };
+ 
+ function namedTestFiles(command: string): string[] {
+   return [...command.matchAll(TEST_FILE)].map((m) => m[1]!.replace(/^\.\//, ""));
+ }
+ 
+ function missingByFlow(): Map<string, Set<string>> {
+   const missing = new Map<string, Set<string>>();
+   for (const entry of readdirSync(FLOWS_DIR, { withFileTypes: true })) {
+     if (!entry.isDirectory()) continue;
+     const acFile = path.join(FLOWS_DIR, entry.name, "acceptance-criteria.md");
+     if (!existsSync(acFile)) continue;
+     for (const line of readFileSync(acFile, "utf8").split("\n")) {
+       for (const exec of line.matchAll(EXEC_LINE)) {
+         for (const file of namedTestFiles(exec[1]!)) {
+           if (existsSync(path.join(REPO_ROOT, file))) continue;
+           if (!missing.has(entry.name)) missing.set(entry.name, new Set());
+           missing.get(entry.name)!.add(file);
+         }
+       }
+
+--- src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md
+@@ 756,796 @@
+ 
+ ```bash
+ keryx review blast-radius --ref "${BASE_SHA}" --previous blast-radius.json [--final]
+ ```
+ 
+ It prints the decision and the reason, and reuses the previous record when
+ nothing moved. The final round recomputes whatever the file set did — otherwise a
+ fix introduced in round 3 gets no regression check at all, and the round that
+ certifies the flow is the one that checked the least.
+ 
+ ## Readiness — the checklist behind `completed` and behind publishing
+ 
+ `keryx review readiness <review-id-or-path> [--json]` reads the package and prints every readiness item, READY or NOT READY, each with the evidence and the command that repairs it. It writes nothing, and exits non-zero when the verdict is NOT READY. Only item 9 reaches GitHub (the PR's own file list); the TUI and `review status` read the package alone.
+ 
+ 1. `files-covered` — every changed file is in a wave or carries a recorded waiver.
+ 2. `blast-radius` — no file the blast radius cut is left unreviewed. A cut radius writes `chunks.json`; run `keryx review chunks plan`, `estimate`, `next`/`record`, `merge`. Then bring in what the passes found: `merge` lists the findings and how many `findings.json` lacks; `keryx review ingest --review-id <id>` records them as `review-regression/<chunk>`; ingest and the report are repeated when a pass finished after the report was written. `review complete` warns about a pass finding still out of `findings.json` and does not refuse. In an unattended run every wave runs without a question, up to the 25-pass ceiling; in an interactive run the operator is asked once: in keryx shell call `review_chunks_answer` (a card, never a terminal); elsewhere the operator runs `keryx review chunks estimate --package <dir> --answer yes --quote "<their words>"` in their terminal; unattended, record Not run.
+ 3. `reviewers` — every planned reviewer was dispatched and its result ingested.
+ 4. `verifier` — the verifier checked every blocker/major finding, or the operator waived the item; a `Not verified: N` line in the report no longer passes it.
+ 5. `ledger` — the ledger is READY.
+ 6. `coverage-md` — coverage.md does not list a reviewer as `run` that the dispatch record says did not finish. Re-run `keryx review ingest` for the package.
+-7. `head` — the report's head is the PR head.
++7. `head` — the head recorded at `review start` is still the PR head and the PR is not merged; otherwise only the operator's `head` waiver lifts it (no report line does).
+ 8. `report-names` — pending mutation candidates and parity warnings are named in the report.
+ 9. `pr-files` — the changed-file count equals the PR's own file list. A recount more than 3x the recorded scope is refused: it came from the wrong base. Recount with `keryx review blast-radius --package <ref> --changed <the PR's files>`.
+ 10. `memory-outside-stage` — the orchestrator read memory only in its memory stage ("Clean context" above). Outside keryx shell it reads "not observable on this host" unless this session's keryx calls carry the caller token `keryx review start` printed.
+ 11. `premise-decisions` — every finding `review-premise` held (`challenged` or `owner-decision`) has an operator decision: in keryx shell the card `review_decide_premise`; elsewhere ask the operator with the host's question tool and record the answer with `keryx review decide-premise --package <dir> --finding <global_id> --answer uphold|dismiss --reason "<why>" --answered-by <source>:<ref> --answer-text "<their words>" --question-text "<the question>"` (SKILL.md "Wave D"; the record reads `confirmedVia: "host-question"`). Not waivable: each held finding needs its own answer, and `review_waive_readiness` / `--waive` refuse this item.
+ 12. `quotes-located` — every open finding whose quote `review ingest` could not place (absent from the file at the reviewed head, or in it more than once) has a disposition. Ingest keeps such a finding with no line, flagged `quote_unlocated` and listed in scope.md, instead of refusing the round. Re-quote one distinct line and re-ingest, record a disposition, or the operator waives the item.
+ 
+ `keryx review complete` refuses status `completed` while any item fails. A failing item other than `premise-decisions` is waived only by the operator. In keryx shell call `review_waive_readiness` for the item: the operator answers it as a card, the waiver is recorded with the card text and the time, and then you call the `review_complete` card (the operator answers it in the shell or in the Telegram topic). An agent completes a review only through that card; `keryx review complete` is for a human in a terminal. Never send the operator to a terminal. Outside keryx shell the operator runs `keryx review complete --waive <item> "<their own words>"` in a terminal, repeatable. Unattended, record the item as Not run. `keryx review publish` is held by the same checklist. Publishing is the operator's decision too: in keryx shell call `review_publish` (a card shows the target and the body; never send the operator to a terminal). A not-ready package goes to GitHub only as a partial review (`review_publish` with `partial: true`, or `keryx review publish --partial`), which puts a "Partial review" header on the post and never approves. The shell guard stops a publish command that runs through the keryx shell; a publisher outside it (CI, another agent, a script file) is not stopped, and that limit is named, not hidden.
+ 
+ ## Fix rounds — dispositions, regressions, withdrawal
+ 
+ ### Every prior finding leaves the round with a disposition
+ 
+ A fix round that reports only new findings is unreadable: the author cannot tell
+ which of their fixes landed. Close the loop explicitly — one line per prior
+ finding, in the report, before the new findings:
+ 
+ | Disposition | Meaning |
+ |---|---|
+ | `closed` | Checked against the code, not against the commit message, and the defect is gone |
+ | `open` | The fix does not reach the defect; say what is still true |
+
+--- src/harness/tool/builtin/spawn-subagent-parallel-hang.test.ts
+@@ 1,107 @@
++// Flow 487: a batch of parallel spawn_subagent calls must come back even when one call never settles.
++// The parent turn waits on every result of the batch, so one lost call parks the whole session.
++import { expect, test } from "bun:test";
++import { runWithCallWatchdog, type CallStage } from "../../../commands/call-watchdog";
++import { invokeWithBackstop, type SubagentCompletionStatus } from "./spawn-subagent-tool";
++
++const BATCH = 9;
++const HUNG_INDEX = 4;
++
++type Result = { status: SubagentCompletionStatus; output: string; isError: boolean };
++
++const ok = async (): Promise<Result> => ({ status: "Completed", output: "ok", isError: false });
++/** A child run that never settles and ignores the abort signal. */
++const hang = (): Promise<Result> => new Promise<Result>(() => {});
++
++function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | "timed-out"> {
++  let timer: ReturnType<typeof setTimeout> | undefined;
++  const limit = new Promise<"timed-out">((resolve) => {
++    timer = setTimeout(() => resolve("timed-out"), ms);
++  });
++  return Promise.race([promise, limit]).finally(() => {
++    if (timer !== undefined) clearTimeout(timer);
++  });
++}
++
++test("a batch of 9 returns when one child hangs inside invoke: the backstop answers it", async () => {
++  const calls = Array.from({ length: BATCH }, (_, i) =>
++    invokeWithBackstop(i === HUNG_INDEX ? hang : ok, { task: `t${i}` }, undefined, 30),
++  );
++  const settled = await withTimeout(Promise.allSettled(calls), 2000);
++  expect(settled).not.toBe("timed-out");
++  if (settled === "timed-out") return;
++  expect(settled.every((s) => s.status === "fulfilled")).toBe(true);
++  const results = settled.map((s) => (s.status === "fulfilled" ? s.value : undefined));
++  expect(results[HUNG_INDEX]?.status).toBe("Timeout");
++  expect(results.filter((r) => r?.status === "Completed")).toHaveLength(BATCH - 1);
++});
++
++test("a batch of 9 returns when one call stalls OUTSIDE invoke (after the tool): the call watchdog answers it", async () => {
++  const calls = Array.from({ length: BATCH }, (_, i) =>
++    runWithCallWatchdog(
++      "spawn_subagent",
++      async (_signal, stage: CallStage) => {
++        stage.current = "invoke";
++        if (i === HUNG_INDEX) {
++          await hang();
++        }
++        stage.current = "post-tool-hook";
++        return ok();
++      },
++      { capMs: 40, abortGraceMs: 10 },
++    ),
++  );
++  const settled = await withTimeout(Promise.allSettled(calls), 2000);
++  expect(settled).not.toBe("timed-out");
++  if (settled === "timed-out") return;
++  const hung = settled[HUNG_INDEX];
++  expect(hung?.status).toBe("fulfilled");
++  if (hung?.status === "fulfilled") {
++    expect(hung.value.isError).toBe(true);
++    expect(hung.value.output).toContain('stuck at stage "invoke"');
++  }
++  expect(settled.filter((s) => s.status === "fulfilled" && !s.value.isError)).toHaveLength(BATCH - 1);
++});
++
++test("the full stack: watchdog around the backstop around a child that never settles", async () => {
++  const calls = Array.from({ length: BATCH }, (_, i) =>
++    runWithCallWatchdog(
++      "spawn_subagent",
++      async (signal, stage: CallStage) => {
++        stage.current = "invoke";
++        const result = await invokeWithBackstop(
++          i === HUNG_INDEX ? hang : ok,
++          { task: `t${i}` },
++          signal === undefined ? undefined : { signal },
++          30,
++        );
++        stage.current = "post-tool-hook";
++        return result;
++      },
++      { capMs: 500, abortGraceMs: 10 },
++    ),
++  );
++  const settled = await withTimeout(Promise.allSettled(calls), 2000);
++  expect(settled).not.toBe("timed-out");
++  if (settled === "timed-out") return;
++  expect(settled.every((s) => s.status === "fulfilled")).toBe(true);
++});
++
++test("a call parked at the human 'approval' stage is still answered once the operator aborts the turn", async () => {
++  const turn = new AbortController();
++  const run = runWithCallWatchdog(
++    "spawn_subagent",
++    async (_signal, stage: CallStage) => {
++      stage.current = "approval";
++      return hang();
++    },
++    { signal: turn.signal, capMs: 20, abortGraceMs: 20 },
++  );
++  // The watchdog clock does not run on the approval stage (HUMAN_STAGES) ...
++  expect(await withTimeout(run, 120)).toBe("timed-out");
++  // ... but the operator's abort must still free the call after the grace.
++  turn.abort();
++  const result = await withTimeout(run, 500);
++  expect(result).not.toBe("timed-out");
++  if (result !== "timed-out") expect(result.isError).toBe(true);
++});
+
+--- src/harness/tool/builtin/spawn-subagent-tool.ts
+@@ 1,30 @@
+ // Interactive `spawn_subagent` tool — wires MAE `spawnSubagent` into the shell agent.
+ //
+ // The model proposes a bounded child task. The host:
+ //   1) fail-closed spawn via RemainingBudgetLedger + spawnSubagent
+ //   2) runs a read-only (or general read-mostly) agent turn
+ //   3) returns a quarantined summary to the parent
+ //
+ // Risk: `delegate` (agent driver requires approval when an approver is present).
+ 
++import { callDiagnostics } from "../../../lib/call-diagnostics";
+ import { tracePhase } from "../../../lib/phase-trace";
+ import { createHash, randomUUID } from "node:crypto";
+ import { execFile } from "node:child_process";
+ import { lstat, mkdir, mkdtemp, readFile, realpath, rm, stat, utimes, writeFile } from "node:fs/promises";
+ import { tmpdir } from "node:os";
+ import path from "node:path";
+ import { promisify } from "node:util";
+ import type { InteractiveTool, InteractiveToolContext } from "./interactive-tools";
+ import { builtinReadOnlyTools, confineToRoot } from "./interactive-tools";
+ import { MAX_TIMER_DELAY_MS } from "./background-job-registry";
+ import { makeKeryxRunner, builtinMetaprojectTools } from "./metaproject-tools";
+ import { reviewerCallerId, withOrchestratorLog } from "../../../review/orchestrator-log";
+ import { slateWriteSeedTool } from "./slate-tool";
+ import { createMetaprojectAdapter } from "../metaproject-adapter";
+ import { RemainingBudgetLedger } from "../../child/ledger";
+ import { DEFAULT_MAX_PASSES } from "../../../review/chunks-estimate";
+ import { describeReviewWave, resolveReviewWave } from "../../../review/wave-key";
+ import { type DispatchUsage, NO_TEXT_PLACEHOLDER, formatOtherUsageLine, formatRecordLine, isEmptyBody, splitUsage } from "../../../review/dispatch-usage";
+ import { spawnSubagent, foldChildSummary } from "../../child/orchestrate";
+ import type { SubagentContext } from "../../child/orchestrate";
+
+--- src/harness/tool/builtin/spawn-subagent-tool.ts
+@@ 557,602 @@
+ 
+ /**
+  * Backstop for the whole `invoke()`: the child deadline starts only after setup, and cleanup and hooks run
+  * after it, so a hang on either side parked the parent turn for good (live review run, 85 minutes). Past
+  * `capMs` the call returns a Timeout result and the child is aborted.
+  */
+ export async function invokeWithBackstop(
+   invoke: SpawnSubagentTool["invoke"],
+   input: Record<string, unknown>,
+   ctx: InteractiveToolContext | undefined,
+   capMs: number = resolveSubagentHardCapMs(input),
+ ): Promise<StructuredSubagentResult> {
+   if (capMs <= 0) return invoke(input, ctx);
+   const cap = new AbortController();
+   const composed = composeAbortSignals(ctx?.signal, cap.signal);
+   let timer: ReturnType<typeof setTimeout> | undefined;
+   const expired = new Promise<"expired">((resolve) => {
+     timer = setTimeout(() => resolve("expired"), Math.min(capMs, MAX_TIMER_DELAY_MS));
+   });
+   tracePhase(`spawn backstop armed ${capMs}ms`);
++  callDiagnostics.event("backstop.armed", `${capMs}ms`);
+   const run = invoke(input, { ...ctx, signal: composed.signal });
+   try {
+     const outcome = await Promise.race([run, expired]);
+     tracePhase(`spawn backstop ${outcome === "expired" ? "expired" : "settled"}`);
++    if (outcome === "expired") callDiagnostics.event("backstop.expired", `${capMs}ms`);
+     if (outcome !== "expired") return outcome;
+     cap.abort();
+     void run.catch(() => {
+       // abandoned call; its result is ignored once the backstop has answered
+     });
+     return {
+       status: "Timeout",
+       output:
+         `spawn_subagent did not return within ${capMs}ms and was abandoned by the harness backstop ` +
+         `(the child deadline plus ${SUBAGENT_HARD_CAP_GRACE_MS}ms for setup and cleanup; tighten or disable with ${ENV_SUBAGENT_TIMEOUT_MS}). ` +
+         "Retry the pass on a smaller slice instead of waiting.",
+       isError: true,
+     };
+   } finally {
+     if (timer !== undefined) clearTimeout(timer);
+     composed.dispose();
+   }
+ }
+ 
+ /** Bound a child summary, marking the cut so the parent can see it happened. */
+
+--- src/harness/tool/builtin/spawn-subagent-tool.ts
+@@ 1074,1098 @@
+  * the caller a `resetBudget()` closure to call at each new parent turn, so a
+  * turn that spawns several subagents is never constrained by what earlier
+  * turns already spent. A caller that never invokes it keeps a single pool for
+  * the tool instance's whole lifetime, same as before.
+  */
+-/**
+- * Schema fields `spawn_subagent` still accepts but never acts on. A skill that
+- * tells a model to pass one of these has instructed a no-op; the review-skill
+- * contract test reads this list.
+- */
+-export const SPAWN_SUBAGENT_IGNORED_FIELDS = ["model_tier"] as const;
+-
+ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubagentTool {
+   const idSeq = deps.idSeq ?? (() => randomUUID());
+   const clock = deps.clock ?? (() => new Date().toISOString());
+   const parentRunId = deps.parentRunId ?? idSeq();
+   const parentSessionId = deps.parentSessionId ?? idSeq();
+   const ledgerLimits = {
+     maxRuntimeMs: DEFAULT_SUBAGENT_LEDGER_RUNTIME_MS,
+   };
+   let ledger = new RemainingBudgetLedger(ledgerLimits, SUBAGENT_LEDGER_CAPS);
+   const routingBudgets = new Map<string, RoutingBudgetLedger>();
+   const emitFleetEvent = (event: SpawnSubagentFleetEvent): void => {
+     try {
+       deps.onFleetEvent?.(event);
+     } catch {
+       // A presentation host must never break the agent turn.
+     }
+   };
+   deps.onLedgerReady?.({
+     resetBudget: () => {
+       ledger = new RemainingBudgetLedger(ledgerLimits, SUBAGENT_LEDGER_CAPS);
+
+--- src/harness/tool/builtin/spawn-subagent-tool.ts
+@@ 1488,1531 @@
+       try {
+       const parent = deps.getParentModel();
+       const detected = deps.getDetectedProviders();
+       const session = { providerId: parent.providerId, modelId: parent.modelId };
+       // The candidate set for tier resolution: whatever runtime detection
+       // reported, passed through verbatim. No table of model ids exists on this
+       // path — a provider that reported no models simply contributes none, and
+       // its tiers resolve to the session model.
+       const catalog: readonly (DiscoveredProvider & FlatPickerProvider)[] = detected.map((p) => ({
+         ...p,
+         models: p.models ?? [],
+       }));
+       let routingConfig: ReturnType<typeof loadRouting>;
+       try {
+         routingConfig = loadRouting(deps.cwd, deps.routingConfigDir);
+       } catch (error) {
+         // Malformed or unconvertible routing settings are surfaced, never routed around.
+         emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "routing-invalid", task });
+         return { status: "Error", output: `spawn_subagent refused: routing settings are invalid: ${error instanceof Error ? error.message : String(error)}`, isError: true };
+       }
+-      const legacyTierMigrationNotice = input[SPAWN_SUBAGENT_IGNORED_FIELDS[0]] !== undefined
+-        ? `ignored model_tier ${String(input.model_tier)} because model routing chooses the child's model; migrate the caller to model_class`
+-        : undefined;
++      const ignoredFields = SPAWN_SUBAGENT_IGNORED_FIELDS.filter((field) => input[field] !== undefined);
++      const legacyTierMigrationNotice = ignoredFields.length === 0
++        ? undefined
++        : `ignored ${ignoredFields.map((field) => `${field} ${String(input[field])}`).join(", ")} because model routing chooses the child's model; migrate the caller to model_class`;
+       if (input.model_class !== undefined && !isModelClass(input.model_class)) {
+         emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "routing-invalid", task });
+         return { status: "Error", output: "spawn_subagent model_class must be light, standard, expert, or frontier", isError: true };
+       }
+       if (legacyTierMigrationNotice !== undefined) {
+         emitFleetEvent({
+           kind: "log",
+           id: workerId,
+           entry: {
+             kind: "system",
+             text: `spawn_subagent ${legacyTierMigrationNotice}`,
+           },
+         });
+       }
+       if (isExternalRuntimeRequest && input.model_class !== undefined) {
+         emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "routing-unmanaged", task });
+         return {
+           status: "Error",
+           output: "spawn_subagent model_class is unavailable for external runtimes, whose model routing is unmanaged",
+           isError: true,
+
+--- src/lib/call-diagnostics.test.ts
+@@ 1,207 @@
++import { afterEach, describe, expect, test } from "bun:test";
++import { mkdtempSync, readFileSync, rmSync } from "node:fs";
++import { tmpdir } from "node:os";
++import path from "node:path";
++import { createCallDiagnostics } from "./call-diagnostics";
++
++function fakeClock(): { now: () => number; advance: (ms: number) => void } {
++  let t = 1_000_000;
++  return {
++    now: () => t,
++    advance: (ms) => {
++      t += ms;
++    },
++  };
++}
++
++const MIN = 60_000;
++
++function setup(): { diag: ReturnType<typeof createCallDiagnostics>; clock: ReturnType<typeof fakeClock>; lines: string[] } {
++  const clock = fakeClock();
++  const lines: string[] = [];
++  const diag = createCallDiagnostics({ now: clock.now, sink: (l) => lines.push(l) });
++  diag.start({ sessionId: "s", intervalMs: 30_000, stallMs: 10 * MIN, repeatMs: 15 * MIN });
++  return { diag, clock, lines };
++}
++
++describe("call registry and metrics", () => {
++  test("tracks stages, durations and outcomes", () => {
++    const { diag, clock } = setup();
++    diag.begin("c1", "spawn_subagent");
++    clock.advance(1_000);
++    diag.stage("c1", "invoke");
++    clock.advance(4_000);
++    expect(diag.inFlight().map((c) => `${c.id}:${c.stage}`)).toEqual(["c1:invoke"]);
++    diag.end("c1", "ok");
++    const snap = diag.snapshot("t");
++    expect(snap.calls).toEqual([]);
++    expect(snap.metrics.callsStarted).toBe(1);
++    expect(snap.metrics.callsSettled).toBe(1);
++    expect(snap.metrics.callsByOutcome).toEqual({ ok: 1 });
++    expect(snap.metrics.stages.start).toEqual({ count: 1, totalMs: 1_000, maxMs: 1_000 });
++    expect(snap.metrics.stages.invoke?.maxMs).toBe(4_000);
++  });
++
++  test("unknown ids are ignored, events are counted and land in the ring", () => {
++    const { diag } = setup();
++    diag.stage("nope", "x");
++    diag.end("nope", "ok");
++    diag.event("approval.rearm", "spawn_subagent#c1");
++    diag.event("approval.rearm");
++    const snap = diag.snapshot("t");
++    expect(snap.metrics.events["approval.rearm"]).toBe(2);
++    expect(snap.recent.some((l) => l.endsWith("event approval.rearm spawn_subagent#c1"))).toBe(true);
++  });
++
++  test("two in-flight calls with one id keep separate entries", () => {
++    const { diag } = setup();
++    const a = diag.begin("dup", "spawn_subagent");
++    const b = diag.begin("dup", "spawn_subagent");
++    expect(a).toBe("dup");
++    expect(b).not.toBe(a);
++    diag.end(a, "ok");
++    expect(diag.inFlight().map((c) => c.id)).toEqual([b]);
++    diag.end(b, "ok");
++    expect(diag.inFlight()).toEqual([]);
++  });
++
++  test("ring buffer is bounded", () => {
++    const diag = createCallDiagnostics({ ringSize: 5 });
++    for (let i = 0; i < 20; i++) diag.record(`label ${i}`);
++    const recent = diag.snapshot("t").recent;
++    expect(recent).toHaveLength(5);
++    expect(recent[4]?.endsWith("label 19")).toBe(true);
++  });
++});
++
++describe("probes", () => {
++  test("are read at snapshot time; a throwing probe is reported, not thrown", () => {
++    const { diag } = setup();
++    let depth = 0;
++    const off = diag.probe("dock", () => ({ queueDepth: depth }));
++    diag.probe("bad", () => {
++      throw new Error("boom");
++    });
++    depth = 3;
++    const snap = diag.snapshot("t");
++    expect(snap.probes.dock).toEqual({ queueDepth: 3 });
++    expect(snap.probes.bad).toEqual({ probeError: "boom" });
++    off();
++    expect(diag.snapshot("t").probes.dock).toBeUndefined();
++  });
++});
++
++describe("stall watcher", () => {
++  test("a healthy session writes nothing", () => {
++    const { diag, clock, lines } = setup();
++    diag.begin("c1", "spawn_subagent");
++    for (let i = 0; i < 5; i++) {
++      clock.advance(30_000);
++      diag.tick();
++    }
++    diag.end("c1", "ok");
++    expect(lines).toHaveLength(0);
++  });
++
++  test("dumps once when a call sits in one stage past the limit, again only after the repeat window", () => {
++    const { diag, clock, lines } = setup();
++    diag.begin("c1", "spawn_subagent");
++    diag.stage("c1", "invoke");
++    diag.probe("dock", () => ({ queueDepth: 9, holderAgeMs: 123 }));
++    clock.advance(10 * MIN);
++    diag.tick();
++    expect(lines).toHaveLength(1);
++    const first = JSON.parse(lines[0] as string);
++    expect(first.reason).toBe("stall");
++    expect(first.calls[0]).toMatchObject({ id: "c1", stage: "invoke" });
++    expect(first.probes.dock).toEqual({ queueDepth: 9, holderAgeMs: 123 });
++    clock.advance(5 * MIN);
++    diag.tick();
++    expect(lines).toHaveLength(1);
++    diag.begin("c2", "spawn_subagent");
++    clock.advance(10 * MIN);
++    diag.tick();
++    expect(lines).toHaveLength(2);
++    clock.advance(15 * MIN);
++    diag.tick();
++    expect(lines).toHaveLength(3);
++  });
++
++  test("a stage change resets the clock, so a slow but moving call is not a stall", () => {
++    const { diag, clock, lines } = setup();
++    diag.begin("c1", "spawn_subagent");
++    for (const s of ["a", "b", "c"]) {
++      clock.advance(9 * MIN);
++      diag.stage("c1", s);
++      diag.tick();
++    }
++    expect(lines).toHaveLength(0);
++  });
++
++  test("a call waiting on the operator is a stall only after three windows", () => {
++    const { diag, clock, lines } = setup();
++    diag.begin("c1", "spawn_subagent");
++    diag.stage("c1", "approval");
++    clock.advance(29 * MIN);
++    diag.tick();
++    expect(lines).toHaveLength(0);
++    clock.advance(1 * MIN);
++    diag.tick();
++    expect(lines).toHaveLength(1);
++  });
++
++  test("a call that does not report stages is never judged by its stay in one", () => {
++    const { diag, clock, lines } = setup();
++    diag.begin("c1", "shell_exec", { watched: false });
++    clock.advance(60 * MIN);
++    diag.tick();
++    expect(lines).toHaveLength(0);
++    expect(diag.inFlight()).toHaveLength(1);
++  });
++
++  test("records event-loop lag when a tick arrives far later than asked", () => {
++    const { diag, clock } = setup();
++    clock.advance(30_000 + 7_000);
++    diag.tick();
++    const snap = diag.snapshot("t");
++    expect(snap.loop.lastLagMs).toBe(7_000);
++    expect(snap.metrics.maxLoopLagMs).toBe(7_000);
++  });
++});
++
++describe("file sink", () => {
++  const dirs: string[] = [];
++  afterEach(() => {
++    for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
++  });
++
++  test("creates the file only on the first dump and appends one JSON line per dump", () => {
++    const dir = mkdtempSync(path.join(tmpdir(), "keryx-diag-"));
++    dirs.push(dir);
++    const diag = createCallDiagnostics();
++    const stop = diag.start({ sessionId: "sess/1", configDir: dir, intervalMs: 3_600_000 });
++    expect(diag.dumpPath()).toBeUndefined();
++    diag.dump("manual");
++    diag.dump("manual");
++    stop();
++    const file = diag.dumpPath() as string;
++    expect(path.dirname(file)).toBe(path.join(dir, "diagnostics"));
++    expect(path.basename(file)).toBe("sess_1.ndjson");
++    const rows = readFileSync(file, "utf8").trim().split("\n").map((l) => JSON.parse(l));
++    expect(rows.map((r) => r.reason)).toEqual(["manual", "manual"]);
++    expect(rows[1].metrics.dumps).toBe(2);
++  });
++
++  test("stops writing past the size cap", () => {
++    const dir = mkdtempSync(path.join(tmpdir(), "keryx-diag-"));
++    dirs.push(dir);
++    const diag = createCallDiagnostics();
++    const stop = diag.start({ sessionId: "cap", configDir: dir, intervalMs: 3_600_000, maxFileBytes: 200 });
++    for (let i = 0; i < 10; i++) diag.dump("manual");
++    stop();
++    const lines = readFileSync(diag.dumpPath() as string, "utf8").trim().split("\n");
++    expect(lines.length).toBeLessThan(10);
++    // a dump the sink refused is reported as not written
++    expect(diag.dump("manual")).toBeUndefined();
++  });
++});
+
+--- src/lib/hub-machine/bridge.approvals.network.test.ts
+@@ 112,139 @@
+  try{
+   expect((await success<{status:string}>(await s.cancel(lease,turn.runId!))).status).toBe('requested');
+   await wait(cancelReceipts,v=>v.some(r=>r.status==='not-applied'));expect(armed).toBe(false);
+   expect(await cancelReceipts()).toEqual([{status:'not-applied',errorCode:'stale-reference'}]);
+   const run=await s.run(turn.runId!);expect(run.state).toBe('succeeded');expect((await s.events(turn.runId!)).some(e=>e.kind==='state'&&(e.state==='cancelling'||e.state==='cancelled'))).toBe(false);
+   expect((await wait(s.read,v=>v.state==='idle')).activeRunId).toBeNull();
+   await s.waitRun(turn.runId!,v=>v.result!==undefined);const again=await s.cancel(lease,turn.runId!);expect(again.status).toBe(409);expect(await again.json()).toMatchObject({error:{code:'cancel-too-late'}});
+  }finally{globalThis.fetch=fetchActual;release();}
+ });
+ const descendants=(pids:string)=>`trap "" TERM; sleep 30 & echo $! >> ${pids}; sleep 30 & echo $! >> ${pids}; wait`;
+ const escaping=(pids:string)=>`trap "" TERM; perl -e 'setpgrp(0,0); sleep 30' & echo $! >> ${pids}; sleep 30 & echo $! >> ${pids}; wait`;
+ for(const [label,script,expected] of [['TERM-ignoring descendants in the owned group are killed after the five-second grace and the run is cancelled',descendants,'cancelled'],['a descendant that left the owned process group survives and the cancel reports unknown, never cancelled',escaping,'unknown']] as const)
+ test(`R5.2 ${label}`,async()=>{
+  const dir=mkdtempSync(path.join(tmpdir(),'cancel-pids-'));const pids=path.join(dir,'pids');let list:number[]=[];
+  const m=await h.machine({approve:allowAll,scripts:[callRound('tree','shell_exec',JSON.stringify({command:script(pids)})),okReply]});const s=m.session;const lease=(await s.claim()).lease;
+  const alive=(pid:number)=>{try{process.kill(pid,0);return true;}catch{return false;}};
+  try{
+   const turn=await s.turn(lease,'Spawn descendants that ignore TERM');await wait(async()=>{try{return readFileSync(pids,'utf8').trim().split('\n').length;}catch{return 0;}},v=>v>=2);list=readFileSync(pids,'utf8').trim().split('\n').map(Number);
+   const started=Date.now();await success(await s.cancel(lease,turn.runId!));
+   const run=await s.waitRun(turn.runId!,v=>TERMINAL.includes(v.state),2000);const elapsed=Date.now()-started;expect(run.state).toBe(expected);
+-  if(expected==='cancelled'){expect(elapsed).toBeGreaterThanOrEqual(5000);expect(list.map(alive)).toEqual([false,false]);expect(await cancelReceipts()).toEqual([{status:'applied',errorCode:'none'}]);expect((await wait(s.read,v=>v.state==='idle')).activeRunId).toBeNull();}
+-  else{expect(alive(list[0]!)).toBe(true);expect(alive(list[1]!)).toBe(false);expect((await wait(s.read,v=>v.state==='recovery-required')).state).toBe('recovery-required');expect(await cancelReceipts()).not.toContainEqual({status:'applied',errorCode:'none'});}
++  if(expected==='cancelled') expect(elapsed).toBeGreaterThanOrEqual(5000);
++  expect(list.map(alive)).toEqual([expected==='unknown',false]);
++  // Hub can project the terminal run event before recording the command receipt.
++  const receipts=await wait(cancelReceipts,values=>values.some(receipt=>receipt.errorCode!==null));
++  if(expected==='cancelled'){expect(receipts).toEqual([{status:'applied',errorCode:'none'}]);expect((await wait(s.read,v=>v.state==='idle')).activeRunId).toBeNull();}
++  else{expect((await wait(s.read,v=>v.state==='recovery-required')).state).toBe('recovery-required');expect(receipts).toEqual([{status:'not-applied',errorCode:'recovery-required'}]);}
+  }finally{for(const pid of list){try{process.kill(pid,'SIGKILL');}catch{/* already gone */}}rmSync(dir,{recursive:true,force:true});}
+ },40000);
+
+--- src/lib/call-diagnostics.ts
+@@ 1,340 @@
++/**
++ * Always-on, in-memory diagnostics for tool calls that never come back (flow 487).
++ *
++ * The failure this exists for: a parent `spawn_subagent` call that stays `running` for hours
++ * after every child finished, with both bounded layers (the spawn backstop and the call
++ * watchdog) silent. The existing traces (`KERYX_PHASE_TRACE`, `keryx shell --debug`) are opt-in,
++ * so the one time it happened nothing had been recorded.
++ *
++ * So this keeps a small amount of state in memory at all times (a registry of in-flight calls
++ * with the stage each is in, a ring buffer of the last phase labels, counters, and named
++ * probes onto other subsystems such as the approval dock) and touches the disk ONLY when
++ * something looks stuck or the operator asks (`/diag`). A healthy session writes nothing.
++ *
++ * Everything here is best-effort: no function may throw into the turn it observes, and probe
++ * output must be free of secrets and file contents (names, counts, ages and flags only).
++ */
++import { statSync } from "node:fs";
++import path from "node:path";
++import { appendOwnerOnlyLine, ensureKeryxSubdir } from "./config-dir";
++
++export type DiagOutcome = "ok" | "error" | "watchdog" | "aborted";
++
++export interface DiagCall {
++  readonly id: string;
++  readonly name: string;
++  readonly startedAt: number;
++  /** Reports its stage changes, so a long stay in one stage means something. False for plain tool calls. */
++  readonly watched: boolean;
++  stage: string;
++  stageSince: number;
++  stageChanges: number;
++}
++
++export interface StageStat {
++  count: number;
++  totalMs: number;
++  maxMs: number;
++}
++
++export interface DiagMetrics {
++  callsStarted: number;
++  callsSettled: number;
++  callsByOutcome: Record<string, number>;
++  /** Time spent per stage, over every call that left that stage. */
++  stages: Record<string, StageStat>;
++  /** Counters for `event()` kinds, e.g. `watchdog.fired`, `backstop.fired`, `approval.rearm`. */
++  events: Record<string, number>;
++  dumps: number;
++  /** Largest event-loop delay seen by the stall watcher: how long the process itself was blocked. */
++  maxLoopLagMs: number;
++}
++
++export type DiagProbe = () => unknown;
++
++export interface DiagSnapshot {
++  readonly ts: string;
++  readonly reason: string;
++  readonly pid: number;
++  readonly sessionId: string | undefined;
++  readonly uptimeMs: number;
++  readonly calls: ReadonlyArray<{ id: string; name: string; ageMs: number; stage: string; stageAgeMs: number; stageChanges: number }>;
++  readonly metrics: DiagMetrics;
++  readonly probes: Record<string, unknown>;
++  readonly loop: { lastLagMs: number; maxLagMs: number };
++  readonly process: { rssBytes: number | undefined; activeResources: Record<string, number> | undefined };
++  readonly recent: readonly string[];
++}
++
++export interface CallDiagnosticsOptions {
++  now?: () => number;
++  /** Phase labels kept for a dump. */
++  ringSize?: number;
++  /** Where a dump goes. Absent: nothing is written (the snapshot is still returned). */
++  sink?: (line: string) => void;
++}
++
++export interface WatcherOptions {
++  sessionId: string;
++  /** Config dir override (tests); defaults to the resolved keryx config dir. */
++  configDir?: string;
++  intervalMs?: number;
++  /** A call that stays in one stage this long is suspected of being stuck. */
++  stallMs?: number;
++  /** While something stays suspect, dump again after this long. */
++  repeatMs?: number;
++  /** Dump file size cap; past it dumps are dropped (a stuck loop must not fill the disk). */
++  maxFileBytes?: number;
++}
++
++export const DEFAULT_WATCH_INTERVAL_MS = 30_000;
++/** Above the 8 min spawn backstop, below the 12 min call watchdog. */
++export const DEFAULT_STALL_MS = 10 * 60_000;
++export const DEFAULT_REPEAT_MS = 15 * 60_000;
++export const DEFAULT_MAX_FILE_BYTES = 1_000_000;
++const SNAPSHOT_RECENT = 120;
++/** An operator may legitimately take a while to answer a dialog; wait this many stall windows. */
++const HUMAN_STAGE_FACTOR = 3;
++const HUMAN_STAGES: ReadonlySet<string> = new Set(["approval"]);
++
++export interface CallDiagnostics {
++  /**
++   * Register a call. Returns the key to pass to `stage`/`end`: the id itself, or `id~n` when
++   * another in-flight call already holds it (provider call ids are not unique across turns).
++   */
++  begin(id: string, name: string, opts?: { watched?: boolean }): string;
++  stage(id: string, stage: string): void;
++  end(id: string, outcome: DiagOutcome): void;
++  /** A countable moment (also lands in the ring buffer). */
++  event(kind: string, detail?: string): void;
++  /** One phase label for the ring buffer (what `tracePhase` feeds). */
++  record(label: string): void;
++  /** Register a named read-only view of another subsystem. Returns an unregister function. */
++  probe(name: string, fn: DiagProbe): () => void;
++  snapshot(reason: string): DiagSnapshot;
++  /** Write a snapshot to the sink. Returns it, or undefined when the sink refused. */
++  dump(reason: string): DiagSnapshot | undefined;
++  /** Start the periodic stall check; the returned function stops it. */
++  start(opts: WatcherOptions): () => void;
++  /** Where dumps for the running watcher go, if started. */
++  dumpPath(): string | undefined;
++  /** One watcher tick, exposed so tests need no real timers. */
++  tick(): void;
++  inFlight(): readonly DiagCall[];
++}
++
++function errText(e: unknown): string {
++  return e instanceof Error ? e.message : String(e);
++}
++
++function emptyMetrics(): DiagMetrics {
++  return { callsStarted: 0, callsSettled: 0, callsByOutcome: {}, stages: {}, events: {}, dumps: 0, maxLoopLagMs: 0 };
++}
++
++export function createCallDiagnostics(options: CallDiagnosticsOptions = {}): CallDiagnostics {
++  const now = options.now ?? ((): number => Date.now());
++  const ringSize = options.ringSize ?? 300;
++  let sink = options.sink;
++  const bornAt = now();
++  const calls = new Map<string, DiagCall>();
++  const probes = new Map<string, DiagProbe>();
++  let ring: string[] = [];
++  const metrics = emptyMetrics();
++  let sessionId: string | undefined;
++  let file: string | undefined;
++  let lastLagMs = 0;
++  let lastTickAt: number | undefined;
++  let intervalMs = DEFAULT_WATCH_INTERVAL_MS;
++  let stallMs = DEFAULT_STALL_MS;
++  let repeatMs = DEFAULT_REPEAT_MS;
++  let lastDumpAt: number | undefined;
++  let lastDumpIds = new Set<string>();
++
++  const record = (label: string): void => {
++    ring.push(`${new Date(now()).toISOString()} ${label}`);
++    if (ring.length > ringSize) ring = ring.slice(ring.length - ringSize);
++  };
++
++  const leaveStage = (call: DiagCall, at: number): void => {
++    const ms = Math.max(0, at - call.stageSince);
++    const stat = (metrics.stages[call.stage] ??= { count: 0, totalMs: 0, maxMs: 0 });
++    stat.count += 1;
++    stat.totalMs += ms;
++    if (ms > stat.maxMs) stat.maxMs = ms;
++  };
++
++  const snapshot = (reason: string): DiagSnapshot => {
++    const at = now();
++    const probed: Record<string, unknown> = {};
++    for (const [name, fn] of probes) {
++      try {
++        probed[name] = fn();
++      } catch (e) {
++        probed[name] = { probeError: errText(e) };
++      }
++    }
++    let rssBytes: number | undefined;
++    try {
++      rssBytes = process.memoryUsage().rss;
++    } catch {
++      rssBytes = undefined;
++    }
++    let activeResources: Record<string, number> | undefined;
++    try {
++      const list = (process as { getActiveResourcesInfo?: () => string[] }).getActiveResourcesInfo?.();
++      if (list !== undefined) {
++        activeResources = {};
++        for (const kind of list) activeResources[kind] = (activeResources[kind] ?? 0) + 1;
++      }
++    } catch {
++      activeResources = undefined;
++    }
++    return {
++      ts: new Date(at).toISOString(),
++      reason,
++      pid: process.pid,
++      sessionId,
++      uptimeMs: at - bornAt,
++      calls: [...calls.values()].map((c) => ({
++        id: c.id,
++        name: c.name,
++        ageMs: at - c.startedAt,
++        stage: c.stage,
++        stageAgeMs: at - c.stageSince,
++        stageChanges: c.stageChanges,
++      })),
++      metrics: structuredClone(metrics),
++      probes: probed,
++      loop: { lastLagMs: lastLagMs, maxLagMs: metrics.maxLoopLagMs },
++      process: { rssBytes, activeResources },
++      recent: ring.slice(-SNAPSHOT_RECENT),
++    };
++  };
++
++  const dump = (reason: string): DiagSnapshot | undefined => {
++    let snap: DiagSnapshot;
++    try {
++      snap = snapshot(reason);
++    } catch {
++      return undefined;
++    }
++    if (sink === undefined) return snap;
++    try {
++      sink(JSON.stringify({ ...snap, metrics: { ...snap.metrics, dumps: metrics.dumps + 1 } }));
++    } catch {
++      return undefined;
++    }
++    metrics.dumps += 1;
++    return snap;
++  };
++
++  const tick = (): void => {
++    const at = now();
++    if (lastTickAt !== undefined) {
++      // A timer that fires much later than asked means the process itself was blocked or starved.
++      const lag = Math.max(0, at - lastTickAt - intervalMs);
++      lastLagMs = lag;
++      if (lag > metrics.maxLoopLagMs) metrics.maxLoopLagMs = lag;
++    }
++    lastTickAt = at;
++    // Only calls that report stages can be judged by how long they sit in one; a plain tool
++    // call (a long build) stays in "start" for its whole legitimate run.
++    const suspects = [...calls.values()].filter(
++      (c) => c.watched && at - c.stageSince >= (HUMAN_STAGES.has(c.stage) ? stallMs * HUMAN_STAGE_FACTOR : stallMs),
++    );
++    if (suspects.length === 0) {
++      lastDumpIds = new Set();
++      return;
++    }
++    const ids = new Set(suspects.map((c) => c.id));
++    const fresh = [...ids].some((id) => !lastDumpIds.has(id));
++    const due = lastDumpAt === undefined || at - lastDumpAt >= repeatMs;
++    if (!fresh && !due) return;
++    lastDumpAt = at;
++    lastDumpIds = ids;
++    record(`diag stall suspected: ${suspects.map((c) => `${c.name}#${c.id}@${c.stage}`).join(", ")}`);
++    dump("stall");
++  };
++
++  return {
++    begin(id, name, opts) {
++      const at = now();
++      let key = id;
++      for (let n = 2; calls.has(key); n += 1) key = `${id}~${n}`;
++      calls.set(key, { id: key, name, startedAt: at, watched: opts?.watched !== false, stage: "start", stageSince: at, stageChanges: 0 });
++      metrics.callsStarted += 1;
++      return key;
++    },
++    stage(id, next) {
++      const call = calls.get(id);
++      if (call === undefined) return;
++      const at = now();
++      leaveStage(call, at);
++      call.stage = next;
++      call.stageSince = at;
++      call.stageChanges += 1;
++    },
++    end(id, outcome) {
++      const call = calls.get(id);
++      if (call === undefined) return;
++      leaveStage(call, now());
++      calls.delete(id);
++      metrics.callsSettled += 1;
++      metrics.callsByOutcome[outcome] = (metrics.callsByOutcome[outcome] ?? 0) + 1;
++    },
++    event(kind, detail) {
++      metrics.events[kind] = (metrics.events[kind] ?? 0) + 1;
++      record(detail === undefined ? `event ${kind}` : `event ${kind} ${detail}`);
++    },
++    record,
++    probe(name, fn) {
++      probes.set(name, fn);
++      return () => {
++        if (probes.get(name) === fn) probes.delete(name);
++      };
++    },
++    snapshot,
++    dump,
++    inFlight: () => [...calls.values()],
++    dumpPath: () => file,
++    tick,
++    start(opts) {
++      sessionId = opts.sessionId;
++      intervalMs = opts.intervalMs ?? DEFAULT_WATCH_INTERVAL_MS;
++      stallMs = opts.stallMs ?? DEFAULT_STALL_MS;
++      repeatMs = opts.repeatMs ?? DEFAULT_REPEAT_MS;
++      const cap = opts.maxFileBytes ?? DEFAULT_MAX_FILE_BYTES;
++      if (sink === undefined) {
++        // Resolved lazily: a healthy session never creates the directory or the file.
++        sink = (line: string): void => {
++          if (file === undefined) {
++            const dir = ensureKeryxSubdir(["diagnostics"], opts.configDir);
++            file = path.join(dir, `${opts.sessionId.replace(/[^A-Za-z0-9._-]/g, "_")}.ndjson`);
++          }
++          let size = 0;
++          try {
++            size = statSync(file).size;
++          } catch {
++            // not created yet
++          }
++          // Throwing (not returning) so dump() reports "not written" instead of claiming a save.
++          if (size >= cap) throw new Error("diagnostics file is at its size cap");
++          appendOwnerOnlyLine(file, line);
++        };
++      }
++      lastTickAt = now();
++      const timer = setInterval(() => {
++        try {
++          tick();
++        } catch {
++          // the watcher must never disturb the session it watches
++        }
++      }, intervalMs);
++      timer.unref?.();
++      return () => clearInterval(timer);
++    },
++  };
++}
++
++/** The process-wide instance every call site feeds. */
++export const callDiagnostics: CallDiagnostics = createCallDiagnostics();
+
+--- src/lib/phase-trace.ts
+@@ 1,17 @@
+ import { appendFileSync } from "node:fs";
++import { callDiagnostics } from "./call-diagnostics";
+ 
+ export const ENV_PHASE_TRACE = "KERYX_PHASE_TRACE";
+ 
+ /** Appends one timestamped line to the file named by `KERYX_PHASE_TRACE`; a no-op without it. */
+ export function tracePhase(label: string, env: Record<string, string | undefined> = process.env): void {
++  // Always kept in the in-memory ring (no file, no env needed): a stall dump replays the last labels.
++  callDiagnostics.record(label);
+   const target = env[ENV_PHASE_TRACE];
+   if (target === undefined || target === "") return;
+   try {
+     appendFileSync(target, `${new Date().toISOString()} ${label}\n`);
+   } catch {
+     // a trace that cannot be written must never disturb the turn it describes
+   }
+ }
+
+--- src/remote/history-host.test.ts
+@@ 1,30 @@
+ // Flow 399 review T-2 (AC6): which entries into a session count as "resumed". The mapping used to sit
+ // inline in the full-screen shell, so every other test ran against a fake host that was told the
+ // answer. These tests take the answer from the real `openSession`, the function the flags and
+ // `/resume` end up in, and push it through the mapping the shell now shares with them.
+ 
+ import { afterEach, describe, expect, test } from "bun:test";
+ import { mkdtempSync, rmSync } from "node:fs";
+ import { tmpdir } from "node:os";
+ import path from "node:path";
+-import { HISTORY_COMMAND, isHistoryCommand, readlineHistoryText } from "../tui/remote-control-surface";
++import { HISTORY_COMMAND, isHistoryCommand } from "../commands/agent-commands";
+ import { openSession, persistHistory } from "../session";
+ import { historyArgsOf, NEW_SESSION_ENTRY, sessionEntryOf } from "./history-host";
+ import { parseHistoryArgs } from "./history";
+ 
+ const dirs: string[] = [];
+ afterEach(() => {
+   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+ });
+ 
+ /** A project that already has one session with a message in it, as a user returning to it would. */
+ function projectWithPast(): { cwd: string; dataDir: string; pastId: string } {
+   const dataDir = mkdtempSync(path.join(tmpdir(), "keryx-host-data-"));
+   const cwd = mkdtempSync(path.join(tmpdir(), "keryx-host-proj-"));
+   dirs.push(dataDir, cwd);
+   const past = openSession({ cwd, dataDir, provider: "p", model: "m" });
+   persistHistory(past.handle, [{ role: "user", content: "an earlier question", provenance: "project" }], { provider: "p", model: "m" });
+   return { cwd, dataDir, pastId: past.handle.summary.id };
+ }
+ 
+ describe("sessionEntryOf: the entry the shell makes into an opened session", () => {
+
+--- src/remote/history-host.test.ts
+@@ 69,94 @@
+     dirs.push(dataDir, cwd);
+     const opened = openSession({ cwd, dataDir, continueLast: true });
+     expect(sessionEntryOf(opened.resumed)).toEqual({ resumed: false, kind: "new" });
+   });
+ 
+   test("a plain start in a project with a past is a new session: resumed false", () => {
+     const { cwd, dataDir, pastId } = projectWithPast();
+     const opened = openSession({ cwd, dataDir });
+     expect(opened.handle.summary.id).not.toBe(pastId);
+     expect(sessionEntryOf(opened.resumed)).toEqual({ resumed: false, kind: "new" });
+   });
+ });
+ 
+ describe("historyArgsOf: the one reading of a /history line", () => {
+   test("the command word is dropped, the rest is trimmed and single-spaced", () => {
+     expect(historyArgsOf("/history")).toBe("");
+     expect(historyArgsOf("  /history   5  ")).toBe("5");
+     expect(historyArgsOf("/history 5 extra")).toBe("5 extra");
+   });
+ 
+-  test("what the readline shell and the full-screen shell read is the same", () => {
++  test("Telegram history still recognises the command and its optional count", () => {
+     expect(isHistoryCommand(HISTORY_COMMAND)).toBe(true);
+     expect(parseHistoryArgs(historyArgsOf("/history 5")).ok).toBe(true);
+     expect(parseHistoryArgs(historyArgsOf("/history lots")).ok).toBe(false);
+-    expect(readlineHistoryText("/history lots")).toContain("Usage: /history");
+-    expect(readlineHistoryText("/history 5")).toContain("full-screen shell");
+   });
+ });
+
+--- src/remote/topic-history.test.ts
+@@ 721,768 @@
+     const h = bridgeHarness({ reused: true });
+     await h.bridge.enable();
+     await h.say("/history lots");
+     await h.bridge.idle();
+     await until(() => h.client().replies.length >= 1, "the usage line");
+     expect(h.client().replies).toEqual([HISTORY_USAGE]);
+   });
+ 
+   test("an empty session is answered with the empty line", async () => {
+     const h = bridgeHarness({ reused: true, history: [] });
+     await h.bridge.enable();
+     await h.say("/history");
+     await h.bridge.idle();
+     await until(() => h.client().replies.length >= 1, "the empty line");
+     expect(h.client().replies).toEqual([HISTORY_EMPTY_MESSAGE]);
+   });
+ });
+ 
+ describe("where /history is listed", () => {
+   test("the topic's command list, the agent's slash commands and the help groups each carry its own entry", () => {
+-    expect(REMOTE_COMMANDS.find((c) => c.name === "history")).toMatchObject({ kind: "builtin" });
++    const remote = REMOTE_COMMANDS.find((c) => c.name === "history");
++    expect(remote).toMatchObject({ kind: "builtin" });
++    expect(remote?.description).toContain("/history [N], 1 to 20");
+     const slash = AGENT_SLASH_COMMANDS.find((c) => c.name === "/history");
+-    expect(slash?.description).toContain("/history [N]");
++    expect(slash?.description).toContain("Ctrl+Shift+H");
+     const help = HELP_GROUPS.find((e) => e.kind === "slash" && e.name === "/history");
+     expect(help?.group).toBe("Automation");
+-    expect(help?.summary).toContain("[N]");
+-    expect(help?.summary).toContain("20");
++    expect(help?.summary).toContain("Ctrl+Shift+H");
+   });
+ });
+ 
+ // ---- the client and the queue ---------------------------------------------------------
+ 
+ describe("the client reports whether the topic was new", () => {
+   let rig: Rig;
+   afterEach(async () => {
+     await rig.cleanup();
+   });
+ 
+   test("a fresh topic is reused:false; the same session registering again is reused:true", async () => {
+     rig = makeRig();
+     await rig.startServe();
+     const first = rig.makeClient({ sessionId: "sess-th-0001", project: "/work/app", name: "release", onLine: () => undefined });
+     const a = await first.start();
+     expect(a).toMatchObject({ ok: true, reused: false });
+     const second = rig.makeClient({ sessionId: "sess-th-0001", project: "/work/app", name: "release", onLine: () => undefined });
+     const b = await second.start();
+     expect(b).toMatchObject({ ok: true });

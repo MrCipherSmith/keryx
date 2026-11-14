@@ -115,7 +115,7 @@ Publish this checklist with `plan_set` under the ids `step-0`…`step-14` and `s
 - Use the reviewer's exact `subagent_type`. If the runtime has no such type, use `general-purpose` and name the reviewer's `SKILL.md` path in the prompt. Neither available: that reviewer is `BLOCKED`.
 - Prompts carry pointers, not pasted files — the diff, the SHAs, the PR, the schema paths — and never paraphrase a contract. On keryx shell the slices travel in `context_files` instead (below). Run `keryx review dispatch-check --payload <file> --manifest <package>/slices/manifest.json --package <package>` on every payload before a mass dispatch; it fails `REVIEWER_INPUT_PATH_MISSING` on a missing `skill_path` or `context_doc`.
 - A reply is a result only if it starts with a `STATUS:` line and carries a `REVIEW_RESULT` block matching `reviewer-finding.schema.json`; anything else is `BLOCKED`. The one exception: a reply or dispatch error of `STATUS: RATE_LIMITED` is handled by the Rate limits rule under Control, never marked `BLOCKED`.
-- The model comes from `keryx review tier` (Step 6). On `spawn_subagent` pass its tier as `model_tier` on every reviewer — `review-verifier` and simple reviewers `light`, normal `standard`, complex reviewers and `review-premise` `deep` (`keryx review tier --premise`); an omitted tier runs the child on your own model.
+- The model comes from `keryx review tier` (Step 6). On `spawn_subagent` pass its tier as `model_class` on every reviewer — `review-verifier` and simple reviewers `light`, normal `standard`, complex reviewers and `review-premise` `expert` (tier `deep`; `keryx review tier --premise`). Without `model_class` the child runs on your own model.
 
 ## Slices, waves and results — every host; keryx shell specifics marked
 
@@ -290,7 +290,7 @@ Everything except `unknown` must cite where the outcome is written down — the
 commit, the test, the decision. A recorded state and its citation cannot be
 overwritten by a later close; record a correction as a new round.
 
-`review complete` on a PR-bound package refuses a merged PR or a moved head unless `report.md`'s first line names the reviewed SHA and says so; a package with no PR binding is unaffected.
+`review complete` on a PR-bound package refuses a merged PR or a moved head unless the operator waives readiness item `head` (`review_waive_readiness` card, or `--waive head "<operator quote>"`); the report's first line still names the reviewed SHA for readers, but it unlocks nothing. A package with no PR binding is unaffected.
 `review complete` refuses a report with no `Evidence level:` line (`static only — did not run: <what>` or `ran — <what>`); a package ingested before the field existed only warns.
 `review ingest` keeps an internal finding whose `quote` is not at its `path` at the reviewed SHA (absent, or in several places) with no line, flagged `quote_unlocated`, instead of refusing the round (readiness item `quotes-located` lists it until it has a disposition); it still refuses, naming the finding, a quote it could not check at all (commit not in the checkout, no file named, or a size bound), and adds a `citation not found` line, never a deletion, to a rebuttal citing a rule or document that is not in the tree.
 A finding may close as `narrowed` (research obligation `"status":"narrowed","remains":"<what remains>"`); it counts as closed only with that text, and the report keeps it under "Refuted and narrowed".

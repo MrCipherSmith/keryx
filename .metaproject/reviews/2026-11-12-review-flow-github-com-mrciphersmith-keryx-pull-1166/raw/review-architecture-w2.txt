@@ -1,0 +1,74 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "slice-03 read in full (audit doc, CLI/guide/skill docs, package schema, review.ts --head-reason plumbing, spawn-field contract test, spawn_subagent ignored-field constant). Structurally sound: the --head-reason gate lives in managed.ts (completeManagedReview) and the CLI only parses and checks the TTY, the host-question path binds the head relabel through validateCompletionHost, and the keryx shell review_complete card closes against the recorded head so it cannot produce a head_override. The new contract test reads accepted/ignored spawn fields from the tool's own schema and exported constant instead of copying them. No blocker or major. Two minor findings: the tier-to-model_class mapping (deep -> expert) exists only as SKILL.md prose while `keryx review tier` still prints the old vocabulary, and SPAWN_SUBAGENT_IGNORED_FIELDS is a list but the tool only acts on index 0. Two info notes on the package schema enum and a displaced JSDoc block.",
+  "slices": ["slice-03"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "line": null,
+      "quote": "On `spawn_subagent` pass its tier as `model_class` on every reviewer",
+      "problem": "The rule that maps a review tier to a spawn model class (light->light, standard->standard, deep->expert) is written only as orchestrator prose. `keryx review tier` (src/commands/review.ts ~1792-1845) still emits `tier: light|standard|deep` with no `model_class`, and nothing in src/review maps tier to model_class (keryx ctx rg for model_class over src/review returns no match). The orchestrator is told to paste the tier block from the command, then translate one of its values by hand into a different vocabulary. This is the same 'rule in prose, not in code' duplication the PR's own audit (docs/analysis/review-process-audit-2026-11-12.md, Architecture section) names as the root architectural defect.",
+      "impact": "An orchestrator that passes the printed tier verbatim (`model_class: deep`) is refused by spawn_subagent ('model_class must be light, standard, expert, or frontier'), so the failure is loud, not silent; but the contract test only checks the field NAME, so a future change to MODEL_CLASSES or the tier set can drift from the prose without any test failing, and `keryx review tier` / plan cost estimates still describe a vocabulary the dispatch does not use.",
+      "suggested_fix": "Have `keryx review tier` print a `model_class` field derived in code from the tier (one mapping function next to the tier decision, deep->expert), make SKILL.md say 'pass the printed model_class', and extend review-spawn-field-contract.test.ts (or a unit test of the mapping) to assert every tier maps into MODEL_CLASSES.",
+      "evidence": "SKILL.md:118 (head) carries the mapping in prose; spawn-subagent-tool.ts rejects non-MODEL_CLASSES values; src/commands/review.ts tier output (tier_reasons at 1792, 1833, 1845) has no model_class; rg 'model_class' in src/review: 0 matches.",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "line": null,
+      "quote": "const legacyTierMigrationNotice = input[SPAWN_SUBAGENT_IGNORED_FIELDS[0]] !== undefined",
+      "problem": "SPAWN_SUBAGENT_IGNORED_FIELDS is exported as the list of fields the tool accepts and ignores, and the contract test treats every entry as ignored. But the tool's only consumer indexes `[0]` and the next line still hard-codes `input.model_tier` in the message. The constant is a list in its contract and a single name in its use (OCP: adding a second ignored field to the list changes the test's judgment but not the tool's behaviour, so the new field gets no migration notice).",
+      "impact": "The constant and the tool can diverge silently: the list grows, the test passes, and callers of the new ignored field get no notice that their field was dropped, which is exactly the silent no-op flow 488 set out to remove.",
+      "suggested_fix": "Iterate the list: compute the ignored fields actually present (`SPAWN_SUBAGENT_IGNORED_FIELDS.filter((f) => input[f] !== undefined)`) and emit one notice naming each, or make the constant a single named field (`SPAWN_SUBAGENT_IGNORED_TIER_FIELD`) if only one is ever intended.",
+      "evidence": "spawn-subagent-tool.ts:1073 export; :1504-1505 uses index 0 and `input.model_tier`; review-spawn-field-contract.test.ts reads the full list as IGNORED.",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "docs/requirements/managed-review-feedback-loop/schemas/managed-review-package.schema.json",
+      "line": null,
+      "quote": "The operator's act of relabelling the reviewed head at `review complete --head`",
+      "problem": "head_override.confirmedVia enumerates tui-card, remote-card and host-question, but the only writer (src/review/managed.ts:1063) sets host-question or omits the field (terminal), and the review_complete card (src/commands/operator-confirm-review.ts ~741, 841) closes against the recorded head so it can never produce a head_override. Two enum values have no producer.",
+      "impact": "None at runtime; a reader of the schema infers a card path for relabelling the head that does not exist. Would be settled by either a card that accepts a head relabel or dropping the two values.",
+      "suggested_fix": "Restrict the enum to [\"host-question\"] (terminal = absent), or document that card values are reserved.",
+      "evidence": "managed.ts:1063 headOverride construction; operator-confirm-review.ts prepared.head is the recorded head.",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "line": null,
+      "quote": "export const SPAWN_SUBAGENT_IGNORED_FIELDS = [\"model_tier\"] as const;",
+      "problem": "The new JSDoc + constant were inserted between the existing 'Create the `spawn_subagent` tool bound to a live shell host.' JSDoc (line 1059) and createSpawnSubagentTool, so that doc block now precedes the constant instead of the exported factory; the factory loses its API documentation.",
+      "impact": "Documentation only; editor hover on createSpawnSubagentTool shows nothing and the constant shows two unrelated blocks. Readability concern (review-style lane).",
+      "suggested_fix": "Move the constant and its JSDoc above the factory's JSDoc block.",
+      "evidence": "slice-03 hunk @@ 1048,1094 @@ shows the insertion point.",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 2 }
+}
+```
+
+Architecture review summary. Stack: generic TS (CLI command layer, review domain module, harness tool). Layering holds: `src/commands/review.ts` parses `--head-reason` and enforces the TTY precondition only; the policy (quote length, relabel detection, head_override record, host-question binding via validateCompletionHost) lives in `src/review/managed.ts`. The contract test in `src/gdskills` depends on `src/harness` exports, which is acceptable for a cross-module contract test since it derives the field sets from the tool rather than copying them. History not read with git (read-only payload); judgments rest on the head files.
+
+Routing audit: graph_used: no (not needed for a single-slice structural read), wiki_used: no (not-relevant), ctx_used: yes (keryx ctx rg), raw_rg_used: no.

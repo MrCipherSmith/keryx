@@ -199,11 +199,11 @@ Its limits are the point:
 Two places, and they are not the same shape:
 
 - **`spawn_subagent`** (`src/harness/tool/builtin/spawn-subagent-tool.ts`) takes an
-  optional `model_tier` input and does the rest in code: it builds the tier map
-  with `buildTierMap` from its host's detection result, hands it to
-  `resolveChildModel`, and records the outcome on the dispatch's run trace.
-  Omitting `model_tier` inherits the parent's model, exactly as before the field
-  existed.
+  optional `model_class` input (`light`, `standard`, `expert`, `frontier`) and lets
+  model routing choose the child's model from it. It still accepts `model_tier` but
+  ignores it and logs a migration notice (`SPAWN_SUBAGENT_IGNORED_FIELDS`). Omitting
+  `model_class` leaves the child to the project's subagent routing: the parent's
+  model unless that category is set to `auto`.
 - **An orchestrator authoring a dispatch document** *runs a command*:
   `keryx review tier`. It takes the signals below as flags and prints the `model`
   block ready to paste — the tier, the ordered rule ids that produced it, the

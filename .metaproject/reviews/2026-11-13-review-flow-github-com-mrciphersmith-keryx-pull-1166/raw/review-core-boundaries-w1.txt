@@ -1,0 +1,40 @@
+STATUS: DONE
+
+```json REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-core-boundaries",
+  "slices": ["slice-01"],
+  "summary": "Fix slice read in full and each of the 12 prior findings judged against code at head b076a85a6354. 11 are closed; review-logic-w4:F-001 is partial (a package closed through a removed escape now reads NOT READY; the operator accepted it and CHANGELOG.md:8 and seals.ts:14-15 record it, so the behaviour stands but is documented). The fix lines add no dependency-direction, boundary or public-surface defect: seals.ts is a leaf imported by readiness.ts, close-gates.ts and managed.ts, and close-gates.ts now owns the research gate for both callers.",
+  "findings": [],
+  "prior_dispositions": [
+    {"id": "review-architecture-w1:F-001", "disposition": "closed"},
+    {"id": "review-logic-w2:F-001", "disposition": "closed"},
+    {"id": "review-degradation-w2:F-001", "disposition": "closed"},
+    {"id": "review-logic-w3:F-002", "disposition": "closed"},
+    {"id": "review-degradation-w2:F-003", "disposition": "closed"},
+    {"id": "review-architecture-w2:F-004", "disposition": "closed"},
+    {"id": "review-degradation-w2:F-002", "disposition": "closed"},
+    {"id": "review-architecture-w3:ARCH-1", "disposition": "closed"},
+    {"id": "review-testing-practices-w1:F-001", "disposition": "closed"},
+    {"id": "review-testing-practices-w2:TP-2", "disposition": "closed"},
+    {"id": "review-logic-w4:F-001", "disposition": "partial"},
+    {"id": "review-security-code-w3:SEC-1", "disposition": "closed"}
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0}
+}
+```
+
+Evidence for each disposition, at head b076a85a6354:
+
+- review-architecture-w1:F-001 and review-logic-w2:F-001: SKILL.detail.md item 7 now reads "the head recorded at `review start` is still the PR head and the PR is not merged; otherwise only the operator's `head` waiver lifts it (no report line does)". Closed.
+- review-degradation-w2:F-001 and review-logic-w3:F-002: the `--head:` block of the help text in src/commands/review.ts now says the head fails readiness item `head`, only the operator waives it, and `--head-reason` is required for a differing head. The JSDoc of CompleteManagedReviewOptions.head (src/review/managed.ts:969-974) and headReason (:976-981) is rewritten. A search for the old phrases across src, .metaproject/skills and docs/docs finds no remaining statement of the old rule; the review-report template (line 78-80) and review-with-a-record.md:788 agree with the new rule.
+- review-degradation-w2:F-003: model-selection.mdc:201-206 (bundled copy and the .metaproject/rules copy) now describes `model_class` and the ignored `model_tier` with SPAWN_SUBAGENT_IGNORED_FIELDS.
+- review-architecture-w2:F-004 and review-degradation-w2:F-002: spawn-subagent-tool.ts:1061-1067 puts the constant and its JSDoc before the factory's own JSDoc (1069-1078), which again sits directly on createSpawnSubagentTool (1079).
+- review-architecture-w3:ARCH-1: close-gates.ts:49-59 `researchRefusals` runs inside `evaluateCloseGates` (line 77) for both complete and publish, tags honoured only via sealed waivers, and uses `{coverage:false}` for a closed publish. `beforeReadiness` (line 76, passed only by managed.ts:1130) now only records the waivers; it no longer carries the research gate.
+- review-testing-practices-w1:F-001: complete-head-gate.test.ts:155-174 now passes `headReason: REASON` so the refusal comes from readiness item `head` (asserts `--waive head`), and :176-181 pins the waiver-positive path. :191-198 pins that `--head-reason` without a relabel is refused.
+- review-testing-practices-w2:TP-2: readiness.test.ts:63 VERIFIED carries verdict, method, evidence and verifier; :66-72 seals it as ingest does. seals.test.ts:106 (`verification: {}`) and :110 (well-formed but unsealed) and readiness.test.ts:172,180 pin that empty, partial and unsealed verifications fail item 4.
+- review-security-code-w3:SEC-1: seals.ts adds digests over target, waivers, head override and verifications. Readiness honours only sealed waivers (readiness.ts:489-498) and `verificationProblem` requires the producer shape plus a matching seal (seals.ts:67-74, used at readiness.ts:242). `sealProblems` (seals.ts:80-93) runs at the top of both close gates. Residual: the seal is tamper evidence, not a signature (seals.ts:11-14 says so), the same level as `roundRecordTampered`. I treat that as a stated design limit, not an open defect.
+- review-logic-w4:F-001: verifierCheck and headCheck still fail on a closed package whose close relied on the removed escapes (also any pre-seal package: seals.ts:14-15). The cost is acknowledged in CHANGELOG.md:8 ("Breaking for packages closed through the removed escapes"). The defect as described is unchanged; only its disclosure was added. Partial.
+
+Routing audit: graph_used: not-relevant (the slice is a fix round of known sites, confirmed by direct reads); wiki_used: not-relevant; ctx_used: yes (`keryx ctx rg`); raw_rg_used: no.

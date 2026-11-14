@@ -1,0 +1,58 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "slice-03 (docs, CLI flag plumbing for --head-reason, the spawn-field contract test, SPAWN_SUBAGENT_IGNORED_FIELDS) is logically sound. The --head relabel gate in managed.ts refuses a differing head without an 8+ character operator quote and records head_override; the verifier gate no longer accepts a 'Not verified' line; the orchestrator now names model_class with deep mapped to expert, and no other model_tier mention remains in the review-orchestrator skill. Two minor gaps: --head-reason given without a differing --head is accepted and silently dropped, and two help/JSDoc passages still say the report's first line lifts the head gate.",
+  "slices": ["slice-03"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/commands/review.ts",
+      "line": null,
+      "quote": "  if (headReason !== undefined && hostQuestion === undefined && !isTerminal()) {",
+      "problem": "runComplete validates --head-reason only for an empty value and for a missing TTY; it never checks that --head was also passed, and completeManagedReviewLocked reads options.headReason only inside the branch where --head differs from the recorded head. So `keryx review complete <pkg> --head-reason \"the round ran on the PR head\"` (no --head), or --head equal to the recorded head plus --head-reason, closes successfully and the operator's words are recorded nowhere. The JSDoc on CompleteManagedReviewOptions.headReason says the quote is 'Required then, and refused otherwise', and the CLI help states the principle 'An unrecognised option is REFUSED, not ignored. A flag that is silently dropped writes nothing and still reports success'.",
+      "impact": "An operator who believes they relabelled the head (forgetting --head, or passing the recorded head) gets status: closed with no head_override and no warning; the stated contract ('refused otherwise') does not hold.",
+      "suggested_fix": "In runComplete, refuse --head-reason when headFlag is undefined (\"--head-reason applies only with --head <sha>\"). In completeManagedReviewLocked, when options.headReason is set but no override was recorded (head equals the recorded head, or none was recorded), either refuse or push a warning that the quote was not needed and not recorded.",
+      "evidence": "src/commands/review.ts:4940-4956 (headReason parsed, only empty/TTY checks); src/review/managed.ts:1056-1066 (headReason read only inside the recordedHead-differs branch); src/review/managed.ts:966-968 JSDoc 'Required then, and refused otherwise'. keryx ctx rg 'headReason|head-reason' over src/review and src/commands/review.ts: no other reader.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/commands/review.ts",
+      "line": null,
+      "quote": "  is not the pull request's head still needs the report's first line to name it",
+      "problem": "Flow 488 removed the report-first-line escape from the head gate (complete-head-gate.ts no longer matches it; the guide, cli-reference, SKILL.md and the report template in this slice were updated to say nothing in report.md lifts item `head`). Two siblings still state the old rule: the `--head:` block of the `keryx review --help` text (src/commands/review.ts:5683-5685) and the JSDoc of CompleteManagedReviewOptions.head (src/review/managed.ts:961-962, 'a head that is not the PR's head still needs the report to name it and say the PR moved').",
+      "impact": "An agent or operator following `keryx review --help` writes the first line and expects completion; it is refused with item `head` failing, and the help points at a repair that no longer exists.",
+      "suggested_fix": "Replace both passages with the new rule: a head that is not the PR's head fails readiness item `head`, which only the operator waives (`--waive head \"<quote>\"` or the review_waive_readiness card).",
+      "evidence": "keryx ctx rg 'first line|say the PR moved|says the PR moved' over complete-head-gate.ts, managed.ts and commands/review.ts: hits only review.ts:5684-5685 and managed.ts:962; complete-head-gate.ts has none.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 0 }
+}
+```
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/flow-488-review-gates`
+- Merge-base: `66ee001172e0d0c048a73727c3e6e099f9149b0a`
+- Scope mode: supplied slice (slice-03, read in full)
+- Spec compliance gate: skipped (no issue/task provided)
+
+### Summary
+The CLI plumbing for `--head-reason`, the managed.ts relabel gate it feeds, the verifier-gate and head-gate doc changes, the `model_class` switch and its contract test hold together. Two minor gaps: `--head-reason` without a differing `--head` is silently dropped (F-001), and two passages still describe the removed first-line escape (F-002).
+
+### Stats
+- blocker: 0 | major: 0 | minor: 2 | info: 0
+
+History: not read beyond the head files (no git log/blame needed for these findings). Routing: graph_used: no (narrow slice, targeted reads sufficed), wiki_used: not-relevant, ctx_used: yes, raw_rg_used: no.

@@ -1,0 +1,45 @@
+STATUS: DONE
+
+```json REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-degradation",
+  "slices": ["slice-06"],
+  "summary": "Slice-06 (kind new) read in full: the PR removes the report-first-line escape from the head gate (complete-head-gate.ts, readiness item 7, review.ts help, both SKILL.detail.md copies), removes the 'Not verified: N' report-line escape from readiness item verifier, and moves the round-record tamper check, evidence level, research gate and readiness out of managed.ts/publish.ts into close-gates.ts evaluateCloseGates. Base read via `git show origin/main:src/review/managed.ts` (gdctx raw log lines 1039-1124). One behaviour-delta filed (minor): the early hard JSON.parse of findings.json was dropped, so an unreadable findings.json is now a research error tagged `ledger` that a `--waive ledger` lifts, and the close then writes manifest status closed before crashing on the unguarded parse at managed.ts:1192. One info on doc wording. Verified clean: (1) roundRecordTampered is not lost — it moved to close-gates.ts:63 and now also guards publish (stricter than base); call sites close-gates.ts, review-ledger.ts:253, review-slice.ts:223 traced. (2) completeHeadGate signature drop of `report`: every caller enumerated by `keryx ctx rg completeHeadGate(` (managed.ts:1106, readiness.ts:360, complete-head-gate.test.ts) passes {manifest, lookup}; no stale caller. (3) No remaining doc/skill/wiki text promises the first-line escape (searched src, docs, .metaproject/skills, .metaproject/wiki with --hidden; only the negative test at complete-head-gate.test.ts:38). (4) publish.ts --partial: base threw readinessRefusal unless --partial; head passes relaxReadiness=partial to evaluateCloseGates — same readiness behaviour, plus integrity gates the PR description names. (5) verifierCheck: removal of NOT_VERIFIED escape is the stated intent (doc comment readiness.ts:233-236), not a regression. (6) complete-head-gate.test.ts: the new tests assert the manifest stays not-closed on refusal and that the waiver closes, so they would fail if the escape came back; not blind. Ordering delta checked: the tamper check now runs after host-question validation and after recordCoverageWaiver, but inside the try whose catch rolls the waiver back (managed.ts:1123-1175), so no lasting write precedes it. The .metaproject/data gdgraph/testing hunks are generated artifacts, not behaviour. Graph consumer list was not used (no layers payload in the brief); consumers were enumerated by search and are marked search-derived.",
+  "findings": [
+    {
+      "id": "DEG-1",
+      "severity": "minor",
+      "degradation_class": "behaviour-delta",
+      "evidence_kind": "base-diff",
+      "file": "src/review/close-gates.ts",
+      "line": 52,
+      "quote": "const findings = await readFile(path.join(packageDir, \"findings.json\"), \"utf8\").then((text): unknown => JSON.parse(text), () => undefined);",
+      "problem": "On base, completeManagedReviewLocked parsed findings.json before any write (`const researchFindings = JSON.parse(await readFile(path.join(packageDir, \"findings.json\"), \"utf8\"));`, base managed.ts:1090, outside the try), so an unreadable or non-JSON findings.json refused the close outright. The PR removes that line; close-gates.ts now turns an unreadable file into `undefined`, which researchErrors reports as \"canonical findings must be an array\" — and packageResearchErrorsTagged tags every researchErrors message with readiness item `ledger` (research.ts:156). researchRefusals (close-gates.ts:57) drops an error whose item is sealed-waived, so `review complete --waive ledger \"<quote>\"` lifts it. computeReadiness then reads the same file as `[]` (readiness.ts:465), so item `verifier` passes vacuously (\"0 blocker/major finding(s), all verified\") and `quotes-located` passes too. The manifest is written `closed` and sealed (managed.ts:1162), active review cleared and the round registered (1176-1179), and only then does the unguarded `JSON.parse(await readFile(path.join(packageDir, \"findings.json\"), \"utf8\"))` at managed.ts:1192 throw, outside the rollback.",
+      "impact": "A package whose findings.json is truncated or hand-broken can be closed with one ledger waiver: the flow's review gate then sees a closed round whose verifier item reported clean over zero findings, and the command exits with a SyntaxError after the irreversible writes, leaving no review notes. research.ts:127-130 says an unreadable ledger is an integrity failure no waiver covers; unreadable findings is now the waivable exception. Trigger needs a corrupt file plus an operator waiver, hence minor.",
+      "suggested_fix": "In researchRefusals, return an untagged (unwaivable) error when findings.json is unreadable instead of passing `undefined` into the tagged ledger check — e.g. `if (findings === undefined) return [\"findings.json is unreadable or not JSON\"]` — or restore an early parse in completeManagedReviewLocked before the try. Optionally move the managed.ts:1192 read above the manifest write.",
+      "evidence": "base-diff: base origin/main managed.ts:1090 `const researchFindings = JSON.parse(...)` before the try; head managed.ts has no such line (slice-06 hunk @@ 1112,1119) and close-gates.ts:52 swallows the parse error. Traced head: close-gates.ts:52 -> research.ts:81 'canonical findings must be an array' -> research.ts:156 tagged ['ledger'] -> close-gates.ts:55-57 waived filter -> readiness.ts:457/465 findings [] -> readiness.ts:245 verifier ok -> managed.ts:1162 manifest closed -> managed.ts:1192 unguarded JSON.parse. Refute: looked for a guard between 1125 and 1162 — recordDispositions reads findings only when --finding dispositions are given; premiseRecords/verdictRecords read via readJson (undefined on failure, verdict.ts:258) and do not throw; missingArtifacts checks existence only. No guard found.",
+      "confidence": "medium",
+      "reviewer": "review-degradation",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "DEG-2",
+      "severity": "info",
+      "degradation_class": "diff-vs-description",
+      "evidence_kind": "base-diff",
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "line": 776,
+      "quote": "7. `head` — the head recorded at `review start` is still the PR head and the PR is not merged; otherwise only the operator's `head` waiver lifts it (no report line does).",
+      "problem": "The rewritten item-7 line says the gate checks the head recorded at `review start`, but with `review complete --head <sha>` the gate checks the --head value (managed.ts:1077 rewrites manifest.target.head before completeHeadGate at 1106), as the help text in review.ts:5681-5683 states. The same line is in .metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md:776.",
+      "impact": "An orchestrator reading the skill may believe --head cannot repair item 7 and reach for a waiver instead; wording only, no code effect.",
+      "suggested_fix": "Say \"the head the round records (the one from `review start`, or `--head`)\" in both copies.",
+      "evidence": "read SKILL.detail.md:776 (both copies) against managed.ts:1059-1078 and :1106 and review.ts:5681-5688.",
+      "confidence": "medium",
+      "reviewer": "review-degradation",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 }
+}
+```

@@ -1,0 +1,44 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-highload",
+  "summary": "slice-04 (src/review close gates, head gate, readiness, research tagging, publish, and their tests) adds no shared mutable state, no unbounded collection, no new pool or connection, no retry loop and no fan-out that scales with input. The concurrency-relevant changes make things better. The head gate now runs once per close and its result is passed to both waiveReadiness and computeReadiness through ReadinessOptions.headGate, so the tracker (PR lookup) is asked once instead of again on each waiver. The tamper and evidence checks moved from before the try block into evaluateCloseGates, which runs inside the try, so a refusal there now also triggers writer.rollback() and takes back a coverage waiver written moments earlier (managed.ts:1153-1157). The checks already guard both publish and complete. The close path still runs under withCompletionLock, and waiveReadiness takes the same lock through writeCompletion, as it did before this change. publishReview still evaluates the gate and posts without the completion lock. That gap predates this diff, which neither widens nor narrows it; a single-operator CLI has no load profile that would make it a high-load issue. No findings.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "slices": ["slice-04"],
+  "inputs_unreadable": []
+}
+```
+
+## High-Load Review
+
+### Review Scope
+- Branch: `feat/flow-488-review-gates`
+- Merge-base: `66ee001172e0d0c048a73727c3e6e099f9149b0a` (head e9ac9253fde7)
+- Scope mode: slices (slice-04, read in full, 2017 lines)
+- Load profile: not provided. This is a local CLI and agent tool: one operator, one package per close.
+- Changed files reviewed: 18 (9 source, 9 test)
+
+### Summary
+The slice moves the round-record tamper check and the evidence-level check out of completeManagedReviewLocked into a shared `evaluateCloseGates`, which `review publish` now also calls. The head gate becomes a result value instead of a thrown error. Each research error now carries the readiness items that may waive it. Under concurrency nothing degrades: the close stays under the completion lock, and failures inside the new gate are now covered by the existing rollback. One tracker round trip per close is removed. Verdict at scale: clean.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 0
+
+### Findings
+- Concurrency & Race Conditions: none detected.
+- Resource Management: none detected.
+- Caching: none detected.
+- Database Under Load: not applicable (no database access).
+- Async / Queues: none detected.
+- Retry / Timeout / Circuit Breaker: none detected. The PR lookup still degrades to a warning on a failed call, and is now called once per close.
+- Idempotency & Distributed Invariants: none detected.
+
+### Clean Areas
+A1/A2 (no new shared module state; the head gate is a snapshot taken under the completion lock, same as before), A3 (the loop over `waiveReadiness` stays sequential and is bounded by the operator's own `--waive` flags), B1-B3, C1-C3, D1-D4 (not applicable), E1-E3, F1-F3, G1-G3.
+
+graph_context: unavailable (query_failed: not run; slice-scoped read-only review, context read directly)
+Routing audit: graph_used: no (not-relevant: the payload supplied the slice), wiki_used: no (not-relevant), ctx_used: yes (`keryx ctx rg` on managed.ts and readiness.ts), raw_rg_used: no

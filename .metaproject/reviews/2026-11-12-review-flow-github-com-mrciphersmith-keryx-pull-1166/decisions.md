@@ -1,0 +1,37 @@
+# Decisions
+
+- review-architecture-w1:F-001: create follow-up task or learning proposal (valid_followup, standalone_review).
+- review-architecture-w1:F-002: create follow-up task or learning proposal (valid_followup, standalone_review).
+- review-architecture-w2:F-001: create follow-up task or learning proposal (valid_followup, standalone_review).
+- review-architecture-w2:F-002: create follow-up task or learning proposal (valid_followup, standalone_review).
+- review-architecture-w2:F-003: create follow-up task or learning proposal (valid_followup, standalone_review).
+- review-architecture-w2:F-004: create follow-up task or learning proposal (valid_followup, standalone_review).
+- review-architecture-w3:ARCH-1: create follow-up task or learning proposal (valid_followup, standalone_review).
+- review-architecture-w3:ARCH-2: create follow-up task or learning proposal (valid_followup, standalone_review).
+- review-architecture-w3:ARCH-3: create follow-up task or learning proposal (valid_followup, standalone_review).
+- review-degradation-w1:F-001: create follow-up task or learning proposal (valid_followup, standalone_review).
+- review-degradation-w2:F-001: create follow-up task or learning proposal (valid_followup, standalone_review).
+- review-degradation-w2:F-002: create follow-up task or learning proposal (valid_followup, standalone_review).
+- review-degradation-w2:F-003: create follow-up task or learning proposal (valid_followup, standalone_review).
+- review-degradation-w3:DEG-1: create follow-up task or learning proposal (valid_followup, standalone_review).
+- review-degradation-w3:DEG-2: create follow-up task or learning proposal (valid_followup, standalone_review).
+- review-logic-w1:F-001: create follow-up task or learning proposal (valid_followup, standalone_review).
+- review-logic-w2:F-001: create follow-up task or learning proposal (valid_followup, standalone_review).
+- review-logic-w2:F-002: create follow-up task or learning proposal (valid_followup, standalone_review).
+- review-logic-w3:F-001: create follow-up task or learning proposal (valid_followup, standalone_review).
+- review-logic-w3:F-002: create follow-up task or learning proposal (valid_followup, standalone_review).
+- review-logic-w4:F-001: create follow-up task or learning proposal (valid_followup, standalone_review).
+- review-logic-w4:F-002: create follow-up task or learning proposal (valid_followup, standalone_review).
+- review-performance-w3:PERF-001: create follow-up task or learning proposal (valid_followup, standalone_review).
+- review-security-code-w1:F-001: create follow-up task or learning proposal (valid_followup, standalone_review).
+- review-security-code-w2:F-001: create follow-up task or learning proposal (valid_followup, standalone_review).
+- review-security-code-w2:F-002: create follow-up task or learning proposal (valid_followup, standalone_review).
+- review-security-code-w3:SEC-1: create follow-up task or learning proposal (valid_followup, standalone_review).
+- review-security-code-w3:SEC-2: create follow-up task or learning proposal (valid_followup, standalone_review).
+- review-testing-practices-w1:F-001: create follow-up task or learning proposal (valid_followup, standalone_review).
+- review-testing-practices-w1:F-002: create follow-up task or learning proposal (valid_followup, standalone_review).
+- review-testing-practices-w1:F-003: create follow-up task or learning proposal (valid_followup, standalone_review).
+- review-testing-practices-w2:TP-1: create follow-up task or learning proposal (valid_followup, standalone_review).
+- review-testing-practices-w2:TP-2: create follow-up task or learning proposal (valid_followup, standalone_review).
+- review-testing-practices-w2:TP-3: create follow-up task or learning proposal (valid_followup, standalone_review).
+- review-testing-practices-w2:TP-4: create follow-up task or learning proposal (valid_followup, standalone_review).

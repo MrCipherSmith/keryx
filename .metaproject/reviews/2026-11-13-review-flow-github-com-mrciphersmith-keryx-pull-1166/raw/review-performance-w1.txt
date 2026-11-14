@@ -1,0 +1,12 @@
+STATUS: DONE
+
+```json REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "slices": ["slice-02"],
+  "summary": "slice-02 read in full. Beyond the excluded merge-of-main files it holds only generated artifacts (gdgraph, testing context), flow bookkeeping, one schema addition (seals), a package.json version and override bump, a CHANGELOG entry and one test-fixture change in operator-confirm-review-tools.test.ts. No runtime code with a hot path, loop, query, subscription, cache or blocking call is changed here, so there is no performance finding.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```

@@ -1,0 +1,51 @@
+// Round 2 verification repros (part 2) for PR 1166: SEC-2 (severity unsealed) and degradation-w1 F-001 (pre-seal verification not honoured).
+import { afterAll, describe, expect, test } from "bun:test";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+const R = "/Users/tsaitler.aleksandr/goodea/keryx/.claude/worktrees/review-process-audit/src/review";
+const { ingestReady, writeFindings, UNVERIFIED_MAJOR, VERIFIED } = await import(`${R}/close-gates.test-helpers.ts`);
+const { computeReadiness } = await import(`${R}/readiness.ts`);
+
+const dirs: string[] = [];
+afterAll(async () => { for (const d of dirs) await rm(d, { recursive: true, force: true }); });
+
+async function pkg(id: string): Promise<{ cwd: string; ref: string; dir: string }> {
+  const cwd = await mkdtemp(path.join(tmpdir(), "r2-"));
+  dirs.push(cwd);
+  const ref = await ingestReady(cwd, "# report", { kind: "report", ref: "local" }, id);
+  return { cwd, ref, dir: path.resolve(cwd, ref) };
+}
+const verifierItem = async (dir: string) => (await computeReadiness(dir, {})).items.find((i: { id: string }) => i.id === "verifier");
+
+describe("SEC-2: verifierCheck selects heavy findings by the unsealed severity string", () => {
+  test("control: an unverified major fails item verifier", async () => {
+    const p = await pkg("sec2-control");
+    await writeFindings(p.cwd, p.ref, [UNVERIFIED_MAJOR]);
+    const item = await verifierItem(p.dir);
+    console.log("SEC-2 control:", item.status, item.evidence ?? item.detail ?? "");
+    expect(item.status).toBe("fail");
+  });
+  test("editing findings.json severity major -> minor makes item verifier pass", async () => {
+    const p = await pkg("sec2-edit");
+    await writeFindings(p.cwd, p.ref, [{ ...UNVERIFIED_MAJOR, severity: "minor" }]);
+    const item = await verifierItem(p.dir);
+    console.log("SEC-2 edited:", item.status, item.evidence ?? item.detail ?? "");
+    expect(item.status).toBe("pass");
+  });
+});
+
+describe("degradation-w1 F-001: a verification in the producer's shape on a package with no seals", () => {
+  test("is not honoured: item verifier fails with 'keryx did not record'", async () => {
+    const p = await pkg("deg1");
+    await writeFindings(p.cwd, p.ref, [{ ...UNVERIFIED_MAJOR, verification: VERIFIED }]);
+    // Strip the seals ingest wrote, as a package written before the seals existed would carry none.
+    const mpath = path.join(p.dir, "manifest.json");
+    const m = JSON.parse(await readFile(mpath, "utf8"));
+    delete m.seals;
+    await writeFile(mpath, JSON.stringify(m, null, 2));
+    const item = await verifierItem(p.dir);
+    console.log("DEG-1:", item.status, JSON.stringify(item));
+    expect(item.status).toBe("fail");
+  });
+});

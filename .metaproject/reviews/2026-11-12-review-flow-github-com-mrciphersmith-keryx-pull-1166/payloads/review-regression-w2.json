@@ -1,0 +1,85 @@
+{
+  "review_context": {
+    "request": {
+      "kind": "pr",
+      "summary": "Flow 488: operator-only review gate escapes, scoped waivers, one close gate for complete and publish, model_class in the orchestrator skill"
+    },
+    "scope": {
+      "mode": "diff",
+      "base": "66ee001172e0d0c048a73727c3e6e099f9149b0a",
+      "head": "e9ac9253fde7",
+      "slices": [
+        "slice-03"
+      ],
+      "files": [
+        "docs/analysis/review-process-audit-2026-11-12.md",
+        "docs/docs/cli-reference.md",
+        "docs/docs/guides/review-with-a-record.md",
+        "docs/requirements/managed-review-feedback-loop/schemas/managed-review-package.schema.json",
+        "src/commands/review.test.ts",
+        "src/commands/review.ts",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+        "src/gdskills/bundled/skills/review/review-orchestrator/templates/review-report.md",
+        "src/gdskills/review-spawn-field-contract.test.ts",
+        "src/harness/tool/builtin/spawn-subagent-tool.ts"
+      ]
+    },
+    "routing": {
+      "reviewer": "review-regression",
+      "wave": 2,
+      "selected_reviewers": [
+        "review-architecture",
+        "review-degradation",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-testing-practices"
+      ]
+    },
+    "token_policy": {
+      "mode": "slices",
+      "context_mode": "light",
+      "omissions": []
+    },
+    "pr": {
+      "url": "https://github.com/MrCipherSmith/keryx/pull/1166",
+      "state": "open",
+      "draft": true
+    }
+  },
+  "reviewer": "review-regression",
+  "scope_mode": "diff",
+  "slices": [
+    "slice-03"
+  ],
+  "model": {
+    "tier": "standard",
+    "tier_reasons": [
+      "base:standard",
+      "resolve:ranking-refused"
+    ],
+    "provider": "anthropic",
+    "model": "claude-opus-5-5",
+    "tier_resolution": "session-fallback",
+    "model_discovery": {
+      "provider": "anthropic",
+      "candidates": [],
+      "ranked": [],
+      "session_rank": null,
+      "fallback_reason": "no discovered provider matches the session provider \"anthropic\""
+    },
+    "routed": true
+  },
+  "budget": {
+    "max_findings": 30
+  },
+  "branch": "feat/flow-488-review-gates",
+  "base_sha": "66ee001172e0d0c048a73727c3e6e099f9149b0a",
+  "round": 1,
+  "is_fix_round": false,
+  "allowed_tools": "read-only",
+  "exec_budget_s": 0
+}

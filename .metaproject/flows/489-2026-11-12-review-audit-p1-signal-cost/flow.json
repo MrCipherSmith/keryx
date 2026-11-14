@@ -1,0 +1,211 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "489",
+  "slug": "review-audit-p1-signal-cost",
+  "title": "Review signal and cost: usage capture, one severity rubric, bounded report, seeded benchmark (audit P1)",
+  "status": "initializing",
+  "createdAt": "2026-11-12T09:59:10.444Z",
+  "updatedAt": "2026-11-12T10:01:55.662Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": null,
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "origin": {
+    "kind": "agent-finding",
+    "source": "docs/analysis/review-process-audit-2026-11-12.md"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Usage and wall-clock capture as a readiness item; cost line in the report verdict block",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Replace inline blocker ratings in highload, backend, frontend, logic with condition-to-rubric tables",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Align negative enumeration with the finding schema; drop inline finding templates from reviewer skills",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Bounded report: findings JSON out of report.md, capped minors in the published body",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "stack_requires needs all tags; cross-family reads as eligibility unless a dispatch is recorded",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "Seeded-defect benchmark for the core reviewers with a committed baseline and an offline CI replay",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-11-12T09:59:10.444Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-11-12T10:01:12.489Z",
+      "event": "task-added",
+      "detail": "T5: Usage and wall-clock capture as a readiness item; cost line in the report verdict block"
+    },
+    {
+      "at": "2026-11-12T10:01:26.309Z",
+      "event": "task-added",
+      "detail": "T6: Replace inline blocker ratings in highload, backend, frontend, logic with condition-to-rubric tables"
+    },
+    {
+      "at": "2026-11-12T10:01:33.313Z",
+      "event": "task-added",
+      "detail": "T7: Align negative enumeration with the finding schema; drop inline finding templates from reviewer skills"
+    },
+    {
+      "at": "2026-11-12T10:01:40.816Z",
+      "event": "task-added",
+      "detail": "T8: Bounded report: findings JSON out of report.md, capped minors in the published body"
+    },
+    {
+      "at": "2026-11-12T10:01:48.803Z",
+      "event": "task-added",
+      "detail": "T9: stack_requires needs all tags; cross-family reads as eligibility unless a dispatch is recorded"
+    },
+    {
+      "at": "2026-11-12T10:01:55.662Z",
+      "event": "task-added",
+      "detail": "T10: Seeded-defect benchmark for the core reviewers with a committed baseline and an offline CI replay"
+    }
+  ]
+}

@@ -1,0 +1,73 @@
+{
+  "judge": "review-premise",
+  "model": "claude-opus-5-5",
+  "premises": [
+    {
+      "finding_id": "A-01",
+      "verdict": "challenged",
+      "intent_signals": [
+        { "ref": "src/review/readiness.ts:36", "says": "readiness item 4 is titled 'the verifier checked every finding it should, or the report says how many it did not': disclosure is a passing state by definition, not a waiver" },
+        { "ref": "src/review/readiness.ts:238", "says": "the refusal's repair offers two equal paths: run review-verifier, or add `Not verified: N` to report.md" },
+        { "ref": "docs/docs/guides/review-with-a-record.md:785", "says": "checklist table, item 4 repair: 'run the verifier, or let the report state the count it did not'" },
+        { "ref": "d5f5f9dec", "says": "flow 451 introduced item 4 with the report-line path in the same commit as the checklist; the checklist targets files nobody read, not optional verification" },
+        { "ref": "src/review/managed.ts:1075", "says": "sibling gate: `Evidence level: static only — did not run: <what>` is likewise an agent-written report line that satisfies complete, by design ('Five gates that keep a report honest', guide :881-884)" },
+        { "ref": "docs/docs/guides/review-with-a-record.md:797", "says": "operator acts are reserved for waivers ('Only you can waive an item'); item 4 passing on disclosure is not a waiver" }
+      ],
+      "reasoning": "The fact reproduces: the agent's own report line passes the item. But the item was designed as an honesty requirement, the report is the body the operator reads before publishing (publish.ts:162, review.ts:4895-4909), and a sibling gate uses the same agent-written-disclosure pattern. The finding treats a disclosure check as an authorization check without showing the disclosure rationale wrong. Requiring a card for this one item would make it differ from the evidence-level sibling.",
+      "question": "Readiness item 4 is designed to pass when the report discloses the unverified count. Keep it as a disclosure check, or turn unverified blocker/major findings into an operator waiver?",
+      "options": ["dismiss — keep the disclosure design; the published report states the count", "uphold — require an operator card/TTY waiver for unverified blocker/major findings"]
+    },
+    {
+      "finding_id": "A-02",
+      "verdict": "challenged",
+      "intent_signals": [
+        { "ref": "src/review/complete-head-gate.ts:28-33", "says": "docstring: 'It is not refused outright, because a round on a merged PR is still worth closing — it is refused until the report's first line names the SHA that was reviewed and says the PR moved'" },
+        { "ref": "d7125889d", "says": "commit title: 'refuse completing a merged or moved PR unless the report names the reviewed SHA' — the report line is the designed unlock" },
+        { "ref": "docs/docs/guides/review-with-a-record.md:881-883", "says": "listed under 'Five gates that keep a report honest': the gate's job is that a reader opening the report cold can tell it describes an older head" },
+        { "ref": "src/review/bot/post.ts:257-261", "says": "sibling posting path refuses a moved head outright ('Run the review again'), so the guard against acting on stale code lives where posting happens, not in closing the record" }
+      ],
+      "reasoning": "The gate is a reader-honesty gate; closing a round on a merged PR is an explicitly wanted outcome. The finding's premise ('the agent alone can close a round whose PR moved') restates the design rather than showing its reason wrong. An operator waiver would change intent, not repair a bypass.",
+      "question": "The moved-head gate is designed to let a round on a merged/moved PR close once the report says so. Keep that, or require an operator waiver to close such a round?",
+      "options": ["dismiss — keep the disclosure gate; closing a merged-PR round stays agent-reachable", "uphold — require an operator card/TTY waiver to close on a moved or merged head"]
+    },
+    {
+      "finding_id": "A-03",
+      "verdict": "owner-decision",
+      "intent_signals": [
+        { "ref": "ea03b8b91", "says": "flow 448 added --head on complete for a documented recovery: 'A package recorded against the wrong commit (for example by a run that predates the head in the prompt) cannot be closed against the commit that was actually reviewed'; replacing the recorded head 'with a warning' was the accepted behaviour" },
+        { "ref": "ea03b8b91:.metaproject/flows/448-2026-10-14-review-run-keepalive/description.md", "says": "'the head gate checks that commit without being loosened' and 'a head that is not the pull request's head still fails the gate' — i.e. passing the PR's current head was expected to pass" },
+        { "ref": "src/review/managed.ts:1051-1053", "says": "explicit warning when --head replaces the recorded head: a deliberate choice to allow replacement" }
+      ],
+      "reasoning": "--head is deliberate, for a recorded-wrong-head recovery, and the flow intended the gate to be unchanged. The finding is right that nothing checks the claimed head was the one reviewed, so naming the PR's current head silences the moved check — which the flow's own observation treats as success. But the suggested fix (equal to or ancestor of the recorded head) would refuse the documented recovery case, where the actually reviewed commit is typically newer than the stale recorded one. Whether that recovery should need an operator act is a product choice.",
+      "question": "`review complete --head` exists to fix a wrongly recorded head, and it can also silence the moved-head check. Keep it warning-only, gate a differing --head behind an operator act, or restrict it to the recorded head's ancestors (which drops the recovery case)?",
+      "options": ["keep — warning-only replacement, as flow 448 decided", "uphold with a different fix — a --head that differs from the recorded head needs an operator card/TTY", "uphold as written — accept only the recorded head or an ancestor, dropping the flow 448 recovery case"]
+    },
+    {
+      "finding_id": "A-04",
+      "verdict": "downgraded",
+      "severity": "minor",
+      "intent_signals": [
+        { "ref": "src/review/managed.ts:1106", "says": "comment: the waiver replaces the research gate's refusal and 'the checklist below still names it' — computeReadiness runs right after (managed.ts:1111-1112) and refuses on any non-waived failing item" },
+        { "ref": "src/review/readiness.ts:309-312", "says": "ledger item re-runs researchErrors() over research.json" },
+        { "ref": "src/review/readiness.ts:212-219", "says": "reviewers item re-runs dispatchErrors() and the coverage gate" },
+        { "ref": "docs/docs/guides/review-with-a-record.md:797", "says": "the drop only happens after an operator-quoted readiness waiver ('Only you can waive an item')" }
+      ],
+      "reasoning": "Most of what the wholesale drop removes is re-checked by readiness for every item that was not waived, so the 'every research error is dropped' impact is mostly compensated by design. What genuinely escapes is the integrity part of packageResearchErrors that readiness does not repeat (artifact-locator checks and the manifest/research.json dispatch mismatch, research.ts:121-132), and only after a human waiver. A real but narrower defect."
+    },
+    {
+      "finding_id": "A-05",
+      "verdict": "upheld",
+      "reasoning": "No intent signal that publish should skip the tamper or evidence-level checks: d5f5f9dec says publish is 'held by the same checklist', but those two checks live outside the checklist (managed.ts:1039, 1075-1082) and publishReview never calls them (publish.ts:146-171). Publish does require the operator to read the body (review.ts:4892-4909), which surfaces a missing evidence line but not a tampered round record. --partial is a deliberate path for not-ready packages; the shared gate must keep it."
+    },
+    {
+      "finding_id": "A-06",
+      "verdict": "upheld",
+      "reasoning": "The code acknowledges the limitation internally (completion-host.ts:28 'reported provenance, not a cryptographic attestation'; readiness.ts:253-258 labels host-question answers 'not by a card' in the checklist), but nothing in publish.ts carries it to the published body. No signal or practice source argues against telling readers."
+    },
+    {
+      "finding_id": "A-07",
+      "verdict": "upheld",
+      "reasoning": "The tool itself marks model_tier as ignored and asks callers to migrate to model_class (spawn-subagent-tool.ts:1124, 1224, 1497-1498 migration notice). The orchestrator skill still names model_tier (SKILL.md:118). The intent signals all point the finding's way."
+    }
+  ]
+}

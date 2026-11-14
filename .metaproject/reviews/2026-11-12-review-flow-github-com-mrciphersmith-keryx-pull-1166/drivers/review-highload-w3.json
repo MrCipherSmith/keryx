@@ -1,0 +1,17 @@
+{
+  "reviewer": "review-highload",
+  "wave": 3,
+  "waves": 3,
+  "slices": [
+    "slice-04"
+  ],
+  "slicePaths": [
+    {
+      "id": "slice-04",
+      "path": "/Users/tsaitler.aleksandr/goodea/keryx/.claude/worktrees/review-process-audit/.metaproject/reviews/2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166/slices/slice-04.diff",
+      "bytes": 127205
+    }
+  ],
+  "result": "raw/review-highload-w3.txt",
+  "definition": ".metaproject/skills/gdskills/review/review-highload/SKILL.md"
+}

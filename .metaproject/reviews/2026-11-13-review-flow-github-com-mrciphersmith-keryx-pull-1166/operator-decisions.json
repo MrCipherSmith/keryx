@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 1,
+  "decisions": [
+    {
+      "kind": "premise-question",
+      "finding": "2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-architecture-w2:F-001",
+      "answer": "dismiss",
+      "reason": "Operator moved the tier-to-model_class code mapping to flow 490",
+      "quote": "dismiss",
+      "at": "2026-11-12T13:03:18.975Z",
+      "actor": "operator",
+      "confirmedVia": "host-question",
+      "subject": {
+        "severity": "minor",
+        "verdict": "challenged",
+        "problemSha256": "81772c2d1154ead7fc5a80e720624f0ab1d9ff82b63de03c5bac5ca7ed75f26b"
+      },
+      "carriedFrom": ".metaproject/reviews/2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166",
+      "hostQuestion": {
+        "source": "claude-code",
+        "ref": "premise-model-class",
+        "questionText": "review-architecture-w2:F-001 (minor): таблица tier → model_class только в тексте skill. Uphold (переносить в код в этом PR) или dismiss (во flow 490)?",
+        "answerText": "dismiss",
+        "time": "2026-11-12T13:03:18.975Z"
+      }
+    },
+    {
+      "kind": "premise-question",
+      "finding": "2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-security-code-w2:F-001",
+      "answer": "dismiss",
+      "reason": "Operator: no bypass (item head already passes with no recorded head); head_override from:null goes to flow 490",
+      "quote": "dismiss",
+      "at": "2026-11-12T13:03:19.698Z",
+      "actor": "operator",
+      "confirmedVia": "host-question",
+      "subject": {
+        "severity": "minor",
+        "verdict": "challenged",
+        "problemSha256": "55f83057aa4dab059157d8846dfcb8cd16a2346c9fef5524e43a21412865c1e9"
+      },
+      "carriedFrom": ".metaproject/reviews/2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166",
+      "hostQuestion": {
+        "source": "claude-code",
+        "ref": "premise-empty-head",
+        "questionText": "review-security-code-w2:F-001 (minor): без записанного head `--head` принимается без причины. Uphold (чинить в этом PR) или dismiss (обхода нет, head_override from:null — во flow 490)?",
+        "answerText": "dismiss",
+        "time": "2026-11-12T13:03:19.698Z"
+      }
+    },
+    {
+      "kind": "premise-question",
+      "finding": "2026-11-13-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-security-code-w8:SEC-2",
+      "answer": "uphold",
+      "reason": "Operator upheld: seal the blocker/major set at ingest and test the severity edit in this PR.",
+      "quote": "Uphold (Recommended)",
+      "at": "2026-11-13T09:35:33.101Z",
+      "actor": "operator",
+      "confirmedVia": "host-question",
+      "subject": {
+        "severity": "major",
+        "verdict": "owner-decision",
+        "problemSha256": "c3674f82044a99cdd32752d2de9850df5233879a51d0c0e77d72a9903976a7e6"
+      },
+      "hostQuestion": {
+        "source": "claude-code",
+        "ref": "pr-1166-round-2",
+        "questionText": "review-security-code-w8:SEC-2: если в findings.json поменять severity непроверенной находки с major на minor, пункт verifier проходит (это подтверждено probe). AC9 не перечисляет severity среди того, что запечатывается, а снимок завершения отдан во flow 490. Что делаем в этом PR?",
+        "answerText": "Uphold (Recommended)",
+        "time": "2026-11-13T09:35:33.101Z"
+      }
+    },
+    {
+      "kind": "premise-question",
+      "finding": "2026-11-13-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-degradation-w1:F-001",
+      "answer": "dismiss",
+      "reason": "Operator dismissed: keep strict per AC9; widen CHANGELOG and the seals.ts comment to name every affected pre-seal package and its repair.",
+      "quote": "Dismiss: strict + docs (Recommended)",
+      "at": "2026-11-13T09:35:35.309Z",
+      "actor": "operator",
+      "confirmedVia": "host-question",
+      "subject": {
+        "severity": "major",
+        "verdict": "owner-decision",
+        "problemSha256": "81e6a3f789a83b4a8bc42de6dcc0ac93dd51b7ff6a7d3a2e2c94f27ee31c04f4"
+      },
+      "hostQuestion": {
+        "source": "claude-code",
+        "ref": "pr-1166-round-2",
+        "questionText": "review-degradation-w1:F-001: пакеты, закрытые до этого релиза с настоящими verifications или TTY-waiver'ами, теперь читаются как NOT READY. Это шире принятого вами разрыва (тот касался только удалённых escape-путей). Что делаем?",
+        "answerText": "Dismiss: strict + docs (Recommended)",
+        "time": "2026-11-13T09:35:35.309Z"
+      }
+    }
+  ]
+}

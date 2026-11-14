@@ -1,16 +1,18 @@
 # Testing Context
 
-generatedAt: 2026-10-19T10:13:23.765Z
+generatedAt: 2026-11-12T12:33:51.380Z
 status: complete
 
 ## Frameworks
 
 - bun
+- vitest
 
 ## Scripts
 
 - `check`: `bun run lint && bun run typecheck && bun run typecheck:scripts && bun test`
 - `check:core`: `bun run lint && bun run typecheck && bun run typecheck:scripts && bun run test:core`
+- `check:hub-web`: `bun run --cwd apps/hub-web typecheck && bun run --cwd apps/hub-web lint && bun run --cwd apps/hub-web test && bun scripts/build-hub-web.ts --check`
 - `docs:check`: `bun run check:doc-links && bun run check:retired-spellings && bun test src/cli-reference-coverage.test.ts src/standard/commands-by-task.test.ts src/standard/help-groups.test.ts`
 - `test`: `bun test`
 - `test:client`: `bun run test:client:terminal && bun run test:client:streaming && bun run test:client:cancel-resume && bun run test:client:runtime`
@@ -18,11 +20,13 @@ status: complete
 - `test:client:runtime`: `bun test src/harness/ src/mcp-client/ src/mcp-servers/ src/agents/ src/commands/agent src/commands/harness src/commands/providers src/scheduler/ src/intake/`
 - `test:client:streaming`: `bun test src/harness/provider/`
 - `test:client:terminal`: `bun test src/tui/ src/commands/shell`
-- `test:core`: `bun test src/cli src/core src/impact-evidence/ src/shell-source-audits.test.ts src/acp/ src/assets/ src/bundle/ src/capability/ src/commands/ src/contracts/ src/ctx/ src/decisions/ src/eval/ src/flow/ src/forgetting/ src/gdgraph/ src/gdskills/ src/governance/ src/product/ src/health/ src/integrations/ src/job/ src/learning/ src/lib/ src/mcp/ src/memory/ src/metrics/ src/retention/ src/review/ src/rules/ src/sac/ src/security/ src/stack/ src/standard/ src/sync/ src/testing/ src/trigger/ src/wiki/ scripts/`
+- `test:core`: `bun test src/cli src/core src/impact-evidence/ src/shell-source-audits.test.ts src/acp/ src/assets/ src/bundle/ src/capability/ src/commands/ src/contracts/ src/ctx/ src/decisions/ src/eval/ src/flow/ src/forgetting/ src/gdgraph/ src/gdskills/ src/governance/ src/product/ src/health/ src/hub/ src/integrations/ src/job/ src/learning/ src/lib/ src/mcp/ src/memory/ src/metrics/ src/remote-control/ src/retention/ src/review/ src/rules/ src/sac/ src/security/ src/stack/ src/standard/ src/sync/ src/testing/ src/trigger/ src/wiki/ scripts/`
 - `test:guards`: `bun test src/lib/config-dir.ast.test.ts src/lib/config-dir.readers.test.ts src/lib/production-graph.test.ts src/harness/policy/profiles.test.ts src/lib/serve-server.test.ts src/gdskills/agent-catalogue-xref.test.ts src/gdskills/enforcement-claims.test.ts`
 
 ## Configs
 
+- apps/hub-web/tsconfig.json
+- apps/hub-web/vitest.config.ts
 - bunfig.toml
 - tsconfig.json
 - tsconfig.scripts.json
@@ -30,6 +34,69 @@ status: complete
 
 ## Test Files
 
+- apps/hub-web/tests/acceptance-support.case.ts
+- apps/hub-web/tests/accessibility.case.tsx
+- apps/hub-web/tests/auth.case.tsx
+- apps/hub-web/tests/breadcrumb.case.tsx
+- apps/hub-web/tests/browser-journeys.e2e.mjs
+- apps/hub-web/tests/client.case.ts
+- apps/hub-web/tests/context-model.case.ts
+- apps/hub-web/tests/context.case.tsx
+- apps/hub-web/tests/css-rules.ts
+- apps/hub-web/tests/demo-receipt.case.ts
+- apps/hub-web/tests/drafts.case.tsx
+- apps/hub-web/tests/flow-acceptance.case.tsx
+- apps/hub-web/tests/flow-acceptance.fixture.tsx
+- apps/hub-web/tests/flow-term.case.ts
+- apps/hub-web/tests/global-flows.case.tsx
+- apps/hub-web/tests/hub-render.tsx
+- apps/hub-web/tests/legacy-decision.case.tsx
+- apps/hub-web/tests/legacy-review-history.case.tsx
+- apps/hub-web/tests/live-shells.case.tsx
+- apps/hub-web/tests/localization.case.ts
+- apps/hub-web/tests/machine-cards.case.tsx
+- apps/hub-web/tests/managed-native-message.case.tsx
+- apps/hub-web/tests/managed-work-advanced.case.tsx
+- apps/hub-web/tests/managed-work.case.tsx
+- apps/hub-web/tests/navigation.case.tsx
+- apps/hub-web/tests/pending-recovery.case.tsx
+- apps/hub-web/tests/project-overview.case.tsx
+- apps/hub-web/tests/remote-client.case.ts
+- apps/hub-web/tests/remote-controller.case.tsx
+- apps/hub-web/tests/remote-draft-renewal.case.tsx
+- apps/hub-web/tests/remote-events.case.tsx
+- apps/hub-web/tests/remote-fixtures.ts
+- apps/hub-web/tests/remote-owned-controls.case.tsx
+- apps/hub-web/tests/remote-recovery.case.tsx
+- apps/hub-web/tests/remote-renewal.case.ts
+- apps/hub-web/tests/remote-runs.case.tsx
+- apps/hub-web/tests/remote-settings.case.tsx
+- apps/hub-web/tests/remote-timeline.case.ts
+- apps/hub-web/tests/remote.case.tsx
+- apps/hub-web/tests/review-aggregate-evidence.case.tsx
+- apps/hub-web/tests/review-draft-recovery.case.tsx
+- apps/hub-web/tests/review-flow-reject.case.tsx
+- apps/hub-web/tests/review-knowledge-followup.case.tsx
+- apps/hub-web/tests/review-legacy-evidence.case.tsx
+- apps/hub-web/tests/revision-pagination.case.tsx
+- apps/hub-web/tests/session-command-outcomes.case.tsx
+- apps/hub-web/tests/session-message-delivery.case.tsx
+- apps/hub-web/tests/session-run-context.case.tsx
+- apps/hub-web/tests/session-timeline.case.ts
+- apps/hub-web/tests/session-workspace.case.tsx
+- apps/hub-web/tests/setup.ts
+- apps/hub-web/tests/theme.case.tsx
+- apps/hub-web/tests/work-incremental.case.tsx
+- apps/hub-web/tests/work-live-amendments.case.tsx
+- apps/hub-web/tests/work-live-attention.case.tsx
+- apps/hub-web/tests/work-live-choices.case.tsx
+- apps/hub-web/tests/work-live-updates.case.tsx
+- apps/hub-web/tests/work-model-guards.case.ts
+- apps/hub-web/tests/work-revision-members.case.tsx
+- apps/hub-web/tests/work-sequences.case.tsx
+- apps/hub-web/tests/work-server-contract.case.ts
+- apps/hub-web/tests/workflow-pagination.case.tsx
+- apps/hub-web/tests/workflow.case.tsx
 - bench/jev-review/adapters/ci-triage.test.ts
 - bench/jev-review/adapters/registry.test.ts
 - bench/jev-review/adapters/review-conform.test.ts
@@ -47,71 +114,8 @@ status: complete
 - scripts/benchmark/long-metrics.test.ts
 - scripts/benchmark/long-runner-turn.test.ts
 - scripts/benchmark/long-tasks.test.ts
-- scripts/benchmark/oracle-emission-gating.test.ts
-- scripts/benchmark/replay-session-shape.test.ts
-- scripts/benchmark/run-ablation-raw.test.ts
-- scripts/benchmark/run-containment.test.ts
-- scripts/benchmark/run-express-oracle.test.ts
-- scripts/benchmark/run-safety.test.ts
-- scripts/benchmark/run-wiki-freshness-scale.test.ts
-- scripts/benchmark/token-metrics.test.ts
-- scripts/benchmark/wiki-freshness-scale-fixture.test.ts
-- scripts/check-doc-links.test.ts
-- scripts/check-retired-cli-spellings.test.ts
-- scripts/install-global.test.ts
-- scripts/sandbox-deep-probe-redaction.test.ts
-- scripts/stress/keryx-shell-stress.test.ts
-- scripts/typecheck.test.ts
-- src/acp/agent-io.test.ts
-- src/acp/cancel-list-load.process.test.ts
-- src/acp/capability-matrix.process.test.ts
-- src/acp/client-requests.test.ts
-- src/acp/commands.test.ts
-- src/acp/concurrent-turns.process.test.ts
-- src/acp/conformance.process.test.ts
-- src/acp/dispatch.test.ts
-- src/acp/framing.test.ts
-- src/acp/hook-notices.test.ts
-- src/acp/mcp-servers.process.test.ts
-- src/acp/models.test.ts
-- src/acp/permission.process.test.ts
-- src/acp/permission.test.ts
-- src/acp/project-tools.process.test.ts
-- src/acp/prompt-content.test.ts
-- src/acp/protocol.test.ts
-- src/acp/roster.test.ts
-- src/acp/server-archive.test.ts
-- src/acp/server-mcp.test.ts
-- src/acp/server-models.test.ts
-- src/acp/session-mcp.test.ts
-- src/acp/session.test.ts
-- src/agents/baseline.test.ts
-- src/agents/bootstrap.test.ts
-- src/agents/bundled-agent-files.test.ts
-- src/agents/catalog.test.ts
-- src/agents/compile.content-hash.test.ts
-- src/agents/compile.format-safety.test.ts
-- src/agents/compile.model-tier.test.ts
-- src/agents/compile.spawn-subagent.test.ts
-- src/agents/export.test.ts
-- src/agents/frontmatter.test.ts
-- src/agents/generate.test.ts
-- src/agents/schema.test.ts
-- src/agents/tools.test.ts
-- src/agents/verify.test.ts
-- src/assets/command.test.ts
-- src/assets/resolver.test.ts
-- src/assets/seed.test.ts
-- src/bundle/applied-state.test.ts
-- src/bundle/apply.test.ts
-- src/bundle/archive.test.ts
-- src/bundle/audit.test.ts
-- src/bundle/export.test.ts
-- src/bundle/external.test.ts
-- src/bundle/hook-audit.e2e.test.ts
-- src/bundle/inspect.test.ts
 
-- ... 1672 more
+- ... 2043 more
 
 ## CI
 

@@ -1,0 +1,11 @@
+STATUS: DONE
+
+```json REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-core-boundaries",
+  "slices": ["slice-02"],
+  "findings": [],
+  "summary": "slice-02 holds generated artifacts (gdgraph, testing context), flow bookkeeping, a model-selection rule doc edit, a review-note, the package schema 'seals' block, a version bump, override bumps and one test change. None touches a shared core module's imports or public surface. The schema 'seals' keys (target, headOverride, readinessWaivers, verifications) match src/review/seals.ts; the model-selection.mdc text matches SPAWN_SUBAGENT_IGNORED_FIELDS at spawn-subagent-tool.ts:1067. No core-boundary findings."
+}
+```

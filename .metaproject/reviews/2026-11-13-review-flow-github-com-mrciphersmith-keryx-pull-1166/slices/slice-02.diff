@@ -1,0 +1,2149 @@
+--- .metaproject/data/gdgraph/.provenance.json
+@@ 1,5 @@
+ {
+-  "commit": "7684b3dce82b9c2ebe87226cf3f4acbbfc8a7854",
++  "commit": "22307264a27b2c532c0cb41870d1b2654387e9c8",
+   "branch": "feat/flow-488-review-gates",
+-  "builtAt": "2026-11-12T11:22:55.686Z"
++  "builtAt": "2026-11-13T05:01:27.700Z"
+ }
+
+--- .metaproject/data/gdgraph/artifacts/module-map.json
+@@ 1762,1802 @@
+     "src/harness/tool/builtin/review-remediation-architecture.test.ts",
+     "src/harness/tool/builtin/shell-exec-background.test.ts",
+     "src/harness/tool/builtin/shell-exec-rss.test-support.ts",
+     "src/harness/tool/builtin/shell-exec-spill.test.ts",
+     "src/harness/tool/builtin/shell-exec-timeout.test.ts",
+     "src/harness/tool/builtin/shell-exec-tool.test.ts",
+     "src/harness/tool/builtin/shell-exec-tool.ts",
+     "src/harness/tool/builtin/shell-transcript.ts",
+     "src/harness/tool/builtin/slate-memory-tools.test.ts",
+     "src/harness/tool/builtin/slate-memory-tools.ts",
+     "src/harness/tool/builtin/slate-tool.test.ts",
+     "src/harness/tool/builtin/slate-tool.ts",
+     "src/harness/tool/builtin/spawn-subagent-backstop.test.ts",
+     "src/harness/tool/builtin/spawn-subagent-child-slate.test.ts",
+     "src/harness/tool/builtin/spawn-subagent-childtools.test.ts",
+     "src/harness/tool/builtin/spawn-subagent-cwd.test.ts",
+     "src/harness/tool/builtin/spawn-subagent-external-seam.test.ts",
+     "src/harness/tool/builtin/spawn-subagent-isolation.test.ts",
+     "src/harness/tool/builtin/spawn-subagent-lifecycle.test.ts",
+     "src/harness/tool/builtin/spawn-subagent-native-budget.e2e.test.ts",
++    "src/harness/tool/builtin/spawn-subagent-parallel-hang.test.ts",
+     "src/harness/tool/builtin/spawn-subagent-routing.test.ts",
+     "src/harness/tool/builtin/spawn-subagent-tool.hooks.test.ts",
+     "src/harness/tool/builtin/spawn-subagent-tool.reasoning-guard.test.ts",
+     "src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+     "src/harness/tool/builtin/spawn-subagent-tool.ts",
+     "src/harness/tool/builtin/spill-read-access.test.ts",
+     "src/harness/tool/builtin/spill-search.ts",
+     "src/harness/tool/builtin/submit-result-tool.ts",
+     "src/harness/tool/builtin/web-fetch-tool.test.ts",
+     "src/harness/tool/builtin/web-fetch-tool.ts",
+     "src/harness/tool/builtin/web-search-tool.test.ts",
+     "src/harness/tool/builtin/web-search-tool.ts",
+     "src/harness/tool/builtin/workspace-context-tool.test.ts",
+     "src/harness/tool/builtin/workspace-context-tool.ts",
+     "src/harness/tool/builtin/workspace-lifecycle-tool.test.ts",
+     "src/harness/tool/builtin/workspace-lifecycle-tool.ts",
+     "src/harness/tool/fake-tool.test.ts",
+     "src/harness/tool/fake-tool.ts",
+     "src/harness/tool/graph-find-projection.test.ts",
+     "src/harness/tool/memory-recall-p3.test.ts",
+
+--- .metaproject/data/gdgraph/artifacts/module-map.json
+@@ 2238,2279 @@
+     "src/learning/signals/reverted-edit.test.ts",
+     "src/learning/signals/reverted-edit.ts",
+     "src/learning/signals/reviewer-comment.test.ts",
+     "src/learning/signals/reviewer-comment.ts",
+     "src/learning/signals/text.ts",
+     "src/learning/signals/types.ts",
+     "src/learning/store-choke-point.test.ts",
+     "src/learning/store.test.ts",
+     "src/learning/store.ts",
+     "src/learning/types.ts"
+   ],
+   "lib": [
+     "src/lib/abort-compose.test.ts",
+     "src/lib/abort-compose.ts",
+     "src/lib/agent-entrypoint-blocks.test.ts",
+     "src/lib/agent-entrypoint-blocks.ts",
+     "src/lib/args.test.ts",
+     "src/lib/args.ts",
+     "src/lib/bounded-stdin.test.ts",
+     "src/lib/bounded-stdin.ts",
++    "src/lib/call-diagnostics.test.ts",
++    "src/lib/call-diagnostics.ts",
+     "src/lib/caller-session.test.ts",
+     "src/lib/caller-session.ts",
+     "src/lib/card-safe.ts",
+     "src/lib/clone-scope.test.ts",
+     "src/lib/clone-scope.ts",
+     "src/lib/command-risk-git-push.test.ts",
+     "src/lib/command-risk-operator-floors.test.ts",
+     "src/lib/command-risk-review-floor.test.ts",
+     "src/lib/command-risk.test.ts",
+     "src/lib/command-risk.ts",
+     "src/lib/config-dir.ast.test.ts",
+     "src/lib/config-dir.ast.ts",
+     "src/lib/config-dir.copy.test.ts",
+     "src/lib/config-dir.permissions.test.ts",
+     "src/lib/config-dir.readers.test.ts",
+     "src/lib/config-dir.scan.ts",
+     "src/lib/config-dir.test.ts",
+     "src/lib/config-dir.ts",
+     "src/lib/config-dir.writers.test.ts",
+     "src/lib/config-update.test.ts",
+
+--- .metaproject/data/gdgraph/artifacts/module-map.json
+@@ 3190,3231 @@
+     "src/review/review-wave-skill.test.ts",
+     "src/review/reviewers.test.ts",
+     "src/review/reviewers.ts",
+     "src/review/role-switches-complete.test.ts",
+     "src/review/role-switches.test.ts",
+     "src/review/role-switches.ts",
+     "src/review/roster.ts",
+     "src/review/round-cut.ts",
+     "src/review/round-need.test.ts",
+     "src/review/round-need.ts",
+     "src/review/round-record.ts",
+     "src/review/round-registry.ts",
+     "src/review/round-split.test.ts",
+     "src/review/round-split.ts",
+     "src/review/round-trip.test.ts",
+     "src/review/routing-check.ts",
+     "src/review/run-profile.ts",
+     "src/review/scope-comment-rule.test.ts",
+     "src/review/scope.test.ts",
+     "src/review/scope.ts",
++    "src/review/seals.test.ts",
++    "src/review/seals.ts",
+     "src/review/second-look.test.ts",
+     "src/review/severity-audit.test.ts",
+     "src/review/severity-audit.ts",
+     "src/review/skill-drift.ts",
+     "src/review/slice-dispatch.test.ts",
+     "src/review/slice-routing.test.ts",
+     "src/review/slice-routing.ts",
+     "src/review/slice.test.ts",
+     "src/review/slice.ts",
+     "src/review/stack.test.ts",
+     "src/review/stack.ts",
+     "src/review/tests-to-run.test.ts",
+     "src/review/tests-to-run.ts",
+     "src/review/text-links.test.ts",
+     "src/review/text-links.ts",
+     "src/review/turn-guard.test.ts",
+     "src/review/turn-guard.ts",
+     "src/review/types.ts",
+     "src/review/verdict.test.ts",
+     "src/review/verdict.ts",
+
+--- .metaproject/data/gdgraph/artifacts/module-map.json
+@@ 3743,3795 @@
+     "src/tui/busy-dispatch.ts",
+     "src/tui/busy-footer.ts",
+     "src/tui/card-lifecycle.test.ts",
+     "src/tui/channels-surface.test.ts",
+     "src/tui/channels-surface.ts",
+     "src/tui/chat-shell.test.ts",
+     "src/tui/chat-shell.ts",
+     "src/tui/ci-triage-inspector.test.ts",
+     "src/tui/ci-triage-inspector.ts",
+     "src/tui/ci-triage-source.test.ts",
+     "src/tui/ci-triage-source.ts",
+     "src/tui/composer-choice.test.ts",
+     "src/tui/composer-choice.ts",
+     "src/tui/conform-inspector.test.ts",
+     "src/tui/conform-inspector.ts",
+     "src/tui/conform-source.ts",
+     "src/tui/connect-modal.test.ts",
+     "src/tui/connect-provider-buttons.test.ts",
+     "src/tui/context-usage.test.ts",
+     "src/tui/context-usage.ts",
++    "src/tui/conversation-history.test.ts",
++    "src/tui/conversation-history.ts",
+     "src/tui/ctrl-c-policy.test.ts",
+     "src/tui/ctrl-c-policy.ts",
+     "src/tui/custom-provider-wizard.test.ts",
+     "src/tui/debug-log.test.ts",
+     "src/tui/debug-log.ts",
+     "src/tui/debug-watcher.test.ts",
+     "src/tui/debug-watcher.ts",
+     "src/tui/decisions-surface.test.ts",
+     "src/tui/decisions-surface.ts",
++    "src/tui/diag-command.test.ts",
++    "src/tui/diag-command.ts",
+     "src/tui/digest-surface.test.ts",
+     "src/tui/duration-format.ts",
+     "src/tui/execution-plan-inspector.test.ts",
+     "src/tui/execution-plan-inspector.ts",
+     "src/tui/execution-plan-panel.test.ts",
+     "src/tui/execution-plan-panel.ts",
+     "src/tui/external-antigravity-surfaces.test.ts",
+     "src/tui/external-bridge.ts",
+     "src/tui/external-command.test.ts",
+     "src/tui/external-command.ts",
+     "src/tui/external-delivery.test.ts",
+     "src/tui/external-delivery.ts",
+     "src/tui/external-diff-modal.test.ts",
+     "src/tui/external-diff-modal.ts",
+     "src/tui/external-diff-sidebar.test.ts",
+     "src/tui/external-diff-sidebar.ts",
+     "src/tui/external-inspector.test.ts",
+     "src/tui/external-inspector.ts",
+     "src/tui/external-operator.test.ts",
+     "src/tui/external-operator.ts",
+
+--- .metaproject/data/gdgraph/artifacts/module-map.json
+@@ 3834,3877 @@
+     "src/tui/games/tic-tac-toe/prompts.ts",
+     "src/tui/games/tic-tac-toe/render.ts",
+     "src/tui/games/types.ts",
+     "src/tui/governance-flow-actions.ts",
+     "src/tui/governance-flows.test.ts",
+     "src/tui/governance-flows.ts",
+     "src/tui/governance-inspector.test.ts",
+     "src/tui/governance-inspector.ts",
+     "src/tui/governance-panel.test.ts",
+     "src/tui/governance-panel.ts",
+     "src/tui/hc-message.test.ts",
+     "src/tui/hc-message.ts",
+     "src/tui/help-first-run.test.ts",
+     "src/tui/help-first-run.ts",
+     "src/tui/help-modal.test.ts",
+     "src/tui/help-modal.ts",
+     "src/tui/herdr-core-status.test.ts",
+     "src/tui/herdr-core-status.ts",
+     "src/tui/herdr-report.test.ts",
+     "src/tui/herdr-report.ts",
++    "src/tui/history-modal.test.ts",
++    "src/tui/history-modal.ts",
++    "src/tui/history-reader.test.ts",
++    "src/tui/history-reader.ts",
+     "src/tui/inspector-sources.test.ts",
+     "src/tui/inspector-sources.ts",
+     "src/tui/intake-surface.test.ts",
+     "src/tui/intake-surface.ts",
+     "src/tui/jev-comments-command.test.ts",
+     "src/tui/jev-comments-command.ts",
+     "src/tui/jev-contract-command.test.ts",
+     "src/tui/jev-contract-command.ts",
+     "src/tui/jev-docs-command.test.ts",
+     "src/tui/jev-docs-command.ts",
+     "src/tui/jev-edit-guard-inspector.test.ts",
+     "src/tui/jev-edit-guard-inspector.ts",
+     "src/tui/jev-profile-inspector.test.ts",
+     "src/tui/jev-profile-inspector.ts",
+     "src/tui/jev-risk-command.test.ts",
+     "src/tui/jev-risk-command.ts",
+     "src/tui/jev-rules-command.test.ts",
+     "src/tui/jev-rules-command.ts",
+     "src/tui/jev-scenarios-command.test.ts",
+     "src/tui/jev-scenarios-command.ts",
+
+--- .metaproject/data/testing/context.json
+@@ 1,23 @@
+ {
+   "schemaVersion": 1,
+-  "generatedAt": "2026-11-12T11:23:00.531Z",
++  "generatedAt": "2026-11-12T12:33:51.380Z",
+   "status": "complete",
+   "incompleteReasons": [],
+   "frameworks": [
+     "bun",
+     "vitest"
+   ],
+   "scripts": [
+     {
+       "name": "check",
+       "command": "bun run lint && bun run typecheck && bun run typecheck:scripts && bun test"
+     },
+     {
+       "name": "check:core",
+       "command": "bun run lint && bun run typecheck && bun run typecheck:scripts && bun run test:core"
+     },
+     {
+       "name": "check:hub-web",
+       "command": "bun run --cwd apps/hub-web typecheck && bun run --cwd apps/hub-web lint && bun run --cwd apps/hub-web test && bun scripts/build-hub-web.ts --check"
+     },
+     {
+
+--- .metaproject/flows/487-2026-11-12-spawn-subagent-parent-call-never-returns/flow.json
+@@ 1,123 @@
++{
++  "schemaVersion": 2,
++  "gates": {
++    "tasks": true,
++    "review": true,
++    "owner": true,
++    "folderCommitted": true
++  },
++  "id": "487",
++  "slug": "spawn-subagent-parent-call-never-returns",
++  "title": "spawn_subagent parent call never returns after all child subagents complete; timeout_ms does not fire",
++  "status": "ready",
++  "createdAt": "2026-11-12T09:32:56.216Z",
++  "updatedAt": "2026-11-12T09:37:13.020Z",
++  "source": {
++    "type": "description",
++    "ref": null
++  },
++  "acChecksum": "sha256:db15170ee68d5e622a98327bd4486da5e9d752f715d4220516b86adb5378c92b",
++  "acConfirmed": {},
++  "pr": {
++    "url": null
++  },
++  "baseBranch": "main",
++  "outcomeAuthor": "agent",
++  "tasks": [
++    {
++      "id": "T1",
++      "title": "Collect remaining context",
++      "kind": "context",
++      "origin": "scaffold",
++      "status": "todo",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {}
++    },
++    {
++      "id": "T2",
++      "title": "Implement per plan",
++      "kind": "implement",
++      "origin": "scaffold",
++      "status": "todo",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {}
++    },
++    {
++      "id": "T3",
++      "title": "Add/adjust tests and make them pass",
++      "kind": "test",
++      "origin": "scaffold",
++      "status": "todo",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {}
++    },
++    {
++      "id": "T4",
++      "title": "Self-review and prepare draft PR",
++      "kind": "review",
++      "origin": "scaffold",
++      "status": "todo",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {}
++    }
++  ],
++  "history": [
++    {
++      "at": "2026-11-12T09:32:56.216Z",
++      "event": "created"
++    },
++    {
++      "at": "2026-11-12T09:37:13.020Z",
++      "event": "frozen",
++      "detail": "6 criteria; checksum recorded"
++    }
++  ],
++  "acKinds": {
++    "AC1": {
++      "kind": "judged"
++    },
++    "AC2": {
++      "kind": "exec",
++      "check": "bun test src/harness/tool/builtin/spawn-subagent-parallel-hang.test.ts"
++    },
++    "AC3": {
++      "kind": "judged"
++    },
++    "AC4": {
++      "kind": "exec",
++      "check": "bun test src/harness/tool/builtin/spawn-subagent-backstop.test.ts src/harness/tool/builtin/spawn-subagent-tool.test.ts"
++    },
++    "AC5": {
++      "kind": "exec",
++      "check": "bun test src/harness/tool/builtin/spawn-subagent-parallel-hang.test.ts"
++    },
++    "AC6": {
++      "kind": "exec",
++      "check": "bun run typecheck"
++    }
++  }
++}
+
+--- .metaproject/flows/488-2026-11-12-review-audit-p0-gates/flow.json
+@@ 1,42 @@
+ {
+   "schemaVersion": 2,
+   "gates": {
+     "tasks": true,
+     "review": true,
+     "owner": true,
+     "folderCommitted": true
+   },
+   "id": "488",
+   "slug": "review-audit-p0-gates",
+   "title": "Review gates: close the agent-text and waiver bypasses (audit P0)",
+-  "status": "in-progress",
++  "status": "implemented",
+   "createdAt": "2026-11-12T09:58:46.961Z",
+-  "updatedAt": "2026-11-12T11:22:36.333Z",
++  "updatedAt": "2026-11-12T13:04:00.142Z",
+   "source": {
+     "type": "description",
+     "ref": null
+   },
+-  "acChecksum": "sha256:9ca2895e0914d3d592d503ed3c73daf0de40a274e8726220504ddb6fe9eee711",
++  "acChecksum": "sha256:c4c592ab022705927750a1782e2971a4be2572fec59a8abacff6601e3ccee365",
+   "acConfirmed": {},
+   "pr": {
+-    "url": null
++    "url": "https://github.com/MrCipherSmith/keryx/pull/1166"
+   },
+   "baseBranch": "main",
+   "origin": {
+     "kind": "agent-finding",
+     "source": "docs/analysis/review-process-audit-2026-11-12.md"
+   },
+   "tasks": [
+     {
+       "id": "T1",
+       "title": "Collect remaining context",
+       "kind": "context",
+       "origin": "scaffold",
+       "status": "done",
+       "dependsOn": [],
+       "attempts": {
+         "count": 0,
+         "log": []
+       },
+       "acRefs": [],
+       "evidenceRefs": [],
+
+--- .metaproject/flows/488-2026-11-12-review-audit-p0-gates/flow.json
+@@ 66,116 @@
+       "title": "Add/adjust tests and make them pass",
+       "kind": "test",
+       "origin": "scaffold",
+       "status": "done",
+       "dependsOn": [],
+       "attempts": {
+         "count": 0,
+         "log": []
+       },
+       "acRefs": [],
+       "evidenceRefs": [],
+       "budget": {},
+       "disposition": "skipped",
+       "dispositionReason": "tests are written inside each of T5-T9, one test file per AC"
+     },
+     {
+       "id": "T4",
+       "title": "Self-review and prepare draft PR",
+       "kind": "review",
+       "origin": "scaffold",
+-      "status": "todo",
++      "status": "done",
+       "dependsOn": [],
+       "attempts": {
+         "count": 0,
+         "log": []
+       },
+       "acRefs": [],
+       "evidenceRefs": [],
+-      "budget": {}
++      "budget": {},
++      "disposition": "completed",
++      "dispositionReason": "draft PR https://github.com/MrCipherSmith/keryx/pull/1166 opened; review round follows"
+     },
+     {
+       "id": "T5",
+       "title": "Verifier and moved-head acknowledgements become operator waivers (card or TTY), not report text",
+       "kind": "implement",
+       "status": "done",
+       "dependsOn": [],
+       "attempts": {
+         "count": 0,
+         "log": []
+       },
+       "acRefs": [],
+       "evidenceRefs": [],
+       "budget": {},
+       "disposition": "completed",
+       "dispositionReason": "verifierCheck no longer passes on the report line; moved-PR gate lost its report escape; both need an operator waiver (readiness-verifier-waiver.test.ts, complete-head-gate.test.ts)"
+     },
+     {
+       "id": "T6",
+       "title": "review complete --head accepts only the recorded head or its ancestor",
+
+--- .metaproject/flows/488-2026-11-12-review-audit-p0-gates/flow.json
+@@ 237,310 @@
+     },
+     {
+       "at": "2026-11-12T11:22:30.393Z",
+       "event": "task-done",
+       "detail": "T6: review complete --head accepts only the recorded head or its ancestor"
+     },
+     {
+       "at": "2026-11-12T11:22:31.512Z",
+       "event": "task-done",
+       "detail": "T7: A readiness waiver removes only the research errors of the waived item"
+     },
+     {
+       "at": "2026-11-12T11:22:32.343Z",
+       "event": "task-done",
+       "detail": "T8: One shared gate evaluation for complete and publish; host-question decisions marked unverified in the published body"
+     },
+     {
+       "at": "2026-11-12T11:22:36.333Z",
+       "event": "task-done",
+       "detail": "T5: Verifier and moved-head acknowledgements become operator waivers (card or TTY), not report text"
++    },
++    {
++      "at": "2026-11-12T12:17:12.713Z",
++      "event": "task-done",
++      "detail": "T4: Self-review and prepare draft PR"
++    },
++    {
++      "at": "2026-11-12T12:17:16.675Z",
++      "event": "implemented",
++      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1166"
++    },
++    {
++      "at": "2026-11-12T13:04:00.142Z",
++      "event": "ac-updated",
++      "detail": "AC9: \"(new)\" -> \"An operator decision the close gates honour (a readiness waiver, a head override, a verifier result on a blocker or major finding) counts only when keryx recorded it through its own command path and its record matches a seal keryx wrote at that time; a waiver added straight into manifest.json, a target.head rewritten in manifest.json, or a verification object written straight into findings.json is refused by both review complete and review publish, and a test edits each file directly and asserts the refusal.\" (Round 1 review of PR 1166: review-security-code-w3:SEC-1 (major, confirmed by execution, pre-existing at base); the operator upheld it for this PR (host-question claude-code:premise-sec-1).)"
+     }
+   ],
+   "acKinds": {
+     "AC1": {
+       "kind": "exec",
+       "check": "bun test src/review/readiness-verifier-waiver.test.ts"
+     },
+     "AC2": {
+       "kind": "exec",
+       "check": "bun test src/review/complete-head-gate.test.ts"
+     },
+     "AC3": {
+       "kind": "exec",
+       "check": "bun test src/review/complete-head-relabel.test.ts"
+     },
+     "AC4": {
+       "kind": "exec",
+       "check": "bun test src/review/complete-waiver-scope.test.ts"
+     },
+     "AC5": {
+       "kind": "exec",
+       "check": "bun test src/review/publish-gate-parity.test.ts"
+     },
+     "AC6": {
+       "kind": "exec",
+       "check": "bun test src/review/publish.test.ts"
+     },
+     "AC7": {
+       "kind": "exec",
+       "check": "bun test src/gdskills/review-spawn-field-contract.test.ts"
+     },
+     "AC8": {
+       "kind": "judged"
++    },
++    "AC9": {
++      "kind": "unclassified"
+     }
+   }
+ }
+
+--- .metaproject/flows/490-2026-11-12-review-audit-p2-architecture/flow.json
+@@ 1,34 @@
+ {
+   "schemaVersion": 2,
+   "gates": {
+     "tasks": true,
+     "review": true,
+     "owner": true,
+     "folderCommitted": true
+   },
+   "id": "490",
+   "slug": "review-audit-p2-architecture",
+   "title": "Review architecture: round state machine in code, byte ceiling for skills, staged modules, one host port (audit P2)",
+   "status": "initializing",
+   "createdAt": "2026-11-12T09:59:21.548Z",
+-  "updatedAt": "2026-11-12T10:01:56.524Z",
++  "updatedAt": "2026-11-12T13:06:08.254Z",
+   "source": {
+     "type": "description",
+     "ref": null
+   },
+   "acChecksum": null,
+   "acConfirmed": {},
+   "pr": {
+     "url": null
+   },
+   "baseBranch": "main",
+   "origin": {
+     "kind": "agent-finding",
+     "source": "docs/analysis/review-process-audit-2026-11-12.md"
+   },
+   "tasks": [
+     {
+       "id": "T1",
+       "title": "Collect remaining context",
+       "kind": "context",
+       "origin": "scaffold",
+
+--- .metaproject/flows/490-2026-11-12-review-audit-p2-architecture/flow.json
+@@ 163,259 @@
+       },
+       "acRefs": [],
+       "evidenceRefs": [],
+       "budget": {}
+     },
+     {
+       "id": "T10",
+       "title": "Completion lock for ingest and ledger build; snapshot list derived from gate inputs; wiki page for src/review",
+       "kind": "implement",
+       "status": "todo",
+       "dependsOn": [
+         "T6"
+       ],
+       "attempts": {
+         "count": 0,
+         "log": []
+       },
+       "acRefs": [],
+       "evidenceRefs": [],
+       "budget": {}
++    },
++    {
++      "id": "T11",
++      "title": "Agent compiler emits model_class (not the ignored model_tier) for keryx-shell spawn input; tier->model_class mapping in code with a test (PR 1166 review: review-architecture-w2:F-001, degradation-w2:F-003)",
++      "kind": "implement",
++      "status": "todo",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {}
++    },
++    {
++      "id": "T12",
++      "title": "Record head_override with from:null when review complete --head fills an absent recorded head (PR 1166 review: review-security-code-w2:F-001, operator dismissed for 488)",
++      "kind": "implement",
++      "status": "todo",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {}
+     }
+   ],
+   "history": [
+     {
+       "at": "2026-11-12T09:59:21.548Z",
+       "event": "created"
+     },
+     {
+       "at": "2026-11-12T10:01:13.362Z",
+       "event": "task-added",
+       "detail": "T5: Design record: round state machine, step command contract, phase split of this flow"
+     },
+     {
+       "at": "2026-11-12T10:01:27.193Z",
+       "event": "task-added",
+       "detail": "T6: Round state machine and step command; end-to-end round test on a built ledger"
+     },
+     {
+       "at": "2026-11-12T10:01:34.164Z",
+       "event": "task-added",
+       "detail": "T7: Round-need command replaces the prose rule; byte ceilings for skills; shrink the orchestrator skill"
+     },
+     {
+       "at": "2026-11-12T10:01:42.063Z",
+       "event": "task-added",
+       "detail": "T8: Stage directories for src/review, table dispatch in review.ts, one Jev config reader"
+     },
+     {
+       "at": "2026-11-12T10:01:49.523Z",
+       "event": "task-added",
+       "detail": "T9: One host port with capability flags; opencode and Grok as named hosts"
+     },
+     {
+       "at": "2026-11-12T10:01:56.524Z",
+       "event": "task-added",
+       "detail": "T10: Completion lock for ingest and ledger build; snapshot list derived from gate inputs; wiki page for src/review"
++    },
++    {
++      "at": "2026-11-12T13:06:07.260Z",
++      "event": "task-added",
++      "detail": "T11: Agent compiler emits model_class (not the ignored model_tier) for keryx-shell spawn input; tier->model_class mapping in code with a test (PR 1166 review: review-architecture-w2:F-001, degradation-w2:F-003)"
++    },
++    {
++      "at": "2026-11-12T13:06:08.254Z",
++      "event": "task-added",
++      "detail": "T12: Record head_override with from:null when review complete --head fills an absent recorded head (PR 1166 review: review-security-code-w2:F-001, operator dismissed for 488)"
+     }
+   ]
+ }
+
+--- .metaproject/rules/core/model-selection.mdc
+@@ 182,226 @@
+   the orchestrator holds.
+ - It must answer JSON, `{"order": [...]}`, best first, and must place the session's
+   own model. An id that was not discovered is dropped. An agent error, a
+   timeout, a malformed answer, or one that leaves out the session's model
+   resolves to the session's model, exactly as without an agent.
+ - It never places `standard` or `deep` below the session: `deep` is only ever taken
+   from above the session in its order, `standard` is never asked. A larger
+   class of an older generation that costs more than the session's model is
+   refused whatever it says.
+ - The result is cached by a hash of the candidate catalogue with prices, so an
+   identical catalogue asks once.
+ - It runs on the **light** tier of the session's own provider — the cheap step
+   below the session, or the session model itself when nothing sits below.
+ - A resolution it produced is recorded `tier_resolution: agent-ranked`.
+ 
+ ## Where this actually runs
+ 
+ Two places, and they are not the same shape:
+ 
+ - **`spawn_subagent`** (`src/harness/tool/builtin/spawn-subagent-tool.ts`) takes an
+-  optional `model_tier` input and does the rest in code: it builds the tier map
+-  with `buildTierMap` from its host's detection result, hands it to
+-  `resolveChildModel`, and records the outcome on the dispatch's run trace.
+-  Omitting `model_tier` inherits the parent's model, exactly as before the field
+-  existed.
++  optional `model_class` input (`light`, `standard`, `expert`, `frontier`) and lets
++  model routing choose the child's model from it. It still accepts `model_tier` but
++  ignores it and logs a migration notice (`SPAWN_SUBAGENT_IGNORED_FIELDS`). Omitting
++  `model_class` leaves the child to the project's subagent routing: the parent's
++  model unless that category is set to `auto`.
+ - **An orchestrator authoring a dispatch document** *runs a command*:
+   `keryx review tier`. It takes the signals below as flags and prints the `model`
+   block ready to paste — the tier, the ordered rule ids that produced it, the
+   resolved provider/model, `tier_resolution` and `model_discovery`. `--json`
+   prints the block alone.
+ 
+ An orchestrator is an agent following prose and **cannot call a TypeScript
+ function**: asked for a tier by hand it reads a table of signals and does the
+ arithmetic in its head — the exact mechanical work this programme moves out of
+ skills and into the code that consumes them. `keryx review tier` is that code's
+ entry point; `decideDispatchModel` is what it calls.
+ 
+ Nothing reads a recorded resolution back and checks it. These fields explain a
+ finished run; they do not gate one.
+ 
+ ## A third place: compiling a Claude Code subagent file
+ 
+ `keryx agents export --runtime claude` (`src/agents/compile.ts`'s
+ `renderClaudeExport`) is neither of the two shapes above — it never asks
+ `spawn_subagent` or `keryx review tier` anything, and it runs at EXPORT time,
+
+--- .metaproject/data/gdgraph/artifacts/summary.md
+@@ 1,43 @@
+ # gdgraph Summary
+ 
+ ## Stats
+ 
+-- Source files indexed: 4002
++- Source files indexed: 4015
+ - Imported asset files indexed: 35
+-- Total nodes: 4037
+-- Edges: 15080
+-- Import edges: 14841
++- Total nodes: 4050
++- Edges: 15145
++- Import edges: 14906
+ - Asset edges: 55
+ - Unresolved imports: 184
+ - Import resolution: 98.8%
+-- Skipped generated/static directories: 17
++- Skipped generated/static directories: 19
+ 
+ ## Top Modules
+ 
+ | Module | Source Files |
+ |---|---:|
+-| harness | 458 |
++| harness | 459 |
+ | commands | 446 |
+-| review | 342 |
+-| tui | 338 |
+-| lib | 274 |
++| tui | 346 |
++| review | 344 |
++| lib | 276 |
+ | hub | 187 |
+ | apps | 161 |
+ | gdskills | 141 |
+ | session | 135 |
+ | remote | 132 |
+ | flow | 94 |
+ | security | 93 |
+ | scripts | 88 |
+ | wiki | 70 |
+ | sac | 66 |
+ | learning | 65 |
+ | health | 57 |
+ | mcp-servers | 56 |
+ | gdgraph | 55 |
+ | memory | 49 |
+ 
+ ## Unresolved By Type
+ 
+ | Type | Count |
+ |---|---:|
+
+--- .metaproject/data/gdgraph/artifacts/summary.md
+@@ 44,89 @@
+ | relative-code | 97 |
+ | package | 68 |
+ | .js | 4 |
+ | .util | 3 |
+ | .mock | 3 |
+ | . | 2 |
+ | .parse | 1 |
+ | .css | 1 |
+ | .slice(4, -3)} | 1 |
+ | .scanner | 1 |
+ | .scan-helper | 1 |
+ | .ts | 1 |
+ | .key | 1 |
+ 
+ ## Skipped Directories
+ 
+ - `.claude`
+ - `.metaproject`
+ - `apps/hub-web/public`
+ - `bench/jev-review/fixtures/conform-project/.metaproject`
++- `dist`
+ - `docs/requirements/keryx-mcp-client/.metaproject`
+ - `fixtures/memory-reliability-p0/.metaproject`
+ - `fixtures/paraphrase/.metaproject`
+ - `fixtures/temporal/.metaproject`
++- `node_modules`
+ - `src/bundle/fixtures/roundtrip/project/.metaproject`
+ - `src/remote-control/generated`
+ - `src/security/audit-harness/fixtures/agents/.metaproject`
+ - `src/security/audit-harness/fixtures/baseline-indefinite/.metaproject`
+ - `src/security/audit-harness/fixtures/baseline-tampered/.metaproject`
+ - `src/security/audit-harness/fixtures/hook-exfil/.claude`
+ - `src/security/audit-harness/fixtures/hook-injection/.claude`
+ - `src/security/audit-harness/fixtures/hook-suppression/.claude`
+ - `src/security/audit-harness/fixtures/permissive-settings/.claude`
+ 
+ ## Generated Files
+ 
+ - `.metaproject/data/gdgraph/storage/nodes.jsonl`
+ - `.metaproject/data/gdgraph/storage/edges.jsonl`
+ - `.metaproject/data/gdgraph/artifacts/module-map.json`
+ 
+ ## Next Commands
+ 
+ ```bash
+ keryx gdgraph query cycles
+
+--- .metaproject/data/testing/context.md
+@@ 1,23 @@
+ # Testing Context
+ 
+-generatedAt: 2026-11-12T11:23:00.531Z
++generatedAt: 2026-11-12T12:33:51.380Z
+ status: complete
+ 
+ ## Frameworks
+ 
+ - bun
+ - vitest
+ 
+ ## Scripts
+ 
+ - `check`: `bun run lint && bun run typecheck && bun run typecheck:scripts && bun test`
+ - `check:core`: `bun run lint && bun run typecheck && bun run typecheck:scripts && bun run test:core`
+ - `check:hub-web`: `bun run --cwd apps/hub-web typecheck && bun run --cwd apps/hub-web lint && bun run --cwd apps/hub-web test && bun scripts/build-hub-web.ts --check`
+ - `docs:check`: `bun run check:doc-links && bun run check:retired-spellings && bun test src/cli-reference-coverage.test.ts src/standard/commands-by-task.test.ts src/standard/help-groups.test.ts`
+ - `test`: `bun test`
+ - `test:client`: `bun run test:client:terminal && bun run test:client:streaming && bun run test:client:cancel-resume && bun run test:client:runtime`
+ - `test:client:cancel-resume`: `bun test src/harness/run/ src/harness/resume/ src/harness/session/ src/session/ src/bus/ src/rewind/ src/remote/ src/docs/ src/commands/sessions`
+ - `test:client:runtime`: `bun test src/harness/ src/mcp-client/ src/mcp-servers/ src/agents/ src/commands/agent src/commands/harness src/commands/providers src/scheduler/ src/intake/`
+ - `test:client:streaming`: `bun test src/harness/provider/`
+ - `test:client:terminal`: `bun test src/tui/ src/commands/shell`
+ - `test:core`: `bun test src/cli src/core src/impact-evidence/ src/shell-source-audits.test.ts src/acp/ src/assets/ src/bundle/ src/capability/ src/commands/ src/contracts/ src/ctx/ src/decisions/ src/eval/ src/flow/ src/forgetting/ src/gdgraph/ src/gdskills/ src/governance/ src/product/ src/health/ src/hub/ src/integrations/ src/job/ src/learning/ src/lib/ src/mcp/ src/memory/ src/metrics/ src/remote-control/ src/retention/ src/review/ src/rules/ src/sac/ src/security/ src/stack/ src/standard/ src/sync/ src/testing/ src/trigger/ src/wiki/ scripts/`
+
+--- .metaproject/data/testing/recommendations.md
+@@ 1,5 @@
+ # Testing Recommendations
+ 
+-generatedAt: 2026-11-12T11:23:00.531Z
++generatedAt: 2026-11-12T12:33:51.380Z
+ 
+ - none
+
+--- .metaproject/flows/487-2026-11-12-spawn-subagent-parent-call-never-returns/acceptance-criteria.md
+@@ 1,21 @@
++# Acceptance Criteria
++
++Rules:
++
++- Criteria lines use the exact format `- ACn: <criterion>`.
++- Every criterion ends with [verify: exec `<command>`],
++  [verify: invariant `<command>`], [verify: judged] or
++  [verify: none — <reason>].
++- After `flow freeze` this file is checksum-protected: any edit outside
++  `keryx flow ac update` fails every gate and status transition.
++- Completion requires every ACn to be confirmed via
++  `keryx flow ac confirm <id> <ACn>`.
++
++## Criteria
++
++- AC1: The root cause of the non-returning parent `spawn_subagent` call (why the result was not delivered and why the existing `invokeWithBackstop` / `timeout_ms` did not fire) is identified and recorded in context.md "Agent Findings" with file/line evidence. [verify: judged]
++- AC2: A regression test reproduces a parallel batch of 9 `spawn_subagent` calls where one child's result is never delivered (or its fold/cleanup hangs), and asserts the parent turn gets a result for every call, with the stuck call resolved as a Timeout error within the bounded time. [verify: exec `bun test src/harness/tool/builtin/spawn-subagent-parallel-hang.test.ts`]
++- AC3: With the fix in, AC2's test passes and it fails when the fix is reverted (the test is not vacuous). [verify: judged]
++- AC4: The existing backstop and spawn tool tests still pass. [verify: exec `bun test src/harness/tool/builtin/spawn-subagent-backstop.test.ts src/harness/tool/builtin/spawn-subagent-tool.test.ts`]
++- AC5: Results the children saved via `save_result_to` are not lost when a call is abandoned by the backstop (the file stays intact and the Timeout output names the saved path). [verify: exec `bun test src/harness/tool/builtin/spawn-subagent-parallel-hang.test.ts`]
++- AC6: Typecheck passes. [verify: exec `bun run typecheck`]
+
+--- .metaproject/flows/487-2026-11-12-spawn-subagent-parent-call-never-returns/context.md
+@@ 1,125 @@
++# Context
++
++Collected deterministically by `keryx flow init` at 2026-11-12T09:32:48.876Z.
++The flow-init skill enriches this with formalization, brainstorm results, and
++interview answers.
++
++## Related Memory
++
++1. [1.69] keryx-gdctx-gdgraph-routing-index-cost-not-measured-before-shipping (known-mistake/accepted) - known-mistakes/keryx-gdctx-routing-index-cost-not-measured-before-shipping.md
++   A mandatory context-injection rule's per-read cost multiplies by every subsequent turn and every subagent dispatch. Measure the re-billed cost across a realistic turn count and subagent fan-out before setting a rule's default scope, not just its one-time size.
++   claimType: known-mistake | confidence: high | version: 0.1.0
++   scope: module:context, orchestration, keryx-cli, subagent-dispatch, entity:hard-gate rule, transcript re-sending, subagent-context-assembly, orient-runtime
++   provenance: source=flow 320 (W7 gdgraph/gdctx correctness) link=docs/requirements/keryx-agent-platform-expansion/workstreams/W7-graph-ctx-correctness.md (GDCTX-5) and docs/requirements/keryx-context-measurement/context-loading.md author=unknown confirmedBy=Measured in context-loading.md: 41,556→42,133 tokens across 4 turns with full index re-billing
++2. [1.657] gdctx-redaction-ignores-trust-tag (known-mistake/accepted) - known-mistakes/gdctx-redaction-ignores-trust-tag.md
++   A `SecuritySource` tag (`trusted-project`) can be threaded all the way to a redaction call and still have zero effect on the policy outcome if the resolver only branches on `category`. Verify a trust axis actually changes a decision before shipping the tag, not just that the tag is present in the type.
++   claimType: known-mistake | confidence: high | version: 0.1.0
++   scope: module:security, redaction, policy-resolution, entity:resolveDecision, buildFinding, SecuritySource, policyFor, image-url policy
++   provenance: source=flow 320 (W7 gdgraph/gdctx correctness) link=docs/requirements/keryx-agent-platform-expansion/workstreams/W7-graph-ctx-correctness.md (GDCTX-2) author=unknown confirmedBy=Reproduced this session via `keryx ctx read README.md --mode full`
++3. [1.633] A fix round needs its own review: three consecutive rounds each introduced a blocker (lesson/accepted) - lessons/a-fix-round-needs-its-own-review-three-consecutive-rounds-each-introduced-a-blocker.md
++   On PR #215 (flow 127, project registry) three consecutive review-fix rounds each introduced a new blocker while closing the previous one. The defect was not in any single fix; it was in treating a fix as finished once it addressed the reported symptom.
++   claimType: lesson | confidence: high | version: 0.5.0
++   scope: module:core, entity:project-registry
++   provenance: source=review rounds on PR #215 (flow 127), PR #216 (flow 128), PR #220 (flow 133) link=https://github.com/MrCipherSmith/keryx/pull/215 author=unknown confirmedBy=unknown
++4. [1.615] OpenTUI: alignSelf on a transcript box collapses its intrinsic height (lesson/accepted) - lessons/tui-alignself-height-collapse.md
++   In a `@opentui/core` ScrollBox column, a child `BoxRenderable` carrying `alignSelf: "flex-start"` stops measuring its intrinsic HEIGHT: it collapses to the viewport height, squeezes its children, and makes the ScrollBox under-report `scrollHeight`. Hug content with `maxWidth` instead.
++   claimType: lesson | confidence: high | version: 1.0.0
++   scope: module:tui, entity:transcript-blocks, shell-chrome
++   provenance: source=flow 115 link=.metaproject/flows/115-2026-07-21-tui-dim-collapsible-thought-blocks-fix-a author=unknown confirmedBy=unknown
++5. [1.583] Flow ids are allocated per clone, not per checkout (constraint/accepted) - constraints/flow-ids-allocated-per-clone.md
++   `flow init` reserves its number in the git common directory, so every linked worktree of one clone shares the id space. A number, once handed out, is never reused — not even after the flow directory is deleted or renumbered.
++   claimType: constraint | confidence: high | version: 1.0.0
++   scope: module:tasks, entity:flow
++   provenance: source=flow 116 (fix duplicate flow ids) link=.metaproject/flows/116-2026-07-22-fix-duplicate-flow-ids-nextflowid-races- author=unknown confirmedBy=unknown
++
++## Code Graph
++
++- `.metaproject/data/gdgraph/artifacts/summary.md`
++- `.metaproject/data/gdgraph/artifacts/module-map.json`
++
++Use `keryx gdgraph affected <file>` for blast radius.
++
++## Code Health
++
++- gate: pass (as of 2026-10-06T09:19:55.947Z)
++- refresh: `keryx health run`
++
++## Enabled Metaproject Modules
++
++- gdgraph
++- gdctx
++- gdskills
++- memory
++- tasks
++- health
++- testing
++- gdwiki
++- security
++- mcp
++
++## Agent Findings
++
++_(flow-init skill appends here)_
++
++### Step 1 findings (2026-11-12) — NOT yet a confirmed root cause
++
++Existing bounds on a `spawn_subagent` call (all predate the report):
++1. `invokeWithBackstop` — `src/harness/tool/builtin/spawn-subagent-tool.ts:569`, applied to the whole tool by the factory's last line (~2906). Cap = child deadline + 3 min, about 8 min for `timeout_ms` 300000. Added in 6bd22fbcf (2026-10-10, 0.3.100). Cap 0 (no bound) for `runtime.kind=external` or `KERYX_SUBAGENT_TIMEOUT_MS=0`.
++2. `runWithCallWatchdog` — `src/commands/call-watchdog.ts`, wired in `src/commands/agent.ts` `executeCallTraced` for `spawn_subagent` only. Default 12 min (`KERYX_SPAWN_CALL_WATCHDOG_MS`; 0 disables). Added 07430ae20 (0.3.101), hardened fcb9e3c33 (0.3.102, `KERYX_PHASE_TRACE`).
++   - KEY: `HUMAN_STAGES = {"approval"}`: while the call's stage is `approval` the timer re-arms forever (no bound by design). `mark("approval")` is set in `executeCallUnbounded` (agent.ts ~6071) only when the call is NOT auto-approved (hook `ask` / untrusted origin etc.).
++3. Parallel path: `agent.ts` `runConcurrentSpawnBatch` (~5415) -> `planWaves`/`executeWaves` (`src/harness/parallel/scheduler.ts:274`, `Promise.allSettled` per wave) -> `executeCall` (watchdogged). The turn awaits the WHOLE batch before pushing any tool result / trail / archive entry (explains: no trail steps for w2).
++
++Implication: a stall inside `invoke` should be cut at ~8 min (1) and ~12 min (2). The report says 2h+, so the stall is outside both, or one was disabled/suspended. Hypotheses, in test order:
++- H1: one call of the batch sits in stage `approval` (hook `ask` / untrusted origin; approval prompt never rendered or lost under concurrent calls; TUI unresponsive). The watchdog deliberately never fires and `executeWaves` waits for it. Matches: 9 auto-approved rows + 1 `running` row, UI unresponsive, no timeout. Check `src/tui/tui-shell.ts` `requestApprovalLocally` (~6417) / `trackApproval` with N concurrent calls.
++- H2: stall AFTER the watchdog answers (post-batch: spill, `recordSlateSessionTrail`, slate/archive lock shared with the child fold, hooks). slate.json mtime == last model call hints that the child fold touched slate at the end.
++- H3: watchdog/backstop disabled by env, or external-runtime path (cap 0).
++
++Caveats:
++- Local `package.json` is 0.4.11 while the report says 0.4.26: verify this checkout matches the reporter's build.
++- The reporter's journal / slate.json / process sample are not in the repo; a re-run with `KERYX_PHASE_TRACE` would show the stuck stage.
++
++### Step 1 findings, part 2 (2026-11-12)
++
++Verified in code (no defect found in these layers):
++- `executeWaves` (`scheduler.ts`): `Promise.allSettled` per wave, no extra waiting. Not the stall.
++- `invokeWithBackstop` (`spawn-subagent-tool.ts:569`): timer is armed before `invoke`, raced, cleared only in `finally`. Sound. Cap 0 only for `runtime.kind=external` or `KERYX_SUBAGENT_TIMEOUT_MS=0`.
++- `runWithCallWatchdog`: sound except `HUMAN_STAGES={"approval"}` (re-arms forever) and `capMs<=0` (`KERYX_SPAWN_CALL_WATCHDOG_MS=0`).
++- `runConcurrentSpawnBatch.runOne` always passes `untrustedOrigin=false`; `next[18]=stage` is wired to the right parameter.
++- The post-batch loop (`agent.ts` ~4540-4690) writes `onToolResult`, spill and `recordSlateSessionTrail` per call, in order. The reported absence of w2 trail steps places the stall INSIDE the batch await, before the loop. Post-batch stall (H2) is unlikely.
++
++Narrowed conclusion: with default env, only stage `approval` evades both timers (executeCall sets it only in the ask branch, `agent.ts` ~6071). The TUI approver (`tui-shell.ts` `requestApprovalLocally` ~6417) handles an asked `spawn_subagent` by a read_only fast path (`shouldAutoApproveReadOnlySpawn`, ~1657) or, for `general` / hookAsk / untrusted, by a modal in the SINGLE shared `chrome.dock` (`showComposerChoice`, ~6475). N concurrent asks from one batch all target that one dock; a lost or unanswered dock promise leaves the call in `approval` and the watchdog never fires. Not yet proven: whether concurrent `showComposerChoice` calls on one dock are serialized or clobber each other.
++
++Next (step 2 of the plan): (a) read `showComposerChoice` / `chrome.withOverlay` for concurrency; (b) write `spawn-subagent-parallel-hang.test.ts` with a batch of 9 where one `requestApproval` never settles; (c) ask the reporter for env (`KERYX_SPAWN_CALL_WATCHDOG_MS`, `KERYX_SUBAGENT_TIMEOUT_MS`) and a `KERYX_PHASE_TRACE` log.
++
++### Step 2a: dock concurrency (2026-11-12)
++
++`src/tui/composer-choice.ts` (read around `lockDock`, ~275, and `showComposerChoiceDetailed`, ~327):
++- Concurrent choices on one dock are NOT clobbered. They are serialized by `lockDock` (a promise chain, `dockChain`), so 9 asks queue behind one another. `presentComposerChoice` also has a reentrancy guard (`dock.visible`) that answers `cancelId` immediately. This rules out part of H1: the dock does not lose promises by overlap.
++- Remaining gap: a queued ask waits in `await lockDock(dock)` with no timeout. The request `signal` is checked only AFTER the lock is acquired, and the abort listener is attached only inside `presentComposerChoice`. A queued approval therefore ignores a turn abort and stays in stage `approval` while the holder in front of it stays open. That stage suppresses the call watchdog (`HUMAN_STAGES`).
++- This does not fully explain the report: in trust mode the 9 children were auto-approved (read_only fast path, no dock), so a dock queue should not have formed. Dock-queue stall is a secondary candidate, not the root cause.
++
++Still unresolved: no path found that evades both timers with default env. Next: the regression test `spawn-subagent-parallel-hang.test.ts` (a batch of 9, one never-settling call; expected: the turn returns via the watchdog or backstop); request env and a `KERYX_PHASE_TRACE` log from the reporter.
++
++### Step 2b: regression test (2026-11-12)
++
++`src/harness/tool/builtin/spawn-subagent-parallel-hang.test.ts`, 4 tests, all pass together with `spawn-subagent-backstop.test.ts` and `call-watchdog.test.ts`: a batch of 9 with one child hung inside `invoke` (backstop answers), a stall outside `invoke` (call watchdog answers), both layers together, and a call parked at stage `approval` freed by the operator's abort. It is a regression guard for AC2/AC5, NOT a reproduction: the guards work in isolation.
++
++### Step 3: checkout vs v0.4.26 (2026-11-12)
++
++- Local HEAD `2caa22985` (`v0.4.11-4`) is an ancestor of tag `v0.4.26`: the checkout is behind the reporter's version.
++- At v0.4.26 the guards are structurally the same: `invokeWithBackstop` (spawn tool 562, wrapper 2787), `runWithCallWatchdog` (agent.ts 5728), `HUMAN_STAGES = {approval}`, same env cap. `call-watchdog.ts` and `scheduler.ts` have no diff.
++- What changed in HEAD..v0.4.26 near this path: flow 486 (`hc run` approval floors, dialog paste guard: `onPaste`, `onSelectReady`, held pastes in `composer-choice.ts`; `tui-shell.ts` +840 lines), routing v2 removal in the spawn tool, and `untrustedContentSeen ||= holdsExternalReport(...)` in `agent.ts` (bus drains ~4184, ~4832). When `untrustedContentSeen` is true the concurrent batch is skipped (~4429) and spawns go through the sequential per-call loop with approval.
++- The report shows a concurrent batch of 9, so the sequential-approval path does not match it. Not yet verified: the new dialog paste guard in a queued state, and the routing classification step before the child deadline starts (inside `invoke`, so the backstop should still cover it).
++
++## Diagnostics (step 4, added after the user asked for logs/metrics for the next hang)
++
++The root cause is still unproven, so the next occurrence must explain itself. Always-on, no env flag needed:
++
++- `src/lib/call-diagnostics.ts`: registry of in-flight tool calls (callId, name, stage, startedAt, stageSince), bounded ring buffer of the last phase events, counters, a stall watcher (default tick 30s; a call sitting in one stage past the limit is dumped once, again only after the repeat window; event-loop lag recorded), and probes read at snapshot time (composer dock, env caps). Output: one JSON line per dump under `<config>/diagnostics/<session>.ndjson`, created on first dump, size-capped.
++- Feed: `tracePhase` writes into the ring; `call-watchdog.ts` labels carry the call id (9 concurrent calls no longer interleave); `agent.ts` executeCall registers every call and reports stage changes; `invokeWithBackstop` reports armed/expired/settled.
++- Probes: `composerDockDiagnostics()` in `src/tui/composer-choice.ts` (holders, waiting, holder age, oldest wait) answers the lockDock-queue hypothesis (H4) directly.
++- Operator: `/diag` (`src/tui/diag-command.ts`) dumps the snapshot on demand, also in the readline shell; listed in help groups and `docs/docs/commands-by-task.md`.
++- What to read after a hang: the last `diagnostics/<session>.ndjson` line: a call stuck in stage `approval` with `dock.waiting > 0` and a large `holderAgeMs` confirms the dock-queue hypothesis; a call in `invoke` with no backstop event points at the backstop timer; an empty file with a stuck UI points at event-loop starvation (see the lag field).
++- Tests: call-diagnostics.test.ts, diag-command.test.ts, composer-choice.test.ts (dock diagnostics), call-watchdog.test.ts, spawn-subagent-parallel-hang.test.ts. tsc clean.
++- Auto-dump on interrupt: `maybeDumpOnInterrupt()` (`src/tui/diag-command.ts`) writes a snapshot before the turn is cancelled when a call has sat 60s in one stage or 5min in flight. Wired at Ctrl+C (cancel-turn) and `/interrupt` in `tui-shell.ts`. Esc does not cancel a main turn in this shell, so it is not wired; the readline shell dumps in `makeSignalShutdown` (`beforeAbort`, shell.ts) on SIGINT/SIGTERM/SIGHUP, printing the note to stderr. Test in diag-command.test.ts.
++- Not done: probes for permission mode / untrustedContentSeen; hardening (abortable queued lockDock, bounded approval stage) waits for evidence.
+
+--- .metaproject/flows/487-2026-11-12-spawn-subagent-parent-call-never-returns/description.md
+@@ 1,34 @@
++# spawn_subagent parent call never returns after all child subagents complete; timeout_ms does not fire
++
++Status: draft (flow-init skill formalizes this)
++Source: user bug report (keryx v0.4.26, session 7418d3f7 / dir 6cdcae93-e730-4f85-a4e5-b4bc7418d3f7, pid 7588, macOS 15.7.2 arm64, branch refactor/primary-command-words, trust mode, anthropic/claude-sonnet-5-5)
++
++## Problem
++
++During an adaptive review (review-orchestrator, PR #8691, 19 reviewers) the parent issued a wave w2 of 9 parallel `spawn_subagent` calls in one message (`timeout_ms` 300000, `mode` read_only, each with `save_result_to`). All 9 children finished (last model call 07:18:12.578 UTC, ~80 s after start), but the parent's `spawn_subagent` call stayed `running` for 2h16m+: no result was delivered to the session and the 300 s `timeout_ms` never fired. Process idle in the event loop (main thread ~95% in kevent64, CPU 0-4%, no TCP sockets, only MCP unix sockets/children). The turn only ends by Esc/kill. Wave w1 (19 reviewers in two batches) in the same session completed normally. The session was ~2 h old, 106 trail steps.
++
++Evidence:
++- routing journal `~/.local/share/keryx/routing/journal/7ee3335a…jsonl`: 9 dispatch events 07:16:49-50 UTC, all ended; nothing after 07:18:12.578 (no started/interrupted).
++- `slate.json` touched 11:18:12 local; `childDispatches` 47 entries, all completed.
++- trail: last step 106 (`keryx review next … r02`); no `spawn_subagent` steps for w2 recorded (calls never completed).
++- UI: 9 auto-approved spawn_subagent rows without output + one running `spawn_subagent(label=code-boss-reviewer-w2)`; Subagents counter 0/47 · 4 failed (the 4 failed are from earlier runs).
++- Excluded by reporter: memory (468 MB RSS), rate limit/API wait, slot exhaustion by failed subagents, budget ($3.18).
++
++Initial code observation (to be verified): `src/harness/tool/builtin/spawn-subagent-tool.ts` already wraps `invoke` in `invokeWithBackstop` (hard cap = child deadline + 3 min grace, about 8 min for 300000 ms), see the factory wrapper near line 2906. A hang inside `invoke` should therefore have returned a `Timeout` result. So either (a) the hang is OUTSIDE the wrapped `invoke` (tool executor for a parallel batch, approval/hook/trust handling, result delivery/Promise.all in the agent loop, TUI/fleet bridge), or (b) the installed v0.4.26 predates the backstop, or (c) the backstop timer/abort path itself is not reached for this path (e.g. external/other branch with cap 0, or a `finally`/dispose that never settles). Root cause is not yet established.
++
++## Expected Outcome
++
++- After all children of a parallel `spawn_subagent` batch have finished, the parent receives every result and the turn continues.
++- If a call does not settle, it returns an error/Timeout result within a bounded time (child deadline + grace) regardless of where the delivery was lost, and the parent turn does not hang indefinitely; results already saved via `save_result_to` remain recoverable.
++- Root cause of the lost delivery is identified and fixed, with a regression test that reproduces a lost/hung child result inside a parallel batch.
++
++## Outcome criteria
++
++- A parallel batch of N `spawn_subagent` calls in which one call's result delivery is lost/hangs returns to the parent within the bounded time with a Timeout error for that call and normal results for the others (covered by an automated regression test).
++- not measured in production — the hang was seen once and has no reliable reproduction.
++
++## Out of Scope
++
++- Review-orchestrator wave sizing/policy (the "use smaller waves" workaround).
++- Machine swap pressure / memory tuning on the reporter's host.
++- UI redesign of the Subagents counter (only fix it if it is a direct consequence of the root cause).
+
+--- .metaproject/flows/487-2026-11-12-spawn-subagent-parent-call-never-returns/journal.md
+@@ 1,4 @@
++# Flow Journal
++
++- 2026-11-12T09:32:56.216Z - flow created
++- 2026-11-12T09:37:13.020Z - frozen: 6 criteria; checksum recorded
+
+--- .metaproject/flows/487-2026-11-12-spawn-subagent-parent-call-never-returns/plan.md
+@@ 1,22 @@
++# Implementation Plan
++
++Status: draft (flow-init skill fills this after context and brainstorm)
++
++## Approach
++
++Investigate first, then fix at the layer where delivery is lost. The spawn tool already has `invokeWithBackstop` (child deadline + 3 min grace), so a 2h hang points at a layer outside that wrapper or at a version/branch gap. Reproduce with an injected hanging child in a 9-wide parallel batch, then add a bounded wait at the lowest layer that owns the hang rather than another timer on top.
++
++## Steps
++
++1. Confirm whether v0.4.26 contains `invokeWithBackstop` (history of spawn-subagent-tool.ts) and whether the factory wrapper (~line 2906) covers every return path (native, external, routing-v2 branches).
++2. Read how the agent loop executes a batch of parallel tool calls (Promise.all / allSettled, trust-mode approval, PreToolUse/PostToolUse/SubagentStop hooks) and where a never-settling promise would park the turn with no timers or sockets.
++3. Inspect `foldChildSlateAndCleanup`, the `save_result_to` writer, the fleet event bridge and TUI result delivery for unbounded awaits.
++4. Write `spawn-subagent-parallel-hang.test.ts` reproducing the lost result in a 9-call batch (short cap / fake clock).
++5. Fix at the owning layer: the stuck call resolves as Timeout, the other 8 results are delivered, `save_result_to` output stays intact.
++6. Run backstop/spawn tests and typecheck; record a known-mistake memory if the root cause is a reusable lesson.
++
++## Risks
++
++- The hang was seen once; reproduction is approximated. Mitigation: inject hanging promises at each suspect layer.
++- A second watchdog could double-fire or abort a legitimately long child (timeout_ms up to 30 min). Mitigation: derive any new bound from `resolveSubagentHardCapMs`.
++- The reporter's evidence files (journal, slate.json, sample) are not in the repo; which of the 9 calls hung is unverified.
+
+--- .metaproject/flows/487-2026-11-12-spawn-subagent-parent-call-never-returns/tasks.md
+@@ 1,15 @@
++# Tasks
++
++Task definitions live here; task **statuses** live in flow.json and are managed
++only via `keryx flow task done <id> <taskId>`.
++
++These four are created by `keryx flow init` as a default checklist. Add your
++own with `keryx flow task add`; a scaffold row your plan supersedes is closed
++with `--disposition skipped --reason "<why>"`, not left open.
++
++| ID | Kind | Title |
++|----|------|-------|
++| T1 | context | Collect remaining context |
++| T2 | implement | Implement per plan |
++| T3 | test | Add/adjust tests and make them pass |
++| T4 | review | Self-review and prepare draft PR |
+
+--- .metaproject/flows/488-2026-11-12-review-audit-p0-gates/acceptance-criteria.md
+@@ 4,24 @@
+ 
+ - Criteria lines use the exact format `- ACn: <criterion>`.
+ - Every criterion ends with [verify: exec `<command>`],
+   [verify: invariant `<command>`], [verify: judged] or
+   [verify: none — <reason>].
+ - After `flow freeze` this file is checksum-protected: any edit outside
+   `keryx flow ac update` fails every gate and status transition.
+ - Completion requires every ACn to be confirmed via
+   `keryx flow ac confirm <id> <ACn>`.
+ 
+ ## Criteria
+ 
+ - AC1: A package with unverified blocker or major findings fails readiness item `verifier` in `review complete` and `review publish` even when `report.md` has a `Not verified: N` line; it passes only with an operator readiness waiver of `verifier` (card, TTY or `--answered-by`, as `--waive` accepts), and the item's repair text no longer offers the report line. [verify: exec `bun test src/review/readiness-verifier-waiver.test.ts`]
+ - AC2: A PR-bound package whose PR head moved or merged is refused by `review complete` and fails readiness item `head` even when the report's first line names the reviewed SHA and says the PR moved; it passes only with an operator readiness waiver of `head`, and the repair text no longer tells the agent to edit the report's first line. [verify: exec `bun test src/review/complete-head-gate.test.ts`]
+ - AC3: `review complete --head <sha>` whose SHA differs from the head recorded at `review start` is refused, naming both SHAs, unless it carries an operator quote recorded through the channels `--waive` accepts (card, TTY or `--answered-by`); the manifest then records the previous head, the new head and the quote. A `--head` equal to the recorded head passes as before. [verify: exec `bun test src/review/complete-head-relabel.test.ts`]
+ - AC4: A readiness waiver of one of `files-covered`, `blast-radius`, `reviewers`, `ledger` removes only the research errors belonging to that item; an artifact-locator or manifest/dispatch mismatch error, or an error of an item not waived, still refuses the close. [verify: exec `bun test src/review/complete-waiver-scope.test.ts`]
+ - AC5: `review publish` refuses a package whose round record was edited after `review start` and a package whose report has no valid `Evidence level:` line, with the same messages `review complete` gives; both commands obtain their refusals from one shared gate evaluation function. [verify: exec `bun test src/review/publish-gate-parity.test.ts`]
+ - AC6: A review published from a package that carries a `confirmedVia: "host-question"` decision states in its body that the decision was not verified by keryx. [verify: exec `bun test src/review/publish.test.ts`]
+ - AC7: The review-orchestrator skill instructs `model_class` with values the `spawn_subagent` schema accepts, and a test fails when any bundled review skill names a `spawn_subagent` field that the tool ignores or rejects. [verify: exec `bun test src/gdskills/review-spawn-field-contract.test.ts`]
+ - AC8: Each regression test added for AC1-AC5 fails when its fix is reverted. [verify: judged]
++- AC9: An operator decision the close gates honour (a readiness waiver, a head override, a verifier result on a blocker or major finding) counts only when keryx recorded it through its own command path and its record matches a seal keryx wrote at that time; a waiver added straight into manifest.json, a target.head rewritten in manifest.json, or a verification object written straight into findings.json is refused by both review complete and review publish, and a test edits each file directly and asserts the refusal.
+
+--- .metaproject/flows/488-2026-11-12-review-audit-p0-gates/journal.md
+@@ 3,36 @@
+ - 2026-11-12T09:58:46.961Z - flow created
+ - 2026-11-12T10:01:11.628Z - task-added: T5: Verifier and moved-head acknowledgements become operator waivers (card or TTY), not report text
+ - 2026-11-12T10:01:25.706Z - task-added: T6: review complete --head accepts only the recorded head or its ancestor
+ - 2026-11-12T10:01:32.644Z - task-added: T7: A readiness waiver removes only the research errors of the waived item
+ - 2026-11-12T10:01:40.140Z - task-added: T8: One shared gate evaluation for complete and publish; host-question decisions marked unverified in the published body
+ - 2026-11-12T10:01:48.034Z - task-added: T9: Orchestrator skill uses model_class; contract test for spawn fields named by review skills
+ - 2026-11-12T10:35:00.000Z - premise: review-premise verdicts in premise/1.json — A-01 challenged, A-02 challenged, A-03 owner-decision, A-04 downgraded to minor, A-05/A-06/A-07 upheld
+ - 2026-11-12T10:35:00.000Z - operator-decision (host-question, Claude Code AskUserQuestion): A-01 answer "Operator waiver" (uphold: unverified blocker/major need an operator waiver)
+ - 2026-11-12T10:35:00.000Z - operator-decision (host-question, Claude Code AskUserQuestion): A-02 answer "Operator waiver" (uphold: moved/merged head needs an operator waiver)
+ - 2026-11-12T10:35:00.000Z - operator-decision (host-question, Claude Code AskUserQuestion): A-03 answer "Operator act if different" (a differing --head needs an operator quote; flow 448 recovery kept); AC3 rewritten accordingly before freeze
+ - 2026-11-12T10:35:09.915Z - frozen: 8 criteria; checksum recorded
+ - 2026-11-12T10:35:13.573Z - started
+ - 2026-11-12T10:35:22.227Z - task-done: T1: Collect remaining context
+ - 2026-11-12T10:35:23.300Z - task-done: T2: Implement per plan
+ - 2026-11-12T10:35:24.315Z - task-done: T3: Add/adjust tests and make them pass
+ - 2026-11-12T10:38:11.909Z - task-done: T9: Orchestrator skill uses model_class; contract test for spawn fields named by review skills
+ - 2026-11-12T11:22:30.393Z - task-done: T6: review complete --head accepts only the recorded head or its ancestor
+ - 2026-11-12T11:22:31.512Z - task-done: T7: A readiness waiver removes only the research errors of the waived item
+ - 2026-11-12T11:22:32.343Z - task-done: T8: One shared gate evaluation for complete and publish; host-question decisions marked unverified in the published body
+ - 2026-11-12T11:22:36.333Z - task-done: T5: Verifier and moved-head acknowledgements become operator waivers (card or TTY), not report text
++- 2026-11-12T12:17:12.713Z - task-done: T4: Self-review and prepare draft PR
++- 2026-11-12T12:17:16.675Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/1166
++- 2026-11-12T12:31:00.000Z - ci-fix: lint `no-explicit-any` in src/review/close-gates.test-helpers.ts (commit 274174521)
++- 2026-11-12T12:38:00.000Z - review round 1 (package 2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166): ARCH-1 major confirmed by execution (publish skips the research-error gate); SEC-1 major confirmed by execution, pre-existing at base (gates trust agent-written manifest/findings JSON)
++- 2026-11-12T12:38:00.000Z - operator-decision (host-question, Claude Code AskUserQuestion): SEC-1 answer "Закрыть в этом PR" (scope widened: provenance for waivers / head override / verification lands in flow 488)
++- 2026-11-12T12:38:00.000Z - operator-decision (host-question, Claude Code AskUserQuestion): review-logic-w4:F-001 answer "Оставить + CHANGELOG (Recommended)" (packages closed via the removed escapes stay NOT READY; break and repair noted in CHANGELOG)
++- 2026-11-12T12:38:00.000Z - operator-decision (host-question, Claude Code AskUserQuestion): review-architecture-w2:F-001 and review-security-code-w2:F-001 answer "Обе — в flow 490 / не чинить (Recommended)"
++- 2026-11-12T13:03:17.233Z - decision d-mwdk6f92-30bb6c [review decide-premise, ordinary]: chose uphold; no recommendation
++- 2026-11-12T13:03:18.208Z - decision d-mwdk6g0j-3a99a4 [review decide-premise, ordinary]: chose uphold; no recommendation
++- 2026-11-12T13:03:19.107Z - decision d-mwdk6gpx-962d05 [review decide-premise, ordinary]: chose dismiss; no recommendation
++- 2026-11-12T13:03:19.794Z - decision d-mwdk6h94-4f94b7 [review decide-premise, ordinary]: chose dismiss; no recommendation
++- 2026-11-12T13:04:00.142Z - ac-updated: AC9: "(new)" -> "An operator decision the close gates honour (a readiness waiver, a head override, a verifier result on a blocker or major finding) counts only when keryx recorded it through its own command path and its record matches a seal keryx wrote at that time; a waiver added straight into manifest.json, a target.head rewritten in manifest.json, or a verification object written straight into findings.json is refused by both review complete and review publish, and a test edits each file directly and asserts the refusal." (Round 1 review of PR 1166: review-security-code-w3:SEC-1 (major, confirmed by execution, pre-existing at base); the operator upheld it for this PR (host-question claude-code:premise-sec-1).)
++- 2026-11-12T13:10:00.000Z - ci-fix: verify-exec-files listed the unwritten verify tests of planned flows 489–491 in KNOWN_MISSING (commit 307eab300)
++- 2026-11-13T04:55:00.000Z - fix round 1: ARCH-1 (research gate moved into evaluateCloseGates, shared by complete and publish); SEC-1/AC9 (src/review/seals.ts: keryx seals target, head_override, readiness waivers and ingest-applied verifications in manifest.seals; gates honour only sealed ones; verifications need verdict+method+evidence); --head-reason without a relabel refused; readiness item 7 retitled; ARCH-2 typed tags; DEG-1 withoutPartialHeader removed; DEG-2 shared fixture; TP-1..TP-4 and testing-practices F-001/F-002 tests; SKILL.detail item 7, model-selection.mdc spawn paragraph, spawn-subagent notice names every ignored field; CHANGELOG Unreleased. Known gaps: a package with no `seals` keeps its target unchecked; research.json coverageWaiver unsealed; the completion card still lists unsealed waivers it will not honour
+
+--- .metaproject/flows/490-2026-11-12-review-audit-p2-architecture/journal.md
+@@ 1,11 @@
+ # Flow Journal
+ 
+ - 2026-11-12T09:59:21.548Z - flow created
+ - 2026-11-12T10:01:13.362Z - task-added: T5: Design record: round state machine, step command contract, phase split of this flow
+ - 2026-11-12T10:01:27.193Z - task-added: T6: Round state machine and step command; end-to-end round test on a built ledger
+ - 2026-11-12T10:01:34.164Z - task-added: T7: Round-need command replaces the prose rule; byte ceilings for skills; shrink the orchestrator skill
+ - 2026-11-12T10:01:42.063Z - task-added: T8: Stage directories for src/review, table dispatch in review.ts, one Jev config reader
+ - 2026-11-12T10:01:49.523Z - task-added: T9: One host port with capability flags; opencode and Grok as named hosts
+ - 2026-11-12T10:01:56.524Z - task-added: T10: Completion lock for ingest and ledger build; snapshot list derived from gate inputs; wiki page for src/review
++- 2026-11-12T13:06:07.260Z - task-added: T11: Agent compiler emits model_class (not the ignored model_tier) for keryx-shell spawn input; tier->model_class mapping in code with a test (PR 1166 review: review-architecture-w2:F-001, degradation-w2:F-003)
++- 2026-11-12T13:06:08.254Z - task-added: T12: Record head_override with from:null when review complete --head fills an absent recorded head (PR 1166 review: review-security-code-w2:F-001, operator dismissed for 488)
+
+--- .metaproject/memory/review-notes/2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166__review-security-code-w2-F-001.md
+@@ 1,51 @@
++# Review finding 2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-security-code-w2:F-001 was dismissed as incorrect
++
++Version: 0.1.0
++Type: review-note
++Status: draft
++Confidence: medium
++
++## Summary
++
++review-security-code raised 2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-security-code-w2:F-001 (minor) and the round recorded it as `dismissed-incorrect` — the one disposition that says the reviewer was wrong.
++
++## Details
++
++- Finding: `2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166#review-security-code-w2:F-001` (display id `review-security-code-w2:F-001`)
++- Reviewer: `review-security-code`
++- Severity: `minor`
++- Location: `src/review/managed.ts`:1057
++- Origin: `internal`
++- What it claimed: The operator-reason requirement for `review complete --head` applies only when a head was recorded at start. When `stored.target.head` is absent or empty, any well-formed `--head` is written to `manifest.target.head` with no `--head-reason`, no TTY check and no `head_override` record. `completeHeadGate` then compares that agent-supplied value with the PR head (`reviewed !== null && prHead !== null && !sameCommit(...)`), so passing the PR's current head makes item `head` pass whatever tree the reviewers actually read.
++- Why it was dismissed: operator (host-question claude-code:premise-empty-head, 2026-11-12T13:03:19.698Z) on the premise question: Operator: no bypass (item head already passes with no recorded head); head_override from:null goes to flow 490
++- Attested by: human — operator (host-question claude-code:premise-empty-head, 2026-11-12T13:03:19.698Z) on the premise question: Operator: no bypass (item head already passes with no recorded head); head_override from:null goes to flow 490
++
++Only `dismissed-incorrect` reaches this folder. `dismissed-wont-fix`,
++`dismissed-out-of-scope` and `dismissed-deprioritised` describe findings that
++were CORRECT and were not acted on; counting them here would teach the reviewer
++to stop raising true findings.
++
++## Provenance
++
++- Source: review
++- Link: .metaproject/reviews/2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166
++- Created: 2026-11-13
++- Updated: 2026-11-13
++
++## Related Scopes
++
++- Module:
++- Entity:
++- Files:
++- Skills:
++
++## Tags
++
++- review-note
++- false-positive
++- round:2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166
++- commit:e9ac9253fde7
++
++## Changelog
++
++- 0.1.0 - Written by `keryx review` when the finding was dismissed as incorrect.
+
+--- .metaproject/wiki/architecture/remote-control.md
+@@ 44,73 @@
+ A button press on an approval makes the surface (`http-surface.ts`, `pressApproval`) write the `approval` frame to the shell's stream and wait `approvalAckMs` (default 5000, `DEFAULT_APPROVAL_ACK_MS`) for `POST /v1/remote/approval-ack`. The ack body is `{sessionId, approvalId, applied?}`: `applied` true (or absent, an older shell whose ack only ever meant received) ends the message "Allowed by user N at ..." or "Denied by ..."; `applied: false` ends it "Not applied at <time>: the shell was no longer waiting for this question ...", and a non-boolean `applied` is a 400; no ack ends it "Sent to the shell at <time>, not confirmed; the shell denies by itself if it did not receive it." with a matching short reply (the sentence is true of an answer the shell never got, whose own question times out as a denial; an Allow received after the wait is still applied and the topic keeps saying not confirmed). The surface keeps an `awaiting` map and a bounded `decided` map: a repeated press during the wait does nothing, a stream end gives up on the wait at once, a late ack is a 200 with no change, and an unknown id or another session's id is a 404. On the shell side `client.ts` decides `applied` in `handleApprovalFrame`: a frame with a waiter in `waiters` is applied; one with none is parked in `earlyDecisions` for at most `earlyDecisionMs` (default 2 s, only because a frame can beat the response naming its id) and acked applied only when `requestApproval` consumes it, otherwise (timeout, stream end via `failApprovals`) as not applied. It acks every approval frame (a repeat is acked again with the recorded outcome, not resolved again), calls `onApprovalFrame({approvalId, decision, applied})` once per id before the ack (the bridge says "allowed from Telegram" only for an applied one), and counts frames whose ack has not returned ok (in flight, or failed in the last 60 seconds) as `unconfirmedApprovals`; the bridge reports it in `status()` and the TUI shows "Approvals not confirmed: N" and "<topic> · N unconfirmed". The shell's own wiring between its queue, session switches and turn stream and the bridge is `src/tui/remote-queue-wiring.ts`, tested in `remote-queue-wiring.test.ts`.
+ 
+ ### Authorization
+ 
+ `config.json` carries `allowedUserIds`. A message or button press from any other id is dropped; only the id and the time are journaled to `rejected.jsonl`, never the content. Updates from another chat, from the General topic or from an unbound topic are ignored.
+ 
+ ### Formatting
+ 
+ `format.ts` is the one place a reply is cut for Telegram. The limit is 4096 UTF-16 code units. A longer reply becomes numbered parts `(1/3)`, split at a line break, then a space, then (only for one unbroken run) at the limit; a fenced code block that crosses a cut is closed and reopened with its info string; a surrogate pair is never cut; blank text produces no message. No `parse_mode` is sent, so nothing is escaped. `OutboundQueue.enqueue` calls it, and the keyboard rides on the last part.
+ 
+ ### Limits and orphans
+ 
+ `orphanMs` (default 10 minutes): a session that stops heartbeating is announced in its topic, and the topic is archived (closing note, `closeForumTopic`, history stays readable) after the window; a heartbeat inside it cancels this. A clean exit (`deregister`) archives at once. Only channel Disconnect deletes topics. `runTimeoutMs` (default 30 minutes): a run started from Telegram is interrupted by the shell and the topic is told (`run-limits.ts`).
+ 
+ ### Session record (`remote` in the summary)
+ 
+ A session driven from a topic records `remote: { name, intervals: [{ on, off? }] }` in its summary (`src/session/store.ts`). `keryx sessions list` prints a `⇄ remote <topic>` line, `--json` carries the field, and the `keryx shell -r` picker marks the row `⇄ remote`.
+ 
+ ### Restoring the conversation into a topic (`/history`)
+ 
+-A topic is archived when the shell exits (still readable), and a resumed session gets a new, empty one. `history.ts` is the pure side: `qualifyingHistory` keeps the operator turns (`isOperatorMessage`) and the final assistant text of each turn (narration before a tool call, tool output and reasoning are dropped), `selectHistory` takes the last N (default 10, at most 20), and `formatHistoryItem` labels it `You:` or `Agent:`, cuts it at 1,500 characters and, before anything else, replaces a turn that looks like a credential (a Telegram bot token shape or a bare 32-character mixed-case-and-digit run, both of which the shared redactor misses) with a fixed placeholder; the shared redactor is left as it is. `shell-bridge.ts` (`postHistory`) sends each message through `client.reply` with `historyPaceMs` (2 s) between them, because the outbound queue does no pacing of its own and a 429 only holds the queue; a run is bound to the client it started on, stops at the next step when remote control goes off, and a second post to the same client is refused while one runs. While a turn is running (`host.turnRunning`) the newest assistant text is half written, since the agent loop appends to that message in place, so it is left out until the turn ends. `enable()` restores on its own only when this is the first enable of the process, `client.start()` reports a created topic (`reused: false`, the first registration's answer, never changed by a reconnect) and the session was resumed; turning remote control off and on again, a reconnect and a reused topic restore nothing, and a restore that does not happen says why in the transcript. `/history [N]` is the same code from the shell (a router `builtin`) and from the topic. The panel's `h` key runs it and the modal and the sidebar show the last post.
++A topic is archived when the shell exits (still readable), and a resumed session gets a new, empty one. `history.ts` is the pure side: `qualifyingHistory` keeps the operator turns (`isOperatorMessage`) and the final assistant text of each turn (narration before a tool call, tool output and reasoning are dropped), `selectHistory` takes the last N (default 10, at most 20), and `formatHistoryItem` labels it `You:` or `Agent:`, cuts it at 1,500 characters and, before anything else, replaces a turn that looks like a credential (a Telegram bot token shape or a bare 32-character mixed-case-and-digit run, both of which the shared redactor misses) with a fixed placeholder; the shared redactor is left as it is. `shell-bridge.ts` (`postHistory`) sends each message through `client.reply` with `historyPaceMs` (2 s) between them, because the outbound queue does no pacing of its own and a 429 only holds the queue; a run is bound to the client it started on, stops at the next step when remote control goes off, and a second post to the same client is refused while one runs. While a turn is running (`host.turnRunning`) the newest assistant text is half written, since the agent loop appends to that message in place, so it is left out until the turn ends. `enable()` restores on its own only when this is the first enable of the process, `client.start()` reports a created topic (`reused: false`, the first registration's answer, never changed by a reconnect) and the session was resumed; turning remote control off and on again, a reconnect and a reused topic restore nothing, and a restore that does not happen says why in the transcript. Run `/history [N]` in the Telegram topic, or press `h` in the shell's Remote Control panel to post the default ten messages. The panel and sidebar show the last post. In the full-screen shell, `/history` and `Ctrl+Shift+H` open the current session's searchable conversation.
+ 
+ ### Connecting from the shell (`/channels`)
+ 
+ `channels.ts` and `pairing.ts` in `src/remote/` are the serve side; `channels-client.ts` is the shell side and `src/tui/channels-surface.ts` the modal, sidebar row and readline text, all drawn from one snapshot. `serve` always mints the shell token on a loopback listener and answers seven `/v1/remote/channels-*` routes (`status`, `pair`, `pairing`, `cancel`, `reload`, `test`, `disconnect`), even with no config. The bot token never travels over HTTP: the shell writes `remote/bot-token` and `remote/config.json` itself (atomic, mode 600), then asks `serve` to reload without a restart. Pairing runs inside the single poller: a one-time code (10 minutes, single use) in a private message adds the sender to the allowlist, and the `my_chat_member` event of the bot being added to a group gives the group id, after which `serve` checks that it is a forum and the bot may manage topics. Test posts to General naming the host; Disconnect has `serve` delete every topic and stop, then the shell erases the files, or erases them alone and reports that topics remain when `serve` is down. One bot per machine.
+ 
+ ## Explicitly out of scope
+ 
+ - The serve `/v1/approvals` surface: an approval raised there has no Telegram card. The Allow/Deny buttons here belong to a mirrored shell session and travel over the shell-token routes.
+ - Telegram verification beyond the fake Bot API (topic creation, permissions, callbacks, the 409 case).
+
+--- CHANGELOG.md
+@@ 1,44 @@
+ # Changelog
+ 
+ ## [Unreleased]
+ 
++### Changed
++
++- **Review gate escapes need an operator act.** A `Not verified: N` line in report.md no longer passes unverified blocker or major findings, and a report first line saying the PR moved no longer passes readiness item `head`. Both need the operator's `--waive verifier` or `--waive head`. `review complete --head` with a head other than the recorded one needs `--head-reason "<operator quote>"`. A waiver now lifts only its own item's research errors. `review publish` runs the same close gates as `review complete`. [#1166](https://github.com/MrCipherSmith/keryx/pull/1166)
++- **Breaking for packages closed through the removed escapes.** A package that an earlier release closed on a `Not verified: N` line or a first-line head statement now reads NOT READY in `review readiness`, `status` and the panel, and `review publish` refuses it. Repair: the operator waives the item (`keryx review complete <package> --waive verifier|head "<their words>"`), or publish it with `--partial`. [#1166](https://github.com/MrCipherSmith/keryx/pull/1166)
++
++## [0.4.27] - 2026-11-13
++
++### Added
++
++- **Searchable Shell history.** Open the current session archive with `/history` or `Ctrl+Shift+H` in Agent and Chat Shell. Search as you type, use Find or Enter to jump, and move between matches with Up and Down. Readline mode prints the conversation with `/history`. [#1167](https://github.com/MrCipherSmith/keryx/pull/1167)
++- **Diagnostics for stalled tool calls.** The Shell records snapshots of stalled calls and their current stages. Use `/diag` to capture a snapshot on demand. [#1165](https://github.com/MrCipherSmith/keryx/pull/1165)
++
++### Changed
++
++- **Session resume and switching.** The Shell restores up to 20 visible messages from the last turn, including assistant replies, and preserves agent attribution in the archive. History loads in chunks as you scroll, and search runs asynchronously across the archive, including long messages. [#1167](https://github.com/MrCipherSmith/keryx/pull/1167)
++
++### Fixed
++
++- **Hub cancellation receipts.** If Session Host cannot prove that a turn stopped, the receipt reports `recovery-required`. [#1167](https://github.com/MrCipherSmith/keryx/pull/1167)
++
+ ## [0.4.26] - 2026-11-12
+ 
+ ### Fixed
+ 
+ - **Shell approval and draft recovery.** A command runs only after an explicit allow choice. Esc dismisses approval, and Enter defaults to denial. Esc in the busy recipient picker restores the draft without submitting it to Main or Side-1. [#1160](https://github.com/MrCipherSmith/keryx/pull/1160)
+ - **Session resume and switching.** Resumed sessions keep their full conversation and archive. Switching clears the previous transcript and usage, preserves pending input for explicit submission, and keeps delayed replies in their original session. [#1160](https://github.com/MrCipherSmith/keryx/pull/1160)
+ - **Escape interrupts active Agent and Chat turns.** The shell remains available for a follow-up. An open modal handles Escape before it reaches the active turn. [#1160](https://github.com/MrCipherSmith/keryx/pull/1160)
+ 
+ ### Verification
+ 
+ - CI runs the Hub recovery and unattended sandbox suites on Ubuntu 26.04 and fails if they are skipped. The Hub tests track the supervised shell across restarts, and the socket scan has its own deadline. [#1162](https://github.com/MrCipherSmith/keryx/pull/1162)
+ - The flow 487 journal records closure and links to the final terminal captures. [#1161](https://github.com/MrCipherSmith/keryx/pull/1161)
+ 
+ ## [0.4.25] - 2026-11-10
+ 
+ ### Fixed
+ - **Session token and cost totals in the shell footer and `/status` no longer inflate with every turn.** Usage events used to be counted once per earlier turn, so turn N was counted N times. A single usage sink is now installed once per shell and each turn attaches to it and detaches when the turn ends. The per-turn cost also no longer gets overwritten by an older turn.
+ 
+ ### Changed
+ - **The usage footer is coloured and drops the key hint.** Input tokens, output tokens and cost use distinct theme roles. While usage is shown, the `/ commands · Ctrl+C cancels a turn` hint is omitted; it still appears before the first turn.
+
+--- docs/docs/cli-reference.md
+@@ 1020,1087 @@
+   refused with a named reason when the capability is off — which is the default.
+   The child appears in the subagent sidebar with a `⤳` marker and opens a
+   **Work / Meta / Command** modal: the live transcript, the run's metadata, and
+   the exact launch argv plus how to continue the session by hand. Operator
+   messages to a running child use the same `/queue` semantics
+   (`remove`/`edit`/`force`); `force` here is kill-plus-resume, not an abort. See
+   [the harness page](./harness.md#external-children-a-vendor-cli-as-a-child-agent).
+ - `/remote-control [name|off|status]` mirrors this session into a topic of a
+   Telegram supergroup. **Off by default**, and it only works when `keryx serve`
+   has remote control configured (see
+   [serve](#remote-control-from-telegram)). `/remote-control <name>` creates the
+   topic (`on` lets `serve` pick `<project>-<short session id>`); `status`, or no
+   argument, prints the state — `off`, `on` or `offline` when `serve` is
+   unreachable — the topic, the last heartbeat and recent events; `off` removes the
+   topic. A line sent from the topic runs as if typed here, shown as `tg ❯` in the
+   transcript and `[tg]` in the queue panel. In the full-screen shell the sidebar
+   row and the `/remote-control` modal (key `o` toggles) show the same state; the
+   readline shell (`--no-tui`) can only print that it is off. Each time it is
+   turned on or off is recorded in the session's history (see
+   [sessions](#sessions)).
+-  `/history [N]` posts the last N messages of this session (1 to 20, default 10:
+-  what you typed and the agent's final answer of each turn, redacted, one message
+-  each) into the topic; typed in the shell, sent from the topic, or key `h` in the
+-  modal. A resumed session whose topic `/remote-control <name>` just created gets
++  In the Telegram topic, `/history [N]` posts the last N messages (1 to 20, default 10)
++  with one redacted message per prompt or final answer. In the remote-control
++  modal, press `h` to post the last 10. A resumed session whose topic `/remote-control <name>` just created gets
+   the last 10 by itself, once.
++
+   Slash commands typed in the topic run only if they are on a fixed list
+   (`/help` and the Telegram menu show it): text commands such as `/status`, `/new`
+   and `/clear` (same topic, one separator line), button pickers (`/model`,
+   `/connect`, `/resume`), and commands that ask first with a Yes/No button
+   (`/mode trust|auto`, `/plan off` (bare `/plan` shows the mode and does not ask),
+   and `/delegate`, `/external` and `/external-agents`, which name the agent and say
+   it is external and paid). The rest, for example `/mcp`, `/guard`, `/route`,
+   `/editguard`, `/channels`, `/schedule`, `/rewind`, `/conform`, `/ci`,
+   bare `/theme` and bare `/think`, stay local (they open a panel, form or picker in
+   the shell) and are refused in the topic with the reason. A command from the topic
+   never cancels the turn running in the shell; `/stop` in the topic ends the run
+   that topic started. A Telegram turn runs in `trust` by default, with the same
+   floors as a shell `trust` turn, and an approval question carries an `Always`
+   button (see `/permissions` and `/remote-policy`). The modal
+   has a Commands tab with the recent ones. Full list and rules:
+   [Drive keryx remotely](guides/drive-keryx-remotely.md#commands-from-the-topic).
++- `/history` in the local shell opens the current session conversation, including
++  archived messages. In the full-screen shell, `Ctrl+Shift+H` opens the same
++  window. Type to find text, click **Find** or press Enter to jump to the match,
++  and use ↑/↓ to move between matches across the archive. Use the mouse wheel
++  or Page Up/Page Down to load more of the conversation. Readline prints the
++  conversation as text. When you resume a session, the full-screen transcript
++  starts with previews of up to 20 messages from the most recent turn.
+ - `/channels [status]` connects Telegram to this machine, from any shell. The modal
+   lists Telegram: when it is not connected there is one button, Connect; when it is,
+   Test and Disconnect. Connect asks for the bot token (hidden, paste works, never in
+   the transcript, history or logs) and writes `remote/bot-token` and
+   `remote/config.json` itself, mode 600. It then shows a one-time code (valid 10
+   minutes, single use); the first private message to the bot carrying it adds that
+   sender to the allowlist. Add the bot to your group as an administrator with the
+   manage topics right and the group id is taken from that event; the modal says what
+   is missing (a group without topics, a bot without the right). Test sends one
+   message naming this machine to the General topic and shows delivered or the
+   reason. Disconnect asks `serve` to delete every topic and stop polling, then
+   erases the token and config; with `serve` down it erases the files and says the
+   existing topics stay in the group. The sidebar row reads `Telegram: off | pairing
+   | connected | serve down`; the readline shell (`--no-tui`) prints the state and
+   how to connect from the full-screen shell. `serve` offers these routes on
+   loopback whether or not Telegram is configured, and the bot token never goes in
+   a request. Use one bot per machine.
+ - `keryx shell` supports a hard stop for a running main turn via
+   `/interrupt`.
+ - Session history is durable during a turn: user input and tool results save
+
+--- docs/docs/commands-by-task.md
+@@ 47,87 @@
+ | `/model` | Switch the model. |
+ | `/models` | Pick a model for the current provider (numbered menu). |
+ | `/mode` | Show or switch the permission mode — /mode [ask\|trust\|auto]. Round limit: 40 rounds per turn, 200 in trust, 200 in auto and in automatic review; KERYX_AGENT_MAX_ROUNDS overrides. |
+ | `/think` | Expand the last reasoning block — /think [auto\|expand\|hide\|collapse]. |
+ | `/reasoning` | Show or set reasoning effort — /reasoning [off\|minimal\|low\|medium\|high\|xhigh\|max]. |
+ 
+ ## Working in keryx shell
+ 
+ | CLI command | Summary |
+ |---|---|
+ | `keryx sessions` | List or export per-project shell sessions. |
+ 
+ | Shell command | Summary |
+ |---|---|
+ | `/sessions` | Open the session list and switch to one. |
+ | `/resume` | Resume a prior session in this project. |
+ | `/new` | Start a new session (old kept on disk). |
+ | `/clear` | New session (alias of /new). |
+ | `/compact` | Compact model context — /compact [focus] (archive kept). |
+ | `/trail` | The tool calls this session recorded (what stays when older rounds leave the request) — /trail [count] [tool=NAME] [file=TEXT] [from=STEP] [to=STEP]. |
++| `/diag` | Dump the tool-call diagnostics (in-flight calls, stage ages, dock queue) to a file for a bug report — /diag. |
+ | `/notes` | The notes the model keeps for itself (the facts that survive older rounds) — /notes [key]. |
+ | `/rewind` | Roll back files and/or conversation to the start of an earlier turn — /rewind [N [files\|history\|both]]; snapshots cover the work tree only. |
+ | `/copy` | Copy the newest transcript block to the clipboard. |
+ | `/expand` | Expand the last tool output block. |
+ | `/status` | Show session identity, context window, limits, workspaces, and flows. |
+ | `/queue` | Manage the main queue — /queue <remove\|edit\|force> [N] (N = qN position, default 1). |
+ | `/tasks` | List supervised shell tasks — /tasks [output <task_id> [cursor] \| kill <task_id>]. |
+ | `/interrupt` | Interrupt the running main agent turn. |
+ | `/exit` | Leave the shell (/quit works too). |
+ | `/game` | Games against the model — /game [seconds] raises the model-turn deadline. |
+ 
+ ## Project knowledge
+ 
+ | CLI command | Summary |
+ |---|---|
+ | `keryx hub` | Connect, sync and exchange revisions with the Team Hub prototype. |
+ | `keryx gdgraph` | Build and query the code dependency graph. |
+ | `keryx ctx` | Run compact context commands and save raw output. |
+ | `keryx wiki` | Manage the local project knowledge base. |
+ | `keryx memory` | Store and search long-term project memory. |
+
+--- docs/docs/commands-by-task.md
+@@ 135,175 @@
+ | `keryx research` | Part 1 materials: sync refreshes the -latest counts, the text-free decisions export and the status page next to the catalog; no commit, only when the content changed. |
+ | `keryx product` | The product's intent as a derived index, and the intents closed in code that nobody looked back at. |
+ | `keryx hooks` | Keryx shell lifecycle hooks: list/validate/test, trust project hooks, enable/disable a registration. |
+ | `keryx learn` | Self-learning loop: observe, extract, review, accept/reject, apply, promote, graduate, prune. |
+ | `keryx remote` | Preview how Telegram replies are rendered (tables, lists, rules) in every mode, with no network: format-sample. |
+ 
+ | Shell command | Summary |
+ |---|---|
+ | `/triggers` | Declared triggers: last outcome, spend, reservations — run one now. |
+ | `/schedule` | Schedule a background agent task — shows a confirmation card first (keryx schedule add). |
+ | `/schedules` | Scheduled tasks: next run, last outcome, report — pause, resume, run now, delete. |
+ | `/autoreview` | Autonomous PR review with nobody at the keyboard: start, list, stop, arbiter — phase, rounds and tokens in the sidebar; arbiter lists what the question arbiter decided. |
+ | `/approvals` | Pending remote approvals with scope, consequence and expiry — allow or deny one call, once. |
+ | `/permissions` | The saved shell rules (what Always remembered): honoured or not, session grants — remove one. |
+ | `/external-diff` | External agent write runs awaiting review: patch and flagged paths — apply (typed hash prefix) or discard. |
+ | `/governance` | Flows with their summary and stated effect — check an open one, complete it once the check passes and the PR is merged; the last report in its own tab, or run one in the background. |
+ | `/decisions` | Recommendation journal report: match share by mode and stage, the deviations with their reasons, and your own answers and typed reasons in full (marked ✍ in the sidebar row), and the Telegram review cards waiting or answered (review_confirm_plan, review_decide_premise, review_waive_readiness, review_waive_coverage, review_complete). |
+ | `/product` | Intents closed in code that nobody looked back at, with their outcome criteria. |
+ | `/reviews` | Managed pull request reviews: findings by outcome, precision, resolved before merge. |
+ | `/remote-control` | Drive this session from a Telegram topic: send lines, get replies, answer approvals and questions (an option button, or "✍ Свой ответ" and a reply with your own text). Off by default; [name\|off\|status]. Also takes the review cards (review_confirm_plan, review_decide_premise, review_waive_readiness, review_waive_coverage, review_complete): each pending one shows with its age and the time left of its 1-hour token, and who pressed. To share this full-screen shell and its recent conversation with Team Hub, use /remote-control hub on\|off\|status. |
+-| `/history` | Post the last messages of this session to the Telegram topic, oldest first. [N], 1 to 20; 10 by default. |
++| `/history` | View the current session conversation. In the full-screen shell, open with Ctrl+Shift+H and search with ↑/↓ to navigate matches. |
+ | `/channels` | Connect, test or disconnect Telegram for this machine: bot token, one-time code, group. [status]. |
+ | `/intake` | GitHub work intake: cards that wait for your decision (take, decline, later), pause or resume the poll, poll by hand. [status\|list\|pause\|resume\|poll]. |
+ | `/rendering` | How Telegram replies are written: tables and lists as rich messages or HTML, with a fallback. [auto\|rich\|html\|plain]. |
+ | `/remote-policy` | Telegram defaults for a turn started there: mode ask\|trust, run limit, approval wait. Never changes the shell's /mode. |
+ 
+ ## External agents, ACP and MCP
+ 
+ | CLI command | Summary |
+ |---|---|
+ | `keryx acp` | Speak ACP v1 (newline-delimited JSON-RPC) over stdio, for an ACP client (e.g. an editor). |
+ | `keryx agents` | Manage optional global agent bootstrap instructions. |
+ | `keryx mcp` | Retired spelling of serve-mcp / integrate; still works, names its replacement. |
+ | `keryx integrate` | Wire this project into an editor or agent as an MCP server. |
+ | `keryx integrations` | Install, audit and uninstall Keryx's hooks and instructions in another coding agent (see also /integrate, unrelated). |
+ | `keryx herdr` | Register Keryx with the Herdr desktop app and herdr-core (opt-in install, remove, status). |
+ | `keryx serve-mcp` | Expose Metaproject services over the Model Context Protocol (opt-in). |
+ | `keryx bus` | Agent bus: list peers and leases, read the log, send a message, prune. |
+ | `keryx report` | One-way, unverified report from an outside agent or script to a live keryx shell over the bus. |
+ | `keryx workspace` | Shared Agent Context: workspaces, FWK reads, propose/review (module sac). |
+ 
+
+--- docs/docs/guides/drive-keryx-remotely.md
+@@ 543,585 @@
+ idle (a confirmation, where one is needed, is still asked first). The queued command
+ is dropped with a note if main stays busy too long, or quietly if remote control goes
+ off. When main is idle they run as soon as you press Yes. `/route` is on the menu:
+ bare `/route` shows the routing, `/route on` and `/route off` ask Yes / No first, and
+ any other argument is refused. `/mode` takes effect at once. A command that runs is answered with a
+ short notice if it takes a while. A command from the topic never cancels the turn
+ you are running in the shell: one that outlasts the limit is only no longer waited
+ for, the topic is told it is still running in the shell, and it is left alone; when it
+ ends, the topic is told how it ended and what it printed.
+ 
+ **`/new` and `/clear` keep the topic.** The topic stays bound to the running shell,
+ gets one separator line (`--- new session ---`), and the session history records
+ the change. No second topic is created and none is deleted. `/resume` offers the
+ earlier sessions as buttons and returns to the one you press
+ (`--- resumed session ---`). Typing `/new` in the shell still ends remote control
+ as before.
+ 
+ **History in the topic.** A topic is archived when the shell exits (see
+ [What happens when the shell closes](#what-happens-when-the-shell-closes)), so a session you resume
+ with `keryx shell --continue` gets a new, empty one. `/history [N]` posts the session's last
+-messages back, from the topic or from the shell (`N` is 1 to 20, and 10 when you give no
+-number). Each message is posted on its own, oldest first, with a `You:` or `Agent:` label, about
++messages back when sent from the Telegram topic (`N` is 1 to 20, and 10 when you give no
++number). In the shell, open `/remote-control` and press `h` to post the last 10 messages.
++Each message is posted on its own, oldest first, with a `You:` or `Agent:` label, about
+ two seconds apart so Telegram does not throttle the run; a message longer than 1,500 characters
+ is cut with `…`. The messages are what you typed and the agent's final answer of each turn: no
+ tool calls, no tool output, no reasoning and no narration written before a tool call. Anything
+ that looks like a secret is redacted first, as in every reply. A message that contains a Telegram
+ bot token or any long run of letters and digits that looks like a key is not posted at all: it
+ appears as `[сообщение скрыто: похоже на секрет]`, because the redactor can miss a token you pasted.
+ While a turn is running, the answer being written is left out; it appears once the turn ends.
+ 
+ When you resume a session and then turn remote control on, and `/remote-control <name>` creates
+ a new topic, the last 10 messages are posted by themselves, once, and the shell says so. That
+ is the only automatic case, and only the first time remote control is turned on in that shell: a
+ topic that already existed is never refilled, and turning remote control off and on again (that
+ makes a new, empty topic on purpose), a reconnect or a restart of `serve` post nothing. Anything
+ else is `/history`. If the automatic restore cannot run, the shell says why in the transcript. The
+ shell shows the last post in the `/remote-control` modal (key `h` posts it again, shows that it is
+ working and repaints when it is done, and shows an answer such as "remote control is off" in the
+ modal itself) and as a line under the Remote row of the sidebar. If Telegram refuses a message the run
+ stops there and says how far it got; sending `/history` again posts the whole set again, so a
+ topic can hold a message twice.
+ 
+
+--- docs/requirements/managed-review-feedback-loop/schemas/managed-review-package.schema.json
+@@ 247,297 @@
+       "description": "Written by `keryx review start|attach` (flow 458) beside round.json: the sha256 of round.json and prior_findings.json as written (slice, ledger build and complete refuse a package whose files no longer match), the target's normalised key (pr:<owner/repo>#<n>, branch:<name> or range:<base>) and the base ref its merge-base was read from, so a later round finds this one however the target is spelled.",
+       "properties": {
+         "roundSha256": {
+           "type": "string",
+           "pattern": "^[0-9a-f]{64}$"
+         },
+         "priorFindingsSha256": {
+           "type": "string",
+           "pattern": "^[0-9a-f]{64}$"
+         },
+         "targetKey": {
+           "type": "string",
+           "minLength": 1
+         },
+         "targetBase": {
+           "type": "string",
+           "minLength": 1
+         }
+       }
+     },
++    "seals": {
++      "type": "object",
++      "description": "Flow 488: sha256 digests keryx writes over what the close gates honour, when its own command path records it (review start/ingest for the target and applied verifications, review complete --waive / the review_waive_readiness card for each readiness waiver, review complete --head with --head-reason for the head override). A waiver, head or verification with no matching seal is not honoured: tamper evidence, not a signature.",
++      "additionalProperties": false,
++      "properties": {
++        "target": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
++        "headOverride": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
++        "readinessWaivers": { "type": "object", "additionalProperties": { "type": "string", "pattern": "^[0-9a-f]{64}$" } },
++        "verifications": { "type": "object", "additionalProperties": { "type": "string", "pattern": "^[0-9a-f]{64}$" } }
++      }
++    },
+     "head_override": {
+       "type": "object",
+       "description": "The operator's act of relabelling the reviewed head at `review complete --head`: the head recorded at review start, the head recorded instead, and the operator's own words.",
+       "additionalProperties": false,
+       "required": [
+         "from",
+         "to",
+         "operator_quote",
+         "time"
+       ],
+       "properties": {
+         "from": {
+           "type": "string",
+           "minLength": 1
+         },
+         "to": {
+           "type": "string",
+           "minLength": 1
+         },
+         "operator_quote": {
+
+--- package.json
+@@ 1,23 @@
+ {
+   "name": "@mrciphersmith/keryx",
+-  "version": "0.4.26",
++  "version": "0.4.27",
+   "description": "Version-controlled project context for AI coding agents: code graph, architecture wiki, project memory, relevant tests, quality signals, and task flows.",
+   "private": false,
+   "publishConfig": {
+     "access": "public"
+   },
+   "license": "MIT",
+   "type": "module",
+   "repository": {
+     "type": "git",
+     "url": "git+ssh://git@github.com/MrCipherSmith/keryx.git"
+   },
+   "keywords": [
+     "ai-agents",
+     "coding-agents",
+     "agent-harness",
+     "agent-context",
+     "repository-context",
+     "code-graph",
+     "project-memory",
+     "test-impact-analysis",
+
+--- package.json
+@@ 62,105 @@
+     "lint": "eslint .",
+     "build:hub-web": "bun scripts/build-hub-web.ts",
+     "check:hub-web": "bun run --cwd apps/hub-web typecheck && bun run --cwd apps/hub-web lint && bun run --cwd apps/hub-web test && bun scripts/build-hub-web.ts --check"
+   },
+   "files": [
+     "dist",
+     "docs/requirements/shared-agent-context/schemas",
+     "src/gdgraph",
+     "src/gdskills/bundled",
+     "src/gdskills/contracts",
+     "!src/**/*.test.ts",
+     "LICENSE",
+     "THIRD_PARTY_NOTICES.md",
+     "README.md",
+     "package.json"
+   ],
+   "overrides": {
+     "fast-uri": "^3.1.9",
+     "body-parser": "^2.4.0",
+     "ip-address": "^10.7.4",
+-    "hono": "^4.13.11",
++    "hono": "^4.13.18",
+     "qs": "^6.17.1",
+     "zod": "^4.6.6",
+-    "@hono/node-server": "^2.1.5",
++    "@hono/node-server": "^2.1.8",
+     "protobufjs": "7.6.6",
+     "sharp": "0.35.5",
+     "minimatch": "^11.0.1"
+   },
+   "dependencies": {},
+   "optionalDependencies": {
+     "@modelcontextprotocol/sdk": "1.32.1",
+     "@opentui/core": "^0.4.5",
+     "web-tree-sitter": "0.25.10"
+   },
+   "devDependencies": {
+     "@eslint/js": "^10.0.1",
+     "@types/bun": "latest",
+     "@xenova/transformers": "^2.17.2",
+     "bun-types": "latest",
+     "eslint": "^10.10.0",
+     "typescript": "^5.9.3",
+     "typescript-eslint": "^8.69.0"
+   },
+   "engines": {
+
+--- src/commands/agent-commands.test.ts
+@@ 35,75 @@
+     "/new",
+     "/goal",
+     "/resume",
+     "/sessions",
+     "/status",
+     "/flows",
+     "/doctor",
+     "/setup",
+     "/ac",
+     "/workspace",
+     "/review",
+     "/reviews",
+     "/remote-control",
+     "/history",
+     "/channels",
+     "/intake",
+     "/rendering",
+     "/remote-policy",
+     "/trail",
+     "/notes",
++    "/diag",
+     "/product",
+     "/governance",
+     "/triggers",
+     "/routing",
+     "/schedule",
+     "/schedules",
+     "/autoreview",
+     "/approvals",
+     "/permissions",
+     "/decisions",
+     "/integrate",
+     "/ci",
+     "/conform",
+     "/risk",
+     "/scenarios",
+     "/jevrules",
+     "/staledocs",
+     "/flow",
+     "/opencomments",
+     "/contract",
+
+--- src/commands/agent-commands.test.ts
+@@ 177,217 @@
+     "/new",
+     "/goal",
+     "/resume",
+     "/sessions",
+     "/status",
+     "/flows",
+     "/doctor",
+     "/setup",
+     "/ac",
+     "/workspace",
+     "/review",
+     "/reviews",
+     "/remote-control",
+     "/history",
+     "/channels",
+     "/intake",
+     "/rendering",
+     "/remote-policy",
+     "/trail",
+     "/notes",
++    "/diag",
+     "/product",
+     "/governance",
+     "/triggers",
+     "/routing",
+     "/schedule",
+     "/schedules",
+     "/autoreview",
+     "/approvals",
+     "/permissions",
+     "/decisions",
+     "/integrate",
+     "/ci",
+     "/conform",
+     "/risk",
+     "/scenarios",
+     "/jevrules",
+     "/staledocs",
+     "/flow",
+     "/opencomments",
+     "/contract",
+
+--- src/commands/agent-commands.test.ts
+@@ 239,279 @@
+     "/delegate",
+     "/tasks",
+     "/demote",
+     "/bus",
+     "/exit",
+   ]);
+ });
+ 
+ test("commandsForMode: chat gets its commands and none of the agent-only trio", () => {
+   const chat = commandsForMode("chat").map((c) => c.name);
+   expect(chat).toEqual([
+     "/help",
+     "/model",
+     "/models",
+     "/connect",
+     "/new",
+     "/status",
+     "/flows",
+     "/doctor",
+     "/setup",
++    "/history",
+     "/compact",
+     "/theme",
+     "/clear",
+     "/bus",
+     "/exit",
+   ]);
+   expect(chat).not.toContain("/think");
+   expect(chat).not.toContain("/expand");
+   expect(chat).not.toContain("/copy");
+ });
+ 
+ // Flow 273 (agent bus P2): /bus is a presence/messaging command, not a tool,
+ // so it is available in both modes exactly like /status and /flows above.
+ test("/bus is available in both modes", () => {
+   const bus = AGENT_SLASH_COMMANDS.find((c) => c.name === "/bus");
+   expect(bus?.modes).toEqual(["chat", "agent"]);
+   expect(findAgentCommand("/bus", "chat")?.name).toBe("/bus");
+   expect(findAgentCommand("/bus @release hi", "agent")?.name).toBe("/bus");
+ });
+ 
+
+--- src/commands/agent-commands.test.ts
+@@ 364,404 @@
+     "/new",
+     "/goal",
+     "/resume",
+     "/sessions",
+     "/status",
+     "/flows",
+     "/doctor",
+     "/setup",
+     "/ac",
+     "/workspace",
+     "/review",
+     "/reviews",
+     "/remote-control",
+     "/history",
+     "/channels",
+     "/intake",
+     "/rendering",
+     "/remote-policy",
+     "/trail",
+     "/notes",
++    "/diag",
+     "/product",
+     "/governance",
+     "/triggers",
+     "/routing",
+     "/schedule",
+     "/schedules",
+     "/autoreview",
+     "/approvals",
+     "/permissions",
+     "/decisions",
+     "/integrate",
+     "/ci",
+     "/conform",
+     "/risk",
+     "/scenarios",
+     "/jevrules",
+     "/staledocs",
+     "/flow",
+     "/opencomments",
+     "/contract",
+
+--- src/commands/agent-commands.test.ts
+@@ 422,462 @@
+     "/plan",
+     "/clear",
+     "/interrupt",
+     "/queue",
+     "/delegate",
+     "/tasks",
+     "/demote",
+     "/bus",
+     "/exit",
+   ]);
+   expect(filterCommands("/", "chat").map((c) => c.name)).toEqual([
+     "/help",
+     "/model",
+     "/models",
+     "/connect",
+     "/new",
+     "/status",
+     "/flows",
+     "/doctor",
+     "/setup",
++    "/history",
+     "/compact",
+     "/theme",
+     "/clear",
+     "/bus",
+     "/exit",
+   ]);
+ });
+ 
+ test("filterCommands: prefix narrows the set (agent)", () => {
+   expect(filterCommands("/h", "agent").map((c) => c.name)).toEqual(["/help", "/history"]);
+   expect(filterCommands("/c", "agent").map((c) => c.name)).toEqual([
+     "/connect",
+     "/copy",
+     "/channels",
+     "/ci",
+     "/conform",
+     "/contract",
+     "/compact",
+     "/clear",
+   ]);
+
+--- src/commands/operator-confirm-review-tools.test.ts
+@@ 718,765 @@
+     const t = tool("review_comments_reply", { replyPass: seam(["x"], calls, { changeOnPost: true }) });
+     const result = await yes(t, input);
+     expect(result.isError).toBe(true);
+     expect(result.output).toContain("changed after the card was shown");
+     expect(calls.some((call) => !call.dryRun)).toBe(false);
+   });
+ });
+ 
+ // Flow 464 (AC4): review_complete, the one card that closes a round.
+ describe("review_complete", () => {
+   const HEAD = "0123456789abcdef0123456789abcdef01234567";
+   const EVIDENCE = "Evidence level: static only — did not run: tests";
+ 
+   async function makeRound(over: { target?: { kind: "pr" | "report"; ref: string; head?: string }; report?: string; id?: string; findings?: Array<Record<string, unknown>> } = {}): Promise<string> {
+     mkdirSync(path.join(root, "docs", "requirements", "managed-review-feedback-loop", "schemas"), { recursive: true });
+     writeFileSync(path.join(root, "docs", "requirements", "managed-review-feedback-loop", "schemas", "managed-review-package.schema.json"), `{"type":"object"}`);
+     const created = await createManagedReviewPackage({
+       cwd: root,
+       mode: "ingest",
+       reviewId: over.id ?? "2026-10-15-complete",
+-      target: over.target ?? { kind: "report", ref: "review.md" },
++      target: over.target ?? { kind: "pr", ref: PR, head: HEAD },
+       reportText: over.report ?? `# Round\n\nNo findings.\n${EVIDENCE}\n`,
+       findings: (over.findings ?? []) as never,
+       now: NOW,
+     });
+     pkg = path.join(root, created.path);
+     put("research.json", { version: 1, scopeReviewed: true, rawReconciled: true, obligations: [], dispatch: READY_DISPATCH });
+     put("coverage.md", READY_COVERAGE_MD);
+-    if (over.target === undefined) put("manifest.json", { ...readJson("manifest.json"), target: { kind: "pr", ref: PR, head: HEAD } });
+     return pkg;
+   }
+ 
+   const status = (): string => readJson("manifest.json")["status"] as string;
+ 
+   test("the card shows the head SHA and the evidence level; with no waiver it says so; yes closes the round and records who pressed", async () => {
+     await makeRound();
+     const result = await yes(tool("review_complete"), { package: pkg }, "remote");
+     const text = result.card.join("\n");
+     expect(result.card[0]).toContain(`Complete review 2026-10-15-complete at ${HEAD.slice(0, 12)}?`);
+     expect(text).toContain(`reviewed head: ${HEAD}`);
+     expect(text).toContain(EVIDENCE);
+     expect(text).toContain("waivers: none");
+     expect(result.output).toContain("complete at 0123456789ab (remote-card");
+     expect(result.isError).toBe(false);
+     expect(status()).toBe("closed");
+     const record = readJson("completion-confirmation.json");
+     expect(record).toMatchObject({ confirmedVia: "remote-card", pressedBy: ALLOWED_ID, pressedAt: PRESSED_AT, head: HEAD, waivers: [] });
+   });
+ 
+
+--- src/commands/shell-preservation-signal.test.ts
+@@ 44,82 @@
+ 
+ test("handlers sharing one guard start a single shutdown; a later signal forces the exit", async () => {
+   const started: string[] = [];
+   const exits: number[] = [];
+   const guard = { startedAt: undefined as number | undefined };
+   const make = (code: number) => makeSignalShutdown({
+     guard, forceGraceMs: 0,
+     busBox: { current: undefined }, leaseBox: { current: {} as NonNullable<SignalShutdownParts["leaseBox"]["current"]> },
+     jobRegistryBox: { current: undefined },
+     preserve: () => { started.push(String(code)); return new Promise<void>(() => {}); },
+     releaseLease: () => { started.push("release"); }, closeMcp: async () => {},
+     closeReadline: () => {}, exit: (c) => { exits.push(c); },
+   }, code);
+   const sigint = make(130); const sigterm = make(143);
+   sigint();
+   expect(started).toEqual(["130"]);
+   sigterm();
+   expect(started).toEqual(["130", "release"]);
+   expect(exits).toEqual([143]);
+ });
++
++test("beforeAbort runs once, before the turn is aborted, and a throw never blocks the shutdown", async () => {
++  const order: string[] = [];
++  let done: (code: number) => void = () => {};
++  const exited = new Promise<number>((resolve) => { done = resolve; });
++  const shutdown = makeSignalShutdown({
++    guard: { startedAt: undefined },
++    busBox: { current: undefined }, leaseBox: { current: undefined },
++    jobRegistryBox: { current: undefined },
++    beforeAbort: () => { order.push("dump"); throw new Error("sink refused"); },
++    abortTurn: () => { order.push("abort"); },
++    releaseLease: () => {}, closeMcp: async () => {},
++    closeReadline: () => {}, exit: done,
++  }, 130);
++  shutdown(); shutdown();
++  expect(await exited).toBe(130);
++  expect(order).toEqual(["dump", "abort"]);
++});
++
+
+--- src/commands/shell-pty-launch.smoke.test.ts
+@@ 396,451 @@
+               terminal?.write("\r");
+               await waitFor("Enter send", switchFrame);
+               terminal?.write(draft);
+               await waitFor(draft, switchFrame);
+               const submitFrame = output.length;
+               terminal?.write("\r");
+               // A reply also wakes the wait so a misrouted prompt fails at the request assertion.
+               await waitFor(/Session switch in progress|Destination answer/, submitFrame);
+               expect(requests).toHaveLength(1);
+               expect(await readSlate(outgoingDir)).toEqual(slate);
+             } finally {
+               release.resolve();
+               await holding;
+             }
+           } else {
+             terminal?.write("\r");
+           }
+           await waitFor("Resumed", switchFrame);
+ 
+           if (check === "destination preview") {
+-            await waitFor("Destination history 206", switchFrame);
++            await waitFor("Destination history 207", switchFrame);
+             const preview = Buffer.concat(output.slice(switchFrame)).toString("utf8");
+-            expect(visibleText(preview)).toContain("Recent prompts");
++            expect(visibleText(preview)).toContain("Last turn");
++            expect(visibleText(preview)).toContain("Destination history 206");
++            expect(visibleText(preview)).not.toContain("Destination history 204");
++            const historyFrame = output.length;
++            terminal?.write("/history\r");
++            await waitFor("Session history", historyFrame);
++            terminal?.write("Archived before compaction");
++            await waitFor("1/1", historyFrame);
++            const shortcutFrame = output.length;
++            // CSI-u encodes Escape without the timeout for an incomplete sequence.
++            terminal?.write("\u001b[27u\u001b[104;6u");
++            await waitFor("Search history", shortcutFrame);
+             const expandFrame = output.length;
+-            terminal?.write("/expand\r");
++            terminal?.write("\u001b[27u/expand\r");
+             await waitFor("Nothing to expand", expandFrame);
+             terminal?.write("Hold an Agent stream\r");
+             await waitFor("Agent stream started", expandFrame);
+             const interruptFrame = output.length;
+             terminal?.write("\u001b");
+             await waitFor("interrupted (Esc)", interruptFrame);
+             await waitFor("worked for", interruptFrame);
+             terminal?.write("After interrupt\r");
+             await waitFor("Destination answer", interruptFrame);
+             return;
+           }
+           let destinationPrompt = "After switch";
+           if (check === "draft submitted during Slate preservation") {
+             expect(requests).toHaveLength(1);
+             // Editing the retained draft also distinguishes this submission from an automatic send.
+             const suffix = " now";
+             terminal?.write(`${suffix}\r`);
+             destinationPrompt = draft + suffix;
+           } else {
+             terminal?.write(`${destinationPrompt}\r`);
+
+--- src/commands/shell.test.ts
+@@ 333,396 @@
+     await expect(runShell(io, deps)).resolves.toBeUndefined();
+     expect(streamCalls.count).toBe(0);
+   });
+ 
+   test("runShell resolves cleanly on /quit", async () => {
+     const streamCalls = { count: 0 };
+     const io: ShellIO = { lines: linesFrom("/quit"), write: () => {} };
+     const deps: ShellDeps = {
+       makeProvider: () => countingProvider(streamCalls),
+       clock: fixedClock(),
+       idSeq: fixedIdSeq(),
+       initial: { provider: "fake", model: "fixture-model" },
+     };
+ 
+     await expect(runShell(io, deps)).resolves.toBeUndefined();
+     expect(streamCalls.count).toBe(0);
+   });
+ });
+ 
+ describe("AC2 — slash commands + provider_error resilience", () => {
+-  test("/clear resets history so the next turn's request carries only the new message", async () => {
++  test.each(["/clear", "/new"])("%s clears the conversation and model context in a nonpersistent session", async (command) => {
+     const turnA = textTranscript("a", ["Ok"]);
+     const turnB = textTranscript("b", ["Sure"]);
+     const { provider, captured } = capturingFakeProvider([turnA, turnB]);
+ 
++    const systemLines: string[] = [];
+     const io: ShellIO = {
+-      lines: linesFrom("First", "/clear", "Second", "/exit"),
++      lines: linesFrom("First", "/history", command, "/history", "Second", "/exit"),
+       write: () => {},
++      onSystem: (text) => systemLines.push(text),
+     };
+     const deps: ShellDeps = {
+       makeProvider: () => provider,
+       clock: fixedClock(),
+       idSeq: fixedIdSeq(),
+       initial: { provider: "fake", model: "fixture-model" },
+     };
+ 
+     await runShell(io, deps);
+ 
++    expect(systemLines).toHaveLength(2);
++    expect(systemLines[0]).toContain("You: First");
++    expect(systemLines[0]).toContain("Assistant: Ok");
++    expect(systemLines[1]).toBe("This session has no messages yet.\n");
+     expect(captured.length).toBe(2);
+     const secondReq = at(captured, 1);
+     expect(secondReq.messages.map((m) => m.content)).toEqual(["Second"]);
+   });
+ 
+   test("/model and /connect switch the active selection for subsequent turns", async () => {
+     const initialTurn = textTranscript("init", ["Hello!"]);
+     const { provider: initialProvider, captured: initialCaptured } = capturingFakeProvider([initialTurn]);
+     const switchedTurn = textTranscript("switched", ["Yo"]);
+     const { provider: switchedProvider, captured: switchedCaptured } = capturingFakeProvider([switchedTurn]);
+ 
+     const makeProviderCalls: Array<{ name: string; model: string; baseUrl?: string }> = [];
+     const makeProvider = (name: string, model: string, baseUrl?: string): ProviderPort => {
+       makeProviderCalls.push(baseUrl === undefined ? { name, model } : { name, model, baseUrl });
+       if (name === "ollama" && model === "llama3.2") {
+         return switchedProvider;
+       }
+       return initialProvider;
+     };
+ 

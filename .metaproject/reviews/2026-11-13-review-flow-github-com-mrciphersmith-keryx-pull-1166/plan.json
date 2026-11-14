@@ -1,0 +1,413 @@
+{
+  "v": 1,
+  "package": "/Users/tsaitler.aleksandr/goodea/keryx/.claude/worktrees/review-process-audit/.metaproject/reviews/2026-11-13-review-flow-github-com-mrciphersmith-keryx-pull-1166",
+  "target": {
+    "kind": "pr",
+    "ref": "https://github.com/MrCipherSmith/keryx/pull/1166",
+    "base": "e9ac9253fde7",
+    "head": "b076a85a6354e6c9bf582cdb61fcdc3b5f9f5b98"
+  },
+  "round": {
+    "number": 2,
+    "mode": "delta",
+    "source": "local-package",
+    "previous": "2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166",
+    "range": {
+      "base": "e9ac9253fde7",
+      "head": "b076a85a6354e6c9bf582cdb61fcdc3b5f9f5b98"
+    },
+    "fixHunks": 9,
+    "newHunks": 775,
+    "priorFindings": 35,
+    "carried": 23,
+    "line": "round 2 (source: local-package; previous 2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166 at e9ac9253fde7; delta e9ac9253fde7..b076a85a6354)"
+  },
+  "slices": {
+    "fix": [
+      {
+        "id": "slice-01",
+        "files": [
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+          "src/commands/review.ts",
+          "src/gdskills/bundled/rules/core/model-selection.mdc",
+          "src/harness/tool/builtin/spawn-subagent-tool.ts",
+          "src/review/close-gates.ts",
+          "src/review/readiness.ts",
+          "src/review/complete-head-gate.test.ts",
+          "src/review/readiness.test.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-core-boundaries",
+          "review-degradation",
+          "review-logic",
+          "review-regression",
+          "review-security-code",
+          "review-style",
+          "review-testing-practices"
+        ],
+        "findingIds": [
+          "review-architecture-w1:F-001",
+          "review-architecture-w2:F-004",
+          "review-architecture-w3:ARCH-1",
+          "review-degradation-w2:F-001",
+          "review-degradation-w2:F-002",
+          "review-degradation-w2:F-003",
+          "review-logic-w2:F-001",
+          "review-logic-w3:F-002",
+          "review-logic-w4:F-001",
+          "review-security-code-w3:SEC-1",
+          "review-testing-practices-w1:F-001",
+          "review-testing-practices-w2:TP-2"
+        ]
+      }
+    ],
+    "new": [
+      {
+        "id": "slice-02",
+        "files": [
+          ".metaproject/data/gdgraph/.provenance.json",
+          ".metaproject/data/gdgraph/artifacts/module-map.json",
+          ".metaproject/data/testing/context.json",
+          ".metaproject/flows/487-2026-11-12-spawn-subagent-parent-call-never-returns/flow.json",
+          ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/flow.json",
+          ".metaproject/flows/490-2026-11-12-review-audit-p2-architecture/flow.json",
+          ".metaproject/rules/core/model-selection.mdc",
+          ".metaproject/data/gdgraph/artifacts/summary.md",
+          ".metaproject/data/testing/context.md",
+          ".metaproject/data/testing/recommendations.md",
+          ".metaproject/flows/487-2026-11-12-spawn-subagent-parent-call-never-returns/acceptance-criteria.md",
+          ".metaproject/flows/487-2026-11-12-spawn-subagent-parent-call-never-returns/context.md",
+          ".metaproject/flows/487-2026-11-12-spawn-subagent-parent-call-never-returns/description.md",
+          ".metaproject/flows/487-2026-11-12-spawn-subagent-parent-call-never-returns/journal.md",
+          ".metaproject/flows/487-2026-11-12-spawn-subagent-parent-call-never-returns/plan.md",
+          ".metaproject/flows/487-2026-11-12-spawn-subagent-parent-call-never-returns/tasks.md",
+          ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/acceptance-criteria.md",
+          ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/journal.md",
+          ".metaproject/flows/490-2026-11-12-review-audit-p2-architecture/journal.md",
+          ".metaproject/memory/review-notes/2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166__review-security-code-w2-F-001.md",
+          ".metaproject/wiki/architecture/remote-control.md",
+          "CHANGELOG.md",
+          "docs/docs/cli-reference.md",
+          "docs/docs/commands-by-task.md",
+          "docs/docs/guides/drive-keryx-remotely.md",
+          "docs/requirements/managed-review-feedback-loop/schemas/managed-review-package.schema.json",
+          "package.json",
+          "src/commands/agent-commands.test.ts",
+          "src/commands/operator-confirm-review-tools.test.ts",
+          "src/commands/shell-preservation-signal.test.ts",
+          "src/commands/shell-pty-launch.smoke.test.ts",
+          "src/commands/shell.test.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-backend",
+          "review-clean-code",
+          "review-core-boundaries",
+          "review-degradation",
+          "review-frontend",
+          "review-highload",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style",
+          "review-testing-practices"
+        ]
+      },
+      {
+        "id": "slice-03",
+        "files": [
+          "src/commands/agent-commands.ts",
+          "src/commands/agent.ts",
+          "src/commands/call-watchdog.ts",
+          "src/commands/shell-types.ts",
+          "src/commands/shell.ts",
+          "src/flow/verify-exec-files.test.ts",
+          "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+          "src/harness/tool/builtin/spawn-subagent-parallel-hang.test.ts",
+          "src/harness/tool/builtin/spawn-subagent-tool.ts",
+          "src/lib/call-diagnostics.test.ts",
+          "src/lib/hub-machine/bridge.approvals.network.test.ts",
+          "src/lib/call-diagnostics.ts",
+          "src/lib/phase-trace.ts",
+          "src/remote/history-host.test.ts",
+          "src/remote/topic-history.test.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-backend",
+          "review-clean-code",
+          "review-degradation",
+          "review-frontend",
+          "review-highload",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style",
+          "review-testing-practices"
+        ]
+      },
+      {
+        "id": "slice-04",
+        "files": [
+          "src/review/close-gates.test-helpers.ts",
+          "src/review/close-gates.ts",
+          "src/review/managed.ts",
+          "src/review/readiness.ts",
+          "src/review/research.ts",
+          "src/review/round-record.ts",
+          "src/review/seals.ts",
+          "src/review/types.ts",
+          "src/review/complete-head-gate.test.ts",
+          "src/review/complete-head-relabel.test.ts",
+          "src/review/complete-waiver-scope.test.ts",
+          "src/review/publish-gate-parity.test.ts",
+          "src/review/publish.test.ts",
+          "src/review/readiness-verifier-waiver.test.ts",
+          "src/review/readiness.test.ts",
+          "src/review/round-trip.test.ts",
+          "src/review/seals.test.ts",
+          "src/session/commands/catalogue.ts",
+          "src/session/commands/coverage.ts",
+          "src/session/host.ts",
+          "src/standard/help-groups.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-backend",
+          "review-clean-code",
+          "review-degradation",
+          "review-frontend",
+          "review-highload",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style",
+          "review-testing-practices"
+        ]
+      },
+      {
+        "id": "slice-05",
+        "files": [
+          "src/tui/busy-dispatch.test.ts",
+          "src/tui/chat-shell.test.ts",
+          "src/tui/composer-choice.test.ts",
+          "src/tui/conversation-history.test.ts",
+          "src/tui/diag-command.test.ts",
+          "src/tui/hc-message.test.ts",
+          "src/tui/history-modal.test.ts",
+          "src/tui/history-reader.test.ts",
+          "src/tui/remote-control-surface.test.ts",
+          "src/tui/busy-dispatch.ts",
+          "src/tui/chat-shell.ts",
+          "src/tui/composer-choice.ts",
+          "src/tui/conversation-history.ts",
+          "src/tui/diag-command.ts",
+          "src/tui/history-modal.ts",
+          "src/tui/history-reader.ts",
+          "src/tui/modal-host.ts",
+          "src/tui/remote-control-surface.ts",
+          "src/tui/tui-shell.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-backend",
+          "review-clean-code",
+          "review-degradation",
+          "review-frontend",
+          "review-highload",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style",
+          "review-testing-practices"
+        ]
+      },
+      {
+        "id": "slice-06",
+        "files": [
+          ".metaproject/data/gdgraph/.provenance.json",
+          ".metaproject/data/testing/context.json",
+          ".metaproject/data/gdgraph/artifacts/summary.md",
+          ".metaproject/data/testing/context.md",
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+          "src/commands/review.ts",
+          "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+          "src/review/complete-head-gate.test.ts",
+          "src/review/complete-head-gate.ts",
+          "src/review/managed.ts",
+          "src/review/publish.ts",
+          "src/review/readiness.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-backend",
+          "review-clean-code",
+          "review-degradation",
+          "review-frontend",
+          "review-highload",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style",
+          "review-testing-practices"
+        ]
+      }
+    ],
+    "secondLook": [
+      {
+        "id": "slice-07",
+        "files": [
+          ".metaproject/data/gdgraph/.provenance.json",
+          ".metaproject/data/testing/context.json",
+          ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/flow.json",
+          ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/premise/1.json",
+          ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/premise/input.json",
+          ".metaproject/flows/489-2026-11-12-review-audit-p1-signal-cost/flow.json",
+          ".metaproject/flows/490-2026-11-12-review-audit-p2-architecture/flow.json",
+          ".metaproject/flows/491-2026-11-12-review-audit-p3-product/flow.json"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-logic",
+          "review-security-code"
+        ]
+      },
+      {
+        "id": "slice-08",
+        "files": [
+          ".metaproject/data/gdgraph/artifacts/summary.md",
+          ".metaproject/data/testing/context.md",
+          ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/acceptance-criteria.md",
+          ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/context.md",
+          ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/description.md",
+          ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/journal.md",
+          ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/plan.md",
+          ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/tasks.md",
+          ".metaproject/flows/489-2026-11-12-review-audit-p1-signal-cost/acceptance-criteria.md",
+          ".metaproject/flows/489-2026-11-12-review-audit-p1-signal-cost/context.md",
+          ".metaproject/flows/489-2026-11-12-review-audit-p1-signal-cost/description.md",
+          ".metaproject/flows/489-2026-11-12-review-audit-p1-signal-cost/journal.md",
+          ".metaproject/flows/489-2026-11-12-review-audit-p1-signal-cost/plan.md",
+          ".metaproject/flows/489-2026-11-12-review-audit-p1-signal-cost/tasks.md",
+          ".metaproject/flows/490-2026-11-12-review-audit-p2-architecture/acceptance-criteria.md",
+          ".metaproject/flows/490-2026-11-12-review-audit-p2-architecture/context.md",
+          ".metaproject/flows/490-2026-11-12-review-audit-p2-architecture/description.md",
+          ".metaproject/flows/490-2026-11-12-review-audit-p2-architecture/journal.md",
+          ".metaproject/flows/490-2026-11-12-review-audit-p2-architecture/plan.md",
+          ".metaproject/flows/490-2026-11-12-review-audit-p2-architecture/tasks.md",
+          ".metaproject/flows/491-2026-11-12-review-audit-p3-product/acceptance-criteria.md",
+          ".metaproject/flows/491-2026-11-12-review-audit-p3-product/context.md",
+          ".metaproject/flows/491-2026-11-12-review-audit-p3-product/description.md",
+          ".metaproject/flows/491-2026-11-12-review-audit-p3-product/journal.md",
+          ".metaproject/flows/491-2026-11-12-review-audit-p3-product/plan.md",
+          ".metaproject/flows/491-2026-11-12-review-audit-p3-product/tasks.md",
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+          ".metaproject/skills/gdskills/review/review-orchestrator/templates/review-report.md"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-logic",
+          "review-security-code"
+        ]
+      },
+      {
+        "id": "slice-09",
+        "files": [
+          "docs/analysis/review-process-audit-2026-11-12.md",
+          "docs/docs/cli-reference.md",
+          "docs/docs/guides/review-with-a-record.md",
+          "docs/requirements/managed-review-feedback-loop/schemas/managed-review-package.schema.json",
+          "src/commands/review.test.ts",
+          "src/commands/review.ts",
+          "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+          "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+          "src/gdskills/bundled/skills/review/review-orchestrator/templates/review-report.md",
+          "src/gdskills/review-spawn-field-contract.test.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-logic",
+          "review-security-code"
+        ]
+      },
+      {
+        "id": "slice-10",
+        "files": [
+          "src/review/close-gates.test-helpers.ts",
+          "src/review/close-gates.ts",
+          "src/review/complete-head-gate.ts",
+          "src/review/completion-host.ts",
+          "src/review/managed.ts",
+          "src/review/publish.ts",
+          "src/review/readiness.ts",
+          "src/review/research.ts",
+          "src/review/types.ts",
+          "src/review/complete-head-gate.test.ts",
+          "src/review/complete-head-relabel.test.ts",
+          "src/review/complete-waiver-scope.test.ts",
+          "src/review/managed.test.ts",
+          "src/review/publish-gate-parity.test.ts",
+          "src/review/publish.test.ts",
+          "src/review/readiness-verifier-waiver.test.ts",
+          "src/review/readiness.test.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-logic",
+          "review-security-code"
+        ]
+      }
+    ]
+  },
+  "roster": [
+    "review-architecture",
+    "review-core-boundaries",
+    "review-degradation",
+    "review-highload",
+    "review-logic",
+    "review-performance",
+    "review-regression",
+    "review-security-code",
+    "review-style",
+    "review-testing-practices"
+  ],
+  "dispatches": 62,
+  "minutes": {
+    "min": 32,
+    "max": 80
+  },
+  "split": {
+    "fix": {
+      "slices": 1,
+      "dispatches": 8
+    },
+    "new": {
+      "slices": 5,
+      "dispatches": 46
+    },
+    "secondLook": {
+      "slices": 4,
+      "dispatches": 8
+    }
+  },
+  "overThreshold": true,
+  "overReasons": [
+    "62 dispatches > 40"
+  ],
+  "planKey": "7bed077d27606a2b",
+  "warnings": [],
+  "next": "confirm plan (card review_confirm_plan / keryx review confirm-plan)"
+}

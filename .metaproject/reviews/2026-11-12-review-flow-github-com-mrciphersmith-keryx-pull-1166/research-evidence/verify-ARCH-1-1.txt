@@ -1,0 +1,23 @@
+# keryx review verify-run
+finding: ARCH-1
+command: bun test ./.metaproject/reviews/2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166/research-evidence/arch1-probe.test.ts --timeout 30000
+cwd: /Users/tsaitler.aleksandr/goodea/keryx/.claude/worktrees/review-process-audit
+time: 2026-11-12T12:29:23.773Z
+exit: 0
+
+--- stdout ---
+bun test v1.4.4 (38afee6c8)
+complete refused: Cannot complete managed review; invalid research artifact locator
+manifest.status after refusal: draft
+publish (no --partial): posted=true partial=false readiness=READY posts=1
+complete refused: Cannot complete managed review; research.json records a reviewer dispatch but manifest.json does not declare it: restore artifacts.reviewerDispatch "research.json"
+manifest.status after refusal: draft
+publish (no --partial): posted=true partial=false readiness=READY posts=1
+--- stderr ---
+
+.metaproject/reviews/2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166/research-evidence/arch1-probe.test.ts:
+
+ 2 pass
+ 0 fail
+ 8 expect() calls
+Ran 2 tests across 1 file. [234.00ms]

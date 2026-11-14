@@ -1,0 +1,55 @@
+STATUS: DONE
+
+```json REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-testing-practices",
+  "slices": ["slice-02"],
+  "summary": "slice-02 holds almost no PR-owned test code: generated gdgraph/testing artifacts, flow journals, CHANGELOG, package.json, the managed-review-package schema (new `seals` property), a review-note, a model-selection.mdc paragraph, and one test edit (operator-confirm-review-tools.test.ts makeRound). The merged-from-main files named in the task were not reviewed. The mutation pass was NOT run: this dispatch allows only git log/show/blame and keryx ctx rg, and no run-tests tool, so no suite could be executed and no mutation result is reported. The test edit is sound: makeRound now builds the PR target (kind pr, ref PR, head HEAD) through createManagedReviewPackage, so the target is sealed at ingest (managed.ts:521), and the former post-hoc rewrite of manifest.json, which the seals would now treat as tampering, is gone. No finding. mutant_candidates are proposed below for the changed branches the slice touches (0 mutated, 5 proposed, 5 not reached).",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "mutation_pass": {
+    "ran": false,
+    "reason": "no run-tests tool in this dispatch; read-only git and keryx ctx rg only",
+    "mutated": 0,
+    "not_reached": 5
+  },
+  "mutant_candidates": [
+    {
+      "id": "mc-seals-target-at-ingest",
+      "file": "src/review/managed.ts",
+      "anchor": "manifest.seals = { ...withVerificationSeals(undefined, applied), target: sealTarget(manifest.target) };",
+      "replacement": "manifest.seals = { ...withVerificationSeals(undefined, applied) };",
+      "kind": "behavior"
+    },
+    {
+      "id": "mc-seals-legacy-package-gate",
+      "file": "src/review/managed.ts",
+      "anchor": "const seals = stored.seals !== undefined || options.head !== undefined",
+      "replacement": "const seals = stored.seals !== undefined",
+      "kind": "behavior"
+    },
+    {
+      "id": "mc-seals-head-override-seal",
+      "file": "src/review/managed.ts",
+      "anchor": "...(headOverride === undefined ? {} : { headOverride: sealHeadOverride(headOverride) })",
+      "replacement": "...{}",
+      "kind": "behavior"
+    },
+    {
+      "id": "mc-seals-target-refresh-on-close",
+      "file": "src/review/managed.ts",
+      "anchor": "{ ...(manifest.seals ?? {}), target: sealTarget(manifest.target), ",
+      "replacement": "{ ...(manifest.seals ?? {}), ",
+      "kind": "behavior"
+    },
+    {
+      "id": "mc-close-gates-seal-problems",
+      "file": "src/review/close-gates.ts",
+      "anchor": "import { partitionWaivers, sealProblems } from \"./seals\";",
+      "replacement": "import { partitionWaivers } from \"./seals\"; const sealProblems = (..._a: unknown[]): string[] => [];",
+      "kind": "behavior"
+    }
+  ]
+}
+```

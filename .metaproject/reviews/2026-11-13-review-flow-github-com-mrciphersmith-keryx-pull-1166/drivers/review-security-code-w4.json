@@ -1,0 +1,17 @@
+{
+  "reviewer": "review-security-code",
+  "wave": 4,
+  "waves": 10,
+  "slices": [
+    "slice-09"
+  ],
+  "slicePaths": [
+    {
+      "id": "slice-09",
+      "path": "/Users/tsaitler.aleksandr/goodea/keryx/.claude/worktrees/review-process-audit/.metaproject/reviews/2026-11-13-review-flow-github-com-mrciphersmith-keryx-pull-1166/slices/slice-09.diff",
+      "bytes": 108441
+    }
+  ],
+  "result": "raw/review-security-code-w4.txt",
+  "definition": ".metaproject/skills/gdskills/review/review-security-code/SKILL.md"
+}

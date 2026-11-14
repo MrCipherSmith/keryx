@@ -1,0 +1,62 @@
+{
+  "status": "DONE",
+  "verifier": "review-verifier",
+  "summary": "9 blocker/major findings, 9 executed, 9 confirmed. Three mechanisms: (A) a waiver on a seal-less package writes seals without a target seal and sealProblems then refuses the untouched target (5 findings); (B) deleting `seals` turns the target check off, so a rewritten target.head passes (2 findings); (C) item verifier selects heavy findings by the unsealed findings.json severity (1 finding); plus degradation-w1 F-001, the pre-seal break wider than the accepted one.",
+  "verifications": [
+    {
+      "finding": "review-logic-w8:LOGIC-1",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/verify-seals-r2-1.txt: keryx review verify-run --finding seals-r2 -- bun test seals-r2-probe (source kept as seals-r2-probe.test.ts.txt) -> 4 pass. A seal-less PR-bound manifest passes sealProblems ([]). The manifest readiness.ts:613 writes for it (seals = {...(undefined ?? {}), readinessWaivers}) yields one problem: 'manifest.json target (head b076a85a6354) does not match the seal keryx wrote when it last recorded the target' although the target was never edited. Cause: seals.ts:87 keys the target check on `manifest.seals !== undefined`, not on `seals.target`."
+    },
+    {
+      "finding": "review-logic-w10:F-001",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Same mechanism and evidence as review-logic-w8:LOGIC-1: research-evidence/verify-seals-r2-1.txt, test 'readiness.ts:613 writes seals = { readinessWaivers } on a seal-less manifest; sealProblems then refuses the untouched target' passes with one false tamper problem."
+    },
+    {
+      "finding": "review-degradation-w2:F-001",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Same mechanism as review-logic-w8:LOGIC-1 (research-evidence/verify-seals-r2-1.txt). The CHANGELOG repair this finding cites (`review complete <package> --waive ...`) is the readiness.ts:613 write path the probe reproduces; afterwards sealProblems refuses complete and publish of the PR-bound package."
+    },
+    {
+      "finding": "review-degradation-w4:F-001",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Same mechanism as review-logic-w8:LOGIC-1 (research-evidence/verify-seals-r2-1.txt): a waiver recorded the supported way on a seal-less package makes sealProblems report a target edit that never happened."
+    },
+    {
+      "finding": "review-regression-w4:F-001",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Same mechanism as review-logic-w8:LOGIC-1 (research-evidence/verify-seals-r2-1.txt). managed.ts:1148 seals the target at close only when `stored.seals !== undefined || options.head !== undefined`, so the first close after the waiver does not repair it."
+    },
+    {
+      "finding": "review-security-code-w8:SEC-1",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/verify-seals-r2-1.txt (seals-r2-probe.test.ts.txt), cluster B: control - a sealed manifest with target.head rewritten gets 1 problem; the same rewrite with `seals` deleted gets [] from sealProblems. seals.ts:87 skips the target check whenever `manifest.seals` is absent, so deleting the key is an unsealed head relabel. The flow 488 journal already lists 'a package with no seals keeps its target unchecked' as a known gap; this confirms it is reachable by an edit of manifest.json alone."
+    },
+    {
+      "finding": "review-security-code-w1:SEC-R2-1",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Same mechanism and evidence as review-security-code-w8:SEC-1: research-evidence/verify-seals-r2-1.txt, test 'the same rewrite with `seals` deleted passes sealProblems' -> B problems: []."
+    },
+    {
+      "finding": "review-security-code-w8:SEC-2",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/verify-sev-and-legacy-r2-1.txt: keryx review verify-run --finding sev-and-legacy-r2 -- bun test sev-and-legacy-r2-probe (source kept as sev-and-legacy-r2-probe.test.ts.txt) -> 3 pass. On an ingested ready package (close-gates.test-helpers ingestReady), computeReadiness item verifier: unverified major -> fail '1 of 1 blocker/major finding(s) carry no verification keryx recorded'; the same finding with findings.json severity edited to minor -> pass '0 blocker/major finding(s), all verified'. readiness.ts:238 filters heavy findings by the unsealed severity string."
+    },
+    {
+      "finding": "review-degradation-w1:F-001",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/verify-sev-and-legacy-r2-1.txt, test 'degradation-w1 F-001': a finding carrying a verification in the producer's shape (verdict, method, evidence, verifier) on a package whose manifest has no `seals` -> item verifier fails: 'findings.json holds f-1 (a verification keryx did not record ...), which is not honoured'. So a package closed before this release with a real verifier result reads NOT READY too, not only one closed through the removed `Not verified` / first-line escapes the operator accepted (review-logic-w4:F-001). Whether that wider break is acceptable is a scope question for the premise judge, not a verification question."
+    }
+  ],
+  "stats": { "confirmed": 9, "refuted": 0, "unverifiable": 0, "not_checked": 0 }
+}

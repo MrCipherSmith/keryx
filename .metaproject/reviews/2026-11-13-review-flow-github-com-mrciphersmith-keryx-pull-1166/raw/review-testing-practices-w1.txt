@@ -1,0 +1,56 @@
+STATUS: DONE
+
+```json REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-testing-practices",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "src/review/close-gates.ts",
+      "line": 53,
+      "quote": "const closedPublish = input.action === \"publish\" && manifest.status === \"closed\";",
+      "evidence": "The closedPublish branch (publish of a closed package skips the live coverage gate: packageResearchErrorsTagged(..., { coverage: false })) has no test I could find that publishes a closed package with a coverage error pending; publish-gate-parity.test.ts has no 'closed' match and the --partial/relax cases do not reach it. This is read-only evidence: the mutation pass was not run (this round allows no test execution), so the survival of a deletion is a prediction, not a result.",
+      "impact": "If the branch is dropped, publishing a package already closed would be re-held to the live coverage gate; nothing would fail in the suite if so. Not verified by execution.",
+      "suggested_fix": "Add one publish-gate-parity case: a closed package whose coverage input has since changed still publishes; and a non-closed one with the same input is refused. Then run it with the branch deleted.",
+      "confidence": "low"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "review-architecture-w1:F-001", "disposition": "closed" },
+    { "id": "review-logic-w2:F-001", "disposition": "closed" },
+    { "id": "review-degradation-w2:F-001", "disposition": "closed" },
+    { "id": "review-logic-w3:F-002", "disposition": "closed" },
+    { "id": "review-degradation-w2:F-003", "disposition": "closed" },
+    { "id": "review-architecture-w2:F-004", "disposition": "closed" },
+    { "id": "review-degradation-w2:F-002", "disposition": "closed" },
+    { "id": "review-architecture-w3:ARCH-1", "disposition": "closed" },
+    { "id": "review-testing-practices-w1:F-001", "disposition": "closed" },
+    { "id": "review-testing-practices-w2:TP-2", "disposition": "closed" },
+    { "id": "review-logic-w4:F-001", "disposition": "partial" },
+    { "id": "review-security-code-w3:SEC-1", "disposition": "closed" }
+  ],
+  "mutation_pass": {
+    "ran": false,
+    "reason": "Round brief permits only read-only git history and keryx ctx rg; no test command may run. Table is empty: 0 mutants executed, all candidates below not reached.",
+    "table": []
+  },
+  "mutant_candidates": [
+    { "id": "mc-01", "file": "src/review/close-gates.ts", "anchor": "if (research.length > 0) throw new Error(`${REFUSAL} ${research.join(\"; \")}`);", "replacement": "", "kind": "behavior" },
+    { "id": "mc-02", "file": "src/review/close-gates.ts", "anchor": "error.items.length === 0 || (input.relaxReadiness !== true && !error.items.some((item) => waived.has(item)))", "replacement": "(input.relaxReadiness !== true && !error.items.some((item) => waived.has(item)))", "kind": "behavior" },
+    { "id": "mc-03", "file": "src/review/close-gates.ts", "anchor": "closedPublish ? { coverage: false } : {}", "replacement": "{}", "kind": "behavior" },
+    { "id": "mc-04", "file": "src/review/close-gates.ts", "anchor": "partitionWaivers(manifest).sealed.map", "replacement": "(manifest.readiness_waivers ?? []).map", "kind": "behavior" },
+    { "id": "mc-05", "file": "src/review/seals.ts", "anchor": "if (!filled(verification.verdict) || !filled(verification.method) || !filled(verification.evidence)) return \"a verification without verdict, method and evidence\";", "replacement": "", "kind": "behavior" },
+    { "id": "mc-06", "file": "src/review/seals.ts", "anchor": "if (manifest.seals?.verifications?.[key] !== sealVerification(key, finding.verification)) return", "replacement": "if (false) return", "kind": "behavior" },
+    { "id": "mc-07", "file": "src/review/readiness.ts", "anchor": "const { sealed, unsealed } = partitionWaivers(manifest);\n  const waivers = new Map(sealed.map", "replacement": "const { sealed, unsealed } = { sealed: manifest.readiness_waivers ?? [], unsealed: [] };\n  const waivers = new Map(sealed.map", "kind": "behavior" },
+    { "id": "mc-08", "file": "src/review/readiness.ts", "anchor": "const unsealedNote = unsealedItems.has(spec.id) ?", "replacement": "const unsealedNote = false ?", "kind": "presentation" },
+    { "id": "mc-09", "file": "src/review/managed.ts", "anchor": "if (options.headReason !== undefined && headOverride === undefined) {", "replacement": "if (false) {", "kind": "behavior" },
+    { "id": "mc-10", "file": "src/review/managed.ts", "anchor": "const quote = (options.headReason ?? \"\").replace(/-{0,2}head-reason/gi, \"\").trim();", "replacement": "const quote = \"x\";", "kind": "behavior" },
+    { "id": "mc-11", "file": "src/harness/tool/builtin/spawn-subagent-tool.ts", "anchor": "export const SPAWN_SUBAGENT_IGNORED_FIELDS = [\"model_tier\"] as const;", "replacement": "export const SPAWN_SUBAGENT_IGNORED_FIELDS = [] as const;", "kind": "behavior" }
+  ],
+  "cap_statement": "0 of 11 candidate mutants run (no test execution allowed this round); 11 not reached. The previous-round gates are mc-01..mc-07, mc-09, mc-10 (ARCH-1, SEC-1, TP-1, TP-2 fixes).",
+  "notes": "Read against head b076a85a6354. Dispositions: item-7 wording fixed in SKILL.detail.md; review.ts --head help and managed.ts head JSDoc (managed.ts:973) now state the operator-waiver rule and name --head-reason, and no 'report to name it' text remains in src/ or .metaproject/skills; the spawn constant now sits above, not between, the factory's JSDoc (diff slice-01 lines 171-181); bundled model-selection.mdc:203 now says model_class (the .metaproject copy too); research gate moved into evaluateCloseGates (close-gates.ts:77) so publish evaluates it, and the beforeReadiness hook now only records waivers; complete-head-gate.test.ts:163-174 now gives headReason and asserts --waive head, so it reaches readiness item head; readiness.test.ts:63 VERIFIED carries verdict, method, evidence and verifier and seals.test.ts:106 pins that `verification: {}` still fails item 4; SEC-1 items 1-4 are each sealed or shape-checked (seals.ts) and the seal is tamper evidence recomputable by an agent that reads seals.ts, which seals.ts:12-14 states as a deliberate limit (accepted level of roundRecordTampered), so the residual is not filed. review-logic-w4:F-001 is partial: a package closed by 0.4.26 through the old escapes still reads NOT READY at publish and in status (seals.ts:14-16 names it as accepted); I found no CHANGELOG entry mentioning it (grep of CHANGELOG.md for seal returns unrelated lines at b076a85a6354), though seals.ts claims 'the flow 488 CHANGELOG entry says so'. That missing entry is the open part. No defect introduced by the fix lines was found."
+}
+```

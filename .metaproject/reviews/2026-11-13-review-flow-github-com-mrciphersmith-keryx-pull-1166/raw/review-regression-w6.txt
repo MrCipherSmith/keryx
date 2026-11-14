@@ -1,0 +1,12 @@
+STATUS: DONE
+
+```json REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "slices": ["slice-06"],
+  "summary": "No regression found. slice-06 is mostly deletions of the round-1 code paths that flow 488 folded into src/review/close-gates.ts. Every removal has a live replacement at head b076a85a6354. (1) roundRecordTampered was dropped from managed.ts completeManagedReviewLocked but runs first in evaluateCloseGates (close-gates.ts:63); the one caller in managed.ts (:1125) and publish.ts (:175) both go through it. (2) publish.ts's inline readinessRefusal throw is now close-gates.ts:80, with relaxReadiness reproducing the --partial bypass. (3) complete-head-gate.ts lost its `report` input and the SAYS_SO escape; the only non-test caller, managed.ts:1106, and readiness.ts:360 pass `{manifest, lookup}`, and the tests in complete-head-gate.test.ts match. (4) The readiness `head` item stays (readiness.ts:40, title changed); SKILL.detail.md dropping item 7 from a hand-listed checklist matches READINESS_ITEMS, which now has the item at number 7 with the new title. (5) The `Not verified: N` escape in verifierCheck is replaced by verificationProblem/seals (readiness.ts:237-252); no non-test reader of NOT_VERIFIED remains. Behaviour change that is deliberate, so not filed: a package whose verifications were recorded before seals existed (seals.verifications absent) now fails the verifier item (seals.ts:72) at complete and publish until waived; a merged or head-moved PR now refuses publish and complete unless the operator waives `head`. Both are the stated AC9 intent, and the failure is a refusal with a named repair, not a silent wrong result. Radius coverage: blast-radius.json records a cap (it mentions dropped/truncated files); I did not enumerate the dropped files, so this is not a claim of a complete sweep. The graph cannot see string-keyed readiness item ids, waivers referencing item names, or skill/doc text, so the SKILL.detail.md and bundled-copy edits (non-code) have an unresolved radius, not a clean one. Slice also holds generated .metaproject/data churn (gdgraph, testing context), which I treated as non-behavioural.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```

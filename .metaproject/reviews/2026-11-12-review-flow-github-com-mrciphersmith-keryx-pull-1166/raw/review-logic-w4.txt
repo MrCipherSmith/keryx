@@ -1,0 +1,69 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "slice-04 (close-gates, managed complete, readiness head/verifier items, complete-head-gate, research error tagging, publish, completion-host) read in full. The shared gate ordering (tamper -> evidence level -> waivers + research gate -> readiness) is consistent between complete and publish; the head gate is computed once and handed to both the waiver path and item 7, so a `--waive head` is judged against the same (possibly relabelled) head the close records; research-error tags line up with the readiness items that back them (ledger<->researchErrors, reviewers<->dispatchErrors/packageCoverageErrors, files-covered/blast-radius<->coverageGateErrors), and readiness still refuses any item a broad tag would let through; a failing close rolls back the coverage and readiness waivers via writer.rollback(); head_override is declared in managed-review-package.schema.json, so the closed manifest validates. No blocker or major. One minor: the stricter verifier and head items have no closed-package carve-out (unlike items 3 and 6), so a package closed under the old rules reads NOT READY and is refused by publish. One info: --head-reason is dropped silently when there is nothing to relabel.",
+  "slices": ["slice-04"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/review/readiness.ts",
+      "line": null,
+      "quote": "function verifierCheck(ctx: Context): Verdict {",
+      "problem": "Items 4 (verifier) and 7 (head) used to accept an agent-written escape: a `Not verified: N` line, or a first line naming the SHA and saying the PR moved. Both checks now fail with no regard to `manifest.status`. Items 3 and 6 deliberately do not re-derive on a closed package (Context.liveCoverageGate / coverageMdGated). So a package that ≤0.4.26 closed legitimately through one of those escapes now reads NOT READY in `review readiness`, `review status` and the panel. `review publish` refuses it too: it now runs evaluateCloseGates, so the readiness checklist is computed again on the closed package.",
+      "impact": "Trigger: a package closed before this release with unverified blocker/major findings and a `Not verified: N` line, or closed on a moved or merged PR through the first-line wording, then published after the upgrade. Outcome: publish is refused. The way through is `--partial` (the page is labelled \"Partial review\") or a fresh operator waiver. Status surfaces call a completed round NOT READY. Nothing is lost and the refusal names its repair, so this is minor.",
+      "suggested_fix": "Decide this deliberately and say so. One option is to grandfather closed packages the way liveCoverageGate does: on a closed package whose report still holds the `Not verified: N` line, item 4 reports the recorded close, and item 7 likewise for a closed package. The other is to state the break in the CHANGELOG/release notes, together with the repair (`review_waive_readiness` card, or `--partial`).",
+      "evidence": "readiness.ts verifierCheck: no status branch; it fails whenever any blocker/major lacks `verification`. headCheck: no status branch either; it fails on gate.refusal. computeReadiness gates only items 3 and 6 by status (`liveCoverageGate: manifest.status !== \"closed\"`, `coverageMdGated`). publish.ts: `evaluateCloseGates(packageDir, { manifest, report: reportText, readiness: options.readiness, action: \"publish\", relaxReadiness: options.partial === true })`. Base readiness.ts accepted `NOT_VERIFIED = /not\\s+verified\\s*[:=]?\\s*(\\d+)/i`, and base completeHeadGate accepted the first line via `SAYS_SO`.",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": ["src/review/readiness.ts:236 verifierCheck", "src/review/readiness.ts:348 headCheck"],
+        "enumeration_method": "Every readiness check the diff tightened by removing a report-text escape. The diff removes exactly two: NOT_VERIFIED in verifierCheck and SAYS_SO/first-line in completeHeadGate (consumed by headCheck). Checked computeReadiness for status-based carve-outs: only liveCoverageGate (item 3) and coverageMdGated (item 6) exist."
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "src/review/managed.ts",
+      "line": null,
+      "quote": "const quote = (options.headReason ?? \"\").replace(/-{0,2}head-reason/gi, \"\").trim();",
+      "problem": "`headReason` is read only inside the branch where the recorded head is a non-empty string different from `--head`. When `--head` equals the recorded head (by prefix), or the recorded head is absent, a supplied `--head-reason` is dropped without a warning, and no `head_override` is written. The same happens to a `--head-reason` given without `--head`, if the CLI passes it through.",
+      "impact": "No gate is loosened: filling an absent head or repeating the recorded one cannot make the head gate pass that would otherwise fail. The cost is that an operator's stated words vanish from the record without a word to them.",
+      "suggested_fix": "Push a warning when headReason is given and no relabel happened (\"--head-reason ignored: --head matches the recorded head\"), or reject it in the CLI.",
+      "evidence": "managed.ts completeManagedReviewLocked: the quote is computed only under `typeof recordedHead === \"string\" && recordedHead !== \"\" && !recordedHead.toLowerCase().startsWith(head) && !head.startsWith(recordedHead.toLowerCase())`. The complete-head-relabel.test cases \"a --head equal to the recorded head ... records no override\" and \"a recorded head that is absent is filled without a quote\" cover the no-quote path but not a supplied-and-ignored quote.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 }
+}
+```
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/flow-488-review-gates`
+- Merge-base: `66ee001172e0d0c048a73727c3e6e099f9149b0a` (head e9ac9253fde7)
+- Scope mode: supplied slice (slice-04), read in full
+- Spec compliance gate: skipped. No issue or task was supplied; I checked the AC1/AC3/AC4/AC5/AC6 behaviours named in the tests against the code.
+
+### Summary
+The new single close gate behaves the same way for `complete` and `publish`. The head gate's result is reused by the waiver path and by readiness item 7, so the tracker is asked once and a `--waive head` is judged against the head the close will record. Research errors are tagged to the readiness items that back them, and the integrity errors stay unwaivable. Rollback still covers every waiver written before a refusal. I found nothing that blocks a merge.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 1  |  info: 1
+
+### What I checked and found sound
+- Tamper check moved after `recordCoverageWaiver`: research.json is written first, but `writer.rollback()` in the catch undoes it. The round stamp hashes only round.json and prior_findings.json.
+- `--waive head` on the card path: operator-confirm-review.ts passes `prLookup`, so item 7 is computed and can be waived. It is not the "already passes" case.
+- Tagging: `researchErrors` -> ledger (ledgerCheck runs the same function); `dispatchErrors` and `packageCoverageErrors` -> reviewers (reviewersCheck/coverageGateOf); `coverageGateErrors` -> files-covered/blast-radius (filesChecks over the same computeCoverage). When a broad tag drops a research error, readiness still fails on the unwaived sibling item.
+- `head_override` is declared in `docs/requirements/managed-review-feedback-loop/schemas/managed-review-package.schema.json`, which has `additionalProperties: false`. It is preserved when waivers re-read the manifest.
+- Host-question context carries `headOverride` without `time`, so the question text is deterministic.
+
+Routing audit: graph_used: no (not-relevant: a bounded slice with named files); wiki_used: no (not-relevant); ctx_used: yes (`keryx ctx rg` for every search); raw_rg_used: no.

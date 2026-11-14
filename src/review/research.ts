@@ -5,6 +5,8 @@ import { coverageGateErrors } from "./coverage-complete";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { asRecord, dispatchRunRecords } from "./record";
+// Type only: readiness.ts imports this module at runtime, so the item ids come across as a type and nothing else.
+import type { ReadinessItemId } from "./readiness";
 export const PENDING_RESEARCH = { version: 1, scopeReviewed: false, rawReconciled: false, obligations: [] };
 
 /**
@@ -118,10 +120,25 @@ export async function packageCoverageErrors(packageDir: string, dispatch: unknow
  * layer/chunk coverage-completeness gate, for a round that was closed before that gate existed.
  */
 export async function packageResearchErrors(packageDir: string, artifacts: unknown, findings: unknown, options: { coverage?: boolean; completeness?: boolean } = {}): Promise<string[]> {
+  return (await packageResearchErrorsTagged(packageDir, artifacts, findings, options)).map((error) => error.message);
+}
+
+/**
+ * A research error and the readiness items it belongs to (flow 488). An operator waiver of an item removes the errors
+ * tagged with it and no others; an error with no items (an artifact locator, a manifest/research mismatch, an unreadable
+ * ledger) is an integrity failure no waiver covers.
+ */
+export type TaggedResearchError = { message: string; items: readonly ReadinessItemId[] };
+
+const untagged = (messages: readonly string[]): TaggedResearchError[] => messages.map((message) => ({ message, items: [] }));
+const tagged = (messages: readonly string[], items: readonly ReadinessItemId[]): TaggedResearchError[] => messages.map((message) => ({ message, items }));
+
+/** The research errors of {@link packageResearchErrors}, each with the readiness items that can waive it. */
+export async function packageResearchErrorsTagged(packageDir: string, artifacts: unknown, findings: unknown, options: { coverage?: boolean; completeness?: boolean } = {}): Promise<TaggedResearchError[]> {
   const a = asRecord(artifacts) ?? {};
-  if (a.research === undefined) return a.reviewerDispatch === undefined ? [] : ["dispatch requires a research artifact"];
-  if (a.reviewerDispatch !== undefined && a.reviewerDispatch !== "research.json") return ["invalid dispatch artifact locator"];
-  if (a.research !== "research.json") return ["invalid research artifact locator"];
+  if (a.research === undefined) return a.reviewerDispatch === undefined ? [] : untagged(["dispatch requires a research artifact"]);
+  if (a.reviewerDispatch !== undefined && a.reviewerDispatch !== "research.json") return untagged(["invalid dispatch artifact locator"]);
+  if (a.research !== "research.json") return untagged(["invalid research artifact locator"]);
   try {
     const ledger = JSON.parse(await readFile(path.join(packageDir, "research.json"), "utf8"));
     // A dispatch block in research.json is checked whatever the manifest says: dropping the manifest's locator must not skip the gate.
@@ -135,7 +152,13 @@ export async function packageResearchErrors(packageDir: string, artifacts: unkno
       ? []
       : await packageCoverageErrors(packageDir, ledger?.dispatch);
     const completeness = !checked || options.coverage === false || options.completeness === false || dispatch.length ? [] : await coverageGateErrors(packageDir, ledger);
-    return [...researchErrors(ledger, findings), ...mismatch, ...dispatch, ...coverage, ...completeness];
+    return [
+      ...tagged(researchErrors(ledger, findings), ["ledger"]),
+      ...untagged(mismatch),
+      ...tagged(dispatch, ["reviewers"]),
+      ...tagged(coverage, ["reviewers"]),
+      ...tagged(completeness, ["files-covered", "blast-radius"]),
+    ];
   }
-  catch { return ["research ledger unreadable or invalid JSON"]; }
+  catch { return untagged(["research ledger unreadable or invalid JSON"]); }
 }

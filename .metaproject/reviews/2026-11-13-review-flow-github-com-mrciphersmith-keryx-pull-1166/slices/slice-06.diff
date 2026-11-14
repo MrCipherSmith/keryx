@@ -1,0 +1,363 @@
+--- .metaproject/data/gdgraph/.provenance.json
+@@ 1,1 @@
+ {
+-  "commit": "a8c725da0dfb0ab6caec9e5abfd09099d54e5fcf",
+-  "branch": "feature-/festive-hawking-hdutk9",
+-  "builtAt": "2026-10-19T10:17:42.194Z"
+
+--- .metaproject/data/testing/context.json
+@@ 1,2 @@
+ {
+   "schemaVersion": 1,
+-  "generatedAt": "2026-10-19T10:13:23.765Z",
+
+--- .metaproject/data/testing/context.json
+@@ 992,994 @@
+     "src/harness/tool/builtin/spawn-subagent-isolation.test.ts",
+     "src/harness/tool/builtin/spawn-subagent-lifecycle.test.ts",
+-    "src/harness/tool/builtin/spawn-subagent-model-tier.test.ts",
+     "src/harness/tool/builtin/spawn-subagent-native-budget.e2e.test.ts",
+
+--- .metaproject/data/gdgraph/artifacts/summary.md
+@@ 1,4 @@
+ # gdgraph Summary
+ 
+ ## Stats
+ 
+-- Source files indexed: 3253
+-- Imported asset files indexed: 14
+-- Total nodes: 3267
+-- Edges: 11703
+-- Import edges: 11550
+-- Asset edges: 31
+-- Unresolved imports: 122
+-- Import resolution: 99%
+-- Skipped generated/static directories: 18
+
+--- .metaproject/data/gdgraph/artifacts/summary.md
+@@ 17,18 @@
+ | Module | Source Files |
+ |---|---:|
+-| commands | 404 |
+-| harness | 400 |
+-| tui | 310 |
+-| review | 280 |
+-| lib | 212 |
+-| gdskills | 137 |
+
+--- .metaproject/data/gdgraph/artifacts/summary.md
+@@ 36,41 @@
+-| learning | 57 |
+ | mcp-servers | 56 |
+ | gdgraph | 55 |
+ | memory | 49 |
+-| session | 46 |
+-| acp | 42 |
+-| metrics | 39 |
+ 
+ ## Unresolved By Type
+ 
+
+--- .metaproject/data/gdgraph/artifacts/summary.md
+@@ 56,61 @@
+ | .key | 1 |
+ 
+ ## Skipped Directories
+ 
+ - `.claude`
+-- `.git`
+ - `.metaproject`
+
+--- .metaproject/data/testing/context.md
+@@ 1,2 @@
+ # Testing Context
+ 
+-generatedAt: 2026-10-19T10:13:23.765Z
+
+--- .metaproject/data/testing/context.md
+@@ 109,117 @@
+ - fixtures/change-impacted-test/src/alpha.test.ts
+ - fixtures/change-impacted-test/src/beta.test.ts
+ - fixtures/change-impacted-test/src/gamma.test.ts
+ - scripts/benchmark/ablation-emission-gating.test.ts
+ - scripts/benchmark/build-comparative-report.test.ts
+ - scripts/benchmark/long-metrics.test.ts
+ - scripts/benchmark/long-runner-turn.test.ts
+ - scripts/benchmark/long-tasks.test.ts
+-- scripts/benchmark/oracle-emission-gating.test.ts
+-- scripts/benchmark/replay-session-shape.test.ts
+-- scripts/benchmark/run-ablation-raw.test.ts
+-- scripts/benchmark/run-containment.test.ts
+-- scripts/benchmark/run-express-oracle.test.ts
+-- scripts/benchmark/run-safety.test.ts
+-- scripts/benchmark/run-wiki-freshness-scale.test.ts
+-- scripts/benchmark/token-metrics.test.ts
+-- scripts/benchmark/wiki-freshness-scale-fixture.test.ts
+-- scripts/check-doc-links.test.ts
+-- scripts/check-retired-cli-spellings.test.ts
+-- scripts/install-global.test.ts
+-- scripts/sandbox-deep-probe-redaction.test.ts
+-- scripts/stress/keryx-shell-stress.test.ts
+-- scripts/typecheck.test.ts
+-- src/acp/agent-io.test.ts
+-- src/acp/cancel-list-load.process.test.ts
+-- src/acp/capability-matrix.process.test.ts
+-- src/acp/client-requests.test.ts
+-- src/acp/commands.test.ts
+-- src/acp/concurrent-turns.process.test.ts
+-- src/acp/conformance.process.test.ts
+-- src/acp/dispatch.test.ts
+-- src/acp/framing.test.ts
+-- src/acp/hook-notices.test.ts
+-- src/acp/mcp-servers.process.test.ts
+-- src/acp/models.test.ts
+-- src/acp/permission.process.test.ts
+-- src/acp/permission.test.ts
+-- src/acp/project-tools.process.test.ts
+-- src/acp/prompt-content.test.ts
+-- src/acp/protocol.test.ts
+-- src/acp/roster.test.ts
+-- src/acp/server-archive.test.ts
+-- src/acp/server-mcp.test.ts
+-- src/acp/server-models.test.ts
+-- src/acp/session-mcp.test.ts
+-- src/acp/session.test.ts
+-- src/agents/baseline.test.ts
+-- src/agents/bootstrap.test.ts
+-- src/agents/bundled-agent-files.test.ts
+-- src/agents/catalog.test.ts
+-- src/agents/compile.content-hash.test.ts
+-- src/agents/compile.format-safety.test.ts
+-- src/agents/compile.model-tier.test.ts
+-- src/agents/compile.spawn-subagent.test.ts
+-- src/agents/export.test.ts
+-- src/agents/frontmatter.test.ts
+-- src/agents/generate.test.ts
+-- src/agents/schema.test.ts
+-- src/agents/tools.test.ts
+-- src/agents/verify.test.ts
+-- src/assets/command.test.ts
+-- src/assets/resolver.test.ts
+-- src/assets/seed.test.ts
+-- src/bundle/applied-state.test.ts
+-- src/bundle/apply.test.ts
+-- src/bundle/archive.test.ts
+-- src/bundle/audit.test.ts
+-- src/bundle/export.test.ts
+-- src/bundle/external.test.ts
+-- src/bundle/hook-audit.e2e.test.ts
+-- src/bundle/inspect.test.ts
+-
+-- ... 1672 more
++
+
+--- .metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md
+@@ 775,775 @@
+ 6. `coverage-md` — coverage.md does not list a reviewer as `run` that the dispatch record says did not finish. Re-run `keryx review ingest` for the package.
+-7. `head` — the report's head is the PR head.
+
+--- src/commands/review.ts
+@@ 5674,5683 @@
+ --head:
+   The commit the round ran against, written to \`manifest.target.head\` and read
+   by the \`review\` completion gate, which refuses to complete a flow whose last
+   round cannot say which tree it read. Omitted, it is \`git rev-parse HEAD\` —
+   the tree the reviewers actually read, which is deliberately preferred over a
+   \`pr\` target's own head so that a round run against something other than what
+   will merge FAILS the gate instead of passing it.
+   \`review complete --head <sha>\` names the commit the round actually reviewed
+   when the one recorded at start is wrong or missing; the head gate then checks
+   that commit, and the manifest records it. The gate is not loosened: a head that
+-  is not the pull request's head still needs the report's first line to name it
+-  and say the PR moved.
+
+--- src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md
+@@ 775,775 @@
+ 6. `coverage-md` — coverage.md does not list a reviewer as `run` that the dispatch record says did not finish. Re-run `keryx review ingest` for the package.
+-7. `head` — the report's head is the PR head.
+
+--- src/review/complete-head-gate.test.ts
+@@ 1,1 @@
+ import { afterEach, beforeEach, expect, test } from "bun:test";
+-import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
+
+--- src/review/complete-head-gate.test.ts
+@@ 4,4 @@
+ import path from "node:path";
+-import { READY_DISPATCH, READY_COVERAGE_MD } from "./dispatch.test-helpers";
+
+--- src/review/complete-head-gate.test.ts
+@@ 7,7 @@
+-import { completeManagedReview, createManagedReviewPackage } from "./managed";
+
+--- src/review/complete-head-gate.test.ts
+@@ 14,15 @@
+ afterEach(async () => { await rm(dir, { recursive: true, force: true }); });
+ 
+-async function ingest(report: string, target: { kind: "pr" | "report"; ref: string; head?: string }): Promise<string> {
+-  const result = await createManagedReviewPackage({ cwd: dir, mode: "ingest", reportText: `${report}\n${EVIDENCE}\n`, reviewId: "head-gate", target });
+-  await writeFile(path.join(path.resolve(dir, result.path), "research.json"), JSON.stringify(ready));
+-  await writeFile(path.join(path.resolve(dir, result.path), "coverage.md"), READY_COVERAGE_MD);
+-  return result.path;
+-}
+-
+-function lookup(pr: { state?: string; headSha?: string } | null): PrLookup & { calls: string[] } {
+-  const calls: string[] = [];
+-  const fn = (async (ref: string) => { calls.push(ref); return pr === null ? null : { exists: true, state: pr.state ?? "OPEN", headSha: pr.headSha ?? HEAD }; }) as PrLookup & { calls: string[] };
+-  fn.calls = calls;
+-  return fn;
+-}
+-
+-test("a merged PR refuses a report that does not say so on its first line", async () => {
+
+--- src/review/complete-head-gate.test.ts
+@@ 157,164 @@
+   const ref = await ingest("# Review\nNo findings.", { kind: "pr", ref: PR });
+   const done = await completeManagedReview(dir, ref, { prLookup: lookup({ headSha: HEAD }), head: HEAD.slice(0, 7) });
+   expect(done.manifest.target.head).toBe(HEAD.slice(0, 7));
+   expect(done.warnings.join(" ")).not.toContain("replaces");
+ });
+ 
+ test("--head does not loosen the gate: a head that is not the PR's head still fails, and the manifest stays as it was", async () => {
+   const ref = await ingest("# Review\nNo findings.", { kind: "pr", ref: PR, head: HEAD });
+-  const error = await completeManagedReview(dir, ref, { prLookup: lookup({ headSha: HEAD }), head: MOVED }).catch((e: Error) => e);
+
+--- src/review/complete-head-gate.test.ts
+@@ 169,169 @@
+   expect((error as Error).message).toContain(HEAD.slice(0, 7));
+-  expect((error as Error).message).toContain("first line");
+
+--- src/review/complete-head-gate.test.ts
+@@ 184,186 @@
+   const pr = await ingest("# Review\nNo findings.", { kind: "pr", ref: PR, head: HEAD });
+   await expect(completeManagedReview(dir, pr, { prLookup: lookup({}), head: "not-a-sha" })).rejects.toThrow(/not a commit SHA/);
+   await expect(completeManagedReview(dir, pr, { prLookup: lookup({}), head: "abc" })).rejects.toThrow(/not a commit SHA/);
+-  const report = await createManagedReviewPackage({ cwd: dir, mode: "ingest", reportText: `# R\nNo findings.\n${EVIDENCE}\n`, reviewId: "head-report", target: { kind: "report", ref: "review.md" } });
+-  await writeFile(path.join(path.resolve(dir, report.path), "research.json"), JSON.stringify(ready));
+-  await writeFile(path.join(path.resolve(dir, report.path), "coverage.md"), READY_COVERAGE_MD);
+-  await expect(completeManagedReview(dir, report.path, { head: HEAD })).rejects.toThrow(/pull request package/);
+
+--- src/review/complete-head-gate.ts
+@@ 1,15 @@
+ import type { ManagedReviewManifest } from "./types";
+ 
+ export type PrSnapshot = { exists: boolean; state?: string | null | undefined; headSha?: string | null | undefined };
+ export type PrLookup = (ref: string) => Promise<PrSnapshot | null>;
+ 
+-const MOVE_WORD = "(?:merged|moved|advanced|superseded|closed|force-pushed)";
+-const PR_WORD = "(?:pr|pull request|head)";
+-const SAYS_SO = new RegExp(`\\b${PR_WORD}\\b.{0,40}\\b${MOVE_WORD}\\b|\\b${MOVE_WORD}\\b.{0,40}\\b${PR_WORD}\\b`, "i");
+ const USABLE_SHA = /^[0-9a-f]{7,40}$/i;
+ 
+ const PR_URL = /github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+/;
+ 
+ /**
+  * A package is bound to a pull request when it targets one, or when its ref IS a pull request URL under another
+  * kind: `review ingest --target report --ref <PR URL>` is how a package for a PR can end up outside the `pr` kind,
+  * and the head check must not depend on which kind the person typed.
+  */
+ export const isPrBound = (target: { kind: string; ref: string }): boolean => target.kind === "pr" || PR_URL.test(target.ref);
+
+--- src/review/complete-head-gate.ts
+@@ 34,35 @@
+   manifest: Pick<ManagedReviewManifest, "target">;
+-  report: string;
+   lookup: PrLookup;
+
+--- src/review/managed.ts
+@@ 16,18 @@
+ import { packageParityWarnings } from "./parity";
+-import { roundRecordTampered } from "./round-record";
+ import { recordFinishedRound } from "./round-registry";
+ import { withSpendSection } from "./dispatch-usage";
+
+--- src/review/managed.ts
+@@ 951,970 @@
+  * guessed — which is the whole reason `global_id` exists.
+  */
+ export type FindingDispositionRecord = {
+   finding: string;
+   state: FindingDispositionState;
+   evidence?: string | undefined;
+ };
+ 
+ export type CompleteManagedReviewOptions = {
+   hostQuestion?: HostQuestion | undefined;
+   dispositions?: readonly FindingDispositionRecord[] | undefined;
+   /** Injectable clock, so a note's `Created:` date is deterministic in a test. */
+   now?: Date | undefined;
+   /** The operator's own words waiving every file the coverage gate finds uncovered (`--waive-coverage`). */
+   waiveCoverage?: string | undefined;
+   /** Reads a PR's state and head. Absent means the head and merge check is not made (a library caller with no tracker). */
+   prLookup?: PrLookup | undefined;
+   /**
+    * The commit this round reviewed (`--head`), a 7-40 hex SHA. When given it is what the head gate
+    * checks and what the closed manifest records as `target.head`, in place of the head recorded at
+-   * start. The gate itself is unchanged: a head that is not the PR's head still needs the report
+-   * to name it and say the PR moved.
+
+--- src/review/managed.ts
+@@ 1036,1056 @@
+ ): Promise<CompleteManagedReviewResult> {
+   const packageDir = await resolveReviewPackagePath(cwd, ref);
+   return withCompletionLock(packageDir, () => completeManagedReviewLocked(cwd, packageDir, options));
+ }
+ 
+ async function completeManagedReviewLocked(
+   cwd: string,
+   packageDir: string,
+   options: CompleteManagedReviewOptions,
+ ): Promise<CompleteManagedReviewResult> {
+   const snapshot = await completionSnapshot(packageDir);
+   const writer = completionWriter(packageDir, snapshot);
+   const writeCompletion: CompletionWriter = writer.write;
+   const assertUnchanged = async (): Promise<void> => { writer.assertUnchanged(); };
+   const manifestPath = path.join(packageDir, "manifest.json");
+   const stored = JSON.parse(await readFile(manifestPath, "utf8")) as ManagedReviewManifest;
+   const missing = await missingArtifacts(packageDir);
+   if (missing.length > 0) {
+     throw new Error(`Cannot complete managed review; missing artifacts: ${missing.join(", ")}`);
+   }
+-  // Flow 458: the round record decides what the round reviewed; one edited after `review start` is refused here too.
+-  const tampered = roundRecordTampered(packageDir);
+-  if (tampered !== undefined) throw new Error(`Cannot complete managed review; ${tampered}`);
+   const warnings: string[] = [];
+
+--- src/review/managed.ts
+@@ 1112,1119 @@
+   const passGap = await passNotInRound(packageDir).catch(() => null);
+   const passMissing = passGap?.missing ?? [];
+   if (passMissing.length > 0) warnings.push(missingWarning(passMissing));
+-  const researchFindings = JSON.parse(await readFile(path.join(packageDir, "findings.json"), "utf8"));
+   // The waiver is written first because the coverage gate reads it from research.json; a close that then fails takes it back,
+   // so the next run does not pass the same gate without the flag.
+   let coverageWaiver: CoverageWaiver | undefined;
+   let readiness: ReadinessReport | undefined;
+   let updated: ManagedReviewManifest;
+
+--- src/review/publish.ts
+@@ 177,179 @@
+   const partial = failing.length > 0;
+-  if (partial && options.partial !== true) throw new Error(readinessRefusal(readiness, "publish"));
+   if (partial && event === "APPROVE") {
+     throw new Error(`A partial review cannot approve: ${failing.length} readiness item(s) are failing (${failing.map((item) => item.id).join(", ")}). Use --event COMMENT or REQUEST_CHANGES, or repair the items.`);
+
+--- src/review/readiness.ts
+@@ 39,39 @@
+   { number: 6, id: "coverage-md", title: "coverage.md states the ingest status of each reviewer truthfully" },
+-  { number: 7, id: "head", title: "the report's head matches the PR head" },
+
+--- src/review/readiness.ts
+@@ 238,238 @@
+   const heavy = ctx.findings.filter((finding) => ["blocker", "major"].includes(String(finding.severity)));
+-  const unverified = heavy.filter((finding) => record(finding.verification) === undefined);
+
+--- src/review/readiness.ts
+@@ 246,246 @@
+-  const stated = NOT_VERIFIED.exec(ctx.report);
+-  if (stated !== null && Number(stated[1]) >= unverified.length) return ok(`${unverified.length} of ${heavy.length} blocker/major finding(s) unverified, and the report says so`);
+
+--- src/review/readiness.ts
+@@ 249,249 @@
+-    `${unverified.length} of ${heavy.length} blocker/major finding(s) carry no verification and the report does not state the count`,
+-    `run the verifier (review-verifier) on them, or add the line \`Not verified: ${unverified.length}\` to report.md`,

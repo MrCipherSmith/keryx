@@ -1,0 +1,102 @@
+STATUS: DONE_WITH_CONCERNS — slice-04 read in full. I did not run the mutation pass: the payload sets allowed_tools "read-only" and exec_budget_s 0, so I ran no suite and report no mutation results. I mutated 0 gates; the 22 candidates below are not reached and go to mutants.json for the main session.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-testing-practices",
+  "summary": "Slice-04 tests pin most of the new gates: verifier no longer passes on a `Not verified: N` line, the head gate's refusal path and its waiver, the relabel quote's three checks, the tracker asked once, and parity between publish and complete for tamper and evidence level. Three gaps. (1) AC4's research-error tags for reviewers, files-covered and blast-radius have no fixture, and no test waives one item while a different item's research error stays open. (2) The readiness fixture's `verification: { verdict: \"confirmed\" }` is a shape the producer cannot emit, and no test pins that a malformed verification fails item 4. (3) hostQuestionNotice's premise-decision branch and its top-level coverageWaiver fallback are never driven. Mutation pass not run (read-only payload, exec_budget_s 0); all 22 candidates are unreached.",
+  "slices": [{ "id": "slice-04", "status": "DONE", "coverage": "read in full; all 18 files in the payload" }],
+  "inputs_unreadable": [],
+  "findings": [
+    {
+      "id": "TP-1",
+      "severity": "minor",
+      "file": "src/review/research.ts",
+      "line": null,
+      "quote": "      ...tagged(dispatch, [\"reviewers\"]),\n      ...tagged(coverage, [\"reviewers\"]),\n      ...tagged(completeness, [\"files-covered\", \"blast-radius\"]),",
+      "problem": "AC4 scopes each research error to the readiness items that can waive it. Tests pin only the `ledger` tag and the untagged integrity errors (complete-waiver-scope.test.ts). No fixture builds a dispatch, coverage or completeness research error and waives `reviewers`, `files-covered` or `blast-radius` at `completeManagedReview`. No test waives one item while another item's research error stays open, which is the case the scoping exists for. A repo-wide search finds no complete-level waiver of those three items. readiness.test.ts:373 calls `waiveReadiness` directly and never reaches the research filter in managed.ts.",
+      "impact": "Three of the five tag groups are unpinned. Before flow 488, waiving blast-radius or files-covered lifted the coverage-completeness errors (`waivedRadius`). That behaviour now survives only through the `[\"files-covered\", \"blast-radius\"]` tag. Changing it to `untagged` would make those waivers unable to close a package they closed before, and no test in the slice builds the input that would catch it. The same holds if the filter is loosened to drop every tagged error whenever any waiver is present.",
+      "suggested_fix": "In complete-waiver-scope.test.ts, add three cases. (a) A package with a coverage-completeness error (a chunk plan with an undone chunk, or a blast-radius cap drop) closes with `waive(\"blast-radius\")` and is refused without it. (b) A dispatch error (an unfinished run) closes with `waive(\"reviewers\")`. (c) A package with both an open obligation and a dispatch error, waiving only `ledger`, is refused with the dispatch message: the research gate throws before the checklist runs.",
+      "evidence": "slice-04 complete-waiver-scope.test.ts builds only `openObligation` (ledger), the `reviewerDispatch` deletion (untagged mismatch) and the `research = \"elsewhere.json\"` locator (untagged). `keryx ctx rg 'waive.{0,20}(blast-radius|files-covered|reviewers)' src --glob '*.test.ts' --all` gives 8 matches: none is a complete-level waiver of these items, and readiness.test.ts:373 is a direct waiveReadiness call. Mutation not run (read-only payload); see mutant_candidates M-10..M-13.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices",
+      "class_scope": {
+        "sites": ["src/review/research.ts (tagged dispatch/coverage/completeness)", "src/review/managed.ts (beforeReadiness waivedItems filter)", "src/review/complete-waiver-scope.test.ts"],
+        "enumeration_method": "every `tagged(`/`untagged(` call in packageResearchErrorsTagged (5 tag groups) set against the fixtures in complete-waiver-scope.test.ts, plus `keryx ctx rg` for test waivers of the three items"
+      }
+    },
+    {
+      "id": "TP-2",
+      "severity": "minor",
+      "file": "src/review/readiness.test.ts",
+      "line": null,
+      "quote": "    { id: \"f-1\", severity: \"major\", title: \"raw finding\", verification: { verdict: \"confirmed\" } },",
+      "problem": "`verifyHeavyFindings` is the fixture that makes item 4 pass without a waiver, and its verification records are `{ verdict: \"confirmed\" }` only. The producer type `ReviewFindingVerification` (types.ts:405) requires `method` and `evidence`, and its doc comment says the writer always fills `verifier`. So the producer cannot emit this shape. The fixture passes only because `verifierCheck` accepts any record: `record(finding.verification) === undefined` is the whole test. No test in the slice pins that an empty or partial verification still fails item 4.",
+      "impact": "Flow 488's point is that agent-written text no longer lifts item 4. The suite pins that for a report.md line. It does not pin it for a findings.json `verification: {}`, and its own READY fixture relies on that leniency, so it reads as coverage of verified findings while covering a shape the verifier never writes. Tightening verifierCheck later would turn these fixtures red for the wrong reason.",
+      "suggested_fix": "Build the fixture with the producer's shape: `{ verdict: \"confirmed\", method: \"site-check\", evidence: \"...\", verifier: \"review-verifier\" }`, as readiness-verifier-waiver.test.ts and round-trip.test.ts already do. Add one test asserting how item 4 treats `verification: {}`. If the intended answer is fail, that test is red today; see the follow-up.",
+      "evidence": "types.ts:405-410 `verdict`, `method` and `evidence` are required; readiness.ts verifierCheck: `const unverified = heavy.filter((finding) => record(finding.verification) === undefined);`. The sibling fixtures (readiness-verifier-waiver.test.ts, round-trip.test.ts) use the full shape.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "TP-3",
+      "severity": "minor",
+      "file": "src/review/publish.ts",
+      "line": null,
+      "quote": "  if (premiseCount > 0) named.push(`${premiseCount} premise decision(s)`);",
+      "problem": "hostQuestionNotice (AC6) has four sources. The publish.test.ts AC6 block drives the readiness waiver, `head_override` and `research.dispatch.coverageWaiver`. It never drives a premise decision with `confirmedVia: \"host-question\"`, or a top-level `research.coverageWaiver` (the `?? research?.coverageWaiver` fallback). The search for `premiseCount` finds only the two lines in publish.ts.",
+      "impact": "Two of the four branches are unpinned. A premise answer recorded from the agent's own host question could be posted to GitHub without the not-verified notice, and the suite would stay green.",
+      "suggested_fix": "In the AC6 describe block, add a case that writes a premise decision with `confirmedVia: \"host-question\"`, for example through the operator-decisions file `premiseRecords` reads, and asserts that the body contains `1 premise decision(s)`. Add another with `research.json = { coverageWaiver: { confirmedVia: \"host-question\", ... } }` at top level that asserts `coverage waiver`.",
+      "evidence": "slice-04 publish.test.ts AC6 tests write readiness_waivers, head_override and dispatch.coverageWaiver only. `keryx ctx rg premiseCount src/review` matches publish.ts:74-75 only. Mutation not run; see M-17, M-18.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "TP-4",
+      "severity": "info",
+      "file": "src/review/complete-head-gate.test.ts",
+      "line": null,
+      "quote": "  expect((error as Error).message).toContain(\"head\");",
+      "problem": "This test is named \"a first line that names the reviewed SHA and says the PR moved no longer lets it through\". The only text assertion on the refusal is `toContain(\"head\")`, and any readiness refusal containing \"--head\" or the item id meets it. The not-closed check proves a refusal happened but not that item `head` caused it. This is the same loose-source shape as the known wave-1 issue at :177, at a different site.",
+      "impact": "If another gate starts refusing this fixture, the test still passes, and the claim in its name goes unverified.",
+      "suggested_fix": "Assert the head item's evidence: `toContain(MOVED.slice(0, 7))` and `toContain(\"merged\")`, or compute readiness and assert `items.find(i => i.id === \"head\").status === \"fail\"` with every other item passing.",
+      "evidence": "slice-04 complete-head-gate.test.ts hunk. The fixture is MERGED with headSha MOVED, so the refusal text contains both SHAs, but the test does not check them.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices"
+    }
+  ],
+  "follow_ups": [
+    "review-logic / review-security-code: readiness.ts verifierCheck counts any object in `finding.verification` as verified (`record(finding.verification) === undefined`). If findings.json can be written by the agent between ingest and complete, `verification: {}` lifts item 4. That is the class flow 488 closed for the report.md `Not verified: N` line. Settle it by checking whether completionSnapshot, the round record or ingest validation rejects an edited findings.json verification."
+  ],
+  "mutant_candidates": [
+    { "id": "M-01", "file": "src/review/close-gates.ts", "anchor": "  if (tampered !== undefined) throw new Error(`Cannot complete managed review; ${tampered}`);", "replacement": "", "kind": "behavior" },
+    { "id": "M-02", "file": "src/review/close-gates.ts", "anchor": "    if (input.manifest.report_fields?.includes(REPORT_FIELD_EVIDENCE_LEVEL)) {", "replacement": "    if (false) {", "kind": "behavior" },
+    { "id": "M-03", "file": "src/review/close-gates.ts", "anchor": "  if (failingItems(readiness).length > 0 && input.relaxReadiness !== true) throw", "replacement": "  if (failingItems(readiness).length > 0) throw", "kind": "behavior" },
+    { "id": "M-04", "file": "src/review/close-gates.ts", "anchor": "input.action === \"publish\" ? \"publish\" : \"complete the review\"", "replacement": "\"complete the review\"", "kind": "presentation" },
+    { "id": "M-05", "file": "src/review/complete-head-gate.ts", "anchor": "  return { warnings: unusable, refusal: what };", "replacement": "  return { warnings: unusable };", "kind": "behavior" },
+    { "id": "M-06", "file": "src/review/managed.ts", "anchor": "      if (quote.length < 8 || !/[\\p{L}\\p{N}]/u.test(quote)) {", "replacement": "      if (quote.length < 8) {", "kind": "behavior" },
+    { "id": "M-07", "file": "src/review/managed.ts", "anchor": "      const quote = (options.headReason ?? \"\").replace(/-{0,2}head-reason/gi, \"\").trim();", "replacement": "      const quote = (options.headReason ?? \"\").trim();", "kind": "behavior" },
+    { "id": "M-08", "file": "src/review/managed.ts", "anchor": "...(options.hostQuestion === undefined ? {} : { confirmedVia: \"host-question\" as const }) };", "replacement": "};", "kind": "behavior" },
+    { "id": "M-09", "file": "src/review/managed.ts", "anchor": "{ target: manifest.target, ...(headOverride === undefined ? {} : { head_override: headOverride }) }", "replacement": "{ target: manifest.target }", "kind": "behavior" },
+    { "id": "M-10", "file": "src/review/managed.ts", "anchor": "          .filter((error) => !error.items.some((item) => waivedItems.has(item)))", "replacement": "          .filter((error) => !(error.items.length > 0 && waivedItems.size > 0))", "kind": "behavior" },
+    { "id": "M-11", "file": "src/review/research.ts", "anchor": "      ...tagged(completeness, [\"files-covered\", \"blast-radius\"]),", "replacement": "      ...untagged(completeness),", "kind": "behavior" },
+    { "id": "M-12", "file": "src/review/research.ts", "anchor": "      ...tagged(dispatch, [\"reviewers\"]),", "replacement": "      ...untagged(dispatch),", "kind": "behavior" },
+    { "id": "M-13", "file": "src/review/research.ts", "anchor": "      ...tagged(coverage, [\"reviewers\"]),", "replacement": "      ...untagged(coverage),", "kind": "behavior" },
+    { "id": "M-14", "file": "src/review/research.ts", "anchor": "      ...untagged(mismatch),", "replacement": "      ...tagged(mismatch, [\"ledger\"]),", "kind": "behavior" },
+    { "id": "M-15", "file": "src/review/readiness.ts", "anchor": "  let gate = options.headGate;", "replacement": "  let gate: HeadGateResult | undefined = undefined;", "kind": "behavior" },
+    { "id": "M-16", "file": "src/review/readiness.ts", "anchor": "  if (gate.refusal === undefined) return ok(", "replacement": "  if (true) return ok(", "kind": "behavior" },
+    { "id": "M-17", "file": "src/review/publish.ts", "anchor": "  if (premiseCount > 0) named.push(`${premiseCount} premise decision(s)`);", "replacement": "", "kind": "behavior" },
+    { "id": "M-18", "file": "src/review/publish.ts", "anchor": "(research?.dispatch?.coverageWaiver ?? research?.coverageWaiver)?.confirmedVia", "replacement": "research?.dispatch?.coverageWaiver?.confirmedVia", "kind": "behavior" },
+    { "id": "M-19", "file": "src/review/publish.ts", "anchor": "  if (manifest.head_override?.confirmedVia === \"host-question\") named.push(", "replacement": "  if (false) named.push(", "kind": "behavior" },
+    { "id": "M-20", "file": "src/review/publish.ts", "anchor": "relaxReadiness: options.partial === true", "replacement": "relaxReadiness: true", "kind": "behavior" },
+    { "id": "M-21", "file": "src/review/completion-host.ts", "anchor": "    ...(context.headOverride === undefined ? {} : { requestedHeadOverride: context.headOverride }), snapshot,", "replacement": "    snapshot,", "kind": "behavior" },
+    { "id": "M-22", "file": "src/review/readiness.ts", "anchor": "  const unverified = heavy.filter((finding) => record(finding.verification) === undefined);", "replacement": "  const unverified = heavy.filter((finding) => record(finding.verification)?.method === undefined);", "kind": "behavior" }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 1 }
+}
+```
+
+Mutation pass: not run. The payload's allowed_tools is "read-only" and exec_budget_s is 0, so I executed no suite. I mutated 0 of the changed gates; all 22 candidates are unreached, and none of them is reported as a result. Where I read the tests as pinning a gate (the relabel quote's three checks M-06/M-07, the tracker asked once M-15, the head refusal M-05/M-16), that is a reading, not a run. M-08 and M-21 sit in the wave-1 known gap (--answered-by with --head-reason). M-22 is a strengthening probe tied to TP-2, not a deletion.
+
+Routing audit: graph_used: no (not-relevant: a bounded slice with the files named in the payload). wiki_used: no (not-relevant). ctx_used: yes (`keryx ctx rg` ×4). raw_rg_used: no.

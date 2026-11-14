@@ -1,0 +1,25 @@
+STATUS: DONE
+
+```json REVIEW_RESULT
+{
+  "reviewer": "review-logic",
+  "slices": ["slice-02"],
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Slice-02 is almost entirely generated or bookkeeping (gdgraph artifacts, testing context, flow 488/490 state, a memory note, package.json override bumps, release 0.4.27 changelog). The only logic-bearing parts are the CHANGELOG Unreleased entry, the new `seals` schema property and one test helper change; no defect in them. One documentation-contract gap found: the CHANGELOG breaking-change entry does not cover packages whose legitimate waivers/verifications predate the seals, although seals.ts says it does.",
+  "findings": [
+    {
+      "id": "F-001",
+      "file": "CHANGELOG.md",
+      "line": 8,
+      "quote": "- **Breaking for packages closed through the removed escapes.**",
+      "severity": "minor",
+      "title": "CHANGELOG omits the seals breakage that src/review/seals.ts says it records",
+      "evidence": "src/review/seals.ts:14-15 states packages written before the seals existed carry none, so their waivers and verifications are not honoured, and 'the flow 488 CHANGELOG entry says so'. The Unreleased entries (CHANGELOG.md:5-9) mention only the removed report-line escapes; a search of CHANGELOG.md for 'seal' finds no entry for this change. A package closed earlier with a genuine operator waiver (--waive) or applied verifications now has unhonoured waivers/verifications and reads NOT READY.",
+      "impact": "An operator with an old, legitimately waived package sees NOT READY and a refused publish, and the documented repair (re-waive the verifier or head item) is written only for report-line closures; waivers of other items (files-covered, blast-radius, reviewers, ledger) and old verifications are not named. Documentation gap, not a behaviour defect.",
+      "suggested_fix": "Add a sentence to the Breaking entry: packages created before this release carry no seals, so their readiness waivers, head overrides and verifier results are no longer honoured; re-run `review complete --waive <item> \"<words>\"` (or `review ingest --verifications`) or publish with `--partial`.",
+      "confidence": "medium"
+    }
+  ],
+  "notes": "Not reviewed per task: flow 487 files and the other merge-from-main files. gdgraph/testing generated files were checked only for consistency (no logic). Seal bypass by deleting manifest.seals is a disclosed known gap (flow 488 journal, seals.ts:15-16); the code lives in another slice."
+}
+```

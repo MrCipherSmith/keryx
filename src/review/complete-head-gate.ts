@@ -3,9 +3,6 @@ import type { ManagedReviewManifest } from "./types";
 export type PrSnapshot = { exists: boolean; state?: string | null | undefined; headSha?: string | null | undefined };
 export type PrLookup = (ref: string) => Promise<PrSnapshot | null>;
 
-const MOVE_WORD = "(?:merged|moved|advanced|superseded|closed|force-pushed)";
-const PR_WORD = "(?:pr|pull request|head)";
-const SAYS_SO = new RegExp(`\\b${PR_WORD}\\b.{0,40}\\b${MOVE_WORD}\\b|\\b${MOVE_WORD}\\b.{0,40}\\b${PR_WORD}\\b`, "i");
 const USABLE_SHA = /^[0-9a-f]{7,40}$/i;
 
 const PR_URL = /github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+/;
@@ -25,18 +22,18 @@ const sameCommit = (a: string, b: string): boolean => {
 /**
  * `keryx review complete` on a PR-bound package: has the PR moved on since the round?
  *
- * A merged PR or a moved head means the report describes code that is no longer
- * what the PR holds, and a reader who opens it cold cannot tell. It is not
- * refused outright, because a round on a merged PR is still worth closing — it
- * is refused until the report's first line names the SHA that was reviewed and
- * says the PR moved. A tracker that cannot be reached is a warning: the gate
- * must not make an offline close impossible.
+ * A merged PR or a moved head means the report describes code that is no longer what the PR holds, and a reader who
+ * opens it cold cannot tell. The gate reports that as a `refusal`; it does not throw, because the close applies the
+ * operator's readiness waivers before it refuses, and a round on a merged PR is still worth closing when the operator
+ * says so (`--waive head "<operator quote>"` / the `review_waive_readiness` card). Nothing the agent writes into the
+ * report lifts it. A tracker that cannot be reached is a warning: the gate must not make an offline close impossible.
  */
+export type HeadGateResult = { warnings: string[]; refusal?: string | undefined };
+
 export async function completeHeadGate(input: {
   manifest: Pick<ManagedReviewManifest, "target">;
-  report: string;
   lookup: PrLookup;
-}): Promise<{ warnings: string[] }> {
+}): Promise<HeadGateResult> {
   const { target } = input.manifest;
   if (!isPrBound(target)) return { warnings: [] };
   let pr: PrSnapshot | null;
@@ -53,10 +50,5 @@ export async function completeHeadGate(input: {
   if (!merged && !moved) return { warnings: unusable };
 
   const what = [merged ? "the PR is merged" : undefined, moved ? `the PR head moved (reviewed ${reviewed!.slice(0, 7)}, now ${prHead!.slice(0, 7)})` : undefined].filter(Boolean).join(" and ");
-  const first = input.report.split(/\r?\n/).find((line) => line.trim() !== "" && !/^\s*<!--.*-->\s*$/.test(line)) ?? "";
-  const names = reviewed === null ? /\b[0-9a-f]{7,40}\b/i.test(first) : first.toLowerCase().includes(reviewed.slice(0, 7).toLowerCase());
-  if (names && SAYS_SO.test(first)) return { warnings: unusable };
-  throw new Error(
-    `Cannot complete managed review; ${what}. The report's first line must name the reviewed SHA${reviewed === null ? "" : ` (${reviewed.slice(0, 7)})`} and say the PR moved, for example: "Reviewed ${(reviewed ?? "<sha>").slice(0, 7)} — the PR has since ${merged ? "merged" : "moved on"}."`,
-  );
+  return { warnings: unusable, refusal: what };
 }

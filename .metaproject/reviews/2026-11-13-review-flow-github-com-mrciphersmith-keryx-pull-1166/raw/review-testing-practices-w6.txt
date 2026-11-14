@@ -1,0 +1,29 @@
+STATUS: DONE
+
+```json REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-testing-practices",
+  "slices": ["slice-06"],
+  "summary": "Mutation pass SKIPPED: the brief allows only git log/blame/show and keryx ctx rg, and my payload carries no run-tests tool, so no suite was executed and no mutation result is reported (0 of 11 candidates run; all 11 are handed to the main session in mutant_candidates). Read in full: slice-06 is the removal side of the round-1 fix (SAYS_SO report-line escape, 'Not verified: N' lifter, publish's own partial throw, managed.ts's duplicated tamper/research reads, head readiness item retitle). Static trace of each removed gate to its replacement and its pinning test found no unpinned gate: report-first-line escape -> complete-head-gate.test.ts:38,49 (a report that names the SHA and says 'merged' still refuses and the repair is --waive head); 'Not verified: N' -> readiness-verifier-waiver.test.ts:29, readiness.test.ts:184; publish's partial throw -> close-gates.ts relaxReadiness, pinned by publish-gate-parity.test.ts:72 and publish.test.ts:82/317; tamper -> publish-gate-parity.test.ts:37 on both commands, even with --partial; --head-reason arity/length/punctuation -> complete-head-relabel.test.ts:34 ('ok', '--head-reason', '........'); --head-reason without relabel -> complete-head-gate.test.ts:191. The fixture helpers moved to close-gates.test-helpers.ts rather than being dropped. No fixture-shape or branch-under-test defect found in the slice.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "mutant_candidates": [
+    { "id": "mc-w6-01", "file": "src/review/complete-head-gate.ts", "anchor": "const moved = reviewed !== null && prHead !== null && !sameCommit(reviewed, prHead);", "replacement": "const moved = false;", "kind": "behavior" },
+    { "id": "mc-w6-02", "file": "src/review/complete-head-gate.ts", "anchor": "const merged = typeof pr.state === \"string\" && pr.state.toUpperCase() === \"MERGED\";", "replacement": "const merged = false;", "kind": "behavior" },
+    { "id": "mc-w6-03", "file": "src/review/managed.ts", "anchor": "if (options.headReason !== undefined && headOverride === undefined) {", "replacement": "if (false) {", "kind": "behavior" },
+    { "id": "mc-w6-04", "file": "src/review/managed.ts", "anchor": "if (quote.length < 8 || !/[\\p{L}\\p{N}]/u.test(quote)) {", "replacement": "if (false) {", "kind": "behavior" },
+    { "id": "mc-w6-05", "file": "src/review/managed.ts", "anchor": "typeof recordedHead === \"string\" && recordedHead !== \"\" && ", "replacement": "typeof recordedHead === \"string\" && ", "kind": "behavior" },
+    { "id": "mc-w6-06", "file": "src/review/close-gates.ts", "anchor": "if (failingItems(readiness).length > 0 && input.relaxReadiness !== true) throw", "replacement": "if (false) throw", "kind": "behavior" },
+    { "id": "mc-w6-07", "file": "src/review/close-gates.ts", "anchor": "if (tampered !== undefined) throw new Error(`${REFUSAL} ${tampered}`);", "replacement": "", "kind": "behavior" },
+    { "id": "mc-w6-08", "file": "src/review/close-gates.ts", "anchor": ".filter((error) => error.items.length === 0 || (input.relaxReadiness !== true && !error.items.some((item) => waived.has(item))))", "replacement": ".filter((error) => error.items.length === 0)", "kind": "behavior" },
+    { "id": "mc-w6-09", "file": "src/review/close-gates.ts", "anchor": "const closedPublish = input.action === \"publish\" && manifest.status === \"closed\";", "replacement": "const closedPublish = false;", "kind": "behavior" },
+    { "id": "mc-w6-10", "file": "src/review/readiness.ts", "anchor": "return problem === undefined ? [] : [{ id: String(finding.global_id ?? finding.id), problem }];", "replacement": "return [];", "kind": "behavior" },
+    { "id": "mc-w6-11", "file": "src/review/readiness.ts", "anchor": "const waivers = new Map(sealed.map((waiver) => [waiver.item, waiver]));", "replacement": "const waivers = new Map([...sealed, ...unsealed].map((waiver) => [waiver.item, waiver]));", "kind": "behavior" }
+  ],
+  "mutation_table": [],
+  "mutation_cap": "0 of 11 candidates run (no run-tests tool in this dispatch); 11 not reached, all listed in mutant_candidates. Previous-round gates first: mc-w6-03, 04, 06, 07, 08, 10, 11 answer round-1 findings."
+}
+```
+
+Summary: no findings in slice-06. The mutation pass was not run (read-only dispatch), so the 11 candidates above are proposals for the main session, not results. Static trace shows each removed gate has a replacement and a named test that would go red on its deletion, but that is a reading, not an executed result.

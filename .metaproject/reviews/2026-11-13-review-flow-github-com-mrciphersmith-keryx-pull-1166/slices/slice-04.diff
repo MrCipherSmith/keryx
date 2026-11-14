@@ -1,0 +1,2286 @@
+--- src/review/close-gates.test-helpers.ts
+@@ 1,58 @@
+ // Fixtures shared by the flow 488 close-gate tests: a package that passes every readiness item, so a test breaks exactly one.
+ 
+ import { readFile, writeFile } from "node:fs/promises";
+ import path from "node:path";
+ import type { PrLookup } from "./complete-head-gate";
+ import { READY_COVERAGE_MD, READY_DISPATCH } from "./dispatch.test-helpers";
+ import { createManagedReviewPackage } from "./managed";
++import { findingKey, sealTarget, withVerificationSeals } from "./seals";
++import type { ManagedReviewManifest } from "./types";
+ 
+ export const HEAD = "a".repeat(40);
+ export const MOVED = "b".repeat(40);
+ export const PR = "https://github.com/acme/app/pull/7";
+ export const EVIDENCE = "Evidence level: static only — did not run: tests";
+ export const OPERATOR_WORDS = "the operator read the finding and accepts it for this round";
+ 
+ const ready = { version: 1, scopeReviewed: true, rawReconciled: true, obligations: [], dispatch: READY_DISPATCH };
+ 
+ /** An ingested package whose research, dispatch and coverage.md pass; the report ends with the evidence level. Returns its path relative to `cwd`. */
+ export async function ingestReady(cwd: string, report: string, target: { kind: "pr" | "report"; ref: string; head?: string }, reviewId = "gate-fixture"): Promise<string> {
+   const result = await createManagedReviewPackage({ cwd, mode: "ingest", reportText: `${report}\n${EVIDENCE}\n`, reviewId, target });
+   await writeFile(path.join(path.resolve(cwd, result.path), "research.json"), JSON.stringify(ready));
+   await writeFile(path.join(path.resolve(cwd, result.path), "coverage.md"), READY_COVERAGE_MD);
+   return result.path;
+ }
+ 
+ /** Replaces the package's findings.json. */
+ export const writeFindings = (cwd: string, ref: string, findings: unknown[]): Promise<void> =>
+   writeFile(path.join(path.resolve(cwd, ref), "findings.json"), JSON.stringify(findings, null, 2));
+ 
+-export const readManifest = async (cwd: string, ref: string): Promise<Record<string, any>> =>
++export const readManifest = async (cwd: string, ref: string): Promise<ManagedReviewManifest> =>
+   JSON.parse(await readFile(path.join(path.resolve(cwd, ref), "manifest.json"), "utf8"));
+ 
+ export function lookup(pr: { state?: string; headSha?: string } | null): PrLookup & { calls: string[] } {
+   const calls: string[] = [];
+   const fn = (async (ref: string) => { calls.push(ref); return pr === null ? null : { exists: true, state: pr.state ?? "OPEN", headSha: pr.headSha ?? HEAD }; }) as PrLookup & { calls: string[] };
+   fn.calls = calls;
+   return fn;
+ }
+ 
++/** A verification in the shape review-verifier's merge writes (verdict, method, evidence, verifier). */
++export const VERIFIED = { verdict: "confirmed", method: "site-check", evidence: "enumerated the sites", verifier: "review-verifier" } as const;
++
++/**
++ * Stands in for `review ingest --verifications` in a test whose subject is not the seal: writes the seal keryx writes over
++ * every verification findings.json holds now. A test of the seal itself never calls this (see seals.test.ts).
++ */
++export async function sealVerificationsAsIngest(packageDir: string): Promise<void> {
++  const findings = JSON.parse(await readFile(path.join(packageDir, "findings.json"), "utf8")) as Array<Record<string, unknown>>;
++  const file = path.join(packageDir, "manifest.json");
++  const manifest = JSON.parse(await readFile(file, "utf8")) as ManagedReviewManifest;
++  const applied = findings.filter((finding) => finding.verification !== undefined).map((finding) => ({ key: findingKey(finding), verification: finding.verification }));
++  // An ingest seals the target in the same write; a hand-built fixture that had no seals gets that one too.
++  await writeFile(file, JSON.stringify({ ...manifest, seals: { ...withVerificationSeals(manifest.seals, applied), target: manifest.seals?.target ?? sealTarget(manifest.target) } }, null, 2));
++}
++
+ /** A blocker/major finding nobody verified: item 4 (`verifier`) fails on it. */
+ export const UNVERIFIED_MAJOR = { id: "f-1", severity: "major", title: "unverified claim" };
+
+--- src/review/close-gates.ts
+@@ 1,74 @@
+ // The one gate evaluation `review complete` and `review publish` share (flow 488). Before it, publish ran the readiness
+-// checklist alone: a package whose round record was edited after `review start`, or whose report had no evidence level,
+-// was refused at complete and published without a word. Both commands now get their refusals from here.
++// checklist alone: a package whose round record was edited after `review start`, whose report had no evidence level, or
++// whose research ledger or artifact locators were broken, was refused at complete and published without a word. Both
++// commands now get their refusals from here.
+ 
++import { readFile } from "node:fs/promises";
++import path from "node:path";
++import { readJsonFileOr } from "../lib/json";
+ import { parseEvidenceLevel, REPORT_FIELD_EVIDENCE_LEVEL } from "./evidence-level";
+ import { computeReadiness, failingItems, readinessRefusal, type ReadinessOptions, type ReadinessReport } from "./readiness";
++import { packageResearchErrorsTagged } from "./research";
+ import { roundRecordTampered } from "./round-record";
++import { partitionWaivers, sealProblems } from "./seals";
+ import type { ManagedReviewManifest } from "./types";
+ 
+ export type CloseGateInput = {
+   manifest: Pick<ManagedReviewManifest, "report_fields">;
+   /** report.md as read for this close (the evidence level is parsed from it). */
+   report: string;
+   readiness?: ReadinessOptions | undefined;
+   /** The verb the readiness refusal names: `complete the review` or `publish`. */
+   action: "complete the review" | "publish";
+-  /** `publish --partial`: a failing readiness checklist does not refuse. The tamper check and the evidence level always do. */
+-  relaxReadiness?: boolean | undefined;
+   /**
+-   * Runs after the tamper and evidence checks and before the checklist is computed. `review complete` records the
+-   * operator's waivers and applies the research-error gate here, so the checklist sees them.
++   * `publish --partial`: a failing readiness checklist does not refuse, nor does a research error that belongs to a
++   * readiness item. The tamper check, the seals, the evidence level and an integrity research error (an artifact
++   * locator, a manifest/dispatch mismatch, an unreadable ledger) always do.
+    */
++  relaxReadiness?: boolean | undefined;
++  /** `review complete` only: records the operator's readiness waivers, before the research gate and the checklist read them. */
+   beforeReadiness?: (() => Promise<void>) | undefined;
+ };
+ 
+ export type CloseGateResult = { readiness: ReadinessReport; warnings: string[] };
+ 
+-/** The tamper check, the evidence level, then the readiness checklist. Throws the refusal; returns the checklist and the warnings. */
++const REFUSAL = "Cannot complete managed review;";
++
++const readManifest = async (packageDir: string): Promise<ManagedReviewManifest> => {
++  const manifest = await readJsonFileOr<ManagedReviewManifest | undefined>(path.join(packageDir, "manifest.json"), undefined);
++  if (manifest === undefined) throw new Error(`Managed review package has no readable manifest.json: ${packageDir}`);
++  return manifest;
++};
++
++/**
++ * The research gate (flow 488, review ARCH-1): the research ledger's errors, each tagged with the readiness items that can
++ * waive it. An error with no item always refuses; a tagged one refuses unless the operator's sealed waiver of one of its
++ * items covers it, or `relax` (publish --partial) lets the checklist speak for it. A closed package is not re-held to the
++ * live coverage gate at publish: it passed that gate at its close (readiness.ts Context.liveCoverageGate, same rule).
++ */
++async function researchRefusals(packageDir: string, input: CloseGateInput): Promise<string[]> {
++  const manifest = await readManifest(packageDir);
++  // Unreadable is not "no findings": undefined fails the ledger's "canonical findings must be an array" check.
++  const findings = await readFile(path.join(packageDir, "findings.json"), "utf8").then((text): unknown => JSON.parse(text), () => undefined);
++  const closedPublish = input.action === "publish" && manifest.status === "closed";
++  const errors = await packageResearchErrorsTagged(packageDir, manifest.artifacts, findings, closedPublish ? { coverage: false } : {});
++  const waived = new Set<string>(partitionWaivers(manifest).sealed.map((waiver) => waiver.item));
++  return errors
++    .filter((error) => error.items.length === 0 || (input.relaxReadiness !== true && !error.items.some((item) => waived.has(item))))
++    .map((error) => error.message);
++}
++
++/** The tamper check, the seals, the evidence level, the research gate, then the readiness checklist. Throws the refusal; returns the checklist and the warnings. */
+ export async function evaluateCloseGates(packageDir: string, input: CloseGateInput): Promise<CloseGateResult> {
+   const tampered = roundRecordTampered(packageDir);
+-  if (tampered !== undefined) throw new Error(`Cannot complete managed review; ${tampered}`);
++  if (tampered !== undefined) throw new Error(`${REFUSAL} ${tampered}`);
++  const sealed = sealProblems(await readManifest(packageDir));
++  if (sealed.length > 0) throw new Error(`${REFUSAL} ${sealed.join("; ")}`);
+   const warnings: string[] = [];
+   const evidence = parseEvidenceLevel(input.report);
+   if (!evidence.ok) {
+     const problem = `the report's evidence level is missing or invalid: ${evidence.reason}`;
+     if (input.manifest.report_fields?.includes(REPORT_FIELD_EVIDENCE_LEVEL)) {
+-      throw new Error(`Cannot complete managed review; ${problem}. Add a line \`Evidence level: static only — did not run: <what>\` or \`Evidence level: ran — <what>\` to report.md`);
++      throw new Error(`${REFUSAL} ${problem}. Add a line \`Evidence level: static only — did not run: <what>\` or \`Evidence level: ran — <what>\` to report.md`);
+     }
+     warnings.push(`${problem} (this package predates the field, so it is a warning)`);
+
+--- src/review/managed.ts
+@@ 1,40 @@
+ import { withCompletionLock } from "./completion-lock";
+ import { completionSnapshot } from "./completion-snapshot";
+ import { completionWriter, type CompletionWriter } from "./completion-write";
+ import { validateCompletionHost } from "./completion-host";
+ import { isAutonomousEnv, readRunProfile } from "./run-profile";
+ import type { HostQuestion } from "./types";
+ import { type CoverageWaiver, recordCoverageWaiver } from "./coverage-complete";
+ import { revisionOperand } from "../lib/git-revision";
+ import { flagMissingCitations } from "./rebuttal-citation";
+ import { completeHeadGate, isPrBound, type PrLookup } from "./complete-head-gate";
+ import { REPORT_FIELD_EVIDENCE_LEVEL } from "./evidence-level";
+ import { evaluateCloseGates } from "./close-gates";
++import { findingKey, sealHeadOverride, sealTarget, withVerificationSeals } from "./seals";
+ import { packageCoverageWarnings, packageRolesNotRun } from "./coverage";
+ import { optionalRolesLine, upsertOptionalRolesLine } from "./role-switches";
+ import { packageParityWarnings } from "./parity";
+ import { recordFinishedRound } from "./round-registry";
+ import { withSpendSection } from "./dispatch-usage";
+ import { renderCoverageMd } from "./coverage-md";
+-import { INGEST_SCREENED_FILE, PENDING_RESEARCH, dispatchRuns, packageResearchErrors, packageResearchErrorsTagged, type DispatchRun, type IngestScreened } from "./research";
++import { INGEST_SCREENED_FILE, PENDING_RESEARCH, dispatchRuns, packageResearchErrors, type DispatchRun, type IngestScreened } from "./research";
+ import { waiveReadiness, type ReadinessReport } from "./readiness";
+ import { lstat, mkdir, readFile, readdir, realpath, rename, rm, stat } from "node:fs/promises";
+ import path from "node:path";
+ import { validateAgainstSchemaObject } from "../contracts/validator";
+ import { loadSchema, validateJson } from "../gdskills/contracts";
+ import { pathExists, writeFileAtomic } from "../lib/fs";
+ import { resolveProjectRoot } from "../lib/contained-path";
+ import { clearActiveReview } from "./active-review";
+ import { listFlowDirs, readFlow, resolveFlowDir, slugify } from "../flow/store";
+ import type { FlowState } from "../flow/types";
+ import {
+   mergeVerifications,
+   renderStageCountsMarkdown,
+   type VerificationMergeResult,
+ } from "./verification";
+ import {
+   applyExternalVerdictRule,
+   partitionExternalFindings,
+   type ExternalReclaim,
+ } from "./pr-comments";
+
+--- src/review/managed.ts
+@@ 344,386 @@
+   // checked. A finding with no quote is untouched — it keeps whatever it said,
+   // and says so by carrying no locator.
+   await anchorFindings(reported, input, head);
+   await flagMissingPaths(reported, input, head);
+   refuseUnresolvedLocators(reported, input, head);
+ 
+   // Minted BEFORE the verifier runs, because a claim names a finding by
+   // `global_id` and the key has to exist for it to be resolvable. Round N+1
+   // carries round N's key verbatim; only a finding without one is minted here.
+   assignGlobalIds(reported, reviewId);
+   const chunkPassIngest: ChunkPassIngest = {
+     brought: passFindings.map((finding) => finding.id),
+     alreadyReported: passIn?.alreadyReported.map(describePassFinding) ?? [],
+   };
+   const passKeys = new Set(passFindings.flatMap((finding) => (finding.global_id === undefined ? [] : [finding.global_id])));
+ 
+   // The verifier, which can only delete. In `annotate` — the default for one
+   // release — nothing is removed and a `refuted` verdict is recorded on a finding
+   // that is still reported, so the drop rate is a measured number before it costs
+   // a real finding.
++  // Flow 488 (AC9): the verification each finding carried INTO the merge. Only one the merge applied in this ingest is
++  // sealed below; a `verification` that arrived inside a reviewer's result (or anywhere but the verifier merge) is not.
++  const carriedVerification = new Map(reported.map((finding) => [findingKey(finding), finding.verification]));
+   const merged = mergeVerifications(reported, verifications, {
+     mode: input.verificationMode ?? DEFAULT_VERIFICATION_MODE,
+   });
+ 
+   // AC10. A `refuted` verdict on an EXTERNAL finding does not remove it and does
+   // not dismiss it — it becomes `answered-disagree`, which still owes a reply. A
+   // human asked a question; a machine deciding the question was invalid is not an
+   // answer, and in `filter` mode the finding would otherwise have left the
+   // package entirely with nobody speaking to the person who raised it.
+   const { result: verification, reclaimed: externalReclaims } = applyExternalVerdictRule(merged);
+ 
+   // The findings cap (AC5): 10 per reviewer, blockers exempt, default in code.
+   //
+   // It runs over the SURVIVING reported findings only, and over neither of the
+   // other two channels, for a reason that is the whole point of this pipeline:
+   // `fromVerifierRefutations` and `input.refuted` are the record of what was
+   // raised and then DISMISSED. Truncating those would rebuild by hand the exact
+   // state flow 202 measured — a corpus holding only the survivors of an unlogged
+   // triage, which reports 100% precision whatever the reviewers got right.
+   // A reading cap belongs on the report, never on the dismissals.
+
+--- src/review/managed.ts
+@@ 496,541 @@
+     scopeCounts: input.scopeCounts,
+     preFilterCarried: carried !== undefined,
+     verification: verification.counts,
+     ...(scopeB.record.screen === undefined ? {} : { scopeB: scopeB.record.screen }),
+     findingsCap: { counts: findingsCap.counts, drops: findingsCap.drops },
+     externalRetained: scoped.external.length,
+     ...(input.refuted === undefined ? {} : { roundDismissed: roundDismissed.length }),
+     duplicatesMerged: deduped.merges.reduce((sum, merge) => sum + merge.absorbed.length, 0),
+   });
+   const manifest = buildManifest({
+     input,
+     target: targetWithHead(input.target, head),
+     reviewId,
+     packageDir,
+     flowMatch,
+     coverage,
+     at,
+     filterStats,
+     repairs,
+   });
++  // Flow 488 (AC9): keryx's record of the target it wrote and of the verifications its merge applied (./seals.ts).
++  const applied = findings.flatMap((finding) => {
++    const key = findingKey(finding);
++    return finding.verification !== undefined && carriedVerification.has(key) && carriedVerification.get(key) !== finding.verification ? [{ key, verification: finding.verification }] : [];
++  });
++  manifest.seals = { ...withVerificationSeals(undefined, applied), target: sealTarget(manifest.target) };
+ 
+   const validation = await validateManagedReviewManifest(input.cwd, manifest);
+   if (!validation.valid) {
+     throw new Error(`Invalid managed review manifest: ${validation.errors.map((item) => `${item.path} ${item.message}`).join("; ")}`);
+   }
+ 
+   const collisions = findingKeyCollisions(findings);
+   if (collisions.length > 0) {
+     throw new Error(
+       `Refusing to record two findings under one key: ${collisions.join(
+         "; ",
+       )}. \`global_id\` is \`<reviewId>#<id>\`, so two findings sharing a display id in one package share a key — and a key that denotes two findings is the defect this field exists to remove.`,
+     );
+   }
+ 
+   const unevidenced = unevidencedDispositions(findings);
+   if (unevidenced.length > 0) {
+     throw new Error(
+       `Refusing to record a disposition with no evidence: ${unevidenced.join(
+         ", ",
+
+--- src/review/managed.ts
+@@ 951,999 @@
+  * guessed — which is the whole reason `global_id` exists.
+  */
+ export type FindingDispositionRecord = {
+   finding: string;
+   state: FindingDispositionState;
+   evidence?: string | undefined;
+ };
+ 
+ export type CompleteManagedReviewOptions = {
+   hostQuestion?: HostQuestion | undefined;
+   dispositions?: readonly FindingDispositionRecord[] | undefined;
+   /** Injectable clock, so a note's `Created:` date is deterministic in a test. */
+   now?: Date | undefined;
+   /** The operator's own words waiving every file the coverage gate finds uncovered (`--waive-coverage`). */
+   waiveCoverage?: string | undefined;
+   /** Reads a PR's state and head. Absent means the head and merge check is not made (a library caller with no tracker). */
+   prLookup?: PrLookup | undefined;
+   /**
+    * The commit this round reviewed (`--head`), a 7-40 hex SHA. When given it is what the head gate
+    * checks and what the closed manifest records as `target.head`, in place of the head recorded at
+-   * start. The gate itself is unchanged: a head that is not the PR's head still needs the report
+-   * to name it and say the PR moved.
++   * start. The gate itself is unchanged: a head that is not the PR's head fails readiness item `head`,
++   * which only the operator waives (`--waive head "<quote>"` or the review_waive_readiness card);
++   * nothing written into report.md lifts it. A head other than the recorded one also needs `headReason`.
+    */
+   head?: string | undefined;
+   /**
+    * The operator's own words for a `head` that differs from the one `review start` recorded (`--head-reason`). Required
+-   * then, and refused otherwise: relabelling the reviewed head is the operator's act, not the agent's. The manifest keeps
+-   * both heads and the quote in `head_override`.
++   * then, and refused otherwise (no `head`, or a `head` equal to the recorded one): relabelling the reviewed head is the
++   * operator's act, not the agent's. The manifest keeps both heads and the quote in `head_override`, sealed.
+    */
+   headReason?: string | undefined;
+   /** Readiness items the operator waives in their own words (`--waive <item> "<quote>"`), one entry per flag. */
+   waiveReadiness?: ReadonlyArray<{ items: readonly string[]; quote: string }> | undefined;
+   /** Reads the PR's own file list for readiness item 9; absent means that comparison is not made. */
+   prFiles?: ((ref: string) => Promise<string[] | null>) | undefined;
+ };
+ 
+ export type CompleteManagedReviewResult = {
+   manifest: ManagedReviewManifest;
+   /**
+    * The learning notes this close wrote, and the dismissals it refused to write
+    * one for (flow 207 AC5/AC6).
+    */
+   reviewNotes: ReviewNoteResult;
+   /**
+    * What the package's findings read AFTER this close, counted off disk.
+    *
+    * Returned so the caller can report the state instead of asserting it. The
+    * dispositions this invocation passed are only part of the answer: a package
+
+--- src/review/managed.ts
+@@ 1059,1173 @@
+   if (options.head !== undefined) {
+     if (!isPrBound(stored.target)) {
+       throw new Error(`--head applies to a pull request package; ${stored.reviewId} targets a ${stored.target.kind}.`);
+     }
+     const head = options.head.trim().toLowerCase();
+     if (!/^[0-9a-f]{7,40}$/.test(head)) {
+       throw new Error(`--head "${options.head}" is not a commit SHA. Give the commit this round ran against, 7-40 hex characters.`);
+     }
+     const recordedHead = stored.target.head;
+     if (typeof recordedHead === "string" && recordedHead !== "" && !recordedHead.toLowerCase().startsWith(head) && !head.startsWith(recordedHead.toLowerCase())) {
+       // Flow 488: a head other than the recorded one is a relabel of what the round reviewed; the operator says so in their own words.
+       const quote = (options.headReason ?? "").replace(/-{0,2}head-reason/gi, "").trim();
+       if (quote.length < 8 || !/[\p{L}\p{N}]/u.test(quote)) {
+         throw new Error(`Cannot complete managed review; --head ${head} differs from the head recorded when the round started (${recordedHead}). Relabelling the reviewed head is the operator's decision: give their own words with --head-reason "<operator quote>" (at least 8 characters; a terminal, or --answered-by from a host question), or complete without --head to keep ${recordedHead.slice(0, 7)}.`);
+       }
+       headOverride = { from: recordedHead, to: head, operator_quote: quote, time: (options.now ?? new Date()).toISOString(), ...(options.hostQuestion === undefined ? {} : { confirmedVia: "host-question" as const }) };
+       warnings.push(`--head ${head.slice(0, 7)} replaces the head recorded when the round started (${recordedHead.slice(0, 7)}), on the operator's word; the manifest records head_override`);
+     }
+     manifest = { ...stored, target: { ...stored.target, head }, ...(headOverride === undefined ? {} : { head_override: headOverride }) };
+   }
++  // Review F-001 (logic w3): a quote with nothing to relabel would be recorded nowhere while the close reports success.
++  if (options.headReason !== undefined && headOverride === undefined) {
++    throw new Error(
++      `Cannot complete managed review; --head-reason applies only with --head <sha> naming a commit other than the head recorded when the round started (${stored.target.head ?? "none recorded"}). ` +
++        "Nothing is relabelled here, so the quote would be recorded nowhere: drop --head-reason, or pass the --head it explains.",
++    );
++  }
+   const reportText = await readFile(path.join(packageDir, "report.md"), "utf8");
+   if (options.hostQuestion !== undefined) {
+     if (process.env["KERYX_TOOL_CALL"] === "1" || process.env["KERYX_UNATTENDED"] === "1" || isAutonomousEnv(process.env) || readRunProfile(packageDir)?.mode === "unattended") {
+       throw new Error("review complete --answered-by is refused in a nested agent shell or unattended run; use the operator card.");
+     }
+     const context = {
+       reviewId: manifest.reviewId, head: manifest.target.head ?? "not recorded", report: reportText, manifest: stored,
+       research: await readFile(path.join(packageDir, "research.json"), "utf8").catch((error: NodeJS.ErrnoException) => { if (error.code === "ENOENT") return "{}"; throw error; }),
+       findings: await readFile(path.join(packageDir, "findings.json"), "utf8"),
+       decisions: await readFile(path.join(packageDir, "decisions.md"), "utf8"),
+       coverage: JSON.parse(snapshot) as Record<string, string | null>,
+       dispositions: options.dispositions ?? [], waiveReadiness: options.waiveReadiness ?? [], waiveCoverage: options.waiveCoverage,
+       ...(headOverride === undefined ? {} : { headOverride: { from: headOverride.from, to: headOverride.to, quote: headOverride.operator_quote } }),
+     };
+     const confirmation = validateCompletionHost(context, options.hostQuestion, stored.completionConfirmations ?? []);
+     if (!confirmation.ok) throw new Error(`review complete refused: ${confirmation.reason}`);
+   }
+ 
+   // The head gate reports instead of throwing: the operator's waiver of item `head` is applied below, then the checklist decides.
+   // Its result is handed to the checklist so a refusal is a failing item a waiver covers, and the tracker is asked once.
+   const headGate = options.prLookup === undefined ? undefined : await completeHeadGate({ manifest, lookup: options.prLookup });
+   if (headGate !== undefined) warnings.push(...headGate.warnings);
+   // A warning, never a refusal: leftovers (Not run candidates, held severities, open follow-ups) the report does not name.
+   warnings.push(...(await packageParityWarnings(packageDir, reportText).catch(() => [])));
+   warnings.push(...(await packageCoverageWarnings(packageDir)));
+   // Variant A (poll 283): a pass finding the round does not hold is said, in the output and in report.md, never refused.
+   const passGap = await passNotInRound(packageDir).catch(() => null);
+   const passMissing = passGap?.missing ?? [];
+   if (passMissing.length > 0) warnings.push(missingWarning(passMissing));
+-  const researchFindings = JSON.parse(await readFile(path.join(packageDir, "findings.json"), "utf8"));
+   // The waiver is written first because the coverage gate reads it from research.json; a close that then fails takes it back,
+   // so the next run does not pass the same gate without the flag.
+   let coverageWaiver: CoverageWaiver | undefined;
+   let readiness: ReadinessReport | undefined;
+   let updated: ManagedReviewManifest;
+   let notRun: string[];
+   let estimateLine: string | undefined;
+   await assertUnchanged();
+   try {
+     coverageWaiver = options.waiveCoverage === undefined ? undefined : await recordCoverageWaiver(packageDir, options.waiveCoverage, options.now, options.hostQuestion === undefined ? undefined : "host-question", options.hostQuestion === undefined ? undefined : { hostQuestion: options.hostQuestion }, writeCompletion);
+     const gates = await evaluateCloseGates(packageDir, {
+       manifest,
+       report: reportText,
+       readiness: { prLookup: options.prLookup, prFiles: options.prFiles, ...(headGate === undefined ? {} : { headGate }) },
+       action: "complete the review",
+       beforeReadiness: async () => {
+         for (const waiver of options.waiveReadiness ?? []) {
+           await waiveReadiness(packageDir, waiver.items, waiver.quote, { ...(options.hostQuestion === undefined ? {} : { confirmedVia: "host-question" as const, hostQuestion: options.hostQuestion }), prFiles: options.prFiles, ...(headGate === undefined ? {} : { headGate }), writeCompletion, ...(options.now === undefined ? {} : { now: options.now }) });
+         }
++        // The waivers (and their seals) are on disk now; the research gate and the checklist in evaluateCloseGates read them there.
+         if ((options.waiveReadiness ?? []).length > 0) manifest = { ...(JSON.parse(await readFile(manifestPath, "utf8")) as ManagedReviewManifest), ...(options.head === undefined ? {} : { target: manifest.target, ...(headOverride === undefined ? {} : { head_override: headOverride }) }) };
+-        // The operator's quoted waiver of an item replaces the research gate's refusal for that item only; the checklist below still names it.
+-        const waivedItems = new Set((manifest.readiness_waivers ?? []).map((waiver) => waiver.item));
+-        const researchProblems = (await packageResearchErrorsTagged(packageDir, manifest.artifacts, researchFindings))
+-          .filter((error) => !error.items.some((item) => waivedItems.has(item)))
+-          .map((error) => error.message);
+-        if (researchProblems.length) {
+-          throw new Error(`Cannot complete managed review; ${researchProblems.join("; ")}`);
+-        }
+       },
+     });
+     readiness = gates.readiness;
+     warnings.push(...gates.warnings);
+     await assertUnchanged();
+     const dispositions = options.dispositions ?? [];
+     if (dispositions.length > 0) {
+       await recordDispositions(packageDir, dispositions, writeCompletion);
+     }
++    // Flow 488 (AC9): the head this close records, and the operator's relabel, are sealed in the same write. A package
++    // from before the seals is sealed only when this close records a head of its own (--head), since its target was
++    // never checked against a record.
++    const seals = stored.seals !== undefined || options.head !== undefined
++      ? { ...(manifest.seals ?? {}), target: sealTarget(manifest.target), ...(headOverride === undefined ? {} : { headOverride: sealHeadOverride(headOverride) }) }
++      : manifest.seals;
+     updated = {
+       ...manifest,
++      ...(seals === undefined ? {} : { seals }),
+       status: "closed",
+       ...(options.hostQuestion === undefined ? {} : { completionConfirmations: [...(stored.completionConfirmations ?? []), options.hostQuestion] }),
+       updatedAt: new Date().toISOString(),
+     };
+     const validation = await validateManagedReviewManifest(cwd, updated);
+     if (!validation.valid) {
+       throw new Error(`Invalid managed review manifest: ${validation.errors.map((item) => `${item.path} ${item.message}`).join("; ")}`);
+     }
+     await writeCompletion(manifestPath, `${JSON.stringify(updated, null, 2)}\n`);
+     // Before the round is recorded as finished, because the registry hashes the package.
+     estimateLine = await packageEstimateLine(packageDir, { open: false });
+     notRun = await packageRolesNotRun(packageDir).catch(() => []);
+     // Read again: a readiness waiver above may have put the partial-review header at the top since `reportText` was read.
+     const current = await readFile(path.join(packageDir, "report.md"), "utf8");
+     const marked = upsertEstimateLine(upsertOptionalRolesLine(upsertMissingSection(current, passMissing), optionalRolesLine(notRun)), estimateLine);
+     if (marked !== current) await writeCompletion(path.join(packageDir, "report.md"), marked);
+   } catch (error) {
+     // Any failure before the manifest is closed takes the waiver back, so the next plain close meets the gate again.
+     try { writer.rollback(); }
+     catch (rollbackError) { throw new AggregateError([error, rollbackError], "Review completion failed and rollback was incomplete", { cause: rollbackError }); }
+
+--- src/review/readiness.ts
+@@ 10,60 @@
+ import { shellWord } from "../lib/shell-quote";
+ import { testsNotRunWarning } from "./tests-to-run";
+ import { writeFileAtomic } from "../lib/fs";
+ import { readJsonFileOr } from "../lib/json";
+ import { isCapDrop, isReasonedDrop } from "./blast-radius";
+ import { computeCoverage } from "./coverage-complete";
+ import { hasChunkPlan } from "./chunks";
+ import { packageScopeFiles } from "./coverage";
+ import { completeHeadGate, isPrBound, type HeadGateResult, type PrLookup } from "./complete-head-gate";
+ import { dispatchErrors } from "./dispatch";
+ import { ORCHESTRATOR_LOG, memoryCalls, readToolLog } from "./layers-usage";
+ import { CALLER_ORCHESTRATOR, CALLER_UNATTRIBUTED, ENV_REVIEW_CALLER_TOKEN } from "./orchestrator-log";
+ import { readRunProfile } from "./run-profile";
+ import type { PremiseQuestionDecision } from "./operator-decisions";
+ import { awaitingOperator, latestPremiseDecision, premiseHoldState } from "./premise";
+ import { premiseRecords } from "./verdict";
+ import { packageParityWarnings } from "./parity";
+ import { dispatchRuns, packageCoverageErrors, researchErrors, type DispatchRun } from "./research";
+ import { asRecord as record } from "./record";
+ import { COVERAGE_MD_MARK, parseCoverageEntries } from "./coverage-md";
++import { partitionWaivers, sealWaiver, verificationProblem } from "./seals";
+ import { FINDING_DISPOSITION_STATES, cardPressFields, type CardPress, type ConfirmedVia, type ManagedReviewManifest, type ReadinessWaiver } from "./types";
+ 
+ export const READINESS_ITEMS = [
+   { number: 1, id: "files-covered", title: "every changed file is covered by a wave or a recorded waiver" },
+   { number: 2, id: "blast-radius", title: "no file the blast radius cut is left unreviewed" },
+   { number: 3, id: "reviewers", title: "every planned reviewer was dispatched and its result ingested" },
+   { number: 4, id: "verifier", title: "the verifier checked every blocker and major finding, or the operator waived it" },
+   { number: 5, id: "ledger", title: "the ledger is READY: every obligation has a closure" },
+   { number: 6, id: "coverage-md", title: "coverage.md states the ingest status of each reviewer truthfully" },
+-  { number: 7, id: "head", title: "the report's head matches the PR head" },
++  { number: 7, id: "head", title: "the head recorded for the round matches the PR head" },
+   { number: 8, id: "report-names", title: "pending mutation candidates and parity warnings are named in the report" },
+   { number: 9, id: "pr-files", title: "the changed-file count equals the PR's own file list" },
+   { number: 10, id: "memory-outside-stage", title: "the orchestrator read memory only in its own memory stage" },
+   { number: 11, id: "premise-decisions", title: "every held finding has an operator decision" },
+   { number: 12, id: "quotes-located", title: "every open finding's quote is placed in its file, or the finding is answered" },
+ ] as const;
+ 
+ export type ReadinessItemId = (typeof READINESS_ITEMS)[number]["id"];
+ export type ReadinessStatus = "pass" | "fail" | "waived";
+ 
+ export type ReadinessItem = {
+   number: number;
+   id: ReadinessItemId;
+   title: string;
+   status: ReadinessStatus;
+   evidence: string;
+   /** The exact command (or edit) that repairs a failing item. Absent when the item passes. */
+   repair?: string;
+   /** The operator's own words, for a waived item. */
+   waiver?: { operatorQuote: string; time: string };
+
+--- src/review/readiness.ts
+@@ 246,269 @@
++  const forged = unverified.filter((entry) => entry.problem !== "no verification");
++  const forgedNote = forged.length === 0 ? "" : `; findings.json holds ${some(forged.map((entry) => `${entry.id} (${entry.problem})`))}, which is not honoured`;
+   return bad(
+-    `${unverified.length} of ${heavy.length} blocker/major finding(s) carry no verification`,
++    `${unverified.length} of ${heavy.length} blocker/major finding(s) carry no verification keryx recorded${forgedNote}`,
+     `run the verifier (review-verifier) on them, or the operator waives it: in keryx shell call the review_waive_readiness tool with item verifier; in a terminal run keryx review complete ${ctx.arg} --waive verifier "<operator quote>"`,
+   );
+ }
+ 
+ /**
+  * Flow 459. A finding the premise judge held (`challenged` / `owner-decision`) is a question for the operator, and a
+  * review with an unanswered question is not finished: it is neither fixed nor dismissed. The repair is the answer, not a
+  * waiver of the question.
+  */
+ function premiseDecisionsCheck(ctx: Context): Verdict {
+   const { records, decisions } = ctx.premise;
+   const held = records.filter((finding) => premiseHoldState(finding, decisions) !== "none");
+   if (held.length === 0) return ok("no finding is held by the premise judge");
+   const awaiting = awaitingOperator(records, decisions);
+   if (awaiting.length === 0) {
+     // Flow 467: an answer the agent recorded from the host's own question is not a card press; say so and from where.
+     const hostQuestions = held.flatMap((finding) => {
+       const decision = latestPremiseDecision(finding, decisions);
+       return decision?.confirmedVia === "host-question" && decision.hostQuestion !== undefined ? [`${decision.hostQuestion.source}:${decision.hostQuestion.ref}`] : [];
+     });
+
+--- src/review/readiness.ts
+@@ 467,494 @@
+     dispatched: manifest.artifacts.reviewerDispatch !== undefined || manifest.artifacts.research !== undefined,
+     coverageMd,
+     coverageMdGated: coverageMd?.includes(COVERAGE_MD_MARK) === true || manifest.status !== "closed",
+     liveCoverageGate: manifest.status !== "closed",
+   };
+   const { files, radius } = await filesChecks(ctx);
+   const verdicts: Record<ReadinessItemId, Verdict> = {
+     "files-covered": files,
+     "blast-radius": radius,
+     reviewers: await reviewersCheck(ctx),
+     verifier: verifierCheck(ctx),
+     ledger: ledgerCheck(ctx),
+     "coverage-md": coverageMdCheck(ctx),
+     head: await headCheck(ctx, options),
+     "report-names": await reportNamesCheck(ctx),
+     "pr-files": await prFilesCheck(ctx, options),
+     "memory-outside-stage": await memoryStageCheck(ctx),
+     "premise-decisions": premiseDecisionsCheck(ctx),
+     "quotes-located": quotesLocatedCheck(ctx),
+   };
+-  const waivers = new Map((manifest.readiness_waivers ?? []).map((waiver) => [waiver.item, waiver]));
++  // Flow 488 (AC9): only a waiver keryx sealed when it recorded it is honoured; one written into manifest.json by hand
++  // (or one from before the seals existed) leaves its item failing, and the item says so.
++  const { sealed, unsealed } = partitionWaivers(manifest);
++  const waivers = new Map(sealed.map((waiver) => [waiver.item, waiver]));
++  const unsealedItems = new Set(unsealed.map((waiver) => waiver.item));
+   const items: ReadinessItem[] = READINESS_ITEMS.map((spec) => {
+     const verdict = verdicts[spec.id];
+     const waiver = waivers.get(spec.id);
+
+--- src/review/readiness.ts
+@@ 543,582 @@
+   if (item === undefined) return "";
+   const state = item.evidence.startsWith("no orchestrator tool log") ? "none" : "recorded";
+   const unattributed = /(\d+) unattributed memory call/.exec(item.evidence)?.[1];
+   return `orchestrator log: ${state}${unattributed === undefined ? "" : `, ${unattributed} unattributed`}`;
+ }
+ 
+ /** What `complete` and `publish` refuse with. */
+ export function readinessRefusal(report: ReadinessReport, action: string): string {
+   const failing = failingItems(report);
+   return [
+     `Cannot ${action}; the readiness checklist has ${failing.length} failing item(s):`,
+     ...failing.flatMap((item) => [`  ${item.number}. ${item.id}: ${item.evidence}`, `     repair: ${item.repair}`]),
+     action === "publish"
+       ? "Repair them, or publish a partial review (the page says what is missing): `keryx review publish <review> --partial`."
+       : "Repair them, or waive an item in the operator's own words: `keryx review complete <review> --waive <item> \"<operator quote>\"`.",
+   ].join("\n");
+ }
+ 
+ const PARTIAL_LINE = /^Partial review:/;
+ 
+-/** The report without its waiver header, for checks that read the report's own first line. */
+-export const withoutPartialHeader = (report: string): string => report.split(/\r?\n/).filter((line) => !PARTIAL_LINE.test(line)).join("\n");
+-
+ /** The first lines of report.md: one line per waived item, replacing any earlier set. */
+ export function partialHeader(waivers: readonly ReadinessWaiver[]): string[] {
+   return waivers.map((waiver) => `Partial review: ${waiver.item} waived by the operator: ${waiver.operator_quote}`);
+ }
+ 
+ async function writePartialHeader(packageDir: string, waivers: readonly ReadinessWaiver[], write: CompletionWriter = writeFileAtomic): Promise<void> {
+   const file = path.join(packageDir, "report.md");
+   const lines = (await readFile(file, "utf8").catch(() => "")).split(/\r?\n/);
+   while (lines.length > 0 && (PARTIAL_LINE.test(lines[0]!) || (lines[0]!.trim() === "" && PARTIAL_LINE.test(lines[1] ?? "")))) lines.shift();
+   while (lines.length > 0 && lines[0]!.trim() === "") lines.shift();
+   await write(file, `${[...partialHeader(waivers), "", ...lines].join("\n").replace(/\n+$/, "")}\n`);
+ }
+ 
+ /**
+  * Waives the named failing items in the operator's own words: written into the manifest and into the first lines of
+  * report.md. A quote that is a flag name, a one-word "ok" or too short is refused, as the coverage waiver does.
+  * `premise-decisions` (item 11) is the one item that cannot be waived: a held finding needs its own answer
+  * (`keryx review decide-premise` / the `review_decide_premise` card), which says uphold or dismiss for that finding; a
+  * blanket quote would let every held finding through unanswered.
+  */
+
+--- src/review/readiness.ts
+@@ 589,616 @@
+   if (quote.length < MIN_WAIVER_QUOTE_CHARS || !/[\p{L}\p{N}]/u.test(quote)) {
+     throw new Error(`--waive needs the operator's own words as its value: at least ${MIN_WAIVER_QUOTE_CHARS} characters, with letters or digits in them.`);
+   }
+   const ids = selectors.map((selector) => {
+     const id = readinessItemId(selector);
+     if (id === undefined) throw new Error(`--waive: "${selector}" is not a readiness item. Items: ${READINESS_ITEMS.map((item) => `${item.number} ${item.id}`).join(", ")}.`);
+     return id;
+   });
+   if (ids.includes("premise-decisions")) {
+     throw new Error(`--waive: ${PREMISE_DECISIONS_NOT_WAIVABLE}`);
+   }
+   const report = await computeReadiness(packageDir, options);
+   const notFailing = ids.filter((id) => report.items.find((item) => item.id === id)?.status === "pass");
+   if (notFailing.length > 0) throw new Error(`--waive: ${notFailing.join(", ")} already pass${notFailing.length === 1 ? "es" : ""}; there is nothing to waive.`);
+   const manifestPath = path.join(packageDir, "manifest.json");
+   const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as ManagedReviewManifest;
+   const time = (options.now ?? new Date()).toISOString();
+   const kept = (manifest.readiness_waivers ?? []).filter((waiver) => !(ids as string[]).includes(waiver.item));
+   const added: ReadinessWaiver[] = ids.map((item) => ({ item, operator_quote: quote, time, ...(options.confirmedVia === undefined ? {} : { confirmedVia: options.confirmedVia }), ...cardPressFields(options), ...hostQuestionFields(options) }));
+   const all = [...kept, ...added].sort((a, b) => READINESS_ITEMS.findIndex((i) => (i.id as string) === a.item) - READINESS_ITEMS.findIndex((i) => (i.id as string) === b.item));
++  // Flow 488 (AC9): each waiver this call records is sealed; a kept waiver keeps the seal it had (an unsealed one stays unsealed).
++  const keptSeals = Object.fromEntries(Object.entries(manifest.seals?.readinessWaivers ?? {}).filter(([item]) => !(ids as string[]).includes(item)));
++  const readinessWaivers = { ...keptSeals, ...Object.fromEntries(added.map((waiver) => [waiver.item, sealWaiver(waiver)])) };
+   const write = options.writeCompletion ?? writeFileAtomic;
+-  await write(manifestPath, `${JSON.stringify({ ...manifest, readiness_waivers: all }, null, 2)}\n`);
++  await write(manifestPath, `${JSON.stringify({ ...manifest, readiness_waivers: all, seals: { ...(manifest.seals ?? {}), readinessWaivers } }, null, 2)}\n`);
+   await writePartialHeader(packageDir, all, write);
+   return added;
+ }
+
+--- src/review/research.ts
+@@ 1,29 @@
+ import { dispatchErrors } from "./dispatch";
+ import { pendingMutants } from "./mutate";
+ import { coverageErrors, packageChangedLines, packageHasBlastRadius, packageHasPrContext, packageScopeFiles, projectRootOfPackage } from "./coverage";
+ import { coverageGateErrors } from "./coverage-complete";
+ import { readFile } from "node:fs/promises";
+ import path from "node:path";
+ import { asRecord, dispatchRunRecords } from "./record";
++// Type only: readiness.ts imports this module at runtime, so the item ids come across as a type and nothing else.
++import type { ReadinessItemId } from "./readiness";
+ export const PENDING_RESEARCH = { version: 1, scopeReviewed: false, rawReconciled: false, obligations: [] };
+ 
+ /**
+  * Flow 460: where `review ingest` records the findings it kept out of findings.json (the scope-B screen), relative to the
+  * package. `review ledger build` reads it and closes each such raw finding `out-of-scope` with the screen's reason, so an
+  * ingest that screens findings out does not leave the research ledger stale. (A finding the duplicate merge folded into
+  * another is found through the survivor's `merged_from` in findings.json.)
+  */
+ export const INGEST_SCREENED_FILE = "research-evidence/ingest-screened.json";
+ 
+ /** One finding the ingest screened out: its display id and global_id, who raised it, and the screen's rule and words. */
+ export type IngestScreened = { id: string; global_id?: string | undefined; reviewer?: string | undefined; rule: string; detail: string };
+ 
+ /** The screened findings of an {@link INGEST_SCREENED_FILE} record, read leniently: [] for anything that is not one. */
+ export function ingestScreenedOf(record: unknown): IngestScreened[] {
+   const list = asRecord(record)?.screened;
+   if (!Array.isArray(list)) return [];
+   return list.flatMap((entry): IngestScreened[] => {
+     const row = asRecord(entry);
+     if (row === undefined) return [];
+
+--- src/review/research.ts
+@@ 111,154 @@
+     changedLines: await packageChangedLines(packageDir),
+     blastRadius: await packageHasBlastRadius(packageDir),
+     prContext: packageHasPrContext(packageDir),
+     pendingMutants: (await pendingMutants(packageDir)).length,
+   });
+ }
+ 
+ /**
+  * Absent artifact identifies packages predating this contract, not completed research. `completeness: false` skips the
+  * layer/chunk coverage-completeness gate, for a round that was closed before that gate existed.
+  */
+ export async function packageResearchErrors(packageDir: string, artifacts: unknown, findings: unknown, options: { coverage?: boolean; completeness?: boolean } = {}): Promise<string[]> {
+   return (await packageResearchErrorsTagged(packageDir, artifacts, findings, options)).map((error) => error.message);
+ }
+ 
+ /**
+  * A research error and the readiness items it belongs to (flow 488). An operator waiver of an item removes the errors
+  * tagged with it and no others; an error with no items (an artifact locator, a manifest/research mismatch, an unreadable
+  * ledger) is an integrity failure no waiver covers.
+  */
+-export type TaggedResearchError = { message: string; items: readonly string[] };
++export type TaggedResearchError = { message: string; items: readonly ReadinessItemId[] };
+ 
+ const untagged = (messages: readonly string[]): TaggedResearchError[] => messages.map((message) => ({ message, items: [] }));
+-const tagged = (messages: readonly string[], items: readonly string[]): TaggedResearchError[] => messages.map((message) => ({ message, items }));
++const tagged = (messages: readonly string[], items: readonly ReadinessItemId[]): TaggedResearchError[] => messages.map((message) => ({ message, items }));
+ 
+ /** The research errors of {@link packageResearchErrors}, each with the readiness items that can waive it. */
+ export async function packageResearchErrorsTagged(packageDir: string, artifacts: unknown, findings: unknown, options: { coverage?: boolean; completeness?: boolean } = {}): Promise<TaggedResearchError[]> {
+   const a = asRecord(artifacts) ?? {};
+   if (a.research === undefined) return a.reviewerDispatch === undefined ? [] : untagged(["dispatch requires a research artifact"]);
+   if (a.reviewerDispatch !== undefined && a.reviewerDispatch !== "research.json") return untagged(["invalid dispatch artifact locator"]);
+   if (a.research !== "research.json") return untagged(["invalid research artifact locator"]);
+   try {
+     const ledger = JSON.parse(await readFile(path.join(packageDir, "research.json"), "utf8"));
+     // A dispatch block in research.json is checked whatever the manifest says: dropping the manifest's locator must not skip the gate.
+     const recorded = ledger?.dispatch !== undefined;
+     const checked = a.reviewerDispatch !== undefined || recorded;
+     const mismatch = recorded && a.reviewerDispatch === undefined
+       ? ['research.json records a reviewer dispatch but manifest.json does not declare it: restore artifacts.reviewerDispatch "research.json"']
+       : [];
+     const dispatch = checked ? dispatchErrors(ledger?.dispatch) : [];
+     const coverage = !checked || options.coverage === false || dispatch.length
+       ? []
+       : await packageCoverageErrors(packageDir, ledger?.dispatch);
+     const completeness = !checked || options.coverage === false || options.completeness === false || dispatch.length ? [] : await coverageGateErrors(packageDir, ledger);
+
+--- src/review/round-record.ts
+@@ 139,179 @@
+     roundSha256: sha256Of(roundBody),
+     priorFindingsSha256: sha256Of(priorBody),
+     ...(identity.targetKey === undefined ? {} : { targetKey: identity.targetKey }),
+     ...(identity.targetBase === undefined ? {} : { targetBase: identity.targetBase }),
+   };
+   await writeFileAtomic(manifestFile, `${JSON.stringify({ ...manifest, roundRecord: stamp }, null, 2)}\n`);
+ }
+ 
+ /** sha256 of the files that identify a finished round: what the local round registry records and compares. */
+ export type PackageHashes = { manifestSha256: string; findingsSha256: string | null; roundRecordSha256: string | null };
+ 
+ /**
+  * The manifest fields that say WHICH round a package is: what it reviewed (target with its head, the flow, the mode)
+  * and what `review start` stamped (operator gate, round record hashes, target key). Lifecycle fields that legitimately
+  * change after a round finished — status, updatedAt, readiness waivers, coverage, cost, report fields, artifacts — are
+  * left out of the hash, so `review learn` closing a package does not make keryx distrust a round it ran.
+  */
+ export const MANIFEST_IDENTITY_FIELDS = ["schemaVersion", "reviewId", "mode", "target", "flow", "createdAt", "operatorGate", "roundRecord"] as const;
+ 
+ /** JSON with object keys sorted at every level: one spelling per value, whatever order a writer used. */
+-function canonicalJson(value: unknown): string {
++export function canonicalJson(value: unknown): string {
+   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+   if (value !== null && typeof value === "object") {
+     const entries = Object.entries(value).filter(([, item]) => item !== undefined).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+     return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`).join(",")}}`;
+   }
+   return JSON.stringify(value);
+ }
+ 
+ /** sha256 of a manifest's identity fields; an unparseable manifest hashes its raw text (it then matches nothing else). */
+ export function manifestIdentitySha256(manifestText: string): string {
+   let parsed: Record<string, unknown> | undefined;
+   try {
+     parsed = record(JSON.parse(manifestText));
+   } catch {
+     parsed = undefined;
+   }
+   if (parsed === undefined) return sha256Of(manifestText);
+   const identity: Record<string, unknown> = {};
+   for (const field of MANIFEST_IDENTITY_FIELDS) if (parsed[field] !== undefined) identity[field] = parsed[field];
+   return sha256Of(canonicalJson(identity));
+
+--- src/review/seals.ts
+@@ 1,93 @@
++// Flow 488 (AC9, review SEC-1): tamper evidence for what the close gates honour. The gates read operator decisions and
++// verifier results back from package JSON an agent can write with a file tool (manifest.json, findings.json). keryx's
++// own write paths therefore record, beside each such decision, a sha256 digest over its content (`manifest.seals`):
++//
++//   - `target`             review start/attach/ingest (createManagedReviewPackage), and `review complete` when it records
++//                          the head (`--head`, with `--head-reason` when it relabels);
++//   - `readinessWaivers`   `review complete --waive` and the review_waive_readiness / review_complete cards (waiveReadiness);
++//   - `headOverride`       `review complete --head <sha> --head-reason "<quote>"` (terminal or --answered-by);
++//   - `verifications`      `review ingest --verifications`: only the verifications the verifier merge applied in that ingest.
++//
++// The gates (close-gates.ts, readiness.ts) honour a waiver, a head override or a verification only when its digest
++// matches. This is the level of `roundRecordTampered`: evidence that a file was edited outside keryx, not a signature —
++// an agent that recomputes the digest the way this module does is not stopped (cryptography is out of scope, flow 488
++// description). Packages written before the seals existed carry none: their waivers and verifications are not honoured
++// (the operator accepted that such a closed package may read NOT READY; the flow 488 CHANGELOG entry says so), and their target
++// is not checked, since there is no record of it to check against.
++
++import { createHash } from "node:crypto";
++import { isPrBound } from "./complete-head-gate";
++import { asRecord as record } from "./record";
++import { canonicalJson } from "./round-record";
++import type { HeadOverride, ManagedReviewManifest, ManagedReviewTarget, ReadinessWaiver, ReviewSeals } from "./types";
++
++const SEAL_DOMAIN = "keryx-review-seal/v1";
++
++/** sha256 over the canonical JSON of a decision, under a domain and kind, so one kind's digest never matches another's. */
++export function sealDigest(kind: string, content: unknown): string {
++  return createHash("sha256").update(canonicalJson({ seal: SEAL_DOMAIN, kind, content })).digest("hex");
++}
++
++/** The target fields the head gate reads. */
++export const sealTarget = (target: ManagedReviewTarget): string => sealDigest("target", { kind: target.kind, ref: target.ref, head: target.head ?? null });
++export const sealWaiver = (waiver: ReadinessWaiver): string => sealDigest("readiness-waiver", waiver);
++export const sealHeadOverride = (override: HeadOverride): string => sealDigest("head-override", override);
++
++/** The key a finding's verification seal is stored under: its `global_id`, else its display `id`. */
++export function findingKey(finding: unknown): string {
++  const raw = record(finding);
++  return String(raw?.global_id ?? raw?.id ?? "");
++}
++
++export const sealVerification = (key: string, verification: unknown): string => sealDigest("verification", { finding: key, verification });
++
++/** The seals of a manifest with the verifications of `findings` (each `{key, verification}`) added. */
++export function withVerificationSeals(seals: ReviewSeals | undefined, findings: ReadonlyArray<{ key: string; verification: unknown }>): ReviewSeals {
++  const verifications = { ...(seals?.verifications ?? {}) };
++  for (const { key, verification } of findings) verifications[key] = sealVerification(key, verification);
++  return { ...(seals ?? {}), ...(findings.length === 0 && seals?.verifications === undefined ? {} : { verifications }) };
++}
++
++/** Whether keryx sealed this waiver as it now reads. */
++export function waiverSealed(manifest: Pick<ManagedReviewManifest, "seals">, waiver: ReadinessWaiver): boolean {
++  return manifest.seals?.readinessWaivers?.[waiver.item] === sealWaiver(waiver);
++}
++
++/** The waivers keryx sealed, and the ones it did not (or that changed since). */
++export function partitionWaivers(manifest: Pick<ManagedReviewManifest, "seals" | "readiness_waivers">): { sealed: ReadinessWaiver[]; unsealed: ReadinessWaiver[] } {
++  const sealed: ReadinessWaiver[] = [];
++  const unsealed: ReadinessWaiver[] = [];
++  for (const waiver of manifest.readiness_waivers ?? []) (waiverSealed(manifest, waiver) ? sealed : unsealed).push(waiver);
++  return { sealed, unsealed };
++}
++
++const filled = (value: unknown): boolean => typeof value === "string" && value.trim() !== "";
++
++/** Why a finding's verification does not count, or undefined when it does: the producer's shape, and keryx's seal over it. */
++export function verificationProblem(manifest: Pick<ManagedReviewManifest, "seals">, finding: Record<string, unknown>): string | undefined {
++  const verification = record(finding.verification);
++  if (verification === undefined) return "no verification";
++  if (!filled(verification.verdict) || !filled(verification.method) || !filled(verification.evidence)) return "a verification without verdict, method and evidence";
++  const key = findingKey(finding);
++  if (manifest.seals?.verifications?.[key] !== sealVerification(key, finding.verification)) return "a verification keryx did not record (no matching seal: it was not applied by `keryx review ingest --verifications`)";
++  return undefined;
++}
++
++/**
++ * Why the manifest's target or head override cannot be trusted, or undefined. Read by the close gates of both
++ * `review complete` and `review publish`. A package with no seals at all predates them, and its target is not checked.
++ */
++export function sealProblems(manifest: Pick<ManagedReviewManifest, "seals" | "target" | "head_override">): string[] {
++  const problems: string[] = [];
++  if (manifest.head_override !== undefined && manifest.seals?.headOverride !== sealHeadOverride(manifest.head_override)) {
++    problems.push(
++      "manifest.json head_override does not match a seal keryx wrote: a head is relabelled only by `keryx review complete <review> --head <sha> --head-reason \"<operator quote>\"` (a terminal, or --answered-by), never by editing manifest.json",
++    );
++  }
++  if (manifest.seals !== undefined && isPrBound(manifest.target) && manifest.seals.target !== sealTarget(manifest.target)) {
++    problems.push(
++      `manifest.json target (head ${manifest.target.head ?? "not recorded"}) does not match the seal keryx wrote when it last recorded the target: the reviewed head changes only through \`keryx review complete <review> --head <sha> --head-reason "<operator quote>"\`, never by editing manifest.json`,
++    );
++  }
++  return problems;
++}
+
+--- src/review/types.ts
+@@ 113,164 @@
+ export type HostQuestion = { source: HostQuestionSource; ref: string; questionText: string; answerText: string; time: string };
+ 
+ /** A complete host question as a stored record must carry it: a known source and a non-blank ref, both texts and the time. */
+ export function isHostQuestion(value: unknown): value is HostQuestion {
+   if (value === null || typeof value !== "object") return false;
+   const hq = value as Record<string, unknown>;
+   const filled = (field: unknown): boolean => typeof field === "string" && field.trim() !== "";
+   return (HOST_QUESTION_SOURCES as readonly unknown[]).includes(hq["source"]) && filled(hq["ref"]) && filled(hq["questionText"]) && filled(hq["answerText"]) && filled(hq["time"]);
+ }
+ 
+ /** The spread that carries `hostQuestion` onto a record: present only when the source has one. */
+ export function hostQuestionFields(source: { hostQuestion?: HostQuestion | undefined } | undefined): { hostQuestion?: HostQuestion } {
+   return source?.hostQuestion === undefined ? {} : { hostQuestion: source.hostQuestion };
+ }
+ 
+ export type ReadinessWaiver = { hostQuestion?: HostQuestion; item: string; operator_quote: string; time: string; confirmedVia?: ConfirmedVia | undefined } & CardPress;
+ 
+ /** The operator's act of relabelling the reviewed head: the head recorded at start, the one recorded instead, their words. */
+ export type HeadOverride = { from: string; to: string; operator_quote: string; time: string; confirmedVia?: ConfirmedVia | undefined };
+ 
++/**
++ * Flow 488 (AC9): the sha256 digests keryx writes over what the close gates honour, each when keryx's own command path
++ * recorded it: the target as last recorded (start/ingest, or `complete --head`), each readiness waiver by item, the head
++ * override, and each verification it applied, keyed by the finding's `global_id` (else `id`). See review/seals.ts.
++ */
++export type ReviewSeals = {
++  target?: string | undefined;
++  readinessWaivers?: Record<string, string> | undefined;
++  headOverride?: string | undefined;
++  verifications?: Record<string, string> | undefined;
++};
++
+ export type ManagedReviewManifest = {
+   schemaVersion: 1;
+   completionConfirmations?: HostQuestion[];
+   reviewId: string;
+   mode: ManagedReviewMode;
+   status: ReviewPackageStatus;
+   target: ManagedReviewTarget;
+   flow?: ManagedReviewFlowRef | undefined;
+   artifacts: {
+     scope: string;
+     coverage: string;
+     report: string;
+     findings: string;
+     learning: string;
+     decisions: string;
+     /** Package-local evidence locators; absent only on legacy packages. */
+     research?: string | undefined;
+     reviewerDispatch?: string | undefined;
+   };
+   coverage: ReviewCoverageEntry[];
+
+--- src/review/types.ts
+@@ 166,207 @@
+    * What this round filtered, in a form a machine can check (roadmap §5.1).
+    *
+    * It lives on the MANIFEST rather than in a seventh artifact file for the same
+    * reason the stage counts went into `scope.md`: `missingArtifacts` names the
+    * six files a package must have, and adding a seventh would strand every
+    * package already on disk. The manifest is read back by
+    * {@link module:review/managed.getManagedReviewStatus} and by the review
+    * completion gate, so a record put here already has readers.
+    *
+    * Optional because every package written before flow 207 has none, and absent
+    * is the honest reading of those: nothing measured them. It is NOT optional in
+    * practice — every ingest writes it — which is exactly the state `target.head`
+    * was in before a producer was built for it, so `keryx review status` reads it
+    * back and says `not recorded` rather than letting the silence pass.
+    */
+   filter_stats?: ReviewFilterStats | undefined;
+   /** Readiness items waived by the operator; each also heads report.md as a "Partial review" line. */
+   readiness_waivers?: ReadinessWaiver[] | undefined;
+   /** Set when `review complete --head` recorded a head other than the one `review start` recorded (flow 488). */
+   head_override?: HeadOverride | undefined;
++  /** Flow 488 (AC9): digests keryx wrote over the decisions the close gates honour (see review/seals.ts). */
++  seals?: ReviewSeals | undefined;
+   /**
+    * Flow 457: the operator-gate version `review start|attach` created the package with (see review/run-profile.ts).
+    * Absent on ingest packages and on packages that predate the gate.
+    */
+   operatorGate?: number | undefined;
+   /** Flow 458: what `review start|attach` stamped beside round.json (see review/round-record.ts `RoundStamp`). */
+   roundRecord?: { roundSha256: string; priorFindingsSha256: string; targetKey?: string | undefined; targetBase?: string | undefined } | undefined;
+   /**
+    * Fields the ingest supplied rather than the reviewer authoring them.
+    * Written only when something was repaired — see
+    * {@link module:review/repair}.
+    */
+   repairs?: FindingRepair[] | undefined;
+   /**
+    * Report fields this package's report is required to carry. Written by every
+    * ingest from the release that introduced `evidence-level`; absent means the
+    * package predates the field, and `complete` warns instead of refusing.
+    */
+   report_fields?: string[] | undefined;
+   /**
+
+--- src/review/complete-head-gate.test.ts
+@@ 1,64 @@
+ import { afterEach, beforeEach, expect, test } from "bun:test";
+-import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
++import { mkdtemp, readFile, rm } from "node:fs/promises";
+ import os from "node:os";
+ import path from "node:path";
+-import { READY_DISPATCH, READY_COVERAGE_MD } from "./dispatch.test-helpers";
++import { HEAD, MOVED, PR, ingestReady, lookup } from "./close-gates.test-helpers";
+ import { completeHeadGate, type PrLookup } from "./complete-head-gate";
+-import { completeManagedReview, createManagedReviewPackage } from "./managed";
++import { completeManagedReview } from "./managed";
+ import { computeReadiness, waiveReadiness } from "./readiness";
+ 
+-const ready = { version: 1, scopeReviewed: true, rawReconciled: true, obligations: [], dispatch: READY_DISPATCH };
+-const HEAD = "a".repeat(40);
+-const MOVED = "b".repeat(40);
+-const EVIDENCE = "Evidence level: static only — did not run: tests";
+-const PR = "https://github.com/acme/app/pull/7";
+ const REASON = "the operator confirms this round ran against the PR head";
+ 
+ let dir = "";
+ beforeEach(async () => { dir = await mkdtemp(path.join(os.tmpdir(), "keryx-head-gate-")); });
+ afterEach(async () => { await rm(dir, { recursive: true, force: true }); });
+ 
+-async function ingest(report: string, target: { kind: "pr" | "report"; ref: string; head?: string }): Promise<string> {
+-  const result = await createManagedReviewPackage({ cwd: dir, mode: "ingest", reportText: `${report}\n${EVIDENCE}\n`, reviewId: "head-gate", target });
+-  await writeFile(path.join(path.resolve(dir, result.path), "research.json"), JSON.stringify(ready));
+-  await writeFile(path.join(path.resolve(dir, result.path), "coverage.md"), READY_COVERAGE_MD);
+-  return result.path;
+-}
+-
+-function lookup(pr: { state?: string; headSha?: string } | null): PrLookup & { calls: string[] } {
+-  const calls: string[] = [];
+-  const fn = (async (ref: string) => { calls.push(ref); return pr === null ? null : { exists: true, state: pr.state ?? "OPEN", headSha: pr.headSha ?? HEAD }; }) as PrLookup & { calls: string[] };
+-  fn.calls = calls;
+-  return fn;
+-}
++const ingest = (report: string, target: { kind: "pr" | "report"; ref: string; head?: string }, reviewId = "head-gate"): Promise<string> =>
++  ingestReady(dir, report, target, reviewId);
+ 
+ const WAIVE_HEAD = [{ items: ["head"], quote: "the operator accepts that the PR moved after the round" }];
+ 
+ test("a merged PR refuses the close, and the repair is the operator waiver, not an edit of report.md", async () => {
+   const ref = await ingest("# Review of the change\nNo findings.", { kind: "pr", ref: PR, head: HEAD });
+   const error = await completeManagedReview(dir, ref, { prLookup: lookup({ state: "MERGED" }) }).catch((e: Error) => e);
+   expect(error).toBeInstanceOf(Error);
+   expect((error as Error).message).toMatch(/merged/i);
+   expect((error as Error).message).toContain("--waive head");
+   expect((error as Error).message).not.toContain("first line");
+ });
+ 
+ test("a head that moved since the round refuses, and names both SHAs", async () => {
+   const ref = await ingest("# Review of the change\nNo findings.", { kind: "pr", ref: PR, head: HEAD });
+   const error = await completeManagedReview(dir, ref, { prLookup: lookup({ headSha: MOVED }) }).catch((e: Error) => e);
+   expect(error).toBeInstanceOf(Error);
+   expect((error as Error).message).toContain(HEAD.slice(0, 7));
+   expect((error as Error).message).toContain(MOVED.slice(0, 7));
+ });
+ 
+ test("a first line that names the reviewed SHA and says the PR moved no longer lets it through", async () => {
+   const ref = await ingest(`Reviewed ${HEAD.slice(0, 7)} — the PR has since merged.\nNo findings.`, { kind: "pr", ref: PR, head: HEAD });
+   const error = await completeManagedReview(dir, ref, { prLookup: lookup({ state: "MERGED", headSha: MOVED }) }).catch((e: Error) => e);
+   expect(error).toBeInstanceOf(Error);
+-  expect((error as Error).message).toContain("head");
++  // The refusal is readiness item head's, and its repair is the operator's waiver: the report's line changed nothing.
++  expect((error as Error).message).toMatch(/merged/i);
++  expect((error as Error).message).toContain("--waive head");
+   const onDisk = JSON.parse(await readFile(path.join(path.resolve(dir, ref), "manifest.json"), "utf8"));
+   expect(onDisk.status).not.toBe("closed");
+ });
+ 
+ test("readiness item head fails on a moved head whatever the report's first line says, and its repair is the waiver", async () => {
+   const ref = await ingest(`Reviewed ${HEAD.slice(0, 7)} — the PR has since moved on.\nNo findings.`, { kind: "pr", ref: PR, head: HEAD });
+   const item = (await computeReadiness(path.resolve(dir, ref), { prLookup: lookup({ headSha: MOVED }) })).items.find((entry) => entry.id === "head");
+   expect(item?.status).toBe("fail");
+   expect(item?.evidence).toContain(MOVED.slice(0, 7));
+   expect(item?.repair).toContain("--waive head");
+   expect(item?.repair).toContain("review_waive_readiness");
+   expect(item?.repair).not.toContain("first line");
+   expect(item?.repair).not.toContain("report.md");
+   await waiveReadiness(path.resolve(dir, ref), ["head"], "the operator accepts that the PR moved after the round", { prLookup: lookup({ headSha: MOVED }) });
+   expect((await computeReadiness(path.resolve(dir, ref), { prLookup: lookup({ headSha: MOVED }) })).items.find((entry) => entry.id === "head")?.status).toBe("waived");
+ });
+ 
+ test("the operator's waiver of item head closes a merged or moved PR, and the manifest records it", async () => {
+   const ref = await ingest(`Reviewed ${HEAD.slice(0, 7)} — the PR has since merged.\nNo findings.`, { kind: "pr", ref: PR, head: HEAD });
+   const done = await completeManagedReview(dir, ref, { prLookup: lookup({ state: "MERGED", headSha: MOVED }), waiveReadiness: WAIVE_HEAD });
+
+--- src/review/complete-head-gate.test.ts
+@@ 169,203 @@
+   expect((error as Error).message).toContain(HEAD.slice(0, 7));
+-  expect((error as Error).message).toContain("--head-reason");
++  expect((error as Error).message).toContain("--waive head");
+   const onDisk = JSON.parse(await readFile(path.join(path.resolve(dir, ref), "manifest.json"), "utf8"));
+   expect(onDisk.status).not.toBe("closed");
+   expect(onDisk.target.head).toBe(HEAD);
+ });
+ 
+ test("a head that is not the PR's head completes only with the operator's waiver of head, besides the reason for the relabel", async () => {
+   const ref = await ingest("# Review\nNo findings.", { kind: "pr", ref: PR, head: HEAD });
+   const done = await completeManagedReview(dir, ref, { prLookup: lookup({ headSha: HEAD }), head: MOVED, headReason: REASON, waiveReadiness: WAIVE_HEAD });
+   expect(done.manifest.target.head).toBe(MOVED);
+   expect(done.manifest.head_override?.to).toBe(MOVED);
+ });
+ 
+ test("--head must be a commit SHA and needs a pull request package", async () => {
+   const pr = await ingest("# Review\nNo findings.", { kind: "pr", ref: PR, head: HEAD });
+   await expect(completeManagedReview(dir, pr, { prLookup: lookup({}), head: "not-a-sha" })).rejects.toThrow(/not a commit SHA/);
+   await expect(completeManagedReview(dir, pr, { prLookup: lookup({}), head: "abc" })).rejects.toThrow(/not a commit SHA/);
+-  const report = await createManagedReviewPackage({ cwd: dir, mode: "ingest", reportText: `# R\nNo findings.\n${EVIDENCE}\n`, reviewId: "head-report", target: { kind: "report", ref: "review.md" } });
+-  await writeFile(path.join(path.resolve(dir, report.path), "research.json"), JSON.stringify(ready));
+-  await writeFile(path.join(path.resolve(dir, report.path), "coverage.md"), READY_COVERAGE_MD);
+-  await expect(completeManagedReview(dir, report.path, { head: HEAD })).rejects.toThrow(/pull request package/);
++  const report = await ingest("# R\nNo findings.", { kind: "report", ref: "review.md" }, "head-report");
++  await expect(completeManagedReview(dir, report, { head: HEAD })).rejects.toThrow(/pull request package/);
++});
++
++test("--head-reason without a relabel is refused: with no --head, and with --head naming the recorded head", async () => {
++  const bare = await ingest("# Review\nNo findings.", { kind: "pr", ref: PR, head: HEAD });
++  await expect(completeManagedReview(dir, bare, { prLookup: lookup({}), headReason: REASON })).rejects.toThrow(/--head-reason applies only/);
++  await expect(completeManagedReview(dir, bare, { prLookup: lookup({}), head: HEAD.toUpperCase(), headReason: REASON })).rejects.toThrow(/--head-reason applies only/);
++  const onDisk = JSON.parse(await readFile(path.join(path.resolve(dir, bare), "manifest.json"), "utf8"));
++  expect(onDisk.status).not.toBe("closed");
++  expect(onDisk.head_override).toBeUndefined();
+ });
+ 
+ test("without --head the recorded head is what the gate checks, as before", async () => {
+   const ref = await ingest("# Review\nNo findings.", { kind: "pr", ref: PR, head: HEAD });
+   await expect(completeManagedReview(dir, ref, { prLookup: lookup({ headSha: MOVED }) })).rejects.toThrow(/moved/);
+ });
+
+--- src/review/complete-head-relabel.test.ts
+@@ 1,31 @@
+ // Flow 488 AC3: `review complete --head <sha>` relabels the head the round reviewed. When it differs from the head
+ // `review start` recorded, it is the operator's act: the refusal names both SHAs, and the manifest keeps both and the quote.
+ 
+ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+-import { mkdtemp, rm } from "node:fs/promises";
++import { mkdtemp, readFile, rm } from "node:fs/promises";
+ import os from "node:os";
+ import path from "node:path";
+ import { reviewCommand } from "../commands/review";
+ import { HEAD, MOVED, OPERATOR_WORDS, PR, ingestReady, lookup, readManifest } from "./close-gates.test-helpers";
++import { reviewCompletionQuestion } from "./completion-host";
++import { completionSnapshot } from "./completion-snapshot";
+ import { completeManagedReview } from "./managed";
+ 
+ let dir = "";
+ beforeEach(async () => { dir = await mkdtemp(path.join(os.tmpdir(), "keryx-head-relabel-")); });
+ afterEach(async () => { await rm(dir, { recursive: true, force: true }); process.exitCode = 0; });
+ 
+ describe("--head that differs from the recorded head (AC3)", () => {
+   test("is refused without the operator's words, naming both SHAs, and the manifest stays as it was", async () => {
+     const ref = await ingestReady(dir, "# Review", { kind: "pr", ref: PR, head: HEAD });
+     const error = await completeManagedReview(dir, ref, { prLookup: lookup({ headSha: MOVED }), head: MOVED }).catch((e: Error) => e);
+     expect(error).toBeInstanceOf(Error);
+     expect((error as Error).message).toContain(HEAD);
+     expect((error as Error).message).toContain(MOVED);
+     expect((error as Error).message).toContain("--head-reason");
+     const onDisk = await readManifest(dir, ref);
+     expect(onDisk.status).not.toBe("closed");
+     expect(onDisk.target.head).toBe(HEAD);
+     expect(onDisk.head_override).toBeUndefined();
+   });
+ 
+
+--- src/review/complete-head-relabel.test.ts
+@@ 42,134 @@
+     expect(done.manifest.status).toBe("closed");
+     const onDisk = await readManifest(dir, ref);
+     expect(onDisk.target.head).toBe(MOVED);
+     expect(onDisk.head_override).toEqual({ from: HEAD, to: MOVED, operator_quote: OPERATOR_WORDS, time: "2026-11-12T10:00:00.000Z" });
+   });
+ 
+   test("a --head equal to the recorded head, in any case or as a prefix, needs no quote and records no override", async () => {
+     const ref = await ingestReady(dir, "# Review", { kind: "pr", ref: PR, head: HEAD });
+     const done = await completeManagedReview(dir, ref, { prLookup: lookup({ headSha: HEAD }), head: HEAD.slice(0, 12).toUpperCase() });
+     expect(done.manifest.status).toBe("closed");
+     expect((await readManifest(dir, ref)).head_override).toBeUndefined();
+   });
+ 
+   test("a recorded head that is absent is filled without a quote: nothing is relabelled", async () => {
+     const ref = await ingestReady(dir, "# Review", { kind: "pr", ref: PR });
+     const done = await completeManagedReview(dir, ref, { prLookup: lookup({ headSha: HEAD }), head: HEAD });
+     expect(done.manifest.target.head).toBe(HEAD);
+     expect((await readManifest(dir, ref)).head_override).toBeUndefined();
+   });
+ 
++  test("the CLI takes --head-reason with --answered-by: the question binds the relabel, and head_override records the host question", async () => {
++    const ref = await ingestReady(dir, "# Review", { kind: "pr", ref: PR, head: HEAD });
++    const pkg = path.resolve(dir, ref);
++    const stored = await readManifest(dir, ref);
++    const context = {
++      reviewId: stored.reviewId, head: MOVED, report: await readFile(path.join(pkg, "report.md"), "utf8"), manifest: stored,
++      research: await readFile(path.join(pkg, "research.json"), "utf8"),
++      findings: await readFile(path.join(pkg, "findings.json"), "utf8"),
++      decisions: await readFile(path.join(pkg, "decisions.md"), "utf8"),
++      coverage: JSON.parse(await completionSnapshot(pkg)) as Record<string, string | null>,
++      dispositions: [], waiveReadiness: [], waiveCoverage: undefined,
++    };
++    const bound = reviewCompletionQuestion({ ...context, headOverride: { from: HEAD, to: MOVED, quote: OPERATOR_WORDS } });
++    const unbound = reviewCompletionQuestion(context);
++    expect(bound).toContain("requestedHeadOverride");
++    const errors: string[] = [];
++    const realError = console.error;
++    const realLog = console.log;
++    console.error = (...args: unknown[]) => void errors.push(args.map(String).join(" "));
++    console.log = () => undefined;
++    const cwd = process.cwd();
++    const previous = process.env["KERYX_TOOL_CALL"];
++    const previousUnattended = process.env["KERYX_UNATTENDED"];
++    delete process.env["KERYX_TOOL_CALL"];
++    delete process.env["KERYX_UNATTENDED"];
++    const run = (question: string, answerRef: string) => reviewCommand(
++      ["complete", ref, "--head", MOVED, "--head-reason", OPERATOR_WORDS, "--answered-by", `codex:${answerRef}`, "--answer-text", "yes", "--question-text", question],
++      { isTerminal: () => false, prLookup: lookup({ headSha: MOVED }), prFiles: async () => null },
++    );
++    try {
++      process.chdir(dir);
++      // A question that does not show the relabel is stale: the operator was not asked about the head.
++      await run(unbound, "q0");
++      expect(process.exitCode).toBe(1);
++      expect(errors.join("\n")).toMatch(/stale/i);
++      expect((await readManifest(dir, ref)).status).not.toBe("closed");
++      errors.length = 0;
++      process.exitCode = 0;
++      await run(bound, "q1");
++      expect(process.exitCode ?? 0).toBe(0);
++      expect(errors.join("\n")).not.toMatch(/refused|stale/i);
++      const onDisk = await readManifest(dir, ref);
++      expect(onDisk.status).toBe("closed");
++      expect(onDisk.head_override).toMatchObject({ from: HEAD, to: MOVED, operator_quote: OPERATOR_WORDS, confirmedVia: "host-question" });
++    } finally {
++      console.error = realError;
++      console.log = realLog;
++      process.chdir(cwd);
++      if (previous === undefined) delete process.env["KERYX_TOOL_CALL"]; else process.env["KERYX_TOOL_CALL"] = previous;
++      if (previousUnattended === undefined) delete process.env["KERYX_UNATTENDED"]; else process.env["KERYX_UNATTENDED"] = previousUnattended;
++    }
++  });
++
+   test("the CLI takes the quote only at a terminal, like --waive", async () => {
+     const ref = await ingestReady(dir, "# Review", { kind: "pr", ref: PR, head: HEAD });
+     const errors: string[] = [];
+     const realError = console.error;
+     console.error = (...args: unknown[]) => void errors.push(args.map(String).join(" "));
+     const cwd = process.cwd();
+     try {
+       process.chdir(dir);
+       await reviewCommand(["complete", ref, "--head", MOVED, "--head-reason", OPERATOR_WORDS], { isTerminal: () => false, prLookup: async () => null, prFiles: async () => null });
+       expect(process.exitCode).toBe(1);
+       expect(errors.join("\n")).toContain("--head-reason needs a terminal");
+       expect((await readManifest(dir, ref)).status).not.toBe("closed");
+       errors.length = 0;
+       process.exitCode = 0;
+       await reviewCommand(["complete", ref, "--head", MOVED, "--head-reason", OPERATOR_WORDS], { isTerminal: () => true, prLookup: async () => null, prFiles: async () => null });
+       expect(errors.join("\n")).not.toContain("needs a terminal");
+       expect((await readManifest(dir, ref)).head_override).toMatchObject({ from: HEAD, to: MOVED, operator_quote: OPERATOR_WORDS });
+     } finally {
+       console.error = realError;
+       process.chdir(cwd);
+
+--- src/review/complete-waiver-scope.test.ts
+@@ 1,26 @@
+ // Flow 488 AC4: a readiness waiver of `files-covered`, `blast-radius`, `reviewers` or `ledger` removes only the research
+ // errors that belong to that item. Before, any one of the four dropped EVERY research error, an artifact-locator or
+ // manifest/dispatch mismatch error included.
+ 
+ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
++import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+ import os from "node:os";
+ import path from "node:path";
+ import { OPERATOR_WORDS, PR, ingestReady, readManifest } from "./close-gates.test-helpers";
+ import { completeManagedReview } from "./managed";
+ import { packageResearchErrors, packageResearchErrorsTagged } from "./research";
+ 
+ let dir = "";
+ beforeEach(async () => { dir = await mkdtemp(path.join(os.tmpdir(), "keryx-waiver-scope-")); });
+ afterEach(async () => { await rm(dir, { recursive: true, force: true }); });
+ 
+ const waive = (item: string) => [{ items: [item], quote: OPERATOR_WORDS }];
+ 
+ /** An open obligation: a ledger error, and the `ledger` readiness item fails with it. */
+ async function openObligation(ref: string): Promise<void> {
+   const file = path.join(path.resolve(dir, ref), "research.json");
+   const research = JSON.parse(await readFile(file, "utf8"));
+   await writeFile(file, JSON.stringify({ ...research, obligations: [{ id: "ob-1", source: "raw", question: "is it real?", status: "open" }] }));
+ }
+ 
+ async function editManifest(ref: string, edit: (manifest: Record<string, any>) => void): Promise<void> {
+
+--- src/review/complete-waiver-scope.test.ts
+@@ 51,122 @@
+ 
+   test("a waiver of ledger still lets the close through when only ledger errors remain", async () => {
+     const ref = await ingestReady(dir, "# Review", { kind: "pr", ref: PR });
+     await openObligation(ref);
+     await expect(completeManagedReview(dir, ref, {})).rejects.toThrow(/unresolved research/);
+     const done = await completeManagedReview(dir, ref, { waiveReadiness: waive("ledger") });
+     expect(done.manifest.status).toBe("closed");
+   });
+ 
+   test("a manifest that does not declare the dispatch the research records still refuses, whatever is waived", async () => {
+     const ref = await ingestReady(dir, "# Review", { kind: "pr", ref: PR });
+     await openObligation(ref);
+     await editManifest(ref, (value) => { delete value.artifacts.reviewerDispatch; });
+     const error = await completeManagedReview(dir, ref, { waiveReadiness: waive("ledger") }).catch((e: Error) => e);
+     expect(error).toBeInstanceOf(Error);
+     expect((error as Error).message).toContain("manifest.json does not declare it");
+     expect((await readManifest(dir, ref)).status).not.toBe("closed");
+     expect((await readManifest(dir, ref)).readiness_waivers).toBeUndefined();
+   });
+ 
++  // TP-1: each of the other three items closes a package whose only research error is its own.
++  async function editResearch(ref: string, edit: (research: Record<string, any>) => void): Promise<void> {
++    const file = path.join(path.resolve(dir, ref), "research.json");
++    const research = JSON.parse(await readFile(file, "utf8"));
++    edit(research);
++    await writeFile(file, JSON.stringify(research));
++  }
++  const unresolvedRules = (research: Record<string, any>) => { research.dispatch = { ...research.dispatch, unresolvedRules: ["rules/missing.mdc"] }; };
++
++  test("a waiver of reviewers closes a package whose only research error is an unresolved rule anchor", async () => {
++    const ref = await ingestReady(dir, "# Review", { kind: "pr", ref: PR });
++    await editResearch(ref, unresolvedRules);
++    await expect(completeManagedReview(dir, ref, {})).rejects.toThrow(/unresolved rule anchors/);
++    expect((await completeManagedReview(dir, ref, { waiveReadiness: waive("reviewers") })).manifest.status).toBe("closed");
++  });
++
++  test("a waiver of blast-radius closes a package whose blast radius dropped a file", async () => {
++    const ref = await ingestReady(dir, "# Review", { kind: "pr", ref: PR });
++    await writeFile(path.join(path.resolve(dir, ref), "blast-radius.json"), JSON.stringify({ dropped: [{ file: "far.ts", reason: "cap" }] }));
++    await expect(completeManagedReview(dir, ref, {})).rejects.toThrow(/uncovered: far.ts/);
++    expect((await completeManagedReview(dir, ref, { waiveReadiness: waive("blast-radius") })).manifest.status).toBe("closed");
++  });
++
++  test("a waiver of files-covered closes a package whose slices left a scope file unreviewed", async () => {
++    const ref = await ingestReady(dir, "# Review", { kind: "pr", ref: PR });
++    await writeFile(path.join(path.resolve(dir, ref), "scope-files.json"), JSON.stringify({ files: ["a.ts", "b.ts"] }));
++    await mkdir(path.join(path.resolve(dir, ref), "slices"), { recursive: true });
++    await writeFile(path.join(path.resolve(dir, ref), "slices", "manifest.json"), JSON.stringify({ slices: [{ id: "s1", files: ["a.ts"] }] }));
++    await expect(completeManagedReview(dir, ref, {})).rejects.toThrow(/uncovered: a.ts, b.ts/);
++    expect((await completeManagedReview(dir, ref, { waiveReadiness: waive("files-covered") })).manifest.status).toBe("closed");
++  });
++
++  test("a waiver of ledger leaves a reviewers research error refusing", async () => {
++    const ref = await ingestReady(dir, "# Review", { kind: "pr", ref: PR });
++    await openObligation(ref);
++    await editResearch(ref, unresolvedRules);
++    const error = await completeManagedReview(dir, ref, { waiveReadiness: waive("ledger") }).catch((e: Error) => e);
++    expect(error).toBeInstanceOf(Error);
++    expect((error as Error).message).toContain("unresolved rule anchors");
++    expect((await readManifest(dir, ref)).status).not.toBe("closed");
++  });
++
+   test("an invalid artifact locator still refuses, whatever is waived", async () => {
+     const ref = await ingestReady(dir, "# Review", { kind: "pr", ref: PR });
+     await openObligation(ref);
+     await editManifest(ref, (value) => { value.artifacts.research = "elsewhere.json"; });
+     const error = await completeManagedReview(dir, ref, { waiveReadiness: waive("ledger") }).catch((e: Error) => e);
+     expect(error).toBeInstanceOf(Error);
+     expect((error as Error).message).toContain("invalid research artifact locator");
+     expect((await readManifest(dir, ref)).status).not.toBe("closed");
+   });
+ });
+
+--- src/review/publish-gate-parity.test.ts
+@@ 1,26 @@
+ // Flow 488 AC5: `review publish` runs the same gate evaluation as `review complete`: a package whose round record was
+ // edited after `review start`, and one whose report has no valid evidence level, are refused by both with the same
+ // messages. `--partial` relaxes readiness only.
+ 
+ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+-import { mkdtemp, rm, writeFile } from "node:fs/promises";
++import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+ import os from "node:os";
+ import path from "node:path";
+ import { PR, UNVERIFIED_MAJOR, ingestReady, readManifest, writeFindings } from "./close-gates.test-helpers";
+ import { evaluateCloseGates } from "./close-gates";
+ import { completeManagedReview } from "./managed";
+ import { publishReview } from "./publish";
+ import { roundRecordTampered } from "./round-record";
+ 
+ let dir = "";
+ beforeEach(async () => { dir = await mkdtemp(path.join(os.tmpdir(), "keryx-gate-parity-")); });
+ afterEach(async () => { await rm(dir, { recursive: true, force: true }); });
+ 
+ const sink = () => {
+   const posts: string[] = [];
+   return { posts, post: async (_ref: string, _event: string, body: string) => { posts.push(body); return { ok: true, detail: "ok" }; }, confirm: async () => true };
+ };
+ 
+ async function editManifest(ref: string, edit: (manifest: Record<string, any>) => void): Promise<void> {
+   const manifest = await readManifest(dir, ref);
+   edit(manifest);
+
+--- src/review/publish-gate-parity.test.ts
+@@ 62,121 @@
+     const ref = await ingestReady(dir, "# Review\nNo findings.", { kind: "pr", ref: PR });
+     await editManifest(ref, (manifest) => { delete manifest.report_fields; });
+     await writeFile(path.join(path.resolve(dir, ref), "report.md"), "# Review\nNo findings.\n");
+     const out = sink();
+     const result = await publishReview(path.resolve(dir, ref), { post: out.post, confirm: out.confirm });
+     expect(result.posted).toBe(true);
+     const gate = await evaluateCloseGates(path.resolve(dir, ref), { manifest: await readManifest(dir, ref), report: "# Review\n", action: "publish" });
+     expect(gate.warnings.join(" ")).toContain("predates the field");
+   });
+ 
+   test("--partial still relaxes readiness: a failing checklist posts with its header", async () => {
+     const ref = await ingestReady(dir, "# Review\nRequest changes.", { kind: "pr", ref: PR });
+     await writeFindings(dir, ref, [UNVERIFIED_MAJOR]);
+     const out = sink();
+     await expect(publishReview(path.resolve(dir, ref), { post: out.post, confirm: out.confirm })).rejects.toThrow(/cannot publish[\s\S]*verifier/i);
+     const result = await publishReview(path.resolve(dir, ref), { partial: true, post: out.post, confirm: out.confirm });
+     expect(result.partial).toBe(true);
+     expect(out.posts[0]).toStartWith("**Partial review.**");
+   });
+ 
++  // ARCH-1: the research-error evaluation lives in evaluateCloseGates, so publish refuses what complete refuses.
++  for (const probe of [
++    { name: "an invalid research artifact locator", text: "invalid research artifact locator", edit: (manifest: Record<string, any>) => { manifest.artifacts.research = "elsewhere.json"; } },
++    { name: "a dispatch the manifest does not declare", text: "manifest.json does not declare it", edit: (manifest: Record<string, any>) => { delete manifest.artifacts.reviewerDispatch; } },
++  ]) {
++    test(`${probe.name} is an untagged research error: complete and publish refuse it, --partial included`, async () => {
++      const ref = await ingestReady(dir, "# Review\nNo findings.", { kind: "pr", ref: PR });
++      await editManifest(ref, probe.edit);
++      const out = sink();
++      const completeMessage = await messageOf(() => completeManagedReview(dir, ref, {}));
++      expect(completeMessage).toContain(probe.text);
++      expect(await messageOf(() => publishReview(path.resolve(dir, ref), { post: out.post, confirm: out.confirm }))).toBe(completeMessage);
++      expect(await messageOf(() => publishReview(path.resolve(dir, ref), { partial: true, post: out.post, confirm: out.confirm }))).toBe(completeMessage);
++      expect(out.posts).toEqual([]);
++    });
++  }
++
++  test("a tagged research error (an open obligation) refuses a full publish, and --partial may skip it", async () => {
++    const ref = await ingestReady(dir, "# Review\nNo findings.", { kind: "pr", ref: PR });
++    const file = path.join(path.resolve(dir, ref), "research.json");
++    const research = JSON.parse(await readFile(file, "utf8"));
++    await writeFile(file, JSON.stringify({ ...research, obligations: [{ id: "ob-1", source: "raw", question: "is it real?", status: "open" }] }));
++    const out = sink();
++    expect(await messageOf(() => completeManagedReview(dir, ref, {}))).toContain("unresolved research");
++    expect(await messageOf(() => publishReview(path.resolve(dir, ref), { post: out.post, confirm: out.confirm }))).toContain("unresolved research");
++    const result = await publishReview(path.resolve(dir, ref), { partial: true, post: out.post, confirm: out.confirm });
++    expect(result.posted).toBe(true);
++    expect(out.posts).toHaveLength(1);
++  });
++
+   test("the shared function refuses the readiness checklist unless relaxed, naming the action", async () => {
+     const ref = await ingestReady(dir, "# Review\nRequest changes.", { kind: "pr", ref: PR });
+     await writeFindings(dir, ref, [UNVERIFIED_MAJOR]);
+     const manifest = await readManifest(dir, ref);
+     const report = "# Review\nEvidence level: static only — did not run: tests\n";
+     await expect(evaluateCloseGates(path.resolve(dir, ref), { manifest, report, action: "publish" })).rejects.toThrow(/Cannot publish/);
+     await expect(evaluateCloseGates(path.resolve(dir, ref), { manifest, report, action: "complete the review" })).rejects.toThrow(/Cannot complete the review/);
+     expect((await evaluateCloseGates(path.resolve(dir, ref), { manifest, report, action: "publish", relaxReadiness: true })).readiness.verdict).toBe("NOT READY");
+   });
+ });
+
+--- src/review/publish.test.ts
+@@ 1,36 @@
+ // Flow 451 AC4: `keryx review publish` is the only keryx path to GitHub. It runs the readiness checklist, refuses while an
+ // item fails, and with --partial posts a body whose first lines say what is missing. The body is shown before it is posted.
+ 
+ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+ import { tmpdir } from "node:os";
+ import path from "node:path";
+ import { reviewCommand } from "../commands/review";
+ import { buildRoundBlock, mentionsFindingId, minorSection, partialPublishHeader, PUBLISHED_BODY_LIMIT, publishReview, reviewEvent, ROUND_BLOCK_LIMIT, type PostResult, type ReviewEvent } from "./publish";
+ import { parseRoundBlocks, renderRoundBlock } from "./pr-comments";
+ import { quoteSha256 } from "./round-record";
+ import { computeReadiness } from "./readiness";
+ import type { VerdictFinding } from "./verdict";
++import { sealVerificationsAsIngest } from "./close-gates.test-helpers";
++import { heldFinding, premiseAnswer } from "./premise-fixtures";
++import { sealHeadOverride, sealTarget } from "./seals";
+ 
+ const minor = (id: string, problem = "a small thing"): VerdictFinding => ({ id, reviewer: "review-style", severity: "minor", problem, location: "src/a.ts:1", verification: "none" });
+ 
+ const PR = "https://github.com/Presight-AI/vantage-frontend/pull/7932";
+ 
+ let root: string;
+ let pkg: string;
+ let cwd: string;
+ 
+ const write = (name: string, value: unknown): void => writeFileSync(path.join(pkg, name), typeof value === "string" ? value : JSON.stringify(value, null, 2));
+ 
+ function makePackage(options: { ready: boolean; kind?: string }): void {
+   write("manifest.json", {
+     schemaVersion: 1,
+     reviewId: "pr7932-r1",
+     mode: "review-flow",
+     status: "draft",
+     target: { kind: options.kind ?? "pr", ref: options.kind === "path" ? "src" : PR },
+     artifacts: { scope: "scope.md", coverage: "coverage.md", report: "report.md", findings: "findings.json", learning: "learning.md", decisions: "decisions.md" },
+     coverage: [],
+
+--- src/review/publish.test.ts
+@@ 117,206 @@
+ 
+   describe("flow 488 AC6: a decision recorded from the agent's host question is said not to be verified by keryx", () => {
+     const hostQuestion = { source: "claude-code", ref: "q-1", questionText: "Complete?", answerText: "yes", time: "2026-11-12T09:00:00Z" };
+     const withManifest = (extra: Record<string, unknown>): void => {
+       makePackage({ ready: true });
+       write("manifest.json", { ...JSON.parse(readFileSync(path.join(pkg, "manifest.json"), "utf8")), ...extra });
+     };
+ 
+     test("a readiness waiver confirmed via host-question puts the notice in the posted body, naming the waiver", async () => {
+       withManifest({ readiness_waivers: [{ item: "verifier", operator_quote: "the operator accepts it", time: "2026-11-12T09:00:00Z", confirmedVia: "host-question", hostQuestion }] });
+       const io = seams();
+       await publishReview(pkg, { post: io.post, confirm: io.confirm });
+       const body = io.posts[0]!.body;
+       expect(body).toContain("Decisions recorded from the agent's host question");
+       expect(body).toContain("readiness waiver of verifier");
+       expect(body).toContain("keryx did not verify the operator's answer");
+       expect(io.shown[0]).toContain("keryx did not verify the operator's answer");
+     });
+ 
+     test("a head override and a coverage waiver confirmed via host-question are named too", async () => {
+-      withManifest({ head_override: { from: "a".repeat(40), to: "b".repeat(40), operator_quote: "the operator moved it", time: "2026-11-12T09:00:00Z", confirmedVia: "host-question" } });
++      // The override as `review complete --head --head-reason --answered-by` writes it: with keryx's seal (flow 488 AC9).
++      const headOverride = { from: "a".repeat(40), to: "b".repeat(40), operator_quote: "the operator moved it", time: "2026-11-12T09:00:00Z", confirmedVia: "host-question" as const };
++      withManifest({ head_override: headOverride, seals: { target: sealTarget({ kind: "pr", ref: PR }), headOverride: sealHeadOverride(headOverride) } });
+       write("research.json", { dispatch: { coverageWaiver: { operatorQuote: "skip them", time: "2026-11-12T09:00:00Z", files: ["a.ts"], confirmedVia: "host-question", hostQuestion } } });
+       const io = seams();
+       await publishReview(pkg, { post: io.post, confirm: io.confirm });
+       expect(io.posts[0]!.body).toContain("head change aaaaaaa to bbbbbbb");
+       expect(io.posts[0]!.body).toContain("coverage waiver");
+       expect(io.posts[0]!.body).toContain("keryx did not verify the operator's answer");
+     });
+ 
++    test("a top-level research.coverageWaiver confirmed via host-question is named (review TP-3)", async () => {
++      makePackage({ ready: true });
++      write("research.json", { coverageWaiver: { operatorQuote: "skip them", time: "2026-11-12T09:00:00Z", files: ["a.ts"], confirmedVia: "host-question", hostQuestion } });
++      const io = seams();
++      await publishReview(pkg, { partial: true, post: io.post, confirm: io.confirm });
++      expect(io.posts[0]!.body).toContain("Decisions recorded from the agent's host question:** coverage waiver.");
++    });
++
++    test("a premise decision confirmed via host-question is named, with the count (review TP-3)", async () => {
++      makePackage({ ready: true });
++      const held = heldFinding({ severity: "minor" });
++      write("findings.json", [held]);
++      write("operator-decisions.json", { schemaVersion: 1, decisions: [premiseAnswer(held, { confirmedVia: "host-question", hostQuestion: hostQuestion as never })] });
++      const io = seams();
++      await publishReview(pkg, { partial: true, post: io.post, confirm: io.confirm });
++      expect(io.posts[0]!.body).toContain("1 premise decision(s)");
++      expect(io.posts[0]!.body).toContain("keryx did not verify the operator's answer");
++    });
++
+     test("a waiver pressed on a card or typed at a terminal carries no such notice", async () => {
+       withManifest({ readiness_waivers: [{ item: "verifier", operator_quote: "the operator accepts it", time: "2026-11-12T09:00:00Z", confirmedVia: "tui-card" }] });
+       const io = seams();
+       await publishReview(pkg, { post: io.post, confirm: io.confirm });
+       expect(io.posts[0]!.body).not.toContain("host question");
+       expect(io.posts[0]!.body).not.toContain("did not verify");
+     });
+   });
+ 
+   test("flow 458: the round block round-trips publish -> parse, and published.json records head and review id", async () => {
+     makePackage({ ready: true });
+     const manifest = JSON.parse(readFileSync(path.join(pkg, "manifest.json"), "utf8"));
+     write("manifest.json", { ...manifest, target: { ...manifest.target, head: "abcdef1234567" } });
+     write("round.json", { v: 1, round: 3 });
+     write("report.md", "# Review\n\nF-1 at `src/a.ts:12` still swallows the error.\n");
+     write("findings.json", [
+       { id: "F-1", reviewer: "review-logic", severity: "minor", problem: "swallows", file: "src/a.ts", line: 12, quote: "catch (e) { /* SECRET-QUOTE */ }", disposition: { state: "acted-on" } },
+       { id: "F-2", reviewer: "review-logic", severity: "major", problem: "not in the body", file: "src/hidden.ts", line: 4, verification: { verdict: "confirmed", method: "reproduction", evidence: "ran it", verifier: "review-verifier" } },
+     ]);
++    await sealVerificationsAsIngest(pkg);
+     const io = seams();
+     await publishReview(pkg, { event: "COMMENT", post: io.post, confirm: io.confirm, now: () => new Date("2026-10-16T00:00:00Z") });
+     const body = io.posts[0]!.body;
+     const blocks = parseRoundBlocks(body);
+     expect(blocks).toEqual([
+       { v: 1, round: 3, reviewId: "pr7932-r1", reviewedHead: "abcdef1234567", findings: [{ id: "F-1", file: "src/a.ts", line: 12, quoteSha256: quoteSha256("catch (e) { /* SECRET-QUOTE */ }"), severity: "minor", status: "acted-on" }] },
+     ]);
+     // Nothing the body does not already say: no raw quote, and no finding the body never names.
+     expect(body).not.toContain("SECRET-QUOTE");
+     expect(body).not.toContain("F-2");
+     expect(body).not.toContain("src/hidden.ts");
+     expect(JSON.parse(readFileSync(path.join(pkg, "published.json"), "utf8"))).toMatchObject({ reviewId: "pr7932-r1", head: "abcdef1234567", round: 3 });
+   });
+ 
+   test("flow 458: a value cannot close the hidden comment, and the block stays within its size limit", () => {
+     const findings = Array.from({ length: 400 }, (_, i) => ({ id: `F-${i}`, severity: "minor", file: "a-->b.ts", line: i }));
+     const body = findings.map((f) => `${f.id} a-->b.ts:${f.line}`).join("\n");
+     const block = buildRoundBlock({ body, round: 1, reviewId: "r", reviewedHead: null, findings });
+     const rendered = renderRoundBlock(block);
+     expect(rendered.length).toBeLessThanOrEqual(ROUND_BLOCK_LIMIT);
+
+--- src/review/readiness-verifier-waiver.test.ts
+@@ 1,28 @@
+ // Flow 488 AC1: unverified blocker/major findings fail readiness item `verifier` at `review complete` and `review publish`.
+ // A `Not verified: N` line the agent writes into report.md no longer lifts it; only the verifier's result or the operator's waiver does.
+ 
+ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+ import { mkdtemp, readFile, rm } from "node:fs/promises";
+ import os from "node:os";
+ import path from "node:path";
+-import { OPERATOR_WORDS, PR, UNVERIFIED_MAJOR, ingestReady, writeFindings } from "./close-gates.test-helpers";
++import { OPERATOR_WORDS, PR, UNVERIFIED_MAJOR, VERIFIED, ingestReady, sealVerificationsAsIngest, writeFindings } from "./close-gates.test-helpers";
+ import { completeManagedReview } from "./managed";
+ import { publishReview } from "./publish";
+ import { computeReadiness, waiveReadiness } from "./readiness";
+ 
+ let dir = "";
+ beforeEach(async () => { dir = await mkdtemp(path.join(os.tmpdir(), "keryx-verifier-waiver-")); });
+ afterEach(async () => { await rm(dir, { recursive: true, force: true }); });
+ 
+ const io = () => {
+   const posts: string[] = [];
+   return { posts, post: async (_ref: string, _event: string, body: string) => { posts.push(body); return { ok: true, detail: "ok" }; }, confirm: async () => true };
+ };
+ 
+ async function unverifiedPackage(): Promise<string> {
+   const ref = await ingestReady(dir, "# Review\nRequest changes.\n\nNot verified: 1", { kind: "pr", ref: PR });
+   await writeFindings(dir, ref, [UNVERIFIED_MAJOR]);
+   return ref;
+ }
+ 
+ describe("readiness item verifier (AC1)", () => {
+
+--- src/review/readiness-verifier-waiver.test.ts
+@@ 52,78 @@
+     expect(done.manifest.readiness_waivers?.map((waiver) => [waiver.item, waiver.operator_quote])).toEqual([["verifier", OPERATOR_WORDS]]);
+     expect(done.readiness?.items.find((item) => item.id === "verifier")?.status).toBe("waived");
+   });
+ 
+   test("review publish refuses it despite the line, naming verifier, and posts nothing", async () => {
+     const ref = await unverifiedPackage();
+     const sink = io();
+     await expect(publishReview(path.resolve(dir, ref), { post: sink.post, confirm: sink.confirm })).rejects.toThrow(/cannot publish[\s\S]*verifier/i);
+     expect(sink.posts).toEqual([]);
+   });
+ 
+   test("review publish passes once the operator waived verifier", async () => {
+     const ref = await unverifiedPackage();
+     await waiveReadiness(path.resolve(dir, ref), ["verifier"], OPERATOR_WORDS);
+     const sink = io();
+     const result = await publishReview(path.resolve(dir, ref), { post: sink.post, confirm: sink.confirm });
+     expect(result.posted).toBe(true);
+     expect(result.readiness.items.find((item) => item.id === "verifier")?.status).toBe("waived");
+   });
+ 
+-  test("a finding that carries a verification passes without a line or a waiver", async () => {
++  test("a finding that carries a verification keryx recorded passes without a line or a waiver", async () => {
+     const ref = await ingestReady(dir, "# Review\nRequest changes.", { kind: "pr", ref: PR });
+-    await writeFindings(dir, ref, [{ ...UNVERIFIED_MAJOR, verification: { verdict: "confirmed", method: "site-check", evidence: "enumerated the sites", verifier: "review-verifier" } }]);
++    await writeFindings(dir, ref, [{ ...UNVERIFIED_MAJOR, verification: VERIFIED }]);
++    await sealVerificationsAsIngest(path.resolve(dir, ref));
+     expect((await computeReadiness(path.resolve(dir, ref))).items.find((item) => item.id === "verifier")?.status).toBe("pass");
+   });
+ });
+
+--- src/review/readiness.test.ts
+@@ 1,37 @@
+ // Flow 451: one checklist stands between a review and "completed" or GitHub. The fixture is shaped like the package of the
+ // review of PR #7932 that was published while incomplete: 25 changed files, 341 candidates of which 301 were cut by the cap,
+ // a ledger with open obligations, reviewers that never ran, a result missing from raw/, and a coverage.md that listed
+ // everything as "run".
+ 
+ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+ import { tmpdir } from "node:os";
+ import path from "node:path";
+ import { reviewCommand } from "../commands/review";
+ import { CHUNK_REVIEWER, ensureChunkPlan, recordChunk } from "./chunks";
+ import { CALLER_UNATTRIBUTED, recordLogStart, recordOrchestratorCall } from "./orchestrator-log";
+ import { downgradedPremise, heldFinding, premiseAnswer } from "./premise-fixtures";
+ import { commitFiles, git, initRepo } from "./git-fixture.test-helpers";
+ import { packageCoverageErrors } from "./research";
+ import { COVERAGE_MD_MARK } from "./coverage-md";
++import { findingKey, sealTarget, withVerificationSeals } from "./seals";
+ import { READINESS_ITEMS, computeReadiness, failingItems, memoryLogNote, partialHeader, readinessDepthLines, readinessItemId, readinessLine, readinessRefusal, renderReadiness, waiveReadiness } from "./readiness";
+ 
+ let root: string;
+ let pkg: string;
+ 
+ const REVIEWERS = ["review-logic", "review-security-code", "review-style", "review-regression", "review-verifier"];
+ const CHANGED = Array.from({ length: 25 }, (_, index) => `src/changed-${String(index).padStart(2, "0")}.ts`);
+ const CUT = Array.from({ length: 301 }, (_, index) => `src/cut-${String(index).padStart(3, "0")}.ts`);
+ 
+ const run = (reviewer: string, extra: object = {}) => ({
+   reviewer,
+   executionId: `run-${reviewer}`,
+   status: "complete",
+   scopeComplete: true,
+   rawEvidence: `raw/${reviewer}.txt#sha256:abc`,
+   ruleEvidence: ["rule"],
+   executionRequired: false,
+   executionReason: "source-only review",
+   ...extra,
+ });
+
+--- src/review/readiness.test.ts
+@@ 75,98 @@
+ const verifyHeavyFindings = (): void =>
+-  writeJson("findings.json", [
+-    { id: "f-1", severity: "major", title: "raw finding", verification: { verdict: "confirmed" } },
+-    { id: "f-2", severity: "blocker", title: "another", verification: { verdict: "confirmed" } },
++  writeSealedFindings([
++    { id: "f-1", severity: "major", title: "raw finding", verification: VERIFIED },
++    { id: "f-2", severity: "blocker", title: "another", verification: VERIFIED },
+     { id: "f-3", severity: "minor", title: "small" },
+   ]);
+ 
+ function writeBlastRadius(changed: string[], dropped: string[]): void {
+   writeJson("blast-radius.json", {
+     schemaVersion: 1,
+     scope: "blast-radius",
+     depth: 2,
+     maxFiles: 40,
+     changedFiles: changed,
+     files: [],
+     dropped: dropped.map((file) => ({ file, hop: 1, fanIn: 1, via: CHANGED[0], source: "graph", reason: "cap", detail: "over the cap" })),
+     unresolved: [],
+     counts: {},
+     graph: { nodes: 1, edges: 0 },
+   });
+ }
+ 
+ beforeEach(() => {
+   root = mkdtempSync(path.join(tmpdir(), "keryx-readiness-"));
+
+--- src/review/readiness.test.ts
+@@ 146,203 @@
+     expect(byId["files-covered"]?.status).toBe("pass");
+     expect(byId["head"]?.status).toBe("pass");
+   });
+ 
+   test("is READY after the repairs, with no item waived", async () => {
+     writeResearch("repaired");
+     for (const name of REVIEWERS) writeFileSync(path.join(pkg, "raw", `${name}.txt`), "reply");
+     writeFileSync(path.join(pkg, "report.md"), "# Review\n\nRequest changes.\n");
+     verifyHeavyFindings();
+     writeCoverageMd(Object.fromEntries(REVIEWERS.map((name) => [name, "run"])));
+     const plan = await ensureChunkPlan(pkg, root);
+     expect(plan?.chunks.length).toBeGreaterThan(0);
+     for (const chunk of plan!.chunks) await recordChunk(pkg, chunk.id, { status: "DONE" });
+     const report = await computeReadiness(pkg);
+     expect(failingItems(report).map((item) => `${item.id}: ${item.evidence}`)).toEqual([]);
+     expect(report.verdict).toBe("READY");
+     expect(report.items.every((item) => item.status === "pass")).toBe(true);
+     expect(CHUNK_REVIEWER).toBeTruthy();
+   });
+ 
++  test("a verification that is an empty object, or lacks method and evidence, fails item 4 even when sealed (review TP-2)", async () => {
++    for (const verification of [{}, { verdict: "confirmed" }]) {
++      writeSealedFindings([{ id: "f-1", severity: "major", title: "raw finding", verification }, { id: "f-2", severity: "blocker", title: "another", verification: VERIFIED }]);
++      const item = (await computeReadiness(pkg)).items.find((entry) => entry.id === "verifier");
++      expect(item?.status).toBe("fail");
++      expect(item?.evidence).toContain("1 of 2 blocker/major finding(s)");
++      expect(item?.evidence).toContain("f-1 (a verification without verdict, method and evidence)");
++    }
++  });
++
++  test("a verification in the verifier's shape written into findings.json by hand, with no seal, fails item 4 (AC9)", async () => {
++    writeJson("findings.json", [{ id: "f-1", severity: "major", title: "raw finding", verification: VERIFIED }]);
++    const item = (await computeReadiness(pkg)).items.find((entry) => entry.id === "verifier");
++    expect(item?.status).toBe("fail");
++    expect(item?.evidence).toContain("f-1 (a verification keryx did not record");
++    expect(item?.evidence).toContain("findings.json");
++  });
++
+   test("a `Not verified: N` line in report.md no longer passes item 4; only the verifier's result or a waiver does", async () => {
+     writeFileSync(path.join(pkg, "report.md"), "# Review\n\nRequest changes.\n\nNot verified: 2\n");
+     const failing = (await computeReadiness(pkg)).items.find((item) => item.id === "verifier");
+     expect(failing?.status).toBe("fail");
+     expect(failing?.evidence).toContain("2 of 2 blocker/major finding(s) carry no verification");
+     await waiveReadiness(pkg, ["verifier"], "the operator accepts unverified findings");
+     expect((await computeReadiness(pkg)).items.find((item) => item.id === "verifier")?.status).toBe("waived");
+   });
+ 
+   test("is read-only: computing it twice leaves every file as it was", async () => {
+     const before = readFileSync(path.join(pkg, "manifest.json"), "utf8") + readFileSync(path.join(pkg, "report.md"), "utf8");
+     await computeReadiness(pkg);
+     await computeReadiness(pkg);
+     expect(readFileSync(path.join(pkg, "manifest.json"), "utf8") + readFileSync(path.join(pkg, "report.md"), "utf8")).toBe(before);
+   });
+ 
+   test("renders one line per fact: verdict, items, evidence and repair, and a one-line summary for status screens", async () => {
+     const report = await computeReadiness(pkg);
+     const lines = renderReadiness(report);
+     expect(lines[0]).toBe("readiness: NOT READY (pr7932-r1)");
+
+--- src/review/round-trip.test.ts
+@@ 263,308 @@
+           target: { kind: "report", ref: "review.md" },
+           reportText: "# Round 1\n",
+           findings: [{ id: "F-001", severity: "minor", problem: "no impact recorded" }],
+           now: new Date("2026-08-29T10:00:00Z"),
+         }),
+       ).rejects.toThrow(/review-finding\.schema\.json/);
+       expect(existsSync(path.join(root, ".metaproject", "reviews", "2026-08-29-incomplete"))).toBe(false);
+     });
+   });
+ });
+ 
+ describe("a disposition and a finding key survive the round trip", () => {
+   // The instrumentation is worthless if it cannot be handed to the next round.
+   // `prior_findings[].finding` $refs `review-finding.schema.json`, which is
+   // `additionalProperties: false` — so a field this pipeline writes and that
+   // contract does not declare would make round 1's own artifact unusable as
+   // round 2's input, which is the exact failure this file was written for.
+ 
+   test("round 2's dispatch carries what round 1 decided, and validates", async () => {
+     await withTempRoot(async (root) => {
+-      const findings = await round1Findings(root);
+-      // The verifier's result on each finding, not a line in the report (flow 488: a `Not verified: N` line passes nothing).
+-      const findingsFile = path.join(root, ".metaproject/reviews/2026-08-29-round-1/findings.json");
+-      const stored = JSON.parse(await readFile(findingsFile, "utf8")) as Array<Record<string, unknown>>;
+-      await writeFile(findingsFile, JSON.stringify(stored.map((finding) => ({ ...finding, verification: { verdict: "confirmed", method: "site-check", evidence: "enumerated the sites", verifier: "review-verifier" } })), null, 2));
++      // The verifier's result on each finding, applied the way the pipeline applies it (`review ingest --verifications`),
++      // not a line in the report and not a hand edit of findings.json (flow 488: neither passes item verifier).
++      const findings = await round1Findings(root, {
++        verifications: ["F-001", "F-002"].map((id) => ({ finding: `2026-08-29-round-1#${id}`, verdict: "confirmed", method: "site-check", evidence: "enumerated the sites", verifier: "review-verifier" })),
++      });
++      expect(findings.every((finding) => finding.verification?.verdict === "confirmed")).toBe(true);
+       await completeManagedReview(root, ".metaproject/reviews/2026-08-29-round-1", {
+         dispositions: [
+           {
+             finding: "2026-08-29-round-1#F-001",
+             state: "acted-on",
+             evidence: "config-dir.writers.test.ts drives every writer under umask 002",
+           },
+           {
+             finding: "2026-08-29-round-1#F-002",
+             state: "dismissed-incorrect",
+             evidence: "deleted the guarded line and the test went red; the finding read the wrong guard",
+           },
+         ],
+       });
+ 
+       const closed = JSON.parse(
+         await readFile(
+           path.join(root, ".metaproject", "reviews", "2026-08-29-round-1", "findings.json"),
+           "utf8",
+         ),
+
+--- src/review/seals.test.ts
+@@ 1,128 @@
++// SEC-1: a waiver, a target head or a verification written straight into the package JSON is refused by both
++// `review complete` and `review publish`; the paths keryx itself writes (the waiver, `--head` + `--head-reason`,
++// `review ingest --verifications`) still close.
++
++import { afterEach, beforeEach, describe, expect, test } from "bun:test";
++import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
++import os from "node:os";
++import path from "node:path";
++import { EVIDENCE, HEAD, MOVED, OPERATOR_WORDS, PR, UNVERIFIED_MAJOR, VERIFIED, ingestReady, lookup, readManifest, writeFindings } from "./close-gates.test-helpers";
++import { READY_COVERAGE_MD, READY_DISPATCH } from "./dispatch.test-helpers";
++import { completeManagedReview, createManagedReviewPackage } from "./managed";
++import { publishReview } from "./publish";
++import { waiveReadiness } from "./readiness";
++
++let dir = "";
++beforeEach(async () => { dir = await mkdtemp(path.join(os.tmpdir(), "keryx-seals-")); });
++afterEach(async () => { await rm(dir, { recursive: true, force: true }); });
++
++const REASON = "the operator confirms this round ran against the PR head";
++/** One reviewer's result, as `reviewer-finding.schema.json` shapes it: a major that enumerates its class. */
++const REVIEWER_RESULT = {
++  status: "DONE_WITH_CONCERNS", reviewer: "synthetic-reviewer", summary: "one major",
++  findings: [{
++    id: "F-001", severity: "major", file: "src/a.ts", line: 1, problem: "unverified claim", impact: "a wrong close",
++    suggested_fix: "verify it", evidence: "read the site", confidence: "high",
++    class_scope: { sites: ["src/a.ts"], enumeration_method: "grep for the shape; one site" },
++  }],
++  stats: { blocker: 0, major: 1, minor: 0, info: 0 },
++};
++const READY_RESEARCH ={ version: 1, scopeReviewed: true, rawReconciled: true, obligations: [], dispatch: READY_DISPATCH };
++
++const sink = () => {
++  const posts: string[] = [];
++  return { posts, post: async (_ref: string, _event: string, body: string) => { posts.push(body); return { ok: true, detail: "ok" }; }, confirm: async () => true };
++};
++
++async function editManifest(ref: string, edit: (manifest: Record<string, any>) => void): Promise<void> {
++  const manifest = await readManifest(dir, ref) as unknown as Record<string, any>;
++  edit(manifest);
++  await writeFile(path.join(path.resolve(dir, ref), "manifest.json"), JSON.stringify(manifest, null, 2));
++}
++
++const messageOf = async (run: () => Promise<unknown>): Promise<string> => {
++  const error = await run().then(() => undefined, (e: Error) => e);
++  expect(error).toBeInstanceOf(Error);
++  return (error as Error).message;
++};
++
++/** Both commands refuse, each message contains every fragment, nothing is posted and the package stays open. */
++async function bothRefuse(ref: string, fragments: string[], prLookup = lookup({})): Promise<void> {
++  const out = sink();
++  const complete = await messageOf(() => completeManagedReview(dir, ref, { prLookup }));
++  const publish = await messageOf(() => publishReview(path.resolve(dir, ref), { readiness: { prLookup }, post: out.post, confirm: out.confirm }));
++  for (const fragment of fragments) {
++    expect(complete).toContain(fragment);
++    expect(publish).toContain(fragment);
++  }
++  expect(out.posts).toEqual([]);
++  expect((await readManifest(dir, ref)).status).not.toBe("closed");
++}
++
++describe("seals keep hand-written gate inputs out (SEC-1)", () => {
++  test("(a) a waiver written into manifest.json is not honoured by complete or publish", async () => {
++    const ref = await ingestReady(dir, "# Review\nRequest changes.", { kind: "pr", ref: PR, head: HEAD });
++    await writeFindings(dir, ref, [UNVERIFIED_MAJOR]);
++    await editManifest(ref, (manifest) => {
++      manifest.readiness_waivers = [{ item: "verifier", operator_quote: OPERATOR_WORDS, time: new Date().toISOString() }];
++    });
++    await bothRefuse(ref, ["verifier", "manifest.json readiness_waivers"]);
++  });
++
++  test("(a) the same waiver recorded by keryx closes the package", async () => {
++    const ref = await ingestReady(dir, "# Review\nRequest changes.", { kind: "pr", ref: PR, head: HEAD });
++    await writeFindings(dir, ref, [UNVERIFIED_MAJOR]);
++    await waiveReadiness(path.resolve(dir, ref), ["verifier"], OPERATOR_WORDS);
++    const out = sink();
++    expect((await publishReview(path.resolve(dir, ref), { readiness: { prLookup: lookup({}) }, post: out.post, confirm: out.confirm })).posted).toBe(true);
++    expect((await completeManagedReview(dir, ref, { prLookup: lookup({}) })).manifest.status).toBe("closed");
++  });
++
++  test("(b) a target head rewritten in manifest.json is refused, even when it now matches the PR head", async () => {
++    const ref = await ingestReady(dir, "# Review\nNo findings.", { kind: "pr", ref: PR, head: HEAD });
++    await editManifest(ref, (manifest) => { manifest.target.head = MOVED; });
++    await bothRefuse(ref, ["manifest.json target", "does not match the seal"], lookup({ headSha: MOVED }));
++  });
++
++  test("(b) --head with --head-reason still relabels the head, and the next close sees the new seal", async () => {
++    const ref = await ingestReady(dir, "# Review\nNo findings.", { kind: "pr", ref: PR, head: HEAD });
++    const done = await completeManagedReview(dir, ref, { prLookup: lookup({ headSha: MOVED }), head: MOVED, headReason: REASON });
++    expect(done.manifest.status).toBe("closed");
++    expect(done.manifest.target.head).toBe(MOVED);
++    const out = sink();
++    expect((await publishReview(path.resolve(dir, ref), { readiness: { prLookup: lookup({ headSha: MOVED }) }, post: out.post, confirm: out.confirm })).posted).toBe(true);
++  });
++
++  test("(b) a head_override written into manifest.json is refused", async () => {
++    const ref = await ingestReady(dir, "# Review\nNo findings.", { kind: "pr", ref: PR, head: HEAD });
++    await editManifest(ref, (manifest) => {
++      manifest.head_override = { from: HEAD, to: MOVED, operator_quote: REASON, time: new Date().toISOString() };
++    });
++    await bothRefuse(ref, ["head_override"]);
++  });
++
++  test("(c) `\"verification\": {}` in findings.json does not pass item verifier", async () => {
++    const ref = await ingestReady(dir, "# Review\nRequest changes.", { kind: "pr", ref: PR, head: HEAD });
++    await writeFindings(dir, ref, [{ ...UNVERIFIED_MAJOR, verification: {} }]);
++    await bothRefuse(ref, ["verifier", "findings.json"]);
++  });
++
++  test("(c) a well-formed verification keryx did not record does not pass item verifier either", async () => {
++    const ref = await ingestReady(dir, "# Review\nRequest changes.", { kind: "pr", ref: PR, head: HEAD });
++    await writeFindings(dir, ref, [{ ...UNVERIFIED_MAJOR, verification: VERIFIED }]);
++    await bothRefuse(ref, ["verifier", "keryx did not record"]);
++  });
++
++  test("(c) a verification applied by ingest --verifications closes the package", async () => {
++    const result = await createManagedReviewPackage({
++      cwd: dir, mode: "ingest", reviewId: "seal-round", target: { kind: "pr", ref: PR, head: HEAD },
++      reportText: `# Review\nRequest changes.\n\n${EVIDENCE}\n\n## Major\n\n### [F-001] unverified claim\n- **Severity**: major\n\n\`\`\`json keryx:findings\n${JSON.stringify([REVIEWER_RESULT])}\n\`\`\`\n`,
++      verifications: [{ finding: "seal-round#F-001", ...VERIFIED }],
++    });
++    await writeFile(path.join(path.resolve(dir, result.path), "research.json"), JSON.stringify(READY_RESEARCH));
++    await writeFile(path.join(path.resolve(dir, result.path), "coverage.md"), READY_COVERAGE_MD);
++    const findings = JSON.parse(await readFile(path.join(path.resolve(dir, result.path), "findings.json"), "utf8")) as Array<{ severity: string; verification?: unknown }>;
++    expect(findings.some((finding) => finding.severity === "major" && finding.verification !== undefined)).toBe(true);
++    expect((await completeManagedReview(dir, result.path, { prLookup: lookup({}) })).manifest.status).toBe("closed");
++  });
++});
+
+--- src/session/commands/catalogue.ts
+@@ 5,45 @@
+ import { catalogueDigest, type Control } from "../../remote-control/protocol";
+ import { projectInspectionCommands } from "./project-inspection";
+ import { acCheckCommands } from "./ac-check";
+ import { decisionFollowupCommands } from "./decision-followups";
+ import { approvalModeCommands, planCommands } from "./plan";
+ import { sessionSettingsCommands } from "./session-settings";
+ import { goalCommands } from "./goal";
+ import { sessionControlCommands } from "./session-control";
+ import { lifecycleCommands } from "../host-lifecycle";
+ import { questionCommands } from "./questions";
+ import { conversationCommands } from "./conversation";
+ import type { NativeCommandContribution } from "./handlers";
+ import { analysisCommands } from "./analysis";
+ import { tasksIntegrationsCommands } from "./tasks-integrations";
+ import { reasoningCommands } from "./reasoning";
+ import { projectRecordCommands } from "./project-records";
+ import { routingCategoryCommands } from "./routing-categories";
+ 
+ export const sharedCommandIds = new Set(["help", "status", "models", "routing", "reasoning", "history", "compact", "tasks", "queue"]);
+ /** specification.md 3.1: "Pure terminal display functions are client concerns." `/think` only chooses how reasoning blocks are shown. */
+-const presentation = new Set(["theme", "copy", "expand", "rendering", "game", "think"]);
++const presentation = new Set(["theme", "copy", "expand", "rendering", "game", "think", "diag"]);
+ /** specification.md 3.1: "unimplemented vendor adapters are explicit capability boundaries" and external-vendor execution "[is] not admitted by this Flow". */
+ const externalVendor = new Set(["delegate", "external-diff"]);
+ const localSetup = new Set(["connect", "search-connect", "setup", "permissions", "mode", "remote-policy", "remote-control"]);
+ const empty: Control["ArgumentSchema"] = { type: "object", additionalProperties: false, properties: {}, required: [] };
+ /** `/history [N]` (src/remote/history.ts): no number reads the whole ordered history, N (1-20) its last N messages. */
+ export const historyInputSchema: Control["ArgumentSchema"] = { type: "object", additionalProperties: false, properties: { count: { type: "integer", minimum: 1, maximum: 20 } }, required: [] };
+ /** `/compact [focus]` (the TUI joins the words after the command): the optional focus the compaction summary carries. */
+ export const compactInputSchema: Control["ArgumentSchema"] = { type: "object", additionalProperties: false, properties: { focus: { type: "string", maxLength: 200 } }, required: [] };
+ export function createCommandCatalogue(capabilityDigest: string, contributions: readonly NativeCommandContribution[] = []): Control["CommandCatalogue"] {
+   const entries: Control["CommandCatalogueEntry"][] = commandsForMode("agent").map((command) => {
+     const commandName = command.name.slice(1);
+     const available = sharedCommandIds.has(commandName);
+     return {
+       commandName, summary: command.description, handlerId: `native.${commandName}`,
+       inputSchema: commandName === "reasoning" ? { type: "object", additionalProperties: false,
+         properties: { effort: { type: "string", maxLength: 16, enum: ["none", "minimal", "low", "medium", "high", "xhigh", "max"] } }, required: ["effort"] } : commandName === "history" ? historyInputSchema : commandName === "compact" ? compactInputSchema : empty,
+       resultSchema: { type: "string", maxLength: 32768 },
+       mutationClass: localSetup.has(commandName) ? "sensitive-setup" : ["reasoning", "compact"].includes(commandName) ? "session" : "read",
+       states: ["idle", "busy", "paused"], busyPolicy: ["reasoning", "compact"].includes(commandName) ? "reject" : "read-only",
+       confirmation: localSetup.has(commandName) ? "local-only" : "none",
+
+--- src/session/commands/coverage.ts
+@@ 34,74 @@
+ }
+ export interface NativeCoverageBlocker { code: string; subject: string; detail: string }
+ export interface NativeCoverageResult { ready: boolean; registeredCommands: number; auditedVariants: number; blockers: NativeCoverageBlocker[] }
+ const ADMITTED = new Set(["applied", "confirmation-required", "queued", "admitted"]);
+ export function parityReceiptId(variantId: string): string { return `native-parity:${variantId}`; }
+ export function nativeParityReceiptDigest(receipt: Omit<NativeParityReceipt, "receiptDigest">): string {
+   const { schema, id, variantId, commandName, handlerName, catalogueDigest: digest, sources, local, headless } = receipt;
+   return canonicalDigest({ schema, id, variantId, commandName, handlerName, catalogueDigest: digest, sources, local, headless });
+ }
+ /** Parity holds only when both paths actually ran and produced the same normalized outcome; `admitted` additionally requires the handler to accept it. */
+ export function receiptParity(receipt: NativeParityReceipt): { matched: boolean; admitted: boolean } {
+   const headless = receipt.headless.outcome;
+   const matched = headless !== null && canonicalDigest(receipt.local.outcome) === canonicalDigest(headless);
+   return { matched, admitted: matched && ADMITTED.has(headless.status) && headless.errorCode === null };
+ }
+ /** Production entry derives the registry from the shipped command definitions; callers cannot omit a registered command. */
+ export function checkRegisteredNativeCommandCoverage(options: Omit<Parameters<typeof checkNativeCommandCoverage>[0], "registryNames">): Promise<NativeCoverageResult> {
+   return checkNativeCommandCoverage({ ...options, registryNames: registeredNativeCommandNames() });
+ }
+ export function registeredNativeCommandNames(): string[] { return [...new Set(commandsForMode("agent").map(command => command.name.slice(1)))].sort(); }
+-const presentation = new Set(["think", "expand", "copy", "theme", "rendering", "game"]);
++const presentation = new Set(["think", "expand", "copy", "theme", "rendering", "game", "diag"]);
+ const standing = new Set(["schedule", "schedules", "intake", "remote-policy"]);
+ const vendors = new Set(["delegate", "external-agents", "external-diff"]);
+ /**
+  * Owner decision 2026-10-29 (ownerDecisionStage1bTo3): these variants execute Jev analysis, which needs explicit local Jev setup and
+  * consent (specification.md 3.1 security-local setup). Owner decision 2026-10-29 (ownerDecisionStage4) adds the conform wizard steps:
+  * picking a reference or a target starts that Jev run, and a clause detail renders its in-memory result. Exactly these, and only with
+  * the frozen spec reference checked below.
+  */
+ export const JEV_SETUP_BOUNDARIES: ReadonlySet<string> = new Set(["risk.working-diff", "scenarios.working-diff", "jevrules.working-diff", "staledocs.working-diff",
+   "contract.working-diff", "opencomments.repo-pr", "triage.latest-review", "ci.triage", "ci.retry", "conform.run",
+   "conform.reference-select", "conform.target-diff", "conform.target-pr", "conform.target-report", "conform.clause-detail"]);
+ /**
+  * Owner decision 2026-10-29 (ownerDecisionStage4), each variant in exactly its decided class and only with the frozen spec reference:
+  * running a trigger spawns an unbounded `keryx trigger run` child whose tracked writes would fence the owned checkout (scope); the
+  * measured turn-guard details exist only in the TUI process memory (presentation); a CI run detail needs GitHub data (external vendor).
+  */
+ export const STAGE4_DECIDED_BOUNDARIES: ReadonlyMap<string, NativeCoverageVariant["classification"]> = new Map([
+   ["triggers.run", "scope-boundary"], ["triggers.confirm-run", "scope-boundary"], ["guard.measured-details", "presentation"], ["ci.detail", "external-vendor"]]);
+ /** Owner decision 2026-10-29: queue actions no frozen queue operation expresses (spec 3.1 names queue edit/remove; protocol QueueEdit/QueueRemove). */
+ export const QUEUE_SCOPE_BOUNDARIES: ReadonlySet<string> = new Set(["queue.force", "queue.force-N", "queue.edit"]);
+
+--- src/session/host.ts
+@@ 213,253 @@
+   let recorder: ReturnType<typeof createRewindRecorder> | undefined;
+   type RewindScope = { kind: "run" | "inspection"; historyVersion?: number; signal: AbortSignal; beforeAction(toolName: string): Promise<void> };
+   let rewindScope: RewindScope | undefined; let rewindSerial: Promise<unknown> = Promise.resolve();
+   const scopedRewind = <T>(scope: RewindScope, invoke: () => Promise<T>): Promise<T> => { const task = rewindSerial.then(async () => { scope.signal.throwIfAborted(); rewindScope = scope; try { return await invoke(); } finally { rewindScope = undefined; } }); rewindSerial = task.catch(() => undefined); return task; };
+   let archiveCursor = history.length;
+   options.runtime.bindSessionDir(handle.dir);
+   options.runtime.bindRestrictions((version) => restriction(version).enabled, (version) => restriction(version).approvalMode === "ask");
+   options.runtime.bindWorkspace(options.workspace);
+   options.runtime.bindProjectContext(options.projectContext, options.inspectionMode ?? "hub-remote");
+   const routing = options.runtime.routing(record.config);
+   const listeners = new Set<(event: Control["SessionEvent"]) => void>();
+   const turnListeners = new Set<(event: NativeTurnObservation) => void>();
+   const hostId = randomUUID();
+   let connected = true; let disposed = false; let recovering = false;
+   let serial: Promise<unknown> = Promise.resolve();
+   const serialized = <T>(task: (release: () => void) => Promise<T>): Promise<T> => {
+     const previous = serial; let release!: () => void; const unlocked = new Promise<void>((resolve) => { release = resolve; });
+     serial = previous.then(() => unlocked).catch(() => undefined);
+     return previous.then(() => task(release)).finally(release);
+   };
+-  let active: { runId: string; turnId: string; historyVersionAtAdmission: number; abort: AbortController; done: Promise<void> } | undefined;
++  let active: { runId: string; turnId: string; historyVersionAtAdmission: number; abort: AbortController; done: Promise<boolean> } | undefined;
+   let selecting: { operationId: string; payloadDigest: string; runId: string; turnId: string; abort: AbortController; done: Promise<SessionHostReceipt> } | undefined;
+   /** An admitted when-idle close: new work is sealed and the close applies at the current turn's boundary (protocol "close when-idle", D15). */
+   let pendingClose: Extract<SessionHostOperation, { kind: "close-session" }> | undefined;
+   const reconnectWaiters = new Set<() => void>();
+   const inspections = new Map<AbortController, Promise<void>>();
+   const approvalOutcomeListeners = new Set<(outcome: SessionApprovalOutcome) => void>();
+   const approvalListeners = new Set<(question: SessionApprovalQuestion) => void>();
+   const approvals = createSessionApprovalService({ dir: join(handle.dir, "remote-control"), sessionId: record.sessionId, expirySeconds: decisionTtlMs / 1000,
+     // Answers need the live control channel. A question raised during a disconnect still reaches the durable outbox: the turn holds at
+     // this pre-tool boundary until reconnection, and the question's own deadline, never the disconnect, denies it.
+     connected: () => connected && !disposed, deliverable: () => !disposed,
+     onOutcome(outcome) { for (const sink of approvalOutcomeListeners) { try { sink(structuredClone(outcome)); } catch { approvalOutcomeListeners.delete(sink); } } },
+     deliver(question) {
+       const safe = { ...question, input: redactSensitiveText(question.input).slice(0, 8192), summary: redactSensitiveText(question.summary) };
+       for (const sink of approvalListeners) sink(safe);
+     },
+   });
+   const questions = createSessionUserQuestions({ dir: join(handle.dir, "remote-control"), sessionId: record.sessionId, now,
+     context: () => active === undefined || record.controller === null ? undefined : { runId: active.runId, turnId: active.turnId, actorId: record.controller.actorId,
+       policyDigest: record.config.policyDigest, controllerLeaseId: record.controller.controllerLeaseId, controllerVersion: record.controller.version,
+
+--- src/session/host.ts
+@@ 519,559 @@
+         // A run whose owned work outlives it has no proven cessation: the session is fenced with it, never idle beside a live owned process.
+         if (terminal.outcome === "unknown") record.state = "recovery-required";
+         if (command !== undefined) {
+           const outcome = sendable({ ...(completedCommand ?? { operationId: operation.operationId, sessionId: record.sessionId, commandName: command.commandName,
+             result: null, confirmationId: null, confirmation: null, runId: operation.runId, turnId: operation.turnId, errorCode: "forbidden" }), sessionVersion: record.version,
+             status: terminal.outcome === "unknown" ? "recovery-required" : terminal.outcome === "succeeded" ? "applied" : "rejected" });
+           remember(operation, outcome); emit({ kind: "command-outcome", outcome });
+         }
+         observe({ kind: "terminal", ...terminal, workspaceBaseline: record.workspaceBaseline, partial: terminal.outcome !== "succeeded",
+           checks: tasks.filter((task) => task.visibility !== "private").map((task) => { const output = options.runtime.jobs.readOutputSince(task.jobId, 0); return { taskId: task.jobId, command: redactSensitiveText(task.command), status: task.status,
+             source: "native-supervised-shell", ...(output.ok ? { output: utf8Bounded(redactSensitiveText(output.output), 8192), outputTruncated: output.missed > 0 || Buffer.byteLength(output.output) > 8192 } : {}),
+             ...(task.exitCode === undefined ? {} : { exitCode: task.exitCode }), startedAt: task.startedAt, ...(task.endedAt === undefined ? {} : { endedAt: task.endedAt }) } satisfies NativeCheckObservation; }) });
+         record.activeRunId = null; record.activeTurnId = null; active = undefined; state();
+         confirmedExecutionDigests.delete(operation.operationId);
+         // Hub may automatically mint a fresh immutable command/grant at this idle boundary.
+         // Retained queued input is never itself continuing execution authority.
+         persist();
+         // A pending when-idle close owns this boundary: it is the next serialized step, and every admission stays sealed until it settles.
+         if (pendingClose !== undefined) void serialized(settlePendingClose);
+       }
++      return terminal.outcome !== "unknown";
+     }));
+     active = { runId: operation.runId, turnId: operation.turnId, historyVersionAtAdmission, abort, done };
+     return receipt;
+   };
+   const start = async (operation: Extract<SessionHostOperation, { kind: "message" | "command" }> & { runId: string; turnId: string }, text: string, request: Control["StartTurnRequest"],
+     command?: Control["CommandInvoke"], releaseMutation: () => void = () => {}, originalRequest: Control["StartTurnRequest"] | Control["MessageSubmit"] | Control["CommandInvoke"] = operation.request): Promise<SessionHostReceipt> => {
+     if (!record.config.routing.enabled || command !== undefined) return launchStart(operation, text, request, command);
+     if (selecting !== undefined) return selecting.operationId === operation.operationId && selecting.payloadDigest === operation.payloadDigest ? selecting.done : opReceipt(operation, "rejected", "busy");
+     const config = structuredClone(record.config); const abort = new AbortController(); const expiresAt = Math.min(now() + 5000, operation.expiresAt === undefined ? Infinity : Date.parse(operation.expiresAt));
+     const pins = () => canonicalDigest({ version: record.version, config: record.config, historyVersion: record.historyVersion, historyCursor: record.historyCursor, workspaceBaseline: record.workspaceBaseline,
+       controller: record.controller, state: record.state });
+     const subject = () => canonicalDigest({ text, originalRequest, config: record.config, catalogue: catalogue().catalogueDigest,
+       availability: routing.availability(), historyVersion: record.historyVersion, historyCursor: record.historyCursor, workspaceBaseline: record.workspaceBaseline,
+       controller: record.controller === null ? null : { id: record.controller.controllerLeaseId, version: record.controller.version, actorId: record.controller.actorId, state: record.controller.state } });
+     const capturedSubject = subject(); const cached = selectionDecisions.get(operation.operationId);
+     const captured = pins(); let finish!: (receipt: SessionHostReceipt) => void; let fail!: (error: unknown) => void;
+     const done = new Promise<SessionHostReceipt>((resolve, reject) => { finish = resolve; fail = reject; });
+     const job = { operationId: operation.operationId, payloadDigest: operation.payloadDigest, runId: operation.runId, turnId: operation.turnId, abort, done }; selecting = job; persist();
+     let hardFailure: string | undefined;
+     let authorityFailure: "temporarily-unavailable" | "revoked-or-forbidden" | "stale-subject" | "expired-work" | "renewal-drift" | "unknown" | undefined;
+
+--- src/session/host.ts
+@@ 805,852 @@
+       expectedSessionVersion: record.version, controller: request.controller, expectedConfigVersion: record.config.configVersion, expectedHistoryVersion: record.historyVersion,
+       expectedWorkspaceBaseline: record.workspaceBaseline, association: operation.association, messageId: operation.operationId, text: `/${request.commandName}` }, request);
+   };
+   const executionConfirmation = (operation: Extract<SessionHostOperation, { kind: "command" }>) => {
+     const confirmation = checked("CommandConfirmationRequest", { confirmationId: randomUUID(), sessionId: record.sessionId, operationId: operation.operationId,
+       operationDigest: operation.payloadDigest, policyDigest: record.config.policyDigest, expectedConfigVersion: record.config.configVersion,
+       proposedConfigDigest: canonicalDigest(record.config), controller: operation.request.controller, actorId: operation.actorId, expiresAt: new Date(now() + decisionTtlMs).toISOString(),
+       summary: `Execute /${operation.request.commandName} with the current local policy and run association`, costEffect: "This command may consume the explicitly configured local analysis budget",
+       privacyEffect: "The selected locally permitted service may receive bounded project context" });
+     pendingExecutions.set(confirmation.confirmationId, { operation, confirmation });
+     const outcome = checked("CommandOutcome", { operationId: operation.operationId, sessionId: record.sessionId, commandName: operation.request.commandName,
+       status: "confirmation-required", sessionVersion: record.version, result: null, confirmationId: confirmation.confirmationId,
+       errorCode: null, confirmation, runId: operation.runId ?? null, turnId: operation.turnId ?? null });
+     remember(operation, outcome); emit({ kind: "command-outcome", outcome }); emit({ kind: "session-state", session: structuredClone(record) }); return outcome;
+   };
+   const stopCurrentTurn = async (): Promise<"stopped" | "unknown" | "too-late"> => {
+     const current = active; if (current === undefined) return "too-late";
+     requestSessionInterrupt({ isActive: true, cancel: () => current.abort.abort(new SessionHostError("cancelled")) });
+     questions.denyAll("turn-cancelled"); approvals.denyAll("turn-cancelled");
+     await options.runtime.stop({ kind: "run", identity: current.runId });
+-    let timer: ReturnType<typeof setTimeout> | undefined;
+-    const completed = await Promise.race([current.done.then(() => true, () => false), new Promise<false>((resolve) => { timer = setTimeout(() => resolve(false), 2000); })]);
+-    if (timer !== undefined) clearTimeout(timer);
++    // A later process-group probe can succeed after the turn already recorded
++    // unproven cessation. The receipt must preserve that terminal outcome.
++    const completedWithKnownOutcome = await within(current.done.catch(() => false), false, SETTLE_BOUND_MS);
+     const final = await options.runtime.stop({ kind: "run", identity: current.runId });
+-    if (!completed || final.status !== "stopped") { record.state = "recovery-required"; state(); return "unknown"; }
++    if (!completedWithKnownOutcome || final.status !== "stopped") {
++      if (record.state !== "recovery-required") { record.state = "recovery-required"; state(); }
++      return "unknown";
++    }
+     return "stopped";
+   };
+   const resumeOwnedSession = async (request: Control["SessionResume"]): Promise<Control["SessionRecord"]> => {
+     // A same-process re-open receives this process's own retained lease handle (lease.ts); unproven cessation stays fenced until explicit recovery.
+     // The one exception is a re-hosted crash whose in-flight run a human resolved lost: its owned baseline is re-verified below.
+     if ((record.state === "recovery-required" && !lostResumable) || recovering) throw new SessionHostError("recovery-required");
+     if (active !== undefined || request.expectedSessionVersion !== record.version
+       || request.expectedHistoryVersion !== record.historyVersion || request.expectedWorkspaceBaseline !== record.workspaceBaseline) throw new SessionHostError("stale-resume-pins");
+     const reacquired = options.workspace.checkoutLease?.reacquire();
+     try {
+       const verified = await options.workspace.verify(record.workspaceBaseline); if (!verified.ok) throw new SessionHostError("workspace-conflict");
+       if (opened.lease.checkLost()) throw new SessionHostError("native-lease-lost");
+       if (opened.lease.released) {
+         const reopened = openLeasedSession({ cwd: options.cwd, resumeId: nativeId, ...(options.dataDir === undefined ? {} : { dataDir: options.dataDir }) });
+         unwatchLease(); opened = reopened; handle = reopened.handle; options.onNativeLease?.({ token: opened.lease.owner.token, nativeSessionId: handle.summary.id });
+         history.splice(0, history.length, ...reopened.history); archive.splice(0, archive.length, ...reopened.archive); archiveCursor = history.length;
+         options.runtime.bindSessionDir(handle.dir); unwatchLease = opened.lease.onLost(onLeaseLost);
+         // Close finalized the session services; the resumed owner binds fresh ones, or stays fenced.
+         try { await attachSessionServices(); } catch { lostResumable = false; record.state = "recovery-required"; state(); throw new SessionHostError("recovery-required"); }
+       }
+
+--- src/standard/help-groups.ts
+@@ 234,279 @@
+     kind: "slash",
+     name: "/sessions",
+     group: "Working in keryx shell",
+     summary: "Open the session list and switch to one.",
+   },
+   { kind: "slash", name: "/resume", group: "Working in keryx shell", summary: "Resume a prior session in this project." },
+   { kind: "slash", name: "/new", group: "Working in keryx shell", summary: "Start a new session (old kept on disk)." },
+   { kind: "slash", name: "/clear", group: "Working in keryx shell", summary: "New session (alias of /new)." },
+   {
+     kind: "slash",
+     name: "/compact",
+     group: "Working in keryx shell",
+     summary: "Compact model context — /compact [focus] (archive kept).",
+   },
+   {
+     kind: "slash",
+     name: "/trail",
+     group: "Working in keryx shell",
+     summary: "The tool calls this session recorded (what stays when older rounds leave the request) — /trail [count] [tool=NAME] [file=TEXT] [from=STEP] [to=STEP].",
+   },
++  {
++    kind: "slash",
++    name: "/diag",
++    group: "Working in keryx shell",
++    summary: "Dump the tool-call diagnostics (in-flight calls, stage ages, dock queue) to a file for a bug report — /diag.",
++  },
+   {
+     kind: "slash",
+     name: "/notes",
+     group: "Working in keryx shell",
+     summary: "The notes the model keeps for itself (the facts that survive older rounds) — /notes [key].",
+   },
+   {
+     kind: "slash",
+     name: "/rewind",
+     group: "Working in keryx shell",
+     summary: "Roll back files and/or conversation to the start of an earlier turn — /rewind [N [files|history|both]]; snapshots cover the work tree only.",
+   },
+   {
+     kind: "slash",
+     name: "/copy",
+     group: "Working in keryx shell",
+     summary: "Copy the newest transcript block to the clipboard.",
+   },
+   { kind: "slash", name: "/expand", group: "Working in keryx shell", summary: "Expand the last tool output block." },
+   {
+
+--- src/standard/help-groups.ts
+@@ 587,627 @@
+     name: "/product",
+     group: "Automation",
+     summary: "Intents closed in code that nobody looked back at, with their outcome criteria.",
+   },
+   {
+     kind: "slash",
+     name: "/reviews",
+     group: "Automation",
+     summary: "Managed pull request reviews: findings by outcome, precision, resolved before merge.",
+   },
+   {
+     kind: "slash",
+     name: "/remote-control",
+     group: "Automation",
+     summary: "Drive this session from a Telegram topic: send lines, get replies, answer approvals and questions (an option button, or \"✍ Свой ответ\" and a reply with your own text). Off by default; [name|off|status]. Also takes the review cards (review_confirm_plan, review_decide_premise, review_waive_readiness, review_waive_coverage, review_complete): each pending one shows with its age and the time left of its 1-hour token, and who pressed. To share this full-screen shell and its recent conversation with Team Hub, use /remote-control hub on|off|status.",
+   },
+   {
+     kind: "slash",
+     name: "/history",
+     group: "Automation",
+-    summary: "Post the last messages of this session to the Telegram topic, oldest first. [N], 1 to 20; 10 by default.",
++    summary: "View the current session conversation. In the full-screen shell, open with Ctrl+Shift+H and search with ↑/↓ to navigate matches.",
+   },
+   {
+     kind: "slash",
+     name: "/channels",
+     group: "Automation",
+     summary: "Connect, test or disconnect Telegram for this machine: bot token, one-time code, group. [status].",
+   },
+   {
+     kind: "slash",
+     name: "/intake",
+     group: "Automation",
+     summary: "GitHub work intake: cards that wait for your decision (take, decline, later), pause or resume the poll, poll by hand. [status|list|pause|resume|poll].",
+   },
+   {
+     kind: "slash",
+     name: "/rendering",
+     group: "Automation",
+     summary: "How Telegram replies are written: tables and lists as rich messages or HTML, with a fallback. [auto|rich|html|plain].",
+   },
+   {

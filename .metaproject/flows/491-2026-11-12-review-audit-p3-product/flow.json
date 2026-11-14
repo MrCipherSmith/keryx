@@ -1,0 +1,192 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "491",
+  "slug": "review-audit-p3-product",
+  "title": "Review product surface: one-command review, human help, glossary, deduplicated guide (audit P3)",
+  "status": "initializing",
+  "createdAt": "2026-11-12T09:59:34.326Z",
+  "updatedAt": "2026-11-12T10:01:50.212Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": null,
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "origin": {
+    "kind": "agent-finding",
+    "source": "docs/analysis/review-process-audit-2026-11-12.md"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "keryx review with no subcommand reviews the current branch",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Split review help into a human surface and an agent surface",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Glossary, deduplicated guide and a quick-start under 1000 words",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Harness capability matrix in the docs; onboarding no longer offers bare review start",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "review metrics reports rounds per change, share of closed packages and cost per round",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-11-12T09:59:34.326Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-11-12T10:01:14.061Z",
+      "event": "task-added",
+      "detail": "T5: keryx review with no subcommand reviews the current branch"
+    },
+    {
+      "at": "2026-11-12T10:01:27.775Z",
+      "event": "task-added",
+      "detail": "T6: Split review help into a human surface and an agent surface"
+    },
+    {
+      "at": "2026-11-12T10:01:34.944Z",
+      "event": "task-added",
+      "detail": "T7: Glossary, deduplicated guide and a quick-start under 1000 words"
+    },
+    {
+      "at": "2026-11-12T10:01:42.714Z",
+      "event": "task-added",
+      "detail": "T8: Harness capability matrix in the docs; onboarding no longer offers bare review start"
+    },
+    {
+      "at": "2026-11-12T10:01:50.212Z",
+      "event": "task-added",
+      "detail": "T9: review metrics reports rounds per change, share of closed packages and cost per round"
+    }
+  ]
+}

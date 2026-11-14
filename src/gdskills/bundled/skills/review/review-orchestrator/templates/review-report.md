@@ -76,7 +76,8 @@ only — did not run: <what>` when nothing was executed, or `Evidence level: ran
 <what ran>`. `keryx review complete` refuses a report without it.
 
 When the PR was merged or its head moved after the review, the report's first line
-says so and names the reviewed SHA, or `keryx review complete` refuses.
+says so and names the reviewed SHA. That line informs the reader only:
+`keryx review complete` still refuses until the operator waives readiness item `head`.
 
 ### Refuted and narrowed
 

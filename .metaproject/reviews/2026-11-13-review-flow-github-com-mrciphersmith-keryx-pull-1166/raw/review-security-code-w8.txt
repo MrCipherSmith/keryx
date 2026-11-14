@@ -1,0 +1,47 @@
+STATUS: DONE
+
+```json REVIEW_RESULT
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-security-code",
+  "summary": "Waivers and verifications fail closed: deleting manifest.seals leaves every waiver and verification unhonoured, and a hand-written head_override is refused. The target seal does not: sealProblems skips the target check when manifest.seals is absent, so an agent with a file tool deletes `seals`, sets target.head to the PR head and passes readiness item `head` (SEC-1 head-relabel shape still open). A second, weaker route: the verifier gate keys on the `severity` string in findings.json, which no seal covers.",
+  "findings": [
+    {
+      "id": "SEC-1",
+      "severity": "blocker",
+      "file": "src/review/seals.ts",
+      "line": 87,
+      "quote": "if (manifest.seals !== undefined && isPrBound(manifest.target) && manifest.seals.target !== sealTarget(manifest.target)) {",
+      "problem": "The target check runs only when `manifest.seals` exists. Absence of the whole `seals` object is treated as 'a package that predates the seals', so the check is skipped. The seal is therefore removable, not just forgeable.",
+      "evidence": "seals.ts:80-93 sealProblems: head_override is checked on its own condition (so a hand-written override is caught), but the target branch is gated on `manifest.seals !== undefined`. close-gates.ts evaluateCloseGates calls sealProblems(readManifest(...)) and nothing else re-checks target. headCheck (readiness.ts:355-367) reads ctx.manifest.target.head via completeHeadGate and compares it with the PR head. roundRecordTampered (round-record.ts:276-287) hashes only round.json and prior_findings.json, so manifest.target is not covered there either (MANIFEST_IDENTITY_FIELDS is used by the registry, not by the close gates). seals.test.ts case (b) edits target.head but leaves `seals` in place, so no test covers deleting `seals`.",
+      "impact": "Attack vector: an agent with only a file tool opens manifest.json of a PR package whose round reviewed an old head, deletes the `seals` key (also `head_override` if present) and sets `target.head` to the PR's current head. `review complete` and `review publish` run sealProblems (no seals, no head_override: no problem) and headCheck (reviewed head equals PR head: pass). The round is closed or published as having reviewed the current head without the operator's --head-reason quote, which is the relabel SEC-1 round 1 asked to stop. Deleting `seals` costs the agent nothing it needs: waivers and verifications are not honoured without it, but the head gate does not need them.",
+      "suggested_fix": "Do not read a missing `seals` as 'legacy'. Record the target seal at every package creation (start, attach, ingest) and treat a PR-bound package without `seals.target` as unsealed. For genuinely old packages, key the legacy exemption on something an agent cannot clear by editing manifest.json, for example the closed-round registry hash or a `schemaVersion`/`createdAt` threshold that is itself covered by roundRecord, or refuse and require `review complete --head ... --head-reason`. Add a test that deletes `seals` and sets target.head to the PR head and expects both complete and publish to refuse.",
+      "confidence": "high",
+      "reviewer": "review-security-code",
+      "class_scope": {
+        "sites": ["src/review/seals.ts:87", "src/review/seals.ts:82", "src/review/managed.ts:521", "src/review/managed.ts (complete, line not re-read at head:seals set only when stored.seals !== undefined || options.head !== undefined)"],
+        "enumeration_method": "keryx ctx rg for manifest.seals / seals: / sealTarget / sealProblems across src (non-test): the only reader of the target seal is sealProblems; the only writers of seals.target are the ingest build at managed.ts:521 and the complete path; the other seal kinds (waivers, verifications) are read through partitionWaivers/verificationProblem, which already fail closed when seals are absent, so the target seal is the one member of the class that does not."
+      }
+    },
+    {
+      "id": "SEC-2",
+      "severity": "major",
+      "file": "src/review/readiness.ts",
+      "line": 238,
+      "quote": "const heavy = ctx.findings.filter((finding) => [\"blocker\", \"major\"].includes(String(finding.severity)));",
+      "problem": "The verifier gate decides which findings need a verification from the `severity` field of findings.json, and the seals cover only the verification object (keyed by global_id/id), not the finding it sits on. A finding can be taken out of the gate by changing its severity string.",
+      "evidence": "seals.ts:42 sealVerification digests {finding: key, verification}; findings.json severity is not part of any seal. readiness.ts:238 filters on severity before verificationProblem is consulted.",
+      "impact": "Attack vector: an agent with a file tool edits findings.json and changes an unverified `major` or `blocker` to `minor`. Item `verifier` then counts zero heavy findings and passes, and the report posted from the package no longer carries the blocking finding. This is a downgrade that skips the check SEC-1 asks to protect; it needs findings.json write access only. Not reached if another gate re-derives severity from the raw reviewer results; I did not find one in this slice, so the precondition is not established by the diff.",
+      "suggested_fix": "Seal the severity-bearing fields (id, global_id, severity) when ingest writes findings.json, for example a digest over the list of {key, severity} for heavy findings stored in manifest.seals, and have verifierCheck compute heavy from the sealed list. Or reconcile findings.json against the ingested raw results at complete.",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "class_scope": {
+        "sites": ["src/review/readiness.ts:238"],
+        "enumeration_method": "keryx ctx rg for verifierCheck and the readers of findings severity in the close gates; slice-04 holds one severity-keyed gate (verifierCheck). Other severity-keyed gates outside this slice were not enumerated."
+      }
+    }
+  ],
+  "stats": { "blocker": 1, "major": 1, "minor": 0, "info": 0 },
+  "slices": ["slice-04"]
+}
+```

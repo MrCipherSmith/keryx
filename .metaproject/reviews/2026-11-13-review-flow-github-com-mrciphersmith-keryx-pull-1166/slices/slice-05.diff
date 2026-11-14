@@ -1,0 +1,3184 @@
+--- src/tui/busy-dispatch.test.ts
+@@ 212,256 @@
+ });
+ 
+ // Flow 273 T7: messaging or viewing the project agent bus must not wait for
+ // the main turn to finish — the same reasoning /status and /flows get.
+ test("classifyBusyDispatch: /bus routes to bus even while main is busy", () => {
+   expect(
+     classifyBusyDispatch({ line: "/bus @release hi", commandName: "/bus", ...base }),
+   ).toBe("bus");
+ });
+ 
+ test("classifyBusyDispatch: bare /bus (opening the modal) also routes to bus while busy", () => {
+   expect(classifyBusyDispatch({ line: "/bus", commandName: "/bus", ...base })).toBe("bus");
+ });
+ 
+ test("flow 300: /governance and /triggers are read-only while busy — never deferred to a side worker", () => {
+   expect(classifyBusyDispatch({ line: "/governance", commandName: "/governance", ...base })).toBe("governance");
+   expect(classifyBusyDispatch({ line: "/triggers", commandName: "/triggers", ...base })).toBe("triggers");
+   expect(classifyBusyDispatch({ line: "/triggers nightly", commandName: "/triggers", ...base })).toBe("triggers");
+ });
+ 
++// Flow 487: /diag exists for a stuck turn, so it answers at once instead of queueing behind it.
++test("classifyBusyDispatch: /diag routes to diag while main is busy, never deferred", () => {
++  expect(classifyBusyDispatch({ line: "/diag", commandName: "/diag", ...base })).toBe("diag");
++});
++
+ // AC5 (flow 418): a slash line sent while main is busy is queued, not dropped.
+ for (const name of ["/route", "/external", "/model", "/goal", "/connect", "/compact"]) {
+   test(`busy slash ${name} is deferred by the classifier and QUEUED for the turn's end`, () => {
+     const line = `${name} some args`;
+     expect(classifyBusyDispatch({ line, commandName: undefined, ...base })).toBe("deferred");
+     expect(deferredBusyAction(line, undefined)).toBe("queue");
+     expect(deferredBusyAction(line, name)).toBe("queue");
+   });
+ }
+ 
+ for (const name of ["/mode", "/remote-control", "/status"]) {
+   test(`busy slash ${name} is never refused: it runs at once or queues`, () => {
+     expect(deferredBusyAction(name, name)).toBe("queue");
+   });
+ }
+ 
+ for (const name of ["/new", "/clear", "/resume", "/sessions", "/rewind"]) {
+   test(`busy slash ${name} is REFUSED, not queued: it would replace the session under the queued questions`, () => {
+     expect(BUSY_REFUSED_COMMANDS.has(name)).toBe(true);
+     expect(deferredBusyAction(`${name} x`, undefined)).toBe("refuse");
+
+--- src/tui/chat-shell.test.ts
+@@ 109,153 @@
+   const provider = scriptedTextProvider(replies);
+   return {
+     makeProvider: () => provider,
+     clock: () => "2026-07-21T00:00:00.000Z",
+     idSeq: () => `id-${idCounter++}`,
+     initial: { provider: "scripted", model: "m" },
+     // No `session`: `runShell` skips persistence, so the test writes no files.
+   };
+ }
+ 
+ /** Let the driver's async turn settle: several render frames + macrotasks. */
+ async function settle(h: { flush: TestSetup["flush"] }, rounds = 6): Promise<void> {
+   for (let i = 0; i < rounds; i++) {
+     await new Promise((resolve) => setTimeout(resolve, 1));
+     await h.flush();
+   }
+ }
+ 
+ async function mountChat(
+   otui: OtuiBundle,
+-  opts: { replies: readonly string[]; width?: number; height?: number; versionCheck?: Promise<VersionCheckResult> },
++  opts: { replies: readonly string[]; width?: number; height?: number; kittyKeyboard?: boolean; versionCheck?: Promise<VersionCheckResult> },
+ ): Promise<TestSetup & { handle: ChatShellHandle; destroy: () => void }> {
+-  const setup = await otui.testing.createTestRenderer({ width: opts.width ?? 90, height: opts.height ?? 26 });
++  const setup = await otui.testing.createTestRenderer({
++    width: opts.width ?? 90, height: opts.height ?? 26, kittyKeyboard: opts.kittyKeyboard ?? false,
++  });
+   const handle = await mountChatShell(otui.core, setup.renderer, {
+     deps: chatDeps(opts.replies),
+     runShell, // the REAL driver — not a stand-in (AC10)
+     persistSelection: false,
+     ...(opts.versionCheck !== undefined ? { versionCheck: opts.versionCheck } : {}),
+   });
+   await setup.flush();
+   return {
+     ...setup,
+     handle,
+     destroy: () => {
+       handle.destroy(); // closes the line stream and clears the chrome timers
+       setup.renderer.destroy();
+     },
+   };
+ }
+ 
+ otuiTest("flow 142 AC4: chat TUI receives the shared persistent version notice", async () => {
+   const otui = requireOtui();
+   const h = await mountChat(otui, {
+
+--- src/tui/chat-shell.test.ts
+@@ 159,243 @@
+       currentVersion: "0.2.17",
+       latestVersion: "0.2.18",
+       installCommand: FIXED_INSTALL_COMMAND,
+       source: "registry",
+     }),
+   });
+   await Promise.resolve();
+   await h.flush();
+   const frame = h.captureCharFrame();
+   const compact = frame.replace(/[\s│]/g, "");
+   expect(frame).toContain("Keryx update");
+   expect(compact).toContain("0.2.17→0.2.18");
+   expect(frame).toContain("npm install -g");
+   expect(compact).toContain("@mrciphersmith/keryx@latest");
+   expect(h.handle.chrome.textarea.focused).toBe(true);
+   h.destroy();
+ });
+ 
+ otuiTest("AC10: a chat turn runs end to end through the real runShell and the reply is on the frame", async () => {
+   const otui = requireOtui();
+-  const h = await mountChat(otui, { replies: ["Keryx is a metaproject CLI.", "Second answer here."] });
++  const h = await mountChat(otui, { replies: ["Keryx is a metaproject CLI.", "Second answer here."], kittyKeyboard: true });
+ 
+   // Mount state: the chat chrome, its own mode label, and a focused composer.
+   const mounted = h.captureCharFrame();
+   expect(mounted).toContain("keryx · chat · scripted/m");
+   expect(h.handle.chrome.textarea.focused).toBe(true);
+ 
+   // A composer submission becomes a `runShell` line and streams a reply back.
+   h.handle.chrome.input.value = "what is keryx?";
+   await h.flush();
+   h.mockInput.pressEnter();
+   await settle(h);
+ 
+   const frame = h.captureCharFrame();
+   expect(frame).toContain("what is keryx?"); // the user echo
+   expect(frame).toContain("Keryx is a metaproject CLI."); // the streamed reply
+   expect(h.handle.chrome.isBusy()).toBe(false); // the turn settled, spinner gone
+   expect(h.handle.bridge.turnActive()).toBe(false);
+   expect(h.handle.chrome.textarea.focused).toBe(true); // focus handed back
+ 
+   // A second turn appends rather than replacing, and the estimate advances.
+   h.handle.chrome.input.value = "and again?";
+   await h.flush();
+   h.mockInput.pressEnter();
+   await settle(h);
+   const second = h.captureCharFrame();
+   expect(second).toContain("Keryx is a metaproject CLI.");
+   expect(second).toContain("Second answer here.");
+   expect(second).toMatch(/~\d/); // the D-A2 estimated context counter
+ 
++  h.handle.chrome.input.value = "/history";
++  await h.flush();
++  h.mockInput.pressEnter();
++  await settle(h);
++  expect(h.captureCharFrame()).toContain("Session history");
++  expect(h.captureCharFrame()).toContain("Second answer here.");
++  h.mockInput.pressEscape();
++  await h.waitFor(() => !h.handle.chrome.overlayActive());
++
+   // A slash command is handled by `runShell` itself and never reaches a model.
+   h.handle.chrome.input.value = "/help";
+   await h.flush();
+   h.mockInput.pressEnter();
+   await settle(h);
+-  expect(h.captureCharFrame()).toContain("/compact");
++  expect(h.captureCharFrame()).toContain("/history");
+ 
+   // …and an agent-only command fails with the wrong-mode explanation (S4/AC8).
+   h.handle.chrome.input.value = "/expand";
+   await h.flush();
+   h.mockInput.pressEnter();
+   await settle(h);
+   expect(h.captureCharFrame()).toContain("only available in agent mode");
+ 
+   // `/exit` ends the line stream, so the driver returns and the shell tears down.
+   h.handle.chrome.input.value = "/exit";
+   await h.flush();
+   h.mockInput.pressEnter();
+   await h.handle.done;
+   h.destroy();
+ });
+ 
+ otuiTest("multiline input echoes the user's own first line, not just a paste placeholder, and submits once", async () => {
+   const otui = requireOtui();
+   const h = await mountChat(otui, { replies: ["ok"] });
+ 
+
+--- src/tui/chat-shell.test.ts
+@@ 367,430 @@
+     expect(handle.chrome.menuActive()).toBe(false);
+     expect(firstSignal?.aborted).toBe(false);
+ 
+     await escape();
+     expect(firstSignal?.aborted).toBe(true);
+     expect(handle.chrome.isBusy()).toBe(false);
+     expect(setup.captureCharFrame()).toContain("chat turn interrupted");
+     expect(setup.captureCharFrame()).not.toContain("Late reply");
+ 
+     await submit("Next question");
+     expect(setup.captureCharFrame()).toContain("Fresh reply");
+   } finally {
+     handle.bridge.close();
+     release.resolve();
+     await handle.done;
+     handle.destroy();
+     setup.renderer.destroy();
+   }
+ });
+ 
+-otuiTest("/new resets the estimated context counter instead of letting it keep climbing", async () => {
++otuiTest("/new resets the estimate and closes history opened while the session changes", async () => {
+   const otui = requireOtui();
+-  const h = await mountChat(otui, { replies: ["A fairly long scripted answer about keryx."] });
++  const h = await mountChat(otui, { replies: ["A fairly long scripted answer about keryx."], kittyKeyboard: true });
+   expect(h.captureCharFrame()).toContain("~0 tokens (est)");
+ 
+   h.handle.chrome.input.value = "a question long enough to move the estimate";
+   await h.flush();
+   h.mockInput.pressEnter();
+   await settle(h);
+   expect(h.captureCharFrame()).not.toContain("~0 tokens (est)"); // it moved
+ 
+   // `/new` makes `runShell` drop its history; the estimate mirrors that history,
+   // so it must be dropped too rather than carried into the fresh session.
+   h.handle.chrome.input.value = "/new";
+   await h.flush();
+   h.mockInput.pressEnter();
++  h.mockInput.pressKey("h", { ctrl: true, shift: true });
++  expect(h.handle.chrome.overlayActive()).toBe(true);
+   await settle(h);
++  expect(h.handle.chrome.overlayActive()).toBe(false);
+   expect(h.captureCharFrame()).toContain("~0 tokens (est)");
+   expect(h.captureCharFrame()).not.toContain("a question long enough to move the estimate");
++  h.mockInput.pressKey("h", { ctrl: true, shift: true });
++  await h.waitForFrame((frame) => frame.includes("This session has no messages yet."));
+   h.destroy();
+ });
+ 
+ otuiTest("AC13: chat renders a ts fence with its language tag and a diff with distinct colours", async () => {
+   const otui = requireOtui();
+   const reply = [
+     "Try this:",
+     "```ts",
+     "const a = 1;",
+     "```",
+     "```diff",
+     "@@ -1,2 +1,2 @@",
+     "-removed line",
+     "+added line",
+     "```",
+   ].join("\n");
+   const h = await mountChat(otui, { replies: [reply], width: 90, height: 30 });
+   h.handle.chrome.input.value = "show me";
+   await h.flush();
+   h.mockInput.pressEnter();
+
+--- src/tui/composer-choice.test.ts
+@@ 1,30 @@
+ // Regression coverage for the dock reentrancy guard: two `showComposerChoice`
+ // calls used to be able to stack in the same dock (e.g. `/mode` opening its
+ // picker while a tool-approval prompt was still pending), leaving two
+ // independent keypress listeners racing the same Enter/Esc and silently
+ // resolving the FIRST dialog with whatever it happened to have selected —
+ // not what the user actually answered. Concurrent approval callers enqueue;
+ // UI callers pass `enqueue: false` to cancel immediately.
+ import { expect, test } from "bun:test";
+ import { commandsForMode } from "../commands/agent-commands";
+-import { choiceDisplayLabel, choicePasteDecision, decideChoicePaste, initialChoiceSelection, setChoicePasteSink, showComposerChoice, showComposerChoiceDetailed, type ChoiceOption } from "./composer-choice";
++import { choiceDisplayLabel, choicePasteDecision, composerDockDiagnostics, decideChoicePaste, initialChoiceSelection, setChoicePasteSink, showComposerChoice, showComposerChoiceDetailed, type ChoiceOption } from "./composer-choice";
+ import { HC_PASTED_HEADER, HC_UNPARSED_HEADER, hcHistoryEcho } from "./hc-message";
+ import { containsNode, modalHides, openModal } from "./modal-host";
+ import { createShellChrome, type ShellChrome, type ShellChromeOptions } from "./shell-chrome";
+ 
+ async function loadOpenTui(): Promise<
+   { core: typeof import("@opentui/core"); testing: typeof import("@opentui/core/testing") } | undefined
+ > {
+   try {
+     const core = await import("@opentui/core");
+     const testing = await import("@opentui/core/testing");
+     return { core, testing };
+   } catch {
+     return undefined;
+   }
+ }
+ 
+ type OtuiBundle = NonNullable<Awaited<ReturnType<typeof loadOpenTui>>>;
+ type TestSetup = Awaited<ReturnType<OtuiBundle["testing"]["createTestRenderer"]>>;
+ 
+ const OTUI = await loadOpenTui();
+
+--- src/tui/composer-choice.test.ts
+@@ 598,661 @@
+ 
+ otuiTest("hand-back: queued choices pass the keyboard along, and the last one returns it to the composer", async () => {
+   const otui = requireOtui();
+   const h = await mountChrome(otui);
+   const first = showComposerChoice(otui.core, h.renderer, h.chrome.dock, { title: "Spawn A?", cancelId: "deny", options: ALLOW_DENY });
+   const second = showComposerChoice(otui.core, h.renderer, h.chrome.dock, { title: "Spawn B?", cancelId: "deny", options: ALLOW_DENY });
+   await h.flush();
+   h.mockInput.pressEnter();
+   expect(await first).toBe("once");
+   await h.flush();
+   expect(h.captureCharFrame()).toContain("Spawn B?");
+   expect(focusInside(h, h.chrome.dock)).toBe(true); // B took it from the composer A handed it back to
+   expect(h.chrome.textarea.focused).toBe(false);
+   h.mockInput.pressEnter();
+   expect(await second).toBe("once");
+   await h.flush();
+   expect(h.chrome.textarea.focused).toBe(true);
+   h.destroy();
+ });
+ 
++otuiTest("flow 487: dock diagnostics report the holder and the queued ask, and settle back to idle", async () => {
++  const otui = requireOtui();
++  const h = await mountChrome(otui);
++  const idle = composerDockDiagnostics();
++  const first = showComposerChoice(otui.core, h.renderer, h.chrome.dock, { title: "Diag A?", cancelId: "deny", options: ALLOW_DENY });
++  const second = showComposerChoice(otui.core, h.renderer, h.chrome.dock, { title: "Diag B?", cancelId: "deny", options: ALLOW_DENY });
++  await h.flush();
++  const busy = composerDockDiagnostics();
++  expect(busy.holders).toBe(idle.holders + 1);
++  expect(busy.waiting).toBe(idle.waiting + 1);
++  expect(busy.holderAgeMs).not.toBeNull();
++  expect(busy.oldestWaitMs).not.toBeNull();
++  h.mockInput.pressEnter();
++  expect(await first).toBe("once");
++  await h.flush();
++  h.mockInput.pressEnter();
++  expect(await second).toBe("once");
++  await h.flush();
++  const after = composerDockDiagnostics();
++  expect(after.holders).toBe(idle.holders);
++  expect(after.waiting).toBe(idle.waiting);
++  h.destroy();
++});
++
+ otuiTest("hand-back: a choice refused because the dock is busy never moves the keyboard", async () => {
+   const otui = requireOtui();
+   const h = await mountChrome(otui);
+   const first = showComposerChoice(otui.core, h.renderer, h.chrome.dock, { title: "Allow shell command?", cancelId: "deny", options: ALLOW_DENY });
+   await h.flush();
+   const held = h.renderer.currentFocusedRenderable;
+   expect(focusInside(h, h.chrome.dock)).toBe(true);
+   const refused = await showComposerChoice(otui.core, h.renderer, h.chrome.dock, {
+     title: "Main agent is busy",
+     cancelId: "side",
+     enqueue: false,
+     options: ROUTE_OPTIONS,
+   });
+   expect(refused).toBe("side");
+   await h.flush();
+   expect(h.renderer.currentFocusedRenderable).toBe(held);
+   h.mockInput.pressEnter();
+   expect(await first).toBe("once");
+   await h.flush();
+   expect(h.chrome.textarea.focused).toBe(true);
+
+--- src/tui/conversation-history.test.ts
+@@ 1,45 @@
++import { expect, test } from "bun:test";
++import type { NormalizedMessage } from "../harness/provider/types";
++import { conversationHistory, conversationHistoryText, resumedConversation } from "./conversation-history";
++import { frameSubmittedLine } from "./hc-message";
++
++test("resume shows the last turn including replies and skips injected context and tool output", () => {
++  const history: NormalizedMessage[] = [
++    { role: "user", content: "Older question" },
++    { role: "assistant", content: "Older answer" },
++    { role: "user", content: "Latest question" },
++    { role: "assistant", content: "Checking the result" },
++    { role: "tool", content: "raw output" },
++    { role: "user", content: "Injected context", injected: true },
++    { role: "assistant", content: "Latest answer" },
++  ];
++  expect(resumedConversation(history).map(({ text }) => text)).toEqual([
++    "Latest question", "Checking the result", "Latest answer",
++  ]);
++  expect(conversationHistory(history).map(({ text }) => text)).toEqual([
++    "Older question", "Older answer", "Latest question", "Checking the result", "Latest answer",
++  ]);
++});
++
++test("a long last turn shows its last 20 messages in order", () => {
++  const replies = Array.from({ length: 25 }, (_, index) => ({ role: "assistant" as const, content: `Reply ${index}` }));
++  const history: NormalizedMessage[] = [{ role: "user", content: "Question" }, ...replies];
++  expect(resumedConversation(history).map(({ text }) => text)).toEqual(replies.slice(-20).map(({ content }) => content));
++});
++
++test("archived agent messages keep their sender and display the original body", () => {
++  const framed = frameSubmittedLine('<hc from="t7 review">Review complete</hc>');
++  const history: NormalizedMessage[] = [
++    { role: "user", content: framed, provenance: "project" },
++    { role: "user", content: "A tool notification", provenance: "tool" },
++    { role: "user", content: framed, provenance: "tool" },
++    { role: "assistant", content: "Acknowledged" },
++  ];
++  const entries = [
++    { label: "◂ t7 review ❯", text: "Review complete" },
++    { label: "Assistant", text: "Acknowledged" },
++  ];
++  expect(resumedConversation(history)).toEqual(entries);
++  expect(conversationHistory(history)).toEqual([{ label: "You", text: framed }, ...entries]);
++  expect(conversationHistoryText(history)).toContain("◂ t7 review ❯: Review complete");
++});
+
+--- src/tui/diag-command.test.ts
+@@ 1,44 @@
++// Flow 487: /diag recognises its own command word and never throws.
++import { expect, test } from "bun:test";
++import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
++import { tmpdir } from "node:os";
++import path from "node:path";
++import { callDiagnostics } from "../lib/call-diagnostics";
++import { isDiagCommand, maybeDumpOnInterrupt, runDiagCommand } from "./diag-command";
++
++test("isDiagCommand matches the bare word and with args, nothing else", () => {
++  expect(isDiagCommand("/diag")).toBe(true);
++  expect(isDiagCommand("  /diag now")).toBe(true);
++  expect(isDiagCommand("/diagram")).toBe(false);
++  expect(isDiagCommand("/trail")).toBe(false);
++});
++
++test("runDiagCommand returns a summary line and never throws", () => {
++  const text = runDiagCommand();
++  expect(text).toContain("Diagnostics:");
++  expect(text).toContain("in flight");
++});
++
++test("maybeDumpOnInterrupt dumps only when a call has waited long, and says where", () => {
++  const dir = mkdtempSync(path.join(tmpdir(), "diag-int-"));
++  const stop = callDiagnostics.start({ sessionId: "diag-interrupt-test", configDir: dir, intervalMs: 3_600_000 });
++  try {
++    // Nothing in flight: nothing to explain.
++    expect(maybeDumpOnInterrupt({ stageMs: 0, callMs: 0 })).toBeUndefined();
++    callDiagnostics.begin("int-1", "spawn_subagent");
++    callDiagnostics.stage("int-1", "approval");
++    // A fresh call under the default limits is an ordinary interrupt: no file noise.
++    expect(maybeDumpOnInterrupt()).toBeUndefined();
++    const note = maybeDumpOnInterrupt({ stageMs: 0, callMs: 0 });
++    expect(note).toContain("diagnostics saved before interrupt");
++    expect(note).toContain("spawn_subagent in approval");
++    const file = callDiagnostics.dumpPath();
++    expect(file !== undefined && existsSync(file)).toBe(true);
++    expect(readFileSync(file as string, "utf8")).toContain("operator interrupt after long wait");
++  } finally {
++    callDiagnostics.end("int-1", "ok");
++    stop();
++    rmSync(dir, { recursive: true, force: true });
++  }
++});
++
+
+--- src/tui/hc-message.test.ts
+@@ 509,548 @@
+     expect(head).toContain("turnLoop.enqueue(line, summarizeSubmittedLine(line), undefined, \"agent-message\")");
+     expect(head).toContain("drainSites.onLeaseRelease()");
+     // the drop-or-hold decision itself is pinned behaviourally in composer-choice.test.ts
+     expect(head).toContain("choicePasteDecision(otui, r, chrome.dock, chrome.isBusy())");
+   });
+ 
+   test("all three keyboard shell approval lines go through the unverified-author helper", () => {
+     const start = tuiSource.indexOf("approved · remembered");
+     const region = tuiSource.slice(start - 200, start + 700);
+     // remembered, cannot be remembered, and (just below them) once
+     expect(region.match(/keyboardApprovalLine\(/g)?.length).toBe(3);
+     expect(tuiSource).toContain('keyboardApprovalLine("approved (once)", process.env)');
+   });
+ 
+   test("the TUI shows an hc message as a message from that agent and frames it for the model", () => {
+     expect(tuiSource).toContain("hcTranscriptEcho(line, agentShaped)");
+     expect(tuiSource).toContain("frameSubmittedLine(line)");
+     expect(tuiSource).toMatch(/runAgentTurn\(foregroundIo, deps, history, modelLine,/);
+-    // The scroll pin carries the same label as the echo; the resume summary decodes stored frames.
++    // The scroll pin carries the same label as the echo.
+     expect(tuiSource).toContain("chrome.registerUserPrompt(userEcho, echoLine, hcEcho?.marker);");
+-    expect(tuiSource).toContain("const hc = hcHistoryEcho(message.content);");
+   });
+ 
+   test("a Telegram line is the operator's: its tg mark wins and it is never framed", () => {
+     expect(tuiSource).toContain("const hcEcho = source === undefined ? hcTranscriptEcho(line, agentShaped) : undefined;");
+     expect(tuiSource).toContain('...(source === TG_SOURCE ? { marker: TG_ECHO_MARKER } : fromHub ? { marker: "hub ❯" } : hcEcho !== undefined ?');
+     expect(tuiSource).toContain("const modelLine = source === undefined");
+     expect(tuiSource).toContain(": line;");
+   });
+ 
+   test("an agent-shaped line skips the operator-only routes: the wiki-enrich picker and the busy dialog", () => {
+     // One definition of "agent-shaped", read at both sites.
+     const definition = 'const agentShaped = source === undefined && (origin === "agent-message" || looksLikeHcMessage(line));';
+     expect(tuiSource.split(definition).length).toBe(2);
+     expect(tuiSource).toContain("if (source === undefined && !agentShaped && isWikiEnrichIntent(line)) {");
+     const defined = tuiSource.indexOf(definition);
+     const busy = tuiSource.indexOf("if (chrome.isBusy()) {");
+     const queued = tuiSource.indexOf('if (agentShaped) {\n          const position = turnLoop.enqueue(line, displayLine, source, "agent-message");');
+     expect(defined).toBeGreaterThan(-1);
+     expect(busy).toBeGreaterThan(defined);
+     const dialog = tuiSource.indexOf("void routeBusyMessage(");
+
+--- src/tui/history-modal.test.ts
+@@ 1,118 @@
++import { expect, test } from "bun:test";
++import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
++import { tmpdir } from "node:os";
++import path from "node:path";
++import { historySnapshot } from "./history-reader";
++import { openHistoryModal } from "./history-modal";
++import { loadOpenTui, mountChrome } from "./ops-sidebar.test-helpers";
++
++const otui = await loadOpenTui();
++
++async function waitForHistoryFrame(h: Awaited<ReturnType<typeof mountChrome>>, predicate: (frame: string) => boolean): Promise<void> {
++  const deadline = Date.now() + 3000;
++  do {
++    await h.flush();
++    if (predicate(h.captureCharFrame())) return;
++    await Bun.sleep(3);
++  } while (Date.now() < deadline);
++  expect(h.captureCharFrame()).toSatisfy(predicate);
++}
++
++test.skipIf(otui === undefined)("search jumps to individual hits in long archived messages and keeps its toolbar fixed", async () => {
++  const h = await mountChrome(otui!, { width: 110, height: 26, kittyKeyboard: true });
++  try {
++    const previousFocus = h.renderer.currentFocusedRenderable;
++    openHistoryModal(otui!.core, h.chrome, historySnapshot([
++      { role: "user", content: "First Needle" },
++      {
++        role: "assistant",
++        content: [...Array.from({ length: 60 }, (_, i) => `Archive line ${i}`),
++          `${"word ".repeat(150)}Later needle`, ...Array(40).fill("More archive"), "Last NEEDLE"].join("\n"),
++      },
++    ]));
++    const waitFor = (text: string) => waitForHistoryFrame(h, (frame) => frame.includes(text));
++    await h.flush();
++    const find = () => h.renderer.root.findDescendantById("history-find")!;
++    await h.mockInput.pressKeys(["n", "e", "e", "d", "l", "e"]);
++    await waitFor("1/3");
++    expect(h.captureCharFrame()).toContain("First Needle");
++    expect(h.captureCharFrame()).toContain("1/3");
++    h.mockInput.pressArrow("down");
++    await waitFor("Later needle");
++    expect(h.captureCharFrame()).toContain("Later needle");
++    expect(h.captureCharFrame()).toContain("2/3");
++    h.mockInput.pressArrow("down");
++    await waitFor("Last NEEDLE");
++    expect(h.captureCharFrame()).toContain("Last NEEDLE");
++    expect(h.captureCharFrame()).toContain("3/3");
++    h.mockInput.pressArrow("up");
++    await waitFor("Later needle");
++    const scroll = h.renderer.root.findDescendantById("modal-body-scroll");
++    if (!(scroll instanceof otui!.core.ScrollBoxRenderable)) throw new Error("Missing history viewport");
++    scroll.scrollTo(0);
++    await h.flush();
++    expect(h.captureCharFrame()).not.toContain("Later needle");
++    await h.mockMouse.click(find().x + 2, find().y);
++    await waitFor("Later needle");
++    expect(h.captureCharFrame()).toContain("Later needle");
++    h.mockInput.pressKey("x");
++    await waitFor("No matches");
++    expect(h.captureCharFrame()).toContain("No matches");
++    expect(h.chrome.overlayActive()).toBe(true);
++    h.mockInput.pressEscape();
++    await h.flush();
++    expect(h.chrome.overlayActive()).toBe(false);
++    expect(h.renderer.currentFocusedRenderable).toBe(previousFocus);
++  } finally {
++    h.destroy();
++  }
++});
++
++test.skipIf(otui === undefined)("a disk archive keeps only one window mounted and scrolls beyond both edges", async () => {
++  const h = await mountChrome(otui!, { width: 110, height: 26, kittyKeyboard: true });
++  const directory = mkdtempSync(path.join(tmpdir(), "keryx-history-modal-"));
++  const messages = Array.from({ length: 1200 }, (_, index) => ({
++    role: "assistant" as const,
++    content: `Message ${String(index).padStart(4, "0")}${index === 3 || index === 1100 ? " archive hit" : ""}`,
++  }));
++  writeFileSync(path.join(directory, "archive.jsonl"), messages.map((item) => JSON.stringify(item)).join("\n") + "\n");
++  try {
++    openHistoryModal(otui!.core, h.chrome, historySnapshot(messages, [], directory));
++    const has = (...text: string[]) => waitForHistoryFrame(h, (frame) => text.every((word) => frame.includes(word)));
++    await has("Message 1199");
++    const row = (index: number) => h.renderer.root.findDescendantById(`history-entry-${index}`);
++    const scroll = h.renderer.root.findDescendantById("modal-body-scroll");
++    if (!(scroll instanceof otui!.core.ScrollBoxRenderable)) throw new Error("Missing history viewport");
++    const mounted = () => scroll.content.getChildren().filter((node) => node.id.startsWith("history-entry-")).length;
++    expect(mounted()).toBe(20);
++    expect(row(1179)).toBeUndefined();
++
++    scroll.scrollTo(3);
++    await h.flush();
++    await h.mockMouse.scroll(scroll.viewport.x + 2, scroll.viewport.y + 3, "up");
++    await waitForHistoryFrame(h, () => row(1170) !== undefined && scroll.scrollTop > 0);
++    expect(mounted()).toBe(20);
++    expect(row(1199)).toBeUndefined();
++    scroll.scrollTo(scroll.scrollHeight);
++    await waitForHistoryFrame(h, () => row(1199) !== undefined);
++    scroll.scrollTo(scroll.scrollHeight);
++    await has("Message 1199");
++    expect(mounted()).toBe(20);
++
++    const field = h.renderer.root.findDescendantById("history-search");
++    if (!(field instanceof otui!.core.InputRenderable)) throw new Error("Missing history input");
++    field.value = "archive hit";
++    h.mockInput.pressEnter();
++    await has("1/2", "Message 0003 archive hit");
++    expect(row(1199)).toBeUndefined();
++    h.mockInput.pressArrow("up");
++    await has("2/2", "Message 1100 archive hit");
++    expect(mounted()).toBe(20);
++    h.mockInput.pressArrow("down");
++    await has("1/2", "Message 0003 archive hit");
++    expect(mounted()).toBe(20);
++  } finally {
++    h.destroy();
++    rmSync(directory, { recursive: true, force: true });
++  }
++});
+
+--- src/tui/history-reader.test.ts
+@@ 1,98 @@
++import { expect, test } from "bun:test";
++import { mkdtempSync, renameSync, rmSync, writeFileSync } from "node:fs";
++import { tmpdir } from "node:os";
++import path from "node:path";
++import type { NormalizedMessage } from "../harness/provider/types";
++import { HistoryReader, historySnapshot } from "./history-reader";
++
++test("search counts millions of hits and locates the last one without retaining each hit", async () => {
++  const directory = mkdtempSync(path.join(tmpdir(), "keryx-history-reader-"));
++  const content = "a ".repeat(2048);
++  const messages: NormalizedMessage[] = Array.from({ length: 2048 }, () => ({ role: "assistant", content }));
++  const file = path.join(directory, "archive.jsonl");
++  writeFileSync(file, (JSON.stringify(messages[0]) + "\n").repeat(messages.length));
++  const signal = new AbortController().signal;
++  try {
++    const reader = await HistoryReader.open(historySnapshot(messages, [], directory), signal);
++    try {
++      const cancelled = new AbortController();
++      const interrupted = reader.search("a", cancelled.signal);
++      setTimeout(() => cancelled.abort(), 5);
++      await expect(interrupted).rejects.toThrow();
++
++      const search = await reader.search("A", signal);
++      expect(search.total).toBe(4_194_304);
++      expect(await search.locate(search.total - 1, signal)).toEqual({ entry: 2047, fragment: 2047, start: 4094, end: 4095 });
++      expect(await search.locate(1024, signal)).toEqual({ entry: 0, fragment: 0, start: 2048, end: 2049 });
++    } finally {
++      await reader.close();
++    }
++  } finally {
++    rmSync(directory, { recursive: true, force: true });
++  }
++}, 15_000);
++
++test("uses the selected checkpoint and live tail when the disk mirror is stale or replaced", async () => {
++  const directory = mkdtempSync(path.join(tmpdir(), "keryx-history-mirror-"));
++  const archive: NormalizedMessage[] = [
++    { role: "user", content: "Saved [literal]" },
++    { role: "assistant", content: "Selected checkpoint" },
++  ];
++  const tail: NormalizedMessage = { role: "assistant", content: "Unflushed answer" };
++  const file = path.join(directory, "archive.jsonl");
++  writeFileSync(file, JSON.stringify(archive[0]) + "\n" + JSON.stringify({ ...archive[1], content: "Stale mirror" }) + "\n");
++  const signal = new AbortController().signal;
++  try {
++    const snapshot = historySnapshot(archive, [tail], directory);
++    tail.content += " changed";
++    const reader = await HistoryReader.open(snapshot, signal);
++    try {
++      renameSync(file, path.join(directory, "old.jsonl"));
++      writeFileSync(file, "");
++      expect((await reader.page(0, reader.length, signal)).map((row) => row.text)).toEqual([
++        "Saved [literal]", "Selected checkpoint", "Unflushed answer",
++      ]);
++      expect((await reader.search("[literal]", signal)).total).toBe(1);
++      expect((await reader.search("stale", signal)).total).toBe(0);
++    } finally {
++      await reader.close();
++    }
++  } finally {
++    rmSync(directory, { recursive: true, force: true });
++  }
++});
++
++test("can page across a single large message and jump to a match spanning fragments", async () => {
++  const content = "x".repeat(4095) + "Needle" + "🦊".repeat(3000);
++  const signal = new AbortController().signal;
++  const reader = await HistoryReader.open(historySnapshot([{ role: "assistant", content }]), signal);
++  try {
++    expect(reader.length).toBe(3);
++    const page = await reader.page(0, reader.length, signal);
++    expect(page.map((row) => row.text).join("")).toBe(content);
++    expect(page.every((row) => row.text.length <= 4096)).toBe(true);
++    const search = await reader.search("needle", signal);
++    expect(await search.locate(0, signal)).toEqual({ entry: 0, fragment: 0, start: 4095, end: 4101 });
++  } finally {
++    await reader.close();
++  }
++});
++
++test("finds the final fragment of a multi-megabyte line without requiring a newline", async () => {
++  const prefix = "x".repeat(8 * 1024 * 1024);
++  const signal = new AbortController().signal;
++  const reader = await HistoryReader.open(historySnapshot([{ role: "assistant", content: prefix + "Last hit" }]), signal);
++  try {
++    const last = reader.length - 1;
++    const page = await reader.page(last - 1, reader.length, signal);
++    expect(page.map(({ start, text }) => [start, text.length])).toEqual([
++      [prefix.length - 4096, 4096], [prefix.length, "Last hit".length],
++    ]);
++    const search = await reader.search("Last hit", signal);
++    expect(await search.locate(0, signal)).toEqual({
++      entry: 0, fragment: last, start: prefix.length, end: prefix.length + "Last hit".length,
++    });
++  } finally {
++    await reader.close();
++  }
++});
+
+--- src/tui/remote-control-surface.test.ts
+@@ 1,48 @@
+ // Flow 376 AC12: `/remote-control` is a first-class TUI surface. The sidebar row,
+ // the modal, the slash menu entry, the typed command's text, the readline text
+ // and the `tg` label on Telegram lines are all built from one `RemoteStatus`.
+ 
+ import { expect, test } from "bun:test";
+-import { commandsForMode } from "../commands/agent-commands";
++import { commandsForMode, HISTORY_COMMAND, isHistoryCommand } from "../commands/agent-commands";
+ import { postureLines, postureSidebarText } from "../commands/remote-policy-command";
+ import type { NormalizedMessage } from "../harness/provider/types";
+ import type { RemoteBridgeHost, RemoteClientLike, RemoteEvent, RemoteStatus } from "../remote/shell-bridge";
+ import { REMOTE_EVENT_LIMIT, RemoteBridge, TG_SOURCE } from "../remote/shell-bridge";
+ import { HELP_GROUPS } from "../standard/help-groups";
+ import { classifyBusyDispatch } from "./busy-dispatch";
+ import { SIDEBAR_TEXT_WIDTH } from "./shell-chrome";
+ import { appendUserEcho } from "./transcript-blocks";
+ import { createTuiAgentIo } from "./tui-shell";
+ import { applyThemeId, getThemeId, roleColor } from "./theme";
+ import { chunkColors, clickNode, findById, loadOpenTui, mountChrome, settle, textOf } from "./ops-sidebar.test-helpers";
+ import {
+   REMOTE_CONTROL_COMMAND,
+   REMOTE_CONTROL_USAGE,
+   REMOTE_FOOTER,
+   REMOTE_TABS,
+   TG_ECHO_MARKER,
+   TG_LABEL,
+   commandEchoText,
+-  HISTORY_COMMAND,
+   HISTORY_POSTING_NOTE,
+   formatAge,
+   formatHistoryStatus,
+-  isHistoryCommand,
+-  readlineHistoryText,
+   formatRemoteCommandLines,
+   formatRemoteEventLines,
+   formatRemoteStatusLines,
+   isRemoteControlCommand,
+   labelTelegramLine,
+   mountRemotePanel,
+   parseHubShareCommand,
+   parseRemoteControlArgs,
+   presentRemoteControl,
+   projectPostureLine,
+   projectRemoteRow,
+   readlineRemoteControlText,
+   renderRemoteControlText,
+ } from "./remote-control-surface";
+ 
+ const OTUI = await loadOpenTui();
+ const otuiTest = test.skipIf(OTUI === undefined);
+ 
+ const OFF: RemoteStatus = { state: "off", events: [] };
+ const ON: RemoteStatus = { state: "on", name: "keryx-demo", heartbeatAgeMs: 12_000, events: [] };
+
+--- src/tui/remote-control-surface.test.ts
+@@ 819,839 @@
+ 
+ test("/history: recognised by name only, runs while a turn runs, listed for the agent shell", () => {
+   expect(HISTORY_COMMAND).toBe("/history");
+   expect(isHistoryCommand("/history")).toBe(true);
+   expect(isHistoryCommand("  /history 5")).toBe(true);
+   expect(isHistoryCommand("/historyx")).toBe(false);
+   expect(isHistoryCommand("/help")).toBe(false);
+   expect(commandsForMode("agent").some((c) => c.name === "/history")).toBe(true);
+   const target = classifyBusyDispatch({
+     line: "/history 5",
+     commandName: "/history",
+     isSessionInfo: false,
+     isFlows: false,
+     isWorkspace: false,
+     isReview: false,
+     isMcp: false,
+     isMcpConsumer: false,
+   });
+   expect(target).toBe("history");
+ });
+-
+-test("readline /history: always off here, says where it works, and rejects a bad number with usage", () => {
+-  expect(readlineHistoryText("/history")).toContain("full-screen shell");
+-  expect(readlineHistoryText("/history 5")).toContain("full-screen shell");
+-  expect(readlineHistoryText("/history lots")).toContain("Usage: /history");
+-});
+
+--- src/tui/busy-dispatch.ts
+@@ 109,153 @@
+   /**
+    * `/approvals` (flow 369): the pending remote approvals. Listing is read-only and an
+    * answer is one call, once, in the store; neither touches the main turn.
+    */
+   | "approvals"
+   /**
+    * `/permissions` (flow 396): the saved shell rules. Listing and removing one edit a file on disk and
+    * the shell's own rule set; neither touches the main turn.
+    */
+   | "permissions"
+   /**
+    * `/decisions` (flow 392): the recommendation journal's report. A read-only look at
+    * a file on disk; it never touches the main turn.
+    */
+   | "decisions"
+   /**
+    * `/external-diff` (flow 370): claude write runs awaiting review. Landing cuts a new local
+    * branch in a throwaway worktree, so it never touches the main turn's checkout.
+    */
+   | "external-diff"
++  /**
++   * `/diag` (flow 487): dumps the in-flight tool-call registry. It exists for the moment a turn is
++   * stuck, so it must answer while the main turn is busy, never queue behind it.
++   */
++  | "diag"
+   | "deferred"
+   | "not-a-command";
+ 
+ /**
+  * Classifies a submitted line into the busy-branch dispatch target
+  * `runLine` would route it to, while a main agent turn is in progress.
+  * Order matters and mirrors the live `if`-chain exactly.
+  */
+ export function classifyBusyDispatch(params: {
+   line: string;
+   commandName: string | undefined;
+   isSessionInfo: boolean;
+   isFlows: boolean;
+   isWorkspace: boolean;
+   isReview: boolean;
+   isMcp: boolean;
+   /** `/mcp`, the consumer view. Read-only, so allowed while busy. */
+   isMcpConsumer: boolean;
+ }): BusyDispatchTarget {
+   const { line, commandName, isSessionInfo, isFlows, isWorkspace, isReview, isMcp, isMcpConsumer } = params;
+
+--- src/tui/busy-dispatch.ts
+@@ 163,203 @@
+   if (commandName === "/mode") return "mode";
+   if (commandName === "/plan") return "plan";
+   if (commandName === "/demote") return "demote";
+   if (commandName === "/game") return "game";
+   if (commandName === "/bus") return "bus";
+   if (commandName === "/governance") return "governance";
+   if (commandName === "/triggers") return "triggers";
+   if (commandName === "/product") return "product";
+   if (commandName === "/reviews") return "reviews";
+   if (commandName === "/remote-control") return "remote-control";
+   if (commandName === "/history") return "history";
+   if (commandName === "/channels") return "channels";
+   if (commandName === "/intake") return "intake";
+   if (commandName === "/remote-policy") return "remote-policy";
+   if (commandName === "/schedules") return "schedules";
+   if (commandName === "/autoreview") return "autoreview";
+   if (commandName === "/approvals") return "approvals";
+   if (commandName === "/permissions") return "permissions";
+   if (commandName === "/decisions") return "decisions";
+   if (commandName === "/external-diff") return "external-diff";
++  if (commandName === "/diag") return "diag";
+   const isBusyReadonlyCommand = isSessionInfo || isFlows || isWorkspace || isReview || isMcp || isMcpConsumer;
+   if (isBusyReadonlyCommand && isSessionInfo) return "session-info";
+   if (isBusyReadonlyCommand && isFlows) return "flows";
+   if (isBusyReadonlyCommand && isWorkspace) return "workspace";
+   if (isBusyReadonlyCommand && isReview) return "review";
+   // BEFORE `isMcp`, mirroring the live if-chain, which this function
+   // exists to predict. The two must stay in the same order or this
+   // classifier answers for a route the shell does not take.
+   if (isBusyReadonlyCommand && isMcpConsumer) return "mcp-consumer";
+   if (isBusyReadonlyCommand && isMcp) return "mcp";
+   if (commandName !== undefined || line.startsWith("/")) return "deferred";
+   return "not-a-command";
+ }
+ 
+ /**
+  * Commands that swap the session out from under the main turn and the questions queued behind it, so
+  * a deferred line of this kind is refused rather than queued: run later, it would rewrite the history
+  * those queued questions were typed against. Keep it in step with tui-shell.ts's session-replacing handlers:
+  * `/clear` and `/new` start a fresh session, `/resume` and its alias `/sessions` swap in another one, and
+  * `/rewind` cuts the history back to an earlier turn.
+
+--- src/tui/chat-shell.ts
+@@ 19,67 @@
+ // object `createTuiAgentIo` uses, so chat gets fenced-code framing and diff
+ // colouring without a second implementation.
+ //
+ // Deliberately NOT here:
+ //   - `onUsage` on `ShellIO` (D-A2): chat has no usage hook, so the header shows
+ //     `estimateContextTokens` and labels it an estimate.
+ //   - assistant replies as retained blocks (D-A3): they stay segment views, so
+ //     `Ctrl+O` / `/copy` remain agent-only. Deferred, not dropped.
+ //
+ // `@opentui/core` is an OPTIONAL dependency (ADR-0005): referenced ONLY
+ // structurally via `typeof import(...)`, loaded ONLY by a dynamic `import()` in
+ // {@link launchTuiChatShell}. The guard in `src/capability/no-optional-imports`
+ // is a regex over file TEXT, so the forbidden static form must not appear in a
+ // comment here either.
+ //
+ // `runShell` is INJECTED rather than imported: `src/commands/shell.ts` imports
+ // this module, so importing its runtime values back would close a module cycle.
+ // Only its types are imported (erased at compile time).
+ import type { ShellDeps, ShellIO } from "../commands/shell-types";
+ import type { DetectedProvider } from "../commands/select";
+-import { commandsForMode, filterCommands } from "../commands/agent-commands";
++import { commandsForMode, filterCommands, isHistoryCommand } from "../commands/agent-commands";
+ import { loadSessionLimits } from "../commands/model-limits";
+ import { saveShellConfig } from "../lib/shell-config";
+ import { summarizeSubmittedLine } from "../lib/md-blocks";
+ import { latestSession } from "../session";
++import type { NormalizedMessage } from "../harness/provider/types";
++import { appendConversationPreview, isHistoryShortcut, openHistoryModal } from "./history-modal";
++import { historySnapshot } from "./history-reader";
++import type { ModalHandle } from "./modal-host";
+ import packageJson from "../../package.json" with { type: "json" };
+ import { createShellChrome, createShellRenderer, type ShellChrome } from "./shell-chrome";
+ import { appendUserEcho, clearTranscriptChildren, createAssistantMessageStream } from "./transcript-blocks";
+ import { applyThemeId, getThemeId, loadPersistedThemeId, parseThemeId, persistThemeId, themeLabel, formatThemeList } from "./theme";
+ import { boldChunk, dimChunk, roleChunk } from "./theme-text";
+ import { isThemeCommand, openThemePicker } from "./theme-picker";
+ import { mountBalancePanel } from "./balance-panel";
+ import type { VersionCheckResult } from "../lib/version-check";
+ import { isFlowsCommand, openFlows } from "./flow-inspector";
+ import { loadInspectorFlows, loadInspectorWorkspaces } from "./inspector-sources";
+ import {
+   buildSessionInfoSnapshot,
+   isSessionInfoCommand,
+   openSessionInfo,
+ } from "./session-info";
+ import {
+   estimateContextTokens,
+   fmtTokens,
+   modelPickerNotice,
+   modelsForPicker,
+
+--- src/tui/chat-shell.ts
+@@ 267,307 @@
+       streaming = false;
+       hooks.onTurnEnd?.(full);
+     },
+     onSystem: (text) => {
+       hooks.onSystem?.(text);
+     },
+   };
+ 
+   return {
+     io,
+     submit: (line) => {
+       const value = line.trim();
+       if (closed || value.length === 0) {
+         return "ignored";
+       }
+       const token = value.split(/\s+/)[0] ?? "";
+       if (token === "/exit" || token === "/quit") {
+         close();
+         return "exit";
+       }
+-      if (isSessionInfoCommand(value) || isFlowsCommand(value) || isThemeCommand(value)) {
++      if (isSessionInfoCommand(value) || isFlowsCommand(value) || isThemeCommand(value) || isHistoryCommand(value)) {
+         return "local";
+       }
+       if ((turn || queue.length > 0) && value.startsWith("/")) {
+         return "deferred";
+       }
+       deliver(value);
+       return "accepted";
+     },
+     close,
+     interruptTurn: () => {
+       const interrupt = interruptTurn;
+       if (interrupt === undefined) return false;
+       interruptTurn = undefined;
+       interrupt();
+       return true;
+     },
+     turnActive: () => turn,
+     pending: () => queue.length,
+   };
+ }
+
+--- src/tui/chat-shell.ts
+@@ 453,564 @@
+       append(otui.t`${roleChunk(otui, "accent", "●")} ${boldChunk(otui, "keryx")}`);
+       chrome.startBusy("waiting for model");
+     },
+     onText: (chunk) => {
+       chrome.setBusyPhase("streaming reply");
+       messages.push(chunk);
+     },
+     onTurnEnd: (full) => {
+       messages.finalize(full);
+       seen.push({ content: full });
+       paintContext();
+     },
+     onTurnSettled: () => {
+       chrome.stopBusy();
+       // Never steal focus from an OPEN `/` dropdown: the user may have opened it
+       // while the reply streamed, and the dropdown stays on screen either way —
+       // yanking focus to the textarea would leave it swallowing printable keys
+       // while Enter submitted the raw filter text instead of selecting the
+       // highlighted command. Same shape as the agent shell's block-nav guard
+       // (`nav.restoreComposerFocus()`).
+-      if (!chrome.menuActive()) {
++      if (!chrome.menuActive() && !chrome.overlayActive()) {
+         chrome.focusComposer();
+       }
+     },
+     onSystem: (text) => {
+       const body = text.replace(/\n+$/, "");
+       if (body.length === 0) {
+         return;
+       }
+       append(body.includes("[error]") ? otui.t`${roleChunk(otui, "error", body)}` : otui.t`${dimChunk(otui, body)}`);
+     },
+   });
+   chrome.onEscapeInterrupt(bridge.interruptTurn);
++  let readConversation = (): readonly NormalizedMessage[] => [];
++  let historyDirectory: string | undefined;
++  let historyModal: ModalHandle | undefined;
++  bridge.io.onConversationReady = (read, resumed, directory) => {
++    historyModal?.close();
++    historyModal = undefined;
++    readConversation = read;
++    historyDirectory = directory;
++    if (resumed) appendConversationPreview(otui, chrome, read());
++  };
++  const showHistory = (): void => {
++    if (!chrome.overlayActive()) historyModal = openHistoryModal(otui, chrome, historySnapshot(readConversation(), [], historyDirectory));
++  };
++  const unsubscribeHistoryKey = onKeypress(r, (key) => {
++    if (!isHistoryShortcut(key) || chrome.overlayActive()) return;
++    key.preventDefault();
++    key.stopPropagation();
++    showHistory();
++  });
+ 
+   // `/models` and `/connect` route through the TUI picker (inside the chrome's
+   // overlay guard, so the `/`-menu key router stays inert while it is up) rather
+   // than through `pickProviderModel`, which would read the next composer
+   // submissions as answers to a numbered text menu.
+   const selectProviderModel: NonNullable<ShellDeps["selectProviderModel"]> = async (_io, pickOpts) => {
+     const picked =
+       opts.pickSelection === undefined
+         ? undefined
+         : await chrome.withOverlay(() => opts.pickSelection?.(pickOpts) ?? Promise.resolve(undefined));
+     chrome.focusComposer();
+     if (picked === undefined) {
+       return { ...selection };
+     }
+     selection = picked;
+     paintLabels();
+     if (opts.persistSelection !== false) {
+       saveShellConfig(
+         picked.baseUrl === undefined
+           ? { provider: picked.provider, model: picked.model }
+           : { provider: picked.provider, model: picked.model, baseUrl: picked.baseUrl },
+       );
+     }
+     chrome.showToast(`Switched to ${label()}`);
+     return { ...picked };
+   };
+ 
+   const deps: ShellDeps = { ...opts.deps, selectProviderModel };
+ 
+   chrome.onSubmit((line) => {
+     const result = bridge.submit(line);
+     if (result === "exit") {
+       opts.onExit?.();
+       return;
+     }
+     if (result === "local") {
++      if (isHistoryCommand(line)) {
++        showHistory();
++        return;
++      }
+       const cwd = opts.deps.session?.cwd;
+       const keys = { onKeypress: (handler: (key: { name: string; sequence: string }) => void) => onKeypress(r, (key) => handler(key)) };
+       if (isThemeCommand(line)) {
+         const arg = line.trim().split(/\s+/).slice(1).join(" ").trim();
+         if (arg.length > 0) {
+           const next = parseThemeId(arg);
+           if (next === undefined) {
+             append(otui.t`${dimChunk(otui, `Unknown theme '${arg}'.\n${formatThemeList(getThemeId())}`)}`);
+             return;
+           }
+           applyThemeId(next, r.themeMode);
+           persistThemeId(next);
+           chrome.showToast(`Theme: ${themeLabel(next)}`);
+           return;
+         }
+         openThemePicker(otui, chrome, {
+           current: getThemeId(),
+           mode: r.themeMode,
+           renderer: r,
+           ...keys,
+
+--- src/tui/chat-shell.ts
+@@ 605,645 @@
+       return;
+     }
+     if (result === "deferred") {
+       append(
+         otui.t`${roleChunk(otui, "attention", "◇ a reply is still streaming — command deferred. Wait for it to finish.")}`,
+       );
+     }
+   });
+ 
+   // Started here, not awaited: the driver runs for the life of the shell and
+   // resolves only once the line stream ends.
+   const done = opts.runShell(bridge.io, deps).catch((cause: unknown) => {
+     append(otui.t`${roleChunk(otui, "error", `[error] ${cause instanceof Error ? cause.message : String(cause)}`)}`);
+   });
+ 
+   return {
+     chrome,
+     bridge,
+     done,
+     destroy: () => {
++      unsubscribeHistoryKey();
+       bridge.close();
+       r.off("theme_mode", onThemeMode);
+       chrome.destroy();
+     },
+   };
+ }
+ 
+ /**
+  * Run the OpenTUI chat shell. Mirrors `launchTuiAgentShell`'s contract exactly:
+  * returns `true` once the user exits, `false` when it declined or failed (no
+  * TTY, absent optional dependency, renderer init failure) so the caller falls
+  * back to the readline chat shell. Never throws.
+  */
+ export async function launchTuiChatShell(opts: {
+   detected: DetectedProvider[];
+   initial?: TuiSelection;
+   /** Re-probe providers for `/connect` and `/models` (fresh detection). */
+   redetect?: () => Promise<DetectedProvider[]>;
+   /** Build `runShell`'s deps once the provider/model is resolved. */
+   makeShellDeps: (sel: TuiSelection) => ShellDeps;
+
+--- src/tui/composer-choice.ts
+@@ 364,449 @@
+     return;
+   }
+   const target = resolveHandBack(previous, r.root);
+   if (target === undefined || modalHides(r, target)) {
+     debugEvent("choice.focus-not-restored", { title, previous: previous?.id ?? null, modal: target !== undefined });
+     return;
+   }
+   try {
+     target.focus();
+     debugEvent("choice.focus-restored", { title, focused: target.id ?? null });
+   } catch {
+     // best-effort: the renderer may be going down under us
+   }
+ }
+ 
+ /** Per-dock waiter chain so concurrent callers cannot both pass `visible===false`. */
+ const dockChain = new WeakMap<object, Promise<void>>();
+ /** How many callers currently hold or wait for this dock (sync, for `enqueue:false`). */
+ const dockDepth = new WeakMap<object, number>();
+ 
++/** Process-wide dock accounting for stall diagnostics (flow 487): who waits, and how long the holder has held it. */
++let diagWaiting = 0;
++let diagHolders = 0;
++let diagHeldSince = 0;
++const diagQueuedSince: number[] = [];
++
++export function composerDockDiagnostics(now: number = Date.now()): {
++  holders: number;
++  waiting: number;
++  holderAgeMs: number | null;
++  oldestWaitMs: number | null;
++} {
++  return {
++    holders: diagHolders,
++    waiting: diagWaiting,
++    holderAgeMs: diagHolders > 0 ? now - diagHeldSince : null,
++    oldestWaitMs: diagQueuedSince.length > 0 ? now - Math.min(...diagQueuedSince) : null,
++  };
++}
++
+ function dockBusy(dock: object): boolean {
+   return (dockDepth.get(dock) ?? 0) > 0;
+ }
+ 
+ function lockDock(dock: object): Promise<() => void> {
+   dockDepth.set(dock, (dockDepth.get(dock) ?? 0) + 1);
++  const queuedAt = Date.now();
++  diagWaiting += 1;
++  diagQueuedSince.push(queuedAt);
+   const prev = dockChain.get(dock) ?? Promise.resolve();
+   let release!: () => void;
+   const mine = new Promise<void>((resolve) => {
+     release = resolve;
+   });
+   dockChain.set(
+     dock,
+     prev.then(() => mine),
+   );
+   return prev.then(() => {
++    diagWaiting -= 1;
++    const at = diagQueuedSince.indexOf(queuedAt);
++    if (at >= 0) diagQueuedSince.splice(at, 1);
++    diagHolders += 1;
++    diagHeldSince = Date.now();
+     return (): void => {
++      diagHolders -= 1;
+       const n = (dockDepth.get(dock) ?? 1) - 1;
+       if (n <= 0) {
+         dockDepth.delete(dock);
+       } else {
+         dockDepth.set(dock, n);
+       }
+       release();
+     };
+   });
+ }
+ 
+ /**
+  * Show an interactive choice menu inside `dock` (placed above the composer in
+  * the main column, same band as the `/` command dropdown). Resolves the chosen
+  * option id, or `cancelId` on Esc. Options are a manually painted list (not
+  * OpenTUI's `SelectRenderable`) so each row can be clicked directly — the
+  * native `SelectRenderable` has no per-item mouse routing, only keyboard.
+  *
+  * Concurrent calls on the same dock are serialized (queued) unless
+  * `enqueue: false`, which cancels immediately while another choice is live.
+
+--- src/tui/conversation-history.ts
+@@ 1,55 @@
++import { stripVTControlCharacters } from "node:util";
++import type { NormalizedMessage } from "../harness/provider/types";
++import { isOperatorMessage } from "../session/compact";
++import { hcHistoryEcho } from "./hc-message";
++
++export type ConversationEntry = { label: string; text: string };
++const PREVIEW_CHARS = 2048;
++
++function displayText(text: string): string {
++  return stripVTControlCharacters(text)
++    .replace(/\r\n?/g, "\n")
++    .replace(/\t/g, "    ")
++    // eslint-disable-next-line no-control-regex
++    .replace(/[\x00-\x09\x0b-\x1f\x7f-\x9f]/g, "");
++}
++
++function agentMessageEcho(message: NormalizedMessage): ReturnType<typeof hcHistoryEcho> {
++  return message.role === "user" && message.provenance === "tool" && message.injected !== true
++    ? hcHistoryEcho(message.content)
++    : undefined;
++}
++
++export function conversationEntry(message: NormalizedMessage, limit = Infinity): ConversationEntry | undefined {
++  const { role } = message;
++  const agentEcho = agentMessageEcho(message);
++  if (role !== "assistant" && agentEcho === undefined && !isOperatorMessage(message)) return;
++  const content = agentEcho?.line ?? message.content;
++  const prefix = content.slice(0, limit);
++  const text = displayText(prefix);
++  if (text.trim().length === 0 && (prefix.length === content.length || content.trim().length === 0)) return;
++  const label = agentEcho === undefined ? (role === "user" ? "You" : "Assistant") : displayText(agentEcho.marker);
++  return { label, text: prefix.length < content.length ? `${text}…` : text };
++}
++
++export function conversationHistory(history: readonly NormalizedMessage[]): ConversationEntry[] {
++  return history.flatMap((message) => conversationEntry(message) ?? []);
++}
++
++export function resumedConversation(history: readonly NormalizedMessage[]): ConversationEntry[] {
++  // An operator prompt or a visible agent message starts a turn.
++  const entries: ConversationEntry[] = [];
++  for (let index = history.length - 1; index >= 0 && entries.length < 20; index--) {
++    const message = history[index]!;
++    const entry = conversationEntry(message, PREVIEW_CHARS);
++    if (entry !== undefined) entries.push(entry);
++    if (isOperatorMessage(message) || agentMessageEcho(message) !== undefined) break;
++  }
++  return entries.reverse();
++}
++
++export function conversationHistoryText(history: readonly NormalizedMessage[]): string {
++  const entries = conversationHistory(history);
++  if (entries.length === 0) return "This session has no messages yet.\n";
++  return entries.map(({ label, text }) => `${label}: ${text}\n`).join("\n");
++}
+
+--- src/tui/diag-command.ts
+@@ 1,74 @@
++// Flow 487: `/diag`, the operator's on-demand dump of what the tool-call diagnostics know.
++//
++// A parent turn that sits on one tool call for hours leaves nothing behind unless something was
++// recording. `callDiagnostics` records always (in memory) and writes to disk only on a stall or
++// when asked; this command asks. It prints a short summary and writes the full snapshot to the
++// session's diagnostics file, so a bug report can attach it.
++
++import { callDiagnostics } from "../lib/call-diagnostics";
++
++export const DIAG_COMMAND = "/diag";
++export const DIAG_SUMMARY = `Dump the tool-call diagnostics (in-flight calls, stage ages, dock queue) to a file: ${DIAG_COMMAND}`;
++
++export function isDiagCommand(line: string): boolean {
++  return (line.trim().split(/\s+/)[0] ?? "") === DIAG_COMMAND;
++}
++
++function age(ms: number): string {
++  if (!Number.isFinite(ms) || ms < 0) return "-";
++  const s = Math.floor(ms / 1000);
++  return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m${String(s % 60).padStart(2, "0")}s`;
++}
++
++/** The text to print for `/diag`. Never throws. */
++export function runDiagCommand(): string {
++  try {
++    const snap = callDiagnostics.dump("operator /diag");
++    const where = callDiagnostics.dumpPath();
++    const calls = snap?.calls ?? callDiagnostics.snapshot("operator /diag").calls;
++    const lines = [`Diagnostics: ${calls.length} tool call${calls.length === 1 ? "" : "s"} in flight`];
++    for (const c of calls.slice(0, 20)) {
++      lines.push(`  ${c.id} ${c.name} stage=${c.stage} running ${age(c.ageMs)} (in stage ${age(c.stageAgeMs)})`);
++    }
++    if (calls.length > 20) lines.push(`  ... +${calls.length - 20} more`);
++    lines.push(
++      snap === undefined
++        ? "Snapshot not written (the diagnostics sink refused or is not started)."
++        : `Snapshot written${where === undefined ? "" : ` to ${where}`}.`,
++    );
++    lines.push("");
++    return lines.join("\n");
++  } catch (error) {
++    return `${DIAG_COMMAND}: ${error instanceof Error ? error.message : String(error)}\n`;
++  }
++}
++
++/** A call this long in one stage, or this long in flight, makes an operator interrupt worth a dump. */
++export const INTERRUPT_DUMP_STAGE_MS = 60_000;
++export const INTERRUPT_DUMP_CALL_MS = 5 * 60_000;
++
++/**
++ * The operator is about to cancel the turn (Ctrl+C or /interrupt). When a tool call has been waiting
++ * long — the state a hang leaves behind — write the diagnostics snapshot first, because cancelling
++ * unwinds the very calls the snapshot describes. Returns the line to print, or undefined when
++ * nothing was waiting long or the sink wrote nothing. Never throws, so it can never block the cancel.
++ */
++export function maybeDumpOnInterrupt(
++  limits: { stageMs?: number; callMs?: number } = {},
++): string | undefined {
++  try {
++    const stageMs = limits.stageMs ?? INTERRUPT_DUMP_STAGE_MS;
++    const callMs = limits.callMs ?? INTERRUPT_DUMP_CALL_MS;
++    const calls = callDiagnostics.snapshot("operator interrupt").calls;
++    const slow = calls.filter((c) => c.stageAgeMs >= stageMs || c.ageMs >= callMs);
++    if (slow.length === 0) return undefined;
++    const snap = callDiagnostics.dump("operator interrupt after long wait");
++    if (snap === undefined) return undefined;
++    const worst = slow.reduce((a, b) => (b.stageAgeMs > a.stageAgeMs ? b : a));
++    const where = callDiagnostics.dumpPath();
++    return `◇ diagnostics saved before interrupt: ${slow.length} call${slow.length === 1 ? "" : "s"} waiting (longest ${worst.name} in ${worst.stage} for ${age(worst.stageAgeMs)})${where === undefined ? "" : ` -> ${where}`}\n`;
++  } catch {
++    return undefined;
++  }
++}
++
+
+--- src/tui/history-modal.ts
+@@ 1,320 @@
++import type { NormalizedMessage } from "../harness/provider/types";
++import { resumedConversation } from "./conversation-history";
++import { HistoryReader, type HistorySearch, type HistorySnapshot } from "./history-reader";
++import { clearTranscriptChildren } from "./transcript-blocks";
++import { openModal, type ModalChrome, type ModalHandle } from "./modal-host";
++import { getTheme } from "./theme";
++import { boldChunk } from "./theme-text";
++
++type OpenTui = typeof import("@opentui/core");
++type Box = InstanceType<OpenTui["BoxRenderable"]>;
++type Match = NonNullable<Awaited<ReturnType<HistorySearch["locate"]>>>;
++const PAGE = 20;
++
++export function isHistoryShortcut(key: { name: string; ctrl: boolean; shift?: boolean; meta: boolean }): boolean {
++  return key.name.toLowerCase() === "h" && key.ctrl && key.shift === true && !key.meta;
++}
++
++export function appendConversationPreview(otui: OpenTui, chrome: ModalChrome & { transcript: Box }, history: readonly NormalizedMessage[]): void {
++  const entries = resumedConversation(history);
++  if (entries.length === 0) return;
++  const add = (text: string, fg: string) => chrome.transcript.add(new otui.TextRenderable(chrome.renderer, {
++    content: text, fg, width: "100%", wrapMode: "word", flexShrink: 0,
++  }));
++  add("Last turn", getTheme().muted);
++  for (const { label, text } of entries) add(`${label}: ${text}`, getTheme().text);
++}
++
++export function openHistoryModal(otui: OpenTui, chrome: ModalChrome, snapshot: HistorySnapshot): ModalHandle | undefined {
++  const r = chrome.renderer;
++  let move = (_delta: number): void => {};
++  let scrollPage = (_delta: number): void => {};
++  return openModal(otui, chrome, {
++    title: "Session history",
++    tabs: [{ id: "history", label: "History" }],
++    toolbar: true,
++    footer: [{ key: "↑/↓", label: "matches or scroll" }, { key: "PgUp/PgDn", label: "scroll" }, { key: "Esc", label: "close" }],
++    claimKey: (key) => {
++      switch (key.name) {
++        case "up": move(-1); return true;
++        case "down": move(1); return true;
++        case "pageup": scrollPage(-1); return true;
++        case "pagedown": scrollPage(1); return true;
++        default: return false;
++      }
++    },
++    renderTab: (_tab, target, { toolbar }) => {
++      if (toolbar === undefined) return;
++      const { controls, scroll } = toolbar;
++      const theme = getTheme();
++      const body = target as Box;
++      const field = new otui.InputRenderable(r, {
++        id: "history-search",
++        placeholder: "Search history",
++        flexGrow: 1,
++        minWidth: 4,
++        textColor: theme.text,
++        focusedTextColor: theme.text,
++        cursorColor: theme.focus,
++      });
++      const count = new otui.TextRenderable(r, { id: "history-count", fg: theme.muted, flexShrink: 0 });
++      const lifetime = new AbortController();
++      const ready = HistoryReader.open(snapshot, lifetime.signal);
++      let reader: HistoryReader | undefined;
++      let query = "";
++      let debounce: ReturnType<typeof setTimeout> | undefined;
++      let searching: AbortController | undefined;
++      let results: HistorySearch | undefined;
++      let selected = 0;
++      let selection = 0;
++      let currentMatch: Match | undefined;
++      let windowStart = 0;
++      let pendingView = 0;
++      let loadingView = false;
++      let matchingView = false;
++      let lastScrollTop = 0;
++      let afterLayout: (() => void) | undefined;
++      type Row = { view: InstanceType<OpenTui["TextRenderable"]>; index: number; entry: number; start: number; text: string };
++      let rows: Row[] = [];
++      const hint = (content: string): void => {
++        body.add(new otui.TextRenderable(r, { content, fg: theme.muted, flexShrink: 0 }));
++      };
++      hint("Loading history…");
++
++      const overlaps = (row: Row, match: Match | undefined): match is Match =>
++        match?.entry === row.entry && match.end > row.start && match.start < row.start + row.text.length;
++      const mark = (row: Row, match: Match | undefined): void => {
++        if (!overlaps(row, match)) {
++          row.view.content = row.text;
++          return;
++        }
++        const start = Math.max(0, match.start - row.start);
++        const end = match.end - row.start;
++        const highlighted = otui.bg(theme.focus)(otui.fg(theme.panel)(row.text.slice(start, end)));
++        row.view.content = otui.t`${row.text.slice(0, start)}${highlighted}${row.text.slice(end)}`;
++      };
++      const repaintMatch = (match: Match | undefined): void => {
++        for (const row of rows) {
++          if (overlaps(row, currentMatch) || overlaps(row, match)) mark(row, match);
++        }
++        currentMatch = match;
++      };
++      const scrollToMatch = (match: Match): void => {
++        const row = rows.find((item) => item.index === match.fragment);
++        if (row === undefined) return;
++        const prefix = row.text.slice(0, match.start - row.start).split("\n");
++        const sourceLine = prefix.length - 1;
++        const column = Bun.stringWidth(prefix[sourceLine]!);
++        const { lineSources, lineStartCols } = row.view.lineInfo;
++        let visualLine = Math.max(0, lineSources.indexOf(sourceLine));
++        const startColumn = lineStartCols[visualLine] ?? 0;
++        while (lineSources[visualLine + 1] === sourceLine
++          && lineStartCols[visualLine + 1]! - startColumn <= column) visualLine++;
++        scroll.scrollTop += row.view.y - scroll.viewport.y + visualLine;
++      };
++      const maxStart = (): number => Math.max(0, (reader?.length ?? 0) - PAGE);
++      const showWindow = async (start: number, position: "end" | "anchor" | Match): Promise<void> => {
++        if (reader === undefined) return;
++        const request = ++pendingView;
++        loadingView = true;
++        matchingView = typeof position !== "string";
++        afterLayout = undefined;
++        try {
++          const page = await reader.page(start, Math.min(start + PAGE, reader.length), lifetime.signal);
++          if (request !== pendingView || lifetime.signal.aborted) return;
++          const anchor = position === "anchor"
++            ? rows.find((row) => row.index >= start && row.index < start + PAGE
++              && row.view.y + row.view.height > scroll.viewport.y)
++            : undefined;
++          const anchorY = anchor === undefined ? 0 : anchor.view.y - scroll.viewport.y;
++          clearTranscriptChildren(body);
++          rows = page.map(({ index, entry, start: offset, label, text }) => {
++            if (label !== "") {
++              body.add(new otui.TextRenderable(r, {
++                content: otui.t`${boldChunk(otui, label)}`,
++                marginTop: index === start ? 0 : 1,
++                flexShrink: 0,
++              }));
++            }
++            const view = new otui.TextRenderable(r, {
++              id: `history-entry-${index}`, content: text, fg: theme.text,
++              width: "100%", wrapMode: "word", flexShrink: 0,
++            });
++            body.add(view);
++            const row = { view, index, entry, start: offset, text };
++            if (overlaps(row, currentMatch)) mark(row, currentMatch);
++            return row;
++          });
++          if (page.length === 0) hint("This session has no messages yet.");
++          const shiftedEarlier = start < windowStart;
++          windowStart = start;
++          afterLayout = () => {
++            if (position === "end") scroll.scrollTop = scroll.scrollHeight;
++            else if (typeof position !== "string") scrollToMatch(position);
++            else if (anchor !== undefined) {
++              const view = rows.find((row) => row.index === anchor.index)!.view;
++              scroll.scrollTop += view.y - scroll.viewport.y - anchorY;
++            } else {
++              scroll.scrollTop = shiftedEarlier ? scroll.scrollHeight : 0;
++            }
++            loadingView = false;
++            matchingView = false;
++          };
++          r.requestRender();
++        } catch {
++          if (lifetime.signal.aborted || request !== pendingView) return;
++          loadingView = false;
++          matchingView = false;
++          count.content = " History unavailable";
++        }
++      };
++      const shiftWindow = (direction: number): void => {
++        if (loadingView || reader === undefined) return;
++        const top = scroll.scrollTop;
++        const bottom = Math.max(0, scroll.scrollHeight - scroll.viewport.height);
++        if (direction < 0 && top <= 2 && windowStart > 0) {
++          void showWindow(Math.max(0, windowStart - PAGE / 2), "anchor");
++        } else if (direction > 0 && top >= bottom - 2 && windowStart < maxStart()) {
++          void showWindow(Math.min(maxStart(), windowStart + PAGE / 2), "anchor");
++        }
++      };
++      const frame = (): void => {
++        if (afterLayout !== undefined) {
++          const position = afterLayout;
++          afterLayout = undefined;
++          position();
++          lastScrollTop = scroll.scrollTop;
++          return;
++        }
++        const current = scroll.scrollTop;
++        shiftWindow(Math.sign(current - lastScrollTop));
++        lastScrollTop = current;
++      };
++      r.on(otui.CliRenderEvents.FRAME, frame);
++      scroll.onMouseScroll = (event) => {
++        const direction = event.scroll?.direction;
++        if (direction === "up" || direction === "down") {
++          queueMicrotask(() => {
++            if (!lifetime.signal.aborted) shiftWindow(direction === "up" ? -1 : 1);
++          });
++        }
++      };
++      const scrollBy = (delta: number): void => {
++        scroll.scrollBy(delta);
++        shiftWindow(Math.sign(delta));
++      };
++
++      const showMatch = async (): Promise<void> => {
++        const result = results;
++        const signal = searching?.signal;
++        if (result === undefined || signal === undefined || result.total === 0) return;
++        const request = ++selection;
++        const ordinal = selected;
++        try {
++          const match = await result.locate(ordinal, signal);
++          if (match === undefined || signal.aborted || request !== selection) return;
++          count.content = ` ${ordinal + 1}/${result.total}`;
++          repaintMatch(match);
++          if (loadingView || match.fragment < windowStart || match.fragment >= windowStart + rows.length) {
++            await showWindow(Math.max(0, Math.min(maxStart(), match.fragment - PAGE / 2)), match);
++          } else {
++            afterLayout = () => {
++              if (!signal.aborted && request === selection) scrollToMatch(match);
++            };
++            r.requestRender();
++          }
++        } catch {
++          if (!signal.aborted && request === selection) count.content = " Search unavailable";
++        }
++      };
++      const runSearch = async (): Promise<void> => {
++        debounce = undefined;
++        const request = new AbortController();
++        searching = request;
++        try {
++          const source = await ready;
++          request.signal.throwIfAborted();
++          const result = await source.search(query, request.signal);
++          request.signal.throwIfAborted();
++          results = result;
++          if (result.total === 0) count.content = " No matches";
++          else void showMatch();
++        } catch {
++          if (!request.signal.aborted && !lifetime.signal.aborted) count.content = " Search unavailable";
++        }
++      };
++      const updateQuery = (): void => {
++        const next = field.value.trim();
++        if (next === query) return;
++        query = next;
++        clearTimeout(debounce);
++        debounce = undefined;
++        searching?.abort();
++        results = undefined;
++        selected = 0;
++        // A delayed jump for the previous query may still be reading from disk.
++        if (matchingView) {
++          pendingView++;
++          loadingView = false;
++          matchingView = false;
++          afterLayout = undefined;
++        }
++        repaintMatch(undefined);
++        count.content = query === "" ? "" : " Searching…";
++        if (query !== "") debounce = setTimeout(() => { void runSearch(); }, 45);
++      };
++      const submit = (): void => {
++        updateQuery();
++        if (debounce !== undefined) {
++          clearTimeout(debounce);
++          void runSearch();
++        } else {
++          void showMatch();
++        }
++        field.focus();
++      };
++      controls.add(field);
++      controls.add(new otui.TextRenderable(r, {
++        id: "history-find",
++        content: " [Find]",
++        fg: theme.focus,
++        flexShrink: 0,
++        onMouseDown: (event) => {
++          event.preventDefault();
++          event.stopPropagation();
++          submit();
++        },
++      }));
++      controls.add(count);
++      field.on(otui.InputRenderableEvents.INPUT, updateQuery);
++      field.on(otui.InputRenderableEvents.ENTER, submit);
++      field.focus();
++      move = (delta) => {
++        if (results === undefined || results.total === 0) scrollBy(delta);
++        else {
++          selected = (selected + delta + results.total) % results.total;
++          void showMatch();
++        }
++      };
++      scrollPage = (delta) => scrollBy(delta * Math.max(1, scroll.viewport.height - 1));
++
++      void ready.then((source) => {
++        if (lifetime.signal.aborted) return;
++        reader = source;
++        void showWindow(maxStart(), "end");
++      }).catch(() => {
++        if (lifetime.signal.aborted) return;
++        clearTranscriptChildren(body);
++        hint("History unavailable.");
++      });
++      return () => {
++        lifetime.abort();
++        clearTimeout(debounce);
++        searching?.abort();
++        scroll.onMouseScroll = undefined;
++        r.off(otui.CliRenderEvents.FRAME, frame);
++        void ready.then((source) => source.close()).catch(() => {});
++      };
++    },
++  });
++}
+
+--- src/tui/history-reader.ts
+@@ 1,224 @@
++import { constants } from "node:fs";
++import { open, type FileHandle } from "node:fs/promises";
++import path from "node:path";
++import type { NormalizedMessage } from "../harness/provider/types";
++import { MAX_TRANSCRIPT_FILE_BYTES } from "../lib/config-dir";
++import { conversationEntry, type ConversationEntry } from "./conversation-history";
++
++const READ_BYTES = 64 * 1024;
++const FRAGMENT_CHARS = 4096;
++const MATCH_STRIDE = 1024;
++
++export type HistorySnapshot = { messages: readonly NormalizedMessage[]; directory?: string };
++type Fragment = { entry: number; start: number; end: number };
++type IndexedEntry = { message: number; first: number; end: number };
++type MatchGroup = { entry: number; first: number; checkpoints: number[] };
++type Match = { entry: number; fragment: number; start: number; end: number };
++export type HistorySearch = { total: number; locate(index: number, signal: AbortSignal): Promise<Match | undefined> };
++
++async function yieldToInput(signal: AbortSignal): Promise<void> {
++  await Bun.sleep(0);
++  signal.throwIfAborted();
++}
++
++/** The compatibility mirror is atomically replaced. Pin its inode for the lifetime of the window. */
++class ArchiveLines {
++  private offsets = [0];
++  private block: { position: number; bytes: Promise<Buffer> } | undefined;
++
++  private constructor(private readonly file: FileHandle, private readonly size: number) {}
++
++  static async open(directory: string, count: number, signal: AbortSignal): Promise<ArchiveLines | undefined> {
++    let file: FileHandle | undefined;
++    try {
++      file = await open(path.join(directory, "archive.jsonl"), constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
++      const stat = await file.stat();
++      if (!stat.isFile() || stat.size === 0 || stat.size > MAX_TRANSCRIPT_FILE_BYTES) {
++        await file.close();
++        return;
++      }
++      const lines = new ArchiveLines(file, stat.size);
++      for (let position = 0; position < stat.size && lines.offsets.length <= count; position += READ_BYTES) {
++        signal.throwIfAborted();
++        const bytes = await lines.read(position, Math.min(READ_BYTES, stat.size - position));
++        for (let newline = bytes.indexOf(10); newline >= 0; newline = bytes.indexOf(10, newline + 1)) {
++          lines.offsets.push(position + newline + 1);
++          if (lines.offsets.length > count) break;
++        }
++      }
++      if (lines.offsets.at(-1)! < stat.size) lines.offsets.push(stat.size);
++      return lines;
++    } catch {
++      await file?.close().catch(() => {});
++      signal.throwIfAborted();
++      // An unavailable mirror is normal for legacy sessions and interrupted checkpoints.
++      return undefined;
++    }
++  }
++
++  async close(): Promise<void> { await this.file.close(); }
++
++  private async read(position: number, length: number): Promise<Buffer> {
++    const bytes = Buffer.allocUnsafe(length);
++    for (let offset = 0; offset < length;) {
++      const { bytesRead } = await this.file.read(bytes, offset, length - offset, position + offset);
++      if (bytesRead === 0) throw new Error("History archive ended before the indexed line");
++      offset += bytesRead;
++    }
++    return bytes;
++  }
++
++  async message(index: number, expected: NormalizedMessage): Promise<NormalizedMessage> {
++    const start = this.offsets[index];
++    const end = this.offsets[index + 1];
++    if (start === undefined || end === undefined || end <= start) return expected;
++    try {
++      const position = Math.floor(start / READ_BYTES) * READ_BYTES;
++      let line: Buffer;
++      if (end - position <= READ_BYTES) {
++        if (this.block?.position !== position) {
++          this.block = { position, bytes: this.read(position, Math.min(READ_BYTES, this.size - position)) };
++        }
++        line = (await this.block.bytes).subarray(start - position, end - position);
++      } else {
++        line = await this.read(start, end - start);
++      }
++      const saved = JSON.parse(line.toString("utf8")) as NormalizedMessage | null;
++      // The selected preservation checkpoint is authoritative, even if its mirror
++      // was interrupted. Fall back per row, including unsaved or growing replies.
++      if (saved?.role === expected.role && saved.content === expected.content
++        && saved.provenance === expected.provenance && saved.injected === expected.injected) return saved;
++    } catch {
++      // A damaged mirror must not hide the already validated session history.
++    }
++    return expected;
++  }
++}
++
++export function historySnapshot(archive: readonly NormalizedMessage[], tail: readonly NormalizedMessage[] = [], directory?: string): HistorySnapshot {
++  const messages = [...archive, ...tail];
++  // The foreground stream can still extend the last assistant message in place.
++  const last = messages.at(-1);
++  if (last?.role === "assistant") messages[messages.length - 1] = { ...last };
++  return { messages, ...(directory === undefined ? {} : { directory }) };
++}
++
++export class HistoryReader {
++  private readonly entries: IndexedEntry[] = [];
++  private readonly fragments: Fragment[] = [];
++
++  private constructor(private readonly snapshot: HistorySnapshot, private readonly file?: ArchiveLines) {}
++
++  static async open(snapshot: HistorySnapshot, signal: AbortSignal): Promise<HistoryReader> {
++    const file = snapshot.directory === undefined ? undefined : await ArchiveLines.open(snapshot.directory, snapshot.messages.length, signal);
++    const history = new HistoryReader(snapshot, file);
++    try {
++      for (let index = 0; index < snapshot.messages.length; index++) {
++        if (index % 128 === 0) await yieldToInput(signal);
++        const entry = conversationEntry(snapshot.messages[index]!);
++        if (entry === undefined) continue;
++        const first = history.fragments.length;
++        for (let start = 0; start < entry.text.length;) {
++          let end = Math.min(start + FRAGMENT_CHARS, entry.text.length);
++          if (end < entry.text.length) {
++            // A long line may have no newline at all. Only scan the part of
++            // this fragment where a break could actually change the split.
++            const searchFrom = start + FRAGMENT_CHARS / 2 + 1;
++            const newline = entry.text.slice(searchFrom, end).lastIndexOf("\n");
++            if (newline >= 0) end = searchFrom + newline + 1;
++            const code = entry.text.charCodeAt(end);
++            if (code >= 0xdc00 && code <= 0xdfff) end--;
++          }
++          history.fragments.push({ entry: history.entries.length, start, end });
++          start = end;
++        }
++        history.entries.push({ message: index, first, end: history.fragments.length });
++      }
++      signal.throwIfAborted();
++      return history;
++    } catch (error) {
++      await history.close();
++      throw error;
++    }
++  }
++
++  get length(): number { return this.fragments.length; }
++  async close(): Promise<void> { await this.file?.close(); }
++
++  private async entry(index: number): Promise<ConversationEntry> {
++    const messageIndex = this.entries[index]!.message;
++    const expected = this.snapshot.messages[messageIndex]!;
++    const message = this.file === undefined ? expected : await this.file.message(messageIndex, expected);
++    return conversationEntry(message)!;
++  }
++
++  async page(start: number, end: number, signal: AbortSignal): Promise<Array<ConversationEntry & { index: number; entry: number; start: number }>> {
++    const rows: Array<ConversationEntry & { index: number; entry: number; start: number }> = [];
++    let last = -1;
++    let entry: ConversationEntry | undefined;
++    for (let index = start; index < end; index++) {
++      signal.throwIfAborted();
++      const fragment = this.fragments[index]!;
++      if (last !== fragment.entry) {
++        entry = await this.entry(fragment.entry);
++        last = fragment.entry;
++      }
++      rows.push({
++        index, entry: fragment.entry, start: fragment.start,
++        label: fragment.start === 0 ? entry!.label : "", text: entry!.text.slice(fragment.start, fragment.end),
++      });
++    }
++    return rows;
++  }
++
++  async search(needle: string, signal: AbortSignal): Promise<HistorySearch> {
++    if (needle === "") return { total: 0, locate: async () => undefined };
++    const literal = needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
++    const pattern = new RegExp(literal, "giu");
++    const groups: MatchGroup[] = [];
++    let total = 0;
++    for (let index = 0; index < this.entries.length; index++) {
++      if (index % 64 === 0) await yieldToInput(signal);
++      const { text } = await this.entry(index);
++      const first = total;
++      const checkpoints: number[] = [];
++      pattern.lastIndex = 0;
++      for (let hit = pattern.exec(text); hit !== null; hit = pattern.exec(text)) {
++        if ((total - first) % MATCH_STRIDE === 0) checkpoints.push(hit.index);
++        total++;
++        if (total % 8192 === 0) await yieldToInput(signal);
++      }
++      if (total > first) groups.push({ entry: index, first, checkpoints });
++    }
++    return {
++      total,
++      locate: async (ordinal, lookupSignal) => {
++        if (ordinal < 0 || ordinal >= total) return undefined;
++        let lo = 0;
++        let hi = groups.length;
++        while (lo + 1 < hi) {
++          const mid = (lo + hi) >>> 1;
++          if (groups[mid]!.first <= ordinal) lo = mid;
++          else hi = mid;
++        }
++        const group = groups[lo]!;
++        const { text } = await this.entry(group.entry);
++        lookupSignal.throwIfAborted();
++        const relative = ordinal - group.first;
++        const matcher = new RegExp(literal, "giu");
++        matcher.lastIndex = group.checkpoints[Math.floor(relative / MATCH_STRIDE)]!;
++        let hit = matcher.exec(text)!;
++        for (let i = relative % MATCH_STRIDE; i > 0; i--) hit = matcher.exec(text)!;
++        const { first, end } = this.entries[group.entry]!;
++        lo = first;
++        hi = end;
++        while (lo + 1 < hi) {
++          const mid = (lo + hi) >>> 1;
++          if (this.fragments[mid]!.start <= hit.index) lo = mid;
++          else hi = mid;
++        }
++        return { entry: group.entry, fragment: lo, start: hit.index, end: hit.index + hit[0].length };
++      },
++    };
++  }
++}
+
+--- src/tui/modal-host.ts
+@@ 14,61 @@
+ import { SIDEBAR_WIDTH } from "./sidebar-metrics";
+ import { getTheme, onThemeChange } from "./theme";
+ import { boldChunk, dimChunk } from "./theme-text";
+ import { clearTranscriptChildren } from "./transcript-blocks";
+ 
+ type OpenTui = typeof import("@opentui/core");
+ type Renderer = Awaited<ReturnType<OpenTui["createCliRenderer"]>>;
+ type Box = InstanceType<OpenTui["BoxRenderable"]>;
+ type Text = InstanceType<OpenTui["TextRenderable"]>;
+ type ScrollBox = InstanceType<OpenTui["ScrollBoxRenderable"]>;
+ 
+ export type ModalTab = { id: string; label: string; temporary?: boolean; renderTab?: OpenModalInput["renderTab"] };
+ 
+ export type ModalFooterAction = { key: string; label: string };
+ 
+ export type ModalTabContext = {
+   /** Columns available inside the panel after border + padding. */
+   width: number;
+   /** Rows available inside the panel body (the scrollbox viewport). */
+   height: number;
++  toolbar?: { controls: Box; scroll: ScrollBox };
+ };
+ 
+ export type OpenModalInput = {
+   title: string;
+   tabs: readonly ModalTab[];
++  /** Use the fixed tab-strip row for the active tab's controls. */
++  toolbar?: boolean;
+   initialTab?: string;
+   /** Footer key-hints. Default: tab switch + Esc close. */
+   footer?: readonly ModalFooterAction[];
+   /**
+    * Footer key-hints per tab, evaluated each time a tab is mounted (tab switch, theme repaint),
+    * so the footer lists the keys of the tab on screen. Absent: `footer` applies to every tab.
+    */
+   footerFor?: (tabId: string) => readonly ModalFooterAction[] | undefined;
+   renderTab: (tabId: string, body: unknown, ctx: ModalTabContext) => void | (() => void);
+   /** Claim left/right arrows before modal-host's tab switch. */
+   onArrowKeys?: (key: KeypressEvent, direction: "left" | "right") => boolean | undefined;
+   /**
+    * Claim any key but Escape before the host's own handling (`x` close, tab
+    * switches, digit jumps). Return true when the body consumed it; the host
+    * then stops it there. For typed input the host would otherwise read as
+    * navigation.
+    */
+   claimKey?: (key: { name: string; sequence: string }) => boolean | undefined;
+   /**
+    * True while the tab body takes every key itself (a hand-built secret field): the host then
+
+--- src/tui/modal-host.ts
+@@ 269,313 @@
+   savedFocus: Renderer["currentFocusedRenderable"];
+   unsubTheme: () => void;
+   /** The renderable the backdrop is currently a child of (`main`, or the root for a wide sidebar). */
+   mountedAt: { add: (child: unknown) => number; remove: (child: never) => void };
+ };
+ 
+ const hosts = new WeakMap<Renderer, HostState>();
+ 
+ /**
+  * Review finding: `ensureHost` registers an `onThemeChange` listener once per
+  * renderer, but `hosts` being a `WeakMap` only lets the STATE object itself
+  * be collected — `theme.ts`'s own `listeners` Set is a process-lifetime,
+  * non-weak Set, so the listener closure (holding `state.backdrop`/
+  * `state.panel`) keeps the whole renderer's modal boxes alive forever once
+  * registered. Any caller that creates more than one renderer per process
+  * (every OpenTUI test suite; a relaunched TUI shell within one process) must
+  * call this when tearing its renderer down, or every later `applyThemeId()`
+  * keeps writing onto boxes belonging to renderers nobody can reach anymore.
+  */
+ export function destroyModalHost(renderer: Renderer): void {
+-  hosts.get(renderer)?.unsubTheme();
++  const state = hosts.get(renderer);
++  if (state === undefined) return;
++  state.unsubTheme();
++  state.tabCleanup?.();
++  state.tabCleanup = undefined;
+ }
+ 
+ 
+ /** Shared with `composer-choice.ts` — one renderable-tree containment walk, not two copies. */
+ export function containsNode(root: { getChildren: () => unknown[] }, node: unknown): boolean {
+   if (root === node) {
+     return true;
+   }
+   for (const child of root.getChildren()) {
+     if (containsNode(child as { getChildren: () => unknown[] }, node)) {
+       return true;
+     }
+   }
+   return false;
+ }
+ 
+ /**
+  * True while the modal on `renderer` is open and `node` is outside it: focusing `node` then would put the
+  * keyboard on something the opaque backdrop hides. A composer-dock choice asks this before it hands the
+  * keyboard back on close (`composer-choice.ts`), so a modal that opened meanwhile keeps it.
+
+--- src/tui/modal-host.ts
+@@ 333,373 @@
+   }
+   if (initialTab !== undefined && tabs.some((tab) => tab.id === initialTab)) {
+     return initialTab;
+   }
+   return first.id;
+ }
+ 
+ /** Columns the body scroll box's vertical scrollbar takes from the tab body. */
+ export const MODAL_BODY_SCROLLBAR_COLS = 1;
+ 
+ function innerWidthOf(state: HostState): number {
+   const panelWidth = state.panel.width;
+   if (typeof panelWidth === "number" && panelWidth > MODAL_PANEL_CHROME_X) {
+     return panelWidth - MODAL_PANEL_CHROME_X;
+   }
+   return resolveModalInnerWidth(state.chrome.renderer.width - MODAL_PANEL_MARGIN * 2);
+ }
+ 
+ function paintTabs(state: HostState): void {
+   clearTranscriptChildren(state.tabStrip);
++  if (state.input?.toolbar === true) return;
+   const theme = getTheme();
+   for (const [index, tab] of state.tabs.entries()) {
+     const active = tab.id === state.active;
+     const label = active ? `[${tab.label}]` : ` ${tab.label} `;
+     const prefix = index === 0 ? "" : " ";
+     state.tabStrip.add(
+       new state.otui.TextRenderable(state.chrome.renderer, {
+         id: `modal-tab-${tab.id}`,
+         content: active
+           ? state.otui.t`${prefix}${boldChunk(state.otui, label)}`
+           : state.otui.t`${prefix}${dimChunk(state.otui, label)}`,
+         fg: active ? theme.focus : theme.muted,
+         onMouseDown: () => {
+           if (!state.open || state.input === undefined || tab.id === state.active) {
+             return;
+           }
+           mountTab(state, state.input, tab.id);
+         },
+       }),
+     );
+
+--- src/tui/modal-host.ts
+@@ 409,459 @@
+   paintTabs(state);
+   if (input.footerFor !== undefined) {
+     paintFooter(state, input.footerFor(tabId) ?? input.footer);
+   }
+   // Deterministic panel-body size from the renderer, NOT from the panel's own
+   // width/height getters: OpenTUI's getters return the last LAYOUT value, so
+   // at mount time (before the first layout pass) they still read the
+   // creation-time floor (72x18) even though openModal already assigned the
+   // resolved 95%-of-terminal size — tab bodies would see a stale 68x13
+   // viewport instead of the real one (the /game board/prompt budget depends
+   // on ctx.height and must not be sized from that floor).
+   const availWidth = resolveModalAvailableWidth(state.chrome);
+   const size = resolveModalPanelSize(availWidth, state.chrome.renderer.height, input.contentRows);
+   const panelWidth = Math.min(availWidth, size.width);
+   const cleanup = (target.renderTab ?? input.renderTab)(tabId, state.body, {
+     // The body sits in a scroll box whose scrollbar takes a column; a line
+     // wrapped to the full inner width lost its last characters to it and the
+     // renderer wrapped the rest onto a blank-looking extra row (flow 270).
+     width: resolveModalInnerWidth(panelWidth) - MODAL_BODY_SCROLLBAR_COLS,
+     height: modalBodyRows(size.height),
++    ...(input.toolbar === true ? { toolbar: { controls: state.tabStrip, scroll: state.scroll } } : {}),
+   });
+   state.tabCleanup = typeof cleanup === "function" ? cleanup : undefined;
+ }
+ 
+ function closeHost(state: HostState, opts: { restoreFocus: boolean; runOnClose: boolean }): void {
+   if (!state.open) {
+     return;
+   }
+   unmountActiveTab(state);
++  if (state.input?.toolbar === true) clearTranscriptChildren(state.tabStrip);
+   state.open = false;
+   state.input = undefined;
+   state.backdrop.visible = false;
+   const onClose = state.onClose;
+   state.onClose = undefined;
+   if (opts.restoreFocus) {
+     const scroll = state.chrome.scroll;
+     if (state.savedScrollTop !== undefined && scroll !== undefined) {
+       scroll.scrollTop = state.savedScrollTop;
+     }
+     const r = state.chrome.renderer;
+     const current = r.currentFocusedRenderable;
+     // A newer surface owns its focus; otherwise return to the still-live holder.
+     if (current === null || containsNode(state.backdrop, current)) {
+       const previous = state.savedFocus;
+       if (previous !== null && focusIsLive(previous, r.root)) previous.focus();
+       else state.chrome.focusComposer();
+     }
+   }
+   if (opts.runOnClose && onClose !== undefined) {
+
+--- src/tui/modal-host.ts
+@@ 610,671 @@
+     active: "",
+     tabCleanup: undefined,
+     onClose: undefined,
+     input: undefined,
+     releaseOverlay: undefined,
+     unsubKeys: undefined,
+     savedScrollTop: undefined,
+     savedFocus: null,
+     unsubTheme: () => {},
+     mountedAt: mountTarget,
+   };
+ 
+   state.releaseOverlay = chrome.addOverlaySource(() => state.open, { kind: "modal" });
+   state.unsubKeys = onKeypress(r, (key) => {
+     if (!state.open || state.input === undefined) {
+       return;
+     }
+     if (state.input.ownsKeys?.() === true) {
+       return;
+     }
+-    const focused = r.currentFocusedRenderable;
+-    const inBody = focused !== null && containsNode(state.scroll, focused);
+     if (key.name === "escape") {
+       const parent = state.temporaryParents.get(state.active);
+       if (parent !== undefined && state.tabs.some((tab) => tab.id === parent)) {
+         mountTab(state, state.input, parent);
+       } else {
+         closeHost(state, { restoreFocus: true, runOnClose: true });
+       }
+       key.preventDefault();
+       key.stopPropagation();
+       return;
+     }
+     // Flow 364: a tab body in the middle of typed input (the governance
+     // modal's flow-id confirmation) takes every key but Escape, so `x`, the
+     // arrows, Tab and the digit tab-jumps below never reach the host.
+     if (state.input.claimKey?.(key) === true) {
+       key.preventDefault();
+       key.stopPropagation();
+       return;
+     }
++    const focused = r.currentFocusedRenderable;
++    const inBody = focused !== null && ((state.input.toolbar === true && containsNode(state.tabStrip, focused))
++      || containsNode(state.scroll, focused));
+     if ((key.name === "x" || key.sequence === "x") && !inBody) {
+       closeHost(state, { restoreFocus: true, runOnClose: true });
+       key.preventDefault();
+       key.stopPropagation();
+       return;
+     }
+     const idx = state.tabs.findIndex((tab) => tab.id === state.active);
+     const onStrip = focused !== null && containsNode(state.tabStrip, focused);
+     // The arrows can be claimed by the tab body (review buttons) BEFORE the
+     // tab-switch below; tab/shift+tab remain modal-host's own switch.
+     const claimArrow = (direction: "left" | "right"): boolean =>
+       state.input?.onArrowKeys?.(key, direction) === true;
+     if (key.name === "left" && claimArrow("left")) {
+       return;
+     }
+     if (key.name === "right" && claimArrow("right")) {
+       return;
+     }
+     // A single tab has nowhere to switch to, so the arrows stay with the body:
+     // a text field in a wizard step needs them to move its cursor (flow 270).
+
+--- src/tui/modal-host.ts
+@@ 822,859 @@
+   } else {
+     state.savedFocus = chrome.renderer.currentFocusedRenderable;
+     modalHandBack.set(state.tabStrip, state.savedFocus);
+     state.savedScrollTop = chrome.scroll.scrollTop;
+     chrome.hideMenu();
+     chrome.blurComposer();
+     state.backdrop.visible = true;
+     state.open = true;
+   }
+ 
+   state.generation += 1;
+   const generation = state.generation;
+   state.input = input;
+   state.tabs = input.tabs.map((tab) => ({ ...tab }));
+   state.temporaryParents.clear();
+   state.onClose = input.onClose;
+   paintHeader(state, input.title);
+   paintFooter(state, input.footer);
+   mountTab(state, input, resolveInitialTab(input.tabs, input.initialTab));
+   const focused = chrome.renderer.currentFocusedRenderable;
+-  if (focused === null || !containsNode(state.scroll, focused)) {
++  if (focused === null || (!containsNode(state.scroll, focused)
++    && !(input.toolbar === true && containsNode(state.tabStrip, focused)))) {
+     state.tabStrip.focus();
+   }
+   // A modal opened from a promise continuation — the next wizard step after
+   // Esc on the previous one closed it — lands while the renderer is still
+   // handling that keypress, and the redraw it asks for is dropped: the dialog
+   // was open, focused and invisible until some unrelated redraw (flow 270).
+   // Ask again on the next tick, which also covers a caller that fills the body
+   // right after this returns.
+   const r = chrome.renderer;
+   setTimeout(() => {
+     if (state.generation === generation && state.open) {
+       r.requestRender();
+     }
+   }, 0);
+   return makeHandle(state, generation);
+ }
+
+--- src/tui/remote-control-surface.ts
+@@ 1,30 @@
+ // `/remote-control`: the TUI and readline halves of the shell's remote control
+ // (flow 376, AC3/AC12). The sidebar row, the modal, the slash command's text
+ // and the readline text are all built from one `RemoteStatus`, so no surface
+ // states something the others do not.
+ //
+ // Remote control is OFF unless this command turned it on. Nothing here starts
+ // it: `presentRemoteControl` and the panel only ask the host to (`onToggle`,
+ // `onOpen`), and the host runs the same code the typed command runs.
+ 
+-import { parseHistoryArgs } from "../remote/history";
+-import { historyArgsOf } from "../remote/history-host";
++import { HISTORY_COMMAND } from "../commands/agent-commands";
+ import { REMOTE_EVENT_LIMIT, type RemoteEvent, type RemoteState, type RemoteStatus, TG_SOURCE } from "../remote/shell-bridge";
+ import { waitingCardsText } from "./operator-confirmations";
+ import { clampScroll, wrapLines, windowLines, type ModalHandle, type OpenModalFn } from "./flow-inspector";
+ import { modalBodyRows, openModal, resolveModalPanelSize } from "./modal-host";
+ import { guardedThemeRepaint, isRenderableGone } from "./theme-repaint";
+ import { onThemeChange, type TextRole } from "./theme";
+ import { dimChunk, roleChunk } from "./theme-text";
+ 
+ type OpenTui = typeof import("@opentui/core");
+ 
+ export const REMOTE_CONTROL_COMMAND = "/remote-control";
+ export const REMOTE_CONTROL_SUMMARY = "Mirror this session into a Telegram topic: /remote-control [name|off|status]";
+ export const hubShareUsage = "Usage: /remote-control hub on|off|status";
+ export type HubShareAction = "on" | "off" | "status" | "usage";
+ 
+ export function parseHubShareCommand(line: string): HubShareAction | undefined {
+   const [command, target, action, ...extra] = line.trim().split(/\s+/);
+   // Keep `/remote-control hub` available as a Telegram topic name.
+   if (command !== REMOTE_CONTROL_COMMAND || target !== "hub" || action === undefined) return;
+   if (extra.length === 0 && (action === "on" || action === "off" || action === "status")) return action;
+
+--- src/tui/remote-control-surface.ts
+@@ 44,83 @@
+ 
+ export function labelTelegramLine(text: string): string {
+   return `[${TG_LABEL}] ${text}`;
+ }
+ 
+ export const REMOTE_FOOTER = [
+   { key: "o", label: "turn on/off" },
+   { key: "h", label: "post history" },
+   { key: "←/→", label: "tab" },
+   { key: "esc", label: "close" },
+ ] as const;
+ 
+ // ---------------------------------------------------------------------------
+ // Command
+ // ---------------------------------------------------------------------------
+ 
+ export function isRemoteControlCommand(line: string): boolean {
+   return (line.trim().split(/\s+/)[0] ?? "") === REMOTE_CONTROL_COMMAND;
+ }
+ 
+-export const HISTORY_COMMAND = "/history";
+-
+-/** `/history [N]` (flow 399): post the session's last messages to the topic. */
+-export function isHistoryCommand(line: string): boolean {
+-  return (line.trim().split(/\s+/)[0] ?? "") === HISTORY_COMMAND;
+-}
+-
+-/**
+- * The readline shell's whole `/history`: it has no session bridge, so there is no topic to post
+- * to. The usage error still reads the same as in the full-screen shell.
+- */
+-export function readlineHistoryText(line: string): string {
+-  const parsed = parseHistoryArgs(historyArgsOf(line));
+-  if (!parsed.ok) return `${parsed.message}\n`;
+-  return "/history posts to the Telegram topic of remote control, which starts only in the full-screen shell (run `keryx shell`, then /remote-control <name>). Here it is off.\n";
+-}
+-
+ export type RemoteControlRequest =
+   | { action: "status" }
+   | { action: "off" }
+   | { action: "on"; name?: string }
+   | { action: "invalid"; message: string };
+ 
+ export const REMOTE_CONTROL_USAGE = `Usage: ${REMOTE_CONTROL_COMMAND} [name|off|status]`;
+ 
+ /**
+  * `/remote-control` and `/remote-control status` read; `off` stops; anything
+  * else is the topic name to start with (`on` starts with a name serve picks).
+  * Starting always needs the explicit word: the bare command never starts it.
+  */
+ export function parseRemoteControlArgs(line: string): RemoteControlRequest {
+   const words = line.trim().split(/\s+/).slice(1);
+   if (words.length === 0) return { action: "status" };
+   if (words.length > 1) return { action: "invalid", message: REMOTE_CONTROL_USAGE };
+   const word = words[0] as string;
+   const lower = word.toLowerCase();
+   if (lower === "status") return { action: "status" };
+
+--- src/tui/remote-control-surface.ts
+@@ 87,128 @@
+ }
+ 
+ // ---------------------------------------------------------------------------
+ // Shared text
+ // ---------------------------------------------------------------------------
+ 
+ /** `12s`, `3m`, `2h`; the unit that reads shortest. */
+ export function formatAge(ms: number): string {
+   const seconds = Math.max(0, Math.round(ms / 1000));
+   if (seconds < 60) return `${seconds}s`;
+   const minutes = Math.round(seconds / 60);
+   if (minutes < 60) return `${minutes}m`;
+   return `${Math.round(minutes / 60)}h`;
+ }
+ 
+ const STATE_WORDS: Record<RemoteState, string> = { off: "off", on: "on", offline: "offline" };
+ 
+ /** `History: 10 messages posted at 06:52:11 (restored automatically)`, or how to post it. */
+ export function formatHistoryStatus(status: RemoteStatus): string {
+   const history = status.history;
+-  if (history === undefined) return `History: not posted yet. Use ${HISTORY_COMMAND} [N], or press h here.`;
+-  return `History: ${history.count} message${history.count === 1 ? "" : "s"} posted at ${clock(history.at)} (${history.auto ? "restored automatically" : HISTORY_COMMAND}). Again: ${HISTORY_COMMAND} [N], or press h here.`;
++  if (history === undefined) return `History: not posted yet. Press h here or send ${HISTORY_COMMAND} [N] in the topic.`;
++  return `History: ${history.count} message${history.count === 1 ? "" : "s"} posted at ${clock(history.at)} (${history.auto ? "restored automatically" : HISTORY_COMMAND}). Press h here to post again.`;
+ }
+ 
+ /** One status block: state, topic, heartbeat age and what turns it on or off. `posture` adds the Telegram permission lines (flow 396). */
+ export function formatRemoteStatusLines(status: RemoteStatus, posture?: readonly string[], confirmations?: readonly string[]): string[] {
+   const lines = [`Remote control: ${STATE_WORDS[status.state]}`];
+   if (status.state === "off") {
+     lines.push("Topic: none");
+     lines.push(`Turn it on with ${REMOTE_CONTROL_COMMAND} <name>, or press o here.`);
+     return lines;
+   }
+   lines.push(`Topic: ${status.name ?? "registering"}`);
+   lines.push(`Last heartbeat: ${status.heartbeatAgeMs === undefined ? "none yet" : `${formatAge(status.heartbeatAgeMs)} ago`}`);
+   lines.push(formatHistoryStatus(status));
+   if (status.state === "offline") lines.push("Serve is not reachable. The shell keeps retrying; nothing is lost from Telegram.");
+   if (status.unconfirmedApprovals !== undefined && status.unconfirmedApprovals > 0) {
+     const n = status.unconfirmedApprovals;
+     lines.push(`Approvals not confirmed: ${n}. The topic shows ${n === 1 ? "it" : "them"} as "not confirmed" until serve takes the shell's ack.`);
+   }
+   // Flow 464 (AC6): the operator cards put to the topic and not answered yet, and who pressed the recent ones.
+   if (confirmations !== undefined && confirmations.length > 0) lines.push("", ...confirmations);
+
+--- src/tui/tui-shell.ts
+@@ 84,136 @@
+ import { permissionsSlashText } from "../commands/permissions-command";
+ import {
+   loadPosture,
+   postureLines,
+   postureSidebarText,
+   REMOTE_POLICY_COMMAND,
+   remotePolicyText,
+   type RemotePolicyDeps,
+ } from "../commands/remote-policy-command";
+ import { openPermissions, PERMISSIONS_COMMAND } from "./permissions-inspector";
+ import { approvalCauseLine, causeOfMeta, type ApprovalCause } from "../commands/approval-cause";
+ import { describeApprovalForTopic, mirrorUndeliveredNote, operatorCardTooLongForTopic, RemoteBridge, type RemoteStatus, TG_SOURCE } from "../remote/shell-bridge";
+ import type { LiveShellShare } from "../lib/hub-machine/live-shell-share";
+ import { liveShellLimits, type LiveShellContext, type LiveShellDecision, type LiveShellUsage } from "../remote-control/live-shell";
+ import { looksLikeSecret, redactSensitiveText } from "../security/service";
+ import { SHELL_TOOL_NAMES } from "../lib/shell-tool-names";
+ import { exportCallerSession } from "../lib/caller-session";
+ import { MAX_APPROVAL_TIMEOUT_MS } from "../remote/protocol";
+ import { BUSY_REASON } from "../remote/command-gateway";
+ import { historyArgsOf, NEW_SESSION_ENTRY, sessionEntryOf } from "../remote/history-host";
++import { appendConversationPreview, isHistoryShortcut, openHistoryModal } from "./history-modal";
++import { historySnapshot } from "./history-reader";
+ import type { CommandOutcome } from "../remote/command-router";
+ import { ChannelsClient } from "../remote/channels-client";
+ import {
+   type ChannelsPanelHandle,
+   isChannelsCommand,
+   loadChannelsSnapshot,
+   mountChannelsPanel,
+   openChannels,
+   parseChannelsArgs,
+ } from "./channels-surface";
+ import {
+-  HISTORY_COMMAND,
+-  isHistoryCommand,
+   isRemoteControlCommand,
+   commandEchoText,
+   hubShareUsage,
+   labelTelegramLine,
+   mountRemotePanel,
+   openRemoteControl,
+   parseHubShareCommand,
+   parseRemoteControlArgs,
+   type HubShareAction,
+   type RemotePanelHandle,
+   TG_ECHO_MARKER,
+ } from "./remote-control-surface";
+ // Flow 328, AC7: the modal's `c` key and `/ac` both run the SAME check the
+ // CLI does — no separate TUI-only Jev path. Never triggered automatically;
+ // only on an explicit key press.
+ import { runCheckAc } from "../commands/flow-check-ac";
+ import { mountOpsSidebar, routeOpsCommand, type OpsSidebar } from "./ops-sidebar";
+ import { describeDetachedRuns } from "./trigger-run-now";
+ import { mountApprovalsSidebar, routeApprovalsCommand, type ApprovalsSidebar } from "./approvals-sidebar";
+ import { intakeConfiguredSync, mountIntakeSidebar, routeIntakeCommand, type IntakeSidebar } from "./intake-surface";
+
+--- src/tui/tui-shell.ts
+@@ 209,249 @@
+   type RoutingClassifierTurnResult,
+ } from "./routing-classifier-source";
+ import { isRouteCommand, ROUTE_COMMAND } from "./route-command";
+ import type { RoutingCategory } from "../harness/routing/table";
+ import type { RoutingCapability } from "../harness/routing/routing-request";
+ import { createMeteredRoutingProvider } from "../harness/routing/routing-provider";
+ import { prepareRoutingCandidate } from "../harness/routing/routing-execution";
+ // Flow 346: the EXTERNAL switch's `/external on|off` command + status line —
+ // no modal (see the flow's own AC8 scope note); the sidebar row and bare
+ // status text are rendered from `external-command.ts`.
+ import {
+   EXTERNAL_COMMAND,
+   isExternalAgentsCommand,
+   isExternalCommand,
+   renderExternalSidebarValue,
+   renderExternalStatusLines,
+   runExternalAgentsCommand,
+ } from "./external-command";
+ import { isRenderingCommand, runRenderingCommand } from "./rendering-command";
+ import { isNotesCommand, isTrailCommand, runNotesCommand, runTrailCommand } from "./working-memory-command";
++import { isDiagCommand, maybeDumpOnInterrupt, runDiagCommand } from "./diag-command";
+ import { resolveExternalSetting, writeUserExternalSetting, type ResolvedExternalSetting } from "../lib/external-switch";
+ import { loadExternalProvidersConfig } from "../lib/external-providers";
+ import { resolveJevApiKey } from "../harness/decision/jev-client";
+ // flow 343: the Jev EDIT GUARD's `/editguard` modal — everything else
+ // (the CLI hook, the config/log I/O) lives in
+ // `../commands/review-jev-edit-guard.ts`/`../review/jev-edit-guard*.ts`.
+ import {
+   EDIT_GUARD_COMMAND,
+   isEditGuardCommand,
+   loadEditGuardStatus as loadSharedEditGuardStatus,
+   openEditGuard,
+   renderEditGuardSidebarValue,
+   type EditGuardStatusSnapshot,
+ } from "./jev-edit-guard-inspector";
+ import { writeJevEditGuardEnabled } from "../review/jev-edit-guard-config";
+ // flow 461: the project rules/implementation context line and `/projectctx` modal.
+ import { writeProjectContextEnforcement } from "../gdskills/project-context-config";
+ import { loadProjectContextStatus, type ProjectContextStatus } from "../gdskills/project-context-status";
+ import {
+   PROJECT_CONTEXT_CONFIG_REFUSAL,
+
+--- src/tui/tui-shell.ts
+@@ 287,328 @@
+   formatSessionInfoText,
+   isSessionInfoCommand,
+   openSessionInfo,
+ } from "./session-info";
+ import { smallActionButton } from "./action-button";
+ import { formatModalFooter, openModal, type ModalChrome, type ModalFooterAction, type ModalHandle } from "./modal-host";
+ import { openHelpModal } from "./help-modal"; // flow 303 AC6: the grouped, tabbed `/help` modal
+ import { openSetupModal } from "./setup-modal";
+ import { ownKeryxPrefix, runSetupSteps } from "./setup-run";
+ import { parseSetupArgs } from "../commands/setup-guide";
+ import { helpFirstRunShown, markHelpFirstRunShown, resolveFirstRunHelp } from "./help-first-run"; // flow 303 AC8
+ import { connectedMessage, createDefaultSearchProviderController, describeConnectionFailure } from "../harness/search";
+ import type { SearchProviderController, SearchProviderDescriptor, SearchProviderId } from "../harness/search";
+ import type { SearchFieldDescriptor } from "../harness/search/types";
+ import {
+   commandsForMode,
+   describeUnavailableCommand,
+   removedCommandHint,
+   filterCommands,
+   findAgentCommand,
++  HISTORY_COMMAND,
++  isHistoryCommand,
+   parseDelegateCommand,
+   parseDemoteCommand,
+   renderCommandHelp,
+ } from "../commands/agent-commands";
+ // Flow 266 (AC8): the demote EFFECT lives with the registry so both shells
+ // dispatch into one rule rather than growing two.
+ import { demoteTask } from "../harness/tool/builtin/background-job-registry";
+ import { runTasksCommand } from "./tasks-command";
+ import { formatUsageLine, formatUsageTable, usageFooterSegments } from "./usage-format";
+ import { createTurnUsage, installTurnUsageSink } from "./turn-usage";
+ import { createUsageTracker } from "./usage-tracker";
+ import {
+   applyThemeId,
+   formatThemeList,
+   getTheme,
+   getThemeId,
+   loadPersistedThemeId,
+   parseThemeId,
+   persistThemeId,
+   themeLabel,
+
+--- src/tui/tui-shell.ts
+@@ 345,385 @@
+   disconnectProvider,
+   fetchOpenAiCompatModelsDetailed,
+   formatProfileSummarySuffix,
+   modelsFailureLine,
+   providerByName,
+   connectionProviderByName,
+   resolveModelsForPicker,
+   sharedCredentialWarning,
+   testProviderConnection,
+ } from "../commands/providers";
+ import { loadSessionLimits } from "../commands/model-limits";
+ import {
+   describeCatalogStatus,
+   formatCatalogAge,
+   loadOrRefreshProviderCatalogFromDetected,
+   loadProviderCatalogCache,
+   type ProviderCatalog,
+ } from "../harness/provider-catalog";
+ import { collapseToolOutput, summarizeToolArgs } from "../lib/ui";
+ import { classifyDiffLine, summarizeSubmittedLine } from "../lib/md-blocks";
+-import { frameSubmittedLine, HC_PASTED_HEADER, hcHistoryEcho, hcTranscriptEcho, keyboardApprovalLine, looksLikeHcMessage } from "./hc-message";
++import { frameSubmittedLine, HC_PASTED_HEADER, hcTranscriptEcho, keyboardApprovalLine, looksLikeHcMessage } from "./hc-message";
+ import { extractPatchText } from "../lib/patch-risk";
+ import { collapseHome } from "../lib/statusbar";
+ import { selfAnsweredLine, terminalSafe } from "../lib/terminal-safe";
+ import { catalogAllows, catalogMethods, deviceCodeMethodLabel } from "../lib/oauth/catalog";
+ import { applyOAuthAccessToEnv, oauthAccessToken } from "../lib/oauth/grants";
+ import { loginDeviceCode } from "../lib/oauth/login";
+ import { openVerificationUrl } from "../lib/oauth/open-url";
+ import { envWithSavedApiKeys, loadShellConfig, noteSavedCredentialEnv, saveApiKey, saveProviderBaseUrl, saveShellConfig, updateShellConfig } from "../lib/shell-config";
+ import { saveCustomCompatProvider } from "../lib/provider-config";
+ import {
+   allowShellPattern,
+   parseShellExecCommand,
+   shellPermissionsFingerprint,
+   shellPermissionsPath,
+   suggestShellPatterns,
+ } from "../lib/shell-permissions";
+ import { evaluateShellApproval } from "../commands/shell-approval";
+ import {
+   evaluateTelegramShellApproval,
+   formatModeInForce,
+
+--- src/tui/tui-shell.ts
+@@ 4679,4723 @@
+   // same way: a nullable ref set once real, read through optional chaining
+   // so an early Ctrl+C degrades to a safe no-op (there is nothing to sweep
+   // that early — no JobRegistry/BackgroundJobStore exists yet either).
+   let liveDeps: AgentDeps | undefined;
+   let liveJobs: BackgroundJobStore | undefined;
+   let disposeExecutionPlanPanel: (() => void) | undefined;
+   let offSidebarGeometry: (() => void) | undefined;
+   // Flow 300: same nullable-ref idiom — the Governance/Triggers sections own a
+   // poller and possibly a running `keryx trigger run` child to stop on exit.
+   let liveOps: OpsSidebar | undefined;
+   let liveSchedules: SchedulesSidebar | undefined;
+   let liveAutoReview: AutoReviewSidebar | undefined;
+   let liveReviewsPanel: ReviewsPanelHandle | undefined;
+   // Flow 376: remote control (the Telegram topic). Same nullable-ref/TDZ idiom as
+   // `busWakeController` below: the bridge's host closes over `runLine` and
+   // `turnLoop`, which do not exist yet, while `onDestroy` and the approval/reply
+   // wraps near the top of the shell already need to reach it. Off until the
+   // operator's `/remote-control <name>`; `closeRemote` deregisters (deletes the
+   // topic) on every exit path.
+   let remoteBridge: RemoteBridge | undefined;
++  let historyModal: ModalHandle | undefined;
++  const closeHistory = (): void => {
++    historyModal?.close();
++    historyModal = undefined;
++  };
+   let hubShare: LiveShellShare | undefined;
+   let startingHubShare: AbortController | undefined;
+   const closeHubShare = () => {
+     startingHubShare?.abort();
+     startingHubShare = undefined;
+     return hubShare?.close();
+   };
+   // A device login started from the topic (flow 471); ended when remote control goes off or the shell closes.
+   let remoteDeviceLogin: RemoteDeviceLogin | undefined;
+   // `/connect` in the topic asks for the connected providers and then for the Add list; each would
+   // otherwise probe every provider's `/models` again. One probe serves both for a short while.
+   const connectedProviders = createConnectedProvidersCache(async () => {
+     const detected = opts.redetect !== undefined ? await opts.redetect() : opts.detected;
+     return { detected, connected: await filterConnectedDetectedProviders(detected, {}) };
+   });
+   let liveRemotePanel: RemotePanelHandle | undefined;
+   // Flow 464 (AC6): the operator cards this shell mirrored to the topic, for the sidebar, the status tab and /decisions.
+   const operatorCards = new OperatorConfirmationLog();
+   const operatorCardLines = (): string[] => operatorConfirmationLines(operatorCards.entries(), Date.now());
+   // Flow 377: the Telegram connection of this machine (`/channels`), shared by every shell.
+
+--- src/tui/tui-shell.ts
+@@ 5838,5881 @@
+       fleet.upsert({
+         id: MAIN_AGENT_ID,
+         label: "main",
+         status,
+         ...(detail !== undefined ? { detail } : {}),
+         model: `${currentSel.provider}/${currentSel.model}`,
+       });
+       herdr.report(herdrStateFor(status));
+       hostStatus.status(status, attention);
+     };
+     // Idle main agent visible from launch.
+     setMainAgent("queued", "ready");
+ 
+     const io = createTuiAgentIo(otui, r, transcript);
+     reviewAgentsIo = io;
+     const ctrlCPolicy = createCtrlCPolicy({ now: Date.now });
+     ctrlCPress = () => {
+       // A turn already told to stop but not yet unwound counts as idle, so a wedged one cannot trap the user.
+       const action = ctrlCPolicy.press(foregroundOperation.isActive && !foregroundOperation.signal.aborted);
+       if (action === "cancel-turn") {
++        // Flow 487: dump first; cancelling unwinds the calls the snapshot describes.
++        const diagNote = maybeDumpOnInterrupt();
+         foregroundOperation.cancel("interrupted by Ctrl+C");
++        if (diagNote !== undefined) io.onSystem?.(diagNote);
+         io.onSystem?.("◇ main turn interrupted (Ctrl+C).\n");
+       } else if (action === "arm-exit") {
+         chrome.showToast(CTRL_C_EXIT_HINT);
+       } else {
+         r.destroy();
+       }
+     };
+     // review r1 F10: now that `io` exists, the drop notifier can actually print.
+     busDropNotifier = createBusDropNotifier((droppedTotal) => io.onSystem?.(busInboxFullNotice(droppedTotal)));
+     // Cumulative token usage → the header counter + sidebar. Prefer the provider's
+     // EXACT `usage`; fall back to an estimate (see the turn `finally` below) for
+     // providers that report nothing (e.g. local Ollama models). `attachUsageIo`
+     // WRAPS the base hook rather than replacing it, so the per-turn transcript
+     // line survives alongside the cumulative counter (gap G-1 — the two answer
+     // different questions).
+     let hasExactUsage = false;
+     const baseWrite = io.write.bind(io);
+     const baseOnSystem = io.onSystem?.bind(io);
+     // `setBusyPhase` / `setMainAgent` are both defined above, so the hooks below
+     // close over live bindings rather than placeholders that get rewired later.
+
+--- src/tui/tui-shell.ts
+@@ 6520,6560 @@
+           if (turnLoop.queue.length > 0) paintMainQueue();
+         }
+       };
+     const queueListingText = (): string =>
+       `${formatQueueListing(
+         turnLoop.queue.map((item) => (item.source === TG_SOURCE ? labelTelegramLine(item.displayQuestion) : item.displayQuestion)),
+         queueWait(),
+       )
+         .map((line) => `◇ ${line}`)
+         .join("\n")}\n`;
+     // Flow 426 (AC5): every approval modal is preceded by the same one-line cause the Telegram relay carries.
+     const addCauseLine = (tool: string, meta: Parameters<typeof causeOfMeta>[1]): void => {
+       transcript.add(
+         new otui.TextRenderable(r, {
+           id: `ap${uid++}`,
+           content: otui.t`${dimChunk(otui, approvalCauseLine(causeOfMeta(tool, meta), meta?.hcLaunch))}`,
+         }),
+       );
+     };
+     const requestApprovalLocally: LocalApproval = async (tool, inputJson, meta, race) => {
++      closeHistory();
+       const dockSignal = race?.signal ?? foregroundOperation.signal;
+       const hubControls = (summary: string, allowOption: string, eligible: boolean) => {
+         const turnId = currentHubTurn();
+         let presented: typeof hubApprovalDock;
+         // Share decisions only when Hub can show the entire, unchanged action.
+         const canAnswer = eligible && race === undefined && turnId !== undefined &&
+           meta?.alwaysAsk !== true && meta?.untrustedOrigin !== true &&
+           summary.trim().length > 0 && Buffer.byteLength(summary) <= liveShellLimits.approvalSummaryBytes &&
+           !/[\p{Cc}\p{Cf}]/u.test(summary.replace(/[\r\n\t]/g, "")) &&
+           !looksLikeSecret(summary) && redactSensitiveText(summary) === summary;
+         return {
+           onSelectReady: (select: (id: string) => boolean) => {
+             const share = hubShare;
+             if (!canAnswer || share?.active !== true) return;
+             presented = {
+               prompt: {
+                 id: crypto.randomUUID(), tool, summary,
+                 reason: approvalCauseLine(causeOfMeta(tool, meta)), canAnswer: true,
+               },
+               answer: (decision) => {
+
+--- src/tui/tui-shell.ts
+@@ 7163,7203 @@
+           dock: (race) => inner(tool, inputJson, meta, race),
+           // The dock waits as long as the operator takes, so the topic leg gets the longest wait serve allows.
+           topic: (signal) => bridge.askApproval(describeApprovalForTopic(tool, inputJson, meta), { signal, timeoutMs: MAX_APPROVAL_TIMEOUT_MS }),
+         });
+         if (outcome.from === "dock") return outcome.result;
+         const allowed = outcome.answer.decision === "allow";
+         input.focus();
+         setMainAgent("running", allowed ? "approved (telegram)" : "denied");
+         io.onSystem?.(allowed ? `◇ ${brief} approved in Telegram.\n` : `◇ ${brief} denied in Telegram.\n`);
+         if (!allowed) return false;
+         // Flow 456: the topic answered first — an operator-confirmed card records `confirmedVia: "remote-card"`.
+         return meta?.fingerprint !== undefined ? remoteApproval(meta.fingerprint, outcome.answer.fromId) : true;
+       };
+     io.requestApproval = trackApproval(mirrorApprovalToTopic(requestApprovalLocally));
+ 
+     /** Host for ask_user — Claude-style options docked above the composer. */
+     const askUserInteractive = async (req: {
+       question: string;
+       options: Array<{ id: string; label: string; description: string; recommended?: boolean; preselected?: boolean }>;
+     }): Promise<AskUserAnswer> => {
++      closeHistory();
+       chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
+       setMainAgent("blocked", "ask", { kind: "question", text: req.question });
+       setBusyPhase("waiting for your answer (menu above input)");
+       // Keep a short transcript breadcrumb; the interactive picker is at the input.
+       const qShort = req.question.length > 100 ? `${req.question.slice(0, 97)}…` : req.question;
+       transcript.add(
+         new otui.TextRenderable(r, {
+           id: `ask${uid++}`,
+           content: otui.t`${roleChunk(otui, "attention", "? ")} ${dimChunk(otui, qShort)}`,
+         }),
+       );
+       // flow 401/419: a question is also put in the topic (any turn, while remote control is on); the first answer wins
+       const topicBridge = remoteBridge?.active === true ? remoteBridge : undefined;
+       const outcome = await raceAskUser({
+         turnSignal: foregroundOperation.signal,
+         ...(topicBridge === undefined ? {} : { topic: (signal: AbortSignal) => topicBridge.askUser(req, signal) }),
+         dock: (dockSignal) =>
+           chrome.withOverlay(() =>
+             showComposerChoiceDetailed(otui, r, chrome.dock, {
+               title: "Question",
+
+--- src/tui/tui-shell.ts
+@@ 7634,7674 @@
+     };
+ 
+     // Flow 271 (specification §6.1, §6.2): every open is leased, through the one
+     // holder. `switchTo` takes the target's lease first and only then releases
+     // the current one, so a refused target leaves the current session held.
+     const leasedOpen = (
+       target: { continueLast?: boolean; resumeId?: string; fork?: boolean; takeOver?: boolean } = {},
+     ): ReturnType<typeof openLeasedSession> =>
+       sessionLease.switchTo(() =>
+         openLeasedSession({
+           cwd: sessionCwd,
+           ...target,
+           provider: currentSel.provider,
+           model: currentSel.model,
+         }),
+       );
+     // `● live` / `◌ stale` on the picker rows (AC4).
+     const leaseState = leaseStateLookup(sessionCwd);
+ 
+     const showSessionPreview = (): void => {
+-      const recentPrompts = history.filter((message) => message.role === "user").slice(-5);
+-      if (recentPrompts.length === 0) return;
+-      transcript.add(new otui.TextRenderable(r, {
+-        id: `sesspreview${uid++}`,
+-        content: otui.t`${dimChunk(otui, "Recent prompts")}`,
+-      }));
+-      for (const message of recentPrompts) {
+-        // A framed hc message uses the same sender marker as its live echo.
+-        const hc = hcHistoryEcho(message.content);
+-        const text = hc?.line ?? message.content;
+-        const preview = text.length > 100 ? `${text.slice(0, 97)}…` : text;
+-        transcript.add(new otui.TextRenderable(r, {
+-          id: `sessu${uid++}`,
+-          content: otui.t`${dimChunk(otui, `  ${hc?.marker ?? "❯"} ${preview}`)}`,
+-        }));
+-      }
++      appendConversationPreview(otui, chrome, nativeHistory());
+     };
+ 
+     /** The transcript lines an opened session announces: skipped, degraded, resumed. */
+     const showOpenedNotes = (opened: ReturnType<typeof openLeasedSession>): void => {
+       if (opened.skipped !== undefined) {
+         // `-c` passed over a session another shell holds (§6.1, AC1).
+         transcript.add(
+           new otui.TextRenderable(r, {
+             id: `sessskip${uid++}`,
+             content: otui.t`${roleChunk(otui, "attention", describeSkippedSession(opened.skipped).replace(/\n+$/, ""))}`,
+             marginTop: 1,
+           }),
+         );
+       }
+       if (opened.archiveDegraded !== undefined) {
+         transcript.add(
+           new otui.TextRenderable(r, {
+             id: `sessdeg${uid++}`,
+             content: otui.t`${roleChunk(otui, "attention", `archive unavailable — resumed from the active context (${opened.archiveDegraded})`)}`,
+             marginTop: 1,
+
+--- src/tui/tui-shell.ts
+@@ 8136,8176 @@
+       onError: (message) => io.onSystem?.(`${message}\n`),
+     });
+     io.beforeMutation = () => rewindRecorder.beforeMutation();
+     refreshRewindSidebar = (): void => {
+       clearTranscriptChildren(sbRewind);
+       if (rewindDisabledByEnv()) return;
+       const count = rewindRecorder.snapshotCount();
+       if (count === 0) return;
+       sbRewind.add(
+         new otui.TextRenderable(r, {
+           id: "sb-rewind-v",
+           content: otui.t`${dimChunk(otui, `Rewind ${count}`)}`,
+           onMouseDown: () => {
+             showRewind();
+           },
+         }),
+       );
+     };
+     refreshRewindSidebar();
+     const resetSessionSurface = (): void => {
++      closeHistory();
+       sideQueue.length = 0;
+       sideSessionAbort.abort();
+       sideSessionAbort = new AbortController();
+       splash?.removeIfShown();
+       nav.exit();
+       chrome.stopBusy();
+       io.resetStream();
+       blockMount.clear();
+       clearTranscriptChildren(transcript);
+       chrome.scroll.scrollTop = 0;
+       chrome.scroll.stickyScroll = true;
+       fleet.clearMatching((w) => w.id !== MAIN_AGENT_ID);
+       setMainAgent("queued", "ready");
+       hasExactUsage = false;
+       lastUsage = undefined;
+       usage.resetUsage();
+     };
+ 
+     /**
+      * `/new` and `/clear`: a fresh leased session (flow 271, §6.2). The new
+
+--- src/tui/tui-shell.ts
+@@ 8445,8493 @@
+     };
+     const disableRemoteControl = async (): Promise<void> => {
+       const turnedOff = (await remoteBridge?.disable()) === true;
+       io.onSystem?.(turnedOff ? "◇ remote control off: the topic is deleted.\n" : "◇ remote control is already off.\n");
+       liveRemotePanel?.refresh();
+     };
+     // Flow 399: `/history [N]` (and the modal's `h`). One code path: the bridge posts and answers
+     // with the one line to show when nothing went out (usage, empty history, remote control off).
+     // Resolves with that line (undefined when messages went out); the sidebar is refreshed when it ends.
+     const postHistoryFor = async (line: string): Promise<string | undefined> => {
+       const bridge = remoteBridge;
+       if (bridge === undefined) return "Remote control is not available in this shell.";
+       try {
+         return await bridge.historyForCommand(historyArgsOf(line));
+       } catch {
+         return "The history could not be posted.";
+       } finally {
+         liveRemotePanel?.refresh();
+       }
+     };
+-    const runHistoryCommand = (line: string): void => {
++    const showHistory = (): void => {
++      if (chrome.overlayActive() || sessionTransferInProgress) return;
++      historyModal = openHistoryModal(otui, chrome, historySnapshot(archive, history.slice(nextArchiveIndex), liveSession.dir));
++    };
++    const runHistoryCommand = (line: string, source?: typeof TG_SOURCE | "hub"): void => {
++      if (source !== TG_SOURCE) {
++        showHistory();
++        return;
++      }
+       void postHistoryFor(line).then((answer) => {
+         if (answer !== undefined) io.onSystem?.(`◇ ${answer}\n`);
+       });
+     };
+     // Flow 397 review L-1: an open /remote-control modal repaints when the bridge reports a change
+     // (an approval confirmed or aged out), not only on the next keypress.
+     const remoteModalListeners = new Set<() => void>();
+     operatorCards.subscribe(() => {
+       liveRemotePanel?.refresh();
+       remoteModalListeners.forEach((listener) => listener());
+     });
+     const showRemoteControl = (): void => {
+       openRemoteControl(otui, chrome, {
+         getStatus: remoteStatus,
+         getConfirmationLines: operatorCardLines,
+         subscribeChange: (listener) => {
+           remoteModalListeners.add(listener);
+           return () => {
+             remoteModalListeners.delete(listener);
+           };
+
+--- src/tui/tui-shell.ts
+@@ 9826,9868 @@
+               });
+             })();
+             return;
+           }
+           case "help": {
+             // PR #669 review, LOW: `/help` is read-only, same reasoning as
+             // `session-info`/`flows`/`workspace`/`review` right below — a
+             // main turn in progress is exactly when an operator most wants
+             // to check what else they can do, and opening the modal never
+             // touches the turn. It used to print a busy notice instead
+             // (with a stray Cyrillic "и" where the sentence needed "and"),
+             // never actually showing the commands it named.
+             openHelp();
+             return;
+           }
+           case "setup": {
+             openSetup(line);
+             return;
+           }
+           case "interrupt": {
++            const diagNote = foregroundOperation.isActive ? maybeDumpOnInterrupt() : undefined;
+             if (requestSessionInterrupt(foregroundOperation)) {
++              if (diagNote !== undefined) io.onSystem?.(diagNote);
+               io.onSystem?.("◇ main turn interrupted.\n");
+               return;
+             }
+             io.onSystem?.("◇ no active main turn to interrupt.\n");
+             return;
+           }
+           case "queue": {
+             const queueArgs = line.trim().split(/\s+/).slice(1).join(" ").trim().toLowerCase();
+             if (queueArgs === "" || queueArgs === "list") {
+               io.onSystem?.(queueListingText());
+               return;
+             }
+             const parsed = parseQueueCommand(queueArgs);
+             if (parsed === undefined) {
+               io.onSystem?.("◇ usage: /queue <remove|edit|force> [N]  (N = qN position, default 1)\n");
+               return;
+             }
+             const index = parsed.position - 1;
+             if (index < 0 || index >= turnLoop.queue.length) {
+               io.onSystem?.(`◇ queue: no item q${parsed.position}.\n`);
+
+--- src/tui/tui-shell.ts
+@@ 9930,10013 @@
+             return;
+           }
+           case "governance":
+           case "triggers": {
+             routeOpsCommand(line, true, ops);
+             return;
+           }
+           case "product": {
+             showProduct();
+             return;
+           }
+           case "reviews": {
+             showReviews();
+             return;
+           }
+           case "remote-control": {
+             runRemoteControlCommand(line);
+             return;
+           }
+           case "history": {
+-            runHistoryCommand(line);
++            runHistoryCommand(line, source);
+             return;
+           }
+           case "channels": {
+             runChannelsCommand(line);
+             return;
+           }
+           case "schedules": {
+             routeSchedulesCommand(line, true, schedules);
+             return;
+           }
+           case "autoreview": {
+             routeAutoReviewCommand(line, true, autoReview);
+             return;
+           }
+           case "approvals": {
+             routeApprovalsCommand(line, true, approvals);
+             return;
+           }
+           case "intake": {
+             routeIntakeCommand(line, intake);
+             return;
+           }
+           case "permissions": {
+             runPermissionsCommand(line);
+             return;
+           }
+           case "remote-policy": {
+             runRemotePolicyCommand(line);
+             return;
+           }
+           case "decisions": {
+             routeDecisionsCommand(line, decisionsPanel);
+             return;
+           }
+           case "external-diff": {
+             routeExternalDiffCommand(line, externalDiff);
+             return;
+           }
++          case "diag": {
++            // flow 487: a stuck turn is exactly when this is needed; it never waits for the turn.
++            io.onSystem?.(runDiagCommand());
++            return;
++          }
+           case "mcp": {
+             showTools();
+             return;
+           }
+           case "mcp-consumer": {
+             if (!runMcpTrustLine(line)) showMcpConsumer();
+             return;
+           }
+           case "game": {
+             showGame(line);
+             return;
+           }
+           case "bus": {
+             // Flow 273 (specification §7.2): messaging/viewing the project
+             // agent bus never waits for the main turn — an operator override
+             // of a `turns` lease has to be reachable from a held instance.
+             runBusCommand(line);
+             return;
+           }
+           case "deferred": {
+
+--- src/tui/tui-shell.ts
+@@ 10353,10393 @@
+         if (command.name === ROUTING_COMMAND) {
+           showRouting();
+           return;
+         }
+         if (routeOpsCommand(line, false, ops)) {
+           return;
+         }
+         if (isProductCommand(command.name)) {
+           showProduct();
+           return;
+         }
+         if (isReviewsCommand(command.name)) {
+           showReviews();
+           return;
+         }
+         if (isRemoteControlCommand(command.name)) {
+           runRemoteControlCommand(line);
+           return;
+         }
+         if (isHistoryCommand(command.name)) {
+-          runHistoryCommand(line);
++          runHistoryCommand(line, source);
+           return;
+         }
+         if (isChannelsCommand(command.name)) {
+           runChannelsCommand(line);
+           return;
+         }
+         if (routeSchedulesCommand(line, false, schedules)) {
+           return;
+         }
+         if (routeAutoReviewCommand(line, false, autoReview)) {
+           return;
+         }
+         if (routeApprovalsCommand(line, false, approvals)) {
+           return;
+         }
+         if (routeIntakeCommand(line, intake)) {
+           return;
+         }
+         if (command.name === PERMISSIONS_COMMAND) {
+           runPermissionsCommand(line);
+
+--- src/tui/tui-shell.ts
+@@ 10611,10655 @@
+             showProjectContext(parsed.tab);
+           }
+           return;
+         }
+         if (isRenderingCommand(command.name)) {
+           // flow 395: how Telegram replies are written. Bare prints the mode and what each does;
+           // with a mode it saves it, and serve reads it before the next message part.
+           const arg = line.trim().split(/\s+/).slice(1).join(" ");
+           io.onSystem?.(runRenderingCommand(arg));
+           return;
+         }
+         if (isTrailCommand(command.name) || isNotesCommand(command.name)) {
+           // flow 393: the working memory, as text. Both read the live session's slate.json.
+           const arg = line.trim().split(/\s+/).slice(1).join(" ");
+           const dir = liveSlateSession()?.dir;
+           trackCommandWork(() =>
+             (isTrailCommand(command.name) ? runTrailCommand(arg, dir) : runNotesCommand(arg, dir)).then((text) => io.onSystem?.(text)),
+           );
+           return;
+         }
++        if (isDiagCommand(command.name)) {
++          // flow 487: dump the tool-call diagnostics and say where.
++          io.onSystem?.(runDiagCommand());
++          return;
++        }
+         if (isExternalAgentsCommand(command.name)) {
+           // flow 373: the shell's one-step opt-in to the agent RUNTIME (the same
+           // enable/disable the CLI calls). Not `/external`, the privacy switch.
+           const arg = line.trim().split(/\s+/).slice(1).join(" ");
+           trackCommandWork(() => runExternalAgentsCommand(arg, opts.session?.cwd ?? process.cwd()).then((text) => io.onSystem?.(text)));
+           return;
+         }
+         if (isExternalCommand(command.name)) {
+           // flow 346: `/external on|off` toggles + persists the PER-USER
+           // layer; bare `/external` prints the full status block (no modal —
+           // see the flow's own AC8 scope note, mirroring `/route`'s header).
+           const arg = line.trim().split(/\s+/).slice(1).join(" ").trim().toLowerCase();
+           if (arg === "on" || arg === "off") {
+             trackCommandWork(() => setExternalEnabled(arg));
+             return;
+           }
+           if (arg.length > 0) {
+             io.onSystem?.(`Unknown /external argument '${arg}'. Usage: ${EXTERNAL_COMMAND} [on|off]\n`);
+             return;
+           }
+
+--- src/tui/tui-shell.ts
+@@ 12002,12047 @@
+           return liveSession.summary.id === found.id ? { ...outcome, ok: true } : { ...outcome, ok: false };
+         },
+         onChange: () => {
+           liveRemotePanel?.refresh();
+           for (const listener of [...remoteModalListeners]) listener();
+           // A Telegram turn starting or ending changes which mode is in force; the mode row follows.
+           paintModeRow();
+         },
+         // Flow 399: the whole conversation (the archive keeps what compaction removed from the
+         // context), and whether this session was resumed, for the automatic restore.
+         history: nativeHistory,
+         sessionResumed: () => sessionResumed,
+       },
+     });
+ 
+     // --- block navigation mode (Ctrl+O … Esc) — flow 109 D-3 ----------------
+     // The mode itself is `createBlockNavController` (transcript-blocks.ts); all
+     // that is left here is subscribing it. Registered through the `onKeypress`
+     // wrapper rather than by reaching for the private `_internalKeyInput` symbol
+     // directly (risk R2); the chrome's `/`-menu router is the other consumer.
++    onKeypress(r, (key) => {
++      if (!isHistoryShortcut(key) || chrome.overlayActive() || sessionTransferInProgress) return;
++      key.preventDefault();
++      key.stopPropagation();
++      showHistory();
++    });
+     onKeypress(r, (key) => {
+       nav.handleKey(key);
+     });
+ 
+     // --- queue-nav mode (Ctrl+Q ... Esc) -- flow 170 T5 ---------------------
+     // Same subscription mechanism as block-nav directly above; the mode's own
+     // arbitration is via `chrome.addOverlaySource` (registered next to
+     // `queueNavActive`'s declaration), not a new key-routing primitive.
+     onKeypress(r, (key) => {
+       handleQueueNavKey(key);
+     });
+     chrome.onEscapeInterrupt(() => {
+       if (!foregroundOperation.cancel("interrupted by Escape")) return false;
+       io.onSystem?.("◇ main turn interrupted (Esc).\n");
+       return true;
+     });
+ 
+     // Both a composer Enter and a `/`-menu selection arrive here: the chrome has
+     // already trimmed the line, cleared the composer and closed the dropdown.
+     chrome.onSubmit((line, draft) => {

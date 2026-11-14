@@ -1,0 +1,57 @@
+STATUS: DONE
+
+## Security Review
+
+### Scope
+- Branch: `feat/flow-488-review-gates`
+- Merge-base: `66ee001172e0d0c048a73727c3e6e099f9149b0a`, head `e9ac9253fde7`
+- Scope mode: slices (slice-02, read in full)
+- Changed files reviewed: 30 (all non-executable: gdgraph/testing generated summaries, flow 488-491 planning documents, and three review-orchestrator skill/template text hunks)
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 1
+
+Slice-02 contains no executable code. Nothing in it builds a query, shell string, path, template, redirect, token or credential, and no secret or credential appears in any added line (the flow context files quote memory entries and command names only). The security-relevant content is the skill text that changes which operator acts unlock the `verifier` and `head` readiness items; that text is consistent with the code direction described in the flow (report-line escapes removed, operator waiver required). The one observation is a wording gap in the flow's own outcome criterion, reported as info.
+
+### Findings
+
+**[F-001] The outcome criterion says "without an operator card or a TTY", but the accepted channels include `--answered-by`, which the agent itself can supply** (info)
+- File: `.metaproject/flows/488-2026-11-12-review-audit-p0-gates/description.md`
+- Attack vector: none in this slice. On a host without operator cards and without a TTY (Claude Code, Codex), the waiver channel AC1-AC3 accept is `--answered-by <source>:<ref>` plus a quote; both are strings the reviewing agent passes. An agent could therefore still waive `verifier` or `head`, or relabel `--head`, with text it wrote, recorded as `confirmedVia: "host-question"`. This is a known, deliberate limit: `completion-host.ts` is described as "reported provenance, not a cryptographic attestation", the description's Out of Scope excludes verifying host-question answers, and AC6 makes the published body say such decisions were not verified. So it is not a defect of this change (law 4); the criterion's wording simply overclaims.
+- Fix: reword the Effect line to "without an operator card, a TTY, or a recorded host-question answer (which keryx does not verify, and the published body says so)", so the flow's claim matches AC1-AC3 and AC6.
+
+### Clean Areas
+Injection (SQL, XSS, command, SSTI, eval): no code in slice. Auth/authz and privilege escalation: skill text tightens the gates (lines removing the `Not verified: N` and first-line escapes). IDOR, input validation, CSRF, path traversal, open redirect, crypto: not applicable to document hunks. Secrets: none in the added lines.
+
+```json
+REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "slice-02 is documentation, flow planning and generated summaries only; no exploitable code. One info: flow 488's outcome criterion overclaims that no gate can be satisfied by agent-written text without a card or TTY, while AC1-AC3 accept --answered-by, an agent-suppliable channel that is deliberately unverified (completion-host.ts, AC6).",
+  "slices": ["slice-02"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/description.md",
+      "line": null,
+      "quote": "no completion or publish gate of a managed review can be satisfied by text the reviewing agent wrote without an operator card or a TTY",
+      "problem": "The Effect criterion states that no completion or publish gate can be satisfied by agent-written text without an operator card or a TTY, but AC1, AC2 and AC3 accept the waiver channels `--waive` accepts, which include `--answered-by` on a non-TTY host. Both the `--answered-by` source and the quote are strings the reviewing agent can pass itself.",
+      "impact": "No exploitable path is introduced: the host-question channel is a deliberate, documented limit (completion-host.ts 'reported provenance, not a cryptographic attestation'; Out of Scope excludes cryptographic verification; AC6 marks such decisions unverified in the published body). The risk is only that a reader of the flow believes the agent-text bypass is fully closed on Claude Code/Codex hosts when it is moved to a recorded, disclosed channel.",
+      "suggested_fix": "Reword the Effect line to name the third channel, e.g. 'without an operator card, a TTY, or a recorded host-question answer (unverified by keryx and marked so in the published body)'.",
+      "evidence": "description.md Effect line vs acceptance-criteria.md AC1 ('card, TTY or `--answered-by`, as `--waive` accepts'), AC3 (same channels), AC6 (host-question marked unverified); context.md cites runComplete refusing --waive without a TTY 'unless --answered-by is given'.",
+      "confidence": "high",
+      "reviewer": "review-security-code",
+      "location_class": "in-diff",
+      "publication": "finding"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+}
+```
+
+Routing: graph_used: no (not-relevant, slice is documents); wiki_used: no (not-relevant); ctx_used: no (no search needed); raw_rg_used: no. History (git log/blame) not read: no deliberate-looking code site in this slice required it.

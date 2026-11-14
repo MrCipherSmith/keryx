@@ -1,0 +1,20 @@
+{
+  "status": "DONE",
+  "verifier": "review-verifier",
+  "summary": "2 findings, 2 executed, 2 confirmed (SEC-1 reproduces but predates this PR: pre-existing, narrowed not widened by flow 488)",
+  "verifications": [
+    {
+      "finding": "review-architecture-w3:ARCH-1",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/verify-ARCH-1-1.txt: keryx review verify-run --finding ARCH-1 -- bun test research-evidence/arch1-probe.test.ts (source kept as arch1-probe.test.ts.txt) -> 2 pass, 0 fail. For a ready ingestReady package with manifest.artifacts.research=\"elsewhere.json\": completeManagedReview refused 'Cannot complete managed review; invalid research artifact locator', status stayed draft, then publishReview without partial returned posted=true partial=false readiness=READY posts=1. Same with artifacts.reviewerDispatch deleted: complete refused 'research.json records a reviewer dispatch but manifest.json does not declare it', publish posted=true partial=false READY. Code: publish.ts:175 calls evaluateCloseGates with no beforeReadiness; the research gate exists only in managed.ts:1113-1125; publishReview (publish.ts:165-189) and runPublish (commands/review.ts:4881-4917) have no closed-status precondition; computeReadiness reads research.json by fixed path (readiness.ts:448) and ledgerCheck runs only researchErrors (readiness.ts:316)."
+    },
+    {
+      "finding": "review-security-code-w3:SEC-1",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/verify-SEC-1-1.txt: keryx review verify-run --finding SEC-1 -- bun test research-evidence/sec1-probe.test.ts --timeout 30000 (source kept as sec1-probe.test.ts.txt) -> 4 pass, 0 fail. Control: unverified major, plain completeManagedReview(dir, ref, {}) refused on item 4. (a) same package plus a hand-written manifest.json readiness_waivers [{item:verifier,...}] -> status closed, verdict READY, verifier waived. (b) PR-bound package with writeRoundRecord stamp, PR head moved: control refused on item 7; after editing manifest.json target.head to the PR head, roundRecordTampered returned undefined and complete closed READY, head pass, head_override undefined. (c) findings.json major with verification:{} -> closed, 'all verified'. PRE-EXISTING, not introduced or widened: git diff 66ee001 HEAD leaves readiness.ts:479-485 (waiver map -> waived, no provenance) and verifierCheck's record(finding.verification) test unchanged; round-record.ts is not in the diff (stamp hashes round.json/prior_findings.json only, also at base); the head gate compared manifest target.head at base too. At base each gate was weaker: verifier passed on a report.md 'Not verified: N' line, head passed on a report.md first line naming the SHA and saying the PR moved, and any waiver of files-covered/blast-radius/reviewers/ledger dropped ALL research errors (base managed.ts waivedRadius); this PR removes the first two and scopes the third per item (packageResearchErrorsTagged). The mechanism is real; its location_class is pre-existing (out of diff), not in-diff."
+    }
+  ],
+  "stats": { "confirmed": 2, "refuted": 0, "unverifiable": 0, "not_checked": 0 }
+}

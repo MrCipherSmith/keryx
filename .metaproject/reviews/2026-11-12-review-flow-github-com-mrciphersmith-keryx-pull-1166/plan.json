@@ -1,0 +1,185 @@
+{
+  "v": 1,
+  "package": "/Users/tsaitler.aleksandr/goodea/keryx/.claude/worktrees/review-process-audit/.metaproject/reviews/2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166",
+  "target": {
+    "kind": "pr",
+    "ref": "https://github.com/MrCipherSmith/keryx/pull/1166",
+    "base": "origin/main",
+    "head": "e9ac9253fde7"
+  },
+  "round": {
+    "number": 1,
+    "mode": "first",
+    "source": "none",
+    "previous": null,
+    "range": {
+      "base": "66ee001172e0d0c048a73727c3e6e099f9149b0a",
+      "head": "e9ac9253fde7"
+    },
+    "fixHunks": 0,
+    "newHunks": 371,
+    "priorFindings": 0,
+    "carried": 0,
+    "line": "round 1 — no previous round found (sources tried: local-package: none, git-history: none, github-block: none, github-comments: none, flow: not consulted (the package is not bound to a flow))"
+  },
+  "slices": {
+    "fix": [],
+    "new": [
+      {
+        "id": "slice-01",
+        "files": [
+          ".metaproject/data/gdgraph/.provenance.json",
+          ".metaproject/data/testing/context.json",
+          ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/flow.json",
+          ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/premise/1.json",
+          ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/premise/input.json",
+          ".metaproject/flows/489-2026-11-12-review-audit-p1-signal-cost/flow.json",
+          ".metaproject/flows/490-2026-11-12-review-audit-p2-architecture/flow.json",
+          ".metaproject/flows/491-2026-11-12-review-audit-p3-product/flow.json"
+        ],
+        "depth": "light",
+        "roles": [
+          "review-logic"
+        ]
+      },
+      {
+        "id": "slice-02",
+        "files": [
+          ".metaproject/data/gdgraph/artifacts/summary.md",
+          ".metaproject/data/testing/context.md",
+          ".metaproject/data/testing/recommendations.md",
+          ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/acceptance-criteria.md",
+          ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/context.md",
+          ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/description.md",
+          ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/journal.md",
+          ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/plan.md",
+          ".metaproject/flows/488-2026-11-12-review-audit-p0-gates/tasks.md",
+          ".metaproject/flows/489-2026-11-12-review-audit-p1-signal-cost/acceptance-criteria.md",
+          ".metaproject/flows/489-2026-11-12-review-audit-p1-signal-cost/context.md",
+          ".metaproject/flows/489-2026-11-12-review-audit-p1-signal-cost/description.md",
+          ".metaproject/flows/489-2026-11-12-review-audit-p1-signal-cost/journal.md",
+          ".metaproject/flows/489-2026-11-12-review-audit-p1-signal-cost/plan.md",
+          ".metaproject/flows/489-2026-11-12-review-audit-p1-signal-cost/tasks.md",
+          ".metaproject/flows/490-2026-11-12-review-audit-p2-architecture/acceptance-criteria.md",
+          ".metaproject/flows/490-2026-11-12-review-audit-p2-architecture/context.md",
+          ".metaproject/flows/490-2026-11-12-review-audit-p2-architecture/description.md",
+          ".metaproject/flows/490-2026-11-12-review-audit-p2-architecture/journal.md",
+          ".metaproject/flows/490-2026-11-12-review-audit-p2-architecture/plan.md",
+          ".metaproject/flows/490-2026-11-12-review-audit-p2-architecture/tasks.md",
+          ".metaproject/flows/491-2026-11-12-review-audit-p3-product/acceptance-criteria.md",
+          ".metaproject/flows/491-2026-11-12-review-audit-p3-product/context.md",
+          ".metaproject/flows/491-2026-11-12-review-audit-p3-product/description.md",
+          ".metaproject/flows/491-2026-11-12-review-audit-p3-product/journal.md",
+          ".metaproject/flows/491-2026-11-12-review-audit-p3-product/plan.md",
+          ".metaproject/flows/491-2026-11-12-review-audit-p3-product/tasks.md",
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+          ".metaproject/skills/gdskills/review/review-orchestrator/templates/review-report.md"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-backend",
+          "review-clean-code",
+          "review-degradation",
+          "review-frontend",
+          "review-highload",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style"
+        ]
+      },
+      {
+        "id": "slice-03",
+        "files": [
+          "docs/analysis/review-process-audit-2026-11-12.md",
+          "docs/docs/cli-reference.md",
+          "docs/docs/guides/review-with-a-record.md",
+          "docs/requirements/managed-review-feedback-loop/schemas/managed-review-package.schema.json",
+          "src/commands/review.test.ts",
+          "src/commands/review.ts",
+          "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+          "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+          "src/gdskills/bundled/skills/review/review-orchestrator/templates/review-report.md",
+          "src/gdskills/review-spawn-field-contract.test.ts",
+          "src/harness/tool/builtin/spawn-subagent-tool.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-backend",
+          "review-clean-code",
+          "review-degradation",
+          "review-frontend",
+          "review-highload",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style",
+          "review-testing-practices"
+        ]
+      },
+      {
+        "id": "slice-04",
+        "files": [
+          "src/review/close-gates.test-helpers.ts",
+          "src/review/close-gates.ts",
+          "src/review/complete-head-gate.ts",
+          "src/review/completion-host.ts",
+          "src/review/managed.ts",
+          "src/review/publish.ts",
+          "src/review/readiness.ts",
+          "src/review/research.ts",
+          "src/review/types.ts",
+          "src/review/complete-head-gate.test.ts",
+          "src/review/complete-head-relabel.test.ts",
+          "src/review/complete-waiver-scope.test.ts",
+          "src/review/managed.test.ts",
+          "src/review/publish-gate-parity.test.ts",
+          "src/review/publish.test.ts",
+          "src/review/readiness-verifier-waiver.test.ts",
+          "src/review/readiness.test.ts",
+          "src/review/round-trip.test.ts"
+        ],
+        "depth": "deep",
+        "roles": [
+          "review-architecture",
+          "review-backend",
+          "review-clean-code",
+          "review-degradation",
+          "review-frontend",
+          "review-highload",
+          "review-logic",
+          "review-performance",
+          "review-regression",
+          "review-security-code",
+          "review-style",
+          "review-testing-practices"
+        ]
+      }
+    ]
+  },
+  "roster": [
+    "review-architecture",
+    "review-degradation",
+    "review-highload",
+    "review-logic",
+    "review-performance",
+    "review-regression",
+    "review-security-code",
+    "review-testing-practices"
+  ],
+  "dispatches": 24,
+  "minutes": {
+    "min": 12,
+    "max": 30
+  },
+  "overThreshold": false,
+  "overReasons": [],
+  "planKey": "acb05dbdf4e847dc",
+  "warnings": [],
+  "next": "dispatch"
+}

@@ -1,0 +1,54 @@
+STATUS: DONE
+
+```json REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "slices": ["slice-01"],
+  "summary": "Fix slice slice-01 read in full against head b076a85a6354. Eleven of the twelve prior findings are closed in code: the stale head wording (SKILL.detail.md item 7, review --help --head block, managed.ts JSDoc), the model-selection.mdc spawn_subagent paragraph, the spawn_subagent doc block and ignored-fields constant, the shared close gate (research gate now inside evaluateCloseGates for complete and publish), the head test, the verification fixture shape, and the seals (waivers, target, head override, verifications). review-logic-w4:F-001 is partial: the closed-package NOT READY outcome is now a deliberate, documented decision, but the CHANGELOG entry covers only the removed escapes, while the seal rule also drops legitimate unsealed waivers and verifications and seals.ts says the CHANGELOG states this. One new minor finding: that comment names a CHANGELOG entry that does not say it.",
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-architecture",
+      "severity": "minor",
+      "file": "src/review/seals.ts",
+      "line": 15,
+      "quote": "the flow 488 CHANGELOG entry says so",
+      "problem": "seals.ts says the operator accepted that a closed package from before the seals may read NOT READY, and that 'the flow 488 CHANGELOG entry says so'. The only CHANGELOG entry (CHANGELOG.md:8, 'Breaking for packages closed through the removed escapes') names packages closed on a `Not verified: N` line or a first-line head statement. The seal rule is wider: partitionWaivers (seals.ts:57) and verificationProblem (seals.ts:72) refuse every waiver and every verification of a package written before the seals existed, including ones recorded honestly through `review complete --waive` or the verifier merge. The CHANGELOG does not mention seals (git grep -i seal CHANGELOG.md finds no flow 488 entry).",
+      "impact": "An operator with an older, legitimately closed package sees item `verifier` or a waived item fail and `review publish` refuse it, and the release notes name a different cause (the removed escapes). The code comment points the maintainer to a disclosure that is not there.",
+      "suggested_fix": "Extend the CHANGELOG breaking note to say that waivers and verifications recorded before this release carry no seal and are not honoured, with the repair (re-waive with `review complete --waive`, re-run `review ingest --verifications`, or publish with `--partial`); or correct the seals.ts comment so it does not cite an entry that does not say it.",
+      "evidence": "src/review/seals.ts:14-16 (comment), :57-62 (partitionWaivers), :66-74 (verificationProblem); CHANGELOG.md:8 at head.",
+      "confidence": "high"
+    }
+  ],
+  "prior_dispositions": [
+    {"id": "review-architecture-w1:F-001", "disposition": "closed"},
+    {"id": "review-logic-w2:F-001", "disposition": "closed"},
+    {"id": "review-degradation-w2:F-001", "disposition": "closed"},
+    {"id": "review-logic-w3:F-002", "disposition": "closed"},
+    {"id": "review-degradation-w2:F-003", "disposition": "closed"},
+    {"id": "review-architecture-w2:F-004", "disposition": "closed"},
+    {"id": "review-degradation-w2:F-002", "disposition": "closed"},
+    {"id": "review-architecture-w3:ARCH-1", "disposition": "closed"},
+    {"id": "review-testing-practices-w1:F-001", "disposition": "closed"},
+    {"id": "review-testing-practices-w2:TP-2", "disposition": "closed"},
+    {"id": "review-logic-w4:F-001", "disposition": "partial"},
+    {"id": "review-security-code-w3:SEC-1", "disposition": "closed"}
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 1, "info": 0}
+}
+```
+
+Disposition evidence at head b076a85a6354:
+
+- review-architecture-w1:F-001 and review-logic-w2:F-001: SKILL.detail.md:776 item 7 now reads "the head recorded at `review start` is still the PR head ... only the operator's `head` waiver lifts it (no report line does)". The old wording is gone.
+- review-degradation-w2:F-001 and review-logic-w3:F-002: a search of src/commands/review.ts and src/review/managed.ts for "report's first line", "report to name it" and "still needs" finds nothing; the --head block names the operator waiver and --head-reason. The managed.ts JSDoc no longer carries the old rule.
+- review-degradation-w2:F-003: model-selection.mdc:203 now documents `model_class` and says `model_tier` is accepted but ignored. The remaining `model_tier` hits (lines 33, 38, 231) are the rule's own front matter and the export compile description.
+- review-architecture-w2:F-004 and review-degradation-w2:F-002: spawn-subagent-tool.ts:1061-1067 holds the constant with its own doc, and the factory doc (1069-1078) sits directly above createSpawnSubagentTool (1079). The tool also iterates the whole constant (1508-1511), so a second ignored field would get a notice.
+- review-architecture-w3:ARCH-1: close-gates.ts:77 runs researchRefusals inside evaluateCloseGates before the checklist, for both `review complete` and `review publish`. `beforeReadiness` (close-gates.ts:76, managed.ts:1130) now only records the operator's waivers, so the hook no longer holds a gate. The integrity errors (items empty) always refuse, including on publish --partial; the tagged ones honour only sealed waivers.
+- review-testing-practices-w1:F-001: complete-head-gate.test.ts:166 passes `headReason`, so the refusal comes from item `head` and the test asserts `--waive head`, with the waiver-positive case at :176.
+- review-testing-practices-w2:TP-2: readiness.test.ts:63 builds VERIFIED with verdict, method, evidence and verifier, and writes the seal as ingest does; seals.test.ts adds hand-written-input cases.
+- review-security-code-w3:SEC-1: waivers (readiness.ts:489-499, close-gates.ts:55), the target (seals.ts:87, close-gates.ts:65-66) and verifications (readiness.ts:241, seals.ts:66-74) are honoured only with a matching digest. seals.ts:11-16 states the limit honestly: tamper evidence, not a signature.
+- review-logic-w4:F-001: verifierCheck and headCheck still fail on a closed package (readiness.ts:468-470 exempts only the live coverage gate). CHANGELOG.md:8 discloses it for the removed escapes only; see the new finding for the unsealed waivers and verifications.
+
+routing audit: graph_used no (diff-bounded fix review, read at head); wiki_used not-relevant; ctx_used yes (keryx ctx rg); raw_rg_used no.

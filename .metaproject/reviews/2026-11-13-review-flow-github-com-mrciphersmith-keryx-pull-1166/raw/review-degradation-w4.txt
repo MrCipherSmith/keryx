@@ -1,0 +1,47 @@
+STATUS: DONE
+```json REVIEW_RESULT
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-degradation",
+  "slices": ["slice-04"],
+  "summary": "Slice-04 read in full (src/review only; src/session/* and src/standard/help-groups.ts skipped as instructed: merged from main). One major: on a package written before the seals existed, the first sealed waiver keryx records gives the manifest a `seals` object with no `target`. From then on sealProblems refuses complete and publish with a tamper message, and --partial cannot lift it. One info question: the flow-move string rewrite can break a verification seal. Verified clean: (1) ingest's verification seal. carriedVerification is keyed after assignGlobalIds (managed.ts:353/366) and the second assignGlobalIds (managed.ts:455) only mints missing keys, so keys match. verdict.ts:202 is the only other mergeVerifications call and is in-memory only (it writes nothing). findings.json serialises verification as-is (managed.ts:1875-1877). (2) Every writer of manifest.target: createManagedReviewPackage (the only creator; callers commands/review.ts:1157 and bot/run.ts:332) and completeManagedReview --head (managed.ts:1077); both re-seal. round-record.ts:752 and the waiver writer spread the manifest and keep seals. (3) buildManifest (managed.ts:1293) carries no readiness_waivers, so a re-ingest drops no waiver seals: waivers are rebuilt on both base and head. (4) researchRefusals moved from beforeReadiness into evaluateCloseGates. It still runs after the waivers are written (close-gates.ts:76-77), so complete is equivalent apart from honouring only sealed waivers (by design, AC9). Publish now also refuses untagged research errors; that is the ARCH-1 intent. (5) withoutPartialHeader removed: no remaining importer in src/. (6) Waivers and verifications from before the seals are no longer honoured. Law 4 applies: the reason is stated in seals.ts:14-17 and the CHANGELOG, so this is not filed. (7) The --head-reason-without-relabel refusal (managed.ts:367) and the head-gate repair text now pointing to --waive head are intended deltas (F-001 fix, doc at managed.ts:310-314). Graph not used. Consumers were found by search (keryx ctx rg) for sealTarget/withVerificationSeals/.seals, mergeVerifications, createManagedReviewPackage, and every manifest.json writer in src/review and src/commands. No run-tests: evidence is consumer-trace only.",
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-degradation",
+      "severity": "major",
+      "degradation_class": "behaviour-delta",
+      "evidence_kind": "consumer-trace",
+      "file": "src/review/readiness.ts",
+      "line": 613,
+      "quote": "await write(manifestPath, `${JSON.stringify({ ...manifest, readiness_waivers: all, seals: { ...(manifest.seals ?? {}), readinessWaivers } }, null, 2)}\\n`);",
+      "problem": "Take a PR package written before the seals existed (manifest.seals undefined, for example one still open when keryx is upgraded). On it, waiveReadiness writes `seals: { readinessWaivers }` and no `target`. sealProblems (seals.ts:87) treats any manifest whose `seals` is defined as sealed. Here seals.target is undefined and differs from sealTarget(target), so every later evaluateCloseGates call (close-gates.ts:65) throws `manifest.json target ... does not match the seal keryx wrote ... never by editing manifest.json`. There are two paths. (a) `review complete --waive <item>`: beforeReadiness writes the waiver after the seal check, so the close succeeds. completeManagedReview keeps `manifest.seals`, which still has no target, because `stored.seals` was undefined and no --head was given (managed.ts:1148-1150). Every later `review publish` is then refused, --partial included, and a closed package has no repair. (b) A standalone waiver (the review_waive_readiness card, then complete): complete itself is refused. On base, both paths worked. Re-waiving with keryx is the natural repair for a package from before the seals, since its old waivers are no longer honoured, and it is exactly what triggers this.",
+      "evidence": "consumer-trace: readiness.ts:613 writes `{...(manifest.seals ?? {}), readinessWaivers}`, which has no target when manifest.seals was undefined. seals.ts:87: `if (manifest.seals !== undefined && isPrBound(manifest.target) && manifest.seals.target !== sealTarget(manifest.target))` makes undefined !== digest, so it refuses. close-gates.ts:65-66 runs this before relaxReadiness is consulted, for both complete and publish. managed.ts:1148-1150: `const seals = stored.seals !== undefined || options.head !== undefined ? {... target: sealTarget(manifest.target) ...} : manifest.seals;` leaves the target out on path (a). Refutation attempted: the only other writers of seals.target are ingest (managed.ts:521) and complete with --head (managed.ts:1149); neither runs on these paths. isPrBound (complete-head-gate.ts:15) is true for every kind:pr target. seals.test.ts and the helpers build packages with ingestReady, which always seals the target, so no test reaches this state. The seals.ts header (lines 14-17) accepts only that old waivers and verifications are not honoured and that an old target is not checked. It does not accept that a package becomes unclosable or unpublishable.",
+      "impact": "An operator who recorded a new waiver the supported way, on a package from before the seals, gets a closed package that `review publish` refuses forever (or an open one `review complete` refuses). The refusal message accuses them of editing manifest.json by hand and names --head --head-reason as the repair, which does not apply to a closed package.",
+      "suggested_fix": "Seal the target wherever seals are first created on a manifest that has none. In waiveReadiness: `seals: { ...(manifest.seals ?? { target: sealTarget(manifest.target) }), readinessWaivers }`. Or make sealProblems check the target only when `manifest.seals?.target !== undefined`. Add a test that strips `seals` from an ingested PR package, then waives, then completes and publishes.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": ["src/review/readiness.ts:613", "src/review/managed.ts:1148", "src/review/seals.ts:87"],
+        "enumeration_method": "search (keryx ctx rg) for every writer of `seals` in src/ outside tests: managed.ts:521 (ingest, always sets target), managed.ts:1148-1150 (complete, target only when stored.seals or --head), readiness.ts:613 (waiver, never sets target). The last two are the sites that can leave seals defined without a target; seals.ts:87 is the reader that turns that into a refusal."
+      }
+    },
+    {
+      "id": "F-002",
+      "reviewer": "review-degradation",
+      "severity": "info",
+      "publication": "question",
+      "degradation_class": "behaviour-delta",
+      "evidence_kind": "consumer-trace",
+      "file": "src/review/flow-move.ts",
+      "line": 226,
+      "quote": "await planJson(plan, path.join(packageDir, \"findings.json\"), finalOf, (value) => mapStrings(value, movePath));",
+      "problem": "A flow renumber rewrites every string in findings.json that starts with `.metaproject/flows/<old>/`, and that includes the fields inside `verification`. The seal (seals.ts:42, sealVerification over the whole verification object) is not recomputed. A verified heavy finding whose verification.evidence (or method/verifier) starts with the old flow path would then read as a forged verification at verifier item 4 after the move. On base, verification was not sealed, so the move was harmless. If true: minor, a moved package goes NOT READY on item verifier and publish is refused without --partial or a waiver.",
+      "evidence": "consumer-trace: flow-move.ts:207-208 movePath rewrites a string only when the whole value starts with the old prefix. mapStrings (flow-move.ts:298-308) walks every nested string. seals.ts:72 compares manifest.seals.verifications[key] against sealVerification(key, finding.verification). Whether real verifier evidence ever starts with a flow path is data the code cannot answer: verify-run.ts:154 appends the record path rather than prefixing it.",
+      "impact": "After housekeeping renumbers a flow, a verified package can lose its verifier pass silently.",
+      "suggested_fix": "Check: grep existing packages' findings.json for a verification.evidence that starts with `.metaproject/flows/`. If any exist, re-seal verifications in flow-move, or exclude `verification` from mapStrings.",
+      "confidence": "low"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 0, "info": 1 }
+}
+```

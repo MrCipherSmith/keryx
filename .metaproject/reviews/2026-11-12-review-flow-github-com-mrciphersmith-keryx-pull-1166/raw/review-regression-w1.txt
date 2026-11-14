@@ -1,0 +1,14 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-regression",
+  "status": "DONE",
+  "slices": ["slice-02"],
+  "findings": [],
+  "summary": "slice-02 holds only non-code files: the regenerated gdgraph summary and testing context/recommendations, the four new flow folders (488-491: acceptance criteria, context, description, journal, plan, tasks), and the installed copies of review-orchestrator SKILL.md, SKILL.detail.md and templates/review-report.md. The blast-radius code graph has no edges into any of these, so the radius cannot answer the regression question for this slice; that is recorded as unresolved, not clean. Checked by hand the runtime edges the graph cannot see: (1) the installed skill edits (model_class in place of model_tier, readiness item 4 verifier text, the head-gate paragraph, the report template's head line) are mirrored in the bundled copies under src/gdskills/bundled/skills/review/review-orchestrator/ (SKILL.md:118 and :293, SKILL.detail.md:773, templates/review-report.md:80), so the bundled/installed parity contract is not broken by this slice; (2) the new instruction to pass `model_class` (light/standard/expert) names a field spawn_subagent declares (src/harness/tool/builtin/spawn-subagent-tool.ts:1233, enum MODEL_CLASSES), while the old `model_tier` field it replaces is documented there as accepted but ignored, so the skill change moves dispatches from an ignored field to an honoured one and breaks no existing dispatch. The skill text now describes the stricter gates (no `Not verified: N` escape, no report-first-line head escape); whether the code at head enforces exactly that is scope A / other slices, not this one. Byte-identity of the two skill copies and the orchestrator line ceiling were not executed (read-only; no tests run): the parity and skill-length tests decide those. The blast-radius record lists dropped files (test-consumers of the changed code modules, reason test-consumer); none of them depend on slice-02's files, and the set was not otherwise judged here."
+}
+```
+
+No regression findings for slice-02. The radius could not answer the question for this slice (all files are docs, data artifacts, flow records or skill text with no code-graph dependents); the cap dropped test-consumer files recorded in blast-radius.json, none tied to this slice.

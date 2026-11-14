@@ -1,0 +1,27 @@
+# keryx review verify-run
+finding: SEC-1
+command: bun test ./.metaproject/reviews/2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166/research-evidence/sec1-probe.test.ts --timeout 30000
+cwd: /Users/tsaitler.aleksandr/goodea/keryx/.claude/worktrees/review-process-audit
+time: 2026-11-12T12:32:39.696Z
+exit: 0
+
+--- stdout ---
+bun test v1.4.4 (38afee6c8)
+control refusal: Cannot complete the review; the readiness checklist has 1 failing item(s):
+  4. verifier: 1 of 1 blocker/major finding(s) carry no verification
+     repair: run
+(a) status: closed verdict: READY verifier: waived
+(b) control with moved PR head: refused: Cannot complete the review; the readiness checklist has 1 failing item(s):
+  7. head: the PR head moved (reviewed aaaaaaa, now bbbbbbb)
+     repair: re-run the 
+(b) roundRecordTampered after editing target.head: undefined
+(b) status: closed verdict: READY head: pass head_override: undefined
+(c) status: closed verifier: 1 blocker/major finding(s), all verified
+--- stderr ---
+
+.metaproject/reviews/2026-11-12-review-flow-github-com-mrciphersmith-keryx-pull-1166/research-evidence/sec1-probe.test.ts:
+
+ 4 pass
+ 0 fail
+ 5 expect() calls
+Ran 4 tests across 1 file. [1035.00ms]
