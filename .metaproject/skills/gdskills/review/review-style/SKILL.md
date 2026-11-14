@@ -15,7 +15,7 @@ triggers:
   - "check readability"
 metadata:
   author: "MrCipherSmith"
-  version: "1.2.0"
+  version: "1.3.0"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
@@ -26,6 +26,20 @@ license: "MIT"
 Focused style reviewer. Covers naming conventions, dead code, readability, DRY violations,
 import organization, comment quality, file length, cyclomatic complexity, and console noise.
 Never touches logic correctness, architecture, security, or performance. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history).
+
+## The standard
+
+Read `.metaproject/rules/core/solid-principles.mdc` before the diff: it is the
+file the code was written against. Its **Readability thresholds** table is this
+lens's thresholds and default severities; under a threshold, report nothing.
+
+Duplication, magic literals, names and comments are rated by `review-clean-code`
+from the same file. `--frontend` dispatches this lens without it, so report those
+signals here at that lens's threshold and severity, never a stricter one: one
+condition must not carry two outcomes.
+
+A threshold counts only when this change crosses it: one more line in a file
+already past a length limit is not a finding.
 
 ---
 
@@ -78,23 +92,14 @@ git diff --name-status "${BASE_SHA}" && git diff "${BASE_SHA}" && git ls-files -
 
 ### 1. Naming Conventions
 
-**Variables and functions**
-- `camelCase` for variables, function parameters, and function names
-- `PascalCase` for classes, interfaces, enums, and React components
-- `UPPER_SNAKE_CASE` for module-level constants (truly constant values, not `let` reassigned as constants)
-- Boolean variables/functions prefixed with `is`, `has`, `can`, `should` (e.g., `isLoading`, `hasAccess`)
-- Avoid single-letter names except in short array callbacks (`arr.map(x => x.id)` acceptable; `let x = fetchUser()` is not)
-- Avoid abbreviations that are not universally understood (`usr`, `mgr`, `repo` vs `repository`)
+Casing, boolean prefixes and verb names follow the language's published defaults; report a departure only where the surrounding code follows the default.
 
-**Functions**
-- Function names are verbs or verb phrases: `getUser`, `handleSubmit`, `parseConfig`
-- Event handlers prefixed with `on` or `handle`: `onSubmit`, `handleClick`
-- Predicate functions return boolean and are named accordingly: `isValid()`, not `checkValid()`
+**Variables and functions**
+- Single-letter names only for loop counters and short array callbacks (`arr.map(x => x.id)`); `let x = fetchUser()` is a finding (`review-clean-code`'s Name row)
 
 **Classes and interfaces**
 - Interface names use `I` prefix: `IUserService`, `IAuthGuard`
 - Enum members: `UPPER_SNAKE_CASE` or `PascalCase` — whichever the project uses consistently; flag inconsistency
-- Type alias names: `PascalCase`
 
 **Files and directories**
 - File names match the primary export: `UserService` → `user.service.ts`
@@ -109,7 +114,7 @@ Naming severity is set by the Style laws below and by the canonical rubric in `r
 - Unused variables (`const x = ...` never referenced) — flag as `minor`
 - Unused function parameters in non-interface-implementing functions — flag as `minor`
 - Unused imports — flag as `minor`; provide the removal patch
-- Commented-out code blocks (more than one line) — flag as `minor`; ask: "Is this intentional? If not, remove."
+- Commented-out code — flag as `minor` (`review-clean-code`'s Comment row); ask: "Is this intentional? If not, remove."
 - Exported functions/classes that are never imported anywhere in the diff scope — flag as `info`
   (may be used externally; do not assume dead without evidence)
 
@@ -118,28 +123,24 @@ Naming severity is set by the Style laws below and by the canonical rubric in `r
 ### 3. Readability and Complexity
 
 **Conditions**
-- Overly complex boolean conditions (more than 3 clauses without parentheses grouping) — flag as `minor`; suggest extracting to a named predicate
+- A boolean condition over the clause threshold — suggest extracting a named predicate
 - Double negatives (`!isNotEmpty`) — flag as `minor`; rewrite to positive form
 - Ternary chains (ternary inside ternary) — flag as `minor`; suggest `if/else` or early return
 
 **Nesting**
-- Functions with callback nesting deeper than 3 levels — flag as `minor`; suggest extraction or `async/await`
-- `if/else` trees deeper than 3 levels — flag as `minor`; suggest guard clauses (early returns)
+- Callback or `if/else` nesting over the depth threshold — suggest extraction, `async/await` or guard clauses
 
-**Magic numbers**
-- Numeric or string literals used in logic without a named constant — flag as `minor`
-- Exception: index `0`, `1`, `-1`, empty string `""`, and HTTP status codes when the context is obvious
-- Suggest: `const MAX_RETRY_COUNT = 3;`
+**Magic literals**
+- A numeric or string literal with business meaning and no named constant, including one repeated across places — flag as `minor`; neutral values are not findings (`review-clean-code`'s Magic number row)
 
 **Cyclomatic complexity**
-- Functions with more than 10 decision branches (if/else/switch cases/ternary/loop) — flag as `minor`; suggest splitting into smaller, named functions
+- A function over the decision-branch threshold (if/else, switch cases, ternaries, loops) — suggest splitting into named functions
 
 ---
 
 ### 4. DRY Violations
 
-- Clearly duplicated logic blocks (same or near-identical code in two places within the diff) — flag as `minor`, however large; `review-clean-code` owns the duplication rating (its law 3)
-- Duplicated string literals used in multiple places — flag as `info`; suggest a shared constant
+- Duplicated logic block in 3 or more copies (`solid-principles.mdc` Thresholds) — flag as `minor`, one finding listing every copy; 2 copies is not a finding
 - Similar switch/if-else trees that could be a lookup map — flag as `minor`
 
 Do not flag DRY violations for code outside the diff even if legacy duplication exists.
@@ -168,18 +169,16 @@ Do not flag DRY violations for code outside the diff even if legacy duplication 
 - Missing JSDoc on public APIs: flag as `info` (unless the project has a documented standard requiring it, in which case `minor`)
 
 **Noise comments**
-- `// increment i` above `i++` — flag as `info`; suggest removing
+- A redundant comment (`// increment i` above `i++`) — flag as `minor` (`review-clean-code`'s Comment row); suggest removing
 - Section divider comments (`// =========`) that add no semantic value — flag as `info`
 
 ---
 
 ### 7. File Length and Structure
 
-- Files exceeding 500 lines (excluding generated code, test fixtures, and migration files) — flag as `info` with a suggestion to split by responsibility
-- Files exceeding 800 lines — flag as `minor`
-- Single file exporting more than 5 unrelated things — flag as `minor`; suggest splitting into focused modules
+- A file over a length threshold — suggest splitting by responsibility
+- A file over the unrelated-exports threshold — suggest splitting into focused modules
 - A React component file whose parts are out of order (imports, interfaces, component, helpers) — flag as `minor`
-- Test files: no limit enforced; complexity handled by test count and grouping
 
 ---
 
@@ -211,7 +210,7 @@ boundary is the trigger-and-outcome test.
 |------|-----------|
 | Style findings are **never** `blocker` | None of the four merge-blocking shapes is reachable from a style observation. This reviewer's finding format omits `blocker` for that reason |
 | A naming issue is `minor`; it reaches `major` only when the name has already produced an observable wrong outcome at a call site you can name | Identical to `review-clean-code` law 2, deliberately: the same condition must not carry two severities |
-| Duplication is `minor`, reported once with every site listed | Identical to `review-clean-code` law 3 |
+| Duplication needs 3+ copies and is `minor`, reported once with every copy listed | Identical to `review-clean-code` law 3 |
 | Never flag issues handled by the project's autoformatter (indentation, trailing spaces, bracket style) | Linter/formatter owns that; double-flagging creates noise |
 | Do not expand scope to architectural or logic concerns | Stay in style lane; hand off to the right reviewer. A circular import that fails at runtime is `review-architecture`'s finding, not a style one |
 
@@ -348,7 +347,6 @@ If absent, infer conventions from surrounding unchanged code in the same files; 
 | Rationalization | Why it is wrong |
 |----------------|-----------------|
 | "The naming is a bit odd but I understand it" | Reviewers understand their own code; the next dev won't |
-| "Commented-out code might be needed later" | Git history exists for that; dead comments add noise |
 | "It's only one magic number" | One `42` today becomes twelve untraceable `42`s tomorrow |
 | "DRY violation is minor so I'll skip it" | It is `minor` and still reported, once, with every site listed |
 | "The file is 600 lines but it's organized" | Organization doesn't prevent merge conflicts and scroll fatigue |

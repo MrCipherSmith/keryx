@@ -67,10 +67,10 @@
 
 /**
  * The line-count ceiling `anatomy:length` applies to a skill with no entry in
- * `SKILL_LENGTH_CEILINGS` — the number `review-style/SKILL.md` and
- * `context-collector/SKILL.md` already cite as the point past which a
- * document should be split rather than grow further (see their own "500
- * lines" guidance). A brand-new skill that ships bigger than this on day one
+ * `SKILL_LENGTH_CEILINGS` — the number `rules/core/solid-principles.mdc`
+ * (Readability thresholds) and `context-collector/SKILL.md` already cite as
+ * the point past which a document should be split rather than grow further
+ * (see their own "500 lines" guidance). A brand-new skill that ships bigger than this on day one
  * has no ceiling to compare against yet, so this is the bar it is held to
  * until one is recorded for it.
  */
@@ -167,7 +167,7 @@ const CEILINGS_BY_KEY = {
   "review/review-premise": 180,
   "review/review-regression": 212,
   "review/review-security-code": 358,
-  "review/review-style": 354,
+  "review/review-style": 352,
   "review/review-testing-practices": 293,
   "review/review-ui-ux": 267,
   "review/review-verifier": 299,
