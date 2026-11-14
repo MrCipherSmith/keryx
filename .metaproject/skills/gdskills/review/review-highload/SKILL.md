@@ -5,7 +5,8 @@ description: |
   Use when: reviewing code that will run under high concurrency or high traffic —
   race conditions, connection pool exhaustion, cache invalidation, missing indexes,
   unbounded queues, missing backpressure, retry storms, idempotency gaps,
-  hot-path blocking I/O, and distributed systems anti-patterns.
+  hot-path blocking I/O, concurrent sessions sharing state files, lock files,
+  process fan-out, and distributed systems anti-patterns.
   Dispatched by review-orchestrator.
   NOT for: frontend re-render performance (review-performance), general N+1 queries
   (review-performance), clean code style (review-clean-code), or NestJS module structure
@@ -18,7 +19,7 @@ triggers:
   - "review distributed"
 metadata:
   author: "MrCipherSmith"
-  version: "1.0.0"
+  version: "1.1.0"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
@@ -26,7 +27,7 @@ license: "MIT"
 
 # Review: High-Load & Scalability
 
-Specialized reviewer for **code that will run under significant concurrent load**.
+Specialized reviewer for **code that runs concurrently** — under request load, or as several sessions and child processes.
 Focuses on correctness under concurrency, resource contention, back-pressure, failure
 modes at scale, and distributed systems invariants — not general performance profiling. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history).
 
@@ -38,11 +39,11 @@ Reviews only changes introduced in the current branch (merge-base to HEAD).
 
 ```
 High-Load Review Progress:
-- [ ] Step 1: Read Job Context (if provided) — understand expected load profile
+- [ ] Step 1: Read Job Context (if provided) — load profile, or the concrete triggers
 - [ ] Step 2: Determine git scope (merge-base)
 - [ ] Step 3: Collect diff and changed file list
-- [ ] Step 4: Concurrency and race condition check
-- [ ] Step 5: Resource management check (connections, threads, file handles, memory)
+- [ ] Step 4: CLI, TUI and multi-session concurrency (Part 0)
+- [ ] Step 5: Concurrency and race conditions; resource management (connections, threads, file handles, memory)
 - [ ] Step 6: Caching and cache invalidation check
 - [ ] Step 7: Database access patterns under load
 - [ ] Step 8: Async processing and queue patterns
@@ -60,7 +61,7 @@ High-Load Review Progress:
 | `branch` | string | no | Branch to review. Defaults to current branch. |
 | `commit_range` | string | no | Explicit hash or range. Overrides merge-base detection. |
 | `context_doc` | string | no | Path to job context document. Read before reviewing to understand expected RPS, SLA, and load profile. |
-| `load_profile` | string | no | Optional hint: expected RPS, concurrent users, or traffic pattern. Adjusts severity of findings. |
+| `load_profile` | string | no | Expected RPS, concurrent users or sessions, or traffic pattern, when a job context states it. Nothing fills it by default; without it see **No stated load** below. |
 
 ---
 
@@ -95,16 +96,17 @@ boundary is the trigger-and-outcome test.
 
 ### High-load laws
 
-1. **Every finding states its failure mode: what breaks, and at what load.** "OOM
-   at ~1k RPS", "pool exhausted at 500 concurrent users", "duplicate charge on the
-   first retry". This is what shared law 1 asks of a load finding — a load level
-   is the trigger.
+1. **Every finding states its failure mode: what breaks, and under what trigger.**
+   "OOM at ~1k RPS", "two sessions running `flow complete` lose one update",
+   "duplicate charge on the first retry". The trigger is a stated load level or a
+   concrete one the evidence shows — never an assumed traffic level.
 2. **A race condition on shared mutable state is never dismissed as unlikely.**
    "It probably won't happen in practice" is not an argument; races manifest
    unpredictably under load. Its *severity* still comes from its outcome — see the
    conditions table below — but it is never dropped for improbability.
-3. **An unbounded resource that grows with request rate is never `minor`.**
-   Connections, threads, queues, in-memory collections: under load it exhausts.
+3. **An unbounded resource names what grows it.** Connections, threads, queues,
+   in-memory collections, child processes: the finding names the input that grows
+   it (requests, sessions, files, flows, children); the table below sets the level.
 4. **Architecture opinions without a named pattern violation and a load-related
    failure mode are `info` only.** State the failure mode, not just that "it could
    be better".
@@ -112,6 +114,22 @@ boundary is the trigger-and-outcome test.
 ---
 
 ## Review Checklist
+
+### Part 0: CLI, TUI and Multi-Session Concurrency (check first)
+
+For a CLI, a full-screen TUI, agent sessions and their child processes, where the
+load is the number of sessions, files, flows or children rather than RPS. A
+finding here cites that trigger; it needs no request handler and no load profile.
+
+- [ ] Several sessions or processes sharing one checkout run the same command over the same state directory (e.g. `.metaproject/`) and nothing serialises them
+- [ ] Read-modify-write of a shared JSON/JSONL state file with no lock and no write-to-temp-then-rename: the last writer drops the other's update, or a reader parses a half-written file
+- [ ] JSONL appended from several processes in more than one write per record, so lines interleave
+- [ ] Lock file created by check-then-create instead of an exclusive create (`wx`); released outside `finally`; no stale-lock recovery (holder PID or age), so a crashed holder blocks every later session; or recovery that can take a live holder's lock
+- [ ] One child process, subagent or task spawned per file, flow, finding or input item with no concurrency bound
+- [ ] Retry loop (spawn, lock acquire, Hub or network call) with no cap and no backoff
+- [ ] Child stdout/stderr or a log accumulated whole in memory (string concatenation, array push) with no cap or ring buffer
+- [ ] AbortController or timeout leaks: timer not cleared on success, a listener added to a long-lived signal per call, a child not killed when the signal aborts, a background task outliving its session
+- [ ] Server-side (e.g. the Hub): per-connection state with no bound, or a broadcast to every socket with no backpressure
 
 ### Part A: Concurrency and Race Conditions
 
@@ -122,32 +140,18 @@ boundary is the trigger-and-outcome test.
 - [ ] `Map` / `Set` / plain objects used as in-process caches mutated from concurrent async operations
 - [ ] NestJS `DEFAULT`-scoped (singleton) service holding per-request state (e.g., `this.currentUser = ...`)
 
-Flags:
-- Singleton service holding mutable per-request state — **blocker**
-- Read-modify-write on shared map/counter without atomicity — **blocker**
-- Module-level mutable variable mutated from async handlers — **major**
-
 #### A2. Double-Check and TOCTOU
 
 - [ ] Check-then-act patterns where the condition can change between check and action: `if (!exists) insert` without a unique constraint or lock
 - [ ] Optimistic upsert without conflict handling (`INSERT ... ON CONFLICT DO NOTHING` with no retry)
 - [ ] Token or resource validity checked before use but not at the moment of use (TOCTOU)
 
-Flags:
-- Check-then-act on a DB record with no uniqueness enforcement or lock — **blocker**
-- Token validity checked only at entry, not at point of use after a long async chain — **major**
-
 #### A3. Async/Await and Concurrency Primitives
 
 - [ ] `Promise.all` used with an unbounded array of promises (can spawn thousands of concurrent operations)
 - [ ] `for...of` with `await` inside where `Promise.all` would allow safe parallelism (sequential when parallel is intended)
 - [ ] Missing concurrency limit: N parallel jobs where N = input size (use a concurrency limiter / semaphore for unbounded inputs)
-- [ ] `async` function swallowing rejection via unhandled `.catch(() => {})` on a fire-and-forget
-
-Flags:
-- `Promise.all(items.map(...))` where `items` can be arbitrarily large — **major** (resource exhaustion)
-- Fire-and-forget async call with no error handling and no queue backing — **major**
-- Missing concurrency cap on parallel operations whose count scales with user input — **major**
+- [ ] `async` function swallowing rejection via unhandled `.catch(() => {})` on a fire-and-forget, or a fire-and-forget call with no error handling and no queue backing
 
 ---
 
@@ -160,32 +164,17 @@ Flags:
 - [ ] Pool exhaustion handling: no timeout on `pool.connect()`, no error boundary — requests will hang silently
 - [ ] Connection opened in a function that may throw before `.release()` or `.end()` without a `finally` block
 
-Flags:
-- `new Pool()` / `new Client()` / `createConnection()` inside a request handler — **blocker**
-- No pool max size configured for a production service — **major**
-- Connection acquired without guaranteed release in finally — **major**
-- Pool timeout not configured (will queue indefinitely on exhaustion) — **minor**
-
 #### B2. File Handles and Streams
 
 - [ ] File opened with `fs.open` / `fs.createReadStream` without explicit close / destroy on error
 - [ ] Readable stream not consumed (memory grows indefinitely until GC or crash)
 - [ ] Large file read into memory at once (`fs.readFileSync` / `Buffer.concat` on unknown-size input) — use streams
 
-Flags:
-- File handle without guaranteed close — **major**
-- `readFileSync` or full `Buffer.concat` on potentially large/user-supplied files — **major**
-- Unhandled readable stream accumulating in memory — **major**
-
 #### B3. Memory and Object Allocation
 
-- [ ] Large objects allocated per-request that are not freed between requests
+- [ ] Large objects allocated per-request that are not freed between requests, or allocated in a hot path where they could be pooled or reused
 - [ ] In-process cache (plain `Map`) with no eviction policy — grows unboundedly
 - [ ] Closure capturing a large object (e.g., full DB result set) in a long-lived data structure
-
-Flags:
-- In-process cache `Map` / `Record` with no TTL or max-size eviction — **major**
-- Per-request object allocation in a hot path that could be pooled or reused — **minor**
 
 ---
 
@@ -198,29 +187,15 @@ Flags:
 - [ ] Cache key not namespaced — collision between tenants / environments
 - [ ] Caching a response that contains per-user data without scoping the key to the user
 
-Flags:
-- Cached response containing user-specific data with no user-scoped key — **blocker** (data leak)
-- Related cache entries not invalidated after a mutating operation — **major**
-- Missing cache key namespace in a multi-tenant or multi-environment system — **major**
-- TTL missing or set to a value that is clearly mismatched with data freshness requirements — **minor**
-
 #### C2. Cache Stampede
 
-- [ ] High-traffic key expires simultaneously for many callers — no lock-based or probabilistic early expiry to prevent stampede
+- [ ] Hot key (the evidence shows many concurrent readers) expires simultaneously for many callers — no lock-based or probabilistic early expiry to prevent stampede
 - [ ] Thundering herd: cache miss triggers N concurrent DB reads for the same key with no deduplication (e.g., no mutex/semaphore on the first fetch)
-
-Flags:
-- Hot key (called >100 RPS) with no stampede protection — **major**
-- Cache miss firing N simultaneous DB queries with no in-flight deduplication — **major**
 
 #### C3. Cache Correctness
 
 - [ ] Mutable value stored in cache by reference (not a deep copy) — mutation after storage corrupts the cache
 - [ ] Cache key includes non-deterministic components (timestamp, random value, process ID)
-
-Flags:
-- Storing a mutable reference in cache (object not serialized/cloned) — **major**
-- Non-deterministic cache key — **major**
 
 ---
 
@@ -232,21 +207,12 @@ Flags:
 - [ ] JOIN on a column that lacks an index on at least one side
 - [ ] Unique constraint missing on a column used in uniqueness checks
 
-Flags:
-- `WHERE` / `ORDER BY` on an un-indexed column on a high-traffic table — **major**
-- Missing unique constraint where the application relies on uniqueness — **blocker**
-
 #### D2. Lock Contention
 
 - [ ] `SELECT ... FOR UPDATE` on a wide row range — locks more rows than needed
 - [ ] Transaction holding a lock while performing external I/O (HTTP call, file read) — lock held far too long
 - [ ] Nested transactions with locks — can deadlock under concurrent writers
-- [ ] Long-running migration with a full-table lock on a live, high-traffic table
-
-Flags:
-- External I/O (HTTP, file) inside a database transaction — **blocker**
-- `SELECT ... FOR UPDATE` with no LIMIT on a high-traffic table — **major**
-- Schema migration adding NOT NULL column without a default on a live table — **major**
+- [ ] Long-running migration with a full-table lock on a live table, or adding a NOT NULL column without a default
 
 #### D3. N+1 and Unbounded Queries
 
@@ -254,20 +220,11 @@ Flags:
 - [ ] `findAll()` / `SELECT *` on a large table with no LIMIT/pagination
 - [ ] Fetching full entity to check a single field
 
-Flags:
-- N+1 in a hot path — **major** (also flagged by `review-performance`, noted here for load context)
-- Unbounded `findAll()` on a table that grows with usage — **major**
-- Fetching full row just to read one column — **minor**
-
 #### D4. Connection and Transaction Hygiene
 
 - [ ] Transaction started but no explicit commit / rollback on all code paths (leak on exception)
 - [ ] Long-lived transaction (spans multiple user interactions or HTTP calls)
 - [ ] Mixing read replicas and write primary within the same business operation without awareness of replication lag
-
-Flags:
-- Transaction with no guaranteed commit/rollback on exception path — **major**
-- Replication lag not accounted for (read-your-writes guarantee assumed on replica) — **major**
 
 ---
 
@@ -279,28 +236,16 @@ Flags:
 - [ ] Consumer not acknowledging/nacking messages — messages redeliver indefinitely on crash
 - [ ] Batch consumer with no upper bound on batch size — single batch can take arbitrarily long
 
-Flags:
-- Unbounded in-memory queue / channel — **blocker**
-- Message consumer missing ack/nack — **major**
-- Batch size not capped — **major**
-
 #### E2. Dead Letter and Poison Pills
 
 - [ ] No dead-letter queue for failed messages — poison pills block the consumer indefinitely
 - [ ] Retry loop with no maximum retry count — failed message retried forever
 - [ ] Consumer crashing on a single malformed message due to missing error handling around deserialization
 
-Flags:
-- No DLQ or max retry limit on a message consumer — **major**
-- Deserialization error crashing the consumer process — **major**
-
 #### E3. Ordering Guarantees
 
 - [ ] Code assumes FIFO delivery on a queue that does not guarantee ordering (e.g., SQS standard)
 - [ ] Parallel consumers writing to shared state where order matters
-
-Flags:
-- FIFO assumption on an at-least-once / unordered queue — **major**
 
 ---
 
@@ -313,30 +258,16 @@ Flags:
 - [ ] No maximum retry count — code retries indefinitely
 - [ ] Missing jitter on exponential backoff — synchronized retries cause thundering herd
 
-Flags:
-- Non-idempotent write retried without idempotency key — **blocker** (data integrity)
-- Fixed delay retry or no backoff — **major**
-- No max retry count — **major**
-- Exponential backoff without jitter — **minor**
-
 #### F2. Timeouts
 
 - [ ] HTTP client / DB call / queue operation with no timeout configured
 - [ ] Single timeout for the full chain (outer timeout too long relative to the number of downstream calls)
 - [ ] `setTimeout` as a timeout substitute for async operations that do not stop when the timer fires
 
-Flags:
-- External call with no timeout — **major**
-- Using `setTimeout` as a "give up" timer without actually canceling the operation — **minor**
-
 #### F3. Circuit Breaker
 
 - [ ] Repeated calls to a known-failing downstream without a circuit breaker — floods the downstream and starves the thread pool
-- [ ] Fallback returning stale/empty data not documented as intentional degradation
-
-Flags:
-- Unbounded retries to a failing downstream without circuit breaker — **major**
-- No fallback or graceful degradation when downstream is unavailable — **minor**
+- [ ] No fallback or graceful degradation when the downstream is unavailable, or a fallback returning stale/empty data not documented as intentional degradation
 
 ---
 
@@ -348,30 +279,17 @@ Flags:
 - [ ] API endpoint that creates a resource not accepting or generating an idempotency key
 - [ ] Distributed cron/scheduled job running on multiple instances simultaneously with no distributed lock
 
-Flags:
-- Event handler with no deduplication and non-idempotent side effects — **blocker**
-- Distributed cron with no leader election or distributed lock — **blocker**
-- Resource creation endpoint with no idempotency key support — **major**
-
 #### G2. Distributed Consistency
 
 - [ ] Assumption that two sequential operations form an atomic unit without a transaction or saga
 - [ ] Cross-service write sequence with no compensation logic on partial failure
 - [ ] Relying on eventual consistency while assuming immediate consistency (reading from cache/replica right after writing)
 
-Flags:
-- Multi-step cross-service operation with no rollback / saga — **major**
-- Assumed immediate consistency where eventual consistency is the actual guarantee — **major**
-
 #### G3. Clock and ID Assumptions
 
 - [ ] Using `Date.now()` or `new Date()` for ordering events across distributed nodes — clocks drift
 - [ ] Auto-increment integer IDs expected to be globally unique across sharded databases
 - [ ] UUID v1 (time-based, exposable MAC address) used where UUID v4 (random) is safer
-
-Flags:
-- Event ordering based on wall-clock time in a distributed context — **major**
-- Assumption of globally unique sequential IDs across shards — **major**
 
 ---
 
@@ -380,6 +298,7 @@ Flags:
 | Concern | This skill | Use instead |
 |---------|-----------|-------------|
 | Race conditions, shared mutable state, concurrent writes | YES | — |
+| Concurrent sessions, shared state-file writes, lock files, child fan-out | YES | — |
 | Connection pool exhaustion, resource leaks | YES | — |
 | Cache invalidation, cache stampede, stale reads | YES | — |
 | Lock contention, long transactions, missing indexes | YES | — |
@@ -433,28 +352,29 @@ observation is theatre, not rigour.
 - **Severity**: blocker | major | minor | info
 - **File**: path/to/file.ts:line
 - **Pattern**: Concurrency A1 — Shared Mutable State | Resource B1 — Connection Pool | etc.
-- **Failure mode**: what specifically breaks under load and at what scale
+- **Failure mode**: what specifically breaks, and the load or concrete trigger that breaks it
 - **Fix**: concrete change with reference pattern (exponential backoff, connection pool, distributed lock, etc.)
 - **Patch** (optional): unified diff
 ```
 
-The **Failure mode** line is mandatory for this reviewer — every finding must state the load-related consequence (OOM at 1k RPS, connection exhaustion at 500 concurrent users, duplicate charges on retry, etc.).
+The **Failure mode** line is mandatory for this reviewer — every finding must state the consequence and its trigger (OOM at 1k RPS, a lost `flow.json` update from two sessions, duplicate charges on retry, etc.).
 
 Severity comes from **Severity (canonical)** in `review-orchestrator/SKILL.md`.
 This reviewer keeps no table of its own; what follows is where its recurring
 conditions land under that rubric, not a second rubric.
 
+Each row names the condition and the evidence the canonical level needs; without
+that evidence the finding drops a row, and without a concrete trigger it is `info`.
+
 | Condition | Severity | Why, under the canonical rubric |
 |---|---|---|
-| Race condition on shared mutable state | `blocker` **if** the interleaving can corrupt or lose data; otherwise `major` | Same wording as `review-logic`, deliberately: the outcome decides, not the word "race" |
-| Non-idempotent retry of an operation with side effects | `blocker` | A retried write duplicates or corrupts persisted state |
-| Unbounded in-memory queue or collection growing with request rate | `blocker` | OOM is a crash; state the rate that reaches it |
-| Distributed cron or job with no lock | `blocker` | Concurrent runs duplicate side effects |
-| Transaction held open across external I/O | `blocker` | Pool exhaustion takes the service down |
-| Blocking I/O on a thread or fiber shared with the event loop | `major` | Named trigger: a request served on that thread. Named outcome: every concurrent request on it stalls behind the one slow call. Restored — the per-reviewer rubric that carried this floor was deleted and the conditions table did not pick it up, leaving the skill's own description advertising hot-path blocking I/O with no rule assigning it a severity |
-| Connection without a pool; unbounded `Promise.all`; missing retry timeout or backoff; cache stampede on a hot key; N+1 on a hot path; long transaction; missing DLQ | `major` | Named trigger (a load level) and named outcome, but the outcome is degradation, not one of the four shapes |
-| Backoff without jitter; TTL misconfigured; per-request allocation on a hot path; full-row fetch for one field | `minor` | Correct under load; the cost is to whoever tunes it next |
-| Architectural note with no failure mode at a stated load | `info` | Shared law 1 |
+| Race condition on shared mutable state, including a lost update to a shared state file | `blocker` **if** the interleaving can corrupt or lose data; otherwise `major` | Same wording as `review-logic`, deliberately: the outcome decides, not the word "race" |
+| Check-then-act with no unique constraint or lock; non-idempotent retry; event handler with no deduplication; scheduled job or session work with no lock | `blocker` when the evidence shows the duplicate or lost write persisted (shape 2); otherwise `major` | The concurrent or retried path must exist in the code, not be assumed |
+| Per-user data cached under a key not scoped to the user | `blocker` when two users reach the key (shape 2: returned data wrong); otherwise `major` | The evidence shows both readers |
+| Unbounded queue, collection, buffer or fan-out | `blocker` only when the evidence shows the growth reaching exhaustion (shape 1); otherwise `major` with what grows it named | Law 3: the input that grows it is the trigger |
+| External I/O inside a transaction or under a lock; connection without a pool; unbounded `Promise.all`; retry without cap or backoff; missing timeout; stale lock with no recovery; stampede on a hot key; N+1 on a hot path; long transaction; missing DLQ; blocking I/O on a thread or the event loop other work shares | `major` when the finding names the trigger and the stall, exhaustion or hang it causes; `blocker` only if it shows the crash | Degradation is not one of the four shapes |
+| Backoff without jitter; TTL misconfigured; per-request allocation on a hot path; full-row fetch for one field; undocumented fallback | `minor` | Correct under load; the cost is to whoever tunes it next |
+| Architectural note with no failure mode under a concrete trigger | `info` | Shared law 1 |
 
 ---
 
@@ -472,7 +392,7 @@ STATUS: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED
 - Parent ref: `<PARENT>`
 - Merge-base: `<BASE_SHA>`
 - Scope mode: `<default-with-uncommitted | explicit-hash-range>`
-- Load profile: `<from context doc or "not provided">`
+- Load profile: `<from context doc, or "not provided" + the concrete triggers used>`
 - Changed files reviewed: <N>
 
 ### Summary
@@ -482,6 +402,9 @@ STATUS: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED
 - blocker: N  |  major: N  |  minor: N  |  info: N
 
 ### Findings
+
+#### CLI / Multi-Session Concurrency
+<[F-NNN] findings or "None detected.">
 
 #### Concurrency & Race Conditions
 <[F-NNN] findings or "None detected.">
@@ -526,7 +449,13 @@ If provided and the file exists, read the context document before reviewing. Use
 - Avoid flagging documented acceptable degradation paths as violations
 
 If absent, proceed normally — context is optional and non-blocking.
-When load profile is unknown, note in findings that severity assumes "moderate-to-high traffic".
+
+**No stated load.** Without a `load_profile` or a context document, do not assume
+a traffic level. Name the concrete trigger the code shows instead: N concurrent
+sessions on one checkout, a loop over every file or flow, a fan-out of children,
+a retry after a failed spawn. Such a finding is rated by the conditions table like
+any other — it is not `info` merely because no load was stated; it is `info` only
+when no concrete trigger can be named.
 
 ---
 
@@ -537,7 +466,7 @@ When load profile is unknown, note in findings that severity assumes "moderate-t
 | "We don't have high traffic yet, so this is fine" | Correctness under concurrency does not depend on current traffic; a race condition exists at 1 RPS too |
 | "The connection pool defaults are probably fine" | Default pools (5–10 connections) queue at a few hundred concurrent users; always verify |
 | "Retrying this is safe because it's idempotent" | Verify it actually is — most `POST` endpoints are not idempotent by default |
-| "We'll add a circuit breaker later" | "Later" is when the downstream is down; flag as minor now to create the record |
+| "We'll add a circuit breaker later" | "Later" is when the downstream is down; flag it now, at the level the conditions table gives |
 | "The cache invalidation is handled somewhere else" | "Somewhere else" means it will be missed — flag where the write happens with no corresponding invalidation |
 | "This runs in a queue so race conditions don't apply" | Multiple consumer instances still race on shared DB rows unless explicitly serialized |
 | "Using Date.now() for ordering is fine" | Clock skew across nodes makes wall-clock ordering unreliable; use logical clocks or DB sequences |
