@@ -29,11 +29,14 @@ Never touches logic correctness, architecture, security, or performance. Its inp
 
 ## The standard
 
+Read `.metaproject/rules/core/solid-principles.mdc` before the diff: it is the
+file the code was written against. Its **Readability thresholds** table is this
+lens's thresholds and default severities; under a threshold, report nothing.
+
 Duplication, magic literals, names and comments are rated by `review-clean-code`
-from `.metaproject/rules/core/solid-principles.mdc` (**Thresholds**), the file the
-code was written against. `--frontend` dispatches this lens without it, so report
-those signals here at that lens's threshold and severity, never a stricter one:
-one condition must not carry two outcomes.
+from the same file. `--frontend` dispatches this lens without it, so report those
+signals here at that lens's threshold and severity, never a stricter one: one
+condition must not carry two outcomes.
 
 A threshold counts only when this change crosses it: one more line in a file
 already past a length limit is not a finding.
@@ -120,19 +123,18 @@ Naming severity is set by the Style laws below and by the canonical rubric in `r
 ### 3. Readability and Complexity
 
 **Conditions**
-- Overly complex boolean conditions (more than 3 clauses without parentheses grouping) — flag as `minor`; suggest extracting to a named predicate
+- A boolean condition over the clause threshold — suggest extracting a named predicate
 - Double negatives (`!isNotEmpty`) — flag as `minor`; rewrite to positive form
 - Ternary chains (ternary inside ternary) — flag as `minor`; suggest `if/else` or early return
 
 **Nesting**
-- Functions with callback nesting deeper than 3 levels — flag as `minor`; suggest extraction or `async/await`
-- `if/else` trees deeper than 3 levels — flag as `minor`; suggest guard clauses (early returns)
+- Callback or `if/else` nesting over the depth threshold — suggest extraction, `async/await` or guard clauses
 
 **Magic literals**
 - A numeric or string literal with business meaning and no named constant, including one repeated across places — flag as `minor`; neutral values are not findings (`review-clean-code`'s Magic number row)
 
 **Cyclomatic complexity**
-- Functions with more than 10 decision branches (if/else/switch cases/ternary/loop) — flag as `minor`; suggest splitting into smaller, named functions
+- A function over the decision-branch threshold (if/else, switch cases, ternaries, loops) — suggest splitting into named functions
 
 ---
 
@@ -174,11 +176,9 @@ Do not flag DRY violations for code outside the diff even if legacy duplication 
 
 ### 7. File Length and Structure
 
-- Files exceeding 500 lines (excluding generated code, test fixtures, and migration files) — flag as `info` with a suggestion to split by responsibility
-- Files exceeding 800 lines — flag as `minor`
-- Single file exporting more than 5 unrelated things — flag as `minor`; suggest splitting into focused modules
+- A file over a length threshold — suggest splitting by responsibility
+- A file over the unrelated-exports threshold — suggest splitting into focused modules
 - A React component file whose parts are out of order (imports, interfaces, component, helpers) — flag as `minor`
-- Test files: no limit enforced; complexity handled by test count and grouping
 
 ---
 

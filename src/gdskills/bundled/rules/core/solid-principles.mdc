@@ -1,12 +1,12 @@
 ---
-description: "SOLID and function-design standard shared by code writers and the code-quality reviewer, with the thresholds both use: function length, parameter count, constructor dependencies, branch chains. Use when designing classes, modules or functions, or reviewing them."
+description: "SOLID and function-design standard shared by code writers and the code-quality and style reviewers, with the thresholds they use: function length, parameter count, constructor dependencies, branch chains, file length, nesting, branching. Use when designing classes, modules or functions, or reviewing them."
 alwaysApply: false
 ---
 
 # SOLID Principles and Function Design
 
 ## Purpose
-One standard for designing and reviewing classes and functions. The thresholds below are the ones the code-quality reviewer applies. A writer who stays inside them gets no finding, and a reviewer reports nothing inside them.
+One standard for designing and reviewing classes and functions. The thresholds below are the ones the code-quality and style reviewers apply. A writer who stays inside them gets no finding, and a reviewer reports nothing inside them.
 
 ## When To Apply
 Apply when creating or extending classes, services, modules or functions, and when reviewing them.
@@ -26,6 +26,20 @@ Apply when creating or extending classes, services, modules or functions, and wh
 | Duplicated block | 3 or more copies | Reported once, listing every copy. |
 
 Under a threshold, the reviewer stays silent. At or over one, the finding is `minor` unless it names a trigger and a wrong outcome (see the review-orchestrator severity rubric).
+
+## Readability thresholds (shared with review-style)
+
+`review-style` rates these; `review-clean-code` leaves them to it. Generated code, fixtures, migrations and test files are exempt.
+
+| Signal | Threshold | Default |
+|---|---|---|
+| File length | over 500 lines; over 800 lines | `info`; `minor` |
+| Nesting depth (callbacks or `if/else`) | more than 3 levels | `minor` |
+| Decision branches in one function | more than 10 | `minor` |
+| Boolean condition | more than 3 clauses without grouping | `minor` |
+| Unrelated exports from one file | more than 5 | `minor` |
+
+A threshold in either table counts only when the change crosses it.
 
 ---
 
@@ -53,5 +67,5 @@ Under a threshold, the reviewer stays silent. At or over one, the finding is `mi
 
 **IRON LAW 1: An override never throws where its base type would not.**
 **IRON LAW 2: A constructor performs no I/O.**
-**IRON LAW 3: The thresholds above are the standard for both writing and review. Change them here, never in a reviewer.**
+**IRON LAW 3: The thresholds in this file are the standard for both writing and review. Change them here, never in a reviewer.**
 </content>
