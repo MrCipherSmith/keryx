@@ -1,4 +1,5 @@
 import { executePlanCommand } from "../session/commands/plan-command";
+import { startShellStateExports } from "../session/shell-state-exports";
 import { createHash } from "node:crypto";
 import { applyRuntimeSwitchToSlate } from "../session/runtime-switch";
 import { requestSessionInterrupt } from "../session/commands/session-control";
@@ -8068,6 +8069,10 @@ export async function launchTuiAgentShell(opts: {
 
     const preservationAbort = new AbortController();
     const sessionSwitches = new SessionSwitchOwner();
+    const stateExports = startShellStateExports({
+      getSession: () => sessionLease.canPersist()
+        ? { cwd: sessionCwd, dir: liveSession.dir, sessionId: liveSession.summary.id, messages: [...archive, ...history] } : undefined,
+    });
     finalizeShell = createShellFinalizer({
       stop: async () => {
         preservationAbort.abort();
@@ -8075,6 +8080,7 @@ export async function launchTuiAgentShell(opts: {
         foregroundOperation.dispose();
         await sessionSwitches.stop();
         await foregroundOperation.settled();
+        await stateExports.stop();
       },
       checkpoint: () => {
         if (!sessionLease.canPersist()) throw new Error("session ownership lost");

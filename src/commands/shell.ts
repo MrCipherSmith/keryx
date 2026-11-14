@@ -1,4 +1,5 @@
 import { executePlanCommand } from "../session/commands/plan-command";
+import { startShellStateExports } from "../session/shell-state-exports";
 import { startShellStartupTrace } from "../lib/shell-startup-trace";
 import { replayPreservationOutbox, replayProjectPreservationOutboxes } from "../sac/service";
 import { createShellFinalizer, preservationProgress } from "../session/shell-finalizer";
@@ -2587,6 +2588,10 @@ export async function runAgentRepl(
 
   slateSession = live !== undefined ? { dir: live.dir, cwd: sessionCwd, opened: false } : undefined;
   slateSessionBox.current = slateSession;
+  const stateExports = startShellStateExports({
+    getSession: () => live !== undefined && leaseWatch.canPersist()
+      ? { cwd: sessionCwd, dir: live.dir, sessionId: live.summary.id, messages: [...archive, ...history] } : undefined,
+  });
 
   const save = (): void => {
     if (live === undefined || !leaseWatch.canPersist()) {
@@ -2632,6 +2637,7 @@ export async function runAgentRepl(
       activeAgentAbort?.abort();
       await activeAgentFlight?.catch(() => {});
       await activeSessionSwitch?.catch(() => {});
+      await stateExports.stop();
     },
     checkpoint: () => {
       if (sessionPersistTimer !== undefined) clearTimeout(sessionPersistTimer);
