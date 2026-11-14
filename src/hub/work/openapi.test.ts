@@ -6,13 +6,22 @@ test("published OpenAPI is the exact generated closed HTTP contract", async () =
     const published = await Bun.file(new URL("../../../docs/requirements/hub-work-management/openapi.json", import.meta.url)).json();
     expect(published).toEqual(workOpenApi);
     expect(workOpenApi.openapi).toBe("3.1.0");
-    expect(Object.keys(workOpenApi.paths)).toHaveLength(26);
+    expect(Object.keys(workOpenApi.paths)).toHaveLength(27);
 });
 
 test("responses reject unknown fields, invalid records, and unsupported actions", () => {
     expect(matchesWorkSchema({ records: [], nextCursor: null, eventCursor: "opaque-cursor" }, { $ref: "#/components/schemas/Page" })).toBe(true);
     expect(matchesWorkSchema({ records: [], nextCursor: null, eventCursor: "opaque-cursor", secret: "bad" }, { $ref: "#/components/schemas/Page" })).toBe(false);
     expect(matchesWorkSchema({ records: [], actions: [{ command: "trust.me", allowed: true, reasonCode: "ok" }], eventCursor: "opaque-cursor" }, { $ref: "#/components/schemas/Aggregate" })).toBe(false);
+});
+
+test('the quick-start request schema accepts what the surfaces send and rejects unknown fields', () => {
+    const body = { mode: 'bug', description: 'Export does nothing', answers: [{ q: 'steps-to-reproduce', a: 'Press Export', skipped: false }, { q: 'expected-vs-actual', a: null, skipped: true }], criteria: ['Downloads a CSV'] };
+    const schema = { $ref: '#/components/schemas/QuickStartRequest' };
+    expect(matchesWorkSchema(body, schema)).toBe(true);
+    expect(matchesWorkSchema({ ...body, mode: 'nonsense' }, schema)).toBe(false);
+    expect(matchesWorkSchema({ ...body, operationId: 'x' }, schema)).toBe(false);
+    expect(Object.keys(workOpenApi.paths).some(path => path.endsWith('/quick-start'))).toBe(true);
 });
 
 test('every published schema reference resolves within the OpenAPI document', () => {
