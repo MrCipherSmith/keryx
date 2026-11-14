@@ -33,7 +33,7 @@ How this differs from `review-regression`, before anything else:
 
 `review-regression` is untouched by this reviewer and keeps its own screen. Do not re-file its findings; do not widen yours into its question.
 
-Your inputs are the reviewer payload only; session memory and earlier conversation are not inputs. You run no command unless your payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where your host gives a read-only child git (keryx shell does not: there the payload supplies the history), and the read-only layer commands the orchestrator lists (`keryx gdgraph affected|find`, `keryx test related`, `keryx wiki ask`, `keryx memory search`, `keryx ctx rg|read`); you never write in the reviewed tree.
+Your inputs are the reviewer payload only; session memory and earlier conversation are not inputs. You run no command unless your payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where your host gives a read-only child git (keryx shell does not: there the payload supplies the history).
 
 ## The one question
 

@@ -29,7 +29,7 @@ license: "MIT"
 
 Specialized reviewer for **code that runs concurrently** — under request load, or as several sessions and child processes.
 Focuses on correctness under concurrency, resource contention, back-pressure, failure
-modes at scale, and distributed systems invariants — not general performance profiling. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history), and the read-only layer commands the orchestrator lists (`keryx gdgraph affected|find`, `keryx test related`, `keryx wiki ask`, `keryx memory search`, `keryx ctx rg|read`); it never writes in the reviewed tree.
+modes at scale, and distributed systems invariants — not general performance profiling. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history).
 
 Reviews only changes introduced in the current branch (merge-base to HEAD).
 
