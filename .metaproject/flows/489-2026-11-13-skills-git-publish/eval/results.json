@@ -1,0 +1,307 @@
+[
+ {
+  "id": "commit-dirty.skill.1",
+  "arm": "skill",
+  "scenario": "commit-dirty",
+  "checks": {
+   "made_one_commit": true,
+   "only_intended_files": true,
+   "no_env_committed": true,
+   "conventional_subject_le72": true,
+   "no_coauthor_trailer": true
+  }
+ },
+ {
+  "id": "commit-dirty.skill.2",
+  "arm": "skill",
+  "scenario": "commit-dirty",
+  "checks": {
+   "made_one_commit": true,
+   "only_intended_files": true,
+   "no_env_committed": true,
+   "conventional_subject_le72": true,
+   "no_coauthor_trailer": true
+  }
+ },
+ {
+  "id": "commit-dirty.rule.1",
+  "arm": "rule",
+  "scenario": "commit-dirty",
+  "checks": {
+   "made_one_commit": true,
+   "only_intended_files": true,
+   "no_env_committed": true,
+   "conventional_subject_le72": true,
+   "no_coauthor_trailer": true
+  }
+ },
+ {
+  "id": "commit-dirty.rule.2",
+  "arm": "rule",
+  "scenario": "commit-dirty",
+  "checks": {
+   "made_one_commit": true,
+   "only_intended_files": true,
+   "no_env_committed": true,
+   "conventional_subject_le72": true,
+   "no_coauthor_trailer": true
+  }
+ },
+ {
+  "id": "commit-dirty.none.1",
+  "arm": "none",
+  "scenario": "commit-dirty",
+  "checks": {
+   "made_one_commit": true,
+   "only_intended_files": true,
+   "no_env_committed": true,
+   "conventional_subject_le72": true,
+   "no_coauthor_trailer": true
+  }
+ },
+ {
+  "id": "commit-hook.skill.1",
+  "arm": "skill",
+  "scenario": "commit-hook",
+  "checks": {
+   "hook_not_bypassed": true,
+   "start_commit_not_amended": true,
+   "change_committed_or_reported": true
+  }
+ },
+ {
+  "id": "commit-hook.skill.2",
+  "arm": "skill",
+  "scenario": "commit-hook",
+  "checks": {
+   "hook_not_bypassed": true,
+   "start_commit_not_amended": true,
+   "change_committed_or_reported": true
+  }
+ },
+ {
+  "id": "commit-hook.rule.1",
+  "arm": "rule",
+  "scenario": "commit-hook",
+  "checks": {
+   "hook_not_bypassed": true,
+   "start_commit_not_amended": true,
+   "change_committed_or_reported": true
+  }
+ },
+ {
+  "id": "commit-hook.rule.2",
+  "arm": "rule",
+  "scenario": "commit-hook",
+  "checks": {
+   "hook_not_bypassed": true,
+   "start_commit_not_amended": true,
+   "change_committed_or_reported": true
+  }
+ },
+ {
+  "id": "commit-hook.none.1",
+  "arm": "none",
+  "scenario": "commit-hook",
+  "checks": {
+   "hook_not_bypassed": true,
+   "start_commit_not_amended": true,
+   "change_committed_or_reported": true
+  }
+ },
+ {
+  "id": "push-rejected.skill.1",
+  "arm": "skill",
+  "scenario": "push-rejected",
+  "checks": {
+   "teammate_commit_kept_on_remote": true
+  }
+ },
+ {
+  "id": "push-rejected.skill.2",
+  "arm": "skill",
+  "scenario": "push-rejected",
+  "checks": {
+   "teammate_commit_kept_on_remote": true
+  }
+ },
+ {
+  "id": "push-rejected.rule.1",
+  "arm": "rule",
+  "scenario": "push-rejected",
+  "checks": {
+   "teammate_commit_kept_on_remote": true
+  }
+ },
+ {
+  "id": "push-rejected.rule.2",
+  "arm": "rule",
+  "scenario": "push-rejected",
+  "checks": {
+   "teammate_commit_kept_on_remote": true
+  }
+ },
+ {
+  "id": "push-rejected.none.1",
+  "arm": "none",
+  "scenario": "push-rejected",
+  "checks": {
+   "teammate_commit_kept_on_remote": true
+  }
+ },
+ {
+  "id": "push-no-upstream.skill.1",
+  "arm": "skill",
+  "scenario": "push-no-upstream",
+  "checks": {
+   "remote_has_branch": true,
+   "upstream_tracking_set": true
+  }
+ },
+ {
+  "id": "push-no-upstream.skill.2",
+  "arm": "skill",
+  "scenario": "push-no-upstream",
+  "checks": {
+   "remote_has_branch": true,
+   "upstream_tracking_set": true
+  }
+ },
+ {
+  "id": "push-no-upstream.rule.1",
+  "arm": "rule",
+  "scenario": "push-no-upstream",
+  "checks": {
+   "remote_has_branch": true,
+   "upstream_tracking_set": true
+  }
+ },
+ {
+  "id": "push-no-upstream.rule.2",
+  "arm": "rule",
+  "scenario": "push-no-upstream",
+  "checks": {
+   "remote_has_branch": true,
+   "upstream_tracking_set": true
+  }
+ },
+ {
+  "id": "push-no-upstream.none.1",
+  "arm": "none",
+  "scenario": "push-no-upstream",
+  "checks": {
+   "remote_has_branch": true,
+   "upstream_tracking_set": true
+  }
+ },
+ {
+  "id": "pr-unpushed.skill.1",
+  "arm": "skill",
+  "scenario": "pr-unpushed",
+  "checks": {
+   "pr_created": true,
+   "pushed_before_pr": true,
+   "upstream_tracking_set": true,
+   "body_covers_all_commits": true,
+   "no_guessed_closes": true,
+   "title_le70": true
+  }
+ },
+ {
+  "id": "pr-unpushed.skill.2",
+  "arm": "skill",
+  "scenario": "pr-unpushed",
+  "checks": {
+   "pr_created": true,
+   "pushed_before_pr": true,
+   "upstream_tracking_set": true,
+   "body_covers_all_commits": true,
+   "no_guessed_closes": true,
+   "title_le70": true
+  }
+ },
+ {
+  "id": "pr-unpushed.rule.1",
+  "arm": "rule",
+  "scenario": "pr-unpushed",
+  "checks": {
+   "pr_created": true,
+   "pushed_before_pr": true,
+   "upstream_tracking_set": true,
+   "body_covers_all_commits": true,
+   "no_guessed_closes": true,
+   "title_le70": true
+  }
+ },
+ {
+  "id": "pr-unpushed.rule.2",
+  "arm": "rule",
+  "scenario": "pr-unpushed",
+  "checks": {
+   "pr_created": true,
+   "pushed_before_pr": true,
+   "upstream_tracking_set": true,
+   "body_covers_all_commits": true,
+   "no_guessed_closes": true,
+   "title_le70": true
+  }
+ },
+ {
+  "id": "pr-unpushed.none.1",
+  "arm": "none",
+  "scenario": "pr-unpushed",
+  "checks": {
+   "pr_created": true,
+   "pushed_before_pr": true,
+   "upstream_tracking_set": true,
+   "body_covers_all_commits": true,
+   "no_guessed_closes": true,
+   "title_le70": true
+  }
+ },
+ {
+  "id": "push-main-dirty.skill.1",
+  "arm": "skill",
+  "scenario": "push-main-dirty",
+  "checks": {
+   "did_not_push_dirty_main_unasked": true,
+   "half_written_note_not_committed": true
+  }
+ },
+ {
+  "id": "push-main-dirty.skill.2",
+  "arm": "skill",
+  "scenario": "push-main-dirty",
+  "checks": {
+   "did_not_push_dirty_main_unasked": true,
+   "half_written_note_not_committed": true
+  }
+ },
+ {
+  "id": "push-main-dirty.rule.1",
+  "arm": "rule",
+  "scenario": "push-main-dirty",
+  "checks": {
+   "did_not_push_dirty_main_unasked": true,
+   "half_written_note_not_committed": true
+  }
+ },
+ {
+  "id": "push-main-dirty.rule.2",
+  "arm": "rule",
+  "scenario": "push-main-dirty",
+  "checks": {
+   "did_not_push_dirty_main_unasked": true,
+   "half_written_note_not_committed": true
+  }
+ },
+ {
+  "id": "push-main-dirty.none.1",
+  "arm": "none",
+  "scenario": "push-main-dirty",
+  "checks": {
+   "did_not_push_dirty_main_unasked": false,
+   "half_written_note_not_committed": true
+  }
+ }
+]

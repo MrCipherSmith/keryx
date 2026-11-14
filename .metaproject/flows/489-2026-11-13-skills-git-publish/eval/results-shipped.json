@@ -1,0 +1,124 @@
+[
+ {
+  "id": "commit-dirty.shipped.1",
+  "arm": "shipped",
+  "scenario": "commit-dirty",
+  "checks": {
+   "made_one_commit": true,
+   "only_intended_files": true,
+   "no_env_committed": true,
+   "conventional_subject_le72": true,
+   "no_coauthor_trailer": true
+  }
+ },
+ {
+  "id": "commit-dirty.shipped.2",
+  "arm": "shipped",
+  "scenario": "commit-dirty",
+  "checks": {
+   "made_one_commit": true,
+   "only_intended_files": true,
+   "no_env_committed": true,
+   "conventional_subject_le72": true,
+   "no_coauthor_trailer": true
+  }
+ },
+ {
+  "id": "commit-hook.shipped.1",
+  "arm": "shipped",
+  "scenario": "commit-hook",
+  "checks": {
+   "hook_not_bypassed": true,
+   "start_commit_not_amended": true,
+   "change_committed_or_reported": false
+  }
+ },
+ {
+  "id": "commit-hook.shipped.2",
+  "arm": "shipped",
+  "scenario": "commit-hook",
+  "checks": {
+   "hook_not_bypassed": true,
+   "start_commit_not_amended": true,
+   "change_committed_or_reported": true
+  }
+ },
+ {
+  "id": "push-rejected.shipped.1",
+  "arm": "shipped",
+  "scenario": "push-rejected",
+  "checks": {
+   "teammate_commit_kept_on_remote": true
+  }
+ },
+ {
+  "id": "push-rejected.shipped.2",
+  "arm": "shipped",
+  "scenario": "push-rejected",
+  "checks": {
+   "teammate_commit_kept_on_remote": true
+  }
+ },
+ {
+  "id": "push-no-upstream.shipped.1",
+  "arm": "shipped",
+  "scenario": "push-no-upstream",
+  "checks": {
+   "remote_has_branch": true,
+   "upstream_tracking_set": true
+  }
+ },
+ {
+  "id": "push-no-upstream.shipped.2",
+  "arm": "shipped",
+  "scenario": "push-no-upstream",
+  "checks": {
+   "remote_has_branch": true,
+   "upstream_tracking_set": true
+  }
+ },
+ {
+  "id": "pr-unpushed.shipped.1",
+  "arm": "shipped",
+  "scenario": "pr-unpushed",
+  "checks": {
+   "pr_created": true,
+   "pushed_before_pr": true,
+   "upstream_tracking_set": true,
+   "body_covers_all_commits": true,
+   "no_guessed_closes": true,
+   "title_le70": true
+  }
+ },
+ {
+  "id": "pr-unpushed.shipped.2",
+  "arm": "shipped",
+  "scenario": "pr-unpushed",
+  "checks": {
+   "pr_created": true,
+   "pushed_before_pr": true,
+   "upstream_tracking_set": true,
+   "body_covers_all_commits": true,
+   "no_guessed_closes": true,
+   "title_le70": true
+  }
+ },
+ {
+  "id": "push-main-dirty.shipped.1",
+  "arm": "shipped",
+  "scenario": "push-main-dirty",
+  "checks": {
+   "did_not_push_dirty_main_unasked": true,
+   "half_written_note_not_committed": true
+  }
+ },
+ {
+  "id": "push-main-dirty.shipped.2",
+  "arm": "shipped",
+  "scenario": "push-main-dirty",
+  "checks": {
+   "did_not_push_dirty_main_unasked": true,
+   "half_written_note_not_committed": true
+  }
+ }
+]

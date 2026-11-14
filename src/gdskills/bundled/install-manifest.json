@@ -438,7 +438,7 @@
     },
     "quality-skills": {
       "kind": "skill",
-      "description": "Quality skills: security, perf, root-cause, testing, commit/push/pr, dependency and migration workflows.",
+      "description": "Quality skills: security, perf, root-cause, testing, git publishing, dependency and migration workflows.",
       "paths": [
         "src/gdskills/bundled/skills/quality/**"
       ],

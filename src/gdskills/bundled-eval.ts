@@ -784,36 +784,44 @@ export function collisionReasonNamesOwner(reason: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Anatomy sections (flow 257 T8, AC3)
+// Anatomy sections (flow 257 T8, AC3; Red Flags made optional in flow 489)
 // ---------------------------------------------------------------------------
 //
 // The `description:*` family above judges the ROUTING clause in isolation. It
-// says nothing about the rest of the document, and three structural gaps slip
+// says nothing about the rest of the document, and two structural gaps slip
 // past every check above while a skill still routes fine and still "works" on
 // a lucky run:
 //
 //   - no disambiguation for the agent that already chose this skill and needs
 //     to know what it is NOT the tool for;
-//   - no catalogue of the specific ways an agent talks itself into skipping
-//     this skill's own rules — the exact failure mode a generic reminder to
-//     "be careful" cannot prevent, because it names nothing concrete;
 //   - no stated shape for "done" — a caller (a human, or an orchestrator
 //     reading a subagent's final line) has nothing to check the result
 //     against.
 //
-// Each of the three is defined below precisely enough that "does this skill
+// A third section, a Red Flags / rationalization table, is OPTIONAL. It used
+// to be required; flow 489 measured a 35-line git-publishing text with no such
+// table at 38/38 on six git scenarios, the same as the three longer skills it
+// replaced that carried one, so requiring it only forced every skill into the
+// long template. A skill that does ship a Red Flags heading is still held to
+// the table definition below (row count, row content) and to
+// `anatomy:red-flags-collision`: an optional section is not an excuse for a
+// hollow one.
+//
+// Each section is defined below precisely enough that "does this skill
 // have it" is decidable by reading the file, not a judgment call — the same
 // bar `ALLOWED_DESCRIPTION_TRIGGER_PHRASES` and `BARE_IMPERATIVE_VERBS` above
-// hold themselves to: derived from what the 67 shipped skills that already do
+// hold themselves to: derived from what the shipped skills that already do
 // this well actually wrote, not from an aspiration nothing on disk uses.
 
 /**
- * The three anatomy sections this check requires, and the vocabulary the
+ * The two anatomy sections this check requires, and the vocabulary the
  * exemption maps below key their entries by. Not check ids on their own —
  * every deficiency reports under the single `anatomy:sections` id, per AC3,
- * with the finding's message naming which of these three is missing.
+ * with the finding's message naming which of these is missing. Red Flags is
+ * not here: it is optional (see the section comment above), and a malformed
+ * one is reported separately under the same id.
  */
-export const ANATOMY_SECTIONS = ["trigger-not-for", "red-flags", "verification"] as const;
+export const ANATOMY_SECTIONS = ["trigger-not-for", "verification"] as const;
 
 export type AnatomySection = (typeof ANATOMY_SECTIONS)[number];
 
@@ -1006,6 +1014,11 @@ export function redFlagsTableBody(text: string): readonly string[] {
   return [];
 }
 
+/** Whether `text` has any heading spelled as a Red Flags / rationalization heading, qualifying table or not. */
+export function hasRedFlagsHeading(text: string): boolean {
+  return text.split("\n").some((line) => RED_FLAGS_HEADING_PATTERN.test(line));
+}
+
 /** Whether `text` carries a Red Flags / rationalization table, per the definition above. */
 export function hasRedFlagsSection(text: string): boolean {
   return redFlagsTableBody(text).length > 0;
@@ -1115,7 +1128,6 @@ export function skillLineCount(text: string): number {
 /** What each `AnatomySection` reports as, when a finding names it. */
 const ANATOMY_SECTION_LABELS: Record<AnatomySection, string> = {
   "trigger-not-for": 'a trigger with a "NOT for" clause',
-  "red-flags": "a Red Flags / rationalization table",
   verification: "a Verification / exit-criteria / STATUS section",
 };
 
@@ -1141,13 +1153,10 @@ export interface AnatomySectionExemption {
  * nothing ever chooses; the caller already decided by writing `Task({
  * subagent_type: "…", … })` with this skill's name literally in the dispatch.
  *
- * This does NOT exempt a Phase subagent from `red-flags` or `verification` —
- * AC9 requires every workflow skill to earn both outright, and a subagent
- * being un-invocable by a user says nothing about whether ITS OWN failure
- * modes are documented or its own output has a checkable shape. Ten of these
- * twelve were missing `red-flags`; T14 wrote a phase-specific Red Flags table
- * into each rather than widening this map, so none of them is carried in
- * `PENDING_ANATOMY_BACKFILL` below any more.
+ * This does NOT exempt a Phase subagent from `verification` — a subagent
+ * being un-invocable by a user says nothing about whether its own output has
+ * a checkable shape. (Red Flags is optional for every skill now, so no
+ * exemption could be needed for it.)
  *
  * What a Phase subagent must still have, in place of the exempted section:
  * every one of the twelve already ships an Iron Laws table (its equivalent of
@@ -1224,9 +1233,7 @@ export const PERMANENT_ANATOMY_EXEMPTIONS: ReadonlyMap<string, AnatomySectionExe
  *
  * Grouped by the task that owns the fix:
  *   - T13 — quality-category skills;
- *   - T14 — platform, planning and orchestration-category skills (this is
- *     also where the ten Phase subagents missing `red-flags` live, since they
- *     ship under `planning/`);
+ *   - T14 — platform, planning and orchestration-category skills;
  *   - T15 — review-category skills, plus `core/reviewer-skill-creator`
  *     (shipped under `core/`, not `review/`, but its whole subject is
  *     authoring reviewer skills — closer to T15's remit than to T14's
@@ -1915,7 +1922,7 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
       }
     }
 
-    // --- anatomy: trigger/NOT-for, Red Flags, Verification -----------------
+    // --- anatomy: trigger/NOT-for, Verification (Red Flags optional) -------
     //
     // Runs over the whole document (`text`), not only the frontmatter parsed
     // above — `hasNotForClause` explicitly reads body prose too (see its
@@ -1941,12 +1948,19 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
       const pending = PENDING_ANATOMY_BACKFILL.get(exemptionKey);
       const missing: AnatomySection[] = [];
       if (!hasNotForClause(text)) missing.push("trigger-not-for");
-      if (!hasRedFlagsSection(text)) missing.push("red-flags");
       if (!hasVerificationSection(text)) missing.push("verification");
       for (const section of missing) {
         if (permanent?.sections.includes(section) === true) continue;
         if (pending?.sections.includes(section) === true) continue;
         add("anatomy:sections", null, `missing ${ANATOMY_SECTION_LABELS[section]}.`);
+      }
+      // Red Flags is optional, but a heading that announces one must deliver it.
+      if (hasRedFlagsHeading(text) && !hasRedFlagsSection(text)) {
+        add(
+          "anatomy:sections",
+          null,
+          `has a Red Flags / rationalization heading but no qualifying table (at least ${ANATOMY_RED_FLAGS_MIN_ROWS} rows of two cells and ${ANATOMY_RED_FLAGS_MIN_ROW_CHARACTERS} characters each). Fill it in or remove the heading — the section is optional, a hollow one is not.`,
+        );
       }
     }
 
