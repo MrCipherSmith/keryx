@@ -16,6 +16,7 @@ import type {
   GitObservation,
   DocumentRef,
 } from "./types";
+import type { QuickStartOutcome, QuickStartRequest } from "./quick-contract";
 
 const SNAPSHOT_PAGE_LIMIT = 200;
 const SNAPSHOT_MAX_PAGES = 500;
@@ -70,6 +71,12 @@ export interface WorkAdapter {
     signal?: AbortSignal,
   ): Promise<{ observations: GitObservation[]; nextCursor: string | null }>;
   observe(command: WorkCommand, signal?: AbortSignal): Promise<WorkReceipt>;
+  /** One Flow, one Intent and frozen criteria in a single server transaction; the same operation id replays. */
+  quickStart(
+    operationId: string,
+    request: QuickStartRequest,
+    signal?: AbortSignal,
+  ): Promise<QuickStartOutcome>;
   acceptancePreview(
     flowId: string,
     signal?: AbortSignal,
@@ -350,6 +357,26 @@ export function liveWorkAdapter(projectId: string): WorkAdapter {
       )
         return invalid();
       return receipt({ ...data, status: "committed" }, command.operationId);
+    },
+    async quickStart(operationId, request, signal) {
+      const data = await workJson<unknown>(
+        base + "/quick-start",
+        "POST",
+        request,
+        signal,
+        operationId,
+      );
+      if (
+        !isObject(data) ||
+        typeof data.flowId !== "string" ||
+        typeof data.intentId !== "string"
+      )
+        return invalid();
+      return {
+        receipt: receipt(data, operationId),
+        flowId: data.flowId,
+        intentId: data.intentId,
+      };
     },
     async acceptancePreview(flowId, signal) {
       const value = await workJson<unknown>(

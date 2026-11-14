@@ -286,6 +286,9 @@ export function demoWorkAdapter(projectId: string): WorkAdapter {
         throw new ApiError(404, "not-found", "Unknown demo operation");
       return receipt.receipt;
     },
+    async quickStart() {
+      throw new ApiError(501, "quick-start-unavailable", "Demo has no quick start");
+    },
     async acceptancePreview() {
       throw new ApiError(
         409,
