@@ -16,7 +16,7 @@ triggers:
   - "review core boundaries"
 metadata:
   author: "MrCipherSmith"
-  version: "1.0.0"
+  version: "1.1.0"
   category: "review"
 license: "MIT"
 ---
@@ -24,7 +24,7 @@ license: "MIT"
 # Review — Core Boundaries
 
 Reviewer for shared infrastructure modules. A core module should provide stable foundations
-used by feature modules; it should not accumulate feature-specific behaviour. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history).
+used by feature modules; it should not accumulate feature-specific behaviour. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history), and the read-only layer commands the orchestrator lists (`keryx gdgraph affected|find`, `keryx test related`, `keryx wiki ask`, `keryx memory search`, `keryx ctx rg|read`); it never writes in the reviewed tree.
 
 ---
 

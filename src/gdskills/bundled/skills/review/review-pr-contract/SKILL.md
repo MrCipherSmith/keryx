@@ -17,7 +17,7 @@ triggers:
   - "documentation needed"
 metadata:
   author: "MrCipherSmith"
-  version: "1.0.0"
+  version: "1.1.0"
   category: "review"
   flags: "--pr-contract"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
@@ -29,7 +29,7 @@ license: "MIT"
 
 Reviewer for what the pull request says about itself. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs.
 
-This lane exists because nobody else reads the PR body. `review-logic` reads the code,
+This lane owns one thing no other reviewer holds: each checklist box and claim of the PR body set against the diff and the documentation outside it. The orchestrator's Stage 1 gate reads the body for spec compliance and `review-degradation` for `diff-vs-description`; neither works the checklist. `review-logic` reads the code,
 `review-testing-practices` reads the tests, and a retrospective review of a merged
 frontend PR missed a documentation gap that sat in plain view: the body left
 **Documentation needed** unticked while the diff added a user-visible table row, and
@@ -79,8 +79,7 @@ and was not touched:
 
 - `keryx gdgraph find <symbol>` and `keryx gdgraph affected <file>` — what points at the
   changed file; a `.md` or docs-site file in the answer is a candidate.
-- `keryx wiki ask "<the changed behaviour>"` and `keryx wiki query` — the wiki pages that
-  name it.
+- `keryx wiki ask "<the changed behaviour>"` — the wiki pages that name it.
 - `keryx ctx rg "<the old label or flag>" docs README.md` — the string the change
   replaced, wherever it is still quoted.
 
@@ -92,7 +91,7 @@ moved it. A document that is merely related is not a finding.
 A reviewer on a shell host is read-only: its file tool reads inside its working directory
 and it runs no `keryx` command. Work from `pr-context.md` and the slices you were
 supplied. If answering needs a document you were not given, do not guess it: reply
-`STATUS: NEEDS_CONTEXT` and name the paths (or the symbol and the wiki query) the
+`STATUS: NEEDS_CONTEXT` and name the paths (or the symbol and the wiki question) the
 orchestrator should supply. Rows you could settle from what you hold are still reported.
 
 ## Severity

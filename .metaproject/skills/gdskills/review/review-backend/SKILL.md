@@ -15,7 +15,7 @@ triggers:
   - "review NestJS"
 metadata:
   author: "MrCipherSmith"
-  version: "1.0.0"
+  version: "1.3.0"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
   stack_requires: "nestjs,prisma"
@@ -26,7 +26,7 @@ license: "MIT"
 
 Focused backend reviewer covering NestJS patterns, REST API design, database access patterns,
 and TypeScript correctness for service-layer code. This skill does NOT duplicate security or
-performance checks — those belong to `review-security-code` and `review-performance`. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history).
+performance checks — those belong to `review-security-code` and `review-performance`. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history), and the read-only layer commands the orchestrator lists (`keryx gdgraph affected|find`, `keryx test related`, `keryx wiki ask`, `keryx memory search`, `keryx ctx rg|read`); it never writes in the reviewed tree.
 
 ---
 
@@ -79,7 +79,7 @@ git diff --name-status "${BASE_SHA}" && git diff "${BASE_SHA}" && git ls-files -
 
 **Module structure**
 - `@Module()` declaration present; providers, imports, exports are correctly listed
-- Circular dependency risk: two modules importing each other — flag as `major` if detected; suggest `forwardRef()`
+- Circular dependency risk: two modules importing each other — defer the cycle to `review-architecture`; suggest `forwardRef()`
 - Feature modules do not import `AppModule`
 
 **Provider scope**
@@ -91,18 +91,17 @@ git diff --name-status "${BASE_SHA}" && git diff "${BASE_SHA}" && git ls-files -
 - All controller methods accepting user input (body, query, param) have a DTO class decorated with `class-validator` decorators
 - Required fields: `@IsString()`, `@IsNumber()`, `@IsEmail()`, etc. present and accurate
 - `@IsOptional()` used only on truly optional fields; non-optional fields must not have `@IsOptional()`
-- `ValidationPipe` applied globally (in `main.ts`) or explicitly via `@UsePipes(ValidationPipe)` — **blocker** if missing on any endpoint accepting user input
+- `ValidationPipe` applied globally (in `main.ts`) or explicitly via `@UsePipes(ValidationPipe)` — missing on an endpoint accepting user input is rated by the DTO row of the conditions table
 - `@Transform()` used where input coercion is needed (e.g., string → number from query params)
 
 **Guards and roles**
 - Protected endpoints have `@UseGuards(...)` with appropriate guard(s)
-- Role-based access uses `@Roles(...)` decorator with a roles guard — missing guard on an endpoint that should be protected is a **blocker**
+- Role-based access uses `@Roles(...)` decorator with a roles guard — a missing guard on an endpoint that should be protected is rated by the auth-guard row of the conditions table
 - Public endpoints explicitly marked with `@Public()` or equivalent decorator, not just left unguarded
 
 **Controller responsibilities**
-- Controllers are thin: no business logic, no direct ORM calls, no computation
-- Controller methods do: parse input → delegate to service → return response
-- If business logic is in a controller method, flag as `major` ("move to service layer")
+- Controllers are thin: no business logic, no direct ORM calls, no computation; a method does parse input → delegate to service → return response
+- If business logic is in a controller method, flag it per the controller row of the conditions table (`minor`: "move to service layer")
 
 **Service layer**
 - Business logic lives in services
@@ -131,7 +130,7 @@ git diff --name-status "${BASE_SHA}" && git diff "${BASE_SHA}" && git ls-files -
 **Error handling**
 - Async controller methods must have error handling: either `try/catch` or a global exception filter
 - Unhandled promise rejections (async method without try/catch, no global filter) — **blocker**
-- Exception messages must not leak internal details (stack traces, ORM error strings) to the HTTP response — leaking is a **blocker**
+- Exception messages must not leak internal details (stack traces, ORM error strings) to the HTTP response — leaking is rated by the stack-trace row of the conditions table
 - NestJS built-in exceptions (`NotFoundException`, `BadRequestException`, etc.) preferred over generic `Error`
 
 ---
@@ -139,7 +138,7 @@ git diff --name-status "${BASE_SHA}" && git diff "${BASE_SHA}" && git ls-files -
 ### 3. Database Patterns (ORM)
 
 **N+1 queries**
-- Relation loaded inside a loop without eager loading (`relations`, `leftJoinAndSelect`) or a DataLoader — **always major**
+- Relation loaded inside a loop without eager loading (`relations`, `leftJoinAndSelect`) or a DataLoader — rated by the N+1 row of the conditions table
 - Example: `for (const user of users) { user.orders = await orderRepo.find(...) }` — flag with concrete suggestion to use `relations: ['orders']` or batch query
 
 **Transactions**
@@ -148,9 +147,9 @@ git diff --name-status "${BASE_SHA}" && git diff "${BASE_SHA}" && git ls-files -
 - NestJS TypeORM: use `dataSource.transaction(async (manager) => { ... })` or `@Transaction()` decorator pattern
 
 **Raw query safety**
-- String interpolation in raw queries is a **blocker** (SQL injection risk)
+- String interpolation in raw queries: SQL injection risk, rated by the raw-SQL row of the conditions table
 - Use parameterized queries: `query('SELECT * FROM users WHERE id = $1', [id])`
-- Flag `createQueryBuilder().where('id = ' + id)` as blocker
+- Flag `createQueryBuilder().where('id = ' + id)` under that row
 
 **Soft deletes**
 - If the project schema uses `deletedAt` / `@DeleteDateColumn()`, deletions must use `.softRemove()` / `.softDelete()`, not `.remove()` / `.delete()`
@@ -159,7 +158,7 @@ git diff --name-status "${BASE_SHA}" && git diff "${BASE_SHA}" && git ls-files -
 **Migration safety**
 - Column removed in migration — check that no application code still references it
 - Dropping a column without a deprecation period in a live system flagged as `major`
-- `NOT NULL` column added without a default value to a populated table — **blocker**
+- `NOT NULL` column added without a default value to a populated table — `major`; `blocker` only on shown truncation
 
 ---
 
@@ -205,15 +204,16 @@ is, and a condition that cannot name one is not a `blocker`.
 
 | Condition | Severity | Shape |
 |---|---|---|
-| Missing DTO validation on an endpoint accepting user input | `blocker` | Exploitable vulnerability |
-| String interpolation in raw SQL query | `blocker` | Exploitable vulnerability |
-| Leaking stack trace / raw ORM error to API response | `blocker` | Exploitable vulnerability (information disclosure) |
+| Missing DTO validation on an endpoint accepting user input | `blocker` with an attack vector stated (input, entry point, impact — `review-security-code` law); `major` with a named malformed input and wrong outcome; else `info` | Exploitable vulnerability only when the vector is shown |
+| String interpolation in raw SQL query | `blocker` with an attack vector stated (input, entry point, impact); `major` with a named input and wrong outcome; else `info` | Exploitable vulnerability only when the vector is shown |
+| Leaking stack trace / raw ORM error to API response | `blocker` with an attack vector stated (what is disclosed, to whom, through which entry point); `major` when the leak is shown reaching a response; else `info` | Exploitable vulnerability only when the vector is shown; a shown leak is a wrong outcome |
+| Missing auth guard on an endpoint that should be protected | `blocker` with an attack vector stated (caller, entry point, impact); `major` with a named caller and the wrong outcome it gets; else `info` | Exploitable vulnerability only when the vector is shown |
 | `REQUEST`-scoped provider injected into a `Singleton` | `blocker` | Data corruption — one request's state is served to another |
 | Unhandled promise rejection in a controller method | `blocker` | Crash |
-| `NOT NULL` column added without a default to a populated table | `blocker` | Data loss — the migration fails or truncates |
-| N+1 query (relation loaded in a loop) | `major` (minimum) | Named trigger and outcome; degradation, not an outage. Same rating as `review-highload` |
+| `NOT NULL` column added without a default to a populated table | `major` — the migration fails on deploy against existing rows; `blocker` only where the tool shown truncates or backfills wrong values | Data loss only when rows are shown destroyed or wrong. Same rating as `review-highload` |
+| N+1 query (relation loaded in a loop) | `major` with the reachable loop size or call frequency named; else `info` | Cost stated with its frequency; degradation, not an outage |
 | Missing transaction on a multi-step atomic mutation | `major` — `blocker` where a partial write corrupts persisted state | The outcome decides |
-| Business logic in a controller | `major` | Layer violation. Same rating as `review-architecture` |
+| Business logic in a controller | `minor` — `major` only with a concrete defect it causes (trigger and outcome) or a stated project rule it breaks | Layer violation. Same rating as `review-architecture` |
 | Missing pagination on an unbounded list endpoint | `major` — `blocker` where an attacker-reachable request exhausts memory | Degradation vs. crash/DoS |
 
 ---
@@ -282,7 +282,7 @@ STATUS: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED
 ```markdown
 # Backend Review Report
 
-## Verdict: APPROVE | APPROVE_WITH_SUGGESTIONS | REQUEST_CHANGES
+<!-- No merge verdict: the orchestrator owns it. A standalone run summarizes findings only. -->
 
 ## Summary
 <2-4 sentences covering what changed, overall backend health, key concerns.>
@@ -343,8 +343,8 @@ When dispatched by `review-orchestrator` or `job-orchestrator`, the prompt MAY c
 |----------------|-----------------|
 | "ValidationPipe is probably configured somewhere" | Always verify it is applied; assumption lets injection reach service layer |
 | "The N+1 only runs on small datasets now" | Data grows; flag it now with a clear fix, not after the incident |
-| "The controller has some logic but it's minor" | The line is binary — logic in controller = untestable without HTTP stack |
-| "Stack trace in response only shows in dev" | Config can be wrong in prod; treat it as blocker always |
+| "The controller has some logic but it's minor" | Logic in a controller is `minor` unless a defect is named; say which, do not rate by feeling |
+| "Stack trace in response only shows in dev" | Config can be wrong in prod; report it per the stack-trace row; blocker needs a shown vector |
 | "I'll skip the migration check — it's just a column rename" | Column renames without fallback break zero-downtime deploys |
 
 <!-- keryx:layers-block:start -->

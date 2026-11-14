@@ -16,7 +16,7 @@ triggers:
   - "check layers"
 metadata:
   author: "MrCipherSmith"
-  version: "1.0.0"
+  version: "1.2.0"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
@@ -26,7 +26,7 @@ license: "MIT"
 
 Specialized reviewer for **architectural patterns and structural decisions**.
 Reviews only changes introduced in the current branch (merge-base to HEAD).
-Focuses exclusively on verifiable structural violations — not style opinions or hypothetical concerns. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history).
+Focuses exclusively on verifiable structural violations — not style opinions or hypothetical concerns. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history), and the read-only layer commands the orchestrator lists (`keryx gdgraph affected|find`, `keryx test related`, `keryx wiki ask`, `keryx memory search`, `keryx ctx rg|read`); it never writes in the reviewed tree.
 
 ---
 
@@ -257,13 +257,13 @@ conditions land under that rubric, not a second rubric.
 |---|---|---|
 | Circular dependency that fails at runtime (an import resolves to `undefined` on a path the change reaches) | `blocker` | Crash |
 | Module scope mismatch that produces wrong data across requests | `blocker` | Data corruption |
-| Layer violation — API/IO call in a component, business logic in a controller, domain importing infrastructure | `major` | A named trigger and a named outcome, but structural: not a crash, data loss, vulnerability, or missing acceptance criterion. Identical to `review-frontend`'s rule for the same condition |
-| Broken DIP; cross-module coupling with a named consequence | `major` | Same |
+| Layer violation — API/IO call in a component, business logic in a controller, domain importing infrastructure | `minor` — `major` only when a concrete defect it causes is named (trigger and outcome) or a stated project rule makes it one | Structural cost lands on the next editor. Identical to `review-frontend` and `review-backend` for the same condition |
+| Broken DIP; cross-module coupling | `minor` — `major` under the same condition | Same |
 | SRP smell with a clear separation path; ISP violation; a component reading several raw observables instead of a computed | `minor` | The code is correct; the cost is to whoever restructures it next |
 | Architectural opinion with no named violation | `info` | Shared laws 1 and 2 |
 
-A circular import that resolves cleanly is not a `blocker` — it is `minor`, and
-if the concern is purely readability it belongs to `review-style`.
+This lens owns circular imports: one that resolves cleanly is `minor`, not a
+`blocker`; `review-style` and `review-clean-code` defer to this rating.
 
 ## Iron Laws
 

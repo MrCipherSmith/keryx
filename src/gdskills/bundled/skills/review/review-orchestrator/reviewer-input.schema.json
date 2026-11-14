@@ -189,20 +189,12 @@
       "type": "string",
       "enum": ["read-only", "run-tests"],
       "default": "read-only",
-      "description": "What the reviewer may do beyond reading. `read-only` (the default): read the diff and files, and run no command, except the read-only history commands `git log`, `git blame` and `git show` (shared law 4; the premise judge too) where the host gives a read-only child git. On keryx shell a read-only child has no shell and no git tool: the parent passes `git log -L`/`git blame` output in `context_files`. `run-tests`: at most one testing reviewer per round may run the tests, inside `exec_budget_s`. Verification commands go through the parent's `keryx review verify-run --timeout`."
+      "description": "What the reviewer may do beyond reading. `read-only` (the default): read the diff and files, and run no command, except the read-only history commands `git log`, `git blame` and `git show` (shared law 4; the premise judge too) where the host gives a read-only child git. Beyond those it runs only the layers-block commands (`keryx gdgraph affected|find`, `keryx test related`, `keryx wiki ask`, `keryx memory search`) and `keryx ctx rg|read`, and never a command that writes in the reviewed tree. On keryx shell a read-only child has no shell and no git tool: the parent passes `git log -L`/`git blame` output in `context_files`. `run-tests`: at most one testing reviewer per round may run the tests, inside `exec_budget_s`. Verification commands go through the parent's `keryx review verify-run --timeout`."
     },
     "exec_budget_s": {
       "type": "integer",
       "minimum": 0,
       "description": "Seconds of command time the reviewer may spend in total. 0 or absent with `allowed_tools: read-only`; a positive budget with `run-tests`."
-    },
-    "known_findings": {
-      "type": "array",
-      "description": "Findings already recorded by earlier waves of this round. Do not report them again; `keryx review ingest` merges duplicates.",
-      "items": {
-        "type": "object",
-        "additionalProperties": true
-      }
     },
     "prior_findings": {
       "type": "array",
@@ -252,7 +244,7 @@
     },
     "known_findings": {
       "type": "array",
-      "description": "Findings an EARLIER WAVE of this same round already reported, from `knownFindingsForWave(<package>)` in src/review/dedupe.ts: id plus the file/line/quote anchor, nothing else. A reviewer that would raise the same defect at the same site cites the known id in its evidence instead of re-reporting it; ingest merges whatever duplicates still arrive (same file, line within 3 or same quote, same mechanism) into one finding with the highest severity and `reported_by`. Optional; absent on the first wave.",
+      "description": "Findings an EARLIER WAVE of this same round already reported, from `knownFindingsForWave(<package>)` in src/review/dedupe.ts: id plus the file/line/quote anchor, nothing else. A reviewer that would raise the same defect at the same site cites the known id in its evidence instead of re-reporting it; `keryx review ingest` merges whatever duplicates still arrive (same file, line within 3 or same quote, same mechanism) into one finding with the highest severity and `reported_by`. Optional; absent on the first wave.",
       "items": {
         "type": "object",
         "required": ["id"],

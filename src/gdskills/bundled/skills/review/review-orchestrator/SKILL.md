@@ -14,7 +14,7 @@ triggers:
   - "review --hierarchical"
 metadata:
   author: "MrCipherSmith"
-  version: "1.14.0"
+  version: "1.16.0"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
@@ -111,7 +111,7 @@ Publish this checklist with `plan_set` under the ids `step-0`…`step-14` and `s
 ## How to spawn (Steps 8 and 10)
 
 - One `Agent` call per reviewer, all calls of a wave in a single message, so the wave runs in parallel.
-- Reviewers are read-only: they read the diff and the files and run no command, except the read-only history commands `git log`, `git blame` and `git show` (law 4; `review-premise` too) where the host gives a read-only child git. keryx shell does not: a `spawn_subagent` child has no shell and no git tool, so you run `git log -L <start>,<end>:<file>` and `git blame -L <start>,<end> <file>` for each deliberate-looking site a reviewer must judge and pass the output in `context_files`; with neither, the reviewer says the history was not read. Only you (through `keryx review verify-run --timeout <seconds>`), the verifier and at most one testing reviewer run other commands, inside a time budget. Each payload carries `allowed_tools` (`read-only` or `run-tests`) and `exec_budget_s`.
+- Reviewers are read-only: they read the diff and the files and run only the read-only commands: `git log`, `git blame` and `git show` (law 4; `review-premise` too) where the host gives a read-only child git. keryx shell does not: a `spawn_subagent` child has no shell and no git tool, so you run `git log -L <start>,<end>:<file>` and `git blame -L <start>,<end> <file>` for each deliberate-looking site a reviewer must judge and pass the output in `context_files`; with neither, the reviewer says the history was not read. Beyond those, a reviewer runs only the layers-block commands (`keryx gdgraph affected|find`, `keryx test related`, `keryx wiki ask`, `keryx memory search`) and `keryx ctx rg|read`, never tests, health checks, servers, mutation or any command that writes in the reviewed tree: that evidence comes from you (`keryx review verify-run --timeout <seconds>`, `keryx review mutate`), the verifier, or the one testing reviewer with `run-tests`, in a scratch copy and a time budget. Each payload carries `allowed_tools` (`read-only` or `run-tests`) and `exec_budget_s`.
 - Use the reviewer's exact `subagent_type`. If the runtime has no such type, use `general-purpose` and name the reviewer's `SKILL.md` path in the prompt. Neither available: that reviewer is `BLOCKED`.
 - Prompts carry pointers, not pasted files — the diff, the SHAs, the PR, the schema paths — and never paraphrase a contract. On keryx shell the slices travel in `context_files` instead (below). Run `keryx review dispatch-check --payload <file> --manifest <package>/slices/manifest.json --package <package>` on every payload before a mass dispatch; it fails `REVIEWER_INPUT_PATH_MISSING` on a missing `skill_path` or `context_doc`.
 - A reply is a result only if it starts with a `STATUS:` line and carries a `REVIEW_RESULT` block matching `reviewer-finding.schema.json`; anything else is `BLOCKED`. The one exception: a reply or dispatch error of `STATUS: RATE_LIMITED` is handled by the Rate limits rule under Control, never marked `BLOCKED`.
@@ -1004,7 +1004,7 @@ Review Plan Preview must include an `Optional legacy/profile reviewers` group (e
 | `--testing-practices` | `review-testing-practices` |
 | `--core-boundaries` | `review-core-boundaries` |
 | `--flow-graph` | `review-flow-graph` |
-| `--layout` / `--ui-ux` | `review-layout` / `review-ui-ux` (UI/UX and AI-slop; live mode too when a URL or dev server is available) |
+| `--layout` / `--ui-ux` | `review-layout` / `review-ui-ux` (UI/UX and AI-slop; live mode too only when the payload supplies a URL or screenshots) |
 | `--pr-contract` | `review-pr-contract` |
 | `--all` | all reviewers above (including `review-highload` and project convention reviewers when local convention docs exist; `review-clean-code` and `review-style` only when the round started with `--style`, and nothing a project lists under `reviewRoles.disabled` in `routing.config.json`); never the legacy/profile reviewers, which stay flag-only |
 | `--verify` | `review-verifier`, started on the first blocker or major and re-run for each later one (`SKILL.detail.md` § "Early verifier"); checks the findings by running something. Delete-only. |
@@ -1313,8 +1313,8 @@ inventing a fifth level to express it would put us back where we started.
 3. **One finding per class, not one per occurrence.** When the same shape appears at several sites, report it once and list every site. Ten findings that are one finding hide the other nine problems.
 4. **A deliberate choice is not a defect until its reason is read and shown wrong.** An explicit override, suppression or exemption, a comment or commit giving a reason, or a sibling doing the same is a decision: read its reason (the comment, `git log -L` or `git blame`, the sibling) before you report it, and report it only when you can show that reason wrong. A project rule is checked against accepted platform practice and its known exceptions before a deviation from it is reported.
 
-`review-security-code` carries a fifth — every security finding states its attack
-vector — which does not generalise and stays there.
+`review-security-code` carries a fifth — a finding that claims attacker impact states its vector; one without a vector
+is rated by trigger and outcome — which does not generalise and stays there.
 
 ## Finding Format
 

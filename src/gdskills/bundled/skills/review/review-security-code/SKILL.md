@@ -13,7 +13,7 @@ triggers:
   - "OWASP review"
 metadata:
   author: "MrCipherSmith"
-  version: "1.0.0"
+  version: "1.4.0"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
@@ -23,7 +23,7 @@ license: "MIT"
 
 ## Purpose
 
-Finds exploitable security vulnerabilities introduced in the changed code of the current branch. Covers injection, auth/authz gaps, IDOR, secrets, insecure crypto, CSRF, path traversal, and framework-specific patterns (NestJS, React). Produces findings with explicit attack vectors and concrete fixes. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history).
+Finds exploitable security vulnerabilities introduced in the changed code of the current branch. Covers injection, auth/authz gaps, IDOR, secrets, insecure crypto, CSRF, path traversal, and framework-specific patterns (NestJS, React). Produces findings with explicit attack vectors and concrete fixes. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history), and the read-only layer commands the orchestrator lists (`keryx gdgraph affected|find`, `keryx test related`, `keryx wiki ask`, `keryx memory search`, `keryx ctx rg|read`); it never writes in the reviewed tree.
 
 This skill covers **code-level security only**. It does NOT audit npm/bun dependency trees, Docker configurations, or deployment surfaces — use `security-audit` for those.
 
@@ -213,10 +213,10 @@ boundary is the trigger-and-outcome test.
 
 ### Security-specific law
 
-1. **Every security finding MUST state the attack vector explicitly.** Name the
-   attacker action, the entry point, and the impact. No attack vector → no finding
-   above `info`. This one does not generalise — a style reviewer has no attacker
-   — so it stays here and only here.
+1. **A finding that claims attacker impact MUST state the attack vector.** Name the
+   attacker action, the entry point, and the impact. With no vector the attacker
+   claim is dropped and the finding is rated by trigger and outcome: `major` with
+   both named, else `info`. This does not generalise (a style reviewer has no attacker), so it stays here.
 
 ---
 
@@ -306,15 +306,14 @@ conditions land under that rubric, not a second rubric.
 | Condition | Severity | Why, under the canonical rubric |
 |---|---|---|
 | Exploitable vulnerability in the current code path, with the attack vector stated | `blocker` | Named shape 3 |
-| A real weakness whose exploitation needs a precondition the diff does not establish — an internal-only endpoint, an authenticated caller, a value not yet attacker-controlled | `major` | Trigger and outcome are named, but the path to exploitation is not complete |
+| A weakness a named trigger reaches in the current code, producing a wrong outcome short of a named attacker impact | `major` | Trigger and outcome are named; not shape 3 |
 | Hardening or defence-in-depth on code that is not currently exploitable | `minor` | The code behaves correctly; the cost is to whoever hardens it later |
-| A pattern with no attack vector in the current code | `info` | Security-specific law, and shared law 1 |
+| A weakness that can be stated but not reached (the precondition — attacker-controlled input, a caller of an internal endpoint — is not shown in the code), or a pattern with no attack vector | `info` | Security-specific law, and shared law 1; say what would settle it |
 
 **"Plausible attack scenario" is not a severity.** A scenario you can state and
-reach is `blocker`; a scenario you can state but cannot reach is `major`; a
-scenario you cannot state is `info`. Being the security reviewer does not raise
-any of them — see the canonical rubric on severity being a property of the
-outcome, not of the domain.
+reach is `blocker`; one you can state but cannot reach, or cannot state, is
+`info` (shared law 1). Being the security reviewer raises none of them: severity
+belongs to the outcome, not the domain (canonical rubric).
 
 ---
 
@@ -329,8 +328,8 @@ Stop and re-read these rules if you are thinking:
 | "MD5 is used for caching keys, not passwords — it's fine" | State it as INFO, but do not silently skip it; it often drifts |
 | "I'll downgrade to minor to avoid friction" | Severity reflects real risk, not social dynamics |
 | "The code uses an ORM so SQL injection is not possible" | ORMs have raw-query escape hatches; verify parameterization |
-| "No attack vector found — I'll call it major anyway" | No attack vector = `info` only, per the security-specific law |
-| "It's a security finding, so it's a blocker" | `blocker` is the four shapes in **Severity (canonical)**. An unreachable weakness is `major` however alarming its name |
+| "No attack vector found — I'll call it major anyway" | Without a vector the attacker claim is dropped, not the finding: it is `major` only with a named trigger and wrong outcome, else `info` (security-specific law) |
+| "It's a security finding, so it's a blocker" | `blocker` is the four shapes in **Severity (canonical)**. An unreachable weakness is `info` (shared law 1) however alarming its name; a reachable one with a named trigger and wrong outcome, short of shape 3, is `major`; reachable but behaving correctly is hardening (`minor`) |
 | "It's outside the diff but the pattern is clearly wrong" | Only flag changed code; flag legacy via INFO with note to track separately |
 
 ---

@@ -1,7 +1,7 @@
 ---
 name: review-performance
 model_tier: standard
-description: "Use when a performance review is requested, checking for N+1 queries, unnecessary re-renders, memory leaks, missing indexes, large bundle imports, and synchronous blocking in changed code. NOT for security, logic correctness, style, or architecture."
+description: "Use when a performance review is requested, checking CLI/TUI hot paths (per keystroke, per file, command startup), N+1 queries, unnecessary re-renders, memory leaks, missing indexes, large bundle imports, and synchronous blocking in changed code. NOT for security, logic correctness, style, or architecture."
 triggers:
   - "performance review"
   - "perf check"
@@ -11,7 +11,7 @@ triggers:
   - "check N+1"
 metadata:
   author: "MrCipherSmith"
-  version: "1.0.0"
+  version: "1.3.0"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
@@ -21,7 +21,7 @@ license: "MIT"
 
 ## Purpose
 
-Finds real, code-level performance problems introduced in the changed code of the current branch. Covers N+1 database queries, unnecessary React re-renders, missing memoization in hot paths, memory leaks, large bundle imports, synchronous blocking in async contexts, missing pagination, and redundant API calls. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history).
+Finds real, code-level performance problems introduced in the changed code of the current branch. Covers CLI and TUI hot paths, N+1 database queries, unnecessary React re-renders, missing memoization in hot paths, memory leaks, large bundle imports, synchronous blocking in async contexts, missing pagination, and redundant API calls. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history), and the read-only layer commands the orchestrator lists (`keryx gdgraph affected|find`, `keryx test related`, `keryx wiki ask`, `keryx memory search`, `keryx ctx rg|read`); it never writes in the reviewed tree.
 
 This skill focuses on **measurable or high-likelihood bottlenecks** only. Premature optimization, hypothetical slowness, and style preferences are out of scope.
 
@@ -42,6 +42,7 @@ This skill focuses on **measurable or high-likelihood bottlenecks** only. Premat
 
 | Concern | This skill | Use instead |
 |---------|-----------|-------------|
+| CLI/TUI hot paths: per keystroke, per frame, per file, command startup | YES | — |
 | N+1 database queries, missing eager loading | YES | — |
 | Unnecessary React re-renders, missing memo/useCallback/useMemo | YES | — |
 | Expensive computations in hot paths (render loops, tight loops) | YES | — |
@@ -64,8 +65,6 @@ This skill focuses on **measurable or high-likelihood bottlenecks** only. Premat
 
 See shared script: `.metaproject/skills/gdskills/shared/git-merge-base.md`
 
-Run the script from that file to determine `MERGE_BASE` (`BASE_SHA`) and `SCOPE` before proceeding.
-
 **Supplied text first.** When the payload carries `slices`, `context_files`, `diff` or `file_contents`, review exactly that text and never rebuild the diff. A choice's history (law 4) is read with `git log`, `git blame` and `git show` only where the host gives a read-only child git; on keryx shell a read-only child has no shell and no git tool, so read the `git log -L`/`git blame` excerpts the payload supplies, or say the history was not read. Only with none supplied, collect it:
 ```bash
 git diff --name-status "${BASE_SHA}" && git diff "${BASE_SHA}" && git ls-files --others --exclude-standard
@@ -78,6 +77,23 @@ git diff --name-status "${BASE_SHA}" && git diff "${BASE_SHA}" && git ls-files -
 
 Work through every category below for each changed file. Tie every finding to a concrete line in the diff. For each finding, state **the hot path or execution frequency** that makes it a real problem — without that, it is INFO only.
 
+### 0. CLI and TUI Hot Paths (check first)
+
+For a command-line tool or a full-screen TUI, where the hot path is a keystroke, a
+render frame, a file in a tree walk or a command start, not a request handler.
+
+- [ ] Work done per keystroke or per render frame (re-reading a file, re-parsing, re-sorting, rebuilding a list) that could be done once per change of its inputs
+- [ ] Per-file work in a command that walks the tree or every flow: a read, parse, `existsSync` or child spawn per entry where one pass or one batch would do
+- [ ] Command startup cost: heavy top-level imports or eager reads in a module every command loads, when only some commands use them
+- [ ] Synchronous I/O (`readFileSync`, `execSync`, `spawnSync`) on an interactive path: input handling, render, a prompt waiting on the user
+- [ ] JSON parse, regex compilation or config load repeated inside a loop instead of hoisted
+- [ ] O(n²) over files, flows, findings or lines: a nested scan, `.includes`/`.find` inside a loop over the same set, sort inside a loop
+- [ ] Polling (`setTimeout`/`setInterval`, `while` wait loop) where an event or a single await would do
+
+**Evidence:** a `verify-run` timing the orchestrator supplies, or a reasoned count
+(calls × size: "per keystroke × a 4,000-line transcript", "per flow × every flow in
+`.metaproject/flows`"). Either is the trigger law 1 asks for.
+
 ### 1. N+1 Database Queries
 
 **Detection patterns:**
@@ -86,11 +102,7 @@ Work through every category below for each changed file. Tie every finding to a 
 - [ ] ORM relation accessed without eager loading inside iteration: `order.items` where `items` is a lazy relation loaded inside a loop
 - [ ] GraphQL resolver loading a child relation per parent without a DataLoader
 
-**Correct patterns to confirm:**
-- Prisma: `include` / `select` on the parent query to fetch relations in one round trip
-- TypeORM: `createQueryBuilder().leftJoinAndSelect()` or `findOptions.relations`
-- MikroORM: `populate` option
-- Raw SQL: `JOIN` rather than a secondary query per row
+**Correct patterns to confirm:** Prisma `include`/`select` on the parent query; TypeORM `leftJoinAndSelect()` or `relations`; MikroORM `populate`; raw SQL `JOIN` rather than a query per row.
 
 **Hot path requirement:** State whether this runs per HTTP request, per list item render, per job iteration, etc.
 
@@ -117,7 +129,7 @@ Work through every category below for each changed file. Tie every finding to a 
 - [ ] `Object.keys().reduce()` or similar aggregation recalculated on every render instead of being derived in store or memoized
 - [ ] Recursive computation without memoization called in a loop
 
-**Hot path requirement:** An expensive computation is only a `major` finding if it runs at render time or in a tight loop. A one-time computation at load time is `info` at most.
+**Hot path requirement:** An expensive computation is a `major` finding when it runs at render time, in a tight loop, or on every CLI command start (a hot path, Part 0). Once per page load is a path you can name: rate it by the table (`major` with its cost and frequency stated, else `minor`). Once per process (server start, a build) is `info` at most.
 
 ### 4. Missing Database Indexes
 
@@ -128,7 +140,7 @@ Detectable from query patterns in changed code (not from DB schema directly):
 - [ ] `LIKE '%term%'` — prefix wildcard prevents index use; flag as info with suggestion to use full-text search
 - [ ] Foreign key column used in JOIN without an index (common ORM footgun)
 
-**Evidence requirement:** Cannot confirm an index is missing without seeing the migration or schema. If schema is not in the diff, downgrade to `minor` and note that the reviewer should check the schema.
+**Evidence requirement:** Cannot confirm an index is missing without seeing the migration or schema. If the schema is not in the payload, it is `info`: say that reading the schema would settle it. Schema shown with no index and the table shown large (its size named): `major`. Schema shown, size not: `minor`.
 
 ### 5. Memory Leaks
 
@@ -217,10 +229,11 @@ boundary is the trigger-and-outcome test.
    issues outside the diff are `info` at most, with a note to track separately.
 3. **An optimisation with no before/after is an unmeasured claim, and a neutral
    one is a finding.** Ask what was measured and on what workload. No pair at all
-   is `minor` — unjustified, not wrong. A neutral pair is `major`, and the fix it
-   suggests is a revert: what counts as neutral under noise, and what the attempt
-   owes the journal, are `perf-check`'s Rules, not restated here. Writing that
-   entry is the author's job, not yours; a revert with no entry is its own `minor`.
+   is `minor` — unjustified, not wrong. A neutral pair is also `minor` (the code is
+   correct; the complexity costs whoever edits it next), and its fix is a revert:
+   what counts as neutral under noise, and what the attempt owes the journal, are
+   `perf-check`'s Rules. Writing that entry is the author's job, not yours; a
+   revert with no entry is its own `minor`.
 
 ---
 
@@ -270,17 +283,10 @@ STATUS: DONE_WITH_CONCERNS
 ## Performance Review
 
 ### Scope
-- Branch: `<BRANCH>`
-- Parent ref: `<PARENT>`
-- Merge-base: `<BASE_SHA>`
-- Scope mode: default-with-uncommitted | explicit-hash-range
-- Changed files reviewed: <N>
+- Branch `<BRANCH>`, parent `<PARENT>`, merge-base `<BASE_SHA>`, mode default-with-uncommitted | explicit-hash-range, <N> changed files
 
 ### Summary
-- Blockers: <N>
-- Major: <N>
-- Minor: <N>
-- Info: <N>
+- blocker: <N> | major: <N> | minor: <N> | info: <N>
 
 ### Findings
 
@@ -291,11 +297,7 @@ STATUS: DONE_WITH_CONCERNS
 - **Problem**: what is wrong in the code
 - **Why it matters**: concrete impact (latency spike, memory growth, render thrash, etc.)
 - **Fix**: concrete suggestion
-- **Patch** (optional):
-```diff
-- slow line
-+ optimized line
-```
+- **Patch** (optional): unified diff
 
 ### Clean Areas
 [List categories with no findings, confirming they were checked]
@@ -309,7 +311,7 @@ conditions land under that rubric, not a second rubric.
 
 | Condition | Severity | Why, under the canonical rubric |
 |---|---|---|
-| A cost that takes the process or request down — OOM, timeout, capacity exhausted at a stated load | `blocker` | Crash |
+| A cost that takes the process or request down — OOM, timeout, capacity exhausted at a stated load or a named trigger | `blocker` | Crash |
 | Bottleneck on a path you can name, with the frequency or data scale that makes it a cost | `major` | Trigger and outcome are both named; slow is not one of the four shapes |
 | Inefficiency off any hot path you can name | `minor` | Correct today; the cost is to whoever tunes it next |
 | "Looks slow", no execution context | `info` | Shared law 1 — no reproducible path |
@@ -321,13 +323,11 @@ A performance finding is `blocker` only when the degradation *is* an outage.
 
 ## Red Flags Table
 
-Stop and re-read these rules if you are thinking:
-
 | Rationalization | Why it's wrong |
 |---|---|
 | "This loop iterates over user data, so N+1 is obviously a problem" | State the expected N and query cost; "user data" is not self-evidently large |
 | "Missing useMemo here is a performance issue" | useMemo has overhead; only flag when the computation is measurably expensive or the component re-renders at high frequency |
-| "The dataset could grow large, so I'll call it a blocker" | "Could grow" = minor or info; known to be large = major or blocker |
+| "The dataset could grow large, so I'll call it a blocker" | "Could grow" = minor or info; known to be large = major, and `blocker` only when it is an outage |
 | "The optimisation measures neutral, but it does no harm — no reason to hold the diff" | The complexity it bought with no measured gain *is* the harm, and it passes review precisely because nothing in it is wrong. Neutral is `revert`, per performance law 3 |
 
 ---

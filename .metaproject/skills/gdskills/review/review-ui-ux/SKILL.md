@@ -17,7 +17,7 @@ triggers:
   - "ai slop check"
 metadata:
   author: "MrCipherSmith"
-  version: "1.0.0"
+  version: "1.2.0"
   origin: "authored"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
@@ -28,8 +28,7 @@ license: "MIT"
 
 Reviewer for what the user sees and does. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs.
 
-Read-only, three passes, cheapest and most objective
-first: deterministic checks → usability heuristics → aesthetic judgment. The tell catalog,
+Read-only, three passes, cheapest and most objective first: deterministic checks → usability heuristics → aesthetic judgment. The tell catalog,
 tiers, thresholds, and slop score come from `rules/core/ui-anti-slop.mdc` — read it first.
 Never edits code; fixes are proposed, not applied.
 
@@ -57,7 +56,7 @@ review-ui-ux Progress:
 |-------|------|----------|-------------|
 | `branch` | string | no | Branch to review. Defaults to current branch. |
 | `commit_range` | string | no | Explicit range. Overrides merge-base detection. |
-| `url` | string | no | Running page/screen for live mode (dev server, preview, staging). |
+| `url` | string | no | A running page the payload supplies for live mode (preview, staging); this reviewer never starts one. |
 | `screenshots` | string[] | no | Image paths when no URL is available. |
 | `primary_task` | string | no | The one job the screen must enable. Inferred and stated if absent. |
 | `context_doc` | string | no | Path to job context document. |
@@ -67,13 +66,14 @@ review-ui-ux Progress:
 - **Code mode** — see `.metaproject/skills/gdskills/shared/git-merge-base.md` for `BASE_SHA`; review UI files changed
   in scope (`*.tsx`, `*.jsx`, `*.vue`, `*.svelte`, `*.css`, `*.scss`, `*.html`, theme/token
   files, Tailwind config). Flag only what the diff introduced or touched.
-- **Live mode** — `url` or `screenshots` given, or a dev server for the changed screens can be
-  started from the project's own scripts. Render at **1440**, **768**, **390** px; light and dark
-  when supported.
-- **Both** — preferred whenever the changed screens can be rendered. Code shows intent; the render
+- **Live mode** — only a `url` or `screenshots` the payload supplies; never start a dev server or
+  any other process. Render a supplied URL at **1440**, **768**, **390** px; light and dark when supported.
+- **Both** — preferred whenever the payload supplies a render. Code shows intent; the render
   shows truth (computed contrast, actual fonts, real target sizes).
+- **No render supplied** — finish the code-mode review (`DONE` / `DONE_WITH_CONCERNS`), list the live checks under
+  "Checks not run" and state the gap in the summary (a URL or screenshots of which screens would close it).
 
-If neither a diff with UI files nor a renderable surface exists, return `NEEDS_CONTEXT`.
+If there is neither a diff with UI files nor a supplied render, return `NEEDS_CONTEXT`.
 
 ---
 
@@ -184,8 +184,7 @@ where its recurring conditions land under that one.
 
 ## Orchestrated Review Contract
 
-When dispatched by `review-orchestrator`, follow the provided
-`reviewer-input.schema.json` payload. Return a `REVIEW_RESULT` object compatible
+When dispatched by `review-orchestrator`, follow the provided `reviewer-input.schema.json` payload. Return a `REVIEW_RESULT` object compatible
 with `.metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json`, then a
 concise markdown summary. Prefix finding ids `UX-`. Return `NEEDS_CONTEXT` instead of guessing
 when the primary task or the renderable surface is unknown and needed.

@@ -105,6 +105,44 @@ describe("mergeDuplicates", () => {
     expect(findings[1]?.id).toBe("F-003");
   });
 
+  test("a negative enumeration merged with a duplicate that lists sites keeps the listing method", () => {
+    const { findings } = mergeDuplicates([
+      finding({ severity: "major", class_scope: { sites: [], enumeration_method: "rg found none" } }),
+      finding({
+        id: "F-002",
+        reviewer: "review-regression",
+        severity: "major",
+        class_scope: { sites: ["src/retry.ts:10"], enumeration_method: "rg attempts" },
+      }),
+    ]);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.class_scope?.sites).toEqual(["src/retry.ts:10"]);
+    expect(findings[0]?.class_scope?.enumeration_method).toBe("rg attempts");
+  });
+
+  test("a canonical that lists its own sites keeps its method over an absorbed member's other listing", () => {
+    // The absorbed lister comes FIRST, so the first scoped member and the first member listing sites both
+    // name it: only the canonical-listed-its-own guard keeps the canonical's method.
+    const { findings, merges } = mergeDuplicates([
+      finding({
+        id: "F-002",
+        global_id: "r#F-002",
+        reviewer: "review-regression",
+        severity: "minor",
+        class_scope: { sites: ["src/other.ts:3"], enumeration_method: "absorbed: listed attempts" },
+      }),
+      finding({
+        global_id: "r#F-001",
+        severity: "major",
+        class_scope: { sites: ["src/retry.ts:10"], enumeration_method: "canonical: every caller of retry" },
+      }),
+    ]);
+    expect(findings).toHaveLength(1);
+    expect(merges[0]?.kept).toBe("r#F-001");
+    expect(findings[0]?.class_scope?.enumeration_method).toBe("canonical: every caller of retry");
+    expect([...(findings[0]?.class_scope?.sites ?? [])].sort()).toEqual(["src/other.ts:3", "src/retry.ts:10"]);
+  });
+
   test("a verifier-confirmed severity is canonical over a higher unconfirmed one", () => {
     const { findings, merges } = mergeDuplicates([
       finding({ severity: "minor", verification: { verdict: "confirmed", method: "execution", evidence: "test red", verifier: "review-verifier" } }),
