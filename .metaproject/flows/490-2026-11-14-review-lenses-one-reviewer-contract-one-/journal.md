@@ -202,3 +202,4 @@ S was measured on c02, c09 and c11 with 3 runs each, against the same truth set,
 - AC8 is met by R = 6.33 against B = 6.33.
 - 2026-11-14T13:40:56.715Z - ac-confirmed: AC6: highload/degradation/ui-ux fallbacks in their lenses; regression no-AC and FIX-slice fallbacks stated in review-orchestrator SKILL.detail.md scope-B dispatch (8cb1e52ab); lens text kept at measured 1.3.0 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
 - 2026-11-14T13:40:56.945Z - ac-confirmed: AC8: blind re-bench: R (shipped 1.3.0 regression lens) 6.33 vs base 6.33 on c02/c09/c11 x3; S draft 5.83 rejected for losing c09 T1; journal 2026-11-14 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-11-14T13:44:14.433Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/1174 (warning: PR is not a draft)

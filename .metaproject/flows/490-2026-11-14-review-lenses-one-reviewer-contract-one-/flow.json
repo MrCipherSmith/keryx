@@ -9,9 +9,9 @@
   "id": "490",
   "slug": "review-lenses-one-reviewer-contract-one-",
   "title": "Review lenses: one reviewer contract, one severity rubric, read-only reviewers",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-11-14T09:10:25.236Z",
-  "updatedAt": "2026-11-14T13:40:56.945Z",
+  "updatedAt": "2026-11-14T13:44:14.433Z",
   "source": {
     "type": "description",
     "ref": null
@@ -56,7 +56,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/1174"
   },
   "baseBranch": "main",
   "owner": {
@@ -488,6 +488,11 @@
       "at": "2026-11-14T13:40:56.945Z",
       "event": "ac-confirmed",
       "detail": "AC8: blind re-bench: R (shipped 1.3.0 regression lens) 6.33 vs base 6.33 on c02/c09/c11 x3; S draft 5.83 rejected for losing c09 T1; journal 2026-11-14 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-14T13:44:14.433Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1174 (warning: PR is not a draft)"
     }
   ],
   "acKinds": {
