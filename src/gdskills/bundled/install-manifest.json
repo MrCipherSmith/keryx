@@ -389,6 +389,7 @@
         "src/gdskills/bundled/rules/core/security-baseline.mdc",
         "src/gdskills/bundled/rules/core/session-plan-bridge.mdc",
         "src/gdskills/bundled/rules/core/shared-definitions.mdc",
+        "src/gdskills/bundled/rules/core/skill-authoring.mdc",
         "src/gdskills/bundled/rules/core/skills-storage-workflow.mdc",
         "src/gdskills/bundled/rules/core/solid-principles.mdc",
         "src/gdskills/bundled/rules/core/storybook-guidelines.mdc",

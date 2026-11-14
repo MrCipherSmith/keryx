@@ -1,0 +1,190 @@
+---
+description: "Content standard for skill, reviewer-lens and rule text: keep only what changes model behaviour — trigger, finish line, filters, calibration, output format, project decisions — and name a published canon instead of restating it."
+alwaysApply: false
+applies_to: process
+---
+
+# Skill Authoring Standard
+
+## Purpose
+
+Current models already know the published canon of software engineering: design principles,
+well-known books, framework documentation. A skill earns its context with what the model
+cannot know — this project's decisions, where the work ends, what not to report, how to grade
+a result. Text that restates the canon is paid for on every load and changes nothing.
+
+Measured on keryx's own clean-code review lens: replacing its restated textbook material with
+a table of project decisions cut the lens from 531 to 220 lines with no loss of recall and no
+added noise, and one filter ("a threshold counts only when this change crosses it") removed a
+third of the noise findings. Filters and decisions moved the numbers; principles did not.
+
+This rule governs **content**. Storage, frontmatter and length ceilings are in
+`skills-storage-workflow.mdc`; freshness is in `skill-lifecycle.mdc`.
+
+## When To Apply
+
+- Writing or editing a `SKILL.md`, a reviewer lens, a rule file, or a subagent instruction.
+- Reviewing a change to any of those.
+- Auditing existing skills and rules for text that no longer changes behaviour.
+
+## Mandatory Behavior
+
+### 1. Apply the deletion test to every line
+
+A line stays only if a capable model would behave differently without it. These fail:
+definitions of well-known concepts, restated principles, generic advice ("write readable
+code"), and motivation for doing the task well. When unsure about a line you are writing,
+leave it out and let the evidence in section 7 decide; for text that already ships, follow
+section 9.
+
+### 2. Name the canon, then state what the name cannot carry
+
+Reference a published standard by name, in one line. Then write the part the name leaves
+open:
+
+- which side wins where the canon contradicts itself or another named canon (small functions
+  against deep modules, removing duplication against keeping code local);
+- where this project departs from the canon on purpose, and why — otherwise the departure is
+  reported as a defect on every run.
+
+A named canon brings its dogma with it. Pair every such reference with filters (section 3),
+or the output fills with findings the canon implies and the project does not want.
+
+A line that mixes the two is split: in "functions should be small and focused; flag as
+minor", the grade stays and the explanation goes.
+
+### 3. Carry the content a model cannot derive
+
+Include each of these that applies to the skill:
+
+- **Trigger** — `description` says what the skill does and when to use it. Conditions of use
+  live there, because the body is not loaded until the skill is chosen.
+- **Finish line** — the state in which the work is done.
+- **Filters** — what not to do or report: debt that predates the change, anything a linter
+  already catches, anything the change did not touch.
+- **Calibration** — for a skill that grades: the severity scale, the confidence below which a
+  finding is dropped, and the evidence a finding must carry (a failing input, not "violates
+  a principle").
+- **Input and output contracts** — a template or a schema, for what the skill receives
+  and what it returns.
+- **Project decisions** — thresholds, conventions, and the departures from section 2. A
+  decision is a specific value or choice the canon leaves open: "40 lines", "locality wins".
+  A language's or framework's published default (camelCase in TypeScript) is canon;
+  choosing between published conventions, or departing from the default, is a decision.
+  In a shipped rule it is a default a project may override; it stays even when its origin
+  was never recorded, because the value still constrains the result where the explanation
+  around it does not.
+- **Known default failures** — specific outputs the model produces by default and should
+  not. A change that adds one names the run where it was seen.
+
+### 4. Write steps only where order is a constraint
+
+Use numbered steps when a step is a gate for the next one or the operation is fragile enough
+that one path is safe. Otherwise state the goal and the finish line. An operation that must
+run the same way every time belongs in a script the skill runs, not in prose the model
+re-derives.
+
+### 5. Give the reason, not the emphasis
+
+A hard rule states its reason in the same sentence, so the model can apply it to a case the
+rule did not foresee. Capitalised emphasis is for a gate whose miss cannot be undone; used
+elsewhere it makes the model apply the rule too widely.
+
+### 6. Offer one default
+
+Give one recommended approach and the condition under which to use the alternative. A list
+of equivalent options moves the choice back to the model without the context to make it.
+
+### 7. Add a line for an observed failure, keep it while it shows an effect
+
+A new line answers a failure seen in a run, not one imagined in advance. For a shipped skill,
+compare its routing and behaviour evals with and without the change; a line that moves
+nothing is removed, and a change that makes them worse is recorded as
+`skills-storage-workflow.mdc` ("Rejected Changes") requires.
+
+### 8. Check the smallest tier the skill runs on
+
+A skill dispatched to a lighter tier (`model-selection.mdc`) is tested on that tier. A line
+the flagship does not need can pass the deletion test for the lighter model; keep it, and say
+which tier it is for. This protects procedure and precision, not restated canon or
+motivation: every tier already knows the published canon.
+
+### 9. Audit existing text by what reading can decide
+
+Reading settles sections 1 and 2; sections 4, 7 and 8 need a run. An audit of text that
+already ships therefore sorts each block into one of three:
+
+- **Remove** — restated canon or motivation, with no decision, filter or grade in it. A code
+  example of a published principle is restated canon; an example that shows a project
+  decision is not.
+- **Keep** — anything section 3 lists, and any block a test pins or a required section
+  holds. For a skill, the required sections are its anatomy; for a rule, the headings
+  `rule-management-workflow.mdc` ("Rule File Standard") requires — the heading stays, its
+  content follows sections 1 and 2. A line that feeds a required field of the output (a
+  `Fix`, a severity) stays whole. To remove pinned text, change the check in the same
+  change.
+- **Undecided** — everything else. It stays until a run decides: an eval comparison, or a
+  run on the lightest tier the skill is dispatched to. Where no eval covers the file, say
+  so; reading alone does not justify the removal.
+
+Two findings are reported rather than sorted: a capitalised rule without a reason
+(section 5) is rewritten with its reason, and numbered steps that are not gates
+(section 4) are Undecided.
+
+An existing line is not removed for lacking a record of the failure it answers; that record
+is required only of lines added from now on.
+
+A file that shrinks to a few lines stays a short file while anything cites it by name.
+Shortness is the expected result, not a gap to refill.
+
+## Output Contract
+
+When this rule drives an edit or a review of a skill or rule:
+
+- Report each removed block as `file:line` with the section of this rule it failed.
+- Report each added line with the observed failure it answers.
+- Report the line count before and after; a trimmed shipped skill lowers its ceiling in the
+  same change (`skills-storage-workflow.mdc`, "Length Ceilings").
+- Report each undecided block with the run that would decide it.
+- Input and output formats and schemas, and safety, permission and confirmation text are out
+  of scope —
+  never removed under this rule.
+
+## Examples
+
+### Restated canon → named canon plus the project's decision
+
+```
+# Before
+The Single Responsibility Principle states that a class should have only one
+reason to change. A function should do one thing, and do it well. Functions
+should be small...
+
+# After
+Review against SOLID and Clean Code. In this project:
+- a function mixing I/O with a transform is a finding at any length;
+- length alone is a finding only past 40 lines;
+- where "small functions" and locality conflict, locality wins.
+```
+
+### Principle → filter
+
+```
+# Before
+Report long functions, duplicated literals and long parameter lists.
+
+# After
+A threshold counts only when this change crosses it. One more line in a
+function that was already too long is not a finding.
+```
+
+### Emphasis → reason
+
+```
+# Before
+NEVER report style issues.
+
+# After
+Leave style to the linter: a finding the linter already raises is noise
+for the author and hides the ones it cannot see.
+```
