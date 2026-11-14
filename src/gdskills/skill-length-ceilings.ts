@@ -165,7 +165,7 @@ const CEILINGS_BY_KEY = {
   "review/review-pr-contract": 190,
   "review/review-pr-feedback": 893,
   "review/review-premise": 180,
-  "review/review-regression": 213,
+  "review/review-regression": 212,
   "review/review-security-code": 358,
   "review/review-style": 354,
   "review/review-testing-practices": 293,

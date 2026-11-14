@@ -13,7 +13,7 @@ triggers:
   - "blast radius"
 metadata:
   author: "MrCipherSmith"
-  version: "1.2.0"
+  version: "1.3.0"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
@@ -21,7 +21,7 @@ license: "MIT"
 
 # Review: Regression
 
-You are reviewing **scope B** of a deep round (or a FIX slice: see "What you are given"). The files you are given are not
+You are reviewing **scope B** of a deep round. The files you are given are not
 under review. They are under **regression check**. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history), and the read-only layer commands the orchestrator lists (`keryx gdgraph affected|find`, `keryx test related`, `keryx wiki ask`, `keryx memory search`, `keryx ctx rg|read`); it never writes in the reviewed tree.
 
 ## The one question
@@ -84,10 +84,8 @@ Step 3b.
 - the diff — what changed;
 - the blast-radius set, each entry with its dependency path back to the change,
   computed from the code graph rather than chosen by a model;
-- the flow's frozen acceptance criteria (none supplied: use the PR body or issue the payload carries, else say in the summary that no criteria were supplied);
+- the flow's frozen acceptance criteria;
 - the previous round's findings.
-
-**On a FIX slice** there is no blast-radius set: review the fix lines for regressions of the behaviour they touch (the path each `prior_findings` entry named, and its neighbours), with the same bar of a named trigger, outcome and change, and return `prior_dispositions`.
 
 The set is bounded by edge distance and a file cap, and **everything the cap dropped is recorded**. If the record says files were dropped, say so in your summary rather than implying the set was complete.
 
@@ -114,7 +112,8 @@ reviewed by scope A. Anchor the finding where the damage lands.
 - The code in the blast radius was already imperfect. Not yours.
 - The change makes an existing weakness easier to reach, but the weakness is
   unreachable in this codebase. That is `info` under law 1.
-- A test in the set is thin. Not a regression: test coverage is `review-testing-practices`' lane, not this one.
+- A test in the set is thin. Say it under scope A if the change touched it;
+  otherwise it is not a regression.
 
 ## What you cannot see, and must not pretend to
 
@@ -197,7 +196,7 @@ Report done only once all of these hold:
 - Every finding is `major` or above, and every `major` names the changed file, module or symbol whose behaviour moved — the anchor alone does not carry it.
 - Every finding carries `class_scope` whose `sites` are the callers that break and whose `enumeration_method` is the walk over the blast-radius set that produced them.
 - The summary states whether the cap dropped files, and whether the radius could answer the question at all for the shape of this change.
-- Nothing that is merely an observation about pre-existing code is filed here; it is left to the scope A reviewers or not filed at all.
+- Nothing that is merely an observation about pre-existing code is filed here; it is either raised under scope A or not at all.
 
 <!-- keryx:layers-block:start -->
 ## Project layers: graph, tests, wiki, memory
