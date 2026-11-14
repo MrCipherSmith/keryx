@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Keryx Cockpit — интерактивный прототип</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="demo-bar"><span><b>ДЕМО</b> Keryx Cockpit <span class="muted">/ концепт для Herdr</span></span><div><label for="scenario">Сценарий</label> <select id="scenario"></select><button id="width" aria-pressed="false">Узкая панель</button></div></header>
+<div class="shell">
+<nav class="rail" aria-label="Макет проектов"><div class="brand-icon">K</div><div class="rail-active">⌘</div><div>▤</div><div>◈</div><span class="rail-bottom">v0.1</span></nav>
+<main class="workspace">
+<header class="window-bar"><span class="dots">● ● ●</span><span>herdr <span class="muted">/ keryx</span></span><span class="muted">Локальный прототип</span></header>
+<div class="split">
+<section class="terminal" aria-label="Макет терминала">
+<div class="tabs"><span class="tab active">◉ backend</span><span class="tab">○ reviewer</span><span class="tab">＋</span></div>
+<div class="terminal-body"><div class="terminal-logo">KERYX <span>build with intent.</span></div><p class="muted">~/projects/keryx <span class="green">main</span></p><div class="prompt">› Исправь истечение сессии при параллельных запросах</div><div id="terminal-content"></div><div class="terminal-hint">Это макет терминала. Команды не выполняются.</div></div>
+<div class="input-mock"><span>›</span><span class="muted">Задача, решение, следующий шаг…</span><kbd>↵</kbd></div>
+</section>
+<aside class="cockpit" aria-label="Keryx Cockpit">
+<div class="cockpit-brand"><span class="wordmark">KERYX<span class="brand-dot">◆</span></span><span class="eyebrow">COCKPIT</span></div>
+<div class="session-row"><span class="source-dot"></span><span id="source"></span><button id="pin" aria-pressed="false" title="Закрепить демосессию">Закрепить</button></div>
+<div class="task"><div class="eyebrow">ОДНА ЗАДАЧА. ОТ ПЛАНА ДО ДОКАЗАТЕЛЬСТВ.</div><h1 id="title"></h1><div class="metadata"><span>keryx</span><span>main</span><span id="flow-label"></span></div></div>
+<section class="now-card"><div class="section-heading"><span>СЕЙЧАС</span><span id="runtime" class="badge"></span></div><h2 id="current"></h2><p id="note"></p><button id="terminal-action" class="primary">Открыть терминал <span>↗</span></button></section>
+<section class="plan-section"><div class="section-heading"><span>ПЛАН СЕССИИ</span><span id="progress"></span></div><div class="progress-track"><div id="progress-fill"></div></div><ol id="plan"></ol><details class="legend"><summary>Что означают статусы</summary><div id="legend"></div></details></section>
+<section class="evidence-section"><div class="section-heading"><span>ДОКАЗАТЕЛЬСТВА</span><span class="muted">отдельно от runtime</span></div><div id="evidence"></div></section>
+<details class="activity"><summary>Последнее событие <span id="event-time"></span></summary><p id="event"></p></details>
+<footer class="cockpit-footer"><span>План → работа → доказательства</span><span>◆</span></footer>
+</aside>
+</div>
+</main>
+</div>
+<div id="toast" role="status" aria-live="polite"></div>
+<dialog id="terminal-dialog"><div class="section-heading"><span>ПЕРЕХОД В ТЕРМИНАЛ · ДЕМО</span><button id="close-dialog" aria-label="Закрыть">×</button></div><h2 id="dialog-title"></h2><p>В нативном моде здесь откроется связанный терминал Herdr. В прототипе ничего не запускается и не подтверждается.</p><pre id="command-preview"></pre><p class="muted">Подтверждение действий остаётся в Keryx.</p></dialog>
+<script src="model.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
