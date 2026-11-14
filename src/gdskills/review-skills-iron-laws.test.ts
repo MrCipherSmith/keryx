@@ -43,12 +43,8 @@ const SHARED_HEADING = "### Shared laws (every reviewer)";
  * findings of its own has nothing for these laws to govern.
  */
 const EXEMPT: Record<string, string> = {
-  "code-ai-review":
-    "legacy opt-in profile (--legacy-profiles); emits a free-prose Russian report with no per-finding severity field, and carries four per-editor SKILL variants that would all have to be kept in step",
-  "code-learned-review": "legacy opt-in profile; same free-prose shape as code-ai-review",
-  "code-mobx-store-review":
-    "legacy opt-in profile; does not use the blocker/major vocabulary at all",
-  "code-style-review": "legacy opt-in profile; does not use the blocker/major vocabulary at all",
+  "code-learned-review":
+    "legacy opt-in profile (--legacy-profiles); emits a free-prose report with no per-finding severity field",
   "review-pr-feedback":
     "reports on other people's findings rather than raising its own, so it has no finding of its own for these laws to govern. It applies the same discipline where it does own the output — Step 8 is one plan item per class, never one per occurrence — but over comments and plan items, not over findings",
   "review-verifier":
@@ -272,15 +268,16 @@ describe("one condition, one severity, across the reviewer set (AC2)", () => {
     expect(drifted).toEqual([]);
   });
 
-  test("a layer violation is `major` in both reviewers that rate it", () => {
+  test("a layer violation is rated the same, `minor` by default, in both reviewers that rate it", () => {
     // review-frontend called an API call in a component `blocker`;
-    // review-architecture called the same condition `major`.
-    expect(read("review-frontend")).toContain(
-      "- API call in a component (hook, handler, useEffect) — **major**",
-    );
-    expect(read("review-frontend")).not.toMatch(/API call in a component[^\n]*\*\*blocker\*\*/);
+    // review-architecture called the same condition `major`. Flow 490 applied the
+    // canonical boundary test: a layer violation whose code behaves correctly names a
+    // maintenance cost, not a trigger and a wrong outcome, so it is `minor` unless a
+    // named defect or a stated project rule makes it more.
+    expect(read("review-frontend")).toMatch(/API call in a component \(hook, handler, useEffect\)[^\n]*\*\*minor\*\*/);
+    expect(read("review-frontend")).not.toMatch(/API call in a component[^\n]*\*\*(blocker|major)\*\*/);
     expect(read("review-architecture")).toMatch(
-      /API\/IO call in a component[\s\S]{0,200}\| `major` \|/,
+      /API\/IO call in a component[\s\S]{0,200}\| `minor`/,
     );
   });
 

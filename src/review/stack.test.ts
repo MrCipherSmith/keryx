@@ -146,7 +146,7 @@ test("AC13: a clean package.json naming none of the tags reports all false, not 
  * `{"name":"x","workspaces":["packages/*"]}` parses cleanly, so detection
  * reported `uncertain: false` and every stack tag `false` — and excluded
  * `review-frontend`, `review-frontend-conventions`, `review-backend` and
- * `code-mobx-store-review` from a React monorepo. A root manifest that declares
+ * `code-mobx-store-review` (since removed) from a React monorepo. A root manifest that declares
  * no dependency has not told us the repository has none; it has told us nothing.
  */
 test("AC13: a package.json with no dependency block anywhere is uncertain, not `no stack`", async () => {

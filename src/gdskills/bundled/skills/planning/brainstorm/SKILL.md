@@ -74,7 +74,7 @@ Launch 3 agents simultaneously:
 3. **Next steps** — concrete action items
 
 ### Step 5: Discuss
-Offer to go deeper on any option or kick off `/feature-dev` / `/prd-creator`.
+Offer to go deeper on any option or start `job-orchestrator` or `/prd-creator`.
 
 ## Quick Mode (--quick)
 Skip agents. Inline: 3-5 options in table, score each, recommend one.

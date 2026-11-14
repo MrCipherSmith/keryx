@@ -97,6 +97,33 @@ describe("review-finding contract requires class_scope for blocker and major", (
   }
 });
 
+describe("enumeration_method must be a real method", () => {
+  test("a whitespace-only enumeration_method is refused", async () => {
+    const value = finding("major", true);
+    value.class_scope = { sites: [], enumeration_method: "   " };
+    const file = writeFinding(value);
+    try {
+      const result = await validateContractFile(file, "review-finding");
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((e) => e.path.includes("enumeration_method"))).toBe(true);
+    } finally {
+      rmSync(path.dirname(file), { recursive: true, force: true });
+    }
+  });
+
+  test("an empty sites list with a stated method is accepted", async () => {
+    const value = finding("major", true);
+    value.class_scope = { sites: [], enumeration_method: "rg for the call; found none" };
+    const file = writeFinding(value);
+    try {
+      const result = await validateContractFile(file, "review-finding");
+      expect(result.errors).toEqual([]);
+    } finally {
+      rmSync(path.dirname(file), { recursive: true, force: true });
+    }
+  });
+});
+
 describe("the two finding schemas do not drift apart", () => {
   // The whole reason this flow exists is that a rule applied to one member of a
   // class leaves the others wrong. Two schemas describe a finding; a
@@ -135,7 +162,7 @@ describe("the two finding schemas do not drift apart", () => {
       properties: Object.fromEntries(
         Object.entries(s.properties as Record<string, any>).map(([k, v]) => [
           k,
-          { type: v.type, minItems: v.minItems, minLength: v.minLength, items: v.items },
+          { type: v.type, minItems: v.minItems, minLength: v.minLength, pattern: v.pattern, items: v.items },
         ]),
       ),
     });
@@ -144,9 +171,49 @@ describe("the two finding schemas do not drift apart", () => {
     );
   });
 
+  test("both refuse a whitespace-only enumeration_method (pattern \\S)", () => {
+    expect(strict.properties.class_scope.properties.enumeration_method.pattern).toBe("\\S");
+    expect(bundledFinding.properties.class_scope.properties.enumeration_method.pattern).toBe("\\S");
+  });
+
   test("both make it conditional on the same severities", () => {
     expect(bundledFinding.if).toEqual(strict.if);
     expect(bundledFinding.then).toEqual(strict.then);
+  });
+});
+
+describe("negative enumeration: an empty sites list needs a method", () => {
+  const withScope = (class_scope: unknown) => ({ ...finding("major", false), class_scope });
+  for (const [name, schema] of [["review-finding", "review-finding"]] as const) {
+    test(`${name}: empty sites with a method is accepted`, async () => {
+      const file = writeFinding(withScope({ sites: [], enumeration_method: "grep for `foo(` outside tests: no other caller" }));
+      try {
+        const result = await validateContractFile(file, schema);
+        expect(result.errors).toEqual([]);
+        expect(result.valid).toBe(true);
+      } finally {
+        rmSync(path.dirname(file), { recursive: true, force: true });
+      }
+    });
+    test(`${name}: empty sites with an empty method is refused`, async () => {
+      const file = writeFinding(withScope({ sites: [], enumeration_method: "" }));
+      try {
+        const result = await validateContractFile(file, schema);
+        expect(result.valid).toBe(false);
+        expect(result.errors.some((e) => e.path.includes("enumeration_method"))).toBe(true);
+      } finally {
+        rmSync(path.dirname(file), { recursive: true, force: true });
+      }
+    });
+  }
+  test("the bundled reviewer schema agrees: no minItems on sites, method still minLength 1", () => {
+    const bundled = JSON.parse(
+      readFileSync(path.join(import.meta.dir, "bundled", "skills", "review", "review-orchestrator", "reviewer-finding.schema.json"), "utf8"),
+    ) as Record<string, any>;
+    const scope = bundled.properties.findings.items.properties.class_scope;
+    expect(scope.properties.sites.minItems).toBeUndefined();
+    expect(scope.properties.enumeration_method.minLength).toBe(1);
+    expect(scope.required).toContain("enumeration_method");
   });
 });
 

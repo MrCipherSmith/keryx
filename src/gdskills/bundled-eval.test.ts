@@ -50,6 +50,7 @@ import {
   descriptionRouteTokens,
   evaluateBundledTree,
   hasNotForClause,
+  hasRedFlagsHeading,
   hasRedFlagsSection,
   hasVerificationSection,
   homePathOffenders,
@@ -117,8 +118,14 @@ describe("AC7: the bundled skill tree is evaluated, over a real denominator", ()
     // Plus `review-pr-contract` (flow 446): one more, an LLM reviewer.
     // Plus `review-premise` (flow 459): a delete-only judge of findings' premises.
     // Plus `ui-direction`, `ui-craft` and `review-ui-ux`: the UI design trio.
+    // Minus the seven `planning/` skills of a pipeline whose orchestrator was
+    // never shipped, and `job-documenter` and `feature-dev` (flow 488): 84 - 9 = 75.
+    // Minus the three `code-*` review profiles (`code-ai-review`,
+    // `code-style-review`, `code-mobx-store-review`; flow 488): 75 - 3 = 72.
+    // Minus `commit`, `push` and `pr`, plus the one `git-publish` that replaces
+    // them (flow 489): 72 - 3 + 1 = 70.
     const files = bundledSkillFiles(path.join(defaultBundledRoot(), "skills"));
-    expect(files.length).toBe(84);
+    expect(files.length).toBe(70);
 
     const evaluation = realTree();
     expect(evaluation.skills).toBe(files.length);
@@ -136,9 +143,10 @@ describe("AC7: the bundled skill tree is evaluated, over a real denominator", ()
     // 167 shipped documents and said nothing about the rest. That is how
     // `task-implementer` shipped four builds missing their whole reporting
     // contract with every check green. Flow 257 deleted the builds that were
-    // byte-identical to their SKILL.md, so fewer ship now (the seven gproject-*
-    // skills' codex/cursor builds) — which is why the named files below are
-    // derived from the tree instead of pinned to task-implementer.
+    // byte-identical to their SKILL.md, and flow 488 removed the last skills
+    // that shipped a genuinely different one, so no shipped skill has a build
+    // now — which is why the real-tree half below derives its builds from the
+    // tree and a synthetic tree (next test) proves the walker still finds one.
     const skillsRoot = path.join(defaultBundledRoot(), "skills");
     const canonical = bundledSkillFiles(skillsRoot);
     const documents = bundledSkillDocuments(skillsRoot);
@@ -147,8 +155,10 @@ describe("AC7: the bundled skill tree is evaluated, over a real denominator", ()
     // (see the dedicated companion-document tests below).
     const companions = bundledSkillCompanionDocuments(skillsRoot);
 
-    // Strictly more documents than skills, or the walker is still canonical-only.
-    expect(documents.length).toBeGreaterThan(canonical.length);
+    // At least as many documents as skills: no shipped skill has a build today,
+    // so equality is the truthful real-tree answer. The strict "more documents
+    // than skills" half is asserted on a synthetic tree in the next test.
+    expect(documents.length).toBeGreaterThanOrEqual(canonical.length);
     // Every canonical file is still in the set — a walker that swapped one set
     // for the other would satisfy the line above and check less than before.
     for (const file of canonical) expect(documents).toContain(file);
@@ -160,19 +170,38 @@ describe("AC7: the bundled skill tree is evaluated, over a real denominator", ()
     // Named files, so a walker that finds builds "somewhere" cannot pass while
     // missing some. Every build that exists beside a SKILL.md, found per
     // directory by exact name rather than by the walker under test, is in the
-    // set — and there is at least one, or "strictly more" above is the only
-    // thing standing between this test and vacuity.
+    // set. There may be none (flow 488); the synthetic tree below is what
+    // keeps this from being vacuous.
     const shippedBuilds = canonical.flatMap((file) =>
       HARNESS_SKILL_RUNTIMES.map((runtime) => path.join(path.dirname(file), skillBuildFileName(runtime)))
         .filter((build) => build !== file && existsSync(build)),
     );
-    expect(shippedBuilds.length).toBeGreaterThan(0);
     for (const build of shippedBuilds) expect(documents).toContain(build);
     expect(documents.length).toBe(canonical.length + shippedBuilds.length);
     // …and the denominator is printed, not just returned.
     expect(renderBundledEvaluation(evaluation)).toContain(
       `documents_evaluated: ${documents.length + companions.length}`,
     );
+  });
+
+  test("the walker finds harness builds beside SKILL.md on a synthetic tree", () => {
+    // Flow 488: no shipped skill has a harness build, so the test above cannot
+    // prove the walker reads them. This one writes a skill with two builds to a
+    // temp directory and demands every one of them, plus the SKILL.md, back.
+    const root = mkdtempSync(path.join(tmpdir(), "keryx-eval-builds-"));
+    try {
+      const dir = path.join(root, "planning", "synthetic");
+      mkdirSync(dir, { recursive: true });
+      const names = ["SKILL.md", ...["codex", "zed"].map((runtime) => skillBuildFileName(runtime as "codex" | "zed"))];
+      for (const name of names) writeFileSync(path.join(dir, name), "---\nname: synthetic\n---\n");
+      const canonical = bundledSkillFiles(root);
+      const documents = bundledSkillDocuments(root);
+      expect(canonical).toEqual([path.join(dir, "SKILL.md")]);
+      expect(documents.length).toBeGreaterThan(canonical.length);
+      expect(documents).toEqual(names.map((name) => path.join(dir, name)).sort());
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   test("companion documents (orchestrator-prompt.md, SKILL.detail.md) are read for cross-references", () => {
@@ -546,13 +575,13 @@ the description and not the body, ever says what this skill excludes.
 `;
 
 /**
- * No Red Flags heading anywhere — trips exactly `red-flags`. The description
- * carries a NOT-for clause and the body a Verification heading, so those two
- * legs stay silent.
+ * No Red Flags heading anywhere — trips nothing, because Red Flags is optional
+ * (flow 489). The description carries a NOT-for clause and the body a
+ * Verification heading, so the two required legs are satisfied.
  */
 const NO_RED_FLAGS_SKILL = `---
 name: no-red-flags-example
-description: Use when a fixture must prove the anatomy sweep catches a document with no Red Flags table. NOT for anything real — this skill only exists to trip one check.
+description: Use when a fixture must prove the anatomy sweep accepts a document with no Red Flags table. NOT for anything real — this skill only exists to prove an optional section stays optional.
 metadata:
   version: 1.0.0
 ---
@@ -561,14 +590,14 @@ metadata:
 
 ## Verification
 
-Nothing to verify — this fixture exists only to trip \`anatomy:sections\` on
-its missing Red Flags table.
+Nothing to verify — this fixture exists only to show that a missing Red Flags
+table does not trip \`anatomy:sections\`.
 `;
 
 /**
  * A Red Flags heading with a table below the row threshold — still trips
- * `red-flags`, proving the check enforces the row count and not merely the
- * heading's presence. Two data rows, one short of \`ANATOMY_RED_FLAGS_MIN_ROWS\`.
+ * `anatomy:sections` as a malformed section, proving the check enforces the
+ * row count and not merely the heading's presence. Two data rows, one short of \`ANATOMY_RED_FLAGS_MIN_ROWS\`.
  */
 const TOO_FEW_RED_FLAGS_ROWS_SKILL = `---
 name: too-few-red-flags-rows-example
@@ -588,7 +617,7 @@ metadata:
 
 ## Verification
 
-- [ ] Confirms two data rows still trips \`anatomy:sections\` (\`red-flags\`)
+- [ ] Confirms two data rows still trips \`anatomy:sections\` (malformed Red Flags)
 `;
 
 /**
@@ -1135,7 +1164,7 @@ beforeAll(() => {
   // Two length fixtures, one per branch of `anatomy:length`.
   //
   // `oversized-no-ceiling` has no entry in SKILL_LENGTH_CEILINGS, so the
-  // default bounds it; `commit` deliberately reuses a real skill key, which is
+  // default bounds it; `git-publish` deliberately reuses a real skill key, which is
   // the only way to exercise the RECORDED branch — a ceiling exists for that
   // key and this fixture is longer than it.
   writeSkill(
@@ -1144,16 +1173,16 @@ beforeAll(() => {
     "oversized-no-ceiling",
     oversizedSkill(
       "oversized-no-ceiling",
-      "Use when a skill that nobody recorded a ceiling for grows past the default, so the fallback bound is what reports it. NOT for a skill whose ceiling is already recorded — see the commit fixture.",
+      "Use when a skill that nobody recorded a ceiling for grows past the default, so the fallback bound is what reports it. NOT for a skill whose ceiling is already recorded — see the git-publish fixture.",
       520,
     ),
   );
   writeSkill(
     fixtureRoot,
     "quality",
-    "commit",
+    "git-publish",
     oversizedSkill(
-      "commit",
+      "git-publish",
       "Use when a skill with a recorded ceiling grows past exactly that number, proving the recorded bound is read instead of the default. NOT for an unrecorded skill — see the oversized-no-ceiling fixture.",
       120,
     ),
@@ -1536,7 +1565,7 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
     expect(found[0]?.message).toContain("NOT for");
 
     // Trips ONLY the trigger-not-for leg — its Red Flags table and
-    // Verification heading must stay silent, proving the three legs of
+    // Verification heading must stay silent, proving the legs of
     // `anatomy:sections` are independent.
     expect(found[0]?.message).not.toContain("Red Flags");
     expect(found[0]?.message).not.toContain("Verification");
@@ -1545,25 +1574,24 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
     expect(control).toEqual([]);
   });
 
-  test("a document with no Red Flags table is rejected ONCE, even when it also ships a harness build", () => {
-    // T19: `anatomy:sections` used to run per DOCUMENT, so a skill with four
-    // builds reported one missing section five times. `document:build-parity`
-    // already forces every build to carry its `SKILL.md`'s body, so the build
-    // is the same fact — the fixture ships a Codex build of this exact file to
-    // pin that. Before the guard this expectation read 2.
+  test("a document with no Red Flags table is NOT reported — the section is optional", () => {
+    // Flow 489: a 35-line text with no Red Flags table scored the same as the
+    // skills that carry one, so a missing table is no longer a finding.
     const found = findingsFor("no-red-flags-example").filter((finding) => finding.check === "anatomy:sections");
-    expect(found).toHaveLength(1);
-    expect(found[0]?.message).toContain("Red Flags");
-
-    // Located in the canonical file, not in the build — the build is where the
-    // defect is copied, `SKILL.md` is where it is fixed.
-    const located = fixtureTree().findings.filter(
-      (finding) => finding.check === "anatomy:sections" && finding.skill === "no-red-flags-example",
-    );
-    expect(located.map((finding) => finding.file)).toEqual(["quality/no-red-flags-example/SKILL.md"]);
-    // …and the build really is there to be over-reported, or this proves nothing.
+    expect(found).toEqual([]);
+    expect(hasRedFlagsHeading("# A skill\n\n## Verification\n\nDone.\n")).toBe(false);
+    // The fixture still ships a Codex build, so this covers the build too.
     expect(existsSync(path.join(fixtureRoot, "skills", "quality", "no-red-flags-example", skillBuildFileName("codex"))))
       .toBe(true);
+  });
+
+  test("a malformed Red Flags section is still reported once, in the canonical file", () => {
+    // `anatomy:sections` runs on the canonical SKILL.md only (T19): the
+    // builds carry the same body, so a defect is one finding, not five.
+    const located = fixtureTree().findings.filter(
+      (finding) => finding.check === "anatomy:sections" && finding.skill === "too-few-red-flags-rows-example",
+    );
+    expect(located.map((finding) => finding.file)).toEqual(["quality/too-few-red-flags-rows-example/SKILL.md"]);
   });
 
   test("a NOT-for clause is matched on word boundaries — \"not formatted\" is not a disambiguation", () => {
@@ -1625,6 +1653,7 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
   });
 
   test("a Red Flags heading with fewer than the minimum rows still fails — the row count is enforced, not just the heading", () => {
+    expect(hasRedFlagsHeading("## Red Flags\n\nJust a paragraph.\n")).toBe(true);
     const found = findingsFor("too-few-red-flags-rows-example").filter(
       (finding) => finding.check === "anatomy:sections",
     );
@@ -1715,14 +1744,14 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
     expect(hasVerificationSection("# Nothing relevant here\n")).toBe(false);
   });
 
-  test("PERMANENT_ANATOMY_EXEMPTIONS is non-empty, every entry carries a reason, and none excuses red-flags or verification", () => {
+  test("PERMANENT_ANATOMY_EXEMPTIONS is non-empty, every entry carries a reason, and none excuses verification", () => {
     expect(PERMANENT_ANATOMY_EXEMPTIONS.size).toBeGreaterThan(0);
     for (const [key, entry] of PERMANENT_ANATOMY_EXEMPTIONS) {
       expect(entry.reason.length).toBeGreaterThan(0);
       expect(entry.sections.length).toBeGreaterThan(0);
       // The permanent exemption is scoped to the user-facing trigger only —
-      // AC9 requires every workflow skill to earn Red Flags and Verification
-      // outright, Phase subagents included.
+      // Every workflow skill must earn Verification outright, Phase subagents
+      // included; Red Flags is optional and needs no exemption.
       expect(entry.sections).toEqual(["trigger-not-for"]);
       expect(key).toMatch(/^planning\//);
     }
@@ -1785,12 +1814,12 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
   }
 
   test("a skill past its recorded ceiling is reported, naming that ceiling", () => {
-    // The fixture reuses the real `quality/commit` key precisely so the
+    // The fixture reuses the real `quality/git-publish` key precisely so the
     // RECORDED branch is what fires: a ceiling exists for it, and the fixture
     // is longer than that number.
-    const recorded = SKILL_LENGTH_CEILINGS.get("quality/commit");
+    const recorded = SKILL_LENGTH_CEILINGS.get("quality/git-publish");
     expect(recorded).toBeGreaterThan(0);
-    const found = findingsFor("commit").filter((finding) => finding.check === "anatomy:length");
+    const found = findingsFor("git-publish").filter((finding) => finding.check === "anatomy:length");
     expect(found).toHaveLength(1);
     expect(found[0]?.message).toContain(`recorded ceiling of ${recorded}`);
 
@@ -1884,9 +1913,9 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
     // …and a skill that grows past a ceiling nobody touched is the other
     // direction of the same equality, reported in the words that say what to
     // do about it.
-    const grown = ceilingMismatches(new Map(SKILL_LENGTH_CEILINGS).set("quality/push", 10));
+    const grown = ceilingMismatches(new Map(SKILL_LENGTH_CEILINGS).set("quality/git-publish", 10));
     expect(grown).toHaveLength(1);
-    expect(grown[0]).toContain("quality/push");
+    expect(grown[0]).toContain("quality/git-publish");
     expect(grown[0]).toContain("never raise the number");
 
     // An entry for a skill that no longer ships is a ceiling nothing is

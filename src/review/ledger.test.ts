@@ -1069,6 +1069,37 @@ describe("a delta round's fix slices (flow 458 AC4)", () => {
   });
 });
 
+describe("a reviewer slice routing gave no slice", () => {
+  // Routing put review-testing-practices on no slice, so it was never dispatched and no driver names its rule file.
+  const routed = (): SliceManifest => ({
+    ...MANIFEST,
+    slices: [
+      slice("slice-01", ["src/a.ts"], { roles: ["review-logic", "review-architecture"], depth: "light", kind: "new" }),
+      slice("slice-02", ["src/b.test.ts"], { roles: ["review-logic", "review-architecture"], depth: "light", kind: "new" }),
+    ],
+  });
+  const ROUTED_OUT = "review-testing-practices";
+
+  test("is not an unresolved rule anchor, and the ledger is READY without a driver for it", async () => {
+    const base = await inputs({ manifest: routed() });
+    expect(base.selected).toContain(ROUTED_OUT);
+    const { [ROUTED_OUT]: _none, ...ruleFiles } = base.ruleFiles;
+    const result = buildLedger({ ...base, ruleFiles, raws: base.raws.filter((r) => r.result?.reviewer !== ROUTED_OUT) });
+    const dispatch = result.ledger.dispatch as { unresolvedRules: string[]; runs: Array<Record<string, unknown>> };
+    expect(dispatch.runs.find((r) => r.reviewer === ROUTED_OUT)).toMatchObject({ status: "complete", routedOut: true });
+    expect(dispatch.unresolvedRules).toEqual([]);
+    expect(await blockersOf(result)).toEqual([]);
+  });
+
+  test("a dispatched reviewer whose driver names no rule file is still flagged beside it", async () => {
+    const base = await inputs({ manifest: routed() });
+    const { [ROUTED_OUT]: _none, "review-logic": _gone, ...ruleFiles } = base.ruleFiles;
+    const result = buildLedger({ ...base, ruleFiles, raws: base.raws.filter((r) => r.result?.reviewer !== ROUTED_OUT) });
+    expect((result.ledger.dispatch as { unresolvedRules: string[] }).unresolvedRules).toEqual(["review-logic"]);
+    expect((await blockersOf(result)).join("\n")).toContain("unresolved rule anchors");
+  });
+});
+
 describe("ledgerBlockers with a package runs what review complete runs", () => {
   test("the layer/chunk completeness gate is among them: a file in no slice blocks READY", async () => {
     const packageDir = path.join(root, ".metaproject", "reviews", "pkg");

@@ -57,7 +57,6 @@ Human dashboard: [keryx-dashboard.html](keryx-dashboard.html)
 | User intent | Capability | Primary entry | Agent action |
 |-------------|------------|---------------|--------------|
 | Any repository task / unclear request | `metaproject-router` | `skills/gdskills/core/metaproject-router/SKILL.md` | Classify the intent first, then route to the narrowest capability. |
-| Need context / where to start | `context-router` | `skills/gdskills/core/context-router/SKILL.md` | Choose graph, wiki, memory, health, testing, or project-skills before raw reads. |
 | Find related files, dependencies, blast radius, cycles, or orphans | `gdgraph` | `skills/gdgraph/SKILL.md`; MCP `gdgraph.*` if available | Start with graph/affected context before broad search. |
 | Files were added, renamed, deleted or moved; graph answers look stale | `gdgraph` | `modules/gdgraph.md` (Freshness & Refresh) | Run `keryx gdgraph build`, then answer from the rebuilt graph. |
 | Understand architecture, domain behavior, business rules, scenarios, integrations, or decisions | `gdwiki` | `skills/gdwiki/SKILL.md`; `wiki/index.md`; MCP `wiki.*` if available | Use knowledge pages first, then jump from wiki concepts to code. |
@@ -77,7 +76,7 @@ Human dashboard: [keryx-dashboard.html](keryx-dashboard.html)
 2. Treat the user's request as a natural-language intent; do not require the user to remember internal module, skill, MCP tool, or CLI names.
 3. Check enabled modules.
 4. Load relevant rules from `rules/`.
-5. For any non-trivial repository task, start with `skills/gdskills/core/metaproject-router/SKILL.md`; for context selection, use `skills/gdskills/core/context-router/SKILL.md`.
+5. For any non-trivial repository task, start with `skills/gdskills/core/metaproject-router/SKILL.md`.
 6. Prefer MCP tools/resources for enabled Metaproject capabilities when the connected agent exposes them; otherwise use the matching skill and `keryx` CLI command.
 7. Route by question type: structural questions go to gdgraph first; conceptual questions go to gdwiki first; gdctx runs in parallel to keep output compact.
 8. Any text, symbol, or pattern search over project code goes through `keryx ctx rg`, never a bare `rg`/`grep` — even a single targeted search, and even when gdgraph/gdwiki are skipped. Raw `rg`/`grep` is a last resort only, with a stated reason.

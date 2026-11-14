@@ -165,7 +165,11 @@ export type StaleRuntimeBuildOutcome =
  */
 export async function removeStaleRuntimeBuilds(
   skillsRoot: string,
-  fsOps: { unlink: (target: string) => Promise<void> } = { unlink },
+  fsOps: {
+    unlink: (target: string) => Promise<void>;
+    /** Where a catalogued skill's bundled directory lives. A test seam: no shipped skill has a per-runtime build, so the "still shipped" rule needs a synthetic bundle to be exercised. */
+    bundledSkillSource?: (category: string, skillName: string) => string;
+  } = { unlink },
 ): Promise<StaleRuntimeBuildOutcome[]> {
   const outcomes: StaleRuntimeBuildOutcome[] = [];
 
@@ -237,7 +241,7 @@ export async function removeStaleRuntimeBuilds(
       continue;
     }
 
-    const bundledDir = bundledSkillSourcePath(skillEntry.category, skillEntry.name);
+    const bundledDir = (fsOps.bundledSkillSource ?? bundledSkillSourcePath)(skillEntry.category, skillEntry.name);
     for (const entryName of entries) {
       // Exact, case-sensitive match against the on-disk name…
       if (!RUNTIME_BUILD_FILE_NAMES.includes(entryName)) continue;

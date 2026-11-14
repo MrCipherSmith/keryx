@@ -1,6 +1,6 @@
 ---
 name: pr-issue-documenter
-description: "Use when documenting PR changes, adding a PR description, creating a linked issue for a PR, or updating an existing issue body. NOT for opening the pull request in the first place (use `pr`)."
+description: "Use when documenting PR changes, adding a PR description, creating a linked issue for a PR, or updating an existing issue body. NOT for opening the pull request in the first place (use `git-publish`)."
 triggers:
   - "document PR"
   - "PR description"

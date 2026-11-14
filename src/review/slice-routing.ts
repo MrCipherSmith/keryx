@@ -169,8 +169,8 @@ export function deepRosterRoles(files: readonly string[]): string[] {
  * (`keryx review slice`) and the narrowing check (`routing-check.ts`) must collapse the same way.
  *
  * `frontend`: review-frontend is kept over review-frontend-conventions. Its rubric is the broader one — React component
- * correctness, the full MobX store checklist and TypeScript safety, consolidated from code-style-review and
- * code-mobx-store-review — while the conventions reviewer restates whatever a repository's CLAUDE.md says about the same
+ * correctness, the full MobX store checklist and TypeScript safety, consolidated from the style and MobX store
+ * profiles it replaced (both since removed, flow 488) — while the conventions reviewer restates whatever a repository's CLAUDE.md says about the same
  * code, which a project overlay states more precisely when the project has one.
  */
 export const BUNDLED_OVERLAP_GROUPS: Readonly<Record<string, readonly string[]>> = {

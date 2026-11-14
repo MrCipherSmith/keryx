@@ -487,8 +487,8 @@ What is in it today:
   continue, and are shown as `◇ awaiting approval` in both the sidebar and the
   modal. Orchestrators publish into this same view — `job-orchestrator`,
   `flow-orchestrator`, `review-orchestrator`, `issue-analyzer`,
-  `feature-analyzer`, `autodoc-orchestrator`, `docpack-orchestrator`,
-  `feature-dev` and `review-pr-feedback` project their own steps here under the
+  `feature-analyzer`, `autodoc-orchestrator`, `docpack-orchestrator`
+  and `review-pr-feedback` project their own steps here under the
   `session-plan-bridge` rule, so a run driven by one of them is watchable while
   it runs instead of only after it reports.
 - **Theme-aware rich transcripts.** Assistant prose, headings, emphasis,

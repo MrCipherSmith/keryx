@@ -44,7 +44,12 @@ export const ROUTING_BASELINE: readonly BaselineEntry[] = [
   { query: "frontend review", top: "review-frontend", score: 75, verdict: "ok" },
   { query: "security review", top: "review-security-code", score: 75, verdict: "ok" },
   { query: "backend review", top: "review-backend", score: 75, verdict: "ok" },
-  { query: "review the mobx store", top: "code-mobx-store-review", score: 85, verdict: "ok" },
+  // Flow 488 removed `code-mobx-store-review`, which used to win this at 85. The
+  // one-word `review` trigger now takes it at 65 (review-frontend ties at 20 with two
+  // others on `review`+`store`). That is still an answer a human accepts: the
+  // orchestrator routes `*.store.ts` to `review-frontend` (review-orchestrator/SKILL.md,
+  // Routing Table), and Part B of review-frontend is the MobX store checklist.
+  { query: "review the mobx store", top: "review-orchestrator", score: 65, verdict: "ok" },
   { query: "проверь безопасность кода", top: "review-security-code", score: 105, verdict: "ok" },
   { query: "commitment issues", top: "changelog", score: 10, verdict: "wrong", note: "token overlap at 10, far below any trigger — noise, not a recommendation" },
   { query: "pushback from the team", top: "reviewer-skill-creator", score: 10, verdict: "wrong", note: "same: bare token overlap" },
@@ -67,10 +72,18 @@ export const ROUTING_BASELINE: readonly BaselineEntry[] = [
   { query: "brainstorming ideas", top: "brainstorm", score: 95, verdict: "ok" },
   { query: "interviewing me first", top: "interviewer", score: 55, verdict: "ok" },
   { query: "reviewing the diff now", top: "review-orchestrator", score: 55, verdict: "ok" },
-  { query: "commits are failing", top: "commit", score: 40, verdict: "ok" },
+  // Flow 489 merged `commit`, `push` and `pr` into `git-publish`. This entry is the
+  // one LOSS: the old 40 was a 30-point skill-name hit (`commit` is a stem of
+  // "commits") plus a 10-point token, and a skill called `git-publish` has no name
+  // hit on this query. What is left is a 10-point tie that `changelog` takes
+  // alphabetically (`git-publish` is in it). The sentence names a symptom, not a
+  // request, so no answer here is something a human would accept; the full prompt in
+  // the corpus ("commits are failing, write me a conventional commit message")
+  // still ranks `git-publish` first. Recorded as `wrong`, not dropped.
+  { query: "commits are failing", top: "changelog", score: 10, verdict: "wrong", note: "token overlap at 10 after the commit/push/pr merge removed the skill-name hit; a symptom, not a request" },
   { query: "создай фло на эту задачу", top: "flow-orchestrator", score: 105, verdict: "ok" },
-  { query: "open a PR", top: "pr", score: 95, verdict: "ok" },
-  { query: "commit changes", top: "commit", score: 105, verdict: "ok" },
+  { query: "open a PR", top: "git-publish", score: 65, verdict: "ok" },
+  { query: "commit changes", top: "git-publish", score: 75, verdict: "ok" },
   { query: "security audit", top: "security-audit", score: 205, verdict: "ok" },
   { query: "architecture review", top: "review-architecture", score: 75, verdict: "ok" },
 ];

@@ -1,6 +1,6 @@
 ---
 name: metaproject-router
-description: "Use when a request's routing to a Metaproject module, skill, or project-skill is unclear and needs deciding before any work starts. NOT for: picking between gdgraph, gdctx, gdwiki, memory, and health once the module is already known (see context-router)."
+description: "Use when a request's routing to a Metaproject module, skill, or project-skill is unclear and needs deciding before any work starts. NOT for: a request whose owning module or skill is already known."
 ---
 
 # metaproject-router
