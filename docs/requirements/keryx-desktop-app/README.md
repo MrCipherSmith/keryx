@@ -1,7 +1,7 @@
 # Keryx Desktop App: solo mode, quick task start, stage timeline, diff view
 Version: 0.2.0
 
-Status: **draft, nothing implemented.** Written 2026-11-14. Decisions D1–D5 taken by the operator the same day (Tauri, GitHub releases, separate app plus `keryx hub solo`, web first, template clarifying form). No Flow exists for this package and no acceptance criteria are frozen. Every capability named here is `planned` unless a file in `src/` or `apps/hub-web/` proves otherwise.
+Status: **draft; the quick task start (R6, R7) is implemented under Flow 492, the rest is planned.** Written 2026-11-14. Decisions D1–D5 taken by the operator the same day (Tauri, GitHub releases, separate app plus `keryx hub solo`, web first, template clarifying form). Flow 492 froze AC1–AC15 for quick start in the web UI and the TUI `/task` command; solo mode, the stage timeline, the diff view and the desktop shell have no Flow yet and no frozen criteria. Every other capability named here is `planned` unless a file in `src/` or `apps/hub-web/` proves otherwise.
 
 ## Purpose
 

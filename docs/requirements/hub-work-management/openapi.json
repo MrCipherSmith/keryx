@@ -9866,6 +9866,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/ObservationResult"
+                  },
+                  {
+                    "$ref": "#/components/schemas/QuickStartResult"
                   }
                 ]
               },

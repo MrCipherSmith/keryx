@@ -516,6 +516,39 @@ test("lines: windowLines keeps the focused field on screen when the body is shor
   expect(windowLines(quickStartLines(form.state(), 80), 6)[0]!.id).toBe("mode");
 });
 
+test("lines: windowLines keeps the whole error on screen after a failed Start", () => {
+  const form = createQuickStartForm({ send: fakeSender({ kind: "network", message: "x ".repeat(120) }).send, onAccepted: () => {}, newOperationId: mintIds() });
+  filled(form);
+  const lines = quickStartLines({ ...form.state(), error: { kind: "network", message: "x ".repeat(120), retry: true }, focus: "submit" }, 60);
+  const errors = lines.filter((line) => line.id.startsWith("error-"));
+  expect(errors.length).toBeGreaterThan(1);
+  const slice = windowLines(lines, 10);
+  expect(slice).toHaveLength(10);
+  expect(slice.some((line) => line.focus)).toBe(true);
+  expect(slice.map((line) => line.id)).toContain(errors[errors.length - 1]!.id);
+});
+
+test("pending: a form handed an unresolved operation replays the same id for the same body and mints a new one for a changed body", async () => {
+  const first = fakeSender({ kind: "network", message: "connection reset" });
+  const ids = mintIds();
+  const earlier = createQuickStartForm({ send: first.send, onAccepted: () => {}, newOperationId: ids });
+  filled(earlier);
+  await submitViaKeys(earlier);
+  const pending = earlier.pendingOperation()!;
+  expect(pending.operationId).toBe("op-1");
+
+  const second = fakeSender(ACCEPTED, ACCEPTED);
+  const reopened = createQuickStartForm({ send: second.send, onAccepted: () => {}, newOperationId: ids, initial: earlier.draft(), initialPending: pending });
+  expect(reopened.state().error?.retry).toBe(true);
+  await submitViaKeys(reopened);
+  expect(second.calls.map((call) => call.operationId)).toEqual(["op-1"]);
+  expect(reopened.pendingOperation()).toBeUndefined();
+
+  const edited = createQuickStartForm({ send: second.send, onAccepted: () => {}, newOperationId: ids, initial: { ...earlier.draft(), description: "A different body" }, initialPending: pending });
+  await submitViaKeys(edited);
+  expect(second.calls.map((call) => call.operationId)).toEqual(["op-1", "op-2"]);
+});
+
 test("lines: tail keeps the end of a long value and wrapText never exceeds the width", () => {
   expect(tail("abcdef", 4)).toBe("…def");
   expect(tail("abc", 4)).toBe("abc");

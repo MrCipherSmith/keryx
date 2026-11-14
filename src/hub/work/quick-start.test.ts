@@ -214,6 +214,19 @@ describe('AC6: the clarifying form is recorded on the Flow', () => {
         expect(lines).not.toContain('Clarifying form: skipped');
     });
 
+    test('a skipped question is recorded under its own name, also when other questions were answered', () => {
+        quickStart(deps(), human, P, request({
+            answers: buildAnswers('bug', { 'steps-to-reproduce': 'Open settings, press Save' }),
+        }));
+        const lines = problemLines();
+        const at = lines.indexOf('Q: expected-vs-actual');
+        expect(at).toBeGreaterThan(-1);
+        expect(lines[at + 1]).toBe('Skipped');
+        expect(lines[lines.indexOf('Q: affected-area') + 1]).toBe('Skipped');
+        expect(lines[lines.indexOf('Q: steps-to-reproduce') + 1]).toBe('A: Open settings, press Save');
+        expect(lines).not.toContain('Clarifying form: skipped');
+    });
+
     test('a fully answered form has no skip line', () => {
         quickStart(deps(), human, P, request({
             answers: buildAnswers('bug', { 'steps-to-reproduce': 'one', 'expected-vs-actual': 'two', 'affected-area': 'three' }),

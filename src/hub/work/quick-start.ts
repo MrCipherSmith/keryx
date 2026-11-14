@@ -48,11 +48,18 @@ function isAnswer(value: unknown): value is ClarifyAnswer {
     return typeof q === 'string' && (typeof a === 'string' || a === null) && typeof skipped === 'boolean';
 }
 
-/** The description followed by the clarifying-form record: Q/A lines for answered questions, one skip line when none were. */
+/**
+ * The description followed by the clarifying-form record. Every question the form asked is kept: an answered one as
+ * Q/A lines, a skipped or blank one as the question and a `Skipped` line, never as an empty answer. When nothing was
+ * answered the record opens with one skip line, so a wholly skipped form is still recognisable at a glance.
+ */
 function problemText(description: string, answers: readonly ClarifyAnswer[]): string {
-    const answered = answers.filter(answer => !answer.skipped && answer.a !== null);
-    const form = answered.length === 0 ? [SKIPPED_LINE] : answered.flatMap(answer => ['Q: ' + answer.q, 'A: ' + answer.a]);
-    return [description, '', ...form].join('\n');
+    const entries = answers.map(answer => {
+        const text = answer.skipped || answer.a === null ? '' : answer.a.trim();
+        return text.length === 0 ? ['Q: ' + answer.q, 'Skipped'] : ['Q: ' + answer.q, 'A: ' + answer.a];
+    });
+    const answered = entries.some(lines => lines[1] !== 'Skipped');
+    return [description, '', ...(answered ? [] : [SKIPPED_LINE]), ...entries.flat()].join('\n');
 }
 
 function titleOf(description: string): string {

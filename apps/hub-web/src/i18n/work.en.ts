@@ -289,12 +289,44 @@ const en = {
     skipQuestion: "Skip: {{question}}",
     skipAll: "Skip all questions",
     templateCriteria: "Starting criteria · frozen exactly as shown",
+    templateCriteriaNote: "Stored with this exact wording.",
+    criteriaTemplates: {
+      quick: {
+        "0": "The requested change is made and nothing else is touched",
+        "1": "The affected behaviour works when checked by hand",
+      },
+      bug: {
+        "0": "The reported failure no longer reproduces",
+        "1": "A regression test fails without the fix and passes with it",
+        "2": "Behaviour outside the reported failure is unchanged",
+      },
+      task: {
+        "0": "The described outcome is observable in the running product",
+        "1": "New behaviour is covered by automated tests",
+        "2": "Existing tests still pass",
+      },
+      epic: {
+        "0": "Every part of the scope is delivered or explicitly deferred with a reason",
+        "1": "Each delivered part has its own checkable acceptance criteria",
+        "2": "The parts work together end to end",
+        "3": "The documentation reflects the delivered behaviour",
+      },
+      refactor: {
+        "0": "External behaviour is unchanged, shown by tests that pass before and after",
+        "1": "The stated structural goal is met",
+        "2": "No new public interfaces are added or removed unless listed in the scope",
+      },
+    },
     criteria: "Your own acceptance criteria · one per line",
     submit: "Start task",
     sending: "Starting…",
     cancel: "Cancel",
     retry: "Retry",
     startOver: "Start over",
+    startOverWarning:
+      "The first request may already be running. Starting over abandons it and sends a new one, which can create a second Flow.",
+    startOverConfirm: "Abandon and start over",
+    startOverKeep: "Keep waiting",
     unknown:
       "The connection was interrupted and the result is unknown. Retry sends the same request again and cannot create a second Flow.",
   },

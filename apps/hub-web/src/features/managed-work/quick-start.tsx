@@ -14,18 +14,29 @@ import { emptyQuickDraft, QuickStartDialog, type QuickPhase } from "./quick-star
 
 export { quickStartRequest };
 
-type Pending = { id: string; request: QuickStartRequest };
+type Pending = { id: string; request: QuickStartRequest; draft: QuickDraft | null };
+
+/**
+ * Unresolved operations, keyed by principal, project and adapter mode. They live outside the component, so leaving
+ * the Work tab and coming back (which unmounts it) keeps the operation id and the exact request: the next Retry
+ * replays the same operation instead of minting a new one. An entry is dropped on success or a definite refusal.
+ */
+const unresolved = new Map<string, { pending: Pending; message: string }>();
 
 /**
  * One submission at a time. A definite refusal (4xx) forgets the operation id, so the next try is a new operation.
  * Anything ambiguous (lost connection, 5xx) keeps the id and the exact request, and only Retry may send them again:
  * the server replays the stored receipt, so a retry can never create a second Flow.
  */
-function useQuickStart(adapter: WorkAdapter, onCreated: (flowId: string) => void) {
+function useQuickStart(adapter: WorkAdapter, onCreated: (flowId: string, sent: QuickDraft | null) => void) {
   const hub = useHub();
   const client = useQueryClient();
-  const [phase, setPhase] = useState<QuickPhase>({ status: "idle" });
-  const pending = useRef<Pending | null>(null);
+  const storeKey = hub.scopeKey + ":" + hub.projectId + ":" + adapter.mode;
+  const restored = unresolved.get(storeKey);
+  const [phase, setPhase] = useState<QuickPhase>(
+    restored ? { status: "unknown", message: restored.message } : { status: "idle" },
+  );
+  const pending = useRef<Pending | null>(restored?.pending ?? null);
   const busy = useRef(false);
   const created = useRef(onCreated);
   created.current = onCreated;
@@ -34,12 +45,14 @@ function useQuickStart(adapter: WorkAdapter, onCreated: (flowId: string) => void
     if (busy.current) return;
     busy.current = true;
     pending.current = next;
+    unresolved.set(storeKey, { pending: next, message: "" });
     setPhase({ status: "sending" });
     const generation = getClientScope();
     try {
       const outcome = await adapter.quickStart(next.id, next.request);
       if (generation !== getClientScope()) return;
       pending.current = null;
+      unresolved.delete(storeKey);
       setPhase({ status: "idle" });
       const snapshot = workSnapshotKey(hub.scopeKey, hub.projectId, adapter.mode);
       if (outcome.receipt.entities)
@@ -52,30 +65,36 @@ function useQuickStart(adapter: WorkAdapter, onCreated: (flowId: string) => void
         exact: true,
         refetchType: "active",
       });
-      created.current(outcome.flowId);
+      created.current(outcome.flowId, next.draft);
     } catch (error) {
       if (generation !== getClientScope()) {
         pending.current = null;
+        unresolved.delete(storeKey);
         setPhase({ status: "idle" });
         return;
       }
       const message = errorMessage(error);
       if (error instanceof ApiError && error.status >= 400 && error.status < 500) {
         pending.current = null;
+        unresolved.delete(storeKey);
         setPhase({ status: "rejected", message });
-      } else setPhase({ status: "unknown", message });
+      } else {
+        unresolved.set(storeKey, { pending: next, message });
+        setPhase({ status: "unknown", message });
+      }
     } finally {
       busy.current = false;
     }
   };
   return {
     phase,
-    submit: (request: QuickStartRequest) => attempt({ id: crypto.randomUUID(), request }),
+    submit: (request: QuickStartRequest, draft: QuickDraft) => attempt({ id: crypto.randomUUID(), request, draft }),
     retry: () => {
       if (pending.current) void attempt(pending.current);
     },
     startOver: () => {
       pending.current = null;
+      unresolved.delete(storeKey);
       setPhase({ status: "idle" });
     },
   };
@@ -96,7 +115,6 @@ export function QuickStart({
     hub.scopeKey + ":" + hub.projectId + ":work-quick-start",
     emptyQuickDraft,
   );
-  const submitted = useRef<QuickDraft | null>(null);
   const trigger = useRef<HTMLElement | null>(null);
   const wasOpen = useRef(false);
   // Closing hands focus back to the button that opened the dialog, even when that click never focused it.
@@ -104,9 +122,8 @@ export function QuickStart({
     if (wasOpen.current && !open) trigger.current?.focus();
     wasOpen.current = open;
   }, [open]);
-  const operation = useQuickStart(adapter, (flowId) => {
-    if (submitted.current) clearDraft(submitted.current);
-    submitted.current = null;
+  const operation = useQuickStart(adapter, (flowId, sent) => {
+    if (sent) clearDraft(sent);
     setOpen(false);
     onCreated(flowId);
   });
@@ -116,8 +133,7 @@ export function QuickStart({
     operation.phase.status !== "unknown";
   const submit = () => {
     if (!canSubmit) return;
-    submitted.current = draft;
-    void operation.submit(quickStartRequest(draft));
+    void operation.submit(quickStartRequest(draft), draft);
   };
   return (
     <>

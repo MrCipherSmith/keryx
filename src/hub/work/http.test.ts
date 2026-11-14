@@ -323,6 +323,8 @@ test('quick-start route: starts a Flow from the Idempotency-Key, replays it, and
     expect(typeof created.flowId).toBe('string');
     expect(typeof created.intentId).toBe('string');
     expect(await (await req(url, body, operatorToken, { 'idempotency-key': key })).json()).toEqual(created);
+    const receipt = await (await req(base(p) + '/operations/' + key)).json();
+    expect(receipt).toMatchObject({ operationId: key, status: 'committed', result: { flowId: created.flowId, intentId: created.intentId } });
     expect((await req(url, { ...body, description: 'Another one' }, operatorToken, { 'idempotency-key': key })).status).toBe(409);
     const listed = await (await req(base(p) + '/snapshot?limit=200')).json();
     expect(listed.records.find((r: { id: string }) => r.id === created.flowId)).toMatchObject({ kind: 'flow', state: 'in-progress' });

@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type KeyboardEvent } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Button, Field, Input, Notice, Textarea } from "../../components/ui";
 import { QUICK_MODES, questionsFor } from "./quick-contract";
@@ -19,13 +19,15 @@ export type QuickPhase =
   | { status: "rejected"; message: string }
   | { status: "unknown"; message: string };
 
-const TABBABLE =
-  "button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled])";
+const TABBABLE = "button, input, textarea, select";
 
-/** Controls reachable with Tab: an unchecked radio is skipped because its group is entered at the checked one. */
+/**
+ * Controls reachable with Tab. `:disabled` also matches controls inside a disabled fieldset, which have no
+ * disabled attribute of their own. An unchecked radio is skipped because its group is entered at the checked one.
+ */
 function tabbable(root: HTMLElement) {
   return [...root.querySelectorAll<HTMLElement>(TABBABLE)].filter(
-    (el) => !(el instanceof HTMLInputElement && el.type === "radio" && !el.checked),
+    (el) => !el.matches(":disabled") && !(el instanceof HTMLInputElement && el.type === "radio" && !el.checked),
   );
 }
 
@@ -54,10 +56,15 @@ export function QuickStartDialog({
   const questions = questionsFor(draft.mode);
   const mode = QUICK_MODES.find((candidate) => candidate.id === draft.mode)!;
   const locked = phase.status === "sending" || phase.status === "unknown";
+  const [confirmingStartOver, setConfirmingStartOver] = useState(false);
 
   useEffect(() => {
     const previous = document.activeElement;
-    root.current?.querySelector<HTMLInputElement>('input[name="quick-mode"]:checked')?.focus();
+    const container = root.current;
+    if (container) {
+      const checked = container.querySelector<HTMLInputElement>('input[name="quick-mode"]:checked');
+      (checked && !checked.matches(":disabled") ? checked : tabbable(container)[0])?.focus();
+    }
     return () => {
       if (previous instanceof HTMLElement) previous.focus();
     };
@@ -186,10 +193,13 @@ export function QuickStartDialog({
           <fieldset className="quick-start-group" disabled={locked}>
             <legend>{t("quickStart.templateCriteria")}</legend>
             <ul className="quick-start-template">
-              {mode.criteriaTemplate.map((criterion) => (
-                <li key={criterion}>{criterion}</li>
+              {mode.criteriaTemplate.map((criterion, index) => (
+                <li key={criterion}>
+                  {t("quickStart.criteriaTemplates." + mode.id + "." + index, { defaultValue: criterion })}
+                </li>
               ))}
             </ul>
+            <p className="quick-start-template-note">{t("quickStart.templateCriteriaNote")}</p>
             <Field label={t("quickStart.criteria")}>
               <Textarea
                 maxLength={8000}
@@ -208,12 +218,22 @@ export function QuickStartDialog({
             <Notice tone="error">
               {phase.message}
               <p>{t("quickStart.unknown")}</p>
+              {confirmingStartOver && <p role="alert">{t("quickStart.startOverWarning")}</p>}
               <span className="quick-start-recovery">
-                <Button variant="secondary" onClick={onRetry}>
-                  {t("quickStart.retry")}
+                <Button variant="secondary" onClick={confirmingStartOver ? () => setConfirmingStartOver(false) : onRetry}>
+                  {confirmingStartOver ? t("quickStart.startOverKeep") : t("quickStart.retry")}
                 </Button>
-                <Button variant="ghost" onClick={onStartOver}>
-                  {t("quickStart.startOver")}
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    if (!confirmingStartOver) setConfirmingStartOver(true);
+                    else {
+                      setConfirmingStartOver(false);
+                      onStartOver();
+                    }
+                  }}
+                >
+                  {confirmingStartOver ? t("quickStart.startOverConfirm") : t("quickStart.startOver")}
                 </Button>
               </span>
             </Notice>

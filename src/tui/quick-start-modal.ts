@@ -146,12 +146,17 @@ export function quickStartLines(state: QuickStartFormState, width: number): Quic
   return lines;
 }
 
-/** The slice of `lines` that fits `budget` rows and keeps the focused line (plus one below it) on screen. */
+/**
+ * The slice of `lines` that fits `budget` rows and keeps the focused line on screen. With an error showing it
+ * reaches down to the last error line, or as far as fits with the focused line still on top, so a failed Start
+ * never hides why it failed; otherwise it keeps one line below the focus.
+ */
 export function windowLines(lines: readonly QuickStartLine[], budget: number): QuickStartLine[] {
   if (budget <= 0 || lines.length <= budget) return [...lines];
   let focusAt = lines.reduce((last, line, index) => (line.focus ? index : last), -1);
   if (focusAt < 0) focusAt = 0;
-  const wanted = Math.min(lines.length - 1, focusAt + 1);
+  const lastError = lines.reduce((last, line, index) => (line.id.startsWith("error-") ? index : last), -1);
+  const wanted = lastError >= 0 ? Math.min(lastError, focusAt + budget - 1) : Math.min(lines.length - 1, focusAt + 1);
   const start = Math.max(0, Math.min(lines.length - budget, wanted - budget + 1));
   return lines.slice(start, start + budget);
 }
@@ -190,6 +195,12 @@ export function openQuickStart(otui: unknown, chrome: unknown, options: QuickSta
         body.remove(block);
       } catch {
         // already detached
+      }
+      // remove() only detaches: without this the row and its text stay registered with the renderer after every repaint.
+      try {
+        block.destroyRecursively();
+      } catch {
+        // already destroyed
       }
     }
     blocks = [];

@@ -55,7 +55,7 @@ schemas.ObservationPage = object({ observations: array(ref("GitObservation"), 20
 schemas.ObserveSubject = object({ operationId: text, expectedVersions: { type: "object", maxProperties: 210, propertyNames: text, additionalProperties: { type: "integer", minimum: 1 } }, payload: object({ subjectDigest: { type: "string", pattern: "^[a-f0-9]{64}$" } }) });
 schemas.Operation = { oneOf: [
     object({ operationId: text, status: { const: "pending" }, receiptId: { type: "null" }, result: { type: "null" }, eventCursor: { type: "null" } }),
-    object({ operationId: text, status: { const: "committed" }, receiptId: text, result: { oneOf: [ref("CommandResult"), ref("ObservationResult")] }, eventCursor: cursor }),
+    object({ operationId: text, status: { const: "committed" }, receiptId: text, result: { oneOf: [ref("CommandResult"), ref("ObservationResult"), ref("QuickStartResult")] }, eventCursor: cursor }),
 ] };
 const submission = domainSchemas.FlowSubmission!.properties!;
 schemas.AcceptancePreview = object({ flowId: submission.flowId!, flowRevisionId: submission.flowRevisionId!, acceptedIntents: submission.acceptedIntents!, knowledgeProposalIds: submission.knowledgeProposalIds!, criterionCoverage: submission.criterionCoverage!, acceptanceManifestDigest: { type: "string", pattern: "^[a-f0-9]{64}$" }, eventCursor: cursor });

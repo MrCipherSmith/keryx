@@ -258,11 +258,67 @@ describe("quick start dialog, state and event matrix", () => {
     fireEvent.click(submit());
     await screen.findByRole("button", { name: "Retry" });
     fireEvent.click(screen.getByRole("button", { name: "Start over" }));
+    expect(screen.getByText(workEn.quickStart.startOverWarning)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: workEn.quickStart.startOverConfirm }));
     expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
     describe_("Fix the login redirect again");
     fireEvent.click(submit());
     await waitFor(closed);
     expect(hub.posts[1]!.key).not.toBe(hub.posts[0]!.key);
+  });
+
+  test("network lost: Keep waiting on the start-over warning goes back to retry with the same operation id", async () => {
+    hub.script.push("network");
+    show();
+    await open();
+    describe_("Fix the login redirect");
+    fireEvent.click(submit());
+    await screen.findByRole("button", { name: "Retry" });
+    fireEvent.click(screen.getByRole("button", { name: "Start over" }));
+    fireEvent.click(screen.getByRole("button", { name: workEn.quickStart.startOverKeep }));
+    expect(screen.queryByText(workEn.quickStart.startOverWarning)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(closed);
+    expect(hub.posts[1]!.key).toBe(hub.posts[0]!.key);
+    expect(hub.created()).toBe(1);
+  });
+
+  test("an unresolved request survives closing the dialog and unmounting the view: retry replays the same operation id", async () => {
+    hub.script.push("commit-then-network");
+    const first = show();
+    await open();
+    describe_("Fix the login redirect");
+    fireEvent.click(submit());
+    await screen.findByRole("button", { name: "Retry" });
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    closed();
+    first.unmount();
+    show();
+    await open();
+    expect(screen.getByLabelText("What needs doing?")).toHaveValue("Fix the login redirect");
+    fireEvent.click(await screen.findByRole("button", { name: "Retry" }));
+    await waitFor(closed);
+    expect(hub.posts).toHaveLength(2);
+    expect(hub.posts[1]!.key).toBe(hub.posts[0]!.key);
+    expect(hub.created()).toBe(1);
+  });
+
+  test("while a request is unresolved, Tab never leaves the dialog even though the form fields are disabled", async () => {
+    hub.script.push("network");
+    show();
+    const dialog = await open();
+    describe_("Fix the login redirect");
+    fireEvent.click(submit());
+    await screen.findByRole("button", { name: "Retry" });
+    const enabled = [...dialog.querySelectorAll<HTMLElement>("button, input, textarea, select")].filter((el) => !el.matches(":disabled"));
+    expect(enabled.length).toBeGreaterThan(0);
+    const last = enabled[enabled.length - 1]!;
+    last.focus();
+    fireEvent.keyDown(last, { key: "Tab" });
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    expect(document.activeElement).toBe(enabled[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(closed);
   });
 
   test("Escape closes without sending, keeps the draft, and returns focus to the button", async () => {
@@ -400,6 +456,31 @@ describe("quick start strings", () => {
         for (const question of questionsFor(mode.id)) expect(strings["questions." + question.id], name + " question " + question.id).toBeTruthy();
       }
     }
+  });
+
+  test("every template criterion has a translation, and the Russian dialog shows it while the Hub keeps the canonical text", async () => {
+    const ru = leaves(workRu.quickStart);
+    const en = leaves(workEn.quickStart);
+    for (const mode of QUICK_MODES) {
+      mode.criteriaTemplate.forEach((criterion, index) => {
+        expect(en["criteriaTemplates." + mode.id + "." + index], "en " + mode.id + " " + index).toBe(criterion);
+        expect(ru["criteriaTemplates." + mode.id + "." + index], "ru " + mode.id + " " + index).toBeTruthy();
+      });
+    }
+    await i18n.changeLanguage("ru");
+    show();
+    fireEvent.click(await screen.findByRole("button", { name: workRu.quickStart.open }));
+    const dialog = await screen.findByRole("dialog");
+    const task = QUICK_MODES.find((mode) => mode.id === "task")!;
+    expect(within(dialog).getByText(ru["criteriaTemplates.task.0"]!)).toBeInTheDocument();
+    expect(within(dialog).queryByText(task.criteriaTemplate[0]!)).not.toBeInTheDocument();
+    expect(within(dialog).getByText(workRu.quickStart.templateCriteriaNote)).toBeInTheDocument();
+    fireEvent.change(within(dialog).getByLabelText(workRu.quickStart.description), { target: { value: "Починить вход" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: workRu.quickStart.submit }));
+    await waitFor(closed);
+    // The template is not sent: the Hub prepends its own English wording, so what is stored never depends on the UI language.
+    expect(hub.posts[0]!.body.criteria).toEqual([]);
+    await i18n.changeLanguage("en");
   });
 
   test.each(["en", "ru"])("the open dialog in %s shows no untranslated key", async (language) => {

@@ -12,7 +12,7 @@ import { authorizeAgentRequest } from '../agent-credentials';
 import { fail, HubFailure, object, sha256 } from '../domain';
 import type { HubStore } from '../store';
 import { allowedWorkCommands, workCommand, workDigest, workRead } from './domain';
-import { parseQuickStartBody, quickStart, type QuickStartResult } from './quick-start';
+import { parseQuickStartBody, quickStart } from './quick-start';
 import type { Attempt, ResultSubject, WorkReceipt, WorkRecord, WorkState } from './model';
 export const workLimits = {
     maxCommandBytes: MAX_COMMAND_BYTES, defaultPageSize: 50, maxPageSize: 200, maxEventPageSize: 1000, maxEventBytes: 1024 * 1024, maxSnapshotBytes: 20 * 1024 * 1024, maxSnapshotCacheBytes: 64 * 1024 * 1024, maxSnapshots: 32, maxSnapshotsPerPrincipal: 4, maxSnapshotBytesPerPrincipal: 32 * 1024 * 1024, snapshotTtlMs: 5 * 60 * 1000, maxObservations: 8, maxObservationsPerPrincipal: 2
@@ -105,9 +105,11 @@ function resultEnvelope(receipt: WorkReceipt, eventCursor: string) {
     if (value && typeof value === 'object' && 'observation' in value)
         return { ...value, eventCursor };
     const entities = resultEntities(value);
+    const started = value && typeof value === 'object' && 'flowId' in value && 'intentId' in value && !('kind' in value)
+        ? { flowId: String(value.flowId), intentId: String(value.intentId) } : undefined;
     const preview = typeof value === 'object' && value !== null && 'status' in value && value.status === 'eligible' ? value : undefined;
     return {
-        operationId: receipt.operationId, entities, eventCursor, receiptId: receipt.receiptId, ...(preview ? { preview } : {})
+        operationId: receipt.operationId, entities, eventCursor, receiptId: receipt.receiptId, ...(preview ? { preview } : {}), ...(started ?? {})
     };
 }
 /** HTTP only: current identity is re-evaluated inside the serialized command turn. */
@@ -422,8 +424,7 @@ export function createWorkHttp(deps: Dependencies) {
                         fail(409, 'idempotency-conflict', 'Operation ID belongs to a pending observation');
                     const fields = parseQuickStartBody(body);
                     const receipt = quickStart({ store: deps.store, now: deps.now }, current.actor, projectId, { operationId: key, ...fields });
-                    const { flowId, intentId } = receipt.result as QuickStartResult;
-                    return json({ ...resultEnvelope(receipt, eventCursor(current.actor, projectId, receipt.eventCursor)), flowId, intentId });
+                    return json(resultEnvelope(receipt, eventCursor(current.actor, projectId, receipt.eventCursor)));
                 });
             }
             operationId = typeof body.operationId === 'string' ? body.operationId : undefined;

@@ -104,7 +104,7 @@ Evidence, with references taken on 2026-11-14:
 
 **Visual artifact**: `{ "runId", "stage": "visual", "kind": "screenshot", "role": "before|after", "ref", "capturedAt" }`.
 
-**Quick start request**: `{ "mode": "quick|bug|task|epic|refactor", "description": "…", "answers": [{"q","a"|null,"skipped":bool}], "criteria": ["…"] }`. The server creates the spec, the Flow and freezes `criteria` in one idempotent mutation, following the existing mutation-queue rule (idempotency key).
+**Quick start request**: `{ "mode": "quick|bug|task|epic|refactor", "description": "…", "answers": [{"q","a"|null,"skipped":bool}], "criteria": ["…"] }`. The server composes `flow.create` (with `specification: null`; the description and answers go into the problem text, every skipped question recorded as `Skipped`), `intent.create` and `flow.approve-and-start`, freezing `criteria` in one idempotent action keyed by the `Idempotency-Key` header (the operation id), following the existing mutation-queue rule. The route is `POST /hub/work/v1/projects/:p/quick-start`.
 
 JSON schemas for these contracts are not written yet. They are added under `schemas/` once Phase 0 settles field names, and the specification then links them.
 
@@ -144,7 +144,7 @@ Decided by the operator in Telegram message 262443 (2026-11-14), verbatim: «1-T
 
 1. `keryx hub solo` starts a loopback-only Hub; a request from a non-loopback peer to the solo login route returns 403. (R2)
 2. The solo Hub child exits within five seconds of the shell quitting, and no process remains. (R1)
-3. Quick start of a one-line bug creates a spec, a Flow and frozen criteria in one mutation. (R7)
+3. Quick start of a one-line bug creates a Flow without a spec document, and frozen criteria, in one action. (R7)
 4. Replaying the same quick-start mutation with the same idempotency key creates no second Flow. (R7)
 5. Each of the five modes sets its default review depth and criteria template from the mode table. (R6)
 6. Skipping the clarifying form is recorded on the Flow and shown at acceptance. (R8)

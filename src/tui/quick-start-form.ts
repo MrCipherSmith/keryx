@@ -39,6 +39,12 @@ export interface QuickStartDraft {
   criteria: string;
 }
 
+/** An operation whose outcome is unknown: its id and the digest of the exact body it was sent with. */
+export interface QuickStartPending {
+  operationId: string;
+  digest: string;
+}
+
 export interface QuickStartFormState extends QuickStartDraft {
   phase: QuickStartPhase;
   focus: QuickStartSlot;
@@ -58,6 +64,8 @@ export interface QuickStartKey {
 export interface QuickStartForm {
   state(): QuickStartFormState;
   draft(): QuickStartDraft;
+  /** The operation in flight or awaiting a retry; keep it across a close and hand it back as `initialPending`. */
+  pendingOperation(): QuickStartPending | undefined;
   /** True when the form consumed the key. Escape is never consumed: the modal host closes on it. */
   handleKey(key: QuickStartKey): boolean;
   /** Starts a send if the form may; the request goes out before this returns. */
@@ -74,6 +82,8 @@ export interface QuickStartFormOptions {
   /** A fresh operation id; defaults to a random UUID. */
   newOperationId?: () => string;
   initial?: QuickStartDraft;
+  /** An operation left unresolved by an earlier form: Start on the same body replays it instead of minting a new id. */
+  initialPending?: QuickStartPending;
 }
 
 const ENTER_KEYS = new Set(["return", "linefeed", "enter", "kpenter"]);
@@ -104,9 +114,16 @@ export function createQuickStartForm(options: QuickStartFormOptions): QuickStart
   let answers: Record<string, string> = { ...(options.initial?.answers ?? {}) };
   let phase: QuickStartPhase = "editing";
   let focus: QuickStartSlot = "mode";
-  let error: QuickStartError | undefined;
+  let error: QuickStartError | undefined =
+    options.initialPending === undefined
+      ? undefined
+      : {
+          kind: "network",
+          message: "The earlier request may have reached the Hub. Press Enter on Start to retry it; it cannot create a second Flow.",
+          retry: true,
+        };
   /** Set while a request is in flight and after a network failure; cleared by every other outcome. */
-  let pending: { operationId: string; digest: string } | undefined;
+  let pending: QuickStartPending | undefined = options.initialPending;
   let inflight: Promise<void> = Promise.resolve();
 
   const slots = (): QuickStartSlot[] => [
@@ -250,6 +267,7 @@ export function createQuickStartForm(options: QuickStartFormOptions): QuickStart
       ...(pending === undefined ? {} : { operationId: pending.operationId }),
     }),
     draft: () => ({ mode, description, answers: { ...answers }, criteria }),
+    pendingOperation: () => (pending === undefined ? undefined : { ...pending }),
     handleKey,
     submit,
     settled: () => inflight,
