@@ -16,7 +16,7 @@ triggers:
   - "check these findings"
 metadata:
   author: "MrCipherSmith"
-  version: "1.1.0"
+  version: "1.2.0"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
@@ -113,14 +113,14 @@ finding claims is broken, and see whether it breaks.**
 bun test src/review/managed.test.ts -t "refuses"     # does the guard actually fire?
 
 # Finding: "this guard is asserted against a synthetic value, so it cannot fail"
-# Delete the guarded line and re-run. If the test stays green, the finding is CONFIRMED.
+# Never edit the reviewed tree. Run the deleted-line mutant in a scratch copy (keryx review mutate
+# --spec <file> --test "<cmd>" --package <p>), or ask the orchestrator for a verify-run. Green: CONFIRMED.
 
 # Finding: "the type allows undefined here"
 bun run typecheck
 ```
 
-Record the command and the relevant output. "I ran the tests and they passed" is
-not evidence; the command you ran and its output is — `bun test <file>` with
+Record the command and the relevant output. "I ran the tests and they passed" is not evidence; the command you ran and its output is — `bun test <file>` with
 the counts it actually printed, not a count quoted from somewhere else. (This
 sentence used to quote a fixed number, which went stale twice in one day.)
 
@@ -296,4 +296,4 @@ Then a short markdown summary:
 | "The finding is understated; I'll bump it to blocker." | You cannot. The merge discards the whole claim and records the attempt. |
 | "Most of my verdicts are `unverifiable`, that looks bad." | It is the expected shape. TestGen-LLM discards 75% of its own output and that is why the remainder is trusted. |
 | "I also spotted something the reviewers missed." | Report it through a domain reviewer in a new round, with evidence. This pass cannot add. |
-| "I raised this finding, so I know best whether it holds." | That is exactly the case AC9 forbids. |
+| "I raised this finding, so I know best whether it holds." | That is the case the Iron Law "Never verify your own finding" forbids, and the merge refuses it by name. |

@@ -14,7 +14,7 @@ triggers:
   - "degradation against the base branch"
 metadata:
   author: "MrCipherSmith"
-  version: "1.0.0"
+  version: "1.1.0"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
   origin: "authored"
@@ -65,12 +65,12 @@ minor, major or blocker carries one `evidence_kind`, and `evidence` says what yo
 |---|---|
 | `probe` | you ran the code, or a script against it, on head and on base, and the outputs differ |
 | `consumer-trace` | you followed a consumer of the changed symbol to its effect, file by file |
-| `merge-trace` | you merged two heads (or traced the merge) and showed what the second drops |
-| `red-test` | you wrote or named a test that fails on the head and passes on the base |
+| `merge-trace` | two heads were merged outside the reviewed tree (or the merge traced) to show what the second drops |
+| `red-test` | a test, named or written outside the reviewed tree, fails on the head and passes on the base |
 | `base-diff` | you read the same path on base and on head and quote both |
 
-`probe`, `red-test` and `merge-trace` run code, so they need `allowed_tools` to include
-`run-tests`. Without it, `consumer-trace` and `base-diff` are still evidence: a trigger and outcome you
+`probe` runs code, so it needs `allowed_tools` to include `run-tests`. `red-test` and `merge-trace` also write, and never in the reviewed tree (other reviewers read it at once): they count only when the orchestrator produced them (`keryx review verify-run`) or they ran in a scratch copy (`keryx review mutate`) or a temporary worktree outside the reviewed tree. Otherwise state the trace in prose, labelled unrun.
+Without `run-tests`, `consumer-trace` and `base-diff` are still evidence: a trigger and outcome you
 read in the code is a finding, `major` when a user who reaches it gets a wrong, lost or blocked result.
 A question is for what the code cannot answer (a backend reply, data, timing), not for what you did not run.
 
@@ -84,7 +84,7 @@ and lists it in `scope.md` under `## Degradation evidence screen` with the rule
 - the diff, and the PR description when there is one;
 - the importers of the module that holds each changed shared export (and of a barrel that re-exports it), from the code graph, under one cap shared by all exports, with what it dropped. Trace those first. If the cap dropped consumers, say so in your summary; do not imply a complete sweep.
   Where the graph lists no importers for a changed export (a barrel, a re-export, a file it has no node for), search for the users of the symbol, mark them `search-derived` in `enumeration_method`, and name in the summary the exports the graph could not answer;
-- the flow's frozen acceptance criteria, and the previous round's findings.
+- the flow's frozen acceptance criteria (none supplied: use the PR body or issue the payload carries, else say in the summary that no criteria were supplied), and the previous round's findings.
 
 ## How to look
 
