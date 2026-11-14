@@ -1,5 +1,5 @@
 import path from "node:path";
-import { flowsRoot, listFlowDirs, readFlow, resolveFlowDir } from "../flow/store";
+import { flowsRoot, listFlowDirs, readFlow, resolveFlowDir } from "../flow/service";
 import { getExecutionPlan, type ExecutionPlan } from "./execution-plan";
 import { readSlate } from "./slate";
 import { isOperatorMessage } from "./compact";

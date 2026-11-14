@@ -1,6 +1,6 @@
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
-import type { FlowTask } from "../flow/types";
+import type { FlowTask } from "../flow/service";
 
 export type TaskDetails = { description: string | null; criteria: string | null; criteriaScope: "task" | "flow"; results: string | null };
 const errorText = (e: unknown): string => e instanceof Error ? e.message : String(e);
