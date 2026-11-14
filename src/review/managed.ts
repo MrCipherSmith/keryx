@@ -2570,7 +2570,7 @@ function readEnumerationMethod(lines: string[]): { text: string; line: number; e
     if (prefix.includes("{")) first = first.replace(/[ \t]*\}[ \t]*$/, "");
     if (prefix.includes("|")) first = first.replace(/[ \t]*\|[ \t]*$/, "");
     const parts = /^[|>][-+]?$/.test(first) ? [] : [first];
-    const quote = /^["'`]/.test(first) ? first[0] : null;
+    const quote: string | null = /^["'`]/.test(first) ? first.charAt(0) : null;
     let open = quote !== null && !(first.length > 1 && first.trimEnd().replace(/[.;,]$/, "").endsWith(quote));
     let end = line;
     if (first !== "" || parts.length === 0) {
