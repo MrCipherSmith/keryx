@@ -33,8 +33,9 @@ This rule governs **content**. Storage, frontmatter and length ceilings are in
 
 A line stays only if a capable model would behave differently without it. These fail:
 definitions of well-known concepts, restated principles, generic advice ("write readable
-code"), and motivation for doing the task well. When unsure, delete the line and let the
-evidence in section 7 decide.
+code"), and motivation for doing the task well. When unsure about a line you are writing,
+leave it out and let the evidence in section 7 decide; for text that already ships, follow
+section 9.
 
 ### 2. Name the canon, then state what the name cannot carry
 
@@ -49,6 +50,9 @@ open:
 A named canon brings its dogma with it. Pair every such reference with filters (section 3),
 or the output fills with findings the canon implies and the project does not want.
 
+A line that mixes the two is split: in "functions should be small and focused; flag as
+minor", the grade stays and the explanation goes.
+
 ### 3. Carry the content a model cannot derive
 
 Include each of these that applies to the skill:
@@ -62,9 +66,13 @@ Include each of these that applies to the skill:
   finding is dropped, and the evidence a finding must carry (a failing input, not "violates
   a principle").
 - **Output format** — a template or a schema.
-- **Project decisions** — thresholds, conventions, and the departures from section 2.
+- **Project decisions** — thresholds, conventions, and the departures from section 2. A
+  decision is a specific value or choice the canon leaves open: "40 lines", "locality wins".
+  In a shipped rule it is a default a project may override; it stays even when its origin
+  was never recorded, because the value still constrains the result where the explanation
+  around it does not.
 - **Known default failures** — specific outputs the model produces by default and should
-  not. List ones that were observed, not ones that might happen.
+  not. A change that adds one names the run where it was seen.
 
 ### 4. Write steps only where order is a constraint
 
@@ -97,6 +105,24 @@ A skill dispatched to a lighter tier (`model-selection.mdc`) is tested on that t
 the flagship does not need can pass the deletion test for the lighter model; keep it, and say
 which tier it is for.
 
+### 9. Audit existing text by what reading can decide
+
+Sections 7 and 8 need a run; reading settles only sections 1 and 2. An audit of text that
+already ships therefore sorts each block into one of three:
+
+- **Remove** — restated canon, with no decision, filter or grade in it.
+- **Keep** — anything section 3 lists, and any block a test pins or a required section of
+  the skill anatomy holds. To remove pinned text, change the check in the same change.
+- **Undecided** — everything else. It stays until a run decides: an eval comparison, or a
+  run on the lightest tier the skill is dispatched to. Where no eval covers the file, say
+  so; reading alone does not justify the removal.
+
+An existing line is not removed for lacking a record of the failure it answers; that record
+is required only of lines added from now on.
+
+A file that shrinks to a few lines stays a short file while anything cites it by name.
+Shortness is the expected result, not a gap to refill.
+
 ## Output Contract
 
 When this rule drives an edit or a review of a skill or rule:
@@ -105,6 +131,7 @@ When this rule drives an edit or a review of a skill or rule:
 - Report each added line with the observed failure it answers.
 - Report the line count before and after; a trimmed shipped skill lowers its ceiling in the
   same change (`skills-storage-workflow.mdc`, "Length Ceilings").
+- Report each undecided block with the run that would decide it.
 - Output formats, schemas, and safety, permission and confirmation text are out of scope —
   never removed under this rule.
 
