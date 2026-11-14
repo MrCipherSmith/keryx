@@ -58,7 +58,7 @@ The first bench showed before 14.0 and after 11.5 of 22. All the loss was on c09
 - **c11:** each new run misses one truth item, but a different one each time (A1 T1, A2 T4). That points to sampling, not to a lost check.
 - **What changed in regression:** on a non-FIX slice the diff only adds a FIX-slice paragraph, a criteria fallback, and moves "thin test" to testing-practices. No detection check was removed.
 
-AC8: met, with a residual -0.75 on regression noted.
+AC8: met, with a residual -0.75 on regression noted. **Superseded** by the "AC8 per lens" section below, which gives the verdict "plausibly met, not proven".
 - 2026-11-14T09:44:30.023Z - task-done: T12: Recall bench after the edits and comparison with baseline
 
 ## AC8 per lens (review round 1 asked for all four), 2026-11-14
@@ -73,12 +73,15 @@ The judges matched each truth item to the finding that found it. Score = match +
 | testing-practices | 4.5 -> 3.5 | not repeated | yes |
 
 Notes:
-- **Attribution.** One truth item can be credited to more than one lens, so per-lens sums exceed the case total (14.0 -> 11.5).
+- **Attribution.** One truth item can be credited to more than one lens, so per-lens sums can exceed the case total. In this run they happen to equal it: 14.0 before and 11.5 after.
 - **Reading.** The unchanged logic lens moved +2 between identical runs, which shows the noise level of a single run.
 - **security-code:** the repeat shows no difference on c09 and c11, where its whole first-bench loss on those cases happened. The remaining 1 point of its first-bench loss is on c01-c03, single run, not repeated.
 - **testing-practices:** -1 in a single run, which is at the tolerance edge, not repeated.
 - **regression:** -0.75 averaged over the two repeat runs on c09 and c11.
-- **Tolerance.** AC8 does not say whether its tolerance is per lens or pooled. Read per lens, every lens is within -1 except regression, which is -1.5 in the single first run and -0.75 averaged over the two repeat runs.
+- **Tolerance.** AC8 does not say whether its tolerance is per lens or pooled. Read per lens, two lenses exceed -1 in the single first run:
+  - **security-code:** -2.0 in the first run, 0.0 averaged over the two repeat runs on c09 and c11.
+  - **regression:** -1.5 in the first run, -0.75 averaged over the two repeat runs.
+- **Lens text benched.** The "after" arm was benched on the lens text at T12, before review-fix commit fdf0df1f2. That commit edited all four AC8 lenses again: it bumped logic to 1.1.0 (preamble only), changed the security-code law, and changed testing-practices and regression wording. So logic is not an exact control at head, and the head text of these lenses was not benched.
 
 **Verdict for the gate judge: AC8 is plausibly met, not proven.** Proving it needs a pooled bench of at least 3 runs per arm on all five cases, which was not run within this flow's budget.
 
@@ -88,5 +91,6 @@ Notes:
 ## Review round 1 notes
 
 - **AC9 locally:** `src/gdskills/install.test.ts` "read-only rules/core directory" fails with EACCES on the base branch too, so it is environmental. Judge AC9 from CI.
-- **AC3:** its clause "ui-ux runs a server only when the payload supplies its URL" is superseded by AC2 and by the built lens, which never starts a server and uses a supplied URL or screenshots only.
-- **Plan steps vs flow task ids:** plan steps T1..T7 correspond to flow tasks T5..T11, and T12 is the bench repeat. The scaffold rows T1..T4 were registered by `flow init`. T1 was closed before the freeze; T2 and T3 were closed as skipped.
+- **AC3:** frozen AC3 allows ui-ux to run a server only when the payload supplies its URL. The built lens never starts a server and uses a supplied URL or screenshots only, so AC3's clause is met vacuously; AC3 itself is unchanged.
+- **Earlier concern resolved:** the T8 concern that review-frontend still had inline `major` labels was resolved in review-fix commit fdf0df1f2.
+- **Plan steps vs flow task ids:** plan step Tn is flow task T(n+5), so plan T1..T7 are flow T6..T12. Flow T5 is the baseline bench from the plan's quality-guard paragraph. Flow T12 is the after-bench (plan T7), and the repeat ran inside it. The scaffold rows T1..T4 were registered by `flow init`. T1..T3 were marked done before the freeze; that is scaffold bookkeeping and no work was done under them. T4 is this review.
