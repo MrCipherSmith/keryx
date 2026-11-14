@@ -11,13 +11,42 @@
   "title": "Review lenses: one reviewer contract, one severity rubric, read-only reviewers",
   "status": "in-progress",
   "createdAt": "2026-11-14T09:10:25.236Z",
-  "updatedAt": "2026-11-14T10:56:43.046Z",
+  "updatedAt": "2026-11-14T13:17:27.382Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:d6839fd3f34f0849ab0831e251ce48cd07cca33d2f6b26450e0da8affffb7d55",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-11-14T13:17:15.376Z",
+      "note": "verify exec: bun test src/gdskills/review-lens-contract.test.ts src/review/chunk-findings.test.ts -> 25 pass, 0 fail (head after c973edf94 + regression fallback edit)"
+    },
+    "AC2": {
+      "at": "2026-11-14T13:17:15.619Z",
+      "note": "verify exec: bun test src/gdskills/review-lens-contract.test.ts src/review/chunk-findings.test.ts -> 25 pass, 0 fail (head after c973edf94 + regression fallback edit)"
+    },
+    "AC3": {
+      "at": "2026-11-14T13:17:15.922Z",
+      "note": "verify exec: bun test src/gdskills/review-lens-contract.test.ts src/review/chunk-findings.test.ts -> 25 pass, 0 fail (head after c973edf94 + regression fallback edit)"
+    },
+    "AC5": {
+      "at": "2026-11-14T13:17:16.152Z",
+      "note": "verify exec: bun test src/gdskills/review-lens-contract.test.ts src/review/chunk-findings.test.ts -> 25 pass, 0 fail (head after c973edf94 + regression fallback edit)"
+    },
+    "AC9": {
+      "at": "2026-11-14T13:17:16.479Z",
+      "note": "bun test src/gdskills: 8319 pass, 1 fail = install.test.ts EACCES (local read-only dir, environmental; CI green); review-lens-contract+chunk-findings 25/25; mirrors cmp-identical; versions bumped; ceilings respected"
+    },
+    "AC4": {
+      "at": "2026-11-14T13:17:27.147Z",
+      "note": "judged: inline severity tables in highload/backend/security-code/architecture/clean-code/style/performance/frontend now defer to the canonical rubric; AC4 pins in review-lens-contract.test.ts (frontend store-load not primary major; backend stack-trace/auth-guard ladder; security unreachable=info; performance load-time cap scoped); three review rounds closed all blocker/major on this criterion"
+    },
+    "AC7": {
+      "at": "2026-11-14T13:17:27.382Z",
+      "note": "judged: review-performance Part 0 names CLI command start/per-keystroke/per-file hot paths; review-highload carries a CLI/TUI concurrency section (concurrent sessions, shared .metaproject writes, process fan-out, file locks) citable without a handler or load profile"
+    }
+  },
   "pr": {
     "url": null
   },
@@ -406,6 +435,41 @@
       "at": "2026-11-14T10:56:43.046Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-11-14T13:17:15.376Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: verify exec: bun test src/gdskills/review-lens-contract.test.ts src/review/chunk-findings.test.ts -> 25 pass, 0 fail (head after c973edf94 + regression fallback edit) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-14T13:17:15.620Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: verify exec: bun test src/gdskills/review-lens-contract.test.ts src/review/chunk-findings.test.ts -> 25 pass, 0 fail (head after c973edf94 + regression fallback edit) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-14T13:17:15.922Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: verify exec: bun test src/gdskills/review-lens-contract.test.ts src/review/chunk-findings.test.ts -> 25 pass, 0 fail (head after c973edf94 + regression fallback edit) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-14T13:17:16.152Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: verify exec: bun test src/gdskills/review-lens-contract.test.ts src/review/chunk-findings.test.ts -> 25 pass, 0 fail (head after c973edf94 + regression fallback edit) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-14T13:17:16.479Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: bun test src/gdskills: 8319 pass, 1 fail = install.test.ts EACCES (local read-only dir, environmental; CI green); review-lens-contract+chunk-findings 25/25; mirrors cmp-identical; versions bumped; ceilings respected (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-14T13:17:27.147Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: judged: inline severity tables in highload/backend/security-code/architecture/clean-code/style/performance/frontend now defer to the canonical rubric; AC4 pins in review-lens-contract.test.ts (frontend store-load not primary major; backend stack-trace/auth-guard ladder; security unreachable=info; performance load-time cap scoped); three review rounds closed all blocker/major on this criterion (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-14T13:17:27.382Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: judged: review-performance Part 0 names CLI command start/per-keystroke/per-file hot paths; review-highload carries a CLI/TUI concurrency section (concurrent sessions, shared .metaproject writes, process fan-out, file locks) citable without a handler or load profile (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
     }
   ],
   "acKinds": {
@@ -441,5 +505,84 @@
       "kind": "exec",
       "check": "bun test src/gdskills src/review/chunk-findings.test.ts"
     }
-  }
+  },
+  "signatures": [
+    {
+      "at": "2026-11-14T13:17:15.376Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:d6839fd3f34f0849ab0831e251ce48cd07cca33d2f6b26450e0da8affffb7d55"
+    },
+    {
+      "at": "2026-11-14T13:17:15.619Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:d6839fd3f34f0849ab0831e251ce48cd07cca33d2f6b26450e0da8affffb7d55"
+    },
+    {
+      "at": "2026-11-14T13:17:15.922Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:d6839fd3f34f0849ab0831e251ce48cd07cca33d2f6b26450e0da8affffb7d55"
+    },
+    {
+      "at": "2026-11-14T13:17:16.152Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:d6839fd3f34f0849ab0831e251ce48cd07cca33d2f6b26450e0da8affffb7d55"
+    },
+    {
+      "at": "2026-11-14T13:17:16.479Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:d6839fd3f34f0849ab0831e251ce48cd07cca33d2f6b26450e0da8affffb7d55"
+    },
+    {
+      "at": "2026-11-14T13:17:27.147Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:d6839fd3f34f0849ab0831e251ce48cd07cca33d2f6b26450e0da8affffb7d55"
+    },
+    {
+      "at": "2026-11-14T13:17:27.382Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:d6839fd3f34f0849ab0831e251ce48cd07cca33d2f6b26450e0da8affffb7d55"
+    }
+  ]
 }

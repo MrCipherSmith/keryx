@@ -735,6 +735,16 @@ as a separate review. Pass `--brief` output verbatim into the scope-B dispatch:
 the code rejection is the enforcement, but a reviewer told afterwards has already
 spent the round producing findings that will all be refused.
 
+**A missing input is replaced in the dispatch, never left blank.** No linked
+flow means no frozen acceptance criteria: put the PR body or issue text in the
+scope-B payload, labelled as the criteria it stands in for; with neither, write
+`acceptance criteria: none supplied`, and the reviewer's summary says it judged
+behaviour against the diff alone. A FIX slice in a `delta` round gets no graph
+blast-radius set: its radius is the names the fix changed
+(`review_context.scope.files`, see the `delta` round below), and the reviewer
+checks the fix lines for regressions of the behaviour they touch before it
+disposes each attached finding.
+
 `class_scope` on a scope-B finding names the **caller that breaks**, not the
 changed line, because that is the site a human has to look at.
 

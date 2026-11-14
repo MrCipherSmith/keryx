@@ -163,3 +163,40 @@ This replaces the "plausibly met, not proven" verdict above.
 - In the pooled re-bench, the other per-lens deltas were each 0.67 or less, which is the noise level shown by the one-sentence logic change. Security-code gained.
 
 **Verdict: AC8 is met for the regression lens.** The pooled four-lens bench was not re-run with R. Its remaining per-lens deltas are within the measured noise.
+- 2026-11-14T13:17:15.376Z - ac-confirmed: AC1: verify exec: bun test src/gdskills/review-lens-contract.test.ts src/review/chunk-findings.test.ts -> 25 pass, 0 fail (head after c973edf94 + regression fallback edit) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-11-14T13:17:15.620Z - ac-confirmed: AC2: verify exec: bun test src/gdskills/review-lens-contract.test.ts src/review/chunk-findings.test.ts -> 25 pass, 0 fail (head after c973edf94 + regression fallback edit) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-11-14T13:17:15.922Z - ac-confirmed: AC3: verify exec: bun test src/gdskills/review-lens-contract.test.ts src/review/chunk-findings.test.ts -> 25 pass, 0 fail (head after c973edf94 + regression fallback edit) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-11-14T13:17:16.152Z - ac-confirmed: AC5: verify exec: bun test src/gdskills/review-lens-contract.test.ts src/review/chunk-findings.test.ts -> 25 pass, 0 fail (head after c973edf94 + regression fallback edit) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-11-14T13:17:16.479Z - ac-confirmed: AC9: bun test src/gdskills: 8319 pass, 1 fail = install.test.ts EACCES (local read-only dir, environmental; CI green); review-lens-contract+chunk-findings 25/25; mirrors cmp-identical; versions bumped; ceilings respected (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-11-14T13:17:27.147Z - ac-confirmed: AC4: judged: inline severity tables in highload/backend/security-code/architecture/clean-code/style/performance/frontend now defer to the canonical rubric; AC4 pins in review-lens-contract.test.ts (frontend store-load not primary major; backend stack-trace/auth-guard ladder; security unreachable=info; performance load-time cap scoped); three review rounds closed all blocker/major on this criterion (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-11-14T13:17:27.382Z - ac-confirmed: AC7: judged: review-performance Part 0 names CLI command start/per-keystroke/per-file hot paths; review-highload carries a CLI/TUI concurrency section (concurrent sessions, shared .metaproject writes, process fan-out, file locks) citable without a handler or load profile (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+
+## AC6 fallbacks for regression: measured in the lens, moved to the orchestrator, 2026-11-14
+
+**Measured arm S.** It is the R lens (1.3.0) plus two inline sentences:
+- with no frozen AC, use the PR body or issue, else say in the summary that none were supplied;
+- on a FIX slice there is no blast-radius set, so check the fix lines.
+
+S was measured on c02, c09 and c11 with 3 runs each, against the same truth set, with blind judges.
+
+| arm | c02 | c09 | c11 | totals | mean |
+|---|---|---|---|---|---|
+| B (base) | 3 / 3 / 3 | 1.5 / 1 / 0.5 | 1.5 / 3 / 2.5 | 6 / 7 / 6 | 6.33 |
+| R (1.3.0) | 3 / 3 / 3 | 0.5 / 1 / 1 | 2.5 / 2 / 3 | 6 / 6 / 7 | 6.33 |
+| S (1.4.0 draft) | 3 / 3 / 4 | 0.5 / 0.5 / 0.5 | 1.5 / 1.5 / 3 | 5 / 5 / 7.5 | 5.83 |
+
+**Reading.**
+- S is within the AC8 tolerance: -0.5 against a bound of -1.
+- But c09 T1, the blocker bypass of the secret detector, was found by S in 0 of 3 runs. Base found it in 2 of 3 and R in 1 of 3. Head lost the same item in the earlier re-bench.
+
+**Owner decision.** Keep the regression lens at 1.3.0.
+
+**Where the fallbacks went instead.** They are now stated in `review-orchestrator/SKILL.detail.md` (scope-B section, orchestrator version 1.16.1) as what the orchestrator puts into the dispatch:
+- no frozen AC: pass the PR body or issue labelled as the criteria; with neither, pass `acceptance criteria: none supplied`, and the reviewer's summary says it judged against the diff alone;
+- FIX slice: no graph blast-radius set; the radius is the names the fix changed, and the reviewer checks the fix lines before it disposes the attached findings.
+
+**Why no new bench.** The reviewer-facing lens text is byte-identical to the measured R arm (6.33), and the bench payloads carry neither AC nor FIX slices. Recall on this corpus is therefore the R measurement.
+
+**AC6 and AC8.**
+- AC6 is now covered: highload, degradation and ui-ux in their lenses, and regression through the orchestrator dispatch.
+- AC8 is met by R = 6.33 against B = 6.33.
