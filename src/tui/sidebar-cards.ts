@@ -32,11 +32,12 @@ export type SidebarCardSeverity = "normal" | "attention" | "error";
 /** Columns a rail row has: border + one padding cell + three text cells (`SIDEBAR_RAIL_WIDTH` = 5). */
 const RAIL_CELLS = 3;
 /**
- * A card is its title row plus at most three value rows: seven cards of four lines and the gaps
- * between them still fit a 40-row terminal, and the first three stay on screen at 24.
+ * Supporting cards have a title plus at most three value rows: Work gets a separate budget so the plan is never displaced by worker telemetry.
  */
 const MAX_VALUE_ROWS = 3;
 const MIN_CARD_LINES = 3;
+// Status + plan heading and seven steps + separate agent/job summaries.
+const MAX_WORK_VALUE_ROWS = 11;
 const NOTHING_TO_SHOW = "Nothing to show yet.";
 
 /** What the card builders read. Every field is optional: an empty snapshot is a quiet sidebar. */
@@ -79,7 +80,7 @@ export interface SidebarCardModel {
   severity: SidebarCardSeverity;
   badge?: string;
   tabs: SidebarCardTab[];
-  /** default|wide: 3 to 5 lines, each at most `textWidth` cells. rail: one line of at most 3 cells. */
+  /** default|wide: compact summaries; Work also keeps the visible plan. Each line is at most `textWidth` cells. rail: one line of at most 3 cells. */
   lines(textWidth: number, mode: SidebarMode): string[];
   rail(): { glyph: string; badge?: string };
 }
@@ -111,6 +112,24 @@ interface CardDef {
 // Icons are single-cell geometric shapes, none with an emoji presentation, each with a
 // distinct printable ASCII fallback for terminals that cannot draw them.
 const CARD_DEFS: readonly CardDef[] = [
+  {
+    id: "work",
+    title: "Work",
+    icon: "▸",
+    asciiIcon: "T",
+    sections: [
+      { id: "status", label: "Status" },
+      { id: "plan", label: "Plan" },
+      { id: "subagents", label: "Subagents" },
+      { id: "jobs", label: "Jobs" },
+    ],
+    rows: [
+      { sections: ["status"], required: true, fallback: "idle" },
+      { sections: ["subagents"], required: false, fallback: "" },
+      { sections: ["jobs"], required: false, fallback: "" },
+      { sections: ["plan"], required: false, fallback: "" },
+    ],
+  },
   {
     id: "session",
     title: "Session",
@@ -152,24 +171,6 @@ const CARD_DEFS: readonly CardDef[] = [
     ],
   },
   {
-    id: "work",
-    title: "Work",
-    icon: "▸",
-    asciiIcon: "T",
-    sections: [
-      { id: "status", label: "Status" },
-      { id: "plan", label: "Plan" },
-      { id: "subagents", label: "Subagents" },
-      { id: "jobs", label: "Jobs" },
-    ],
-    rows: [
-      { sections: ["status"], required: true, fallback: "idle" },
-      { sections: ["subagents"], required: false, fallback: "" },
-      { sections: ["jobs"], required: false, fallback: "" },
-      { sections: ["plan"], required: false, fallback: "" },
-    ],
-  },
-  {
     id: "reviews",
     title: "Reviews",
     icon: "◈",
@@ -195,7 +196,7 @@ const CARD_DEFS: readonly CardDef[] = [
       { id: "governance", label: "Governance", command: "/governance" },
       { id: "triggers", label: "Triggers", command: "/triggers" },
       { id: "schedules", label: "Schedules", command: "/schedules" },
-      { id: "intake", label: "Intake", command: "/intake status" },
+      { id: "intake", label: "Intake", command: "/intake" },
       { id: "decisions", label: "Decisions", command: "/decisions" },
       { id: "research-sync", label: "Research" },
     ],
@@ -362,6 +363,7 @@ function signalFor(def: CardDef, snapshot: SidebarSnapshot): { severity: Sidebar
       const count = snapshot.reviewsNotReady ?? 0;
       return count > 0 ? { severity: "attention", badge: countBadge(count) } : { severity: "normal" };
     }
+    case "work":
     case "remote": {
       const pending = snapshot.approvalsPending ?? 0;
       if (pending > 0) return { severity: "attention", badge: countBadge(pending) };
@@ -380,7 +382,23 @@ function headerLine(icon: string, title: string, badge: string | undefined, widt
   return gap >= 1 ? `${left}${" ".repeat(gap)}${badge}` : `${fitCells(left, Math.max(1, width - displayWidth(badge) - 1))} ${badge}`;
 }
 
+function workRows(snapshot: SidebarSnapshot, width: number): string[] {
+  const attention = [sectionText(snapshot, "approvals"), sectionText(snapshot, "hold")]
+    .map(firstLine).filter((value): value is string => value !== undefined);
+  const status = firstLine(sectionText(snapshot, "status")) ?? "idle";
+  const rows = [fitCells(attention.length > 0 ? `! ${attention.join(" · ")} · ${status}` : status, width)];
+  const plan = sectionText(snapshot, "plan");
+  if (plan !== undefined) {
+    rows.push(...plan.split("\n").filter((line) => line.trim() !== "").slice(0, 8).map((line) => fitCells(line, width)));
+  }
+  const workers = ["subagents", "jobs"].map((id) => firstLine(sectionText(snapshot, id)))
+    .filter((value): value is string => value !== undefined);
+  rows.push(...workers.map((value) => fitCells(value, width)));
+  return rows;
+}
+
 function valueRows(def: CardDef, snapshot: SidebarSnapshot, width: number): string[] {
+  if (def.id === "work") return workRows(snapshot, width);
   const rows: string[] = [];
   for (const row of def.rows) {
     const parts = row.sections.map((id) => firstLine(sectionText(snapshot, id))).filter((part): part is string => part !== undefined);
@@ -392,7 +410,7 @@ function valueRows(def: CardDef, snapshot: SidebarSnapshot, width: number): stri
     }
     rows.push(fitCells(parts.join(" · "), width));
   }
-  return rows.slice(0, MAX_VALUE_ROWS);
+  return rows.slice(0, def.id === "session" || def.id === "workspace" ? 2 : MAX_VALUE_ROWS);
 }
 
 function buildCard(def: CardDef, order: number, snapshot: SidebarSnapshot, ascii: boolean): SidebarCardModel {
@@ -415,13 +433,13 @@ function buildCard(def: CardDef, order: number, snapshot: SidebarSnapshot, ascii
     tabs,
     lines: (textWidth, mode) => {
       if (mode === "rail") {
-        return [fitCells(`${icon}${badge ?? ""}`, RAIL_CELLS)];
+        return [fitCells(`${def.asciiIcon}${badge ?? ""}`, RAIL_CELLS)];
       }
       const lines = [headerLine(icon, def.title, badge, textWidth), ...valueRows(def, snapshot, textWidth)];
       while (lines.length < MIN_CARD_LINES) lines.push("");
       return lines;
     },
-    rail: () => ({ glyph: def.icon, ...(badge !== undefined ? { badge } : {}) }),
+    rail: () => ({ glyph: def.asciiIcon, ...(badge !== undefined ? { badge } : {}) }),
   };
 }
 
@@ -504,11 +522,11 @@ export function mountSidebarCards(otui: OpenTui, renderer: Renderer, parent: Par
       id: `sb-card-${def.id}`,
       flexDirection: "column",
       flexShrink: 0,
-      marginTop: def.id === "session" ? 0 : 1,
+      marginTop: def.id === "work" ? 0 : 1,
       onMouseDown: open,
     });
     const texts: Text[] = [];
-    for (let index = 0; index < MAX_VALUE_ROWS + 1; index += 1) {
+    for (let index = 0; index < (def.id === "work" ? MAX_WORK_VALUE_ROWS : MAX_VALUE_ROWS) + 1; index += 1) {
       // No handler here: a mouse-down on a row bubbles to the slot, and a handler on both would open the card twice.
       const text = new otui.TextRenderable(renderer, { id: `sb-card-${def.id}-l${index}`, content: "", flexShrink: 0 });
       texts.push(text);
@@ -644,9 +662,17 @@ export function openSidebarCard(
         paint();
         return options.subscribe?.(paint);
       }
-      const lines = tab.lines(ctx.width);
       const parent = body as Parent;
-      parent.add(new otui.TextRenderable(chrome.renderer, { id: `sb-card-detail-${tabId}`, content: lines.join("\n"), fg: roleColor("text") }));
+      const text = new otui.TextRenderable(chrome.renderer, {
+        id: `sb-card-detail-${tabId}`, content: tab.lines(ctx.width).join("\n"), fg: roleColor("text"),
+      });
+      parent.add(text);
+      const paint = (): void => {
+        const current = tabOf(tabId);
+        if (current === undefined) return;
+        text.content = current.lines(ctx.width).join("\n");
+        chrome.renderer.requestRender();
+      };
       if (tab.command !== undefined) {
         parent.add(
           new otui.TextRenderable(chrome.renderer, {
@@ -656,6 +682,7 @@ export function openSidebarCard(
           }),
         );
       }
+      return options.subscribe?.(paint);
     },
     claimKey: (key) => {
       if (key.name !== "return" && key.name !== "enter") return false;

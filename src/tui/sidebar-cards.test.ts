@@ -118,8 +118,8 @@ const FORMER_SECTIONS: Record<string, readonly string[]> = {
   policy: ["route", "guard", "edit-guard", "rewind", "project-ctx", "external", "tools"],
   remote: ["remote", "telegram", "approvals", "hold"],
 };
-const CARD_ORDER = ["session", "workspace", "work", "reviews", "ops", "policy", "remote"];
-const CARD_TITLES = ["Session", "Workspace", "Work", "Reviews", "Ops", "Policy", "Remote"];
+const CARD_ORDER = ["work", "session", "workspace", "reviews", "ops", "policy", "remote"];
+const CARD_TITLES = ["Work", "Session", "Workspace", "Reviews", "Ops", "Policy", "Remote"];
 const ALL_SECTIONS = CARD_ORDER.flatMap((card) => [...(FORMER_SECTIONS[card] ?? [])]);
 
 /** A distinctive multi-word value for a section, long enough to overflow 30 columns. */
@@ -147,7 +147,7 @@ function cardOf(cards: readonly Card[], id: string): Card {
 // AC12 — seven cards, 3..5 lines, nothing lost
 // ---------------------------------------------------------------------------
 
-test("flow 468 AC12: the sidebar has seven cards in the fixed order Session, Workspace, Work, Reviews, Ops, Policy, Remote", async () => {
+test("flow 468 AC12: the sidebar has seven cards in the fixed order Work, Session, Workspace, Reviews, Ops, Policy, Remote", async () => {
   const c = await loadCards();
   expect([...c.SIDEBAR_CARD_IDS]).toEqual(CARD_ORDER);
   const cards = c.buildSidebarCards({});
@@ -609,7 +609,7 @@ test("flow 468 AC17: a pending approval, a hold, an update and a not-ready revie
   for (const signal of SIGNALS) {
     const cards = c.buildSidebarCards(signal.snapshot);
     for (const card of cards) {
-      if (card.id !== signal.card) {
+      if (card.id !== signal.card && !(card.id === "work" && signal.card === "remote")) {
         expect(card.severity, `${signal.name}: ${card.id} stays normal`).toBe("normal");
         expect(card.badge, `${signal.name}: ${card.id}`).toBeUndefined();
       }
@@ -712,7 +712,7 @@ otuiTest("flow 468 AC17: a theme switch recolours the pinned header, every card 
           };
           const before = painted();
           if (mode === "rail") {
-            for (const card of c.buildSidebarCards(snapshot)) expect(before.text, `rail ${card.id}`).toContain(card.icon);
+            for (const card of c.buildSidebarCards(snapshot)) expect(before.text, `rail ${card.id}`).toContain(card.rail().glyph);
           } else {
             expect(before.text).toContain("keryx");
             for (const title of CARD_TITLES) expect(before.text, title).toContain(title);
@@ -735,4 +735,122 @@ otuiTest("flow 468 AC17: a theme switch recolours the pinned header, every card 
   } finally {
     applyThemeId(previous);
   }
+});
+
+
+test("Work reserves plan rows ahead of agents and jobs", async () => {
+  const c = await loadCards();
+  const plan = ["Plan · rev 9", "✓ Reproduce", "▶ Fix layout", "○ Verify clicks"].join("\n");
+  const work = cardOf(c.buildSidebarCards({ sections: { status: "Working", plan, subagents: "Agents 2", jobs: "Jobs 3" } }), "work");
+  const lines = work.lines(30, "default");
+  for (const row of plan.split("\n")) expect(lines).toContain(row);
+  expect(lines.indexOf("▶ Fix layout")).toBeLessThan(lines.findIndex((line) => line.includes("Agents 2")));
+});
+
+test("Work surfaces pending decisions and holds", async () => {
+  const c = await loadCards();
+  for (const snapshot of [{ approvalsPending: 2 }, { hold: "held by peer" }]) {
+    const work = cardOf(c.buildSidebarCards(snapshot), "work");
+    expect(work.severity).toBe("attention");
+    expect(work.lines(30, "default")[1]).toContain("!");
+  }
+});
+
+test("Session and Workspace stay compact with technical details reachable", async () => {
+  const c = await loadCards();
+  for (const id of ["session", "workspace"]) {
+    const card = cardOf(c.buildSidebarCards(fullSnapshot()), id);
+    expect(card.lines(30, "default")).toHaveLength(3);
+    expect(card.tabs.flatMap((tab) => tab.lines(80)).join(" ")).toContain(`UNIQ-${id === "session" ? "balance" : "workspace"}`);
+  }
+});
+
+test("rail uses readable ASCII labels", async () => {
+  const c = await loadCards();
+  for (const card of c.buildSidebarCards(fullSnapshot())) {
+    expect(card.rail().glyph).toBe(card.asciiIcon);
+    expect(card.lines(3, "rail")[0]?.startsWith(card.asciiIcon)).toBe(true);
+  }
+});
+
+
+otuiTest("mounted Work reserves space for every visible plan row above Session", async () => {
+  const otui = requireOtui();
+  const g = await loadGeometry();
+  await withTmpDir(async (configDir) => {
+    const geo = g.createSidebarGeometry({ columns: 140, configDir, mode: "default" });
+    const h = await mountChrome(otui, geo, { height: 40 });
+    const plan = ["Plan · rev 9", ...Array.from({ length: 7 }, (_, i) => `Step ${i + 1}`)].join("\n");
+    const host = await mountCards(otui, h, geo, {
+      sections: { status: "Working", plan, subagents: "Agents 2", jobs: "Jobs 3" },
+    });
+    try {
+      expect(byId(h, "sb-card-work").y).toBeLessThan(byId(h, "sb-card-session").y);
+      for (const row of plan.split("\n")) expect(sidebarRows(h).join("\n")).toContain(row);
+    } finally { host.destroy(); h.destroy(); }
+  });
+});
+
+
+otuiTest("Intake Enter opens the interactive surface", async () => {
+  const otui = requireOtui();
+  const g = await loadGeometry();
+  const c = await loadCards();
+  await withTmpDir(async (configDir) => {
+    const h = await mountChrome(otui, g.createSidebarGeometry({ columns: 140, configDir, mode: "default" }));
+    const ran: string[] = [];
+    try {
+      c.openSidebarCard(otui.core, h.chrome, "ops", {
+        snapshot: () => ({}), initialTab: "intake", runCommand: (command) => ran.push(command),
+      });
+      await h.flush();
+      h.mockInput.pressEnter();
+      await h.flush();
+      expect(ran).toEqual(["/intake"]);
+    } finally { h.destroy(); }
+  });
+});
+
+otuiTest("open Plan refreshes live and releases subscriptions on tab switch and close", async () => {
+  const otui = requireOtui();
+  const g = await loadGeometry();
+  const c = await loadCards();
+  await withTmpDir(async (configDir) => {
+    const h = await mountChrome(otui, g.createSidebarGeometry({ columns: 140, configDir, mode: "default" }));
+    const listeners = new Set<() => void>();
+    let disposed = 0;
+    let plan = "Revision one";
+    try {
+      const handle = c.openSidebarCard(otui.core, h.chrome, "work", {
+        initialTab: "plan", snapshot: () => ({ sections: { plan } }),
+        subscribe: (refresh) => {
+          listeners.add(refresh);
+          return () => { listeners.delete(refresh); disposed += 1; };
+        },
+      });
+      await h.flush();
+      expect(listeners.size).toBe(1);
+      plan = "Revision two";
+      for (const refresh of listeners) refresh();
+      await h.flush();
+      expect(h.captureCharFrame()).toContain("Revision two");
+      expect(h.captureCharFrame()).not.toContain("Revision one");
+      const status = byId(h, "modal-tab-status");
+      await h.mockMouse.click(status.x, status.y);
+      await h.flush();
+      expect(disposed).toBe(1);
+      expect(listeners.size).toBe(1);
+      const tab = byId(h, "modal-tab-plan");
+      await h.mockMouse.click(tab.x, tab.y);
+      await h.flush();
+      expect(disposed).toBe(2);
+      plan = "Revision three";
+      for (const refresh of listeners) refresh();
+      await h.flush();
+      expect(h.captureCharFrame()).toContain("Revision three");
+      handle?.close();
+      expect(listeners.size).toBe(0);
+      expect(disposed).toBe(3);
+    } finally { h.destroy(); }
+  });
 });
