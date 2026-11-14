@@ -26,3 +26,5 @@
 - 2026-11-14T17:05:06.522Z - task-done: T12: Surface parity test (AC12)
 - 2026-11-14T17:10:15.788Z - task-done: T13: Verification: run every exec criterion, typecheck, smoke run on a real Hub (AC13-AC15)
 - 2026-11-14T17:21:40.000Z - operator-answer (first-green gate, poll 381, answered via Helyx): chose "Открыть PR и пустить стандартное ревью (рекомендую)"; no hardening cells selected
+
+- 2026-11-14: CI on PR 1179 failed three jobs (cancel-resume, linux sandbox smoke, macOS real-host): `/task` was missing from the native command catalogue (`implementation-gap`). Registered it as a client presentation boundary in `catalogue.ts` and `coverage.ts`, like `/theme` and `/think`; `src/session/commands` tests pass (131). Done before review round 1 so the reviewers see the final head.
