@@ -173,7 +173,6 @@ export function openQuickStart(otui: unknown, chrome: unknown, options: QuickSta
   let budget = Number.MAX_SAFE_INTEGER;
   let blocks: Box[] = [];
   let closed = false;
-  let handle: ModalHandle | undefined;
   let unsubscribeForm: () => void = () => {};
   let unsubscribeTheme: () => void = () => {};
 
@@ -217,7 +216,7 @@ export function openQuickStart(otui: unknown, chrome: unknown, options: QuickSta
     80,
   ).length;
 
-  handle = openModal(core, chrome as never, {
+  const handle: ModalHandle | undefined = openModal(core, chrome as never, {
     title: QUICK_START_COMMAND,
     tabs: [{ id: "task", label: "New task" }],
     footer: QUICK_START_FOOTER,

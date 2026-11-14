@@ -44,7 +44,7 @@ function checkedBase(raw: string): URL {
 /** Server text is shown to the operator: strip control characters and bound the length. */
 function safeText(value: unknown): string {
   if (typeof value !== "string") return "";
-  return value.replace(/[\u0000-\u001f\u007f]+/g, " ").trim().slice(0, MAX_MESSAGE_CHARS);
+  return value.replace(/\p{Cc}+/gu, " ").trim().slice(0, MAX_MESSAGE_CHARS);
 }
 
 function parseJson(text: string): unknown {

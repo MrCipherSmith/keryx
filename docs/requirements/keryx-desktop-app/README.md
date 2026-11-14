@@ -35,8 +35,8 @@ Four directions, each with a matching TUI requirement (project rule: every user-
 - [hub-remote-sessions](../hub-remote-sessions/README.md) and [hub-remote-agents](../hub-remote-agents/README.md): sessions, runs, commands
 - [keryx-native-distribution](../keryx-native-distribution/README.md): how keryx is shipped (the desktop shell must not break the npm-only global install)
 - [keryx-opentui-shell](../keryx-opentui-shell/README.md): the TUI that receives the parity items
-- [keryx-review-orchestrator-log](../keryx-review-orchestrator-log/README.md): source of reviewer findings
-- [keryx-ticket-intake](../keryx-ticket-intake/README.md): existing intake path that quick start must not duplicate
+- [keryx-review-orchestrator-log](../keryx-review-orchestrator-log/prd.md): source of reviewer findings
+- [keryx-ticket-intake](../keryx-ticket-intake/prd.md): existing intake path that quick start must not duplicate
 
 ## Evidence behind this package
 
