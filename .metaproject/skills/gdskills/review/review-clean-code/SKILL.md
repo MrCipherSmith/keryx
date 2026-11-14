@@ -18,7 +18,7 @@ triggers:
   - "Uncle Bob review"
 metadata:
   author: "MrCipherSmith"
-  version: "1.2.0"
+  version: "1.3.0"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
@@ -33,43 +33,36 @@ The goal is not stylistic nitpicking — every finding here points to a concrete
 maintainability, readability, or extensibility problem that will cause friction
 as the codebase grows.
 
----
+## The standard
 
-## Workflow
+The code under review was written against two project rules, and this reviewer
+judges it against the same two. Read both before the diff:
 
-```
-Clean Code Review Progress:
-- [ ] Step 1: Read Job Context (if provided)
-- [ ] Step 2: Determine git scope (merge-base)
-- [ ] Step 3: Collect diff and changed file list
-- [ ] Step 4: Meaningful Names check
-- [ ] Step 5: Functions check (size, abstraction, arguments)
-- [ ] Step 6: Comments check
-- [ ] Step 7: Error Handling check
-- [ ] Step 8: DRY check
-- [ ] Step 9: SOLID check (SRP, OCP, LSP, ISP, DIP)
-- [ ] Step 10: Emit findings in unified format
-```
+- `.metaproject/rules/core/solid-principles.mdc` — the **Thresholds** table
+  (function length, parameters, boolean flags, constructor dependencies,
+  branch chains, duplication) and the SOLID rules.
+- `.metaproject/rules/core/error-handling.mdc` — how failure is signalled,
+  what a message carries, `cause`, and silent catches.
+
+A threshold in those rules is the reviewer's threshold. Under it, report
+nothing; this file never sets a stricter number of its own. Where this file and
+a rule disagree, the rule wins and the disagreement is a bug in this file.
 
 ---
 
-## Input Contract
+## Scope
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `branch` | string | no | Branch to review. Defaults to current branch. |
-| `commit_range` | string | no | Explicit hash or range. Overrides merge-base detection. |
-| `context_doc` | string | no | Path to job context document. Read before reviewing. |
+Review scope: **only code introduced or modified in this change**.
+Pre-existing problems in unchanged lines are out of scope.
 
----
-
-## Scope Detection
-
-See shared script: `.metaproject/skills/gdskills/shared/git-merge-base.md`
-
-Review scope: **only code introduced or modified in this branch since merge-base**.
-Pre-existing problems in unchanged lines are out of scope unless a change directly
-worsens them.
+**Debt the change did not create.** A threshold counts against the change only
+when the change crosses it. Check the before-state (diff context or base file)
+before citing one. If the code was already over the line, one more of the same
+is not a finding: a line or step added to a function already past the length
+threshold, another copy of a literal already copied 3+ times, another parameter
+on a signature already at 4+. It is a finding when the change crosses from
+under to over, or when the diff itself adds a self-contained block that meets
+the threshold on its own — then cite that block, not the old function.
 
 **Supplied text first.** When the payload carries `slices`, `context_files`, `diff` or `file_contents`, review exactly that text and never rebuild the diff. A choice's history (law 4) is read with `git log`, `git blame` and `git show` only where the host gives a read-only child git; on keryx shell a read-only child has no shell and no git tool, so read the `git log -L`/`git blame` excerpts the payload supplies, or say the history was not read. Only with none supplied, collect it:
 ```bash
@@ -155,16 +148,20 @@ Flags:
 #### B1. Function Size and Single Responsibility
 
 Clean Code guideline: functions should do **one thing** at one level of abstraction.
+Length is the threshold in `solid-principles.mdc`: over 40 lines, and only when
+the function also mixes abstraction levels or does two separable jobs.
 
-- [ ] Function body exceeds ~20 lines: a strong smell that it does more than one thing
-- [ ] Function mixes levels of abstraction: high-level orchestration next to low-level data manipulation in the same block
+- [ ] Function over 40 lines that mixes high-level orchestration with low-level data manipulation
 - [ ] Function that both queries data AND transforms it AND persists it (three responsibilities)
 - [ ] Functions with a `And` or `Or` in the name, describing two operations
 
 Flags:
-- Function body >40 lines — **minor** (clear overload; flag specific function by name)
-- Function body 20–40 lines with visible mixed abstraction — **minor**
+- Function body >40 lines with mixed abstraction or two separable jobs — **minor** (name the jobs)
+- Any length: one function that does I/O (reads or writes a file, the network, a store) and also transforms the data in between — **minor** (name the I/O and the transform that should be a pure helper)
 - `doXAndY()` naming explicitly stating two operations — **minor**
+
+Not a finding: a long but linear function (a table, a serializer, a test, a
+sequence of one-line steps at one level).
 
 #### B2. Function Arguments
 
@@ -176,10 +173,9 @@ Flags:
 - [ ] Output arguments: a function that mutates its argument instead of returning a value (`populate(result)`)
 
 Flags:
-- Function with ≥4 parameters not using an options/config object — **minor**
-- Boolean flag parameter (`enabled: boolean`) passed to control function flow — **minor** (split into two functions)
+- Function with ≥4 positional parameters, no options object, not a natural ordered set the codebase already uses — **minor**
+- Boolean flag parameter that selects between two different behaviours — **minor** (split into two functions)
 - Output argument (mutating parameter instead of returning) — **minor**
-- Three parameters where a plain named object would be clearer — **minor**
 
 #### B3. Abstraction Level Consistency
 
@@ -261,28 +257,32 @@ These are the correct uses of comments — do NOT flag:
 
 ### Part D: Error Handling
 
-#### D1. Error Types and Propagation
+The standard is `error-handling.mdc`. Throwing is the codebase default; a
+discriminated result is allowed, never required. A plain `Error` with a
+contextual message is fine inside a module. Do not report a throw for not being
+a `Result`, or a plain `Error` for not being a typed class, unless a caller in
+the diff needs to tell that failure apart from others.
 
-- [ ] Returning `null` or `undefined` to signal failure instead of throwing or using a Result type — causes null propagation and eventual NPE
-- [ ] Swallowing exceptions: `catch (err) {}` with no logging or re-throw
-- [ ] Logging AND re-throwing the same error — double-logs across callers
-- [ ] Using error strings instead of typed errors: `throw new Error("NOT_FOUND")` — callers cannot pattern-match
-- [ ] `catch (err: any)` — loses type safety; use `catch (err: unknown)`
+#### D1. Silent and disguised failures
+
+- [ ] A `catch` that is empty or only logs, after which the caller proceeds as if the operation succeeded
+- [ ] Failure signalled by `null`, `undefined`, `false`, `-1` or an empty collection that a caller can read as a valid result
+- [ ] Logging AND re-throwing the same error in one catch — double-logs across callers
 
 Flags:
-- `catch` block with empty body or only a comment — **major** when a named failure is hidden from the caller (silent failure; conditions table), else **minor**
-- Returning `null` / `undefined` from a function to signal "not found" in a critical path — **minor**; **major** only with a named trigger where the caller then produces a wrong outcome
+- `catch` that hides a failure from a caller who then proceeds — **major** when you can name the caller and its wrong outcome (silent failure; conditions table), else **minor**
+- A `catch` with a correct fallback and a comment giving the reason — **not a finding** (shared law 4)
+- Failure returned as a value the caller then treats as a valid result — **major** with that caller named, else **minor**
 - Log + rethrow in the same catch block — **minor**
-- Untyped error in catch — **minor**
 
-#### D2. Error Context
+#### D2. Error context
 
-- [ ] Re-throwing an error without wrapping context: `throw err` loses the call site information; prefer `throw new AppError("context", { cause: err })`
-- [ ] Generic `new Error("something went wrong")` — message must identify what went wrong and ideally what inputs caused it
+- [ ] A rethrow that drops the original: `throw new Error("…")` inside a catch with no `{ cause }`
+- [ ] A message that does not say what failed or for which input: `new Error("something went wrong")`
 
 Flags:
-- Bare `throw err` re-throw losing context in a library/service boundary — **minor**
-- Generic error message with no context — **minor**
+- Rethrow without `cause` at a module boundary — **minor**
+- Error message with no operation or input in it — **minor**
 
 ---
 
@@ -295,8 +295,8 @@ Flags:
 - [ ] Multiple functions doing the same transformation with slightly different wrapping
 
 Flags:
-- 3+ identical or near-identical blocks in the diff that could be extracted — **minor** (Clean Code law 3; this lens owns duplication, `review-style` defers)
-- 2 occurrences — **minor** (note, do not raise unless the pattern is clearly intentional duplication)
+- 3+ identical or near-identical blocks in the diff that could be extracted — **minor**, one finding listing every copy (Clean Code law 3; this lens owns duplication, `review-style` defers)
+- 2 occurrences — not a finding (under the threshold)
 
 #### E2. Magic Numbers and Strings
 
@@ -325,18 +325,18 @@ A class should have **one reason to change**: one owner (one part of the system 
 Flags:
 - Class with two clearly distinct responsibilities that have different change drivers — **minor**
 - Constructor performing I/O or async operations — **minor**; **major** only with a named defect it causes (e.g. an unhandled rejection on construction)
+- Constructor receiving more than 5 dependencies — **minor** (name the two responsibilities)
 - Service method doing validation + transformation + persistence inline — **minor**
 
 #### F2. Open/Closed Principle (OCP)
 
 Classes should be open for extension, closed for modification. Violations appear as chains that must grow every time a new case is added.
 
-- [ ] `if/else if` or `switch` over a type discriminant that already has 3+ branches — consider a strategy/visitor pattern
-- [ ] Adding a case to an existing long `switch` in a file not in the diff context — flag if the diff shows a new `case` in a multi-case switch
+- [ ] An `if/else if` or `switch` over a type discriminant with 4+ branches that this diff extends, where the codebase already dispatches the same kind of thing through a map or strategy (name it)
 
 Flags:
-- New `case` added to a switch with ≥4 existing cases where a strategy pattern would be more appropriate — **minor**
-- `instanceof` chain (`if (x instanceof A) ... else if (x instanceof B)`) — **minor**
+- Branch chain of 4+ over a discriminant, extended by the diff, with an existing map/strategy precedent — **minor**
+- `instanceof` chain (`if (x instanceof A) ... else if (x instanceof B)`) over 4+ types — **minor**
 
 #### F3. Liskov Substitution Principle (LSP)
 
@@ -365,12 +365,26 @@ Flags:
 
 High-level modules should not depend on low-level modules. Both should depend on abstractions.
 
-- [ ] Class instantiating its own dependencies with `new` instead of receiving them via constructor injection
-- [ ] Class importing a concrete implementation class from another module instead of an interface/abstract class
+- [ ] Business logic constructing the I/O, network or clock dependency it calls into, instead of receiving it
 
 Flags:
-- `new ConcreteService()` inside a class method that should receive it via DI — **minor**
-- Import of concrete implementation where an interface or abstract type exists — **minor**
+- `new` of an I/O, network or clock dependency inside business logic — **minor**
+- Constructing a plain helper or value object inside a module — not a finding
+
+#### Thresholds recap
+
+These come from `solid-principles.mdc`; under them, report nothing.
+
+| Signal | Reported at |
+|---|---|
+| Function length | >40 lines plus mixed abstraction or two jobs |
+| I/O mixed with a transform | any length |
+| Positional parameters | ≥4, no options object |
+| Constructor dependencies | >5 |
+| Branch chain over a discriminant | ≥4 branches, extended by the diff, map/strategy precedent exists |
+| Duplication | ≥3 copies |
+
+Each row counts only when this change crosses it (see Scope: debt the change did not create).
 
 ---
 
@@ -447,15 +461,12 @@ conditions land under that rubric, not a second rubric.
 | LSP violation that produces a wrong result or a crash at a named call site | `major`, or `blocker` on the crash/corruption outcome | The outcome decides, not the principle's name |
 | Constructor performing I/O | `minor` — `major` only with a named defect it causes (trigger and outcome) | The I/O running is not wrong behaviour; untestable is a maintenance cost |
 | Function > 40 lines; ≥ 4 parameters without an options object; boolean flag argument; class with two distinct responsibilities; `new ConcreteService()` bypassing DI | `minor` | The code is correct. The cost is to whoever reads or edits it next — that is exactly `minor` |
-| Poor naming; redundant or stale comment; duplication (3+ sites); magic number; 20–40 line function; OCP/ISP smell; log-and-rethrow | `minor` | Same. This lens owns duplication and comments; `review-style` defers to it |
+| Poor naming; redundant or stale comment; duplication (3+ sites); magic number; OCP/ISP smell; log-and-rethrow; rethrow without `cause` | `minor` | Same. This lens owns duplication and comments; `review-style` defers to it |
+| Anything under a `solid-principles.mdc` threshold; a throw that is not a `Result`; a plain `Error` with a contextual message | not a finding | The shared standard allows it |
 | Stylistic opinion; a future issue with no current violation | `info` | Neither trigger nor a named maintenance cost |
 
-**Clean Code findings are `minor` by default.** A long function with a named
-responsibility split is a maintenance cost, not observable wrong behaviour, and
-`major` is reserved for findings that name a trigger and an outcome. This
-reviewer previously called a 41-line function `major` and thereby forced
-`REQUEST_CHANGES` on it; that is the exact mis-ranking the canonical rubric
-exists to stop.
+**Clean Code findings are `minor` by default**: a maintenance cost, not wrong
+behaviour. `major` needs a named trigger and outcome.
 
 ---
 
@@ -483,23 +494,8 @@ STATUS: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED
 
 ### Findings
 
-#### Naming
-<[F-NNN] findings or "No naming issues found.">
-
-#### Functions
-<[F-NNN] findings or "No function design issues found.">
-
-#### Comments
-<[F-NNN] findings or "No comment issues found.">
-
-#### Error Handling
-<[F-NNN] findings or "No error handling issues found.">
-
-#### DRY
-<[F-NNN] findings or "No DRY violations found.">
-
-#### SOLID
-<[F-NNN] findings or "No SOLID violations found.">
+One `####` section per checklist part (Naming, Functions, Comments, Error Handling,
+DRY, SOLID): its `[F-NNN]` findings, or "No <part> issues found."
 
 ### Clean Areas
 [List parts of the checklist with no findings, confirming they were reviewed]
@@ -516,12 +512,8 @@ JOB_NAME:     <job-name>
 CONTEXT_PATH: <JOBS_ROOT>/<job-name>/ai/context.md
 ```
 
-If provided and the file exists, read the context document before reviewing. Use it to:
-- Understand team-agreed naming conventions that may differ from defaults
-- Identify intentional design decisions that appear to violate Clean Code but are documented exceptions
-- Understand error handling strategy (Result types vs. exceptions vs. null)
-
-If absent, proceed normally — context is optional and non-blocking.
+If provided and the file exists, read it first for team naming conventions and
+documented exceptions that look like Clean Code violations. If absent, proceed.
 
 ---
 
@@ -529,7 +521,8 @@ If absent, proceed normally — context is optional and non-blocking.
 
 | Rationalization | Why it is wrong |
 |----------------|-----------------|
-| "This function is long but it's clear" | Clarity and length are separate concerns; long functions are harder to test and change regardless of clarity |
+| "This function is over 40 lines and mixes parsing with orchestration, but it's clear" | Clarity is not the test; two jobs at two levels are harder to test and change. (A long linear function at one level is not a finding — that is the threshold, not a rationalization.) |
+| "Stricter is safer, I'll flag 25-line functions too" | The threshold is the shared standard the writer followed. A finding under it is noise the writer was told not to fix |
 | "The team knows what `data` means here" | Names must survive team turnover; if a newcomer can't understand it, it fails |
 | "DRY isn't violated — the two blocks just happen to look the same" | If they change together and must stay in sync, they are a DRY violation |
 | "Boolean arg is fine, it's obvious from context" | Boolean args always create `call(true, false, true)` call sites that require reading the signature to decode |
