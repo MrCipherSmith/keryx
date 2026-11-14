@@ -150,6 +150,41 @@ describe("the two finding schemas do not drift apart", () => {
   });
 });
 
+describe("negative enumeration: an empty sites list needs a method", () => {
+  const withScope = (class_scope: unknown) => ({ ...finding("major", false), class_scope });
+  for (const [name, schema] of [["review-finding", "review-finding"]] as const) {
+    test(`${name}: empty sites with a method is accepted`, async () => {
+      const file = writeFinding(withScope({ sites: [], enumeration_method: "grep for `foo(` outside tests: no other caller" }));
+      try {
+        const result = await validateContractFile(file, schema);
+        expect(result.errors).toEqual([]);
+        expect(result.valid).toBe(true);
+      } finally {
+        rmSync(path.dirname(file), { recursive: true, force: true });
+      }
+    });
+    test(`${name}: empty sites with an empty method is refused`, async () => {
+      const file = writeFinding(withScope({ sites: [], enumeration_method: "" }));
+      try {
+        const result = await validateContractFile(file, schema);
+        expect(result.valid).toBe(false);
+        expect(result.errors.some((e) => e.path.includes("enumeration_method"))).toBe(true);
+      } finally {
+        rmSync(path.dirname(file), { recursive: true, force: true });
+      }
+    });
+  }
+  test("the bundled reviewer schema agrees: no minItems on sites, method still minLength 1", () => {
+    const bundled = JSON.parse(
+      readFileSync(path.join(import.meta.dir, "bundled", "skills", "review", "review-orchestrator", "reviewer-finding.schema.json"), "utf8"),
+    ) as Record<string, any>;
+    const scope = bundled.properties.findings.items.properties.class_scope;
+    expect(scope.properties.sites.minItems).toBeUndefined();
+    expect(scope.properties.enumeration_method.minLength).toBe(1);
+    expect(scope.required).toContain("enumeration_method");
+  });
+});
+
 describe("the validator actually evaluates a conditional", () => {
   // Without this the tests above could pass for the wrong reason. The validator
   // is hand-rolled (zero runtime dependencies) and silently ignores any keyword
