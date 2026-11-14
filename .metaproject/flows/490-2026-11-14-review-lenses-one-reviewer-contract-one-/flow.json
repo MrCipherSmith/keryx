@@ -9,9 +9,9 @@
   "id": "490",
   "slug": "review-lenses-one-reviewer-contract-one-",
   "title": "Review lenses: one reviewer contract, one severity rubric, read-only reviewers",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-11-14T09:10:25.236Z",
-  "updatedAt": "2026-11-14T13:44:14.433Z",
+  "updatedAt": "2026-11-14T14:18:23.104Z",
   "source": {
     "type": "description",
     "ref": null
@@ -493,6 +493,20 @@
       "at": "2026-11-14T13:44:14.433Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1174 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-11-14T14:15:38.931Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-11-14T14:18:23.103Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-11-14T14:18:23.104Z",
+      "event": "done",
+      "detail": "completed with exceptions: review:ingested-round: no managed review package exists under `.metaproject/flows/490-2026-11-14-review-lenses-one-reviewer-contract-one-/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed.; reason: three review rounds ran as branch-mode packages under .metaproject/reviews/2026-11-14-review-flow-branch*, not flow-linked; PR merged green; operator: yes | review:terminal-dispositions: no ingested round to read findings from; reason: three review rounds ran as branch-mode packages under .metaproject/reviews/2026-11-14-review-flow-branch*, not flow-linked; PR merged green; operator: yes | review:head-commit: no ingested round to compare against the PR head; reason: three review rounds ran as branch-mode packages under .metaproject/reviews/2026-11-14-review-flow-branch*, not flow-linked; PR merged green; operator: yes | review:verifier-stats: no ingested round to read verification stats from; reason: three review rounds ran as branch-mode packages under .metaproject/reviews/2026-11-14-review-flow-branch*, not flow-linked; PR merged green; operator: yes"
     }
   ],
   "acKinds": {
@@ -628,6 +642,186 @@
       },
       "criterion": "AC8",
       "acChecksum": "sha256:d6839fd3f34f0849ab0831e251ce48cd07cca33d2f6b26450e0da8affffb7d55"
+    },
+    {
+      "at": "2026-11-14T14:18:23.104Z",
+      "kind": "complete",
+      "cleanCompletion": false,
+      "exceptions": [
+        {
+          "gate": "review",
+          "condition": "ingested-round",
+          "detail": "no managed review package exists under `.metaproject/flows/490-2026-11-14-review-lenses-one-reviewer-contract-one-/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed.",
+          "reason": "three review rounds ran as branch-mode packages under .metaproject/reviews/2026-11-14-review-flow-branch*, not flow-linked; PR merged green",
+          "operatorWords": "yes",
+          "confirmedVia": "terminal",
+          "at": "2026-11-14T14:18:23.102Z"
+        },
+        {
+          "gate": "review",
+          "condition": "terminal-dispositions",
+          "detail": "no ingested round to read findings from",
+          "reason": "three review rounds ran as branch-mode packages under .metaproject/reviews/2026-11-14-review-flow-branch*, not flow-linked; PR merged green",
+          "operatorWords": "yes",
+          "confirmedVia": "terminal",
+          "at": "2026-11-14T14:18:23.102Z"
+        },
+        {
+          "gate": "review",
+          "condition": "head-commit",
+          "detail": "no ingested round to compare against the PR head",
+          "reason": "three review rounds ran as branch-mode packages under .metaproject/reviews/2026-11-14-review-flow-branch*, not flow-linked; PR merged green",
+          "operatorWords": "yes",
+          "confirmedVia": "terminal",
+          "at": "2026-11-14T14:18:23.102Z"
+        },
+        {
+          "gate": "review",
+          "condition": "verifier-stats",
+          "detail": "no ingested round to read verification stats from",
+          "reason": "three review rounds ran as branch-mode packages under .metaproject/reviews/2026-11-14-review-flow-branch*, not flow-linked; PR merged green",
+          "operatorWords": "yes",
+          "confirmedVia": "terminal",
+          "at": "2026-11-14T14:18:23.102Z"
+        }
+      ],
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:d6839fd3f34f0849ab0831e251ce48cd07cca33d2f6b26450e0da8affffb7d55",
+      "headCommit": "2fe7af3cd8a1803d657aa8f96876ce155157a84d"
     }
-  ]
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-11-14T14:18:23.103Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "9 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "2fe7af3cd8a1803d657aa8f96876ce155157a84d is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "2fe7af3cd8a1803d657aa8f96876ce155157a84d is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "12 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "folder-committed",
+          "status": "pass",
+          "detail": "490-2026-11-14-review-lenses-one-reviewer-contract-one- is committed in HEAD"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "4 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/490-2026-11-14-review-lenses-one-reviewer-contract-one-/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | verifier-stats (unobserved): no ingested round to read verification stats from",
+          "conditions": [
+            {
+              "id": "ingested-round",
+              "status": "unobserved",
+              "detail": "no managed review package exists under `.metaproject/flows/490-2026-11-14-review-lenses-one-reviewer-contract-one-/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed."
+            },
+            {
+              "id": "terminal-dispositions",
+              "status": "unobserved",
+              "detail": "no ingested round to read findings from"
+            },
+            {
+              "id": "head-commit",
+              "status": "unobserved",
+              "detail": "no ingested round to compare against the PR head"
+            },
+            {
+              "id": "external-comments",
+              "status": "pass",
+              "detail": "MrCipherSmith/keryx#1174: 0 comment(s) collected over 1 round(s) up to the PR head 21aa1ea8ed5be221567737afa3eba760a68f6a9a (round 1), 0 answered, 0 outstanding"
+            },
+            {
+              "id": "verifier-stats",
+              "status": "unobserved",
+              "detail": "no ingested round to read verification stats from"
+            }
+          ]
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:d6839fd3f34f0849ab0831e251ce48cd07cca33d2f6b26450e0da8affffb7d55",
+      "cleanCompletion": false,
+      "exceptions": [
+        {
+          "gate": "review",
+          "condition": "ingested-round",
+          "detail": "no managed review package exists under `.metaproject/flows/490-2026-11-14-review-lenses-one-reviewer-contract-one-/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed.",
+          "reason": "three review rounds ran as branch-mode packages under .metaproject/reviews/2026-11-14-review-flow-branch*, not flow-linked; PR merged green",
+          "operatorWords": "yes",
+          "confirmedVia": "terminal",
+          "at": "2026-11-14T14:18:23.102Z"
+        },
+        {
+          "gate": "review",
+          "condition": "terminal-dispositions",
+          "detail": "no ingested round to read findings from",
+          "reason": "three review rounds ran as branch-mode packages under .metaproject/reviews/2026-11-14-review-flow-branch*, not flow-linked; PR merged green",
+          "operatorWords": "yes",
+          "confirmedVia": "terminal",
+          "at": "2026-11-14T14:18:23.102Z"
+        },
+        {
+          "gate": "review",
+          "condition": "head-commit",
+          "detail": "no ingested round to compare against the PR head",
+          "reason": "three review rounds ran as branch-mode packages under .metaproject/reviews/2026-11-14-review-flow-branch*, not flow-linked; PR merged green",
+          "operatorWords": "yes",
+          "confirmedVia": "terminal",
+          "at": "2026-11-14T14:18:23.102Z"
+        },
+        {
+          "gate": "review",
+          "condition": "verifier-stats",
+          "detail": "no ingested round to read verification stats from",
+          "reason": "three review rounds ran as branch-mode packages under .metaproject/reviews/2026-11-14-review-flow-branch*, not flow-linked; PR merged green",
+          "operatorWords": "yes",
+          "confirmedVia": "terminal",
+          "at": "2026-11-14T14:18:23.102Z"
+        }
+      ]
+    }
+  ],
+  "merged": {
+    "commit": "2fe7af3cd8a1803d657aa8f96876ce155157a84d",
+    "ref": "origin/main",
+    "at": "2026-11-14T14:18:23.104Z"
+  }
 }
