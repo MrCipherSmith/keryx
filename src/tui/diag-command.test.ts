@@ -21,8 +21,10 @@ test("runDiagCommand returns a summary line and never throws", () => {
 
 test("maybeDumpOnInterrupt dumps only when a call has waited long, and says where", () => {
   const dir = mkdtempSync(path.join(tmpdir(), "diag-int-"));
-  const stop = callDiagnostics.start({ sessionId: "diag-interrupt-test", configDir: dir, intervalMs: 3_600_000 });
+  const stop = callDiagnostics.start({ sessionId: "diag-interrupt-test", configDir: dir, continuous: true, intervalMs: 3_600_000 });
   try {
+    expect(runDiagCommand()).toContain(`Continuous journal: ${callDiagnostics.journalPath()}`);
+    expect(existsSync(callDiagnostics.journalPath() as string)).toBe(true);
     // Nothing in flight: nothing to explain.
     expect(maybeDumpOnInterrupt({ stageMs: 0, callMs: 0 })).toBeUndefined();
     callDiagnostics.begin("int-1", "spawn_subagent");

@@ -18,6 +18,7 @@
 // `typeof import(...)`, there is no top-level import of the optional package (the
 // static guard in `src/capability/no-optional-imports` is a regex over file text).
 import { displayWidth } from "../lib/live-render";
+import { callDiagnostics } from "../lib/call-diagnostics";
 import { openModal, type ModalChrome } from "./modal-host";
 import { sidebarTextWidth, type SidebarGeometryState, type SidebarMode } from "./sidebar-geometry";
 import { getTheme, onThemeChange, roleColor } from "./theme";
@@ -610,14 +611,20 @@ export function openSidebarCard(
     ...(options.initialTab !== undefined ? { initialTab: options.initialTab } : {}),
     footer: SIDEBAR_CARD_FOOTER,
     renderTab: (tabId, body, ctx) => {
+      const work = cardId === "work";
+      const flags = { subagents: tabId === "subagents", jobs: tabId === "jobs", plan: tabId === "plan" };
+      if (work) callDiagnostics.observe("work.open", { ...flags, width: ctx.width, height: ctx.height });
       const tab = tabOf(tabId);
       if (tab === undefined) return;
       if (options.snapshot().items?.[tabId] !== undefined) {
         const rows = new otui.BoxRenderable(chrome.renderer, {
           id: `sb-card-items-${tabId}`, flexDirection: "column", flexShrink: 0,
         });
+        if (work) rows.onSizeChange = () => {
+          callDiagnostics.observe("work.layout", { ...flags, width: rows.width, height: rows.height, visible: rows.visible });
+        };
         (body as Parent).add(rows);
-        const paint = (): void => {
+        const paintContent = (): void => {
           for (const child of [...rows.getChildren()]) {
             rows.remove(child);
             child.destroy();
@@ -640,9 +647,24 @@ export function openSidebarCard(
             }));
           }
           chrome.renderer.requestRender();
+          if (work) {
+            callDiagnostics.observe("work.paint", { ...flags, items: snapshot.items?.[tabId]?.length ?? 0, children: rows.getChildren().length });
+          }
+        };
+        const paint = (): void => {
+          try { paintContent(); }
+          catch (error) {
+            if (work) callDiagnostics.observe("work.error", flags);
+            throw error;
+          }
         };
         paint();
-        return options.subscribe?.(paint);
+        const unsubscribe = options.subscribe?.(paint);
+        return () => {
+          rows.onSizeChange = undefined;
+          unsubscribe?.();
+          if (work) callDiagnostics.observe("work.close", flags);
+        };
       }
       const lines = tab.lines(ctx.width);
       const parent = body as Parent;

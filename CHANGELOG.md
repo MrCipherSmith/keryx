@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.4.29] - 2026-11-14
+
+### Added
+
+- **Continuous Shell and review diagnostics.** Shell startup creates a private, rotating NDJSON journal of call stages, periodic active-call snapshots and Work modal rendering measurements. `/diag` reports the journal path and write failures; evidence no longer depends on requesting a dump after a hang.
+
 
 ## [0.4.28] - 2026-11-14
 

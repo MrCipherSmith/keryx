@@ -416,6 +416,37 @@ otuiTest("flow 468 AC13: clicking a card opens its detail, in default mode and i
   });
 });
 
+otuiTest("Work diagnostics record completed rows without their text", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { callDiagnostics } = await import("../lib/call-diagnostics");
+  const otui = requireOtui();
+  const g = await loadGeometry();
+  const c = await loadCards();
+  await withTmpDir(async (configDir) => {
+    const stop = callDiagnostics.start({ sessionId: "work-log", configDir, continuous: true });
+    const geo = g.createSidebarGeometry({ columns: 140, configDir, mode: "default" });
+    const h = await mountChrome(otui, geo);
+    try {
+      const handle = c.openSidebarCard(otui.core, h.chrome, "work", {
+        initialTab: "subagents",
+        snapshot: () => ({ sections: { subagents: "private-header" }, items: {
+          subagents: Array.from({ length: 15 }, (_, i) => ({ id: `a${i}`, label: "private-label", text: "private-result done" })),
+        } }),
+      });
+      await h.flush();
+      const text = readFileSync(callDiagnostics.journalPath() as string, "utf8");
+      const rows = text.trim().split("\n").map((line) => JSON.parse(line));
+      expect(rows.find((row) => row.kind === "work.paint")).toMatchObject({ items: 15, children: 16, subagents: true });
+      expect(rows.some((row) => row.kind === "work.layout" && row.width > 0 && row.height > 0)).toBe(true);
+      expect(text).not.toContain("private-");
+      handle?.close();
+    } finally {
+      h.destroy();
+      stop();
+    }
+  });
+});
+
 otuiTest("Work item click opens a temporary tab and cleans up on return", async () => {
   const otui = requireOtui();
   const g = await loadGeometry();
