@@ -65,9 +65,12 @@ Include each of these that applies to the skill:
 - **Calibration** — for a skill that grades: the severity scale, the confidence below which a
   finding is dropped, and the evidence a finding must carry (a failing input, not "violates
   a principle").
-- **Output format** — a template or a schema.
+- **Input and output contracts** — a template or a schema, for what the skill receives
+  and what it returns.
 - **Project decisions** — thresholds, conventions, and the departures from section 2. A
   decision is a specific value or choice the canon leaves open: "40 lines", "locality wins".
+  A language's or framework's published default (camelCase in TypeScript) is canon;
+  choosing between published conventions, or departing from the default, is a decision.
   In a shipped rule it is a default a project may override; it stays even when its origin
   was never recorded, because the value still constrains the result where the explanation
   around it does not.
@@ -103,19 +106,30 @@ nothing is removed, and a change that makes them worse is recorded as
 
 A skill dispatched to a lighter tier (`model-selection.mdc`) is tested on that tier. A line
 the flagship does not need can pass the deletion test for the lighter model; keep it, and say
-which tier it is for.
+which tier it is for. This protects procedure and precision, not restated canon or
+motivation: every tier already knows the published canon.
 
 ### 9. Audit existing text by what reading can decide
 
-Sections 7 and 8 need a run; reading settles only sections 1 and 2. An audit of text that
+Reading settles sections 1 and 2; sections 4, 7 and 8 need a run. An audit of text that
 already ships therefore sorts each block into one of three:
 
-- **Remove** — restated canon, with no decision, filter or grade in it.
-- **Keep** — anything section 3 lists, and any block a test pins or a required section of
-  the skill anatomy holds. To remove pinned text, change the check in the same change.
+- **Remove** — restated canon or motivation, with no decision, filter or grade in it. A code
+  example of a published principle is restated canon; an example that shows a project
+  decision is not.
+- **Keep** — anything section 3 lists, and any block a test pins or a required section
+  holds. For a skill, the required sections are its anatomy; for a rule, the headings
+  `rule-management-workflow.mdc` ("Rule File Standard") requires — the heading stays, its
+  content follows sections 1 and 2. A line that feeds a required field of the output (a
+  `Fix`, a severity) stays whole. To remove pinned text, change the check in the same
+  change.
 - **Undecided** — everything else. It stays until a run decides: an eval comparison, or a
   run on the lightest tier the skill is dispatched to. Where no eval covers the file, say
   so; reading alone does not justify the removal.
+
+Two findings are reported rather than sorted: a capitalised rule without a reason
+(section 5) is rewritten with its reason, and numbered steps that are not gates
+(section 4) are Undecided.
 
 An existing line is not removed for lacking a record of the failure it answers; that record
 is required only of lines added from now on.
@@ -132,7 +146,8 @@ When this rule drives an edit or a review of a skill or rule:
 - Report the line count before and after; a trimmed shipped skill lowers its ceiling in the
   same change (`skills-storage-workflow.mdc`, "Length Ceilings").
 - Report each undecided block with the run that would decide it.
-- Output formats, schemas, and safety, permission and confirmation text are out of scope —
+- Input and output formats and schemas, and safety, permission and confirmation text are out
+  of scope —
   never removed under this rule.
 
 ## Examples
