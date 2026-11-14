@@ -44,7 +44,12 @@ export const ROUTING_BASELINE: readonly BaselineEntry[] = [
   { query: "frontend review", top: "review-frontend", score: 75, verdict: "ok" },
   { query: "security review", top: "review-security-code", score: 75, verdict: "ok" },
   { query: "backend review", top: "review-backend", score: 75, verdict: "ok" },
-  { query: "review the mobx store", top: "code-mobx-store-review", score: 85, verdict: "ok" },
+  // Flow 488 removed `code-mobx-store-review`, which used to win this at 85. The
+  // one-word `review` trigger now takes it at 65 (review-frontend ties at 20 with two
+  // others on `review`+`store`). That is still an answer a human accepts: the
+  // orchestrator routes `*.store.ts` to `review-frontend` (review-orchestrator/SKILL.md,
+  // Routing Table), and Part B of review-frontend is the MobX store checklist.
+  { query: "review the mobx store", top: "review-orchestrator", score: 65, verdict: "ok" },
   { query: "проверь безопасность кода", top: "review-security-code", score: 105, verdict: "ok" },
   { query: "commitment issues", top: "changelog", score: 10, verdict: "wrong", note: "token overlap at 10, far below any trigger — noise, not a recommendation" },
   { query: "pushback from the team", top: "reviewer-skill-creator", score: 10, verdict: "wrong", note: "same: bare token overlap" },

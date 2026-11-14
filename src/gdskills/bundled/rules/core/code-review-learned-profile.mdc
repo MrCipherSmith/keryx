@@ -61,8 +61,7 @@ nothing.
 
 ## Response Format
 
-1. Verdict in one line — the canonical verdict vocabulary (same set as
-   `core/code-review-ai-assistant.mdc`):
+1. Verdict in one line — the canonical verdict vocabulary:
    - `APPROVE` — no blocking issues; changes accepted as-is
    - `APPROVE WITH SUGGESTIONS` — accepted but improvements noted for follow-up
    - `REQUEST CHANGES` — has issues that must be fixed before merge

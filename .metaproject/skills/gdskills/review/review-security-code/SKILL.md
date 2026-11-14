@@ -57,7 +57,7 @@ This skill covers **code-level security only**. It does NOT audit npm/bun depend
 | Infrastructure / Docker / deployment security | NO | `security-audit` |
 | Performance bottlenecks | NO | `review-performance` |
 | Logic correctness, architecture | NO | `review-logic`, `review-architecture` |
-| Code style, naming | NO | `code-style-review` |
+| Code style, naming | NO | `review-style` |
 
 ---
 

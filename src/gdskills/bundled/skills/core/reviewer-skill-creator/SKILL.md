@@ -236,7 +236,7 @@ undocumented is drift that will be silently "fixed" by whoever refreshes next.
 | Refresh one whose origin drifted | YES | — |
 | Create an entity/module project-skill | NO | `entity-skill-creator` |
 | Change a reviewer keryx ships | NO | edit `src/gdskills/bundled/skills/review/` and open a PR |
-| Update a skill from review findings | NO | `entity-skill-learner`, `keryx skills learn` |
+| Update a skill from review findings | NO | `keryx skills learn` |
 | Decide which reviewers a round dispatches | NO | `review-orchestrator` |
 | Import a tree of overlay reviewers | YES — `keryx review import --from <dir> --only '<glob>'`, dry-run first (`SKILL.detail.md`) | — |
 | Import a non-review SKILL.md / GitHub URL | NO | `entity-skill-creator` / `keryx skills import` |

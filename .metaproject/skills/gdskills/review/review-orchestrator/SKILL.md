@@ -199,7 +199,7 @@ which of its inputs were recovered and which were never written down.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `flags` | string[] | no | One or more of: `--hierarchical`, `--frontend`, `--backend`, `--architecture`, `--security`, `--performance`, `--style`, `--clean-code`, `--highload`, `--project-conventions`, `--frontend-conventions`, `--testing-practices`, `--core-boundaries`, `--flow-graph`, `--legacy-profiles`, `--code-ai`, `--learned`, `--code-style`, `--mobx-store`, `--verify`, `--all`. `--hierarchical` selects the capability-gated hierarchical engine; absence keeps the legacy path. |
+| `flags` | string[] | no | One or more of: `--hierarchical`, `--frontend`, `--backend`, `--architecture`, `--security`, `--performance`, `--style`, `--clean-code`, `--highload`, `--project-conventions`, `--frontend-conventions`, `--testing-practices`, `--core-boundaries`, `--flow-graph`, `--legacy-profiles`, `--learned`, `--verify`, `--all`. `--hierarchical` selects the capability-gated hierarchical engine; absence keeps the legacy path. |
 | `path` | string | no | File or directory path to review (e.g., `src/stores/`, `src/components/UserCard.tsx`). Activates **path mode** — reviews the files at this path directly, not a git diff. |
 | `commit_range` | string | no | Explicit commit hash or range (e.g., `abc123..HEAD`). Overrides merge-base detection. Ignored in path mode. |
 | `issue_url` | string | no | GitHub issue or task URL. If provided, Stage 1 gate checks spec compliance before dispatching reviewers. |
@@ -970,26 +970,20 @@ When `review.jev.select` is on, before Wave A/B dispatch: run `keryx review jev-
 
 ## Legacy/Profile Reviewer Auto-Detection
 
-Legacy/profile reviewers are specialized review profiles that predate the review-domain `review-*` naming. They are still valid and must be shown separately from generic and convention reviewers so the user can opt in deliberately. **They are present only when installed:** `code-ai-review`, `code-learned-review`, `code-style-review` and `code-mobx-store-review` are in the `full` profile only, so in any other profile the flags below (`--code-ai`, `--learned`, `--code-style`, `--mobx-store`, `--legacy-profiles`) name reviewers that may not exist. When the inventory's `bundledSource` is `"project"`, a legacy reviewer missing from the `bundled` half of `keryx review reviewers --json` is absent (when it is `"package"` the half is the keryx package's own list and says nothing about this project — decide as `SKILL.detail.md`, "Skills present only when installed", describes): leave it out of the `Optional legacy/profile reviewers` preview, and when a flag asked for it, do not dispatch a substitute — record it in `Skipped reviewers` with reason `not-installed` and the command that adds it (`keryx skills install --profile full`, or the narrower manifest form in `SKILL.detail.md`, "Skills present only when installed"). `--legacy-profiles` dispatches the legacy reviewers that are installed and skips the rest the same way; `--all` never selects them.
+Legacy/profile reviewers are specialized review profiles that predate the review-domain `review-*` naming. They are still valid and must be shown separately from generic and convention reviewers so the user can opt in deliberately. **They are present only when installed:** `code-learned-review` is in the `full` profile only, so in any other profile the flags below (`--learned`, `--legacy-profiles`) name reviewers that may not exist. When the inventory's `bundledSource` is `"project"`, a legacy reviewer missing from the `bundled` half of `keryx review reviewers --json` is absent (when it is `"package"` the half is the keryx package's own list and says nothing about this project — decide as `SKILL.detail.md`, "Skills present only when installed", describes): leave it out of the `Optional legacy/profile reviewers` preview, and when a flag asked for it, do not dispatch a substitute — record it in `Skipped reviewers` with reason `not-installed` and the command that adds it (`keryx skills install --profile full`, or the narrower manifest form in `SKILL.detail.md`, "Skills present only when installed"). `--legacy-profiles` dispatches the legacy reviewers that are installed and skips the rest the same way; `--all` never selects them.
 
 | Trigger | Reviewers appended |
 |---|---|
-| `--legacy-profiles` | `code-ai-review` + `code-learned-review` + `code-style-review` + `code-mobx-store-review` when MobX/store files are present |
-| `--code-ai` | `code-ai-review` |
+| `--legacy-profiles` | `code-learned-review` |
 | `--learned` | `code-learned-review` |
-| `--code-style` | `code-style-review` |
-| `--mobx-store` | `code-mobx-store-review` |
-| `*.store.ts`, `makeObservable`, `observable`, `computed`, `action.bound` | suggest `code-mobx-store-review` as optional profile reviewer |
 
 Legacy/profile reviewers are never auto-included and never prompted for, interactive or unattended — do not
-ask about them. They are exempt from the finding contract (for example `code-ai-review` emits
-free-prose Russian with no per-finding severity field, so its output cannot be normalised into
+ask about them. They are exempt from the finding contract (`code-learned-review` emits
+free prose with no per-finding severity field, so its output cannot be normalised into
 the unified report), which is why inclusion must be a deliberate, explicit act rather than a
 default the user has to opt out of on every review. Dispatch them ONLY when the user passes one
 of the flags in the Trigger table above, or when `job-orchestrator` provides `reviewers` /
-`conditional_reviewers` automation settings that name them. The `code-mobx-store-review`
-auto-suggestion (MobX/store files present) is informational only — list it in the Review Plan
-Preview below, but do not dispatch it and do not ask about it without an explicit flag.
+`conditional_reviewers` automation settings that name them.
 
 Review Plan Preview must include an `Optional legacy/profile reviewers` group (each installed one with the flag that selects it) and a `Skipped reviewers` group with each one's reason; the wording: `SKILL.detail.md` § "Review Plan Preview — legacy groups".
 
@@ -1206,7 +1200,7 @@ Each reviewer must return a `REVIEW_RESULT` object matching `.metaproject/skills
 | Test / e2e conventions | NO | `review-testing-practices` |
 | Shared core boundary rules | NO | `review-core-boundaries` |
 | Shared flow/graph abstraction contracts | NO | `review-flow-graph` |
-| Legacy/profile review profiles | NO | `code-ai-review`, `code-learned-review`, `code-style-review`, `code-mobx-store-review` |
+| Legacy/profile review profiles | NO | `code-learned-review` |
 
 ## Sub-Agent Report Quality Gate
 

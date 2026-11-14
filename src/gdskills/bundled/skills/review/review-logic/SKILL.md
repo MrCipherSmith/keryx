@@ -26,7 +26,7 @@ license: "MIT"
 # Review Logic
 
 Specialized reviewer for **logic correctness and algorithmic soundness**.
-Inherits from the original `code-ai-review` + `code-learned-review` correctness phases
+Inherits from the correctness phases of two earlier profiles (the strict AI review one, since removed, and `code-learned-review`)
 and unifies them into a single focused pass. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history).
 
 This reviewer does not care about formatting, naming, or architecture opinions.
@@ -187,7 +187,7 @@ earlier review round, because there the finding is recorded as closed and is not
 | Performance profiling (bundle size, query cost, render cycles) | NO | `review-performance` |
 | Style, naming, import organization | NO | `review-style` |
 | Layer violations, SOLID, module coupling | NO | `review-architecture` |
-| React/MobX-specific store patterns | NO | `code-mobx-store-review` |
+| React/MobX-specific store patterns | NO | `review-frontend` |
 
 ---
 

@@ -197,7 +197,7 @@ Focus on **SRP** and **DIP** — the two most commonly violated in practice.
 | Security vulnerabilities (injection, auth bypass) | NO | `review-security-code` |
 | Style, naming, import order | NO | `review-style` |
 | Performance (bundle size, render cost, query plan) | NO | `review-performance` |
-| MobX store internals deep-dive | surface violations only | `code-mobx-store-review` for full store audit |
+| MobX store internals deep-dive | surface violations only | `review-frontend` for full store audit |
 
 ---
 

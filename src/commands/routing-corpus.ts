@@ -126,7 +126,7 @@ export const KNOWN_ROUTING_GAPS: readonly RoutingGap[] = [
   // skill already carries ("review my code", "full review", "review PR") — was
   // measured and rejected. Dropping it costs three `ok` entries in
   // ROUTING_BASELINE their top skill ("review" and "do a review" fall from
-  // review-orchestrator at 65 to code-ai-review at 10; "reviewing the diff now"
+  // review-orchestrator at 65 to code-ai-review at 10 (since removed, flow 488); "reviewing the diff now"
   // falls to perf-check at 20) and takes review-orchestrator's own positive
   // "reviewing the diff now, where are the problems" away from it. A skill whose
   // contract is to take the review request that names no specialist has to fire
@@ -224,11 +224,43 @@ export const KNOWN_ROUTING_GAPS: readonly RoutingGap[] = [
  * `review-ui-ux`, `ui-direction` and `ui-craft` added four positives each, all
  * ranking first: 342/345 + 12 = 354/357.
  *
+ * Flow 488 removed the seven `planning/` skills whose orchestrator was never
+ * shipped (`project-discovery`, `problem-definer`, `stack-advisor`,
+ * `patterns-researcher`, `spec-writer`, `consistency-checker`, `planner`) with
+ * their 26 positives, all of which ranked first: 354/357 - 26 = 328/331. The
+ * three misses are unchanged; no regression is recorded.
+ *
+ * Flow 488 then removed `job-documenter` (job folders are made by `keryx job
+ * init` / `keryx job document`) and `feature-dev` (the end-to-end pipelines are
+ * `flow-orchestrator` and `job-orchestrator`) with their 7 positives, all
+ * ranking first: 328/331 - 7 = 321/324. Again no regression is recorded.
+ *
+ * Flow 488 last removed six catalog-only stubs that no product code named —
+ * `hook-manager`, `skill-catalog-manager`, `skill-runtime-exporter`,
+ * `skill-sync`, `entity-skill-router` and `entity-skill-learner` — with their 22
+ * positives, all ranking first: 321/324 - 22 = 299/302. The three misses are
+ * still the same three; no regression is recorded.
+ *
+ * It then removed `context-router`, the last of those stubs, together with the
+ * generated routing rows that pointed at it, with its 3 positives, all ranking
+ * first: 299/302 - 3 = 296/299. No regression is recorded.
+ *
+ * Finally it removed the three `code-*` review profiles — `code-ai-review`,
+ * `code-style-review` and `code-mobx-store-review` — whose checks are carried by
+ * `review-logic`, `review-frontend`, `review-style` and the other reviewers
+ * (flow 488's `code-profile-coverage.md`), with their 11 positives
+ * (4, 4 and 3), all ranking first: 296/299 - 11 = 285/288. The three misses are
+ * still the same three (`reviewer-skill-creator`, `review-pr-contract`,
+ * `pr-issue-documenter`); no regression is recorded. `review-frontend` and
+ * `code-learned-review` each lost a negative whose owner was a removed profile, so
+ * each gained one against a neighbour that still exists to stay at the two-negative
+ * floor.
+ *
  * Raise `RANK1_FIRST` (and `RANK1_TOTAL` if the corpus grew) when routing
  * improves; never lower either without saying which cases regressed.
  */
-export const RANK1_FIRST = 354;
-export const RANK1_TOTAL = 357;
+export const RANK1_FIRST = 285;
+export const RANK1_TOTAL = 288;
 
 /**
  * Human-readable form of the ratchet above, derived rather than pinned
@@ -248,34 +280,8 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "just route this to whichever agent should decide on tools and context here",
     ],
     negatives: [
-      { prompt: "what should I inspect first to understand this code", owner: "context-router" },
+      { prompt: "collect the docs and references the workers will need", owner: "context-collector" },
       { prompt: "review my code", owner: "review-orchestrator" },
-    ],
-  },
-  {
-    skill: "context-router",
-    positives: [
-      "I need to find the files behind the auth store",
-      "what should I inspect first to understand this code",
-      "the module is settled, now do I reach for gdgraph or gdwiki",
-    ],
-    negatives: [
-      { prompt: "no idea which skill should be used for this, route it", owner: "metaproject-router" },
-      { prompt: "load the project skill for the kanban store before touching it", owner: "entity-skill-router" },
-    ],
-  },
-  {
-    skill: "entity-skill-router",
-    positives: [
-      "load the project skill for the kanban store before touching it",
-      "is there already a skill describing this component pattern",
-      "we keep module-specific work notes for this service, open them",
-      "we already have a skill written for this component, load it instead of grepping",
-      "before we write new code, check if a skill already exists for this project or some past work specific to this module",
-    ],
-    negatives: [
-      { prompt: "create skill for src/core/flow", owner: "entity-skill-creator" },
-      { prompt: "is this project skill stale or still fresh", owner: "entity-skill-verifier" },
     ],
   },
   {
@@ -287,7 +293,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "there's no entity skill of any kind for this brand new module yet, can you generate one for it",
     ],
     negatives: [
-      { prompt: "load the project skill for the kanban store before touching it", owner: "entity-skill-router" },
+      { prompt: "is this project skill stale or still fresh", owner: "entity-skill-verifier" },
       { prompt: "create a reviewer from our team's review profile", owner: "reviewer-skill-creator" },
     ],
   },
@@ -312,20 +318,8 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "does this skill still match the code, or has it gone stale",
     ],
     negatives: [
-      { prompt: "the review found something, update the skill for that store", owner: "entity-skill-learner" },
-      { prompt: "run lint and the tests and the type-check before I call this done", owner: "code-verifier" },
-    ],
-  },
-  {
-    skill: "entity-skill-learner",
-    positives: [
-      "learn from the review findings and update the skill",
-      "the review found something, update the skill for that store",
-      "a test failure showed this skill is out of date, fold the lesson in",
-    ],
-    negatives: [
-      { prompt: "is this project skill stale or still fresh", owner: "entity-skill-verifier" },
       { prompt: "create skill for src/core/flow", owner: "entity-skill-creator" },
+      { prompt: "run lint and the tests and the type-check before I call this done", owner: "code-verifier" },
     ],
   },
 
@@ -357,18 +351,6 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
     ],
   },
   {
-    skill: "job-documenter",
-    positives: [
-      "initialize the job folder for this work",
-      "save the job report into jobs/",
-      "put the findings for this job into its folder as a document",
-    ],
-    negatives: [
-      { prompt: "add a description to the PR and open a linked issue", owner: "pr-issue-documenter" },
-      { prompt: "document this codebase", owner: "autodoc-orchestrator" },
-    ],
-  },
-  {
     skill: "context-collector",
     positives: [
       "gather the context for this job before the subagents start",
@@ -376,8 +358,8 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "collect the docs and references the workers will need",
     ],
     negatives: [
-      { prompt: "the module is settled, now do I reach for gdgraph or gdwiki", owner: "context-router" },
-      { prompt: "initialize the job folder for this work", owner: "job-documenter" },
+      { prompt: "no idea which skill should be used for this, route it", owner: "metaproject-router" },
+      { prompt: "analyze the issue and turn it into tasks", owner: "issue-analyzer" },
     ],
   },
   {
@@ -427,19 +409,6 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
     negatives: [
       { prompt: "break down issue 42 into atomic tasks", owner: "issue-analyzer" },
       { prompt: "does this change break anything else", owner: "review-regression" },
-    ],
-  },
-  {
-    skill: "feature-dev",
-    positives: [
-      "build this feature from scratch up to a merge-ready PR",
-      "develop the feature described in this issue end to end",
-      "take me through the guided feature workflow for this idea",
-      "spin up something brand new for this idea and carry it all the way to a pr I can merge",
-    ],
-    negatives: [
-      { prompt: "implement this issue", owner: "job-orchestrator" },
-      { prompt: "implement task 3 from the breakdown", owner: "task-implementer" },
     ],
   },
 
@@ -545,7 +514,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
     ],
     negatives: [
       { prompt: "review my code", owner: "review-orchestrator" },
-      { prompt: "mobx store review of these actions and reactions", owner: "code-mobx-store-review" },
+      { prompt: "backend review of the new endpoints", owner: "review-backend" },
     ],
   },
   {
@@ -832,19 +801,6 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
     ],
   },
   {
-    skill: "code-ai-review",
-    positives: [
-      "run code-ai-review on this branch",
-      "do a strict AI review with the ai assistant profile",
-      "use the code review ai assistant profile on this branch",
-      "run a strict pass, ai baseline style, and go through this branch before any human review happens",
-    ],
-    negatives: [
-      { prompt: "review my code", owner: "review-orchestrator" },
-      { prompt: "review with our conventions learned from past PRs", owner: "code-learned-review" },
-    ],
-  },
-  {
     skill: "code-learned-review",
     positives: [
       "review with our conventions learned from past PRs",
@@ -853,33 +809,8 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "our own pull request history taught us some conventions, can you review this branch against everything we've learned from that",
     ],
     negatives: [
-      { prompt: "run code-ai-review on this branch", owner: "code-ai-review" },
       { prompt: "review my code", owner: "review-orchestrator" },
-    ],
-  },
-  {
-    skill: "code-style-review",
-    positives: [
-      "run code-style-review on my branch",
-      "check the architecture style with the code-style-patterns profile",
-      "use the legacy style and architecture profile on this branch",
-      "run the older architecture and style checks we still keep around for legacy branches",
-    ],
-    negatives: [
       { prompt: "style review, naming and readability only", owner: "review-style" },
-      { prompt: "architecture review of this module", owner: "review-architecture" },
-    ],
-  },
-  {
-    skill: "code-mobx-store-review",
-    positives: [
-      "review the mobx store",
-      "mobx store review of these actions and reactions",
-      "this store needs a review, the async runInAction looks wrong",
-    ],
-    negatives: [
-      { prompt: "frontend review of these components", owner: "review-frontend" },
-      { prompt: "review my code", owner: "review-orchestrator" },
     ],
   },
 
@@ -993,11 +924,11 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
     ],
     negatives: [
       // The two neighbours, each asked for in a user's own words. The first
-      // changes which versions the project is on; the second chooses patterns
-      // for a stack before any call exists. Neither reads the build on disk to
+      // changes which versions the project is on; the second weighs options
+      // for a design before any call exists. Neither reads the build on disk to
       // settle a signature, which is the only thing this skill does.
       { prompt: "upgrade our packages to the latest versions", owner: "dependency-update" },
-      { prompt: "which architecture patterns fit the stack we chose", owner: "patterns-researcher" },
+      { prompt: "brainstorm which of these two designs we should adopt", owner: "brainstorm" },
     ],
   },
   {
@@ -1191,83 +1122,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
     ],
     negatives: [
       { prompt: "clarify requirements", owner: "interviewer" },
-      { prompt: "write the implementation plan from the PRD", owner: "spec-writer" },
-    ],
-  },
-  {
-    skill: "project-discovery",
-    positives: [
-      "run project discovery for this new project",
-      "do the initial analysis of what we know so far",
-      "discover what this project is from the sources we have",
-      "let's take an initial look and figure out everything we can discover about this project from what's available, basically an analysis of where things stand",
-    ],
-    negatives: [
-      { prompt: "define the problem and the non-goals", owner: "problem-definer" },
-      { prompt: "create PRD for this feature", owner: "prd-creator" },
-    ],
-  },
-  {
-    skill: "problem-definer",
-    positives: [
-      "define the problem and the non-goals",
-      "what are the success metrics for this",
-      "write the goals and non goals section",
-    ],
-    negatives: [
-      { prompt: "run project discovery for this new project", owner: "project-discovery" },
-      { prompt: "create PRD for this feature", owner: "prd-creator" },
-    ],
-  },
-  {
-    skill: "stack-advisor",
-    positives: [
-      "help me choose the stack for an MVP",
-      "I need stack advice for a production service",
-      "which technology choice makes sense here, postgres or mongo",
-      "torn between two technology options for the stack here, what advice would help us choose",
-    ],
-    negatives: [
-      { prompt: "research the architecture patterns for this stack", owner: "patterns-researcher" },
-      { prompt: "brainstorming ideas for the caching layer", owner: "brainstorm" },
-    ],
-  },
-  {
-    skill: "patterns-researcher",
-    positives: [
-      "research the architecture patterns for this stack",
-      "what are the best practices for NestJS here",
-      "look into the patterns we should research before the PRD",
-      "before we lock in an architecture, can you dig up common patterns and see what practices actually work best for other teams handling this kind of research",
-    ],
-    negatives: [
-      { prompt: "help me choose the stack for an MVP", owner: "stack-advisor" },
-      { prompt: "architecture review of this module", owner: "review-architecture" },
-    ],
-  },
-  {
-    skill: "spec-writer",
-    positives: [
-      "write the implementation plan from the PRD",
-      "produce the technical specification for this module",
-      "write the spec and the plan for implementation from the PRD",
-      "this needs a technical write-up, think specification level detail, plus a plan for how the implementation will actually proceed",
-    ],
-    negatives: [
-      { prompt: "create PRD for this feature", owner: "prd-creator" },
-      { prompt: "check the PRD for consistency with the decisions registry", owner: "consistency-checker" },
-    ],
-  },
-  {
-    skill: "consistency-checker",
-    positives: [
-      "check the PRD for consistency with the decisions registry",
-      "validate the spec against the architecture doc",
-      "find the doc contradictions in this plan",
-    ],
-    negatives: [
-      { prompt: "write the implementation plan from the PRD", owner: "spec-writer" },
-      { prompt: "verify the requirements package for completeness", owner: "docpack-review" },
+      { prompt: "write the implementation plan from the PRD", owner: "docpack-orchestrator" },
     ],
   },
   {
@@ -1292,20 +1147,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
     ],
     negatives: [
       { prompt: "create requirements package for the billing module", owner: "docpack-orchestrator" },
-      { prompt: "check the PRD for consistency with the decisions registry", owner: "consistency-checker" },
-    ],
-  },
-  {
-    skill: "planner",
-    positives: [
-      "create the roadmap and the milestones from the PRD",
-      "give me the task breakdown with dependencies",
-      "plan out the milestones we need to create",
-      "can you create a plan, plus a breakdown of tasks, so we know what depends on what before we start",
-    ],
-    negatives: [
-      { prompt: "break down issue 42 into atomic tasks", owner: "issue-analyzer" },
-      { prompt: "write the implementation plan from the PRD", owner: "spec-writer" },
+      { prompt: "create PRD for this feature", owner: "prd-creator" },
     ],
   },
   {
@@ -1411,19 +1253,6 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
     ],
   },
   {
-    skill: "hook-manager",
-    positives: [
-      "install the post-commit git hook for graph rebuilds",
-      "install the hook that verifies skills",
-      "set up a git hook that runs health after a commit",
-      "can you install a hook so git fires something automatically the moment work gets committed",
-    ],
-    negatives: [
-      { prompt: "run lint after every edit, set that up as a hook", owner: "hookify" },
-      { prompt: "commit changes", owner: "commit" },
-    ],
-  },
-  {
     skill: "hookify",
     positives: [
       "run lint after every edit, set that up as a hook",
@@ -1431,7 +1260,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "hookify this: play a sound on finish",
     ],
     negatives: [
-      { prompt: "install the post-commit git hook for graph rebuilds", owner: "hook-manager" },
+      { prompt: "every morning at nine summarise the new github issues for me, unattended", owner: "scheduled-tasks" },
       { prompt: "run lint and the tests and the type-check before I call this done", owner: "code-verifier" },
     ],
   },
@@ -1461,43 +1290,6 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
     ],
   },
   {
-    skill: "skill-catalog-manager",
-    positives: [
-      "the skill catalog is out of date, regenerate it",
-      "list the skills we have",
-      "rebuild the machine readable registry of skills",
-    ],
-    negatives: [
-      { prompt: "export this skill for the codex runtime", owner: "skill-runtime-exporter" },
-      { prompt: "sync the exported skills into my local runtimes", owner: "skill-sync" },
-    ],
-  },
-  {
-    skill: "skill-runtime-exporter",
-    positives: [
-      "export this skill for the codex runtime",
-      "turn the canonical packages into runtime skill artifacts",
-      "build the codex skill artifacts, stripped of management files",
-      "we need whatever codex uses at runtime, stripped down from the full skill package, ready to export",
-    ],
-    negatives: [
-      { prompt: "sync the exported skills into my local runtimes", owner: "skill-sync" },
-      { prompt: "the skill catalog is out of date, regenerate it", owner: "skill-catalog-manager" },
-    ],
-  },
-  {
-    skill: "skill-sync",
-    positives: [
-      "sync the exported skills into my local runtimes",
-      "install the runtime skills globally",
-      "global skill sync is enabled, push them out",
-    ],
-    negatives: [
-      { prompt: "export this skill for the codex runtime", owner: "skill-runtime-exporter" },
-      { prompt: "the skill catalog is out of date, regenerate it", owner: "skill-catalog-manager" },
-    ],
-  },
-  {
     skill: "commit",
     positives: [
       "commit these changes for me",
@@ -1506,7 +1298,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
     ],
     negatives: [
       { prompt: "push branch to the remote with upstream tracking", owner: "push" },
-      { prompt: "install the post-commit git hook for graph rebuilds", owner: "hook-manager" },
+      { prompt: "open a pull request for this branch", owner: "pr" },
     ],
   },
 ];

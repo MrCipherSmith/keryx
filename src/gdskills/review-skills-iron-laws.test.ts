@@ -43,12 +43,8 @@ const SHARED_HEADING = "### Shared laws (every reviewer)";
  * findings of its own has nothing for these laws to govern.
  */
 const EXEMPT: Record<string, string> = {
-  "code-ai-review":
-    "legacy opt-in profile (--legacy-profiles); emits a free-prose Russian report with no per-finding severity field, and carries four per-editor SKILL variants that would all have to be kept in step",
-  "code-learned-review": "legacy opt-in profile; same free-prose shape as code-ai-review",
-  "code-mobx-store-review":
-    "legacy opt-in profile; does not use the blocker/major vocabulary at all",
-  "code-style-review": "legacy opt-in profile; does not use the blocker/major vocabulary at all",
+  "code-learned-review":
+    "legacy opt-in profile (--legacy-profiles); emits a free-prose report with no per-finding severity field",
   "review-pr-feedback":
     "reports on other people's findings rather than raising its own, so it has no finding of its own for these laws to govern. It applies the same discipline where it does own the output — Step 8 is one plan item per class, never one per occurrence — but over comments and plan items, not over findings",
   "review-verifier":

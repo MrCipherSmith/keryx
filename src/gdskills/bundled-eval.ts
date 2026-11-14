@@ -24,7 +24,7 @@
 // into every installation. They were assumed correct, and were not. This sweep's
 // first clean run over the shipped tree returned 27 findings:
 //
-//   - 1 skill named but never bundled — `feature-dev` said "Launch `code-review`
+//   - 1 skill named but never bundled — `feature-dev` (since removed) said "Launch `code-review`
 //     skill", and no `code-review` has ever shipped;
 //   - 25 paths into the shipped tree that resolved to nothing, in 9 distinct
 //     forms, every one of them missing its category segment: four contract
@@ -128,9 +128,9 @@ export type BundledSkillCheck = (typeof BUNDLED_SKILL_CHECKS)[number];
 export interface BundledSkillFinding {
   /** Which rule fired. */
   readonly check: BundledSkillCheck;
-  /** Skill directory name, e.g. `feature-dev`. */
+  /** Skill directory name, e.g. `job-orchestrator`. */
   readonly skill: string;
-  /** Path relative to the swept root, e.g. `orchestration/feature-dev/SKILL.md`. */
+  /** Path relative to the swept root, e.g. `orchestration/job-orchestrator/SKILL.md`. */
   readonly file: string;
   /** 1-based line, or `null` when the defect is the absence of something. */
   readonly line: number | null;
@@ -639,8 +639,8 @@ export const MAX_DESCRIPTION_LENGTH = 1024;
 // The three checks above each judge ONE description in isolation. None of
 // them can see two descriptions that read as near-duplicates of EACH OTHER —
 // a router scores both skills for the same request and an agent choosing
-// between them has no signal beyond a coin flip. `context-router`'s own
-// SKILL.md carries a comment (`catalog.ts`) explicitly carving "collect
+// between them has no signal beyond a coin flip. The catalog once carried a
+// hand-written comment (`catalog.ts`) explicitly carving "collect
 // context" out of its trigger list because `context-collector` already owns
 // that phrase; nothing before this check verified the tree does not have
 // OTHER pairs quietly reproducing what that one hand-written comment guards
@@ -874,7 +874,7 @@ export function hasNotForClause(text: string): boolean {
  * already shipped headings — "Red Flags" (11 skills), "Red Flags Table" (4
  * skills, all `review-*`) — and matched by heading text rather than by an
  * exact string so a heading such as `## Red Flags — Stop and re-read this
- * skill if you are thinking:` (task-implementer, feature-dev, issue-analyzer)
+ * skill if you are thinking:` (task-implementer, issue-analyzer)
  * still counts.
  *
  * WHAT MAKES IT A TABLE (OR A TWO-COLUMN LIST): the heading alone is not
@@ -895,8 +895,8 @@ export function hasNotForClause(text: string): boolean {
  *     table is not forced into table syntax just to pass this check.
  *
  * WHY 3 ROWS: every genuine shipped table has at least 4 data rows
- * (`stack-advisor`'s is the shortest, at 4; `review-logic` and
- * `review-performance` both have 6). Three sits one below that observed floor
+ * (`review-logic` and `review-performance` both have 6; the
+ * shortest, a since-removed planning skill's, had 4). Three sits one below that observed floor
  * — high enough that a single scattered callout (one row, by construction)
  * cannot pass, low enough that no compliant skill on the tree today is
  * pushed into non-compliance by a threshold picked too high. It is not "the
@@ -922,7 +922,8 @@ export function hasNotForClause(text: string): boolean {
  * WHY 24 CHARACTERS: the shortest data row in any shipped Red Flags table
  * carries 72 characters of cell text (`review-security-code`'s "The team
  * would never send that payload" / "Attackers are not on the team"), and the
- * shortest non-empty single cell carries 11 (`spec-writer`'s "Scope creep").
+ * shortest non-empty single cell carried 11 (a since-removed planning skill's
+ * "Scope creep").
  * 24 sits at a third of the observed row floor — far enough below it that no
  * shipped table is near the line and a genuinely terse future pair is not
  * pushed into padding, far enough above `| a | b |` (2 characters) that a
@@ -1206,62 +1207,6 @@ export const PERMANENT_ANATOMY_EXEMPTIONS: ReadonlyMap<string, AnatomySectionExe
         "Phase 4 subagent dispatched only by autodoc-orchestrator, one instance per section; never chosen by a user from a description. Its Iron Laws and Output Contract status enum substitute for a user-facing NOT-for clause.",
     },
   ],
-  [
-    "planning/consistency-checker",
-    {
-      sections: ["trigger-not-for"],
-      reason:
-        "Phase 5 subagent dispatched only by gproject-orchestrator; never chosen by a user from a description. Its Iron Laws and Output Contract status enum substitute for a user-facing NOT-for clause.",
-    },
-  ],
-  [
-    "planning/planner",
-    {
-      sections: ["trigger-not-for"],
-      reason:
-        "Phase 6 subagent dispatched only by gproject-orchestrator; never chosen by a user from a description. Its Iron Laws and Output Contract status enum substitute for a user-facing NOT-for clause.",
-    },
-  ],
-  [
-    "planning/problem-definer",
-    {
-      sections: ["trigger-not-for"],
-      reason:
-        "Phase 1 subagent dispatched only by gproject-orchestrator; never chosen by a user from a description. Its Iron Laws and Output Contract status enum substitute for a user-facing NOT-for clause.",
-    },
-  ],
-  [
-    "planning/project-discovery",
-    {
-      sections: ["trigger-not-for"],
-      reason:
-        "Phase 0 subagent dispatched only by gproject-orchestrator, always called through it; never chosen by a user from a description. Its Iron Laws and Output Contract status enum substitute for a user-facing NOT-for clause.",
-    },
-  ],
-  [
-    "planning/spec-writer",
-    {
-      sections: ["trigger-not-for"],
-      reason:
-        "Phase 4 subagent dispatched only by gproject-orchestrator; never chosen by a user from a description. Its Iron Laws and Output Contract status enum substitute for a user-facing NOT-for clause.",
-    },
-  ],
-  [
-    "planning/stack-advisor",
-    {
-      sections: ["trigger-not-for"],
-      reason:
-        "Phase 2 subagent dispatched only by gproject-orchestrator; never chosen by a user from a description. Its Iron Laws and Output Contract status enum substitute for a user-facing NOT-for clause.",
-    },
-  ],
-  [
-    "planning/patterns-researcher",
-    {
-      sections: ["trigger-not-for"],
-      reason:
-        "Phase 3 subagent dispatched only by gproject-orchestrator; never chosen by a user from a description. Its Iron Laws and Output Contract status enum substitute for a user-facing NOT-for clause.",
-    },
-  ],
 ]);
 
 /**
@@ -1295,9 +1240,9 @@ export const PENDING_ANATOMY_BACKFILL: ReadonlyMap<string, AnatomySectionExempti
   // --- T14: platform, planning, orchestration — LANDED, all 29 entries removed.
   // The three platform skills, the ten planning skills and the nine
   // orchestration skills now state a "NOT for" clause, carry a Red Flags table
-  // and state their own exit criteria outright. The ten Phase subagents
-  // (`autodoc-*`, `consistency-checker`, `planner`, `problem-definer`,
-  // `project-discovery`, `patterns-researcher`) were BACKFILLED rather than
+  // and state their own exit criteria outright. The Phase subagents
+  // (`autodoc-*`, and the planning pipeline later removed in flow 488) were
+  // BACKFILLED rather than
   // moved to `PERMANENT_ANATOMY_EXEMPTIONS`: each one's Red Flags table names
   // rationalizations specific to its own phase, which is what AC9 asks for and
   // what an Iron Laws table — firm rules, not named excuses — does not supply.
@@ -1326,7 +1271,7 @@ export function pendingReasonNamesBackfillTask(reason: string): boolean {
  * with that false-positive rate is routed around within a week.
  *
  * The narrow form still catches the defect that actually shipped:
- * `feature-dev` said "Launch `code-review` skill" for a skill that was never
+ * `feature-dev` (since removed) said "Launch `code-review` skill" for a skill that was never
  * bundled.
  */
 const SKILL_REFERENCE_PATTERNS: readonly RegExp[] = [
@@ -1461,7 +1406,7 @@ export const GENERATED_PATH_ROOTS: readonly { prefix: string; producedBy: string
 
 /**
  * `*` joins the allowed characters so a glob such as a rule's own frontmatter
- * `globs: skills/gproject-` followed by a wildcard segment gets captured
+ * `globs: skills/review-` followed by a wildcard segment gets captured
  * whole and then excluded by the existing `raw.includes("*")` guard below,
  * rather than truncated right before the star into something that LOOKS like
  * a concrete path and gets existence-checked as one.
@@ -1510,7 +1455,7 @@ function stripTrailingSentencePeriod(raw: string): string {
  * skill's own name — and only when `<name>` is a skill this tree actually
  * ships (`known`). That is the same convention this tree already uses for
  * `rules/core/<file>.mdc` cross-references elsewhere (a citation, not a literal
- * read path), and closing it too would turn every "see the `code-style-review`
+ * read path), and closing it too would turn every "see the `review-style`
  * skill" mention into a rewrite this sweep cannot make on its own in a file it
  * does not own. A reference reaching INTO a skill — a specific file, one path
  * segment further — has no such excuse: it is either the installed prefix or

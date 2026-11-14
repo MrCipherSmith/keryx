@@ -55,7 +55,7 @@ This skill focuses on **measurable or high-likelihood bottlenecks** only. Premat
 | Security vulnerabilities | NO | `review-security-code` |
 | Logic correctness, race conditions | NO | `review-logic` |
 | Architecture decisions | NO | `review-architecture` |
-| Code style, naming | NO | `code-style-review` |
+| Code style, naming | NO | `review-style` |
 | npm/bun dependency vulnerabilities, bundle analysis tooling | NO | `security-audit` / `perf-check` |
 
 ---

@@ -179,6 +179,7 @@ Do not flag DRY violations for code outside the diff even if legacy duplication 
 - Files exceeding 500 lines (excluding generated code, test fixtures, and migration files) — flag as `info` with a suggestion to split by responsibility
 - Files exceeding 800 lines — flag as `minor`
 - Single file exporting more than 5 unrelated things — flag as `minor`; suggest splitting into focused modules
+- A React component file whose parts are out of order (imports, interfaces, component, helpers) — flag as `minor`
 - Test files: no limit enforced; complexity handled by test count and grouping
 
 ---

@@ -1,6 +1,6 @@
 ---
 name: entity-skill-creator
-description: "Use when no project-skill exists yet for a target module, component, store, service, or domain entity, or one needs scaffolding, importing, or refreshing from its origin. NOT for: loading a project-skill that already exists (see entity-skill-router)."
+description: "Use when no project-skill exists yet for a target module, component, store, service, or domain entity, or one needs scaffolding, importing, or refreshing from its origin. NOT for: loading a project-skill that already exists."
 ---
 
 # entity-skill-creator
