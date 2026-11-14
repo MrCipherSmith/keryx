@@ -95,3 +95,71 @@ Notes:
 - **Earlier concern resolved:** the T8 concern that review-frontend still had inline `major` labels was resolved in review-fix commit fdf0df1f2.
 - **Plan steps vs flow task ids:** plan step Tn is flow task T(n+5), so plan T1..T7 are flow T6..T12. Flow T5 is the baseline bench from the plan's quality-guard paragraph. Flow T12 is the after-bench (plan T7), and the repeat ran inside it. The scaffold rows T1..T4 were registered by `flow init`. T1..T3 were marked done before the freeze; that is scaffold bookkeeping and no work was done under them. T4 is this review.
 - 2026-11-14T10:56:43.046Z - task-done: T4: Self-review and prepare draft PR
+
+## AC8 re-bench on the head lens text, 2026-11-14
+
+This replaces the "plausibly met, not proven" verdict above.
+
+**Setup.**
+- Lens text: base 536da7f against head 23b47b1. Head includes the round-3 fixes.
+- Lenses: logic, regression, security-code and testing-practices.
+- Cases: the slices that carry them in c01, c02, c03, c09 and c11.
+- Runs: 3 runs per arm, 126 in total.
+  - 27 base runs were reused from the earlier benches. The other 99 were new and ran interleaved, base and head alternating.
+- Judging: 30 blind judges, one per (case, run), with the arm label sealed.
+- Score: matches + 0.5 × partials against the truth file.
+
+| case | base B1/B2/B3 | mean | head H1/H2/H3 | mean |
+|---|---|---|---|---|
+| c01 | 2.0 / 2.0 / 2.0 | 2.00 | 2.0 / 2.0 / 2.0 | 2.00 |
+| c02 | 4.5 / 4.5 / 4.5 | 4.50 | 4.0 / 4.5 / 4.0 | 4.17 |
+| c03 | 1.5 / 1.5 / 2.0 | 1.67 | 1.0 / 0.5 / 1.5 | 1.00 |
+| c09 | 2.0 / 1.0 / 1.0 | 1.33 | 0.5 / 0.5 / 0.5 | 0.50 |
+| c11 | 4.0 / 4.0 / 4.0 | 4.00 | 3.5 / 3.5 / 4.0 | 3.67 |
+| **total** | 14.0 / 13.0 / 13.5 | **13.50** | 11.0 / 11.0 / 12.0 | **11.33** |
+
+**Per lens.** Each truth item is credited to the lens that produced the finding the judge cited. The means are over 3 runs:
+- logic: 4.50 → 3.83
+- regression: 3.83 → 2.00
+- security-code: 2.00 → 3.00
+- testing-practices: 3.17 → 2.50
+
+**Candidate volume.** Base runs produced 70, 67 and 67 candidates. Head runs produced 65, 64 and 76.
+
+**Reading.**
+- The two arms do not overlap: the best head run (12.0) is below the worst base run (13.0).
+- Using only the fresh base run, B3 = 13.5 still beats every head run, so the result does not come from reusing older base outputs.
+- The pooled drop is -2.17 of about 13.5, roughly 16%. Four of the five cases lose recall; c01 is flat.
+- Security-code is the only lens that gains.
+- No reviewer in either arm called `keryx gdgraph`, `wiki ask`, `memory search` or `test related`; all used `keryx ctx rg`. So the new layer-command sentence did not draw reviewers into other tools.
+- The logic lens changed by one preamble sentence only, yet moved -0.67. Per-lens deltas below about 1 are therefore within noise.
+- The regression drop (-1.83) exceeds that bound. c09 T1, a blocker bypass of the secret detector, was found 2 times in base and 0 times in head.
+
+**Verdict: AC8 is not met.** The head lens text lowers pooled recall on this corpus, and the regression lens carries most of the loss. The flow cannot close on AC8 until the regression lens change is reverted or reworked and a re-bench shows no drop.
+
+## AC8 fix: regression lens rolled back, re-measured, 2026-11-14
+
+**Change.** `review-regression` now carries the base 536da7f text, version 1.3.0, with one edit: the contract preamble sentence (read-only layer commands, never writes in the reviewed tree).
+- Three round-fix edits are dropped:
+  - the FIX-slice mode;
+  - the missing-criteria fallback;
+  - "thin test is testing-practices' lane", and the pre-existing-code wording.
+- One wrapped paragraph is joined to a single line, so the rendered text is unchanged.
+- The length ceiling goes from 213 to 212.
+
+**Bench.** Regression lens only, on c02, c09 (slices 1 and 2) and c11, 3 runs per arm, with 27 blind judges, one per (case, arm, run).
+- B is base. H is head 23b47b1. R is the rollback.
+- The B and H runs are the regression runs from the re-bench above. R is 12 new runs.
+
+| arm | c02 | c09 | c11 | totals | mean |
+|---|---|---|---|---|---|
+| B base | 3 / 3 / 3 | 1.5 / 1 / 0.5 | 1.5 / 3 / 2.5 | 6 / 7 / 6 | **6.33** |
+| H head | 3 / 1 / 3 | 0.5 / 0.5 / 0.5 | 2 / 2.5 / 2 | 5.5 / 4 / 5.5 | **5.00** |
+| R rollback | 3 / 3 / 3 | 0.5 / 1 / 1 | 2.5 / 2 / 3 | 6 / 6 / 7 | **6.33** |
+
+**Reading.**
+- R equals B (6.33 against 6.33). Every R run is at least 6, and every H run is at most 5.5.
+- So the head regression edits caused the regression loss, and the rollback removes it.
+- In the pooled re-bench, the other per-lens deltas were each 0.67 or less, which is the noise level shown by the one-sentence logic change. Security-code gained.
+
+**Verdict: AC8 is met for the regression lens.** The pooled four-lens bench was not re-run with R. Its remaining per-lens deltas are within the measured noise.
