@@ -18,7 +18,7 @@ triggers:
   - "Uncle Bob review"
 metadata:
   author: "MrCipherSmith"
-  version: "1.0.0"
+  version: "1.2.0"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
@@ -27,7 +27,7 @@ license: "MIT"
 # Review: Clean Code + SOLID
 
 Specialized reviewer for **Clean Code principles** (Robert C. Martin) and **SOLID** at the
-function and class level. Focuses on code in the current branch diff only. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history).
+function and class level. Focuses on code in the current branch diff only. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history), and the read-only layer commands the orchestrator lists (`keryx gdgraph affected|find`, `keryx test related`, `keryx wiki ask`, `keryx memory search`, `keryx ctx rg|read`); it never writes in the reviewed tree.
 
 The goal is not stylistic nitpicking — every finding here points to a concrete
 maintainability, readability, or extensibility problem that will cause friction
@@ -162,7 +162,7 @@ Clean Code guideline: functions should do **one thing** at one level of abstract
 - [ ] Functions with a `And` or `Or` in the name, describing two operations
 
 Flags:
-- Function body >40 lines — **major** (clear overload; flag specific function by name)
+- Function body >40 lines — **minor** (clear overload; flag specific function by name)
 - Function body 20–40 lines with visible mixed abstraction — **minor**
 - `doXAndY()` naming explicitly stating two operations — **minor**
 
@@ -176,8 +176,8 @@ Flags:
 - [ ] Output arguments: a function that mutates its argument instead of returning a value (`populate(result)`)
 
 Flags:
-- Function with ≥4 parameters not using an options/config object — **major**
-- Boolean flag parameter (`enabled: boolean`) passed to control function flow — **major** (split into two functions)
+- Function with ≥4 parameters not using an options/config object — **minor**
+- Boolean flag parameter (`enabled: boolean`) passed to control function flow — **minor** (split into two functions)
 - Output argument (mutating parameter instead of returning) — **minor**
 - Three parameters where a plain named object would be clearer — **minor**
 
@@ -270,8 +270,8 @@ These are the correct uses of comments — do NOT flag:
 - [ ] `catch (err: any)` — loses type safety; use `catch (err: unknown)`
 
 Flags:
-- `catch` block with empty body or only a comment — **major** (silent failure)
-- Returning `null` / `undefined` from a function to signal "not found" in a critical path — **major**
+- `catch` block with empty body or only a comment — **major** when a named failure is hidden from the caller (silent failure; conditions table), else **minor**
+- Returning `null` / `undefined` from a function to signal "not found" in a critical path — **minor**; **major** only with a named trigger where the caller then produces a wrong outcome
 - Log + rethrow in the same catch block — **minor**
 - Untyped error in catch — **minor**
 
@@ -295,7 +295,7 @@ Flags:
 - [ ] Multiple functions doing the same transformation with slightly different wrapping
 
 Flags:
-- 3+ identical or near-identical blocks in the diff that could be extracted — **major**
+- 3+ identical or near-identical blocks in the diff that could be extracted — **minor** (Clean Code law 3; this lens owns duplication, `review-style` defers)
 - 2 occurrences — **minor** (note, do not raise unless the pattern is clearly intentional duplication)
 
 #### E2. Magic Numbers and Strings
@@ -323,8 +323,8 @@ A class should have **one reason to change**: one owner (one part of the system 
 - [ ] A constructor that does real work: making network calls, reading files, computing state — constructors should only assign
 
 Flags:
-- Class with two clearly distinct responsibilities that have different change drivers — **major**
-- Constructor performing I/O or async operations — **major**
+- Class with two clearly distinct responsibilities that have different change drivers — **minor**
+- Constructor performing I/O or async operations — **minor**; **major** only with a named defect it causes (e.g. an unhandled rejection on construction)
 - Service method doing validation + transformation + persistence inline — **minor**
 
 #### F2. Open/Closed Principle (OCP)
@@ -348,8 +348,8 @@ Subtypes must be substitutable for their base types without changing the program
 - [ ] Override that weakens postconditions (returns less than the parent guarantees)
 
 Flags:
-- Override throwing "not supported" — **major**
-- Override requiring `instanceof` self-check — **major**
+- Override throwing "not supported" — **minor**; **major** (or **blocker**) when a named call site reaches it through the base type (conditions table)
+- Override requiring `instanceof` self-check — **minor**, same condition as the line above
 
 #### F4. Interface Segregation Principle (ISP)
 
@@ -369,7 +369,7 @@ High-level modules should not depend on low-level modules. Both should depend on
 - [ ] Class importing a concrete implementation class from another module instead of an interface/abstract class
 
 Flags:
-- `new ConcreteService()` inside a class method that should receive it via DI — **major**
+- `new ConcreteService()` inside a class method that should receive it via DI — **minor**
 - Import of concrete implementation where an interface or abstract type exists — **minor**
 
 ---
@@ -445,9 +445,9 @@ conditions land under that rubric, not a second rubric.
 |---|---|---|
 | Swallowed exception hiding a failed operation | `major` — `blocker` only if the caller then persists or returns wrong data | Same wording as `review-logic`, deliberately. Silent failure is wrong behaviour; corruption is a different shape |
 | LSP violation that produces a wrong result or a crash at a named call site | `major`, or `blocker` on the crash/corruption outcome | The outcome decides, not the principle's name |
-| Constructor performing I/O | `major` | Named trigger (constructing it) and named outcome (the I/O runs); untestable is not one of the four shapes |
+| Constructor performing I/O | `minor` — `major` only with a named defect it causes (trigger and outcome) | The I/O running is not wrong behaviour; untestable is a maintenance cost |
 | Function > 40 lines; ≥ 4 parameters without an options object; boolean flag argument; class with two distinct responsibilities; `new ConcreteService()` bypassing DI | `minor` | The code is correct. The cost is to whoever reads or edits it next — that is exactly `minor` |
-| Poor naming; redundant comment; magic number; 20–40 line function; OCP/ISP smell; log-and-rethrow | `minor` | Same |
+| Poor naming; redundant or stale comment; duplication (3+ sites); magic number; 20–40 line function; OCP/ISP smell; log-and-rethrow | `minor` | Same. This lens owns duplication and comments; `review-style` defers to it |
 | Stylistic opinion; a future issue with no current violation | `info` | Neither trigger nor a named maintenance cost |
 
 **Clean Code findings are `minor` by default.** A long function with a named

@@ -14,7 +14,7 @@ description: |
 triggers: ["frontend conventions", "local frontend rules", "CLAUDE frontend", "review frontend conventions"]
 metadata:
   author: "MrCipherSmith"
-  version: "1.0.0"
+  version: "1.1.0"
   category: "review"
   stack_requires: "react,mobx"
   overlap_group: "frontend"
@@ -26,7 +26,7 @@ license: "MIT"
 
 Reviewer for frontend repository conventions that are more specific than generic React/MobX
 correctness. Use it alongside `review-frontend`, `review-style`, `review-performance`, and
-`review-logic`. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history).
+`review-logic`. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history), and the read-only layer commands the orchestrator lists (`keryx gdgraph affected|find`, `keryx test related`, `keryx wiki ask`, `keryx memory search`, `keryx ctx rg|read`); it never writes in the reviewed tree.
 
 Before reviewing, read the nearest project guide files if they exist: root `CLAUDE.md`,
 `AGENTS.md`, `.junie/guidelines.md`, `ARCHITECTURE.md`, and module-level `CLAUDE.md` files.

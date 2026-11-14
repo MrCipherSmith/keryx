@@ -17,7 +17,7 @@ triggers:
   - "check this for bugs"
 metadata:
   author: "MrCipherSmith"
-  version: "1.0.0"
+  version: "1.1.0"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
@@ -27,7 +27,7 @@ license: "MIT"
 
 Specialized reviewer for **logic correctness and algorithmic soundness**.
 Inherits from the correctness phases of two earlier profiles (the strict AI review one, since removed, and `code-learned-review`)
-and unifies them into a single focused pass. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history).
+and unifies them into a single focused pass. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history), and the read-only layer commands the orchestrator lists (`keryx gdgraph affected|find`, `keryx test related`, `keryx wiki ask`, `keryx memory search`, `keryx ctx rg|read`); it never writes in the reviewed tree.
 
 This reviewer does not care about formatting, naming, or architecture opinions.
 Every finding must describe an observable, reproducible defect or a spec gap.

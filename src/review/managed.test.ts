@@ -291,6 +291,143 @@ describe("flow 460: ingest procedure", () => {
   });
 });
 
+async function ingestScopeReport(lines: string[]): Promise<string> {
+  await fresh();
+  await writeFile(path.join(ROOT, "review.md"), lines.join("\n"), "utf8");
+  const result = await createManagedReviewPackage({
+    cwd: ROOT,
+    mode: "ingest",
+    reviewId: "2026-07-09-empty-sites",
+    target: { kind: "report", ref: "review.md" },
+    reportPath: "review.md",
+    now: new Date("2026-07-09T11:00:00Z"),
+  });
+  return readFile(path.join(ROOT, result.path, "findings.json"), "utf8");
+}
+
+test("ingest accepts a major whose class_scope has `sites: []` and a method", async () => {
+  const findings = await ingestScopeReport([
+    "## Major Issues",
+    "",
+    "- [F-001] major: Missing managed review coverage.",
+    "  - class_scope:",
+    "    sites: []",
+    "    enumeration_method: \"rg createManagedReviewPackage across src; found none\"",
+    "",
+  ]);
+  expect(findings).toContain('"id": "F-001"');
+  expect(findings).toContain('"class_scope"');
+  expect(findings).toContain('"sites": []');
+  const parsed = JSON.parse(findings) as Array<{ class_scope?: unknown }>;
+  expect(parsed[0]?.class_scope).toEqual({
+    sites: [],
+    enumeration_method: "rg createManagedReviewPackage across src; found none",
+  });
+});
+
+describe("class_scope keys are line-anchored and the method does not cross into the next bullet", () => {
+  const REFUSED = /do not enumerate their class/;
+  test("blank method followed by a `- **Fix**:` bullet is refused", async () => {
+    await expect(
+      ingestScopeReport([
+        "## Major Issues",
+        "",
+        "- [F-001] major: Missing managed review coverage.",
+        "  - class_scope:",
+        "    sites: []",
+        "    enumeration_method:",
+        "  - **Fix**: add the coverage",
+        "",
+      ]),
+    ).rejects.toThrow(REFUSED);
+  });
+
+  test("the same with non-empty sites is refused", async () => {
+    await expect(
+      ingestScopeReport([
+        "## Major Issues",
+        "",
+        "- [F-001] major: Missing managed review coverage.",
+        "  - class_scope:",
+        "    sites: [\"src/a.ts:1\"]",
+        "    enumeration_method:",
+        "  - **Fix**: add the coverage",
+        "",
+      ]),
+    ).rejects.toThrow(REFUSED);
+  });
+
+  test("no sites key with a valid method is refused", async () => {
+    await expect(
+      ingestScopeReport([
+        "## Major Issues",
+        "",
+        "- [F-001] major: Missing managed review coverage.",
+        "  - class_scope:",
+        "    enumeration_method: \"rg across src\"",
+        "",
+      ]),
+    ).rejects.toThrow(REFUSED);
+  });
+
+  test("a method that mentions \"sites:\" in prose does not supply the sites key", async () => {
+    await expect(
+      ingestScopeReport([
+        "## Major Issues",
+        "",
+        "- [F-001] major: Missing managed review coverage.",
+        "  - class_scope:",
+        "    enumeration_method: \"rg across src, call sites: none found\"",
+        "",
+      ]),
+    ).rejects.toThrow(REFUSED);
+  });
+});
+
+describe("prose class_scope layouts (review round 3)", () => {
+  const scopeOf = async (scopeLines: string[]) => {
+    const findings = await ingestScopeReport(["## Major Issues", "", "- [F-001] major: Missing managed review coverage.", ...scopeLines, ""]);
+    return (JSON.parse(findings) as Array<{ class_scope?: { sites: string[]; enumeration_method: string } }>)[0]?.class_scope;
+  };
+
+  test.each([
+    ["inline after a period (a committed report's form)", ["  - **class_scope**: sites = [\"src/a.ts:1\", \"src/b.ts:2\"]. enumeration_method: `rg across src`"], ["src/a.ts:1", "src/b.ts:2"], "rg across src"],
+    ["inline bare sites", ["  - class_scope: sites: src/a.ts:1 enumeration_method: rg across src"], ["src/a.ts:1"], "rg across src"],
+    ["brace form", ["  - class_scope: { sites: [\"src/a.ts:1\"], enumeration_method: \"rg across src\" }"], ["src/a.ts:1"], "rg across src"],
+    ["table row", ["  - | class_scope | sites: [\"src/a.ts:1\"] | enumeration_method: rg across src |"], ["src/a.ts:1"], "rg across src"],
+    ["numbered keys", ["  - class_scope:", "    1. sites: [\"src/a.ts:1\"]", "    2. enumeration_method: rg across src"], ["src/a.ts:1"], "rg across src"],
+    ["bold sub-bullets", ["  - class_scope:", "    - **sites**: src/a.ts:1, src/b.ts:2", "    - **enumeration_method**: rg across src"], ["src/a.ts:1", "src/b.ts:2"], "rg across src"],
+    ["quoted method over lines with a label-like continuation", ["  - class_scope:", "    sites: []", "    enumeration_method: \"all callers", "      note: one is dead\""], [], "all callers note: one is dead"],
+  ])("accepts %s", async (_name, scopeLines, sites, method) => {
+    const scope = await scopeOf(scopeLines);
+    expect(scope).toEqual({ sites, enumeration_method: method });
+  });
+
+  test.each([
+    ["an indented prose line", ["  - class_scope:", "    sites: []", "    enumeration_method:", "    Evidence follows here"]],
+    ["an ordered item", ["  - class_scope:", "    sites: []", "    enumeration_method:", "   2. **Fix**: x"]],
+    ["a fence close", ["  - class_scope:", "    ```yaml", "    sites: []", "    enumeration_method:", "    ```"]],
+  ])("refuses a blank method followed by %s", async (_name, scopeLines) => {
+    await expect(ingestScopeReport(["## Major Issues", "", "- [F-001] major: Missing managed review coverage.", ...scopeLines, ""])).rejects.toThrow(
+      /do not enumerate their class/,
+    );
+  });
+});
+
+test("ingest refuses a major with `sites: []` and a blank enumeration_method", async () => {
+  await expect(
+    ingestScopeReport([
+      "## Major Issues",
+      "",
+      "- [F-001] major: Missing managed review coverage.",
+      "  - class_scope:",
+      "    sites: []",
+      "    enumeration_method: ",
+      "",
+    ]),
+  ).rejects.toThrow(/do not enumerate their class/);
+});
+
 test("ingest writes classified findings and skill learning decision", async () => {
   await fresh();
   const reportPath = path.join(ROOT, "review.md");

@@ -371,7 +371,12 @@ function mergeCluster<T extends StructuredReviewFinding>(members: readonly T[]):
     const base = canonical.class_scope ?? scoped[0]?.class_scope;
     if (base !== undefined) {
       const sites = [...new Set(scoped.flatMap((member) => member.class_scope?.sites ?? []))];
-      finding.class_scope = { ...base, sites };
+      // A negative enumeration ("found none") must not sit next to a non-empty union: take the method of the member
+      // that actually listed the sites.
+      const lister = (canonical.class_scope?.sites.length ?? 0) === 0 && sites.length > 0
+        ? scoped.find((member) => (member.class_scope?.sites.length ?? 0) > 0)?.class_scope
+        : undefined;
+      finding.class_scope = { ...base, ...(lister === undefined ? {} : { enumeration_method: lister.enumeration_method }), sites };
     }
   }
 
