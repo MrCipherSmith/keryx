@@ -1,0 +1,248 @@
+diff --git a/apps/orders-web/src/components/CustomerBadge.stories.tsx b/apps/orders-web/src/components/CustomerBadge.stories.tsx
+new file mode 100644
+index 000000000..205b36144
+--- /dev/null
++++ b/apps/orders-web/src/components/CustomerBadge.stories.tsx
+@@ -0,0 +1,18 @@
++import type { Meta, StoryObj } from "@storybook/react";
++import { CustomerBadge } from "./CustomerBadge";
++
++const meta: Meta<typeof CustomerBadge> = {
++  title: "Components/CustomerBadge",
++  component: CustomerBadge,
++};
++
++export default meta;
++type Story = StoryObj<typeof CustomerBadge>;
++
++export const Default: Story = {
++  args: { customer: { id: "c-1", name: "Alina Petrova" } },
++};
++
++export const Guest: Story = {
++  args: { customer: undefined },
++};
+diff --git a/apps/orders-web/src/components/CustomerBadge.tsx b/apps/orders-web/src/components/CustomerBadge.tsx
+new file mode 100644
+index 000000000..1f63287c2
+--- /dev/null
++++ b/apps/orders-web/src/components/CustomerBadge.tsx
+@@ -0,0 +1,19 @@
++import { Avatar, Space, Typography } from "antd";
++import type { OrderDto } from "../api/orders.api";
++
++export interface CustomerBadgeProps {
++  customer: OrderDto["customer"];
++}
++
++export function CustomerBadge({ customer }: CustomerBadgeProps) {
++  if (!customer) {
++    return <Typography.Text type="secondary">Guest</Typography.Text>;
++  }
++
++  return (
++    <Space>
++      <Avatar size="small">{customer.name.charAt(0).toUpperCase()}</Avatar>
++      <Typography.Text>{customer.name}</Typography.Text>
++    </Space>
++  );
++}
+diff --git a/apps/orders-web/src/components/OrderCard.stories.tsx b/apps/orders-web/src/components/OrderCard.stories.tsx
+new file mode 100644
+index 000000000..98dd5df18
+--- /dev/null
++++ b/apps/orders-web/src/components/OrderCard.stories.tsx
+@@ -0,0 +1,36 @@
++import type { Meta, StoryObj } from "@storybook/react";
++import { fn } from "@storybook/test";
++import type { OrderDto } from "../api/orders.api";
++import { OrderCard } from "./OrderCard";
++
++const ORDER: OrderDto = {
++  id: "o-1001",
++  number: "A-1001",
++  status: "paid",
++  totalCents: 12990,
++  createdAt: "2026-10-12T09:30:00Z",
++  customer: { id: "c-1", name: "Alina Petrova" },
++};
++
++const meta: Meta<typeof OrderCard> = {
++  title: "Components/OrderCard",
++  component: OrderCard,
++  args: { order: ORDER },
++};
++
++export default meta;
++type Story = StoryObj<typeof OrderCard>;
++
++export const Default: Story = {
++  args: { onSelect: fn() },
++};
++
++export const Cancelled: Story = {
++  args: { order: { ...ORDER, status: "cancelled" } },
++};
++
++export const Selectable: Story = {
++  args: {
++    onSelect: (id) => console.log("selected order", id),
++  },
++};
+diff --git a/apps/orders-web/src/components/OrderCard.tsx b/apps/orders-web/src/components/OrderCard.tsx
+new file mode 100644
+index 000000000..939de461f
+--- /dev/null
++++ b/apps/orders-web/src/components/OrderCard.tsx
+@@ -0,0 +1,42 @@
++import { Alert, Card, Skeleton, Typography } from "antd";
++import type { OrderDto } from "src/api/orders.api";
++import { formatDate, toMoney } from "../lib/format";
++import { StatusTag } from "./StatusTag";
++
++export interface IOrderCardProps {
++  order: OrderDto;
++  loading?: boolean;
++  error?: string;
++  onSelect?: (id: string) => void;
++}
++
++export function OrderCard({ order, loading, error, onSelect }: IOrderCardProps) {
++  if (loading) {
++    return (
++      <Card>
++        <Skeleton active />
++      </Card>
++    );
++  }
++
++  if (error) {
++    return (
++      <Card>
++        <Alert type="error" message={error} />
++      </Card>
++    );
++  }
++
++  return (
++    <Card
++      hoverable={onSelect !== undefined}
++      title={`Order ${order.number}`}
++      extra={<StatusTag status={order.status} />}
++      onClick={() => onSelect?.(order.id)}
++    >
++      <Typography.Text strong>{order.customer!.name}</Typography.Text>
++      <div>{toMoney(order.totalCents)}</div>
++      <Typography.Text type="secondary">{formatDate(order.createdAt)}</Typography.Text>
++    </Card>
++  );
++}
+diff --git a/apps/orders-web/src/components/OrderList.stories.tsx b/apps/orders-web/src/components/OrderList.stories.tsx
+new file mode 100644
+index 000000000..b1a5cbd09
+--- /dev/null
++++ b/apps/orders-web/src/components/OrderList.stories.tsx
+@@ -0,0 +1,46 @@
++import type { Meta, StoryObj } from "@storybook/react";
++import { fn } from "@storybook/test";
++import type { OrderDto } from "../api/orders.api";
++import { OrderList } from "./OrderList";
++
++const ORDERS: OrderDto[] = [
++  {
++    id: "o-1001",
++    number: "A-1001",
++    status: "paid",
++    totalCents: 12990,
++    createdAt: "2026-10-12T09:30:00Z",
++    customer: { id: "c-1", name: "Alina Petrova" },
++  },
++  {
++    id: "o-1002",
++    number: "A-1002",
++    status: "shipped",
++    totalCents: 4500,
++    createdAt: "2026-10-13T14:05:00Z",
++    customer: { id: "c-2", name: "Marek Novak" },
++  },
++  {
++    id: "o-1003",
++    number: "A-1003",
++    status: "new",
++    totalCents: 78000,
++    createdAt: "2026-10-14T08:00:00Z",
++    customer: { id: "c-1", name: "Alina Petrova" },
++  },
++];
++
++const meta: Meta<typeof OrderList> = {
++  title: "Components/OrderList",
++  component: OrderList,
++  args: { orders: ORDERS, onSelect: fn() },
++};
++
++export default meta;
++type Story = StoryObj<typeof OrderList>;
++
++export const Default: Story = {};
++
++export const SingleOrder: Story = {
++  args: { orders: ORDERS.slice(0, 1) },
++};
+diff --git a/apps/orders-web/src/components/OrderList.tsx b/apps/orders-web/src/components/OrderList.tsx
+new file mode 100644
+index 000000000..da0e89aeb
+--- /dev/null
++++ b/apps/orders-web/src/components/OrderList.tsx
+@@ -0,0 +1,30 @@
++import { Empty, Space, Typography } from "antd";
++import type { OrderDto } from "../api/orders.api";
++import { OrderCard } from "./OrderCard";
++
++export interface OrderListProps {
++  orders: OrderDto[];
++  onSelect?: (id: string) => void;
++}
++
++export function OrderList({ orders, onSelect }: OrderListProps) {
++  if (orders.length === 0) {
++    return <Empty description="No orders match the current filter" />;
++  }
++
++  const withCustomer = orders.filter((order) => order.customer);
++  // Every entry in withCustomer passed the filter above, so customer is set;
++  // TypeScript does not narrow the element type through filter().
++  const customerIds = new Set(withCustomer.map((order) => order.customer!.id));
++
++  return (
++    <Space direction="vertical" style={{ width: "100%" }}>
++      <Typography.Text type="secondary">
++        {orders.length} orders from {customerIds.size} customers
++      </Typography.Text>
++      {orders.map((order) => (
++        <OrderCard key={order.id} order={order} onSelect={onSelect} />
++      ))}
++    </Space>
++  );
++}
+diff --git a/apps/orders-web/src/lib/format.ts b/apps/orders-web/src/lib/format.ts
+new file mode 100644
+index 000000000..18cd16147
+--- /dev/null
++++ b/apps/orders-web/src/lib/format.ts
+@@ -0,0 +1,15 @@
++const dateFormat = new Intl.DateTimeFormat("en-GB", {
++  year: "numeric",
++  month: "short",
++  day: "2-digit",
++});
++
++export function toMoney(v: any): string {
++  const cents = Number(v);
++  if (Number.isNaN(cents)) return "-";
++  return (cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" });
++}
++
++export function formatDate(iso: string): string {
++  return dateFormat.format(new Date(iso));
++}
