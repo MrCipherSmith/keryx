@@ -1,0 +1,4 @@
+[
+  {"tid":"D1","file":"services/orders-api/src/shipments/dto/create-shipment.dto.ts","line":57,"severity":"minor","problem":"notes is optional with @IsOptional().","impact":"None.","quote":"@ApiPropertyOptional({ description: \"Instructions for the courier\", maxLength: 500 })","why_not_a_defect":"notes is truly optional (nullable column, not required in the spec); @IsOptional with @ApiPropertyOptional is the correct pairing."},
+  {"tid":"D2","file":"services/orders-api/src/shipments/dto/create-shipment.dto.ts","line":20,"severity":"minor","problem":"@Transform on countryCode trims and upper-cases the value.","impact":"None.","quote":"@Transform(({ value }) => (typeof value === \"string\" ? value.trim().toUpperCase() : value))","why_not_a_defect":"Normalising an ISO country code at the boundary is intended and guards non-string input before calling string methods."}
+]

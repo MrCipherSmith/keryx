@@ -1,0 +1,4 @@
+[
+  {"tid":"D1","file":"services/orders-api/migrations/1731900000000-status-history.ts","line":15,"severity":"minor","problem":"CREATE INDEX without CONCURRENTLY.","impact":"None.","quote":"CREATE INDEX IF NOT EXISTS idx_order_status_history_order_id ON order_status_history(order_id, created_at)","why_not_a_defect":"The table is created empty in the same migration; there is nothing to lock out, as the comment says."},
+  {"tid":"D2","file":"services/orders-api/src/orders/orders.service.ts","line":60,"severity":"minor","problem":"GET /v1/orders/:id/history has no pagination.","impact":"None.","quote":"An order has at most one row per status transition, so the list is short and needs no paging.","why_not_a_defect":"The list is bounded by the handful of status transitions an order can make, as the doc comment states; it is not an unbounded list."}
+]
