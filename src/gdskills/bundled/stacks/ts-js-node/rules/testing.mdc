@@ -8,56 +8,29 @@ metadata:
 # TypeScript/JavaScript (Node.js) testing
 
 Test layout, runner and determinism conventions for Node.js server/library/
-CLI code. Discover the project's actual runner before writing anything --
-`node:test`, Vitest, Jest and `bun test` all exist in active use and are
-not interchangeable in syntax or config.
+CLI code. `node:test`, Vitest, Jest and `bun test` are not interchangeable in
+syntax or config; discover the project's runner first.
 
 ## Layout and runner
 
-- Discover the runner from `package.json`'s `scripts.test`, `devDependencies`,
-  and any `vitest.config.*`/`jest.config.*` before writing a test --
-  `describe`/`it`/`test` globals differ in import source (`node:test`,
-  `vitest`, or Jest's ambient globals) even though the call shape looks
-  similar.
-- Match the project's existing test location convention: co-located
-  `*.test.ts`/`*.spec.ts` next to the source file, or a parallel `test/`/
-  `__tests__/` tree -- do not introduce the other layout alongside it.
-- For `node:test`, run with `node --test` (or the project's npm script
-  wrapping it); it needs no extra dependency and ships in Node itself.
+- Discover the runner from `package.json`'s `scripts.test`, `devDependencies`, and any `vitest.config.*`/`jest.config.*`; `describe`/`it`/`test` import from `node:test`, `vitest`, or Jest's ambient globals.
+- Match the project's test location (co-located `*.test.ts`/`*.spec.ts`, or a parallel `test/`/`__tests__/` tree); do not add the other layout.
+- For `node:test`, run `node --test` (or the project's npm script wrapping it).
 
 ## Fixtures and mocking
 
-- Mock at the process boundary (network calls, the filesystem, a DB
-  client, `Date.now`/timers) -- not an internal function one module over,
-  which only checks that two mocks agree with each other.
-- Use the runner's own timer mocking (`node:test`'s `mock.timers`,
-  Vitest's `vi.useFakeTimers()`, Jest's `jest.useFakeTimers()`) for any
-  test that depends on `setTimeout`/`setInterval`/`Date.now` -- a test
-  that waits on a real timer is slow and, under load, flaky.
-- Use `node:test`'s `mock.fn()`/`mock.method()` (or the runner's
-  equivalent) instead of hand-rolled spy objects when the runner ships
-  one already.
+- Mock at the process boundary (network, filesystem, DB client, `Date.now`/timers), not an internal function one module over.
+- Use the runner's timer mocking (`node:test` `mock.timers`, `vi.useFakeTimers()`, `jest.useFakeTimers()`) for anything depending on `setTimeout`/`setInterval`/`Date.now`.
+- Use `node:test`'s `mock.fn()`/`mock.method()` (or the runner's equivalent) over hand-rolled spies.
 
 ## Determinism
 
-- Async tests must `await` every assertion-relevant promise; a test
-  function that returns before its assertions run reports green
-  regardless of what the assertions found.
-- Pass the test's own `AbortSignal` (`t.signal` in `node:test`, or the
-  runner's equivalent) into any `fetch`/cancelable call a test makes, so a
-  test that times out does not leave the request running past it.
-- Never depend on test execution order or on state a previous test left
-  behind (a shared in-memory array, a module-level counter) -- each test
-  sets up and tears down its own state.
-- A flaky test (timing-, network-, or order-dependent) gets fixed at the
-  dependency it is racing, not wrapped in a retry or a longer timeout.
+- Await every assertion-relevant promise in an async test.
+- Pass the test's `AbortSignal` (`t.signal` in `node:test`, or the runner's equivalent) into any `fetch`/cancelable call a test makes.
+- Never depend on test order or state a previous test left behind; each test sets up and tears down its own state.
+- Fix a flaky test at the dependency it races, not with a retry or a longer timeout.
 
 ## Coverage expectations
 
-- Every new/changed exported function, class method, and CLI command gets
-  at least: one happy-path case, one edge case (empty/`null`/`undefined`/
-  boundary value), and one error case that asserts the thrown error type
-  or message, not just that something threw.
-- A bug fix ships with a regression test that fails on the pre-fix code
-  and passes after -- without one, the fix has no evidence it addressed
-  the reported behavior.
+- Every new/changed exported function, class method, and CLI command gets one happy-path case, one edge case (empty/`null`/`undefined`/boundary value), and one error case asserting the thrown error type or message.
+- A bug fix ships with a regression test that fails on the pre-fix code and passes after.

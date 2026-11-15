@@ -7,77 +7,57 @@ metadata:
 
 # NestJS patterns
 
-Idiomatic module/provider/request-pipeline design for NestJS, and the
-anti-patterns that recur in Nest codebases specifically. Applies only to
-`*.ts` files in a NestJS project; general TypeScript design guidance still
-comes from `ts-js-node`'s own rules.
+Module/provider/request-pipeline design for NestJS (official NestJS
+documentation) and its recurring anti-patterns. Applies only to `*.ts` files
+in a NestJS project; general TypeScript design guidance comes from
+`ts-js-node`'s own rules.
 
 ## Module and provider design
 
-- A feature module owns its controllers, services, and the providers those
-  services need; it imports other feature modules only for the providers
-  it actually consumes, and exports only what other modules are meant to
-  inject.
-- Break a real circular dependency between two modules with `forwardRef()`
-  on both sides of the `imports`/`providers` reference — but treat
-  `forwardRef()` as a signal to reconsider the boundary first: a genuine
-  circular need between two feature modules is often better modeled as a
-  shared third module both depend on.
-- Prefer constructor injection over property injection (`@Inject()` on a
-  class field) except where a truly optional dependency needs
-  `@Optional()` — constructor injection makes required dependencies
-  visible in the type signature and fails fast at module-compile time.
-- Default provider scope (`Default`/Singleton) is correct for stateless
-  services. Reach for `Scope.REQUEST` only when the provider genuinely
-  needs per-request state (e.g. the current user from a request-scoped
-  `REQUEST` token); a `REQUEST`-scoped provider re-instantiates its entire
-  injection subtree per request, which has a real performance cost — do
-  not default to it "to be safe."
+- A feature module owns its controllers, services, and their providers;
+  imports other feature modules only for providers it consumes, exports only
+  what others should inject.
+- Break a real circular dependency with `forwardRef()` on both sides, but
+  first reconsider the boundary; prefer a shared third module both depend on.
+- Constructor injection over property injection (`@Inject()` on a field)
+  except a truly optional dependency with `@Optional()`.
+- Default (Singleton) scope for stateless services; `Scope.REQUEST` only when
+  the provider needs per-request state (e.g. the `REQUEST` token), since it
+  re-instantiates its injection subtree per request.
 
 ## Guards, interceptors, pipes, and filters
 
-- Cross-cutting concerns (auth, logging, response shaping, validation)
-  belong in a guard/interceptor/pipe/filter, not duplicated inline in every
-  controller method that needs it.
-- Register a cross-cutting concern that applies to (nearly) every route as
-  a global provider via `APP_GUARD`/`APP_INTERCEPTOR`/`APP_PIPE`/
-  `APP_FILTER` in a module's `providers` array (this keeps it inside Nest's
-  DI graph, unlike `app.useGlobalGuards()` called on the bootstrapped
-  instance), not by decorating every controller by hand.
-- When a global guard protects most routes, mark the exceptions explicitly
-  with a custom decorator read via `Reflector` (e.g. `@Public()`) rather
-  than leaving some controllers undecorated and hoping the guard's default
-  is safe — an undecorated route should never be silently open just
-  because the guard's fallback happens to allow it.
-- A guard, interceptor, or pipe class stays free of business logic: a guard
-  decides allow/deny, an interceptor transforms/observes the
-  request-response stream, a pipe transforms/validates one argument. Move
-  any decision that needs several service calls into the service layer and
-  have the guard call that service.
+- Cross-cutting concerns (auth, logging, response shaping, validation) go in
+  a guard/interceptor/pipe/filter, not inline per controller method.
+- Register a concern that applies to nearly every route as a global provider
+  via `APP_GUARD`/`APP_INTERCEPTOR`/`APP_PIPE`/`APP_FILTER` in a module's
+  `providers` (inside Nest's DI graph, unlike `app.useGlobalGuards()`), not
+  by decorating every controller.
+- When a global guard protects most routes, mark exceptions with a custom
+  decorator read via `Reflector` (e.g. `@Public()`); an undecorated route
+  must not be silently open via the guard's fallback.
+- A guard only decides allow/deny, an interceptor transforms/observes the
+  request-response stream, a pipe transforms/validates one argument; a
+  decision needing several service calls moves to the service layer, which
+  the guard calls.
 
 ## Controllers vs. services
 
-- A controller method parses/validates input (via DTO + `ValidationPipe`),
-  delegates to exactly one service call for the actual work, and shapes
-  the HTTP response — it does not call a repository/ORM directly, does not
-  branch on business rules, and does not orchestrate multiple service
-  calls that a service method could compose instead.
+- A controller method parses/validates input (DTO + `ValidationPipe`),
+  delegates to exactly one service call, and shapes the HTTP response; no
+  direct repository/ORM calls, business-rule branching, or orchestration of
+  several service calls a service method could compose.
 - A service method has an explicit return type and throws a Nest HTTP
   exception (see `rules/coding-style.mdc`) or a domain error the caller
-  translates — it never imports `Request`/`Response` from the HTTP
-  framework except for a documented streaming/file-download case.
+  translates; it imports `Request`/`Response` only for a documented
+  streaming/file-download case.
 
 ## Anti-patterns to avoid
 
-- Injecting the whole `ModuleRef` or reaching for
-  `moduleRef.get(Provider, { strict: false })` to route around a missing
-  `imports`/`exports` entry — fix the module graph instead; a lazy
-  `ModuleRef.get` lookup hides a real DI wiring mistake.
-- A provider registered with `useValue`/`useFactory` whose factory has side
-  effects beyond constructing the value (e.g. opening a connection with no
-  corresponding `OnModuleDestroy` cleanup) — pair any resource-acquiring
-  factory provider with the matching lifecycle hook.
-- Business rules encoded only as `@Roles()`/`@Permissions()` decorator
-  strings scattered per-endpoint with no single source of truth for what
-  each role can do — centralize the role/permission matrix so a guard
-  reads it instead of re-deriving it per route.
+- Injecting `ModuleRef` or `moduleRef.get(Provider, { strict: false })` to
+  route around a missing `imports`/`exports` entry; fix the module graph.
+- A `useValue`/`useFactory` provider whose factory acquires a resource (e.g.
+  opens a connection) without a matching `OnModuleDestroy` hook.
+- Role/permission rules as scattered per-endpoint `@Roles()`/`@Permissions()`
+  strings with no single source of truth; centralize the matrix and have a
+  guard read it.

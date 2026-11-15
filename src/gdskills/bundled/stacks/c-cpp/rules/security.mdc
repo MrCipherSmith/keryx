@@ -8,83 +8,56 @@ metadata:
 # C / C++ security
 
 Narrows `core-common-rules`' stack-agnostic security rules to C/C++
-memory-safety and undefined-behavior risks, and the sanitizers/safe APIs
-to use instead. Applies to both C and C++ files.
+memory-safety and undefined-behavior risks, and the sanitizers/safe APIs to
+use. Applies to both C and C++ files.
 
 ## Memory safety
 
-- Never dereference, write through, or `free` a pointer after it has been
-  freed or has gone out of scope (use-after-free) — set a freed pointer
-  to `NULL` when it could be read again, and never return a pointer or
-  reference to a stack-local object.
-- Never `free`/`delete` the same pointer twice (double-free) — a
-  freed-and-nulled pointer makes a second `free`/`delete` a harmless
-  no-op instead of heap corruption.
+- Never dereference, write through, or `free` a pointer after it was freed or
+  left scope (use-after-free); set a freed pointer to `NULL` when it could be
+  read again.
+- Never `free`/`delete` the same pointer twice.
 - Bounds-check every array/buffer index and every pointer arithmetic
-  expression built from untrusted input before it is used to read or
-  write memory — an off-by-one or an unchecked length from user input is
-  the most common route to a buffer overflow.
-- Never use `strcpy`, `strcat`, `sprintf`, or `gets` on data whose length
-  is not already statically known to fit the destination — use
-  `snprintf`, a length-checked copy, or a `std::string`/`std::vector`
-  that manages its own capacity.
+  expression built from untrusted input before it reads or writes memory.
+- Never `strcpy`, `strcat`, `sprintf`, or `gets` on data not statically known
+  to fit; use `snprintf`, a length-checked copy, or `std::string`/
+  `std::vector`.
 
 ## Undefined behavior
 
-- Signed integer overflow is undefined behavior in C/C++ (unlike
-  unsigned wraparound, which is well-defined modular arithmetic) — check
-  bounds before an addition/multiplication that could overflow a signed
-  type, or use an unsigned/wider type, or a checked-arithmetic helper,
-  for a bounds or size computation derived from untrusted input.
-- Never read an uninitialized local variable or heap allocation — value-
-  initialize (`Type x{};` in C++, an explicit `= 0`/`memset` in C) any
-  variable whose first use might be a read, and never rely on whatever
-  value happened to be left on the stack or heap.
-- Never access an object through a pointer of an incompatible type (a
-  strict-aliasing violation) — use `memcpy` for a type-punning copy, or
-  (C++20+) `std::bit_cast`, instead of reinterpreting a pointer's type
-  and dereferencing it.
-- Do not read past the end of an array via pointer arithmetic even when
-  the read "usually" lands in valid memory — an out-of-bounds read past
-  the last element is undefined behavior regardless of what happens to be
-  mapped there.
+- Signed integer overflow is UB (unsigned wraparound is not): check bounds
+  before a signed addition/multiplication, or use an unsigned/wider type or a
+  checked-arithmetic helper, for size computations from untrusted input.
+- Never read an uninitialized local or heap allocation; value-initialize
+  (`Type x{};` in C++, `= 0`/`memset` in C).
+- No strict-aliasing violations; use `memcpy`, or `std::bit_cast` (C++20+),
+  for type punning.
+- No out-of-bounds read past the last element via pointer arithmetic.
 
 ## Concurrency
 
-- Every variable read from more than one thread while at least one thread
-  writes it is guarded by a mutex, or is a `std::atomic`/C11 `_Atomic`
-  type — an unsynchronized shared read/write is a data race, which is
-  undefined behavior in both C and C++, not merely "occasionally wrong."
-- Acquire locks in a consistent global order across the codebase to avoid
-  deadlock; prefer `std::lock_guard`/`std::scoped_lock` (which also
-  supports locking multiple mutexes deadlock-free in one call) over
-  manual `lock()`/`unlock()` pairs, since a manual pair skips the unlock
-  on an early return or exception.
+- Every variable read by more than one thread while one writes it is guarded
+  by a mutex or is `std::atomic`/C11 `_Atomic`.
+- Acquire locks in a consistent global order; prefer `std::lock_guard`/
+  `std::scoped_lock` (the latter locks several mutexes deadlock-free) over
+  manual `lock()`/`unlock()` pairs.
 
 ## Sanitizers
 
 - Build and run with AddressSanitizer + UndefinedBehaviorSanitizer
   (`-fsanitize=address,undefined -fno-omit-frame-pointer -g`, Clang/GCC)
-  whenever investigating a memory-safety or UB bug report, or before
-  trusting a fix for one — ASan catches use-after-free, double-free,
-  buffer overflow, and heap corruption at the exact faulting access; UBSan
-  catches signed overflow, misaligned access, and other UB the compiler
-  is otherwise free to miscompile around silently.
-- Build and run with ThreadSanitizer (`-fsanitize=thread`) — built as a
-  separate binary from ASan/UBSan, the two runtimes are not composable in
-  one build — whenever investigating a suspected data race or before
-  trusting a fix for one.
-- A memory-safety, UB, or concurrency bug report is not actually verified
-  fixed until it has been reproduced and re-run under the relevant
-  sanitizer and comes back clean; a fix that only "looks right" by
-  inspection, or that only passes without a sanitizer attached, has not
-  been verified.
+  when investigating a memory-safety or UB report, or before trusting a fix
+  for one.
+- Build and run with ThreadSanitizer (`-fsanitize=thread`) as a separate
+  binary from ASan/UBSan, since the runtimes are not composable, when
+  investigating a data race or before trusting a fix for one.
+- A memory-safety, UB, or concurrency bug is not verified fixed until it is
+  reproduced and re-run clean under the relevant sanitizer.
 
 ## Dependency and input hygiene
 
-- Validate the length/format of any externally-sourced buffer (network,
-  file, IPC, command-line argument) before parsing it — do not assume a
-  length field in the input itself is trustworthy without a sanity check
-  against the buffer's actual size.
-- Never hard-code a credential, API key, or signing secret in source;
-  load it from environment/secret storage the project already uses.
+- Validate the length/format of any externally-sourced buffer (network, file,
+  IPC, command-line argument) before parsing; check a length field in the
+  input against the buffer's actual size.
+- No hard-coded credential, API key, or signing secret; load from the
+  environment/secret storage the project already uses.

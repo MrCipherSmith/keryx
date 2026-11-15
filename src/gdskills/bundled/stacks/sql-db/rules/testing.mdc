@@ -7,77 +7,32 @@ metadata:
 
 # SQL testing
 
-Narrows `core-common-rules`' stack-agnostic testing rules to testing raw
-`.sql` — migrations, schema, and hand-written query files — across
-Postgres, MySQL, and generic SQL engines. Applies only to `*.sql` files;
-testing a query or migration issued from application code (a language's
-ORM test helpers) is covered by that language's own stack pack, and
-should still follow the transactional-wrapping and fixture discipline
-below where that language's test suite talks to a real database.
+Narrows `core-common-rules`' testing rules to raw `.sql` (migrations, schema, hand-written queries) across Postgres, MySQL and generic SQL. Applies only to `*.sql` files; tests of SQL issued from application code follow that language's stack pack, with the transactional-wrapping and fixture discipline below where its suite uses a real database.
 
 ## Test isolation
 
-- Wrap each test in a transaction that is rolled back at teardown
-  (`BEGIN` before the test, `ROLLBACK` after) rather than truncating and
-  re-seeding tables between tests — rollback is faster and guarantees no
-  leftover state regardless of what the test wrote.
-- When a test must exercise something a transaction can't roll back
-  cleanly (`CREATE INDEX CONCURRENTLY`, an advisory-lock scenario, a
-  cross-transaction concurrency test), isolate it in its own
-  database/schema that is torn down and recreated instead of relying on
-  transactional rollback for that one case.
-- Never point a test suite at a shared development or staging database —
-  a fixed, disposable test database (a local container, an ephemeral
-  schema per CI run) so tests don't observe or clobber each other's data.
+- Wrap each test in a transaction rolled back at teardown (`BEGIN` before, `ROLLBACK` after), not truncate-and-reseed.
+- Isolate what a transaction cannot roll back (`CREATE INDEX CONCURRENTLY`, advisory locks, cross-transaction concurrency tests) in its own database/schema that is torn down and recreated.
+- Never point a test suite at a shared development or staging database; use a disposable test database (a local container, an ephemeral schema per CI run).
 
 ## Fixtures and seed data
 
-- Seed only the rows a given test actually needs, built through the same
-  helper/factory the rest of the suite uses — do not duplicate a large
-  shared seed script per test file, and do not depend on a global fixture
-  a different test also mutates.
-- Name fixture data so a failure is legible (`user_with_expired_token`,
-  not `test_user_3`) — a table-driven or parameterized test case should
-  carry a descriptive case name for the same reason.
-- A fixture representing a timestamp or "now"-relative value is
-  constructed relative to a fixed, injected clock/reference time in the
-  test, not `NOW()`/`CURRENT_TIMESTAMP` evaluated live — a live clock
-  value makes boundary cases (rows that just expired, rows created "just
-  now") flaky depending on when the test happens to run.
+- Seed only the rows a test needs, through the suite's shared helper/factory; no large per-file seed script, no global fixture another test mutates.
+- Name fixture data and parameterized cases descriptively (`user_with_expired_token`, not `test_user_3`).
+- Build timestamp and "now"-relative fixtures from a fixed, injected reference time, not a live `NOW()`/`CURRENT_TIMESTAMP`.
 
 ## Testing migrations
 
-- Test a migration's `up` path against a database seeded to look like
-  production before the change: representative row counts for anything
-  the migration scans or backfills, not an empty table where every
-  approach looks instant.
-- Test the reverse/`down` path when the migration states one — running
-  `up` then `down` should leave the schema equivalent to before, and
-  running `up` twice (or `down` twice) should not error when the
-  migration was written to be idempotent.
-- For a batched backfill migration, test with a row count large enough to
-  exercise at least two batches, and assert every row was updated exactly
-  once (no row skipped at a batch boundary, none processed twice in a way
-  that would double-apply a non-idempotent update).
+- Test a migration's `up` path against a database seeded like production before the change, with representative row counts for anything it scans or backfills.
+- Test the `down` path when the migration states one: `up` then `down` leaves an equivalent schema; running `up` or `down` twice does not error when the migration is idempotent.
+- For a batched backfill, use enough rows for at least two batches and assert every row is updated exactly once.
 
 ## Testing queries
 
-- Assert on the query's actual result set (rows, values, ordering when
-  the query specifies `ORDER BY`), not merely that it executed without
-  error — a query testing only "did not throw" would pass even after a
-  regression silently returns zero or the wrong rows.
-- For a query added to fix an N+1, assert the query count too (most
-  ORMs/test harnesses expose a query counter or log) — a regression test
-  for an N+1 fix should fail again if the fix regresses back to per-row
-  queries, not just check the final result shape.
-- Test the empty-result case (a `WHERE` that matches nothing) and the
-  boundary case for any range condition (`created_at >= X`) explicitly —
-  these are exactly where an off-by-one in a range filter or a `JOIN`
-  that should have been a `LEFT JOIN` shows up.
+- Assert on the actual result set (rows, values, ordering when the query specifies `ORDER BY`), not merely that the query ran.
+- For a query added to fix an N+1, assert the query count too.
+- Test the empty-result case and the boundary case of any range condition (`created_at >= X`).
 
 ## Verification
 
-- Run the full suite against the transactional-rollback isolation
-  described above before considering a change to `.sql` test fixtures or
-  migration tests done — a test that passes in isolation but leaves state
-  for the next test to trip over is not actually isolated.
+- Run the full suite under the transactional-rollback isolation above before treating a change to `.sql` test fixtures or migration tests as done.
