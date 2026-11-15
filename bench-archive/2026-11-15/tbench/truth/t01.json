@@ -1,0 +1,82 @@
+[
+  {
+    "tid": "T1",
+    "file": "services/orders-api/src/orders/orders.service.ts",
+    "line": 80,
+    "severity": "minor",
+    "rule": "new or changed logic needs a test; missing branch coverage",
+    "problem": "`cancel` has an already-cancelled early return, but no test cancels an already-cancelled order, so the branch that makes cancelling twice a no-op (and must not restock again) is uncovered.",
+    "impact": "A regression that restocks on a second cancel, or throws, would ship green and double-count stock.",
+    "quote": "if (order.status === OrderStatus.Cancelled) return OrderResponse.from(order);"
+  },
+  {
+    "tid": "T2",
+    "file": "services/orders-api/src/orders/orders.service.test.ts",
+    "line": 127,
+    "severity": "major",
+    "rule": "tests must not be skipped; a skipped test hides the new branch",
+    "problem": "The test for the new shipped-order guard is `it.skip`, in the same change that adds the guard, so the suite is green without checking it.",
+    "impact": "The rule that a shipped order cannot be cancelled is not verified; removing the guard keeps CI green.",
+    "quote": "it.skip(\"rejects cancelling a shipped order\""
+  },
+  {
+    "tid": "T3",
+    "file": "services/orders-api/src/orders/orders.service.test.ts",
+    "line": 136,
+    "severity": "major",
+    "rule": "assertions that cannot fail",
+    "problem": "The not-found test asserts `expect(() => service.cancel(\"missing\")).not.toThrow()`; `cancel` is async so the call never throws synchronously, the promise is not awaited, and the NotFoundException path is never exercised.",
+    "impact": "The test passes whatever `cancel` does, including if the not-found check is deleted.",
+    "quote": "expect(() => service.cancel(\"missing\")).not.toThrow();"
+  },
+  {
+    "tid": "T4",
+    "file": "services/orders-api/src/orders/orders.service.test.ts",
+    "line": 102,
+    "severity": "major",
+    "rule": "asserting only on mocks",
+    "problem": "\"persists the order\" only asserts that the mocked `manager.save` was called twice and never what was saved (status, lines, totals).",
+    "impact": "Any content of the saved order can be wrong and the test still passes; it pins the number of calls, not behaviour.",
+    "quote": "expect(manager.save).toHaveBeenCalledTimes(2);"
+  },
+  {
+    "tid": "T5",
+    "file": "services/orders-api/src/orders/orders.service.test.ts",
+    "line": 124,
+    "severity": "major",
+    "rule": "time dependence without control",
+    "problem": "The cancellation-time test compares the saved date with `new Date()` read in the test, with no fake timers or injected clock.",
+    "impact": "It fails when the run straddles midnight (UTC) and only checks the calendar day, so a wrong time of day passes.",
+    "quote": "toBe(new Date().toISOString().slice(0, 10))"
+  },
+  {
+    "tid": "T6",
+    "file": "services/orders-api/src/orders/orders.service.test.ts",
+    "line": 21,
+    "severity": "major",
+    "rule": "shared mutable state between tests",
+    "problem": "`lamp` is a module-level product object that `create` mutates (`stock -= quantity`); the later \"rejects a line that asks for more than is left\" test only means what it says because the first test already took 2 units.",
+    "impact": "Tests pass or fail depending on order; running one alone, a rerun in the same process or a reorder breaks them.",
+    "quote": "const lamp = { id: LAMP_ID, title: \"Lamp\", priceCents: 2500, stock: 5 } as Product;"
+  },
+  {
+    "tid": "T7",
+    "file": "services/orders-api/src/orders/orders.service.test.ts",
+    "line": 28,
+    "severity": "minor",
+    "rule": "fixture shape drifts from the real producer",
+    "problem": "`makeOrder` builds an order with `status: \"PENDING\"` and `total` and casts it through `unknown`; the entity has lowercase `OrderStatus` values and `totalCents`.",
+    "impact": "The cast hides the drift: the status never equals the enum values the service compares with, so a cancel path test can pass on a shape the database never produces.",
+    "quote": "status: \"PENDING\","
+  },
+  {
+    "tid": "T8",
+    "file": "services/orders-api/src/orders/orders.service.test.ts",
+    "line": 10,
+    "severity": "minor",
+    "rule": "internal collaborator mocked",
+    "problem": "`OrderResponse` is a pure mapper owned by the same module, yet the whole file mocks it with a two-field stand-in.",
+    "impact": "The tests no longer cover the real response mapping (`customerName`, `createdAt`); a mapper change is invisible and the mock can drift from it.",
+    "quote": "jest.mock(\"./dto/order.response\""
+  }
+]

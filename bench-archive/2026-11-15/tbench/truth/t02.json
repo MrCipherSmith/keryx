@@ -1,0 +1,82 @@
+[
+  {
+    "tid": "T1",
+    "file": "apps/orders-web/src/stores/customers.store.test.ts",
+    "line": 84,
+    "severity": "major",
+    "rule": "flaky waits: wait on state or fake the clock, never sleep",
+    "problem": "The debounce test waits with a real `setTimeout` of 400 ms for the 300 ms reaction.",
+    "impact": "Slow runners make it flaky and every run pays the delay; it breaks the moment the debounce changes.",
+    "quote": "await new Promise((resolve) => setTimeout(resolve, 400));"
+  },
+  {
+    "tid": "T2",
+    "file": "apps/orders-web/src/pages/customers/CustomersPage.test.tsx",
+    "line": 7,
+    "severity": "major",
+    "rule": "tests must not use the real network",
+    "problem": "Both page tests render `CustomersPage`, which builds its store from the real `customersApi` (axios against `/api`); nothing is mocked.",
+    "impact": "The result depends on whatever answers at `/api/customers` in the test environment, so the tests fail offline or pass for the wrong reason.",
+    "quote": "render(<CustomersPage />);"
+  },
+  {
+    "tid": "T3",
+    "file": "apps/orders-web/src/__tests__/StatusTag.test.tsx",
+    "line": 12,
+    "severity": "major",
+    "rule": "assertions that cannot fail",
+    "problem": "The `it.each` over all five statuses asserts `expect(container).toBeDefined()`; `render` always returns a container.",
+    "impact": "It looks like coverage of every status but cannot fail, even if the tag renders nothing.",
+    "quote": "expect(container).toBeDefined();"
+  },
+  {
+    "tid": "T4",
+    "file": "apps/orders-web/src/stores/customers.store.test.ts",
+    "line": 73,
+    "severity": "minor",
+    "rule": "asserting only on mocks",
+    "problem": "\"keeps the message of a failed load\" only asserts that the mocked `listCustomers` was called; it never reads `store.error`.",
+    "impact": "The error path of the store is reported as tested but passes when `error` is never set.",
+    "quote": "expect(api.listCustomers).toHaveBeenCalled();"
+  },
+  {
+    "tid": "T5",
+    "file": "apps/orders-web/src/stores/customers.store.ts",
+    "line": 71,
+    "severity": "minor",
+    "rule": "new or changed logic needs a test; missing branch coverage",
+    "problem": "`setMinOrders` clamps negatives and floors fractions with `Math.max(0, Math.floor(value))`, but the tests only call it with 2 and 50.",
+    "impact": "A regression that lets a negative or fractional minimum through is not caught.",
+    "quote": "this.minOrders = Math.max(0, Math.floor(value));"
+  },
+  {
+    "tid": "T6",
+    "file": "apps/orders-web/src/stores/customers.store.test.ts",
+    "line": 17,
+    "severity": "major",
+    "rule": "shared mutable state between tests",
+    "problem": "One `CustomersStore` is created at describe level and shared by the three `visibleItems` tests; the second and third depend on the items loaded and the minimum left by the earlier ones.",
+    "impact": "Reordering, `.only` on one test or a rerun changes the result; failures cascade from the first test.",
+    "quote": "const store = new CustomersStore(makeApi());"
+  },
+  {
+    "tid": "T7",
+    "file": "apps/orders-web/src/stores/customers.store.test.ts",
+    "line": 8,
+    "severity": "minor",
+    "rule": "fixture shape drifts from the real producer",
+    "problem": "`barbara` has `ordersCount: null`, forced through `as unknown as CustomerDto`; the API contract is a number.",
+    "impact": "The \"without orders as zero\" test pins a behaviour (null coerced to 0 by `+`) for a payload the server never sends, and hides that the type forbids it.",
+    "quote": "ordersCount: null } as unknown as CustomerDto;"
+  },
+  {
+    "tid": "T8",
+    "file": "apps/orders-web/src/__tests__/StatusTag.test.tsx",
+    "line": 4,
+    "severity": "info",
+    "rule": "unit tests are colocated beside the code",
+    "problem": "The StatusTag test lives in a separate `src/__tests__` folder instead of next to `src/components/StatusTag.tsx`; the other new tests sit beside their sources.",
+    "impact": "The test is easy to miss and drifts from the component when it moves.",
+    "quote": "import { StatusTag } from \"../components/StatusTag\";"
+  }
+]

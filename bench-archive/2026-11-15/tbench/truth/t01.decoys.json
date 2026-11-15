@@ -1,0 +1,22 @@
+[
+  {
+    "tid": "D1",
+    "file": "services/orders-api/src/orders/orders.service.test.ts",
+    "line": 93,
+    "severity": "minor",
+    "problem": "The test asserts only on the mocked `manager.find` call arguments.",
+    "impact": "None: the pessimistic lock is the contract of `create` and its only observable effect is the options passed to the query, there is no returned value to assert on instead.",
+    "quote": "expect(manager.find).toHaveBeenCalledWith(Product, expect.objectContaining({ lock: { mode: \"pessimistic_write\" } }));",
+    "why_not_a_defect": "The lock option is the behaviour under test; the other `create` tests assert the results, this one pins the side effect."
+  },
+  {
+    "tid": "D2",
+    "file": "services/orders-api/src/orders/orders.controller.ts",
+    "line": 31,
+    "severity": "minor",
+    "problem": "The new `cancel` controller method has no test.",
+    "impact": "None: it is a one-line pass-through to `OrdersService.cancel`, which is tested.",
+    "quote": "cancel(@Param(\"id\", ParseUUIDPipe) id: string): Promise<OrderResponse> {",
+    "why_not_a_defect": "Pass-through code with no logic of its own needs no test; testing it would only be reported as info."
+  }
+]

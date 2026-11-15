@@ -1,0 +1,82 @@
+[
+  {
+    "tid": "T1",
+    "file": "apps/orders-web/e2e/customers.spec.ts",
+    "line": 26,
+    "severity": "major",
+    "rule": "flaky waits: wait on state, never sleep",
+    "problem": "After typing in the search box the test sleeps 1000 ms before asserting the rows.",
+    "impact": "Too short on a slow runner, wasted time on a fast one; the web-first assertions below already wait for the rows.",
+    "quote": "await page.waitForTimeout(1000);"
+  },
+  {
+    "tid": "T2",
+    "file": "apps/orders-web/e2e/customers.spec.ts",
+    "line": 33,
+    "severity": "minor",
+    "rule": "flaky waits: wait on state, never networkidle",
+    "problem": "The sort test waits for `networkidle` before asserting the first row.",
+    "impact": "`networkidle` is a time heuristic (and the page may keep connections open); the assertion that follows should wait on the row itself.",
+    "quote": "await page.waitForLoadState(\"networkidle\");"
+  },
+  {
+    "tid": "T3",
+    "file": "apps/orders-web/e2e/customers.spec.ts",
+    "line": 35,
+    "severity": "minor",
+    "rule": "locators: getByRole/getByLabel first, never CSS classes",
+    "problem": "The first row is found with the Ant Design class `.ant-table-row` plus `.first()`, although rows have the `row` role.",
+    "impact": "A library upgrade or restyle changes the class and breaks the spec; `.first()` over a shared list also pins whatever order the data has.",
+    "quote": "page.locator(\".ant-table-row\").first()"
+  },
+  {
+    "tid": "T4",
+    "file": "apps/orders-web/e2e/auth.spec.ts",
+    "line": 12,
+    "severity": "major",
+    "rule": "e2e auth through a setup project and storageState; specs never depend on each other",
+    "problem": "The sign-in test is an ordinary spec that writes `e2e/.auth/user.json`, and `customers.spec.ts` reads it with `test.use({ storageState })`; the config has no setup project or dependency.",
+    "impact": "With `fullyParallel` the customers specs can start before the file exists, or run alone with no session; running one spec in isolation fails.",
+    "quote": "await page.context().storageState({ path: authFile });"
+  },
+  {
+    "tid": "T5",
+    "file": "apps/orders-web/playwright.config.ts",
+    "line": 11,
+    "severity": "major",
+    "rule": "flaky waits fixed by waiting on state, never retry or longer timeout",
+    "problem": "The config sets `retries: 3`, a 90 s test timeout and a 20 s expect timeout to ride out a slow dev API.",
+    "impact": "Flaky tests pass on a retry and are never fixed, genuine failures take minutes to show, and every assertion hides real latency regressions.",
+    "quote": "retries: 3,"
+  },
+  {
+    "tid": "T6",
+    "file": "apps/orders-web/e2e/customers.spec.ts",
+    "line": 39,
+    "severity": "major",
+    "rule": ".only left in",
+    "problem": "`test.only` is left on the minimum-order test.",
+    "impact": "Every other test in the file is silently skipped, so the suite stays green with most of the coverage gone (and `forbidOnly` is not set).",
+    "quote": "test.only(\"hides customers under the minimum order count\""
+  },
+  {
+    "tid": "T7",
+    "file": "apps/orders-web/e2e/customers.spec.ts",
+    "line": 49,
+    "severity": "minor",
+    "rule": "screenshot tests only with an existing visual setup and a stable surface",
+    "problem": "`toHaveScreenshot` on the full customers page, which shows live rows and totals, with no mask and no committed visual baseline or visual project.",
+    "impact": "The first run only writes a baseline and later runs fail on data or font changes, producing noise rather than regressions.",
+    "quote": "await expect(page).toHaveScreenshot(\"customers.png\", { fullPage: true });"
+  },
+  {
+    "tid": "T8",
+    "file": "apps/orders-web/e2e/customers.spec.ts",
+    "line": 81,
+    "severity": "major",
+    "rule": "specs never depend on each other",
+    "problem": "The \"search box\" tests run in serial mode on one shared page; \"clearing the search\" clicks the clear button that only exists because the previous test typed \"ada\".",
+    "impact": "The second test fails when run alone, is skipped after the first fails, and cannot be sharded.",
+    "quote": "test(\"clearing the search brings every customer back\""
+  }
+]

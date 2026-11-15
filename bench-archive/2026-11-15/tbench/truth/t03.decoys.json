@@ -1,0 +1,22 @@
+[
+  {
+    "tid": "D1",
+    "file": "apps/orders-web/e2e/customers.spec.ts",
+    "line": 53,
+    "severity": "minor",
+    "problem": "The test replaces the customers API with a 500 answer using a route glob.",
+    "impact": "None: the network is stubbed at the boundary for an error-path test; the glob has no hard-coded origin and the assertion waits on the alert.",
+    "quote": "await page.route(\"**/api/customers**\", (route) => route.fulfill({ status: 500, json: { message: \"down\" } }));",
+    "why_not_a_defect": "Mocking the HTTP boundary is how e2e covers an error the real backend cannot produce on demand."
+  },
+  {
+    "tid": "D2",
+    "file": "apps/orders-web/e2e/customers.spec.ts",
+    "line": 16,
+    "severity": "minor",
+    "problem": "The test waits on a request with `waitForRequest` before asserting.",
+    "impact": "None: it waits on the observable event the test is about (the request carrying the typed query), not on time.",
+    "quote": "const request = page.waitForRequest((req) => req.url().includes(\"/api/customers\") && req.url().includes(\"query=ada\"));",
+    "why_not_a_defect": "Waiting on the request is waiting on state, the pattern the rulings ask for."
+  }
+]

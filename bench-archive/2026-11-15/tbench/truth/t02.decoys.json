@@ -1,0 +1,22 @@
+[
+  {
+    "tid": "D1",
+    "file": "apps/orders-web/src/stores/customers.store.test.ts",
+    "line": 90,
+    "severity": "minor",
+    "problem": "A test about a 300 ms debounce advances timers by 300.",
+    "impact": "None: the clock is faked with `vi.useFakeTimers()` and `advanceTimersByTimeAsync`, so there is no sleep and no wall-clock dependence.",
+    "quote": "await vi.advanceTimersByTimeAsync(300);",
+    "why_not_a_defect": "Faking the clock is the required way to test a debounce."
+  },
+  {
+    "tid": "D2",
+    "file": "apps/orders-web/src/stores/customers.store.test.ts",
+    "line": 116,
+    "severity": "minor",
+    "problem": "The test asserts only a call count on the mocked API.",
+    "impact": "None: \"no more loads after unmount\" has no other observable output; the fake clock runs past the debounce and the count must stay at 1.",
+    "quote": "expect(api.listCustomers).toHaveBeenCalledTimes(1);",
+    "why_not_a_defect": "A count is the proof of an absent effect and the test also performs the mount and unmount that could have triggered it."
+  }
+]
