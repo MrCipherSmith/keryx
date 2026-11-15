@@ -31,7 +31,7 @@ src/hub/solo-auth.ts         solo login route and loopback guard
 src/hub/work/quick-modes.ts  mode table (exists)
 src/hub/work/clarify.ts      clarifying-question storage (exists)
 src/hub/work/quick-start.ts  quick start request parser and route body (exists)
-src/hub/work/quick-start-limits.ts  size limits shared by the Hub, web and TUI (exists)
+src/hub/work/quick-start-limits.ts  size limits shared by the Hub (parser, OpenAPI) and the TUI; the web states them in text only (exists)
 src/hub/work/stage-timeline.ts
 src/hub/work/diff-view.ts
 src/hub/work/finding-anchor.ts

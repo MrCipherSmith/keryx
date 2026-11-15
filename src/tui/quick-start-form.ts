@@ -40,6 +40,15 @@ export interface QuickStartDraft {
   criteria: string;
 }
 
+/** The request body a draft sends. The form and the memory both compare against it, so it lives in one place. */
+function quickStartDraftBody(draft: QuickStartDraft): QuickStartRequestBody {
+  return buildQuickStartRequest({ ...draft, criteria: parseCriteriaField(draft.criteria) });
+}
+
+function quickStartDraftDigest(draft: QuickStartDraft): string {
+  return JSON.stringify(quickStartDraftBody(draft));
+}
+
 /** An operation whose outcome is unknown: its id and the digest of the exact body it was sent with. */
 export interface QuickStartPending {
   operationId: string;
@@ -136,13 +145,12 @@ export function createQuickStartForm(options: QuickStartFormOptions): QuickStart
   const emit = (): void => {
     for (const listener of [...listeners]) listener();
   };
-  const body = (): QuickStartRequestBody =>
-    buildQuickStartRequest({ mode, description, answers, criteria: parseCriteriaField(criteria) });
+  const body = (): QuickStartRequestBody => quickStartDraftBody({ mode, description, answers, criteria });
 
   /** What an unresolved operation says while the form is idle: retry it as it was, or a warning once the body has moved on. */
   function pendingNotice(): QuickStartError | undefined {
     if (pending === undefined) return undefined;
-    const same = pending.digest === JSON.stringify(body());
+    const same = pending.digest === quickStartDraftDigest({ mode, description, answers, criteria });
     return { kind: "network", message: same ? RETRY_NOTICE : EDITED_PENDING_NOTICE, retry: same };
   }
   // A reopened form shows its notice and starts on Start, so the window shows the message and the button together.
@@ -318,8 +326,8 @@ export function createQuickStartMemory(): QuickStartMemory {
         const state = form.state();
         if (state.operationId !== undefined) {
           lastOperation = state.operationId;
-          // A re-sent id is judged by its latest outcome, not by an earlier rejection of the same id.
-          rejected.delete(lastOperation);
+          // Only a form that sends the id again re-opens it; merely holding it as pending (a reopened form) does not.
+          if (state.phase === "submitting") rejected.delete(lastOperation);
         }
         if (lastOperation === undefined) return;
         if (state.phase === "done") accepted.add(lastOperation);
@@ -336,7 +344,7 @@ export function createQuickStartMemory(): QuickStartMemory {
       }
       if (pending !== undefined && accepted.has(pending.operationId)) {
         // The request went through. Forget the draft only if it is still that request; text typed for another task stays.
-        const sent = pending.digest === JSON.stringify(buildQuickStartRequest({ ...draft, criteria: parseCriteriaField(draft.criteria) }));
+        const sent = pending.digest === quickStartDraftDigest(draft);
         if (sent) current = undefined;
         return sent ? {} : { initial: draft };
       }

@@ -760,6 +760,24 @@ test("memory: an id sent again after an earlier rejection of it is judged by its
   expect(memory.options().initialPending?.operationId).toBe("op-1");
 });
 
+test("memory: moving or typing in a reopened form does not bring back an id the Hub already refused", async () => {
+  const memory = createQuickStartMemory();
+  let release: (outcome: QuickStartOutcome) => void = () => {};
+  const first = createQuickStartForm({ send: () => new Promise((resolve) => (release = resolve)), onAccepted: () => {}, newOperationId: mintIds() });
+  memory.attach(first);
+  filled(first);
+  focusSubmit(first);
+  first.handleKey(ENTER);
+  const second = createQuickStartForm({ send: fakeSender(ACCEPTED).send, onAccepted: () => {}, newOperationId: mintIds(), ...memory.options() });
+  memory.attach(second);
+  release({ kind: "rejected", status: 400, code: "invalid-body", message: "no" });
+  await first.settled();
+  expect(memory.options().initialPending).toBeUndefined();
+  second.handleKey(key("up"));
+  type(second, "x");
+  expect(memory.options().initialPending).toBeUndefined();
+});
+
 test("pending: a form handed an unresolved operation replays the same id for the same body and mints a new one for a changed body", async () => {
   const first = fakeSender({ kind: "network", message: "connection reset" });
   const ids = mintIds();
