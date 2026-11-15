@@ -133,6 +133,17 @@ Highload lens and `concurrency-patterns` (2026-11-16), 2 reps. Arm A is `review-
 
 The trim loses no recall within run-to-run variation (one b01 item, 0.25 per rep) and reports less noise. History c12/c13 (races) stays at the floor for both arms, so it cannot separate them; a dedicated concurrency suite would be needed for that.
 
+UI rules (2026-11-16), ui suite, 2 reps. Arm A is each lens and `ui-anti-slop` as on main; arm B reads `ui-anti-slop` with its severity table and the new `layout-rendering`:
+
+| Lens, cases | Arm | Recall | Valid | Noise | Decoy | Control findings |
+|---|---|---|---|---|---|---|
+| `review-ui-ux`, u01 u02 + control u04 (/18) | A | 17.5 | 6 | 4.5 | 0 | 5.5 |
+| | B | 17.5 | 6.5 | 6 | 0 | 6.5 |
+| `review-layout`, u03 + control u04 (/6) | A | 6.0 | 0 | 1.5 | 0 | 0 |
+| | B | 6.0 | 0 | 1 | 0 | 0 |
+
+Both arms reach the ceiling and neither takes a decoy, so this suite separates them only on noise; the shorter lenses keep recall. The suite does not score whether the stated severity is right, which is what the new tables change.
+
 History suite: one general reviewer against the fixed blocker/major findings found 14 match + 6 partial of 46, about 37%.
 
 ## Notes
