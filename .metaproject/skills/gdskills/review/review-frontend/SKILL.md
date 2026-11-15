@@ -284,7 +284,7 @@ Stop and re-read these rules if you are thinking:
 |---|---|
 | "The store is small, no need for full observer wrapping" | Missing `observer()` is reported regardless of store size — frontend law 2. It is `major`, not `blocker`: stale UI is not one of the four shapes |
 | "The mutation happens in a non-async method, so runInAction isn't needed" | Mutations outside action/runInAction are always reported — frontend law 1; the rule's severity table sets the level |
-| "I'll skip the API call in component to avoid friction" | API in a component is always reported — frontend law 3; `minor` unless a named defect or a stated project rule makes it `major`, as in `review-architecture` |
+| "I'll skip the API call in component to avoid friction" | API in a component is always reported — frontend law 3; `minor` unless a named defect makes it `major`, as in `review-architecture` |
 | "The `public` keyword is just a style issue, I'll call it minor" | It is `minor` — but still reported. The linter fails CI on it, which is why a reviewer does not need to block merge on it too |
 | "This inter-store callback works fine as public" | Frontend law 5: if it is not called from JSX, it must be `private` |
 | "No spec compliance check needed for this skill" | Correct — this skill covers Stage 2 (code quality) only; spec compliance is handled by the orchestrator or review-logic |

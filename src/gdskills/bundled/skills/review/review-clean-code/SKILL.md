@@ -3,12 +3,13 @@ name: review-clean-code
 model_tier: standard
 description: |
   Use when: reviewing code against Clean Code principles (Uncle Bob) and SOLID at the
-  function/class level — meaningful names, small functions, single level of abstraction,
-  argument count, error handling, DRY, comment quality, and SOLID (SRP, OCP, LSP, ISP, DIP)
-  as applied to individual classes and functions.
+  function/class level — small functions, single level of abstraction, argument count,
+  error handling, DRY, magic literals, comment quality, and SRP, OCP, LSP and ISP as applied
+  to individual classes and functions.
   Dispatched by review-orchestrator.
-  NOT for: architectural layer violations (review-architecture), naming convention formatting
-  (review-style), logic correctness bugs (review-logic), or security (review-security-code).
+  NOT for: layer violations, dependency inversion and circular imports (review-architecture),
+  names and readability (review-style), logic correctness bugs (review-logic), or security
+  (review-security-code).
 triggers:
   - "clean code review"
   - "functions do too much"
@@ -41,23 +42,23 @@ there the payload supplies the history).
 
 Read both rules before the diff. They are what the code was written against.
 
-- `.metaproject/rules/core/solid-principles.mdc` — the **Thresholds** table and the SOLID rules.
+- `.metaproject/rules/core/solid-principles.mdc` — the **Thresholds** table, the SOLID rules and **Review severities**, which rate every SRP, OCP, LSP, ISP, duplication, magic-literal and comment finding.
 - `.metaproject/rules/core/error-handling.mdc` — how failure is signalled, what a message carries, `cause`, silent catches.
 
 A threshold there is your threshold. Under it, report nothing; never apply a
 stricter textbook number. Where this file and a rule disagree, the rule wins.
 
+Ownership: this lens owns SRP, OCP, LSP and ISP at class and function level, plus
+duplication, magic literals and comments. `review-architecture` owns DIP, layers,
+module boundaries and circular imports; `review-style` owns names and readability.
+
 ## Scope
 
 Only code introduced or modified in this change.
 
-**Debt the change did not create.** A threshold counts only when this change
-crosses it. Check the before-state (diff context or base file) first. One more of
-the same on code already over the line is not a finding: a line added to a
-function already past the length threshold, another copy of a literal already
-copied 3+ times, another parameter on a signature already at 4+. It is a finding
-when the change crosses from under to over, or when the diff adds a
-self-contained block that meets the threshold on its own — cite that block.
+**Debt the change did not create** is not a finding (`solid-principles.mdc`):
+check the before-state first. It is a finding when the change crosses a threshold,
+or adds a self-contained block that meets it alone; cite that block.
 
 **Supplied text first.** When the payload carries `slices`, `context_files`, `diff` or `file_contents`, review exactly that text and never rebuild the diff. A choice's history (law 4) is read with `git log`, `git blame` and `git show` only where the host gives a read-only child git; on keryx shell a read-only child has no shell and no git tool, so read the `git log -L`/`git blame` excerpts the payload supplies, or say the history was not read. Only with none supplied, collect it:
 ```bash
@@ -82,8 +83,8 @@ boundary is the trigger-and-outcome test.
 ### Clean Code laws
 
 1. **Every finding cites a `file:line` in the diff.** No observations about the codebase in general.
-2. **A naming issue is `minor`.** It reaches `major` only when the name has already produced an observable wrong outcome at a call site you can name. Naming is never a `blocker`. (`review-style` carries the identical rule.)
-3. **Duplication needs 3+ copies and is `minor`**, reported once with every copy. This lens owns duplication and comments; `review-style` defers to it.
+2. **Names are `review-style`'s.** This lens reports no naming finding.
+3. **Duplication needs 3+ copies**, reported once with every copy, rated by the `solid-principles.mdc` table.
 4. **A SOLID finding names the principle, the two responsibilities or the broken contract, and the impact**, or it is `info`.
 5. **Language idioms and framework conventions are not violations.**
 
@@ -96,22 +97,8 @@ a named site, a threshold crossed by this change, a cost someone will pay.
 | Signal | A finding when | Default | Not a finding |
 |---|---|---|---|
 | Failure paths: a hiding `catch`, failure as a value, lost `cause`, log-and-rethrow | per `error-handling.mdc` **Review severities** | as there | as there |
-| Override that throws "not supported" or rejects base input | a named call site reaches it through the base type | `major`, or `blocker` on the crash/corruption outcome; else `minor` | — |
-| Constructor doing I/O or async work | always | `minor`; `major` only with a named defect it causes | — |
-| Function length | over 40 lines **and** two separable jobs or mixed abstraction levels | `minor` (name the jobs) | a long linear table, serializer, test or one-level sequence |
-| I/O mixed with a transform | one function reads or writes (file, network, store) and transforms the data in between, at any length | `minor` (name the transform that should be a pure helper) | the transform already lives in a helper the I/O shell calls |
-| Positional parameters | 4+, no options object, not a natural ordered set the codebase already uses | `minor` | — |
-| Boolean flag parameter | it selects between two behaviours (`run(x, true)`) | `minor` | — |
-| Output argument | a function fills a caller-supplied argument instead of returning | `minor` | — |
-| Constructor dependencies | more than 5 | `minor` (name the two responsibilities) | — |
-| Class or function with two change drivers | you can name both (e.g. validation + persistence) | `minor` | — |
-| Branch chain over a type discriminant | 4+ branches, extended by the diff, and a map/strategy precedent exists (name it) | `minor` | no precedent in the codebase |
-| Interface wider than its implementers | implementers leave methods as stubs/no-ops | `minor` | — |
-| Business logic constructing its I/O, network or clock dependency | always | `minor` | a plain helper or value object built inside a module |
-| Duplicated block | 3+ copies | `minor`, one finding listing every copy | 2 copies |
-| Magic number / repeated string literal | business meaning, no named constant | `minor` | `0`, `1`, `100` and other neutral values |
-| Name | needs a comment to be understood; generic (`data`, `result`, `temp`); two names for one concept in the diff; ambiguous boolean polarity | `minor` | loop counters; project-standard abbreviations |
-| Comment | stale, contradicting the code; redundant; commented-out code; compensating for a bad name | `minor` | intent, a domain constraint, a warning, a TODO with an issue |
+| SRP, OCP, LSP, ISP: override that breaks the base contract, constructor I/O, function length, I/O mixed with a transform, parameters, constructor dependencies, branch chain, two change drivers, wide interface | per `solid-principles.mdc` **Review severities** | as there (LSP `major`, `blocker` when the broken caller is in the diff) | as there |
+| Duplicated block, magic literal, comment | per `solid-principles.mdc` **Review severities** | as there | as there |
 | Stylistic opinion; a future issue with no current violation | — | `info` | — |
 
 ## Documentation drift — search for it
@@ -130,8 +117,8 @@ Where an issue or PR is cited, check it is the right one and still says what the
 
 | Concern | Use instead |
 |---------|-------------|
-| Layer violations, module coupling, dependency direction | `review-architecture` |
-| Naming convention formatting (casing, prefix) | `review-style` |
+| Layer violations, module coupling, dependency direction, DIP (`new X()` for I/O), circular imports | `review-architecture` |
+| Names, naming conventions, readability | `review-style` |
 | Logic bugs, off-by-one errors, null-safety | `review-logic` |
 | Security vulnerabilities | `review-security-code` |
 | Performance anti-patterns | `review-performance` |
@@ -163,7 +150,7 @@ class_scope:
 
 - **Severity**: blocker | major | minor | info
 - **File**: path/to/file.ts:line
-- **Principle**: Clean Code — names | function design | comments | error handling | DRY | SOLID — SRP/OCP/LSP/ISP/DIP
+- **Principle**: Clean Code — function design | comments | error handling | DRY | SOLID — SRP/OCP/LSP/ISP
 - **Problem**: what is wrong and why it matters
 - **Fix**: concrete actionable suggestion
 ```
@@ -193,7 +180,7 @@ STATUS: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED
 - blocker: N  |  major: N  |  minor: N  |  info: N
 
 ### Findings
-One `####` section per area (Naming, Functions, Comments, Error Handling, DRY,
+One `####` section per area (Functions, Comments, Error Handling, DRY,
 SOLID): its `[F-NNN]` findings, or "No <area> issues found."
 
 ### Clean Areas

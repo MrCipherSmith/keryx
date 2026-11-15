@@ -18,14 +18,14 @@ Apply to backend code when creating new modules, services, or features; when dec
 - **Business rules live in domain entities and domain services**, not in use cases. A use
   case coordinates repositories and domain services and owns the transaction; a controller
   parses input, calls one use case and formats the output.
-- **A controller that queries the database is a violation whatever its size**: there is no
-  thin-controller exception.
+- **A controller that queries the database is a layer violation**: there is no
+  thin-controller exception, and it is rated by Review severities below.
 - **A repository is the I/O boundary that gets an interface** (`solid-principles.mdc`,
   D): the interface is declared in the domain, the implementation lives in infrastructure.
 - **Each boundary maps its own types.** A persistence row never reaches a controller, and a
   request DTO never enters a domain entity. Request DTOs belong to presentation, use-case
   input and output to application, persistence models to infrastructure.
-- **A service that touches more than 2 domain aggregates is split.**
+- **A use case or transaction that changes more than 2 domain aggregates is split.**
 - **A module's public API is its index exports.** Importing another module's internal files
   (`b/internal/...`) crosses its boundary.
 - **Project size is not an exemption**: the layers apply to a small service too.
@@ -33,3 +33,21 @@ Apply to backend code when creating new modules, services, or features; when dec
   `src/{domain,application,infrastructure,presentation}/<module>/`.
 
 The check for a change: replacing the database or the transport changes no domain file.
+
+---
+
+## Review severities (shared with reviewers)
+
+`review-architecture` rates layer and dependency-direction findings by this table; `review-backend` uses the same rating for the same condition. Change a row here, never in a reviewer. A layer violation is a maintenance cost, so it is `minor`; `major` needs a named defect (a trigger and a wrong outcome), never size or a project preference.
+
+| Signal | A finding when | Default | Not a finding |
+|---|---|---|---|
+| Controller queries the database or holds business rules | always | `minor`; `major` only with a named defect | parsing input, calling one use case, formatting output |
+| Business rule added to a use case instead of the domain | the change adds the rule to a use case | `minor` | coordination and transaction ownership |
+| Domain imports infrastructure, framework, ORM or SDK | always | `minor`; `major` only with a named defect | — |
+| Persistence row reaches a controller, or a request DTO enters a domain entity | always | `minor`; `major` only with a named defect | — |
+| Repository without a domain interface, or an interface with no I/O or substitution boundary | the repository is an I/O boundary with no interface, or the interface has one internal implementation | `minor` | a plain helper or value object |
+| Use case or transaction changes more than 2 domain aggregates | always | `minor`; `major` only with a named defect (for example lost consistency) | — |
+| Another module's internal files imported instead of its index exports | the path bypasses the index | `minor`; `major` only with a named defect | — |
+| Core or shared module imports feature code | always | `minor`; `major` only with a named defect | — |
+| Circular import between modules | always | `minor`; `blocker` when an import resolves to `undefined` on a path the change reaches | — |

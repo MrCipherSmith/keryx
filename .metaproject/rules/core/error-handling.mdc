@@ -99,4 +99,3 @@ Do not throw from an `assert` on input a caller can legitimately send. Validate 
 **IRON LAW 1: A catch that hides a failure from a caller who then proceeds is forbidden.**
 **IRON LAW 2: A failure is never signalled by a value a caller can read as success.**
 **IRON LAW 3: A rethrow keeps the original error as `cause`.**
-</content>
