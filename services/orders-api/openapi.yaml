@@ -57,15 +57,16 @@ components:
     Order:
       type: object
       additionalProperties: false
-      required: [id, customerId, customerName, status, totalCents, currency, createdAt]
+      required: [id, customerId, customerName, status, amountCents, currency, createdAt]
       properties:
         id: { type: string, format: uuid }
         customerId: { type: string, format: uuid }
         customerName: { type: string }
         status: { $ref: '#/components/schemas/OrderStatus' }
-        totalCents: { type: integer }
+        amountCents: { type: integer }
         currency: { type: string, minLength: 3, maxLength: 3 }
         createdAt: { type: string, format: date-time }
+        cancelledAt: { type: string, format: date-time }
     OrderPage:
       type: object
       additionalProperties: false

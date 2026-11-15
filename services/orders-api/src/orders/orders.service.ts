@@ -34,6 +34,25 @@ export class OrdersService {
     return OrderResponse.from(order);
   }
 
+  /**
+   * Moves a pending or paid order to cancelled. Cancelling an already cancelled order
+   * returns it unchanged, so a retried request has the same effect as the first one.
+   */
+  async cancel(id: string): Promise<OrderResponse> {
+    const order = await this.orders.findOne({ where: { id }, relations: { customer: true } });
+    if (!order) throw new NotFoundException("Order not found");
+    if (order.status === OrderStatus.Cancelled) return OrderResponse.from(order);
+    if (order.status === OrderStatus.Shipped) throw new ConflictException("A shipped order cannot be cancelled");
+    order.status = OrderStatus.Cancelled;
+    order.cancelledAt = new Date();
+    const result = await this.orders.update(
+      { id, status: In([OrderStatus.Pending, OrderStatus.Paid]) },
+      { status: order.status, cancelledAt: order.cancelledAt },
+    );
+    if (result.affected === 0) throw new ConflictException("The order changed while it was being cancelled");
+    return OrderResponse.from(order);
+  }
+
   /** Creates the order and its lines and reserves stock, all or nothing. */
   async create(dto: CreateOrderDto): Promise<OrderResponse> {
     return this.dataSource.transaction(async (manager) => {

@@ -19,6 +19,13 @@ export class OrdersController {
     return this.orders.findOne(id);
   }
 
+  // No Idempotency-Key: cancel is a state transition, and repeating it returns the same order.
+  @Post(":id/cancel")
+  @HttpCode(200)
+  cancel(@Param("id", ParseUUIDPipe) id: string): Promise<OrderResponse> {
+    return this.orders.cancel(id);
+  }
+
   @Post()
   @HttpCode(201)
   @UseInterceptors(IdempotencyInterceptor)

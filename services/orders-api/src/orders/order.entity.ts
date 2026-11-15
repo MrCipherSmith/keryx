@@ -51,6 +51,9 @@ export class Order {
   @CreateDateColumn({ name: "created_at", type: "timestamptz" })
   createdAt!: Date;
 
+  @Column({ name: "cancelled_at", type: "timestamptz", nullable: true })
+  cancelledAt!: Date | null;
+
   @DeleteDateColumn({ name: "deleted_at", type: "timestamptz" })
   deletedAt!: Date | null;
 }
