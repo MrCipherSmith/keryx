@@ -1,0 +1,33 @@
+{
+  "name": "orders-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build"
+  },
+  "dependencies": {
+    "@ant-design/icons": "5.4.0",
+    "antd": "5.20.0",
+    "axios": "1.7.4",
+    "mobx": "6.13.1",
+    "mobx-react-lite": "4.0.7",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@storybook/react": "8.2.9",
+    "@storybook/react-vite": "8.2.9",
+    "@storybook/test": "8.2.9",
+    "@types/react": "18.3.3",
+    "@types/react-dom": "18.3.0",
+    "@vitejs/plugin-react": "4.3.1",
+    "storybook": "8.2.9",
+    "typescript": "5.5.4",
+    "vite": "5.4.2"
+  }
+}
