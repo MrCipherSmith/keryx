@@ -14,6 +14,11 @@ export class OrdersController {
     return this.orders.findPage(query);
   }
 
+  @Get("by-ref/:ref")
+  getByRef(@Param("ref") ref: string): Promise<OrderResponse> {
+    return this.orders.findByExternalRef(ref);
+  }
+
   @Get(":id")
   get(@Param("id", ParseUUIDPipe) id: string): Promise<OrderResponse> {
     return this.orders.findOne(id);

@@ -37,6 +37,12 @@ export class CreateOrderDto {
   @ArrayMaxSize(50)
   items!: CreateOrderItemDto[];
 
+  @ApiPropertyOptional({ description: "Partner reference for marketplace orders", maxLength: 64 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  externalRef?: string;
+
   @ApiPropertyOptional({ description: "Free-text note for the warehouse", maxLength: 500 })
   @IsOptional()
   @IsString()

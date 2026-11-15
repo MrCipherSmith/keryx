@@ -1,4 +1,5 @@
 import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import { randomUUID } from "node:crypto";
 import { InjectDataSource, InjectRepository } from "@nestjs/typeorm";
 import { DataSource, In, Repository } from "typeorm";
 import { Customer } from "../customers/customer.entity";
@@ -13,6 +14,7 @@ import { OrderItem } from "./order-item.entity";
 export class OrdersService {
   constructor(
     @InjectRepository(Order) private readonly orders: Repository<Order>,
+    @InjectRepository(OrderItem) private readonly items: Repository<OrderItem>,
     @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
 
@@ -25,7 +27,18 @@ export class OrdersService {
       take: query.limit,
       skip: query.offset,
     });
-    return { data: rows.map(OrderResponse.from), meta: { limit: query.limit, offset: query.offset, total } };
+    const data: OrderResponse[] = [];
+    for (const row of rows) {
+      const itemCount = await this.items.countBy({ orderId: row.id });
+      data.push({ ...OrderResponse.from(row), itemCount });
+    }
+    return { data, meta: { limit: query.limit, offset: query.offset, total } };
+  }
+
+  async findByExternalRef(externalRef: string): Promise<OrderResponse> {
+    const order = await this.orders.findOne({ where: { externalRef }, relations: { customer: true } });
+    if (!order) throw new NotFoundException("Order not found");
+    return OrderResponse.from(order);
   }
 
   async findOne(id: string): Promise<OrderResponse> {
@@ -62,6 +75,7 @@ export class OrdersService {
         totalCents,
         currency: "EUR",
         note: dto.note ?? null,
+        externalRef: dto.externalRef ?? "web-" + randomUUID(),
         items,
       });
       const saved = await manager.save(order);

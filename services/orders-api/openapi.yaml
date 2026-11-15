@@ -49,8 +49,76 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Order' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /v1/orders/by-ref/{ref}:
+    get:
+      operationId: getOrderByExternalRef
+      summary: Get an order by the partner reference
+      parameters:
+        - { name: ref, in: path, required: true, schema: { type: string, maxLength: 64 } }
+      responses:
+        '200':
+          description: The order
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Order' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /v1/customers:
+    get:
+      operationId: listCustomersByTier
+      summary: Latest 500 customers on a loyalty tier
+      parameters:
+        - { name: tier, in: query, required: true, schema: { $ref: '#/components/schemas/LoyaltyTier' } }
+      responses:
+        '200':
+          description: Customers
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Customer' } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /v1/customers/tiers:
+    get:
+      operationId: getTierSummary
+      summary: Customer count per loyalty tier, as of process start
+      responses:
+        '200':
+          description: Summary
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [tier, customers]
+                  properties:
+                    tier: { $ref: '#/components/schemas/LoyaltyTier' }
+                    customers: { type: integer }
+  /v1/customers/{id}:
+    delete:
+      operationId: archiveCustomer
+      summary: Archive a customer and cancel their pending orders
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '204': { description: Archived }
+        '404': { $ref: '#/components/responses/NotFound' }
 components:
   schemas:
+    LoyaltyTier:
+      type: string
+      enum: [standard, silver, gold, platinum]
+    Customer:
+      type: object
+      additionalProperties: false
+      required: [id, name, loyaltyTier, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        loyaltyTier: { $ref: '#/components/schemas/LoyaltyTier' }
+        createdAt: { type: string, format: date-time }
     OrderStatus:
       type: string
       enum: [pending, paid, shipped, cancelled]
@@ -66,6 +134,7 @@ components:
         totalCents: { type: integer }
         currency: { type: string, minLength: 3, maxLength: 3 }
         createdAt: { type: string, format: date-time }
+        itemCount: { type: integer }
     OrderPage:
       type: object
       additionalProperties: false

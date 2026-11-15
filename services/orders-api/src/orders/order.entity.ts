@@ -42,8 +42,11 @@ export class Order {
   @Column({ type: "char", length: 3 })
   currency!: string;
 
-  @Column({ type: "varchar", length: 500, nullable: true })
+  @Column({ name: "warehouse_note", type: "varchar", length: 500, nullable: true })
   note!: string | null;
+
+  @Column({ name: "external_ref", type: "varchar", length: 64 })
+  externalRef!: string;
 
   @OneToMany(() => OrderItem, (item) => item.order, { cascade: ["insert"] })
   items!: OrderItem[];

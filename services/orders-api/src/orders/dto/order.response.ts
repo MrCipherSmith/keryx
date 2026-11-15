@@ -1,4 +1,4 @@
-import { ApiProperty } from "@nestjs/swagger";
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { Order, OrderStatus } from "../order.entity";
 
 export class OrderResponse {
@@ -9,6 +9,7 @@ export class OrderResponse {
   @ApiProperty() totalCents!: number;
   @ApiProperty({ minLength: 3, maxLength: 3 }) currency!: string;
   @ApiProperty({ format: "date-time" }) createdAt!: string;
+  @ApiPropertyOptional({ description: "Number of order lines; set on list responses" }) itemCount?: number;
 
   static from(order: Order): OrderResponse {
     return {
