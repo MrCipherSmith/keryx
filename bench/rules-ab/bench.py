@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """A/B bench for review rules and lenses. Python 3 standard library only.
 
-    bench.py setup  --suite seeded|backend|frontend|testing|history --arm NAME=DIR [--arm ...] --reps N [--cases ID,...] [--seed S] [--run NAME]
+    bench.py setup  --suite seeded|backend|frontend|testing|ui|history --arm NAME=DIR [--arm ...] --reps N [--cases ID,...] [--seed S] [--run NAME]
     bench.py judges --suite ... [--run NAME] [--truth DIR]
     bench.py score  --suite ... [--run NAME]
 
@@ -25,9 +25,9 @@ CAND_FIELDS = ("file", "line", "severity", "problem", "impact", "quote")
 # history diffs leave out files that describe the review itself or are generated
 HISTORY_EXCLUDES = [":!.metaproject", ":!CHANGELOG.md", ":!bun.lock"]
 # where the truth lives inside a checkout of the research branch, per suite
-TRUTH_SUBDIRS = {"seeded": "qbench/truth", "backend": "bbench/truth", "frontend": "fbench/truth", "testing": "tbench/truth", "history": "bench/truth"}
+TRUTH_SUBDIRS = {"seeded": "qbench/truth", "backend": "bbench/truth", "frontend": "fbench/truth", "testing": "tbench/truth", "ui": "ubench/truth", "history": "bench/truth"}
 # suites with planted defects, decoys and a clean control (scored for noise); history has none of these
-PLANTED = {"seeded", "backend", "frontend", "testing"}
+PLANTED = {"seeded", "backend", "frontend", "testing", "ui"}
 
 
 def die(msg):

@@ -1,0 +1,589 @@
+diff --git a/apps/orders-web/e2e/layout.spec.ts b/apps/orders-web/e2e/layout.spec.ts
+new file mode 100644
+index 000000000..02f33e23a
+--- /dev/null
++++ b/apps/orders-web/e2e/layout.spec.ts
+@@ -0,0 +1,18 @@
++import { writeFileSync } from "node:fs";
++import { expect, test } from "@playwright/test";
++
++const LOCALES = ["en", "de", "ar"] as const;
++
++for (const locale of LOCALES) {
++  test(`measure insights layout (${locale})`, async ({ page }) => {
++    await page.goto(`/insights?locale=${locale}`);
++    const widths: Record<string, number> = {};
++    for (const name of ["score-track", "meter-track", "meter-fill", "badge-box", "orders-table"]) {
++      const box = await page.locator(`[data-measure="${name}"]`).first().boundingBox();
++      expect(box).not.toBeNull();
++      widths[name] = Math.round((box?.width ?? 0) * 10) / 10;
++    }
++    const viewport = page.viewportSize();
++    writeFileSync(`test-results/layout-${locale}-${viewport?.width}.json`, JSON.stringify(widths, null, 1));
++  });
++}
+diff --git a/apps/orders-web/layout-measurements.json b/apps/orders-web/layout-measurements.json
+new file mode 100644
+index 000000000..100acda04
+--- /dev/null
++++ b/apps/orders-web/layout-measurements.json
+@@ -0,0 +1,182 @@
++{
++  "command": "npx playwright test e2e/layout.spec.ts --project=chromium --reporter=list",
++  "generatedBy": "e2e/layout.spec.ts",
++  "units": "css px, rounded to 0.1",
++  "measurements": [
++    {
++      "component": "OrderScoreCard",
++      "element": "[data-measure=score-track]",
++      "locale": "en",
++      "viewport": {
++        "width": 320,
++        "height": 640
++      },
++      "hostWidth": 320,
++      "widthPx": 0.0,
++      "cardWidthPx": 120.4
++    },
++    {
++      "component": "OrderScoreCard",
++      "element": "[data-measure=score-track]",
++      "locale": "en",
++      "viewport": {
++        "width": 390,
++        "height": 844
++      },
++      "hostWidth": 390,
++      "widthPx": 0.0,
++      "cardWidthPx": 120.4
++    },
++    {
++      "component": "FulfilmentMeter",
++      "element": "[data-measure=meter-track]",
++      "locale": "en",
++      "viewport": {
++        "width": 390,
++        "height": 844
++      },
++      "hostWidth": 390,
++      "valuePercent": 80,
++      "labelWidthPx": 62.4,
++      "trackWidthPx": 62.4,
++      "fillWidthPx": 49.9
++    },
++    {
++      "component": "FulfilmentMeter",
++      "element": "[data-measure=meter-track]",
++      "locale": "de",
++      "viewport": {
++        "width": 390,
++        "height": 844
++      },
++      "hostWidth": 390,
++      "valuePercent": 80,
++      "labelWidthPx": 106.0,
++      "trackWidthPx": 106.0,
++      "fillWidthPx": 84.8
++    },
++    {
++      "component": "FulfilmentMeter",
++      "element": "[data-measure=meter-track]",
++      "locale": "ar",
++      "viewport": {
++        "width": 390,
++        "height": 844
++      },
++      "hostWidth": 390,
++      "valuePercent": 80,
++      "labelWidthPx": 71.2,
++      "trackWidthPx": 71.2,
++      "fillWidthPx": 57.0
++    },
++    {
++      "component": "OrderTotalsStrip",
++      "element": "[data-measure=totals-total]",
++      "locale": "en",
++      "viewport": {
++        "width": 390,
++        "height": 844
++      },
++      "hostWidth": 390,
++      "containerLeftPx": 16.0,
++      "containerRightPx": 374.0,
++      "elementLeftPx": 330.4,
++      "elementRightPx": 401.0,
++      "visibleWidthPx": 43.6,
++      "clippedBy": "overflow-hidden on [data-measure=totals-container]"
++    },
++    {
++      "component": "OrdersTable",
++      "element": "[data-measure=orders-table]",
++      "locale": "en",
++      "viewport": {
++        "width": 390,
++        "height": 844
++      },
++      "hostWidth": 390,
++      "elementWidthPx": 720.0,
++      "documentScrollWidthPx": 752,
++      "documentClientWidthPx": 390
++    },
++    {
++      "component": "ScoreBadge",
++      "element": "[data-measure=badge-score]",
++      "locale": "en",
++      "viewport": {
++        "width": 390,
++        "height": 844
++      },
++      "hostWidth": 390,
++      "boxLeftPx": 16.0,
++      "boxWidthPx": 192.0,
++      "boxCenterXPx": 112.0,
++      "scoreCenterXPx": 100.0,
++      "offsetFromBoxCenterPx": -12.0
++    },
++    {
++      "component": "ScoreBadge",
++      "element": "[data-measure=badge-score]",
++      "locale": "ar",
++      "viewport": {
++        "width": 390,
++        "height": 844
++      },
++      "hostWidth": 390,
++      "boxLeftPx": 182.0,
++      "boxWidthPx": 192.0,
++      "boxCenterXPx": 278.0,
++      "scoreCenterXPx": 290.0,
++      "offsetFromBoxCenterPx": 12.0
++    },
++    {
++      "component": "RecentFilters",
++      "element": "[data-measure=fade]",
++      "locale": "en",
++      "viewport": {
++        "width": 390,
++        "height": 844
++      },
++      "hostWidth": 390,
++      "overlayLeftPx": 16.0,
++      "overlayWidthPx": 32.0,
++      "stripStartEdge": "left"
++    },
++    {
++      "component": "RecentFilters",
++      "element": "[data-measure=fade]",
++      "locale": "ar",
++      "viewport": {
++        "width": 390,
++        "height": 844
++      },
++      "hostWidth": 390,
++      "overlayLeftPx": 16.0,
++      "overlayWidthPx": 32.0,
++      "stripStartEdge": "right"
++    },
++    {
++      "component": "CustomerCell",
++      "element": "[data-measure=customer-name]",
++      "locale": "en",
++      "viewport": {
++        "width": 320,
++        "height": 640
++      },
++      "hostWidth": 320,
++      "widthPx": 86.0,
++      "mount": "standalone"
++    },
++    {
++      "component": "CustomerCell",
++      "element": "[data-measure=customer-name]",
++      "locale": "en",
++      "viewport": {
++        "width": 200,
++        "height": 640
++      },
++      "hostWidth": 200,
++      "widthPx": 0.0,
++      "mount": "standalone"
++    }
++  ]
++}
+diff --git a/apps/orders-web/src/pages/insights/CustomerCell.tsx b/apps/orders-web/src/pages/insights/CustomerCell.tsx
+new file mode 100644
+index 000000000..f35893743
+--- /dev/null
++++ b/apps/orders-web/src/pages/insights/CustomerCell.tsx
+@@ -0,0 +1,21 @@
++export interface CustomerCellProps {
++  name: string;
++  badge: string;
++}
++
++export function CustomerCell({ name, badge }: CustomerCellProps) {
++  return (
++    <div className="flex items-center gap-2" data-measure="customer-cell">
++      <span
++        aria-hidden="true"
++        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-line font-medium text-ink"
++      >
++        {name.slice(0, 1)}
++      </span>
++      <span className="min-w-0 flex-1 truncate" data-measure="customer-name">
++        {name}
++      </span>
++      <span className="w-28 shrink-0 text-end text-[14px] text-muted">{badge}</span>
++    </div>
++  );
++}
+diff --git a/apps/orders-web/src/pages/insights/DeliveryScrubber.tsx b/apps/orders-web/src/pages/insights/DeliveryScrubber.tsx
+new file mode 100644
+index 000000000..21e339780
+--- /dev/null
++++ b/apps/orders-web/src/pages/insights/DeliveryScrubber.tsx
+@@ -0,0 +1,26 @@
++import { useMessages } from "../../i18n";
++import { insightsMessages } from "./insights.messages";
++
++export interface DeliveryScrubberProps {
++  step: number;
++  steps: number;
++  onChange: (step: number) => void;
++}
++
++// Scrubbers follow platform media players: time runs left to right whatever the locale.
++export function DeliveryScrubber({ step, steps, onChange }: DeliveryScrubberProps) {
++  const t = useMessages(insightsMessages);
++
++  return (
++    <input
++      type="range"
++      dir="ltr"
++      min={0}
++      max={steps}
++      value={step}
++      aria-label={t("deliveryProgress")}
++      onChange={(e) => onChange(Number(e.target.value))}
++      className="w-full accent-[var(--color-accent)]"
++    />
++  );
++}
+diff --git a/apps/orders-web/src/pages/insights/FulfilmentMeter.tsx b/apps/orders-web/src/pages/insights/FulfilmentMeter.tsx
+new file mode 100644
+index 000000000..e857a4d69
+--- /dev/null
++++ b/apps/orders-web/src/pages/insights/FulfilmentMeter.tsx
+@@ -0,0 +1,19 @@
++import { useMessages } from "../../i18n";
++import { insightsMessages } from "./insights.messages";
++
++export interface FulfilmentMeterProps {
++  percent: number;
++}
++
++export function FulfilmentMeter({ percent }: FulfilmentMeterProps) {
++  const t = useMessages(insightsMessages);
++
++  return (
++    <div className="inline-grid">
++      <span className="whitespace-nowrap text-[14px] text-muted">{t("fulfilledLabel")}</span>
++      <div className="mt-1 h-2 rounded-full bg-line" data-measure="meter-track">
++        <div className="h-full rounded-full bg-sage" style={{ width: `${percent}%` }} data-measure="meter-fill" />
++      </div>
++    </div>
++  );
++}
+diff --git a/apps/orders-web/src/pages/insights/OrderInsightsPage.tsx b/apps/orders-web/src/pages/insights/OrderInsightsPage.tsx
+new file mode 100644
+index 000000000..e5b97260b
+--- /dev/null
++++ b/apps/orders-web/src/pages/insights/OrderInsightsPage.tsx
+@@ -0,0 +1,47 @@
++import { useState } from "react";
++import type { OrderDto } from "../../api/orders.api";
++import { useMessages } from "../../i18n";
++import { DeliveryScrubber } from "./DeliveryScrubber";
++import { FulfilmentMeter } from "./FulfilmentMeter";
++import { insightsMessages } from "./insights.messages";
++import { OrderScoreCard } from "./OrderScoreCard";
++import { OrdersTable } from "./OrdersTable";
++import { OrderTotalsStrip } from "./OrderTotalsStrip";
++import { RecentFilters } from "./RecentFilters";
++import { ScoreBadge } from "./ScoreBadge";
++
++export interface OrderInsightsPageProps {
++  orders: OrderDto[];
++  score: number;
++  fulfilledPercent: number;
++  subtotalCents: number;
++  totalCents: number;
++  recentFilters: string[];
++  onPickFilter: (filter: string) => void;
++}
++
++export function OrderInsightsPage(props: OrderInsightsPageProps) {
++  const t = useMessages(insightsMessages);
++  const [step, setStep] = useState(2);
++
++  return (
++    <main className="mx-auto max-w-4xl space-y-8 px-4 py-8">
++      <h1 className="font-display text-[28px] text-ink">{t("title")}</h1>
++
++      <div className="flex flex-wrap items-start gap-6">
++        <ScoreBadge score={props.score} />
++        <OrderScoreCard score={props.score} />
++        <FulfilmentMeter percent={props.fulfilledPercent} />
++      </div>
++
++      <OrderTotalsStrip subtotalCents={props.subtotalCents} totalCents={props.totalCents} />
++      <DeliveryScrubber step={step} steps={4} onChange={setStep} />
++      <RecentFilters filters={props.recentFilters} onPick={props.onPickFilter} />
++
++      <section>
++        <h2 className="mb-3 font-display text-[20px] text-ink">{t("ordersHeading")}</h2>
++        <OrdersTable orders={props.orders} />
++      </section>
++    </main>
++  );
++}
+diff --git a/apps/orders-web/src/pages/insights/OrderNumber.tsx b/apps/orders-web/src/pages/insights/OrderNumber.tsx
+new file mode 100644
+index 000000000..65f8b2bd6
+--- /dev/null
++++ b/apps/orders-web/src/pages/insights/OrderNumber.tsx
+@@ -0,0 +1,13 @@
++export interface OrderNumberProps {
++  value: string;
++}
++
++// Order numbers are identifiers, not prose: like phone numbers they keep reading
++// left to right in right-to-left locales.
++export function OrderNumber({ value }: OrderNumberProps) {
++  return (
++    <span dir="ltr" className="tabular-nums font-medium text-ink">
++      {value}
++    </span>
++  );
++}
+diff --git a/apps/orders-web/src/pages/insights/OrderScoreCard.tsx b/apps/orders-web/src/pages/insights/OrderScoreCard.tsx
+new file mode 100644
+index 000000000..5f48c9727
+--- /dev/null
++++ b/apps/orders-web/src/pages/insights/OrderScoreCard.tsx
+@@ -0,0 +1,22 @@
++import { useMessages } from "../../i18n";
++import { insightsMessages } from "./insights.messages";
++
++export interface OrderScoreCardProps {
++  score: number;
++}
++
++export function OrderScoreCard({ score }: OrderScoreCardProps) {
++  const t = useMessages(insightsMessages);
++
++  return (
++    <div className="w-fit rounded-panel border border-line bg-surface p-4">
++      <div className="flex items-center gap-3">
++        <span className="text-[14px] text-muted">{t("scoreLabel")}</span>
++        <div className="h-2 min-w-0 flex-1 rounded-full bg-line" data-measure="score-track">
++          <div className="h-full rounded-full bg-sage" style={{ width: `${score}%` }} />
++        </div>
++        <span className="tabular-nums text-ink">{score}</span>
++      </div>
++    </div>
++  );
++}
+diff --git a/apps/orders-web/src/pages/insights/OrderTotalsStrip.tsx b/apps/orders-web/src/pages/insights/OrderTotalsStrip.tsx
+new file mode 100644
+index 000000000..05aa1a343
+--- /dev/null
++++ b/apps/orders-web/src/pages/insights/OrderTotalsStrip.tsx
+@@ -0,0 +1,26 @@
++import { useLocale, useMessages } from "../../i18n";
++import { insightsMessages } from "./insights.messages";
++
++export interface OrderTotalsStripProps {
++  subtotalCents: number;
++  totalCents: number;
++}
++
++export function OrderTotalsStrip({ subtotalCents, totalCents }: OrderTotalsStripProps) {
++  const t = useMessages(insightsMessages);
++  const locale = useLocale();
++  const money = new Intl.NumberFormat(locale, { style: "currency", currency: "EUR" });
++
++  return (
++    <div className="overflow-hidden rounded-panel border border-line bg-surface" data-measure="totals-container">
++      <div className="flex w-[112%] items-center justify-between gap-6 bg-paper px-4 py-3">
++        <span className="text-muted">
++          {t("subtotal")} <span className="tabular-nums">{money.format(subtotalCents / 100)}</span>
++        </span>
++        <span className="font-medium text-ink" data-measure="totals-total">
++          {t("total")} <span className="tabular-nums">{money.format(totalCents / 100)}</span>
++        </span>
++      </div>
++    </div>
++  );
++}
+diff --git a/apps/orders-web/src/pages/insights/OrdersTable.tsx b/apps/orders-web/src/pages/insights/OrdersTable.tsx
+new file mode 100644
+index 000000000..1dbd389e7
+--- /dev/null
++++ b/apps/orders-web/src/pages/insights/OrdersTable.tsx
+@@ -0,0 +1,42 @@
++import type { OrderDto } from "../../api/orders.api";
++import { useLocale, useMessages } from "../../i18n";
++import { CustomerCell } from "./CustomerCell";
++import { insightsMessages } from "./insights.messages";
++import { OrderNumber } from "./OrderNumber";
++
++export interface OrdersTableProps {
++  orders: OrderDto[];
++}
++
++export function OrdersTable({ orders }: OrdersTableProps) {
++  const t = useMessages(insightsMessages);
++  const locale = useLocale();
++  const money = new Intl.NumberFormat(locale, { style: "currency", currency: "EUR" });
++
++  return (
++    <div className="w-[720px]" data-measure="orders-table">
++      <table className="w-full border-collapse text-start">
++        <thead>
++          <tr className="border-b border-line text-[14px] text-muted">
++            <th scope="col" className="py-2 text-start font-medium">{t("colNumber")}</th>
++            <th scope="col" className="py-2 text-start font-medium">{t("colCustomer")}</th>
++            <th scope="col" className="py-2 text-end font-medium">{t("colTotal")}</th>
++          </tr>
++        </thead>
++        <tbody>
++          {orders.map((order) => (
++            <tr key={order.id} className="border-b border-line">
++              <td className="py-3">
++                <OrderNumber value={order.number} />
++              </td>
++              <td className="py-3 pe-4">
++                <CustomerCell name={order.customer?.name ?? t("guest")} badge={order.status} />
++              </td>
++              <td className="py-3 text-end tabular-nums">{money.format(order.totalCents / 100)}</td>
++            </tr>
++          ))}
++        </tbody>
++      </table>
++    </div>
++  );
++}
+diff --git a/apps/orders-web/src/pages/insights/RecentFilters.tsx b/apps/orders-web/src/pages/insights/RecentFilters.tsx
+new file mode 100644
+index 000000000..bd638135f
+--- /dev/null
++++ b/apps/orders-web/src/pages/insights/RecentFilters.tsx
+@@ -0,0 +1,36 @@
++import { useMessages } from "../../i18n";
++import { insightsMessages } from "./insights.messages";
++
++export interface RecentFiltersProps {
++  filters: string[];
++  onPick: (filter: string) => void;
++}
++
++export function RecentFilters({ filters, onPick }: RecentFiltersProps) {
++  const t = useMessages(insightsMessages);
++
++  return (
++    <section aria-label={t("recentFilters")}>
++      <h3 className="ml-4 text-[14px] text-muted">{t("recentFilters")}</h3>
++      <div className="relative mt-2">
++        <ul className="flex gap-3 overflow-x-auto ps-4 pe-12">
++          {filters.map((filter) => (
++            <li key={filter} className="shrink-0">
++              <button
++                type="button"
++                onClick={() => onPick(filter)}
++                className="min-h-11 rounded-control border border-line bg-surface px-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
++              >
++                {filter}
++              </button>
++            </li>
++          ))}
++        </ul>
++        <div
++          className="pointer-events-none absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-paper to-transparent"
++          data-measure="fade"
++        />
++      </div>
++    </section>
++  );
++}
+diff --git a/apps/orders-web/src/pages/insights/ScoreBadge.tsx b/apps/orders-web/src/pages/insights/ScoreBadge.tsx
+new file mode 100644
+index 000000000..837ffa283
+--- /dev/null
++++ b/apps/orders-web/src/pages/insights/ScoreBadge.tsx
+@@ -0,0 +1,13 @@
++export interface ScoreBadgeProps {
++  score: number;
++}
++
++export function ScoreBadge({ score }: ScoreBadgeProps) {
++  return (
++    <div className="w-48 rounded-panel border border-line bg-surface pe-6 py-3 text-center" data-measure="badge-box">
++      <span className="font-display text-[40px] leading-none text-ink" data-measure="badge-score">
++        {score}
++      </span>
++    </div>
++  );
++}
+diff --git a/apps/orders-web/src/pages/insights/insights.messages.ts b/apps/orders-web/src/pages/insights/insights.messages.ts
+new file mode 100644
+index 000000000..5dc1f2cc4
+--- /dev/null
++++ b/apps/orders-web/src/pages/insights/insights.messages.ts
+@@ -0,0 +1,46 @@
++import { defineMessages } from "../../i18n";
++
++export const insightsMessages = defineMessages({
++  en: {
++    title: "Order insights",
++    scoreLabel: "Score",
++    fulfilledLabel: "Fulfilled",
++    subtotal: "Subtotal",
++    total: "Total",
++    ordersHeading: "Latest orders",
++    colNumber: "Order",
++    colCustomer: "Customer",
++    colTotal: "Total",
++    recentFilters: "Recent filters",
++    deliveryProgress: "Delivery progress",
++    guest: "Guest",
++  },
++  de: {
++    title: "Bestellübersicht",
++    scoreLabel: "Wertung",
++    fulfilledLabel: "Erfüllungsgrad",
++    subtotal: "Zwischensumme",
++    total: "Gesamt",
++    ordersHeading: "Neueste Bestellungen",
++    colNumber: "Bestellung",
++    colCustomer: "Kunde",
++    colTotal: "Summe",
++    recentFilters: "Zuletzt verwendete Filter",
++    deliveryProgress: "Lieferfortschritt",
++    guest: "Gast",
++  },
++  ar: {
++    title: "ملخص الطلبات",
++    scoreLabel: "التقييم",
++    fulfilledLabel: "نسبة الإنجاز",
++    subtotal: "المجموع الفرعي",
++    total: "الإجمالي",
++    ordersHeading: "أحدث الطلبات",
++    colNumber: "الطلب",
++    colCustomer: "العميل",
++    colTotal: "المبلغ",
++    recentFilters: "المرشحات الأخيرة",
++    deliveryProgress: "تقدّم التسليم",
++    guest: "ضيف",
++  },
++});
