@@ -382,6 +382,7 @@
         "src/gdskills/bundled/rules/core/implementation-doc-mandate.mdc",
         "src/gdskills/bundled/rules/core/implementation-plans.mdc",
         "src/gdskills/bundled/rules/core/jobs-documentation.mdc",
+        "src/gdskills/bundled/rules/core/layout-rendering.mdc",
         "src/gdskills/bundled/rules/core/model-selection.mdc",
         "src/gdskills/bundled/rules/core/playwright-testing.mdc",
         "src/gdskills/bundled/rules/core/requirements-management.mdc",

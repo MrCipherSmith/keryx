@@ -1,0 +1,180 @@
+diff --git a/apps/orders-web/src/api/orders.api.ts b/apps/orders-web/src/api/orders.api.ts
+index ccd1842e4..0f7553722 100644
+--- a/apps/orders-web/src/api/orders.api.ts
++++ b/apps/orders-web/src/api/orders.api.ts
+@@ -38,3 +38,12 @@ export async function updateStatus(id: string, status: OrderStatus): Promise<Ord
+   const res = await http.patch<OrderDto>(`/orders/${encodeURIComponent(id)}/status`, { status });
+   return res.data;
+ }
++
++export async function getOrderNotes(id: string): Promise<string> {
++  const res = await http.get<{ text: string }>(`/orders/${encodeURIComponent(id)}/notes`);
++  return res.data.text;
++}
++
++export async function saveOrderNotes(id: string, text: string): Promise<void> {
++  await http.put(`/orders/${encodeURIComponent(id)}/notes`, { text });
++}
+diff --git a/apps/orders-web/src/pages/notes/OrderNotes.tsx b/apps/orders-web/src/pages/notes/OrderNotes.tsx
+new file mode 100644
+index 000000000..501b34f20
+--- /dev/null
++++ b/apps/orders-web/src/pages/notes/OrderNotes.tsx
+@@ -0,0 +1,108 @@
++import { useCallback, useEffect, useId, useState, type FormEvent } from "react";
++import { getOrderNotes, saveOrderNotes } from "../../api/orders.api";
++import { useMessages } from "../../i18n";
++import { notesMessages } from "./notes.messages";
++
++const MAX_LENGTH = 2000;
++
++type LoadState = "loading" | "ready" | "failed";
++type SaveState = "idle" | "saving" | "saved" | "failed";
++
++export interface OrderNotesProps {
++  orderId: string;
++}
++
++export function OrderNotes({ orderId }: OrderNotesProps) {
++  const t = useMessages(notesMessages);
++  const fieldId = useId();
++  const [text, setText] = useState("");
++  const [load, setLoad] = useState<LoadState>("loading");
++  const [save, setSave] = useState<SaveState>("idle");
++
++  const fetchNotes = useCallback(() => {
++    setLoad("loading");
++    getOrderNotes(orderId)
++      .then((value) => {
++        setText(value);
++        setLoad("ready");
++      })
++      .catch(() => setLoad("failed"));
++  }, [orderId]);
++
++  useEffect(() => {
++    fetchNotes();
++  }, [fetchNotes]);
++
++  async function submit(e: FormEvent) {
++    e.preventDefault();
++    setSave("saving");
++    try {
++      await saveOrderNotes(orderId, text);
++      setSave("saved");
++    } catch {
++      setSave("failed");
++    }
++  }
++
++  if (load === "loading") {
++    return (
++      <p role="status" className="text-muted">
++        {t("loading")}
++      </p>
++    );
++  }
++
++  if (load === "failed") {
++    return (
++      <div role="alert" className="flex flex-wrap items-center gap-3 text-danger">
++        <span>{t("loadError")}</span>
++        <button
++          type="button"
++          onClick={fetchNotes}
++          className="min-h-11 rounded-control border border-line bg-surface px-4 text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
++        >
++          {t("retry")}
++        </button>
++      </div>
++    );
++  }
++
++  return (
++    <form onSubmit={submit} className="space-y-3">
++      <label htmlFor={fieldId} className="block font-medium text-ink">
++        {t("label")}
++      </label>
++      <p id={`${fieldId}-hint`} className="text-[14px] text-muted">
++        {text === "" ? t("empty") : t("hint")}
++      </p>
++      <textarea
++        id={fieldId}
++        value={text}
++        maxLength={MAX_LENGTH}
++        rows={5}
++        aria-describedby={`${fieldId}-hint ${fieldId}-count`}
++        onChange={(e) => {
++          setText(e.target.value);
++          setSave("idle");
++        }}
++        className="w-full rounded-control border border-line bg-surface p-3 text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
++      />
++      <p id={`${fieldId}-count`} className="text-[14px] text-muted">
++        {t("counter", { count: text.length, max: MAX_LENGTH })}
++      </p>
++      <div className="flex flex-wrap items-center gap-4">
++        <button
++          type="submit"
++          aria-busy={save === "saving"}
++          className="min-h-11 rounded-control bg-accent px-5 text-accent-ink motion-safe:transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
++        >
++          {save === "saving" ? t("saving") : t("save")}
++        </button>
++        <p role="status" className={save === "failed" ? "text-danger" : "text-sage"}>
++          {save === "saved" && t("saved")}
++          {save === "failed" && t("saveError")}
++        </p>
++      </div>
++    </form>
++  );
++}
+diff --git a/apps/orders-web/src/pages/notes/notes.messages.ts b/apps/orders-web/src/pages/notes/notes.messages.ts
+new file mode 100644
+index 000000000..50bc69f22
+--- /dev/null
++++ b/apps/orders-web/src/pages/notes/notes.messages.ts
+@@ -0,0 +1,43 @@
++import { defineMessages } from "../../i18n";
++
++export const notesMessages = defineMessages({
++  en: {
++    label: "Internal notes",
++    hint: "Visible to support staff only. Customers never see them.",
++    empty: "No notes yet. Add what the next person handling this order should know.",
++    loading: "Loading notes",
++    loadError: "Notes could not be loaded.",
++    retry: "Try loading again",
++    save: "Save notes",
++    saving: "Saving notes",
++    saved: "Notes saved",
++    saveError: "Notes were not saved. Your text is still here.",
++    counter: "{count} of {max} characters",
++  },
++  de: {
++    label: "Interne Notizen",
++    hint: "Nur für den Support sichtbar. Kunden sehen sie nie.",
++    empty: "Noch keine Notizen. Halten Sie fest, was die nächste Person zu dieser Bestellung wissen sollte.",
++    loading: "Notizen werden geladen",
++    loadError: "Die Notizen konnten nicht geladen werden.",
++    retry: "Erneut laden",
++    save: "Notizen speichern",
++    saving: "Notizen werden gespeichert",
++    saved: "Notizen gespeichert",
++    saveError: "Die Notizen wurden nicht gespeichert. Ihr Text bleibt erhalten.",
++    counter: "{count} von {max} Zeichen",
++  },
++  ar: {
++    label: "ملاحظات داخلية",
++    hint: "تظهر لموظفي الدعم فقط ولا يراها العملاء أبدًا.",
++    empty: "لا توجد ملاحظات بعد. اكتب ما يجب أن يعرفه الشخص التالي الذي يتولى هذا الطلب.",
++    loading: "جارٍ تحميل الملاحظات",
++    loadError: "تعذّر تحميل الملاحظات.",
++    retry: "أعد التحميل",
++    save: "احفظ الملاحظات",
++    saving: "جارٍ حفظ الملاحظات",
++    saved: "تم حفظ الملاحظات",
++    saveError: "لم تُحفظ الملاحظات. نصك ما زال هنا.",
++    counter: "{count} من {max} حرفًا",
++  },
++});

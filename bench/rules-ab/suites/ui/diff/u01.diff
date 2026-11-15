@@ -1,0 +1,474 @@
+diff --git a/apps/orders-web/src/api/orders.api.ts b/apps/orders-web/src/api/orders.api.ts
+index ccd1842e4..c220c8729 100644
+--- a/apps/orders-web/src/api/orders.api.ts
++++ b/apps/orders-web/src/api/orders.api.ts
+@@ -38,3 +38,18 @@ export async function updateStatus(id: string, status: OrderStatus): Promise<Ord
+   const res = await http.patch<OrderDto>(`/orders/${encodeURIComponent(id)}/status`, { status });
+   return res.data;
+ }
++
++export interface CreateOrderInput {
++  customerName: string;
++  email: string;
++  totalCents: number;
++}
++
++export async function createOrder(input: CreateOrderInput): Promise<OrderDto> {
++  const res = await http.post<OrderDto>("/orders", input);
++  return res.data;
++}
++
++export async function removeOrder(id: string): Promise<void> {
++  await http.delete(`/orders/${encodeURIComponent(id)}`);
++}
+diff --git a/apps/orders-web/src/pages/orders/CreateOrderForm.tsx b/apps/orders-web/src/pages/orders/CreateOrderForm.tsx
+new file mode 100644
+index 000000000..14b08c554
+--- /dev/null
++++ b/apps/orders-web/src/pages/orders/CreateOrderForm.tsx
+@@ -0,0 +1,62 @@
++import { useState, type FormEvent } from "react";
++import { createOrder } from "../../api/orders.api";
++import { useMessages } from "../../i18n";
++import { ordersMessages } from "./orders.messages";
++
++export interface CreateOrderFormProps {
++  onCreated: () => void;
++}
++
++export function CreateOrderForm({ onCreated }: CreateOrderFormProps) {
++  const t = useMessages(ordersMessages);
++  const [customerName, setCustomerName] = useState("");
++  const [email, setEmail] = useState("");
++  const [total, setTotal] = useState("");
++
++  const valid = customerName.trim() !== "" && /\S+@\S+/.test(email) && Number(total) > 0;
++
++  async function submit(e: FormEvent) {
++    e.preventDefault();
++    await createOrder({ customerName, email, totalCents: Math.round(Number(total) * 100) });
++    setCustomerName("");
++    setEmail("");
++    setTotal("");
++    onCreated();
++  }
++
++  return (
++    <form onSubmit={submit} className="grid gap-3 border-b border-line px-4 py-4 sm:grid-cols-[1fr_1fr_160px_auto]">
++      <input
++        type="text"
++        value={customerName}
++        onChange={(e) => setCustomerName(e.target.value)}
++        placeholder={t("customerPlaceholder")}
++        className="min-h-11 rounded-control border border-line bg-surface px-3"
++      />
++      <input
++        type="email"
++        value={email}
++        onChange={(e) => setEmail(e.target.value)}
++        onPaste={(e) => e.preventDefault()}
++        placeholder={t("emailPlaceholder")}
++        className="min-h-11 rounded-control border border-line bg-surface px-3"
++      />
++      <input
++        type="number"
++        min="0"
++        step="0.01"
++        value={total}
++        onChange={(e) => setTotal(e.target.value)}
++        placeholder={t("totalPlaceholder")}
++        className="min-h-11 rounded-control border border-line bg-surface px-3"
++      />
++      <button
++        type="submit"
++        disabled={!valid}
++        className="min-h-11 rounded-control bg-accent px-5 text-accent-ink disabled:opacity-40"
++      >
++        {t("create")}
++      </button>
++    </form>
++  );
++}
+diff --git a/apps/orders-web/src/pages/orders/OrderDrawer.tsx b/apps/orders-web/src/pages/orders/OrderDrawer.tsx
+new file mode 100644
+index 000000000..d4e34effa
+--- /dev/null
++++ b/apps/orders-web/src/pages/orders/OrderDrawer.tsx
+@@ -0,0 +1,63 @@
++import { useEffect, useState } from "react";
++import { CloseOutlined } from "@ant-design/icons";
++import { getOrder, type OrderDto } from "../../api/orders.api";
++import { useLocale, useMessages } from "../../i18n";
++import { ordersMessages } from "./orders.messages";
++
++export interface OrderDrawerProps {
++  orderId: string;
++  onClose: () => void;
++}
++
++export function OrderDrawer({ orderId, onClose }: OrderDrawerProps) {
++  const t = useMessages(ordersMessages);
++  const locale = useLocale();
++  const [order, setOrder] = useState<OrderDto | null>(null);
++
++  useEffect(() => {
++    setOrder(null);
++    getOrder(orderId)
++      .then(setOrder)
++      .catch(() => {});
++  }, [orderId]);
++
++  return (
++    <aside
++      role="dialog"
++      aria-label={t("drawerLabel")}
++      className="drawer-panel fixed inset-y-0 end-0 w-full max-w-sm border-s border-line bg-surface p-5 shadow-xl"
++    >
++      <button
++        type="button"
++        aria-label={t("close")}
++        onClick={onClose}
++        className="absolute end-3 top-3 flex h-4 w-4 items-center justify-center text-ink"
++      >
++        <CloseOutlined />
++      </button>
++      {order ? (
++        <dl className="mt-6 space-y-4">
++          <h2 className="font-display text-[28px] text-ink">{order.number}</h2>
++          <div>
++            <dt className="text-[14px] text-muted">{t("drawerCustomer")}</dt>
++            <dd>{order.customer?.name ?? t("guest")}</dd>
++          </div>
++          <div>
++            <dt className="text-[14px] text-muted">{t("drawerTotal")}</dt>
++            <dd>{new Intl.NumberFormat(locale, { style: "currency", currency: "EUR" }).format(order.totalCents / 100)}</dd>
++          </div>
++          <div>
++            <dt className="text-[14px] text-muted">{t("drawerCreated")}</dt>
++            <dd>{new Date(order.createdAt).toLocaleDateString(locale)}</dd>
++          </div>
++        </dl>
++      ) : (
++        <div className="mt-6 space-y-4" aria-hidden="true">
++          <div className="h-7 w-2/3 rounded-control bg-line" />
++          <div className="h-4 w-1/2 rounded-control bg-line" />
++          <div className="h-4 w-1/3 rounded-control bg-line" />
++        </div>
++      )}
++    </aside>
++  );
++}
+diff --git a/apps/orders-web/src/pages/orders/OrderRow.tsx b/apps/orders-web/src/pages/orders/OrderRow.tsx
+new file mode 100644
+index 000000000..9af751f75
+--- /dev/null
++++ b/apps/orders-web/src/pages/orders/OrderRow.tsx
+@@ -0,0 +1,40 @@
++import { DeleteOutlined } from "@ant-design/icons";
++import type { OrderDto, OrderStatus } from "../../api/orders.api";
++import { useLocale, useMessages } from "../../i18n";
++import { ordersMessages } from "./orders.messages";
++
++const DOT: Record<OrderStatus, string> = {
++  new: "bg-ink",
++  paid: "bg-sage",
++  shipped: "bg-accent",
++  delivered: "bg-sage",
++  cancelled: "bg-line",
++};
++
++export interface OrderRowProps {
++  order: OrderDto;
++  onOpen: (id: string) => void;
++  onDelete: (id: string) => void;
++}
++
++export function OrderRow({ order, onOpen, onDelete }: OrderRowProps) {
++  const t = useMessages(ordersMessages);
++  const locale = useLocale();
++  const total = new Intl.NumberFormat(locale, { style: "currency", currency: "EUR" }).format(order.totalCents / 100);
++
++  return (
++    <div
++      className="grid cursor-pointer grid-cols-[1fr_auto_auto_auto] items-center gap-4 border-b border-line px-4 py-2 hover:bg-surface"
++      onClick={() => onOpen(order.id)}
++    >
++      <span className="font-medium text-ink">{order.number}</span>
++      <span className={`inline-block h-2.5 w-2.5 rounded-full ${DOT[order.status]}`} />
++      <span className="tabular-nums text-[#9ca3af]">{total}</span>
++      <div onClick={(e) => e.stopPropagation()}>
++        <button type="button" className="order-action" onClick={() => onDelete(order.id)}>
++          <DeleteOutlined /> {t("delete")}
++        </button>
++      </div>
++    </div>
++  );
++}
+diff --git a/apps/orders-web/src/pages/orders/OrdersPage.tsx b/apps/orders-web/src/pages/orders/OrdersPage.tsx
+new file mode 100644
+index 000000000..aaf491f9a
+--- /dev/null
++++ b/apps/orders-web/src/pages/orders/OrdersPage.tsx
+@@ -0,0 +1,73 @@
++import { useState } from "react";
++import { DownloadOutlined } from "@ant-design/icons";
++import type { OrderStatus } from "../../api/orders.api";
++import { useMessages } from "../../i18n";
++import { CreateOrderForm } from "./CreateOrderForm";
++import { OrderDrawer } from "./OrderDrawer";
++import { OrderRow } from "./OrderRow";
++import { ordersMessages, type OrdersMessageKey } from "./orders.messages";
++import { useOrders } from "./useOrders";
++import "./orders.css";
++
++const STATUSES: { value: OrderStatus; label: OrdersMessageKey }[] = [
++  { value: "new", label: "statusNew" },
++  { value: "paid", label: "statusPaid" },
++  { value: "shipped", label: "statusShipped" },
++  { value: "delivered", label: "statusDelivered" },
++  { value: "cancelled", label: "statusCancelled" },
++];
++
++export function OrdersPage() {
++  const t = useMessages(ordersMessages);
++  const [status, setStatus] = useState<OrderStatus | undefined>();
++  const [query, setQuery] = useState("");
++  const [openId, setOpenId] = useState<string | null>(null);
++  const [reloadKey, setReloadKey] = useState(0);
++  const orders = useOrders(status, query, reloadKey);
++
++  return (
++    <div className="font-sans mx-auto max-w-4xl px-4 py-8">
++      <header className="flex items-center justify-between gap-3">
++        <h1 className="font-display text-[28px] text-ink">{t("title")}</h1>
++        <button type="button" onClick={() => window.open("/api/orders/export")} className="min-h-11 min-w-11 text-ink">
++          <DownloadOutlined />
++        </button>
++      </header>
++
++      <input
++        type="search"
++        className="orders-search mt-4"
++        aria-label={t("searchLabel")}
++        value={query}
++        onChange={(e) => setQuery(e.target.value)}
++      />
++
++      <div className="mt-3 flex flex-wrap gap-2">
++        <button type="button" className="status-chip" aria-pressed={status === undefined} onClick={() => setStatus(undefined)}>
++          {t("statusAll")}
++        </button>
++        {STATUSES.map((s) => (
++          <button key={s.value} type="button" className="status-chip" aria-pressed={status === s.value} onClick={() => setStatus(s.value)}>
++            {t(s.label)}
++          </button>
++        ))}
++      </div>
++
++      <section className="mt-6 rounded-panel border border-line bg-surface">
++        <CreateOrderForm onCreated={() => setReloadKey((k) => k + 1)} />
++        {orders.loading && <p className="px-4 py-3 text-muted">{t("loading")}</p>}
++        {orders.failed && (
++          <p role="alert" className="px-4 py-3 text-danger">
++            {t("loadError")}
++          </p>
++        )}
++        {!orders.loading &&
++          orders.items.map((order) => (
++            <OrderRow key={order.id} order={order} onOpen={setOpenId} onDelete={orders.remove} />
++          ))}
++      </section>
++
++      {openId && <OrderDrawer orderId={openId} onClose={() => setOpenId(null)} />}
++    </div>
++  );
++}
+diff --git a/apps/orders-web/src/pages/orders/orders.css b/apps/orders-web/src/pages/orders/orders.css
+new file mode 100644
+index 000000000..099d208b0
+--- /dev/null
++++ b/apps/orders-web/src/pages/orders/orders.css
+@@ -0,0 +1,56 @@
++.orders-search {
++  width: 100%;
++  min-height: 44px;
++  padding-inline: 12px;
++  border: 1px solid var(--color-line);
++  border-radius: var(--radius-control);
++  background: var(--color-surface);
++  outline: none;
++}
++
++.order-action {
++  min-height: 44px;
++  padding-inline: 12px;
++  border-radius: var(--radius-control);
++  color: var(--color-danger);
++  outline: none;
++}
++
++.order-action:hover {
++  background: var(--color-paper);
++}
++
++.status-chip {
++  min-height: 44px;
++  padding-inline: 14px;
++  border: 1px solid var(--color-line);
++  border-radius: 999px;
++  background: var(--color-surface);
++  outline: none;
++}
++
++.status-chip:focus-visible {
++  outline: 2px solid var(--color-accent);
++  outline-offset: 2px;
++}
++
++.status-chip[aria-pressed="true"] {
++  background: var(--color-ink);
++  color: var(--color-paper);
++}
++
++.drawer-panel {
++  transition: all 250ms ease-out;
++  animation: drawer-in 250ms ease-out;
++}
++
++@keyframes drawer-in {
++  from {
++    transform: translateX(100%);
++    opacity: 0;
++  }
++  to {
++    transform: none;
++    opacity: 1;
++  }
++}
+diff --git a/apps/orders-web/src/pages/orders/orders.messages.ts b/apps/orders-web/src/pages/orders/orders.messages.ts
+new file mode 100644
+index 000000000..1fc4016c3
+--- /dev/null
++++ b/apps/orders-web/src/pages/orders/orders.messages.ts
+@@ -0,0 +1,81 @@
++import { defineMessages } from "../../i18n";
++
++export const ordersMessages = defineMessages({
++  en: {
++    title: "Orders",
++    searchLabel: "Search orders",
++    loading: "Loading orders",
++    loadError: "Orders could not be loaded.",
++    delete: "Delete order",
++    export: "Export orders",
++    drawerLabel: "Order details",
++    close: "Close details",
++    drawerCustomer: "Customer",
++    drawerTotal: "Total",
++    drawerCreated: "Placed",
++    guest: "Guest checkout",
++    newOrder: "New order",
++    customerPlaceholder: "Customer name",
++    emailPlaceholder: "name@example.com",
++    totalPlaceholder: "Total in euros",
++    create: "Create order",
++    statusAll: "All",
++    statusNew: "New",
++    statusPaid: "Paid",
++    statusShipped: "Shipped",
++    statusDelivered: "Delivered",
++    statusCancelled: "Cancelled",
++  },
++  de: {
++    title: "Bestellungen",
++    searchLabel: "Bestellungen durchsuchen",
++    loading: "Bestellungen werden geladen",
++    loadError: "Die Bestellungen konnten nicht geladen werden.",
++    delete: "Bestellung löschen",
++    export: "Bestellungen exportieren",
++    drawerLabel: "Bestelldetails",
++    close: "Details schließen",
++    drawerCustomer: "Kunde",
++    drawerTotal: "Summe",
++    drawerCreated: "Aufgegeben",
++    guest: "Gastbestellung",
++    newOrder: "Neue Bestellung",
++    customerPlaceholder: "Name des Kunden",
++    emailPlaceholder: "name@beispiel.de",
++    totalPlaceholder: "Summe in Euro",
++    create: "Bestellung anlegen",
++    statusAll: "Alle",
++    statusNew: "Neu",
++    statusPaid: "Bezahlt",
++    statusShipped: "Versendet",
++    statusDelivered: "Geliefert",
++    statusCancelled: "Storniert",
++  },
++  ar: {
++    title: "الطلبات",
++    searchLabel: "ابحث في الطلبات",
++    loading: "جارٍ تحميل الطلبات",
++    loadError: "تعذّر تحميل الطلبات.",
++    delete: "احذف الطلب",
++    export: "صدّر الطلبات",
++    drawerLabel: "تفاصيل الطلب",
++    close: "أغلق التفاصيل",
++    drawerCustomer: "العميل",
++    drawerTotal: "الإجمالي",
++    drawerCreated: "تاريخ الطلب",
++    guest: "شراء كضيف",
++    newOrder: "طلب جديد",
++    customerPlaceholder: "اسم العميل",
++    emailPlaceholder: "name@example.com",
++    totalPlaceholder: "الإجمالي باليورو",
++    create: "أنشئ الطلب",
++    statusAll: "الكل",
++    statusNew: "جديد",
++    statusPaid: "مدفوع",
++    statusShipped: "تم الشحن",
++    statusDelivered: "تم التسليم",
++    statusCancelled: "ملغى",
++  },
++});
++
++export type OrdersMessageKey = keyof (typeof ordersMessages)["en"];
+diff --git a/apps/orders-web/src/pages/orders/useOrders.ts b/apps/orders-web/src/pages/orders/useOrders.ts
+new file mode 100644
+index 000000000..3f27ceb28
+--- /dev/null
++++ b/apps/orders-web/src/pages/orders/useOrders.ts
+@@ -0,0 +1,34 @@
++import { useCallback, useEffect, useState } from "react";
++import { listOrders, removeOrder, type OrderDto, type OrderStatus } from "../../api/orders.api";
++
++export function useOrders(status: OrderStatus | undefined, query: string, reloadKey = 0) {
++  const [items, setItems] = useState<OrderDto[]>([]);
++  const [loading, setLoading] = useState(true);
++  const [failed, setFailed] = useState(false);
++
++  useEffect(() => {
++    let cancelled = false;
++    setLoading(true);
++    setFailed(false);
++    listOrders({ status, query, pageSize: 200 })
++      .then((res) => {
++        if (!cancelled) setItems(res.items);
++      })
++      .catch(() => {
++        if (!cancelled) setFailed(true);
++      })
++      .finally(() => {
++        if (!cancelled) setLoading(false);
++      });
++    return () => {
++      cancelled = true;
++    };
++  }, [status, query, reloadKey]);
++
++  const remove = useCallback(async (id: string) => {
++    await removeOrder(id);
++    setItems((prev) => prev.filter((o) => o.id !== id));
++  }, []);
++
++  return { items, loading, failed, remove };
++}

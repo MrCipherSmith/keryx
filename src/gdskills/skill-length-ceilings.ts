@@ -158,7 +158,7 @@ const CEILINGS_BY_KEY = {
   "review/review-jev-risk": 185,
   "review/review-jev-rules": 262,
   "review/review-jev-scenarios": 182,
-  "review/review-layout": 237,
+  "review/review-layout": 231,
   "review/review-logic": 364,
   "review/review-orchestrator": 1565,
   "review/review-performance": 332,
@@ -169,7 +169,7 @@ const CEILINGS_BY_KEY = {
   "review/review-security-code": 358,
   "review/review-style": 315,
   "review/review-testing-practices": 275,
-  "review/review-ui-ux": 267,
+  "review/review-ui-ux": 227,
   "review/review-verifier": 299,
 } satisfies Record<string, number>;
 

@@ -20,6 +20,8 @@ Use it for the clean-code lens and its rules. Run at least 3 reps: single runs v
 
 **testing** (4 cases). Tests for the two small apps (`services/orders-api`, `apps/orders-web`) on a base commit that holds both; t01 (API unit tests), t02 (web unit tests) and t03 (Playwright e2e) carry planted test defects, 24 in all; t04 is a clean control. Scored like seeded (recall out of 24). Use it for `review-testing-practices` and the testing rules. The case commits live on branches `bench-seeds/testing-*`; the diffs in `suites/testing/diff/` hold the same change. Truth: `bench-archive/2026-11-15/tbench/truth/tNN.json` and `tNN.decoys.json`.
 
+**ui** (4 cases). The frontend app (`apps/orders-web`) with Tailwind 3, theme tokens, `DESIGN.md`, an en/de/ar message catalog and a home page, as the base commit; u01 (states, accessibility and forms), u02 (AI-slop tells and copy) and u03 (layout, with measurements supplied in `apps/orders-web/layout-measurements.json` because a reviewer cannot run a browser) each add a feature with planted defects, 24 in all; u04 is a clean control. Scored like seeded (recall out of 24). Use it for `review-ui-ux` and `review-layout` and the UI rule: `review-ui-ux` runs on u01, u02 and u04, `review-layout` on u03 and u04 (use `--cases` for each lens). The case commits live on branches `bench-seeds/ui-*`; the diffs in `suites/ui/diff/` hold the same change. Truth: `bench-archive/2026-11-16/ubench/truth/uNN.json` and `uNN.decoys.json`.
+
 **history** (13 cases). Past review packages: for each, the base and head commits and the 46 blocker/major findings that were later confirmed and fixed. One general reviewer reads each change cold. It measures recall against real, already-fixed defects: how much of what reviews historically had to catch a single pass catches. There is no decoy or noise measure here.
 
 ## Procedure
@@ -46,6 +48,7 @@ The planted defects, decoys and the history findings are the answer key. They ar
 - seeded truth: `qbench/truth/qNN.json` and `qNN.decoys.json`
 - backend truth: `bench-archive/2026-11-15/bbench/truth/bNN.json` and `bNN.decoys.json`
 - frontend truth: `bench-archive/2026-11-15/fbench/truth/fNN.json` and `fNN.decoys.json`
+- ui truth: `bench-archive/2026-11-16/ubench/truth/uNN.json` and `uNN.decoys.json`
 - history truth: `bench/truth/cNN.json` (findings with reviewer names stripped; the full corpus is `bench/corpus.json`)
 - old arm keys: `sealed/`
 
@@ -129,6 +132,17 @@ Highload lens and `concurrency-patterns` (2026-11-16), 2 reps. Arm A is `review-
 | | B | 0.75 | | | | |
 
 The trim loses no recall within run-to-run variation (one b01 item, 0.25 per rep) and reports less noise. History c12/c13 (races) stays at the floor for both arms, so it cannot separate them; a dedicated concurrency suite would be needed for that.
+
+UI rules (2026-11-16), ui suite, 2 reps. Arm A is each lens and `ui-anti-slop` as on main; arm B reads `ui-anti-slop` with its severity table and the new `layout-rendering`:
+
+| Lens, cases | Arm | Recall | Valid | Noise | Decoy | Control findings |
+|---|---|---|---|---|---|---|
+| `review-ui-ux`, u01 u02 + control u04 (/18) | A | 17.5 | 6 | 4.5 | 0 | 5.5 |
+| | B | 17.5 | 6.5 | 6 | 0 | 6.5 |
+| `review-layout`, u03 + control u04 (/6) | A | 6.0 | 0 | 1.5 | 0 | 0 |
+| | B | 6.0 | 0 | 1 | 0 | 0 |
+
+Both arms reach the ceiling and neither takes a decoy, so this suite separates them only on noise; the shorter lenses keep recall. The suite does not score whether the stated severity is right, which is what the new tables change.
 
 History suite: one general reviewer against the fixed blocker/major findings found 14 match + 6 partial of 46, about 37%.
 
