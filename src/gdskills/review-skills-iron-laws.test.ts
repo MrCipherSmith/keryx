@@ -285,7 +285,10 @@ describe("one condition, one severity, across the reviewer set (AC2)", () => {
     // canonical boundary test: a layer violation whose code behaves correctly names a
     // maintenance cost, not a trigger and a wrong outcome, so it is `minor` unless a
     // named defect or a stated project rule makes it more.
-    expect(read("review-frontend")).toMatch(/API call in a component \(hook, handler, useEffect\)[^\n]*\*\*minor\*\*/);
+    // review-frontend rates it by the code-style-patterns severity table (core-rules audit, group 3).
+    const codeStyle = readFileSync(path.join(import.meta.dir, "bundled", "rules", "core", "code-style-patterns.mdc"), "utf8");
+    expect(codeStyle).toMatch(/^\| API\/IO or business logic in a component \(Rule 2\) \| always \| `minor`; `major` with a named defect/m);
+    expect(read("review-frontend")).toContain("code-style-patterns.mdc");
     expect(read("review-frontend")).not.toMatch(/API call in a component[^\n]*\*\*(blocker|major)\*\*/);
     expect(read("review-architecture")).toMatch(
       /API\/IO call in a component[\s\S]{0,200}\| `minor`/,
