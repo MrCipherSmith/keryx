@@ -1644,7 +1644,7 @@ Three properties, each of which the command enforces rather than describes:
 
   ```bash
   keryx providers cross-family --opt-in --json > cross-family.json
-  keryx review ingest --report round.md --ref <ref> --cross-family-review cross-family.json
+  keryx review ingest --report round.md --target-ref <ref> --cross-family-review cross-family.json
   keryx review status <review-id>
   ```
 
@@ -5007,11 +5007,11 @@ keryx review agents spawn --run-dir <dir> --payload <json>
 keryx review agents wait --run-dir <dir> --dispatch <id>
 keryx review agents cancel --run-dir <dir> [--dispatch <id>] --reason <text>
 keryx review agents result --run-dir <dir> --dispatch <id>
-keryx review attach --flow <id> --target <kind> --ref <ref> [--head <sha>]
+keryx review attach --flow <id> --target <kind> --target-ref <ref> [--head <sha>]
                     [--reviewers a,b] [--report <path>] [--automatic]
-keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>] [--style] [--with-role <role>]
+keryx review start --target <kind> --target-ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>] [--style] [--with-role <role>]
                    [--memory-query "<query>"] [--automatic]
-keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>] [--automatic]
+keryx review ingest --report <path> [--flow <id>] --target-ref <ref> [--head <sha>] [--automatic]
                     [--verifications <file|->] [--verification-mode off|annotate|filter]
                     [--premises <file|->]...
                     [--scope <scope.json>] [--blast-radius <blast-radius.json>]

@@ -646,7 +646,8 @@ function flagTokens(args: readonly string[]): Array<{ name: string; value: strin
 
 /** The shared unknown-flag refusal, scoped to `keryx review <usage>`. */
 function rejectReviewFlags(args: readonly string[], allowed: readonly string[], usage: string): void {
-  rejectUnknownFlags(args, allowed, `review ${usage}`);
+  // Review flags were judged by name only before the shared helper, so every one keeps its `--name=value` spelling.
+  rejectUnknownFlags(args, allowed, `review ${usage}`, { valueFlags: allowed });
 }
 
 /** Test seam: whether a person is at a terminal. Default: stdin and stdout are both TTYs. */
@@ -1081,6 +1082,15 @@ export async function refreshCreatedPackageLayers(
   }
 }
 
+/**
+ * The target ref of `attach|start|ingest`. `--target-ref` is the preferred
+ * spelling; the older `--ref` alias keeps working and, as before the alias was
+ * documented, wins when both are given.
+ */
+export function resolveTargetRef(args: readonly string[]): string | undefined {
+  return optionValue(args as string[], "--ref") ?? optionValue(args as string[], "--target-ref");
+}
+
 async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: ReviewCommandSeams = {}): Promise<void> {
   rejectReviewFlags(args, CREATE_FLAGS, mode === "ingest" ? "ingest" : mode === "review-flow" ? "start" : "attach");
   if (mode !== "review-flow" && (args.includes("--style") || flagTokens(args).some((token) => token.name === "--with-role"))) {
@@ -1088,11 +1098,11 @@ async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: R
   }
   const optIn = optInRolesFromArgs(args);
   const targetKind = targetKindFromArgs(mode, args);
-  const targetRef = optionValue(args, "--ref") ?? optionValue(args, "--target-ref");
+  const targetRef = resolveTargetRef(args);
   // `--target-ref` is the preferred spelling; `--ref` keeps working (and still wins) with one stderr notice per invocation.
   if (optionValue(args, "--ref") !== undefined) console.error("keryx review: --ref is an alias of --target-ref; prefer --target-ref.");
   if (!targetRef) {
-    throw new Error("Usage: keryx review <attach|start|ingest> --target <kind> --ref <ref>");
+    throw new Error("Usage: keryx review <attach|start|ingest> --target <kind> --target-ref <ref>");
   }
   const reviewers = optionValue(args, "--reviewers")?.split(",").map((item) => item.trim()).filter(Boolean);
   const graphTimeout = parseGraphTimeout(optionValue(args, "--graph-timeout"));
@@ -5261,7 +5271,7 @@ process; past the bound the package is still created, the command returns, and t
 (log: <package>/layers-refresh.log; check with \`keryx review layers status --package <dir>\`). The cap is ${MAX_GRAPH_TIMEOUT_SECONDS} s.`;
 
 function printStartHelp(): void {
-  console.log(`keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
+  console.log(`keryx review start --target <kind> --target-ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
                    [--research <ledger.json>] [--review-id <id>] [--memory-query "<query>"] [--automatic]
                    [--graph-timeout <seconds>] [--unattended] [--host keryx-shell|claude-code|codex|other]
                    [--no-prior-round | --prior <package|reviewId>] [--style] [--with-role <role>]
@@ -5286,7 +5296,7 @@ ${GRAPH_TIMEOUT_HELP}`);
 }
 
 function printIngestHelp(): void {
-  console.log(`keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>] [--research <ledger.json>]
+  console.log(`keryx review ingest --report <path> [--flow <id>] --target-ref <ref> [--head <sha>] [--research <ledger.json>]
                     [--review-id <id>] [--automatic] [--verifications <file|->] [--verification-mode ${VERIFICATION_MODES.join("|")}]
                     [--premises <file|->]...
                     [--scope <scope.json>] [--blast-radius <blast-radius.json>] [--cross-family-review <file|->]
@@ -5377,10 +5387,10 @@ Usage:
   keryx review agents serve --project <dir> [--runs-root <dir>] --provider <id> --model <id>
                         --config-dir <dir> --cost-mode cost-unknown --permission-mode trust
   keryx review agents <start|plan|capabilities|status|spawn|wait|cancel|result> --run-dir <dir> ...
-  keryx review attach --flow <id> --target <kind> --ref <ref> [--head <sha>]
+  keryx review attach --flow <id> --target <kind> --target-ref <ref> [--head <sha>]
                       [--reviewers a,b] [--report <path>] [--research <ledger.json>]
                       [--automatic] [--no-prior-round | --prior <package|reviewId>]
-  keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
+  keryx review start --target <kind> --target-ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
                      [--research <ledger.json>] [--review-id <id>] [--memory-query "<query>"] [--automatic]
                      [--graph-timeout <seconds>] [--unattended] [--host keryx-shell|claude-code|codex|other]
                      [--no-prior-round | --prior <package|reviewId>] [--style] [--with-role <role>]  (writes <package>/round.json)
@@ -5390,7 +5400,7 @@ Usage:
   keryx review decide-premise --package <dir> --finding <id> --answer uphold|dismiss --reason "<why>"
                                                                      (terminal; card review_decide_premise)
   keryx review verify-run --package <dir> --finding <id> -- <command…>
-  keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>]
+  keryx review ingest --report <path> [--flow <id>] --target-ref <ref> [--head <sha>]
                       [--research <ledger.json>] [--review-id <id>] [--automatic]
                       [--verifications <file|->] [--premises <file|->]... [--verification-mode ${VERIFICATION_MODES.join("|")}]
                       [--scope <scope.json>] [--blast-radius <blast-radius.json>]

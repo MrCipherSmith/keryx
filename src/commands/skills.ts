@@ -1406,7 +1406,13 @@ function printVerifyAllJson(reports: unknown[], args: string[]): void {
 }
 
 async function verifySkillCommand(args: string[]): Promise<void> {
-  rejectUnknownFlags(args.slice(1), VERIFY_FLAGS, "skills verify");
+  rejectUnknownFlags(args.slice(1), VERIFY_FLAGS, "skills verify", { valueFlags: ["--root"] });
+  if (args.includes("--json-legacy-array") && !(args.includes("--all") && args.includes("--json"))) {
+    throw new Error(
+      "keryx skills verify: --json-legacy-array only applies to `--all --json` (the one output that used to be a bare array); " +
+        "other --json outputs are versioned objects.",
+    );
+  }
   const target = args[1];
   if (target === "--bundled" || args.includes("--bundled")) {
     verifyBundledSkills(args);
@@ -1433,6 +1439,7 @@ async function verifySkillCommand(args: string[]): Promise<void> {
     });
 
     if (args.includes("--json")) {
+      // The report carries its own `schemaVersion` as its first key (gdskills/verify.ts).
       console.log(JSON.stringify(report, null, 2));
       return;
     }

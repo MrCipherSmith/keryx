@@ -25,7 +25,7 @@ function service(): WorkspaceService {
 
 export async function workspaceCommand(args: string[]): Promise<void> {
   const subcommand = args[0];
-  const guardFlags = (rest: readonly string[], allowed: readonly string[]): void => rejectUnknownFlags(rest, allowed, `workspace ${subcommand}`);
+  const guardFlags = (rest: readonly string[], allowed: readonly string[]): void => rejectUnknownFlags(rest, allowed, `workspace ${subcommand}`, { valueFlags: allowed });
   if (!subcommand || subcommand === "help" || args.includes("--help") || args.includes("-h")) return printHelp();
   try {
     if (subcommand === "create") {

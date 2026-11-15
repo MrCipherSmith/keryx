@@ -55,8 +55,26 @@ export function optionValues(args: readonly string[], name: string): string[] {
 }
 
 export interface UnknownFlagOptions {
-  /** Also treat a single-dash token (`-x`) as a flag. Default: only `--name` tokens are flags. */
+  /** Also treat any single-dash token (`-`, `-x`, `-5`) as a flag. Default: only `--name` tokens are flags. */
   readonly shortFlags?: boolean;
+  /**
+   * The flags whose `--name=value` spelling the caller actually reads (through
+   * {@link optionValue} / {@link optionValues}). Default: none. A `--name=value`
+   * token for any other flag is refused: a caller that reads its boolean flags
+   * with `args.includes("--name")` never sees `--name=1`, so accepting it would
+   * drop the flag and report success.
+   */
+  readonly valueFlags?: readonly string[];
+}
+
+function flagNameOf(argument: string): string {
+  const equals = argument.indexOf("=");
+  return equals > 0 ? argument.slice(0, equals) : argument;
+}
+
+function isFlagToken(argument: string, options: UnknownFlagOptions): boolean {
+  if (argument.startsWith("--")) return true;
+  return options.shortFlags === true && argument.startsWith("-");
 }
 
 /**
@@ -69,14 +87,27 @@ export interface UnknownFlagOptions {
 export function unknownFlags(args: readonly string[], allowed: readonly string[], options: UnknownFlagOptions = {}): string[] {
   const names: string[] = [];
   for (const argument of args) {
-    const isLong = argument.startsWith("--");
-    const isShort = options.shortFlags === true && !isLong && argument.length > 1 && argument.startsWith("-") && !/^-\d/.test(argument);
-    if (!isLong && !isShort) continue;
-    const equals = argument.indexOf("=");
-    const name = equals > 0 ? argument.slice(0, equals) : argument;
+    if (!isFlagToken(argument, options)) continue;
+    const name = flagNameOf(argument);
     if (!allowed.includes(name) && !names.includes(name)) names.push(name);
   }
   return names;
+}
+
+/**
+ * The distinct allowed flags given in the `--name=value` spelling that the
+ * caller does not read that way (not in `options.valueFlags`), as typed.
+ */
+export function unreadableValueFlags(args: readonly string[], allowed: readonly string[], options: UnknownFlagOptions = {}): string[] {
+  const valueFlags = options.valueFlags ?? [];
+  const tokens: string[] = [];
+  for (const argument of args) {
+    if (!argument.startsWith("--")) continue;
+    const name = flagNameOf(argument);
+    if (name === argument || !allowed.includes(name) || valueFlags.includes(name)) continue;
+    if (!tokens.includes(argument)) tokens.push(argument);
+  }
+  return tokens;
 }
 
 /**
@@ -84,6 +115,8 @@ export function unknownFlags(args: readonly string[], allowed: readonly string[]
  * (`cli-interface-design.mdc`, decision 4): it throws one line naming the flag(s)
  * and listing what is accepted, which the CLI prints on stderr with exit code 1.
  * A dropped flag writes nothing and reports success, so it is refused instead.
+ * A `--name=value` token for a flag the caller does not read in that spelling is
+ * refused the same way (see {@link UnknownFlagOptions.valueFlags}).
  *
  * `command` is the invocation as the person typed it after `keryx`, e.g.
  * `"review slice"` or `"memory search"`.
@@ -95,12 +128,19 @@ export function rejectUnknownFlags(
   options: UnknownFlagOptions = {},
 ): void {
   const unknown = unknownFlags(args, allowed, options);
-  if (unknown.length === 0) return;
-  throw new Error(
-    `Unknown option${unknown.length > 1 ? "s" : ""} for \`keryx ${command}\`: ${unknown.join(", ")}. Accepted: ${
-      allowed.length > 0 ? allowed.join(", ") : "(none)"
-    }.`,
-  );
+  if (unknown.length > 0) {
+    throw new Error(
+      `Unknown option${unknown.length > 1 ? "s" : ""} for \`keryx ${command}\`: ${unknown.join(", ")}. Accepted: ${
+        allowed.length > 0 ? allowed.join(", ") : "(none)"
+      }.`,
+    );
+  }
+  const valued = unreadableValueFlags(args, allowed, options);
+  if (valued.length > 0) {
+    throw new Error(
+      `\`keryx ${command}\` does not take a value with ${valued.map((token) => flagNameOf(token)).join(", ")} (got ${valued.join(", ")}). Give the bare flag.`,
+    );
+  }
 }
 
 export function parseBooleanFlags<const T extends readonly string[]>(

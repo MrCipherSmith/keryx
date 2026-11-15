@@ -25,7 +25,7 @@ function parseFilters(args: readonly string[]): GovernanceFilters {
 }
 
 async function runReport(args: string[]): Promise<void> {
-  rejectUnknownFlags(args, REPORT_FLAGS, "governance report");
+  rejectUnknownFlags(args, REPORT_FLAGS, "governance report", { valueFlags: ["--flow", "--owner", "--since", "--until"] });
   const filters = parseFilters(args);
   const allProjects = args.includes("--all-projects");
   const asJson = args.includes("--json");

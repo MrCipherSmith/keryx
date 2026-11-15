@@ -22,6 +22,29 @@ async function runCli(args: string[], cwd?: string): Promise<{ code: number; out
   return { code: await proc.exited, out, err };
 }
 
+/** A project with one registered project skill, `review/review-house`, that `skills verify <target>` can verify. */
+function oneSkillProject(): string {
+  const dir = mkdtempSync(path.join(tmpdir(), "keryx-verify-json-one-"));
+  const packageRoot = path.join(dir, ".metaproject", "project-skills", "review", "review-house");
+  mkdirSync(packageRoot, { recursive: true });
+  writeFileSync(
+    path.join(dir, ".metaproject", "metaproject.json"),
+    JSON.stringify({
+      modules: {
+        gdskills: {
+          projectSkillRegistry: [
+            { module: "review", name: "review-house", target: "review-house", path: ".metaproject/project-skills/review/review-house", version: "0.1.0", status: "active", updatedAt: "2026-09-09T00:00:00.000Z" },
+          ],
+        },
+      },
+    }),
+    "utf8",
+  );
+  writeFileSync(path.join(packageRoot, "SKILL.md"), '---\nname: review-house\nmetadata:\n  version: "2.0.0"\n---\n\n# House\n', "utf8");
+  writeFileSync(path.join(packageRoot, "skill-changelog.md"), "# changelog\n", "utf8");
+  return dir;
+}
+
 /** A project whose manifest registers no project skills. */
 function emptyRegistryProject(): string {
   const dir = mkdtempSync(path.join(tmpdir(), "keryx-verify-json-proj-"));
@@ -66,5 +89,29 @@ describe("keryx skills verify --json envelopes", () => {
     expect(result.code).toBe(0);
     expect(JSON.parse(result.out)).toEqual([]);
     expect(result.err.match(/deprecated/g)?.length).toBe(1);
+  }, 60_000);
+
+  test("a single target --json carries schemaVersion first, then the report", async () => {
+    const result = await runCli(["skills", "verify", "review/review-house", "--json", "--dry-run"], oneSkillProject());
+    expect(result.err).toBe("");
+    expect(result.code).toBe(0);
+    const parsed = JSON.parse(result.out) as Record<string, unknown>;
+    expect(Object.keys(parsed)[0]).toBe("schemaVersion");
+    expect(parsed.schemaVersion).toBe(1);
+    expect(parsed.module).toBe("review");
+    expect(parsed.name).toBe("review-house");
+  }, 60_000);
+
+  test("--json-legacy-array is refused unless used with --all --json", async () => {
+    for (const args of [
+      ["skills", "verify", "review/review-house", "--json", "--json-legacy-array"],
+      ["skills", "verify", "--all", "--json-legacy-array"],
+      ["skills", "verify", "--bundled", "--json", "--json-legacy-array"],
+    ]) {
+      const result = await runCli(args, oneSkillProject());
+      expect(result.code).toBe(1);
+      expect(result.err).toContain("--json-legacy-array only applies to `--all --json`");
+      expect(result.out).toBe("");
+    }
   }, 60_000);
 });

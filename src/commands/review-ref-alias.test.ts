@@ -3,7 +3,7 @@
 // The run is stopped right after the ref is read (an invalid --host), so no review package is written.
 
 import { afterEach, describe, expect, test } from "bun:test";
-import { reviewCommand } from "./review";
+import { resolveTargetRef, reviewCommand } from "./review";
 
 async function stderrOf(args: string[]): Promise<string[]> {
   const errors: string[] = [];
@@ -43,5 +43,27 @@ describe("review --ref alias notice", () => {
     process.exitCode = 0;
     await stderrOf(["attach", "--target", "branch", "--target-ref", "x", "--host", "bogus"]);
     expect(withAlias).toBe(process.exitCode);
+  });
+});
+
+describe("review --ref / --target-ref precedence", () => {
+  test("--target-ref alone and --ref alone each answer", () => {
+    expect(resolveTargetRef(["--target-ref", "a"])).toBe("a");
+    expect(resolveTargetRef(["--ref", "b"])).toBe("b");
+  });
+
+  test("with both given, --ref wins (the alias keeps the behaviour it always had), in either argv order", () => {
+    expect(resolveTargetRef(["--ref", "old", "--target-ref", "new"])).toBe("old");
+    expect(resolveTargetRef(["--target-ref", "new", "--ref", "old"])).toBe("old");
+  });
+
+  test("neither given answers undefined", () => {
+    expect(resolveTargetRef(["--target", "branch"])).toBeUndefined();
+  });
+
+  test("the missing-ref usage error names --target-ref", async () => {
+    process.exitCode = 0;
+    const errors = await stderrOf(["start", "--target", "branch"]);
+    expect(errors.join("\n")).toContain("--target-ref <ref>");
   });
 });
