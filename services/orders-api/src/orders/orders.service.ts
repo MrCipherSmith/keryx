@@ -69,4 +69,25 @@ export class OrdersService {
       return OrderResponse.from(saved);
     });
   }
+
+  /** Cancels a pending or paid order and puts the reserved stock back. Cancelling twice is a no-op. */
+  async cancel(id: string): Promise<OrderResponse> {
+    return this.dataSource.transaction(async (manager) => {
+      const order = await manager.findOne(Order, { where: { id }, lock: { mode: "pessimistic_write" } });
+      if (!order) throw new NotFoundException("Order not found");
+      order.customer = await manager.findOneByOrFail(Customer, { id: order.customerId });
+
+      if (order.status === OrderStatus.Cancelled) return OrderResponse.from(order);
+      if (order.status === OrderStatus.Shipped) throw new ConflictException("Shipped orders cannot be cancelled");
+
+      const items = await manager.findBy(OrderItem, { orderId: order.id });
+      for (const item of items) {
+        await manager.increment(Product, { id: item.productId }, "stock", item.quantity);
+      }
+      order.status = OrderStatus.Cancelled;
+      order.cancelledAt = new Date();
+      await manager.save(order);
+      return OrderResponse.from(order);
+    });
+  }
 }

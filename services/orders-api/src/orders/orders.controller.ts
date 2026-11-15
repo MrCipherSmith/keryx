@@ -25,4 +25,10 @@ export class OrdersController {
   create(@Body() dto: CreateOrderDto): Promise<OrderResponse> {
     return this.orders.create(dto);
   }
+
+  @Post(":id/cancel")
+  @HttpCode(200)
+  cancel(@Param("id", ParseUUIDPipe) id: string): Promise<OrderResponse> {
+    return this.orders.cancel(id);
+  }
 }
