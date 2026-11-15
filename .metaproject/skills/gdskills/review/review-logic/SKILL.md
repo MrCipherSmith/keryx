@@ -253,7 +253,7 @@ conditions land under that rubric, not a second rubric.
 | Silent wrong result on a named input | `major` | Trigger and outcome are both named |
 | Type contract broken (declared type is not what is returned) | `major` | Callers observe the wrong value |
 | Edge case not handled, no input that reaches it named | `minor` | No trigger; the cost is to the next editor |
-| Non-null assertion without a comment | `minor` | Behaves correctly today; the cost is to the reader |
+| Non-null assertion (`!`) | the `!` row of `code-style-patterns.mdc` Review severities | That table owns the rating; do not restate it here |
 | "Could be more defensive", no observable defect | `info` | Neither trigger nor maintenance cost named |
 
 ## Iron Laws

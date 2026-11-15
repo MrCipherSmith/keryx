@@ -79,6 +79,12 @@ Do not throw from an `assert` on input a caller can legitimately send. Validate 
 
 ---
 
+## Iron Laws
+
+**IRON LAW 1: A catch that hides a failure from a caller who then proceeds is forbidden.**
+**IRON LAW 2: A failure is never signalled by a value a caller can read as success.**
+**IRON LAW 3: A rethrow keeps the original error as `cause`.**
+
 ## Review severities (shared with reviewers)
 
 `review-clean-code`, `review-logic`, `review-backend` and `review-frontend` rate failure paths by this table and keep only framework-specific rows of their own (a NestJS exception type, a MobX store's `try/catch/finally`). Change a row here, never in a reviewer.
@@ -93,9 +99,3 @@ Do not throw from an `assert` on input a caller can legitimately send. Validate 
 | `catch (err: any)` in TypeScript | always | `minor` | `catch (err: unknown)` |
 
 ---
-
-## Iron Laws
-
-**IRON LAW 1: A catch that hides a failure from a caller who then proceeds is forbidden.**
-**IRON LAW 2: A failure is never signalled by a value a caller can read as success.**
-**IRON LAW 3: A rethrow keeps the original error as `cause`.**
