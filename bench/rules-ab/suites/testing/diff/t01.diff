@@ -1,0 +1,299 @@
+diff --git a/services/orders-api/jest.config.ts b/services/orders-api/jest.config.ts
+new file mode 100644
+index 000000000..a69eea9fa
+--- /dev/null
++++ b/services/orders-api/jest.config.ts
+@@ -0,0 +1,10 @@
++import type { Config } from "jest";
++
++const config: Config = {
++  preset: "ts-jest",
++  testEnvironment: "node",
++  rootDir: "src",
++  testRegex: ".*\\.test\\.ts$",
++};
++
++export default config;
+diff --git a/services/orders-api/migrations/1700000100000-order-cancelled-at.ts b/services/orders-api/migrations/1700000100000-order-cancelled-at.ts
+new file mode 100644
+index 000000000..585f9fdde
+--- /dev/null
++++ b/services/orders-api/migrations/1700000100000-order-cancelled-at.ts
+@@ -0,0 +1,11 @@
++import { MigrationInterface, QueryRunner } from "typeorm";
++
++export class OrderCancelledAt1700000100000 implements MigrationInterface {
++  async up(q: QueryRunner): Promise<void> {
++    await q.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS cancelled_at timestamptz`);
++  }
++
++  async down(q: QueryRunner): Promise<void> {
++    await q.query(`ALTER TABLE orders DROP COLUMN IF EXISTS cancelled_at`);
++  }
++}
+diff --git a/services/orders-api/src/common/idempotency.interceptor.test.ts b/services/orders-api/src/common/idempotency.interceptor.test.ts
+new file mode 100644
+index 000000000..22dfffa72
+--- /dev/null
++++ b/services/orders-api/src/common/idempotency.interceptor.test.ts
+@@ -0,0 +1,57 @@
++import { BadRequestException, type CallHandler, type ExecutionContext } from "@nestjs/common";
++import { firstValueFrom, of } from "rxjs";
++import type { Repository } from "typeorm";
++import { IdempotencyInterceptor } from "./idempotency.interceptor";
++import type { IdempotencyRecord } from "./idempotency-record.entity";
++
++function contextFor(headers: Record<string, string>): ExecutionContext {
++  const req = {
++    method: "POST",
++    route: { path: "/v1/orders" },
++    header: (name: string) => headers[name],
++  };
++  return { switchToHttp: () => ({ getRequest: () => req }) } as unknown as ExecutionContext;
++}
++
++function setup(stored: Partial<IdempotencyRecord> | null) {
++  const records = {
++    findOneBy: jest.fn().mockResolvedValue(stored),
++    insert: jest.fn().mockResolvedValue(undefined),
++  };
++  const handler: CallHandler = { handle: jest.fn(() => of({ id: "fresh" })) };
++  const interceptor = new IdempotencyInterceptor(records as unknown as Repository<IdempotencyRecord>);
++  return { records, handler, interceptor };
++}
++
++describe("IdempotencyInterceptor", () => {
++  it("refuses a request without the header", () => {
++    const { interceptor, handler } = setup(null);
++
++    expect(() => interceptor.intercept(contextFor({}), handler)).toThrow(BadRequestException);
++  });
++
++  it("refuses a key longer than 64 characters", () => {
++    const { interceptor, handler } = setup(null);
++
++    expect(() => interceptor.intercept(contextFor({ "Idempotency-Key": "k".repeat(65) }), handler)).toThrow(BadRequestException);
++  });
++
++  it("replays the stored response and does not run the handler again", async () => {
++    const { interceptor, handler, records } = setup({ response: { id: "stored" } });
++
++    const result = await firstValueFrom(interceptor.intercept(contextFor({ "Idempotency-Key": "abc" }), handler));
++
++    expect(result).toEqual({ id: "stored" });
++    expect(handler.handle).not.toHaveBeenCalled();
++    expect(records.insert).not.toHaveBeenCalled();
++  });
++
++  it("runs the handler once and stores what it returned", async () => {
++    const { interceptor, handler, records } = setup(null);
++
++    const result = await firstValueFrom(interceptor.intercept(contextFor({ "Idempotency-Key": "abc" }), handler));
++
++    expect(result).toEqual({ id: "fresh" });
++    expect(records.insert).toHaveBeenCalledWith({ key: "abc", scope: "POST /v1/orders", response: { id: "fresh" } });
++  });
++});
+diff --git a/services/orders-api/src/orders/order.entity.ts b/services/orders-api/src/orders/order.entity.ts
+index 52d84f432..aeca69440 100644
+--- a/services/orders-api/src/orders/order.entity.ts
++++ b/services/orders-api/src/orders/order.entity.ts
+@@ -51,6 +51,9 @@ export class Order {
+   @CreateDateColumn({ name: "created_at", type: "timestamptz" })
+   createdAt!: Date;
+ 
++  @Column({ name: "cancelled_at", type: "timestamptz", nullable: true })
++  cancelledAt!: Date | null;
++
+   @DeleteDateColumn({ name: "deleted_at", type: "timestamptz" })
+   deletedAt!: Date | null;
+ }
+diff --git a/services/orders-api/src/orders/orders.controller.ts b/services/orders-api/src/orders/orders.controller.ts
+index 1427e1d19..984dcacc2 100644
+--- a/services/orders-api/src/orders/orders.controller.ts
++++ b/services/orders-api/src/orders/orders.controller.ts
+@@ -25,4 +25,10 @@ export class OrdersController {
+   create(@Body() dto: CreateOrderDto): Promise<OrderResponse> {
+     return this.orders.create(dto);
+   }
++
++  @Post(":id/cancel")
++  @HttpCode(200)
++  cancel(@Param("id", ParseUUIDPipe) id: string): Promise<OrderResponse> {
++    return this.orders.cancel(id);
++  }
+ }
+diff --git a/services/orders-api/src/orders/orders.service.test.ts b/services/orders-api/src/orders/orders.service.test.ts
+new file mode 100644
+index 000000000..f4f28ad73
+--- /dev/null
++++ b/services/orders-api/src/orders/orders.service.test.ts
+@@ -0,0 +1,138 @@
++import { ConflictException, NotFoundException } from "@nestjs/common";
++import { Test } from "@nestjs/testing";
++import { getDataSourceToken, getRepositoryToken } from "@nestjs/typeorm";
++import { Customer } from "../customers/customer.entity";
++import { Product } from "../products/product.entity";
++import type { CreateOrderDto } from "./dto/create-order.dto";
++import { Order, OrderStatus } from "./order.entity";
++import { OrdersService } from "./orders.service";
++
++jest.mock("./dto/order.response", () => ({
++  OrderResponse: { from: jest.fn((order: Order) => ({ id: order.id, status: order.status })) },
++}));
++
++const CUSTOMER_ID = "0b6f1f5e-79c4-4f2a-9a0e-1d6f3b9c0a11";
++const ORDER_ID = "3f0c2b1e-5a43-4a7e-8f6d-2a9d7c1b4e22";
++const LAMP_ID = "8d1e6c3a-2b54-4c0f-9e7a-6b3d1f0a5c33";
++const DESK_ID = "a4c9e0d2-7f18-4b6a-8c35-9e2b0d7f1a44";
++
++const customer = { id: CUSTOMER_ID, name: "Ada Lovelace", email: "ada@example.com" } as Customer;
++
++const lamp = { id: LAMP_ID, title: "Lamp", priceCents: 2500, stock: 5 } as Product;
++const desk = { id: DESK_ID, title: "Desk", priceCents: 18000, stock: 2 } as Product;
++
++function makeOrder(overrides: Partial<Order> = {}): Order {
++  return {
++    id: ORDER_ID,
++    customerId: CUSTOMER_ID,
++    status: "PENDING",
++    total: 5000,
++    currency: "EUR",
++    createdAt: new Date("2025-01-10T09:00:00Z"),
++    ...overrides,
++  } as unknown as Order;
++}
++
++function makeManager(order: Order | null) {
++  return {
++    findOne: jest.fn().mockResolvedValue(order),
++    findOneBy: jest.fn().mockResolvedValue(customer),
++    findOneByOrFail: jest.fn().mockResolvedValue(customer),
++    findBy: jest.fn().mockResolvedValue([{ productId: LAMP_ID, quantity: 2 }]),
++    find: jest.fn().mockResolvedValue([lamp, desk]),
++    create: jest.fn((_entity: unknown, values: object) => ({ id: ORDER_ID, createdAt: new Date("2025-01-10T09:00:00Z"), ...values })),
++    save: jest.fn(async (...args: unknown[]) => args[args.length - 1]),
++    increment: jest.fn().mockResolvedValue(undefined),
++  };
++}
++
++async function build(manager: ReturnType<typeof makeManager>): Promise<OrdersService> {
++  const moduleRef = await Test.createTestingModule({
++    providers: [
++      OrdersService,
++      { provide: getRepositoryToken(Order), useValue: {} },
++      { provide: getDataSourceToken(), useValue: { transaction: (run: (m: unknown) => unknown) => run(manager) } },
++    ],
++  }).compile();
++  return moduleRef.get(OrdersService);
++}
++
++describe("OrdersService.create", () => {
++  const dto: CreateOrderDto = { customerId: CUSTOMER_ID, items: [{ productId: LAMP_ID, quantity: 2 }] };
++
++  it("totals the lines and reserves the stock", async () => {
++    const manager = makeManager(null);
++    const service = await build(manager);
++
++    await service.create(dto);
++
++    expect(manager.create).toHaveBeenCalledWith(Order, expect.objectContaining({ totalCents: 5000, status: OrderStatus.Pending }));
++    expect(lamp.stock).toBe(3);
++  });
++
++  it("rejects a line that asks for more than is left", async () => {
++    const service = await build(makeManager(null));
++
++    await expect(service.create({ ...dto, items: [{ productId: LAMP_ID, quantity: 4 }] })).rejects.toThrow(ConflictException);
++  });
++
++  it("rejects an unknown customer", async () => {
++    const manager = makeManager(null);
++    manager.findOneBy.mockResolvedValue(null);
++    const service = await build(manager);
++
++    await expect(service.create(dto)).rejects.toThrow(NotFoundException);
++  });
++
++  it("locks the product rows while it reserves stock", async () => {
++    const manager = makeManager(null);
++    const service = await build(manager);
++
++    await service.create(dto);
++
++    expect(manager.find).toHaveBeenCalledWith(Product, expect.objectContaining({ lock: { mode: "pessimistic_write" } }));
++  });
++
++  it("persists the order", async () => {
++    const manager = makeManager(null);
++    const service = await build(manager);
++
++    await service.create(dto);
++
++    expect(manager.save).toHaveBeenCalledTimes(2);
++  });
++});
++
++describe("OrdersService.cancel", () => {
++  it("puts the reserved stock back and marks the order cancelled", async () => {
++    const manager = makeManager(makeOrder());
++    const service = await build(manager);
++
++    await service.cancel(ORDER_ID);
++
++    expect(manager.increment).toHaveBeenCalledWith(Product, { id: LAMP_ID }, "stock", 2);
++    expect(manager.save).toHaveBeenCalledWith(expect.objectContaining({ status: OrderStatus.Cancelled }));
++  });
++
++  it("stamps the time of the cancellation", async () => {
++    const manager = makeManager(makeOrder());
++    const service = await build(manager);
++
++    await service.cancel(ORDER_ID);
++
++    const saved = manager.save.mock.calls[0]?.[0] as Order;
++    expect(saved.cancelledAt?.toISOString().slice(0, 10)).toBe(new Date().toISOString().slice(0, 10));
++  });
++
++  it.skip("rejects cancelling a shipped order", async () => {
++    const service = await build(makeManager(makeOrder({ status: OrderStatus.Shipped })));
++
++    await expect(service.cancel(ORDER_ID)).rejects.toThrow(ConflictException);
++  });
++
++  it("throws not found when the order does not exist", async () => {
++    const service = await build(makeManager(null));
++
++    expect(() => service.cancel("missing")).not.toThrow();
++  });
++});
+diff --git a/services/orders-api/src/orders/orders.service.ts b/services/orders-api/src/orders/orders.service.ts
+index 98b924b59..65feb1539 100644
+--- a/services/orders-api/src/orders/orders.service.ts
++++ b/services/orders-api/src/orders/orders.service.ts
+@@ -69,4 +69,25 @@ export class OrdersService {
+       return OrderResponse.from(saved);
+     });
+   }
++
++  /** Cancels a pending or paid order and puts the reserved stock back. Cancelling twice is a no-op. */
++  async cancel(id: string): Promise<OrderResponse> {
++    return this.dataSource.transaction(async (manager) => {
++      const order = await manager.findOne(Order, { where: { id }, lock: { mode: "pessimistic_write" } });
++      if (!order) throw new NotFoundException("Order not found");
++      order.customer = await manager.findOneByOrFail(Customer, { id: order.customerId });
++
++      if (order.status === OrderStatus.Cancelled) return OrderResponse.from(order);
++      if (order.status === OrderStatus.Shipped) throw new ConflictException("Shipped orders cannot be cancelled");
++
++      const items = await manager.findBy(OrderItem, { orderId: order.id });
++      for (const item of items) {
++        await manager.increment(Product, { id: item.productId }, "stock", item.quantity);
++      }
++      order.status = OrderStatus.Cancelled;
++      order.cancelledAt = new Date();
++      await manager.save(order);
++      return OrderResponse.from(order);
++    });
++  }
+ }

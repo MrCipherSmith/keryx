@@ -1,5 +1,5 @@
 ---
-description: "Playwright E2E testing standards, test structure, and UI verification workflows."
+description: "Playwright e2e standard shared by code writers and reviewers, with the severities reviewers use: web-first waits instead of sleeps or retries, getByRole and getByLabel locators, auth once in a setup project, independent specs, mocked network, screenshots only on stable surfaces. Use when writing or reviewing Playwright specs."
 alwaysApply: false
 globs:
   - "e2e/**"
@@ -8,315 +8,41 @@ globs:
 stack_requires: "playwright"
 ---
 
-# Playwright E2E Testing Guidelines
+# Playwright E2E Testing
 
-## Purpose
-Standardize E2E test creation, execution, and UI verification workflows using Playwright.
+Canon applies: the Playwright documentation on locators, web-first assertions, fixtures and projects. This rule holds only this project's decisions; the general testing rules are in `tdd-workflow.mdc`.
 
-## When to Apply
-- Writing new E2E tests
-- Debugging failing tests
-- Setting up visual regression tests
-- Analyzing UI behavior changes
+## Rules
 
-## Prerequisites
+1. **Wait on a state, never on time.** Use web-first assertions (`await expect(locator).toBeVisible()`) or await the event or response that proves completion (`waitForResponse`). `waitForTimeout`, a fixed delay and `networkidle` are not waits. A flaky spec is fixed by finding the state it races; a retry, a longer timeout or a skip is not a fix.
+2. **Locators, in this order:** `getByRole` and `getByLabel`; `data-testid` when no role or label fits. CSS classes and XPath never. The string-selector APIs (`page.click(sel)`, `page.fill(sel, v)`, `page.check(sel)`) are deprecated: use a locator.
+3. **Log in once, in a setup project.** A `setup` project writes `storageState`, and the browser projects depend on it (`dependencies`). Credentials come from the environment, never from a spec. Ordinary specs do not depend on each other or on a spec that writes shared state.
+4. **A spec owns its data.** It creates what it asserts on, under a unique name, and does not change or delete seeded data. No exact global counts, `.first()` or `.nth(N)` on data the spec does not own.
+5. **Mock the network at the route** (`page.route`) for anything the spec does not exercise; an unmocked request to an external host is a failure, not a pass-through.
+6. **Screenshots only** where the repo already has visual-test setup and the surface is stable (no dates, animations or random data); mask or fix what moves. Thresholds live in `playwright.config.ts`, not in a spec.
+7. **Smoke tags** (`@smoke`) are for fast, reliable, load-bearing flows only.
+8. **Specs are TypeScript** with descriptive names.
 
-Check Playwright is installed and configured:
-```bash
-npm list @playwright/test
-ls playwright.config.ts
-```
+---
 
-## Run Commands
+## Review severities (shared with reviewers)
 
-```bash
-# Run all tests
-npm run e2e
+`review-testing-practices` rates these patterns by this table. Change a row here, never in the reviewer.
 
-# Run specific test file
-npx playwright test e2e/example.spec.ts
-
-# Run in headed mode (see browser)
-npx playwright test --headed
-
-# Run with UI mode (interactive debugging)
-npx playwright test --ui
-
-# Run specific project (chromium/firefox/webkit)
-npx playwright test --project=chromium
-
-# Run with trace (for debugging)
-npx playwright test --trace on
-
-# View trace report
-npx playwright show-trace trace.zip
-
-# Generate HTML report
-npx playwright test --reporter=html
-npx playwright show-report
-```
-
-## Test File Structure
-
-```typescript
-// e2e/feature-name.spec.ts
-import { test, expect } from '@playwright/test';
-
-test.describe('Feature Name', () => {
-  test.beforeEach(async ({ page }) => {
-    // Setup: login, navigate, etc.
-    await page.goto('/path');
-  });
-
-  test('should display correct initial state', async ({ page }) => {
-    // Arrange
-    
-    // Act
-    
-    // Assert
-    await expect(page.locator('[data-testid="element"]')).toBeVisible();
-  });
-
-  test('should handle user interaction', async ({ page }) => {
-    // Test steps
-  });
-});
-```
-
-## UI Verification Patterns
-
-### Element Visibility
-```typescript
-// Check element is visible
-await expect(page.locator('.my-class')).toBeVisible();
-
-// Check element is hidden
-await expect(page.locator('.loading')).toBeHidden();
-
-// Check element contains text
-await expect(page.locator('h1')).toContainText('Expected Title');
-
-// Check element has exact text
-await expect(page.locator('.status')).toHaveText('Active');
-```
-
-### Form Interactions
-
-> **Deprecation notice:** `page.fill()`, `page.click()`, and `page.check()` are deprecated.
-> Use the locator-based equivalents instead:
-> - `page.fill(selector, value)` → `page.locator(selector).fill(value)`
-> - `page.click(selector)` → `page.locator(selector).click()`
-> - `page.check(selector)` → `page.locator(selector).check()`
-
-```typescript
-// Fill input
-await page.locator('[data-testid="email-input"]').fill('test@example.com');
-
-// Select from dropdown
-await page.locator('select[name="country"]').selectOption('US');
-
-// Click button
-await page.locator('button[type="submit"]').click();
-
-// Check checkbox
-await page.locator('input[type="checkbox"]').check();
-```
-
-### Visual Regression Testing
-
-```typescript
-// Screenshot comparison
-test('visual regression - component state', async ({ page }) => {
-  await page.goto('/component-url');
-  
-  // Wait for stability
-  // DEPRECATED: waitUntil: 'networkidle' / waitForLoadState('networkidle') is deprecated.
-  // Prefer waitUntil: 'load', waitForLoadState('load'), or explicit waitForSelector / UI state checks.
-  await page.waitForLoadState('load');
-  
-  // Take screenshot
-  await expect(page).toHaveScreenshot('component-state.png', {
-    maxDiffPixels: 100
-  });
-});
-```
-
-**Screenshot Configuration** in `playwright.config.ts`:
-```typescript
-expect: {
-  toHaveScreenshot: {
-    maxDiffPixels: 100,
-    threshold: 0.2,
-  },
-},
-```
-
-### Responsive Testing
-
-```typescript
-test('responsive layout', async ({ page }) => {
-  // Test mobile
-  await page.setViewportSize({ width: 375, height: 667 });
-  await page.goto('/');
-  await expect(page.locator('.mobile-menu')).toBeVisible();
-  
-  // Test desktop
-  await page.setViewportSize({ width: 1280, height: 720 });
-  await page.goto('/');
-  await expect(page.locator('.desktop-nav')).toBeVisible();
-});
-```
-
-## Test Data Attributes
-
-Use `data-testid` for stable selectors:
-```tsx
-// Component
-<button data-testid="submit-button">Submit</button>
-
-// Test (page.click() is deprecated — use locator-based API)
-await page.locator('[data-testid="submit-button"]').click();
-```
-
-## API Mocking
-
-```typescript
-import { test, expect } from '@playwright/test';
-
-test('handles API error', async ({ page }) => {
-  // Mock API response
-  await page.route('**/api/users', async route => {
-    await route.fulfill({
-      status: 500,
-      body: JSON.stringify({ error: 'Server error' })
-    });
-  });
-  
-  await page.goto('/users');
-  await expect(page.locator('.error-message')).toBeVisible();
-});
-```
-
-## Authentication Patterns
-
-```typescript
-test.describe('Authenticated Routes', () => {
-  test.use({ storageState: 'e2e/auth.json' });
-  
-  test('access protected page', async ({ page }) => {
-    await page.goto('/dashboard');
-    await expect(page.locator('.dashboard')).toBeVisible();
-  });
-});
-
-// Setup auth in global setup
-test('login flow', async ({ page }) => {
-  await page.goto('/login');
-  await page.locator('[data-testid="username"]').fill('user');
-  await page.locator('[data-testid="password"]').fill('pass');
-  await page.locator('[data-testid="login-button"]').click();
-  
-  // Save state
-  await page.context().storageState({ path: 'e2e/auth.json' });
-});
-```
-
-## Debugging Failed Tests
-
-```bash
-# Run with trace
-npx playwright test --trace on
-
-# View trace
-npx playwright show-trace test-results/trace.zip
-
-# Run in debug mode
-npx playwright test --debug
-
-# Slow motion execution
-npx playwright test --headed --slow-mo 1000
-```
-
-## Common Issues and Solutions
-
-### Flaky Tests
-```typescript
-// Add retry logic
-await expect.poll(async () => {
-  const response = await page.evaluate(() => fetch('/api/status'));
-  return response.status;
-}).toBe(200);
-
-// DEPRECATED: waitForLoadState('networkidle') / waitUntil: 'networkidle' is deprecated.
-// Prefer waitForLoadState('load') or explicit waitForSelector / UI state checks.
-await page.waitForLoadState('load');
-```
-
-### Timing Issues
-```typescript
-// Wait for specific element
-await page.waitForSelector('.loaded', { timeout: 10000 });
-
-// Wait for request
-await page.waitForRequest('**/api/data');
-
-// Wait for response
-await page.waitForResponse('**/api/data');
-```
-
-### Dynamic Content
-```typescript
-// Wait for text to appear
-await page.waitForFunction(() => {
-  return document.querySelector('.status')?.textContent === 'Ready';
-});
-```
-
-## Integration with Feature Analysis
-
-When using Playwright with `feature-analyzer`:
-
-1. **Visual Verification**: After code changes, run visual tests to detect UI regressions
-2. **Flow Validation**: Test critical user flows affected by the feature
-3. **Cross-browser Check**: Verify functionality in all supported browsers
-4. **Responsive Check**: Ensure UI works across different viewports
-
-```typescript
-// Example: Testing a feature from analysis
-test.describe('Feature: User Profile Update (from analysis)', () => {
-  test('validates profile form changes', async ({ page }) => {
-    // Based on analysis: test form validation
-    await page.goto('/profile');
-    
-    // Clear and fill (as per DTO changes)
-    await page.locator('[data-testid="name-input"]').fill('New Name');
-    await page.locator('[data-testid="save-button"]').click();
-    
-    // Verify success (as per API contract)
-    await expect(page.locator('.success-message')).toBeVisible();
-  });
-});
-```
-
-## Output Contract
-
-- Test files must be TypeScript
-- Use descriptive test names
-- Include Arrange-Act-Assert comments
-- Provide trace/logs for failed tests
-- Screenshots must be in `e2e/screenshots/`
-
-## CI/CD Integration
-
-```yaml
-# Example CI step
-- name: Run Playwright tests
-  run: npx playwright test
-  
-- name: Upload test results
-  uses: actions/upload-artifact@v4
-  if: always()
-  with:
-    name: playwright-report
-    path: playwright-report/
-```
+| Signal | A finding when | Default | Not a finding |
+|---|---|---|---|
+| `waitForTimeout` or a fixed delay as the wait (Rule 1) | always | `major` | a delay inside a fake-clock test |
+| Backend-dependent assertion with no wait on the response or event that proves completion (Rule 1) | the assertion can race the backend | `major` | an assertion that already retries on the visible state |
+| `networkidle` as the wait (Rule 1) | always | `minor` | — |
+| Flake "fixed" by a retry, a longer timeout or a skip (Rule 1) | one of them is added | `major` | a wait on the proving state |
+| Spec depends on another spec's side effect, or on a storage-state file a spec writes (Rule 3) | specs can run in parallel or in isolation | `major`; `minor` when the config runs them serially | state written by the setup project |
+| Spec mutates or deletes seeded or shared data (Rule 4) | another spec or run reads that data | `major` | data the spec created itself |
+| Exact global count, `.first()` or `.nth(N)` on data the spec does not own (Rule 4) | the environment can hold other rows | `minor`; `major` where a parallel run is shown to change it | a list the spec created in full |
+| Real external host reachable (Rule 5) | a spec calls it, or an unhandled request passes through | `major` | an error path mocked with `page.route` |
+| CSS class or XPath locator where a role, label or test id exists (Rule 2) | always | `minor` | a third-party widget with none of them |
+| Deprecated string-selector API (Rule 2) | always | `minor` | — |
+| Screenshot test on a heavy or non-deterministic surface (Rule 6) | the repo has no visual-test setup, or nothing is masked or fixed | `minor` | a stable component with masked regions |
+| Screenshot threshold loosened inside a spec (Rule 6) | always | `info` | — |
+| Smoke tag on a slow or unreliable flow (Rule 7) | always | `minor` | — |
+| Credentials or a non-test origin hard-coded in a spec (Rule 3) | a real secret or host | `major` | a test-only value (`info`) |
+| Non-TypeScript spec or a vague test name (Rule 8) | always | `info` | — |

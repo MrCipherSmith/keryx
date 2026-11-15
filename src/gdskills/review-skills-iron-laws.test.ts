@@ -279,6 +279,19 @@ describe("one condition, one severity, across the reviewer set (AC2)", () => {
     }
   });
 
+  test("testing severities live once, in the two testing rules, and the testing lens cites both", () => {
+    const rulesDir = path.join(import.meta.dir, "bundled", "rules", "core");
+    const lens = read("review-testing-practices");
+    for (const rule of ["tdd-workflow.mdc", "playwright-testing.mdc"]) {
+      const text = readFileSync(path.join(rulesDir, rule), "utf8");
+      expect(text).toContain("## Review severities");
+      expect(lens).toContain(rule);
+    }
+    const tdd = readFileSync(path.join(rulesDir, "tdd-workflow.mdc"), "utf8");
+    expect(normalise(tdd)).toContain(normalise("| Test that passes while the behaviour it names is broken |"));
+    expect(normalise(lens)).not.toContain(normalise("| Real network or wall-clock dependence"));
+  });
+
   test("a layer violation is rated the same, `minor` by default, in both reviewers that rate it", () => {
     // review-frontend called an API call in a component `blocker`;
     // review-architecture called the same condition `major`. Flow 490 applied the

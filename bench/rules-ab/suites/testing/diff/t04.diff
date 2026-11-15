@@ -1,0 +1,231 @@
+diff --git a/apps/orders-web/e2e/.gitignore b/apps/orders-web/e2e/.gitignore
+new file mode 100644
+index 000000000..0dcbb783f
+--- /dev/null
++++ b/apps/orders-web/e2e/.gitignore
+@@ -0,0 +1 @@
++.auth/
+diff --git a/apps/orders-web/e2e/auth.setup.ts b/apps/orders-web/e2e/auth.setup.ts
+new file mode 100644
+index 000000000..2701f3f53
+--- /dev/null
++++ b/apps/orders-web/e2e/auth.setup.ts
+@@ -0,0 +1,12 @@
++import { expect, test as setup } from "@playwright/test";
++import { authFile } from "../playwright.config";
++
++setup("sign in as an operator", async ({ page }) => {
++  await page.goto("/login");
++  await page.getByLabel("Email").fill(process.env.E2E_USER ?? "operator@example.com");
++  await page.getByLabel("Password").fill(process.env.E2E_PASSWORD ?? "");
++  await page.getByRole("button", { name: "Sign in" }).click();
++
++  await expect(page).toHaveURL(/\/customers$/);
++  await page.context().storageState({ path: authFile });
++});
+diff --git a/apps/orders-web/e2e/customers.spec.ts b/apps/orders-web/e2e/customers.spec.ts
+new file mode 100644
+index 000000000..617bff5e8
+--- /dev/null
++++ b/apps/orders-web/e2e/customers.spec.ts
+@@ -0,0 +1,41 @@
++import { expect, test } from "@playwright/test";
++import type { CustomerDto } from "../src/api/customers.api";
++
++const customers: CustomerDto[] = [
++  { id: "c1", name: "Ada", email: "ada@example.com", ordersCount: 4 },
++  { id: "c2", name: "Grace", email: "grace@example.com", ordersCount: 9 },
++  { id: "c3", name: "Linus", email: "linus@example.com", ordersCount: 1 },
++];
++
++test.beforeEach(async ({ page }) => {
++  await page.route("**/api/customers**", (route) => {
++    const query = new URL(route.request().url()).searchParams.get("query") ?? "";
++    const rows = customers.filter((customer) => customer.name.toLowerCase().includes(query.toLowerCase()));
++    return route.fulfill({ json: rows });
++  });
++  await page.goto("/customers");
++});
++
++test("search narrows the list to the matching customers", async ({ page }) => {
++  await page.getByRole("textbox", { name: "Search customers" }).fill("grace");
++
++  await expect(page.getByRole("row", { name: /Grace/ })).toBeVisible();
++  await expect(page.getByRole("row", { name: /Ada/ })).toHaveCount(0);
++});
++
++test("the footer adds up the orders of the listed customers", async ({ page }) => {
++  await expect(page.getByText("14 orders in total")).toBeVisible();
++
++  await page.getByRole("textbox", { name: "Search customers" }).fill("ada");
++
++  await expect(page.getByText("4 orders in total")).toBeVisible();
++});
++
++test("a failing API shows the error instead of a table of stale rows", async ({ page }) => {
++  await page.route("**/api/customers**", (route) => route.fulfill({ status: 500, json: { message: "down" } }));
++
++  await page.reload();
++
++  await expect(page.getByRole("alert")).toContainText("500");
++  await expect(page.getByRole("row", { name: /Grace/ })).toHaveCount(0);
++});
+diff --git a/apps/orders-web/package.json b/apps/orders-web/package.json
+index 306095345..308b15a5e 100644
+--- a/apps/orders-web/package.json
++++ b/apps/orders-web/package.json
+@@ -7,6 +7,8 @@
+     "dev": "vite",
+     "build": "tsc --noEmit && vite build",
+     "typecheck": "tsc --noEmit",
++    "test": "vitest run",
++    "e2e": "playwright test",
+     "storybook": "storybook dev -p 6006",
+     "build-storybook": "storybook build"
+   },
+@@ -20,6 +22,7 @@
+     "react-dom": "18.3.1"
+   },
+   "devDependencies": {
++    "@playwright/test": "1.46.1",
+     "@storybook/react": "8.2.9",
+     "@storybook/react-vite": "8.2.9",
+     "@storybook/test": "8.2.9",
+@@ -28,6 +31,7 @@
+     "@vitejs/plugin-react": "4.3.1",
+     "storybook": "8.2.9",
+     "typescript": "5.5.4",
+-    "vite": "5.4.2"
++    "vite": "5.4.2",
++    "vitest": "2.0.5"
+   }
+ }
+diff --git a/apps/orders-web/playwright.config.ts b/apps/orders-web/playwright.config.ts
+new file mode 100644
+index 000000000..ae1daf5ff
+--- /dev/null
++++ b/apps/orders-web/playwright.config.ts
+@@ -0,0 +1,29 @@
++import { defineConfig, devices } from "@playwright/test";
++
++const baseURL = "http://localhost:5173";
++
++export const authFile = "e2e/.auth/operator.json";
++
++export default defineConfig({
++  testDir: "e2e",
++  fullyParallel: true,
++  forbidOnly: !!process.env.CI,
++  reporter: [["list"], ["html", { open: "never" }]],
++  use: {
++    baseURL,
++    trace: "on-first-retry",
++  },
++  projects: [
++    { name: "setup", testMatch: /.*\.setup\.ts/ },
++    {
++      name: "chromium",
++      use: { ...devices["Desktop Chrome"], storageState: authFile },
++      dependencies: ["setup"],
++    },
++  ],
++  webServer: {
++    command: "npm run dev",
++    url: baseURL,
++    reuseExistingServer: !process.env.CI,
++  },
++});
+diff --git a/apps/orders-web/src/components/OrderTotal.tsx b/apps/orders-web/src/components/OrderTotal.tsx
+new file mode 100644
+index 000000000..a61557928
+--- /dev/null
++++ b/apps/orders-web/src/components/OrderTotal.tsx
+@@ -0,0 +1,10 @@
++import { formatCents } from "../format/money";
++
++export interface OrderTotalProps {
++  cents: number;
++  currency: string;
++}
++
++export function OrderTotal({ cents, currency }: OrderTotalProps) {
++  return <span>{formatCents(cents, currency)}</span>;
++}
+diff --git a/apps/orders-web/src/format/money.test.ts b/apps/orders-web/src/format/money.test.ts
+new file mode 100644
+index 000000000..3322e6492
+--- /dev/null
++++ b/apps/orders-web/src/format/money.test.ts
+@@ -0,0 +1,35 @@
++import { describe, expect, it } from "vitest";
++import { formatCents, sumCents } from "./money";
++
++describe("formatCents", () => {
++  it("formats whole and fractional amounts", () => {
++    expect(formatCents(1250, "USD")).toBe("$12.50");
++    expect(formatCents(100_000, "USD")).toBe("$1,000.00");
++  });
++
++  it("formats zero with the currency symbol", () => {
++    expect(formatCents(0, "EUR")).toBe("€0.00");
++  });
++
++  it("formats a negative amount as a refund", () => {
++    expect(formatCents(-300, "USD")).toBe("-$3.00");
++  });
++
++  it.each([12.5, Number.NaN, Number.POSITIVE_INFINITY])("rejects %s as an amount of cents", (cents) => {
++    expect(() => formatCents(cents, "USD")).toThrow(RangeError);
++  });
++});
++
++describe("sumCents", () => {
++  it("adds the amounts", () => {
++    expect(sumCents([1250, 300, -50])).toBe(1500);
++  });
++
++  it("is zero for no amounts", () => {
++    expect(sumCents([])).toBe(0);
++  });
++
++  it("rejects a fractional amount instead of rounding it", () => {
++    expect(() => sumCents([100, 0.5])).toThrow(RangeError);
++  });
++});
+diff --git a/apps/orders-web/src/format/money.ts b/apps/orders-web/src/format/money.ts
+new file mode 100644
+index 000000000..c3ec9772e
+--- /dev/null
++++ b/apps/orders-web/src/format/money.ts
+@@ -0,0 +1,17 @@
++/** Formats an integer amount of minor units (cents) as a localized currency string. */
++export function formatCents(cents: number, currency: string, locale = "en-US"): string {
++  if (!Number.isSafeInteger(cents)) {
++    throw new RangeError(`cents must be a safe integer, got ${cents}`);
++  }
++  return new Intl.NumberFormat(locale, { style: "currency", currency }).format(cents / 100);
++}
++
++/** Adds up amounts in minor units, rejecting anything that is not a whole number of cents. */
++export function sumCents(values: readonly number[]): number {
++  return values.reduce((sum, cents) => {
++    if (!Number.isSafeInteger(cents)) {
++      throw new RangeError(`cents must be a safe integer, got ${cents}`);
++    }
++    return sum + cents;
++  }, 0);
++}
+diff --git a/apps/orders-web/vitest.config.ts b/apps/orders-web/vitest.config.ts
+new file mode 100644
+index 000000000..c1433e6ef
+--- /dev/null
++++ b/apps/orders-web/vitest.config.ts
+@@ -0,0 +1,8 @@
++import { defineConfig } from "vitest/config";
++
++export default defineConfig({
++  test: {
++    environment: "node",
++    include: ["src/**/*.test.ts"],
++  },
++});

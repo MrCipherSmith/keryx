@@ -104,26 +104,25 @@ pass, then work the checklist.
 
 ---
 
+## The standard
+
+These project rules hold what to check and how to rate it. Read each one that applies to the change and rate by its **Review severities** table; this lens does not restate them.
+
+- `.metaproject/rules/core/tdd-workflow.mdc`: one toolchain, colocation, a test for new or changed logic, boundary mocking, no real network or clock, no sleeps, flakes fixed by waiting on a state, tests never deleted to go green.
+- `.metaproject/rules/core/playwright-testing.mdc`: waits, locator order, auth in a setup project, independent specs, owned data, route mocking, screenshots, smoke tags.
+
+The checks below are the lens's own; no rule covers them.
+
+---
+
 ## Checklist
 
-### Test Location and Tiers
+### Boundary Mocking, Beyond the Rule
 
-- Tests live near the code they cover unless the repository has a deliberate central test layout.
-- Shared test infrastructure folders are not used as buckets for feature tests.
-- Unit, integration, component, and e2e tiers are named and routed consistently.
-- Fast feedback lanes stay fast; screenshot/component/e2e suites are not used for cheap unit
-  assertions.
-- Coverage gates focus on changed risk, not low-value tests for trivial getters.
-
-### Network and Boundary Mocking
-
-- For data-fetching UI, prefer rendering the real component/store and mocking only the network
-  boundary.
-- Avoid mocking the API module in integration tests when the repository has network-level mock
-  infrastructure.
+- For data-fetching UI, prefer rendering the real component/store and mocking only the network boundary.
+- Avoid mocking the API module in integration tests when the repository has network-level mock infrastructure.
 - Unhandled network requests fail loudly instead of silently hitting the real world.
-- Mock handlers/fixtures are colocated and reusable by tests/stories where practical.
-- Handler paths match the runtime test environment and avoid hard-coded origins unless required.
+- Mock handlers/fixtures are colocated and reusable by tests/stories where practical; handler paths match the runtime test environment and avoid hard-coded origins unless required.
 
 ### Behaviour Assertions
 
@@ -166,24 +165,10 @@ pass, then work the checklist.
   such test needs one positive artifact proving the path was entered before the
   negative assertions mean anything.
 
-### Browser and E2E Determinism
+### Tiers
 
-- Tests create their own artifacts with unique names and assert on those artifacts.
-- Avoid mutating or deleting seeded/shared environment data.
-- Avoid env-wide assertions such as exact global counts, `.first()`, or `.nth(N)` unless the test
-  owns the full dataset.
-- No fixed sleeps; wait on assertions, events, responses, or polling predicates.
-- Backend-dependent assertions wait on the response/event that proves the backend completed.
-- Smoke tags are reserved for fast, reliable, load-bearing baseline flows.
-- Locator priority prefers stable test ids and accessible roles over raw CSS selectors.
-- Screenshot tests are avoided for heavy, unstable, or non-deterministic surfaces unless the
-  repository explicitly supports them.
-
-### Local Type and Build Gotchas
-
-- Account for incremental compiler caches when validating newly added files.
-- Generated/vendored files that are outside the lint/type project are ignored centrally rather
-  than hand-formatted into compliance.
+- Fast feedback lanes stay fast: screenshot, component and e2e suites are not used for cheap unit assertions.
+- Coverage gates focus on changed risk.
 
 ---
 
@@ -234,19 +219,16 @@ class_scope:
 - **Fix**: concrete test rewrite or fixture/handler change
 ```
 
-Severity comes from **Severity (canonical)** in `review-orchestrator/SKILL.md`. This reviewer keeps no rubric of its own; what follows is where its recurring conditions land under that rubric.
+Severity comes from **Severity (canonical)** in `review-orchestrator/SKILL.md`. Defects the two rules name are rated by their **Review severities** tables (`tdd-workflow.mdc`, `playwright-testing.mdc`), including a test that cannot fail and a flaky test; this lens does not restate them. What follows is where its own recurring conditions land.
 
 | Condition | Severity | Why, under the canonical rubric |
 |---|---|---|
-| A test that passes while the behaviour it names is broken | `blocker` | The acceptance criterion is unimplemented — the test only claims otherwise |
-| Real-network leak; shared-data mutation across tests; fixed sleeps; asserting on a backend race | `major` | Named trigger (the run) and named outcome (flake or a false pass) |
 | A gate the diff added survives deletion with the suite green | `minor` | The code is correct; the cost is that the next edit to it is unprotected |
-| A fixture whose shape contradicts the scenario it names, or pins a value the producer cannot emit | `minor` | Same — plus the next author reads it as coverage it does not provide |
+| A fixture whose shape contradicts the scenario it names, or pins a value the producer cannot emit | `minor` | Same, plus the next author reads it as coverage it does not provide |
 | Assertions ride the fallback branch while the code names another authoritative | `minor` | Same |
-| Substrate choice, smoke tagging, locator priority, co-location | `minor` | The suite is correct; the cost is to whoever maintains it |
+| A test that asserts only falsy state, with no positive artifact that the path ran | `minor` | It passes when the code never ran |
+| Substrate choice (API module mocked where network-level mocks exist) | `minor` | The suite is correct; the cost is to whoever maintains it |
 | A convention preference with no effect on determinism or signal | `info` | Shared laws 1 and 2 |
-
-A flaky test is `major`, not `blocker`: it wastes time, but it does not ship a defect. A test that cannot fail does — which is why it is the one `blocker` here.
 
 The three mutation-pass rows sit at `minor` deliberately, and the reasoning is the canonical rubric rather than modesty: a coverage gap names no runtime trigger and no user-visible outcome, so it cannot be `major` under the boundary test. What makes them worth reporting is not severity but **evidence class** — each one is a command that ran, which is the rarest thing in a review and the only kind of finding a later round cannot argue away. Report them with the mutation and its result, and they survive adjudication intact. Report them as "coverage looks thin" and they are correctly discarded.
 
