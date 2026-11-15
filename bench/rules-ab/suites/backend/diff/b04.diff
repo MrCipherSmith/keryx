@@ -1,0 +1,318 @@
+diff --git a/services/orders-api/migrations/1731900000000-status-history.ts b/services/orders-api/migrations/1731900000000-status-history.ts
+new file mode 100644
+index 000000000..4d195d8da
+--- /dev/null
++++ b/services/orders-api/migrations/1731900000000-status-history.ts
+@@ -0,0 +1,22 @@
++import { MigrationInterface, QueryRunner } from "typeorm";
++
++export class StatusHistory1731900000000 implements MigrationInterface {
++  async up(q: QueryRunner): Promise<void> {
++    await q.query(`CREATE TABLE IF NOT EXISTS order_status_history (
++      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
++      order_id uuid NOT NULL REFERENCES orders(id),
++      from_status varchar(16) NOT NULL,
++      to_status varchar(16) NOT NULL,
++      payment_ref varchar(64),
++      created_at timestamptz NOT NULL DEFAULT now()
++    )`);
++    // A new, empty table: a plain CREATE INDEX takes no lock anyone waits on.
++    await q.query(`CREATE INDEX IF NOT EXISTS idx_order_status_history_order_id ON order_status_history(order_id, created_at)`);
++    await q.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS paid_at timestamptz`);
++  }
++
++  async down(q: QueryRunner): Promise<void> {
++    await q.query(`ALTER TABLE orders DROP COLUMN IF EXISTS paid_at`);
++    await q.query(`DROP TABLE IF EXISTS order_status_history`);
++  }
++}
+diff --git a/services/orders-api/openapi.yaml b/services/orders-api/openapi.yaml
+index 33323be39..f8c37c18d 100644
+--- a/services/orders-api/openapi.yaml
++++ b/services/orders-api/openapi.yaml
+@@ -49,8 +49,62 @@ paths:
+             application/json:
+               schema: { $ref: '#/components/schemas/Order' }
+         '404': { $ref: '#/components/responses/NotFound' }
++  /v1/orders/{id}/pay:
++    post:
++      operationId: payOrder
++      summary: Mark a pending order paid
++      parameters:
++        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
++        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 64 } }
++      requestBody:
++        required: true
++        content:
++          application/json:
++            schema: { $ref: '#/components/schemas/PayOrder' }
++      responses:
++        '200':
++          description: The paid order
++          content:
++            application/json:
++              schema: { $ref: '#/components/schemas/Order' }
++        '400': { $ref: '#/components/responses/BadRequest' }
++        '404': { $ref: '#/components/responses/NotFound' }
++        '409': { $ref: '#/components/responses/Conflict' }
++  /v1/orders/{id}/history:
++    get:
++      operationId: getOrderHistory
++      summary: Status transitions of an order, oldest first
++      parameters:
++        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
++      responses:
++        '200':
++          description: Transitions
++          content:
++            application/json:
++              schema:
++                type: object
++                additionalProperties: false
++                required: [data]
++                properties:
++                  data: { type: array, items: { $ref: '#/components/schemas/StatusChange' } }
++        '404': { $ref: '#/components/responses/NotFound' }
+ components:
+   schemas:
++    PayOrder:
++      type: object
++      additionalProperties: false
++      required: [paymentRef]
++      properties:
++        paymentRef: { type: string, minLength: 1, maxLength: 64 }
++    StatusChange:
++      type: object
++      additionalProperties: false
++      required: [fromStatus, toStatus, createdAt]
++      properties:
++        fromStatus: { $ref: '#/components/schemas/OrderStatus' }
++        toStatus: { $ref: '#/components/schemas/OrderStatus' }
++        paymentRef: { type: string }
++        createdAt: { type: string, format: date-time }
+     OrderStatus:
+       type: string
+       enum: [pending, paid, shipped, cancelled]
+@@ -66,6 +120,7 @@ components:
+         totalCents: { type: integer }
+         currency: { type: string, minLength: 3, maxLength: 3 }
+         createdAt: { type: string, format: date-time }
++        paidAt: { type: string, format: date-time }
+     OrderPage:
+       type: object
+       additionalProperties: false
+diff --git a/services/orders-api/src/orders/dto/order.response.ts b/services/orders-api/src/orders/dto/order.response.ts
+index 509595067..2da789e53 100644
+--- a/services/orders-api/src/orders/dto/order.response.ts
++++ b/services/orders-api/src/orders/dto/order.response.ts
+@@ -1,4 +1,4 @@
+-import { ApiProperty } from "@nestjs/swagger";
++import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+ import { Order, OrderStatus } from "../order.entity";
+ 
+ export class OrderResponse {
+@@ -9,6 +9,7 @@ export class OrderResponse {
+   @ApiProperty() totalCents!: number;
+   @ApiProperty({ minLength: 3, maxLength: 3 }) currency!: string;
+   @ApiProperty({ format: "date-time" }) createdAt!: string;
++  @ApiPropertyOptional({ format: "date-time" }) paidAt?: string;
+ 
+   static from(order: Order): OrderResponse {
+     return {
+@@ -19,6 +20,7 @@ export class OrderResponse {
+       totalCents: order.totalCents,
+       currency: order.currency,
+       createdAt: order.createdAt.toISOString(),
++      ...(order.paidAt ? { paidAt: order.paidAt.toISOString() } : {}),
+     };
+   }
+ }
+diff --git a/services/orders-api/src/orders/dto/pay-order.dto.ts b/services/orders-api/src/orders/dto/pay-order.dto.ts
+new file mode 100644
+index 000000000..b30f361da
+--- /dev/null
++++ b/services/orders-api/src/orders/dto/pay-order.dto.ts
+@@ -0,0 +1,9 @@
++import { ApiProperty } from "@nestjs/swagger";
++import { IsString, Length } from "class-validator";
++
++export class PayOrderDto {
++  @ApiProperty({ description: "Payment provider reference of the captured payment", minLength: 1, maxLength: 64 })
++  @IsString()
++  @Length(1, 64)
++  paymentRef!: string;
++}
+diff --git a/services/orders-api/src/orders/dto/status-change.response.ts b/services/orders-api/src/orders/dto/status-change.response.ts
+new file mode 100644
+index 000000000..101ca1545
+--- /dev/null
++++ b/services/orders-api/src/orders/dto/status-change.response.ts
+@@ -0,0 +1,19 @@
++import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
++import { OrderStatus } from "../order.entity";
++import { OrderStatusHistory } from "../order-status-history.entity";
++
++export class StatusChangeResponse {
++  @ApiProperty({ enum: OrderStatus }) fromStatus!: OrderStatus;
++  @ApiProperty({ enum: OrderStatus }) toStatus!: OrderStatus;
++  @ApiPropertyOptional() paymentRef?: string;
++  @ApiProperty({ format: "date-time" }) createdAt!: string;
++
++  static from(row: OrderStatusHistory): StatusChangeResponse {
++    return {
++      fromStatus: row.fromStatus,
++      toStatus: row.toStatus,
++      ...(row.paymentRef ? { paymentRef: row.paymentRef } : {}),
++      createdAt: row.createdAt.toISOString(),
++    };
++  }
++}
+diff --git a/services/orders-api/src/orders/order-status-history.entity.ts b/services/orders-api/src/orders/order-status-history.entity.ts
+new file mode 100644
+index 000000000..a3e66f1c9
+--- /dev/null
++++ b/services/orders-api/src/orders/order-status-history.entity.ts
+@@ -0,0 +1,24 @@
++import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from "typeorm";
++import { OrderStatus } from "./order.entity";
++
++@Entity("order_status_history")
++@Index("idx_order_status_history_order_id", ["orderId", "createdAt"])
++export class OrderStatusHistory {
++  @PrimaryGeneratedColumn("uuid")
++  id!: string;
++
++  @Column({ name: "order_id", type: "uuid" })
++  orderId!: string;
++
++  @Column({ name: "from_status", type: "varchar", length: 16 })
++  fromStatus!: OrderStatus;
++
++  @Column({ name: "to_status", type: "varchar", length: 16 })
++  toStatus!: OrderStatus;
++
++  @Column({ name: "payment_ref", type: "varchar", length: 64, nullable: true })
++  paymentRef!: string | null;
++
++  @CreateDateColumn({ name: "created_at", type: "timestamptz" })
++  createdAt!: Date;
++}
+diff --git a/services/orders-api/src/orders/order.entity.ts b/services/orders-api/src/orders/order.entity.ts
+index 52d84f432..f6587163e 100644
+--- a/services/orders-api/src/orders/order.entity.ts
++++ b/services/orders-api/src/orders/order.entity.ts
+@@ -51,6 +51,9 @@ export class Order {
+   @CreateDateColumn({ name: "created_at", type: "timestamptz" })
+   createdAt!: Date;
+ 
++  @Column({ name: "paid_at", type: "timestamptz", nullable: true })
++  paidAt!: Date | null;
++
+   @DeleteDateColumn({ name: "deleted_at", type: "timestamptz" })
+   deletedAt!: Date | null;
+ }
+diff --git a/services/orders-api/src/orders/orders.controller.ts b/services/orders-api/src/orders/orders.controller.ts
+index 1427e1d19..498f5eecd 100644
+--- a/services/orders-api/src/orders/orders.controller.ts
++++ b/services/orders-api/src/orders/orders.controller.ts
+@@ -3,6 +3,8 @@ import { IdempotencyInterceptor } from "../common/idempotency.interceptor";
+ import { CreateOrderDto } from "./dto/create-order.dto";
+ import { ListOrdersQuery } from "./dto/list-orders.query";
+ import { OrderPage, OrderResponse } from "./dto/order.response";
++import { PayOrderDto } from "./dto/pay-order.dto";
++import { StatusChangeResponse } from "./dto/status-change.response";
+ import { OrdersService } from "./orders.service";
+ 
+ @Controller("v1/orders")
+@@ -19,6 +21,18 @@ export class OrdersController {
+     return this.orders.findOne(id);
+   }
+ 
++  @Get(":id/history")
++  history(@Param("id", ParseUUIDPipe) id: string): Promise<{ data: StatusChangeResponse[] }> {
++    return this.orders.history(id);
++  }
++
++  @Post(":id/pay")
++  @HttpCode(200)
++  @UseInterceptors(IdempotencyInterceptor)
++  pay(@Param("id", ParseUUIDPipe) id: string, @Body() dto: PayOrderDto): Promise<OrderResponse> {
++    return this.orders.pay(id, dto);
++  }
++
+   @Post()
+   @HttpCode(201)
+   @UseInterceptors(IdempotencyInterceptor)
+diff --git a/services/orders-api/src/orders/orders.module.ts b/services/orders-api/src/orders/orders.module.ts
+index 73085252a..d672bea6e 100644
+--- a/services/orders-api/src/orders/orders.module.ts
++++ b/services/orders-api/src/orders/orders.module.ts
+@@ -6,11 +6,12 @@ import { Customer } from "../customers/customer.entity";
+ import { Product } from "../products/product.entity";
+ import { Order } from "./order.entity";
+ import { OrderItem } from "./order-item.entity";
++import { OrderStatusHistory } from "./order-status-history.entity";
+ import { OrdersController } from "./orders.controller";
+ import { OrdersService } from "./orders.service";
+ 
+ @Module({
+-  imports: [TypeOrmModule.forFeature([Order, OrderItem, Customer, Product, IdempotencyRecord])],
++  imports: [TypeOrmModule.forFeature([Order, OrderItem, OrderStatusHistory, Customer, Product, IdempotencyRecord])],
+   controllers: [OrdersController],
+   providers: [OrdersService, IdempotencyInterceptor],
+ })
+diff --git a/services/orders-api/src/orders/orders.service.ts b/services/orders-api/src/orders/orders.service.ts
+index 98b924b59..0aab07eb3 100644
+--- a/services/orders-api/src/orders/orders.service.ts
++++ b/services/orders-api/src/orders/orders.service.ts
+@@ -6,8 +6,11 @@ import { Product } from "../products/product.entity";
+ import { CreateOrderDto } from "./dto/create-order.dto";
+ import { ListOrdersQuery } from "./dto/list-orders.query";
+ import { OrderPage, OrderResponse } from "./dto/order.response";
++import { PayOrderDto } from "./dto/pay-order.dto";
++import { StatusChangeResponse } from "./dto/status-change.response";
+ import { Order, OrderStatus } from "./order.entity";
+ import { OrderItem } from "./order-item.entity";
++import { OrderStatusHistory } from "./order-status-history.entity";
+ 
+ @Injectable()
+ export class OrdersService {
+@@ -34,6 +37,38 @@ export class OrdersService {
+     return OrderResponse.from(order);
+   }
+ 
++  /** Marks a pending order paid and records the transition, in one transaction. */
++  async pay(id: string, dto: PayOrderDto): Promise<OrderResponse> {
++    return this.dataSource.transaction(async (manager) => {
++      const order = await manager.findOne(Order, { where: { id }, lock: { mode: "pessimistic_write" } });
++      if (!order) throw new NotFoundException("Order not found");
++      if (order.status !== OrderStatus.Pending) throw new ConflictException("Only a pending order can be paid");
++      order.status = OrderStatus.Paid;
++      order.paidAt = new Date();
++      await manager.save(order);
++      await manager.insert(OrderStatusHistory, {
++        orderId: id,
++        fromStatus: OrderStatus.Pending,
++        toStatus: OrderStatus.Paid,
++        paymentRef: dto.paymentRef,
++      });
++      order.customer = await manager.findOneByOrFail(Customer, { id: order.customerId });
++      return OrderResponse.from(order);
++    });
++  }
++
++  /** An order has at most one row per status transition, so the list is short and needs no paging. */
++  async history(id: string): Promise<{ data: StatusChangeResponse[] }> {
++    const exists = await this.orders.exists({ where: { id } });
++    if (!exists) throw new NotFoundException("Order not found");
++    const rows = await this.dataSource.getRepository(OrderStatusHistory).find({
++      select: { fromStatus: true, toStatus: true, paymentRef: true, createdAt: true },
++      where: { orderId: id },
++      order: { createdAt: "ASC" },
++    });
++    return { data: rows.map(StatusChangeResponse.from) };
++  }
++
+   /** Creates the order and its lines and reserves stock, all or nothing. */
+   async create(dto: CreateOrderDto): Promise<OrderResponse> {
+     return this.dataSource.transaction(async (manager) => {

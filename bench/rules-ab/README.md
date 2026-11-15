@@ -14,6 +14,8 @@ Compares two or more versions ("arms") of a reviewer's rule and skill files by r
 
 Use it for the clean-code lens and its rules. Run at least 3 reps: single runs vary.
 
+**backend** (4 cases). A small NestJS + TypeORM service (`services/orders-api`) added on top of `main` at the base commit; b01 (API contracts), b02 (DTOs) and b03 (database and migrations) each add a feature with planted defects, 21 in all; b04 is a clean control. Scored like seeded (recall out of 21, valid, noise, decoy, control findings). Use it for `review-backend` and the `api-contracts`, `nestjs-dto` and `database-patterns` rules. The case commits live on local branches `bench-seeds/backend-*`; the diffs in `suites/backend/diff/` hold the same change if those refs are lost.
+
 **history** (13 cases). Past review packages: for each, the base and head commits and the 46 blocker/major findings that were later confirmed and fixed. One general reviewer reads each change cold. It measures recall against real, already-fixed defects: how much of what reviews historically had to catch a single pass catches. There is no decoy or noise measure here.
 
 ## Procedure
@@ -38,6 +40,7 @@ History runs use `--suite history` the same way; `score` prints match / partial 
 The planted defects, decoys and the history findings are the answer key. They are kept out of `main` so a reviewer working in a checkout of `main` cannot read them. They live on the research branch (`research/part2-data`) under `bench-archive/2026-11-14/`:
 
 - seeded truth: `qbench/truth/qNN.json` and `qNN.decoys.json`
+- backend truth: `bench-archive/2026-11-15/bbench/truth/bNN.json` and `bNN.decoys.json`
 - history truth: `bench/truth/cNN.json` (findings with reviewer names stripped; the full corpus is `bench/corpus.json`)
 - old arm keys: `sealed/`
 
@@ -59,6 +62,15 @@ Seeded suite, 3 reps, means per rep (recall out of 24):
 | QD: + old-debt rule | 22.0 | 6 | 8.33 |
 | QE: + I/O-with-transform row (shipped) | 22.67 | 7.0 | 9.33 |
 | QF: 220-line decision-table lens | 23.0 | 7.67 | 9.33 |
+
+Backend suite (2026-11-15), 3 reps, means per rep (recall out of 21):
+
+| Arm | Recall | Valid | Noise | Decoy | Control findings |
+|---|---|---|---|---|---|
+| A: `review-backend` as on main, no rules | 17.83 | 5.33 | 7.33 | 1.0 | 3.33 |
+| B: `review-backend` reading `api-contracts`, `nestjs-dto`, `database-patterns` (shipped) | 20.33 | 4.67 | 6.67 | 0.67 | 2.67 |
+
+The gain is mostly b02 (DTOs): 4.17 to 6.33 of 7.
 
 History suite: one general reviewer against the fixed blocker/major findings found 14 match + 6 partial of 46, about 37%.
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """A/B bench for review rules and lenses. Python 3 standard library only.
 
-    bench.py setup  --suite seeded|history --arm NAME=DIR [--arm ...] --reps N [--cases ID,...] [--seed S] [--run NAME]
+    bench.py setup  --suite seeded|backend|history --arm NAME=DIR [--arm ...] --reps N [--cases ID,...] [--seed S] [--run NAME]
     bench.py judges --suite ... [--run NAME] [--truth DIR]
     bench.py score  --suite ... [--run NAME]
 
@@ -25,7 +25,9 @@ CAND_FIELDS = ("file", "line", "severity", "problem", "impact", "quote")
 # history diffs leave out files that describe the review itself or are generated
 HISTORY_EXCLUDES = [":!.metaproject", ":!CHANGELOG.md", ":!bun.lock"]
 # where the truth lives inside a checkout of the research branch, per suite
-TRUTH_SUBDIRS = {"seeded": "qbench/truth", "history": "bench/truth"}
+TRUTH_SUBDIRS = {"seeded": "qbench/truth", "backend": "bbench/truth", "history": "bench/truth"}
+# suites with planted defects, decoys and a clean control (scored for noise); history has none of these
+PLANTED = {"seeded", "backend"}
 
 
 def die(msg):
@@ -183,7 +185,7 @@ def cmd_judges(args):
         r = byrid[rid]
         jid = "h%02d" % i
         item = dict(truth=load(os.path.join(tdir, r["case"] + ".json")))
-        if args.suite == "seeded":
+        if args.suite in PLANTED:
             decoys = load(os.path.join(tdir, r["case"] + ".decoys.json"))
             item["decoys"] = [dict(x, did="D%d" % n) for n, x in enumerate(decoys, 1)]
         item["candidate"] = read_candidates(r["out"])
@@ -232,7 +234,7 @@ def cmd_score(args):
         c["case_" + k["case"]] += got
         for t in tv:
             c["v_" + t["verdict"]] += 1
-        if args.suite == "seeded":
+        if args.suite in PLANTED:
             for g in v["candidates"]:
                 c[g["label"]] += 1
             c["cands"] += len(v["candidates"])
@@ -249,7 +251,7 @@ def cmd_score(args):
             vals = [c[name] for c in reps]
             return vals, mean(vals)
 
-        if args.suite == "seeded":
+        if args.suite in PLANTED:
             print(arm, "recall", col("recall"), "/ %s" % total_t, "| cands", col("cands"), "| valid", col("valid"),
                   "| noise", col("noise"), "| decoy", col("decoy"), "| control findings", col("control_findings"))
         else:

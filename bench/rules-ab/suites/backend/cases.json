@@ -1,0 +1,34 @@
+{
+ "suite": "backend",
+ "note": "A small NestJS + TypeORM service (services/orders-api) added on top of main at the base commit; b01-b03 each add a feature with planted API-contract, DTO or database defects; b04 is a clean control. The commits are kept on local branches bench-seeds/backend-*.",
+ "cases": [
+  {
+   "id": "b01",
+   "kind": "seeded",
+   "base": "15a20487eb15974d40280502364543eeb7195f18",
+   "head": "43f60bfe083d643dc0bb238a57baf74ad2bc9d4e",
+   "diff": "diff/b01.diff"
+  },
+  {
+   "id": "b02",
+   "kind": "seeded",
+   "base": "15a20487eb15974d40280502364543eeb7195f18",
+   "head": "786e14b22e4526ffac6e29e75e64b56c660aa2fb",
+   "diff": "diff/b02.diff"
+  },
+  {
+   "id": "b03",
+   "kind": "seeded",
+   "base": "15a20487eb15974d40280502364543eeb7195f18",
+   "head": "2ab6d5825f3c3421e71d19c197def47decb18aa8",
+   "diff": "diff/b03.diff"
+  },
+  {
+   "id": "b04",
+   "kind": "control",
+   "base": "15a20487eb15974d40280502364543eeb7195f18",
+   "head": "168b9335afcde5ef1fa0defe81d33ef7aa88e545",
+   "diff": "diff/b04.diff"
+  }
+ ]
+}

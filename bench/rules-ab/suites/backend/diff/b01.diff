@@ -1,0 +1,281 @@
+diff --git a/services/orders-api/migrations/1731600000000-refunds.ts b/services/orders-api/migrations/1731600000000-refunds.ts
+new file mode 100644
+index 000000000..22ead04df
+--- /dev/null
++++ b/services/orders-api/migrations/1731600000000-refunds.ts
+@@ -0,0 +1,20 @@
++import { MigrationInterface, QueryRunner } from "typeorm";
++
++export class Refunds1731600000000 implements MigrationInterface {
++  async up(q: QueryRunner): Promise<void> {
++    await q.query(`CREATE TABLE IF NOT EXISTS refunds (
++      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
++      order_id uuid NOT NULL REFERENCES orders(id),
++      amount_cents integer NOT NULL,
++      reason varchar(200) NOT NULL,
++      created_at timestamptz NOT NULL DEFAULT now()
++    )`);
++    await q.query(`CREATE INDEX IF NOT EXISTS idx_refunds_order_id ON refunds(order_id)`);
++    await q.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS cancelled_at timestamptz`);
++  }
++
++  async down(q: QueryRunner): Promise<void> {
++    await q.query(`ALTER TABLE orders DROP COLUMN IF EXISTS cancelled_at`);
++    await q.query(`DROP TABLE IF EXISTS refunds`);
++  }
++}
+diff --git a/services/orders-api/openapi.yaml b/services/orders-api/openapi.yaml
+index 33323be39..123ea03ad 100644
+--- a/services/orders-api/openapi.yaml
++++ b/services/orders-api/openapi.yaml
+@@ -57,15 +57,16 @@ components:
+     Order:
+       type: object
+       additionalProperties: false
+-      required: [id, customerId, customerName, status, totalCents, currency, createdAt]
++      required: [id, customerId, customerName, status, amountCents, currency, createdAt]
+       properties:
+         id: { type: string, format: uuid }
+         customerId: { type: string, format: uuid }
+         customerName: { type: string }
+         status: { $ref: '#/components/schemas/OrderStatus' }
+-        totalCents: { type: integer }
++        amountCents: { type: integer }
+         currency: { type: string, minLength: 3, maxLength: 3 }
+         createdAt: { type: string, format: date-time }
++        cancelledAt: { type: string, format: date-time }
+     OrderPage:
+       type: object
+       additionalProperties: false
+diff --git a/services/orders-api/src/orders/dto/order.response.ts b/services/orders-api/src/orders/dto/order.response.ts
+index 509595067..8f819cec5 100644
+--- a/services/orders-api/src/orders/dto/order.response.ts
++++ b/services/orders-api/src/orders/dto/order.response.ts
+@@ -1,4 +1,4 @@
+-import { ApiProperty } from "@nestjs/swagger";
++import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+ import { Order, OrderStatus } from "../order.entity";
+ 
+ export class OrderResponse {
+@@ -6,9 +6,10 @@ export class OrderResponse {
+   @ApiProperty({ format: "uuid" }) customerId!: string;
+   @ApiProperty() customerName!: string;
+   @ApiProperty({ enum: OrderStatus }) status!: OrderStatus;
+-  @ApiProperty() totalCents!: number;
++  @ApiProperty() amountCents!: number;
+   @ApiProperty({ minLength: 3, maxLength: 3 }) currency!: string;
+   @ApiProperty({ format: "date-time" }) createdAt!: string;
++  @ApiPropertyOptional({ format: "date-time" }) cancelledAt?: string;
+ 
+   static from(order: Order): OrderResponse {
+     return {
+@@ -16,9 +17,10 @@ export class OrderResponse {
+       customerId: order.customerId,
+       customerName: order.customer.name,
+       status: order.status,
+-      totalCents: order.totalCents,
++      amountCents: order.totalCents,
+       currency: order.currency,
+       createdAt: order.createdAt.toISOString(),
++      ...(order.cancelledAt ? { cancelledAt: order.cancelledAt.toISOString() } : {}),
+     };
+   }
+ }
+diff --git a/services/orders-api/src/orders/order.entity.ts b/services/orders-api/src/orders/order.entity.ts
+index 52d84f432..aeca69440 100644
+--- a/services/orders-api/src/orders/order.entity.ts
++++ b/services/orders-api/src/orders/order.entity.ts
+@@ -51,6 +51,9 @@ export class Order {
+   @CreateDateColumn({ name: "created_at", type: "timestamptz" })
+   createdAt!: Date;
+ 
++  @Column({ name: "cancelled_at", type: "timestamptz", nullable: true })
++  cancelledAt!: Date | null;
++
+   @DeleteDateColumn({ name: "deleted_at", type: "timestamptz" })
+   deletedAt!: Date | null;
+ }
+diff --git a/services/orders-api/src/orders/orders.controller.ts b/services/orders-api/src/orders/orders.controller.ts
+index 1427e1d19..02c02bbe1 100644
+--- a/services/orders-api/src/orders/orders.controller.ts
++++ b/services/orders-api/src/orders/orders.controller.ts
+@@ -19,6 +19,13 @@ export class OrdersController {
+     return this.orders.findOne(id);
+   }
+ 
++  // No Idempotency-Key: cancel is a state transition, and repeating it returns the same order.
++  @Post(":id/cancel")
++  @HttpCode(200)
++  cancel(@Param("id", ParseUUIDPipe) id: string): Promise<OrderResponse> {
++    return this.orders.cancel(id);
++  }
++
+   @Post()
+   @HttpCode(201)
+   @UseInterceptors(IdempotencyInterceptor)
+diff --git a/services/orders-api/src/orders/orders.module.ts b/services/orders-api/src/orders/orders.module.ts
+index 73085252a..7c4fc837a 100644
+--- a/services/orders-api/src/orders/orders.module.ts
++++ b/services/orders-api/src/orders/orders.module.ts
+@@ -4,14 +4,17 @@ import { IdempotencyRecord } from "../common/idempotency-record.entity";
+ import { IdempotencyInterceptor } from "../common/idempotency.interceptor";
+ import { Customer } from "../customers/customer.entity";
+ import { Product } from "../products/product.entity";
++import { Refund } from "../refunds/refund.entity";
++import { RefundsController } from "../refunds/refunds.controller";
++import { RefundsService } from "../refunds/refunds.service";
+ import { Order } from "./order.entity";
+ import { OrderItem } from "./order-item.entity";
+ import { OrdersController } from "./orders.controller";
+ import { OrdersService } from "./orders.service";
+ 
+ @Module({
+-  imports: [TypeOrmModule.forFeature([Order, OrderItem, Customer, Product, IdempotencyRecord])],
+-  controllers: [OrdersController],
+-  providers: [OrdersService, IdempotencyInterceptor],
++  imports: [TypeOrmModule.forFeature([Order, OrderItem, Customer, Product, Refund, IdempotencyRecord])],
++  controllers: [OrdersController, RefundsController],
++  providers: [OrdersService, RefundsService, IdempotencyInterceptor],
+ })
+ export class OrdersModule {}
+diff --git a/services/orders-api/src/orders/orders.service.ts b/services/orders-api/src/orders/orders.service.ts
+index 98b924b59..071db984c 100644
+--- a/services/orders-api/src/orders/orders.service.ts
++++ b/services/orders-api/src/orders/orders.service.ts
+@@ -34,6 +34,25 @@ export class OrdersService {
+     return OrderResponse.from(order);
+   }
+ 
++  /**
++   * Moves a pending or paid order to cancelled. Cancelling an already cancelled order
++   * returns it unchanged, so a retried request has the same effect as the first one.
++   */
++  async cancel(id: string): Promise<OrderResponse> {
++    const order = await this.orders.findOne({ where: { id }, relations: { customer: true } });
++    if (!order) throw new NotFoundException("Order not found");
++    if (order.status === OrderStatus.Cancelled) return OrderResponse.from(order);
++    if (order.status === OrderStatus.Shipped) throw new ConflictException("A shipped order cannot be cancelled");
++    order.status = OrderStatus.Cancelled;
++    order.cancelledAt = new Date();
++    const result = await this.orders.update(
++      { id, status: In([OrderStatus.Pending, OrderStatus.Paid]) },
++      { status: order.status, cancelledAt: order.cancelledAt },
++    );
++    if (result.affected === 0) throw new ConflictException("The order changed while it was being cancelled");
++    return OrderResponse.from(order);
++  }
++
+   /** Creates the order and its lines and reserves stock, all or nothing. */
+   async create(dto: CreateOrderDto): Promise<OrderResponse> {
+     return this.dataSource.transaction(async (manager) => {
+diff --git a/services/orders-api/src/refunds/refund.entity.ts b/services/orders-api/src/refunds/refund.entity.ts
+new file mode 100644
+index 000000000..4db365cf4
+--- /dev/null
++++ b/services/orders-api/src/refunds/refund.entity.ts
+@@ -0,0 +1,20 @@
++import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from "typeorm";
++
++@Entity("refunds")
++@Index("idx_refunds_order_id", ["orderId"])
++export class Refund {
++  @PrimaryGeneratedColumn("uuid")
++  id!: string;
++
++  @Column({ name: "order_id", type: "uuid" })
++  orderId!: string;
++
++  @Column({ name: "amount_cents", type: "integer" })
++  amountCents!: number;
++
++  @Column({ type: "varchar", length: 200 })
++  reason!: string;
++
++  @CreateDateColumn({ name: "created_at", type: "timestamptz" })
++  createdAt!: Date;
++}
+diff --git a/services/orders-api/src/refunds/refunds.controller.ts b/services/orders-api/src/refunds/refunds.controller.ts
+new file mode 100644
+index 000000000..76b66fe74
+--- /dev/null
++++ b/services/orders-api/src/refunds/refunds.controller.ts
+@@ -0,0 +1,28 @@
++import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Res } from "@nestjs/common";
++import type { Response } from "express";
++import { RefundsService, RefundView } from "./refunds.service";
++
++@Controller("v1/orders/:id/refunds")
++export class RefundsController {
++  constructor(private readonly refunds: RefundsService) {}
++
++  @Get()
++  list(@Param("id", ParseUUIDPipe) id: string): Promise<RefundView[]> {
++    return this.refunds.listForOrder(id);
++  }
++
++  @Post()
++  async create(
++    @Param("id", ParseUUIDPipe) id: string,
++    @Body() body: { amountCents: number; reason: string },
++    @Res() res: Response,
++  ): Promise<void> {
++    try {
++      const refund = await this.refunds.create(id, body.amountCents, body.reason);
++      res.status(201).json(refund);
++    } catch (e) {
++      const err = e as { status?: number; message: string };
++      res.status(err.status ?? 500).json({ error: err.message });
++    }
++  }
++}
+diff --git a/services/orders-api/src/refunds/refunds.service.ts b/services/orders-api/src/refunds/refunds.service.ts
+new file mode 100644
+index 000000000..8a882f4b8
+--- /dev/null
++++ b/services/orders-api/src/refunds/refunds.service.ts
+@@ -0,0 +1,45 @@
++import { Injectable, NotFoundException, UnprocessableEntityException } from "@nestjs/common";
++import { InjectDataSource } from "@nestjs/typeorm";
++import { DataSource } from "typeorm";
++import { Order } from "../orders/order.entity";
++import { Refund } from "./refund.entity";
++
++export interface RefundView {
++  id: string;
++  amountCents: number;
++  reason: string;
++  createdAt: string;
++}
++
++@Injectable()
++export class RefundsService {
++  constructor(@InjectDataSource() private readonly dataSource: DataSource) {}
++
++  async create(orderId: string, amountCents: number, reason: string): Promise<RefundView> {
++    if (!Number.isInteger(amountCents) || amountCents <= 0) {
++      throw new UnprocessableEntityException("amountCents must be a positive integer");
++    }
++    if (!reason || reason.length > 200) {
++      throw new UnprocessableEntityException("reason is required, at most 200 characters");
++    }
++    return this.dataSource.transaction(async (manager) => {
++      const order = await manager.findOne(Order, { where: { id: orderId }, lock: { mode: "pessimistic_write" } });
++      if (!order) throw new NotFoundException("Order not found");
++      const refunded = await manager.sum(Refund, "amountCents", { orderId });
++      if ((refunded ?? 0) + amountCents > order.totalCents) {
++        throw new UnprocessableEntityException("Refund exceeds the order total");
++      }
++      const refund = await manager.save(manager.create(Refund, { orderId, amountCents, reason }));
++      return toView(refund);
++    });
++  }
++
++  async listForOrder(orderId: string): Promise<RefundView[]> {
++    const rows = await this.dataSource.getRepository(Refund).find({ where: { orderId }, order: { createdAt: "ASC" } });
++    return rows.map(toView);
++  }
++}
++
++function toView(r: Refund): RefundView {
++  return { id: r.id, amountCents: r.amountCents, reason: r.reason, createdAt: r.createdAt.toISOString() };
++}

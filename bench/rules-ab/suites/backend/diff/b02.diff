@@ -1,0 +1,410 @@
+diff --git a/services/orders-api/migrations/1731700000000-shipments.ts b/services/orders-api/migrations/1731700000000-shipments.ts
+new file mode 100644
+index 000000000..c063fab69
+--- /dev/null
++++ b/services/orders-api/migrations/1731700000000-shipments.ts
+@@ -0,0 +1,24 @@
++import { MigrationInterface, QueryRunner } from "typeorm";
++
++export class Shipments1731700000000 implements MigrationInterface {
++  async up(q: QueryRunner): Promise<void> {
++    await q.query(`CREATE TABLE IF NOT EXISTS shipments (
++      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
++      order_id uuid NOT NULL REFERENCES orders(id),
++      carrier varchar(8) NOT NULL,
++      tracking_number varchar(64),
++      weight_grams integer NOT NULL,
++      country_code char(2) NOT NULL,
++      postcode varchar(20) NOT NULL,
++      street varchar(200) NOT NULL,
++      notes varchar(500),
++      created_at timestamptz NOT NULL DEFAULT now()
++    )`);
++    await q.query(`CREATE INDEX IF NOT EXISTS idx_shipments_order_id ON shipments(order_id)`);
++    await q.query(`CREATE INDEX IF NOT EXISTS idx_shipments_carrier_created_at ON shipments(carrier, created_at)`);
++  }
++
++  async down(q: QueryRunner): Promise<void> {
++    await q.query(`DROP TABLE IF EXISTS shipments`);
++  }
++}
+diff --git a/services/orders-api/openapi.yaml b/services/orders-api/openapi.yaml
+index 33323be39..b5c9ba934 100644
+--- a/services/orders-api/openapi.yaml
++++ b/services/orders-api/openapi.yaml
+@@ -49,8 +49,88 @@ paths:
+             application/json:
+               schema: { $ref: '#/components/schemas/Order' }
+         '404': { $ref: '#/components/responses/NotFound' }
++  /v1/orders/{id}/shipments:
++    post:
++      operationId: createShipment
++      summary: Book a shipment for an order
++      parameters:
++        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
++        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 64 } }
++      requestBody:
++        required: true
++        content:
++          application/json:
++            schema: { $ref: '#/components/schemas/CreateShipment' }
++      responses:
++        '201':
++          description: Booked
++          content:
++            application/json:
++              schema: { $ref: '#/components/schemas/Shipment' }
++        '400': { $ref: '#/components/responses/BadRequest' }
++        '404': { $ref: '#/components/responses/NotFound' }
++  /v1/shipments:
++    get:
++      operationId: listShipments
++      summary: List shipments, newest first
++      parameters:
++        - { name: carrier, in: query, required: false, schema: { $ref: '#/components/schemas/Carrier' } }
++        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
++        - { name: offset, in: query, required: false, schema: { type: integer, minimum: 0, default: 0 } }
++      responses:
++        '200':
++          description: A page of shipments
++          content:
++            application/json:
++              schema: { $ref: '#/components/schemas/ShipmentPage' }
++        '400': { $ref: '#/components/responses/BadRequest' }
+ components:
+   schemas:
++    Carrier:
++      type: string
++      enum: [dhl, ups, gls]
++    CreateShipment:
++      type: object
++      additionalProperties: false
++      required: [carrier, orderLineIds, weightGrams, address]
++      properties:
++        carrier: { $ref: '#/components/schemas/Carrier' }
++        orderLineIds: { type: array, minItems: 1, items: { type: string, format: uuid } }
++        weightGrams: { type: integer, minimum: 1 }
++        address:
++          type: object
++          additionalProperties: false
++          required: [countryCode, postcode, street]
++          properties:
++            countryCode: { type: string, minLength: 2, maxLength: 2 }
++            postcode: { type: string, maxLength: 20 }
++            street: { type: string, maxLength: 200 }
++        trackingNumber: { type: string, maxLength: 64 }
++        notes: { type: string, maxLength: 500 }
++    Shipment:
++      type: object
++      additionalProperties: false
++      required: [id, orderId, carrier, weightGrams, createdAt]
++      properties:
++        id: { type: string, format: uuid }
++        orderId: { type: string, format: uuid }
++        carrier: { $ref: '#/components/schemas/Carrier' }
++        trackingNumber: { type: string, nullable: true }
++        weightGrams: { type: integer }
++        createdAt: { type: string, format: date-time }
++    ShipmentPage:
++      type: object
++      additionalProperties: false
++      required: [data, meta]
++      properties:
++        data: { type: array, items: { $ref: '#/components/schemas/Shipment' } }
++        meta:
++          type: object
++          required: [limit, offset, total]
++          properties:
++            limit: { type: integer }
++            offset: { type: integer }
++            total: { type: integer }
+     OrderStatus:
+       type: string
+       enum: [pending, paid, shipped, cancelled]
+diff --git a/services/orders-api/src/app.module.ts b/services/orders-api/src/app.module.ts
+index dbc05258f..c1a84eb3e 100644
+--- a/services/orders-api/src/app.module.ts
++++ b/services/orders-api/src/app.module.ts
+@@ -2,8 +2,9 @@ import { Module } from "@nestjs/common";
+ import { TypeOrmModule } from "@nestjs/typeorm";
+ import { dataSourceOptions } from "./data-source";
+ import { OrdersModule } from "./orders/orders.module";
++import { ShipmentsModule } from "./shipments/shipments.module";
+ 
+ @Module({
+-  imports: [TypeOrmModule.forRoot(dataSourceOptions), OrdersModule],
++  imports: [TypeOrmModule.forRoot(dataSourceOptions), OrdersModule, ShipmentsModule],
+ })
+ export class AppModule {}
+diff --git a/services/orders-api/src/shipments/dto/create-shipment.dto.ts b/services/orders-api/src/shipments/dto/create-shipment.dto.ts
+new file mode 100644
+index 000000000..7408638b4
+--- /dev/null
++++ b/services/orders-api/src/shipments/dto/create-shipment.dto.ts
+@@ -0,0 +1,62 @@
++import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
++import { Transform } from "class-transformer";
++import {
++  ArrayMinSize,
++  IsEnum,
++  IsObject,
++  IsOptional,
++  IsString,
++  IsUUID,
++  Length,
++  MaxLength,
++} from "class-validator";
++import { Carrier } from "../shipment.entity";
++
++export class ShipmentAddressDto {
++  @ApiProperty({ description: "ISO 3166-1 alpha-2 country code" })
++  @IsString()
++  @Length(2, 2)
++  @Transform(({ value }) => (typeof value === "string" ? value.trim().toUpperCase() : value))
++  countryCode!: string;
++
++  @ApiProperty({ description: "Postal code" })
++  @IsString()
++  @MaxLength(20)
++  postcode!: string;
++
++  @ApiProperty({ description: "Street and house number" })
++  @IsString()
++  @MaxLength(200)
++  street!: string;
++}
++
++export class CreateShipmentDto {
++  @ApiProperty({ description: "Carrier that collects the parcel", enum: Carrier })
++  @IsOptional()
++  @IsEnum(Carrier)
++  carrier!: Carrier;
++
++  @IsUUID("4", { each: true })
++  @ArrayMinSize(1)
++  orderLineIds!: string[];
++
++  @ApiProperty({ description: "Вес посылки в граммах" })
++  @IsString()
++  weightGrams!: number;
++
++  @ApiProperty({ description: "Delivery address", type: ShipmentAddressDto })
++  @IsObject()
++  address!: ShipmentAddressDto;
++
++  @ApiProperty({ description: "Carrier tracking number, when the label is printed elsewhere" })
++  @IsOptional()
++  @IsString()
++  @MaxLength(64)
++  trackingNumber?: string;
++
++  @ApiPropertyOptional({ description: "Instructions for the courier", maxLength: 500 })
++  @IsOptional()
++  @IsString()
++  @MaxLength(500)
++  notes?: string;
++}
+diff --git a/services/orders-api/src/shipments/dto/list-shipments.query.ts b/services/orders-api/src/shipments/dto/list-shipments.query.ts
+new file mode 100644
+index 000000000..ace015669
+--- /dev/null
++++ b/services/orders-api/src/shipments/dto/list-shipments.query.ts
+@@ -0,0 +1,23 @@
++import { ApiPropertyOptional } from "@nestjs/swagger";
++import { IsEnum, IsInt, IsOptional, Max, Min } from "class-validator";
++import { Carrier } from "../shipment.entity";
++
++export class ListShipmentsQuery {
++  @ApiPropertyOptional({ description: "Only shipments with this carrier", enum: Carrier })
++  @IsOptional()
++  @IsEnum(Carrier)
++  carrier?: Carrier;
++
++  @ApiPropertyOptional({ description: "Page size", minimum: 1, maximum: 100, default: 20 })
++  @IsOptional()
++  @IsInt()
++  @Min(1)
++  @Max(100)
++  limit = 20;
++
++  @ApiPropertyOptional({ description: "Rows to skip", minimum: 0, default: 0 })
++  @IsOptional()
++  @IsInt()
++  @Min(0)
++  offset = 0;
++}
+diff --git a/services/orders-api/src/shipments/shipment.entity.ts b/services/orders-api/src/shipments/shipment.entity.ts
+new file mode 100644
+index 000000000..1c42d9a17
+--- /dev/null
++++ b/services/orders-api/src/shipments/shipment.entity.ts
+@@ -0,0 +1,42 @@
++import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from "typeorm";
++
++export enum Carrier {
++  Dhl = "dhl",
++  Ups = "ups",
++  Gls = "gls",
++}
++
++@Entity("shipments")
++@Index("idx_shipments_order_id", ["orderId"])
++@Index("idx_shipments_carrier_created_at", ["carrier", "createdAt"])
++export class Shipment {
++  @PrimaryGeneratedColumn("uuid")
++  id!: string;
++
++  @Column({ name: "order_id", type: "uuid" })
++  orderId!: string;
++
++  @Column({ type: "varchar", length: 8 })
++  carrier!: Carrier;
++
++  @Column({ name: "tracking_number", type: "varchar", length: 64, nullable: true })
++  trackingNumber!: string | null;
++
++  @Column({ name: "weight_grams", type: "integer" })
++  weightGrams!: number;
++
++  @Column({ name: "country_code", type: "char", length: 2 })
++  countryCode!: string;
++
++  @Column({ type: "varchar", length: 20 })
++  postcode!: string;
++
++  @Column({ type: "varchar", length: 200 })
++  street!: string;
++
++  @Column({ type: "varchar", length: 500, nullable: true })
++  notes!: string | null;
++
++  @CreateDateColumn({ name: "created_at", type: "timestamptz" })
++  createdAt!: Date;
++}
+diff --git a/services/orders-api/src/shipments/shipments.controller.ts b/services/orders-api/src/shipments/shipments.controller.ts
+new file mode 100644
+index 000000000..e9edfd664
+--- /dev/null
++++ b/services/orders-api/src/shipments/shipments.controller.ts
+@@ -0,0 +1,22 @@
++import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Query, UseInterceptors } from "@nestjs/common";
++import { IdempotencyInterceptor } from "../common/idempotency.interceptor";
++import { CreateShipmentDto } from "./dto/create-shipment.dto";
++import { ListShipmentsQuery } from "./dto/list-shipments.query";
++import { ShipmentPage, ShipmentsService, ShipmentView } from "./shipments.service";
++
++@Controller("v1")
++export class ShipmentsController {
++  constructor(private readonly shipments: ShipmentsService) {}
++
++  @Post("orders/:id/shipments")
++  @HttpCode(201)
++  @UseInterceptors(IdempotencyInterceptor)
++  create(@Param("id", ParseUUIDPipe) id: string, @Body() dto: CreateShipmentDto): Promise<ShipmentView> {
++    return this.shipments.create(id, dto);
++  }
++
++  @Get("shipments")
++  list(@Query() query: ListShipmentsQuery): Promise<ShipmentPage> {
++    return this.shipments.list(query);
++  }
++}
+diff --git a/services/orders-api/src/shipments/shipments.module.ts b/services/orders-api/src/shipments/shipments.module.ts
+new file mode 100644
+index 000000000..081e5f4e1
+--- /dev/null
++++ b/services/orders-api/src/shipments/shipments.module.ts
+@@ -0,0 +1,15 @@
++import { Module } from "@nestjs/common";
++import { TypeOrmModule } from "@nestjs/typeorm";
++import { IdempotencyRecord } from "../common/idempotency-record.entity";
++import { IdempotencyInterceptor } from "../common/idempotency.interceptor";
++import { Order } from "../orders/order.entity";
++import { Shipment } from "./shipment.entity";
++import { ShipmentsController } from "./shipments.controller";
++import { ShipmentsService } from "./shipments.service";
++
++@Module({
++  imports: [TypeOrmModule.forFeature([Shipment, Order, IdempotencyRecord])],
++  controllers: [ShipmentsController],
++  providers: [ShipmentsService, IdempotencyInterceptor],
++})
++export class ShipmentsModule {}
+diff --git a/services/orders-api/src/shipments/shipments.service.ts b/services/orders-api/src/shipments/shipments.service.ts
+new file mode 100644
+index 000000000..a7dc69d93
+--- /dev/null
++++ b/services/orders-api/src/shipments/shipments.service.ts
+@@ -0,0 +1,72 @@
++import { Injectable, NotFoundException } from "@nestjs/common";
++import { InjectRepository } from "@nestjs/typeorm";
++import { Repository } from "typeorm";
++import { Order } from "../orders/order.entity";
++import { CreateShipmentDto } from "./dto/create-shipment.dto";
++import { ListShipmentsQuery } from "./dto/list-shipments.query";
++import { Shipment } from "./shipment.entity";
++
++export interface ShipmentPage {
++  data: ShipmentView[];
++  meta: { limit: number; offset: number; total: number };
++}
++
++export interface ShipmentView {
++  id: string;
++  orderId: string;
++  carrier: string;
++  trackingNumber: string | null;
++  weightGrams: number;
++  createdAt: string;
++}
++
++@Injectable()
++export class ShipmentsService {
++  constructor(
++    @InjectRepository(Shipment) private readonly shipments: Repository<Shipment>,
++    @InjectRepository(Order) private readonly orders: Repository<Order>,
++  ) {}
++
++  async create(orderId: string, dto: CreateShipmentDto): Promise<ShipmentView> {
++    const exists = await this.orders.exists({ where: { id: orderId } });
++    if (!exists) throw new NotFoundException("Order not found");
++    const shipment = await this.shipments.save(
++      this.shipments.create({
++        orderId,
++        carrier: dto.carrier,
++        trackingNumber: dto.trackingNumber ?? null,
++        weightGrams: dto.weightGrams,
++        countryCode: dto.address.countryCode,
++        postcode: dto.address.postcode,
++        street: dto.address.street,
++        notes: dto.notes ?? null,
++      }),
++    );
++    return toView(shipment, labelPrefix(dto.carrier));
++  }
++
++  async list(query: ListShipmentsQuery): Promise<ShipmentPage> {
++    const [rows, total] = await this.shipments.findAndCount({
++      where: query.carrier ? { carrier: query.carrier } : {},
++      order: { createdAt: "DESC" },
++      take: query.limit,
++      skip: query.offset,
++    });
++    return { data: rows.map((r) => toView(r, labelPrefix(r.carrier))), meta: { limit: query.limit, offset: query.offset, total } };
++  }
++}
++
++function labelPrefix(carrier: string): string {
++  return carrier.toUpperCase() + "-";
++}
++
++function toView(s: Shipment, prefix: string): ShipmentView {
++  return {
++    id: s.id,
++    orderId: s.orderId,
++    carrier: s.carrier,
++    trackingNumber: s.trackingNumber ? prefix + s.trackingNumber : null,
++    weightGrams: s.weightGrams,
++    createdAt: s.createdAt.toISOString(),
++  };
++}
