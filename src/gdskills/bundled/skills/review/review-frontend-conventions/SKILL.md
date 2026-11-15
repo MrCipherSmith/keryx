@@ -58,28 +58,15 @@ project-specific guide was found.
 
 ### TypeScript
 
-- Avoid `any` and broad `as` casts. Prefer type guards, discriminated unions, and precise types.
+- Avoid broad `as` casts. Prefer type guards, discriminated unions, and precise types. `any`, `!` and the `I` prefix are `.metaproject/rules/core/code-style-patterns.mdc` Rule 8.
 - Keep tests and stories typed unless intentionally exercising invalid edge cases.
 - Follow local React type import conventions consistently.
 - Write new code in the direction of stricter compiler settings.
 
-### React Components
+### React Components and State Stores
 
-- Keep components thin: read state, bind events, render.
-- Business logic, IO, validation, and data transformation belong in stores/services.
-- Avoid React local state/memo/callback hooks where the local architecture expects observable or
-  computed state.
-- Use effects only for lifecycle, subscriptions, and third-party integration; always clean up.
-- Components reading observable state are wrapped in the repository's reactive wrapper.
-- Props shape and file naming follow local conventions.
+Components follow `.metaproject/rules/core/code-style-patterns.mdc` (reactive wrapper, thin components, where state lives, effects and cleanup, props naming) and stores follow `.metaproject/rules/core/mobx-store-template.mdc` (naming and file casing, reactivity in the constructor, member order, `@action.bound` on public UI-called methods only, actions around async mutations). Each takes its severity from that rule's **Review severities** table, and a local guide that is stricter wins. Local `useState` for UI-only state and a memo over non-store values are correct. Beyond the rules:
 
-### State Stores
-
-- Store classes follow local naming, file casing, context, and hook conventions.
-- Observable classes initialize their reactivity in constructors.
-- Member ordering follows local lint/member-ordering rules.
-- UI-called actions preserve `this` binding.
-- Async callbacks that mutate observable state re-enter an action boundary.
 - Derived serializable state has a single source of truth such as `currentState` when that is the
   local pattern.
 
@@ -90,13 +77,12 @@ project-specific guide was found.
   entries.
 - Browser storage goes through shared wrappers/adapters; direct `localStorage`/`sessionStorage`
   access is a review finding when wrappers exist.
-- Catch blocks normalize user-facing messages, preserve original errors for logging, and notify
-  through the established UI notification channel.
+- Catch blocks notify through the established UI notification channel and normalize user-facing
+  messages; keeping the cause and logging once are `.metaproject/rules/core/error-handling.mdc` Rules 3 and 5.
 
 ### Stories and Tooling
 
-- New reusable UI surfaces have stories or examples matching local standards.
-- Stories include representative default, empty/minimal, and stress/large states where useful.
+- New reusable UI surfaces have stories or examples matching local standards; which states they cover is `.metaproject/rules/core/storybook-guidelines.mdc` Rule 2.
 - Wrapper components expose plain props for controls when the primary component is store-only.
 - Treat unused-code tools as signals: preserve intentional public APIs with narrow ignores rather
   than deleting documented runtime/story/test entrypoints.
@@ -169,7 +155,7 @@ conditions land under that rubric.
 | Condition | Severity | Why, under the canonical rubric |
 |---|---|---|
 | Unguarded direct storage writes that can throw on quota | `blocker` | Crash on a reachable input |
-| Lost reactivity; masked translation or error behaviour | `major` | Named trigger and named outcome. Identical to `review-frontend`'s rating for lost reactivity, deliberately |
+| Lost reactivity (`code-style-patterns.mdc` Rule 1 row); a masked translation | `major` | Named trigger and named outcome. Identical to `review-frontend`'s rating for lost reactivity, deliberately. An error path is rated by `error-handling.mdc`, not here |
 | A convention violation the linter or CI already fails on | `minor` | The machine catches it; a reviewer restating it is not a merge gate |
 | Naming, story coverage, file placement | `minor` | Correct today; the cost is to the next editor |
 | A convention preference with no named consequence | `info` | Shared laws 1 and 2 |
