@@ -119,6 +119,17 @@ SOLID and architecture rules (2026-11-15), seeded suite, 2 reps. Arm A is the le
 
 `review-style` B misses more than A only on what it no longer owns: the LSP override, constructor I/O, the branch chain, the magic literal, mixed I/O and the stale comment now belong to `review-clean-code`, which still finds them. Both lenses report less noise.
 
+Highload lens and `concurrency-patterns` (2026-11-16), 2 reps. Arm A is `review-highload` (471 lines) with its rules as on main; arm B is the 328-line lens that points at `api-contracts`, `error-handling`, `async-patterns`, `database-patterns` and the new `concurrency-patterns`:
+
+| Suite, cases | Arm | Recall | Valid | Noise | Decoy | Control findings |
+|---|---|---|---|---|---|---|
+| backend b01, b03 + control b04 (/14) | A | 13.75 | 4.5 | 5.5 | 1.5 | 4 |
+| | B | 13.5 | 4.5 | 4.5 | 1.5 | 3 |
+| history c12, c13 (/5) | A | 0.5 | | | | |
+| | B | 0.75 | | | | |
+
+The trim loses no recall within run-to-run variation (one b01 item, 0.25 per rep) and reports less noise. History c12/c13 (races) stays at the floor for both arms, so it cannot separate them; a dedicated concurrency suite would be needed for that.
+
 History suite: one general reviewer against the fixed blocker/major findings found 14 match + 6 partial of 46, about 37%.
 
 ## Notes
