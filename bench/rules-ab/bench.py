@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """A/B bench for review rules and lenses. Python 3 standard library only.
 
-    bench.py setup  --suite seeded|history --arm NAME=DIR [--arm ...] --reps N [--seed S] [--run NAME]
+    bench.py setup  --suite seeded|history --arm NAME=DIR [--arm ...] --reps N [--cases ID,...] [--seed S] [--run NAME]
     bench.py judges --suite ... [--run NAME] [--truth DIR]
     bench.py score  --suite ... [--run NAME]
 
@@ -106,6 +106,12 @@ def arm_listing(path):
 
 def cmd_setup(args):
     cases = load_cases(args.suite)
+    if args.cases:
+        wanted = args.cases.split(",")
+        unknown = sorted(set(wanted) - {c["id"] for c in cases})
+        if unknown:
+            die("unknown case ids: " + " ".join(unknown))
+        cases = [c for c in cases if c["id"] in wanted]
     arms = parse_arms(args.arm)
     work = work_dir(args)
     if os.path.exists(os.path.join(work, "runs.json")):
@@ -256,6 +262,7 @@ def main():
     ap.add_argument("--run", help="work dir name under .work/ (default: the suite name)")
     ap.add_argument("--arm", action="append", default=[], help="NAME=DIR, repeat per arm (setup)")
     ap.add_argument("--reps", type=int, default=3, help="reviewer runs per case and arm (setup)")
+    ap.add_argument("--cases", help="comma-separated case ids to run, e.g. c06,c07 (setup; default: all)")
     ap.add_argument("--seed", type=int, default=4920, help="shuffle seed (setup); judges use seed+1")
     ap.add_argument("--truth", help="truth directory from the research checkout (judges); or env KERYX_BENCH_TRUTH")
     args = ap.parse_args()

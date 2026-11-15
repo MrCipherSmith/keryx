@@ -31,6 +31,8 @@ Use it for the clean-code lens and its rules. Run at least 3 reps: single runs v
 
 History runs use `--suite history` the same way; `score` prints match / partial / miss and found %.
 
+`setup --cases c06,c07,...` runs only the named cases. Use it when a change touches one topic: for security, c06 c07 c09 c10 c11 hold the security findings; for async and races, c12 c13.
+
 ## Truth and keys: where they are and why they are not here
 
 The planted defects, decoys and the history findings are the answer key. They are kept out of `main` so a reviewer working in a checkout of `main` cannot read them. They live on the research branch (`research/part2-data`) under `bench-archive/2026-11-14/`:
