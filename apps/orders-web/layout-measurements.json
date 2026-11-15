@@ -1,0 +1,182 @@
+{
+  "command": "npx playwright test e2e/layout.spec.ts --project=chromium --reporter=list",
+  "generatedBy": "e2e/layout.spec.ts",
+  "units": "css px, rounded to 0.1",
+  "measurements": [
+    {
+      "component": "OrderScoreCard",
+      "element": "[data-measure=score-track]",
+      "locale": "en",
+      "viewport": {
+        "width": 320,
+        "height": 640
+      },
+      "hostWidth": 320,
+      "widthPx": 0.0,
+      "cardWidthPx": 120.4
+    },
+    {
+      "component": "OrderScoreCard",
+      "element": "[data-measure=score-track]",
+      "locale": "en",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "hostWidth": 390,
+      "widthPx": 0.0,
+      "cardWidthPx": 120.4
+    },
+    {
+      "component": "FulfilmentMeter",
+      "element": "[data-measure=meter-track]",
+      "locale": "en",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "hostWidth": 390,
+      "valuePercent": 80,
+      "labelWidthPx": 62.4,
+      "trackWidthPx": 62.4,
+      "fillWidthPx": 49.9
+    },
+    {
+      "component": "FulfilmentMeter",
+      "element": "[data-measure=meter-track]",
+      "locale": "de",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "hostWidth": 390,
+      "valuePercent": 80,
+      "labelWidthPx": 106.0,
+      "trackWidthPx": 106.0,
+      "fillWidthPx": 84.8
+    },
+    {
+      "component": "FulfilmentMeter",
+      "element": "[data-measure=meter-track]",
+      "locale": "ar",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "hostWidth": 390,
+      "valuePercent": 80,
+      "labelWidthPx": 71.2,
+      "trackWidthPx": 71.2,
+      "fillWidthPx": 57.0
+    },
+    {
+      "component": "OrderTotalsStrip",
+      "element": "[data-measure=totals-total]",
+      "locale": "en",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "hostWidth": 390,
+      "containerLeftPx": 16.0,
+      "containerRightPx": 374.0,
+      "elementLeftPx": 330.4,
+      "elementRightPx": 401.0,
+      "visibleWidthPx": 43.6,
+      "clippedBy": "overflow-hidden on [data-measure=totals-container]"
+    },
+    {
+      "component": "OrdersTable",
+      "element": "[data-measure=orders-table]",
+      "locale": "en",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "hostWidth": 390,
+      "elementWidthPx": 720.0,
+      "documentScrollWidthPx": 752,
+      "documentClientWidthPx": 390
+    },
+    {
+      "component": "ScoreBadge",
+      "element": "[data-measure=badge-score]",
+      "locale": "en",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "hostWidth": 390,
+      "boxLeftPx": 16.0,
+      "boxWidthPx": 192.0,
+      "boxCenterXPx": 112.0,
+      "scoreCenterXPx": 100.0,
+      "offsetFromBoxCenterPx": -12.0
+    },
+    {
+      "component": "ScoreBadge",
+      "element": "[data-measure=badge-score]",
+      "locale": "ar",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "hostWidth": 390,
+      "boxLeftPx": 182.0,
+      "boxWidthPx": 192.0,
+      "boxCenterXPx": 278.0,
+      "scoreCenterXPx": 290.0,
+      "offsetFromBoxCenterPx": 12.0
+    },
+    {
+      "component": "RecentFilters",
+      "element": "[data-measure=fade]",
+      "locale": "en",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "hostWidth": 390,
+      "overlayLeftPx": 16.0,
+      "overlayWidthPx": 32.0,
+      "stripStartEdge": "left"
+    },
+    {
+      "component": "RecentFilters",
+      "element": "[data-measure=fade]",
+      "locale": "ar",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "hostWidth": 390,
+      "overlayLeftPx": 16.0,
+      "overlayWidthPx": 32.0,
+      "stripStartEdge": "right"
+    },
+    {
+      "component": "CustomerCell",
+      "element": "[data-measure=customer-name]",
+      "locale": "en",
+      "viewport": {
+        "width": 320,
+        "height": 640
+      },
+      "hostWidth": 320,
+      "widthPx": 86.0,
+      "mount": "standalone"
+    },
+    {
+      "component": "CustomerCell",
+      "element": "[data-measure=customer-name]",
+      "locale": "en",
+      "viewport": {
+        "width": 200,
+        "height": 640
+      },
+      "hostWidth": 200,
+      "widthPx": 0.0,
+      "mount": "standalone"
+    }
+  ]
+}
