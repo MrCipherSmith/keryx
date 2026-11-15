@@ -1,0 +1,23 @@
+# Flow Journal
+
+- 2026-11-15T22:39:27.802Z - flow created
+- 2026-11-15T22:42:18.512Z - task-added: T5: Shared unknown-flag refusal helper; migrate six copies; guard modules/skills/memory
+- 2026-11-15T22:42:19.107Z - task-added: T6: Versioned skills verify --json envelopes
+- 2026-11-15T22:42:20.368Z - frozen: 5 criteria; checksum recorded
+- 2026-11-15T22:42:21.232Z - started
+- 2026-11-15T22:42:40.341Z - task-added: T7: Stderr notice for the ref alias of target-ref in keryx review
+- 2026-11-15T22:42:41.296Z - task-done: T1: Collect remaining context
+- 2026-11-15T22:42:42.071Z - task-done: T2: Implement per plan
+- 2026-11-15T22:42:42.824Z - task-attempt: T5: started (attempt 1) — 494-T5 task-implementer
+- 2026-11-15T23:01:07.137Z - task-done: T5: Shared unknown-flag refusal helper; migrate six copies; guard modules/skills/memory
+- 2026-11-15T23:01:07.610Z - task-attempt: T6: started (attempt 1) — 494-T6 task-implementer
+- 2026-11-15T23:01:08.087Z - task-attempt: T7: started (attempt 1) — 494-T7 task-implementer
+- 2026-11-15T23:10:28.144Z - task-done: T7: Stderr notice for the ref alias of target-ref in keryx review
+- 2026-11-15T23:11:03.633Z - task-done: T6: Versioned skills verify --json envelopes
+- 2026-11-15T23:34:17.290Z - ac-confirmed: AC1: cli-unknown-flags.test.ts pass (66/66 targeted run, e03a6479a) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-11-15T23:34:17.510Z - ac-confirmed: AC2: ctx rg: only src/lib/args.ts:124 defines rejectUnknownFlags (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-11-15T23:34:17.717Z - ac-confirmed: AC3: skills.verify-json.test.ts pass (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-11-15T23:34:17.921Z - ac-confirmed: AC4: review-ref-alias.test.ts pass (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-11-15T23:34:18.125Z - ac-confirmed: AC5: bun test src/commands: 4710 pass, 28 fail = 26 research (fail on main) + 2 init hook tests caused by an empty GIT_TEMPLATE_DIR; both pass without it (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-11-15T23:34:18.322Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-11-15T23:34:18.518Z - task-done: T4: Self-review and prepare draft PR
