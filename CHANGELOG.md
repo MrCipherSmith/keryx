@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+## [0.4.30] - 2026-11-16
+
+### Changed
+
+- **One rule per topic for implementer and reviewer.** Each core rule now ends with a `Review severities` table (signal, when it is a finding, default severity, what is not a finding), and the review lenses point at those rows instead of keeping their own rubrics. Covered: security and async, API contracts, DTOs and database, MobX stores, code style and Storybook, testing (TDD and Playwright), SOLID and clean architecture, highload, CLI design and UI. Every change was A/B-measured on the new `bench/rules-ab` suites before merge. [#1192](https://github.com/MrCipherSmith/keryx/pull/1192) [#1193](https://github.com/MrCipherSmith/keryx/pull/1193) [#1194](https://github.com/MrCipherSmith/keryx/pull/1194) [#1195](https://github.com/MrCipherSmith/keryx/pull/1195) [#1196](https://github.com/MrCipherSmith/keryx/pull/1196) [#1197](https://github.com/MrCipherSmith/keryx/pull/1197) [#1199](https://github.com/MrCipherSmith/keryx/pull/1199) [#1200](https://github.com/MrCipherSmith/keryx/pull/1200) [#1202](https://github.com/MrCipherSmith/keryx/pull/1202)
+- **New rules.** `concurrency-patterns` (lock files, temp-and-rename writes, JSONL appends, bounded child fan-out) and `layout-rendering` (measured layout, 320 px floor, locale geometry, RTL mirroring). The context resolver loads `cli-interface-design` and `concurrency-patterns` for matching implement tasks. [#1199](https://github.com/MrCipherSmith/keryx/pull/1199) [#1200](https://github.com/MrCipherSmith/keryx/pull/1200)
+- **CLI flags are refused by name.** One shared helper refuses unknown flags (one stderr line, exit 1); `modules`, `skills verify` and `memory search` no longer ignore them, and `--flag=value` is refused on a flag that takes no value. `skills verify --all --json` prints `{schemaVersion, results}` (`--json-legacy-array` keeps the bare array for one release), and `review --ref` names the preferred `--target-ref`. [#1205](https://github.com/MrCipherSmith/keryx/pull/1205), [#1198](https://github.com/MrCipherSmith/keryx/issues/1198)
+
+### Added
+
+- **Desktop quick start.** Web and TUI quick start in the desktop app. [#1179](https://github.com/MrCipherSmith/keryx/pull/1179)
+- **Rules A/B bench.** `bench/rules-ab` compares versions of a lens and its rules on seeded, backend, frontend, testing, UI and history suites with blind judges. [#1189](https://github.com/MrCipherSmith/keryx/pull/1189)
+
+### Fixed
+
+- **Monorepo reviewer routing.** `review required` reads the nearest `package.json` of each changed file, so React/MobX/NestJS lenses run on changes under sub-packages. [#1203](https://github.com/MrCipherSmith/keryx/pull/1203)
+- **Pinned review head.** `review plan`/`review slice --head` slice the pinned range instead of the working tree. [#1201](https://github.com/MrCipherSmith/keryx/pull/1201)
+
+
 ## [0.4.29] - 2026-11-14
 
 ### Added
