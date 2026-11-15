@@ -1,5 +1,5 @@
 ---
-description: "Shared catalog of AI-slop tells in UI (visual, copy, behavioral) with severity tiers, numeric craft thresholds, and the positive-direction principle. Read by ui-direction, ui-craft, and review-ui-ux."
+description: "Shared catalog of AI-slop tells in UI (visual, copy, behavioral) with visibility tiers, the project's craft thresholds, the positive-direction principle, and the severities reviewers use. Read by ui-direction, ui-craft, and review-ui-ux."
 alwaysApply: false
 globs:
   - "**/*.tsx"
@@ -16,12 +16,21 @@ globs:
 
 One vocabulary for the three UI skills: `ui-direction` (concept before code), `ui-craft`
 (implementation), `review-ui-ux` (review). The creator and the reviewer judge by the same list.
+Rendered geometry (sizing, overflow, reflow, RTL) is `layout-rendering.mdc`.
+
+Canon applies: WCAG 2.2 AA, the NN/g usability heuristics and response-time limits, Practical
+Typography, and Jakob's Law. This rule holds only this project's decisions on top of them.
+
+**Applies to.** Marketing and content surfaces (landing, pricing, docs home, blog) use every row.
+App screens (dashboards, admin, settings, data views) use Behavioral slop, Components & surfaces,
+Motion, and the craft thresholds; there, body text of 14–16px is allowed when the component
+library sets it and `DESIGN.md` says so.
 
 ## Why slop happens
 
 - **Distributional convergence.** With no direction a model emits the most probable design:
   Inter, indigo-on-white, centered hero, three cards, fade-up on scroll. Every "safe" default
-  is a vote for the average. (Anthropic, *Improving frontend design through skills*)
+  is a vote for the average.
 - **A ban list alone fails.** Ban purple and the output moves to the *next* most probable look
   ("second-wave slop": cream + serif + terracotta; near-black + one neon accent; broadsheet).
   The cure is a **positive direction derived from the subject**, with this list as a guard rail.
@@ -36,18 +45,18 @@ One vocabulary for the three UI skills: `ui-direction` (concept before code), `u
    the client's own numbers and names. Not from "modern, clean, minimal".
 2. **Spend boldness in one place.** Exactly one signature element; everything else quiet.
    Before finishing, remove one element.
-3. **Distinctive look, conventional behavior** (Jakob's Law). Navigation placement, link
-   affordance, form patterns, and keyboard behavior stay standard.
-4. **Structure must encode information.** Borders, numbering, eyebrows, dividers, badges exist
-   only when they carry meaning.
+3. **Distinctive look, conventional behavior.** Navigation, links, forms and keyboard stay standard.
+4. **Decoration carries meaning or goes.** Borders, numbering, eyebrows, dividers, badges.
 5. **Never invent proof.** No made-up stats, logos, testimonials, customers, or "Live" chips.
-6. **If the brief names a look, follow it** — even if that look is on the list below.
+6. **If `DESIGN.md`, the brief or the job context names a look, follow it** — even if that look
+   is on the list below.
 7. **Don't claim checks that weren't run.** No browser → say so.
 
 ## Tell catalog
 
-Tiers: **T1** — recognizable as AI within ~3 seconds by a layperson (must fix).
-**T2** — obvious to anyone who builds UI (should fix). **T3** — weak alone, damning in a stack.
+Tiers say how visible a tell is, not how severe a finding is; severity comes from
+**Review severities** below. **T1** — recognizable as AI within ~3 seconds by a layperson.
+**T2** — obvious to anyone who builds UI. **T3** — weak alone, damning in a stack.
 
 ### Color
 | Tier | Tell | Fix |
@@ -69,7 +78,7 @@ Tiers: **T1** — recognizable as AI within ~3 seconds by a layperson (must fix)
 | T2 | Accent on one headline word ("Build *faster*" — italic/colored/serif swap) | Let the sentence carry itself |
 | T2 | Tracked ALL-CAPS eyebrow above every heading; mono for decorative meta labels | Only where it encodes information |
 | T2 | Meta strings "A · B · C"; labels "WORD — fragment" | Plain sentence-case labels |
-| T3 | Framework size ramp verbatim (12/14/16/18/24/30/36/48/60/72) | Modular ratio (1.2 / 1.25 / 1.333), ≤5 sizes |
+| T3 | Framework size ramp verbatim (12/14/16/18/24/30/36/48/60/72) | Modular ratio (1.2 / 1.25 / 1.333); a defined scale has ≤5 sizes |
 | T3 | Close weights (400 vs 600); body at 600 | Extreme contrast (200–300 vs 700–900); body 400 |
 | T3 | Headlines ≥48px with default tracking | −0.02 to −0.05em, leading 0.85–1.05 |
 
@@ -120,29 +129,23 @@ Tiers: **T1** — recognizable as AI within ~3 seconds by a layperson (must fix)
 | T2 | Critical actions only visible on hover; color-only status | Always reachable; text/icon + color |
 | T2 | No `prefers-reduced-motion` variant | Keep content, drop travel |
 
-## Craft thresholds (checkable)
+## Craft thresholds (project picks on top of the canon)
 
-**Type.** 1–2 families. Body 16–20px (≥16px on mobile inputs), line-height 1.45–1.6, measure
-45–75ch (hero 30–45ch). Display ≥3× body on marketing pages; ≤3 visible sizes on dense app
-screens. Real punctuation (curly quotes, “…”, en/em dashes). `tabular-nums` for compared numbers.
+**Type.** 1–2 families. Body 16–20px (≥16px on mobile inputs; 14–16px on app screens per
+**Applies to**). Display ≥3× body on marketing pages. A defined type scale has ≤5 sizes; one
+dense app screen shows ≤3 of them.
 
-**Color.** Contrast text ≥4.5:1, large text (≥24px or ≥18.66px bold) and UI boundaries/icons
-≥3:1 (WCAG 1.4.3 / 1.4.11). Color never the sole carrier of meaning (1.4.1). ≤3 contrast
-treatments per view.
+**Color.** ≤3 contrast treatments per view.
 
 **Space & shape.** One spacing scale (4/8/12/16/24/32/48/64/96/128). Groups separated more than
 items within them. Radius: one scale by role, nested radius concentric.
 
-**Targets.** ≥24×24 CSS px (WCAG 2.5.8); ≥44px on touch (Apple 44pt, Material 48dp).
+**Targets.** ≥44px on touch, above the WCAG 24px floor.
 
-**Motion.** 100–400ms; ~100ms for toggles, 200–300ms for dialogs, nothing ≥500ms; entrances
-slightly longer than exits; stagger 60–90ms; travel 16–32px.
+**Motion.** ~100ms for toggles, 200–300ms for dialogs, nothing ≥500ms; stagger 60–90ms;
+travel 16–32px.
 
-**Feedback timing.** 0.1s feels instant; >1s needs an indicator; 2–10s spinner; ≥10s percent-done
-+ cancel. Loaders appear after ~150–300ms and stay ≥300ms. Skeletons match final dimensions.
-
-**Accessibility floor.** WCAG 2.2 AA, including 2.4.11 Focus Not Obscured (sticky headers →
-`scroll-padding`), 2.5.7 drag alternative, 1.4.10 reflow at 320px, never disable zoom.
+**Feedback.** Loaders appear after ~150–300ms and stay ≥300ms. Skeletons match final dimensions.
 
 ## Slop score
 
@@ -151,17 +154,25 @@ Count tells by tier on the reviewed surface: `T1×3 + T2×2 + T3×1`.
 - 4–8 — template-leaning; fix T1/T2 first
 - ≥9 — reads as AI-generated; redo direction, don't patch
 
-A tell is exempt when `DESIGN.md` or the brief explicitly chooses it — record the exemption.
+A tell is exempt when `DESIGN.md`, the brief or the job context explicitly chooses it — record
+the exemption and where it was read.
 
-## Sources
+---
 
-- Anthropic frontend-design skill — https://github.com/anthropics/skills/blob/main/skills/frontend-design/SKILL.md
-- Anthropic, Improving frontend design through skills — https://claude.com/blog/improving-frontend-design-through-skills
-- Anthropic cookbook, Prompting for frontend aesthetics — https://github.com/anthropics/claude-cookbooks/blob/main/coding/prompting_for_frontend_aesthetics.ipynb
-- How to fix AI slop in web design — https://capitalandcompute.net/blog/fix-ai-slop-design/
-- ux-skill: detecting AI slop — https://github.com/Laith0003/ux-skill/wiki/How-to-detect-AI-slop-in-your-design
-- Impeccable — https://github.com/pbakaus/impeccable · Taste Skill — https://github.com/Leonxlnx/taste-skill
-- Vercel Web Interface Guidelines — https://vercel.com/design/guidelines
-- Practical Typography — https://practicaltypography.com/summary-of-key-rules.html
-- NN/g: heuristics, severity, hierarchy, response times, progress, errors, empty states, animation duration — https://www.nngroup.com/articles/
-- Laws of UX — https://lawsofux.com/ · WCAG 2.2 — https://www.w3.org/WAI/WCAG22/quickref/
+## Review severities (shared with reviewers)
+
+`review-ui-ux` rates these by this table. Change a row here, never in a reviewer. A row counts
+only when the change touches the surface, and only on the surfaces **Applies to** names. A tier
+is visibility; the severity is this table's. Overflow and reflow at a width are rated by
+`layout-rendering.mdc`.
+
+| Signal | A finding when | Default | Not a finding |
+|---|---|---|---|
+| Invented proof shipped as fact: stats, logos, testimonials, customers (Copy T1, principle 5) | it renders in shipped copy | `major` | content marked as sample; Storybook fixtures |
+| Primary task unreachable by keyboard, or focus invisible on the primary flow (`outline: none` with no `:focus-visible`, `div onClick`) | Tab through the flow cannot finish the task or cannot see where focus is | `major`; `minor` on a non-primary control | a `:focus-visible` replacement exists |
+| Text contrast below 4.5:1 (3:1 large) on primary content | the pair is on shipped primary text, measured or computed from the token pair | `major` | decorative text; a pair not measured (`info`) |
+| Missing loading, empty or error state on a primary view; destructive action with no confirm or Undo | the view or action is primary | `major`; `minor` on a secondary view | a state the component library renders by default |
+| Other WCAG floor misses: target under 24px, color-only status, no reduced-motion branch, placeholder-as-label, paste blocked, zoom disabled, missing accessible name | always | `minor`; `major` when it blocks the primary flow | an N/A the author recorded |
+| T1 tell, or slop score ≥9 | counted per tier on the changed surface | `minor` | a tell `DESIGN.md`, the brief or the job context chose; invented proof, focus and missing states, which the rows above rate (they still count in the score) |
+| T2 tell, hierarchy competition, inconsistent tokens, drift from `DESIGN.md` | always | `minor` | the same exemptions |
+| T3 tell (generic CTA labels included), polish, or a visual claim with no measurement | always | `info` | — |

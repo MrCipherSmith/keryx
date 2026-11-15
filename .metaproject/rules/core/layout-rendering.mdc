@@ -1,0 +1,51 @@
+---
+description: "Rendered-layout standard shared by code writers and reviewers, with the severities reviewers use: a layout claim is measured in a real layout engine, 320px is always a supported width, nothing clips or scrolls sideways at a supported width, identical data renders identical geometry in every locale, and a mirrored component mirrors entirely. Use when writing or reviewing flex/grid sizing, overflow, logical properties, RTL, or containers of translated text."
+alwaysApply: false
+globs:
+  - "**/*.tsx"
+  - "**/*.jsx"
+  - "**/*.vue"
+  - "**/*.svelte"
+  - "**/*.css"
+  - "**/*.scss"
+  - "**/*.html"
+---
+
+# Layout Rendering
+
+Canon applies: the CSS box model, Flexbox and Grid sizing (intrinsic and extrinsic sizing),
+CSS Logical Properties, and WCAG 2.2 1.4.10 Reflow with its two-dimensional-content exception.
+This rule holds only this project's decisions for rendered geometry. Taste and the UI tell
+catalog are `ui-anti-slop.mdc`.
+
+## Rules
+
+1. **A layout claim is measured in a real layout engine.** The project's real-CSS tier
+   (Storybook, Playwright, a component-visual suite) or a probe that mounts the component and
+   reads computed CSS off the node. A DOM stub (happy-dom, jsdom) loads no stylesheet, so a
+   class assertion or a `getBoundingClientRect` there measures nothing. Measurements supplied
+   with the change count when they name the command and the viewport.
+2. **320px is always a supported width.** Other supported widths come from the project's own
+   list: `DESIGN.md`, the brief, the job context, or the hosts the product ships in. At every
+   supported width nothing is clipped and the page does not scroll sideways.
+3. **Identical data renders identical geometry in every locale.** A box sized by its own
+   labels is measured with the longest real translation in the catalog, not the English one.
+4. **A component that mirrors under RTL mirrors entirely.** Logical properties flip; a physical
+   gradient, shadow or transform in the same component is made logical or flipped explicitly.
+   Surfaces that do not mirror by platform practice (media controls and their seek bar, numbers,
+   code, phone numbers) keep `dir="ltr"` with the reason in a comment.
+
+---
+
+## Review severities (shared with reviewers)
+
+`review-layout` rates these by this table, and `review-ui-ux` defers overflow and reflow to it.
+Change a row here, never in a reviewer. A row counts only when the change touches the element.
+
+| Signal | A finding when | Default | Not a finding |
+|---|---|---|---|
+| Element renders at 0px while its label shows (Rule 1) | at a supported width, measured | `major` | a width no supported host reaches (`info`) |
+| Identical data renders different geometry per locale (Rule 3) | measured with the longest real translation in the catalog | `major` | — |
+| Content clipped, or the page scrolls sideways (Rule 2) | at a supported width, 320px included, measured | `major` | content that needs two dimensions to read (data table, map, code block) scrolling inside its own region |
+| Cosmetic offset (a few px off centre), or a physical gradient, shadow or transform that does not flip under RTL (Rule 4) | measured: a few px, or one direction named per locale | `minor` | a surface that does not mirror by platform practice, with its reason read |
+| Any layout claim with no measurement (Rule 1) | always | `info` | — |

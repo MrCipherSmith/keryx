@@ -292,6 +292,30 @@ describe("one condition, one severity, across the reviewer set (AC2)", () => {
     expect(normalise(lens)).not.toContain(normalise("| Real network or wall-clock dependence"));
   });
 
+  test("UI severities live in ui-anti-slop and layout-rendering, and the two UI lenses cite them", () => {
+    // review-ui-ux and review-layout each kept their own severity table, and
+    // both rated sideways scroll. The rows now live in the rules the implementer
+    // loads; review-layout owns overflow, and review-ui-ux points at it.
+    const rulesDir = path.join(import.meta.dir, "bundled", "rules", "core");
+    const ux = read("review-ui-ux");
+    const layout = read("review-layout");
+    for (const rule of ["ui-anti-slop.mdc", "layout-rendering.mdc"]) {
+      const text = readFileSync(path.join(rulesDir, rule), "utf8");
+      expect(text).toContain("## Review severities");
+    }
+    expect(ux).toContain("ui-anti-slop.mdc");
+    expect(ux).toContain("layout-rendering.mdc");
+    expect(layout).toContain("layout-rendering.mdc");
+    const slop = readFileSync(path.join(rulesDir, "ui-anti-slop.mdc"), "utf8");
+    expect(normalise(slop)).toContain(normalise("| Invented proof shipped as fact"));
+    expect(slop).toMatch(/^\| T3 tell \(generic CTA labels included\)[^\n]*\| `info` \|/m);
+    const rendering = readFileSync(path.join(rulesDir, "layout-rendering.mdc"), "utf8");
+    expect(normalise(rendering)).toContain(normalise("| Content clipped, or the page scrolls sideways"));
+    expect(normalise(ux)).not.toContain(normalise("| Invented proof shipped as fact"));
+    expect(normalise(ux)).not.toMatch(/320px width: no 2-D scroll/);
+    expect(normalise(layout)).not.toContain(normalise("| Content clipped, or the page forced to scroll"));
+  });
+
   test("a layer violation is rated the same, `minor` by default, in both reviewers that rate it", () => {
     // review-frontend called an API call in a component `blocker`;
     // review-architecture called the same condition `major`. Flow 490 applied the
