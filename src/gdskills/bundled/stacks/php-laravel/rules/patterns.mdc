@@ -7,74 +7,33 @@ metadata:
 
 # PHP / Laravel patterns
 
-Narrows `core-common-rules`' stack-agnostic design guidance to idiomatic
-Laravel application design and its common anti-patterns. Applies only to
-`*.php` files.
+Narrows `core-common-rules`' design guidance to idiomatic Laravel design and its anti-patterns. Applies only to `*.php` files.
 
 ## Layered responsibility
 
-- Controllers orchestrate; they do not contain business rules. Push
-  non-trivial logic into an Eloquent model method, an invokable action
-  class (`app/Actions/...`), or a service class injected through the
-  constructor.
-- A Form Request class owns validation rules and authorization for one
-  request shape (`rules()`, `authorize()`); do not duplicate the same
-  validation array across multiple controller methods when a shared Form
-  Request would do.
-- Eloquent model classes own their own data shape (casts, relationships,
-  scopes, accessors); keep cross-model orchestration (a multi-model
-  transaction, a workflow spanning several models) in a service or action
-  class, not stuffed into one model's methods.
+- Controllers orchestrate; push non-trivial logic into an Eloquent model method, an invokable action class (`app/Actions/...`), or a constructor-injected service class.
+- A Form Request owns validation rules and authorization (`rules()`, `authorize()`) for one request shape; do not duplicate a validation array across controller methods.
+- Models own their data shape (casts, relationships, scopes, accessors); keep cross-model orchestration (a multi-model transaction or workflow) in a service or action class.
 
 ## Eloquent relationships and queries
 
-- Eager-load a relationship (`with()`, or `load()` after the fact) before
-  iterating a collection and accessing that relationship inside the loop;
-  a relationship accessed per-row with no eager load is an N+1 query, not
-  "just how Eloquent works."
-- For a result set too large to hold in memory, use `chunk()`/`chunkById()`
-  or `cursor()`/`lazy()` instead of `all()`/an unbounded `get()`;
-  `chunkById()` (not plain `chunk()`) when the loop body updates or
-  deletes rows, since plain `chunk()`'s offset pagination skips rows as
-  the underlying set shifts.
-- Use query scopes (`scopeActive`, `scopePublished`) for a filter reused
-  across more than one call site instead of repeating the same `where()`
-  chain.
+- Eager-load (`with()`, or `load()`) before iterating a collection that accesses a relationship in the loop.
+- For a result set too large for memory, use `chunk()`/`chunkById()` or `cursor()`/`lazy()` instead of `all()`/an unbounded `get()`; use `chunkById()` when the loop body updates or deletes rows.
+- Use query scopes (`scopeActive`, `scopePublished`) for a filter reused across call sites.
 
 ## Dependency injection and the service container
 
-- Type-hint a constructor/method dependency and let the container resolve
-  it instead of calling `app(SomeClass::class)`/`resolve(...)` inline
-  inside business logic — reserve container-pulling for genuinely
-  dynamic resolution (a class name only known at runtime).
-- Bind an interface to its implementation in a service provider's
-  `register()` when a class needs to be swappable (a payment gateway, a
-  notification channel); do not introduce an interface with exactly one
-  implementation and no swapping need "for testability" alone when
-  Laravel's own container-based mocking (`$this->mock(...)` in tests)
-  already covers that.
+- Type-hint dependencies and let the container resolve them; reserve `app(SomeClass::class)`/`resolve(...)` for resolution by a class name known only at runtime.
+- Bind an interface in a service provider's `register()` only when the class must be swappable (a payment gateway, a notification channel); no single-implementation interface "for testability" alone, since `$this->mock(...)` covers it.
 
 ## Jobs, events, and idempotency
 
-- A queued job that can be delivered more than once (most production
-  queue connections are at-least-once) either implements `ShouldBeUnique`/`uniqueId()`, or
-  checks/records its own side effect before repeating it — do not assume
-  a job runs exactly once.
-- Prefer a domain event (`event(new OrderShipped($order))`) with
-  dedicated listeners over stacking unrelated side effects directly in
-  the code path that triggers them, when more than one unrelated concern
-  needs to react to the same occurrence.
+- A queued job that can be delivered more than once implements `ShouldBeUnique`/`uniqueId()` or checks/records its side effect before repeating it.
+- Prefer a domain event (`event(new OrderShipped($order))`) with dedicated listeners when more than one unrelated concern reacts to the same occurrence.
 
 ## Anti-patterns to flag
 
-- A "fat controller" that validates, queries, transforms, and formats the
-  response all inline — split by responsibility as above.
-- A model with `protected $guarded = []` used outside of a factory/seeder
-  context — this disables mass-assignment protection entirely and should
-  be treated as a defect, not a convenience default.
-- Business logic duplicated between a web controller and an API
-  controller for the same underlying action — extract the shared action/
-  service both call.
-- A trait used to share mutable state between unrelated models instead of
-  genuinely shared, stateless behavior — prefer composition (an injected
-  collaborator) when the "shared behavior" is really shared state.
+- A fat controller that validates, queries, transforms and formats the response inline.
+- `protected $guarded = []` outside a factory/seeder context.
+- Business logic duplicated between a web controller and an API controller; extract the shared action/service.
+- A trait sharing mutable state between unrelated models; prefer an injected collaborator.

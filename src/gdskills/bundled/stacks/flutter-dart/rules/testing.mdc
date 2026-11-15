@@ -7,95 +7,63 @@ metadata:
 
 # Flutter/Dart testing
 
-Narrows `core-common-rules`' stack-agnostic testing rules to
-`flutter_test`'s widget-test framework and `package:test`'s unit-test
-conventions. Applies only to `*.dart` files.
+Narrows `core-common-rules`' testing rules to `flutter_test` widget tests and `package:test` unit tests.
 
 ## Layout and naming
 
-- Unit and widget tests live under `test/`, mirroring `lib/`'s structure
-  (`lib/order/order_service.dart` → `test/order/order_service_test.dart`)
-  — no separate ad hoc fixture tree.
-- A widget test file's `testWidgets('<behavior it verifies>', (tester)
-  async { ... })` description names the observable behavior under test,
-  not the widget's implementation detail — `'shows an error banner when
-  submit fails'`, not `'calls setState'`.
-- `group('OrderService', () { ... })` to cluster related cases for one
-  class/widget, matching whatever the project's existing suite already
-  does.
+- Tests live under `test/`, mirroring `lib/`
+  (`lib/order/order_service.dart` -> `test/order/order_service_test.dart`); no
+  separate ad hoc fixture tree.
+- A `testWidgets('<behavior it verifies>', ...)` description names observable
+  behavior (`'shows an error banner when submit fails'`), not an implementation
+  detail (`'calls setState'`).
+- `group('OrderService', () { ... })` clusters cases for one class/widget,
+  matching the project's existing suite.
 
 ## Widget tests
 
-- Build the widget under test with `tester.pumpWidget(...)`, wrapped in
-  whatever ancestor widgets it actually needs to render (a `MaterialApp`/
-  `CupertinoApp`, a `Localizations` scope, a state-management provider) —
-  matching the app's real widget tree shape, not an arbitrary bare
-  wrapper.
-- Locate widgets with `find.byType`, `find.text`, `find.byKey`, or
-  `find.byIcon` — prefer `find.byKey` for a widget identified by role
-  rather than by its current text/type when either could plausibly change
+- Build the widget with `tester.pumpWidget(...)` wrapped in the ancestors it
+  needs (`MaterialApp`/`CupertinoApp`, a `Localizations` scope, a
+  state-management provider), matching the app's real tree.
+- Locate with `find.byType`, `find.text`, `find.byKey`, `find.byIcon`; prefer
+  `find.byKey` for a widget identified by role when its text/type could change
   without the behavior changing.
-- Use `tester.pump()` to advance exactly one frame (a single `setState`
-  or a fixed-duration animation step) and `tester.pumpAndSettle()` when
-  waiting for an animation, page transition, or async operation to fully
-  finish before asserting — but do not reach for `pumpAndSettle()` by
-  default for everything: a widget under a `Timer.periodic` or another
-  never-ending animation makes `pumpAndSettle()` time out waiting for a
-  frame that never stops changing, so a bounded `pump(Duration(...))` is
-  the correct tool there instead.
-- Interact with `tester.tap(finder)`, `tester.enterText(finder, '...')`,
-  `tester.drag(finder, offset)`, each followed by a `pump()`/
-  `pumpAndSettle()` appropriate to what the interaction triggers, before
-  asserting on the result.
+- `tester.pump()` advances one frame; `tester.pumpAndSettle()` waits for an
+  animation, transition or async operation to finish. Not `pumpAndSettle()` by
+  default: under a `Timer.periodic` or other endless animation it times out; use a
+  bounded `pump(Duration(...))` there.
+- Interact with `tester.tap`, `tester.enterText`, `tester.drag`, each followed by
+  the `pump()`/`pumpAndSettle()` the interaction needs before asserting.
 
 ## Mocking the boundary, not the internals
 
-- Mock at the external boundary a widget/class depends on — a repository,
-  an HTTP client, a platform-channel wrapper — defined as an interface (an
-  abstract class) the real implementation and a test double both satisfy,
-  using `mocktail` (no code generation, works with sound null safety) or
-  `mockito` (code-generation based) to build that double.
-- Never mock a class's own internal collaborator that exists purely to
-  implement its behavior (a private helper, a widget's own internal
-  state) — mocking one layer too deep tests that the implementation calls
-  itself in a particular way, not that the widget/class actually produces
-  the right externally-observable behavior, and it breaks on every
-  internal refactor even when the behavior is unchanged.
-- Verify a mocked dependency's interaction (`verify(() =>
-  mockRepository.fetchOrders()).called(1)`) only for calls that matter to
-  the behavior under test — do not over-verify every incidental call,
-  which turns the test into a change-detector for implementation details.
+- Mock at the external boundary (repository, HTTP client, platform-channel
+  wrapper) defined as an abstract class, using `mocktail` (no code generation) or
+  `mockito` (code generation).
+- Never mock a class's own internal collaborator (a private helper, a widget's
+  internal state).
+- Verify a mocked interaction (`verify(() => mockRepository.fetchOrders()).called(1)`)
+  only for calls that matter to the behavior; do not over-verify incidental calls.
 
 ## Async state in widget tests
 
-- When a widget's state depends on a `Future` (a repository call behind a
-  loading spinner), pump through the states explicitly: `pump()` once to
-  render the loading state, then `pump()`/`pumpAndSettle()` again after
-  the mocked `Future` resolves, asserting the loading indicator is gone
-  and the real content is present — asserting only on the state
-  immediately after `pumpWidget()` misses the loading-to-loaded
-  transition entirely.
-- Never use `Future.delayed`/a real `Duration` wait inside a test to give
-  a mocked async call "enough time" to resolve — control the mock's
-  `Future` directly (a `Completer` the test completes explicitly, or a
-  mock configured to resolve immediately) and drive time forward with
-  `pump()`/`pumpAndSettle()`/`tester.pump(duration)` instead, so the test
-  is deterministic rather than timing-dependent.
+- For state depending on a `Future`, `pump()` once for the loading state, then
+  `pump()`/`pumpAndSettle()` after the mocked `Future` resolves, asserting the
+  loading indicator is gone and the content is present.
+- Never use `Future.delayed` or a real `Duration` wait in a test; control the
+  mock's `Future` (a `Completer` the test completes, or an immediately resolving
+  mock) and advance time with `pump()`/`pumpAndSettle()`/`tester.pump(duration)`.
 
 ## Fixtures and golden tests
 
-- `testWidgets` fixtures (sample model instances, mock repository
-  responses) live in a `test/fixtures/` or per-feature helper file,
-  matching whatever the project already uses — do not invent a second
-  fixture convention alongside an existing one.
-- A golden-image test (`matchesGoldenFile`) is opt-in per project; only
-  add one where the project already has a golden-test setup and baseline
-  images checked in, and regenerate baselines deliberately (`flutter test
-  --update-goldens`), not as a side effect of an unrelated change.
+- Fixtures (sample models, mock repository responses) live in `test/fixtures/` or
+  a per-feature helper file, matching the project; no second fixture convention.
+- A golden-image test (`matchesGoldenFile`) is opt-in: add one only where the
+  project already has a golden setup and checked-in baselines, and regenerate
+  with `flutter test --update-goldens` deliberately, not as a side effect.
 
 ## Running and coverage
 
-- Run `flutter test` (or `flutter test --coverage` when the project
-  tracks coverage) before reporting a testing task done; fix a failing
-  test by correcting the test or the fixture it depends on, not by
-  weakening its `expect`/`find` assertion to make it pass.
+- Run `flutter test` (`--coverage` when the project tracks coverage) before
+  reporting a testing task done; fix a failing test by correcting the test or its
+  fixture, not by weakening its `expect`/`find` assertion.
