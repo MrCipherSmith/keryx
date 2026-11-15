@@ -48,5 +48,3 @@ Narrows `core-common-rules`' stack-agnostic testing rules to the standard
 
 - `go test -race ./...` for any change touching goroutines, shared state, or
   channels.
-- New behavior gets a new test in the same change; a bug fix gets a
-  regression test that fails before the fix.

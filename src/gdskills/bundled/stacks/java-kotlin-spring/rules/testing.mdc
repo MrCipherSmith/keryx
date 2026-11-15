@@ -59,8 +59,6 @@ Spring Boot Test conventions, for both Java and Kotlin. Applies only to
 
 ## Coverage expectations
 
-- New behavior gets a new test in the same change; a bug fix gets a
-  regression test that fails before the fix and passes after.
 - Run the build-tool test task (`./gradlew test` or `mvn test`) for any
   change touching test files, and the integration-test task separately when
   configured, before reporting done.

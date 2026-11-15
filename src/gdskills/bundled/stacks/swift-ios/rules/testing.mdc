@@ -55,5 +55,3 @@ Narrows `core-common-rules`' testing rules to Swift Testing (default for new tes
 - No dependence on real network access, the real Keychain or wall-clock time;
   inject a fake at the protocol boundary and a clock/date provider instead of
   calling `Date()` in the code under test.
-- A bug fix gets a regression test that fails before the fix and passes after;
-  new behavior gets coverage in the same change.

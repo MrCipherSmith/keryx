@@ -57,5 +57,3 @@ Narrows `core-common-rules`' stack-agnostic testing rules to Rust's built-in
 - Run `cargo test` (add `--all-features`/`--workspace` when CI does) before
   reporting tests as passing; for wall-clock, real-network, or shared-global
   state use a fake clock, a mock boundary, or `#[serial]` (`serial_test`).
-- New behavior gets a new test in the same change; a bug fix gets a
-  regression test that fails before the fix.

@@ -36,7 +36,3 @@ Narrows `core-common-rules`' testing rules to Rails: RSpec, with the Minitest eq
 
 - Never synchronize with `sleep`; use `perform_enqueued_jobs`, a Capybara wait matcher (`have_content`), or a polling helper with a timeout.
 - Freeze time (`travel_to`/`Timecop`, matching the project) for any timestamp or time-dependent assertion.
-
-## Regression discipline
-
-- A bug fix gets a regression test that fails before the fix and passes after; new behavior gets new coverage in the same change.
