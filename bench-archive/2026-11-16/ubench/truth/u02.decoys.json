@@ -1,0 +1,12 @@
+[
+  {
+    "tid": "D1",
+    "file": "apps/orders-web/src/pages/launch/Testimonial.stories.tsx",
+    "line": 16,
+    "severity": "minor",
+    "problem": "The story uses invented names \"Jane Doe\" and \"Acme\" and a made-up quote.",
+    "impact": "None.",
+    "quote": "author: \"Jane Doe, Acme (sample data)\",",
+    "why_not_a_defect": "The story is marked as sample data in its title, text and comment and is never rendered on the page; placeholders are legitimate in a story."
+  }
+]

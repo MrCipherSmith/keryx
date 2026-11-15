@@ -1,0 +1,62 @@
+[
+  {
+    "tid": "T1",
+    "file": "apps/orders-web/src/pages/insights/OrderScoreCard.tsx",
+    "line": 15,
+    "severity": "major",
+    "rule": "layout: collapse",
+    "problem": "The score track is `flex-1 min-w-0` inside a `w-fit` card, so it has no width to grow into; the supplied measurements show the track at 0.0 px at 320 and 390 px.",
+    "impact": "The score bar never renders on any supported width.",
+    "quote": "<div className=\"h-2 min-w-0 flex-1 rounded-full bg-line\" data-measure=\"score-track\">"
+  },
+  {
+    "tid": "T2",
+    "file": "apps/orders-web/src/pages/insights/FulfilmentMeter.tsx",
+    "line": 12,
+    "severity": "major",
+    "rule": "layout: locale-dependent geometry",
+    "problem": "The meter track takes its width from the label above it, so the same 80% renders a 49.9 px, 84.8 px and 57.0 px fill in en, de and ar (see the measurements).",
+    "impact": "The same value looks different in each locale and comparisons across languages are wrong.",
+    "quote": "<div className=\"inline-grid\">"
+  },
+  {
+    "tid": "T3",
+    "file": "apps/orders-web/src/pages/insights/OrderTotalsStrip.tsx",
+    "line": 16,
+    "severity": "major",
+    "rule": "layout: clipped content",
+    "problem": "A band 112% wide sits inside an `overflow-hidden` container; at 390 px the total's right edge is at 401 px while the container ends at 374 px, so the total is clipped (measured visible width 43.6 of 70.6 px).",
+    "impact": "The order total is cut off on phones.",
+    "quote": "<div className=\"flex w-[112%] items-center justify-between gap-6 bg-paper px-4 py-3\">"
+  },
+  {
+    "tid": "T4",
+    "file": "apps/orders-web/src/pages/insights/OrdersTable.tsx",
+    "line": 17,
+    "severity": "major",
+    "rule": "layout: reflow, sideways scroll",
+    "problem": "The table sits in a fixed `w-[720px]` wrapper with no scroll container; at 390 px the document scrolls sideways (scrollWidth 752 against clientWidth 390).",
+    "impact": "Phone users must pan the whole page sideways to read the orders.",
+    "quote": "<div className=\"w-[720px]\" data-measure=\"orders-table\">"
+  },
+  {
+    "tid": "T5",
+    "file": "apps/orders-web/src/pages/insights/ScoreBadge.tsx",
+    "line": 7,
+    "severity": "minor",
+    "rule": "layout: cosmetic offset",
+    "problem": "The badge is `w-48` with `pe-6` and centred text, so the score sits 12 px off the centre of the box (measured -12 px in en, +12 px in ar).",
+    "impact": "The number looks misplaced inside its box.",
+    "quote": "<div className=\"w-48 rounded-panel border border-line bg-surface pe-6 py-3 text-center\" data-measure=\"badge-box\">"
+  },
+  {
+    "tid": "T6",
+    "file": "apps/orders-web/src/pages/insights/RecentFilters.tsx",
+    "line": 30,
+    "severity": "minor",
+    "rule": "layout: RTL physical properties",
+    "problem": "The fade overlay uses `left-0` with `bg-gradient-to-r` and the heading uses `ml-4`, in a component that otherwise uses `ps-4` and `pe-12`; in `ar` the fade stays on the left edge while the strip starts on the right (measurements show overlayLeft 16 px in both locales).",
+    "impact": "The Arabic layout does not mirror: the fade covers the wrong end of the strip and the heading is misaligned.",
+    "quote": "absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-paper to-transparent"
+  }
+]

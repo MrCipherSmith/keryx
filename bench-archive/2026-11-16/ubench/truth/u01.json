@@ -1,0 +1,112 @@
+[
+  {
+    "tid": "T1",
+    "file": "apps/orders-web/src/pages/orders/OrderRow.tsx",
+    "line": 34,
+    "severity": "major",
+    "rule": "missing state: destructive action needs a confirm or an Undo",
+    "problem": "The Delete order button calls the delete straight through `onDelete` and `remove` hits the API; there is no confirmation step and no Undo, and the row disappears at once.",
+    "impact": "One mis-tap on a row action permanently deletes a customer order with no way back.",
+    "quote": "onClick={() => onDelete(order.id)}"
+  },
+  {
+    "tid": "T2",
+    "file": "apps/orders-web/src/pages/orders/OrdersPage.tsx",
+    "line": 65,
+    "severity": "major",
+    "rule": "missing state: empty",
+    "problem": "When the list loads and returns no orders (or a filter matches none) the section renders only the create form; there is no empty state and no hint to clear the filter.",
+    "impact": "Support staff see a blank list and cannot tell an empty result from a broken page.",
+    "quote": "orders.items.map((order) => ("
+  },
+  {
+    "tid": "T3",
+    "file": "apps/orders-web/src/pages/orders/OrderDrawer.tsx",
+    "line": 21,
+    "severity": "major",
+    "rule": "missing state: error",
+    "problem": "The order fetch failure is swallowed by an empty catch, so `order` stays null and the skeleton is shown forever; the user gets no error message and no retry.",
+    "impact": "A failed request looks like endless loading, and the drawer cannot be recovered without closing and reopening it.",
+    "quote": ".catch(() => {});"
+  },
+  {
+    "tid": "T4",
+    "file": "apps/orders-web/src/pages/orders/orders.css",
+    "line": 8,
+    "severity": "major",
+    "rule": "focus: visible indicator removed",
+    "problem": "`.orders-search` and `.order-action` set `outline: none` and the stylesheet has no `:focus-visible` rule for either, so keyboard users get no focus indicator on the search field or the row buttons.",
+    "impact": "Keyboard users cannot see where focus is on the page's primary search and delete controls.",
+    "quote": "outline: none;"
+  },
+  {
+    "tid": "T5",
+    "file": "apps/orders-web/src/pages/orders/OrderRow.tsx",
+    "line": 28,
+    "severity": "major",
+    "rule": "keyboard: interactive div",
+    "problem": "The order row is a `div` with an `onClick`, no role and no `tabIndex`, and it is the only way to open an order, so the details drawer cannot be reached from the keyboard or by assistive technology.",
+    "impact": "Keyboard and screen-reader users cannot open any order.",
+    "quote": "onClick={() => onOpen(order.id)}"
+  },
+  {
+    "tid": "T6",
+    "file": "apps/orders-web/src/pages/orders/OrderRow.tsx",
+    "line": 32,
+    "severity": "major",
+    "rule": "contrast: text below 4.5:1",
+    "problem": "The order total, a primary column, is `#9ca3af` on the white surface (about 2.5:1), below the 4.5:1 floor, and is not a token from the palette.",
+    "impact": "The figure people scan for is hard to read for low-vision users and in daylight.",
+    "quote": "text-[#9ca3af]"
+  },
+  {
+    "tid": "T7",
+    "file": "apps/orders-web/src/pages/orders/OrderRow.tsx",
+    "line": 31,
+    "severity": "minor",
+    "rule": "WCAG floor: colour alone",
+    "problem": "Order status is shown only as a coloured dot with no text, icon or accessible name; `new` and `shipped` differ only by hue.",
+    "impact": "Colour-blind users and screen-reader users cannot tell the status of an order.",
+    "quote": "inline-block h-2.5 w-2.5 rounded-full"
+  },
+  {
+    "tid": "T8",
+    "file": "apps/orders-web/src/pages/orders/OrdersPage.tsx",
+    "line": 32,
+    "severity": "minor",
+    "rule": "WCAG floor: control without a name",
+    "problem": "The export button holds only an icon and has no `aria-label` or text, although the catalog already has an `export` string.",
+    "impact": "Screen readers announce an unnamed button.",
+    "quote": "onClick={() => window.open(\"/api/orders/export\")}"
+  },
+  {
+    "tid": "T9",
+    "file": "apps/orders-web/src/pages/orders/CreateOrderForm.tsx",
+    "line": 40,
+    "severity": "minor",
+    "rule": "WCAG floor: form fields",
+    "problem": "The create form's three inputs use placeholders as their only labels, the submit button is disabled until everything is valid with no hint why, and paste is blocked on the email field.",
+    "impact": "Labels vanish once a field is filled, assistive technology has no names, and users who paste or use a password manager cannot fill the email.",
+    "quote": "onPaste={(e) => e.preventDefault()}"
+  },
+  {
+    "tid": "T10",
+    "file": "apps/orders-web/src/pages/orders/OrderDrawer.tsx",
+    "line": 34,
+    "severity": "minor",
+    "rule": "WCAG floor: target size",
+    "problem": "The drawer close button is 16 x 16 px, far below the 44 px target the design notes require on touch widths.",
+    "impact": "Touch users miss the close control; the drawer covers the whole screen at 320 px.",
+    "quote": "flex h-4 w-4 items-center justify-center text-ink"
+  },
+  {
+    "tid": "T11",
+    "file": "apps/orders-web/src/pages/orders/orders.css",
+    "line": 43,
+    "severity": "minor",
+    "rule": "WCAG floor: motion",
+    "problem": "The drawer slides in with `transition: all` and a keyframe animation and there is no `prefers-reduced-motion` branch.",
+    "impact": "Users who asked for reduced motion still get a full-width slide, and `all` also animates properties that should not move.",
+    "quote": "transition: all 250ms ease-out;"
+  }
+]

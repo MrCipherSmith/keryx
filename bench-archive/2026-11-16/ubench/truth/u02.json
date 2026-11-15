@@ -1,0 +1,72 @@
+[
+  {
+    "tid": "T1",
+    "file": "apps/orders-web/src/pages/launch/launch.messages.ts",
+    "line": 9,
+    "severity": "major",
+    "rule": "invented proof",
+    "problem": "The page claims \"10,000+ merchants\", \"99.9% uptime\", a row of five brand names and a quote from \"Sarah Johnson, Acme\"; none of it comes from product data and the design notes forbid such claims.",
+    "impact": "Fabricated social proof misleads visitors and exposes the company to false-advertising complaints.",
+    "quote": "statMerchants: \"10,000+ merchants\","
+  },
+  {
+    "tid": "T2",
+    "file": "apps/orders-web/src/pages/launch/LaunchPage.tsx",
+    "line": 19,
+    "severity": "minor",
+    "rule": "AI-slop tell T1: gradient headline",
+    "problem": "The hero headline is a purple-to-blue `bg-clip-text` gradient.",
+    "impact": "The tell reads as generic template output and the colours are outside the palette.",
+    "quote": "bg-gradient-to-r from-purple-500 to-blue-500 bg-clip-text"
+  },
+  {
+    "tid": "T3",
+    "file": "apps/orders-web/src/pages/launch/LaunchPage.tsx",
+    "line": 44,
+    "severity": "minor",
+    "rule": "AI-slop tell T1: three equal feature cards",
+    "problem": "The features are three identical cards, each with its icon in a tinted rounded square, in an equal three-column grid.",
+    "impact": "A uniform card trio carries no hierarchy and is the default template layout.",
+    "quote": "<div className=\"grid gap-6 md:grid-cols-3\">"
+  },
+  {
+    "tid": "T4",
+    "file": "apps/orders-web/src/pages/launch/LaunchPage.tsx",
+    "line": 24,
+    "severity": "minor",
+    "rule": "T2 / DESIGN.md drift: untouched default palette and face",
+    "problem": "Primary actions use stock `indigo-500` and `slate` utilities and every heading is set in `font-sans` (Inter); `DESIGN.md` names a terracotta accent and Fraunces for headings and says the default Tailwind palette is not part of the system.",
+    "impact": "The page ignores the recorded design system, so it will look unlike the rest of the product.",
+    "quote": "className=\"rounded-2xl bg-indigo-500 px-6 py-3 font-semibold text-white shadow-lg\""
+  },
+  {
+    "tid": "T5",
+    "file": "apps/orders-web/src/pages/launch/LaunchPage.tsx",
+    "line": 46,
+    "severity": "minor",
+    "rule": "AI-slop tell T1: one radius and shadow everywhere, cards in cards",
+    "problem": "Every container uses the same `rounded-2xl` and `shadow-lg`, and the feature cards sit inside another rounded, shadowed panel; the design notes say a panel never sits inside another panel and reserve shadows for overlays.",
+    "impact": "Uniform depth removes hierarchy, and nested cards add visual noise.",
+    "quote": "<article key={f.titleKey} className=\"rounded-2xl bg-white p-6 shadow-lg\">"
+  },
+  {
+    "tid": "T6",
+    "file": "apps/orders-web/src/pages/launch/launch.messages.ts",
+    "line": 7,
+    "severity": "info",
+    "rule": "T3: generic CTA labels",
+    "problem": "The buttons read \"Get started\", \"Learn more\" and \"Submit\" rather than naming the action; the design notes ask for labels that name what runs.",
+    "impact": "Generic labels tell visitors little about what happens next.",
+    "quote": "getStarted: \"Get started\","
+  },
+  {
+    "tid": "T7",
+    "file": "apps/orders-web/src/pages/launch/launch.messages.ts",
+    "line": 5,
+    "severity": "minor",
+    "rule": "T2: emoji headings and hype copy",
+    "problem": "The hero and feature headings start with emoji and the copy uses \"Unlock\" and \"Supercharge\".",
+    "impact": "Emoji-led headings and hype verbs read as template filler and conflict with the plain, specific tone in the design notes.",
+    "quote": "heroTitle: \"🚀 Unlock the full power of your orders\","
+  }
+]

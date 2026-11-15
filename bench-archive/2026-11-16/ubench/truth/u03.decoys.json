@@ -1,0 +1,22 @@
+[
+  {
+    "tid": "D1",
+    "file": "apps/orders-web/src/pages/insights/OrderNumber.tsx",
+    "line": 9,
+    "severity": "minor",
+    "problem": "`dir=\"ltr\"` is forced on the order number and on the delivery scrubber, in a component set that mirrors for `ar`.",
+    "impact": "None.",
+    "quote": "<span dir=\"ltr\" className=\"tabular-nums font-medium text-ink\">",
+    "why_not_a_defect": "Order numbers are identifiers and a scrubber follows platform media players; the code says both stay left to right in every locale."
+  },
+  {
+    "tid": "D2",
+    "file": "apps/orders-web/src/pages/insights/CustomerCell.tsx",
+    "line": 15,
+    "severity": "minor",
+    "problem": "The customer name span collapses to 0.0 px in the 200 px measurement.",
+    "impact": "None.",
+    "quote": "<span className=\"min-w-0 flex-1 truncate\" data-measure=\"customer-name\">",
+    "why_not_a_defect": "The collapse appears only at a 200 px host, below the supported minimum of 320 px in DESIGN.md; at 320 px the name measures 86 px."
+  }
+]
