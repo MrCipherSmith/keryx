@@ -1,0 +1,43 @@
+import { defineMessages } from "../../i18n";
+
+export const notesMessages = defineMessages({
+  en: {
+    label: "Internal notes",
+    hint: "Visible to support staff only. Customers never see them.",
+    empty: "No notes yet. Add what the next person handling this order should know.",
+    loading: "Loading notes",
+    loadError: "Notes could not be loaded.",
+    retry: "Try loading again",
+    save: "Save notes",
+    saving: "Saving notes",
+    saved: "Notes saved",
+    saveError: "Notes were not saved. Your text is still here.",
+    counter: "{count} of {max} characters",
+  },
+  de: {
+    label: "Interne Notizen",
+    hint: "Nur für den Support sichtbar. Kunden sehen sie nie.",
+    empty: "Noch keine Notizen. Halten Sie fest, was die nächste Person zu dieser Bestellung wissen sollte.",
+    loading: "Notizen werden geladen",
+    loadError: "Die Notizen konnten nicht geladen werden.",
+    retry: "Erneut laden",
+    save: "Notizen speichern",
+    saving: "Notizen werden gespeichert",
+    saved: "Notizen gespeichert",
+    saveError: "Die Notizen wurden nicht gespeichert. Ihr Text bleibt erhalten.",
+    counter: "{count} von {max} Zeichen",
+  },
+  ar: {
+    label: "ملاحظات داخلية",
+    hint: "تظهر لموظفي الدعم فقط ولا يراها العملاء أبدًا.",
+    empty: "لا توجد ملاحظات بعد. اكتب ما يجب أن يعرفه الشخص التالي الذي يتولى هذا الطلب.",
+    loading: "جارٍ تحميل الملاحظات",
+    loadError: "تعذّر تحميل الملاحظات.",
+    retry: "أعد التحميل",
+    save: "احفظ الملاحظات",
+    saving: "جارٍ حفظ الملاحظات",
+    saved: "تم حفظ الملاحظات",
+    saveError: "لم تُحفظ الملاحظات. نصك ما زال هنا.",
+    counter: "{count} من {max} حرفًا",
+  },
+});

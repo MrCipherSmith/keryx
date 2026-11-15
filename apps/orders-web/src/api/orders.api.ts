@@ -38,3 +38,12 @@ export async function updateStatus(id: string, status: OrderStatus): Promise<Ord
   const res = await http.patch<OrderDto>(`/orders/${encodeURIComponent(id)}/status`, { status });
   return res.data;
 }
+
+export async function getOrderNotes(id: string): Promise<string> {
+  const res = await http.get<{ text: string }>(`/orders/${encodeURIComponent(id)}/notes`);
+  return res.data.text;
+}
+
+export async function saveOrderNotes(id: string, text: string): Promise<void> {
+  await http.put(`/orders/${encodeURIComponent(id)}/notes`, { text });
+}
