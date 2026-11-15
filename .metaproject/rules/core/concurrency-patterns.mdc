@@ -1,0 +1,32 @@
+---
+description: "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
+alwaysApply: false
+---
+
+# Concurrency Patterns
+
+Canon applies: POSIX `rename(2)` atomicity, `O_EXCL` / the Node.js `wx` open flag, and `child_process` stream semantics. This rule holds only this project's decisions for state shared by concurrent sessions and processes.
+
+## Rules
+
+1. **A lock file is taken by exclusive create** (`wx`), never check-then-create. It is released in `finally`, and a stale lock is recovered by the holder's PID or age without taking a live holder's lock.
+2. **A shared state file is written to a temp file in the same directory and renamed over the target.** A read-modify-write of it holds a lock (Rule 1).
+3. **One JSONL record is one write.** A record is serialised whole, with its newline, and appended in a single call.
+4. **Child-process fan-out is bounded.** One child per file, flow, finding or input item goes through a concurrency limit; default 4.
+5. **Child output is capped.** Child stdout and stderr, and logs, are held in a ring buffer or written to a file, never concatenated whole in memory.
+
+---
+
+## Review severities (shared with reviewers)
+
+`review-highload` rates these patterns by this table. Change a row here, never in a reviewer.
+
+| Signal | A finding when | Default | Not a finding |
+|---|---|---|---|
+| Read-modify-write of a shared state file with no lock, or a write with no temp file and rename (Rules 1, 2) | two sessions or processes can reach it, named | `blocker` if the interleaving can corrupt or lose data, or a reader parses a half-written file; otherwise `major` | a file only one process writes, shown |
+| Lock file taken by check-then-create (Rule 1) | always | `major`; `blocker` where the duplicate holder is shown to persist a lost or doubled write | an exclusive create |
+| Lock released outside `finally`, or no stale-lock recovery (Rule 1) | a crash or throw leaves it held and a later session waits on it | `major` | a lock with a holder PID or age check |
+| Stale-lock recovery that can take a live holder's lock (Rule 1) | the recovery test can pass while the holder runs | `major`; `blocker` where two holders are shown to write | — |
+| JSONL record appended in more than one write (Rule 3) | several processes append to the file | `major` | a file one process appends to |
+| One child process per input item with no bound (Rule 4) | the item count is not fixed small, named | `major` when the stall or exhaustion it causes is named; `blocker` only if the crash is shown | a fixed small count |
+| Child stdout, stderr or log accumulated whole in memory (Rule 5) | the child's output size is not bounded | `major` when a named child can print without limit; else `minor` | output known small, or read from a file |

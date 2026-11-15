@@ -370,6 +370,7 @@
         "src/gdskills/bundled/rules/core/code-review-learned-profile.mdc",
         "src/gdskills/bundled/rules/core/code-style-patterns.mdc",
         "src/gdskills/bundled/rules/core/commit-message-formatting.mdc",
+        "src/gdskills/bundled/rules/core/concurrency-patterns.mdc",
         "src/gdskills/bundled/rules/core/database-patterns.mdc",
         "src/gdskills/bundled/rules/core/definition-of-done.mdc",
         "src/gdskills/bundled/rules/core/documentation-management.mdc",

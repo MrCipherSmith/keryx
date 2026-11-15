@@ -125,9 +125,7 @@ The standard and its severities are `.metaproject/rules/core/database-patterns.m
 
 ### 4. Missing Database Indexes
 
-The standard and its severities are `.metaproject/rules/core/database-patterns.mdc` (Rule 2 and its **Review severities** row). Also: `LIKE '%term%'` cannot use a b-tree index; flag it as `info` with full-text search as the fix.
-
-**Evidence requirement:** Cannot confirm an index is missing without seeing the migration or schema. If the schema is not in the payload, it is `info`: say that reading the schema would settle it.
+The standard and its severities are `.metaproject/rules/core/database-patterns.mdc` (Rule 2 and its **Review severities** row, which also rates an index with no schema in the payload). Also: `LIKE '%term%'` cannot use a b-tree index; flag it as `info` with full-text search as the fix.
 
 ### 5. Memory Leaks
 
