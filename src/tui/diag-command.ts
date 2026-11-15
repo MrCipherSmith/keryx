@@ -27,6 +27,10 @@ export function runDiagCommand(): string {
     const where = callDiagnostics.dumpPath();
     const calls = snap?.calls ?? callDiagnostics.snapshot("operator /diag").calls;
     const lines = [`Diagnostics: ${calls.length} tool call${calls.length === 1 ? "" : "s"} in flight`];
+    const journal = callDiagnostics.journalPath();
+    if (journal !== undefined) lines.push(`Continuous journal: ${journal}`);
+    const error = callDiagnostics.journalError();
+    if (error !== undefined) lines.push(`Continuous journal degraded: ${error}`);
     for (const c of calls.slice(0, 20)) {
       lines.push(`  ${c.id} ${c.name} stage=${c.stage} running ${age(c.ageMs)} (in stage ${age(c.stageAgeMs)})`);
     }

@@ -4105,10 +4105,12 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
   // with a consume-once notices getter fixes both the redundant rebuild and
   // the redundant print, without changing what a single surface prints.
   const shellHookSessionId = randomUUID();
-  // Flow 487: always-on tool-call diagnostics. In memory until a call stalls (or /diag), then one
-  // NDJSON dump per session under <config>/diagnostics. The timer is unref'd: it never keeps the
-  // process alive.
-  callDiagnostics.start({ sessionId: shellHookSessionId });
+  // Persist immediately, including review startup; stall dumps remain available via /diag.
+  // The periodic snapshot timer is unref'd and never keeps the process alive.
+  callDiagnostics.start({ sessionId: shellHookSessionId, continuous: true, ...(runtime.cacheDir === undefined ? {} : { configDir: runtime.cacheDir }) });
+  if (callDiagnostics.journalError() === undefined) {
+    process.stderr.write(`keryx: continuous diagnostics -> ${callDiagnostics.journalPath()}\n`);
+  }
   callDiagnostics.probe("dock", () => composerDockDiagnostics());
   callDiagnostics.probe("env", () => ({
     version: packageJson.version,

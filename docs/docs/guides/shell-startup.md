@@ -41,3 +41,21 @@ request mode `0600`; existing permissions are unchanged. Keep traces local.
 Orientation reuses one Git status result per preparation, not across launches.
 Failed freshness checks remain unknown. Compare cold and warm runs separately;
 no fixed speedup or complete animation-stall fix is guaranteed.
+
+## Continuous Shell and review diagnostics
+
+Separately from the opt-in startup trace, every new Shell session writes a
+continuous journal, including when running a review. Use `/diag` to see its
+path and any write failure. The path is
+`<runtime.cacheDir>/diagnostics/<shell-session-id>.events.ndjson`; this internal
+Shell ID can differ from the saved conversation ID.
+
+The journal records call start, stage and completion events, active-call
+snapshots every 30 seconds, and Work modal opening, painting, layout, closing
+and errors. Work measurements contain counts, dimensions and flags, not item
+labels or results. It does not record prompts, responses or file contents.
+
+Files are private to the owner and rotate at 1 MB, retaining one `.1` copy.
+A write failure warns without stopping the review. A blocked event loop also
+stops periodic snapshots: inspect the last persisted events, not an assumed
+heartbeat. Restart an older Shell to enable this journal.

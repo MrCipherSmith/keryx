@@ -8,14 +8,16 @@
  *
  * So this keeps a small amount of state in memory at all times (a registry of in-flight calls
  * with the stage each is in, a ring buffer of the last phase labels, counters, and named
- * probes onto other subsystems such as the approval dock) and touches the disk ONLY when
- * something looks stuck or the operator asks (`/diag`). A healthy session writes nothing.
+ * probes onto other subsystems such as the approval dock) and writes emergency dumps when
+ * something looks stuck or the operator asks (`/diag`). Interactive hosts additionally enable a
+ * continuous bounded lifecycle journal, excluding free-form ring labels and probe output.
  *
  * Everything here is best-effort: no function may throw into the turn it observes, and probe
  * output must be free of secrets and file contents (names, counts, ages and flags only).
  */
 import { statSync } from "node:fs";
 import path from "node:path";
+import { createDiagnosticsJournal, diagnosticMeasurements, type DiagnosticsJournal } from "./diagnostics-journal";
 import { appendOwnerOnlyLine, ensureKeryxSubdir } from "./config-dir";
 
 export type DiagOutcome = "ok" | "error" | "watchdog" | "aborted";
@@ -85,6 +87,9 @@ export interface WatcherOptions {
   repeatMs?: number;
   /** Dump file size cap; past it dumps are dropped (a stuck loop must not fill the disk). */
   maxFileBytes?: number;
+  continuous?: boolean;
+  /** Once per watcher session; code only, not raw filesystem errors. */
+  onJournalError?: (code: string) => void;
 }
 
 export const DEFAULT_WATCH_INTERVAL_MS = 30_000;
@@ -118,6 +123,9 @@ export interface CallDiagnostics {
   start(opts: WatcherOptions): () => void;
   /** Where dumps for the running watcher go, if started. */
   dumpPath(): string | undefined;
+  journalPath(): string | undefined;
+  journalError(): string | undefined;
+  observe(kind: string, measurements: Record<string, number | boolean>): void;
   /** One watcher tick, exposed so tests need no real timers. */
   tick(): void;
   inFlight(): readonly DiagCall[];
@@ -149,6 +157,26 @@ export function createCallDiagnostics(options: CallDiagnosticsOptions = {}): Cal
   let repeatMs = DEFAULT_REPEAT_MS;
   let lastDumpAt: number | undefined;
   let lastDumpIds = new Set<string>();
+  let journal: DiagnosticsJournal | undefined;
+  let journalFailure: string | undefined;
+  let warnJournal: ((code: string) => void) | undefined;
+  let warningDelivered = false;
+  const persist = (kind: string, fields: Record<string, unknown> = {}): void => {
+    if (journal === undefined) return;
+    const result = journal.write({ ts: new Date(now()).toISOString(), kind, ...fields });
+    if (result.ok) return;
+    journalFailure = result.error;
+    if (!warningDelivered) {
+      warningDelivered = true;
+      try { warnJournal?.(result.error); }
+      catch { journalFailure = "JOURNAL_WARNING_FAILED"; }
+    }
+  };
+  const persistSnapshot = (): void => persist("snapshot", {
+    calls: [...calls.values()].map((c) => ({ id: c.id, name: c.name, stage: c.stage,
+      ageMs: now() - c.startedAt, stageAgeMs: now() - c.stageSince, stageChanges: c.stageChanges })),
+    callsStarted: metrics.callsStarted, callsSettled: metrics.callsSettled, lastLagMs,
+  });
 
   const record = (label: string): void => {
     ring.push(`${new Date(now()).toISOString()} ${label}`);
@@ -237,6 +265,7 @@ export function createCallDiagnostics(options: CallDiagnosticsOptions = {}): Cal
       if (lag > metrics.maxLoopLagMs) metrics.maxLoopLagMs = lag;
     }
     lastTickAt = at;
+    persistSnapshot();
     // Only calls that report stages can be judged by how long they sit in one; a plain tool
     // call (a long build) stays in "start" for its whole legitimate run.
     const suspects = [...calls.values()].filter(
@@ -263,6 +292,7 @@ export function createCallDiagnostics(options: CallDiagnosticsOptions = {}): Cal
       for (let n = 2; calls.has(key); n += 1) key = `${id}~${n}`;
       calls.set(key, { id: key, name, startedAt: at, watched: opts?.watched !== false, stage: "start", stageSince: at, stageChanges: 0 });
       metrics.callsStarted += 1;
+      persist("call.begin", { id: key, name });
       return key;
     },
     stage(id, next) {
@@ -273,6 +303,7 @@ export function createCallDiagnostics(options: CallDiagnosticsOptions = {}): Cal
       call.stage = next;
       call.stageSince = at;
       call.stageChanges += 1;
+      persist("call.stage", { id, stage: next });
     },
     end(id, outcome) {
       const call = calls.get(id);
@@ -281,10 +312,12 @@ export function createCallDiagnostics(options: CallDiagnosticsOptions = {}): Cal
       calls.delete(id);
       metrics.callsSettled += 1;
       metrics.callsByOutcome[outcome] = (metrics.callsByOutcome[outcome] ?? 0) + 1;
+      persist("call.end", { id, outcome, ageMs: now() - call.startedAt });
     },
     event(kind, detail) {
       metrics.events[kind] = (metrics.events[kind] ?? 0) + 1;
       record(detail === undefined ? `event ${kind}` : `event ${kind} ${detail}`);
+      persist(kind);
     },
     record,
     probe(name, fn) {
@@ -297,6 +330,9 @@ export function createCallDiagnostics(options: CallDiagnosticsOptions = {}): Cal
     dump,
     inFlight: () => [...calls.values()],
     dumpPath: () => file,
+    journalPath: () => journal?.path(),
+    journalError: () => journalFailure,
+    observe: (kind, measurements) => persist(kind, diagnosticMeasurements(measurements)),
     tick,
     start(opts) {
       sessionId = opts.sessionId;
@@ -304,6 +340,13 @@ export function createCallDiagnostics(options: CallDiagnosticsOptions = {}): Cal
       stallMs = opts.stallMs ?? DEFAULT_STALL_MS;
       repeatMs = opts.repeatMs ?? DEFAULT_REPEAT_MS;
       const cap = opts.maxFileBytes ?? DEFAULT_MAX_FILE_BYTES;
+      journal = opts.continuous ? createDiagnosticsJournal(opts) : undefined;
+      journalFailure = undefined;
+      warningDelivered = false;
+      warnJournal = opts.onJournalError ?? ((code) => {
+        process.stderr.write(`keryx: diagnostics journal unavailable (${code}).\n`);
+      });
+      persist("session.start", { pid: process.pid, sessionId });
       if (sink === undefined) {
         // Resolved lazily: a healthy session never creates the directory or the file.
         sink = (line: string): void => {
@@ -331,7 +374,15 @@ export function createCallDiagnostics(options: CallDiagnosticsOptions = {}): Cal
         }
       }, intervalMs);
       timer.unref?.();
-      return () => clearInterval(timer);
+      let stopped = false;
+      return () => {
+        if (stopped) return;
+        stopped = true;
+        clearInterval(timer);
+        persistSnapshot();
+        persist("session.stop");
+        journal = undefined;
+      };
     },
   };
 }
