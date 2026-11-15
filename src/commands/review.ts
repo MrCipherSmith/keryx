@@ -1089,6 +1089,8 @@ async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: R
   const optIn = optInRolesFromArgs(args);
   const targetKind = targetKindFromArgs(mode, args);
   const targetRef = optionValue(args, "--ref") ?? optionValue(args, "--target-ref");
+  // `--target-ref` is the preferred spelling; `--ref` keeps working (and still wins) with one stderr notice per invocation.
+  if (optionValue(args, "--ref") !== undefined) console.error("keryx review: --ref is an alias of --target-ref; prefer --target-ref.");
   if (!targetRef) {
     throw new Error("Usage: keryx review <attach|start|ingest> --target <kind> --ref <ref>");
   }
@@ -5279,7 +5281,7 @@ prior_findings.json. --no-prior-round: round 1 without searching. --prior: use t
 (default: attended). --host: the agent host (default: detected). Both go to <package>/run-profile.json, with the
 caller token \`start\` prints; a package created before run-profile.json keeps the earlier operator-quote rules.
 
-Starts a managed review package for a flow. Also accepted: ${CREATE_FLAGS.join(" ")} (--target-ref is an alias of --ref).
+Starts a managed review package for a flow. Also accepted: ${CREATE_FLAGS.join(" ")} (--ref is an accepted alias of --target-ref and prints one notice).
 ${GRAPH_TIMEOUT_HELP}`);
 }
 
