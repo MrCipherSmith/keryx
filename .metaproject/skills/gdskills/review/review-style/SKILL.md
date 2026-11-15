@@ -122,26 +122,21 @@ Naming severity is set by the Style laws below and by the canonical rubric in `r
 
 ### 3. Readability and Complexity
 
-**Conditions**
+**Conditions and nesting** (clause, depth and complexity thresholds are the Readability thresholds table)
 - A boolean condition over the clause threshold — suggest extracting a named predicate
+- Callback or `if/else` nesting over the depth threshold — suggest extraction, `async/await` or guard clauses
+- A function over the decision-branch threshold — suggest splitting into named functions
 - Double negatives (`!isNotEmpty`) — flag as `minor`; rewrite to positive form
 - Ternary chains (ternary inside ternary) — flag as `minor`; suggest `if/else` or early return
 
-**Nesting**
-- Callback or `if/else` nesting over the depth threshold — suggest extraction, `async/await` or guard clauses
-
 **Magic literals**
 - A numeric or string literal with business meaning and no named constant, including one repeated across places — flag as `minor`; neutral values are not findings (`review-clean-code`'s Magic number row)
-
-**Cyclomatic complexity**
-- A function over the decision-branch threshold (if/else, switch cases, ternaries, loops) — suggest splitting into named functions
 
 ---
 
 ### 4. DRY Violations
 
-- Duplicated logic block in 3 or more copies (`solid-principles.mdc` Thresholds) — flag as `minor`, one finding listing every copy; 2 copies is not a finding
-- Similar switch/if-else trees that could be a lookup map — flag as `minor`
+- Duplicated logic block in 3 or more copies, or similar switch/if-else trees that could be a lookup map (`solid-principles.mdc` Thresholds) — flag as `minor`, one finding listing every copy; 2 copies is not a finding
 
 Do not flag DRY violations for code outside the diff even if legacy duplication exists.
 
@@ -209,7 +204,7 @@ boundary is the trigger-and-outcome test.
 | Style findings are **never** `blocker` | None of the four merge-blocking shapes is reachable from a style observation. This reviewer's finding format omits `blocker` for that reason |
 | A naming issue is `minor`; it reaches `major` only when the name has already produced an observable wrong outcome at a call site you can name | Identical to `review-clean-code` law 2, deliberately: the same condition must not carry two severities |
 | Duplication needs 3+ copies and is `minor`, reported once with every copy listed | Identical to `review-clean-code` law 3 |
-| Never flag issues handled by the project's autoformatter or linter (indentation, trailing spaces, bracket style, import grouping and order) | Linter/formatter owns that; double-flagging creates noise |
+| Never flag issues handled by the project's autoformatter or linter (indentation, trailing spaces, bracket style, import grouping and order) | Linter/formatter owns that; double-flagging creates noise. This does not cover the `from "src/..."` import-path row of `code-style-patterns.mdc` Rule 8, which is path style, not grouping or order |
 | Do not expand scope to architectural or logic concerns | Stay in style lane; hand off to the right reviewer. A circular import that fails at runtime is `review-architecture`'s finding, not a style one |
 
 ---

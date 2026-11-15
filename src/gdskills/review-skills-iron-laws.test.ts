@@ -290,8 +290,10 @@ describe("one condition, one severity, across the reviewer set (AC2)", () => {
     expect(codeStyle).toMatch(/^\| API\/IO or business logic in a component \(Rule 2\) \| always \| `minor`; `major` with a named defect/m);
     expect(read("review-frontend")).toContain("code-style-patterns.mdc");
     expect(read("review-frontend")).not.toMatch(/API call in a component[^\n]*\*\*(blocker|major)\*\*/);
+    // review-architecture points the frontend half at the same table and keeps only the backend row.
+    expect(read("review-architecture")).toContain("code-style-patterns.mdc");
     expect(read("review-architecture")).toMatch(
-      /API\/IO call in a component[\s\S]{0,200}\| `minor`/,
+      /Layer violation in the backend[\s\S]{0,300}\| `minor`/,
     );
     // review-core-boundaries rated feature code imported into core `major` on its
     // own; the owner settled it as the same layer-violation rating.

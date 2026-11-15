@@ -85,7 +85,7 @@ render frame, a file in a tree walk or a command start, not a request handler.
 - [ ] Work done per keystroke or per render frame (re-reading a file, re-parsing, re-sorting, rebuilding a list) that could be done once per change of its inputs
 - [ ] Per-file work in a command that walks the tree or every flow: a read, parse, `existsSync` or child spawn per entry where one pass or one batch would do
 - [ ] Command startup cost: heavy top-level imports or eager reads in a module every command loads, when only some commands use them
-- [ ] Synchronous I/O (`readFileSync`, `execSync`, `spawnSync`) on an interactive path: input handling, render, a prompt waiting on the user
+- [ ] Synchronous I/O (`readFileSync`, `execSync`, `spawnSync`) on an interactive path: input handling, render, a prompt waiting on the user (rated by `.metaproject/rules/core/async-patterns.mdc` Rule 4, as in section 7)
 - [ ] JSON parse, regex compilation or config load repeated inside a loop instead of hoisted
 - [ ] O(n²) over files, flows, findings or lines: a nested scan, `.includes`/`.find` inside a loop over the same set, sort inside a loop
 - [ ] Polling (`setTimeout`/`setInterval`, `while` wait loop) where an event or a single await would do
@@ -102,32 +102,32 @@ The standard and its severities are `.metaproject/rules/core/database-patterns.m
 
 **Detection patterns:**
 - [ ] Object or array literal created inline in JSX: `<Component options={{ key: val }} />` — new reference every render
-- [ ] Arrow function created inline as prop: `<Button onClick={() => store.doX()} />` — new reference every render
-- [ ] Large expensive computation performed directly in render body (not in useMemo)
+- [ ] Arrow function created inline as a prop of a non-store value; an arrow that only forwards to a store action is allowed and needs no `useCallback`
+- [ ] Large expensive computation performed directly in render body
 - [ ] Context value object created inline without useMemo: `<MyContext.Provider value={{ a, b }}>` — every parent render triggers all consumers
 - [ ] Component receiving a new object/array reference from props despite same data (parent not memoizing)
 
 **When memo IS justified (flag absence):**
 - [ ] Pure child component receiving stable props but not wrapped in `React.memo` — only flag if the parent re-renders frequently (e.g., on keypress, scroll, animation frame)
-- [ ] `useCallback` absent for a callback passed to a `React.memo` child — only flag if the child is expensive
+- [ ] `useCallback` absent for a non-store callback passed to a `React.memo` child — only flag if the child is expensive; a store method or store value is never wrapped in `useCallback`/`useMemo`
 
-**MobX note:** With MobX + observer, `useCallback`/`useMemo` are rarely needed. Do NOT flag their absence unless there is concrete evidence of re-render cost. Flag only missing `observer()` (see `review-frontend` for full MobX checklist).
+**MobX note:** `observer` and where memoization does and does not belong are `.metaproject/rules/core/code-style-patterns.mdc` Rules 1 and 3. Without a concrete re-render cost there is no finding.
 
 ### 3. Expensive Computations in Hot Paths
 
-- [ ] Sorting, filtering, or reducing a large array inside a render function without `useMemo`
+- [ ] Sorting, filtering, or reducing a large array inside a render function without `useMemo`; when the array is store state the fix is `@computed` (`.metaproject/rules/core/mobx-store-template.mdc` Rule 1), not `useMemo`
 - [ ] Deep clone (`JSON.parse(JSON.stringify(...))`) inside a loop or on every render
 - [ ] Regex compilation inside a loop — should be compiled once outside: `const RE = /pattern/`
 - [ ] `Object.keys().reduce()` or similar aggregation recalculated on every render instead of being derived in store or memoized
 - [ ] Recursive computation without memoization called in a loop
 
-**Hot path requirement:** An expensive computation is a `major` finding when it runs at render time, in a tight loop, or on every CLI command start (a hot path, Part 0). Once per page load is a path you can name: rate it by the table (`major` with its cost and frequency stated, else `minor`). Once per process (server start, a build) is `info` at most.
+**Hot path requirement:** An expensive computation is `major` only with a named cost and frequency (a render, a tight loop, every CLI command start: a hot path, Part 0); without both it is `minor`. Once per process (server start, a build) is `info` at most.
 
 ### 4. Missing Database Indexes
 
-The standard and its severities are `.metaproject/rules/core/database-patterns.mdc` (Rule 2). Also: `LIKE '%term%'` cannot use a b-tree index; flag it as `info` with full-text search as the fix.
+The standard and its severities are `.metaproject/rules/core/database-patterns.mdc` (Rule 2 and its **Review severities** row). Also: `LIKE '%term%'` cannot use a b-tree index; flag it as `info` with full-text search as the fix.
 
-**Evidence requirement:** Cannot confirm an index is missing without seeing the migration or schema. If the schema is not in the payload, it is `info`: say that reading the schema would settle it. Schema shown with no index and the table shown large (its size named): `major`. Schema shown, size not: `minor`.
+**Evidence requirement:** Cannot confirm an index is missing without seeing the migration or schema. If the schema is not in the payload, it is `info`: say that reading the schema would settle it.
 
 ### 5. Memory Leaks
 
@@ -135,11 +135,9 @@ The standard and its severities are `.metaproject/rules/core/database-patterns.m
 - [ ] `addEventListener` without matching `removeEventListener` in cleanup
 - [ ] `setInterval` / `setTimeout` (recurring) without `clearInterval` / `clearTimeout` in cleanup
 - [ ] RxJS `subscribe()` without `unsubscribe()` stored in a disposable or returned from useEffect cleanup
-- [ ] MobX `autorun` / `reaction` / `when` without disposer called in `dispose()` (see `review-frontend` for full checklist)
 - [ ] WebSocket or SSE connection opened without close in cleanup
 
-**React useEffect:**
-- [ ] `useEffect` that creates a subscription, timer, or async operation but returns no cleanup function
+MobX disposers are `.metaproject/rules/core/mobx-store-template.mdc` Rule 5; a `useEffect` subscription, timer or async operation with no cleanup is `.metaproject/rules/core/code-style-patterns.mdc` Rule 5. Each takes its severity from that rule's table.
 
 **Unbounded collections:**
 - [ ] Map, Set, or array that grows on every event/request with no eviction, max size, or TTL
@@ -162,19 +160,16 @@ The standard and its severities are `.metaproject/rules/core/database-patterns.m
 
 ### 7. Synchronous Blocking in Async Contexts
 
-- [ ] `fs.readFileSync` / `fs.writeFileSync` inside a request handler or async function
-- [ ] `child_process.execSync` in a Node.js server handler
-- [ ] CPU-intensive synchronous computation (sorting large arrays, JSON.parse of large payloads) in an Express/NestJS handler without offloading to a worker
+Sync file I/O, `execSync` and CPU-heavy work on a request path are `.metaproject/rules/core/async-patterns.mdc` Rule 4 and its **Review severities** row. Also:
+
 - [ ] `new Promise(resolve => setTimeout(resolve, N))` — artificial sleep in a server handler
 - [ ] Synchronous DB client used in an async context (e.g., `better-sqlite3` in an Express handler serving concurrent requests)
 
 ### 8. Missing Pagination
 
-- [ ] Repository query with no `take`/`limit` on a collection that could grow (user-generated content, logs, history)
-- [ ] `findAll()` / `find({})` with no limit on a table mentioned as potentially large in context
-- [ ] API endpoint returning an array without `page`/`cursor`/`limit` parameters when the underlying data is unbounded
+The standard and its severities are `.metaproject/rules/core/api-contracts.mdc` (Rule 6 and its **Review severities** row): a list bounded small by construction is not a finding, and attacker-reachable memory exhaustion is `blocker`. The repository-level counterpart:
 
-**Evidence requirement:** Only flag as `major` if the dataset is described as large or clearly unbounded. For small controlled datasets, flag as `minor`.
+- [ ] Repository query with no `take`/`limit` on a collection that could grow (user-generated content, logs, history), or `findAll()` / `find({})` with no limit on a table named as large
 
 ### 9. Redundant API Calls
 
@@ -185,9 +180,7 @@ The standard and its severities are `.metaproject/rules/core/database-patterns.m
 
 ### 10. MobX: Derived State Computed in Renders
 
-- [ ] Value derived from observables computed inline in a component: `const total = store.items.reduce(...)` — should be `@computed get total()` in the store
-- [ ] Filtered list recalculated in render: `store.items.filter(x => x.active)` — should be a `@computed`
-- [ ] Conditional format derived from observable in render instead of a computed getter
+Derived values belong in `@computed` (`.metaproject/rules/core/mobx-store-template.mdc` Rule 1 and its row) and logic does not live in a component (`.metaproject/rules/core/code-style-patterns.mdc` Rule 2). This lens adds only the cost angle: a reduce, filter or format recomputed on a high-frequency render, with its frequency named.
 
 ---
 

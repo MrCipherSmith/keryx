@@ -92,43 +92,30 @@ When `stack_hint` is not provided, infer from changed file paths:
 
 ### Layer Violations
 
-A **layer violation** occurs when code belonging to one architectural layer is placed in another.
-Common layers (adapt to the project's actual layering):
-
-```
-UI (View) → ViewModel / Store → Service → Domain → Infrastructure (DB, HTTP)
-```
-
-- [ ] API call or HTTP client import inside a React component (should be in store/service)
-- [ ] Business logic inside a controller (should be in service/use-case)
-- [ ] Database query directly inside a service bypassing the repository layer
-- [ ] Domain entity mutating itself with HTTP response data (infrastructure leaking into domain)
-- [ ] UI component computing derived state that belongs in a ViewModel or computed property
+A **layer violation** occurs when code belonging to one architectural layer is placed in another. The layers and what each may import are `.metaproject/rules/core/clean-architecture.mdc` (backend: controller, use case, repository, domain, infrastructure, each boundary mapping its own types) and `.metaproject/rules/core/code-style-patterns.mdc` Rule 2 (frontend: component renders, store holds logic, service does I/O only; derived state is `@computed` per `.metaproject/rules/core/mobx-store-template.mdc` Rule 1). Adapt to the project's actual layering and report a placement those rules forbid.
 
 ### Dependency Direction
 
 Dependencies must flow **inward** (from infrastructure toward domain), never outward.
 
-- [ ] Domain module importing from infrastructure (e.g., domain entity importing ORM types)
+- [ ] Domain module importing from infrastructure (`.metaproject/rules/core/clean-architecture.mdc`)
 - [ ] Core/shared module importing from feature module (inverted dependency)
 - [ ] Circular import between modules (A imports B, B imports A)
 - [ ] Barrel file (`index.ts`) that creates hidden circular references
 
 ### Module Boundary Violations
 
-- [ ] Feature A directly accessing feature B's internal service instead of a public API/facade
+- [ ] Feature A reaching into feature B's internal files instead of its public exports (`.metaproject/rules/core/clean-architecture.mdc`)
 - [ ] Shared `utils/` or `common/` module containing domain-specific business logic
 - [ ] Cross-module data transformation happening in the wrong module
 
 ### Design Pattern Misuse
 
-**Repository pattern:**
-- [ ] Repository method containing business logic (filtering/transformation beyond simple queries)
-- [ ] Service bypassing repository and using ORM/DB client directly
+**Repository pattern** (`.metaproject/rules/core/clean-architecture.mdc`: the repository is the I/O boundary, business rules live in the domain):
 - [ ] Multiple repositories doing the same data transformation independently
 
 **Dependency Injection:**
-- [ ] `new SomeService()` inside a class that should receive it via DI
+- [ ] `new X()` for an I/O, network or clock dependency inside a class that should receive it (constructing a plain helper or value object inside a module is fine: `.metaproject/rules/core/solid-principles.mdc` section D)
 - [ ] Service locator pattern used instead of constructor injection
 - [ ] Singleton service holding request-scoped state
 
@@ -138,25 +125,11 @@ Dependencies must flow **inward** (from infrastructure toward domain), never out
 
 ### SOLID Violations
 
-Focus on **SRP** and **DIP** — the two most commonly violated in practice.
+SRP, OCP, LSP, ISP and DIP, their thresholds and their severities are `.metaproject/rules/core/solid-principles.mdc` (its Thresholds table). Below a threshold, report nothing. This lens adds only its calibration:
 
-**SRP (Single Responsibility):**
-- [ ] Class/module doing two unrelated things (e.g., handles auth AND sends emails)
-- [ ] Service with >5 injected dependencies (smell: likely SRP violation)
-- [ ] Component rendering UI AND fetching data AND computing derived state
-
-**OCP (Open/Closed):**
-- [ ] `switch`/`if-else` chain over a type discriminant that will grow (should be polymorphism or strategy)
-
-**LSP (Liskov Substitution):**
-- [ ] Subclass overriding a method with stronger preconditions or weaker postconditions
-
-**ISP (Interface Segregation):**
-- [ ] Implementing interface that forces implementing methods never used by this class
-
-**DIP (Dependency Inversion):**
-- [ ] High-level module importing a concrete low-level class (should import an abstraction)
-- [ ] Infrastructure class passed directly through multiple layers instead of behind an interface
+- SRP: name the two responsibilities the class holds; size alone is not a finding. A component that renders, fetches and derives is `.metaproject/rules/core/code-style-patterns.mdc` Rule 2.
+- OCP: a finding only at the Thresholds branch-chain row (4 or more branches over a type discriminant, extended by this change, where the codebase already uses a map or strategy); a chain that merely might grow is not one.
+- DIP: asks for an interface only at an I/O or substitution boundary; a single internal implementation gets none. An infrastructure class passed through several layers instead of behind an interface at that boundary is a finding.
 
 ### NestJS-Specific
 
@@ -169,19 +142,16 @@ Focus on **SRP** and **DIP** — the two most commonly violated in practice.
 
 ### React + MVVM (with MobX)
 
-- [ ] Business logic directly in a component (should be in store action or computed)
-- [ ] `useEffect` performing state orchestration that belongs in a MobX reaction or action
-- [ ] Store method calling another store's `private` action directly (should go through public API)
+Logic in a component, effects that orchestrate state, and cleanup are `.metaproject/rules/core/code-style-patterns.mdc` Rules 2 and 5 with `.metaproject/rules/core/mobx-store-template.mdc` Rule 8. This lens adds:
+
 - [ ] Component subscribing to raw observable fields instead of using computed/derived values
 - [ ] View rendering based on multiple raw observable fields instead of a single computed boolean
 
 ### MobX Store Layer
 
-- [ ] `@action` performing async work without wrapping in `runInAction` on resolution
+Mutation outside an action, async resolution without `runInAction`, and inter-store callbacks left public are `.metaproject/rules/core/mobx-store-template.mdc` Rules 2 and 3 and their rows; a store importing another store's internal file is `.metaproject/rules/core/clean-architecture.mdc` (public exports only). This lens adds:
+
 - [ ] `@computed` with side effects (computed must be pure)
-- [ ] Observable state mutated outside of an `@action` (MobX strict mode violation)
-- [ ] Store importing from another store's internal file instead of its public export
-- [ ] Inter-store callback (`onChangeX`, `handleX`, `syncX`) declared `public` when only used internally (should be `private`)
 
 ---
 
@@ -257,9 +227,9 @@ conditions land under that rubric, not a second rubric.
 |---|---|---|
 | Circular dependency that fails at runtime (an import resolves to `undefined` on a path the change reaches) | `blocker` | Crash |
 | Module scope mismatch that produces wrong data across requests | `blocker` | Data corruption |
-| Layer violation — API/IO call in a component, business logic in a controller, domain importing infrastructure | `minor` — `major` only when a concrete defect it causes is named (trigger and outcome) or a stated project rule makes it one | Structural cost lands on the next editor. Identical to `review-frontend` and `review-backend` for the same condition |
-| Broken DIP; cross-module coupling | `minor` — `major` under the same condition | Same |
-| SRP smell with a clear separation path; ISP violation; a component reading several raw observables instead of a computed | `minor` | The code is correct; the cost is to whoever restructures it next |
+| Layer violation in the backend — business logic in a controller, domain importing infrastructure (a frontend component's layer violation is the `code-style-patterns.mdc` Rule 2 row) | `minor` — `major` only when a concrete defect it causes is named (trigger and outcome) or a stated project rule makes it one | Structural cost lands on the next editor. Identical to `review-backend` for the same condition |
+| Cross-module coupling | `minor` — `major` under the same condition | Same |
+| SOLID findings (SRP, ISP, DIP, OCP, LSP) take the `solid-principles.mdc` Thresholds severity; a component reading several raw observables instead of a computed | `minor` | The code is correct; the cost is to whoever restructures it next |
 | Architectural opinion with no named violation | `info` | Shared laws 1 and 2 |
 
 This lens owns circular imports: one that resolves cleanly is `minor`, not a
