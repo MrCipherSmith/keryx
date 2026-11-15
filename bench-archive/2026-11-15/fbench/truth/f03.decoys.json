@@ -1,0 +1,32 @@
+[
+  {
+    "tid": "D1",
+    "file": "apps/orders-web/src/components/CustomerBadge.stories.tsx",
+    "line": 6,
+    "severity": "minor",
+    "problem": "`CustomerBadge.stories.tsx` has no loading or error stories.",
+    "impact": "Impact would be none: the component has no loading or error props or states.",
+    "quote": "component: CustomerBadge,",
+    "why_not_a_defect": "The loading/error story rule applies only to components that have those states."
+  },
+  {
+    "tid": "D2",
+    "file": "apps/orders-web/src/components/OrderList.tsx",
+    "line": 18,
+    "severity": "minor",
+    "problem": "A `!` non-null assertion on `order.customer` inside `OrderList`.",
+    "impact": "Impact would be none: `withCustomer` is filtered on `order.customer` just above, so every element has it.",
+    "quote": "const customerIds = new Set(withCustomer.map((order) => order.customer!.id));",
+    "why_not_a_defect": "The comment states the invariant; TypeScript cannot narrow through filter(), unlike the unguarded `!` in OrderCard."
+  },
+  {
+    "tid": "D3",
+    "file": "apps/orders-web/src/components/OrderCard.tsx",
+    "line": 13,
+    "severity": "minor",
+    "problem": "`OrderCard` is a plain component without `observer`.",
+    "impact": "Impact would be none: it reads only props, no observables.",
+    "quote": "export function OrderCard({ order, loading, error, onSelect }: IOrderCardProps) {",
+    "why_not_a_defect": "observer is needed only where observable state is read in render; props-only components should stay plain."
+  }
+]

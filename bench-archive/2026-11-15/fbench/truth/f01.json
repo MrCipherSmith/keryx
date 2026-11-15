@@ -1,0 +1,74 @@
+[
+  {
+    "tid": "T1",
+    "file": "apps/orders-web/src/stores/orders.store.ts",
+    "line": 145,
+    "severity": "major",
+    "problem": "In the private load method `this.items` is assigned after `await` outside `runInAction`, while the next lines update `total` and `loading` inside one.",
+    "impact": "MobX reports a strict-mode warning on every load, and observers render once with the new rows but the old total and a still-true loading flag before the second batch lands.",
+    "quote": "this.items = res.items;"
+  },
+  {
+    "tid": "T2",
+    "file": "apps/orders-web/src/stores/orders.store.ts",
+    "line": 40,
+    "severity": "major",
+    "problem": "The constructor creates a `reaction` on `page` and discards the returned disposer, so `dispose()` (which only drains `disposers`) never stops it.",
+    "impact": "Every visit to the orders page leaves a live reaction that keeps the store and its up-to-2,000 loaded rows reachable after unmount, and repeated visits stack leaked stores.",
+    "quote": "reaction("
+  },
+  {
+    "tid": "T3",
+    "file": "apps/orders-web/src/stores/orders.store.ts",
+    "line": 150,
+    "severity": "major",
+    "problem": "`loadOrders` sets `loading = true` but has no `finally`; the success path resets it and the catch path only sets `error`.",
+    "impact": "When the request fails (timeout, 500) the table spinner never stops and covers the error, so support staff see an endless loading state until they reload the page.",
+    "quote": "} catch (err: unknown) {"
+  },
+  {
+    "tid": "T4",
+    "file": "apps/orders-web/src/stores/orders-filter.store.ts",
+    "line": 24,
+    "severity": "major",
+    "problem": "The truthy guard `status && ...` rejects `undefined`, so choosing the 'All statuses' option in the select never clears the status filter.",
+    "impact": "After filtering by Paid the user cannot go back to all orders; the list stays on Paid and the select shows a cleared value that no longer matches the data.",
+    "quote": "if (status && status !== this.status) {"
+  },
+  {
+    "tid": "T5",
+    "file": "apps/orders-web/src/stores/orders.store.ts",
+    "line": 114,
+    "severity": "minor",
+    "problem": "The private inter-store callback is declared as a decorated `@action.bound private` method; the project wants private methods as arrow fields and `@action.bound` only on public UI methods.",
+    "impact": "Breaks the store convention and makes the class mix two binding styles, so readers cannot tell which private methods are actions.",
+    "quote": "private onFilterChange(): void {"
+  },
+  {
+    "tid": "T6",
+    "file": "apps/orders-web/src/stores/orders.store.ts",
+    "line": 118,
+    "severity": "minor",
+    "problem": "`onChangeQuery` is only called by the filter store through the constructor callback, never from JSX, yet it is public (no `private`).",
+    "impact": "It widens the store's public API with an internal hook that components can call and that bypasses the filter store.",
+    "quote": "onChangeQuery = (query: string): void => {"
+  },
+  {
+    "tid": "T7",
+    "file": "apps/orders-web/src/stores/orders.store.ts",
+    "line": 54,
+    "severity": "minor",
+    "problem": "The derived page total is a plain method that sums all items on each call instead of a `@computed` getter.",
+    "impact": "OrdersSummary calls it in render, so with 2,000 rows the sum is recomputed on every selection change and re-render rather than cached.",
+    "quote": "getTotalCents(): number {"
+  },
+  {
+    "tid": "T8",
+    "file": "apps/orders-web/src/stores/orders.store.ts",
+    "line": 99,
+    "severity": "major",
+    "problem": "'Select all on page' replaces the observable `selectedIds` array with a new one instead of using `.replace()` on the existing array.",
+    "impact": "OrdersSummary subscribes with `observe(store.selectedIds)` once per store, so after Select all it listens to the discarded array and the 'Orders (N selected)' document title silently stops updating while the Selected statistic keeps changing.",
+    "quote": "this.selectedIds = observable(this.items.map((order) => order.id));"
+  }
+]

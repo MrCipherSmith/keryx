@@ -1,0 +1,32 @@
+[
+  {
+    "tid": "D1",
+    "file": "apps/orders-web/src/stores/orders.store.ts",
+    "line": 89,
+    "severity": "minor",
+    "problem": "A public synchronous `@action.bound onSelect` mutates `selectedIds` directly without `runInAction`.",
+    "impact": "Impact would be none: a synchronous `@action.bound` method is already an action, so `runInAction` is not needed.",
+    "quote": "onSelect(id: string, selected: boolean): void {",
+    "why_not_a_defect": "It is already wrapped in an action, there is no await, so wrapping in runInAction would be redundant."
+  },
+  {
+    "tid": "D2",
+    "file": "apps/orders-web/src/stores/orders.store.ts",
+    "line": 22,
+    "severity": "minor",
+    "problem": "`items` is `@observable.ref` and replaced whole on each load.",
+    "impact": "Impact would be none: rows are never mutated in place, so a reference-only observable avoids deep-proxying 2,000 DTOs.",
+    "quote": "@observable.ref items: OrderDto[] = [];",
+    "why_not_a_defect": "Replacing a reference-observed array wholesale is the correct pattern for large read-only lists."
+  },
+  {
+    "tid": "D3",
+    "file": "apps/orders-web/src/stores/orders.store.ts",
+    "line": 58,
+    "severity": "minor",
+    "problem": "A public arrow selector `getById` has no `@action.bound`.",
+    "impact": "Impact would be none: it only reads state and does not mutate, so it is not an action.",
+    "quote": "getById = (id: string): OrderDto | undefined => this.items.find((order) => order.id === id);",
+    "why_not_a_defect": "Read-only selectors must not be actions; the arrow keeps `this` bound."
+  }
+]

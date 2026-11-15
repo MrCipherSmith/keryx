@@ -1,0 +1,32 @@
+[
+  {
+    "tid": "D1",
+    "file": "apps/orders-web/src/pages/orders/OrdersTable.tsx",
+    "line": 49,
+    "severity": "minor",
+    "problem": "`useState` holds whether the column-settings dropdown is open.",
+    "impact": "Impact would be none: purely UI state used by one component.",
+    "quote": "const [settingsOpen, setSettingsOpen] = useState(false);",
+    "why_not_a_defect": "Per the README, UI-only state used by a single component belongs in useState."
+  },
+  {
+    "tid": "D2",
+    "file": "apps/orders-web/src/pages/orders/OrderDrawer.tsx",
+    "line": 13,
+    "severity": "minor",
+    "problem": "`OrderDrawer` is wrapped with `observer` and rendered inside an antd `Drawer` from the page.",
+    "impact": "Impact would be none: it reads `store.selectedIds` in render so it needs observer, and wrapping the content (not the Drawer) is correct.",
+    "quote": "export const OrderDrawer = observer(function OrderDrawer({ orderId, store }: OrderDrawerProps) {",
+    "why_not_a_defect": "The drawer content reads observables, so observer is required; observer on the page does not track reads made in this child."
+  },
+  {
+    "tid": "D3",
+    "file": "apps/orders-web/src/pages/orders/OrdersTable.tsx",
+    "line": 53,
+    "severity": "minor",
+    "problem": "`useMemo` builds the column menu items from the module-level `COLUMN_DEFS` constant.",
+    "impact": "Impact would be none: it reads no store or props and gives the antd Dropdown a stable `items` identity.",
+    "quote": "const menuItems = useMemo(",
+    "why_not_a_defect": "Pure constant config, cheap, deliberately stable; not a stale-closure or store-reading memo."
+  }
+]

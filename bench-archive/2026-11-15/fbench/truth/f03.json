@@ -1,0 +1,74 @@
+[
+  {
+    "tid": "T1",
+    "file": "apps/orders-web/src/components/OrderCard.tsx",
+    "line": 6,
+    "severity": "minor",
+    "problem": "The props interface is named `IOrderCardProps`; the project names props `<Component>Props` without an `I` prefix.",
+    "impact": "Inconsistent with `StatusTagProps` and other components, and spreads a convention the team does not use.",
+    "quote": "export interface IOrderCardProps {"
+  },
+  {
+    "tid": "T2",
+    "file": "apps/orders-web/src/lib/format.ts",
+    "line": 7,
+    "severity": "minor",
+    "problem": "`toMoney` takes `v: any` although the value comes from `OrderDto.totalCents`, which has a named type.",
+    "impact": "Any call, including one passing a string or an object, type-checks and silently renders '-' or a wrong amount.",
+    "quote": "export function toMoney(v: any): string {"
+  },
+  {
+    "tid": "T3",
+    "file": "apps/orders-web/src/components/OrderCard.tsx",
+    "line": 37,
+    "severity": "blocker",
+    "problem": "`OrderCard` dereferences `order.customer!.name`, but `customer` is optional because guest-checkout orders have none.",
+    "impact": "A single guest order throws a TypeError during render and, with no error boundary, blanks the whole order list.",
+    "quote": "<Typography.Text strong>{order.customer!.name}</Typography.Text>"
+  },
+  {
+    "tid": "T4",
+    "file": "apps/orders-web/src/components/OrderCard.tsx",
+    "line": 2,
+    "severity": "minor",
+    "problem": "The api type is imported through a bare `src/...` path; neither `tsconfig.json` nor the Vite/Storybook config defines such an alias or `baseUrl`.",
+    "impact": "`tsc` and Storybook cannot resolve the module, so the typecheck/build fails; all other files use relative imports.",
+    "quote": "import type { OrderDto } from \"src/api/orders.api\";"
+  },
+  {
+    "tid": "T5",
+    "file": "apps/orders-web/src/components/OrderList.stories.tsx",
+    "line": 42,
+    "severity": "minor",
+    "problem": "`OrderList` has an empty state but `OrderList.stories.tsx` has no story that renders it.",
+    "impact": "The empty state is never visually reviewed or caught by Storybook tests, so a regression in it would go unnoticed.",
+    "quote": "export const Default: Story = {};"
+  },
+  {
+    "tid": "T6",
+    "file": "apps/orders-web/src/components/OrderCard.stories.tsx",
+    "line": 17,
+    "severity": "minor",
+    "problem": "`OrderCard` takes `loading` and `error` props, but `OrderCard.stories.tsx` has no loading story and no error story.",
+    "impact": "Both states are untested in Storybook, against the project rule that every visible state has a story.",
+    "quote": "component: OrderCard,"
+  },
+  {
+    "tid": "T7",
+    "file": "apps/orders-web/src/components/OrderList.stories.tsx",
+    "line": 44,
+    "severity": "minor",
+    "problem": "`OrderList.stories.tsx` has only a three-order and a single-order story and no stress case with many orders or very long customer names.",
+    "impact": "Layout problems with 2,000-row pages or long names are not exercised in Storybook.",
+    "quote": "export const SingleOrder: Story = {"
+  },
+  {
+    "tid": "T8",
+    "file": "apps/orders-web/src/components/OrderCard.stories.tsx",
+    "line": 34,
+    "severity": "minor",
+    "problem": "The `Selectable` story passes a `console.log` handler instead of `fn()` from `@storybook/test`.",
+    "impact": "Storybook's actions panel and interaction tests cannot assert the click, and the story logs to the console.",
+    "quote": "onSelect: (id) => console.log(\"selected order\", id),"
+  }
+]

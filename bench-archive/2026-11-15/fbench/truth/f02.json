@@ -1,0 +1,74 @@
+[
+  {
+    "tid": "T1",
+    "file": "apps/orders-web/src/pages/orders/OrdersTable.tsx",
+    "line": 47,
+    "severity": "major",
+    "problem": "`OrdersTable` reads `store.items`, `store.loading` and `store.selectedIds` during render but is a plain function component, not wrapped in `observer`.",
+    "impact": "The table does not re-render when orders load, the spinner stops, or checkboxes change, so the list stays empty or stale until some unrelated parent state change forces a render.",
+    "quote": "export function OrdersTable({ store, selectedId, compact, onOpen }: OrdersTableProps) {"
+  },
+  {
+    "tid": "T2",
+    "file": "apps/orders-web/src/pages/orders/OrderDrawer.tsx",
+    "line": 21,
+    "severity": "minor",
+    "problem": "`OrderDrawer` calls the `getOrder` api function directly in a `useEffect` and keeps the result in `useState`.",
+    "impact": "API access and loading/error state live in the component instead of a store, so it cannot be shared, cached or reused for status updates and goes against the project layering.",
+    "quote": "getOrder(orderId)"
+  },
+  {
+    "tid": "T3",
+    "file": "apps/orders-web/src/pages/orders/OrdersPage.tsx",
+    "line": 25,
+    "severity": "minor",
+    "problem": "The page loads data with `useEffect(() => { store.loadOrders(); }, [])` instead of the `onMount`/`onUnmount` bridge the other page uses.",
+    "impact": "The store is never told about unmount, so its `disposed` guard is never set and in-flight responses are applied to a store whose page is gone.",
+    "quote": "store.loadOrders();"
+  },
+  {
+    "tid": "T4",
+    "file": "apps/orders-web/src/pages/orders/OrdersPage.tsx",
+    "line": 20,
+    "severity": "major",
+    "problem": "The store is constructed directly in the component body, so a new store is created on every render.",
+    "impact": "Each render (including the resize-driven ones) swaps in an empty store, so loaded orders, the status filter and the bulk selection are lost and the table shows empty.",
+    "quote": "const store = new OrdersStore(ordersApi);"
+  },
+  {
+    "tid": "T5",
+    "file": "apps/orders-web/src/pages/orders/OrdersTable.tsx",
+    "line": 111,
+    "severity": "minor",
+    "problem": "Rows of the sortable table use the array index as `key`.",
+    "impact": "After sorting by a column React reuses row DOM by position, so row-local state such as focus and the checkbox hover/focus state sticks to the wrong order.",
+    "quote": "key={index}"
+  },
+  {
+    "tid": "T6",
+    "file": "apps/orders-web/src/pages/orders/OrdersPage.tsx",
+    "line": 30,
+    "severity": "major",
+    "problem": "The `useEffect` adds a window `resize` listener and returns no cleanup.",
+    "impact": "The handler keeps calling `setCompact` on an unmounted page after navigating away and stacks another listener on every mount, leaking memory and causing state updates on unmounted components.",
+    "quote": "window.addEventListener(\"resize\", onResize);"
+  },
+  {
+    "tid": "T7",
+    "file": "apps/orders-web/src/pages/orders/OrdersPage.tsx",
+    "line": 45,
+    "severity": "major",
+    "problem": "The icon-only refresh button has no text and no `aria-label`.",
+    "impact": "Screen reader users hear an unnamed button and cannot find the refresh action.",
+    "quote": "<Button icon={<ReloadOutlined />} onClick={() => store.loadOrders()} />"
+  },
+  {
+    "tid": "T8",
+    "file": "apps/orders-web/src/pages/orders/OrdersPage.tsx",
+    "line": 21,
+    "severity": "major",
+    "problem": "The selected order id is kept in page `useState` while `OrdersStore` also tracks selection (`selectedIds`) for bulk actions.",
+    "impact": "Row highlight and the drawer follow one source and the checkboxes and 'Mark as paid' follow another, so the highlighted order and the bulk-selected orders diverge and can disagree after status updates.",
+    "quote": "const [selectedId, setSelectedId] = useState<string | null>(null);"
+  }
+]
