@@ -162,7 +162,7 @@ test("the bundled task-type table adds the rules it adds today, only those prese
 
 test("for test returns testing skills and project rules for the test files; for review returns project rules only", async () => {
   const root = await project();
-  await core(root, { "tdd-workflow.mdc": "tdd\n", "testing-conventions.mdc": "conv\n" });
+  await core(root, { "tdd-workflow.mdc": "tdd\n" });
   await importRules(root, { "testing.mdc": ruleText({ globs: "src/**/*.test.tsx" }), "styling.mdc": ruleText({ globs: "src/**/*.css" }) });
   for (const [module, name] of [["testing", "msw"], ["implementation", "stores"]] as const) {
     await put(root, `.metaproject/project-skills/${module}/${name}/SKILL.md`, `---\nname: ${name}\n---\nbody\n`);
@@ -182,7 +182,7 @@ test("for test returns testing skills and project rules for the test files; for 
     }),
   );
   const test_ = await resolveProjectContext({ projectRoot: root, files: ["src/a.test.tsx"], taskType: "ui_component", for: "test" });
-  expect(paths(test_.entries)).toEqual([P("testing.mdc"), ".metaproject/project-skills/testing/msw/SKILL.md", C("tdd-workflow.mdc"), C("testing-conventions.mdc")]);
+  expect(paths(test_.entries)).toEqual([P("testing.mdc"), ".metaproject/project-skills/testing/msw/SKILL.md", C("tdd-workflow.mdc")]);
   expect(test_.entries.find((entry) => entry.kind === "skill")).toMatchObject({ source: "project", reason: "route" });
 
   const impl = await resolveProjectContext({ projectRoot: root, files: ["src/s.ts"], taskType: "store_logic", for: "implement" });
@@ -192,6 +192,67 @@ test("for test returns testing skills and project rules for the test files; for 
 
   const review = await resolveProjectContext({ projectRoot: root, files: ["src/a.css"], taskType: "ui_component", for: "review" });
   expect(paths(review.entries)).toEqual([P("styling.mdc")]);
+});
+
+test("an installed stack rule is must_read when its paths match a task file, for every worker; a pack whose paths match nothing is absent", async () => {
+  const root = await project();
+  await core(root, { "tdd-workflow.mdc": "tdd\n" });
+  const java = `---\nextends: common\npaths: ["**/*.java", "**/*.kt"]\n---\n\nJava style.\n`;
+  await put(root, ".metaproject/rules/stacks/java-kotlin-spring/coding-style.mdc", java);
+  await put(root, ".metaproject/rules/stacks/java-kotlin-spring/testing.mdc", `---\nextends: common\npaths: ["**/*Test.java"]\n---\n\nJava tests.\n`);
+  await put(root, ".metaproject/rules/stacks/ts-js-node/coding-style.mdc", `---\nextends: common\npaths: ["**/*.{ts,tsx}"]\n---\n\nTS style.\n`);
+  const S = (rel: string): string => `.metaproject/rules/stacks/${rel}`;
+  const impl = await resolveProjectContext({ projectRoot: root, files: ["src/main/Order.java"], for: "implement" });
+  expect(impl.entries.map((entry) => [entry.path, entry.source, entry.reason, entry.tier])).toEqual([
+    [S("java-kotlin-spring/coding-style.mdc"), "bundled", "glob:**/*.java", "must_read"],
+    [C("tdd-workflow.mdc"), "bundled", "bundled-default", "must_read"],
+  ]);
+  expect(impl.entries[0]?.sha256).toBe(sha256Hex(java));
+  const test_ = await resolveProjectContext({ projectRoot: root, files: ["src/test/OrderTest.java"], for: "test" });
+  expect(paths(test_.entries)).toEqual([S("java-kotlin-spring/coding-style.mdc"), S("java-kotlin-spring/testing.mdc"), C("tdd-workflow.mdc")]);
+  const review = await resolveProjectContext({ projectRoot: root, files: ["web/app.tsx"], for: "review" });
+  expect(paths(review.entries)).toEqual([S("ts-js-node/coding-style.mdc")]);
+});
+
+test("a conditional core rule is must_read when the task text, a file path or a file's content names its subject, and on_demand otherwise", async () => {
+  const root = await project();
+  await core(root, {
+    "security-baseline.mdc": `---\ndescription: "Security baseline."\nalwaysApply: false\n---\nbody\n`,
+    "async-patterns.mdc": `---\ndescription: "Async patterns."\nalwaysApply: false\n---\nbody\n`,
+  });
+  const view = (result: Awaited<ReturnType<typeof resolveProjectContext>>): string[][] => result.entries.map((entry) => [entry.path, entry.reason, entry.tier]);
+  const quiet = await resolveProjectContext({ projectRoot: root, files: ["src/format.ts"], for: "implement", taskText: "rename a helper" });
+  expect(view(quiet)).toEqual([
+    [C("security-baseline.mdc"), "when-relevant", "on_demand"],
+    [C("async-patterns.mdc"), "when-relevant", "on_demand"],
+  ]);
+  expect(quiet.entries[0]?.description).toBe("Security baseline.");
+
+  const byText = await resolveProjectContext({ projectRoot: root, files: ["src/format.ts"], for: "implement", taskText: "Store the API key and retry on timeout" });
+  expect(view(byText)).toEqual([
+    [C("security-baseline.mdc"), "task-text:api key", "must_read"],
+    [C("async-patterns.mdc"), "task-text:retry", "must_read"],
+  ]);
+
+  await put(root, "src/fetch.ts", "export async function load() {\n  return await fetch(url);\n}\n");
+  const byFile = await resolveProjectContext({ projectRoot: root, files: ["src/auth/session.ts", "src/fetch.ts"], for: "implement" });
+  expect(view(byFile)).toEqual([
+    [C("security-baseline.mdc"), "file:src/auth/session.ts", "must_read"],
+    [C("async-patterns.mdc"), "content:src/fetch.ts", "must_read"],
+  ]);
+
+  const forTest = await resolveProjectContext({ projectRoot: root, files: ["src/fetch.test.ts"], for: "test" });
+  expect(paths(forTest.entries)).toEqual([C("async-patterns.mdc")]);
+  const forReview = await resolveProjectContext({ projectRoot: root, files: ["src/fetch.ts"], for: "review" });
+  expect(forReview.entries).toEqual([]);
+});
+
+test("a project rule with a conditional rule's name replaces it", async () => {
+  const root = await project();
+  await core(root, { "security-baseline.mdc": "bundled security\n" });
+  await importRules(root, { "security-baseline.mdc": ruleText({ globs: "docs/**" }) });
+  const result = await resolveProjectContext({ projectRoot: root, files: ["src/a.ts"], for: "implement", taskText: "add a login form" });
+  expect(result.entries.map((entry) => [entry.path, entry.reason, entry.shadows])).toEqual([[P("security-baseline.mdc"), "replaces-bundled", C("security-baseline.mdc")]]);
 });
 
 test("ordering: a literal glob before a wildcard glob, fewer matched files before more, then smaller size, then path", async () => {
