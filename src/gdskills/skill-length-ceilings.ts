@@ -149,7 +149,7 @@ const CEILINGS_BY_KEY = {
   "review/review-core-boundaries": 158,
   "review/review-degradation": 191,
   "review/review-flow-graph": 183,
-  "review/review-frontend": 610,
+  "review/review-frontend":      317,
   "review/review-frontend-conventions": 206,
   "review/review-highload": 471,
   "review/review-jev-comments": 179,

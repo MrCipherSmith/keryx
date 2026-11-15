@@ -1,5 +1,5 @@
 ---
-description: "Storybook setup, story authoring, and review checklist."
+description: "Storybook standard shared by code writers and reviewers, with the severities reviewers use: typed stories, which states every component's stories cover (default and empty always, loading and error when the component has them, stress cases for lists and long text), fn() for actions, no side effects in render. Use when writing or reviewing *.stories.tsx."
 alwaysApply: false
 globs:
   - ".storybook/**"
@@ -9,29 +9,27 @@ stack_requires: "react"
 
 # Storybook Guidelines
 
-## Purpose
-Standardize story creation, validation, and visual regression readiness.
+Canon applies: the Storybook documentation (CSF 3, args, decorators, `@storybook/test`). This rule holds only this project's decisions.
 
-## When To Apply
-Apply when creating, reviewing, or updating Storybook stories (`*.stories.tsx`).
+## Rules
 
-## Run Commands
-- Local: `npm run storybook`
-- Clean restart: `npm run storybook:clean`
-- Static build: `npm run build-storybook`
-- Static preview: `npm run storybook:preview`
+1. **Typed CSF stories**: `*.stories.tsx` with `Meta` and `StoryObj`; state variants through `args`; providers and theme through decorators.
+2. **States covered.** Every component has a default story, and an empty story when it can render empty. A component with a loading or error state has a story for each. A list, or a component that shows user text, has a stress story: many items, long text.
+3. **No side effects.** Story callbacks are `fn()` from `@storybook/test`; a story never calls a real API, writes storage or logs in place of an action.
+4. **Visual changes** update the screenshot tests in the same change.
 
-## Story Authoring Rules
-- Use `*.stories.tsx` with `Meta` and `StoryObj` typing.
-- Prefer `args` for state variants.
-- Use `fn()` from `@storybook/test` for actions.
-- Use decorators for providers/context.
+Commands: `npm run storybook`, `npm run build-storybook`.
 
-## Review Checklist
-- Cover key states: default/loading/error/empty.
-- Avoid side effects during render.
-- Respect global theme/locale decorators.
-- Update screenshot tests when visual behavior changes.
+---
 
-## Output Contract
-- Story examples in responses must be fenced Markdown code blocks.
+## Review severities (shared with reviewers)
+
+`review-frontend` rates these patterns by this table. Change a row here, never in a reviewer.
+
+| Signal | A finding when | Default | Not a finding |
+|---|---|---|---|
+| Missing default or empty story (Rule 2) | the component renders that state | `minor` | a component that cannot be empty |
+| Missing loading or error story (Rule 2) | the component has that state (a prop or branch) | `minor` | a component without that state |
+| Missing stress story (Rule 2) | a list, or user text that can be long | `minor` | fixed-length content |
+| A story calls a real API or has another side effect (Rule 3) | always | `minor`; `major` when it writes to a real backend | `fn()` |
+| Visual change without updated screenshot tests (Rule 4) | the project has screenshot tests | `minor` | — |

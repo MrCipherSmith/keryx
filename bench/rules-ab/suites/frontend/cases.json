@@ -1,0 +1,34 @@
+{
+ "suite": "frontend",
+ "note": "A small React + MobX + Ant Design web app (apps/orders-web) added on top of main at the base commit; f01 (stores), f02 (components) and f03 (TypeScript and stories) each add a feature with planted defects; f04 is a clean control. The commits are on branches bench-seeds/frontend-*.",
+ "cases": [
+  {
+   "id": "f01",
+   "kind": "seeded",
+   "base": "5bb4a5366af8ba3e989fe4d47f947fd89c8ec976",
+   "head": "54a0c51c21ac06c2fdf2bbee99e4ec3d24fc765c",
+   "diff": "diff/f01.diff"
+  },
+  {
+   "id": "f02",
+   "kind": "seeded",
+   "base": "5bb4a5366af8ba3e989fe4d47f947fd89c8ec976",
+   "head": "8b2c2f3c0eda2161418e52bfc09e0b1ba126cb3c",
+   "diff": "diff/f02.diff"
+  },
+  {
+   "id": "f03",
+   "kind": "seeded",
+   "base": "5bb4a5366af8ba3e989fe4d47f947fd89c8ec976",
+   "head": "5fdbad5869666eff904bc749432e7606eaceb4a1",
+   "diff": "diff/f03.diff"
+  },
+  {
+   "id": "f04",
+   "kind": "control",
+   "base": "5bb4a5366af8ba3e989fe4d47f947fd89c8ec976",
+   "head": "81e6cfe583a5d6b725ebedcab5bc62a45dd1ca0e",
+   "diff": "diff/f04.diff"
+  }
+ ]
+}
