@@ -129,7 +129,10 @@ def cmd_setup(args):
             c["_diff"] = os.path.join(sdir, c["diff"])
         else:  # history: regenerate the diff from the two commits
             c["_diff"] = os.path.join(work, "diff", c["id"] + ".diff")
-            text = git("diff", c["base"], c["head"], "--", ".", *HISTORY_EXCLUDES)
+            # ":/" is the repository root; "." would mean bench/rules-ab, since git runs with -C HERE
+            text = git("diff", c["base"], c["head"], "--", ":/", *HISTORY_EXCLUDES)
+            if not text.strip():
+                die("empty diff for %s (%s..%s)" % (c["id"], c["base"], c["head"]))
             write(c["_diff"], text)
     runs = []
     for c in cases:
