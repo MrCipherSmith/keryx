@@ -108,6 +108,17 @@ Testing suite (2026-11-15), 2 reps, means per rep (recall out of 24):
 
 Both arms are near the ceiling, so this suite separates them weakly; B never took a decoy and raised fewer findings on the clean control.
 
+SOLID and architecture rules (2026-11-15), seeded suite, 2 reps. Arm A is the lens and its rules as on main; arm B is this change:
+
+| Lens | Arm | Recall /24 | Valid | Noise | Decoy | Control findings |
+|---|---|---|---|---|---|---|
+| `review-clean-code` | A | 22.0 | 2 | 10.5 | 0 | 5.5 |
+| | B | 22.75 | 2 | 8 | 0 | 5.5 |
+| `review-style` | A | 22.5 | 2 | 13 | 0 | 7.5 |
+| | B | 18.75 | 2.5 | 10 | 0 | 5 |
+
+`review-style` B misses more than A only on what it no longer owns: the LSP override, constructor I/O, the branch chain, the magic literal, mixed I/O and the stale comment now belong to `review-clean-code`, which still finds them. Both lenses report less noise.
+
 History suite: one general reviewer against the fixed blocker/major findings found 14 match + 6 partial of 46, about 37%.
 
 ## Notes
