@@ -1,0 +1,65 @@
+[
+  {
+    "id": "G1",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 71,
+    "severity": "major",
+    "problem": "recordPlanRevision catches a failed cursor write, only logs it to stderr, and then returns the entry as if it had been recorded. The journal line was already appended, but readers trust only entries at or below the cursor, so the entry is now hidden. The catch has no comment saying why this fallback is correct (error-handling.mdc Rule 3 / Iron Law 1). The only site of this shape in the change is this catch; readCursor and the constructor rethrow.",
+    "impact": "Trigger: writeFileAtomic on plan-history.cursor.json fails (disk full, permissions). Outcome: writePlan reports success, and ExecutionPlanHistory / renderExecutionPlanChangelog leave that revision out. If it was the only change since sinceRevision, they return undefined ('nothing changed'). An operator catching up on the session is told the agent changed nothing when it did, until a later write moves the cursor forward. This is the 'hide committed entries' outcome the readCursor comment says must be avoided.",
+    "quote": "} catch (error) {\n    process.stderr.write(`plan history: cursor update failed: ${message(error)}\\n`);\n  }\n  return entry;"
+  },
+  {
+    "id": "G2",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 122,
+    "severity": "minor",
+    "problem": "The ExecutionPlanHistory constructor does synchronous file I/O and parsing: readCursor, readFileSync of the journal, and parseEntry over every line. solid-principles.mdc Iron Law 2 says a constructor performs no I/O. Construction can also throw on a missing-permission or corrupt file. The rest of execution-plan.ts reads through async helpers such as readPlanFile.",
+    "impact": "You cannot build the object without touching the filesystem, so the class is hard to test or reuse with entries already in memory. `new ExecutionPlanHistory(dir)` also hides a blocking read and a possible throw behind what looks like a plain object creation. A static `load(dir)` factory that passes parsed entries to the constructor would keep the constructor to assignments only.",
+    "quote": "constructor(readonly dir: string) {\n    const committed = readCursor(dir);"
+  },
+  {
+    "id": "G3",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 99,
+    "severity": "minor",
+    "problem": "parseEntry throws `new Error(\"Invalid entry\")` without naming the journal file, the line or the revision. A JSON.parse failure on a torn line (the case the cursor exists for) is not wrapped at all when it propagates out of `.map(parseEntry)` in the constructor (line 133). This breaks error-handling.mdc Rule 2, and it is inconsistent with readCursor in the same file, which includes the path and a cause.",
+    "impact": "When plan-history.jsonl has one bad line, the whole history and changelog fail with 'Invalid entry' or a bare SyntaxError. The operator gets no pointer to plan-history.jsonl, although the readCursor comment and its test treat 'fail with the file it came from' as the contract.",
+    "quote": "throw new Error(\"Invalid entry\");"
+  },
+  {
+    "id": "G4",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 87,
+    "severity": "minor",
+    "problem": "readCursor treats a cursor that is valid JSON but has no numeric `revision` as revision 0. That signals failure with a value the caller reads as 'nothing committed yet' (error-handling.mdc Rule 1). The comment four lines below argues the opposite: guessing a revision would hide committed entries, so the code must fail with the path. Only the JSON.parse failure follows that reasoning; a wrong-shaped cursor gets exactly the silent guess the comment rejects.",
+    "impact": "A cursor such as `{}` or `{\"revision\":\"3\"}` makes ExecutionPlanHistory drop every entry without any error. renderExecutionPlanChangelog then returns undefined, as if the plan never changed. The next reader also sees two contradictory policies for one file.",
+    "quote": "return typeof parsed.revision === \"number\" ? parsed.revision : 0;"
+  },
+  {
+    "id": "G5",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 27,
+    "severity": "minor",
+    "problem": "The doc comment on planHistoryCursorPath says a line appended by a writer that died before updating the cursor 'is never shown as history'. The code does not provide 'never'. The next successful recordPlanRevision writes the cursor at a higher revision, and the orphaned line then passes `entry.revision <= committed` at line 134 and is shown. The same thing happens after the swallowed cursor-write failure at line 71. The guarantee only holds until the next write.",
+    "impact": "A maintainer who relies on the comment will assume that orphaned or uncommitted lines are filtered permanently. They may then build on that, for example by skipping cleanup or treating the journal as transactional, when the cursor is really only a high-water mark.",
+    "quote": "a line appended by a writer that died before updating the\n * cursor is never shown as history."
+  },
+  {
+    "id": "G6",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 37,
+    "severity": "minor",
+    "problem": "diffExecutionPlans returns void and pushes into a caller-supplied `out` array, which is an output argument (Clean Code B2). Both callers in the change create an empty array only to pass it in: recordPlanRevision at lines 64-65 and the test in execution-plan-history.test.ts. Neither caller accumulates across calls, so nothing calls for the mutation.",
+    "impact": "Every caller has to declare a scratch array and read the result from a side effect. A caller that passes a non-empty array silently mixes transitions from earlier diffs into the result. Returning `PlanTransition[]` would make the pure function read like one.",
+    "quote": "export function diffExecutionPlans(previous: ExecutionPlan | undefined, next: ExecutionPlan, out: PlanTransition[]): void {"
+  },
+  {
+    "id": "G7",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 113,
+    "severity": "info",
+    "problem": "describeChange dispatches over the five PlanTransition kinds with an if/else-if chain whose final bare `else` handles 'reordered' by elimination. It is not an exhaustive switch with a `never` check. The chain is new rather than extended, so the OCP threshold in solid-principles.mdc does not apply. This is an observation only.",
+    "impact": "If a sixth transition kind is added, the compiler will not flag describeChange; that kind would fall into the final branch. Today TypeScript narrowing rejects `change.from + 1` on a non-number kind, so a new kind whose `from` is a string would be caught, but one with numeric fields would not. A `switch (change.kind)` with a `never` default would settle it.",
+    "quote": "} else {\n    return `^ ${change.itemId} moved ${change.from + 1} -> ${change.to + 1}`;"
+  }
+]

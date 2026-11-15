@@ -1,0 +1,20 @@
+{
+  "truth": [
+    {"tid": "T1", "verdict": "match", "gid": "G1", "why": "Same throwing cancel override reached by cancelPendingDispatches, same fix (omit cancel)."},
+    {"tid": "T2", "verdict": "match", "gid": "G2", "why": "Same null-to-empty coalescing of a failed recording load turning into clean empty replays."},
+    {"tid": "T3", "verdict": "match", "gid": "G5", "why": "Same writeReplaySummary mixing IO with validation/transform and duplicating the loader's parsing."},
+    {"tid": "T4", "verdict": "match", "gid": "G6", "why": "Same seven-day magic expression at both sites with no named constant."},
+    {"tid": "T5", "verdict": "match", "gid": "G3", "why": "Same in-place sort inside the isReplayableResult predicate that scopesMatch depends on."},
+    {"tid": "T6", "verdict": "match", "gid": "G7", "why": "Same one-letter counter n explained by a comment instead of a descriptive name."}
+  ],
+  "candidates": [
+    {"gid": "G1", "label": "truth", "why": "Matches T1."},
+    {"gid": "G2", "label": "truth", "why": "Matches T2."},
+    {"gid": "G3", "label": "truth", "why": "Matches T5."},
+    {"gid": "G4", "label": "valid", "why": "The new comment claims the summary counts unrecorded replays, but writeReplaySummary only summarises the recording file, so the comment is false."},
+    {"gid": "G5", "label": "truth", "why": "Matches T3."},
+    {"gid": "G6", "label": "truth", "why": "Matches T4."},
+    {"gid": "G7", "label": "truth", "why": "Matches T6."},
+    {"gid": "G8", "label": "noise", "why": "Four positional parameters on an internal helper is a borderline style preference, not a defect a maintainer would clearly need to fix."}
+  ]
+}

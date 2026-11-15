@@ -1,0 +1,101 @@
+[
+  {
+    "id": "G1",
+    "file": "src/review/agents/recorded-adapter.ts",
+    "line": 113,
+    "severity": "major",
+    "problem": "LSP / contract violation: the recorded adapter declares `cancellation: false` (line 97) yet implements the optional `cancel` member as a method that always throws. In this interface an absent `cancel` is how an adapter says 'unsupported' (types.ts:156; adapter-shutdown.ts:50 and controller.ts:422 both test `cancel === undefined`), so this adapter advertises cancellation to every caller that checks the member and then fails. The declared capabilities also make the header's purpose unreachable: the controller refuses any adapter without `cancellation` (and without `hierarchy` for coordinators) at controller.ts:239, so every spawn with adapterId `recorded` returns `adapter_unsupported` and the adapter can never 're-drive a coordinator's plan'.",
+    "impact": "Through the base type, cancelPendingDispatches (adapter-shutdown.ts:54) takes the 'supported' branch and rejects on the first recorded dispatch; through the controller the adapter is never admitted at all. Users of the replay feature get a refusal or a thrown shutdown instead of a replay. Fix: omit `cancel` (or implement a no-op that resolves, since there is no provider work to stop) and set capabilities to what the controller requires, or document why the adapter is meant to bypass the controller.",
+    "quote": "async cancel() {\n      throw new Error(\"cancel is not supported by the recorded adapter\");"
+  },
+  {
+    "id": "G2",
+    "file": "src/review/agents/adapter-shutdown.ts",
+    "line": 54,
+    "severity": "major",
+    "problem": "No per-dispatch error handling or timeout in the shutdown loop. One rejecting `adapter.cancel` (the external adapter's cancel is tested to reject, external-adapter.test.ts:281; the recorded adapter's always throws) aborts the whole loop: every later pending dispatch is never asked to stop and the partially built report is discarded. A cancel that never settles hangs the shutdown. The controller already solved this for the same operation (controller.ts:418-429: Promise.race with cancelCleanupTimeoutMs, catch per dispatch, mark unresolved); this function re-implements it without either guard and has no field for 'cancel failed'.",
+    "impact": "The module's stated purpose is that a host abandoning a run 'must not leave provider work running behind a closed controller' (lines 1-3). With one failing adapter early in the sorted list, the remaining provider work is left running and the caller gets an exception instead of a report saying which dispatches were stopped. Fix: catch per dispatch, record failures in a `failed` list, bound each cancel with a timeout, or reuse the controller's cancellation path.",
+    "quote": "await adapter.cancel({ runId, dispatchId: dispatch.dispatchId, reason });\n    n += 1;"
+  },
+  {
+    "id": "G3",
+    "file": "src/review/agents/recorded-adapter.ts",
+    "line": 43,
+    "severity": "major",
+    "problem": "Swallowed exceptions: both empty `catch` blocks (lines 43 and 49) turn every read failure (ENOENT, EACCES, EISDIR) and every JSON syntax error into `null`, and the only caller turns `null` into an empty recording (`?? []`, line 83). execute then answers every dispatch with `{ findings: [] }, recorded: false` (line 109). The doc comment (line 38) also understates the behaviour: it says null means 'missing or not a JSON array', not 'unreadable or malformed'.",
+    "impact": "A typo in recordingPath or a truncated recording file makes a replay run 'complete' with zero findings for every task and no error anywhere, which is exactly the wrong outcome for a dry run or plan-eval replay whose job is to reproduce a prior run's output. Fix: return null only for ENOENT if absence is a supported case, and throw with the path and cause for anything else.",
+    "quote": "} catch {\n    return null;\n  }"
+  },
+  {
+    "id": "G4",
+    "file": "src/review/agents/recorded-adapter.ts",
+    "line": 65,
+    "severity": "minor",
+    "problem": "Hidden side effect in a predicate (output argument): `isReplayableResult`, named and documented as a pure check, sorts `entry.scopeIds` in place. `RecordedEntry.scopeIds` is the only non-readonly field (line 24), made mutable for this. `scopesMatch` (line 74) silently depends on that sort having happened inside an unrelated predicate during index construction.",
+    "impact": "Anyone who calls scopesMatch on an entry that did not pass through isReplayableResult, reorders the filter, or makes the field readonly gets order-dependent false mismatches. Normalise scopeIds once in loadRecordedResults (sorted copy) and keep the predicate pure.",
+    "quote": "entry.scopeIds.sort();"
+  },
+  {
+    "id": "G5",
+    "file": "src/review/agents/recorded-adapter.ts",
+    "line": 106,
+    "severity": "minor",
+    "problem": "Comment does not match the branch it sits above. It says the branch handles 'a task the recorded run never reached', but the condition also covers an entity mismatch, a scope mismatch, and entries dropped as stale by isReplayableResult. It also claims 'the summary counts it', but no code reads `recorded: false`: writeReplaySummary summarises the recording file, not replay outcomes.",
+    "impact": "The next reader believes stale or mismatched recordings are distinguishable and counted somewhere; they are silently folded into the same empty reply. State the actual cases, or emit a reason in metadata.",
+    "quote": "// A task the recorded run never reached replays as an empty reply flagged\n      // `recorded: false`, so the replayed plan still completes and the summary counts it."
+  },
+  {
+    "id": "G6",
+    "file": "src/review/agents/recorded-adapter.ts",
+    "line": 53,
+    "severity": "minor",
+    "problem": "Two inconsistent parsers for one file format. loadRecordedResults casts the parsed array to ReviewAgentStoredResult[] with no validation (a missing `scopeIds` throws a TypeError from the spread on line 57, a missing `taskId` throws later at line 66), while writeReplaySummary (lines 130-143) validates taskId, attempt and createdAt and throws descriptive errors. Read, parse and validate of the recording are written twice with different failure policies (null vs throw vs TypeError).",
+    "impact": "A recording the summary rejects with a clear message is half-accepted by the adapter, and the two will drift further as fields change. Extract one `parseRecording(path)` that validates and returns entries, used by both.",
+    "quote": "return (parsed as ReviewAgentStoredResult[]).map((stored) => ({"
+  },
+  {
+    "id": "G7",
+    "file": "src/review/agents/recorded-adapter.ts",
+    "line": 69,
+    "severity": "minor",
+    "problem": "Magic number duplicated: the 7-day replay window is written inline twice (line 69 and line 151) and the hour conversion as 3_600_000 (line 150), with no named constant tying the adapter's cutoff to the summary's `stale` flag.",
+    "impact": "Changing the window in one place makes the summary report entries as fresh that the adapter silently drops (or vice versa). Introduce e.g. `REPLAY_MAX_AGE_MS` and `MS_PER_HOUR`.",
+    "quote": "return nowMs - recordedAt <= 7 * 24 * 60 * 60 * 1000;"
+  },
+  {
+    "id": "G8",
+    "file": "src/review/agents/adapter-shutdown.ts",
+    "line": 43,
+    "severity": "minor",
+    "problem": "Single-letter accumulator with a comment that exists only to explain the name, and the name it maps to is inaccurate: the report field is `confirmed` but the value counts cancel calls that resolved, not confirmed stops (the controller distinguishes these via timeout). Similarly `unknownAdapter` (lines 15, 42) holds dispatch ids, not adapters.",
+    "impact": "Readers of AdapterShutdownReport must open the implementation to learn what the numbers and lists contain. Rename to e.g. `cancelledCount` and `dispatchesWithUnknownAdapter`, and drop the comment.",
+    "quote": "let n = 0; // n is the number of dispatches whose adapter accepted the cancel"
+  },
+  {
+    "id": "G9",
+    "file": "src/review/agents/adapter-shutdown.ts",
+    "line": 18,
+    "severity": "minor",
+    "problem": "Non-terminal status set re-declared and misnamed. RUNNING_STATUSES is the complement of store.ts:24 `TERMINAL` and of the controller's `terminal()` check, written out a third time; it also includes `queued`, which is not running and has no adapter work, contradicting both the constant name and the doc 'an adapter may still be working on'.",
+    "impact": "Adding a status to ReviewAgentAssignmentStatus requires remembering this list; a queued dispatch is sent to adapter.cancel for work that never started. Derive it from the shared terminal set and name it for what it is (e.g. NON_TERMINAL_STATUSES).",
+    "quote": "const RUNNING_STATUSES: ReadonlySet<ReviewAgentAssignmentRecord[\"status\"]> = new Set([\n  \"queued\","
+  },
+  {
+    "id": "G10",
+    "file": "src/review/agents/recorded-adapter.ts",
+    "line": 129,
+    "severity": "minor",
+    "problem": "SRP: writeReplaySummary reads the file, validates each entry, computes derived rows, sorts, and writes an output file in one ~30-line function; its doc comment lists the three responsibilities ('Validates..., summarises... and writes'). The output path and file name are also hard-coded next to the input.",
+    "impact": "The summary computation cannot be tested or reused without filesystem I/O, and validation is not shareable with the loader (see G6). Split into parse/validate, a pure `summariseRecording(entries, nowMs)`, and a thin writer.",
+    "quote": "/** Validates the recording, summarises each entry and writes `replay-summary.json` next to it. */"
+  },
+  {
+    "id": "G11",
+    "file": "src/review/agents/adapter-shutdown.ts",
+    "line": 34,
+    "severity": "minor",
+    "problem": "Four positional parameters, the last two adjacent strings (`runId`, `reason`) of the same type, with no options object.",
+    "impact": "Call sites can swap runId and reason without a type error, and the dispatched cancel then carries the wrong run id. Use a named options object `{ adapters, pending, runId, reason }`.",
+    "quote": "export async function cancelPendingDispatches(\n  adapters: readonly ReviewAgentAdapter[],\n  pending: readonly PendingDispatch[],\n  runId: string,\n  reason: string,"
+  }
+]

@@ -1,0 +1,20 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "match", "gid": "G1", "why": "G1 names the empty catch around the snapshot write followed by the hard-coded ok:true return in exportProviderCatalogSnapshot." },
+    { "tid": "T2", "verdict": "match", "gid": "G5", "why": "G5 flags the JSON.parse catch that both writes to stderr and rethrows the same error." },
+    { "tid": "T3", "verdict": "match", "gid": "G4", "why": "G4 flags the toPinned boolean switching syncPinnedSnapshot between export and import, citing both call sites." },
+    { "tid": "T4", "verdict": "match", "gid": "G3", "why": "G3 names the duplicated provider/live summary computation at all three sites." },
+    { "tid": "T5", "verdict": "match", "gid": "G2", "why": "G2 flags the JSDoc's newer-wins merge claim contradicted by the unconditional updateProviderCatalogEntry call." },
+    { "tid": "T6", "verdict": "match", "gid": "G6", "why": "G6 flags the ~57-line importProviderCatalogSnapshot mixing I/O with parse/validate/age-filter logic and proposes extraction." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "truth", "why": "Matches T1." },
+    { "gid": "G2", "label": "truth", "why": "Matches T5." },
+    { "gid": "G3", "label": "truth", "why": "Matches T4." },
+    { "gid": "G4", "label": "truth", "why": "Matches T3." },
+    { "gid": "G5", "label": "truth", "why": "Matches T2." },
+    { "gid": "G6", "label": "truth", "why": "Matches T6." },
+    { "gid": "G7", "label": "valid", "why": "Verified in the snapshot: the change adds a JSDoc citing `keryx providers pin` and a 'for `keryx providers status`' comment, but no such pin command exists and formatCatalogSummaryLine has no callers, so the new comments point at code paths that do not exist." },
+    { "gid": "G8", "label": "noise", "why": "An info-level alias export is a naming-taste point with negligible cost, not a defect a maintainer would reasonably need to fix." }
+  ]
+}

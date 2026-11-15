@@ -1,0 +1,10 @@
+{
+  "truth": [],
+  "candidates": [
+    { "gid": "G1", "label": "noise", "why": "A documented test-local helper with two defaulted positional args is a readability preference, not a defect a maintainer would need to fix." },
+    { "gid": "G2", "label": "valid", "why": "The new Swept line says 'left by dead passes' while the sweep (mutate.ts abandoned rule) also removes live-pid stale-marker and unmarked old directories, and the field doc says 'dead or abandoned'; the rendered text is inaccurate." },
+    { "gid": "G3", "label": "noise", "why": "Docs and help naturally state the thresholds in prose, and 'owner died (no heartbeat for two minutes)' accurately summarises the dead-pid-and-stale-marker rule." },
+    { "gid": "G4", "label": "noise", "why": "The parenthetical is coherent (linked worktrees are typically ignored paths the copy skips) and the overlap with the following sentence is a minor wording matter." },
+    { "gid": "G5", "label": "noise", "why": "TP-006 does count hash reads of findReviewGateState against SIGNATURE_WALKS_PER_STOP * MAX_SIGNATURE_FILES, so the claimed unguarded invariant is largely covered; speculative." }
+  ]
+}

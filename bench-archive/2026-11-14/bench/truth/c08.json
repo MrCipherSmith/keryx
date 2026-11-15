@@ -1,0 +1,29 @@
+[
+ {
+  "tid": "T1",
+  "file": "src/commands/providers.ts",
+  "line": null,
+  "severity": "major",
+  "problem": "Disconnecting a provider authenticated via a saved OAuth grant removed the grant from auth.json but left the provider's resolved credential sitting in process.env for the rest of the running process, so a later in-process read of that env var (or a later /connect re-listing) could still observe a token that had just been disconnected.",
+  "impact": "An operator who disconnected an OAuth-backed provider believing the credential was gone would have it silently keep working for anything reading process.env directly in the same process, and a later /connect listing built from the live environment could still report the provider as connected.",
+  "quote": "oauthEnvKeyFor"
+ },
+ {
+  "tid": "T2",
+  "file": "src/commands/providers.ts",
+  "line": 1359,
+  "severity": "major",
+  "problem": "zai and zai-coding resolve their credential from the same ZAI_API_KEY saved key. Disconnecting either one removed that single saved key, which silently disconnected the OTHER provider too, with no warning to the operator before or after the action.",
+  "impact": "An operator disconnecting zai because they no longer wanted THAT provider would also lose zai-coding without being told, and would only discover it was gone the next time they tried to use it - a surprising, silent side effect of an action that named only one provider.",
+  "quote": "sharedWith"
+ },
+ {
+  "tid": "T3",
+  "file": "src/commands/providers.ts",
+  "line": null,
+  "severity": "major",
+  "problem": "keryx providers remove <unknown-name> printed a success-shaped message and exited 0 for a provider name that did not exist, instead of reporting the name as unrecognised.",
+  "impact": "A typo'd or stale provider name in a script or an operator's shell history would report success without touching anything, so a caller checking only the exit code (or a human reading only the first line) would believe a disconnect happened when nothing did - the opposite of keryx providers test, which already validated the name first.",
+  "quote": "providerByName"
+ }
+]

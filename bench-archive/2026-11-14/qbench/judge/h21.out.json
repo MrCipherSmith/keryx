@@ -1,0 +1,20 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "match", "gid": "G1", "why": "G1 identifies writeExportFile swallowing mkdir/writeFile errors behind KERYX_VERBOSE while success is printed with exit 0." },
+    { "tid": "T2", "verdict": "match", "gid": "G3", "why": "G3 names the same rethrow in collectRunRows that drops the original error without { cause }." },
+    { "tid": "T3", "verdict": "match", "gid": "G6", "why": "G6 describes runHistoryExport as an over-long function mixing orchestration with --format inference, --since parsing, timestamp trimming and path resolution." },
+    { "tid": "T4", "verdict": "match", "gid": "G5", "why": "G5 flags renderRunLine's four params, the boolean format flag and the redundant run-derived arguments." },
+    { "tid": "T5", "verdict": "match", "gid": "G4", "why": "G4 names the same label-sanitising block copied at all three sites." },
+    { "tid": "T6", "verdict": "match", "gid": "G2", "why": "G2 reports the collectRunRows doc comment claiming oldest-first while listWikiRuns returns newest first with no re-sort." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "truth", "why": "Matches T1." },
+    { "gid": "G2", "label": "truth", "why": "Matches T6." },
+    { "gid": "G3", "label": "truth", "why": "Matches T2." },
+    { "gid": "G4", "label": "truth", "why": "Matches T5." },
+    { "gid": "G5", "label": "truth", "why": "Matches T4." },
+    { "gid": "G6", "label": "truth", "why": "Matches T3." },
+    { "gid": "G7", "label": "noise", "why": "HISTORY_USAGE is a terse summary line and EXPORT_USAGE lists the filters where export is used; the omission is minor documentation taste, so torn toward noise." },
+    { "gid": "G8", "label": "noise", "why": "Info-level type-alias style preference with no behavioural or maintenance defect." }
+  ]
+}

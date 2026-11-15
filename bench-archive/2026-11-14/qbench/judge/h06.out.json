@@ -1,0 +1,20 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "match", "gid": "G1", "why": "G1 identifies the log-only catch on the cursor write that still returns the entry as recorded, hiding it from readers." },
+    { "tid": "T2", "verdict": "match", "gid": "G4", "why": "G4 flags the synchronous, throwing file I/O in the ExecutionPlanHistory constructor and proposes a static load." },
+    { "tid": "T3", "verdict": "miss", "gid": null, "why": "No candidate addresses the if/else-if dispatch in describeChange or its non-exhaustive final else." },
+    { "tid": "T4", "verdict": "match", "gid": "G6", "why": "G6 flags diffExecutionPlans writing into a caller-supplied out array and returning void." },
+    { "tid": "T5", "verdict": "miss", "gid": null, "why": "No candidate raises the transition/change naming inconsistency; G8 is about the unrelated `message` helper." },
+    { "tid": "T6", "verdict": "match", "gid": "G5", "why": "G5 flags parseEntry's context-free 'Invalid entry' error lacking path and line." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "truth", "why": "Matches T1." },
+    { "gid": "G2", "label": "valid", "why": "appendFile failure at line 68 does propagate after plan.json is committed, giving a failed-write signal for a succeeded write; a distinct, real inconsistency from the swallowed cursor error." },
+    { "gid": "G3", "label": "valid", "why": "The doc comment's 'never shown' claim is false: a later cursor advance exposes the orphan line, and an unterminated torn line gets concatenated with the next append and breaks parsing of the whole journal." },
+    { "gid": "G4", "label": "truth", "why": "Matches T2." },
+    { "gid": "G5", "label": "truth", "why": "Matches T6." },
+    { "gid": "G6", "label": "truth", "why": "Matches T4." },
+    { "gid": "G7", "label": "noise", "why": "A valid-JSON cursor with a non-number revision is not produced by any writer; a speculative edge case, scored lower when torn." },
+    { "gid": "G8", "label": "noise", "why": "Naming the one-use helper `message` is a taste-level readability nit." }
+  ]
+}

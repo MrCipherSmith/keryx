@@ -1,0 +1,11 @@
+{
+  "truth": [],
+  "candidates": [
+    { "gid": "G1", "label": "noise", "why": "Restating CLI behaviour across the reference, guide, help text and a mirrored skill file is how this project documents commands, and prose docs cannot import code constants, so this is a doc-maintenance preference, not a defect." },
+    { "gid": "G2", "label": "noise", "why": "A three-line fake scan repeated in three adjacent tests is test-fixture taste, well below what a maintainer would need to fix." },
+    { "gid": "G3", "label": "valid", "why": "The new code masks stat mode with a bare 0o170000 where the named fs.constants.S_IFMT exists, and the sibling module already imports constants from node:fs, so a named mask is a concrete, cheap readability fix the change introduced." },
+    { "gid": "G4", "label": "noise", "why": "Renaming the local `stalled` string to `stallReason` is a naming preference; the code is correct and the variable's use is two lines away." },
+    { "gid": "G5", "label": "noise", "why": "The parenthetical is accurate (ignored files are copied into the scratch, except linked worktrees, which are typically ignored paths), and the full rule follows a few lines later, so nothing is wrong." },
+    { "gid": "G6", "label": "noise", "why": "An info-level observation that a documented constant is not mechanically tied to the two hand-written walks; there is no defect today, and the reviewer calls it observation only." }
+  ]
+}

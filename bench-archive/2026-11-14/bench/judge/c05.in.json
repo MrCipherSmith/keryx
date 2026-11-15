@@ -1,0 +1,132 @@
+{
+ "truth": [
+  {
+   "tid": "T1",
+   "file": "src/gdskills/install.ts",
+   "line": 130,
+   "severity": "major",
+   "problem": "removeUnmodifiedRetiredRules gates on existsSync (follows symlinks, true for dirs/FIFOs) then readFile with no lstat/isFile, no size bound, no try/catch. Directory -> EISDIR aborts install before catalog/manifest/contracts are written; symlink to /dev/zero -> unbounded memory; FIFO -> hang; chmod 000 -> EACCES abort.",
+   "impact": ".metaproject/rules/core is git-tracked, so a repo can plant a non-regular entry at a retired name and make every keryx init/update/skills install abort (or hang/exhaust memory) before catalog, manifest and contracts are written.",
+   "quote": null
+  },
+  {
+   "tid": "T2",
+   "file": "src/gdskills/install.ts",
+   "line": 133,
+   "severity": "major",
+   "problem": "sha256 over raw bytes; registry hashes are LF-only, BOM-less. An unmodified copy with CRLF (Windows core.autocrlf=true on a versioned .metaproject/rules/core) or a BOM is classified kept-modified forever and warned on every install.",
+   "impact": "Unmodified retired rules are never cleaned up on CRLF/BOM checkouts and produce a permanent false 'modified' warning on every install.",
+   "quote": null
+  },
+  {
+   "tid": "T3",
+   "file": "src/gdskills/bundled/rules/core/implementation-plans.mdc",
+   "line": 2,
+   "severity": "major",
+   "problem": "implementation-plans says plans live only in docs/requirements/<name>/implementation-plan.md, \"no separate plans/ tree\", and to scaffold a requirements package first; documentation-management keeps a plans/ category and analysis/<feature>/implementation-plan.md, which feature-analyzer writes.",
+   "impact": "Two core rules and a shipped skill disagree on where an implementation plan lives.",
+   "quote": null
+  },
+  {
+   "tid": "T4",
+   "file": "src/gdskills/bundled/rules/core/skills-storage-workflow.mdc",
+   "line": 21,
+   "severity": "major",
+   "problem": "skills-storage-workflow names the install mirror as source of truth, says \"sync\" with keryx update (which force-copies bundled over the installed tree and never syncs globally; global sync is `keryx skills sync --runtime <r> --target <dir>`), \"both global destinations\" vs four listed, layout omits <category>/. rule-management-workflow:15 cites nonexistent `keryx install`; its Sync Targets (~/.cursor/rules/AGENTS.md etc.) are written by no code.",
+   "impact": "An agent following these rules edits the wrong tree, runs a command that does not sync, or runs a command that does not exist.",
+   "quote": null
+  }
+ ],
+ "candidate": [
+  {
+   "id": "G1",
+   "file": "src/gdskills/bundled/skills/orchestration/code-verifier/SKILL.md",
+   "line": 118,
+   "severity": "major",
+   "problem": "The rewritten gate computes its scope as `git diff --name-only <base_branch>...HEAD` (line 72) but then runs `keryx health run --changed` and `keryx test run --changed --strict` without `--since <base_branch>`. Both commands default the ref to HEAD: src/health/run.ts:526 (`selector.since ?? \"HEAD\"` -> `git diff --name-only HEAD`) and src/testing/service.ts:660/740-763 (`git diff --name-only HEAD` + untracked, falling back to the files of the LAST commit only). The same text is copied into SKILL.codex.md/.cursor.md/.opencode.md/.zed.md. The removed version ran type-check on the full project and the project's whole test script.",
+   "impact": "code-verifier is dispatched after a task-implementer wave whose tasks are already committed (task-implementer commits per task; the new git-concurrency rule in this same diff demands a commit at every task boundary). On that clean tree `health run --changed` resolves an empty changed list and `test run --changed` sees only the last commit's files, so lint/type errors and failing tests introduced by every earlier commit of the branch pass the mandatory gate unseen. The 'independent gate over the whole diff' is narrowed to at most one commit, a regression from the previous full tsc + full test run.",
+   "quote": "keryx health run --changed --source eslint,typescript"
+  },
+  {
+   "id": "G2",
+   "file": "src/gdskills/catalog.ts",
+   "line": 30,
+   "severity": "major",
+   "problem": "The new description overrides append `NOT for: <the sibling's job> (see <sibling>)`. `scoreBundledSkillRoute` (src/commands/skills.ts:512-520, 551-555) folds `entry.description` into the token haystack and scores 10 per overlapping token, so each NOT-for clause donates the sibling's vocabulary to the skill that is explicitly the wrong one. The added tests only check the description regex, not routing.",
+   "impact": "Confirmed by running the scorer against the pre-change descriptions: `keryx skills route \"pick between gdgraph gdctx gdwiki\"` went from context-router 40 alone to metaproject-router 40 = context-router 40 with metaproject-router first (catalog order); \"split oversized entrypoint into rules\" went from agent-entrypoint-distiller 85 / manager 65 to manager 85 = distiller 85 with manager first; \"turn skills into runtime artifacts\" now lists skill-catalog-manager ahead of skill-runtime-exporter; \"check skill against code\" now lists entity-skill-router ahead of entity-skill-verifier. A change made to sharpen routing between siblings makes the excluded sibling tie or win for exactly the phrasing it disclaims.",
+   "quote": "NOT for: picking between gdgraph, gdctx, gdwiki, memory, and health once the module is already known (see context-router)."
+  },
+  {
+   "id": "G3",
+   "file": "src/gdskills/bundled/rules/core/rule-management-workflow.mdc",
+   "line": 15,
+   "severity": "minor",
+   "problem": "This rule is shipped into every user project's `.metaproject/rules/core/`. The new 'Source of Truth' line names `src/gdskills/bundled/rules/` (a path that exists only in the keryx repository), cites a `keryx install` command that the CLI does not have (only `keryx init`, `keryx update`, `keryx skills install`), and says to edit the source rather than the installed copy, while lines 27 and 34 of the same file still tell the agent to create/edit rules under `rules/core` / `.metaproject/rules/` and then run `keryx update`. `renderProjectRulesReadme` (src/lib/templates.ts:1747) writes the same keryx-repo path into the user's `.metaproject/rules/README.md`.",
+   "impact": "An agent following the rule in an installed project is pointed at a nonexistent directory and a nonexistent command, and receives two contradictory instructions about where a rule edit goes; the one it can actually follow (edit `.metaproject/rules/core/*.mdc`, run `keryx update`) is the one whose edits `installBundledRules` force-overwrites for bundled file names.",
+   "quote": "Repository source: `src/gdskills/bundled/rules/` — installed into `.metaproject/rules/` by `keryx install`/`keryx update`"
+  },
+  {
+   "id": "G4",
+   "file": "src/gdskills/bundled/skills/review/review-orchestrator/review-context.schema.json",
+   "line": 367,
+   "severity": "minor",
+   "problem": "The diff removes `current` from `model_strategy` in input-contract.schema.json and SKILL.md ('`model_strategy: \"current\"` is gone', default now `adaptive`), but the review context schema the skill says every sub-agent payload 'must follow' still enumerates `current` for `model_plan.strategy`, and SKILL.md still carries the old vocabulary: line 1574 keeps a rule for `strategy` = `current-session`, and the report templates at 1606/1760/1801 still offer `economy | per-group | current-session` although the strategy table now defines only `ask` and `adaptive` and the removed rule was the only one that produced `current-session`.",
+   "impact": "A review_context built with `model_plan.strategy: \"current\"` still validates against the shipped schema while the input contract rejects the same value, and an orchestrator following the report template can record strategies the skill no longer defines; the contract and the prose drifted within the one skill this diff edits.",
+   "quote": "\"current\","
+  },
+  {
+   "id": "G5",
+   "file": "src/review/stack.ts",
+   "line": 154,
+   "severity": "minor",
+   "problem": "The new `sql` and `http-server` marker lists overlap the existing `prisma` markers and the `@nestjs/` prefix match, and `matched.push(...hit)` appends per tag without deduplicating. `DetectedStack.matched` is documented as the declared dependency names that matched and is printed verbatim at line 326.",
+   "impact": "For a package.json declaring `@nestjs/core`, `prisma` and `@prisma/client`, `detectProjectStack` now returns matched = [\"@nestjs/core\",\"prisma\",\"@prisma/client\",\"prisma\",\"@prisma/client\",\"@nestjs/core\"] (verified by running it), so the stack report prints 'matched dependencies: ...' with every Prisma/Nest dependency twice. The new tests only assert `toContain`, so they cannot see it.",
+   "quote": "matched.push(...hit);"
+  },
+  {
+   "id": "G6",
+   "file": "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md",
+   "line": 401,
+   "severity": "minor",
+   "problem": "The added paragraph states 'Every git command runs as `git -C <this worktree's absolute path>`', but the commit templates this same skill tells the agent to use are still bare `git add <modified files>` / `git commit -m ...` (lines 320-321 and 406-407, the latter five lines below the new sentence). job-orchestrator gets the same new MUST (SKILL.md:701) without its own git snippets being converted.",
+   "impact": "An implementer copying the skill's own template runs exactly the bare-cwd git commands the new rule (git-concurrency.mdc Rule 3) says once pushed another session's work to main; the rule is asserted in prose and contradicted by the executable example next to it. The destructive-git sweep does not check for bare `git`, so nothing flags it.",
+   "quote": "Every git command runs as `git -C <this worktree's absolute path>`."
+  },
+  {
+   "id": "G7",
+   "file": "src/gdskills/retired-rules.ts",
+   "line": 57,
+   "severity": "minor",
+   "problem": "Only `RETIRED_RULES[0]` (review-agent-profile.mdc) has a fixture and is exercised by install.test.ts / skills-install-warnings.test.ts. The two `review-strict-profile.mdc` hashes are asserted by a comment alone; the second matches the content deleted in this diff, but the first ('the original from fd43d35a') is checked against nothing in the tree, and no test covers a multi-hash entry.",
+   "impact": "If that older hash is wrong, every project still holding the original untouched review-strict-profile.mdc keeps the dead rule and is told 'retired rule kept because it was modified' on every `keryx update`/`init`/`skills install`, permanently, with no test able to fail.",
+   "quote": "\"2e8847426bfba76ece8a208952402edadc6a062920aed07a721902b635a3f0e6\","
+  },
+  {
+   "id": "G8",
+   "file": "src/commands/skills-install-warnings.test.ts",
+   "line": 8,
+   "severity": "minor",
+   "problem": "The test drives only `keryx skills install` and declares that it 'stands in for all three call sites'. The other two are separate code added by this diff: init.ts threads `gdskillsInstallResult.warnings` into a local and prints under `heading(\"Warnings\")`, update.ts threads them through a new `RefreshSummary.gdskillsWarnings` field. Neither path is executed by any test.",
+   "impact": "Dropping `gdskillsWarnings` from the `RefreshSummary` return, or the print block in init.ts/update.ts, leaves every test green while `keryx update` and `keryx init` (the commands existing projects actually run) silently stop reporting a kept-modified retired rule.",
+   "quote": "// `keryx init` scaffold — so it stands in for all three call sites here."
+  },
+  {
+   "id": "G9",
+   "file": "src/gdskills/bundled-eval.ts",
+   "line": 498,
+   "severity": "minor",
+   "problem": "`resolveInstalledReference` returns null (unconditionally wrong, 'SOURCE tree's own layout') for every `skills/...` reference that is not `skills/gdskills/...` or a 3-segment known skill. But `.metaproject`-relative spelling is a form the function itself accepts (`skills/gdskills/…`, `rules/core/…`), and an installed project does have `.metaproject/skills/catalog.md`, `.metaproject/skills/flow/SKILL.md`, `.metaproject/skills/sac/SKILL.md`. The message also builds its suggested rewrite by prefixing `.metaproject/skills/gdskills/` to whatever followed `skills/`.",
+   "impact": "A rule or skill citing `skills/catalog.md` is told the path 'names the SOURCE tree's own layout' and to write `.metaproject/skills/gdskills/catalog.md` (verified with a one-rule fixture tree) — a path that exists nowhere, so following the checker's advice replaces a resolvable reference with a dead one that the checker then accepts only until existsSync fails.",
+   "quote": "return null;"
+  },
+  {
+   "id": "G10",
+   "file": "docs/plans/skills-quality-program.md",
+   "line": 69,
+   "severity": "minor",
+   "problem": "The new plan document commits a maintainer's absolute home-directory worktree path, and (line 30) promises attribution in `THIRD_PARTY_NOTICES.md`, a file that does not exist in the snapshot. bundled-eval's `path:personal-home` check exists to keep exactly this kind of path out of shipped text but does not cover docs/.",
+   "impact": "A personal username and local directory layout are published in the repository's docs, and the constraint is unusable for anyone else; the attribution the document says accompanies adapted techniques has no file to live in.",
+   "quote": "- Worktree: `$REPO/.claude/worktrees/skills-quality`,"
+  }
+ ]
+}

@@ -1,0 +1,20 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "match", "gid": "G1", "why": "G1 reports the empty catch around writeOwnerOnlyFileAtomic followed by a hard-coded ok: true return." },
+    { "tid": "T2", "verdict": "match", "gid": "G5", "why": "G5 reports the JSON.parse catch that logs to stderr and rethrows the same error." },
+    { "tid": "T3", "verdict": "match", "gid": "G4", "why": "G4 reports the boolean toPinned flag selecting two unrelated operations and proposes two named functions." },
+    { "tid": "T4", "verdict": "match", "gid": "G3", "why": "G3 names the same three duplicated summary blocks at the same sites." },
+    { "tid": "T5", "verdict": "match", "gid": "G2", "why": "G2 reports the JSDoc newest-wins merge rule that the unconditional updateProviderCatalogEntry calls do not implement." },
+    { "tid": "T6", "verdict": "match", "gid": "G6", "why": "G6 reports importProviderCatalogSnapshot as an over-long function mixing parsing/validation with merge policy and suggests extracting helpers." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "truth", "why": "Matches T1." },
+    { "gid": "G2", "label": "truth", "why": "Matches T5." },
+    { "gid": "G3", "label": "truth", "why": "Matches T4." },
+    { "gid": "G4", "label": "truth", "why": "Matches T3." },
+    { "gid": "G5", "label": "truth", "why": "Matches T2." },
+    { "gid": "G6", "label": "truth", "why": "Matches T6." },
+    { "gid": "G7", "label": "noise", "why": "The extra existence read before the import is a minor redundancy with a negligible race on a local config file; borderline, so it is scored at the lower verdict." },
+    { "gid": "G8", "label": "noise", "why": "'next to the config dir' versus inside it is an info-level wording nit, not a code-quality defect a maintainer would need to fix." }
+  ]
+}

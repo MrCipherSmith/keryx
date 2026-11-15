@@ -1,0 +1,114 @@
+{
+ "truth": [
+  {
+   "tid": "T1",
+   "file": "src/commands/providers.ts",
+   "line": null,
+   "severity": "major",
+   "problem": "OpenRouter's balance endpoint used a doubled `/api` path (`balancePath: \"/api/v1/credits\"` against a `baseUrl` that already ends in `/api`) and parsed a response shape neither `/v1/credits` nor any other OpenRouter endpoint returns (`body.credits.{total,used,remaining}`).",
+   "impact": "`keryx providers status`, `/connect` and the routing picker's balance column always showed OpenRouter as having no balance (a 404 or a malformed body makes `fetchProviderBalance` return `undefined`), even for a correctly connected, funded key — the AC5 balance feature silently did not work for the most common hosted provider.",
+   "quote": null
+  },
+  {
+   "tid": "T2",
+   "file": "src/harness/provider-catalog-cache.ts",
+   "line": null,
+   "severity": "major",
+   "problem": "The full-refresh cache writer (`saveProviderCatalogCache`) and the single-provider patch writer `providers test` uses (`updateProviderCatalogEntry`) both wrote `provider-catalog.json` with no lock between them. A `providers test` patch landing while a slower full refresh (up to `CATALOG_FETCH_TIMEOUT_MS` per provider, run in parallel at `keryx shell` startup) was still in flight was silently clobbered once the older refresh finally finished and overwrote the whole file unconditionally.",
+   "impact": "A provider an operator had just re-tested and fixed via `providers test` (or the `/connect` row's `[Test]` button) could have that corrected entry silently reverted to an older, still-in-flight startup refresh's result — a lost update with no error and nothing on the record showing it happened.",
+   "quote": null
+  }
+ ],
+ "candidate": [
+  {
+   "id": "G1",
+   "file": "src/tui/tui-shell.ts",
+   "line": 3730,
+   "severity": "blocker",
+   "problem": "The shell startup refresh is fed `opts.detected`, but `resolveTuiStartup` (src/commands/shell.ts:2905-2930) returns `detected: []` whenever a provider+model comes from flags or from the saved config — i.e. for every returning user. `loadOrRefreshProviderCatalogFromDetected([], …)` then builds `{fetchedAt: now, providers: {}}` and `saveProviderCatalogCache` writes it (its merge only iterates the refresh's own providers, so every on-disk entry is dropped). Confirmed by running it: after an empty-detected refresh, `loadOrRefreshProviderCatalog` with DEEPSEEK_API_KEY set returns no providers and makes zero fetches.",
+   "impact": "On a normal `keryx shell` start with a stale/missing cache, the catalog is wiped and stamped fresh for 5 minutes. In that window `/routing`'s picker offers no providers, `/routing` and `keryx routing list` report every assignment as not connected / falling back, `keryx providers status` prints 'none — no provider is connected', and the AC6 startup failure notice can never fire. The feature's main path produces the opposite of what it claims, and the only test of this wiring is a source-text audit that cannot see it.",
+   "quote": "loadOrRefreshProviderCatalogFromDetected(opts.detected, {"
+  },
+  {
+   "id": "G2",
+   "file": "src/harness/provider-catalog-cache.ts",
+   "line": 209,
+   "severity": "major",
+   "problem": "`updateProviderCatalogEntry` overwrites the catalog-level `fetchedAt` with the single patched entry's timestamp. `isCatalogFresh` reads only that top-level field, so one `keryx providers test <name>` makes the whole catalog look fresh although no other provider was probed (or even present). Confirmed by running it: empty cache, DEEPSEEK_API_KEY set, `providers test groq` -> the next `loadOrRefreshProviderCatalog` returns only groq and does not refresh.",
+   "impact": "After any `providers test`, `providers status`, `/routing`'s picker and `keryx routing list` serve a partial or days-old catalog for 5 minutes: other connected providers are missing or shown with stale status/models/balance, and routing assignments to them are reported as not connected. `providers.status.test.ts` ('also updates the SAME catalog cache') asserts this behaviour instead of catching it.",
+   "quote": "fetchedAt: entry.fetchedAt,"
+  },
+  {
+   "id": "G3",
+   "file": "src/harness/provider-catalog.ts",
+   "line": 129,
+   "severity": "major",
+   "problem": "The 'connected' gate is skipped for every registry provider with `requiresApiKey: false`: built-in `rapid-mlx` (darwin) and all custom `llm-providers.json` entries (`customCompatProviders` forces `requiresApiKey: false`). They are always probed and always listed. Confirmed by running it: darwin, empty env, nothing listening -> catalog contains `rapid-mlx: unreachable`.",
+   "impact": "Every macOS user who does not run Rapid-MLX gets 127.0.0.1:8010 probed on each refresh, sees 'Rapid-MLX (Local): unreachable' in `providers status`, and (once G1 is fixed, or on first-run startup where detected is populated) a 'Rapid-MLX (Local): unreachable — /connect to fix' startup notice on every launch. Contradicts the documented 'An unconnected provider is never probed and never listed'. The tests avoid it by pinning `platform: \"linux\"`.",
+   "quote": "if (requiresApiKey && (apiKey === undefined || apiKey.length === 0)) {"
+  },
+  {
+   "id": "G4",
+   "file": "src/commands/providers.ts",
+   "line": 1298,
+   "severity": "major",
+   "problem": "`providers test <name>` writes a catalog entry unconditionally, including for a provider that has no credential at all. `providers test groq` with no GROQ_API_KEY gets a 401 and stores `groq: auth-failed` (confirmed by running it); combined with G2 the catalog is then also 'fresh'.",
+   "impact": "A never-connected provider appears in `keryx providers status` as a connected provider with a rejected credential, and the next shell start inside the TTL announces 'Groq: auth failed — /connect to fix'. The catalog's 'only connected providers' invariant is broken by the command documented as keeping it current.",
+   "quote": "await updateProviderCatalogEntry(catalogEntry, dir);"
+  },
+  {
+   "id": "G5",
+   "file": "src/harness/provider-catalog.ts",
+   "line": 215,
+   "severity": "major",
+   "problem": "A fresh cache is returned without regard to the current credentials, and nothing invalidates it when they change: `disconnectProvider` (CLI `providers remove`, TUI Disconnect at tui-shell.ts:2713) and the `/connect` key-save path never touch the catalog. `providers.status.test.ts` even asserts a provider with no key in `env` is still reported `ok` from cache.",
+   "impact": "For up to 5 minutes after `providers remove X` / Disconnect, `providers status` and the `/routing` picker still list X with selectable live models; for up to 5 minutes after connecting a new provider via `/connect`, it is absent from the `/routing` picker and assignments to it show as not connected. Before this change the picker reflected the current state on every open.",
+   "quote": "if (isCatalogFresh(cached, deps.now ?? Date.now, opts.ttlMs)) {"
+  },
+  {
+   "id": "G6",
+   "file": "src/tui/tui-shell.ts",
+   "line": 2678,
+   "severity": "minor",
+   "problem": "The `/connect` [Test] row button still calls bare `testProviderConnection` and never updates the catalog; only the CLI `runProvidersTest` does. The code comments (providers.ts:1276, provider-catalog-cache.ts 'the `[Test]` row button') and cli-reference.md ('already refreshed by … `/connect`') say the button and `/connect` keep the cache current. `/connect` only reads the cache.",
+   "impact": "After pressing [Test] the row's own cached status/age note and `providers status` keep the old reading; the documented AC3 behaviour does not exist for the TUI path.",
+   "quote": "const result = await testProviderConnection(provider, opts.fetch ?? globalThis.fetch, opts.env ?? process.env);"
+  },
+  {
+   "id": "G7",
+   "file": "src/tui/tui-shell.ts",
+   "line": 3738,
+   "severity": "minor",
+   "problem": "The 'checking providers…' step is set and synchronously overwritten on the next line, so it is never rendered. `provider-catalog-startup.test.ts` only checks the string exists in the source, so it passes while the claimed behaviour ('the spinner names it') is absent; the whole AC2/AC6 test file is source-text matching that would also pass with G1.",
+   "impact": "The documented startup step never appears, and the tests for the startup wiring cannot fail on behavioural regressions.",
+   "quote": "startupIndicator.setStep(\"checking providers…\");"
+  },
+  {
+   "id": "G8",
+   "file": "src/commands/providers.ts",
+   "line": 1287,
+   "severity": "minor",
+   "problem": "`providers test` now awaits a balance fetch (two sequential requests for an unlimited OpenRouter key) before printing its result, and sends the credential to the balance endpoint. Help text (providers.ts:1604), the function doc (1223) and cli-reference.md:1173 still state it makes ONE network call.",
+   "impact": "For deepseek/openrouter the command makes 2-3 requests and can stall up to 2 x BALANCE_FETCH_TIMEOUT_MS after the probe already answered; the docs describe behaviour the code no longer has.",
+   "quote": "? await fetchProviderBalance(fetchFn, provider, apiKeyForBalance, { timeoutMs: BALANCE_FETCH_TIMEOUT_MS }).catch(() => undefined)"
+  },
+  {
+   "id": "G9",
+   "file": "src/harness/provider-catalog.ts",
+   "line": 106,
+   "severity": "minor",
+   "problem": "`detectProviders()` reads custom providers from the default config dir (`allOpenAiCompatProviders()` with no dir, select.ts:219) while `buildCatalogEntry` looks them up with `providerByName(detected.name, deps.dir)`. When `deps.dir` differs from the default, a custom provider is detected, not found in the registry, and falls into the native branch.",
+   "impact": "With an injected `dir` (every new test, and `providersCommand` deps.dir) a real custom provider on the machine is recorded as `not-supported` and never probed, so the new tests such as 'none — no provider is connected' fail on a developer machine that has an `llm-providers.json` entry — the tests are not hermetic despite the comment claiming the temp dir isolates them.",
+   "quote": "const registry = providerByName(detected.name, deps.dir);"
+  },
+  {
+   "id": "G10",
+   "file": "src/commands/routing.ts",
+   "line": 78,
+   "severity": "minor",
+   "problem": "The default provider source for `keryx routing list` and the `/routing` picker now drops the `fake` provider (excluded in `buildCatalogEntry`) and every `auth-failed` provider, where `detectProviders()` always included `fake` and every compat provider.",
+   "impact": "A routing assignment to `fake` (offline/test setups) is now reported as not connected and falling back, and `fake` can no longer be chosen in the `/routing` picker; `keryx routing list` also became a network-probing, cache-writing command where it was a single local probe.",
+   "quote": "const catalog = await loadOrRefreshProviderCatalog({ fetch, env: envWithSavedApiKeys() });"
+  }
+ ]
+}

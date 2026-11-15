@@ -1,0 +1,20 @@
+[
+ {
+  "tid": "T1",
+  "file": "src/security/detect/pii.ts",
+  "line": 261,
+  "severity": "blocker",
+  "problem": "isIdentifierFragment treats any adjacent letter as proof of identifier, un-redacting real phone numbers.",
+  "impact": "A real phone number adjacent to a letter across a hyphen is no longer redacted anywhere the PII detector is the last line of defence — MCP tool output, keryx security check-output, session transcripts. A single letter suffices, so it is also a trivial deliberate evasion.",
+  "quote": null
+ },
+ {
+  "tid": "T2",
+  "file": "src/security/detect/pii.ts",
+  "line": 233,
+  "severity": "major",
+  "problem": "enclosingToken's unbounded outward scan adds a second quadratic term on adversarial input.",
+  "impact": "detectPii runs on every tool output, including externally-influenced text. On a 272 KB adversarial blob the guard added ~60% to an already-quadratic cost (46.5s vs 28.8s).",
+  "quote": null
+ }
+]

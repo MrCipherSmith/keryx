@@ -1,0 +1,191 @@
+[
+ {
+  "tag": "c01",
+  "pkg": "2026-08-31-sac-mutation",
+  "base": "a0f41af88585fcb41dfb0c2a4493408be1002dcc",
+  "head": "6b1c05d92c70ba4326cb8c20e6fce5434283c5e4",
+  "wt": "$BENCH/bench/wt/c01",
+  "diff_lines": 348,
+  "truth": 2,
+  "reviewers": [
+   "review-testing-practices",
+   "review-logic"
+  ]
+ },
+ {
+  "tag": "c02",
+  "pkg": "2026-09-02-ingest-868eae95",
+  "base": "09e8555c9079c3142125799c9e560e65d1eeae01",
+  "head": "e54718e94945efe9bce7526fe9ba034355a1a235",
+  "wt": "$BENCH/bench/wt/c02",
+  "diff_lines": 2822,
+  "truth": 6,
+  "reviewers": [
+   "review-logic",
+   "review-logic",
+   "review-logic",
+   "review-logic",
+   "review-testing-practices",
+   "review-regression"
+  ]
+ },
+ {
+  "tag": "c03",
+  "pkg": "2026-09-09-ingest-499-r06",
+  "base": "f46724b5075d1a1ffbf89ad94e2ba1907d3bd338",
+  "head": "f0b74c26880b8c9704910cfdc24bac1eefe8c4bf",
+  "wt": "$BENCH/bench/wt/c03",
+  "diff_lines": 4550,
+  "truth": 3,
+  "reviewers": [
+   "review-orchestrator",
+   "review-orchestrator",
+   "independent-verifier-a"
+  ]
+ },
+ {
+  "tag": "c04",
+  "pkg": "2026-09-10-ingest-510",
+  "base": "ea0b396c37f7bbedf7d35adcdf303b996c1ae009",
+  "head": "e4a839a7adccb9662b78372e94e89398baeeeb80",
+  "wt": "$BENCH/bench/wt/c04",
+  "diff_lines": 845,
+  "truth": 3,
+  "reviewers": [
+   "review-pr510",
+   "review-pr510",
+   "review-pr510"
+  ]
+ },
+ {
+  "tag": "c05",
+  "pkg": "2026-09-11-ingest-skills-quality-program",
+  "base": "bb0e36b411aa8316175222ffc97869404e750074",
+  "head": "2078a9a645e34ffadbdadc544e50bc6650bd3f3f",
+  "wt": "$BENCH/bench/wt/c05",
+  "diff_lines": 7073,
+  "truth": 4,
+  "reviewers": [
+   "review-security-code",
+   "review-logic",
+   "review-architecture",
+   "review-architecture"
+  ]
+ },
+ {
+  "tag": "c06",
+  "pkg": "2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-549",
+  "base": "b44255cbccc5f776fc4b9724cff34216aff89138",
+  "head": "2aa3d0e2ad2086ca981cb975cbc3b98cb15477dd",
+  "wt": "$BENCH/bench/wt/c06",
+  "diff_lines": 238,
+  "truth": 2,
+  "reviewers": [
+   "review-security-code",
+   "review-security-code"
+  ]
+ },
+ {
+  "tag": "c07",
+  "pkg": "2026-09-16-ingest-github-com-mrciphersmith-keryx-pull-560",
+  "base": "b618e46632b336d3edefb99a3a7d43956e3d3900",
+  "head": "088801de0aa69e55d10f7bd2b8f9841fd8db398f",
+  "wt": "$BENCH/bench/wt/c07",
+  "diff_lines": 1996,
+  "truth": 4,
+  "reviewers": [
+   "review-security-code",
+   "review-security-code",
+   "review-logic",
+   "review-logic"
+  ]
+ },
+ {
+  "tag": "c08",
+  "pkg": "2026-09-23-verify-connect-disconnect",
+  "base": "f4c72712f6f26a1f7af7f5fda24e5f9e1473bace",
+  "head": "5d203ec9925f83b60cb93441e09f0f01e871f882",
+  "wt": "$BENCH/bench/wt/c08",
+  "diff_lines": 2601,
+  "truth": 3,
+  "reviewers": [
+   "code-reviewer (flow 304, PR #673)",
+   "code-reviewer (flow 304, PR #673)",
+   "code-reviewer (flow 304, PR #673)"
+  ]
+ },
+ {
+  "tag": "c09",
+  "pkg": "2026-09-28-pr-776-round2-2a2db6b7",
+  "base": "b7020b9fed35889b5fa814fdea4dd31ce5a28765",
+  "head": "2a2db6b7b05761b8f0a38bd057671cc286512c05",
+  "wt": "$BENCH/bench/wt/c09",
+  "diff_lines": 3522,
+  "truth": 4,
+  "reviewers": [
+   "review-security-code",
+   "review-logic",
+   "review-regression",
+   "review-security-code"
+  ]
+ },
+ {
+  "tag": "c10",
+  "pkg": "2026-09-28-pr-779-round3-9b0b3f58",
+  "base": "1a11bff6fbb9fa8c05f2ba11537c6da3414959cd",
+  "head": "9b0b3f58b18caf90b2e811744133ef2364dc7e4b",
+  "wt": "$BENCH/bench/wt/c10",
+  "diff_lines": 568,
+  "truth": 3,
+  "reviewers": [
+   "review-security-code",
+   "review-security-code",
+   "review-regression"
+  ]
+ },
+ {
+  "tag": "c11",
+  "pkg": "2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02",
+  "base": "b7020b9fed35889b5fa814fdea4dd31ce5a28765",
+  "head": "dc63b9bc0469580d726379f9a03040bc7a71f6da",
+  "wt": "$BENCH/bench/wt/c11",
+  "diff_lines": 2182,
+  "truth": 7,
+  "reviewers": [
+   "review-security-code",
+   "review-security-code",
+   "review-security-code",
+   "review-logic",
+   "review-regression",
+   "review-regression",
+   "review-architecture"
+  ]
+ },
+ {
+  "tag": "c12",
+  "pkg": "2026-11-10-review-flow-origin-main",
+  "base": "947f6d9cf1942f00e6b7e89105831abde4ea3ca8",
+  "head": "baaaec78c057018b40a03c0b87db612dbcf68c19",
+  "wt": "$BENCH/bench/wt/c12",
+  "diff_lines": 1011,
+  "truth": 3,
+  "reviewers": [
+   "review-logic",
+   "review-logic",
+   "review-logic"
+  ]
+ },
+ {
+  "tag": "c13",
+  "pkg": "309-r01",
+  "base": "2aaf8372d51e418005f866f630e2943cb307f09c",
+  "head": "bd89d5a8d8411cb1f9d86d8171f8e2b068be917e",
+  "wt": "$BENCH/bench/wt/c13",
+  "diff_lines": 2222,
+  "truth": 2,
+  "reviewers": [
+   "sonnet-reviewer",
+   "sonnet-reviewer"
+  ]
+ }
+]

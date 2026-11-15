@@ -1,0 +1,96 @@
+{
+ "truth": [
+  {
+   "tid": "T1",
+   "file": "src/gdskills/bundled/skills/review/review-pr-feedback/output-contract.schema.json",
+   "line": null,
+   "severity": "blocker",
+   "problem": "The allOf conditional added to review-pr-feedback-output's schema (analyze mode implies fix must be null) was fully redundant with a pre-existing top-level if/then/else whose else branch already required it. The commit's central claim - that the rule lived only in a description no validator reads - was false.",
+   "impact": "The PR's flagship demonstration did not demonstrate what it claimed: the AC2 payload was already refused at the parent commit. None of the sixteen new tests could tell the difference - removing the conditional left them all green - so a change that altered no behaviour shipped described as closing a gap, in a PR whose whole subject is unverified claims.",
+   "quote": null
+  },
+  {
+   "tid": "T2",
+   "file": "src/gdskills/contract-enforcement.test.ts",
+   "line": null,
+   "severity": "major",
+   "problem": "The enforcement guard checked its production claim with a raw substring match for loadSchema(\"<name>\"), which is satisfied by a commented-out call, a docstring example, or a call inside dead code.",
+   "impact": "The registry's central promise - that a production claim is checked rather than trusted - was weaker than stated. Proved on live code: inserting return; above the real loadSchema call left it unreachable and fully disabled the new enforcement, and the guard still passed every assertion.",
+   "quote": null
+  },
+  {
+   "tid": "T3",
+   "file": "src/commands/review.ts",
+   "line": null,
+   "severity": "major",
+   "problem": "review-pr-feedback-output was recorded as kind: production while its enforcement sits behind an optional --result flag that no documented invocation passed.",
+   "impact": "The registry used one word for two different guarantees. job-orchestrator-state, review-finding and subagent-result validate on every real call because keryx performs the write; this one validated only if a caller remembered a flag that nothing told them to pass - so in the documented workflow a self-contradictory result was never actually refused.",
+   "quote": null
+  }
+ ],
+ "candidate": [
+  {
+   "id": "G1",
+   "file": "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md",
+   "line": 593,
+   "severity": "major",
+   "problem": "The new enforcement is opt-in through `--result`, and nothing that invokes `comments reply` is told the flag exists. The skill's Step 10 command (the only documented caller) does not pass it, the `keryx review` usage text (src/commands/review.ts:2011-2014) and docs/docs/cli-reference.md:1462 do not list it, and the skill never says to write the result file before replying. The registry nevertheless records `review-pr-feedback-output` as `kind: \"production\"` and review.ts calls this 'the contract's only enforcement point'. In addition SKILL.md:84-85 still states 'Nothing refuses a dispatch that ignores them — no production code loads either file', which this diff makes false for the output schema.",
+   "impact": "Every review-pr-feedback run that follows the skill as written posts replies with `refuseInvalidResult` returning at `source === undefined`; a self-contradictory result is refused in no real run. The registry now counts the contract as enforced, which is the false-claim defect the change exists to remove, and the skill text and the registry contradict each other.",
+   "quote": "keryx review comments reply --repo <owner/repo> --pr <n> --outcomes <file|-> \\"
+  },
+  {
+   "id": "G2",
+   "file": "src/gdskills/bundled/skills/review/review-pr-feedback/output-contract.schema.json",
+   "line": 375,
+   "severity": "major",
+   "problem": "The added `allOf` branch is a no-op whose justification is false. The schema already had a top-level `if mode=fix / then / else` (lines 321-350) whose `else` sets `fix: {type: null}` and `replies: {type: null}`, and the hand-written validator applies it. Confirmed by running validateJson on an analyze-mode payload with a fully valid populated `fix` after removing the new branch: it is still rejected with `$.fix: Expected type null, got object`. The `$comment`, and the test comment in review-result-contract.test.ts:110-113 ('Before the conditional was expressed, this validated clean'), assert the opposite.",
+   "impact": "The schema half of the change does nothing except make the refusal print the same error twice (`$.fix: Expected type null, got object` on two lines), and it ships a recorded history ('validated clean') that is untrue. A maintainer reading it will believe the analyze/fix rule was unexpressed before and may delete the original `else` as redundant, dropping the `replies: null` rule the new branch does not carry.",
+   "quote": "\"$comment\": \"The rule 'Present in fix mode only. Null in analyze mode' was carried by the `fix` property DESCRIPTION and nothing else, so an analyze-mode result reporting a branch, a merge and an operator confirmation validated clean."
+  },
+  {
+   "id": "G3",
+   "file": "src/commands/review-result-contract.test.ts",
+   "line": 151,
+   "severity": "major",
+   "problem": "The 'anti-vacuity' test cannot fail for the reason it exists, and it makes live network calls. It only asserts the output does NOT contain the contract-refusal sentence, so it passes whenever the command dies before reaching the check (unknown flag, import error, missing bun) exactly as it passes when the check accepts the payload. It is also run without `--fixtures`/`--self`, so after the check the command goes on to `createGhPort()` and `gh api user`: running the same invocation produced `gh api GET repos/owner/repo/pulls/1/reviews exited 1: gh: Not Found (HTTP 404)`, i.e. an authenticated request to GitHub from a unit test.",
+   "impact": "If `--result` were dropped from COMMENTS_REPLY_FLAGS or the validation moved after an earlier failure, tests 1 and 2 would still see a non-zero exit and this test would still pass, so nothing proves a conforming result is accepted by the command. Each run of the suite hits api.github.com with the developer's or CI's token for a third-party repository name (`owner/repo`), and takes up to 30s when offline or rate-limited.",
+   "quote": "expect(output).not.toContain(\"does not satisfy the review-pr-feedback-output contract\");"
+  },
+  {
+   "id": "G4",
+   "file": "src/gdskills/contract-enforcement.test.ts",
+   "line": 70,
+   "severity": "major",
+   "problem": "The guard that is supposed to turn `kind: \"production\"` into 'a checkable claim, not a comment' is a substring match over the file text, so a comment satisfies it. This diff itself creates the counterexample: src/harness/extension/execute.ts:97 now contains the literal text `loadSchema(\"subagent-dispatch\")` inside a doc comment that says the schema is loaded nowhere (src/job/store.ts:74 has the same pattern in a comment, src/gdskills/contracts.ts:282 too).",
+   "impact": "Registering `subagent-dispatch` as `{kind: \"production\", module: \"src/harness/extension/execute.ts\"}` — the exact false claim the long comment in contracts.ts says the original flow description made — passes the guard. The statement in contracts.ts that 'a declaration that names a file which does not load the schema fails the build' is not true for that input.",
+   "quote": "if (!source.includes(`loadSchema(\"${contract.name}\")`)) {"
+  },
+  {
+   "id": "G5",
+   "file": "src/commands/review.ts",
+   "line": 1078,
+   "severity": "minor",
+   "problem": "The result is validated in isolation and never tied to the invocation it gates. `pr`, `head_sha` and `mode` in the file are not compared with `--repo/--pr`, `--sha` or the fact that a reply pass is being posted. Any conforming JSON passes, including a result for a different pull request, a stale result from an earlier head, or an analyze-mode result (`fix: null`, `replies: null`, documented as 'no branch, no PR, no merge, no reply') offered to the command that posts replies.",
+   "impact": "`keryx review comments reply --repo a/b --pr 7 --result <analyze-mode result for c/d#3>` posts replies to a/b#7. The registry text says nothing reaches the pull request 'when the result contradicts itself', but the most direct contradiction available at this point — a result saying no reply while replies are posted, or naming another PR — is accepted.",
+   "quote": "const schema = await loadSchema(\"review-pr-feedback-output\");"
+  },
+  {
+   "id": "G6",
+   "file": "src/gdskills/contract-enforcement-regression.test.ts",
+   "line": 43,
+   "severity": "minor",
+   "problem": "The pinned rejecting payload for `review-pr-feedback-output` is labelled 'an analyze-mode result carrying a populated fix' but its `fix` has `operator_confirmed: {}`, which fails the `fix` sub-schema's own required fields (`confirmed_by`, `confirmed_at`, `plan_digest`) independently of mode. The test only asserts `errors.length > 0`.",
+   "impact": "If both the pre-existing `else` and the new analyze branch were removed — the loosening this file says it guards against — the test still passes on the unrelated operator_confirmed errors, so the analyze/fix rule is not pinned by the regression suite.",
+   "quote": "fix: { flow_id: \"1\", flow_status: \"done\", merged_into: \"main\", operator_confirmed: {} },"
+  },
+  {
+   "id": "G7",
+   "file": "src/commands/review-result-contract.test.ts",
+   "line": 102,
+   "severity": "minor",
+   "problem": "The headline test does not depend on the schema change it is presented as demonstrating, and its field-name assertion is weak. Because the pre-existing `else` already rejects the payload (see G2), the test passes with the schema hunk reverted; it exercises only the new `--result` wiring. `expect(output).toContain(\"fix\")` matches any occurrence of the three letters anywhere in stdout+stderr rather than the `$.fix` path the comment says it checks.",
+   "impact": "The test gives no evidence for the schema hunk, so the false 'validated clean before' claim went unnoticed; a refusal that named the wrong field but included the substring 'fix' elsewhere (for example in a temp path or another message) would pass.",
+   "quote": "expect(output).toContain(\"fix\");"
+  }
+ ]
+}

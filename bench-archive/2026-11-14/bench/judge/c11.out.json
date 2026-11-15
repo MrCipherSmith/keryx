@@ -1,0 +1,44 @@
+[
+ {
+  "tid": "T1",
+  "verdict": "match",
+  "gid": "G7",
+  "why": "G7 identifies that the outbound entropy check only fires with a sensitive label, so an opaque secret under a generic param name passes containsOutboundSecret."
+ },
+ {
+  "tid": "T2",
+  "verdict": "match",
+  "gid": "G4",
+  "why": "G4 identifies the git-SHA/UUID/integrity allow-shapes exempting labelled real secrets regardless of label."
+ },
+ {
+  "tid": "T3",
+  "verdict": "match",
+  "gid": "G1",
+  "why": "G1 identifies the (^|_) anchoring of GLUED_SECRET_RE dropping prefixed glued credential names."
+ },
+ {
+  "tid": "T4",
+  "verdict": "match",
+  "gid": "G2",
+  "why": "G2 (and G3) identify TOKEN's '/' making a whole URL path one candidate with the label coming from the api.* host, refusing/redacting ordinary URLs."
+ },
+ {
+  "tid": "T5",
+  "verdict": "miss",
+  "gid": null,
+  "why": "No candidate covers purely-numeric 24+ digit path segments over-masked via HEX_BLOB; G8 is about under-masking in the same line."
+ },
+ {
+  "tid": "T6",
+  "verdict": "miss",
+  "gid": null,
+  "why": "No candidate notes that redactSensitiveText/containsOutboundSecret ignore backends.entropy.enabled."
+ },
+ {
+  "tid": "T7",
+  "verdict": "miss",
+  "gid": null,
+  "why": "No candidate covers the env-deny import bypassing the security/service facade and raising the bypass ceiling."
+ }
+]

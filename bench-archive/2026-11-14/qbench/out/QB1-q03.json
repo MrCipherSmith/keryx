@@ -1,0 +1,74 @@
+[
+  {
+    "id": "G1",
+    "file": "src/session/execution-plan.ts",
+    "line": 178,
+    "severity": "major",
+    "problem": "recordPlanRevision is awaited inside the plan lock after plan.json has already been committed, and its appendFile (execution-plan-history.ts:68) is not caught. Any journal failure (EACCES/ENOSPC on plan-history.jsonl, a directory at that path) therefore rejects setExecutionPlan/updateExecutionPlan even though plan.json now holds the new revision, and notify() is skipped. The error policy inside recordPlanRevision is also split: the append propagates while the cursor write two lines later (execution-plan-history.ts:69-73) is swallowed. Class scope: the two writes in recordPlanRevision, append at execution-plan-history.ts:68 (propagates) and cursor at :70 (swallowed); its only caller is writePlan at execution-plan.ts:178, found by searching src for recordPlanRevision.",
+    "impact": "An agent whose plan write actually succeeded gets an error, retries with the old expectedRevision and hits ExecutionPlanConflictError. The sidebar listeners never hear about the new revision. This breaks the rule the file itself states for observers in notify() at execution-plan.ts:74-76: a secondary failure must not turn a completed mutation into a rejected promise.",
+    "quote": "await recordPlanRevision(dir, current, result);"
+  },
+  {
+    "id": "G2",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 72,
+    "severity": "minor",
+    "problem": "When the cursor update fails, the error is written to stderr and dropped, and the function still returns the entry as if it had been recorded. Because the cursor is the commit marker, that entry is not visible to readers, and it stays hidden until a later write moves the cursor on. No comment gives a reason for swallowing here, while readCursor next to it explains why it throws.",
+    "impact": "The return value says the revision was recorded when readers cannot see it. The only signal is a raw stderr line, which nothing in the shell turns into an operator-visible message.",
+    "quote": "process.stderr.write(`plan history: cursor update failed: ${message(error)}\\n`);"
+  },
+  {
+    "id": "G3",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 28,
+    "severity": "minor",
+    "problem": "The cursor doc promises that a line from a writer that died before updating the cursor is never shown. The constructor, though, runs parseEntry on every line before the cursor filter (lines 130-134). A writer killed partway through appendFile leaves a torn last line, and JSON.parse throws a SyntaxError before the filter runs. parseEntry's own error is the generic \"Invalid entry\", which names neither the file nor the line, unlike readCursor, which carefully names its path.",
+    "impact": "The comment claims protection that the code order does not give. When a torn or malformed line appears, every changelog read fails with an error that does not say which file to fix.",
+    "quote": "throw new Error(\"Invalid entry\");"
+  },
+  {
+    "id": "G4",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 87,
+    "severity": "minor",
+    "problem": "readCursor treats a parseable cursor with a missing or non-numeric revision as revision 0. That hides every committed entry, which is exactly the 'guessing a revision would hide committed entries' outcome its own comment (lines 89-91) gives as the reason to throw. Also, the cursor text `null` is valid JSON, yet `parsed.revision` then throws a TypeError inside the try and is reported as 'is not valid JSON'.",
+    "impact": "Two inputs from one corrupt cursor file get two opposite policies: one fails loudly, the other silently empties the history. The error message misdescribes the `null` case.",
+    "quote": "return typeof parsed.revision === \"number\" ? parsed.revision : 0;"
+  },
+  {
+    "id": "G5",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 37,
+    "severity": "minor",
+    "problem": "diffExecutionPlans takes an output argument (`out: PlanTransition[]`) and pushes into it instead of returning the transitions. Both call sites (recordPlanRevision at line 65 and the test) first create an empty array just to pass it in.",
+    "impact": "Callers have to set up and own a mutable buffer, which hides the function's pure-diff nature and makes it harder to compose.",
+    "quote": "export function diffExecutionPlans(previous: ExecutionPlan | undefined, next: ExecutionPlan, out: PlanTransition[]): void {"
+  },
+  {
+    "id": "G6",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 122,
+    "severity": "minor",
+    "problem": "The ExecutionPlanHistory constructor does real work: synchronous readFileSync of two files, parsing and filtering. It can throw (corrupt cursor, bad line) just from `new`. It also keeps `readonly dir` as a public member that nothing reads after construction. The rest of the plan module does its file I/O asynchronously.",
+    "impact": "Construction cannot be separated from I/O for testing or reuse. Renderers block the event loop on every call, and a reader of the class sees a `dir` field that does nothing.",
+    "quote": "constructor(readonly dir: string) {"
+  },
+  {
+    "id": "G7",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 113,
+    "severity": "minor",
+    "problem": "describeChange branches on the PlanTransition discriminant with an if/else-if chain whose final bare `else` silently means 'reordered'. Without a `switch` and a `never` exhaustiveness check, a sixth transition kind would compile and be rendered as a move line built from fields it does not have.",
+    "impact": "Whoever adds a new transition kind gets no compiler help, and the wrong output is only noticed in the changelog text.",
+    "quote": "} else {\n    return `^ ${change.itemId} moved ${change.from + 1} -> ${change.to + 1}`;"
+  },
+  {
+    "id": "G8",
+    "file": "src/session/execution-plan.ts",
+    "line": 276,
+    "severity": "info",
+    "problem": "Changelog rendering is split across two modules. describeChange (the per-transition format) is exported from execution-plan-history.ts, but renderExecutionPlanChangelog, which only reads ExecutionPlanHistory, lives in execution-plan.ts. That forces execution-plan.ts to import the history module while the history module imports types back from execution-plan.ts.",
+    "impact": "One output format has two homes, so a change to the changelog has to touch both files. The modules are now mutually dependent, where they could depend in one direction.",
+    "quote": "export function renderExecutionPlanChangelog(dir: string, sinceRevision = 0, maxEntries = 10): string | undefined {"
+  }
+]

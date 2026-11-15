@@ -1,0 +1,127 @@
+{
+ "truth": [
+  {
+   "tid": "T1",
+   "file": "src/commands/wiki-history-export.ts",
+   "line": 68,
+   "severity": "major",
+   "problem": "writeExportFile catches every mkdir/writeFile failure and only prints it when KERYX_VERBOSE is set; it never rethrows or sets an exit code.",
+   "impact": "When the export path is unwritable (read-only dir, permission denied, a parent that is a file), runHistoryExport still prints 'exported N run(s) to <file>' and exits 0, so the user or a script believes the file exists when nothing was written.",
+   "quote": "if (process.env.KERYX_VERBOSE) {"
+  },
+  {
+   "tid": "T2",
+   "file": "src/commands/wiki-history-export.ts",
+   "line": 35,
+   "severity": "minor",
+   "problem": "The exported collectRunRows catches the listWikiRuns failure and rethrows a new Error without { cause: error }, discarding the original error (errno/parse detail and stack).",
+   "impact": "Anyone diagnosing a failed export sees only a generic message; the underlying cause is lost at the module boundary.",
+   "quote": "throw new Error(\"wiki history: could not read the runs log\");"
+  },
+  {
+   "tid": "T3",
+   "file": "src/commands/wiki-history-export.ts",
+   "line": 75,
+   "severity": "minor",
+   "problem": "runHistoryExport is ~58 lines and mixes CLI orchestration (usage, exit codes, collecting, writing, printing) with low-level parsing and string work (format inference from the file extension, --since date normalisation regex, timestamp trimming, display-path resolution).",
+   "impact": "One concern (e.g. --since parsing or format inference) cannot be tested or changed without reading the whole command flow; the parsing logic is not reusable.",
+   "quote": "export async function runHistoryExport(args: string[], cwd: string = process.cwd()): Promise<void> {"
+  },
+  {
+   "tid": "T4",
+   "file": "src/commands/wiki-history-export.ts",
+   "line": 47,
+   "severity": "minor",
+   "problem": "renderRunLine takes four positional parameters (run, at, pages, markdown) and the boolean flag switches it between two different output formats; at/pages also duplicate fields already on run.",
+   "impact": "Call sites read as renderRunLine(run, at, run.pages, format === \"md\") with no name on the boolean; the function does two jobs and should be two renderers or take the format enum.",
+   "quote": "export function renderRunLine(run: WikiRunSummary, at: string, pages: number, markdown: boolean): string {"
+  },
+  {
+   "tid": "T5",
+   "file": "src/commands/wiki-history-export.ts",
+   "line": 49,
+   "severity": "minor",
+   "problem": "The same 5-line command-label sanitising block (strip newlines, collapse whitespace, trim, slice to MAX_COMMAND_WIDTH) is copy-pasted in three places: src/commands/wiki-history-export.ts:49 (markdown branch), src/commands/wiki-history-export.ts:56 (CSV branch), and src/commands/wiki-history.ts:47 (text --runs listing).",
+   "impact": "Any change to how labels are cleaned or clipped has to be made three times and the copies will drift; it should be one helper.",
+   "quote": ".replace(/[\\r\\n]+/g, \" \")"
+  },
+  {
+   "tid": "T6",
+   "file": "src/commands/wiki-history-export.ts",
+   "line": 25,
+   "severity": "minor",
+   "problem": "The doc comment on collectRunRows says it returns the runs oldest first, but the function only filters listWikiRuns output, which is sorted newest first; nothing re-sorts.",
+   "impact": "Readers and callers relying on the comment expect chronological order; the exported file is actually newest first, contradicting the documented contract.",
+   "quote": "oldest first, so the exported file reads in the order the writes happened."
+  }
+ ],
+ "decoys": [
+  {
+   "tid": "D1",
+   "file": "src/commands/wiki-history-export.ts",
+   "line": 127,
+   "severity": "minor",
+   "problem": "Empty catch around realpath() when computing the path shown in the success message.",
+   "impact": "None: the value is display-only, it is initialised to the path the user typed before the try, and the comment states why any failure falls back to it.",
+   "quote": "// Display only: a path that cannot be resolved here",
+   "why_not_a_defect": "The catch guards purely cosmetic path resolution; the fallback (print the path as typed) is correct and the reason is documented. It hides no failure the caller needs; whether the write succeeded is decided elsewhere (the real swallow is T1 in writeExportFile).",
+   "did": "D1"
+  }
+ ],
+ "candidate": [
+  {
+   "id": "G1",
+   "file": "src/commands/wiki-history-export.ts",
+   "line": 68,
+   "severity": "major",
+   "problem": "writeExportFile swallows every mkdir/writeFile failure: the catch only logs, and only when KERYX_VERBOSE is set. Its sole caller, runHistoryExport (line 122), then goes on to print 'exported N run(s) to <file>' (line 131) and leaves exitCode at 0. That breaks error-handling.mdc Rule 3 and Iron Law 1. The class has one site: writeExportFile is the only write path in the new module.",
+   "impact": "A user or script that exports to an unwritable path (read-only directory, EACCES, ENOSPC, a path whose parent is a file) is told the export succeeded and gets exit 0, then attaches or reads a file that does not exist. The fix is to let the error propagate, or rethrow it with a message naming the file and { cause }.",
+   "quote": "} catch (error) {\n    if (process.env.KERYX_VERBOSE) {"
+  },
+  {
+   "id": "G2",
+   "file": "src/commands/wiki-history-export.ts",
+   "line": 24,
+   "severity": "minor",
+   "problem": "The JSDoc on collectRunRows says it returns the runs oldest first. The function only filters the result of listWikiRuns, which is documented as 'Runs newest first' and sorts descending (src/wiki/history.ts:495-508). Nothing reverses the order, so the comment describes a behaviour that has no code path.",
+   "impact": "The next reader or caller trusts the comment and believes the exported file is chronological. The wiki help text in the same change still says 'newest first'. Either the comment or the code has to change.",
+   "quote": "Returns the runs\n * oldest first, so the exported file reads in the order the writes happened."
+  },
+  {
+   "id": "G3",
+   "file": "src/commands/wiki-history-export.ts",
+   "line": 35,
+   "severity": "minor",
+   "problem": "The rethrow drops the original error: there is no { cause }, and the caught `error` is never used. The message does not say which runs log or which cwd failed. This goes against error-handling.mdc Rule 2, Rule 5 and Iron Law 3.",
+   "impact": "Someone debugging a failed export sees a generic message with no errno, path or stack from listWikiRuns, so they cannot tell a missing log from a parse or permission failure.",
+   "quote": "throw new Error(\"wiki history: could not read the runs log\");"
+  },
+  {
+   "id": "G4",
+   "file": "src/commands/wiki-history-export.ts",
+   "line": 49,
+   "severity": "minor",
+   "problem": "The command-label sanitizer (collapse newlines, collapse whitespace, trim, slice to MAX_COMMAND_WIDTH) is copied three times in this change: wiki-history-export.ts:49-53 (markdown branch), wiki-history-export.ts:56-60 (CSV branch) and wiki-history.ts:47-51 (text listing). Only MAX_COMMAND_WIDTH is shared, not the transformation.",
+   "impact": "Any change to how labels are cleaned or clipped has to be made in three places and kept in sync. The two copies inside renderRunLine are identical and sit only a few lines apart.",
+   "quote": ".replace(/[\\r\\n]+/g, \" \")\n      .replace(/\\s+/g, \" \")\n      .trim()\n      .slice(0, MAX_COMMAND_WIDTH);"
+  },
+  {
+   "id": "G5",
+   "file": "src/commands/wiki-history-export.ts",
+   "line": 47,
+   "severity": "minor",
+   "problem": "renderRunLine takes four positional parameters, and the last one is a boolean flag (`markdown`) that switches between two different renderers. The call site reads `renderRunLine(run, at, run.pages, format === \"md\")`. `pages` repeats run.pages, and `at` is a normalization of run.at that the caller works out itself (line 118). Both are part of `run`, so the signature splits one value across three arguments. solid-principles.mdc thresholds: boolean flag that selects behaviour, and 4 or more positional parameters with no options object.",
+   "impact": "Call sites cannot be read without the signature. A caller could pass a `pages` or `at` that disagrees with `run`. Adding a third format means growing the flag into a discriminant. Splitting it into renderCsvRow(run) and renderMarkdownRow(run), or keying a renderer by RunExportFormat, removes all three problems.",
+   "quote": "export function renderRunLine(run: WikiRunSummary, at: string, pages: number, markdown: boolean): string {"
+  },
+  {
+   "id": "G6",
+   "file": "src/commands/wiki-history-export.ts",
+   "line": 75,
+   "severity": "minor",
+   "problem": "runHistoryExport is about 57 lines long (75-132) and does separable jobs at different levels of abstraction: it parses and validates three options (--export, --format with extension inference, --since with a date-only regex), queries, normalizes timestamps inline (line 118), renders, writes the file, and resolves the path it displays. That passes the solid-principles.mdc length threshold with two separable jobs.",
+   "impact": "Option parsing cannot be unit-tested apart from file I/O; the tests in this change have to go through the whole command to check --format and --since validation. Extracting a parseExportOptions(args) that returns the options or a usage error would leave the command as a short orchestration.",
+   "quote": "export async function runHistoryExport(args: string[], cwd: string = process.cwd()): Promise<void> {"
+  }
+ ]
+}

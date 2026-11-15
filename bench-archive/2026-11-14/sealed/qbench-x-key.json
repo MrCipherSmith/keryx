@@ -1,0 +1,146 @@
+{
+ "x01": {
+  "rid": "QE1-q04",
+  "case": "q04",
+  "arm": "QE",
+  "rep": 1
+ },
+ "x02": {
+  "rid": "QF2-q04",
+  "case": "q04",
+  "arm": "QF",
+  "rep": 2
+ },
+ "x03": {
+  "rid": "QE2-q03",
+  "case": "q03",
+  "arm": "QE",
+  "rep": 2
+ },
+ "x04": {
+  "rid": "QF2-q05",
+  "case": "q05",
+  "arm": "QF",
+  "rep": 2
+ },
+ "x05": {
+  "rid": "QE1-q01",
+  "case": "q01",
+  "arm": "QE",
+  "rep": 1
+ },
+ "x06": {
+  "rid": "QE3-q01",
+  "case": "q01",
+  "arm": "QE",
+  "rep": 3
+ },
+ "x07": {
+  "rid": "QE2-q01",
+  "case": "q01",
+  "arm": "QE",
+  "rep": 2
+ },
+ "x08": {
+  "rid": "QF1-q02",
+  "case": "q02",
+  "arm": "QF",
+  "rep": 1
+ },
+ "x09": {
+  "rid": "QF1-q04",
+  "case": "q04",
+  "arm": "QF",
+  "rep": 1
+ },
+ "x10": {
+  "rid": "QF1-q01",
+  "case": "q01",
+  "arm": "QF",
+  "rep": 1
+ },
+ "x11": {
+  "rid": "QE2-q04",
+  "case": "q04",
+  "arm": "QE",
+  "rep": 2
+ },
+ "x12": {
+  "rid": "QE3-q04",
+  "case": "q04",
+  "arm": "QE",
+  "rep": 3
+ },
+ "x13": {
+  "rid": "QF1-q03",
+  "case": "q03",
+  "arm": "QF",
+  "rep": 1
+ },
+ "x14": {
+  "rid": "QF3-q05",
+  "case": "q05",
+  "arm": "QF",
+  "rep": 3
+ },
+ "x15": {
+  "rid": "QF3-q02",
+  "case": "q02",
+  "arm": "QF",
+  "rep": 3
+ },
+ "x16": {
+  "rid": "QE3-q03",
+  "case": "q03",
+  "arm": "QE",
+  "rep": 3
+ },
+ "x17": {
+  "rid": "QF3-q01",
+  "case": "q01",
+  "arm": "QF",
+  "rep": 3
+ },
+ "x18": {
+  "rid": "QF1-q05",
+  "case": "q05",
+  "arm": "QF",
+  "rep": 1
+ },
+ "x19": {
+  "rid": "QF2-q01",
+  "case": "q01",
+  "arm": "QF",
+  "rep": 2
+ },
+ "x20": {
+  "rid": "QF3-q03",
+  "case": "q03",
+  "arm": "QF",
+  "rep": 3
+ },
+ "x21": {
+  "rid": "QF2-q03",
+  "case": "q03",
+  "arm": "QF",
+  "rep": 2
+ },
+ "x22": {
+  "rid": "QE1-q03",
+  "case": "q03",
+  "arm": "QE",
+  "rep": 1
+ },
+ "x23": {
+  "rid": "QF3-q04",
+  "case": "q04",
+  "arm": "QF",
+  "rep": 3
+ },
+ "x24": {
+  "rid": "QF2-q02",
+  "case": "q02",
+  "arm": "QF",
+  "rep": 2
+ }
+}

@@ -1,0 +1,105 @@
+{
+ "truth": [],
+ "decoys": [],
+ "candidate": [
+  {
+   "id": "G1",
+   "file": "src/review/mutate.ts",
+   "line": 445,
+   "severity": "minor",
+   "problem": "runMutation (now ~135 lines, 414-548) gets two more separable jobs inline: timing and running two sweeps (scratchBase and repoScratch) with their record fields, and the owner-marker heartbeat lifecycle (setInterval + utimes + unref, cleared in two places, 462 and 544). These are low-level filesystem and timer steps placed inside the high-level orchestration of copy, baseline, mutant loop and record assembly (SRP / B1, B3).",
+   "impact": "Whoever next changes the sweep or the heartbeat has to edit the orchestration function and keep the two clearInterval/rm cleanup paths in sync by hand; the sweep and heartbeat cannot be tested apart from a full mutation run (the heartbeat test drives a whole runMutation with a probe script). Extracting e.g. sweepAllScratch(scratchBase, repoScratch) -> sweepFields and startOwnerHeartbeat(ownerFile, ms) -> stop() would keep runMutation at one level.",
+   "quote": "const sweepStarted = Date.now();\n  let sweptScratch = await sweepStaleScratch(scratchBase);\n  if (scratchBase !== repoScratch) sweptScratch += await sweepStaleScratch(repoScratch);"
+  },
+  {
+   "id": "G2",
+   "file": "src/review/completion-gate.ts",
+   "line": 771,
+   "severity": "minor",
+   "problem": "The diff adds a fifth positional parameter `now` to findReviewGateState(cwd, since, named, signal, now), with no options object, so every test call must pass a placeholder `undefined` for `signal` to reach `now` (completion-gate.test.ts 749, 752, 764, 773, 798, 816, 819, 902). The same shape is added in the test helper make(name, owner, ageMs, markerAgeMs, into) in src/review/mutate.test.ts:251, called as make(..., 1000, 3 * HEARTBEAT_MS, repoScratch) at 351.",
+   "impact": "Call sites read `findReviewGateState(root, 0, {}, undefined, now)`: the reader must open the signature to decode the positional slots, and the next injectable (a clock is already the second) grows the list again. `named`/`signal`/`now` belong in one options object, as SignatureOptions already does for dirSignature.",
+   "quote": "  signal?: AbortSignal,\n  now?: number,\n): Promise<OpenManagedReview | null> {"
+  },
+  {
+   "id": "G3",
+   "file": "src/review/mutate.ts",
+   "line": 457,
+   "severity": "minor",
+   "problem": "The heartbeat swallows every utimes failure with an empty `.catch(() => {})` and no comment giving the reason, unlike the other best-effort catches in this file, which each say why (error-handling.mdc Rule 3). The marker it fails to touch is exactly what sweepStaleScratch uses to decide deletion: a marker older than STALE_HEARTBEAT_MS is removed 'whatever its pid says'.",
+   "impact": "If the touch keeps failing, the pass gives no sign of it, and after ten minutes another pass may treat the live scratch as abandoned; the next maintainer cannot tell whether ignoring the error was deliberate. A one-line reason (or a degraded flag on the record) makes the decision visible.",
+   "quote": "void utimes(ownerFile, at, at).catch(() => {});"
+  },
+  {
+   "id": "G4",
+   "file": "src/review/mutate.ts",
+   "line": 377,
+   "severity": "minor",
+   "problem": "The deletion policy, the core decision of the sweep, is one nested ternary mixing three time rules (unmarked age vs staleMs, marker age vs staleHeartbeatMs, dead pid plus marker older than an inline `2 * heartbeatMs`) and calls now() up to three times, inside the directory loop next to lstat/readOwner/rm. The 'two heartbeats' factor is an unnamed magic multiplier explained only in the JSDoc.",
+   "impact": "The rule that decides an irreversible rm cannot be read or unit-tested on its own; every test of it (mutate.test.ts 365-525) has to build directories and age markers with utimes. A pure isAbandoned({ owner, dirMtimeMs, now, ... }) with a named DEAD_OWNER_HEARTBEATS constant would make each branch testable and readable.",
+   "quote": ": now() - owner.mtimeMs > staleHeartbeatMs || (!isAlive(owner.pid) && now() - owner.mtimeMs > 2 * heartbeatMs);"
+  },
+  {
+   "id": "G5",
+   "file": "src/commands/agent-review-gate.test.ts",
+   "line": 168,
+   "severity": "minor",
+   "problem": "Three new tests each define the same inline scan stub that aborts the controller and returns openReview(): lines 168-171, 179-182 and 191-194, together with the identical `const controller = new AbortController()` setup (E1, 3 copies).",
+   "impact": "A change to how an aborting scan is simulated has to be made three times; a helper such as `abortingScan(controller)` next to openReview() would hold it once.",
+   "quote": "const reviewGateState: typeof findReviewGateState = async () => {\n    controller.abort();\n    return openReview();\n  };"
+  },
+  {
+   "id": "G6",
+   "file": "src/commands/agent.ts",
+   "line": 4283,
+   "severity": "minor",
+   "problem": "The new abort exit copies the literal system line again: `system(\"\\n[stopped] Model turn interrupted by user.\\n\")` followed by a return now appears at 3226, 3488, 3510, 3767, 3815, 3896, 3924, 4014, 4196, 4283 (new), 4318, 4448 and 4862, with three different return shapes ({}, { finishReason: \"interrupted\" }, or a recovery-dependent choice). The comment claims the new site 'ends like the other abort sites', which only a shared helper would guarantee.",
+   "impact": "Each new abort site is another hand copy of the message and a hand choice of return value; changing the wording or the interrupted finish reason means editing 13 sites and the copies already disagree on what they return.",
+   "quote": "      if (isAborted()) {\n        system(\"\\n[stopped] Model turn interrupted by user.\\n\");\n        return {};\n      }"
+  },
+  {
+   "id": "G7",
+   "file": "src/review/completion-gate.ts",
+   "line": 65,
+   "severity": "minor",
+   "problem": "Magic number: the file-type mask is written as the raw octal 0o170000 instead of the named constant node:fs `constants.S_IFMT`, and the resulting signature text (`special:10000` for a FIFO) is an undocumented encoding of it.",
+   "impact": "A reader has to know the POSIX S_IFMT value to see that the code extracts the file type; the named constant says it directly.",
+   "quote": "if (!info.isFile()) return `special:${(info.mode & 0o170000).toString(8)}`;"
+  },
+  {
+   "id": "G8",
+   "file": "src/review/mutate.test.ts",
+   "line": 396,
+   "severity": "minor",
+   "problem": "The marker age that means 'stale but not abandoned' is written as the bare expression `3 * HEARTBEAT_MS` at 351, 365, 367, 381, 382, 448, 469, 471, 478, 497 and 509, while one describe block alone names it `staleButNotAbandoned` (396).",
+   "impact": "The intent of the 3x factor is visible in one block and implicit in eleven other sites; if the sweep's two-heartbeat rule changes, the reader cannot tell which of the eleven copies depend on it. Hoisting the named const to the describe scope next to make() covers all of them.",
+   "quote": "const staleButNotAbandoned = 3 * HEARTBEAT_MS;"
+  },
+  {
+   "id": "G9",
+   "file": "src/review/completion-gate.ts",
+   "line": 888,
+   "severity": "minor",
+   "problem": "`stalled` reads as a boolean (did the gate stall?) but holds a sentence fragment of the stop report, and it is computed even when the stall clause is not used (the continues-limit branch).",
+   "impact": "The next reader of the report template `${stalls >= MAX_REVIEW_GATE_STALLS ? stalled : \"\"}` has to look up what `stalled` is; a name like `stallReason` says it.",
+   "quote": "const stalled = open.signature.includes(TRUNCATION_MARKER)"
+  },
+  {
+   "id": "G10",
+   "file": "docs/docs/guides/review-with-a-record.md",
+   "line": 200,
+   "severity": "info",
+   "problem": "The new user docs (here, and the same sentence in docs/docs/cli-reference.md, src/commands/review.ts help, and both SKILL.detail.md copies) say the sweep removes the operator's `keryx-mutate-*` directories, but the code only considers names matching SCRATCH_NAME, `keryx-mutate-` plus exactly six alphanumerics (mutate.ts SCRATCH_NAME; the test keeps `keryx-mutate-test-xyz`).",
+   "impact": "Minor imprecision for an operator reading the docs; stating `keryx-mutate-XXXXXX` (what mkdtemp makes) would match the code.",
+   "quote": "own `keryx-mutate-*` directories whose owner died (no heartbeat for two minutes)"
+  },
+  {
+   "id": "G11",
+   "file": "src/review/mutate.ts",
+   "line": 232,
+   "severity": "info",
+   "problem": "The isLinkedWorktree JSDoc says everything else 'is copied as the base copy did'; 'the base copy' has no referent in this file (it appears to mean the copy before nested checkouts were excluded, i.e. history the reader does not have).",
+   "impact": "A reader cannot tell what behaviour is being referred to; 'is copied' alone says the same thing.",
+   "quote": "Everything else is copied as the base copy did, because the tests may load it"
+  }
+ ]
+}

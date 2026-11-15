@@ -1,0 +1,12 @@
+[
+  {
+    "tid": "D1",
+    "file": "src/review/agents/recorded-adapter.ts",
+    "line": 104,
+    "severity": "minor",
+    "problem": "request.signal.throwIfAborted() appears twice in execute (lines 102 and 104), which can look like a duplicated guard.",
+    "impact": "None.",
+    "quote": "request.signal.throwIfAborted();",
+    "why_not_a_defect": "Idiomatic abort checking: once before the await and once after it, because the signal can fire while the recording is being read. The sibling native adapter does the same (src/commands/review-agents-runtime/native-adapter.ts throwIfAborted at lines 133 and 199, before and after its awaits)."
+  }
+]

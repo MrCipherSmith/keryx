@@ -1,0 +1,57 @@
+---
+description: "SOLID and function-design standard shared by code writers and the code-quality reviewer, with the thresholds both use: function length, parameter count, constructor dependencies, branch chains. Use when designing classes, modules or functions, or reviewing them."
+alwaysApply: false
+---
+
+# SOLID Principles and Function Design
+
+## Purpose
+One standard for designing and reviewing classes and functions. The thresholds below are the ones the code-quality reviewer applies. A writer who stays inside them gets no finding, and a reviewer reports nothing inside them.
+
+## When To Apply
+Apply when creating or extending classes, services, modules or functions, and when reviewing them.
+
+---
+
+## Thresholds (shared with review-clean-code)
+
+| Signal | Threshold | When a reviewer reports it |
+|---|---|---|
+| Function body length | over 40 lines | Only when the function also mixes levels of abstraction or does two separable jobs. A long linear table, serializer or test is not a finding. |
+| I/O mixed with a transform | any length | One function that reads or writes (file, network, store) and also transforms the data in between. Keep the transform a pure helper the I/O shell calls. |
+| Positional parameters | 4 or more | When there is no options object and the parameters are not a natural ordered set the codebase already uses. |
+| Boolean flag parameter | any | When the flag selects between two different behaviours, so that call sites read `run(x, true)`. |
+| Constructor dependencies | more than 5 | As an SRP signal; name the two responsibilities. |
+| Branch chain over a type discriminant | 4 or more branches, extended by the change | When the codebase already uses a lookup map or a strategy for the same kind of dispatch. |
+| Duplicated block | 3 or more copies | Reported once, listing every copy. |
+
+Under a threshold, the reviewer stays silent. At or over one, the finding is `minor` unless it names a trigger and a wrong outcome (see the review-orchestrator severity rubric).
+
+---
+
+## S — Single Responsibility
+**One class or module, one reason to change.**
+- Do not mix fetching, business rules and presentation or persistence in one class or function.
+- If you cannot name it in three words without "and", it does too much.
+- A constructor assigns. It does not perform I/O or start async work.
+
+## O — Open/Closed
+- Adding a variant should not mean editing a growing `if/else` or `switch` when the codebase already dispatches that kind of thing through a map or a strategy.
+
+## L — Liskov Substitution
+- An override must work wherever the base type is used. An override that throws "not supported", or rejects input the base accepts, breaks callers that hold the base type.
+
+## I — Interface Segregation
+- An implementation that leaves methods as stubs or no-ops means the interface is too wide.
+
+## D — Dependency Inversion
+- Business logic receives the dependencies it calls into (I/O, network, clock) instead of constructing them. Inside a module, constructing a plain helper or value object is fine.
+
+---
+
+## Iron Laws
+
+**IRON LAW 1: An override never throws where its base type would not.**
+**IRON LAW 2: A constructor performs no I/O.**
+**IRON LAW 3: The thresholds above are the standard for both writing and review. Change them here, never in a reviewer.**
+</content>

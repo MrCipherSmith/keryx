@@ -1,0 +1,20 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "match", "gid": "G1", "why": "G1 reports the same empty catch around writeOwnerOnlyFileAtomic followed by an unconditional ok:true return." },
+    { "tid": "T2", "verdict": "match", "gid": "G6", "why": "G6 flags the JSON.parse catch that both logs to stderr and rethrows the same error." },
+    { "tid": "T3", "verdict": "match", "gid": "G4", "why": "G4 flags the toPinned boolean flag selecting two opposite operations, citing the same call sites." },
+    { "tid": "T4", "verdict": "match", "gid": "G3", "why": "G3 names all three duplicated summary blocks at the same lines." },
+    { "tid": "T5", "verdict": "match", "gid": "G2", "why": "G2 reports the JSDoc merge rule contradicting the unconditional updateProviderCatalogEntry overwrite." },
+    { "tid": "T6", "verdict": "match", "gid": "G5", "why": "G5 flags the ~57-line import function mixing parsing/validation with cache I/O and suggests extracting a parser." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "truth", "why": "Matches T1." },
+    { "gid": "G2", "label": "truth", "why": "Matches T5." },
+    { "gid": "G3", "label": "truth", "why": "Matches T4." },
+    { "gid": "G4", "label": "truth", "why": "Matches T3." },
+    { "gid": "G5", "label": "truth", "why": "Matches T6." },
+    { "gid": "G6", "label": "truth", "why": "Matches T2." },
+    { "gid": "G7", "label": "valid", "why": "Verified in the snapshot: nothing sets pinSnapshot, no `keryx providers pin` command exists, and formatCatalogSummaryLine has no caller, so the new doc comments point to entry points that do not exist." },
+    { "gid": "G8", "label": "noise", "why": "An info-level redundant existence-probe read and a repeated path computation are minor taste issues, below the threshold a maintainer would reasonably act on." }
+  ]
+}

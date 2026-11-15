@@ -1,0 +1,65 @@
+[
+ {
+  "tid": "T1",
+  "file": "src/harness/web/outbound-secret.ts",
+  "line": null,
+  "severity": "blocker",
+  "problem": "S-8's outbound-secret check (containsOutboundSecret) is trivially bypassed: detectSecrets' URL-aware rule only fires when the query-param/path-segment name is on a small closed label list (api_key/access_token/auth_token/token/password/secret), and detectEntropy additionally requires a SENSITIVE_LABEL word within 40 chars on the same line. A secret placed under a generic param name, split across two generic params, or with the label word percent-encoded (t%6fken=) defeats both detectors.",
+  "impact": "web_fetch/web_search send a real secret to an attacker-controlled host before any network call is blocked. Reviewer constructed and ran live probes against the worktree: containsOutboundSecret returned false for a 43-char secret under '?d=', for the same secret split across '?a='/'?b=', for a 40-hex secret under a generic param, and for a percent-encoded label ('t%6fken='). web_fetch reaches the real HTTP GET whenever this returns false.",
+  "quote": "export function containsOutboundSecret(text: string): boolean {\n  return detectSecrets(text).length > 0 || detectEntropy(text).length > 0;\n}"
+ },
+ {
+  "tid": "T2",
+  "file": "src/security/detect/entropy.ts",
+  "line": 38,
+  "severity": "major",
+  "problem": "The S-6/S-9 allow-shapes are checked by shape alone with no provenance signal, applied even when an explicit sensitive label sits directly next to the value. A real secret that happens to be 40/7-12 hex chars, a UUID, or an npm/yarn integrity-shaped string is unconditionally exempted from redaction and from displayUrl masking.",
+  "impact": "redactSensitiveText leaves labeled real secrets in these four shapes completely unredacted; displayUrl prints the same shapes verbatim in mcp list / mcp doctor --json / the trust prompt. Reviewer verified live: redactSensitiveText('leaked token: deadbeef...deadbeef') (40-hex), '...UUID...', '...sha512-...', and a short-hex case were all returned byte-for-byte unchanged despite the explicit label.",
+  "quote": "function isAllowShapedValue(value: string): boolean {\n  return (\n    FULL_GIT_SHA_RE.test(value) ||\n    SHORT_GIT_SHA_RE.test(value) ||\n    UUID_RE.test(value) ||\n    INTEGRITY_RE.test(value)\n  );\n}"
+ },
+ {
+  "tid": "T3",
+  "file": "src/security/credential-shape.ts",
+  "line": null,
+  "severity": "major",
+  "problem": "R-I2's anchoring fix (added this PR to stop GLUED_SECRET_RE over-matching APITOKENIZER) requires the (^|_) boundary immediately before the glued prefix. This stops the false positive but also means the check only protects the five compounds at the very start of a name or right after an underscore; gluing any other word in front with no underscore (a common naming convention) makes the whole check stop matching for KEY/TOKEN/SECRET/PASS(WD) compounds (SECRET_SUBSTRING_RE still catches the PASSWORD family unaffected).",
+  "impact": "A real credential named PRODDBPASS, MYPRIVATEKEY, USERREFRESHTOKEN, LEGACYACCESSTOKEN, V2APITOKEN, OAUTHACCESSTOKEN or SNOWFLAKEDBPASS is copied into a spawned MCP server's environment and an external agent CLI's environment unfiltered. Reviewer verified live: isDeniedForMcpChild returns false for all of the above (credential-shaped values), true for the unprefixed forms, and false for APITOKENIZER (intended). No existing test exercises a prefixed variant.",
+  "quote": "const GLUED_SECRET_RE =\n  /(^|_)(PRIVATE|SECRET|ACCESS|REFRESH|SESSION|CLIENT|API|APP)(KEY|TOKEN|SECRET)($|_)|(^|_)DB(PASS|PWD)($|_)/;"
+ },
+ {
+  "tid": "T4",
+  "file": "src/security/detect/entropy.ts",
+  "line": 15,
+  "severity": "blocker",
+  "problem": "The entropy detector's TOKEN regex includes '/' in its character class, so applied to a URL it does not stop at path separators: an entire host/path/segments/<hex> run becomes one compound candidate. This defeats the git-SHA/UUID/integrity allow-shapes (which only match an isolated value, not a compound blob containing it) and makes SENSITIVE_LABEL's bare substring match fire on ordinary text like the hostname 'api.github.com'. Independently confirmed by review-regression (RG-1) from the outbound-refusal angle.",
+  "impact": "redactSensitiveText mangles an ordinary https://api.github.com/repos/x/y/commits/<40-hex-sha> into '.../api.github.[REDACTED:entropy]' (silent corruption of tool-output transcripts). containsOutboundSecret refuses that same ordinary URL and an ordinary https://api.example.com/v1/webhooks/subscribe?... before any network call -- contradicting AC2's zero-false-positive claim and AC4's 'an ordinary URL with a commit SHA still fetches' guarantee for any api.*-hosted URL. Reproduced end-to-end against the real webFetchTool: api.github.com commit URL and api.stripe.com charge URL both hard-refused with zero network calls attempted; the PR's own boundary test uses a non-'api'-hosted host and dodges the bug.",
+  "quote": "const TOKEN = /[A-Za-z0-9+/=_-]{20,}(?:\\.[A-Za-z0-9+/=_-]{6,})*/g;"
+ },
+ {
+  "tid": "T5",
+  "file": "src/mcp-servers/http-headers.ts",
+  "line": 351,
+  "severity": "major",
+  "problem": "displayUrl's new per-path-segment masking calls looksSecretShaped with no label requirement, which falls back to HEX_BLOB = /^[0-9a-f]{24,}$/i whenever the entropy floor isn't met on its own. Decimal digits are a strict subset of the hex alphabet, so any purely-numeric string of 24+ characters satisfies HEX_BLOB regardless of actual entropy or credential likelihood.",
+  "impact": "A legitimate, non-credential, purely-numeric resource id (order/invoice/charge id) of 24+ digits anywhere in an MCP server's URL path is silently replaced with '…' in mcp list, mcp doctor --json, and the trust-authorisation prompt -- exactly the surfaces this feature exists to make debuggable. Verified: https://api.example.com/v1/invoices/123456789012345678901234/lines -> '.../invoices/.../lines'; a 23-digit id of the same shape is left untouched, so the boundary is arbitrary. None of the existing displayUrl masking tests exercise a purely-numeric segment.",
+  "quote": "return detectSecrets(segment).length > 0 || looksSecretShaped(segment) ? \"…\" : segment;"
+ },
+ {
+  "tid": "T6",
+  "file": "src/security/redact.ts",
+  "line": 145,
+  "severity": "major",
+  "problem": "This diff wires detectEntropy into redactSensitiveText (S-6) and into the new containsOutboundSecret (S-8) unconditionally -- neither threads a config/cwd parameter, so neither can consult SecurityConfig.backends.entropy.enabled. The only existing gate for detectEntropy is runDetectors (src/security/detect/index.ts:36), which keryx security scan/report/gate go through.",
+  "impact": "An operator who has explicitly set backends.entropy.enabled: false (a real, documented, default-true toggle) still gets every tool output/session transcript entropy-redacted and every web_fetch/web_search call entropy-checked/potentially refused, with no way to turn either off -- silently breaking the previously-consistent meaning of that flag.",
+  "quote": "const matches = [\n    ...detectSecrets(text),\n    ...detectPii(text),\n    ...detectExfil(text),\n    ...detectEntropy(text),\n  ];"
+ },
+ {
+  "tid": "T7",
+  "file": "src/harness/external/env-deny.ts",
+  "line": 11,
+  "severity": "major",
+  "problem": "This diff adds a new client-zone-imports-core-internal edge (harness/external/env-deny.ts -> security/credential-shape.ts), bypassing the security/service.ts facade, and permanently raises AVOIDABLE_BYPASS_CEILING from 150 to 151. The PR justifies this as 'structurally unavoidable' because credential-shape.ts (core) cannot import env-deny.ts (client) back -- true but irrelevant, since the actual bypass exists only because security/service.ts re-exports isDeniedForMcpChild from credential-shape.ts (added in this same diff) but was not also extended to re-export EXTERNAL_ENV_DENY/EXTERNAL_ENV_PREFIX_SWEEPS.",
+  "impact": "The ratchet in import-policy.live.test.ts only ever fails on growth and does not self-correct once raised, baking in one avoidable bypass as permanent tracked debt when the fix was a two-line change to a file this diff was already editing for the identical purpose.",
+  "quote": "export { EXTERNAL_ENV_DENY, EXTERNAL_ENV_PREFIX_SWEEPS } from \"../../security/credential-shape\";"
+ }
+]

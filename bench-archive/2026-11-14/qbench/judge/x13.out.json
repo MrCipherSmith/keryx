@@ -1,0 +1,21 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "match", "gid": "G1", "why": "G1 reports the swallowed cursor-write failure that still returns the entry as committed, hiding the revision from history." },
+    { "tid": "T2", "verdict": "match", "gid": "G6", "why": "G6 flags synchronous file I/O in the ExecutionPlanHistory constructor and proposes a factory or loaded entries." },
+    { "tid": "T3", "verdict": "match", "gid": "G9", "why": "G9 identifies the five-branch if/else dispatch on kind with the bare else absorbing new kinds, and suggests a Record or exhaustive switch." },
+    { "tid": "T4", "verdict": "match", "gid": "G8", "why": "G8 reports diffExecutionPlans filling a caller-supplied output array instead of returning transitions." },
+    { "tid": "T5", "verdict": "miss", "gid": null, "why": "No candidate raises the inconsistent transition/change naming." },
+    { "tid": "T6", "verdict": "match", "gid": "G4", "why": "G4 reports the bare 'Invalid entry' error that has no path, line, or field context." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "truth", "why": "Matches T1." },
+    { "gid": "G2", "label": "valid", "why": "writePlan awaits recordPlanRevision after plan.json is persisted, so an appendFile failure rejects a write that succeeded and skips notify; this is a real coupling the change introduces." },
+    { "gid": "G3", "label": "valid", "why": "readCursor silently returns 0 for parseable JSON with no numeric revision, which hides all history and contradicts the adjacent no-guess comment." },
+    { "gid": "G4", "label": "truth", "why": "Matches T6." },
+    { "gid": "G5", "label": "valid", "why": "parseEntry runs on every line before the cursor filter, so a torn trailing line throws, and the doc comment's crash-safety claim does not hold." },
+    { "gid": "G6", "label": "truth", "why": "Matches T2." },
+    { "gid": "G7", "label": "noise", "why": "The I/O-versus-formatting split in renderExecutionPlanChangelog is a design preference that largely repeats the constructor-I/O point in G6/T2." },
+    { "gid": "G8", "label": "truth", "why": "Matches T4." },
+    { "gid": "G9", "label": "truth", "why": "Matches T3." }
+  ]
+}

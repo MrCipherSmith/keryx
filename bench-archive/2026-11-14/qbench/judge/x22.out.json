@@ -1,0 +1,21 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "match", "gid": "G2", "why": "G2 flags the log-only catch on the cursor write that still returns the entry, leaving it hidden past the cursor." },
+    { "tid": "T2", "verdict": "match", "gid": "G5", "why": "G5 reports the ExecutionPlanHistory constructor doing synchronous cursor/journal I/O and being able to throw." },
+    { "tid": "T3", "verdict": "match", "gid": "G9", "why": "G9 names the 5-branch if/else-if over kind in describeChange with the catch-all else and suggests a Record map." },
+    { "tid": "T4", "verdict": "match", "gid": "G7", "why": "G7 reports diffExecutionPlans' out parameter returning void instead of the transitions." },
+    { "tid": "T5", "verdict": "miss", "gid": null, "why": "No candidate raises the transition/change naming inconsistency." },
+    { "tid": "T6", "verdict": "match", "gid": "G3", "why": "G3 reports parseEntry's generic 'Invalid entry' error lacking path/line context." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "valid", "why": "Code confirms appendFile failure after plan.json is atomically written rejects the write and skips notify, so a committed write is reported as failed; distinct from T1's cursor swallow." },
+    { "gid": "G2", "label": "truth", "why": "Matches T1." },
+    { "gid": "G3", "label": "truth", "why": "Matches T6." },
+    { "gid": "G4", "label": "valid", "why": "readCursor returns 0 for parseable but wrong-shaped JSON, silently hiding all entries, contradicting its own no-guess comment; not D1, which is the JSON.parse rethrow." },
+    { "gid": "G5", "label": "truth", "why": "Matches T2." },
+    { "gid": "G6", "label": "noise", "why": "The I/O in renderExecutionPlanChangelog stems from the constructor I/O already covered by T2/G5; largely a duplicate concern." },
+    { "gid": "G7", "label": "truth", "why": "Matches T4." },
+    { "gid": "G8", "label": "noise", "why": "Naming a small helper 'message' is pure taste." },
+    { "gid": "G9", "label": "truth", "why": "Matches T3." }
+  ]
+}

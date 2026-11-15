@@ -1,0 +1,20 @@
+[
+  {
+    "id": "G1",
+    "file": "src/tui/tui-shell.ts",
+    "line": 1936,
+    "severity": "minor",
+    "problem": "The deny-by-default for shell approval is implemented by moving `recommended: true` onto the Deny option. In composer-choice.ts `recommended` drives the visible label (`choiceDisplayLabel` prefixes \"(Recommended) \", line 26/508) and preselection is a separate field (`preselected`, lines 14-21, 34-39). So the change does more than change what a bare Enter does: every shell approval prompt now reads \"(Recommended) Deny\", for every command including harmless ones.",
+    "impact": "An operator asked to approve an ordinary command (e.g. `ls`, `git status`) is told by the dialog that refusing it is the recommended answer. The safe-default goal only needs `preselected: true` on Deny; the label is an unintended side effect that misstates guidance on every prompt.",
+    "quote": "description: \"Do not run\",\n      recommended: true,"
+  },
+  {
+    "id": "G2",
+    "file": "src/tui/tui-shell.test.ts",
+    "line": 1626,
+    "severity": "minor",
+    "problem": "The agent-shell Esc test builds its own wiring (`chrome.onEscapeInterrupt(() => foreground.cancel(...))` on a locally created ForegroundOperationOwner) instead of exercising the wiring this change adds in launchTuiAgentShell (tui-shell.ts:11946-11950). It proves that chrome.onEscapeInterrupt plus ForegroundOperationOwner.cancel abort a provider, not that the agent shell binds Esc. No source audit covers the production call either.",
+    "impact": "Deleting or breaking the production binding at tui-shell.ts:11946 (the thing the footer hint \"Esc interrupt\" depends on in agent mode), or dropping its `◇ main turn interrupted (Esc)` notice, leaves this test and the rest of the suite green.",
+    "quote": "chrome.onEscapeInterrupt(() => foreground.cancel(\"interrupted by Escape\"));"
+  }
+]

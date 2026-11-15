@@ -1,0 +1,21 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "match", "gid": "G1", "why": "G1 names the empty catch around writeOwnerOnlyFileAtomic followed by unconditional ok:true in exportProviderCatalogSnapshot." },
+    { "tid": "T2", "verdict": "match", "gid": "G4", "why": "G4 reports the JSON.parse catch that logs to stderr and rethrows the same error." },
+    { "tid": "T3", "verdict": "match", "gid": "G6", "why": "G6 flags the toPinned boolean switching between two opposite operations, citing the same call sites." },
+    { "tid": "T4", "verdict": "match", "gid": "G5", "why": "G5 names the duplicated summary block at all three sites." },
+    { "tid": "T5", "verdict": "match", "gid": "G3", "why": "G3 says the JSDoc's newer-entry-kept rule is not implemented because updateProviderCatalogEntry overwrites unconditionally." },
+    { "tid": "T6", "verdict": "match", "gid": "G8", "why": "G8 flags the long import function mixing parsing/validation with merge policy and proposes extracting helpers." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "truth", "why": "Matches T1." },
+    { "gid": "G2", "label": "valid", "why": "Line 111 maps a missing or non-object providers to {}, while the other malformed shapes throw, so with prune:true a truncated snapshot wipes the cache and still reports success." },
+    { "gid": "G3", "label": "truth", "why": "Matches T5." },
+    { "gid": "G4", "label": "truth", "why": "Matches T2." },
+    { "gid": "G5", "label": "truth", "why": "Matches T4." },
+    { "gid": "G6", "label": "truth", "why": "Matches T3." },
+    { "gid": "G7", "label": "valid", "why": "syncPinnedSnapshot can throw (export with no cache, import of a bad pin) at provider-catalog.ts:270/274, beside best-effort cache writes, so a courtesy pin can fail a refresh that succeeded." },
+    { "gid": "G8", "label": "truth", "why": "Matches T6." },
+    { "gid": "G9", "label": "noise", "why": "Info-level wording nit in a header comment (next to vs inside the config dir, list of fields); too small to count as a defect a maintainer would need to fix." }
+  ]
+}

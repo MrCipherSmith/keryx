@@ -1,0 +1,22 @@
+{
+  "truth": [
+    {"tid": "T1", "verdict": "match", "gid": "G3", "why": "G3 names the throwing cancel stub despite cancellation:false and the uncaught call in cancelPendingDispatches aborting the loop."},
+    {"tid": "T2", "verdict": "match", "gid": "G1", "why": "G1 identifies null from loadRecordedResults coalesced via ?? [] so a bad recording replays as clean empty findings."},
+    {"tid": "T3", "verdict": "match", "gid": "G10", "why": "G10 is the SRP split of writeReplaySummary into read/validate/summarise/write with the same testability impact."},
+    {"tid": "T4", "verdict": "match", "gid": "G5", "why": "G5 names the duplicated bare 7-day window at both sites with drift risk."},
+    {"tid": "T5", "verdict": "match", "gid": "G2", "why": "G2 identifies the in-place sort inside the predicate and scopesMatch's hidden dependence on it."},
+    {"tid": "T6", "verdict": "match", "gid": "G7", "why": "G7 flags the comment compensating for the one-letter name n and suggests confirmedCount."}
+  ],
+  "candidates": [
+    {"gid": "G1", "label": "truth", "why": "Matches T2."},
+    {"gid": "G2", "label": "truth", "why": "Matches T5."},
+    {"gid": "G3", "label": "truth", "why": "Matches T1."},
+    {"gid": "G4", "label": "valid", "why": "The comment claims the summary counts unrecorded tasks, but writeReplaySummary never sees metadata.recorded and the branch also covers mismatch and staleness; a real misleading comment introduced by the change."},
+    {"gid": "G5", "label": "truth", "why": "Matches T4."},
+    {"gid": "G6", "label": "truth", "why": "Partial of T3, whose impact names the duplicated parsing between the loader and writeReplaySummary."},
+    {"gid": "G7", "label": "truth", "why": "Matches T6."},
+    {"gid": "G8", "label": "noise", "why": "A complementary status set follows the existing pattern (store.ts and controller.ts already each define their own TERMINAL set); low-value taste."},
+    {"gid": "G9", "label": "noise", "why": "Two positional string parameters is a style preference, not a defect a maintainer would reasonably be expected to fix."},
+    {"gid": "G10", "label": "truth", "why": "Matches T3."}
+  ]
+}

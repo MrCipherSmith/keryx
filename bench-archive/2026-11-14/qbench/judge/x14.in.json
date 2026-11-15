@@ -1,0 +1,69 @@
+{
+ "truth": [],
+ "decoys": [],
+ "candidate": [
+  {
+   "id": "G1",
+   "file": "src/review/mutate.ts",
+   "line": 380,
+   "severity": "minor",
+   "problem": "The dead-pid grace period is an unnamed `2 * heartbeatMs` multiplier inside the sweep decision. The constants next to it (HEARTBEAT_MS, STALE_HEARTBEAT_MS, STALE_SCRATCH_MS) are each named, but this one is not. The same 'two heartbeats' figure is also written out in the sweepStaleScratch doc comment, in the tests (`2 * HEARTBEAT_MS ± 30_000`) and as 'two minutes' in four documentation copies.",
+   "impact": "Whoever tunes the grace period has to find the bare multiplier and every prose 'two minutes'. Nothing ties them together, so the code and the docs can drift without any warning.",
+   "quote": "(!isAlive(owner.pid) && now() - owner.mtimeMs > 2 * heartbeatMs)"
+  },
+  {
+   "id": "G2",
+   "file": "src/review/mutate.ts",
+   "line": 377,
+   "severity": "minor",
+   "problem": "The abandonment policy is now three rules: an unmarked directory older than staleMs, a marker older than staleHeartbeatMs, and a dead pid with a marker past two heartbeats. The change writes it inline as a nested ternary with `||`/`&&`, inside the I/O loop that does readdir, lstat, readOwner and rm. The pure rule (owner, dir mtime, now and thresholds go in, abandoned comes out) has no helper of its own.",
+   "impact": "The policy can only be exercised through the filesystem. The tests show it: every rule case builds real directories and back-dates them with utimes (`make(..., 3 * HEARTBEAT_MS)`). Extending the rule means editing one dense expression inside the I/O shell.",
+   "quote": "const abandoned =\n          owner === undefined\n            ? now() - info.mtimeMs > staleMs\n            : now() - owner.mtimeMs > staleHeartbeatMs || ..."
+  },
+  {
+   "id": "G3",
+   "file": "src/review/completion-gate.ts",
+   "line": 35,
+   "severity": "minor",
+   "problem": "SIGNATURE_WALKS_PER_STOP = 2 states how many trees the gate signs. Nothing in the code derives from it: findReviewGateState hard-codes the two dirSignature calls (lines 788 and 805). MAX_SIGNATURE_FILES is then defined as MAX_HASHED_FILES / SIGNATURE_WALKS_PER_STOP, so the guard test at completion-gate.test.ts:805 (`SIGNATURE_WALKS_PER_STOP * MAX_SIGNATURE_FILES <= MAX_HASHED_FILES`) holds by definition and can never fail.",
+   "impact": "A developer who adds a third signed tree to findReviewGateState gets no signal that the constant, and the cache-budget invariant it claims to protect, is now wrong. The test that looks like a guard stays green.",
+   "quote": "export const SIGNATURE_WALKS_PER_STOP = 2;"
+  },
+  {
+   "id": "G4",
+   "file": "src/review/mutate.test.ts",
+   "line": 251,
+   "severity": "minor",
+   "problem": "The new shared test helper `make` takes five positional parameters, with two adjacent millisecond ages (ageMs, markerAgeMs) and an optional directory last. Call sites read as bare number pairs, e.g. `make(\"keryx-mutate-DEADDD\", {...}, 1000, 3 * HEARTBEAT_MS, repoScratch)`.",
+   "impact": "The directory age and the marker age are easy to swap, and nothing catches it. The heartbeat tests depend on exactly which of the two is old, so a swapped pair silently tests the wrong case.",
+   "quote": "async function make(name: string, owner: unknown, ageMs: number, markerAgeMs: number = ageMs, into: string = scratch): Promise<string> {"
+  },
+  {
+   "id": "G5",
+   "file": "src/review/completion-gate.ts",
+   "line": 65,
+   "severity": "minor",
+   "problem": "The file-type mask is the magic number 0o170000. Node exposes it as fs.constants.S_IFMT, and the module already imports from node:fs.",
+   "impact": "A reader has to recognise the POSIX S_IFMT value to see what the `special:` signature encodes.",
+   "quote": "if (!info.isFile()) return `special:${(info.mode & 0o170000).toString(8)}`;"
+  },
+  {
+   "id": "G6",
+   "file": "src/review/mutate.ts",
+   "line": 232,
+   "severity": "minor",
+   "problem": "The new isLinkedWorktree doc says everything else 'is copied as the base copy did'. No 'base copy' exists in the code, so the phrase only makes sense against the replaced isNestedCheckout behaviour. Even then it is inaccurate: that version skipped embedded clones, `.git` links and unreadable `.git` files, and this one copies them.",
+   "impact": "A maintainer reading the comment cannot tell what 'the base copy' refers to, and may take the old skip behaviour as the intended baseline.",
+   "quote": "Everything else is copied as the base copy did, because the tests may load it"
+  },
+  {
+   "id": "G7",
+   "file": "docs/docs/guides/review-with-a-record.md",
+   "line": 200,
+   "severity": "info",
+   "problem": "The same sweep-policy paragraph, with the thresholds hard-coded as 'two minutes', 'ten minutes' and 'six hours', is added at four hand-maintained sites: this guide (lines 197-202), docs/docs/cli-reference.md:5107, src/commands/review.ts:5087-5093 (help text), and the SKILL.detail.md pair (.metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md:790-795, mirrored in src/gdskills/bundled/...). The values come from HEARTBEAT_MS, STALE_HEARTBEAT_MS and STALE_SCRATCH_MS, but none of the copies is generated or checked against them. This is info only because the mutate entry already duplicates its other prose (treeHash, bail) across these same surfaces, so the duplication follows an existing convention.",
+   "impact": "Each threshold change needs four prose edits. The same guide already shows the cost: its two review-gate paragraphs had drifted to 'two' vs 'three' stalls, which this change fixes.",
+   "quote": "own `keryx-mutate-*` directories whose owner died (no heartbeat for two minutes)"
+  }
+ ]
+}

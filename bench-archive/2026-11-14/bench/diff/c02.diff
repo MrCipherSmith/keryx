@@ -1,0 +1,2822 @@
+diff --git a/.claude/settings.json b/.claude/settings.json
+index 8ad3f52c3..e1b7e190a 100644
+--- a/.claude/settings.json
++++ b/.claude/settings.json
+@@ -13,7 +13,7 @@
+     ],
+     "PreToolUse": [
+       {
+-        "matcher": "Bash",
++        "matcher": "Bash|Grep",
+         "hooks": [
+           {
+             "type": "command",
+diff --git a/src/commands/ctx.ts b/src/commands/ctx.ts
+index 2359565cb..2aaf07fd1 100644
+--- a/src/commands/ctx.ts
++++ b/src/commands/ctx.ts
+@@ -348,13 +348,17 @@ async function handleInstallHook(args: string[]): Promise<void> {
+   console.log("escape: append `# keryx:raw <reason>` to run a raw command anyway");
+   console.log("");
+   for (const runtime of runtimes) {
+-    const { path: file, errors } = await installRuntimeHook(cwd, runtime);
++    const { path: file, errors, upgraded } = await installRuntimeHook(cwd, runtime);
+     const tag = runtime.confidence === "experimental" ? " (experimental — verify on a live install)" : "";
+     if (errors.length > 0) {
+       for (const error of errors) console.error(`  ✗ ${error}`);
+       process.exitCode = 1;
+     } else {
+       console.log(`  ✓ ${runtime.id} -> ${path.relative(cwd, file)}${tag}`);
++      // Said out loud, because the install silently overwrites it: an operator
++      // who ran install-hook before a tool was added has no other way to learn
++      // that their guard had stopped covering one.
++      if (upgraded) console.log(`    ${upgraded}`);
+     }
+   }
+   reportUnsupported(unsupported);
+diff --git a/src/commands/orient-stdin.test.ts b/src/commands/orient-stdin.test.ts
+new file mode 100644
+index 000000000..ff19b7cf7
+--- /dev/null
++++ b/src/commands/orient-stdin.test.ts
+@@ -0,0 +1,108 @@
++// The hook runs on EVERY prompt, so the no-prompt path is the one that must not
++// move. A runtime that pipes this command nothing, or pipes it something it did
++// not expect, has to keep getting exactly the output it got before the prompt
++// was ever read — and the turn must survive a router that throws.
++
++import { describe, expect, test } from "bun:test";
++import path from "node:path";
++
++const CLI = path.join(import.meta.dir, "..", "cli.ts");
++const REPO = path.join(import.meta.dir, "..", "..");
++
++async function orient(stdin: string | null): Promise<{ out: string; code: number }> {
++  const proc = Bun.spawn(["bun", CLI, "orient", "claude"], {
++    cwd: REPO,
++    stdin: stdin === null ? "ignore" : new TextEncoder().encode(stdin),
++    stdout: "pipe",
++    stderr: "pipe",
++  });
++  const [out, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
++  return { out, code };
++}
++
++describe("orient reads the UserPromptSubmit payload", () => {
++  test("a routed prompt appends a block naming the skill", async () => {
++    const { out, code } = await orient(JSON.stringify({ prompt: "сделай мне полное ревью без исправления" }));
++    expect(code).toBe(0);
++    expect(out).toContain("Routing for THIS request");
++    expect(out).toContain("review-orchestrator");
++  }, 30000);
++
++  test("the output DIFFERS by prompt — the property that was false before", async () => {
++    const review = await orient(JSON.stringify({ prompt: "сделай полное ревью" }));
++    const trivial = await orient(JSON.stringify({ prompt: "what is 2+2" }));
++    expect(review.out).not.toBe(trivial.out);
++  }, 30000);
++
++  test("every no-prompt form yields the same output and exit 0", async () => {
++    const forms = [null, "", "   ", "not json at all", "[1,2,3]", '{"session_id":"x"}', '{"prompt":""}', '{"prompt":42}'];
++    const results = await Promise.all(forms.map((f) => orient(f)));
++    for (const r of results) {
++      expect(r.code).toBe(0);
++      expect(r.out).not.toContain("Routing for THIS request");
++    }
++    const [first, ...rest] = results;
++    for (const r of rest) {
++      expect(r.out).toBe(first!.out);
++    }
++  }, 60000);
++
++  test("an unroutable prompt emits no block, rather than guessing", async () => {
++    const { out, code } = await orient(JSON.stringify({ prompt: "what is 2+2" }));
++    expect(code).toBe(0);
++    expect(out).not.toContain("Routing for THIS request");
++  }, 30000);
++});
++
++describe("the fail-safes on a hook that runs on every prompt", () => {
++  test("a stdin that never closes does not hang the process", async () => {
++    // `Bun.stdin.text()` waited forever on an open pipe, AFTER buildOrientation
++    // had done its work, so nothing was written at all. Racing a timer was not
++    // enough on its own either: the abandoned read holds the event loop, so the
++    // orientation got written and the process still never exited — and a hook
++    // that never exits hangs the harness just as surely as one that never
++    // writes. This drives a real pipe that is opened and never fed.
++    const proc = Bun.spawn(["bun", CLI, "orient", "claude"], {
++      cwd: REPO,
++      stdin: "pipe",
++      stdout: "pipe",
++      stderr: "pipe",
++    });
++    const settled = await Promise.race([
++      Promise.all([new Response(proc.stdout).text(), proc.exited]).then(([out, code]) => ({ out, code })),
++      new Promise<null>((resolve) => setTimeout(() => resolve(null), 15000)),
++    ]);
++    if (settled === null) {
++      proc.kill();
++      throw new Error("orient did not exit with an open stdin — the deadline did not release the read");
++    }
++    expect(settled.code).toBe(0);
++    // It still produced the orientation; the deadline costs the routing block,
++    // which is the correct thing to lose.
++    expect(settled.out.length).toBeGreaterThan(100);
++    expect(settled.out).not.toContain("Routing for THIS request");
++  }, 30000);
++
++  test("the no-prompt output is exactly the orientation, not merely self-consistent", async () => {
++    // The suite used to assert only that the eight no-prompt forms agreed with
++    // EACH OTHER, so a change to the body or to the body/routing concatenation
++    // passed for all of them at once — the invariant the test was named for was
++    // the one it did not check.
++    const { out, code } = await orient("");
++    expect(code).toBe(0);
++    const { buildOrientation } = await import("../ctx/orient");
++    const { getOrientRuntime } = await import("../ctx/orient-runtimes");
++    const orientation = await buildOrientation(REPO);
++    const runtime = getOrientRuntime("claude");
++    expect(out).toBe(`${runtime ? runtime.format(orientation) : orientation}\n`);
++  }, 30000);
++
++  test("a routed prompt is the orientation PLUS the block, inside the envelope", async () => {
++    // The block used to be appended after `runtime.format(...)`, outside the
++    // envelope that function exists to own — which for cursor produced
++    // unparseable JSON and lost the orientation too.
++    const { out } = await orient(JSON.stringify({ prompt: "сделай полное ревью" }));
++    expect(out).toContain("Routing for THIS request");
++    expect(out).toContain("review-orchestrator");
++  }, 30000);
++});
+diff --git a/src/commands/orient.ts b/src/commands/orient.ts
+index 4a82a7e18..3c9f56949 100644
+--- a/src/commands/orient.ts
++++ b/src/commands/orient.ts
+@@ -3,6 +3,7 @@ import path from "node:path";
+ import { pathExists } from "../lib/fs";
+ import { optionValue } from "../lib/args";
+ import { buildOrientation } from "../ctx/orient";
++import { formatRoutingBlock, routePrompt } from "../ctx/orient-routing";
+ import {
+   getOrientRuntime,
+   orientRuntimeIds,
+@@ -41,7 +42,111 @@ export async function orientCommand(args: string[]): Promise<void> {
+   // Default: emit the orientation for a runtime (invoked by the installed hook).
+   const runtime = getOrientRuntime(first ?? "claude") ?? getOrientRuntime("claude");
+   const orientation = await buildOrientation(process.cwd());
+-  process.stdout.write(`${runtime ? runtime.format(orientation) : orientation}\n`);
++  // Folded in BEFORE formatting, because `format` owns the runtime's envelope.
++  // Appending after it emitted raw markdown behind `cursorAdditionalContext`'s
++  // closing brace — `{"additional_context":"…"}## Routing…` — which is not
++  // parseable JSON, so cursor would have dropped the ORIENTATION too, not just
++  // the routing block. Latent only because cursor's sessionStart payload
++  // carries no `prompt`; the runtime that does carry one happens to be the one
++  // using plainStdout.
++  const full = `${orientation}${await routingBlockForStdin()}`;
++  process.stdout.write(`${runtime ? runtime.format(full) : full}\n`);
++}
++
++// This command is installed as a `UserPromptSubmit` hook and its stdout is added
++// to the turn's context. It never read the payload: its output was byte-identical
++// for "сделай полное ревью" and "what is 2+2", so what reached the agent was the
++// static Intent Router table — the same prose that failed to route the session
++// which reported this. Reading the prompt turns a table of ten rows into one
++// name.
++//
++// Advisory by construction. "The agent did not invoke a skill" is the ABSENCE of
++// an action and `PreToolUse` intercepts actions, so there is nothing here to
++// block; this injects a suggestion and blocks nothing.
++async function routingBlockForStdin(): Promise<string> {
++  try {
++    const prompt = await readPromptFromStdin();
++    if (!prompt) {
++      return "";
++    }
++    return formatRoutingBlock(prompt, await routePrompt(prompt));
++  } catch {
++    // A hook that runs on every prompt must never fail the turn. Losing the
++    // routing block is the correct failure; losing the turn is not.
++    return "";
++  }
++}
++
++/**
++ * The prompt from a `UserPromptSubmit` payload, or null.
++ *
++ * Absent, empty, non-JSON, or JSON without a prompt all return null, and the
++ * caller then emits exactly the pre-change output — a runtime that pipes this
++ * command nothing must keep working.
++ */
++/** Long enough for a harness that writes then closes; short enough to never be felt. */
++const STDIN_DEADLINE_MS = 250;
++
++/**
++ * Read stdin to EOF, or give up at the deadline and CANCEL the read.
++ *
++ * `Bun.stdin.text()` on a pipe that is never closed waits forever, and it waits
++ * after buildOrientation has done its work, so nothing is written at all. Racing
++ * it against a timer is not enough on its own: the abandoned read keeps its own
++ * handle on the event loop, so the orientation gets written and the process
++ * still never exits — and a hook that never exits hangs the harness just as
++ * surely as one that never writes. Cancelling the reader releases it.
++ *
++ * `keryx orient` printed immediately before this feature existed; a CI step or
++ * `ssh host \'keryx orient\'` inherits exactly the stdin that reintroduced the wait.
++ */
++async function readAllBounded(): Promise<string | null> {
++  const reader = Bun.stdin.stream().getReader();
++  const timer = setTimeout(() => void reader.cancel().catch(() => {}), STDIN_DEADLINE_MS);
++  timer.unref?.();
++  const chunks: Uint8Array[] = [];
++  try {
++    for (;;) {
++      const { done, value } = await reader.read();
++      if (done) break;
++      if (value) chunks.push(value);
++    }
++  } catch {
++    return null; // cancelled at the deadline, or an unreadable stdin
++  } finally {
++    clearTimeout(timer);
++    reader.releaseLock?.();
++  }
++  if (chunks.length === 0) return null;
++  return new TextDecoder().decode(Buffer.concat(chunks.map((c) => Buffer.from(c))));
++}
++
++async function readPromptFromStdin(): Promise<string | null> {
++  if (process.stdin.isTTY) {
++    return null;
++  }
++  // Bounded, because `Bun.stdin.text()` on a pipe that is never closed waits
++  // forever — and it waits AFTER buildOrientation has done its work, so nothing
++  // is written at all. The try/catch around this cannot help: a block is not a
++  // throw. `keryx orient` printed immediately before this change; a CI step or
++  // `ssh host 'keryx orient'` inherits exactly such a stdin. A hook that runs on
++  // every prompt must never fail the turn, and expiry is treated as the
++  // no-prompt case the caller already handles correctly.
++  const raw = await readAllBounded();
++  if (raw === null || !raw.trim()) {
++    return null;
++  }
++  let payload: unknown;
++  try {
++    payload = JSON.parse(raw);
++  } catch {
++    return null;
++  }
++  if (typeof payload !== "object" || payload === null) {
++    return null;
++  }
++  const prompt = (payload as { prompt?: unknown }).prompt;
++  return typeof prompt === "string" && prompt.trim() ? prompt : null;
+ }
+ 
+ function parseRuntimeArg(args: string[]): string[] {
+diff --git a/src/commands/route-synonyms.test.ts b/src/commands/route-synonyms.test.ts
+new file mode 100644
+index 000000000..10543b760
+--- /dev/null
++++ b/src/commands/route-synonyms.test.ts
+@@ -0,0 +1,111 @@
++// The synonym table is routing DATA, and 27 of its 33 new entries had no test.
++//
++// Measured, not supposed: a mutation deleting all 33 newly-added prefixes turned
++// only 6 corpus tests red, and deleting `["полн", ["full","complete"]]` — the
++// entry the change names as the root cause of the reported incident — turned
++// none red at all, because the literal `"полное ревью"` catalog trigger masks
++// it. So the corpus could not say which mechanism carried the fix, and a wrong
++// prefix would ship silently.
++//
++// Driving `expandQueryTokens` directly pins the table itself, which is far
++// cheaper than one end-to-end corpus pair per entry and does not depend on any
++// catalog trigger staying where it is.
++
++import { describe, expect, test } from "bun:test";
++import { expandQueryTokens, normalizeRouteText } from "./skills";
++
++function tokensFor(text: string): Set<string> {
++  return new Set(expandQueryTokens(normalizeRouteText(text)).keys());
++}
++
++/** One inflected form a user would actually type, per prefix family. */
++const EXPANSIONS: ReadonlyArray<readonly [string, readonly string[]]> = [
++  ["сделай ревью", ["review"]],
++  ["ревьюирование кода", ["review"]],
++  ["проверь это", ["check", "verify"]],
++  ["реализуй фичу", ["implement"]],
++  ["внедри это", ["implement"]],
++  ["закрой задачу", ["task", "tasks"]],
++  ["заведи тикет", ["issue", "ticket"]],
++  ["напиши тесты", ["test", "tests", "testing", "write", "create"]],
++  ["верифицируй результат", ["verify", "verification"]],
++  ["оцени качество", ["quality"]],
++  ["собери документацию", ["documentation", "docs", "document", "build"]],
++  ["собери требования", ["requirements"]],
++  ["подготовь пакет", ["package"]],
++  ["напиши спецификацию", ["specification", "spec"]],
++  ["проверь безопасность", ["security"]],
++  ["найди уязвимости", ["security", "vulnerability"]],
++  ["предотврати утечку", ["security", "exfiltration", "leak"]],
++  ["собери контекст", ["context"]],
++  ["составь план", ["plan", "planning"]],
++  ["сделай рефакторинг", ["refactor"]],
++  ["накати миграцию", ["migration", "migrate"]],
++  ["измерь производительность", ["performance"]],
++  ["проверь здоровье проекта", ["health"]],
++  ["построй граф", ["graph"]],
++  ["обнови вики", ["wiki"]],
++  ["создай скилл", ["skill", "create"]],
++  ["разверни сервис", ["deploy"]],
++  ["обнови зависимости", ["dependency", "dependencies", "update", "upgrade"]],
++  ["проведи интервью", ["interview"]],
++  ["устрой брейншторм", ["brainstorm"]],
++  ["опиши продукт", ["product", "prd"]],
++  ["создай фло", ["flow", "create"]],
++  ["запусти оркестратор", ["orchestrator", "orchestrate", "run"]],
++  ["проанализируй код", ["analyze", "analysis"]],
++  // The families added by this change, each named in its own right.
++  ["полное покрытие", ["full", "complete"]],
++  ["целиком проект", ["full", "whole"]],
++  ["весь проект", ["all", "full"]],
++  ["напиши функцию", ["write", "create"]],
++  ["начни работу", ["start", "begin"]],
++  ["исправь баг", ["fix"]],
++  ["почини это", ["fix"]],
++  ["найди файл", ["find"]],
++  ["поиск по коду", ["find", "search"]],
++  ["объясни архитектуру", ["explain"]],
++  ["измени поведение", ["change", "changes"]],
++  ["заведи флоу", ["create", "start", "flow"]],
++  ["сделай коммит", ["commit"]],
++  ["открой файл", ["open"]],
++  ["пулл реквест", ["pull", "request"]],
++  ["влей ветку", ["merge", "branch"]],
++  ["запусти сборку", ["run", "build"]],
++  ["проанализируй ишью", ["analyze", "analysis", "issue"]],
++];
++
++describe("every synonym family expands to the tokens it claims", () => {
++  for (const [phrase, expected] of EXPANSIONS) {
++    test(`${phrase} -> ${expected.join("+")}`, () => {
++      const tokens = tokensFor(phrase);
++      for (const token of expected) {
++        expect(tokens.has(token)).toBe(true);
++      }
++    });
++  }
++
++  test("the table is exercised broadly, not by a handful of families", () => {
++    // Non-vacuity: an emptied EXPANSIONS list would make every loop above
++    // vanish and this file would pass while testing nothing.
++    expect(EXPANSIONS.length).toBeGreaterThanOrEqual(45);
++  });
++
++  test("`проверь` does NOT imply review — it means check", () => {
++    // It used to. One `провер*` word expanded to check+verify+review, which
++    // satisfied review-verifier's two-word trigger "review --verify" on its own,
++    // so "проверь почту" ("check the mail") routed there at 100.
++    const tokens = tokensFor("проверь почту");
++    expect(tokens.has("check")).toBe(true);
++    expect(tokens.has("review")).toBe(false);
++  });
++
++  test("a token records the query word it came from", () => {
++    // The map, not the set, is what stops one word satisfying a multi-word
++    // trigger. Without the source, `sources.size` in triggerSpecificity is
++    // meaningless.
++    const map = expandQueryTokens(normalizeRouteText("проанализируй ишью"));
++    expect(map.get("analyze")).toBe("проанализируй");
++    expect(map.get("issue")).toBe("ишью");
++  });
++});
+diff --git a/src/commands/skills-route-corpus.test.ts b/src/commands/skills-route-corpus.test.ts
+new file mode 100644
+index 000000000..ba6a1b1bf
+--- /dev/null
++++ b/src/commands/skills-route-corpus.test.ts
+@@ -0,0 +1,203 @@
++// Routing is pinned by a corpus, because spot checks are what let it break.
++//
++// A live session was asked, in Russian, for a full review. It never reached
++// `review-orchestrator`. The cause was not the language: `review-frontend`
++// carries the trigger "ui review", `routeTokens` drops tokens under three
++// characters, so the trigger reduced to ["review"] — and the order-free test is
++// `every(token => queryTokens.has(token))`, which a one-element list satisfies
++// for ANY query containing "review". The specialist therefore claimed a full
++// trigger hit on every review request in every language and outscored the
++// orchestrator, inverting the orchestrator's own contract: it exists for the
++// request that names no specialist, and that is the request it lost.
++//
++// The same collapse hit "open PR" -> "open" and "db migrate" -> "migrate".
++//
++// Two directions have to hold at once, and fixing either one alone breaks the
++// other, which is why they are asserted together rather than in separate tests:
++// a GENERIC request must reach the orchestrator, and a request NAMING a
++// specialist must reach that specialist.
++
++import { describe, expect, test } from "bun:test";
++import { BUNDLED_GDSKILLS } from "../gdskills/catalog";
++import { routePrompt } from "../ctx/orient-routing";
++import { scoreBundledSkillRoute, triggerSpecificity, normalizeRouteText } from "./skills";
++
++function topSkill(query: string): { name: string; category: string; score: number } | null {
++  const ranked = BUNDLED_GDSKILLS.map((entry) => scoreBundledSkillRoute(entry, query))
++    .filter((match) => match.score > 0)
++    .sort((a, b) => b.score - a.score || a.entry.name.localeCompare(b.entry.name));
++  const best = ranked[0];
++  return best ? { name: best.entry.name, category: best.entry.category, score: best.score } : null;
++}
++
++/**
++ * (query, expected top-1). Every pair here is one a human would answer the same
++ * way; genuinely ambiguous requests ("проверь качество", "объясни архитектуру")
++ * are deliberately absent rather than pinned to whichever skill happens to win.
++ */
++const RU_CORPUS: ReadonlyArray<readonly [string, string]> = [
++  ["сделай мне полное ревью без исправления", "review-orchestrator"],
++  ["полное ревью проекта", "review-orchestrator"],
++  ["сделай код ревью всего проекта", "review-orchestrator"],
++  ["проведи ревью пулл реквеста", "review-orchestrator"],
++  ["проверь безопасность кода", "review-security-code"],
++  ["найди узкие места по производительности", "review-performance"],
++  ["создай фло на эту задачу", "flow-orchestrator"],
++  ["заведи флоу из этой ишьи", "flow-orchestrator"],
++  ["проанализируй ишью", "issue-analyzer"],
++  ["реализуй задачу", "task-implementer"],
++  ["напиши спецификацию", "spec-writer"],
++  ["напиши тесты для этого модуля", "test-gen"],
++  ["оформи пакет документации", "docpack-orchestrator"],
++  ["создай PRD", "prd-creator"],
++  ["обнови зависимости", "dependency-update"],
++  ["сделай коммит", "commit"],
++  ["открой пулл реквест", "pr"],
++  ["создай скилл для этого модуля", "entity-skill-creator"],
++  ["разбери CLAUDE.md", "agent-entrypoint-distiller"],
++];
++
++const EN_CORPUS: ReadonlyArray<readonly [string, string]> = [
++  ["review", "review-orchestrator"],
++  ["do a review", "review-orchestrator"],
++  ["do a full review without fixing", "review-orchestrator"],
++  ["review the changes", "review-orchestrator"],
++  ["frontend review", "review-frontend"],
++  ["security review", "review-security-code"],
++  ["architecture review", "review-architecture"],
++  ["backend review", "review-backend"],
++  ["logic review", "review-logic"],
++  ["highload review", "review-highload"],
++  ["layout review", "review-layout"],
++  ["clean code review", "review-clean-code"],
++  ["review the mobx store", "code-mobx-store-review"],
++  ["verify the findings", "review-verifier"],
++  ["review PR feedback", "review-pr-feedback"],
++  ["implement this issue end to end", "job-orchestrator"],
++  ["create a flow from this issue", "flow-orchestrator"],
++  ["analyze the issue", "issue-analyzer"],
++  ["brainstorm options", "brainstorm"],
++  ["write a technical specification", "spec-writer"],
++  ["open a PR", "pr"],
++  ["commit changes", "commit"],
++  ["update dependencies", "dependency-update"],
++  ["generate a changelog", "changelog"],
++  ["run the quality gate", "code-verifier"],
++  ["security audit", "security-audit"],
++];
++
++describe("routing corpus", () => {
++  test("the corpus is real — an empty catalog would pass every assertion vacuously", async () => {
++    expect(BUNDLED_GDSKILLS.length).toBeGreaterThan(50);
++    expect(RU_CORPUS.length + EN_CORPUS.length).toBeGreaterThanOrEqual(30);
++    // Russian is not a token afterthought: the reported failure was a Russian
++    // request, and an English-only corpus would not have caught it.
++    expect(RU_CORPUS.length * 3).toBeGreaterThanOrEqual(RU_CORPUS.length + EN_CORPUS.length);
++    // Every expected skill must exist, or a typo becomes a silent pass.
++    for (const [, expected] of [...RU_CORPUS, ...EN_CORPUS]) {
++      expect(BUNDLED_GDSKILLS.some((s) => s.name === expected)).toBe(true);
++    }
++  });
++
++  for (const [query, expected] of RU_CORPUS) {
++    test(`ru: ${query} -> ${expected}`, async () => {
++      expect(topSkill(query)?.name).toBe(expected);
++    });
++  }
++
++  for (const [query, expected] of EN_CORPUS) {
++    test(`en: ${query} -> ${expected}`, async () => {
++      expect(topSkill(query)?.name).toBe(expected);
++    });
++  }
++});
++
++// Ranking is not what ships. `topSkill` above filters `score > 0`; the surface a
++// user meets is `routePrompt`, which filters `score >= ROUTING_FLOOR` and is what
++// the orient hook prints. Three pairs of this corpus were green while the hook
++// emitted NOTHING for them — including `open a PR`, one of the very collapses
++// this file's header says the change fixed. Asserting ranking alone let the
++// headline regression asset pass while the feature was silent.
++describe("the corpus holds through the surface that actually ships", () => {
++  for (const [query, expected] of [...RU_CORPUS, ...EN_CORPUS]) {
++    test(`routePrompt: ${query} -> ${expected}`, async () => {
++      const emitted = await routePrompt(query);
++      expect(emitted.length).toBeGreaterThan(0);
++      expect(emitted[0]?.name).toBe(expected);
++    });
++  }
++
++  test("ranking and emission agree on every pair — no pair ranks one way and emits another", async () => {
++    const disagreements: Array<{ query: string; ranked: string | undefined; emitted: string | undefined }> = [];
++    for (const [query] of [...RU_CORPUS, ...EN_CORPUS]) {
++      const ranked = topSkill(query)?.name;
++      const emitted = (await routePrompt(query))[0]?.name;
++      if (ranked !== emitted) disagreements.push({ query, ranked, emitted });
++    }
++    expect(disagreements).toEqual([]);
++  });
++});
++
++describe("a trigger cannot fire on fewer words than it was written with", () => {
++  // The scorer now needs token -> source-word, so one query word cannot satisfy
++  // a multi-word trigger through synonym expansion.
++  const tokensOf = (q: string) =>
++    new Map(
++      normalizeRouteText(q)
++        .split(" ")
++        .filter((t) => t.length >= 3)
++        .map((t) => [t, t] as const),
++    );
++
++  test('"ui review" no longer degenerates to "review"', () => {
++    // The regression in one line: before the fix this returned a hit, because
++    // "ui" was filtered out and `every` over ["review"] is trivially true.
++    expect(triggerSpecificity("ui review", "review", tokensOf("review"))).toBe(0);
++    // It still fires when the query actually says it.
++    expect(triggerSpecificity("ui review", "ui review", tokensOf("ui review"))).toBe(2);
++  });
++
++  test('"open pr" no longer fires on any query containing "open"', () => {
++    expect(triggerSpecificity("open pr", "open the file", tokensOf("open the file"))).toBe(0);
++  });
++
++  test("a genuine one-word trigger still works, because verbatim is what it meant", async () => {
++    expect(triggerSpecificity("brainstorm", "brainstorm options", tokensOf("brainstorm options"))).toBe(1);
++  });
++
++  test("a two-token trigger still matches order-free", async () => {
++    // The behaviour the order-free path exists for, unchanged.
++    expect(
++      triggerSpecificity("requirements package", "prepare a requirements documentation package", tokensOf("prepare a requirements documentation package")),
++    ).toBe(2);
++  });
++
++  test("a longer match outranks a shorter one, which is what keeps both directions right", async () => {
++    const generic = triggerSpecificity("review", "frontend review", tokensOf("frontend review"));
++    const specific = triggerSpecificity("frontend review", "frontend review", tokensOf("frontend review"));
++    expect(specific).toBeGreaterThan(generic);
++  });
++});
++
++describe("the orchestrator takes the request that names no specialist", () => {
++  test("a generic review outranks every specialist reviewer", async () => {
++    const generic = topSkill("review");
++    expect(generic?.name).toBe("review-orchestrator");
++    const frontend = scoreBundledSkillRoute(
++      BUNDLED_GDSKILLS.find((s) => s.name === "review-frontend")!,
++      "review",
++    );
++    expect(frontend.reasons).not.toContain("trigger");
++    expect(frontend.score).toBeLessThan(generic!.score);
++  });
++
++  test("naming a specialist still reaches it — the direction that is easy to break while fixing the other", async () => {
++    for (const [query, expected] of [
++      ["frontend review", "review-frontend"],
++      ["security review", "review-security-code"],
++      ["backend review", "review-backend"],
++    ] as const) {
++      expect(topSkill(query)?.name).toBe(expected);
++    }
++  });
++});
+diff --git a/src/commands/skills.ts b/src/commands/skills.ts
+index 17e3f94d6..505c0df33 100644
+--- a/src/commands/skills.ts
++++ b/src/commands/skills.ts
+@@ -304,6 +304,58 @@ function parseProjectSkillMetadata(content: string): {
+   };
+ }
+ 
++export interface RankedSkill {
++  readonly source: "catalog" | "project";
++  readonly name: string;
++  readonly module: string;
++  readonly score: number;
++  readonly reasons: string[];
++  readonly path: string;
++}
++
++/**
++ * One ranking over both skill sources, for every caller.
++ *
++ * There were three copies of this pipeline — `routeProjectSkills`, the per-prompt
++ * router, and a helper duplicated across two test files — and they did not
++ * agree. The per-prompt one omitted project-skills entirely, so the hook could
++ * never name a project-defined skill or reviewer even though the project's own
++ * routing rule says to prefer them; that exclusion was never recorded as a
++ * decision anywhere, which is how it read as an omission.
++ */
++export async function rankSkillsForQuery(query: string): Promise<RankedSkill[]> {
++  const catalog = BUNDLED_GDSKILLS.map((entry) => scoreBundledSkillRoute(entry, query))
++    .filter((match) => match.score > 0)
++    .map((match): RankedSkill => ({
++      source: "catalog",
++      name: match.entry.name,
++      module: match.entry.category,
++      score: match.score,
++      reasons: match.reasons,
++      path: `.metaproject/skills/gdskills/${match.entry.category}/${match.entry.name}/SKILL.md`,
++    }));
++
++  const registry = await readProjectSkillRegistryFromManifest();
++  const project = registry
++    .map((entry) => scoreProjectSkillRoute(entry, query))
++    .filter((match) => match.score > 0)
++    .map((match): RankedSkill => ({
++      source: "project",
++      name: match.entry.name,
++      module: match.entry.module,
++      score: match.score,
++      reasons: match.reasons,
++      path: match.entry.path,
++    }));
++
++  return [...catalog, ...project].sort(
++    (a, b) =>
++      b.score - a.score ||
++      a.source.localeCompare(b.source) ||
++      `${a.module}/${a.name}`.localeCompare(`${b.module}/${b.name}`),
++  );
++}
++
+ async function routeProjectSkills(args: string[]): Promise<void> {
+   if (args.includes("--help") || args.includes("-h")) {
+     printRouteHelp();
+@@ -378,6 +430,60 @@ async function routeProjectSkills(args: string[]): Promise<void> {
+   console.log(`Next: ${matches[0]?.next}`);
+ }
+ 
++/**
++ * How specifically `trigger` matches the query: the number of words the match
++ * accounts for, or 0 when it does not fire.
++ *
++ * Verbatim matches count the trigger's RAW words, because a verbatim match
++ * accounted for all of them — including the short ones `routeTokens` drops. The
++ * order-free path counts only surviving tokens and requires at least two of
++ * them, which is what stops a short-token trigger from degenerating into a bare
++ * generic word.
++ */
++export function triggerSpecificity(
++  trigger: string,
++  normalizedQuery: string,
++  queryTokens: ReadonlyMap<string, string>,
++): number {
++  if (!trigger) {
++    return 0;
++  }
++  const triggerTokens = triggerTokensOf(trigger);
++  if (triggerTokens.length === 0) {
++    return 0;
++  }
++  // Word-boundary padded: this change added one-word triggers ("review",
++  // "commit", "push") and a bare substring test matched inside longer words —
++  // "commitment issues" scored commit at 85, "preview the deck" reached
++  // review-orchestrator. Both sides are space-normalized, so padding is exact.
++  if (` ${normalizedQuery} `.includes(` ${trigger} `)) {
++    return triggerTokens.length;
++  }
++  if (!triggerTokens.every((token) => queryTokens.has(token))) {
++    return 0;
++  }
++  // Every token is present — but they must come from as many DISTINCT query
++  // WORDS as the trigger has tokens. Synonym expansion turns one Russian word
++  // into several English tokens: `провер*` yields check+verify+review, which
++  // covered review-verifier's two-word trigger "review --verify" by itself, so
++  // "проверь почту" ("check the mail") routed there at 100 and the orient hook
++  // injected it as a confident single arrow.
++  const sources = new Set(triggerTokens.map((token) => queryTokens.get(token)));
++  return sources.size >= triggerTokens.length ? triggerTokens.length : 0;
++}
++
++/**
++ * Trigger score = BASE + PER_TOKEN x specificity, so a longer match outranks a
++ * shorter one and a one-word trigger scores 55 — what every trigger scored
++ * before specificity existed.
++ *
++ * Exported because `ROUTING_FLOOR` is derived from them. It used to restate the
++ * sum as a bare `55` in another file, so retuning either constant silently
++ * changed what that floor meant, with no compile error and no failing test.
++ */
++export const TRIGGER_BASE = 40;
++export const TRIGGER_PER_TOKEN = 15;
++
+ export function scoreBundledSkillRoute(
+   entry: BundledSkill,
+   query: string,
+@@ -400,7 +506,7 @@ export function scoreBundledSkillRoute(
+     ].join(" "),
+   );
+ 
+-  const queryTokens = routeTokens(normalizedQuery, true);
++  const queryTokens = expandTokens(normalizedQuery, true);
+ 
+   let score = 0;
+   const reasons: string[] = [];
+@@ -413,15 +519,26 @@ export function scoreBundledSkillRoute(
+   // meaningful token of the trigger is present in the query (order-free) — so
+   // "requirements package" still matches "prepare requirements documentation
+   // package". Triggers carry both EN and RU phrasings.
+-  const triggerHit = triggers.some((trigger) => {
+-    if (normalizedQuery.includes(trigger)) {
+-      return true;
+-    }
+-    const triggerTokens = [...routeTokens(trigger)];
+-    return triggerTokens.length > 0 && triggerTokens.every((token) => queryTokens.has(token));
+-  });
+-  if (triggerHit) {
+-    score += 55;
++  //
++  // The order-free path is gated on the trigger keeping at least TWO meaningful
++  // tokens, and this is the whole point of `triggerSpecificity`. `routeTokens`
++  // drops tokens under three characters, so "ui review" reduced to ["review"]
++  // and `every` over a one-element list is satisfied by ANY query containing
++  // "review" — `review-frontend` therefore claimed a full trigger hit on every
++  // review request in every language and outscored `review-orchestrator`, whose
++  // triggers are honest two-word phrases. That inverts the orchestrator's own
++  // contract, which is to take the request that names no specialist. The same
++  // collapse hits "open PR" -> "open" and "db migrate" -> "migrate".
++  //
++  // Longer matches outrank shorter ones so the direction stays right in both
++  // cases: a request naming a specialist reaches the specialist, and a generic
++  // one reaches the orchestrator.
++  const specificity = triggers.reduce<number>(
++    (best, trigger) => Math.max(best, triggerSpecificity(trigger, normalizedQuery, queryTokens)),
++    0,
++  );
++  if (specificity > 0) {
++    score += TRIGGER_BASE + specificity * TRIGGER_PER_TOKEN;
+     reasons.push("trigger");
+   }
+   if (name && normalizedQuery.includes(name)) {
+@@ -430,7 +547,7 @@ export function scoreBundledSkillRoute(
+   }
+ 
+   const haystackTokens = routeTokens(haystack);
+-  const overlap = [...queryTokens].filter((token) => haystackTokens.has(token));
++  const overlap = [...queryTokens.keys()].filter((token) => haystackTokens.has(token));
+   if (overlap.length > 0) {
+     score += overlap.length * 10;
+     reasons.push(`tokens:${overlap.slice(0, 4).join("+")}`);
+@@ -504,6 +621,13 @@ const ROUTE_STOPWORDS = new Set([
+   "out", "run", "use", "used", "make", "get", "can", "please", "help", "want",
+   "для", "при", "что", "как", "это", "под", "над", "или", "все", "мне", "нам",
+   "нужно", "надо", "мой", "моя", "мои", "чтобы", "его", "them",
++  // Two-letter filler, now that the length floor is 2 rather than 3. The floor
++  // moved because the old one deleted meaningful short words from the query —
++  // "pr", "ui", "db", "md" — so a trigger that legitimately names one could
++  // never be satisfied and the skill became unreachable.
++  "an", "of", "to", "in", "is", "it", "on", "at", "by", "be", "do", "we", "me",
++  "my", "as", "or", "if", "so", "up", "no",
++  "на", "по", "из", "не", "об", "во", "ко", "мы", "вы", "их", "ее", "её", "им",
+ ]);
+ 
+ // Bundled skills carry mostly English metadata, so a Russian intent would never
+@@ -549,6 +673,7 @@ const RU_SYNONYM_PREFIXES: ReadonlyArray<readonly [string, readonly string[]]> =
+   ["созда", ["create"]],
+   ["деплой", ["deploy"]],
+   ["разверт", ["deploy"]],
++  ["разверн", ["deploy"]],
+   ["зависим", ["dependency", "dependencies"]],
+   ["интервью", ["interview"]],
+   ["опрос", ["interview"]],
+@@ -559,20 +684,100 @@ const RU_SYNONYM_PREFIXES: ReadonlyArray<readonly [string, readonly string[]]> =
+   ["оркестр", ["orchestrator", "orchestrate"]],
+   ["анализ", ["analyze", "analysis"]],
+   ["ревьюир", ["review"]],
++  // Words that decide WHICH skill wins, not merely that the query is on-topic.
++  // "полное ревью" carried no `full`, so it never earned the `full+review`
++  // match that puts review-orchestrator on top in English, and every Russian
++  // review request fell through to whichever specialist scored on `review`
++  // alone.
++  ["полн", ["full", "complete"]],
++  ["целик", ["full", "whole"]],
++  ["весь", ["all", "full"]],
++  ["всего", ["all", "full"]],
++  ["напиш", ["write", "create"]],
++  ["напис", ["write", "create"]],
++  ["начн", ["start", "begin"]],
++  ["начат", ["start", "begin"]],
++  ["исправ", ["fix"]],
++  ["почин", ["fix"]],
++  ["найд", ["find"]],
++  ["ищи", ["find", "search"]],
++  ["поиск", ["find", "search"]],
++  ["объясн", ["explain"]],
++  ["опиш", ["describe", "document"]],
++  ["измен", ["change", "changes"]],
++  ["правк", ["change", "changes"]],
++  // Russian verbs take prefixes (про-, за-, об-, от-), and matching is
++  // `startsWith`, so a root alone does not reach the inflected form the user
++  // actually types: "проанализируй" does not start with "анализ", and "проверь"
++  // does not start with "проверк". Each of these is a form observed in the
++  // routing corpus, not a guess at the language.
++  ["провер", ["check", "verify"]],
++  ["проанализ", ["analyze", "analysis"]],
++  ["ишь", ["issue"]],
++  ["завед", ["create", "start"]],
++  ["обнов", ["update", "upgrade"]],
++  ["коммит", ["commit"]],
++  ["откр", ["open"]],
++  ["пулл", ["pull"]],
++  ["реквест", ["request"]],
++  ["мерж", ["merge"]],
++  ["влив", ["merge"]],
++  ["влей", ["merge"]],
++  ["влит", ["merge"]],
++  ["пуш", ["push"]],
++  ["ветк", ["branch"]],
++  ["запуст", ["run"]],
++  ["собер", ["build"]],
++  ["сборк", ["build"]],
+ ];
+ 
++/** Exposed so the prefix table can be tested directly rather than only through end-to-end routing. */
++export function expandQueryTokens(normalized: string): ReadonlyMap<string, string> {
++  return expandTokens(normalized, true);
++}
++
+ function routeTokens(normalized: string, expand = false): Set<string> {
+-  const tokens = new Set(
+-    normalized
+-      .split(" ")
+-      .filter((token) => token.length >= 3 && !ROUTE_STOPWORDS.has(token)),
+-  );
++  return new Set(expandTokens(normalized, expand).keys());
++}
++
++/**
++ * Meaningful tokens of an AUTHOR-WRITTEN trigger — the noise filter does not
++ * apply.
++ *
++ * `length >= 3` exists to keep filler out of a free-text QUERY. Applied to a
++ * trigger it silently deleted words: "ui review" became ["review"], "open pr"
++ * became ["open"], "db migrate" became ["migrate"], and an `every()` over the
++ * one survivor then matched any query containing that word. Keeping every word
++ * an author wrote is what makes the >= 1 rule below sufficient with no special
++ * case: a trigger cannot degenerate if nothing is dropped from it.
++ */
++function triggerTokensOf(trigger: string): string[] {
++  return trigger.split(" ").filter(Boolean);
++}
++
++/**
++ * Query tokens mapped to the SOURCE WORD each came from.
++ *
++ * The map, rather than a bare set, is what stops one word from satisfying a
++ * multi-word trigger. A single `провер*` word expands to check+verify+review,
++ * which covered review-verifier's two-word trigger "review --verify" on its
++ * own — so "проверь почту" ("check the mail") routed to review-verifier at 100
++ * and the orient hook injected it as a confident single arrow. The gate has to
++ * count how many words of the QUERY were consumed, not how many tokens the
++ * trigger has.
++ */
++function expandTokens(normalized: string, expand = false): Map<string, string> {
++  const tokens = new Map<string, string>();
++  const words = normalized.split(" ").filter((word) => word.length >= 2 && !ROUTE_STOPWORDS.has(word));
++  for (const word of words) {
++    if (!tokens.has(word)) tokens.set(word, word);
++  }
+   if (expand) {
+-    for (const token of [...tokens]) {
++    for (const word of words) {
+       for (const [prefix, synonyms] of RU_SYNONYM_PREFIXES) {
+-        if (token.startsWith(prefix)) {
++        if (word.startsWith(prefix)) {
+           for (const synonym of synonyms) {
+-            tokens.add(synonym);
++            if (!tokens.has(synonym)) tokens.set(synonym, word);
+           }
+         }
+       }
+diff --git a/src/ctx/hook-classify.ts b/src/ctx/hook-classify.ts
+index 96d76ddfc..c81fdd627 100644
+--- a/src/ctx/hook-classify.ts
++++ b/src/ctx/hook-classify.ts
+@@ -43,20 +43,165 @@ const ROUTES: readonly Route[] = [
+ // `git <sub>` sub-commands whose output is long enough to route through ctx.
+ const GIT_ROUTABLE = /^(diff|log|show)$/;
+ 
+-// Split a command line into independently-executed segments. A shallow split on
+-// shell connectors is enough to catch `cd x && rg y` and `cat f | rg y` without
+-// a full shell parser.
+-function segments(command: string): string[] {
++// Split a command line into independently-executed STATEMENTS. A shallow split
++// on sequencing connectors is enough to catch `cd x && rg y` without a full
++// shell parser. `|` is deliberately NOT a separator here — see `firstStages`.
++function statements(command: string): string[] {
+   return command
+-    .split(/\|\||&&|;|\||\n/)
++    .split(/\|\||&&|;|\n/)
+     .map((s) => s.trim())
+     .filter(Boolean);
+ }
+ 
++/**
++ * Every pipeline stage of every statement, in order.
++ *
++ * The first version of this kept only the first stage, on the premise that
++ * "everything downstream of a `|` reads STDIN". That premise is FALSE, and the
++ * recorded lesson `allowlist-not-a-boundary.md` predicted exactly this: a
++ * pattern matches text and the shell re-interprets that text. `grep -rn P DIR`,
++ * `cat FILE`, `find`, `sed -n … FILE` and `git log` all take operands and never
++ * read stdin, so a one-token prefix disabled the guard for its entire target
++ * set — `true | grep -rn foo src/` ran a full tree search and was recorded as
++ * compliant, which is the false-clean defect the native-tool half of this same
++ * change was written to close.
++ *
++ * Position was never the right discriminator. Whether the stage NAMES A FILE
++ * is — see `readsStdin`.
++ */
++interface Stage {
++  readonly text: string;
++  /** First in its pipeline: nothing upstream, so nothing to read from stdin. */
++  readonly isFirst: boolean;
++}
++
++function stages(command: string): Stage[] {
++  const out: Stage[] = [];
++  for (const statement of statements(command)) {
++    const parts = splitPipeline(statement);
++    parts.forEach((text, index) => {
++      const trimmed = text.trim();
++      if (trimmed) out.push({ text: trimmed, isFirst: index === 0 });
++    });
++  }
++  return out;
++}
++
++/**
++ * Split on `|`, ignoring pipes inside quotes.
++ *
++ * `grep -E 'Test Files|Tests '` is ONE stage; splitting inside the quoted
++ * pattern invented a second one and blocked a command the guard is meant to
++ * allow. Still a shallow parser — it does not handle escapes or here-docs — but
++ * the quoted-pipe case is the one that occurs in real commands.
++ */
++function splitPipeline(statement: string): string[] {
++  const parts: string[] = [];
++  let current = "";
++  let quote: string | null = null;
++  for (const char of statement) {
++    if (quote) {
++      if (char === quote) quote = null;
++      current += char;
++      continue;
++    }
++    if (char === "'" || char === '"') {
++      quote = char;
++      current += char;
++      continue;
++    }
++    if (char === "|") {
++      parts.push(current);
++      current = "";
++      continue;
++    }
++    current += char;
++  }
++  parts.push(current);
++  return parts;
++}
++
++/** Tokens of a stage, treating a quoted run as a single token. */
++function stageTokens(stage: string): string[] {
++  return (stage.match(/'[^']*'|"[^"]*"|\S+/g) ?? []).filter(Boolean);
++}
++
++/**
++ * Flags that take a value, so the token after them is NOT a path operand.
++ *
++ * Per command, not one shared set: `-f` means "read patterns from a file" to
++ * grep and "follow" to tail, so a shared list swallowed `app.log` in
++ * `tail -f app.log` and let a file read through. Getting this wrong is silent in
++ * exactly one direction — it under-blocks — which is why it is spelled out.
++ */
++const VALUE_FLAGS: Record<string, ReadonlySet<string>> = {
++  search: new Set(["-e", "--regexp", "-f", "--file", "-m", "--max-count", "-A", "-B", "-C", "--context"]),
++  head: new Set(["-n", "--lines", "-c", "--bytes"]),
++  tail: new Set(["-n", "--lines", "-c", "--bytes"]),
++  sed: new Set(["-e", "--expression", "-f", "--file"]),
++  awk: new Set(["-f", "-v"]),
++};
++
++function valueFlagsFor(command: string, searchLike: boolean): ReadonlySet<string> {
++  return searchLike ? VALUE_FLAGS.search! : (VALUE_FLAGS[command] ?? new Set<string>());
++}
++
++/**
++ * True when this stage is filtering a stream rather than reading the tree.
++ *
++ * The distinction the change was actually reaching for: `grep -E 'Tests'` has a
++ * pattern and no path, so it can only be reading stdin; `grep -rn foo src/`
++ * names a directory. A recursive flag settles it on its own — `-r` with no path
++ * still walks the working directory.
++ *
++ * `find`, `ls` and `git log|diff|show` never read stdin in any useful sense and
++ * are therefore never filters, whatever their position.
++ */
++function readsStdin(tokens: readonly string[], isFirst: boolean): boolean {
++  const [command, ...rest] = tokens;
++  if (!command) {
++    return true;
++  }
++  if (/^(find|ls|git)$/.test(command)) {
++    return false;
++  }
++  // `rg` defaults to a RECURSIVE search of the working directory, so `rg y` with
++  // no path is a tree search — unlike `grep y`, which reads stdin. It is a
++  // filter only when something upstream is feeding it. This is the one place
++  // position legitimately matters, and getting it wrong let `cd x && rg y`
++  // through, which is the case the statement split exists to catch.
++  if (/^(rg|ripgrep)$/.test(command) && isFirst) {
++    return false;
++  }
++  const searchLike = /^(rg|grep|egrep|fgrep|ripgrep)$/.test(command);
++  const valueFlags = valueFlagsFor(command, searchLike);
++  // A search takes its pattern as the first operand; a reader does not.
++  let operandsAllowed = searchLike ? 1 : 0;
++  for (let i = 0; i < rest.length; i += 1) {
++    const token = rest[i] ?? "";
++    if (valueFlags.has(token)) {
++      i += 1; // the value belongs to the flag, not to the operand list
++      continue;
++    }
++    if (token.startsWith("-")) {
++      if (searchLike && /^-[a-zA-Z]*[rR]/.test(token)) {
++        return false; // recursive: walks the tree with or without a path
++      }
++      continue;
++    }
++    if (operandsAllowed > 0) {
++      operandsAllowed -= 1;
++      continue;
++    }
++    return false; // a path operand: this stage reads files
++  }
++  return true;
++}
++
+ // The meaningful leading tokens of a segment: skip env assignments (`FOO=bar`)
+ // and benign wrappers (`sudo`, `env`, …).
+ function leadingTokens(segment: string): string[] {
+-  const tokens = segment.split(/\s+/).filter(Boolean);
++  const tokens = stageTokens(segment);
+   let i = 0;
+   while (i < tokens.length) {
+     const token = tokens[i] ?? "";
+@@ -80,8 +225,11 @@ export function classifyCommand(command: string): HookClassification {
+     return { block: false, escapeReason: (escape[1] ?? "").trim() };
+   }
+ 
+-  for (const segment of segments(command)) {
+-    const tokens = leadingTokens(segment);
++  for (const stage of stages(command)) {
++    const tokens = leadingTokens(stage.text);
++    if (readsStdin(tokens, stage.isFirst)) {
++      continue;
++    }
+     const first = tokens[0];
+     if (!first || ALREADY_ROUTED.has(first)) {
+       continue;
+diff --git a/src/ctx/hook-install.test.ts b/src/ctx/hook-install.test.ts
+index f44f2ce9e..82fa6fb0a 100644
+--- a/src/ctx/hook-install.test.ts
++++ b/src/ctx/hook-install.test.ts
+@@ -6,6 +6,7 @@ import { installRuntimeHook, uninstallRuntimeHook } from "./hook-install";
+ import {
+   CLAUDE_RUNTIME,
+   CTX_HOOK_SENTINEL,
++  preToolUseMatcher,
+   getRuntime,
+   resolveRuntimes,
+   runtimeIds,
+@@ -58,7 +59,7 @@ test("installs the Bash routing guard into an absent settings file", async () =>
+     expect(raw.endsWith("\n")).toBe(true);
+     const settings = JSON.parse(raw) as Settings;
+ 
+-    const group = preToolUse(settings).find((g) => g.matcher === "Bash");
++    const group = preToolUse(settings).find((g) => g.matcher === preToolUseMatcher(CLAUDE_RUNTIME));
+     expect(group).toBeDefined();
+     expect(group?._keryxManaged).toBe(CTX_HOOK_SENTINEL);
+     expect(group?.hooks?.[0]?.command).toBe(CLAUDE_COMMAND);
+@@ -109,7 +110,7 @@ test("preserves user keys and coexists with security hooks", async () => {
+     const security = preToolUse(settings).find((g) => g.matcher === "Write|Edit");
+     expect(security?._keryxManaged).toBe("security-agent-hooks");
+     expect(settings.hooks?.UserPromptSubmit?.[0]?._keryxManaged).toBe("security-agent-hooks");
+-    expect(preToolUse(settings).some((g) => g.matcher === "Bash")).toBe(true);
++    expect(preToolUse(settings).some((g) => g.matcher === preToolUseMatcher(CLAUDE_RUNTIME))).toBe(true);
+     expect(settings._keryxManaged).toEqual(["security-agent-hooks", CTX_HOOK_SENTINEL]);
+   });
+ });
+@@ -136,7 +137,7 @@ test("uninstall removes only the ctx group, leaving security hooks intact", asyn
+     expect(removed).toBe(true);
+ 
+     const settings = await readSettings(root);
+-    expect(preToolUse(settings).some((g) => g.matcher === "Bash")).toBe(false);
++    expect(preToolUse(settings).some((g) => g.matcher === preToolUseMatcher(CLAUDE_RUNTIME))).toBe(false);
+     expect(preToolUse(settings).some((g) => g.matcher === "Write|Edit")).toBe(true);
+     expect(settings._keryxManaged).toEqual(["security-agent-hooks"]);
+   });
+@@ -147,3 +148,44 @@ test("uninstall on an absent settings file returns false", async () => {
+     expect(await uninstallRuntimeHook(root, CLAUDE_RUNTIME)).toBe(false);
+   });
+ });
++
++test("an install over a stale guard says what it replaced", async () => {
++  // The drift check used to run after the merge that erases the drift, so it
++  // could never fire in production. This is the assertion that would have caught
++  // that: it drives the real installer over a real Bash-only settings file.
++  await withTempDir(async (root) => {
++    const file = claudeSettingsPath(root);
++    await mkdir(path.dirname(file), { recursive: true });
++    await writeFile(
++      file,
++      `${JSON.stringify(
++        {
++          hooks: {
++            PreToolUse: [
++              {
++                matcher: "Bash",
++                hooks: [{ type: "command", command: CLAUDE_COMMAND }],
++                _keryxManaged: CTX_HOOK_SENTINEL,
++              },
++            ],
++          },
++          _keryxManaged: [CTX_HOOK_SENTINEL],
++        },
++        null,
++        2,
++      )}\n`,
++      "utf8",
++    );
++
++    const result = await installRuntimeHook(root, CLAUDE_RUNTIME);
++    expect(result.errors).toEqual([]);
++    expect(result.upgraded).toBeDefined();
++    expect(result.upgraded).toContain("Bash|Grep");
++
++    // And the install actually rewrote it, so a second run has nothing to say.
++    const second = await installRuntimeHook(root, CLAUDE_RUNTIME);
++    expect(second.upgraded).toBeUndefined();
++    const settings = JSON.parse(await readFile(file, "utf8")) as Settings;
++    expect(preToolUse(settings).some((g) => g.matcher === preToolUseMatcher(CLAUDE_RUNTIME))).toBe(true);
++  });
++});
+diff --git a/src/ctx/hook-install.ts b/src/ctx/hook-install.ts
+index 9a71e28cf..e0c095886 100644
+--- a/src/ctx/hook-install.ts
++++ b/src/ctx/hook-install.ts
+@@ -1,7 +1,7 @@
+ import { mkdir, readFile, writeFile } from "node:fs/promises";
+ import path from "node:path";
+ import { pathExists } from "../lib/fs";
+-import type { CtxRuntime, Settings } from "./runtimes";
++import { describeExistingGuard, type CtxRuntime, type Settings } from "./runtimes";
+ 
+ // Opt-in, merge-safe installer for the gdctx routing guard across harnesses.
+ // The per-runtime merge/strip lives in runtimes.ts; this module only owns the
+@@ -35,7 +35,7 @@ async function writeSettings(file: string, settings: Settings): Promise<void> {
+ export async function installRuntimeHook(
+   projectRoot: string,
+   runtime: CtxRuntime,
+-): Promise<{ path: string; errors: string[] }> {
++): Promise<{ path: string; errors: string[]; upgraded?: string }> {
+   const file = runtime.locate(projectRoot);
+   if (runtime.customInstall) {
+     const errors = await runtime.customInstall(projectRoot);
+@@ -47,9 +47,12 @@ export async function installRuntimeHook(
+     return { path: file, errors: [`${runtime.id}: no installer defined`] };
+   }
+   const settings = await readSettings(file);
++  // Read BEFORE the merge: this is the only moment the pre-install state exists,
++  // and the drift it reports is overwritten by the very next line.
++  const upgraded = describeExistingGuard(settings, runtime);
+   await writeSettings(file, merge(settings));
+   const errors = validate(await readSettings(file));
+-  return { path: file, errors };
++  return { path: file, errors, ...(upgraded ? { upgraded } : {}) };
+ }
+ 
+ // Remove ONLY the managed guard for one runtime; false if nothing was present.
+diff --git a/src/ctx/hook-native-search.test.ts b/src/ctx/hook-native-search.test.ts
+new file mode 100644
+index 000000000..ae2e0be67
+--- /dev/null
++++ b/src/ctx/hook-native-search.test.ts
+@@ -0,0 +1,198 @@
++// The matcher was `Bash` alone and `parseCommand` returned null for every other
++// tool, which fails open. An agent that reached for its runtime's own search
++// tool instead of the shell was not guarded at all — and the Bash guard then
++// reported a clean run, which is worse than no guard: the routing audit records
++// compliance that did not happen.
++//
++// The list of guarded tools is explicit and never a heuristic. Anything not
++// named keeps failing open, and that is the property that makes the guard safe
++// to leave installed.
++
++import { describe, expect, test } from "bun:test";
++import path from "node:path";
++import {
++  CLAUDE_RUNTIME,
++  CODEX_RUNTIME,
++  describeExistingGuard,
++  preToolUseMatcher,
++  nativeSearchMessage,
++  parseToolName,
++} from "./runtimes";
++
++const CLI = path.join(import.meta.dir, "..", "cli.ts");
++const REPO = path.join(import.meta.dir, "..", "..");
++
++async function hook(payload: string): Promise<{ code: number; err: string }> {
++  const proc = Bun.spawn(["bun", CLI, "ctx", "hook", "claude"], {
++    cwd: REPO,
++    stdin: new TextEncoder().encode(payload),
++    stdout: "pipe",
++    stderr: "pipe",
++  });
++  const [err, code] = await Promise.all([new Response(proc.stderr).text(), proc.exited]);
++  return { code, err };
++}
++
++describe("the native search tool is guarded", () => {
++  test("Grep is declared as a code search for claude", () => {
++    expect(CLAUDE_RUNTIME.nativeSearchTools).toContain("Grep");
++  });
++
++  test("Glob is deliberately NOT guarded", () => {
++    // It returns paths rather than file content, so it is not "a text, symbol,
++    // or pattern search over project code" in the sense the rule means, and
++    // guarding it would generate false blocks for no routing gain.
++    expect(CLAUDE_RUNTIME.nativeSearchTools).not.toContain("Glob");
++  });
++
++  test("a Grep payload is refused, naming the replacement", async () => {
++    const { code, err } = await hook(
++      JSON.stringify({ tool_name: "Grep", tool_input: { pattern: "foo", path: "src/" } }),
++    );
++    expect(code).toBe(2);
++    expect(err).toContain("keryx ctx rg");
++    // Naming the replacement is the whole point; a bare denial teaches nothing.
++    expect(err).toContain("gdgraph");
++  }, 30000);
++
++  test("the refusal stays escapable in practice, and says how", () => {
++    // It carries no in-line marker of its own, so it must point at the path that
++    // does — otherwise it is the one refusal a user cannot get past.
++    expect(nativeSearchMessage("Grep")).toContain("# keryx:raw");
++  });
++
++  test("a tool that is neither Bash nor declared fails open", async () => {
++    for (const tool of ["Read", "Edit", "Glob", "WebFetch"]) {
++      const { code, err } = await hook(JSON.stringify({ tool_name: tool, tool_input: {} }));
++      expect(code).toBe(0);
++      expect(err).toBe("");
++    }
++  }, 60000);
++
++  test("an unparseable payload fails open", async () => {
++    for (const payload of ["", "not json", "[1,2,3]", "{}"]) {
++      const { code } = await hook(payload);
++      expect(code).toBe(0);
++    }
++  }, 60000);
++
++  test("parseToolName reads the name and nothing else", () => {
++    expect(parseToolName('{"tool_name":"Grep"}')).toBe("Grep");
++    expect(parseToolName('{"tool_name":42}')).toBeNull();
++    expect(parseToolName("garbage")).toBeNull();
++  });
++});
++
++describe("an install that would not do its job is reported, not called clean", () => {
++  const group = (overrides: Record<string, unknown> = {}) => ({
++    matcher: preToolUseMatcher(CLAUDE_RUNTIME),
++    hooks: [{ type: "command", command: "keryx ctx hook claude" }],
++    _keryxManaged: "ctx-agent-hooks",
++    ...overrides,
++  });
++  const settings = (overrides?: Record<string, unknown>) => ({ hooks: { PreToolUse: [group(overrides)] } });
++  const validate = (s: unknown) => CLAUDE_RUNTIME.validate?.(s as never) ?? [];
++
++  test("the matcher is derived from the runtime's own tool list, not declared twice", () => {
++    // It used to be a module constant beside a per-runtime `nativeSearchTools`
++    // with nothing tying them together, so adding a tool without editing the
++    // constant meant the refusal never ran and validate still said clean.
++    expect(preToolUseMatcher(CLAUDE_RUNTIME)).toBe("Bash|Grep");
++    expect(preToolUseMatcher({})).toBe("Bash");
++    expect(preToolUseMatcher({ nativeSearchTools: ["Grep", "Search"] })).toBe("Bash|Grep|Search");
++  });
++
++  test("a fresh install validates clean", () => {
++    expect(validate(settings())).toEqual([]);
++  });
++
++  test("every shape that would silently under-cover is reported", () => {
++    // All four were reported CLEAN before. The module fails toward reporting: a
++    // guard that covers less than it claims is the defect this check exists for.
++    for (const [label, overrides] of [
++      ["a Bash-only matcher", { matcher: "Bash" }],
++      ["an absent matcher", { matcher: undefined }],
++      ["a non-string matcher", { matcher: 123 }],
++      ["a null matcher", { matcher: null }],
++    ] as const) {
++      const errors = validate(settings(overrides as Record<string, unknown>));
++      expect(errors.length, label).toBe(1);
++      expect(errors[0], label).toContain("install-hook");
++    }
++  });
++
++  test('a hook entry of type "prompt" is not an installed guard', () => {
++    // A harness executes only `type: "command"` entries, so a one-word edit left
++    // an install that validate called current and that never ran. Matching on
++    // the command alone reported it clean.
++    const errors = validate({
++      hooks: {
++        PreToolUse: [
++          { ...group(), hooks: [{ type: "prompt", command: "keryx ctx hook claude" }] },
++        ],
++      },
++    });
++    expect(errors).toHaveLength(1);
++    expect(errors[0]).toContain("missing");
++  });
++
++  test("a missing guard is still reported as missing", () => {
++    expect(validate({})).toHaveLength(1);
++    expect(validate({})[0]).toContain("missing");
++  });
++});
++
++describe("the drift check can actually reach a pre-install state", () => {
++  // `installRuntimeHook` merges and THEN validates what it just wrote, so
++  // `validate` never sees a stale install and its stale branch could not fire in
++  // production at all — the tests reached it only by calling validate directly
++  // with an object the installer can never produce. `describeExistingGuard` is
++  // read before the merge, which is the only moment the old state exists.
++  const stale = {
++    hooks: {
++      PreToolUse: [
++        {
++          matcher: "Bash",
++          hooks: [{ type: "command", command: "keryx ctx hook claude" }],
++          _keryxManaged: "ctx-agent-hooks",
++        },
++      ],
++    },
++  };
++
++  test("it names what would be replaced", () => {
++    const described = describeExistingGuard(stale as never, CLAUDE_RUNTIME);
++    expect(described).toContain("Bash");
++    expect(described).toContain("Bash|Grep");
++  });
++
++  test("it says nothing when there is nothing to upgrade", () => {
++    expect(describeExistingGuard({} as never, CLAUDE_RUNTIME)).toBeNull();
++    const current = {
++      hooks: {
++        PreToolUse: [
++          {
++            matcher: preToolUseMatcher(CLAUDE_RUNTIME),
++            hooks: [{ type: "command", command: "keryx ctx hook claude" }],
++            _keryxManaged: "ctx-agent-hooks",
++          },
++        ],
++      },
++    };
++    expect(describeExistingGuard(current as never, CLAUDE_RUNTIME)).toBeNull();
++  });
++});
++
++describe("codex declares only what is evidenced", () => {
++  test("codex does not claim a Grep tool", () => {
++    // Nothing in the repo evidences that codex names a search tool `Grep`; the
++    // only `--tools Read Grep Glob` reference is about `claude`. Declaring it
++    // widened codex's installed matcher for something that never fires.
++    expect(CODEX_RUNTIME.nativeSearchTools).toBeUndefined();
++    expect(preToolUseMatcher(CODEX_RUNTIME)).toBe("Bash");
++  });
++
++  test("claude still declares Grep, so the mechanism is live", () => {
++    expect(CLAUDE_RUNTIME.nativeSearchTools).toContain("Grep");
++  });
++});
+diff --git a/src/ctx/hook-pipeline.test.ts b/src/ctx/hook-pipeline.test.ts
+new file mode 100644
+index 000000000..b3d9488f8
+--- /dev/null
++++ b/src/ctx/hook-pipeline.test.ts
+@@ -0,0 +1,89 @@
++// A command downstream of a pipe reads STDIN. It is filtering a stream, not
++// searching a tree.
++//
++// The classifier split on `||`, `&&`, `;`, `|` and newline all at once and
++// classified every piece as though it named a file. So the guard refused
++// `npm test | grep -E 'Tests'`, `bun test 2>&1 | tail -5`, and — the case that
++// gives the game away — `keryx ctx rg 'foo' | grep -c 'bar'`: routing the search
++// exactly as the rule demands and then counting the results was refused. That is
++// the failure mode that gets a hook uninstalled, and the most likely reason this
++// guard is opt-in while every other module hook is installed by `keryx init`.
++//
++// The fix must not overshoot in the other direction, which is the expensive one:
++// piping a code search into a pager does not stop it being a code search.
++
++import { describe, expect, test } from "bun:test";
++import { classifyCommand } from "./hook-classify";
++
++const verdict = (command: string) => (classifyCommand(command).block ? "block" : "pass");
++
++describe("filtering piped output is not a code search", () => {
++  const ALLOWED = [
++    "npm run test:unit | grep -E 'Test Files|Tests '",
++    "bun test 2>&1 | tail -5",
++    "echo hi | grep hi",
++    "keryx ctx rg 'foo' | grep -c 'bar'",
++    "bun run typecheck | grep error",
++    "ls -la | head -20",
++  ];
++
++  for (const command of ALLOWED) {
++    test(`pass: ${command}`, () => {
++      expect(verdict(command)).toBe("pass");
++    });
++  }
++});
++
++describe("the first stage of a statement is still classified", () => {
++  const BLOCKED: ReadonlyArray<readonly [string, string]> = [
++    ["grep -rn 'foo' src/", "a plain recursive search"],
++    ["grep -n 'foo' src/some/file.ts", "a search with a file operand"],
++    ["grep -rn 'foo' src/ | head -20", "piping a code search into a pager does not stop it being one"],
++    ["rg 'foo' src/ | wc -l", "same, counted rather than paged"],
++    ["cd x && rg y", "the sequencing case the shallow split exists to catch"],
++    ["cat f | rg y", "now caught at `cat f`, which is the more accurate place"],
++    ["find . -name '*.ts'", "large listings are routed too"],
++  ];
++
++  for (const [command, why] of BLOCKED) {
++    test(`block: ${command} — ${why}`, () => {
++      expect(verdict(command)).toBe("block");
++    });
++  }
++});
++
++describe("the outside proposal's own specimens", () => {
++  // A proposal filed from another session listed five pass/block cases as the
++  // detail that "decides whether the hook survives its first day". Four are now
++  // as it asked. The fifth is a deliberate divergence and is asserted as such,
++  // so that changing it later is a decision rather than an accident.
++  const SPECIMENS: ReadonlyArray<readonly [string, "pass" | "block", string]> = [
++    ["npm run test:unit | grep -E 'Test Files|Tests '", "pass", "agreed"],
++    ["keryx ctx rg 'foo' | grep -c 'bar'", "pass", "agreed"],
++    ["grep -rn 'foo' src/", "block", "agreed"],
++    ["grep -n 'foo' src/some/file.ts", "block", "agreed"],
++    [
++      "git log --format=%B | grep -v '^Co-Authored-By'",
++      "block",
++      "DIVERGENCE: `git log` is in the guard for output volume, not for being a code search. A downstream filter does not bound it, `keryx ctx run -- <command>` exists for exactly this, and the escape marker covers the exception.",
++    ],
++  ];
++
++  for (const [command, want, note] of SPECIMENS) {
++    test(`${want}: ${command} (${note.slice(0, 40)})`, () => {
++      expect(verdict(command)).toBe(want);
++    });
++  }
++});
++
++describe("the escape marker still works", () => {
++  test("a raw command with a reason is allowed, and the reason is returned", () => {
++    const result = classifyCommand("grep -rn 'foo' src/ # keryx:raw comparing against a vendored copy");
++    expect(result.block).toBe(false);
++    expect(result.escapeReason).toBe("comparing against a vendored copy");
++  });
++
++  test("the marker is what allows it — without it the same command blocks", () => {
++    expect(verdict("grep -rn 'foo' src/")).toBe("block");
++  });
++});
+diff --git a/src/ctx/hook.ts b/src/ctx/hook.ts
+index 9c41c7d9d..88bdbfd90 100644
+--- a/src/ctx/hook.ts
++++ b/src/ctx/hook.ts
+@@ -4,12 +4,14 @@
+ // block/allow signal. All harness-specific behavior lives in runtimes.ts; the
+ // classification logic lives in hook-classify.ts.
+ //
+-// Fail-open by construction: an unknown runtime, a non-shell tool, or an
+-// unparseable payload always allows the command (exit 0). The guard never blocks
+-// work it cannot confidently classify.
++// Fail-open by construction, with ONE exception: a tool named in the runtime's
++// `nativeSearchTools` is refused, because a native code search bypasses the
++// shell entirely and the Bash guard would report a clean run over it. An unknown
++// runtime, an unparseable payload, or any other non-shell tool still allows the
++// command (exit 0). The guard never blocks work it cannot confidently classify.
+ 
+ import { classifyCommand } from "./hook-classify";
+-import { getRuntime } from "./runtimes";
++import { getRuntime, nativeSearchMessage, parseToolName, refusalAction, type HookAction } from "./runtimes";
+ 
+ // Re-exports kept for callers/tests that imported these from hook.ts.
+ export { classifyCommand, buildBlockMessage, type HookClassification } from "./hook-classify";
+@@ -38,7 +40,16 @@ export async function runCtxHook(runtimeId: string | undefined): Promise<void> {
+   const payload = await readStdin();
+   const command = runtime.parseCommand(payload);
+   if (command === null) {
+-    return; // fail-open: not a shell call or unparseable payload.
++    // Not a shell call. Before failing open, check whether it is the runtime's
++    // OWN search tool: the matcher used to be `Bash` alone, so an agent that
++    // reached for the native tool went unguarded and the Bash guard still
++    // reported a clean run — compliance recorded in the routing audit that did
++    // not happen.
++    const nativeSearch = matchedNativeSearch(runtime.nativeSearchTools, payload);
++    if (nativeSearch) {
++      emit(refusalAction(runtime.id, nativeSearchMessage(nativeSearch)));
++    }
++    return; // fail-open for anything else: unparseable, or a tool we do not claim.
+   }
+ 
+   const classification = classifyCommand(command);
+@@ -46,7 +57,21 @@ export async function runCtxHook(runtimeId: string | undefined): Promise<void> {
+     ? runtime.block(command, classification)
+     : runtime.allow(classification);
+ 
++  emit(action);
++}
++
++/** The single place a HookAction becomes process output. */
++function emit(action: HookAction): void {
+   if (action.stdout) process.stdout.write(action.stdout);
+   if (action.stderr) process.stderr.write(action.stderr);
+   if (action.exitCode) process.exitCode = action.exitCode;
+ }
++
++/** The declared native search tool this payload invokes, or null. */
++function matchedNativeSearch(tools: readonly string[] | undefined, payload: string): string | null {
++  if (!tools || tools.length === 0) {
++    return null;
++  }
++  const name = parseToolName(payload);
++  return name && tools.includes(name) ? name : null;
++}
+diff --git a/src/ctx/orient-routing.test.ts b/src/ctx/orient-routing.test.ts
+new file mode 100644
+index 000000000..df1c6c8d0
+--- /dev/null
++++ b/src/ctx/orient-routing.test.ts
+@@ -0,0 +1,84 @@
++// `keryx orient` is a `UserPromptSubmit` hook whose stdout is added to context,
++// and it never read the payload: its output was byte-identical for
++// "сделай полное ревью" and "what is 2+2". What reached the agent was the static
++// Intent Router table — the same prose that failed to route the session which
++// reported this. These tests hold the two properties that change is worth
++// having: it says something specific when it knows, and nothing at all when it
++// does not.
++
++import { describe, expect, test } from "bun:test";
++import { formatRoutingBlock, routePrompt, ROUTING_FLOOR } from "./orient-routing";
++
++describe("routePrompt", () => {
++  test("a full-review request routes to the orchestrator", async () => {
++    const [top] = await routePrompt("сделай мне полное ревью без исправления");
++    expect(top?.name).toBe("review-orchestrator");
++    expect(top?.path).toBe(".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md");
++  });
++
++  test("a request naming a specialist routes to the specialist", async () => {
++    expect((await routePrompt("frontend review"))[0]?.name).toBe("review-frontend");
++  });
++
++  test("an ordinary question routes nowhere — the floor is the point", async () => {
++    // A router that answers every prompt is one the agent learns to ignore, and
++    // a confident wrong name costs more than silence.
++    expect(await routePrompt("what is 2+2")).toEqual([]);
++    expect(await routePrompt("hi")).toEqual([]);
++  });
++
++  test("bare token overlap does not clear the floor", async () => {
++    // 10 points per overlapping token and no trigger: on-topic words alone must
++    // not produce a recommendation.
++    expect(ROUTING_FLOOR).toBeGreaterThan(10 * 4);
++    for (const match of await routePrompt("сделай мне полное ревью без исправления")) {
++      expect(match.score).toBeGreaterThanOrEqual(ROUTING_FLOOR);
++    }
++  });
++
++  test("at most two candidates are returned", async () => {
++    expect((await routePrompt("review the code changes")).length).toBeLessThanOrEqual(2);
++  });
++});
++
++describe("formatRoutingBlock", () => {
++  const prompt = "сделай мне полное ревью без исправления";
++
++  test("no match produces no block at all", async () => {
++    expect(formatRoutingBlock(prompt, [])).toBe("");
++  });
++
++  test("the block names the skill, its path, and stays advisory", async () => {
++    const block = formatRoutingBlock(prompt, await routePrompt(prompt));
++    expect(block).toContain("Routing for THIS request");
++    expect(block).toContain("review-orchestrator");
++    expect(block).toContain(".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md");
++    // Advisory by construction: "the agent did not invoke a skill" is the
++    // absence of an action, and PreToolUse intercepts actions — there is
++    // nothing here that could block even if the wording pretended otherwise.
++    expect(block).toContain("suggestion, not a gate");
++    expect(block).not.toContain("blocked");
++  });
++
++  test("the runner-up is named when there is one", async () => {
++    const block = formatRoutingBlock("review code", [
++      { name: "review-orchestrator", category: "review", score: 90, path: "a" },
++      { name: "code-ai-review", category: "review", score: 75, path: "b" },
++    ]);
++    expect(block).toContain("Runner-up: code-ai-review");
++  });
++
++  test("a long prompt is truncated rather than pasted whole into every turn", async () => {
++    const long = "проведи полное ревью ".repeat(40);
++    const block = formatRoutingBlock(long, await routePrompt(long));
++    const requestLine = block.split("\n").find((l) => l.startsWith("Request:")) ?? "";
++    expect(requestLine.length).toBeLessThan(200);
++    expect(requestLine).toContain("…");
++  });
++
++  test("a prompt with newlines stays on one line", async () => {
++    const block = formatRoutingBlock("сделай полное ревью\n\nи ничего не чини", await routePrompt("сделай полное ревью"));
++    const requestLine = block.split("\n").filter((l) => l.startsWith("Request:"));
++    expect(requestLine).toHaveLength(1);
++  });
++});
+diff --git a/src/ctx/orient-routing.ts b/src/ctx/orient-routing.ts
+new file mode 100644
+index 000000000..7722ee40f
+--- /dev/null
++++ b/src/ctx/orient-routing.ts
+@@ -0,0 +1,69 @@
++import { TRIGGER_BASE, TRIGGER_PER_TOKEN, rankSkillsForQuery } from "../commands/skills";
++
++export interface RoutedSkill {
++  readonly name: string;
++  readonly category: string;
++  readonly score: number;
++  readonly path: string;
++}
++
++/**
++ * The floor below which nothing is said: the score of a one-word trigger.
++ *
++ * A router that answers every prompt is one the agent learns to ignore, and a
++ * confident wrong name costs more than silence.
++ *
++ * Note what this does NOT promise. An earlier version of this comment claimed
++ * the floor "requires a real trigger match"; it does not, and never did — six
++ * overlapping tokens score 60 and clear it with no trigger at all. The floor is
++ * a score threshold, and `requireTrigger` below is what actually makes a trigger
++ * necessary. Derived from the scoring constants rather than restated, so
++ * retuning them cannot silently change what this means.
++ */
++export const ROUTING_FLOOR = TRIGGER_BASE + TRIGGER_PER_TOKEN;
++
++export async function routePrompt(prompt: string): Promise<RoutedSkill[]> {
++  const ranked = await rankSkillsForQuery(prompt);
++  return ranked
++    // Both conditions, because the floor alone is a score and vocabulary overlap
++    // can reach it: naming a skill off shared words is the "confident wrong
++    // name" this is supposed to prevent.
++    .filter((match) => match.score >= ROUTING_FLOOR && match.reasons.includes("trigger"))
++    .slice(0, 2)
++    .map((match) => ({
++      name: match.name,
++      category: match.module,
++      score: match.score,
++      path: match.path,
++    }));
++}
++
++/** Empty string when nothing cleared the floor — silence, not a guess. */
++export function formatRoutingBlock(prompt: string, matches: readonly RoutedSkill[]): string {
++  const top = matches[0];
++  if (!top) {
++    return "";
++  }
++  const lines = [
++    "",
++    "## Routing for THIS request",
++    "",
++    `Request: ${JSON.stringify(truncate(prompt, 160))}`,
++    `→ ${top.name} (${top.score})`,
++    `  Load ${top.path}`,
++  ];
++  const runnerUp = matches[1];
++  if (runnerUp) {
++    lines.push(
++      "",
++      `Runner-up: ${runnerUp.name} (${runnerUp.score}) — if the narrower skill is what was meant.`,
++    );
++  }
++  lines.push("", "This is a suggestion, not a gate. Say why if you route elsewhere.");
++  return `${lines.join("\n")}\n`;
++}
++
++function truncate(value: string, max: number): string {
++  const flat = value.replace(/\s+/g, " ").trim();
++  return flat.length <= max ? flat : `${flat.slice(0, max - 1)}…`;
++}
+diff --git a/src/ctx/runtimes.test.ts b/src/ctx/runtimes.test.ts
+index bb2e918ca..c13bd3117 100644
+--- a/src/ctx/runtimes.test.ts
++++ b/src/ctx/runtimes.test.ts
+@@ -6,6 +6,7 @@ import { installRuntimeHook, uninstallRuntimeHook } from "./hook-install";
+ import {
+   ANTIGRAVITY_RUNTIME,
+   CODEX_RUNTIME,
++  preToolUseMatcher,
+   CURSOR_RUNTIME,
+   OPENCODE_RUNTIME,
+   WINDSURF_RUNTIME,
+@@ -77,7 +78,7 @@ test("codex installs a PreToolUse group into .codex/hooks.json", async () => {
+     const s = JSON.parse(await readFile(file, "utf8")) as {
+       hooks: { PreToolUse: Array<{ matcher?: string; hooks?: Array<{ command?: string }> }> };
+     };
+-    const g = s.hooks.PreToolUse.find((x) => x.matcher === "Bash");
++    const g = s.hooks.PreToolUse.find((x) => x.matcher === preToolUseMatcher(CODEX_RUNTIME));
+     expect(g?.hooks?.[0]?.command).toBe("keryx ctx hook codex");
+     expect(await uninstallRuntimeHook(root, CODEX_RUNTIME)).toBe(true);
+   });
+diff --git a/src/ctx/runtimes.ts b/src/ctx/runtimes.ts
+index c152ac314..5d5d44c1b 100644
+--- a/src/ctx/runtimes.ts
++++ b/src/ctx/runtimes.ts
+@@ -40,6 +40,19 @@ export interface CtxRuntime {
+   readonly confidence: Confidence;
+   // --- hook side (invoked by `keryx ctx hook <id>`) ---
+   parseCommand(payload: string): string | null;
++  /**
++   * Tool names that are a code search in their own right, bypassing the shell.
++   *
++   * The matcher used to be `Bash` alone and `parseCommand` returned null for
++   * everything else, so an agent that reached for its runtime's own search tool
++   * was not guarded at all — and the Bash guard then reported a clean run,
++   * which is worse than no guard, because the routing audit records compliance
++   * that did not happen.
++   *
++   * An explicit list, never a heuristic: anything not named here keeps failing
++   * open, and that is the property that makes the guard safe to leave installed.
++   */
++  readonly nativeSearchTools?: readonly string[];
+   block(command: string, classification: HookClassification): HookAction;
+   allow(classification: HookClassification): HookAction;
+   // --- install side ---
+@@ -141,20 +154,51 @@ function stripFromHookArray(settings: Settings, key: string): Settings {
+   return settings;
+ }
+ 
+-function hasManagedInArray(settings: Settings, key: string, command: string): boolean {
++/**
++ * Managed groups that own `command`, flat (cursor/windsurf) or nested (claude).
++ *
++ * One walker, because the flat-vs-nested ownership test is the subtle part and
++ * two copies of it drift: when a fourth settings shape arrives, one copy gets
++ * updated and the other keeps reporting the install clean.
++ */
++function managedGroupsFor(settings: Settings, key: string, command: string): Array<Record<string, unknown>> {
+   const hooks = settings.hooks as Settings | undefined;
+   const groups = Array.isArray(hooks?.[key]) ? (hooks?.[key] as unknown[]) : [];
+-  return groups.some((g) => {
+-    if (!isManagedGroup(g)) return false;
+-    const inner = (g as { hooks?: unknown; command?: unknown });
+-    if (inner.command === command) return true; // flat entry (cursor/windsurf)
++  return groups.filter((group): group is Record<string, unknown> => {
++    if (!isManagedGroup(group)) return false;
++    const entry = group as { hooks?: unknown; command?: unknown };
++    if (entry.command === command) return true; // flat entry (cursor/windsurf)
+     return (
+-      Array.isArray(inner.hooks) &&
+-      (inner.hooks as Array<{ command?: unknown }>).some((h) => h?.command === command)
++      Array.isArray(entry.hooks) &&
++      (entry.hooks as Array<{ command?: unknown; type?: unknown }>).some(
++        // `type` matters: a harness executes only `type: "command"` entries, so
++        // a group whose entry says "prompt" is installed and inert. Matching on
++        // the command alone reported it clean.
++        (hook) => hook?.command === command && hook?.type === "command",
++      )
+     );
+   });
+ }
+ 
++function hasManagedInArray(settings: Settings, key: string, command: string): boolean {
++  return managedGroupsFor(settings, key, command).length > 0;
++}
++
++/**
++ * True when an installed guard's matcher no longer covers what this build
++ * installs.
++ *
++ * An absent or non-string matcher counts as stale rather than clean: the module
++ * fails toward reporting, because a guard that silently covers less than it
++ * claims is the defect this whole check exists to surface.
++ */
++function hasStalePreToolUseMatcher(settings: Settings, runtime: CtxRuntime): boolean {
++  const expected = preToolUseMatcher(runtime);
++  return managedGroupsFor(settings, "PreToolUse", hookCommand(runtime.id)).some(
++    (group) => typeof group.matcher !== "string" || group.matcher !== expected,
++  );
++}
++
+ // --- payload parsers ---------------------------------------------------------
+ 
+ function parseJson(payload: string): Record<string, unknown> | null {
+@@ -176,6 +220,30 @@ function parseToolInputCommand(payload: string): string | null {
+   return typeof command === "string" ? command : null;
+ }
+ 
++/** The `tool_name` of a PreToolUse payload, for runtimes that shape it that way. */
++export function parseToolName(payload: string): string | null {
++  const record = parseJson(payload);
++  const name = record?.tool_name;
++  return typeof name === "string" ? name : null;
++}
++
++/**
++ * Refusal for a native search tool. It names the replacement rather than only
++ * denying, and it is escapable in practice even though it carries no in-line
++ * marker of its own: `keryx ctx rg` does the same job, and a Bash command with
++ * `# keryx:raw <reason>` remains available for anything raw.
++ */
++export function nativeSearchMessage(tool: string): string {
++  return [
++    `[keryx ctx] The \`${tool}\` tool searches project code without the gdctx routing layer.`,
++    `Use instead:  keryx ctx rg "<pattern>" [path]`,
++    `The routed form is compressed and recorded in the routing audit (ctx_used).`,
++    `Structural question (callers, usages, blast radius)? Use gdgraph first.`,
++    `If raw output is genuinely required, run it through Bash with an escape marker:`,
++    `  rg "<pattern>" <path>   # keryx:raw <why raw is needed>`,
++  ].join("\n");
++}
++
+ // Cursor beforeShellExecution: top-level { command }.
+ function parseCursorCommand(payload: string): string | null {
+   const record = parseJson(payload);
+@@ -281,10 +349,62 @@ function antigravityAllow(_c: HookClassification): HookAction {
+ // --- JSON group builders (install artifacts) ---------------------------------
+ 
+ // Claude/Codex PreToolUse group: { matcher, hooks:[{type,command}], _keryxManaged }.
+-function preToolUseGroup(id: string): Settings {
++/**
++ * The matcher a runtime installs: the shell, plus whatever native search tools
++ * that runtime actually has.
++ *
++ * Derived rather than declared. It used to be a module-level constant beside a
++ * per-runtime `nativeSearchTools` list with nothing tying them together, so
++ * adding a tool to the list without editing the constant meant the refusal code
++ * never ran and `validate` still reported the install clean — the same
++ * "reported a clean run, which is worse than no guard" failure the tool list was
++ * added to close, one field over.
++ */
++export function preToolUseMatcher(runtime: Pick<CtxRuntime, "nativeSearchTools">): string {
++  return ["Bash", ...(runtime.nativeSearchTools ?? [])].join("|");
++}
++
++function validatePreToolUse(settings: Settings, runtime: CtxRuntime): string[] {
++  const command = hookCommand(runtime.id);
++  const expected = preToolUseMatcher(runtime);
++  if (!hasManagedInArray(settings, "PreToolUse", command)) {
++    return [`${runtime.id}: missing PreToolUse(${expected}) guard`];
++  }
++  if (hasStalePreToolUseMatcher(settings, runtime)) {
++    return [
++      `${runtime.id}: PreToolUse guard does not match ${expected}; a tool it should cover bypasses it. ` +
++        `Re-run \`keryx ctx install-hook --runtime ${runtime.id}\`.`,
++    ];
++  }
++  return [];
++}
++
++/**
++ * What an install would REPLACE, read before the merge — or null if nothing
++ * stale is there.
++ *
++ * `installRuntimeHook` merges and then validates what it just wrote, so
++ * `validate` never sees a pre-install state and the stale-matcher branch could
++ * not fire in production at all. The tests reached it only by calling `validate`
++ * directly with a hand-built object the installer can never produce. A drift
++ * check that runs only after the drift has been overwritten reports nothing,
++ * forever.
++ */
++export function describeExistingGuard(settings: Settings, runtime: CtxRuntime): string | null {
++  const command = hookCommand(runtime.id);
++  if (!hasManagedInArray(settings, "PreToolUse", command)) return null;
++  if (!hasStalePreToolUseMatcher(settings, runtime)) return null;
++  const found = managedGroupsFor(settings, "PreToolUse", command)
++    .map((group) => (typeof group.matcher === "string" ? group.matcher : "(no matcher)"))
++    .join(", ");
++  return `upgraded an existing guard: ${found} -> ${preToolUseMatcher(runtime)}`;
++}
++
++/** The managed PreToolUse group this runtime installs. */
++function preToolUseGroup(runtime: CtxRuntime): Settings {
+   return {
+-    matcher: "Bash",
+-    hooks: [{ type: "command", command: hookCommand(id) }],
++    matcher: preToolUseMatcher(runtime),
++    hooks: [{ type: "command", command: hookCommand(runtime.id) }],
+     [MANAGED_KEY]: CTX_HOOK_SENTINEL,
+   };
+ }
+@@ -293,28 +413,34 @@ function preToolUseGroup(id: string): Settings {
+ 
+ export const CLAUDE_RUNTIME: CtxRuntime = {
+   id: "claude",
+-  label: ".claude/settings.json (PreToolUse/Bash)",
++  label: ".claude/settings.json (PreToolUse)",
+   confidence: "verified",
++  nativeSearchTools: ["Grep"],
+   parseCommand: parseToolInputCommand,
+   block: exitCodeBlock,
+   allow: exitCodeAllow,
+   locate: (root) => path.join(root, ".claude", "settings.json"),
+-  merge: (s) => mergeIntoHookArray(s, "PreToolUse", preToolUseGroup("claude")),
++  merge: (s) => mergeIntoHookArray(s, "PreToolUse", preToolUseGroup(CLAUDE_RUNTIME)),
+   strip: (s) => stripFromHookArray(s, "PreToolUse"),
+-  validate: (s) => (hasManagedInArray(s, "PreToolUse", hookCommand("claude")) ? [] : ["claude: missing PreToolUse(Bash) guard"]),
++  validate: (s) => validatePreToolUse(s, CLAUDE_RUNTIME),
+ };
+ 
+ export const CODEX_RUNTIME: CtxRuntime = {
+   id: "codex",
+-  label: ".codex/hooks.json (PreToolUse/Bash)",
++  label: ".codex/hooks.json (PreToolUse)",
+   confidence: "verified",
++  // No `nativeSearchTools`: nothing in this repo evidences that codex names a
++  // search tool `Grep`. The only `--tools Read Grep Glob` reference is about
++  // `claude` (docs/docs/harness.md). Declaring a tool a runtime may not have is
++  // the unverified claim this module exists to stop, and it would widen the
++  // installed matcher for something that never fires. Add it with a citation.
+   parseCommand: parseToolInputCommand,
+   block: exitCodeBlock,
+   allow: exitCodeAllow,
+   locate: (root) => path.join(root, ".codex", "hooks.json"),
+-  merge: (s) => mergeIntoHookArray(s, "PreToolUse", preToolUseGroup("codex")),
++  merge: (s) => mergeIntoHookArray(s, "PreToolUse", preToolUseGroup(CODEX_RUNTIME)),
+   strip: (s) => stripFromHookArray(s, "PreToolUse"),
+-  validate: (s) => (hasManagedInArray(s, "PreToolUse", hookCommand("codex")) ? [] : ["codex: missing PreToolUse(Bash) guard"]),
++  validate: (s) => validatePreToolUse(s, CODEX_RUNTIME),
+ };
+ 
+ export const CURSOR_RUNTIME: CtxRuntime = {
+diff --git a/src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md b/src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md
+index fc62f55d4..995df1d5d 100644
+--- a/src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md
++++ b/src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md
+@@ -52,7 +52,7 @@ unified report sorted by severity. It does not perform any review logic itself.
+ ```
+ Review Orchestrator Progress:
+ - [ ] Step 0: On a PR target, collect external comments — `keryx review comments collect`
+-- [ ] Step 1: Build Review Context Pack (PR metadata, scope, rules, context_doc summary)
++- [ ] Step 1: Build Review Context Pack — PR metadata AND the PR's own description, scope, rules, context_doc summary, accepted memory, and the cross-repo contracts the diff consumes
+ - [ ] Step 2: Detect review mode (diff mode vs. path mode)
+ - [ ] Step 3: Build the bounded scope with `keryx review scope` — never by hand
+ - [ ] Step 3b: On a deep round, compute scope B with `keryx review blast-radius` — never by browsing — and KEEP the `--json` file; `review ingest --blast-radius <file>` is refused without it
+@@ -462,8 +462,8 @@ Required content:
+ - Git/PR metadata: repo, branch, base, head, merge-base, PR number/URL when available.
+ - Scope summary: changed files grouped by domain, high-risk files, generated/ignored files.
+ - Requirements: issue URL, linked task docs, acceptance criteria extracted from `context_doc` when available.
+-- **The PR's own description**, fetched not assumed: `gh pr view <n> --json title,body`. See below.
+-- **Cross-repo contracts the diff depends on**, each pinned to the SHA you read it at. See below.
++- **The PR's own description**, fetched not assumed: `gh pr view <n> --json title,body`, into the typed `pr.body`. See below.
++- **Cross-repo contracts the diff depends on**, in the typed `cross_repo`: each pinned to the ref you read it at, and each recording whether the producer has merged. See below.
+ - Rules: matched repository rules and convention docs by path.
+ - **Memory: accepted project memory intersecting the changed paths.** See below — this step is required, not best-effort.
+ - Decisions: why each reviewer was selected or skipped.
+@@ -487,8 +487,17 @@ and not a pleasantry because unfiled housekeeping is raised again every round an
+ fixed in none — three consecutive rounds of "still worth rewriting" is the
+ recorded outcome of leaving it out of the findings array.
+ 
++**The Stage 1 gate files it.** Handing the body to every reviewer is what makes
++the body available; it is not what makes the comparison happen. A rule addressed
++to everyone is owned by no one, and that is the state this finding sat in for
++three rounds. The gate already holds the stated intent and the diff side by side,
++so the comparison belongs there — see `## Stage 1 Gate — Spec Compliance`.
++
+ Same class, same severity: an approach that depends on another repository's change
+-being deployed first, with no deploy note saying so.
++being deployed first, with no deploy note saying so. Note the boundary — that
++`minor` is about the *description*. When the dependency is real and this change
++can merge first, the blocker is filed against the call site instead; see
++`### A producer that has not merged yet`.
+ 
+ ### Cross-repo contracts are read, not assumed
+ 
+@@ -499,15 +508,21 @@ the SHA:
+ ```yaml
+ cross_repo:
+   - repo: vantage-backend
++    state: merged
+     sha: f5219d5d4
++    merge_order: independent
+     reason: "DQ report payload: which halves are null vs 0"
++    facts_pinned_round: 1
+     facts:
+       - "sqlScore/schemaDriftScore stay null when the half is absent"
+       - "sqlWeightPercentage/schemaDriftWeightPercentage init to 0.0 and are set unconditionally"
+ ```
+ 
+-Put the facts in `review_context` so every reviewer shares one reading, and so a
+-later round can tell a contract that moved from a reviewer that misread it.
++Put the facts in `review_context.cross_repo` so every reviewer shares one reading,
++and so a later round can tell a contract that moved from a reviewer that misread
++it. The shape is typed in `review-context.schema.json`: `repo`, `reason`, `facts`
++and `state` are required, `state: merged` requires the `sha`, and `state: open`
++requires the `pr`.
+ 
+ The rule that follows for reviewers, and that belongs in the dispatch prompt:
+ 
+@@ -517,9 +532,49 @@ The rule that follows for reviewers, and that belongs in the dispatch prompt:
+ > producer disproves, and a defect missed because the producer's actual default was
+ > assumed rather than read.
+ 
+-If the other repository is not available to you, say so in `cross_repo` and leave
+-the dependent findings at `info`. An unavailable producer is a result. Assuming
+-one is not.
++If the other repository is not available to you, record it as
++`state: unavailable` in `cross_repo` and leave the dependent findings at `info`.
++An unavailable producer is a result. Assuming one is not.
++
++A finding whose evidence lives in the producer sets `repo` on the finding itself.
++`file` and `line` alone name a path in the repository under review, so without
++`repo` a cross-repo claim cannot say where its evidence is — and the `info` rule
++above then rests on nothing a later round can check.
++
++### A producer that has not merged yet
++
++`state: merged` is the easy case: the contract is on the producer's base branch,
++you pin the SHA, and it stays where you pinned it. A **parallel pull request** —
++the backend change your change was written against, still open — is a different
++object, and pinning it the same way is wrong in three separate ways.
++
++**Pin the pull request, not just the commit.** An open branch gets rebased and
++squashed. A SHA read from it today names a commit that will not exist after the
++merge, so `state: open` requires `pr` and the SHA becomes a note about when you
++read it rather than an address a later reader can follow.
++
++**Merge order is a `blocker`, not a note.** A missing deploy note in the PR body
++is `minor` — that is a documentation finding and it stays where it is. The
++operational case is not that one: when an entry is `state: open` with
++`merge_order: producer_first`, and this change can merge without the producer,
++**production breaks the moment it does**. That is a `blocker` under the existing
++enumeration, not a new shape — the consumer calls what is not there, or reads a
++default the producer has not changed yet, which is shape 1 or shape 2 in
++`### \`blocker\` — merge-blocking, and nothing else`. File it against the consuming
++call site rather than the description, and write the fix as what it is: a merge
++gate, a flag, or a fallback, never an edit to a diff that may be perfectly
++correct. Scope it exactly — both facts have to be recorded, an open producer AND
++a producer-first order, and no gate already holding the merge. A
++`merge_order: unknown` is a question to resolve, not a blocker to file.
++
++**Re-read an open producer every round.** `facts` pinned in round 1 are a
++statement about a branch that is still being written; by round 3 the contract may
++have changed under a finding that still cites it. On each round, re-read every
++entry with `state: open` and set `revalidated_round`. An entry whose
++`revalidated_round` is behind the current round has not been checked this round,
++and findings resting on it drop to `info` until it is. This is the same discipline
++`prior_findings` already imposes on the local diff, applied to the one input that
++is most likely to have moved.
+ 
+ ### Memory (required)
+ 
+@@ -1117,7 +1172,8 @@ local frontend conventions reviewer.
+ 
+ ## Stage 1 Gate — Spec Compliance
+ 
+-**Run this FIRST, before dispatching quality reviewers, when an `issue_url` or task doc is provided.**
++**Run this FIRST, before dispatching quality reviewers, whenever the change has a
++stated intent — an `issue_url`, a task doc, or a PR body.**
+ 
+ 1. Fetch issue or task requirements.
+ 2. Map changed files and functions to acceptance criteria.
+@@ -1125,6 +1181,27 @@ local frontend conventions reviewer.
+ 4. If there are unimplemented criteria: emit them as `blocker` findings in the final report and note them in `## Blockers`.
+ 5. Continue dispatching the remaining reviewers regardless (spec gaps + quality issues both belong in the report).
+ 
++### With no issue and no task doc, the PR body is the spec
++
++A pull request with nothing linked is the common case, not the exception, and the
++gate used to skip entirely on it — which meant the only written statement of what
++the change was for went unchecked precisely when it was the only one there. When
++`issue_url` and `context_doc` are both absent, read `pr.body` as the spec and run
++steps 2-4 against it. Nothing at all to read — no issue, no task doc, an empty
++body — is itself the finding: `minor`, that the change states no intent.
++
++### This gate owns the description-vs-diff comparison
++
++The `minor` for a description that promises an approach the diff does not take
++(see the Context Pack) is **filed here**. It was previously stated as a rule for
++"every reviewer" and owned by none, which is how it stayed a remark instead of a
++finding across three rounds. A domain reviewer reviews its domain; the one step
++that already holds intent and diff side by side is this one.
++
++Run it on every round, not only the first. The drift the finding catches is
++created BY the rounds: the code moves to answer findings, the body does not, and
++whoever reads the merge commit a year later reads the body.
++
+ ---
+ 
+ ## Dispatching Reviewers
+@@ -1328,6 +1405,18 @@ Everything else is at most `major`. "This will definitely cause problems later"
+ is not one of the four. Neither is "this violates the architecture", "this fails
+ the linter", or "this is how the last outage started".
+ 
++**An unshipped dependency is shape 1 or shape 2, and the list stays closed.**
++When a producer is recorded `state: open` with `merge_order: producer_first` and
++nothing stops this change merging first, ask the enumeration's own question —
++what happens at runtime. The consumer calls what is not there (shape 1) or reads
++the default the producer has not changed yet (shape 2). That is why it is a
++`blocker` without a fifth shape being invented for it. Two things follow from
++its being an ordering fault rather than a coding one: file it against the
++consuming call site, and say in the fix that the remedy is a merge gate, a flag,
++or a fallback — never a change to the diff, which may be entirely correct. A
++missing deploy note with no recorded producer state behind it is not this; that
++is the `minor` in the Context Pack. See `### A producer that has not merged yet`.
++
+ ### `major` / `minor` / `info` — the boundary test
+ 
+ Ask one question, and ask it of the **finding**, not of the code:
+@@ -1459,6 +1548,7 @@ All findings from all sub-reviewers must be normalized to this format before con
+ 
+ - **Severity**: blocker | major | minor | info
+ - **File**: path/to/file.ts:line
++- **Repo**: producer repository — only when the evidence is not in the repository under review
+ - **Problem**: what is wrong
+ - **Why it matters**: impact on correctness / safety / maintainability / UX
+ - **Fix**: concrete suggestion
+diff --git a/src/gdskills/bundled/skills/review/review-orchestrator/review-context.schema.json b/src/gdskills/bundled/skills/review/review-orchestrator/review-context.schema.json
+index 794417edd..a7f97460b 100644
+--- a/src/gdskills/bundled/skills/review/review-orchestrator/review-context.schema.json
++++ b/src/gdskills/bundled/skills/review/review-orchestrator/review-context.schema.json
+@@ -23,6 +23,58 @@
+         "object",
+         "null"
+       ],
++      "description": "The pull request under review, when there is one. `body` is the author's own statement of what the change does, and it is checkable against the diff — it is typed here rather than left to convention because the Context Pack prose told reviewers to read `pr.body` while the schema declared no such field, so nothing carried it and nothing could tell a body that was never fetched from one that was empty.",
++      "properties": {
++        "number": {
++          "type": [
++            "integer",
++            "null"
++          ]
++        },
++        "url": {
++          "type": [
++            "string",
++            "null"
++          ]
++        },
++        "title": {
++          "type": [
++            "string",
++            "null"
++          ]
++        },
++        "body": {
++          "type": [
++            "string",
++            "null"
++          ],
++          "description": "Fetched, not assumed: `gh pr view <n> --json title,body`. Null means the fetch did not happen or returned nothing; an empty string means the author wrote no description, which is a different fact and a reportable one."
++        },
++        "state": {
++          "type": [
++            "string",
++            "null"
++          ],
++          "enum": [
++            "open",
++            "merged",
++            "closed",
++            null
++          ]
++        },
++        "base": {
++          "type": [
++            "string",
++            "null"
++          ]
++        },
++        "head": {
++          "type": [
++            "string",
++            "null"
++          ]
++        }
++      },
+       "additionalProperties": true
+     },
+     "scope": {
+@@ -71,6 +123,129 @@
+         "type": "string"
+       }
+     },
++    "cross_repo": {
++      "type": "array",
++      "description": "Contracts owned by another service that this diff consumes — a payload shape, a status enum, a timeout, a permission, a default. Each entry is one reading of the producer, shared by every reviewer, so that a later round can tell a contract that moved from a reviewer that misread it. An entry is a RECORD OF READING: an unavailable producer is a result and belongs here as `state: unavailable`, whereas an assumed one belongs nowhere.",
++      "items": {
++        "type": "object",
++        "required": [
++          "repo",
++          "reason",
++          "facts",
++          "state"
++        ],
++        "properties": {
++          "repo": {
++            "type": "string",
++            "minLength": 1
++          },
++          "reason": {
++            "type": "string",
++            "minLength": 1,
++            "description": "What this diff needs from the producer, in one line."
++          },
++          "facts": {
++            "type": "array",
++            "minItems": 1,
++            "items": {
++              "type": "string"
++            },
++            "description": "What the producer actually says, read at the pinned ref. A claim about another service's behaviour with no `file:line` behind it at a pinned ref is `info`, not `major`, however confident — both failure modes are recorded: a finding the producer disproves, and a defect missed because the producer's real default was assumed rather than read."
++          },
++          "state": {
++            "type": "string",
++            "enum": [
++              "merged",
++              "open",
++              "unavailable"
++            ],
++            "description": "Where the contract lives right now. `merged` is on the producer's own base branch and is pinned by `sha`. `open` is a parallel pull request that has not landed: its branch will be rebased or squashed, so a sha pinned today names a commit that will not exist after the merge, and the contract itself can still change. `unavailable` means the producer could not be read."
++          },
++          "sha": {
++            "type": [
++              "string",
++              "null"
++            ],
++            "description": "The commit the facts were read at. Required when `state` is `merged`."
++          },
++          "pr": {
++            "type": [
++              "string",
++              "null"
++            ],
++            "description": "The producer's pull request, when the contract is not merged yet."
++          },
++          "branch": {
++            "type": [
++              "string",
++              "null"
++            ]
++          },
++          "merge_order": {
++            "type": "string",
++            "enum": [
++              "producer_first",
++              "consumer_first",
++              "independent",
++              "unknown"
++            ],
++            "default": "unknown",
++            "description": "Which side has to ship first for production to stay correct. `producer_first` on a `state: open` entry is the case where merging THIS change first breaks production, and it is a blocker rather than the `minor` filed for a missing deploy note."
++          },
++          "facts_pinned_round": {
++            "type": [
++              "integer",
++              "null"
++            ],
++            "description": "The review round the facts were read in."
++          },
++          "revalidated_round": {
++            "type": [
++              "integer",
++              "null"
++            ],
++            "description": "The last round the producer was re-read. An entry with `state: open` that was pinned in round 1 and never revalidated is stale by round 3: a parallel pull request is precisely the thing that moves between rounds."
++          }
++        },
++        "allOf": [
++          {
++            "if": {
++              "properties": {
++                "state": {
++                  "const": "merged"
++                }
++              },
++              "required": [
++                "state"
++              ]
++            },
++            "then": {
++              "required": [
++                "sha"
++              ]
++            }
++          },
++          {
++            "if": {
++              "properties": {
++                "state": {
++                  "const": "open"
++                }
++              },
++              "required": [
++                "state"
++              ]
++            },
++            "then": {
++              "required": [
++                "pr"
++              ]
++            }
++          }
++        ],
++        "additionalProperties": true
++      }
++    },
+     "memory": {
+       "type": "object",
+       "required": [
+diff --git a/src/gdskills/bundled/skills/review/review-orchestrator/reviewer-finding.schema.json b/src/gdskills/bundled/skills/review/review-orchestrator/reviewer-finding.schema.json
+index 41051a2fb..b61590339 100644
+--- a/src/gdskills/bundled/skills/review/review-orchestrator/reviewer-finding.schema.json
++++ b/src/gdskills/bundled/skills/review/review-orchestrator/reviewer-finding.schema.json
+@@ -60,6 +60,13 @@
+               "info"
+             ]
+           },
++          "repo": {
++            "type": [
++              "string",
++              "null"
++            ],
++            "description": "Which repository `file` and `line` are in. Null, the default, means the repository under review. A cross-repo claim names the producer here and pins the ref it was read at in `evidence`; without this field a finding about another service's behaviour could not say where its evidence lived, so the rule that such a claim is `info` unless it has a `file:line` at a pinned ref could not be checked by anything but the reviewer's word. Kept identical to src/gdskills/contracts/review-finding.schema.json, which is stricter (additionalProperties: false) and would reject a finding carrying `repo` if the property were declared only here."
++          },
+           "file": {
+             "type": [
+               "string",
+diff --git a/src/gdskills/catalog.ts b/src/gdskills/catalog.ts
+index 0096fabd2..712f611d4 100644
+--- a/src/gdskills/catalog.ts
++++ b/src/gdskills/catalog.ts
+@@ -131,7 +131,11 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
+     "Use gdgraph affected context for exported symbols and shared surfaces.",
+     "Dispatch specialized review passes conceptually or as separate skill loads.",
+     "Report findings first, ordered by severity, with concrete file references.",
+-  ], ["review code", "full review", "review changes"]),
++    // A bare "review" belongs to the ORCHESTRATOR — which is what this skill's
++    // own description says: use it when a review is requested and the user does
++    // NOT name a specialist. A one-word trigger scores below any two-word
++    // specialist trigger, so "frontend review" still reaches review-frontend.
++  ], ["review", "ревью", "review code", "full review", "полное ревью", "review changes"]),
+   skill("review-logic", "review", ["recommended", "full"], "Review logic correctness, contracts, edge cases, nullability, and async behavior.", [
+     "Trace behavior through call sites and affected context.",
+     "Look for incorrect assumptions, missing branches, race conditions, and error paths.",
+@@ -146,12 +150,12 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
+     "Map inputs, trust boundaries, and sensitive outputs.",
+     "Check injection, auth, crypto, secrets, and unsafe filesystem/network behavior.",
+     "Prioritize exploitable findings with concrete remediation.",
+-  ], ["security review", "secure code", "vulnerability"]),
++  ], ["security review", "secure code", "vulnerability", "проверь безопасность", "безопасность кода"]),
+   skill("review-performance", "review", ["recommended", "full"], "Review hot paths, unnecessary work, bundle/perf regressions, blocking operations, and memory risk.", [
+     "Find changed hot paths and repeated operations.",
+     "Check loops, rendering, async blocking, large imports, and caching behavior.",
+     "Prioritize measurable or high-likelihood regressions.",
+-  ], ["performance review", "perf check", "slow"]),
++  ], ["performance review", "perf check", "slow", "узкие места", "проседает производительность"]),
+   skill("review-frontend", "review", ["recommended", "full"], "Review frontend components, state boundaries, rendering behavior, and UI integration patterns.", [
+     "Identify component, store, hook, route, and UI boundary changes.",
+     "Check data flow, state ownership, rendering cost, accessibility, and local conventions.",
+@@ -284,7 +288,7 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
+     "Detect migration tooling and existing conventions.",
+     "Create minimal reversible migrations where possible.",
+     "Run or describe verification and rollback steps.",
+-  ], ["database migration", "db migrate", "migration status"]),
++  ], ["database migration", "db migrate", "migrate database", "migration status"]),
+   skill("deploy", "quality", ["full"], "Run deployment pre-flight checks and deployment workflow summaries.", [
+     "Detect deployment target and required pre-flight checks.",
+     "Run verification before deployment unless explicitly skipped.",
+@@ -294,17 +298,17 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
+     "Inspect staged and unstaged changes.",
+     "Group related changes without staging unrelated work.",
+     "Create a conventional commit message with verification summary.",
+-  ], ["commit changes", "git commit", "conventional commit"]),
++  ], ["commit", "commit changes", "git commit", "conventional commit"]),
+   skill("push", "quality", ["full"], "Push branches with safety checks, upstream handling, and concise result summary.", [
+     "Check branch and remote state.",
+     "Push the current branch with upstream when needed.",
+     "Report remote branch and any follow-up needed.",
+-  ], ["push branch", "git push", "publish branch"]),
++  ], ["push", "push branch", "git push", "publish branch"]),
+   skill("pr", "quality", ["full"], "Prepare pull request creation or update context from local changes.", [
+     "Collect branch, commits, diff summary, tests, and risks.",
+     "Draft concise PR title and description.",
+     "Use project issue links when available.",
+-  ], ["open PR", "create pull request", "draft PR"]),
++  ], ["open PR", "open pull request", "create pull request", "draft PR"]),
+   skill("pr-issue-documenter", "quality", ["recommended", "full"], "Create PR descriptions and linked issue documentation from branch changes.", [
+     "Analyze commits and changed files.",
+     "Group changes by area and user-visible behavior.",
+diff --git a/src/gdskills/contracts/review-finding.schema.json b/src/gdskills/contracts/review-finding.schema.json
+index f8130acb0..c6b4de080 100644
+--- a/src/gdskills/contracts/review-finding.schema.json
++++ b/src/gdskills/contracts/review-finding.schema.json
+@@ -95,6 +95,10 @@
+       }
+     },
+     "severity": { "type": "string", "enum": ["blocker", "major", "minor", "info"] },
++    "repo": {
++      "type": ["string", "null"],
++      "description": "Which repository `file` and `line` are in. Null, the default, means the repository under review. A cross-repo claim names the producer here and pins the ref it was read at in `evidence`; without this field a finding about another service's behaviour could not say where its evidence lived, so the rule that such a claim is `info` unless it has a `file:line` at a pinned ref could not be checked by anything but the reviewer's word. Declared in BOTH this schema and skills/review/review-orchestrator/reviewer-finding.schema.json: this one is additionalProperties:false, so a finding carrying `repo` is rejected here if only the reviewer-side schema knows about it."
++    },
+     "file": { "type": ["string", "null"] },
+     "line": { "type": ["integer", "null"], "minimum": 1 },
+     "symbol": { "type": ["string", "null"] },
+diff --git a/src/gdskills/review-context-pr-cross-repo.test.ts b/src/gdskills/review-context-pr-cross-repo.test.ts
+new file mode 100644
+index 000000000..ba8b1f126
+--- /dev/null
++++ b/src/gdskills/review-context-pr-cross-repo.test.ts
+@@ -0,0 +1,354 @@
++// The Context Pack's two hardest-won rules had no carrier.
++//
++// `review-orchestrator`'s SKILL.md told reviewers to read `review_context.pr.body`
++// and to record cross-repo contracts in `review_context.cross_repo`. The schema
++// declared `pr` as a bare `{"type": ["object","null"], "additionalProperties": true}`
++// with no properties at all, and declared no `cross_repo` whatsoever — it survived
++// only on `additionalProperties: true`. So neither rule could be violated, which
++// is a different thing from neither rule being broken: a body that was never
++// fetched and a body that was empty were the same value, and a cross-repo fact
++// pinned to a branch that had since been squashed still validated clean.
++//
++// These tests drive real instances through the SHIPPED schemas, because the
++// schema files are what a dispatched reviewer is handed. A test that asserted
++// against an inline copy would pass while the shipped file drifted.
++
++import { describe, expect, test } from "bun:test";
++import { existsSync, readFileSync, readdirSync } from "node:fs";
++import path from "node:path";
++import { validateJson } from "./contracts";
++
++/** `Schema` is module-local in contracts.ts; take it from the function it feeds. */
++type Schema = Parameters<typeof validateJson>[1];
++
++const ORCHESTRATOR = path.join(
++  import.meta.dir,
++  "bundled",
++  "skills",
++  "review",
++  "review-orchestrator",
++);
++
++function schema(name: string): Schema {
++  return JSON.parse(readFileSync(path.join(ORCHESTRATOR, name), "utf8")) as Schema;
++}
++
++const CONTEXT = schema("review-context.schema.json");
++const FINDING = schema("reviewer-finding.schema.json");
++const SKILL = readFileSync(path.join(ORCHESTRATOR, "SKILL.md"), "utf8");
++
++/** The minimum a `review_context` needs to be valid, so each test varies one thing. */
++function baseContext(extra: Record<string, unknown> = {}): Record<string, unknown> {
++  return {
++    request: { raw: "review this PR" },
++    scope: { mode: "diff", files: ["src/api/client.ts"] },
++    routing: { selected_reviewers: ["review-backend"] },
++    token_policy: { context_mode: "light", omissions: [] },
++    ...extra,
++  };
++}
++
++async function errorsFor(value: unknown, s: Schema = CONTEXT): Promise<string[]> {
++  return (await validateJson(value, s)).map((e) => `${e.path}: ${e.message}`);
++}
++
++describe("the PR description is a typed field, not a naming convention", () => {
++  test("a fetched body validates", async () => {
++    expect(
++      await errorsFor(
++        baseContext({
++          pr: {
++            number: 431,
++            url: "https://github.com/o/r/pull/431",
++            title: "narrow the retry window",
++            body: "Switches the client to the producer's new timeout.",
++            state: "open",
++          },
++        }),
++      ),
++    ).toEqual([]);
++  });
++
++  test("a null body validates and is distinguishable from an empty one", async () => {
++    // Null means the fetch did not happen; "" means the author wrote nothing.
++    // Both are legal values and they are NOT the same fact — the second is
++    // reportable and the first is a gap in the pack.
++    expect(await errorsFor(baseContext({ pr: { number: 1, body: null } }))).toEqual([]);
++    expect(await errorsFor(baseContext({ pr: { number: 1, body: "" } }))).toEqual([]);
++  });
++
++  test("a non-string body is rejected — before this it was accepted", async () => {
++    const errors = await errorsFor(baseContext({ pr: { number: 1, body: { text: "oops" } } }));
++    expect(errors.length).toBeGreaterThan(0);
++    expect(errors.join(" ")).toContain("pr.body");
++  });
++
++  test("an unknown pr state is rejected", async () => {
++    const errors = await errorsFor(baseContext({ pr: { number: 1, state: "landed" } }));
++    expect(errors.join(" ")).toContain("pr.state");
++  });
++
++  test("pr stays optional — path-mode review has no pull request", async () => {
++    expect(await errorsFor(baseContext())).toEqual([]);
++    expect(await errorsFor(baseContext({ pr: null }))).toEqual([]);
++  });
++});
++
++describe("cross_repo can describe a producer that has not merged", () => {
++  const merged = {
++    repo: "vantage-backend",
++    state: "merged",
++    sha: "f5219d5d4",
++    reason: "DQ report payload: which halves are null vs 0",
++    facts: ["sqlScore stays null when the half is absent"],
++    merge_order: "independent",
++  };
++
++  const open = {
++    repo: "vantage-backend",
++    state: "open",
++    pr: "https://github.com/o/backend/pull/98",
++    branch: "feat/new-timeout",
++    reason: "the timeout this client now assumes",
++    facts: ["requestTimeoutMs default moves 30_000 -> 5_000"],
++    merge_order: "producer_first",
++    facts_pinned_round: 1,
++    revalidated_round: 3,
++  };
++
++  test("both a merged and an open producer validate", async () => {
++    expect(await errorsFor(baseContext({ cross_repo: [merged, open] }))).toEqual([]);
++  });
++
++  test("an unavailable producer is a recordable result, not an omission", async () => {
++    expect(
++      await errorsFor(
++        baseContext({
++          cross_repo: [
++            {
++              repo: "vantage-backend",
++              state: "unavailable",
++              reason: "the DQ payload shape",
++              facts: ["not readable from this checkout; dependent findings held at info"],
++            },
++          ],
++        }),
++      ),
++    ).toEqual([]);
++  });
++
++  test("a merged producer without a sha is rejected", async () => {
++    const { sha, ...noSha } = merged;
++    const errors = await errorsFor(baseContext({ cross_repo: [noSha] }));
++    expect(errors.join(" ")).toContain("sha");
++  });
++
++  test("an open producer without a pull request is rejected", async () => {
++    // This is the whole point of the `state` split: an open branch is rebased
++    // and squashed, so a sha read from it names a commit that will not survive
++    // the merge. The pull request is the address that does.
++    const { pr, ...noPr } = open;
++    const errors = await errorsFor(baseContext({ cross_repo: [noPr] }));
++    expect(errors.join(" ")).toContain("pr");
++  });
++
++  test("an entry without repo, reason, facts or state is rejected", async () => {
++    for (const missing of ["repo", "reason", "facts", "state"] as const) {
++      const entry: Record<string, unknown> = { ...merged };
++      delete entry[missing];
++      const errors = await errorsFor(baseContext({ cross_repo: [entry] }));
++      expect(errors.join(" ")).toContain(missing);
++    }
++  });
++
++  test("an empty facts array is rejected — an entry that read nothing recorded nothing", async () => {
++    const errors = await errorsFor(baseContext({ cross_repo: [{ ...merged, facts: [] }] }));
++    expect(errors.length).toBeGreaterThan(0);
++  });
++
++  test("an unknown state or merge_order is rejected", async () => {
++    expect((await errorsFor(baseContext({ cross_repo: [{ ...merged, state: "draft" }] }))).join(" "))
++      .toContain("state");
++    expect((await errorsFor(baseContext({ cross_repo: [{ ...merged, merge_order: "later" }] }))).join(" "))
++      .toContain("merge_order");
++  });
++});
++
++describe("a finding can name the repository its evidence lives in", () => {
++  function report(finding: Record<string, unknown>): Record<string, unknown> {
++    return {
++      status: "DONE",
++      reviewer: "review-backend",
++      summary: "one cross-repo claim",
++      findings: [
++        {
++          id: "F-001",
++          reviewer: "review-backend",
++          severity: "info",
++          problem: "the client assumes a 5s producer timeout",
++          impact: "a slow producer response is retried instead of awaited",
++          suggested_fix: "read the timeout from the producer's config contract",
++          evidence: "backend config.ts:42 at PR o/backend#98, head 9a1c2f0",
++          confidence: "medium",
++          ...finding,
++        },
++      ],
++      stats: { blocker: 0, major: 0, minor: 0, info: 1 },
++    };
++  }
++
++  test("repo validates on the reviewer-side schema", async () => {
++    expect(
++      await errorsFor(
++        report({ repo: "vantage-backend", file: "src/config.ts", line: 42 }),
++        FINDING,
++      ),
++    ).toEqual([]);
++  });
++
++  test("repo stays optional — a local finding names no repository", async () => {
++    expect(await errorsFor(report({ file: "src/api/client.ts", line: 9 }), FINDING)).toEqual([]);
++    expect(await errorsFor(report({ repo: null, file: "src/api/client.ts" }), FINDING)).toEqual([]);
++  });
++
++  test("the registered review-finding contract accepts repo too", async () => {
++    // It is `additionalProperties: false`, so a finding carrying `repo` would be
++    // REJECTED by the registered contract if the property were declared only on
++    // the reviewer-side schema. The two schemas are a pair and drift silently.
++    const registered = JSON.parse(
++      readFileSync(path.join(import.meta.dir, "contracts", "review-finding.schema.json"), "utf8"),
++    ) as Schema;
++    const errors = await validateJson(
++      {
++        id: "F-001",
++        reviewer: "review-backend",
++        severity: "info",
++        repo: "vantage-backend",
++        file: "src/config.ts",
++        line: 42,
++        problem: "the client assumes a 5s producer timeout",
++        impact: "a slow producer response is retried instead of awaited",
++        suggested_fix: "read the timeout from the producer's config contract",
++        evidence: "backend config.ts:42 at PR o/backend#98, head 9a1c2f0",
++        confidence: "medium",
++      },
++      registered,
++    );
++    expect(errors.map((e) => `${e.path}: ${e.message}`)).toEqual([]);
++  });
++});
++
++describe("the skill states the rules the schemas now carry", () => {
++  test("the Step 1 checklist names the description, memory and cross-repo", () => {
++    const step1 = SKILL.split("\n").find((l) => l.startsWith("- [ ] Step 1:"));
++    expect(step1).toBeDefined();
++    expect(step1!.toLowerCase()).toContain("description");
++    expect(step1!.toLowerCase()).toContain("memory");
++    expect(step1!.toLowerCase()).toContain("cross-repo");
++  });
++
++  test("an open producer that must ship first is a blocker, kept distinct from the deploy-note minor", () => {
++    // Matched on IDENTIFIERS, not on the sentence around them. Asserting the
++    // colon-joined literal made this a spell-check: a rewrite preserving the
++    // meaning exactly — "merge order of `producer_first`" — turned it red, which
++    // trains the next author to edit the test instead of thinking about the rule.
++    const section = SKILL.slice(SKILL.indexOf("### A producer that has not merged yet"));
++    expect(section).toMatch(/merge_order/);
++    expect(section).toMatch(/producer_first/);
++    expect(section).toMatch(/state:\s*open|`state: open`|state `open`/);
++    expect(section).toContain("`blocker`");
++    // The pre-existing `minor` is about the DESCRIPTION and must survive: the two
++    // findings have different subjects and collapsing them loses the operational one.
++    expect(section).toContain("`minor`");
++  });
++
++  test("the blocker enumeration stays closed at four shapes", () => {
++    // The first draft of this change added a FIFTH shape, which would have
++    // falsified "not one of the four shapes" in five other reviewer skills that
++    // cite this list — the exact unwired-claim defect this flow exists to remove.
++    // An unshipped dependency is a crash or a corruption at runtime, so it is
++    // already shape 1 or 2 and the enumeration does not have to grow.
++    const rubric = SKILL.slice(SKILL.indexOf("### `blocker` — merge-blocking"));
++    expect(rubric).toContain("Exactly four shapes");
++    expect(SKILL).not.toContain("Exactly five shapes");
++    const closed = rubric.slice(0, rubric.indexOf("### `major`"));
++    // "Exactly four shapes" IS a contract — five other reviewer skills cite that
++    // count — so it stays a literal. The rest matches identifiers only.
++    expect(closed).toMatch(/shape 1 or shape 2/);
++    expect(closed).toMatch(/merge_order/);
++    expect(closed).toMatch(/producer_first/);
++  });
++
++  test("no reviewer skill's reference to the four shapes was falsified", () => {
++    // The cross-references are prose in other files; the guard is that the
++    // number they name still matches the list they name it about.
++    const citing = readdirSync(path.join(import.meta.dir, "bundled", "skills", "review"))
++      .map((dir) => path.join(import.meta.dir, "bundled", "skills", "review", dir, "SKILL.md"))
++      .filter((file) => existsSync(file))
++      .filter((file) => /the four shapes/.test(readFileSync(file, "utf8")));
++    expect(citing.length).toBeGreaterThan(0); // non-vacuity: these citations exist
++    expect(SKILL).toContain("Exactly four shapes");
++  });
++
++  test("an open producer is re-read every round rather than pinned once", () => {
++    const section = SKILL.slice(SKILL.indexOf("### A producer that has not merged yet"));
++    expect(section).toContain("revalidated_round");
++    expect(section.toLowerCase()).toContain("every round");
++  });
++
++  test("the Stage 1 gate falls back to the PR body and owns the description-vs-diff check", () => {
++    const gate = SKILL.slice(SKILL.indexOf("## Stage 1 Gate — Spec Compliance"));
++    // The two facts, not the two headings verbatim: that the body is the spec
++    // when nothing else is, and that this gate owns the comparison.
++    expect(gate).toMatch(/no issue[\s\S]{0,80}task doc[\s\S]{0,80}spec/i);
++    expect(gate).toMatch(/description-vs-diff/i);
++    expect(gate).toContain("pr.body");
++  });
++});
++
++test("every keyword these schemas declare is one the validator implements", () => {
++  // The registry guard in contract-keywords.test.ts covers CONTRACTS only, and
++  // none of review-orchestrator's schemas are registered — so the keywords added
++  // here (`enum`, `if`/`then`, `const`, `minItems`) were outside every existing
++  // check. Scraped from the validator source rather than hand-listed, for the
++  // reason that test records: a hand-listed set is one more thing that drifts.
++  const source = readFileSync(path.join(import.meta.dir, "contracts.ts"), "utf8");
++  const implemented = new Set<string>();
++  for (const match of source.matchAll(/\bschema\.([$a-zA-Z][a-zA-Z0-9_]*)/g)) implemented.add(match[1]!);
++  expect(implemented.has("if")).toBe(true);
++  expect(implemented.has("enum")).toBe(true);
++  expect(implemented.has("minItems")).toBe(true);
++
++  const annotations = new Set([
++    "$schema", "$id", "$comment", "title", "description", "examples", "default",
++    "deprecated", "readOnly", "writeOnly", "$defs", "definitions", "format",
++  ]);
++
++  function declared(node: unknown, into: Set<string>): void {
++    if (Array.isArray(node)) {
++      for (const entry of node) declared(entry, into);
++      return;
++    }
++    if (typeof node !== "object" || node === null) return;
++    for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
++      if (key === "properties" || key === "definitions" || key === "$defs") {
++        for (const child of Object.values((value ?? {}) as Record<string, unknown>)) declared(child, into);
++        continue;
++      }
++      into.add(key);
++      declared(value, into);
++    }
++  }
++
++  const offenders: string[] = [];
++  for (const name of ["review-context.schema.json", "reviewer-finding.schema.json"]) {
++    const keywords = new Set<string>();
++    declared(schema(name), keywords);
++    expect(keywords.size).toBeGreaterThan(5); // non-vacuity: the walk read something
++    for (const keyword of [...keywords].sort()) {
++      if (annotations.has(keyword) || implemented.has(keyword)) continue;
++      offenders.push(`${name} declares \`${keyword}\`, which validateValue never reads`);
++    }
++  }
++  expect(offenders).toEqual([]);
++});

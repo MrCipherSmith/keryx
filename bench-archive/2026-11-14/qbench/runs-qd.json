@@ -1,0 +1,122 @@
+[
+ {
+  "rid": "QD1-q03",
+  "case": "q03",
+  "arm": "QD",
+  "rep": 1,
+  "task": "$BENCH/qbench/tasks/QD1-q03.md",
+  "out": "$BENCH/qbench/out/QD1-q03.json"
+ },
+ {
+  "rid": "QD1-q01",
+  "case": "q01",
+  "arm": "QD",
+  "rep": 1,
+  "task": "$BENCH/qbench/tasks/QD1-q01.md",
+  "out": "$BENCH/qbench/out/QD1-q01.json"
+ },
+ {
+  "rid": "QD2-q01",
+  "case": "q01",
+  "arm": "QD",
+  "rep": 2,
+  "task": "$BENCH/qbench/tasks/QD2-q01.md",
+  "out": "$BENCH/qbench/out/QD2-q01.json"
+ },
+ {
+  "rid": "QD2-q03",
+  "case": "q03",
+  "arm": "QD",
+  "rep": 2,
+  "task": "$BENCH/qbench/tasks/QD2-q03.md",
+  "out": "$BENCH/qbench/out/QD2-q03.json"
+ },
+ {
+  "rid": "QD3-q04",
+  "case": "q04",
+  "arm": "QD",
+  "rep": 3,
+  "task": "$BENCH/qbench/tasks/QD3-q04.md",
+  "out": "$BENCH/qbench/out/QD3-q04.json"
+ },
+ {
+  "rid": "QD1-q02",
+  "case": "q02",
+  "arm": "QD",
+  "rep": 1,
+  "task": "$BENCH/qbench/tasks/QD1-q02.md",
+  "out": "$BENCH/qbench/out/QD1-q02.json"
+ },
+ {
+  "rid": "QD1-q05",
+  "case": "q05",
+  "arm": "QD",
+  "rep": 1,
+  "task": "$BENCH/qbench/tasks/QD1-q05.md",
+  "out": "$BENCH/qbench/out/QD1-q05.json"
+ },
+ {
+  "rid": "QD2-q04",
+  "case": "q04",
+  "arm": "QD",
+  "rep": 2,
+  "task": "$BENCH/qbench/tasks/QD2-q04.md",
+  "out": "$BENCH/qbench/out/QD2-q04.json"
+ },
+ {
+  "rid": "QD3-q05",
+  "case": "q05",
+  "arm": "QD",
+  "rep": 3,
+  "task": "$BENCH/qbench/tasks/QD3-q05.md",
+  "out": "$BENCH/qbench/out/QD3-q05.json"
+ },
+ {
+  "rid": "QD2-q05",
+  "case": "q05",
+  "arm": "QD",
+  "rep": 2,
+  "task": "$BENCH/qbench/tasks/QD2-q05.md",
+  "out": "$BENCH/qbench/out/QD2-q05.json"
+ },
+ {
+  "rid": "QD3-q02",
+  "case": "q02",
+  "arm": "QD",
+  "rep": 3,
+  "task": "$BENCH/qbench/tasks/QD3-q02.md",
+  "out": "$BENCH/qbench/out/QD3-q02.json"
+ },
+ {
+  "rid": "QD3-q03",
+  "case": "q03",
+  "arm": "QD",
+  "rep": 3,
+  "task": "$BENCH/qbench/tasks/QD3-q03.md",
+  "out": "$BENCH/qbench/out/QD3-q03.json"
+ },
+ {
+  "rid": "QD2-q02",
+  "case": "q02",
+  "arm": "QD",
+  "rep": 2,
+  "task": "$BENCH/qbench/tasks/QD2-q02.md",
+  "out": "$BENCH/qbench/out/QD2-q02.json"
+ },
+ {
+  "rid": "QD3-q01",
+  "case": "q01",
+  "arm": "QD",
+  "rep": 3,
+  "task": "$BENCH/qbench/tasks/QD3-q01.md",
+  "out": "$BENCH/qbench/out/QD3-q01.json"
+ },
+ {
+  "rid": "QD1-q04",
+  "case": "q04",
+  "arm": "QD",
+  "rep": 1,
+  "task": "$BENCH/qbench/tasks/QD1-q04.md",
+  "out": "$BENCH/qbench/out/QD1-q04.json"
+ }
+]

@@ -1,0 +1,170 @@
+[
+ {
+  "rid": "QE1-q01",
+  "case": "q01",
+  "arm": "QE",
+  "rep": 1,
+  "out": "$BENCH/qbench/out/QE1-q01.json"
+ },
+ {
+  "rid": "QE2-q01",
+  "case": "q01",
+  "arm": "QE",
+  "rep": 2,
+  "out": "$BENCH/qbench/out/QE2-q01.json"
+ },
+ {
+  "rid": "QE3-q01",
+  "case": "q01",
+  "arm": "QE",
+  "rep": 3,
+  "out": "$BENCH/qbench/out/QE3-q01.json"
+ },
+ {
+  "rid": "QE1-q03",
+  "case": "q03",
+  "arm": "QE",
+  "rep": 1,
+  "out": "$BENCH/qbench/out/QE1-q03.json"
+ },
+ {
+  "rid": "QE2-q03",
+  "case": "q03",
+  "arm": "QE",
+  "rep": 2,
+  "out": "$BENCH/qbench/out/QE2-q03.json"
+ },
+ {
+  "rid": "QE3-q03",
+  "case": "q03",
+  "arm": "QE",
+  "rep": 3,
+  "out": "$BENCH/qbench/out/QE3-q03.json"
+ },
+ {
+  "rid": "QE1-q04",
+  "case": "q04",
+  "arm": "QE",
+  "rep": 1,
+  "out": "$BENCH/qbench/out/QE1-q04.json"
+ },
+ {
+  "rid": "QE2-q04",
+  "case": "q04",
+  "arm": "QE",
+  "rep": 2,
+  "out": "$BENCH/qbench/out/QE2-q04.json"
+ },
+ {
+  "rid": "QE3-q04",
+  "case": "q04",
+  "arm": "QE",
+  "rep": 3,
+  "out": "$BENCH/qbench/out/QE3-q04.json"
+ },
+ {
+  "rid": "QF1-q01",
+  "case": "q01",
+  "arm": "QF",
+  "rep": 1,
+  "out": "$BENCH/qbench/out/QF1-q01.json"
+ },
+ {
+  "rid": "QF2-q01",
+  "case": "q01",
+  "arm": "QF",
+  "rep": 2,
+  "out": "$BENCH/qbench/out/QF2-q01.json"
+ },
+ {
+  "rid": "QF3-q01",
+  "case": "q01",
+  "arm": "QF",
+  "rep": 3,
+  "out": "$BENCH/qbench/out/QF3-q01.json"
+ },
+ {
+  "rid": "QF1-q02",
+  "case": "q02",
+  "arm": "QF",
+  "rep": 1,
+  "out": "$BENCH/qbench/out/QF1-q02.json"
+ },
+ {
+  "rid": "QF2-q02",
+  "case": "q02",
+  "arm": "QF",
+  "rep": 2,
+  "out": "$BENCH/qbench/out/QF2-q02.json"
+ },
+ {
+  "rid": "QF3-q02",
+  "case": "q02",
+  "arm": "QF",
+  "rep": 3,
+  "out": "$BENCH/qbench/out/QF3-q02.json"
+ },
+ {
+  "rid": "QF1-q03",
+  "case": "q03",
+  "arm": "QF",
+  "rep": 1,
+  "out": "$BENCH/qbench/out/QF1-q03.json"
+ },
+ {
+  "rid": "QF2-q03",
+  "case": "q03",
+  "arm": "QF",
+  "rep": 2,
+  "out": "$BENCH/qbench/out/QF2-q03.json"
+ },
+ {
+  "rid": "QF3-q03",
+  "case": "q03",
+  "arm": "QF",
+  "rep": 3,
+  "out": "$BENCH/qbench/out/QF3-q03.json"
+ },
+ {
+  "rid": "QF1-q04",
+  "case": "q04",
+  "arm": "QF",
+  "rep": 1,
+  "out": "$BENCH/qbench/out/QF1-q04.json"
+ },
+ {
+  "rid": "QF2-q04",
+  "case": "q04",
+  "arm": "QF",
+  "rep": 2,
+  "out": "$BENCH/qbench/out/QF2-q04.json"
+ },
+ {
+  "rid": "QF3-q04",
+  "case": "q04",
+  "arm": "QF",
+  "rep": 3,
+  "out": "$BENCH/qbench/out/QF3-q04.json"
+ },
+ {
+  "rid": "QF1-q05",
+  "case": "q05",
+  "arm": "QF",
+  "rep": 1,
+  "out": "$BENCH/qbench/out/QF1-q05.json"
+ },
+ {
+  "rid": "QF2-q05",
+  "case": "q05",
+  "arm": "QF",
+  "rep": 2,
+  "out": "$BENCH/qbench/out/QF2-q05.json"
+ },
+ {
+  "rid": "QF3-q05",
+  "case": "q05",
+  "arm": "QF",
+  "rep": 3,
+  "out": "$BENCH/qbench/out/QF3-q05.json"
+ }
+]

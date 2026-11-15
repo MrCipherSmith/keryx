@@ -1,0 +1,69 @@
+{
+ "truth": [],
+ "decoys": [],
+ "candidate": [
+  {
+   "id": "G1",
+   "file": "src/review/mutate.ts",
+   "line": 380,
+   "severity": "minor",
+   "problem": "sweepStaleScratch now inlines its whole deletion policy in one nested ternary inside the I/O loop. That policy has three thresholds (no-marker age, stale-heartbeat age, and dead pid plus two heartbeats) and calls now() three times. The irreversible decision is mixed into the readdir/lstat/rm loop instead of living in a pure predicate (for example isAbandoned(owner, dirInfo, now, thresholds)).",
+   "impact": "This rule decides what gets deleted, and the change has just made it more complex. Anyone tuning a threshold has to reason about precedence across || and && inside the loop, and a test can only reach the rule through the filesystem, which is why the new tests build real directories with utimes for every case.",
+   "quote": ": now() - owner.mtimeMs > staleHeartbeatMs || (!isAlive(owner.pid) && now() - owner.mtimeMs > 2 * heartbeatMs);"
+  },
+  {
+   "id": "G2",
+   "file": "src/review/mutate.ts",
+   "line": 258,
+   "severity": "minor",
+   "problem": "isLinkedWorktree mixes two lstat/readFile probes with a pure classification of the gitdir path: it splits segments, finds the last `.git` and checks for exactly `.git/worktrees/<name>`. The path-shape rule is the subtle part (a submodule of a worktree must not match), but it is buried after two try/catch I/O blocks instead of being a pure helper over the gitdir string.",
+   "impact": "The tricky part can only be tested by writing gitfiles to disk. The new copy test has to build eleven directories to cover these path shapes, and the next change to the rule means editing an I/O function.",
+   "quote": "const segments = value.split(/[\\\\/]+/).filter((segment) => segment !== \"\");"
+  },
+  {
+   "id": "G3",
+   "file": "src/review/mutate.ts",
+   "line": 589,
+   "severity": "minor",
+   "problem": "The new Swept line in renderMutationTable is one template literal with three nested conditionals (count > 0, singular/plural, optional ms), written inline. The neighbouring optional lines go through small helpers (costLine(record), provenanceLine(record)).",
+   "impact": "The render function ends up with two levels of abstraction side by side, and the one-liner is hard to read or change. The test for this line needs five cases to pin its branches.",
+   "quote": "? [`Swept: ${record.sweptScratch} scratch ${record.sweptScratch === 1 ? \"copy\" : \"copies\"} left by dead passes${record.sweepMs === undefined ? \"\" : ` (${record.sweepMs} ms)`}.`,"
+  },
+  {
+   "id": "G4",
+   "file": "src/review/completion-gate.ts",
+   "line": 65,
+   "severity": "minor",
+   "problem": "The new special-file branch masks the mode with the bare literal 0o170000. Node already names this as fs.constants.S_IFMT.",
+   "impact": "A reader has to recognise the octal as the file-type mask, and the meaning of the resulting `special:<octal>` string goes undocumented. The signature format now depends on that string, and the tests assert its prefix.",
+   "quote": "if (!info.isFile()) return `special:${(info.mode & 0o170000).toString(8)}`;"
+  },
+  {
+   "id": "G5",
+   "file": "src/review/mutate.test.ts",
+   "line": 251,
+   "severity": "minor",
+   "problem": "The new test helper `make` takes five positional parameters (name, owner, ageMs, markerAgeMs, into), two of them durations of the same type. Call sites read as bare number pairs. Separately, the age `3 * HEARTBEAT_MS` (a marker old enough to count) is spelled inline at 12 sites, although the same file names it once as `staleButNotAbandoned`, inside only one describe block.",
+   "impact": "At sites like make(\"...\", {...}, 1000, 3 * HEARTBEAT_MS, repoScratch), a reader cannot tell which number is the directory age and which is the marker age without the signature. Swapping them silently changes which branch the sweep test exercises. Retuning the marker threshold means editing 12 copies. Sites: mutate.test.ts:351, 365, 367, 381, 382, 448, 469, 471, 478, 497, 509 (and 396 for the named copy).",
+   "quote": "async function make(name: string, owner: unknown, ageMs: number, markerAgeMs: number = ageMs, into: string = scratch): Promise<string> {"
+  },
+  {
+   "id": "G6",
+   "file": "src/commands/agent-review-gate.test.ts",
+   "line": 169,
+   "severity": "minor",
+   "problem": "Three new tests each define the same scan stub: a reviewGateState that calls controller.abort() and returns openReview(). The diff already extracts openReview() for these tests but leaves the abort-then-resolve stub copied three times. Sites: agent-review-gate.test.ts:169, 180, 192.",
+   "impact": "The stub is the scenario all three tests share: an abort that lands during a scan that then resolves. A change to it, such as resolving null or aborting after an await, has to be made three times and could drift between the TP-004 and LOGIC-003 cases.",
+   "quote": "const reviewGateState: typeof findReviewGateState = async () => {\n    controller.abort();\n    return openReview();\n  };"
+  },
+  {
+   "id": "G7",
+   "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+   "line": 788,
+   "severity": "minor",
+   "problem": "The edited treeHash sentence attaches 'except linked worktrees, which it leaves out' to the parenthetical about ignored files. That reads as though linked worktrees were a kind of ignored file, and it mixes a statement about the scratch copy into a sentence about what treeHash hashes. The paragraph added four lines later states the linked-worktree rule properly, so the parenthetical is both confusing and redundant. The same text is in the bundled mirror at src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md:788.",
+   "impact": "Agents read this skill as instructions for the mutation pass. The sentence blurs what treeHash covers with what the copy contains, and two places now state the worktree rule, so they can drift apart.",
+   "quote": "ignored files (the scratch copy still includes them, except linked worktrees, which it leaves out), the inside of an"
+  }
+ ]
+}

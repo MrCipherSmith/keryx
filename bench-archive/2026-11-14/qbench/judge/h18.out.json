@@ -1,0 +1,20 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "match", "gid": "G1", "why": "G1 names the empty catch in exportProviderCatalogSnapshot that still returns ok: true." },
+    { "tid": "T2", "verdict": "match", "gid": "G7", "why": "G7 reports the same log-to-stderr-then-rethrow in the JSON.parse catch." },
+    { "tid": "T3", "verdict": "match", "gid": "G4", "why": "G4 flags the boolean toPinned flag switching export/import, with the same call sites." },
+    { "tid": "T4", "verdict": "match", "gid": "G5", "why": "G5 names the same three duplicated summary blocks at the same sites." },
+    { "tid": "T5", "verdict": "match", "gid": "G2", "why": "G2 identifies the JSDoc merge rule contradicted by the unconditional updateProviderCatalogEntry." },
+    { "tid": "T6", "verdict": "match", "gid": "G3", "why": "G3 flags the same ~57-line importProviderCatalogSnapshot mixing abstraction levels." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "truth", "why": "Matches T1." },
+    { "gid": "G2", "label": "truth", "why": "Matches T5." },
+    { "gid": "G3", "label": "truth", "why": "Matches T6." },
+    { "gid": "G4", "label": "truth", "why": "Matches T3." },
+    { "gid": "G5", "label": "truth", "why": "Matches T4." },
+    { "gid": "G6", "label": "valid", "why": "Verified in the snapshot: no `keryx providers pin` command exists and formatCatalogSummaryLine has no caller, so the new docs point at nonexistent things." },
+    { "gid": "G8", "label": "noise", "why": "The new writer follows the module's established lock-and-best-effort pattern; the repetition is pre-existing and is a refactor preference, not a defect the change introduces." },
+    { "gid": "G9", "label": "noise", "why": "An info-level alias export is a naming-taste nit." }
+  ]
+}

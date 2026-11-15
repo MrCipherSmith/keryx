@@ -1,0 +1,110 @@
+[
+  {
+    "id": "G1",
+    "file": "package.json",
+    "line": 57,
+    "severity": "major",
+    "problem": "The new retired-spellings gate is never executed on a pull request. `check:retired-spellings` is added as a script but no workflow step calls it (ci.yml only runs `check:core`, `check:doc-links`, the security eval and the client matrix), and its test lives in scripts/check-retired-cli-spellings.test.ts, which `test:core` (src/ paths only) and the `test:client:*` legs do not match. The only place it runs is release.yml's `bun run check` (bare `bun test`).",
+    "impact": "A PR that reintroduces `keryx mcp serve` / `keryx mcp install` in docs or src goes green and merges; the drift the script header says 'fails the build' is first detected when a release tag is pushed, where it blocks publishing instead of the PR that caused it.",
+    "quote": "\"check:retired-spellings\": \"bun scripts/check-retired-cli-spellings.ts\","
+  },
+  {
+    "id": "G2",
+    "file": "docs/docs/cli-reference.md",
+    "line": 2269,
+    "severity": "minor",
+    "problem": "The `integrate` row still documents the written client entry as `args: [\"mcp\",\"serve\",\"--cwd\",...]` for cursor/claude, opencode and vscode, but this diff changed MCP_SERVER_ARGS to [\"serve-mcp\"] (src/mcp/client-config.ts:32) and the tests now assert [\"serve-mcp\",\"--cwd\",root]. The gate does not see it because the array form is not the string `keryx mcp serve`.",
+    "impact": "The CLI reference describes a config shape the command no longer writes; anyone hand-authoring or validating a config from the reference produces the retired spelling and gets the deprecation line on every editor session.",
+    "quote": "`cursor`/`claude` add `mcpServers.keryx = { command: \"keryx\", args: [\"mcp\",\"serve\",\"--cwd\",\"<absolute-project-root>\"] }`"
+  },
+  {
+    "id": "G3",
+    "file": "docs/docs/modules.md",
+    "line": 918,
+    "severity": "minor",
+    "problem": "The MCP module's 'CLI surface' table was not updated: it still lists only `mcp serve`, `mcp serve --http`, `mcp install --runtime ...`, `mcp uninstall --runtime ...` as the surface, with no mention of `serve-mcp` / `integrate`. It survives the gate because the rows omit the `keryx ` prefix the RETIRED regex requires.",
+    "impact": "A reader of the modules guide is taught exactly the three retired spellings as the current command surface, which is the outcome the rename and its gate exist to prevent.",
+    "quote": "| `mcp install --runtime <cursor\\|claude\\|opencode\\|generic\\|all>` | write project-scoped client config with `--cwd <project-root>` |"
+  },
+  {
+    "id": "G4",
+    "file": "scripts/check-retired-cli-spellings.ts",
+    "line": 63,
+    "severity": "minor",
+    "problem": "The matcher only recognises the retired spellings when literally prefixed by `keryx ` and only inside README.md, docs/, .metaproject/ and src/. Confirmed misses in this snapshot: docs/docs/modules.md:918-922 (`mcp serve` / `mcp install --runtime`), the generated core README template at src/mcp/client-config.ts:575 (\"`mcp install` writes client configs\"), docs/docs/cli-reference.md:2301 (\"`mcp serve` hard-fails\"), and vscode-extension/README.md:84 (`keryx mcp install --runtime vscode`, outside PATTERNS). The script reports '0 of them undeclared' while these remain.",
+    "impact": "The gate reports clean on a tree that still teaches the retired names in a user-facing guide, a template written into every project's .metaproject/core/mcp, and the extension README; the 'did the scan do its work' assertions do not cover this class.",
+    "quote": "const RETIRED = /keryx mcp (serve|install|uninstall)\\b/g;"
+  },
+  {
+    "id": "G5",
+    "file": "src/mcp/client-config.ts",
+    "line": 1,
+    "severity": "minor",
+    "problem": "A file-scope exemption is declared for 'two comments' in the file that also holds the template generating .metaproject/modules/mcp.md and the core README. The gate's own header names that template as the reason src/ is scanned, yet the whole file (template included) is now invisible to it; the same whole-file exemption is applied to src/cli.ts, whose usage/help text is reader-facing.",
+    "impact": "If the module-doc template or the CLI help text drifts back to `keryx mcp serve`/`install` as an instruction, the gate does not flag it at the source; a line-scope marker on the two historical comments would have kept the template covered.",
+    "quote": "// retired-spellings-ok: file — two comments describing what the code did before the rename; history, not instruction"
+  },
+  {
+    "id": "G6",
+    "file": "scripts/check-retired-cli-spellings.ts",
+    "line": 61,
+    "severity": "minor",
+    "problem": "The collector scans `.metaproject/**/*.md` and excludes only data/ and flows/ as 'records of work already completed'. `.metaproject/reviews/` and `.metaproject/jobs/` exist in this tree and are the same kind of tool-written, append-only record (review packages and job reports that quote the code under review), but they are scanned.",
+    "impact": "A review or job report that quotes a finding such as 'docs still say `keryx mcp serve`' makes `bun test` / `bun run check` fail on that checkout and at release, for a file nobody reads as an instruction; fixing it means editing a historical record or adding a marker to it.",
+    "quote": "const EXCLUDED_ROOTS = [\".metaproject/data/\", \".metaproject/flows/\"];"
+  },
+  {
+    "id": "G7",
+    "file": "scripts/check-retired-cli-spellings.ts",
+    "line": 112,
+    "severity": "minor",
+    "problem": "The was->is pairing uses `startsWith` on the replacement, so `keryx mcp install` is accepted beside `keryx integrate --remove <editor>` (it starts with `keryx integrate`), and once any cell pairs, scanText skips every retired spelling on that line (line 190), including one in a third free-text cell. The 'WRONG replacement' test only covers serve -> integrate.",
+    "impact": "A table row `| keryx mcp install --runtime x | keryx integrate --remove x |` (misinforming: install mapped to removal) or a real was/is row with a trailing 'tip: run `keryx mcp install` ...' cell is exempted by shape, the exact hole the comment above the function says was closed.",
+    "quote": "if (neighbour !== undefined && neighbour.startsWith(replacement)) return true;"
+  },
+  {
+    "id": "G8",
+    "file": "src/commands/integrate.ts",
+    "line": 53,
+    "severity": "minor",
+    "problem": "`integrate` folds add and remove into one verb switched by `--remove`, but every other dash-argument is silently discarded by parseEditors and never validated. A mistyped or guessed mode flag therefore selects the opposite, mutating action.",
+    "impact": "`keryx integrate --uninstall cursor`, `--delete cursor` or `-remove cursor` exits 0 after WRITING .cursor/mcp.json and setting modules.mcp.enabled=true; `keryx integrate --remove cursor --dryrun` performs a real removal. Under the retired spelling install/uninstall were separate subcommands and an unknown one was rejected with exit 1.",
+    "quote": ".filter((argument) => !argument.startsWith(\"-\"))"
+  },
+  {
+    "id": "G9",
+    "file": "docs/requirements/keryx-mcp-servers/specification.md",
+    "line": 128,
+    "severity": "minor",
+    "problem": "The specification contradicts itself and D-04 after the partial rewrite: §4.3 says `/mcp` becomes the consumer view (line 125) and, three lines later, that `/mcp` stays the keryx-as-server installer; §6 still says `src/commands/mcp.ts` must 'not change serve/install/uninstall' (line 229) and that a 'new `/mcps` modal is a sibling file' (line 230), while AC9 in the same file says `/mcps` is never registered. AC8 also carries an unterminated 'Superseded text' quote.",
+    "impact": "The document is the stated input for implementers of P0–P4; it gives two opposite instructions for `/mcp` and instructs creating the `/mcps` modal that the new confusable test is written to forbid.",
+    "quote": "- `/mcp` stays the keryx-as-server installer (`MCP_TOOLS_COMMAND` in"
+  },
+  {
+    "id": "G10",
+    "file": "docs/requirements/roadmap.md",
+    "line": 529,
+    "severity": "minor",
+    "problem": "The package row added by this diff (outside the exempted changelog section) describes the superseded design: 'additive `keryx mcp add|...`, TUI `/mcps` distinct from installer `/mcp`' and 'Does not change inbound `keryx serve-mcp`', while the same diff renames the inbound surface and D-04 forbids `/mcps`. The package README has the same drift: its 'verified against current code' status says `keryx mcp` is serve/install/uninstall in src/commands/mcp.ts (line 28) and its Scope bullet ends in the garbled 'moves to `/integrations` stays.' (line 62); naming-collision.md still says 'Status: proposal — no decision taken' (line 6) above the recorded decision.",
+    "impact": "The roadmap, which is the index readers use to learn a package's shape, states the opposite of the adopted decision for the slash command and the CLI surface.",
+    "quote": "TUI `/mcps` distinct from installer `/mcp`, OAuth + owner-only credentials"
+  },
+  {
+    "id": "G11",
+    "file": "src/commands/mcp-naming.test.ts",
+    "line": 272,
+    "severity": "minor",
+    "problem": "The AC2 'writes what mcp install --runtime X wrote, byte for byte' tests compare `mcp install` against `integrate` in the same build, where `mcp install` is now a three-line translation into the same `integrateCommand`. Both sides are the new implementation, so the comparison cannot detect a change relative to pre-rename behaviour; and the bytes did change in this very diff (args [\"mcp\",\"serve\"] -> [\"serve-mcp\"]) with these tests green.",
+    "impact": "The test name claims parity with what the old command wrote, but it only proves the alias forwards its arguments; a regression in the written config shape passes as long as both spellings share it.",
+    "quote": "test(`AC2: integrate ${runtime} writes what mcp install --runtime ${runtime} wrote, byte for byte`, async () => {"
+  },
+  {
+    "id": "G12",
+    "file": "opencode.json",
+    "line": 7,
+    "severity": "minor",
+    "problem": "The repository's own committed, keryx-managed client config was not regenerated: it still launches `keryx mcp serve`, which after this diff prints the deprecation line on stderr at every start. src/mcp/client-config.ts:33-37 states this is precisely what a generated config must not do.",
+    "impact": "Every opencode session opened in this repository starts the server through the retired alias and carries the deprecation notice; the config also contradicts what `keryx integrate opencode` now writes.",
+    "quote": "\"mcp\","
+  }
+]

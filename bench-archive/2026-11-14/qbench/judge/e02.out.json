@@ -1,0 +1,20 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "match", "gid": "G3", "why": "G3 identifies the throwing cancel stub despite cancellation:false, the unguarded call in cancelPendingDispatches aborting the loop, and the fix of omitting cancel; lower severity does not change the match." },
+    { "tid": "T2", "verdict": "match", "gid": "G1", "why": "G1 names loadRecordedResults returning null coalesced by ?? [] so a bad recording replays as clean zero findings." },
+    { "tid": "T3", "verdict": "match", "gid": "G5", "why": "G5 describes writeReplaySummary mixing read/validate/transform/write in one function and the untestable transform." },
+    { "tid": "T4", "verdict": "match", "gid": "G4", "why": "G4 flags the duplicated unnamed seven-day window at both sites and the drift risk." },
+    { "tid": "T5", "verdict": "match", "gid": "G2", "why": "G2 flags the predicate mutating entry.scopeIds via sort and scopesMatch depending on it." },
+    { "tid": "T6", "verdict": "match", "gid": "G7", "why": "G7 flags the one-letter n explained by a comment and suggests naming it confirmed." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "truth", "why": "Matches T2." },
+    { "gid": "G2", "label": "truth", "why": "Matches T5." },
+    { "gid": "G3", "label": "truth", "why": "Matches T1." },
+    { "gid": "G4", "label": "truth", "why": "Matches T4." },
+    { "gid": "G5", "label": "truth", "why": "Matches T3." },
+    { "gid": "G6", "label": "noise", "why": "unknownAdapter reads naturally as dispatches with an unknown adapter and RUNNING_STATUSES naming is a taste quibble, not a clear defect." },
+    { "gid": "G7", "label": "truth", "why": "Matches T6." },
+    { "gid": "G8", "label": "noise", "why": "Four positional parameters on a small internal function is a style preference below a reasonable fix threshold." }
+  ]
+}

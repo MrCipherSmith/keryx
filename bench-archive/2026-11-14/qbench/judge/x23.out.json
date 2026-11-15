@@ -1,0 +1,21 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "match", "gid": "G1", "why": "G1 names the empty catch around writeOwnerOnlyFileAtomic followed by a hard-coded ok: true return." },
+    { "tid": "T2", "verdict": "match", "gid": "G4", "why": "G4 flags the same log-to-stderr-and-rethrow in the JSON.parse catch." },
+    { "tid": "T3", "verdict": "match", "gid": "G5", "why": "G5 flags the toPinned boolean switching between export and import, and cites the same call sites." },
+    { "tid": "T4", "verdict": "match", "gid": "G3", "why": "G3 names all three duplicated summary blocks at the same sites." },
+    { "tid": "T5", "verdict": "match", "gid": "G2", "why": "G2 says the JSDoc promises newer entries are kept while updateProviderCatalogEntry overwrites every entry." },
+    { "tid": "T6", "verdict": "match", "gid": "G7", "why": "G7 flags the same ~57-line function mixing I/O with parsing and validation, and proposes extracting helpers." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "truth", "why": "Matches T1." },
+    { "gid": "G2", "label": "truth", "why": "Matches T5." },
+    { "gid": "G3", "label": "truth", "why": "Matches T4." },
+    { "gid": "G4", "label": "truth", "why": "Matches T2." },
+    { "gid": "G5", "label": "truth", "why": "Matches T3." },
+    { "gid": "G6", "label": "valid", "why": "Line 111 really does turn a missing or non-object providers field into {}, unlike the explicit throws nearby, and with prune it would delete every cache entry; a maintainer would reasonably make it throw." },
+    { "gid": "G7", "label": "truth", "why": "Matches T6." },
+    { "gid": "G8", "label": "valid", "why": "In src, pinSnapshot appears only in provider-catalog.ts and no caller sets it, so the docs point to a `keryx providers pin` command that does not exist." },
+    { "gid": "G9", "label": "noise", "why": "This is minor header-wording imprecision (inside vs next to the config dir; the field list omits identity fields); between valid and noise the brief says to pick the lower verdict." }
+  ]
+}

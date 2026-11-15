@@ -1,0 +1,21 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "match", "gid": "G1", "why": "G1 names the empty catch around writeOwnerOnlyFileAtomic followed by an unconditional ok:true return." },
+    { "tid": "T2", "verdict": "match", "gid": "G7", "why": "G7 reports the log-to-stderr-then-rethrow in the JSON.parse catch and the double reporting." },
+    { "tid": "T3", "verdict": "match", "gid": "G5", "why": "G5 flags the boolean toPinned switching between export and import and proposes two named functions." },
+    { "tid": "T4", "verdict": "match", "gid": "G4", "why": "G4 names the duplicated summary formula at all three sites." },
+    { "tid": "T5", "verdict": "match", "gid": "G2", "why": "G2 reports the JSDoc merge rule contradicted by the unconditional updateProviderCatalogEntry overwrite." },
+    { "tid": "T6", "verdict": "match", "gid": "G6", "why": "G6 flags the ~57-line import function mixing abstraction levels and suggests extracting parsing/validation." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "truth", "why": "Matches T1." },
+    { "gid": "G2", "label": "truth", "why": "Matches T5." },
+    { "gid": "G3", "label": "noise", "why": "pinSnapshot and formatCatalogSummaryLine are indeed unwired, but an opt-in dep not yet used by a command is scaffolding, not a clear defect; torn, so noise." },
+    { "gid": "G4", "label": "truth", "why": "Matches T4." },
+    { "gid": "G5", "label": "truth", "why": "Matches T3." },
+    { "gid": "G6", "label": "truth", "why": "Matches T6." },
+    { "gid": "G7", "label": "truth", "why": "Matches T2." },
+    { "gid": "G8", "label": "noise", "why": "Speculative: the reviewer concedes the path is unreachable since nothing sets pinSnapshot." },
+    { "gid": "G9", "label": "noise", "why": "'next to' vs 'inside' the config dir is a trivial wording nit." }
+  ]
+}

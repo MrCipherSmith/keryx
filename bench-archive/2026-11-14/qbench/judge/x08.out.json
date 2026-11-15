@@ -1,0 +1,19 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "match", "gid": "G1", "why": "G1 names the throwing cancel override on the recorded adapter and the unguarded call in cancelPendingDispatches that aborts the shutdown loop." },
+    { "tid": "T2", "verdict": "match", "gid": "G2", "why": "G2 identifies the null from loadRecordedResults coalesced to [] so a bad recording replays as an empty clean result." },
+    { "tid": "T3", "verdict": "match", "gid": "G5", "why": "G5 describes writeReplaySummary mixing file IO with validation and summary transform in one function." },
+    { "tid": "T4", "verdict": "match", "gid": "G4", "why": "G4 names the inline seven-day window at both sites, isReplayableResult and writeReplaySummary." },
+    { "tid": "T5", "verdict": "match", "gid": "G3", "why": "G3 identifies the in-place sort inside the predicate and scopesMatch's hidden dependency on it." },
+    { "tid": "T6", "verdict": "match", "gid": "G6", "why": "G6 flags the comment explaining the one-letter counter n instead of naming it." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "truth", "why": "Matches T1." },
+    { "gid": "G2", "label": "truth", "why": "Matches T2." },
+    { "gid": "G3", "label": "truth", "why": "Matches T5." },
+    { "gid": "G4", "label": "truth", "why": "Matches T4." },
+    { "gid": "G5", "label": "truth", "why": "Matches T3." },
+    { "gid": "G6", "label": "truth", "why": "Matches T6." },
+    { "gid": "G7", "label": "noise", "why": "Four parameters with two adjacent strings is a borderline taste point, not a clear defect a maintainer would necessarily fix; tie resolved to the lower label." }
+  ]
+}

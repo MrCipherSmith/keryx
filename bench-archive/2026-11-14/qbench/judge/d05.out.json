@@ -1,0 +1,20 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "match", "gid": "G1", "why": "G1 names the log-only cursor-write catch in recordPlanRevision that returns the entry as recorded while the revision stays invisible." },
+    { "tid": "T2", "verdict": "match", "gid": "G4", "why": "G4 flags the synchronous read/parse I/O in the ExecutionPlanHistory constructor and proposes a static/async loader." },
+    { "tid": "T3", "verdict": "match", "gid": "G8", "why": "G8 targets the same if/else-if chain in describeChange whose bare else absorbs new kinds without exhaustiveness checking." },
+    { "tid": "T4", "verdict": "match", "gid": "G5", "why": "G5 reports the out-parameter/void signature of diffExecutionPlans." },
+    { "tid": "T5", "verdict": "miss", "gid": null, "why": "No candidate raises the transition vs change naming inconsistency." },
+    { "tid": "T6", "verdict": "match", "gid": "G3", "why": "G3 reports parseEntry's bare \"Invalid entry\" error lacking file/line context, contrasting readCursor." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "truth", "why": "Match for T1." },
+    { "gid": "G2", "label": "valid", "why": "writePlan awaits recordPlanRevision after plan.json is committed, so an appendFile failure rejects a write that landed, skips notify, and a retry hits a conflict; a real introduced issue not in either list." },
+    { "gid": "G3", "label": "truth", "why": "Match for T6." },
+    { "gid": "G4", "label": "truth", "why": "Match for T2." },
+    { "gid": "G5", "label": "truth", "why": "Match for T4." },
+    { "gid": "G6", "label": "truth", "why": "Covers the T1 consequence that the next successful write advances the cursor and commits the orphaned line; partial for T1." },
+    { "gid": "G7", "label": "noise", "why": "SRP/naming opinion about renderExecutionPlanChangelog that largely restates the constructor-I/O testability concern already covered by G4." },
+    { "gid": "G8", "label": "truth", "why": "Match for T3." }
+  ]
+}

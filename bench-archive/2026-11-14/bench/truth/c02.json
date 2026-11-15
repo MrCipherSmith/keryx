@@ -1,0 +1,56 @@
+[
+ {
+  "tid": "T1",
+  "file": "src/ctx/hook-classify.ts",
+  "line": 179,
+  "severity": "major",
+  "problem": "readsStdin lets `grep -e PAT FILE` through: when the pattern arrives via a value flag the pattern operand is never spent, so operandsAllowed absorbs the first PATH instead. Attached spellings (-efoo, --regexp=foo) are missed by the value-flag set entirely.",
+  "impact": "A full file read past the guard, recorded as ctx_used-compliant — the exact false-clean the change exists to close. Regression: `grep -e foo file.ts` BLOCKED at 868eae95 and passes after the fix.",
+  "quote": null
+ },
+ {
+  "tid": "T2",
+  "file": "src/ctx/hook-classify.ts",
+  "line": 187,
+  "severity": "major",
+  "problem": "The recursive check /^-[a-zA-Z]*[rR]/ cannot match a long option: after ^- the next character is -, which [a-zA-Z]* cannot consume.",
+  "impact": "`grep --recursive foo` and `grep --dereference-recursive foo` walk the tree unguarded, including after a statement split (`cd src && grep --recursive foo`).",
+  "quote": null
+ },
+ {
+  "tid": "T3",
+  "file": "src/ctx/hook-classify.ts",
+  "line": 179,
+  "severity": "major",
+  "problem": "operandsAllowed is 1 only for search-like commands. sed and awk take a SCRIPT as their first operand exactly as grep takes a pattern, so a downstream filter's script is misread as a path.",
+  "impact": "This is the false-positive class that made the guard unusable and motivated the change in the first place. The fix moved it one command over: `bun test | sed -n '1,5p'` and `bun test | awk '{print $1}'` are refused.",
+  "quote": null
+ },
+ {
+  "tid": "T4",
+  "file": "src/commands/skills.ts",
+  "line": 405,
+  "severity": "major",
+  "problem": "The fix removed the short-token filter from the TRIGGER side only, so triggerTokens.every(t => queryTokens.has(t)) fails permanently for any trigger containing a stopword or one-character word.",
+  "impact": "Net regression measured over the whole catalog: 15 triggers lost the order-free path, 9 gained; round 1 complained about 11 and the count is now 17. It produces a WRONG route, not just silence: 'learn lessons from this review' names review-orchestrator while entity-skill-learner scores 30, below the floor.",
+  "quote": null
+ },
+ {
+  "tid": "T5",
+  "file": "src/ctx/hook-classify.ts",
+  "line": 137,
+  "severity": "major",
+  "problem": "Two guards added this round are unpinned: emptying the per-command VALUE_FLAGS, and dropping the isFirst half of the rg branch, both leave the suite green while over-blocking.",
+  "impact": "The file header says a false block is the failure mode that gets a hook uninstalled. `bun test | head -n 20` is the canonical form of the command the ALLOWED list protects and it flips to block under the mutation; the list exercises no value flag and contains no downstream rg.",
+  "quote": null
+ },
+ {
+  "tid": "T6",
+  "file": "src/gdskills/catalog.ts",
+  "line": 292,
+  "severity": "major",
+  "problem": "The word-boundary padding matches only the standalone word and there is no stemming, so every one-word trigger in the untouched catalog stops matching the inflected forms operators type. The token fallback cannot recover it because expandTokens compares by exact equality.",
+  "impact": "Silent wrong result on the surface the project's routing rule depends on. `run the deployment` deploy(95) -> silence; `reviewing the diff now` review-orchestrator(55) -> gone, top becomes context-router(10); `commits are failing`, `brainstorming ideas`, `interviewing me first` all -> silence.",
+  "quote": null
+ }
+]

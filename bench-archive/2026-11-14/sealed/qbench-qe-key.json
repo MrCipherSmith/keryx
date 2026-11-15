@@ -1,0 +1,38 @@
+{
+ "e01": {
+  "rid": "QE1-q02",
+  "case": "q02",
+  "arm": "QE",
+  "rep": 1
+ },
+ "e02": {
+  "rid": "QE2-q02",
+  "case": "q02",
+  "arm": "QE",
+  "rep": 2
+ },
+ "e03": {
+  "rid": "QE3-q02",
+  "case": "q02",
+  "arm": "QE",
+  "rep": 3
+ },
+ "e04": {
+  "rid": "QE3-q05",
+  "case": "q05",
+  "arm": "QE",
+  "rep": 3
+ },
+ "e05": {
+  "rid": "QE2-q05",
+  "case": "q05",
+  "arm": "QE",
+  "rep": 2
+ },
+ "e06": {
+  "rid": "QE1-q05",
+  "case": "q05",
+  "arm": "QE",
+  "rep": 1
+ }
+}

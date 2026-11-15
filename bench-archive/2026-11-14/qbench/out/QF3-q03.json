@@ -1,0 +1,83 @@
+[
+  {
+    "id": "G1",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 71,
+    "severity": "major",
+    "problem": "The cursor write failure is caught, logged to stderr and swallowed, and recordPlanRevision still returns the entry as if it was recorded. The cursor is the commit marker readers trust, so the appended entry stays invisible to ExecutionPlanHistory / renderExecutionPlanChangelog. No comment gives a reason for the fallback (error-handling Rule 3, Iron Law 1).",
+    "impact": "If writeFileAtomic on plan-history.cursor.json fails (EACCES, ENOSPC), writePlan carries on as if the write succeeded. The operator's changelog then silently drops that revision, and every later one while the failure lasts. The returned PlanHistoryEntry also claims success to any future caller of recordPlanRevision.",
+    "quote": "} catch (error) {\n    process.stderr.write(`plan history: cursor update failed: ${message(error)}\\n`);\n  }\n  return entry;"
+  },
+  {
+    "id": "G2",
+    "file": "src/session/execution-plan.ts",
+    "line": 178,
+    "severity": "major",
+    "problem": "Journaling runs inside writePlan after plan.json is already committed, and an appendFile failure in recordPlanRevision propagates out of writePlan. The same function swallows a cursor failure (G1), so one journal has two failure policies: append failure is fatal and cursor failure is ignored.",
+    "impact": "If appending to plan-history.jsonl fails, setExecutionPlan/updateExecutionPlan reject even though the new revision is persisted. notify() is skipped, so the sidebar is not refreshed. A caller that retries with the same expectedRevision gets ExecutionPlanConflictError for a write it was told failed.",
+    "quote": "await writeFileAtomic(executionPlanPath(dir), `${JSON.stringify(result, null, 2)}\\n`);\n    await recordPlanRevision(dir, current, result);"
+  },
+  {
+    "id": "G3",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 29,
+    "severity": "minor",
+    "problem": "The doc comment says a line from a writer that died before updating the cursor 'is never shown as history'. The code only hides it until the next successful write, because that write moves the cursor to a higher revision, which covers the orphaned line. The same happens to a line left behind by the swallowed cursor failure at line 71.",
+    "impact": "A maintainer who relies on the stated guarantee will misread how the cursor protocol behaves after a crash or a cursor write failure.",
+    "quote": "cursor is never shown as history."
+  },
+  {
+    "id": "G4",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 37,
+    "severity": "minor",
+    "problem": "Output argument: diffExecutionPlans fills a caller-supplied `out` array and returns void, when it could return PlanTransition[]. Both call sites (recordPlanRevision line 65 and the test) create an empty array only to pass it in.",
+    "impact": "Callers need boilerplate, and the function cannot be used as an expression. Readers have to check whether `out` might already hold entries.",
+    "quote": "export function diffExecutionPlans(previous: ExecutionPlan | undefined, next: ExecutionPlan, out: PlanTransition[]): void {"
+  },
+  {
+    "id": "G5",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 122,
+    "severity": "minor",
+    "problem": "The ExecutionPlanHistory constructor does synchronous file I/O (the cursor and the journal), then parses and filters the data in the same place. This breaks SOLID Iron Law 2 (a constructor performs no I/O) and the I/O-mixed-with-transform threshold. The split/parse/filter step should be a pure helper that an I/O shell, such as a static async load(dir), calls.",
+    "impact": "The class cannot be built from in-memory data in tests or reused on supplied text. Every `new` blocks the event loop with readFileSync inside an otherwise async module.",
+    "quote": "constructor(readonly dir: string) {\n    const committed = readCursor(dir);"
+  },
+  {
+    "id": "G6",
+    "file": "src/session/execution-plan.ts",
+    "line": 277,
+    "severity": "minor",
+    "problem": "renderExecutionPlanChangelog is a text renderer, but it builds its own disk-reading dependency (new ExecutionPlanHistory(dir)) and formats the result in one function. Its sibling renderExecutionPlanSnapshot takes the plan as data.",
+    "impact": "The formatting cannot be tested or reused without a session directory on disk. Each call re-reads and re-parses the whole journal.",
+    "quote": "const history = new ExecutionPlanHistory(dir);"
+  },
+  {
+    "id": "G7",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 99,
+    "severity": "minor",
+    "problem": "parseEntry throws a bare \"Invalid entry\" that names neither the file nor the line. A JSON.parse failure at line 97 escapes with no path at all. readCursor wraps its parse error with the path and `cause` (line 92), and a test checks that, so the journal fails the error-handling Rule 2 standard its sibling meets.",
+    "impact": "One torn or malformed journal line makes every ExecutionPlanHistory construction throw. The operator gets no hint which file, or which line, to fix.",
+    "quote": "throw new Error(\"Invalid entry\");"
+  },
+  {
+    "id": "G8",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 67,
+    "severity": "minor",
+    "problem": "recordPlanRevision reads the wall clock itself (new Date()) instead of taking the timestamp as an input. This is the DIP row: business logic constructing its clock dependency.",
+    "impact": "The `at` field cannot be pinned in tests, so changelog output that includes timestamps cannot be asserted exactly.",
+    "quote": "at: new Date().toISOString()"
+  },
+  {
+    "id": "G9",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 113,
+    "severity": "info",
+    "problem": "describeChange dispatches on the 5-member `kind` union with an if/else chain, and the final bare `else` silently handles 'reordered'. No map/strategy or exhaustiveness precedent was found in src/session or src/lib, so this is below the OCP threshold. A switch with a `never` check would make a new PlanTransition kind a compile error instead of rendering as a 'moved' line.",
+    "impact": "A future transition kind added to PlanTransition would be formatted as a reorder without any compiler warning.",
+    "quote": "} else {\n    return `^ ${change.itemId} moved ${change.from + 1} -> ${change.to + 1}`;"
+  }
+]

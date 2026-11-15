@@ -1,0 +1,22 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "match", "gid": "G1", "why": "G1 names the empty catch around writeOwnerOnlyFileAtomic followed by an unconditional ok:true return." },
+    { "tid": "T2", "verdict": "match", "gid": "G7", "why": "G7 flags the log-to-stderr-then-rethrow in the JSON.parse catch as double reporting." },
+    { "tid": "T3", "verdict": "match", "gid": "G5", "why": "G5 flags the toPinned boolean switching between export and import and proposes two named functions." },
+    { "tid": "T4", "verdict": "match", "gid": "G4", "why": "G4 names the duplicated summary block at all three sites." },
+    { "tid": "T5", "verdict": "match", "gid": "G3", "why": "G3 identifies the JSDoc merge rule that the unconditional updateProviderCatalogEntry loop does not implement." },
+    { "tid": "T6", "verdict": "match", "gid": "G6", "why": "G6 flags the ~57-line import function mixing abstraction levels and suggests extracting helpers." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "truth", "why": "Matches T1." },
+    { "gid": "G2", "label": "valid", "why": "The new pinSnapshot path in loadOrRefreshWith can throw (export throws on a missing cache after a best-effort save; import throws on a malformed pinned file), so a successful refresh is lost to a courtesy copy." },
+    { "gid": "G3", "label": "truth", "why": "Matches T5." },
+    { "gid": "G4", "label": "truth", "why": "Matches T4." },
+    { "gid": "G5", "label": "truth", "why": "Matches T3." },
+    { "gid": "G6", "label": "truth", "why": "Matches T6." },
+    { "gid": "G7", "label": "truth", "why": "Matches T2." },
+    { "gid": "G8", "label": "valid", "why": "Line 111 silently turns a missing or non-object catalog.providers into {}, unlike the sibling checks that throw, and with prune that wipes the cache." },
+    { "gid": "G9", "label": "noise", "why": "Positional versus options-object parameter style between export and import is a matter of taste, not a defect." },
+    { "gid": "G10", "label": "valid", "why": "The change adds the exported formatCatalogSummaryLine, whose doc names a caller, but nothing in src calls it (confirmed by search)." }
+  ]
+}

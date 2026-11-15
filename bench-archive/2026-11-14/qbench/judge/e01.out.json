@@ -1,0 +1,20 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "match", "gid": "G2", "why": "G2 names the throwing cancel despite cancellation:false and its effect on cancelPendingDispatches aborting the loop; removing the method fixes T1." },
+    { "tid": "T2", "verdict": "match", "gid": "G1", "why": "G1 identifies loadRecordedResults returning null coalesced by `?? []` in entries(), producing false clean empty replays." },
+    { "tid": "T3", "verdict": "match", "gid": "G4", "why": "G4 flags writeReplaySummary mixing read, validation, summary transform and write in one function, untestable without the filesystem." },
+    { "tid": "T4", "verdict": "match", "gid": "G5", "why": "G5 names the inline seven-day expression at both sites (lines 69 and 151) and the drift risk." },
+    { "tid": "T5", "verdict": "match", "gid": "G3", "why": "G3 describes the in-place sort inside the predicate isReplayableResult and scopesMatch's hidden dependency on it." },
+    { "tid": "T6", "verdict": "match", "gid": "G7", "why": "G7 flags the single-letter n with an explanatory comment and proposes naming it confirmed." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "truth", "why": "Matches T2." },
+    { "gid": "G2", "label": "truth", "why": "Matches T1." },
+    { "gid": "G3", "label": "truth", "why": "Matches T5." },
+    { "gid": "G4", "label": "truth", "why": "Matches T3." },
+    { "gid": "G5", "label": "truth", "why": "Matches T4." },
+    { "gid": "G6", "label": "valid", "why": "The comment at line 106 says only unreached tasks replay as recorded:false, but the code also returns that for stale, entity-mismatched and scope-mismatched recorded entries, which is a misleading comment introduced by the change." },
+    { "gid": "G7", "label": "truth", "why": "Matches T6." },
+    { "gid": "G8", "label": "noise", "why": "Four positional parameters on a small internal helper is a style preference with no demonstrated misuse; borderline, so labelled noise." }
+  ]
+}

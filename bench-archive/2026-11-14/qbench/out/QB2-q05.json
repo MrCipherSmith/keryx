@@ -1,0 +1,83 @@
+[
+  {
+    "id": "G1",
+    "file": "src/review/mutate.ts",
+    "line": 380,
+    "severity": "minor",
+    "problem": "The new abandonment rule (stale marker regardless of pid, OR dead pid AND marker older than two heartbeats, else unmarked-and-old) is packed into one nested ternary with a mixed ||/&& clause and an unnamed `2 * heartbeatMs` grace multiplier. The 'two heartbeats' grace is a business rule that the docstring, review.ts help text and three docs restate in prose, but the code has no name for it.",
+    "impact": "The next editor of the sweep, the one place that decides to delete directories, has to decode operator precedence and a bare multiplier to see which case applies. Changing the grace means finding the literal here and the prose copies elsewhere.",
+    "quote": ": now() - owner.mtimeMs > staleHeartbeatMs || (!isAlive(owner.pid) && now() - owner.mtimeMs > 2 * heartbeatMs);"
+  },
+  {
+    "id": "G2",
+    "file": "src/review/completion-gate.ts",
+    "line": 771,
+    "severity": "minor",
+    "problem": "findReviewGateState takes a fifth positional parameter, `now`, after the optional `signal`. Every new test call has to pass an `undefined` placeholder for the signal, e.g. `findReviewGateState(root, 0, {}, undefined, now)` (completion-gate.test.ts:749 and about ten other call sites). The internal SignatureOptions already moved to an options object for `now`, but the public function did not.",
+    "impact": "Call sites read as `(root, 0, {}, undefined, now)`, so a reader has to open the signature to decode them, and adding the next injectable makes the list longer again.",
+    "quote": "  signal?: AbortSignal,\n  now?: number,\n): Promise<OpenManagedReview | null> {"
+  },
+  {
+    "id": "G3",
+    "file": "src/review/mutate.ts",
+    "line": 589,
+    "severity": "minor",
+    "problem": "The new Swept line says the copies were 'left by dead passes'. The sweep it reports also removes directories whose pid is still alive but whose marker went stale (reused pid or another PID namespace), and unmarked directories older than six hours. The record field it renders is documented as 'dead or abandoned earlier passes', so the same concept has two names and the rendered text is the narrower, inaccurate one.",
+    "impact": "An operator reading mutation-<n>.md after a sweep of a live-pid/stale-marker directory is told that a dead pass was cleaned up, which is not what happened.",
+    "quote": "scratch ${record.sweptScratch === 1 ? \"copy\" : \"copies\"} left by dead passes"
+  },
+  {
+    "id": "G4",
+    "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+    "line": 788,
+    "severity": "minor",
+    "problem": "The parenthetical added to the treeHash paragraph (what the hash leaves out) is about the scratch copy, not the hash. It also implies that linked worktrees are a subset of ignored files, and the very next added sentence says the same thing again: 'The scratch copy leaves out linked worktrees'. The same text is mirrored byte-for-byte in src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md:788.",
+    "impact": "A reader working out what treeHash covers gets a copy-scope rule mixed into it, and has to reconcile two statements of the worktree rule in two adjacent sentences, in both mirrored copies.",
+    "quote": "ignored files (the scratch copy still includes them, except linked worktrees, which it leaves out), the inside of an"
+  },
+  {
+    "id": "G5",
+    "file": "src/commands/agent.ts",
+    "line": 4283,
+    "severity": "minor",
+    "problem": "The new abort exit copies the `system(\"\\n[stopped] Model turn interrupted by user.\\n\"); return {};` pair inline again. It is now the 14th copy of that literal in runAgentTurnCore and its neighbours (lines 3226, 3488, 3510, 3767, 3815, 3896, 3924, 4014, 4196, 4283, 4318, 4448, 4862). The new comment even says it 'ends like the other abort sites', so these are meant to stay in sync, but nothing shared enforces that.",
+    "impact": "A change to the stop message or the abort return shape has to be made at 14 sites. The new LOGIC-003 tests pin the exact text, so a missed site shows up as an inconsistent message.",
+    "quote": "system(\"\\n[stopped] Model turn interrupted by user.\\n\");\n        return {};"
+  },
+  {
+    "id": "G6",
+    "file": "src/review/mutate.ts",
+    "line": 414,
+    "severity": "minor",
+    "problem": "runMutation, already about 140 lines, now also owns the sweep orchestration across two bases with its own timing, the owner-marker heartbeat lifecycle (setInterval/unref, cleared in both the signal cleanup and the finally), and a new optional option. Provenance, sweep, scratch and marker setup, heartbeat, copy, baseline and mutant loop all sit at different abstraction levels in one body (SRP / single level of abstraction).",
+    "impact": "Each new concern in the pass grows the same function. The heartbeat has to be cleared in two places, so the next person to add a teardown step has to find both.",
+    "quote": "  let sweptScratch = await sweepStaleScratch(scratchBase);\n  if (scratchBase !== repoScratch) sweptScratch += await sweepStaleScratch(repoScratch);"
+  },
+  {
+    "id": "G7",
+    "file": "src/review/mutate.test.ts",
+    "line": 365,
+    "severity": "minor",
+    "problem": "The 'old enough to count as dead' marker age `3 * HEARTBEAT_MS` is written inline at 11 sites (lines 351, 365, 367, 381, 382, 448, 469, 471, 478, 497, 509). A named constant for it, `staleButNotAbandoned`, exists at line 396 but is scoped to one describe block and is not used anywhere else.",
+    "impact": "If the dead-pid grace in sweepStaleScratch changes, every inline site has to be found and updated, and the one named constant suggests a single source that does not exist.",
+    "quote": "await make(\"keryx-mutate-AAAAAA\", { pid: 111, startedAt: \"x\" }, 1000, 3 * HEARTBEAT_MS);"
+  },
+  {
+    "id": "G8",
+    "file": "src/commands/agent-review-gate.test.ts",
+    "line": 168,
+    "severity": "minor",
+    "problem": "Three new tests (TP-004 and both LOGIC-003 tests) each build the same AbortController plus a `reviewGateState` stub that aborts and then returns openReview(). openReview was extracted as a helper, but the abort-then-resolve stub around it was pasted three times.",
+    "impact": "A change to how the abort-during-gate scenario is staged has to be made in three places to keep the tests describing the same condition.",
+    "quote": "const reviewGateState: typeof findReviewGateState = async () => {\n    controller.abort();\n    return openReview();\n  };"
+  },
+  {
+    "id": "G9",
+    "file": "src/review/mutate.ts",
+    "line": 232,
+    "severity": "info",
+    "problem": "The isLinkedWorktree docstring says everything else 'is copied as the base copy did'. The phrase 'the base copy' is not defined in this file and reads as a leftover from the change history, not a description of current behaviour.",
+    "impact": "A reader has to guess what 'base copy' refers to. It is low cost, but the rest of the docstring is precise.",
+    "quote": "under review. Everything else is copied as the base copy did, because the tests may load it"
+  }
+]

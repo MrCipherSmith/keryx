@@ -1,0 +1,22 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "match", "gid": "G1", "why": "G1 names the throwing cancel stub despite cancellation:false and the unguarded await in cancelPendingDispatches that aborts the shutdown loop." },
+    { "tid": "T2", "verdict": "match", "gid": "G2", "why": "G2 identifies loadRecordedResults returning null coalesced to [] so every dispatch replays as empty findings." },
+    { "tid": "T3", "verdict": "partial", "gid": "G6", "why": "G6 flags the duplicated, divergent parsing/validation between writeReplaySummary and the loader, but not the mixing of validation, transform and IO in one function." },
+    { "tid": "T4", "verdict": "match", "gid": "G4", "why": "G4 names the duplicated inline seven-day window at both sites with no named constant." },
+    { "tid": "T5", "verdict": "match", "gid": "G3", "why": "G3 identifies the in-place sort inside the predicate and scopesMatch's hidden dependency on it." },
+    { "tid": "T6", "verdict": "match", "gid": "G7", "why": "G7 reports the single-letter n compensated by a comment, suggesting confirmed." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "truth", "why": "Match for T1." },
+    { "gid": "G2", "label": "truth", "why": "Match for T2." },
+    { "gid": "G3", "label": "truth", "why": "Match for T5." },
+    { "gid": "G4", "label": "truth", "why": "Match for T4." },
+    { "gid": "G5", "label": "valid", "why": "The comment at lines 106-107 claims the summary counts unrecorded replays and only covers unreached tasks, but writeReplaySummary never reads metadata.recorded and the branch also covers entity/scope mismatches." },
+    { "gid": "G6", "label": "truth", "why": "Partial for T3 (duplicated, inconsistent parsing between loader and summary)." },
+    { "gid": "G7", "label": "truth", "why": "Match for T6." },
+    { "gid": "G8", "label": "noise", "why": "Status sets are already hand-copied in controller.ts and store.ts; another small set is a pre-existing pattern and borderline taste." },
+    { "gid": "G9", "label": "noise", "why": "Positional string parameters on a four-arg internal function is style preference, not a defect." },
+    { "gid": "G10", "label": "noise", "why": "A newly exported module whose header states intended use without a caller yet is not a real defect worth fixing." }
+  ]
+}

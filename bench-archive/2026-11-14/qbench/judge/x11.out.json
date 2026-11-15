@@ -1,0 +1,22 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "match", "gid": "G1", "why": "G1 names the empty catch around writeOwnerOnlyFileAtomic and the hard-coded ok: true success return." },
+    { "tid": "T2", "verdict": "match", "gid": "G4", "why": "G4 identifies the log-to-stderr-and-rethrow in the JSON.parse catch causing double reporting." },
+    { "tid": "T3", "verdict": "match", "gid": "G5", "why": "G5 flags the toPinned boolean flag switching export/import and cites the same call sites, proposing two named functions." },
+    { "tid": "T4", "verdict": "match", "gid": "G3", "why": "G3 names the duplicated summary computation at all three listed sites." },
+    { "tid": "T5", "verdict": "match", "gid": "G2", "why": "G2 reports the JSDoc's newer-entry-kept rule contradicted by the unconditional updateProviderCatalogEntry overwrite." },
+    { "tid": "T6", "verdict": "match", "gid": "G6", "why": "G6 flags importProviderCatalogSnapshot as ~57 lines mixing I/O, parsing, validation, age filtering, pruning and summarizing." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "truth", "why": "Matches T1." },
+    { "gid": "G2", "label": "truth", "why": "Matches T5." },
+    { "gid": "G3", "label": "truth", "why": "Matches T4." },
+    { "gid": "G4", "label": "truth", "why": "Matches T2." },
+    { "gid": "G5", "label": "truth", "why": "Matches T3." },
+    { "gid": "G6", "label": "truth", "why": "Matches T6." },
+    { "gid": "G7", "label": "valid", "why": "The new pinSnapshot doc cites a `keryx providers pin` command that does not exist and the new formatCatalogSummaryLine has no caller in src, a real doc/dead-code issue introduced by the change." },
+    { "gid": "G8", "label": "valid", "why": "Confirmed in code: after a best-effort save that silently fails on a first run, exportProviderCatalogSnapshot throws on an undefined cache and the rejection escapes loadOrRefreshWith, so an optional pin step can fail a successful refresh." },
+    { "gid": "G9", "label": "noise", "why": "Minor header wording imprecision (next to vs inside the config dir, field list) that is borderline taste; lower verdict chosen." },
+    { "gid": "G10", "label": "noise", "why": "Info-level redundant existence read before import; a minor efficiency nit, not a defect worth fixing." }
+  ]
+}

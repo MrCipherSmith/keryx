@@ -1,0 +1,38 @@
+[
+  {
+    "id": "G1",
+    "file": "src/review/completion-gate.ts",
+    "line": 888,
+    "severity": "minor",
+    "problem": "decideReviewGate learns whether the walk was truncated by substring-searching the serialized signature for TRUNCATION_MARKER, instead of the scan carrying that fact as data (e.g. a `truncated: boolean` on OpenManagedReview, which findReviewGateState already knows when dirSignature runs out of budget). The signature is an opaque change-detector built from file names and hashes; this change turns it into a format the decision layer parses. The variable that holds the result is also named `stalled` but is a report-suffix string, not a boolean.",
+    "impact": "Whoever next changes the signature format (escaping, reordering, hashing it) must know a distant consumer greps it for a magic substring, and a file whose name contains the marker text flips the stop message. The tests already have to assert on marker counts and positions inside the string (completion-gate.test.ts TP-M07) to pin it.",
+    "quote": "const stalled = open.signature.includes(TRUNCATION_MARKER)"
+  },
+  {
+    "id": "G2",
+    "file": "src/review/mutate.ts",
+    "line": 377,
+    "severity": "minor",
+    "problem": "The sweep's abandonment policy, which this change grew from one condition to three thresholds (unmarked age, marker older than staleHeartbeatMs, dead pid plus marker older than two heartbeats), is inlined as a nested ternary with three `now()` calls inside the lstat/readOwner/rm loop. The policy is a pure decision over (owner, dir mtime, now, isAlive) mixed into the I/O shell, against the solid-principles rule to keep the transform a pure helper the I/O calls.",
+    "impact": "Every policy case has to be tested by building real directories and aging markers with utimes (mutate.test.ts adds ~10 such tests, including the HL-001 boundary pair at 2*HEARTBEAT_MS +/- 30s); a pure `isAbandoned(...)` helper would make the policy readable in one place and testable as a table.",
+    "quote": ": now() - owner.mtimeMs > staleHeartbeatMs || (!isAlive(owner.pid) && now() - owner.mtimeMs > 2 * heartbeatMs);"
+  },
+  {
+    "id": "G3",
+    "file": "src/review/mutate.test.ts",
+    "line": 251,
+    "severity": "minor",
+    "problem": "New test helper with a generic name (`make`) and five positional parameters, three of them numbers/paths whose meaning depends on position (ageMs, markerAgeMs, into). No options object. Call sites read as opaque tuples.",
+    "impact": "Readers of the ~25 sweep tests must jump to the signature to tell the directory age from the marker age, which is exactly the distinction those tests exist to pin; swapping the two numbers would silently test the wrong case.",
+    "quote": "async function make(name: string, owner: unknown, ageMs: number, markerAgeMs: number = ageMs, into: string = scratch): Promise<string> {"
+  },
+  {
+    "id": "G4",
+    "file": "src/review/completion-gate.ts",
+    "line": 65,
+    "severity": "minor",
+    "problem": "Magic number 0o170000 (the S_IFMT file-type mask) inlined to build the special-file hash token, with no named constant; node:fs exposes it as `constants.S_IFMT`, and the same change already imports `constants` from node:fs in mutate.ts.",
+    "impact": "A reader must recognise a raw POSIX bitmask to understand what the `special:` token encodes.",
+    "quote": "if (!info.isFile()) return `special:${(info.mode & 0o170000).toString(8)}`;"
+  }
+]

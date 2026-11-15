@@ -1,0 +1,123 @@
+{
+ "truth": [
+  {
+   "tid": "T1",
+   "file": "src/commands/providers.ts",
+   "line": null,
+   "severity": "major",
+   "problem": "Disconnecting a provider authenticated via a saved OAuth grant removed the grant from auth.json but left the provider's resolved credential sitting in process.env for the rest of the running process, so a later in-process read of that env var (or a later /connect re-listing) could still observe a token that had just been disconnected.",
+   "impact": "An operator who disconnected an OAuth-backed provider believing the credential was gone would have it silently keep working for anything reading process.env directly in the same process, and a later /connect listing built from the live environment could still report the provider as connected.",
+   "quote": "oauthEnvKeyFor"
+  },
+  {
+   "tid": "T2",
+   "file": "src/commands/providers.ts",
+   "line": 1359,
+   "severity": "major",
+   "problem": "zai and zai-coding resolve their credential from the same ZAI_API_KEY saved key. Disconnecting either one removed that single saved key, which silently disconnected the OTHER provider too, with no warning to the operator before or after the action.",
+   "impact": "An operator disconnecting zai because they no longer wanted THAT provider would also lose zai-coding without being told, and would only discover it was gone the next time they tried to use it - a surprising, silent side effect of an action that named only one provider.",
+   "quote": "sharedWith"
+  },
+  {
+   "tid": "T3",
+   "file": "src/commands/providers.ts",
+   "line": null,
+   "severity": "major",
+   "problem": "keryx providers remove <unknown-name> printed a success-shaped message and exited 0 for a provider name that did not exist, instead of reporting the name as unrecognised.",
+   "impact": "A typo'd or stale provider name in a script or an operator's shell history would report success without touching anything, so a caller checking only the exit code (or a human reading only the first line) would believe a disconnect happened when nothing did - the opposite of keryx providers test, which already validated the name first.",
+   "quote": "providerByName"
+  }
+ ],
+ "candidate": [
+  {
+   "id": "G1",
+   "file": "src/commands/providers.ts",
+   "line": 1002,
+   "severity": "major",
+   "problem": "disconnectProvider returns ok:true for kind 'no-credential', and /connect draws [Disconnect] on every connected row. filterConnectedDetectedProviders passes non-registry rows (ollama, anthropic, openai, gemini, fake) through untouched, and keyless local rows (rapid-mlx) too. For all of them classifyProviderConnection ends in 'no-credential' (providerByName is undefined or has no envKey), so a confirmed Disconnect removes nothing, yet the TUI treats it as success: onDisconnected fires and the row is deleted from the list. The docstring claim 'the UI never offers this' is false.",
+   "impact": "An operator with ANTHROPIC_API_KEY/OPENAI_API_KEY/GEMINI_API_KEY exported (or a local ollama/rapid-mlx) confirms Disconnect on that row: the row vanishes and, if it is the active provider, the transcript prints '<name> disconnected — this session keeps its already-loaded credential…'. Nothing was disconnected; the provider is back on the next /connect. The env-var case should have been refused with the 'unset X' message (AC6) but is not, because the classification only knows OpenAI-compat registry names. CLI twin: `keryx providers remove rapid-mlx --yes` prints 'disconnected (no-credential)' and exits 0.",
+   "quote": "case \"no-credential\":\n      return {\n        ok: true,"
+  },
+  {
+   "id": "G2",
+   "file": "src/tui/tui-shell.ts",
+   "line": 2644,
+   "severity": "major",
+   "problem": "[Test] (and `keryx providers test`, providers.ts:1101) probe the REGISTRY entry from providerByName, ignoring the endpoint the row is actually connected through. The connected filter and the model picker both overlay the DetectedProvider's baseUrl/chatPath/modelsPath and prov.envKey (filterConnectedDetectedProviders lines 555-566, resolveModelsForPicker), where baseUrl comes from the saved `baseUrls` override (withSavedBaseUrls) or KERYX_<NAME>_BASE_URL (resolveProviderBaseUrl). testProviderConnection uses none of that, so it is not 'the same probe /connect uses' as the code comment, help text and docs claim.",
+   "impact": "A provider with a saved or env endpoint override — rapid-mlx on a non-default port, github-copilot whose API host is saved from the token exchange, any built-in pointed at a proxy — is listed as connected, but [Test] / `keryx providers test` hits the default registry URL and reports a false failure (unreachable/404/401), or a false 'ok' from a different server than the one the session uses. For non-registry rows (ollama/anthropic/openai/gemini/fake) [Test] can only ever answer 'unknown provider — cannot test'.",
+   "quote": "const provider = providerByName(name, opts.configDir);"
+  },
+  {
+   "id": "G3",
+   "file": "src/tui/tui-shell.ts",
+   "line": 2658,
+   "severity": "minor",
+   "problem": "runTest writes its result into the row's status line without checking whether a Disconnect was armed on that row while the probe was in flight. Arming does not cancel or invalidate the pending probe, so the probe result overwrites the confirmation prompt (including the shared-credential warning) while pendingDisconnect stays set.",
+   "impact": "Enter/click [Test] (probe can take up to 10s), then Enter/click [Disconnect] to arm; the probe resolves and the row shows '✓ ok — N model(s)' with no prompt. The next Enter/click on [Disconnect] — which the operator now reads as the first, arming press — deletes the credential with no visible confirmation.",
+   "quote": "if (current === undefined || resolved) return;\n      current.status.content ="
+  },
+  {
+   "id": "G4",
+   "file": "src/commands/providers.ts",
+   "line": 923,
+   "severity": "minor",
+   "problem": "Classification returns the first artifact found and disconnect removes only that one. A provider holding BOTH an OAuth grant and a keryx-saved API key for the same env var (grok: `keryx auth login grok` plus apiKeys.XAI_API_KEY) classifies as 'oauth-grant': the grant is deleted and process.env.XAI_API_KEY is cleared, but apiKeys.XAI_API_KEY stays in auth.json. The result is ok:true and the row is removed.",
+   "impact": "The operator is told the provider is disconnected and its saved credential removed, but the plaintext key remains on disk and applySavedApiKeys reloads it on the next launch, silently reconnecting the provider. Docs promise removal of 'whichever one it actually has'.",
+   "quote": "if (loadShellConfig(dir).oauthGrants?.[name] !== undefined) {"
+  },
+  {
+   "id": "G5",
+   "file": "src/commands/providers.ts",
+   "line": 934,
+   "severity": "minor",
+   "problem": "The saved-key check reads only apiKeys[envKey]. The legacy top-level `openrouterKey` field that envWithSavedApiKeys/applySavedApiKeys still load into OPENROUTER_API_KEY (shell-config.ts:253, never migrated on disk) is not considered, so such a key falls through to the env branch and is classified 'env-var-only'.",
+   "impact": "An operator whose auth.json carries only the legacy openrouterKey gets Disconnect refused with 'set via OPENROUTER_API_KEY in your environment — unset OPENROUTER_API_KEY in your shell', a variable keryx itself set from its own file; unsetting it does nothing and the credential cannot be removed through this feature. Same misreport class the change says it fixed for OAuth grants. From the CLI (no env applied) the same state reports 'disconnected (no-credential)' while the key stays.",
+   "quote": "if (loadShellConfig(dir).apiKeys?.[envKey] !== undefined) {"
+  },
+  {
+   "id": "G6",
+   "file": "src/tui/tui-shell.ts",
+   "line": 2692,
+   "severity": "minor",
+   "problem": "After a confirmed disconnect only the clicked row is removed, although result.sharedWith names providers that lost the same credential (zai/zai-coding share ZAI_API_KEY).",
+   "impact": "Disconnect zai: the 'Z.AI GLM Coding Plan' row stays in the 'Connected providers' list with live [Test]/[Disconnect] buttons. Selecting it switches the session to a provider whose key was just deleted from disk and from process.env.",
+   "quote": "rows = rows.filter((d) => d.name !== name);"
+  },
+  {
+   "id": "G7",
+   "file": "src/standard/command-registry.ts",
+   "line": 1199,
+   "severity": "minor",
+   "problem": "The command registry was not updated for the two new subcommands. It still describes the `providers` group as read-only and network-free and has no descriptor for `providers test` (one network call) or `providers remove` (deletes credentials from auth.json / llm-providers.json), while the sibling `auth logout` carries explicit sideEffects.",
+   "impact": "Agents and tooling that consult the descriptors to decide what is safe to run get no entry, and no sideEffects, for a credential-deleting command; the comment now states something the module no longer does.",
+   "quote": "// Both are read-only and network-free: they report over `llm-providers.json`"
+  },
+  {
+   "id": "G8",
+   "file": "src/commands/providers.disconnect.test.ts",
+   "line": 451,
+   "severity": "minor",
+   "problem": "The 'without a confirm seam' test calls the real ttyConfirm. lib/prompt.ts returns the default only when stdin is not a TTY; on a TTY it opens a readline question and waits. The test's own `if (!process.stdin.isTTY)` guard shows the TTY case was anticipated but not handled.",
+   "impact": "Running `bun test` from an interactive terminal blocks this test on a y/N prompt until someone answers or it times out; with the guard, the exit-code assertion is also skipped there, so on a TTY the test asserts only that the key is untouched.",
+   "quote": "await providersCommand([\"remove\", \"deepseek\"], { dir, env: {} });"
+  },
+  {
+   "id": "G9",
+   "file": "docs/docs/cli-reference.md",
+   "line": 1180,
+   "severity": "minor",
+   "problem": "The reference documents `remove` without --json (synopsis and the Flags column list only `<name>`, `--yes`), while the command implements it and `keryx --help` / `keryx providers --help` print `[--yes] [--json]`. onboarding.md:328 has the same omission.",
+   "impact": "The documented contract for the new command disagrees with the shipped usage text; a reader of the reference does not learn that the machine-readable form (with sharedWith) exists.",
+   "quote": "keryx providers remove <name> [--yes]"
+  },
+  {
+   "id": "G10",
+   "file": "docs/requirements/keryx-shell-split/audits-tui-other.md",
+   "line": 152,
+   "severity": "minor",
+   "problem": "The source-text audit row added by this change describes a different pin than the test contains: it says a 1500-character window and the literal `onDisconnected: (name) => {`, while connect-provider-buttons.test.ts slices 2500 characters and asserts `onDisconnected: (name, sharedWith) => {` plus the two sharedWith literals, which the row does not list.",
+   "impact": "The audit inventory exists to tell a maintainer which cosmetic edits break which pin; this row gives the wrong window size and the wrong literals for the test it documents.",
+   "quote": "`indexOf` window (1500 chars from the `/connect`\\|`/provider` branch's `if`)"
+  }
+ ]
+}

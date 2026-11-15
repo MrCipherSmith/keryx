@@ -1,0 +1,845 @@
+diff --git a/.gitignore b/.gitignore
+index f0e33715b..d4b3f140d 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -66,10 +66,6 @@ docs/requirements/keryx-shell-benchmark/harness/__pycache__/
+ .metaproject/data/testing/artifacts/latest.md
+ .metaproject/data/testing/artifacts/latest.json
+ .metaproject/data/tasks/runtime/
+-# The auto-sweep stamp: runtime state rewritten by the gdctx write path, not
+-# a project artifact. Tracking it would churn on every `keryx ctx` call.
+-.metaproject/data/forgetting/
+-.metaproject/data/retention/
+ .metaproject/data/tasks/logs/
+ .metaproject/flows/.flow-init.lock/
+ .metaproject/flows/.flow-lock-*/
+@@ -83,5 +79,12 @@ docs/requirements/keryx-shell-benchmark/harness/__pycache__/
+ .metaproject/data/security/raw/**
+ .metaproject/data/security/artifacts/latest.md
+ .metaproject/data/security/artifacts/latest.json
++# Forgetting/retention runtime state: the auto-sweep stamp is rewritten by the
++# gdctx write path on every call, not a project artifact. These lines were added
++# to this repository's .gitignore by hand INSIDE the managed block, where the
++# next `keryx update` regenerated them away — which is how they came to belong
++# here instead.
++.metaproject/data/forgetting/
++.metaproject/data/retention/
+ .metaproject/reports/
+ # keryx:end
+diff --git a/src/commands/review-result-contract.test.ts b/src/commands/review-result-contract.test.ts
+new file mode 100644
+index 000000000..14fa71ad4
+--- /dev/null
++++ b/src/commands/review-result-contract.test.ts
+@@ -0,0 +1,156 @@
++import { mkdtemp, rm, writeFile } from "node:fs/promises";
++import { tmpdir } from "node:os";
++import path from "node:path";
++import { describe, expect, test } from "bun:test";
++
++/**
++ * AC2 of flow 213, demonstrated the way the criterion demands: by running a
++ * violating payload through the real command and watching it refuse, "not by a
++ * unit test over the schema alone".
++ *
++ * The distinction is the whole point of the flow. A schema test proves the
++ * schema says something. It cannot prove anything loads the schema — and for
++ * eight of the eleven registered contracts, nothing does. Only running the
++ * command shows the refusal exists.
++ *
++ * `src/cli.ts` is spawned from the working tree, never the installed `keryx`,
++ * which is a released build that predates this enforcement and would pass or
++ * fail for reasons unrelated to the change.
++ */
++const CLI = path.join(import.meta.dir, "..", "cli.ts");
++
++async function runReply(resultPath: string, extra: string[] = []): Promise<{ code: number; stderr: string; stdout: string }> {
++  const proc = Bun.spawn(
++    [
++      process.execPath,
++      CLI,
++      "review",
++      "comments",
++      "reply",
++      "--repo",
++      "owner/repo",
++      "--pr",
++      "1",
++      "--sha",
++      "0123abc",
++      "--outcomes",
++      resultPath, // never read: the refusal happens before outcomes are parsed
++      "--result",
++      resultPath,
++      ...extra,
++    ],
++    { stdout: "pipe", stderr: "pipe", env: { ...process.env, NO_COLOR: "1" } },
++  );
++  const [stdout, stderr, code] = await Promise.all([
++    new Response(proc.stdout).text(),
++    new Response(proc.stderr).text(),
++    proc.exited,
++  ]);
++  return { code, stdout, stderr };
++}
++
++/** A result that satisfies every required field, so only the conditional decides. */
++function baseResult(over: Record<string, unknown> = {}): Record<string, unknown> {
++  return {
++    status: "DONE",
++    mode: "analyze",
++    pr: "owner/repo#1",
++    head_sha: "0123abcdef0123abcdef0123abcdef0123abcdef",
++    collected: 0,
++    verdicts: { valid: 0, "out-of-scope": 0 },
++    plan_items: 0,
++    summary: "nothing to do",
++    screen_status: "ran",
++    screened: 0,
++    excluded_for_injection: [],
++    filtered: [],
++    ...over,
++  };
++}
++
++describe("review-pr-feedback-output is refused at a keryx-owned write path", () => {
++  test("an analyze-mode result carrying a populated fix is refused, naming the field, and posts nothing", async () => {
++    const dir = await mkdtemp(path.join(tmpdir(), "keryx-result-contract-"));
++    try {
++      const file = path.join(dir, "result.json");
++      // The payload AC2 names. Before the conditional was expressed, this
++      // validated clean: the rule "Present in fix mode only. Null in analyze
++      // mode" lived in the `fix` property's DESCRIPTION, where no validator
++      // reads it.
++      await writeFile(
++        file,
++        JSON.stringify(
++          baseResult({
++            mode: "analyze",
++            fix: {
++              flow_id: "244",
++              flow_status: "done",
++              merged_into: "main",
++              operator_confirmed: true,
++            },
++          }),
++        ),
++        "utf8",
++      );
++
++      const { code, stdout, stderr } = await runReply(file);
++      const output = `${stdout}${stderr}`;
++
++      expect(code).not.toBe(0);
++      expect(output).toContain("review-pr-feedback-output");
++      // The failing field by name, not a count.
++      expect(output).toContain("fix");
++      // The success header never printed, so the pass was not built and
++      // nothing reached the pull request. Asserting on the absence of
++      // "posted:" would be wrong: the refusal's own message ends with "so
++      // nothing was posted:".
++      expect(output).not.toContain("# review comments reply");
++    } finally {
++      await rm(dir, { recursive: true, force: true });
++    }
++  }, 30_000);
++
++  test("a result claiming the injection screen never ran while excluding comments is refused", async () => {
++    const dir = await mkdtemp(path.join(tmpdir(), "keryx-result-contract-"));
++    try {
++      const file = path.join(dir, "result.json");
++      await writeFile(
++        file,
++        JSON.stringify(
++          baseResult({
++            screen_status: "unavailable",
++            screened: 2,
++            excluded_for_injection: ["c1"],
++          }),
++        ),
++        "utf8",
++      );
++
++      const { code, stdout, stderr } = await runReply(file);
++      expect(code).not.toBe(0);
++      expect(`${stdout}${stderr}`).toContain("review-pr-feedback-output");
++    } finally {
++      await rm(dir, { recursive: true, force: true });
++    }
++  }, 30_000);
++
++  // Anti-vacuity: the two tests above would pass just as well if the command
++  // refused everything, or refused for some unrelated reason such as a missing
++  // flag. A conforming result must get PAST the contract check.
++  test("a conforming analyze-mode result passes the contract check and fails later, if at all", async () => {
++    const dir = await mkdtemp(path.join(tmpdir(), "keryx-result-contract-"));
++    try {
++      const file = path.join(dir, "result.json");
++      await writeFile(file, JSON.stringify(baseResult({ mode: "analyze", fix: null })), "utf8");
++
++      const { stdout, stderr } = await runReply(file);
++      const output = `${stdout}${stderr}`;
++
++      // Whatever else happens — this run has no tracker and no real pull
++      // request — it must not be the contract that rejected it.
++      expect(output).not.toContain("does not satisfy the review-pr-feedback-output contract");
++    } finally {
++      await rm(dir, { recursive: true, force: true });
++    }
++  }, 30_000);
++});
+diff --git a/src/commands/review.ts b/src/commands/review.ts
+index 3300a8cd9..b81a20898 100644
+--- a/src/commands/review.ts
++++ b/src/commands/review.ts
+@@ -3,6 +3,7 @@ import path, { join } from "node:path";
+ import { optionValue } from "../lib/args";
+ import { pathExists, toPosix, writeFileAtomic } from "../lib/fs";
+ import { learnProjectSkill } from "../gdskills/learn";
++import { loadSchema, validateJson } from "../gdskills/contracts";
+ import {
+   learningRecordPath,
+   learningSourcePath,
+@@ -190,6 +191,9 @@ const COMMENTS_REPLY_FLAGS = [
+   // from the collection it is answering.
+   "--self",
+   "--outcomes",
++  // The skill's own result, checked against `review-pr-feedback-output` before
++  // anything is posted. See `refuseInvalidResult`.
++  "--result",
+   "--sha",
+   "--round",
+   "--final",
+@@ -921,6 +925,13 @@ async function runCommentsReply(args: string[]): Promise<void> {
+   const round = parseNonNegativeInteger(optionValue(args, "--round"), "--round") ?? 1;
+   const isFinal = args.includes("--final");
+   const dryRun = args.includes("--dry-run");
++
++  // Before any network call, not merely before the post. A self-contradictory
++  // result is refusable from the file alone, and making the caller wait on a
++  // comment collection to be told so would hide the refusal behind whatever
++  // else can fail first — including, on an unreachable tracker, forever.
++  await refuseInvalidResult(optionValue(args, "--result"), optionValue(args, "--outcomes"));
++
+   const cwd = process.cwd();
+   const port = await resolvePort(args);
+   const state = await readPrCommentState(cwd, repo, number);
+@@ -1023,6 +1034,60 @@ async function resolveSelfLogin(args: string[]): Promise<string> {
+   return login;
+ }
+ 
++/**
++ * The `review-pr-feedback` result, refused here or nowhere.
++ *
++ * This is the contract's only enforcement point, and it exists because the
++ * skill's own SKILL.md said the quiet part: "Nothing refuses a dispatch that
++ * ignores them — no production code loads either file". A schema nothing loads
++ * describes a shape rather than requiring one.
++ *
++ * It sits on `comments reply` rather than anywhere cheaper because this is the
++ * command that acts OUTWARD — it writes into someone else's pull request. A
++ * result that contradicts itself is worth refusing at the last moment before
++ * that, not after. So the check runs before the pass is built, and its failure
++ * posts nothing.
++ *
++ * Optional, deliberately: the flag is how a caller offers the result for
++ * checking, and making it required would break every existing invocation to no
++ * benefit. A caller that omits it gets the behaviour it had before — which the
++ * registry records honestly as the limit of this enforcement rather than
++ * rounding up to "the contract is enforced".
++ */
++async function refuseInvalidResult(source: string | undefined, outcomesSource: string | undefined): Promise<void> {
++  if (source === undefined) {
++    return;
++  }
++  if (source === "-" && outcomesSource === "-") {
++    throw new Error(
++      "`--result -` and `--outcomes -` both read standard input, which can only be consumed once. Pass at least one of them as a file path.",
++    );
++  }
++
++  const raw = source === "-" ? await Bun.stdin.text() : await readFile(source, "utf8");
++  let parsed: unknown;
++  try {
++    parsed = JSON.parse(raw) as unknown;
++  } catch (error) {
++    // eslint-disable-next-line preserve-caught-error -- Surface the parse position without the raw stack.
++    throw new Error(
++      `\`--result ${source}\` is not JSON: ${error instanceof Error ? error.message : String(error)}. Nothing was posted.`,
++    );
++  }
++
++  const schema = await loadSchema("review-pr-feedback-output");
++  const errors = await validateJson(parsed, schema);
++  if (errors.length > 0) {
++    // Every failing field named, not just the count: a refusal that says "3
++    // errors" sends the reader back to the schema to find out which three.
++    throw new Error(
++      `\`--result ${source}\` does not satisfy the review-pr-feedback-output contract, so nothing was posted:\n${errors
++        .map((error) => `  ${error.path}: ${error.message}`)
++        .join("\n")}`,
++    );
++  }
++}
++
+ async function readOutcomes(source: string | undefined): Promise<CommentOutcome[]> {
+   if (source === undefined) {
+     throw new Error(
+diff --git a/src/gdskills/bundled/skills/review/review-pr-feedback/output-contract.schema.json b/src/gdskills/bundled/skills/review/review-pr-feedback/output-contract.schema.json
+index 32a23b9ad..3a4e029d6 100644
+--- a/src/gdskills/bundled/skills/review/review-pr-feedback/output-contract.schema.json
++++ b/src/gdskills/bundled/skills/review/review-pr-feedback/output-contract.schema.json
+@@ -370,6 +370,26 @@
+           }
+         }
+       }
++    },
++    {
++      "$comment": "The rule 'Present in fix mode only. Null in analyze mode' was carried by the `fix` property DESCRIPTION and nothing else, so an analyze-mode result reporting a branch, a merge and an operator confirmation validated clean. That is the same defect this skill's INPUT contract had, where 'operator_confirmed is REQUIRED whenever fix is true' was also only a description. A rule a reader can see and a validator cannot is not a rule.",
++      "if": {
++        "required": [
++          "mode"
++        ],
++        "properties": {
++          "mode": {
++            "const": "analyze"
++          }
++        }
++      },
++      "then": {
++        "properties": {
++          "fix": {
++            "type": "null"
++          }
++        }
++      }
+     }
+   ]
+ }
+diff --git a/src/gdskills/contract-enforcement-regression.test.ts b/src/gdskills/contract-enforcement-regression.test.ts
+new file mode 100644
+index 000000000..a56635f8d
+--- /dev/null
++++ b/src/gdskills/contract-enforcement-regression.test.ts
+@@ -0,0 +1,93 @@
++import { describe, expect, test } from "bun:test";
++import { CONTRACTS, loadSchema, validateJson } from "./contracts";
++
++/**
++ * AC6 of flow 213: the contracts that already refused something still refuse it.
++ *
++ * One rejecting payload per enforced contract, run through the same
++ * `loadSchema` + `validateJson` pair the production modules use. This does not
++ * prove the modules CALL that pair — `contract-enforcement.test.ts` checks the
++ * call exists, and `review-result-contract.test.ts` runs the real command for
++ * the one added here. What it proves is narrower and still worth pinning: the
++ * schemas themselves have not been loosened into accepting what they used to
++ * reject, which is how an enforcement stops enforcing without anyone editing
++ * the code that enforces it.
++ */
++const REJECTING_PAYLOAD: Record<string, { payload: unknown; because: string }> = {
++  "job-orchestrator-state": {
++    payload: { schemaVersion: 1 },
++    because: "a state file missing every required field",
++  },
++  "review-finding": {
++    payload: { id: "F-1" },
++    because: "a finding with an id and nothing else",
++  },
++  "subagent-result": {
++    payload: { status: "not-a-status" },
++    because: "a result whose status is outside the enum",
++  },
++  "review-pr-feedback-output": {
++    payload: {
++      status: "DONE",
++      mode: "analyze",
++      pr: "o/r#1",
++      head_sha: "0123abc",
++      collected: 0,
++      verdicts: {},
++      plan_items: 0,
++      summary: "s",
++      screen_status: "ran",
++      screened: 0,
++      excluded_for_injection: [],
++      filtered: [],
++      fix: { flow_id: "1", flow_status: "done", merged_into: "main", operator_confirmed: {} },
++    },
++    because: "an analyze-mode result carrying a populated fix",
++  },
++};
++
++describe("the contracts that refuse in production still refuse", () => {
++  const enforced = CONTRACTS.filter((c) => c.enforcement.kind === "production");
++
++  test("every enforced contract has a rejecting payload pinned here", () => {
++    // Otherwise this file silently stops covering a contract the moment one is
++    // added — the same omission the enforcement guard exists to prevent, one
++    // layer out.
++    const missing = enforced.map((c) => c.name).filter((name) => !(name in REJECTING_PAYLOAD));
++    expect(missing).toEqual([]);
++    expect(enforced.length).toBeGreaterThanOrEqual(4);
++  });
++
++  for (const [name, { payload, because }] of Object.entries(REJECTING_PAYLOAD)) {
++    test(`${name} rejects ${because}`, async () => {
++      const schema = await loadSchema(name as (typeof CONTRACTS)[number]["name"]);
++      const errors = await validateJson(payload, schema);
++      expect(errors.length).toBeGreaterThan(0);
++    });
++  }
++
++  test("a conforming value is accepted, so the rejections above are not vacuous", async () => {
++    // If every payload were rejected, the tests above would pass with the
++    // validator broken shut rather than working.
++    const schema = await loadSchema("review-pr-feedback-output");
++    const errors = await validateJson(
++      {
++        status: "DONE",
++        mode: "analyze",
++        pr: "o/r#1",
++        head_sha: "0123abc",
++        collected: 0,
++        verdicts: {},
++        plan_items: 0,
++        summary: "s",
++        screen_status: "ran",
++        screened: 0,
++        excluded_for_injection: [],
++        filtered: [],
++        fix: null,
++      },
++      schema,
++    );
++    expect(errors).toEqual([]);
++  });
++});
+diff --git a/src/gdskills/contract-enforcement.test.ts b/src/gdskills/contract-enforcement.test.ts
+new file mode 100644
+index 000000000..a0b864e6d
+--- /dev/null
++++ b/src/gdskills/contract-enforcement.test.ts
+@@ -0,0 +1,164 @@
++import { existsSync, readFileSync } from "node:fs";
++import path from "node:path";
++import { fileURLToPath } from "node:url";
++import { describe, expect, test } from "bun:test";
++import { CONTRACTS, type ContractInfo } from "./contracts";
++
++const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
++
++/**
++ * Every way a registration's enforcement claim can be untrue, as messages.
++ *
++ * A list of problems rather than a boolean, and one that names the contract,
++ * because "the contracts guard failed" sends the reader to eleven registrations
++ * to find out which.
++ *
++ * `readModule` is injected so the negative cases can be built in memory. A
++ * guard whose only test is the real tree passes for as long as the real tree
++ * happens to be right, which is not the same as the guard working.
++ */
++export function enforcementProblems(
++  contracts: readonly ContractInfo[],
++  readModule: (relPath: string) => string | undefined,
++): string[] {
++  const problems: string[] = [];
++
++  for (const contract of contracts) {
++    const enforcement = contract.enforcement as ContractInfo["enforcement"] | undefined;
++
++    // The discriminant is checked at runtime as well as in the type, because
++    // AC4 is about the registration that lands in NEITHER group, and a cast or
++    // a JSON-shaped registration can do that while the compiler is satisfied.
++    if (enforcement === undefined) {
++      problems.push(`${contract.name}: no enforcement declared — it must state production or none`);
++      continue;
++    }
++    if (enforcement.kind !== "production" && enforcement.kind !== "none") {
++      problems.push(
++        `${contract.name}: enforcement.kind is ${JSON.stringify(
++          (enforcement as { kind: unknown }).kind,
++        )}, which is neither "production" nor "none"`,
++      );
++      continue;
++    }
++
++    if (enforcement.kind === "none") {
++      if (enforcement.reason.trim() === "") {
++        problems.push(
++          `${contract.name}: enforcement none carries no reason — a gap with no stated reason reads as an oversight`,
++        );
++      }
++      continue;
++    }
++
++    const { module } = enforcement;
++    if (module.includes(".test.")) {
++      problems.push(
++        `${contract.name}: enforcement names ${module}, a test file. A contract enforced only by its own test is not enforced in production`,
++      );
++      continue;
++    }
++    const source = readModule(module);
++    if (source === undefined) {
++      problems.push(`${contract.name}: enforcement names ${module}, which does not exist`);
++      continue;
++    }
++    // The claim, checked rather than accepted. A module that does not load this
++    // schema cannot be refusing anything on its behalf, whatever the
++    // registration says — and a registration saying otherwise is the exact
++    // defect this contract set exists to stop.
++    if (!source.includes(`loadSchema("${contract.name}")`)) {
++      problems.push(
++        `${contract.name}: enforcement names ${module}, but that file contains no loadSchema("${contract.name}") call, so it cannot be refusing anything`,
++      );
++    }
++    if (enforcement.refuses.trim() === "") {
++      problems.push(`${contract.name}: enforcement production carries no description of what it refuses`);
++    }
++  }
++
++  return problems;
++}
++
++const readFromTree = (relPath: string): string | undefined => {
++  const abs = path.join(ROOT, relPath);
++  return existsSync(abs) ? readFileSync(abs, "utf8") : undefined;
++};
++
++describe("every registered contract states whether it is enforced, and the statement is true", () => {
++  test("the real registry declares an enforcement for each contract, and every claim holds", () => {
++    expect(enforcementProblems(CONTRACTS, readFromTree)).toEqual([]);
++  });
++
++  // Anti-vacuity. The guard above passes just as well over an empty array, and
++  // an empty array is what a broken import gives it.
++  test("the guard is looking at a populated registry", () => {
++    expect(CONTRACTS.length).toBeGreaterThanOrEqual(11);
++    const kinds = new Set(CONTRACTS.map((c) => c.enforcement.kind));
++    // Both groups must be non-empty, or the split this records is not a split.
++    expect([...kinds].sort()).toEqual(["none", "production"]);
++  });
++
++  test("a registration in neither group fails, so the next contract cannot join the silent set by omission", () => {
++    const fake = [
++      { name: "agent-event", fileName: "x.json", description: "d" } as unknown as ContractInfo,
++    ];
++    const problems = enforcementProblems(fake, readFromTree);
++    expect(problems).toHaveLength(1);
++    expect(problems[0]).toContain("no enforcement declared");
++  });
++
++  test("a declared enforcement point that does not load the schema fails", () => {
++    const fake = [
++      {
++        name: "agent-event",
++        fileName: "x.json",
++        description: "d",
++        enforcement: { kind: "production", module: "src/lib/templates.ts", refuses: "nothing, in fact" },
++      } as ContractInfo,
++    ];
++    const problems = enforcementProblems(fake, readFromTree);
++    expect(problems).toHaveLength(1);
++    expect(problems[0]).toContain("no loadSchema");
++  });
++
++  test("a declared enforcement point that does not exist fails", () => {
++    const fake = [
++      {
++        name: "agent-event",
++        fileName: "x.json",
++        description: "d",
++        enforcement: { kind: "production", module: "src/does/not/exist.ts", refuses: "r" },
++      } as ContractInfo,
++    ];
++    expect(enforcementProblems(fake, readFromTree)[0]).toContain("does not exist");
++  });
++
++  test("a test file cannot be the enforcement point", () => {
++    const fake = [
++      {
++        name: "agent-event",
++        fileName: "x.json",
++        description: "d",
++        enforcement: {
++          kind: "production",
++          module: "src/gdskills/contract-enforcement.test.ts",
++          refuses: "r",
++        },
++      } as ContractInfo,
++    ];
++    expect(enforcementProblems(fake, readFromTree)[0]).toContain("a test file");
++  });
++
++  test("an unenforced contract must say why", () => {
++    const fake = [
++      {
++        name: "agent-event",
++        fileName: "x.json",
++        description: "d",
++        enforcement: { kind: "none", reason: "   " },
++      } as ContractInfo,
++    ];
++    expect(enforcementProblems(fake, readFromTree)[0]).toContain("no reason");
++  });
++});
+diff --git a/src/gdskills/contracts.ts b/src/gdskills/contracts.ts
+index e7b18358e..e1dc1416e 100644
+--- a/src/gdskills/contracts.ts
++++ b/src/gdskills/contracts.ts
+@@ -16,11 +16,45 @@ export type ContractName =
+   | "task-implementer-input"
+   | "task-implementer-output";
+ 
++/**
++ * Whether keryx itself refuses a bad value of this contract, and where.
++ *
++ * Required, and a union rather than an optional field, so a new registration
++ * cannot join the unenforced set by saying nothing. That is how the set grew:
++ * three contracts were registered in PR #424 so a validator could be POINTED at
++ * them, which is worth doing and is not an enforcement, and nothing recorded
++ * the difference.
++ *
++ * `kind: "production"` is a checkable claim, not a comment. The guard in
++ * `contract-enforcement.test.ts` opens the named module and requires it to
++ * contain the actual `loadSchema("<name>")` call — a declaration that names a
++ * file which does not load the schema fails the build. The alternative, taking
++ * the registration's word for it, is the defect this whole flow is about.
++ */
++export type ContractEnforcement =
++  | {
++      kind: "production";
++      /** Repo-relative non-test module that loads this schema and refuses on error. */
++      module: string;
++      /** What a rejected value looks like, in one sentence. */
++      refuses: string;
++    }
++  | {
++      kind: "none";
++      /**
++       * Why nothing can refuse it. Required: a gap with no stated reason reads
++       * as an oversight, and the reader cannot tell "no keryx process is on
++       * this path" from "somebody forgot".
++       */
++      reason: string;
++    };
++
+ export type ContractInfo = {
+   name: ContractName;
+   /** Name this contract is written under in `.metaproject/core/gdskills/contracts/`. */
+   fileName: string;
+   description: string;
++  enforcement: ContractEnforcement;
+   /**
+    * Repo-relative location of the AUTHORITATIVE file, when it does not live in
+    * `src/gdskills/contracts/`.
+@@ -124,6 +158,11 @@ export const CONTRACTS: ContractInfo[] = [
+     name: "agent-event",
+     fileName: "agent-event.schema.json",
+     description: "Append-only lifecycle event emitted by orchestrators and subagents.",
++    enforcement: {
++      kind: "none",
++      reason:
++        "Events are appended by whichever agent is running, in that agent's own runtime. No keryx process sits between the emitter and the log, so there is no point at which a malformed event could be refused rather than written.",
++    },
+   },
+   /**
+    * `flow-orchestrator`'s input, on the `task-implementer-input` precedent.
+@@ -142,6 +181,11 @@ export const CONTRACTS: ContractInfo[] = [
+       "Dispatch payload handed to flow-orchestrator (request + base branch + completion outcome + constraints).",
+     sourcePath:
+       "src/gdskills/bundled/skills/orchestration/flow-orchestrator/input-contract.schema.json",
++    enforcement: {
++      kind: "none",
++      reason:
++        "This payload is handed from one AGENT to another. In a session driven by a host agent's own dispatch tool, no keryx process is on that path, so nothing can refuse a malformed dispatch. Same structural position as reviewer-input, recorded for the same reason. Registering it made `keryx skills contracts validate --schema flow-orchestrator-input` possible, which is a validator an agent must remember to run, not an enforcement.",
++    },
+   },
+   /**
+    * `review-pr-feedback`'s two, registered for the same reason its sibling was.
+@@ -160,6 +204,11 @@ export const CONTRACTS: ContractInfo[] = [
+     description:
+       "Request handed to review-pr-feedback (PR reference, --fix, and the operator confirmation --fix requires).",
+     sourcePath: "src/gdskills/bundled/skills/review/review-pr-feedback/input-contract.schema.json",
++    enforcement: {
++      kind: "none",
++      reason:
++        "The request is what an operator or a host agent hands the skill before any keryx command runs, so keryx is not yet in the path when the payload would have to be refused. This is the one where that hurts most: `--fix` merges third-party review comments into somebody else's pull request, and `operator_confirmed` is the fence. The conditional is expressed in the schema and `keryx skills contracts validate --schema review-pr-feedback-input` will apply it — but only when something invokes it.",
++    },
+   },
+   {
+     name: "review-pr-feedback-output",
+@@ -167,6 +216,19 @@ export const CONTRACTS: ContractInfo[] = [
+     description:
+       "Result review-pr-feedback returns: verdict counts, the injection-screen record, and what the fix run merged.",
+     sourcePath: "src/gdskills/bundled/skills/review/review-pr-feedback/output-contract.schema.json",
++    enforcement: {
++      kind: "production",
++      module: "src/commands/review.ts",
++      /*
++       * This entry said `none` first, and briefly said `production` pointing at
++       * src/review/managed.ts before that — where the guard in
++       * contract-enforcement.test.ts rejected it by name for containing no
++       * `loadSchema` call. The guard caught its own author, which is the only
++       * reason this claim is worth reading now.
++       */
++      refuses:
++        "`keryx review comments reply --result <file>` validates the skill's result before the pass is built, so nothing reaches the pull request when the result contradicts itself — an analyze-mode run reporting a branch and a merge, or a record saying the injection screen never ran while claiming it excluded comments.",
++    },
+   },
+   {
+     name: "job-orchestrator-state",
+@@ -174,26 +236,74 @@ export const CONTRACTS: ContractInfo[] = [
+     description:
+       "Persisted job package state (.metaproject/jobs/<name>/state.json), written by `keryx job`.",
+     sourcePath: "src/gdskills/bundled/skills/orchestration/job-orchestrator/state.schema.json",
++    enforcement: {
++      kind: "production",
++      module: "src/job/store.ts",
++      refuses:
++        "`writeJob` refuses to write a state file that does not satisfy the schema, so an invalid job package cannot reach disk.",
++    },
+   },
+   {
+     name: "orchestrator-state",
+     fileName: "orchestrator-state.schema.json",
+     description: "Persisted resumable orchestrator state.",
++    enforcement: {
++      kind: "none",
++      reason:
++        "No keryx command reads or writes this file. It describes state an orchestrator agent persists for itself, in its own runtime, so there is no keryx-owned write path to refuse at. Contrast job-orchestrator-state, which looks similar and IS enforced for exactly one reason: `keryx job` writes that one.",
++    },
+   },
+   {
+     name: "review-finding",
+     fileName: "review-finding.schema.json",
+     description: "Normalized reviewer finding consumed by review-orchestrator and learning flows.",
++    enforcement: {
++      kind: "production",
++      module: "src/review/managed.ts",
++      refuses:
++        "`createManagedReviewPackage` refuses to record findings that do not satisfy the schema, and the disposition sub-schema is applied the same way, so a review round cannot be written with a malformed finding or an unreadable outcome.",
++    },
+   },
+   {
+     name: "subagent-dispatch",
+     fileName: "subagent-dispatch.schema.json",
+     description: "Orchestrator-to-subagent dispatch payload.",
++    enforcement: {
++      kind: "none",
++      /*
++       * Recorded as `none` against the flow description that opened this work,
++       * which lists it as refused in production by
++       * `src/harness/child/{spawn,contract}.ts` and
++       * `src/harness/extension/execute.ts`.
++       *
++       * Those three files name it. None loads it. `subagent-dispatch` appears
++       * there as a label — `canonicalContract: "subagent-dispatch"` — on the
++       * harness extension metadata, and the schema it labels is validated
++       * nowhere: `loadSchema("subagent-dispatch")` occurs in no non-test file,
++       * and nothing reads `subagent-dispatch.schema.json` either. Six files
++       * mention the schema in prose, several describing it as defining or
++       * gating the dispatch.
++       *
++       * So the enumeration that this flow called "not by impression" carried
++       * one entry claiming an enforcement that does not exist — which is the
++       * defect the flow was opened to fix, present in its own statement of the
++       * problem. Kept visible here rather than silently corrected, because a
++       * table that got believed is the thing being guarded against.
++       */
++      reason:
++        "The dispatch is built and consumed inside the harness without the canonical schema being loaded: `subagent-dispatch` appears only as a label on the extension metadata. Its sibling `subagent-result` IS validated, because the harness parses a child's reply back and has to decide whether it is well-formed; nothing performs the equivalent act on the way out.",
++    },
+   },
+   {
+     name: "subagent-result",
+     fileName: "subagent-result.schema.json",
+     description: "Subagent-to-orchestrator result payload.",
++    enforcement: {
++      kind: "production",
++      module: "src/harness/external/runtime.ts",
++      refuses:
++        "A child's reply that does not parse as a well-formed result is rejected when the harness reads it back, so a malformed result cannot be persisted as if the child had succeeded.",
++    },
+   },
+   /**
+    * `task-implementer`'s two contracts, on the `job-orchestrator-state`
+@@ -213,6 +323,11 @@ export const CONTRACTS: ContractInfo[] = [
+       "Task request handed to task-implementer (task + workspace + automation), validated before dispatch.",
+     sourcePath:
+       "src/gdskills/bundled/skills/orchestration/task-implementer/input-contract.schema.json",
++    enforcement: {
++      kind: "none",
++      reason:
++        "Dispatched agent-to-agent, like flow-orchestrator-input. The skill's Phase 1.4 lists five `ASSERT … → ABORT(…)` refusals; registering the contract is what lets `keryx skills contracts validate` perform them, and nothing forces that call. The comment beside this registration has said so since it was written.",
++    },
+   },
+   {
+     name: "task-implementer-output",
+@@ -221,6 +336,11 @@ export const CONTRACTS: ContractInfo[] = [
+       "JSON result task-implementer writes in Phase 6.1 before it emits its STATUS line.",
+     sourcePath:
+       "src/gdskills/bundled/skills/orchestration/task-implementer/output-contract.schema.json",
++    enforcement: {
++      kind: "none",
++      reason:
++        "The skill writes this file itself, in its own runtime, and no keryx command reads it back. Contrast subagent-result, which is the same shape of thing and IS enforced for one reason: the harness reads that one back and must decide whether it is well-formed.",
++    },
+   },
+ ];
+ 
+diff --git a/src/harness/child/contract.ts b/src/harness/child/contract.ts
+index 79748677a..dc75357b4 100644
+--- a/src/harness/child/contract.ts
++++ b/src/harness/child/contract.ts
+@@ -3,10 +3,17 @@
+ // Adapts the canonical gdskills `subagent-dispatch`/`subagent-result` contracts
+ // (`.metaproject/core/gdskills/contracts/`) with harness parent/session/attempt
+ // extension metadata and STATUS-first prose framing. The extension object is
+-// metadata OVER the canonical contracts (validates against the frozen
+-// `harness-child-contract-extension.schema.json`), NOT a replacement wire
++// metadata OVER the canonical contracts — SHAPED to mirror the frozen
++// `harness-child-contract-extension.schema.json`, NOT a replacement wire
+ // contract.
+ //
++// Shaped, not validated. This comment said "validates against" until flow 213
++// checked whether anything loads that schema: nothing does, on this path or any
++// other. The shape is held by the TypeScript types below. See
++// `harness/extension/execute.ts` for the same correction, and
++// `gdskills/contracts.ts` for why `subagent-dispatch` is recorded as
++// unenforced while `subagent-result` is not.
++//
+ // STATUS-first prose is adapter framing: a worker's reply whose first line is
+ // `STATUS: <TOKEN>` is converted to a canonical `subagent-result` object BEFORE
+ // persistence. The persisted form is always the canonical object, never the raw
+diff --git a/src/harness/extension/execute.ts b/src/harness/extension/execute.ts
+index 9f6bfc0db..9c222cd94 100644
+--- a/src/harness/extension/execute.ts
++++ b/src/harness/extension/execute.ts
+@@ -87,9 +87,21 @@ export type DispatchExtensionResult =
+   | { ok: false; reason: string };
+ 
+ /**
+- * Build a canonical child dispatch (validates as `subagent-dispatch`) plus the
+- * frozen extension metadata (validates as `harness-child-contract-extension`),
+- * bounded to the extension's granted capabilities.
++ * Build a canonical child dispatch SHAPED as `subagent-dispatch` plus the frozen
++ * extension metadata SHAPED as `harness-child-contract-extension`, bounded to
++ * the extension's granted capabilities.
++ *
++ * Shaped, not validated. Neither schema is loaded on this path — the names
++ * appear here and on `canonicalContract` as labels, and the shapes are held by
++ * the TypeScript types alone. This said "validates as" until flow 213 checked:
++ * `loadSchema("subagent-dispatch")` occurs in no non-test file, and nothing
++ * reads `harness-child-contract-extension.schema.json` either. A comment
++ * claiming a validation that does not happen is the same defect the contract
++ * registry now guards against, so it is stated accurately instead.
++ *
++ * The sibling `subagent-result` IS validated, in `harness/external/runtime.ts`,
++ * because the harness reads a child's reply back and must decide whether it is
++ * well-formed. Nothing performs the equivalent act on the way out.
+  *
+  * Fail-closed: `registration.ok === false` refuses immediately with NO dispatch
+  * or extension built (the denied result carries only `{ok,reason}`). The

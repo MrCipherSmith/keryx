@@ -1,0 +1,22 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "match", "gid": "G1", "why": "G1 names the empty catch around writeOwnerOnlyFileAtomic followed by an unconditional ok:true return." },
+    { "tid": "T2", "verdict": "match", "gid": "G4", "why": "G4 identifies the log-to-stderr-then-rethrow in the JSON.parse catch and the duplicate logging it causes." },
+    { "tid": "T3", "verdict": "match", "gid": "G6", "why": "G6 flags the toPinned boolean switching export/import with the same call sites and proposes two named functions." },
+    { "tid": "T4", "verdict": "match", "gid": "G5", "why": "G5 lists the same three duplicated summary sites." },
+    { "tid": "T5", "verdict": "match", "gid": "G3", "why": "G3 reports the JSDoc merge rule contradicted by unconditional updateProviderCatalogEntry." },
+    { "tid": "T6", "verdict": "match", "gid": "G7", "why": "G7 flags the ~57-line importProviderCatalogSnapshot mixing validation, filtering and cache writes and suggests extraction." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "truth", "why": "Matches T1." },
+    { "gid": "G2", "label": "valid", "why": "Confirmed in code: syncPinnedSnapshot and loadOrRefreshWith (provider-catalog.ts:270-274) do not catch import/export throws, so a corrupt optional pinned file now rejects the catalog load; this is a distinct real defect, not the D1 decoy." },
+    { "gid": "G3", "label": "truth", "why": "Matches T5." },
+    { "gid": "G4", "label": "truth", "why": "Matches T2." },
+    { "gid": "G5", "label": "truth", "why": "Matches T4." },
+    { "gid": "G6", "label": "truth", "why": "Matches T3." },
+    { "gid": "G7", "label": "truth", "why": "Matches T6." },
+    { "gid": "G8", "label": "noise", "why": "Header wording nits ('next to' vs inside the config dir, an incomplete field list) are low-value comment imprecision, not a fix a maintainer would prioritize." },
+    { "gid": "G9", "label": "valid", "why": "Confirmed at lines 154-156: the pinned file is read in full only as an existence probe and then read again by the importer, a real redundant read with a split absent-vs-throw contract introduced by the change." },
+    { "gid": "G10", "label": "noise", "why": "An info-level alias export of a private function is a taste point, not a real defect." }
+  ]
+}

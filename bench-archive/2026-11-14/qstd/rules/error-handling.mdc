@@ -1,0 +1,85 @@
+---
+description: "Error handling standard shared by code writers and the code-quality reviewer: failure is observable, carries context, keeps its cause, and is never signalled by a value a caller can mistake for success. Use when implementing functions that can fail, calling external APIs, handling async operations, or reviewing that code."
+alwaysApply: false
+---
+
+# Error Handling
+
+## Purpose
+One standard for writing and reviewing failure paths. It describes how this codebase already handles errors (typed and contextual throws, `cause` chains, no silent catches), so a writer following it and a reviewer checking it reach the same answer.
+
+## When To Apply
+Apply whenever code interacts with external systems, parses input, performs I/O, or runs an operation that can fail, and when reviewing such code.
+
+---
+
+## Rules
+
+### Rule 1: Signal failure explicitly
+A function that can fail signals the failure in a form the caller cannot mistake for success:
+- **Throw** an error. This is the default in this codebase.
+- **Return a discriminated result** (`{ ok: true, value } | { ok: false, error }` or a tagged union) when callers are expected to branch on an anticipated failure, such as a parse or a lookup. This is allowed, not required.
+
+Never signal failure with `null`, `undefined`, `false`, `-1` or an empty collection when a caller could read that value as a valid result.
+
+```typescript
+// BAD — "not found" and "empty" are the same value to the caller
+function readEntries(path: string): Entry[] {
+  try { return parse(readFileSync(path, "utf8")); } catch { return []; }
+}
+
+// GOOD — the failure is visible and says what failed
+function readEntries(path: string): Entry[] {
+  try { return parse(readFileSync(path, "utf8")); }
+  catch (error) { throw new Error(`cannot read entries from ${path}`, { cause: error }); }
+}
+```
+
+### Rule 2: The message names what failed and for which input
+An error message identifies the operation and the input it failed on: `cannot read entries from ${path}`, not `something went wrong`.
+
+Use a typed error class (`class XError extends Error`) when a caller needs to tell this failure apart from others, or when it crosses a module boundary that handles it. A plain `Error` with a contextual message is fine inside a module.
+
+### Rule 3: No silent failures
+Every `catch` either:
+- rethrows, or returns the failure per Rule 1;
+- takes a fallback that is correct for the caller, and says why in a comment;
+- marks the result as degraded where the caller can see it.
+
+An empty `catch`, or one that only logs, is a defect when the caller then proceeds as if the operation succeeded.
+
+```typescript
+// BAD — the write failed, the caller is told it succeeded
+try { await writeState(next); } catch {}
+return { saved: true };
+
+// GOOD — a deliberate, explained fallback
+try { await removeTempFile(path); }
+catch { /* best effort: a leftover temp file is swept by the next run */ }
+```
+
+### Rule 4: No unhandled promise rejections
+See `async-patterns.mdc` Rule 4.
+
+### Rule 5: Keep the cause
+When catching and rethrowing, pass the original as `cause`. Do not both log and rethrow the same error in one `catch`: whoever handles it logs it.
+
+```typescript
+// BAD — the original stack is lost
+catch (e) { throw new Error("database failed"); }
+
+// GOOD
+catch (e) { throw new DatabaseError("write failed", { cause: e }); }
+```
+
+### Rule 6: Assertions guard invariants, not recoverable input
+Do not throw from an `assert` on input a caller can legitimately send. Validate it and fail per Rule 1.
+
+---
+
+## Iron Laws
+
+**IRON LAW 1: A catch that hides a failure from a caller who then proceeds is forbidden.**
+**IRON LAW 2: A failure is never signalled by a value a caller can read as success.**
+**IRON LAW 3: A rethrow keeps the original error as `cause`.**
+</content>

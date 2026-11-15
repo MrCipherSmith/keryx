@@ -1,0 +1,9 @@
+{
+  "truth": [],
+  "candidates": [
+    { "gid": "G1", "label": "valid", "why": "The change makes decideReviewGate substring-search the opaque signature for TRUNCATION_MARKER, so an entry name containing the marker text flips the stop report; carrying truncation as a field is a specific, reasonable fix." },
+    { "gid": "G2", "label": "noise", "why": "A two-line inline condition with injectable now/isAlive is already testable; extracting a pure helper is a structural preference, not a defect." },
+    { "gid": "G3", "label": "noise", "why": "Test helper's positional parameters are documented by its JSDoc; naming/options-object preference is taste." },
+    { "gid": "G4", "label": "noise", "why": "Inlined S_IFMT mask is a minor readability nit below a reasonable fix threshold; torn, so the lower verdict." }
+  ]
+}

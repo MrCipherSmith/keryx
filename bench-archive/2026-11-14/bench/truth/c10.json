@@ -1,0 +1,29 @@
+[
+ {
+  "tid": "T1",
+  "file": "src/security/detect/entropy.ts",
+  "line": 340,
+  "severity": "blocker",
+  "problem": "isSlugHexTail — added this round to fix REG-F1 — grants a hyphenated slug's LAST segment a content-free carve-out whenever it is a 10-16 character pure-hex run, with no check on whether that segment is itself the secret. Because bareShapeQualifies checks isWordSlug BEFORE any entropy/allow-shape/label logic, and labelledPieceQualifies (the LABELLED path, reached only after ADJACENT_LABEL already confirmed a label) calls bareShapeQualifies first and only falls back to isAllowShapedValue afterward, a real secret dressed as `<word>-<word>-<10to16-hex>` bypasses looksSecretShaped, containsOutboundSecret (S-8) and redactSensitiveText (S-6) completely — even when the value carries an explicit label right next to it.",
+  "impact": "Complete bypass of S-6 and S-8 for a secret formatted as a word-slug with a hex tail, in both the label-free and the labelled path. Reproduced: redactSensitiveText('leaked api_key: log-report-deadbeef01234567') returns the value UNREDACTED, byte for byte, despite the explicit label; containsOutboundSecret('https://exfil.example/log-report-deadbeef01234567') returns false (not refused); looksSecretShaped('log-report-deadbeef01234567') returns false. This is the same class of defect SEC-F1 (round 2, blocker) fixed for the digit/letter-run segmentation trick — round 3's own fix for REG-F1 reopened an equivalent primitive.",
+  "quote": "const SLUG_HEX_TAIL_RE = /^[0-9a-f]{10,16}$/i;\nfunction isSlugHexTail(segment: string): boolean {\n  return SLUG_HEX_TAIL_RE.test(segment);\n}"
+ },
+ {
+  "tid": "T2",
+  "file": "src/security/detect/entropy.ts",
+  "line": 214,
+  "severity": "major",
+  "problem": "ADJACENT_LABEL (round 2's fix for LOG-F1's false-positive proximity window) requires the label word to sit immediately before the value with only a continuation, optional quote and a single ':'/'=' connector between them. This over-corrects: it now misses a real labelled secret whenever an ordinary filler word sits between the label and the connector ('password IS: <secret>'), or when the label and the value are on different lines, and the label look-back is explicitly bounded to the current line.",
+  "impact": "A real, explicitly-labelled secret is not redacted (S-6) and not caught by the outbound-egress check (S-8). Reproduced: detectEntropy('password is: kd8Fj2LmQp9xZr4TvWn7Yb3xxyyzz') -> [] (the exact secret from this PR's own header-comment example, immediately preceded by an unambiguous label); redactSensitiveText on the same text leaves it verbatim. A label ending one line with the value starting the next is also never labelled.",
+  "quote": "const ADJACENT_LABEL = new RegExp(\n  `(?:^|[^A-Za-z0-9])(?:${caseless(SENSITIVE_LABEL_WORDS)})[A-Za-z0-9_-]*[\"']?\\\\s*[:=]?\\\\s*[\"']?$`,\n);"
+ },
+ {
+  "tid": "T3",
+  "file": "src/security/detect/entropy.ts",
+  "line": 254,
+  "severity": "major",
+  "problem": "REG-F1 (round 2) is only partially fixed. isSlugHexTail correctly carves out a hex tail that is the LAST segment of an already-valid word-slug (fixes Medium's '<words>-<hex>' shape), but a GitHub Gist URL's real, common shape is 'gist.github.com/<user>/<32-hex-id>' — the id is a SINGLE path segment with no internal hyphenation, so it never reaches isWordSlug at all (segments.length < 3 short-circuit). That segment falls straight to bareShapeQualifies's unconditional isHexBlob check.",
+  "impact": "web_fetch still refuses an entirely ordinary, public GitHub Gist URL — REG-F1's own stated AC4 guarantee remains violated for this shape, even though the CHANGELOG and PR body describe REG-F1 as closed for 'a Medium OR GitHub Gist URL'. This is the exact reproduction the round-2 finding used, still failing.",
+  "quote": "function isHexBlob(value: string): boolean {\n  return HEX_BLOB.test(value) && /[a-f]/i.test(value);\n}"
+ }
+]

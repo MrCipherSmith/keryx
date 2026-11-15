@@ -1,0 +1,6 @@
+[
+{"tid":"T1","verdict":"partial","gid":"G9","why":"G9 targets the same isWordSlug exemption bypassing the entropy gate but frames it as the loosened words/transition rule for labelled prefix_id_secret shapes, not the general re-segmentation bypass lacking a reconstituted-entropy check."},
+{"tid":"T2","verdict":"miss","gid":null,"why":"G10 reports false positives from LABEL_ASSIGNMENT_RE, a different regex than the TOKEN class and SENSITIVE_LABEL proximity window."},
+{"tid":"T3","verdict":"miss","gid":null,"why":"No candidate reports isSingleTransitionTag making Medium/Gist slug-hex URLs refused by web_fetch."},
+{"tid":"T4","verdict":"miss","gid":null,"why":"No candidate reports the entropy floor in bareShapeQualifies running before the label for labelled UUIDs."}
+]

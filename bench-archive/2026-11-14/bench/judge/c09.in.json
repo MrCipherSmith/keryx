@@ -1,0 +1,177 @@
+{
+ "truth": [
+  {
+   "tid": "T1",
+   "file": "src/security/detect/entropy.ts",
+   "line": 235,
+   "severity": "blocker",
+   "problem": "isWordSlug exempts a hyphen/underscore-segmented run from the entropy/hex-blob gate whenever every segment is pure-alpha, pure-digit, or a single-transition tag, with no check on the RECONSTITUTED value's own entropy. Re-segmenting any real secret into single-character-class chunks joined by '-' defeats looksSecretShaped/secretShapedCandidatesIn entirely.",
+   "impact": "Complete bypass of S-6 (redactSensitiveText) and S-8 (containsOutboundSecret) for a re-segmented secret, and of S-9 (displayUrl masking). Reproduced: a real 32-char alphanumeric secret, re-segmented into letter-run/digit-run chunks ('aK-9-dQ-2-rN-7-zVbT-4-pXeYfWmC-1-oLaHsJtU-8'), passes looksSecretShaped as false, containsOutboundSecret as false when placed in a URL path, and redactSensitiveText leaves it byte-for-byte unredacted even when explicitly labelled 'leaked api_key:'. A simpler variant using real dictionary words on either side of the secret ('log-<secret>-id') reproduces the same bypass.",
+   "quote": "function isWordSlug(value: string): boolean {\n  const segments = value.split(/[-_]/);\n  if (segments.length < 3) {\n    return false;\n  }"
+  },
+  {
+   "tid": "T2",
+   "file": "src/security/detect/entropy.ts",
+   "line": 173,
+   "severity": "major",
+   "problem": "The generic (non-URL) per-line scan's TOKEN character class still includes '/' and '=', so a relative path, a code assignment, or a '/'-joined list is swept as one compound run; SENSITIVE_LABEL's 40-char lookback is same-line PROXIMITY, not true adjacency, so any ordinary occurrence of a label word earlier in the line/comment triggers a match on unrelated text.",
+   "impact": "Silent corruption of tool-output/transcript content, the same impact class F-LOG-F1 was blocker for. Real-file sweep of this repository: git log -p -30 --stat (30 commits) produced 5 false positives (a relative markdown link path near the words 'Credential Masking'; a GitHub noreply-email local part near the word 'key'; a Python 'from_attributes=True' assignment near the word 'API'; a 'passlib/bcrypt/argon2' library-name comment near the word 'password'), against 0 in bun.lock and 0 in CHANGELOG.md.",
+   "quote": "const TOKEN = /[A-Za-z0-9+/=_-]{20,}(?:\\.[A-Za-z0-9+/=_-]{6,})*/g;"
+  },
+  {
+   "tid": "T3",
+   "file": "src/security/detect/entropy.ts",
+   "line": 231,
+   "severity": "major",
+   "problem": "isSingleTransitionTag only forgives a segment that changes character class at most once. Medium's and GitHub Gist's common '<slug>-<hex id>' URL convention interleaves letters and digits many times in the trailing id, which fails isWordSlug entirely (one bad segment poisons the whole slug check) and falls through to the entropy gate, qualifying as secret-shaped.",
+   "impact": "web_fetch refuses an entirely ordinary, public, non-credential URL, contradicting AC4's guarantee. Reproduced against a URL already present in this repository's own docs: docs/requirements/keryx-wiki-graph-next/README.md links a Medium article whose trailing hex id triggers the refusal; a GitHub Gist URL reproduces the same failure.",
+   "quote": "function isSingleTransitionTag(segment: string): boolean {\n  return /^[A-Za-z]+[0-9]+$/.test(segment) || /^[0-9]+[A-Za-z]+$/.test(segment);\n}"
+  },
+  {
+   "tid": "T4",
+   "file": "src/security/detect/entropy.ts",
+   "line": 274,
+   "severity": "major",
+   "problem": "Continuation of round-1 F-SEC-F2. The fixed label-overrides-allow-shape logic is correct, but bareShapeQualifies's own entropy floor (3.6 bits, no hex-blob match possible for a hyphenated UUID) runs BEFORE the label is ever consulted, so whether a labelled UUID is redacted depends entirely on that UUID's own digit repetition, independent of the label.",
+   "impact": "Non-deterministic protection for UUID-shaped credentials even when explicitly labelled as leaked. Sample: 6 of 8 UUIDs redacted when labelled 'leaked credential:'; 2 were not, including the canonical RFC 4122 example UUID (550e8400-e29b-41d4-a716-446655440000, entropy 3.39) that appears throughout real documentation and example code. The existing regression test for this exact case uses a UUID (entropy 4.06) that happens to clear the floor, so it passes without exercising the boundary.",
+   "quote": "function bareShapeQualifies(head: string): { qualifies: boolean; entropy: number } {"
+  }
+ ],
+ "candidate": [
+  {
+   "id": "G1",
+   "file": "src/harness/tool/builtin/web-search-tool.ts",
+   "line": 58,
+   "severity": "major",
+   "problem": "The web_search pre-flight does not catch an opaque secret in a query. A query is not a URL, so outboundUrlComponents returns [] and the label-free component scan never runs; what remains is detectSecrets (named shapes) and detectEntropy, which requires a sensitive label word within 40 chars. Confirmed: containsOutboundSecret('K9dQnR2zVbT8pXeYfWmC1oLaHsJtUvBgNq3rDcZk0AI') and containsOutboundSecret('what is K9dQ...0AI') both return false.",
+   "impact": "S-8 is documented as closed for web_search, but a model (or injected content steering it) can send any unlabelled high-entropy token to the search provider verbatim. The only web_search test uses an sk- prefixed named shape, so the gap is untested.",
+   "quote": "if (containsOutboundSecret(query)) {"
+  },
+  {
+   "id": "G2",
+   "file": "src/harness/web/outbound-secret.ts",
+   "line": 84,
+   "severity": "major",
+   "problem": "The URL decomposition scans path segments, query VALUES and the fragment only. A secret placed in a query parameter NAME or in a hostname label is never examined (detectEntropy's own URL pass also skips the authority and, for a pair with '=', the name; its generic scan skips every URL span). Confirmed false for both https://x.example/c?<43-char secret>=1 and https://<secret>.x.example/c.",
+   "impact": "web_fetch still exfiltrates an opaque secret to an attacker-chosen host by moving it from the value to the name ('?SECRET=1') or into a subdomain (which also leaks through DNS). The refusal the change claims ('wherever it sits in the URL') is bypassed with a trivial rearrangement.",
+   "quote": "for (const [, value] of url.searchParams) {"
+  },
+  {
+   "id": "G3",
+   "file": "src/security/detect/entropy.ts",
+   "line": 465,
+   "severity": "major",
+   "problem": "secretShapedCandidatesIn replaces every '+' with a space before tokenising, for path segments, fragments and already-decoded query values alike. '+' is a base64 alphabet character, so any secret containing '+' (literal, or %2B which is decoded first) is cut into pieces; pieces under 20 chars are dropped. Confirmed: containsOutboundSecret('https://x.example/c?d=K9dQnR2zVbT8pXeY%2BfWmC1oLaHsJtUvBg%2BNq3rDcZk0AI') === false, same for the path form with literal '+'. A '.' every <20 chars has the same effect.",
+   "impact": "Standard-base64 credentials in URLs are neither refused outbound nor redacted in tool output, and inserting '+' separators is a single-value bypass of the S-8 check (not the documented multi-param split limit).",
+   "quote": "const normalized = text.replace(/\\+/g, \" \");"
+  },
+  {
+   "id": "G4",
+   "file": "src/security/credential-shape.ts",
+   "line": 293,
+   "severity": "major",
+   "problem": "GLUED_SECRET_RE was unanchored (findings R-I2: 'no false positive found') and is now required to end at $ or '_'. Glued credential names with any suffix after KEY/TOKEN no longer match. Confirmed isDeniedForMcpChild returns false for PRIVATEKEYPEM, PRIVATEKEYPATH, ACCESSTOKENS, REFRESHTOKENS, SESSIONTOKENS, APITOKENV2, ACCESSKEYID, APPKEYS, DBPASS1; all matched the previous regex.",
+   "impact": "Environment variables with these names in the operator's shell are now inherited by third-party MCP servers and external agent CLIs. A security filter was loosened to fix a non-problem; the table test only adds names that end in the suffix, so it cannot see the regression.",
+   "quote": "/(PRIVATE|SECRET|ACCESS|REFRESH|SESSION|CLIENT|API|APP)(KEY|TOKEN|SECRET)($|_)|DB(PASS|PWD)($|_)/;"
+  },
+  {
+   "id": "G5",
+   "file": "src/security/detect/injection.ts",
+   "line": 39,
+   "severity": "major",
+   "problem": "The confusables map folds Cyrillic U+0456/U+0406 (the homoglyph of Latin i) to 'o'/'O' so that the acceptance string 'Ign\\u0456re' becomes 'Ignore'. The natural use of that glyph is as 'i': '\\u0456gnore all previous instructions' folds to 'ognore...' and 'ignore all previous \\u0456nstructions' to '...onstructions'. Both confirmed to return 0 matches. No Cyrillic entry maps to Latin 'i' at all.",
+   "impact": "The most common homoglyph evasion of 'ignore'/'instructions' still defeats isUnsafeExternalInstruction on fetched web content, while S-7 is recorded as fixed. injection.test.ts asserts the one string the map was shaped around, so it passes because of the wrong mapping.",
+   "quote": "\"і\": \"o\", \"І\": \"O\", // flow 355 AC3's own evasion: \"Ignіre\" (U+0456) for \"Ignore\"."
+  },
+  {
+   "id": "G6",
+   "file": "src/lib/oauth/open-url.ts",
+   "line": 33,
+   "severity": "major",
+   "problem": "The win32 allowlist rejects '&' on the stated ground that browserOpenPlan only ever opens a device-code verification_uri. It is also called by openAuthorisationUrl (src/commands/mcp-servers.ts:727) with the MCP OAuth authorisation URL, which carries several '&'-joined parameters (client_id, redirect_uri, state, code_challenge). Confirmed: browserOpenPlan('https://auth.example/authorize?client_id=a&redirect_uri=...&state=x','win32',{}) is undefined. '&' needs no exclusion once the shell is gone (rundll32 gets the url as one argv entry).",
+   "impact": "On Windows the browser never opens for MCP server OAuth login, and the operator is told 'No graphical session detected, so nothing was opened' although one exists. Worked before this diff.",
+   "quote": "const ALLOWED_URL_CHARS = /^[A-Za-z0-9\\-._~:/?#[\\]@!$'()*+,;=%]+$/;"
+  },
+  {
+   "id": "G7",
+   "file": "src/security/detect/entropy.ts",
+   "line": 163,
+   "severity": "major",
+   "problem": "LABEL_ASSIGNMENT_RE captures the value with a class that excludes '.', so for a dotted composite credential only the head is matched; the generic TOKEN pass, which would mask head plus dotted tail, is then skipped because it overlaps the existing match (line 547). Confirmed: redactSensitiveText('api_key=0123456789abcdef0123456789abcdef.AbCdEf1234567890') -> 'api_key=[REDACTED:entropy].AbCdEf1234567890', while the 'api_key: ...' form masks the whole value.",
+   "impact": "For key=value output of dotted credentials (the <32hex>.<16alnum> shape the file's own TOKEN comment names, and similar two-part keys) the second half reaches the model and provider in clear: a partial reveal, which redact.ts states never happens.",
+   "quote": "[A-Za-z0-9_-]*\"?\\\\s*=\\\\s*\"?([A-Za-z0-9+/_=-]{6,})`,"
+  },
+  {
+   "id": "G8",
+   "file": "src/security/detect/entropy.ts",
+   "line": 137,
+   "severity": "major",
+   "problem": "SENSITIVE_LABEL now requires a non-alphanumeric boundary (or a following uppercase letter) around the label word. Lower-case glued labels have neither: in 'apikey', 'api' is followed by 'k' and 'key' is preceded by 'i'. Confirmed detectEntropy('apikey: kd8Fj2LmQp9xZr4TvWn7Yb3') is [] and redactSensitiveText leaves 'apikey: ...', 'X-Apikey: ...' and 'accesstoken: ...' untouched. The previous unbounded regex matched all of them.",
+   "impact": "`keryx security scan` loses recall it had before this diff for a common header/config spelling (apikey, accesstoken, authtoken, secretkey, privatekey followed by ':' or a space), and the new tool-output redaction misses the same values. Only the '=' form is rescued, by LABEL_ASSIGNMENT_RE.",
+   "quote": "const SENSITIVE_LABEL = new RegExp("
+  },
+  {
+   "id": "G9",
+   "file": "src/security/detect/entropy.ts",
+   "line": 251,
+   "severity": "major",
+   "problem": "isWordSlug was loosened twice at once: a letters-then-digits or digits-then-letters segment now counts as structured, and the required number of alphabetic words dropped from 2 to 1. The exemption sits in bareShapeQualifies, so it also applies when an explicit label is adjacent. Confirmed unredacted: 'secret: prod_xkmqwzrtpl_31415926535897ab', 'api_key: user_1234567890_9876543210ab' (entropy 4.02), 'token: tok-48291037465-99201847563' (3.74). All were non-slugs under the old rule and are above the 3.6 floor.",
+   "impact": "A labelled credential of the shape word_<run>_<run> (prefix_id_secret style tokens) is now exempt from both scan and redaction; the change was made to spare one wheel filename in URLs but weakens the labelled path for everything.",
+   "quote": "return words >= 1;"
+  },
+  {
+   "id": "G10",
+   "file": "src/security/detect/entropy.ts",
+   "line": 162,
+   "severity": "minor",
+   "problem": "LABEL_ASSIGNMENT_RE has no boundary after the label word (any [A-Za-z0-9_-]* continuation is absorbed) and its value class includes '/', so ordinary assignments whose name merely starts with a label word are redacted, including filesystem paths, which the comment in bareShapeQualifies says must never be masked. Confirmed: '--keyfile=/home/user1/work/deploy-2024/config' -> '--keyfile=[REDACTED:entropy]', 'KEYCLOAK_URL=auth/realms/master1/protocol/openid-connect' -> redacted, 'keyword=abcdefgh12345678ijk' -> redacted.",
+   "impact": "Tool output shown to the agent loses real paths and config values (this scrubber runs on all tool output); none of these shapes is in the false-positive fixture.",
+   "quote": "const LABEL_ASSIGNMENT_RE = new RegExp("
+  },
+  {
+   "id": "G11",
+   "file": "src/security/detect/injection.ts",
+   "line": 71,
+   "severity": "minor",
+   "problem": "NFKC is applied to the whole content or not at all: if it changes the length anywhere, it is skipped everywhere. One length-changing compatibility character anywhere in a page (e.g. the ligature U+FB01) disables fullwidth/compatibility folding for the entire text. Confirmed: '\\uFF49gnore all previous instructions' is detected, the same text followed by ' \\uFB01' is not.",
+   "impact": "An attacker page defeats the NFKC half of S-7 by appending one ligature; ordinary pages containing a ligature silently lose the protection.",
+   "quote": "return nfkc.length === folded.length ? nfkc : folded;"
+  },
+  {
+   "id": "G12",
+   "file": "src/security/detect/injection.ts",
+   "line": 78,
+   "severity": "minor",
+   "problem": "With the gap changed from [^.\\n] to [^.], period-free multi-line text (bullet lists, tables, headings) is now one gap. Confirmed: '- ignore whitespace\\n- show previous\\n- lint rules' yields a prompt-injection match. The only negative test uses two sentences separated by a period.",
+   "impact": "isUnsafeExternalInstruction returns true, so sanitizeWebContent rejects the whole text/plain page ('external content contains a likely prompt injection') and web_search drops the result, for benign changelogs and option lists.",
+   "quote": "/\\b(ignore|disregard|forget|override)\\b[^.]{0,40}\\b(all\\s+)?(previous|prior|above|earlier|system|developer)\\b[^.]{0,20}"
+  },
+  {
+   "id": "G13",
+   "file": "src/mcp-servers/http-headers.ts",
+   "line": 351,
+   "severity": "minor",
+   "problem": "displayUrl judges a path segment whole with looksSecretShaped, the divergent code path that review round 2 removed from outbound-secret.ts in favour of looksSecretShapedIn. Versioned or dotted segments of 16+ chars are masked. Confirmed: displayUrl('https://host/servers/filesystem-v1.2.3-mcp/sse') -> 'https://host/servers/.../sse' (ellipsis char), displayUrl('https://host/typescript-5.6.3.tgz') -> host plus ellipsis only. It also ignores backends.entropy.enabled.",
+   "impact": "`mcp list`, `mcp doctor` and the trust prompt hide the endpoint-identifying part of ordinary URLs at the moment the operator is deciding whether to trust the server.",
+   "quote": "return detectSecrets(segment).length > 0 || looksSecretShaped(segment) ? \"…\" : segment;"
+  },
+  {
+   "id": "G14",
+   "file": "src/security/entropy-gate.ts",
+   "line": 28,
+   "severity": "minor",
+   "problem": "The entropy gate loads security.config.json from process.cwd(), once per process, asynchronously, while the tools it gates receive the project directory explicitly (input.cwd). Calls made before the promise resolves use the default (enabled), and a session whose project root differs from the process cwd never sees the operator's setting. redact.ts still documents redactSensitiveText as 'no model, no config, no IO' and 'Pure' (lines 127-132), which is no longer true.",
+   "impact": "An operator who sets backends.entropy.enabled=false still gets entropy redaction/refusals for the first outputs of every process, and for the whole session when cwd differs from the project; the tests only exercise the forced test setter, never the real load.",
+   "quote": "loadSecurityConfig(process.cwd())"
+  },
+  {
+   "id": "G15",
+   "file": "docs/docs/modules.md",
+   "line": 970,
+   "severity": "minor",
+   "problem": "The module doc lists 'a 7–12-hex short SHA' among the allow-shapes and a '200-sample fixture'. SHORT_GIT_SHA_RE was removed in this same diff (entropy.ts header, F-LOG-F2) and the fixture asserts exactly 204 samples.",
+   "impact": "The doc describes detector behaviour the code does not have.",
+   "quote": "allow-shapes (a 40-hex git commit SHA, a 7–12-hex short SHA, a UUID, an"
+  }
+ ]
+}

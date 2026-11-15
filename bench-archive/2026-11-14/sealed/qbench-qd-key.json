@@ -1,0 +1,92 @@
+{
+ "d01": {
+  "rid": "QD2-q02",
+  "case": "q02",
+  "arm": "QD",
+  "rep": 2
+ },
+ "d02": {
+  "rid": "QD2-q05",
+  "case": "q05",
+  "arm": "QD",
+  "rep": 2
+ },
+ "d03": {
+  "rid": "QD3-q01",
+  "case": "q01",
+  "arm": "QD",
+  "rep": 3
+ },
+ "d04": {
+  "rid": "QD2-q01",
+  "case": "q01",
+  "arm": "QD",
+  "rep": 2
+ },
+ "d05": {
+  "rid": "QD2-q03",
+  "case": "q03",
+  "arm": "QD",
+  "rep": 2
+ },
+ "d06": {
+  "rid": "QD1-q03",
+  "case": "q03",
+  "arm": "QD",
+  "rep": 1
+ },
+ "d07": {
+  "rid": "QD3-q05",
+  "case": "q05",
+  "arm": "QD",
+  "rep": 3
+ },
+ "d08": {
+  "rid": "QD1-q04",
+  "case": "q04",
+  "arm": "QD",
+  "rep": 1
+ },
+ "d09": {
+  "rid": "QD1-q01",
+  "case": "q01",
+  "arm": "QD",
+  "rep": 1
+ },
+ "d10": {
+  "rid": "QD3-q02",
+  "case": "q02",
+  "arm": "QD",
+  "rep": 3
+ },
+ "d11": {
+  "rid": "QD3-q03",
+  "case": "q03",
+  "arm": "QD",
+  "rep": 3
+ },
+ "d12": {
+  "rid": "QD1-q05",
+  "case": "q05",
+  "arm": "QD",
+  "rep": 1
+ },
+ "d13": {
+  "rid": "QD3-q04",
+  "case": "q04",
+  "arm": "QD",
+  "rep": 3
+ },
+ "d14": {
+  "rid": "QD1-q02",
+  "case": "q02",
+  "arm": "QD",
+  "rep": 1
+ },
+ "d15": {
+  "rid": "QD2-q04",
+  "case": "q04",
+  "arm": "QD",
+  "rep": 2
+ }
+}

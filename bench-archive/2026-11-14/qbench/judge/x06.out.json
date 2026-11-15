@@ -1,0 +1,20 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "match", "gid": "G1", "why": "G1 names the same swallowed mkdir/writeFile failure in writeExportFile leading to a false success message and exit 0." },
+    { "tid": "T2", "verdict": "match", "gid": "G5", "why": "G5 reports the same rethrow without { cause: error } in collectRunRows." },
+    { "tid": "T3", "verdict": "match", "gid": "G6", "why": "G6 identifies runHistoryExport as a long function mixing orchestration with format inference and --since parsing." },
+    { "tid": "T4", "verdict": "match", "gid": "G4", "why": "G4 flags the boolean format flag, four positional params and redundant at/pages in renderRunLine." },
+    { "tid": "T5", "verdict": "match", "gid": "G3", "why": "G3 names the duplicated label-sanitising chain at all three sites." },
+    { "tid": "T6", "verdict": "match", "gid": "G2", "why": "G2 reports the stale 'oldest first' doc comment while listWikiRuns returns newest first." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "truth", "why": "Matches T1." },
+    { "gid": "G2", "label": "truth", "why": "Matches T6." },
+    { "gid": "G3", "label": "truth", "why": "Matches T5." },
+    { "gid": "G4", "label": "truth", "why": "Matches T4." },
+    { "gid": "G5", "label": "truth", "why": "Matches T2." },
+    { "gid": "G6", "label": "truth", "why": "Matches T3." },
+    { "gid": "G7", "label": "noise", "why": "HISTORY_USAGE is an abbreviated summary line and the export path prints the full EXPORT_USAGE; the drift is minor taste-level, so torn toward noise." },
+    { "gid": "G8", "label": "noise", "why": "Info-level redundant defensive guard (optionValue already rejects a following flag); harmless and below a reasonable fix threshold." }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "match", "gid": "G3", "why": "G3 identifies the throwing cancel stub that defeats cancelPendingDispatches' undefined-check and rejects the loop at line 54; omitting the method fixes T1." },
+    { "tid": "T2", "verdict": "match", "gid": "G1", "why": "G1 names the null-to-empty coalescing at line 83 that makes a bad or corrupt recording replay as zero findings." },
+    { "tid": "T3", "verdict": "match", "gid": "G5", "why": "G5 describes writeReplaySummary mixing read/validate, summary transform and write, and duplicating the loader's parsing." },
+    { "tid": "T4", "verdict": "match", "gid": "G4", "why": "G4 names the unnamed 7-day window duplicated in isReplayableResult and writeReplaySummary." },
+    { "tid": "T5", "verdict": "match", "gid": "G2", "why": "G2 flags the in-place sort inside the isReplayableResult predicate and scopesMatch's hidden dependency on it." },
+    { "tid": "T6", "verdict": "match", "gid": "G6", "why": "G6 flags the one-letter counter n whose comment compensates for the name." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "truth", "why": "Matches T2." },
+    { "gid": "G2", "label": "truth", "why": "Matches T5." },
+    { "gid": "G3", "label": "truth", "why": "Matches T1." },
+    { "gid": "G4", "label": "truth", "why": "Matches T4." },
+    { "gid": "G5", "label": "truth", "why": "Matches T3." },
+    { "gid": "G6", "label": "truth", "why": "Matches T6." },
+    { "gid": "G7", "label": "noise", "why": "Four positional parameters with two adjacent strings is a borderline style preference, not a clear defect a maintainer would need to fix." }
+  ]
+}

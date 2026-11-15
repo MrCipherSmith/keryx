@@ -1,0 +1,3 @@
+[
+  {"tid":"D1","file":"src/session/execution-plan-history.ts","line":92,"severity":"minor","problem":"Catch block around JSON.parse of the cursor file that replaces the parse error with a new Error.","impact":"None: the failure still propagates, with the original error as cause and the file path in the message.","quote":"throw new Error(`plan history cursor ${planHistoryCursorPath(dir)} is not valid JSON`, { cause: error });","why_not_a_defect":"The catch does not swallow or hide anything: it rethrows with { cause } preserved, names the offending file, and the comment explains why guessing a revision would be wrong. This is the recommended error-wrapping pattern, not an empty/log-only catch or a generic error."}
+]

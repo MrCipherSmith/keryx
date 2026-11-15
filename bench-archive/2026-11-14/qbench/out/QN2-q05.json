@@ -1,0 +1,56 @@
+[
+  {
+    "id": "G1",
+    "file": "src/review/mutate.ts",
+    "line": 445,
+    "severity": "minor",
+    "problem": "runMutation (about 135 lines, already mixing provenance, copy, baseline-error formatting, the mutant loop and record assembly) now also inlines two more separable jobs: the two-base sweep with its timing (sweepStarted/sweptScratch/sweepMs/sweepFields) and the owner-marker heartbeat lifecycle (writeFile, setInterval/utimes, unref, plus clearInterval in both the signal cleanup and the finally). SRP / B1: orchestration and low-level timer/marker plumbing at one level.",
+    "impact": "The next person changing the heartbeat or sweep policy has to edit the main pass body and keep the two clearInterval sites in step; neither job can be tested without running a whole mutation pass, which is why the new heartbeat test needs a probe script that sleeps 600 ms.",
+    "quote": "const heartbeat = setInterval(() => {\n    const at = new Date();\n    void utimes(ownerFile, at, at).catch(() => {});\n  }, options.heartbeatMs ?? HEARTBEAT_MS);"
+  },
+  {
+    "id": "G2",
+    "file": "src/review/completion-gate.ts",
+    "line": 771,
+    "severity": "minor",
+    "problem": "findReviewGateState grows a fifth positional parameter (cwd, since, named, signal, now), and three of them are optional, so every test call that only wants the clock has to fill the gaps with placeholders. The sibling dirSignature in the same diff takes `now` through an options object (SignatureOptions), so the codebase already has the right shape here.",
+    "impact": "Call sites read `findReviewGateState(root, 0, {}, undefined, now)` (about a dozen in completion-gate.test.ts). The reader has to look up the signature to decode them, and the next injectable gets added as a sixth positional.",
+    "quote": "  signal?: AbortSignal,\n  now?: number,\n): Promise<OpenManagedReview | null> {"
+  },
+  {
+    "id": "G3",
+    "file": "src/commands/agent.ts",
+    "line": 4283,
+    "severity": "minor",
+    "problem": "The diff adds one more inline copy of the abort-stop literal and the system()+return pair. The same string literal already appears 12 times in this file (lines 3226, 3488, 3510, 3767, 3815, 3896, 3924, 4014, 4196, 4318, 4448, 4862), with no shared constant or helper (E2 repeated string / E1 duplication, 3+ sites).",
+    "impact": "Changing the wording of the stop line, or what an aborted turn returns, now means 13 edits, and a missed one shows the operator two different messages for the same event. The new LOGIC-003 tests also pin the literal text.",
+    "quote": "system(\"\\n[stopped] Model turn interrupted by user.\\n\");\n        return {};"
+  },
+  {
+    "id": "G4",
+    "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+    "line": 788,
+    "severity": "minor",
+    "problem": "The edited treeHash sentence puts the copy behaviour for linked worktrees inside the parenthetical about ignored files, so it reads as if linked worktrees were a kind of ignored file. That rule has nothing to do with whether a directory is ignored, and the new paragraph three lines below (791) says it correctly and separately. The same edit is in the bundled mirror at src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md:788.",
+    "impact": "A reader working out what treeHash and the scratch copy cover gets two overlapping statements with different framing. It costs a re-read and invites the wrong takeaway that only ignored linked worktrees are left out.",
+    "quote": "ignored files (the scratch copy still includes them, except linked worktrees, which it leaves out)"
+  },
+  {
+    "id": "G5",
+    "file": "src/review/mutate.ts",
+    "line": 232,
+    "severity": "minor",
+    "problem": "The isLinkedWorktree doc comment says everything else is copied \"as the base copy did\", but nothing in the file defines \"base copy\". It seems to mean the behaviour before this change, which is history and does not belong in a doc comment describing current behaviour.",
+    "impact": "A reader can't resolve the reference from the code. It points at a past version that only git history shows, and it goes stale the next time the copy rules change.",
+    "quote": "Everything else is copied as the base copy did, because the tests may load it"
+  },
+  {
+    "id": "G6",
+    "file": "docs/docs/cli-reference.md",
+    "line": 5107,
+    "severity": "info",
+    "problem": "The sweep thresholds that HEARTBEAT_MS, 2 * heartbeatMs, STALE_HEARTBEAT_MS and STALE_SCRATCH_MS hold in src/review/mutate.ts are written out by hand as prose (two minutes / ten minutes / six hours) in five places: docs/docs/cli-reference.md:5107, docs/docs/guides/review-with-a-record.md:201, src/commands/review.ts:5092 (help text), and both SKILL.detail.md mirrors at about line 793. This is an observation, not a defect: the docs-mirroring convention may be intended. It would be settled if a docs/help drift check exists that ties these numbers to the constants.",
+    "impact": "If one constant is tuned, the five prose copies silently go stale unless every one is found by hand.",
+    "quote": "whose owner died (no heartbeat for two minutes) or stopped refreshing its marker for ten minutes, and unmarked ones older than six hours"
+  }
+]

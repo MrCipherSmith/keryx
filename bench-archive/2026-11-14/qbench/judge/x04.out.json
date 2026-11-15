@@ -1,0 +1,11 @@
+{
+  "truth": [],
+  "candidates": [
+    { "gid": "G1", "label": "noise", "why": "'the base copy' plausibly means the plain copy before the nested-checkout filter was added one commit earlier, so the comment is ambiguous rather than clearly false, and the behaviour reversal it describes is intentional." },
+    { "gid": "G2", "label": "noise", "why": "The doc comment states 'two heartbeats' right next to the expression and heartbeatMs is already an option, so the inline 2x factor is a readability preference, not a defect worth fixing." },
+    { "gid": "G3", "label": "noise", "why": "Positional parameters on a local test helper that the doc comment explains are a matter of taste." },
+    { "gid": "G4", "label": "valid", "why": "The new tests repeat the same abort-then-return-openReview stub three times, right after openReview itself was pulled into a helper; extracting it is a reasonable cleanup." },
+    { "gid": "G5", "label": "valid", "why": "The new code writes the raw POSIX mask 0o170000 where node:fs provides constants.S_IFMT, which the same change already imports in mutate.ts." },
+    { "gid": "G6", "label": "noise", "why": "A slightly redundant parenthetical in a doc, at info level, is stylistic and harms nothing." }
+  ]
+}

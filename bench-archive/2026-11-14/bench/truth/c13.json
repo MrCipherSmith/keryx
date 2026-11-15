@@ -1,0 +1,20 @@
+[
+ {
+  "tid": "T1",
+  "file": "src/commands/providers.ts",
+  "line": null,
+  "severity": "major",
+  "problem": "OpenRouter's balance endpoint used a doubled `/api` path (`balancePath: \"/api/v1/credits\"` against a `baseUrl` that already ends in `/api`) and parsed a response shape neither `/v1/credits` nor any other OpenRouter endpoint returns (`body.credits.{total,used,remaining}`).",
+  "impact": "`keryx providers status`, `/connect` and the routing picker's balance column always showed OpenRouter as having no balance (a 404 or a malformed body makes `fetchProviderBalance` return `undefined`), even for a correctly connected, funded key — the AC5 balance feature silently did not work for the most common hosted provider.",
+  "quote": null
+ },
+ {
+  "tid": "T2",
+  "file": "src/harness/provider-catalog-cache.ts",
+  "line": null,
+  "severity": "major",
+  "problem": "The full-refresh cache writer (`saveProviderCatalogCache`) and the single-provider patch writer `providers test` uses (`updateProviderCatalogEntry`) both wrote `provider-catalog.json` with no lock between them. A `providers test` patch landing while a slower full refresh (up to `CATALOG_FETCH_TIMEOUT_MS` per provider, run in parallel at `keryx shell` startup) was still in flight was silently clobbered once the older refresh finally finished and overwrote the whole file unconditionally.",
+  "impact": "A provider an operator had just re-tested and fixed via `providers test` (or the `/connect` row's `[Test]` button) could have that corrected entry silently reverted to an older, still-in-flight startup refresh's result — a lost update with no error and nothing on the record showing it happened.",
+  "quote": null
+ }
+]

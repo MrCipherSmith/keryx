@@ -1,0 +1,20 @@
+[
+ {
+  "tid": "T1",
+  "verdict": "miss",
+  "gid": null,
+  "why": "No candidate covers a Side-1 worker painting stale results into the destination session after a switch."
+ },
+ {
+  "tid": "T2",
+  "verdict": "miss",
+  "gid": null,
+  "why": "No candidate covers a foreground turn starting during Slate preservation and the busy flag being cleared."
+ },
+ {
+  "tid": "T3",
+  "verdict": "miss",
+  "gid": null,
+  "why": "No candidate covers the recipient picker dismissal overwriting newly typed input."
+ }
+]

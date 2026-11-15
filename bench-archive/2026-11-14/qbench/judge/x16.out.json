@@ -1,0 +1,22 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "match", "gid": "G2", "why": "G2 names the log-only catch on the cursor write that returns the entry as recorded, leaving the revision invisible past the commit marker." },
+    { "tid": "T2", "verdict": "match", "gid": "G3", "why": "G3 reports the ExecutionPlanHistory constructor doing synchronous file reads/parsing that can throw, suggesting a static load." },
+    { "tid": "T3", "verdict": "match", "gid": "G10", "why": "G10 identifies the if/else-if dispatch on the PlanTransition kind with a bare else absorbing new kinds; an exhaustive dispatch fixes both." },
+    { "tid": "T4", "verdict": "match", "gid": "G6", "why": "G6 reports diffExecutionPlans pushing into a caller-supplied out array and returning void." },
+    { "tid": "T5", "verdict": "miss", "gid": null, "why": "No candidate raises the transition/change naming inconsistency." },
+    { "tid": "T6", "verdict": "match", "gid": "G4", "why": "G4 reports parseEntry's generic 'Invalid entry' error lacking file and line context." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "valid", "why": "A failed appendFile in recordPlanRevision rejects writePlan after plan.json was already committed, skipping notify and causing conflict on retry; this is a real, distinct failure-policy defect introduced by the change." },
+    { "gid": "G2", "label": "truth", "why": "Matches T1." },
+    { "gid": "G3", "label": "truth", "why": "Matches T2." },
+    { "gid": "G4", "label": "truth", "why": "Matches T6." },
+    { "gid": "G5", "label": "valid", "why": "The constructor maps parseEntry over every line before filtering by the cursor, so a torn uncommitted line throws, contradicting the commit-marker doc comment; verified in the code." },
+    { "gid": "G6", "label": "truth", "why": "Matches T4." },
+    { "gid": "G7", "label": "noise", "why": "Overlaps the constructor-I/O concern of T2/G3 and is largely a design preference for the render function's signature." },
+    { "gid": "G8", "label": "noise", "why": "Wrong-shape cursor defaulting to 0 is a speculative path no writer produces; borderline, so the lower label." },
+    { "gid": "G9", "label": "noise", "why": "Naming a one-use helper `message` is taste." },
+    { "gid": "G10", "label": "truth", "why": "Matches T3." }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "match", "gid": "G1", "why": "G1 names the same log-only catch around the cursor write that returns the entry as recorded and hides the revision." },
+    { "tid": "T2", "verdict": "match", "gid": "G2", "why": "G2 flags the same synchronous I/O and possible throw in the ExecutionPlanHistory constructor and proposes a static load." },
+    { "tid": "T3", "verdict": "match", "gid": "G7", "why": "G7 identifies the five-branch if/else-if dispatch on kind whose bare else silently absorbs new kinds; its exhaustive-dispatch fix resolves T3." },
+    { "tid": "T4", "verdict": "match", "gid": "G6", "why": "G6 reports the same output-argument void return in diffExecutionPlans." },
+    { "tid": "T5", "verdict": "miss", "gid": null, "why": "No candidate raises the transition/change naming inconsistency." },
+    { "tid": "T6", "verdict": "match", "gid": "G3", "why": "G3 reports the same context-free \"Invalid entry\" error in parseEntry with no file or line." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "truth", "why": "Matches T1." },
+    { "gid": "G2", "label": "truth", "why": "Matches T2." },
+    { "gid": "G3", "label": "truth", "why": "Matches T6." },
+    { "gid": "G4", "label": "valid", "why": "Line 87 really maps a wrong-shaped cursor to revision 0, silently dropping all entries, contradicting the fail-loudly policy right below it." },
+    { "gid": "G5", "label": "valid", "why": "The doc comment's 'never shown' claim is false: an orphaned line with revision <= a later cursor passes the filter at line 134 once the next write advances the cursor." },
+    { "gid": "G6", "label": "truth", "why": "Matches T4." },
+    { "gid": "G7", "label": "truth", "why": "Matches T3." }
+  ]
+}

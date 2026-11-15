@@ -1,0 +1,9 @@
+{
+  "truth": [],
+  "candidates": [
+    { "gid": "G1", "label": "noise", "why": "A local test helper whose two trailing parameters have defaults; the parameter-count complaint is style taste in test code, not a defect a maintainer would reasonably fix." },
+    { "gid": "G2", "label": "noise", "why": "The parenthetical is accurate (linked worktrees are often ignored paths the copy otherwise keeps), so the complaint is about wording and repetition, which is taste." },
+    { "gid": "G3", "label": "noise", "why": "A naming preference for a local string variable in a short block; when torn, the lower label applies." },
+    { "gid": "G4", "label": "noise", "why": "The reviewer itself says this follows the project's habit and does not report it as a defect." }
+  ]
+}

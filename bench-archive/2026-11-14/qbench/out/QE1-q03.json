@@ -1,0 +1,83 @@
+[
+  {
+    "id": "G1",
+    "file": "src/session/execution-plan.ts",
+    "line": 178,
+    "severity": "major",
+    "problem": "Journaling is an auxiliary step, but its failure becomes the primary write's failure. recordPlanRevision is awaited inside writePlan's lock after plan.json has already been written atomically. If appendFile throws (src/session/execution-plan-history.ts:68, e.g. EACCES or ENOSPC on plan-history.jsonl), the error propagates raw, with no 'plan history' context and no cause wrapper. setExecutionPlan/updateExecutionPlan then reject even though plan.json is now at the new revision, and notify(dir, plan) at line 181 never runs. The same function treats the other journal failure, the cursor write at execution-plan-history.ts:69-73, as best-effort. So one helper has two opposite failure policies for the same auxiliary concern. Sites: execution-plan.ts:178 (the only caller, found with keryx ctx rg recordPlanRevision src) and execution-plan-history.ts:68 plus 69-73.",
+    "impact": "Trigger: the journal append fails. Outcome: the caller is told the plan write failed when it actually committed. Subscribers are never notified. A retry with the same expectedRevision gets ExecutionPlanConflictError at line 175, because the revision already advanced.",
+    "quote": "await writeFileAtomic(executionPlanPath(dir), `${JSON.stringify(result, null, 2)}\\n`);\n    await recordPlanRevision(dir, current, result);"
+  },
+  {
+    "id": "G2",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 72,
+    "severity": "minor",
+    "problem": "This catch only logs. It writes to process.stderr and then returns `entry` as if the revision was recorded and committed. error-handling.mdc Rule 3 requires a correct fallback with a comment saying why, or a degraded result the caller can see. This catch has neither. The entry stays above the cursor, so readers hide it (see the planHistoryCursorPath doc at lines 26-30). A raw stderr write from a session library is also invisible in the TUI.",
+    "impact": "If the cursor write fails, renderExecutionPlanChangelog silently omits that revision until a later write advances the cursor, and the returned entry says nothing about it. writePlan ignores the return value today, so nothing user-facing breaks yet. The cost falls on the next reader, who has to work out why a recorded revision is missing.",
+    "quote": "process.stderr.write(`plan history: cursor update failed: ${message(error)}\\n`);"
+  },
+  {
+    "id": "G3",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 99,
+    "severity": "minor",
+    "problem": "The error does not say what failed or for which input. parseEntry throws `new Error(\"Invalid entry\")` with no journal path or line, and the JSON.parse at line 97 lets a bare SyntaxError escape. The cursor reader 7 lines earlier names its file and keeps `cause`, so the two readers are inconsistent. There is also doc drift: the planHistoryCursorPath doc (lines 26-30) says a line appended by a writer that died is never shown. In fact a torn last line throws in .map(parseEntry) at line 133, before the cursor filter at line 134 runs, so the whole history fails to load.",
+    "impact": "An operator whose journal has one bad line gets an `Invalid entry` or `Unexpected token` error from new ExecutionPlanHistory() and renderExecutionPlanChangelog, with nothing pointing to plan-history.jsonl. The cursor comment also promises a tolerance the code does not provide.",
+    "quote": "throw new Error(\"Invalid entry\");"
+  },
+  {
+    "id": "G4",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 87,
+    "severity": "minor",
+    "problem": "When the cursor is valid JSON but has the wrong shape (missing revision, or a non-number), it is reported as 0. 0 is a legitimate value meaning 'nothing committed', so this is a failure disguised as a valid result (error-handling.mdc Rule 1 / Iron Law 2). It contradicts the comment directly below, which refuses to guess a revision because guessing 'would either hide committed entries or surface uncommitted ones'. Returning 0 is exactly that guess, and it hides every entry.",
+    "impact": "A malformed but parseable cursor silently empties the history, and the changelog returns undefined. The torn-JSON case fails loudly with the path, so readers get two different behaviours for the same kind of corruption.",
+    "quote": "return typeof parsed.revision === \"number\" ? parsed.revision : 0;"
+  },
+  {
+    "id": "G5",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 122,
+    "severity": "minor",
+    "problem": "The constructor performs I/O, which solid-principles.mdc forbids ('A constructor performs no I/O', Iron Law 2). ExecutionPlanHistory's constructor reads both the cursor file (line 123) and the journal file (line 126) synchronously, parses every line and filters them. Construction can therefore throw (the test at execution-plan-history.test.ts:74 relies on that). The `readonly dir` parameter property is stored but never read by any member.",
+    "impact": "The class cannot be built from already-loaded entries for tests or rendering. Every `new` does blocking disk reads and can throw parse errors. The unused public `dir` field adds API surface nobody uses.",
+    "quote": "constructor(readonly dir: string) {\n    const committed = readCursor(dir);"
+  },
+  {
+    "id": "G6",
+    "file": "src/session/execution-plan.ts",
+    "line": 276,
+    "severity": "minor",
+    "problem": "I/O is mixed with a transform, which solid-principles.mdc reports at any length. renderExecutionPlanChangelog reads the history from disk (via new ExecutionPlanHistory(dir) at line 277) and also formats it. Its sibling renderExecutionPlanSnapshot (line 252) is a pure function over an ExecutionPlan, so the shared `render` prefix now hides that this one does blocking file reads and can throw on a corrupt cursor or journal.",
+    "impact": "The formatting cannot be tested or reused without a real session directory on disk; the test file has to create temp dirs just to check string output. Callers who assume a pure render based on the sibling can be surprised by a synchronous filesystem read or a throw.",
+    "quote": "export function renderExecutionPlanChangelog(dir: string, sinceRevision = 0, maxEntries = 10): string | undefined {\n  const history = new ExecutionPlanHistory(dir);"
+  },
+  {
+    "id": "G7",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 37,
+    "severity": "minor",
+    "problem": "`out` is an output argument. diffExecutionPlans is a pure diff, but it returns void and pushes into a caller-supplied array instead of returning PlanTransition[]. Both callers (recordPlanRevision at line 64-65 and the test at execution-plan-history.test.ts:29-30) have to declare an empty array first and then call.",
+    "impact": "The exported API is harder to read and compose: you cannot write `const transitions = diffExecutionPlans(a, b)`, and a caller that reuses an array silently gets accumulated transitions.",
+    "quote": "export function diffExecutionPlans(previous: ExecutionPlan | undefined, next: ExecutionPlan, out: PlanTransition[]): void {"
+  },
+  {
+    "id": "G8",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 35,
+    "severity": "minor",
+    "problem": "The function is named with a bare noun. `message` is a function that extracts text from an unknown error, so at the call site `message(error)` reads like a variable rather than an action. Something like `errorMessage` or `describeError` would say what it does.",
+    "impact": "A small readability cost for the next reader of the catch at line 72.",
+    "quote": "const message = (error: unknown): string => error instanceof Error ? error.message : String(error);"
+  },
+  {
+    "id": "G9",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 113,
+    "severity": "info",
+    "problem": "describeChange is a new 5-branch if/else-if chain over `kind`, with a catch-all `else` that silently assumes `reordered`. It is new rather than extended, so the OCP threshold does not apply. But because there is no exhaustive switch or `never` check, a future PlanTransition kind falls into the 'moved' branch without a compile error whenever its from/to fields happen to typecheck.",
+    "impact": "There is no current defect. An exhaustive switch, or a Record<kind, formatter>, would make adding a kind a compile-time requirement here.",
+    "quote": "} else {\n    return `^ ${change.itemId} moved ${change.from + 1} -> ${change.to + 1}`;"
+  }
+]

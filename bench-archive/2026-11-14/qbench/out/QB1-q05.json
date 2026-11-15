@@ -1,0 +1,65 @@
+[
+  {
+    "id": "G1",
+    "file": "src/review/mutate.ts",
+    "line": 445,
+    "severity": "minor",
+    "problem": "runMutation (already ~135 lines, lines 414-548) takes on two more inline responsibilities in this change: timing a two-base sweep (lines 445-449) and owning a heartbeat timer (lines 455-459), whose teardown then has to be written twice, in the signal cleanup (line 462) and in the finally block (line 544). High-level orchestration (provenance, copy, baseline, mutant loop) now sits next to low-level timer and utimes plumbing.",
+    "impact": "Whoever next changes the pass lifecycle has to keep the two clearInterval sites in step and read the whole function to find them. Moving the sweep into a `sweepScratchBases(...) -> sweepFields` helper and the marker into a `startOwnerHeartbeat(ownerFile, ms) -> stop()` helper would shorten the function and leave one teardown call.",
+    "quote": "const heartbeat = setInterval(() => {"
+  },
+  {
+    "id": "G2",
+    "file": "src/review/mutate.ts",
+    "line": 380,
+    "severity": "minor",
+    "problem": "The core deletion rule of sweepStaleScratch is one compound expression: a ternary whose else branch is `A || (B && C)`, which recomputes `now() - owner.mtimeMs` twice and uses an unnamed `2 * heartbeatMs` grace. The docblock above the function needs a whole paragraph to explain this one line.",
+    "impact": "This line decides an irreversible `rm -rf`, and it is hard to audit at a glance. A named predicate (e.g. `isAbandoned(owner, info)` with `markerAgeMs` and a `DEAD_PID_GRACE_HEARTBEATS = 2` constant) would make each branch readable on its own.",
+    "quote": ": now() - owner.mtimeMs > staleHeartbeatMs || (!isAlive(owner.pid) && now() - owner.mtimeMs > 2 * heartbeatMs);"
+  },
+  {
+    "id": "G3",
+    "file": "src/review/completion-gate.ts",
+    "line": 771,
+    "severity": "minor",
+    "problem": "findReviewGateState grows to five positional parameters, and the new one (`now`) is used only by tests. So every new test call has to pass placeholder positionals: `findReviewGateState(root, 0, {}, undefined, now)`, at completion-gate.test.ts lines 749, 752, 764, 773, 798, 816, 819 and 902. The new test helper `make(name, owner, ageMs, markerAgeMs, into)` in src/review/mutate.test.ts:251 has the same shape: calls like `make(\"keryx-mutate-DEADDD\", {...}, 1000, 3 * HEARTBEAT_MS, repoScratch)` cannot be read without the signature.",
+    "impact": "The `{}, undefined` filler hides which argument is the clock, and the next optional parameter makes it worse. Folding `signal` and `now` into an options object (as dirSignature's SignatureOptions already does) would remove the placeholders.",
+    "quote": "  signal?: AbortSignal,\n  now?: number,"
+  },
+  {
+    "id": "G4",
+    "file": "src/commands/agent.ts",
+    "line": 4283,
+    "severity": "minor",
+    "problem": "The change adds another copy of the inline literal `\"\\n[stopped] Model turn interrupted by user.\\n\"`. The same string already appears at 12 other sites in this file (3226, 3488, 3510, 3767, 3815, 3896, 3924, 4014, 4196, 4318, 4448, 4862), and the new comment says this site is meant to end 'like the other abort sites'.",
+    "impact": "Changing the interrupted-turn wording, or what an abort does (it is `system(...)` plus `return {}` at each site), means editing 13 places, and a missed one gives an inconsistent message. A shared `const STOPPED_LINE` or a `stopInterrupted()` helper would make that one edit.",
+    "quote": "system(\"\\n[stopped] Model turn interrupted by user.\\n\");"
+  },
+  {
+    "id": "G5",
+    "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+    "line": 788,
+    "severity": "minor",
+    "problem": "The new parenthetical in the treeHash sentence mixes two unrelated sets: linked worktrees are not a subset of ignored files, so 'except linked worktrees' reads as if they were. It is also incomplete (the copy also leaves out the repository's own mutate-scratch), and the new paragraph three lines later (791-795) says the same thing properly. The same text is in the bundled mirror src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md:788.",
+    "impact": "An operator or agent reading what treeHash covers can wrongly conclude that linked worktrees count as ignored files, or that they matter to the hash. Dropping the clause and keeping the dedicated paragraph would fix it.",
+    "quote": "ignored files (the scratch copy still includes them, except linked worktrees, which it leaves out)"
+  },
+  {
+    "id": "G6",
+    "file": "src/review/mutate.ts",
+    "line": 232,
+    "severity": "minor",
+    "problem": "The isLinkedWorktree docblock says everything else is copied 'as the base copy did'. 'Base copy' is not defined anywhere in the file. It reads as a reference to the previous version of this function, which did skip embedded clones and unreadable `.git` entries, so the phrase now describes behaviour this change reversed.",
+    "impact": "A reader can't tell what the comparison point is, and if it means the old code, it says the opposite of what the code now does. Writing 'is copied' alone states the rule.",
+    "quote": "Everything else is copied as the base copy did, because the tests may load it"
+  },
+  {
+    "id": "G7",
+    "file": "src/review/completion-gate.ts",
+    "line": 101,
+    "severity": "minor",
+    "problem": "The diff introduces an injectable clock named `now` with two different shapes. Here, and in findReviewGateState, it is a timestamp (`now?: number`). In sweepStaleScratch, which this same diff extends (src/review/mutate.ts:354, `now?: (() => number)`), it is a function. The tests reflect this: `aged()` passes a number into one, while `now: () => Date.now() + ...` is passed to the other.",
+    "impact": "A test author who moves between the two modules has to check each signature to know whether to pass `Date.now()` or `Date.now`. One convention, or a different name for the frozen value (e.g. `at`), would remove the trap.",
+    "quote": "now?: number | undefined;"
+  }
+]

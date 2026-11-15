@@ -1,0 +1,38 @@
+[
+ {
+  "tid": "T1",
+  "file": "src/gdskills/install.ts",
+  "line": 130,
+  "severity": "major",
+  "problem": "removeUnmodifiedRetiredRules gates on existsSync (follows symlinks, true for dirs/FIFOs) then readFile with no lstat/isFile, no size bound, no try/catch. Directory -> EISDIR aborts install before catalog/manifest/contracts are written; symlink to /dev/zero -> unbounded memory; FIFO -> hang; chmod 000 -> EACCES abort.",
+  "impact": ".metaproject/rules/core is git-tracked, so a repo can plant a non-regular entry at a retired name and make every keryx init/update/skills install abort (or hang/exhaust memory) before catalog, manifest and contracts are written.",
+  "quote": null
+ },
+ {
+  "tid": "T2",
+  "file": "src/gdskills/install.ts",
+  "line": 133,
+  "severity": "major",
+  "problem": "sha256 over raw bytes; registry hashes are LF-only, BOM-less. An unmodified copy with CRLF (Windows core.autocrlf=true on a versioned .metaproject/rules/core) or a BOM is classified kept-modified forever and warned on every install.",
+  "impact": "Unmodified retired rules are never cleaned up on CRLF/BOM checkouts and produce a permanent false 'modified' warning on every install.",
+  "quote": null
+ },
+ {
+  "tid": "T3",
+  "file": "src/gdskills/bundled/rules/core/implementation-plans.mdc",
+  "line": 2,
+  "severity": "major",
+  "problem": "implementation-plans says plans live only in docs/requirements/<name>/implementation-plan.md, \"no separate plans/ tree\", and to scaffold a requirements package first; documentation-management keeps a plans/ category and analysis/<feature>/implementation-plan.md, which feature-analyzer writes.",
+  "impact": "Two core rules and a shipped skill disagree on where an implementation plan lives.",
+  "quote": null
+ },
+ {
+  "tid": "T4",
+  "file": "src/gdskills/bundled/rules/core/skills-storage-workflow.mdc",
+  "line": 21,
+  "severity": "major",
+  "problem": "skills-storage-workflow names the install mirror as source of truth, says \"sync\" with keryx update (which force-copies bundled over the installed tree and never syncs globally; global sync is `keryx skills sync --runtime <r> --target <dir>`), \"both global destinations\" vs four listed, layout omits <category>/. rule-management-workflow:15 cites nonexistent `keryx install`; its Sync Targets (~/.cursor/rules/AGENTS.md etc.) are written by no code.",
+  "impact": "An agent following these rules edits the wrong tree, runs a command that does not sync, or runs a command that does not exist.",
+  "quote": null
+ }
+]

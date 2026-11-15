@@ -1,0 +1,83 @@
+[
+  {
+    "id": "G1",
+    "file": "src/review/agents/recorded-adapter.ts",
+    "line": 164,
+    "severity": "major",
+    "problem": "Recording load failures are disguised as an empty recording. loadRecordedResults (lines 40-52) catches a missing/unreadable file and an unparseable JSON body and returns null with no cause; its caller entries() coerces that to [] with `?? []`, so execute() (line 189-190) answers every dispatch with `{ findings: [] }`. The same empty reply is produced for entries silently dropped as stale (line 168) and for entity/scope mismatches. Its doc comment (line 119) also omits the invalid-JSON case. Violates error-handling.mdc Rules 1 and 3 (failure signalled by a value the caller reads as a valid result; catch with no stated fallback reason).",
+    "impact": "A replay pointed at a wrong path, a corrupt file, or a recording older than 7 days completes normally with zero findings for every task; the only trace is `metadata.recorded: false` per reply, which nothing in the change reads. Dry runs and plan-eval replays report a clean review instead of failing, and the operator cannot tell 'no findings' from 'no recording'. class_scope: sites recorded-adapter.ts:43-45, :48-50, :164, :168, :189-190; enumerated by reading every catch/return path in the two new files.",
+    "quote": "const loaded = (await loadRecordedResults(options.recordingPath)) ?? [];"
+  },
+  {
+    "id": "G2",
+    "file": "src/review/agents/recorded-adapter.ts",
+    "line": 194,
+    "severity": "minor",
+    "problem": "LSP/ISP: ReviewAgentAdapter.cancel is optional (types.ts:156) and the new cancelPendingDispatches treats an absent cancel as 'skip' (adapter-shutdown.ts:56-58). The recorded adapter, which declares `cancellation: false`, instead implements cancel as an unconditional throw of 'not supported', so it opts into the call path that awaits cancel and then fails. Today the controller refuses to admit adapters without cancellation (controller.ts:239), so no recorded dispatch is pending and no call site reaches it; hence minor.",
+    "impact": "The stub contradicts the adapter's own capability flag and the convention the same change introduces; if a recorded dispatch ever becomes pending, cancelPendingDispatches (adapter-shutdown.ts:60) throws mid-loop, abandoning the remaining dispatches and the report. Omitting cancel gives the intended 'skipped' outcome.",
+    "quote": "throw new Error(\"cancel is not supported by the recorded adapter\");"
+  },
+  {
+    "id": "G3",
+    "file": "src/review/agents/recorded-adapter.ts",
+    "line": 146,
+    "severity": "minor",
+    "problem": "A predicate with a hidden side effect / output argument: isReplayableResult sorts entry.scopeIds in place, and scopesMatch (line 155) silently depends on that mutation having happened, which is why RecordedEntry.scopeIds alone is left non-readonly (line 105). The sort has nothing to do with replayability.",
+    "impact": "Temporal coupling between two unrelated functions: any caller that builds a RecordedEntry without passing it through isReplayableResult (it is exported) gets order-sensitive, wrong scope matching. Sorting once when the entry is built in loadRecordedResults would remove the coupling and let the field be readonly.",
+    "quote": "entry.scopeIds.sort();"
+  },
+  {
+    "id": "G4",
+    "file": "src/review/agents/recorded-adapter.ts",
+    "line": 187,
+    "severity": "minor",
+    "problem": "Comment asserts a code path that does not exist: it says an unrecorded task replays as empty 'so ... the summary counts it'. No code counts `recorded: false`; writeReplaySummary (line 210) summarises the recording file, not replay replies, and nothing reads metadata.recorded.",
+    "impact": "The next reader is told that misses are surfaced in a summary, which hides the silent-empty behaviour in G1 behind a false reassurance.",
+    "quote": "`recorded: false`, so the replayed plan still completes and the summary counts it."
+  },
+  {
+    "id": "G5",
+    "file": "src/review/agents/recorded-adapter.ts",
+    "line": 150,
+    "severity": "minor",
+    "problem": "Magic number: the 7-day replay window is written inline as `7 * 24 * 60 * 60 * 1000` in isReplayableResult (line 150) and again in writeReplaySummary's stale flag (line 232), with no named constant tying the two together.",
+    "impact": "The replay cut-off and the summary's 'stale' flag must agree; changing one site leaves the summary reporting entries as fresh that the adapter already drops (or vice versa).",
+    "quote": "return nowMs - recordedAt <= 7 * 24 * 60 * 60 * 1000;"
+  },
+  {
+    "id": "G6",
+    "file": "src/review/agents/recorded-adapter.ts",
+    "line": 53,
+    "severity": "minor",
+    "problem": "Two readers of the same recording format with divergent rules: loadRecordedResults casts the parsed array to ReviewAgentStoredResult[] unvalidated, while writeReplaySummary (lines 215-224) validates taskId/attempt/createdAt with contextual messages. A malformed entry in the loader fails as a bare TypeError (`[...stored.scopeIds]` on undefined, or `entry.taskId.length` at line 147) that names neither the recording path nor the entry; writeReplaySummary's own readFile/JSON.parse (lines 211-212) likewise throw without the path.",
+    "impact": "The operator replaying a bad recording gets 'undefined is not iterable' with no file or task id, and the two parsers will keep drifting; error-handling.mdc Rule 2 asks the message to name the operation and input.",
+    "quote": "return (parsed as ReviewAgentStoredResult[]).map((stored) => ({"
+  },
+  {
+    "id": "G7",
+    "file": "src/review/agents/recorded-adapter.ts",
+    "line": 210,
+    "severity": "minor",
+    "problem": "SRP: writeReplaySummary validates the recording, transforms it into summary rows, and persists a file to a derived path in one function; its doc comment needs 'and' twice to describe it, and the name only mentions the write.",
+    "impact": "The validation cannot be reused by loadRecordedResults (see G6) and the summary cannot be computed or tested without touching the filesystem.",
+    "quote": "/** Validates the recording, summarises each entry and writes `replay-summary.json` next to it. */"
+  },
+  {
+    "id": "G8",
+    "file": "src/review/agents/adapter-shutdown.ts",
+    "line": 49,
+    "severity": "minor",
+    "problem": "Single-letter name with a comment that exists only to explain it; the value is returned as `confirmed`, so the domain name already exists.",
+    "impact": "Readers must decode `n` via the comment; naming it `confirmed` makes the comment and the rename at the return site unnecessary.",
+    "quote": "let n = 0; // n is the number of dispatches whose adapter accepted the cancel"
+  },
+  {
+    "id": "G9",
+    "file": "src/review/agents/adapter-shutdown.ts",
+    "line": 40,
+    "severity": "minor",
+    "problem": "cancelPendingDispatches takes 4 positional parameters with no options object, the last two being adjacent plain strings (runId, reason); the adapter cancel request it builds is itself an object `{ runId, dispatchId, reason }`.",
+    "impact": "Call sites can swap runId and reason without a type error; an options object matching the cancel request shape would make calls self-describing.",
+    "quote": "runId: string,\n  reason: string,"
+  }
+]

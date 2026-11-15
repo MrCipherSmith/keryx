@@ -1,0 +1,3 @@
+[
+  {"tid":"D1","file":"src/commands/wiki-history-export.ts","line":127,"severity":"minor","problem":"Empty catch around realpath() when computing the path shown in the success message.","impact":"None: the value is display-only, it is initialised to the path the user typed before the try, and the comment states why any failure falls back to it.","quote":"// Display only: a path that cannot be resolved here","why_not_a_defect":"The catch guards purely cosmetic path resolution; the fallback (print the path as typed) is correct and the reason is documented. It hides no failure the caller needs; whether the write succeeded is decided elsewhere (the real swallow is T1 in writeExportFile)."}
+]

@@ -1,0 +1,65 @@
+[
+  {
+    "id": "G1",
+    "file": "src/security/detect/entropy.ts",
+    "line": 357,
+    "severity": "major",
+    "problem": "The SEC-F1 fix (plain-casing rule) is bypassed by a different chunking of the same secret. isWordSlug still accepts any run whose segments are each plainly cased, and a single character is always plainly cased; a Capitalised chunk and a lowercase letters+digits tag are too. Confirmed by running: looksSecretShaped('log-a-K-9-d-Q-2-r-N-7-z-V-b-T-4-p-X-e-Y-f-W-m-C-1-o-L-a-H-s-J-t-U-8') === false, and containsOutboundSecret is false for https://exfil.example/<that>, for 'Ak-9-Dq-2-Rn-7-Zvbt-4-Pxeyfwmc-1-Olahsjtu-8' and for 'ak9-dq2-rn7-zvbt4-pxeyfwmc1-olahsjtu8-log'. The new tests pin only the one reported chunking (aK-9-dQ-...), so they cannot detect this.",
+    "impact": "The finding this change claims to close as a blocker is still open: an injected instruction can make the model exfiltrate a full secret through web_fetch/web_search by splitting it at every case change (or lowercasing a base36/hex key into letter-run+digit-run tags) and adding one 3-letter word; the same string is also not redacted in tool output. findings.md now states a re-chunked secret 'now still refuses'.",
+    "quote": "if (isPlainCasedWord(segment)) {\n      if (segment.length >= 3) {\n        words += 1;\n      }\n      continue;"
+  },
+  {
+    "id": "G2",
+    "file": "src/security/detect/entropy.ts",
+    "line": 743,
+    "severity": "major",
+    "problem": "The new '/'-decomposition of a labelled candidate breaks redaction of standard-alphabet base64 secrets, which contain '/' about half the time at 40+ chars. Each piece is scored alone and only the FIRST qualifying piece is masked; the remaining pieces and any dotted tail are left in clear, and if no single piece qualifies nothing is masked. Confirmed: redactSensitiveText('secret: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY') returns the input unchanged; 'token: kd8Fj2LmQp9xZr4TvWn7Yb3Qa/Xc5Vb6Nm7Lk8Jh9Gf0Ds1Ap2Zq3.abcdef123456' becomes 'token: [REDACTED:entropy]/Xc5Vb6Nm7Lk8Jh9Gf0Ds1Ap2Zq3.abcdef123456'; '\"client_secret\": \"Zk9xT2pLd1/hQmNkRWZHaElq+S2xNbk9wUXJTdFV2\"' leaves the first piece exposed. Before this diff the whole head was scored and the whole span (including dotted tail) masked.",
+    "impact": "Regression in the scrubber that runs on every tool output: a labelled 'key: <base64>' / JSON '\"secret\": \"<base64>\"' value (AWS secret access key shape, any base64 of random bytes) reaches the model wholly or partly unredacted whenever it contains a '/'. No test covers a labelled value containing '/'.",
+    "quote": "if (head.includes(\"/\")) {\n      const piece = firstQualifyingSlashPiece(head);\n      if (piece === null) {\n        continue;\n      }"
+  },
+  {
+    "id": "G3",
+    "file": "src/security/detect/entropy.ts",
+    "line": 735,
+    "severity": "major",
+    "problem": "Requiring ADJACENT_LABEL for every generic match removes redaction for common labelled shapes where anything other than quote/':'/'='/whitespace sits between label and value. Confirmed unredacted after this change (all were labelled by the removed same-line check): 'Authorization: Basic dXNlcjpwYXNzd29yZDEyMzQ1Njc4OWFiY2RlZg==', 'secret: `kd8Fj2LmQp9xZr4TvWn7Yb3Qa`' (markdown backticks), 'token: <...>', 'password: [...]', 'password (prod): ...', 'token -> ...', 'the api key is ...', '| api key | ... |' (table cell). No other detector catches them (output is returned verbatim).",
+    "impact": "Recall regression on S-6's own promise (opaque tokens in tool output): a Basic auth header from curl -v / HTTP logs, a secret quoted in backticks in a README or issue, or a credentials table now reaches the model in clear. The change trades these for 6 false positives without a test or doc entry recording the lost shapes.",
+    "quote": "if (!ADJACENT_LABEL.test(before)) {\n      continue;\n    }"
+  },
+  {
+    "id": "G4",
+    "file": "src/security/detect/entropy.ts",
+    "line": 296,
+    "severity": "major",
+    "problem": "isPlainCasedWord rejects any camelCase/PascalCase/mixed-case word, so a slug containing one such word plus a digit is no longer a word slug and falls through to the entropy gate, which ordinary 20+-char slugs pass. The same rule was added to isSingleTransitionTag (OAuth2, React18, ES6 with 'ES' ok but 'JavaScript' not). Confirmed containsOutboundSecret === true (all were slugs before this diff, where any alphabetic segment counted): https://stackoverflow.com/questions/218384/NullPointerException-in-Java-8-streams, https://github.com/org/repo/wiki/Getting-Started-with-OAuth2, https://en.wikipedia.org/wiki/JavaScript_ES6_features, https://example.com/blog/Announcing-TypeScript-5-release-notes, https://learn.example.com/docs/PostgreSQL-16-release-notes, https://example.com/docs/Using-GitHub-Actions-2024, https://en.wikipedia.org/wiki/McDonnell_Douglas_F-15E_Strike_Eagle, https://github.com/org/repo/blob/main/tests/test_parseURL_handles_ipv6.py, .../src/MyComponent-v2-testHelpers.tsx.",
+    "impact": "web_fetch refuses ordinary Wikipedia/StackOverflow/GitHub/docs URLs with 'outbound secret-shaped content' and records an egress.outbound-secret incident; the same path segments are masked as [REDACTED:entropy] in tool output so the model cannot open the file or link. The 65-URL ordinary fixture has no mixed-case-word slug, so its '0 refused' claim does not cover this class.",
+    "quote": "return /^[a-z]+$/.test(letters) || /^[A-Z]+$/.test(letters) || /^[A-Z][a-z]*$/.test(letters);"
+  },
+  {
+    "id": "G5",
+    "file": "src/security/detect/entropy.ts",
+    "line": 214,
+    "severity": "major",
+    "problem": "With SENSITIVE_LABEL deleted, ADJACENT_LABEL is the only label test, and it has no trailing word boundary: the continuation [A-Za-z0-9_-]* lets any word that merely STARTS with a label word count ('author', 'authorId', 'authority', 'keyframe', 'keyword', 'tokenizer', 'apiVersion'). The removed SENSITIVE_LABEL required a boundary or an uppercase letter after the word, so these were not labels before. Combined with SEC-F2 (an allow-shape qualifies unconditionally once labelled), confirmed: '\"authorId\": \"550e8400-e29b-41d4-a716-446655440000\"' and '\"author_id\": \"<uuid>\"' become [REDACTED:entropy]; 'Author: <40-hex sha>' and 'keyframe: <sha>' are redacted; 'tokenizer_hash: sha256-...' is partly redacted.",
+    "impact": "Ordinary API/tool JSON carrying author ids (issue trackers, GitHub/GraphQL responses) or any '<label-prefixed word>: <uuid|sha|integrity>' line loses the public identifier the agent needs for its next call; the new '20 random UUIDs ... NONE redacted when unlabelled' tests use only 'request id:' and so do not exercise a label-prefixed ordinary word.",
+    "quote": "`(?:^|[^A-Za-z0-9])(?:${caseless(SENSITIVE_LABEL_WORDS)})[A-Za-z0-9_-]*[\"']?\\\\s*[:=]?\\\\s*[\"']?$`,"
+  },
+  {
+    "id": "G6",
+    "file": "src/security/redact.test.ts",
+    "line": 189,
+    "severity": "minor",
+    "problem": "The new test asserts that redactSensitiveText leaves 'request id: <crypto.randomUUID()>' byte-identical, but redactSensitiveText also runs the credit-card detector, which fires on some random UUIDs. Confirmed over 20000 random UUIDs: 2 were altered, e.g. 'request id: 87f90425-691d-4d15-9504-963323656513' -> 'request id: 87f90425-691d-4d15-[REDACTED:cc]'.",
+    "impact": "Nondeterministic test: roughly 1 in 500 CI runs fails on an unseeded random input for a reason unrelated to the entropy change; the failure will not reproduce on rerun.",
+    "quote": "expect(unlabelled).toBe(`request id: ${uuid}`);"
+  },
+  {
+    "id": "G7",
+    "file": "docs/requirements/keryx-audit-remediation/findings.md",
+    "line": 9,
+    "severity": "minor",
+    "problem": "The S-6/S-8 rows now record SEC-F1 as fixed ('a real secret re-chunked ... bypassed redaction entirely; fixed by requiring ... PLAINLY CASED', 'a re-chunked secret in a URL path/query/fragment now still refuses') and the sweep as '0 false positives', while the code still passes single-character/Capitalised/lowercase-tag chunkings (G1) and now refuses ordinary mixed-case slugs (G4). The recall lost to adjacency and '/'-decomposition (G2, G3) is not recorded as a limit, unlike the two limits the S-8 row does record.",
+    "impact": "The audit register is the source of truth for what is closed; a maintainer reading it will treat the segmented-secret exfiltration path as closed and will not know labelled base64-with-slash or 'Authorization: Basic' values are no longer scrubbed.",
+    "quote": "fixed by requiring a segment's letter run to be PLAINLY CASED (all-lowercase, all-uppercase, or Capitalised — never scrambled case) to count as a word or tag"
+  }
+]

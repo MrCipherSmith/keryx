@@ -1,0 +1,271 @@
+diff --git a/src/session/execution-plan-history.test.ts b/src/session/execution-plan-history.test.ts
+new file mode 100644
+index 000000000..c4d83a7c7
+--- /dev/null
++++ b/src/session/execution-plan-history.test.ts
+@@ -0,0 +1,69 @@
++import { expect, test } from "bun:test";
++import { mkdtemp, readFile, writeFile } from "node:fs/promises";
++import { tmpdir } from "node:os";
++import { join } from "node:path";
++import { renderExecutionPlanChangelog, setExecutionPlan, updateExecutionPlan, type ExecutionPlan } from "./execution-plan";
++import { diffExecutionPlans, ExecutionPlanHistory, planHistoryCursorPath, planHistoryPath, type PlanTransition } from "./execution-plan-history";
++
++async function bareDir(): Promise<string> {
++  return mkdtemp(join(tmpdir(), "keryx-plan-history-"));
++}
++
++test("diffExecutionPlans reports added, renamed, status, reordered and removed items", () => {
++  const previous: ExecutionPlan = { revision: 1, items: [
++    { id: "a", title: "Alpha", status: "pending" },
++    { id: "b", title: "Beta", status: "pending" },
++    { id: "c", title: "Gamma", status: "pending" },
++  ] };
++  const next: ExecutionPlan = { revision: 2, items: [
++    { id: "b", title: "Beta", status: "in_progress" },
++    { id: "a", title: "Alpha (narrowed)", status: "pending" },
++    { id: "d", title: "Delta", status: "proposed" },
++  ] };
++  const out: PlanTransition[] = [];
++  diffExecutionPlans(previous, next, out);
++  expect(out.map((change) => `${change.kind}:${change.itemId}`)).toEqual([
++    "status:b", "reordered:b", "renamed:a", "reordered:a", "added:d", "removed:c",
++  ]);
++});
++
++test("every plan write is journaled and the changelog renders it", async () => {
++  const dir = await bareDir();
++  await setExecutionPlan(dir, { expectedRevision: 0, items: [
++    { id: "one", title: "First", status: "pending" },
++    { id: "two", title: "Second", status: "pending" },
++  ] });
++  await updateExecutionPlan(dir, { expectedRevision: 1, itemId: "one", status: "in_progress" });
++
++  const history = new ExecutionPlanHistory(dir);
++  expect(history.entries.map((entry) => entry.revision)).toEqual([1, 2]);
++  expect(history.changesFor("one").map((change) => change.kind)).toEqual(["added", "status"]);
++
++  const changelog = renderExecutionPlanChangelog(dir, 1);
++  expect(changelog).toContain("revision 2");
++  expect(changelog).toContain("* one pending -> in_progress");
++  expect(changelog).not.toContain("+ two");
++});
++
++test("a write that changes nothing adds no journal line", async () => {
++  const dir = await bareDir();
++  const items = [{ id: "x", title: "Only", status: "pending" as const }];
++  await setExecutionPlan(dir, { expectedRevision: 0, items });
++  await setExecutionPlan(dir, { expectedRevision: 1, items });
++  const lines = (await readFile(planHistoryPath(dir), "utf8")).trim().split("\n");
++  expect(lines).toHaveLength(1);
++  expect(renderExecutionPlanChangelog(dir, 1)).toBeUndefined();
++});
++
++test("entries past the cursor are not reported as history", async () => {
++  const dir = await bareDir();
++  await setExecutionPlan(dir, { expectedRevision: 0, items: [{ id: "x", title: "Only", status: "pending" }] });
++  await writeFile(planHistoryCursorPath(dir), `${JSON.stringify({ revision: 0 })}\n`);
++  expect(new ExecutionPlanHistory(dir).entries).toEqual([]);
++});
++
++test("a corrupt cursor fails with the file it came from", async () => {
++  const dir = await bareDir();
++  await writeFile(planHistoryCursorPath(dir), "{not json");
++  expect(() => new ExecutionPlanHistory(dir)).toThrow(planHistoryCursorPath(dir));
++});
+diff --git a/src/session/execution-plan-history.ts b/src/session/execution-plan-history.ts
+new file mode 100644
+index 000000000..e06decd92
+--- /dev/null
++++ b/src/session/execution-plan-history.ts
+@@ -0,0 +1,148 @@
++import { readFileSync } from "node:fs";
++import { appendFile } from "node:fs/promises";
++import path from "node:path";
++import { isNotFound, writeFileAtomic } from "../lib/fs";
++import type { ExecutionPlan, ExecutionPlanStatus } from "./execution-plan";
++
++/**
++ * One observable change between two plan revisions. The sidebar only ever shows
++ * the current plan; this is what lets the operator ask "what did the agent change
++ * since I last looked" without diffing `plan.json` by hand.
++ */
++export type PlanTransition =
++  | { kind: "added"; itemId: string; title: string; status: ExecutionPlanStatus }
++  | { kind: "removed"; itemId: string; title: string }
++  | { kind: "renamed"; itemId: string; from: string; to: string }
++  | { kind: "status"; itemId: string; from: ExecutionPlanStatus; to: ExecutionPlanStatus }
++  | { kind: "reordered"; itemId: string; from: number; to: number };
++
++export type PlanHistoryEntry = { revision: number; at: string; transitions: PlanTransition[] };
++
++/** Append-only journal of plan revisions, a sibling of `plan.json`. */
++export function planHistoryPath(dir: string): string {
++  return path.join(dir, "plan-history.jsonl");
++}
++
++/**
++ * The commit marker for the journal: readers trust only entries whose revision is
++ * at or below it, so a line appended by a writer that died before updating the
++ * cursor is never shown as history.
++ */
++export function planHistoryCursorPath(dir: string): string {
++  return path.join(dir, "plan-history.cursor.json");
++}
++
++const message = (error: unknown): string => error instanceof Error ? error.message : String(error);
++
++export function diffExecutionPlans(previous: ExecutionPlan | undefined, next: ExecutionPlan, out: PlanTransition[]): void {
++  const before = new Map((previous?.items ?? []).map((item, index) => [item.id, { item, index }]));
++  const after = new Set(next.items.map((item) => item.id));
++  next.items.forEach((item, index) => {
++    const prior = before.get(item.id);
++    if (prior === undefined) {
++      out.push({ kind: "added", itemId: item.id, title: item.title, status: item.status });
++      return;
++    }
++    if (prior.item.title !== item.title) out.push({ kind: "renamed", itemId: item.id, from: prior.item.title, to: item.title });
++    if (prior.item.status !== item.status) out.push({ kind: "status", itemId: item.id, from: prior.item.status, to: item.status });
++    if (prior.index !== index) out.push({ kind: "reordered", itemId: item.id, from: prior.index, to: index });
++  });
++  for (const [id, { item }] of before) {
++    if (!after.has(id)) out.push({ kind: "removed", itemId: id, title: item.title });
++  }
++}
++
++/**
++ * Journal the transitions from `previous` to `next`. Called under the plan lock
++ * right after `plan.json` is written, so entries land in revision order.
++ */
++export async function recordPlanRevision(
++  dir: string,
++  previous: ExecutionPlan | undefined,
++  next: ExecutionPlan,
++): Promise<PlanHistoryEntry | undefined> {
++  const transitions: PlanTransition[] = [];
++  diffExecutionPlans(previous, next, transitions);
++  if (transitions.length === 0) return undefined;
++  const entry: PlanHistoryEntry = { revision: next.revision, at: new Date().toISOString(), transitions };
++  await appendFile(planHistoryPath(dir), `${JSON.stringify(entry)}\n`, { mode: 0o600 });
++  try {
++    await writeFileAtomic(planHistoryCursorPath(dir), `${JSON.stringify({ revision: entry.revision })}\n`, { mode: 0o600 });
++  } catch (error) {
++    process.stderr.write(`plan history: cursor update failed: ${message(error)}\n`);
++  }
++  return entry;
++}
++
++function readCursor(dir: string): number {
++  let raw: string;
++  try {
++    raw = readFileSync(planHistoryCursorPath(dir), "utf8");
++  } catch (error) {
++    if (isNotFound(error)) return 0;
++    throw error;
++  }
++  try {
++    const parsed = JSON.parse(raw) as { revision?: unknown };
++    return typeof parsed.revision === "number" ? parsed.revision : 0;
++  } catch (error) {
++    // A torn cursor cannot be repaired here: guessing a revision would either hide
++    // committed entries or surface uncommitted ones. Fail with the path so the
++    // operator knows which file to remove.
++    throw new Error(`plan history cursor ${planHistoryCursorPath(dir)} is not valid JSON`, { cause: error });
++  }
++}
++
++function parseEntry(line: string): PlanHistoryEntry {
++  const parsed = JSON.parse(line) as Partial<PlanHistoryEntry>;
++  if (typeof parsed.revision !== "number" || typeof parsed.at !== "string" || !Array.isArray(parsed.transitions)) {
++    throw new Error("Invalid entry");
++  }
++  return parsed as PlanHistoryEntry;
++}
++
++export function describeChange(change: PlanTransition): string {
++  if (change.kind === "added") {
++    return `+ ${change.itemId} "${change.title}" (${change.status})`;
++  } else if (change.kind === "removed") {
++    return `- ${change.itemId} "${change.title}"`;
++  } else if (change.kind === "renamed") {
++    return `~ ${change.itemId} renamed "${change.from}" -> "${change.to}"`;
++  } else if (change.kind === "status") {
++    return `* ${change.itemId} ${change.from} -> ${change.to}`;
++  } else {
++    return `^ ${change.itemId} moved ${change.from + 1} -> ${change.to + 1}`;
++  }
++}
++
++/** Committed plan history for one session dir. */
++export class ExecutionPlanHistory {
++  readonly entries: PlanHistoryEntry[];
++
++  constructor(readonly dir: string) {
++    const committed = readCursor(dir);
++    let raw = "";
++    try {
++      raw = readFileSync(planHistoryPath(dir), "utf8");
++    } catch (error) {
++      if (!isNotFound(error)) throw error;
++    }
++    this.entries = raw
++      .split("\n")
++      .filter((line) => line.trim().length > 0)
++      .map(parseEntry)
++      .filter((entry) => entry.revision <= committed);
++  }
++
++  get latestRevision(): number {
++    return this.entries.at(-1)?.revision ?? 0;
++  }
++
++  since(revision: number): PlanHistoryEntry[] {
++    return this.entries.filter((entry) => entry.revision > revision);
++  }
++
++  changesFor(itemId: string): PlanTransition[] {
++    return this.entries.flatMap((entry) => entry.transitions.filter((change) => change.itemId === itemId));
++  }
++}
+diff --git a/src/session/execution-plan.ts b/src/session/execution-plan.ts
+index fe11ddf27..4709981ad 100644
+--- a/src/session/execution-plan.ts
++++ b/src/session/execution-plan.ts
+@@ -2,6 +2,7 @@ import { mkdir, readFile } from "node:fs/promises";
+ import path from "node:path";
+ import { isNotFound, withFileLock, writeFileAtomic } from "../lib/fs";
+ import { readSlate } from "./slate";
++import { describeChange, ExecutionPlanHistory, recordPlanRevision } from "./execution-plan-history";
+ 
+ /**
+  * `proposed` is the status this vocabulary was missing (report item 1): a plan
+@@ -174,6 +175,7 @@ async function writePlan(
+     if (expectedRevision !== actual) throw new ExecutionPlanConflictError(expectedRevision, actual);
+     result = build(current);
+     await writeFileAtomic(executionPlanPath(dir), `${JSON.stringify(result, null, 2)}\n`);
++    await recordPlanRevision(dir, current, result);
+   });
+   const plan = clonePlan(result as ExecutionPlan);
+   notify(dir, plan);
+@@ -266,3 +268,21 @@ export function renderExecutionPlanSnapshot(plan: ExecutionPlan | undefined, max
+   if (finished.length > 0) rows.push(`- ${finished.length} completed/skipped item(s) (folded)`);
+   return `Current execution plan (revision ${plan.revision}):\n${rows.join("\n")}`;
+ }
++
++/**
++ * What changed in the plan after `sinceRevision`, newest revision last, for the
++ * operator catching up on a session. `undefined` when nothing was recorded since.
++ */
++export function renderExecutionPlanChangelog(dir: string, sinceRevision = 0, maxEntries = 10): string | undefined {
++  const history = new ExecutionPlanHistory(dir);
++  const entries = history.since(sinceRevision);
++  if (entries.length === 0) return undefined;
++  const shown = entries.slice(-Math.max(1, maxEntries));
++  const blocks = shown.map((entry) => [
++    `revision ${entry.revision} (${entry.at})`,
++    ...entry.transitions.map((change) => `  ${describeChange(change)}`),
++  ].join("\n"));
++  const skipped = entries.length - shown.length;
++  const header = `Execution plan changes since revision ${sinceRevision} (latest ${history.latestRevision}):`;
++  return [header, ...(skipped > 0 ? [`… ${skipped} earlier revision(s) omitted`] : []), ...blocks].join("\n");
++}

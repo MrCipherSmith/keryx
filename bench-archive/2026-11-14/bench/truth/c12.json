@@ -1,0 +1,29 @@
+[
+ {
+  "tid": "T1",
+  "file": "src/tui/tui-shell.ts",
+  "line": 9617,
+  "severity": "major",
+  "problem": "A Side-1 worker from the outgoing session can paint its result in the destination after a successful switch.",
+  "impact": "The destination transcript and worker status can contain stale data from an earlier session, violating AC2.",
+  "quote": "await runAgentTurn(sideIo, sideDeps, sideHistory, prompt);"
+ },
+ {
+  "tid": "T2",
+  "file": "src/tui/tui-shell.ts",
+  "line": 8247,
+  "severity": "major",
+  "problem": "A foreground turn can start during asynchronous outgoing Slate preservation. Interactive resume now clears the busy flag even though the displaced foreground operation still owns its active token.",
+  "impact": "Before the old token settles, a destination prompt can bypass busy dispatch and throw from foregroundOperation.begin. The prompt that started in the preservation window is also canceled by the successful adoption.",
+  "quote": "resetSessionSurface();\n      applyOpened(opened);"
+ },
+ {
+  "tid": "T3",
+  "file": "src/tui/tui-shell.ts",
+  "line": 1820,
+  "severity": "major",
+  "problem": "Dismissing a busy recipient picker overwrites text typed while the decision journal opens the picker.",
+  "impact": "A second piece of unsent text disappears on Escape although no recipient was selected.",
+  "quote": "chrome.input.value = draft;"
+ }
+]

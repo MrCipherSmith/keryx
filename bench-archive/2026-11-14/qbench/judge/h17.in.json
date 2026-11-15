@@ -1,0 +1,163 @@
+{
+ "truth": [
+  {
+   "tid": "T1",
+   "file": "src/review/agents/recorded-adapter.ts",
+   "line": 114,
+   "severity": "major",
+   "problem": "The recorded adapter implements the optional ReviewAgentAdapter.cancel by throwing 'not supported' instead of omitting it (it already declares cancellation: false). cancelPendingDispatches in adapter-shutdown.ts calls adapter.cancel through the base interface (line 54) whenever cancel is defined, with no try/catch.",
+   "impact": "Liskov violation: shutting down a run that has a pending recorded dispatch rejects mid-loop, so every later pending dispatch on other adapters is never cancelled and the caller gets an error instead of a shutdown report.",
+   "quote": "throw new Error(\"cancel is not supported by the recorded adapter\");"
+  },
+  {
+   "tid": "T2",
+   "file": "src/review/agents/recorded-adapter.ts",
+   "line": 83,
+   "severity": "major",
+   "problem": "loadRecordedResults returns null to signal a missing, unreadable or non-array recording file; the adapter's entries() coalesces that null to an empty list as if the recording were valid but empty.",
+   "impact": "With a bad recording path or corrupt file, every dispatch falls through to the 'not recorded' branch and replays as { findings: [] }, so the replayed review completes as a clean result with zero findings instead of failing.",
+   "quote": "(await loadRecordedResults(options.recordingPath)) ?? []"
+  },
+  {
+   "tid": "T3",
+   "file": "src/review/agents/recorded-adapter.ts",
+   "line": 129,
+   "severity": "minor",
+   "problem": "writeReplaySummary reads the file, validates each entry, transforms entries into summary rows (age, staleness, sorting) and writes replay-summary.json all inline in one function.",
+   "impact": "Two change drivers (validation/summary rules vs. file layout/IO) in one function; neither the validation nor the summary transform can be tested or reused without the filesystem, and it duplicates the loader's parsing.",
+   "quote": "export async function writeReplaySummary(recordingPath: string"
+  },
+  {
+   "tid": "T4",
+   "file": "src/review/agents/recorded-adapter.ts",
+   "line": 69,
+   "severity": "minor",
+   "problem": "The recording staleness window 7 * 24 * 60 * 60 * 1000 (seven days) is a business rule written as a bare expression in isReplayableResult and again in writeReplaySummary (line 151), with no named constant.",
+   "impact": "The replay filter and the summary's stale flag can drift apart when one copy is changed; the meaning of the number is not named.",
+   "quote": "nowMs - recordedAt <= 7 * 24 * 60 * 60 * 1000"
+  },
+  {
+   "tid": "T5",
+   "file": "src/review/agents/recorded-adapter.ts",
+   "line": 65,
+   "severity": "minor",
+   "problem": "isReplayableResult reads as a pure predicate but sorts entry.scopeIds in place before answering; scopesMatch relies on that hidden side effect.",
+   "impact": "Misleading name: callers do not expect a predicate to mutate its argument, and scopesMatch silently breaks if anyone calls it on an entry that did not pass through isReplayableResult.",
+   "quote": "entry.scopeIds.sort();"
+  },
+  {
+   "tid": "T6",
+   "file": "src/review/agents/adapter-shutdown.ts",
+   "line": 43,
+   "severity": "minor",
+   "problem": "A comment explains what the one-letter variable n means instead of the variable being named (e.g. confirmedCount).",
+   "impact": "The comment compensates for a bad name and the name is used again far below (n += 1, confirmed: n) where the comment is not visible.",
+   "quote": "let n = 0; // n is the number of dispatches whose adapter accepted the cancel"
+  }
+ ],
+ "decoys": [
+  {
+   "tid": "D1",
+   "file": "src/review/agents/recorded-adapter.ts",
+   "line": 104,
+   "severity": "minor",
+   "problem": "request.signal.throwIfAborted() appears twice in execute (lines 102 and 104), which can look like a duplicated guard.",
+   "impact": "None.",
+   "quote": "request.signal.throwIfAborted();",
+   "why_not_a_defect": "Idiomatic abort checking: once before the await and once after it, because the signal can fire while the recording is being read. The sibling native adapter does the same (src/commands/review-agents-runtime/native-adapter.ts throwIfAborted at lines 133 and 199, before and after its awaits).",
+   "did": "D1"
+  }
+ ],
+ "candidate": [
+  {
+   "id": "G1",
+   "file": "src/review/agents/recorded-adapter.ts",
+   "line": 41,
+   "severity": "major",
+   "problem": "loadRecordedResults swallows every failure. A missing file, an unreadable file (permissions) and malformed JSON are all caught with an empty `catch` and turned into `null`. The adapter then uses `?? []` (line 83), so a bad recordingPath silently becomes an empty recording. Every dispatch then replays as `{ findings: [] }` with `recorded: false` (lines 108-109). The sibling writeReplaySummary (lines 130-132) lets the same failures throw, so the two readers of one file disagree on whether a bad file is an error.",
+   "impact": "Trigger: a replay run with a typo in recordingPath or a truncated recording. Outcome: the replay completes 'successfully' with zero findings for every task, and nothing reports why. Whoever runs a dry run or plan-eval replay gets a false clean result instead of an error.",
+   "quote": "  } catch {\n    return null;\n  }"
+  },
+  {
+   "id": "G2",
+   "file": "src/review/agents/recorded-adapter.ts",
+   "line": 64,
+   "severity": "minor",
+   "problem": "isReplayableResult is named and documented as a predicate, but its first statement mutates the argument (`entry.scopeIds.sort()`). This is an output argument hidden inside a boolean query. scopesMatch (line 74) silently depends on the side effect: it compares a sorted request against entry.scopeIds by index. That only works because entries() happens to call the predicate on every entry first. To allow this, RecordedEntry.scopeIds (line 24) is the one non-readonly field of the interface.",
+   "impact": "This is temporal coupling. Anyone who calls scopesMatch on an entry that skipped the predicate, or who reorders or removes that call in entries(), gets a scope mismatch: matching recordings replay as `recorded: false`. Nothing in either function's name or doc warns about it.",
+   "quote": "export function isReplayableResult(entry: RecordedEntry, nowMs: number): boolean {\n  entry.scopeIds.sort();"
+  },
+  {
+   "id": "G3",
+   "file": "src/review/agents/recorded-adapter.ts",
+   "line": 113,
+   "severity": "minor",
+   "problem": "This is an LSP / contract inconsistency. The adapter declares `cancellation: false` (line 97) but still implements the optional `cancel`, and that implementation always throws 'not supported'. ReviewAgentAdapter.cancel is optional (types.ts:156), so the idiomatic way to say 'no cancellation' is to leave it out. The new cancelPendingDispatches (adapter-shutdown.ts:50-60) keys on `adapter.cancel === undefined`, not on the capability. So it calls this method, and with no per-dispatch catch the rejection aborts the whole loop. Remaining dispatches are not cancelled and no report is returned. By contrast, the sibling cancel loop in controller.ts:421-429 does catch adapter failures. The controller currently refuses to admit adapters with `cancellation: false` (controller.ts:239), so reaching this today needs assignments that did not come through the controller. That is why it is minor.",
+   "impact": "There are two signals for one capability, and they contradict each other. Shutdown code that trusts method presence gets a throwing stub, which turns a best-effort stop of N dispatches into a rejected promise.",
+   "quote": "    async cancel() {\n      throw new Error(\"cancel is not supported by the recorded adapter\");\n    },"
+  },
+  {
+   "id": "G4",
+   "file": "src/review/agents/recorded-adapter.ts",
+   "line": 106,
+   "severity": "minor",
+   "problem": "The comment describes a narrower rule than the code and claims a code path that does not exist. The branch also fires when an entry exists but its entity or scopes differ, and when an entry was filtered out as older than 7 days. 'A task the recorded run never reached' covers none of those cases. The comment also says 'the summary counts it', but writeReplaySummary builds rows only from the recording file and never sees `metadata.recorded`.",
+   "impact": "A reader debugging an unexpected `recorded: false` is told the recorded run never reached the task, so they do not suspect an entity or scope mismatch or staleness. They may also expect replay-summary.json to show the miss, and it never does.",
+   "quote": "// A task the recorded run never reached replays as an empty reply flagged\n      // `recorded: false`, so the replayed plan still completes and the summary counts it."
+  },
+  {
+   "id": "G5",
+   "file": "src/review/agents/recorded-adapter.ts",
+   "line": 69,
+   "severity": "minor",
+   "problem": "The 7-day staleness window is a magic number written twice in the same file, with no named constant. One site uses `<=` to mean replayable (line 69) and the other uses `>` to mean stale (line 151). The two copies are kept in sync only by eye.",
+   "impact": "Whoever changes the replay window has to find both literals. If only one is changed, replay-summary.json reports entries as fresh or stale differently from what the adapter actually replays.",
+   "quote": "return nowMs - recordedAt <= 7 * 24 * 60 * 60 * 1000;"
+  },
+  {
+   "id": "G6",
+   "file": "src/review/agents/recorded-adapter.ts",
+   "line": 53,
+   "severity": "minor",
+   "problem": "There are two parsers for the same recording format with different rules. loadRecordedResults casts the parsed array with `as ReviewAgentStoredResult[]` and does no field checks. writeReplaySummary (lines 134-143) validates taskId, attempt and createdAt, and defaults entity and scopeIds. Neither one reuses the other's element validation.",
+   "impact": "The validation rule for a recording entry lives in one function but is needed by both. A malformed entry is rejected by the summary but accepted or crashed on by the adapter, and every change to the format has to be made twice.",
+   "quote": "return (parsed as ReviewAgentStoredResult[]).map((stored) => ({"
+  },
+  {
+   "id": "G7",
+   "file": "src/review/agents/adapter-shutdown.ts",
+   "line": 49,
+   "severity": "minor",
+   "problem": "The comment exists only to explain a single-letter name. `n` is not a loop counter; it is the count of confirmed cancels, which the code returns as `confirmed`.",
+   "impact": "The reader has to read the comment and the return statement to learn what `n` means. A name like `confirmedCount` would make the comment unnecessary.",
+   "quote": "let n = 0; // n is the number of dispatches whose adapter accepted the cancel"
+  },
+  {
+   "id": "G8",
+   "file": "src/review/agents/adapter-shutdown.ts",
+   "line": 24,
+   "severity": "minor",
+   "problem": "RUNNING_STATUSES is a second hand-maintained status taxonomy. It is the complement of controller.ts's `TERMINAL` set (controller.ts:13), but it is written out separately instead of being derived from it or shared with it.",
+   "impact": "Adding a new ReviewAgentAssignmentStatus means updating two independent sets in two files. If one is missed, shutdown either skips live dispatches or tries to cancel finished ones.",
+   "quote": "const RUNNING_STATUSES: ReadonlySet<ReviewAgentAssignmentRecord[\"status\"]> = new Set(["
+  },
+  {
+   "id": "G9",
+   "file": "src/review/agents/adapter-shutdown.ts",
+   "line": 40,
+   "severity": "minor",
+   "problem": "cancelPendingDispatches takes four positional parameters, and the last two are adjacent plain strings (`runId`, `reason`). The adapter.cancel call it forwards to already takes a named object `{ runId, dispatchId, reason }`.",
+   "impact": "Swapping runId and reason at a call site type-checks. Callers have to read the signature to decode each call, and a named options object would prevent the swap.",
+   "quote": "  runId: string,\n  reason: string,\n): Promise<AdapterShutdownReport> {"
+  },
+  {
+   "id": "G10",
+   "file": "src/review/agents/recorded-adapter.ts",
+   "line": 129,
+   "severity": "minor",
+   "problem": "SRP: writeReplaySummary does four things in one 30-line body. It reads and parses the file, validates each entry, computes the summary rows, and decides the output path and writes it. It also mixes levels of abstraction (the file-path arithmetic sits beside per-field type checks).",
+   "impact": "The validation and summarising cannot be tested or reused (for example by loadRecordedResults, see G6) without touching the filesystem, and any change to one concern means editing this one function.",
+   "quote": "export async function writeReplaySummary(recordingPath: string, nowMs: number = Date.now()): Promise<string> {"
+  }
+ ]
+}

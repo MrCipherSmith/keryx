@@ -1,0 +1,38 @@
+[
+ {
+  "tid": "T1",
+  "file": "src/security/detect/entropy.ts",
+  "line": 235,
+  "severity": "blocker",
+  "problem": "isWordSlug exempts a hyphen/underscore-segmented run from the entropy/hex-blob gate whenever every segment is pure-alpha, pure-digit, or a single-transition tag, with no check on the RECONSTITUTED value's own entropy. Re-segmenting any real secret into single-character-class chunks joined by '-' defeats looksSecretShaped/secretShapedCandidatesIn entirely.",
+  "impact": "Complete bypass of S-6 (redactSensitiveText) and S-8 (containsOutboundSecret) for a re-segmented secret, and of S-9 (displayUrl masking). Reproduced: a real 32-char alphanumeric secret, re-segmented into letter-run/digit-run chunks ('aK-9-dQ-2-rN-7-zVbT-4-pXeYfWmC-1-oLaHsJtU-8'), passes looksSecretShaped as false, containsOutboundSecret as false when placed in a URL path, and redactSensitiveText leaves it byte-for-byte unredacted even when explicitly labelled 'leaked api_key:'. A simpler variant using real dictionary words on either side of the secret ('log-<secret>-id') reproduces the same bypass.",
+  "quote": "function isWordSlug(value: string): boolean {\n  const segments = value.split(/[-_]/);\n  if (segments.length < 3) {\n    return false;\n  }"
+ },
+ {
+  "tid": "T2",
+  "file": "src/security/detect/entropy.ts",
+  "line": 173,
+  "severity": "major",
+  "problem": "The generic (non-URL) per-line scan's TOKEN character class still includes '/' and '=', so a relative path, a code assignment, or a '/'-joined list is swept as one compound run; SENSITIVE_LABEL's 40-char lookback is same-line PROXIMITY, not true adjacency, so any ordinary occurrence of a label word earlier in the line/comment triggers a match on unrelated text.",
+  "impact": "Silent corruption of tool-output/transcript content, the same impact class F-LOG-F1 was blocker for. Real-file sweep of this repository: git log -p -30 --stat (30 commits) produced 5 false positives (a relative markdown link path near the words 'Credential Masking'; a GitHub noreply-email local part near the word 'key'; a Python 'from_attributes=True' assignment near the word 'API'; a 'passlib/bcrypt/argon2' library-name comment near the word 'password'), against 0 in bun.lock and 0 in CHANGELOG.md.",
+  "quote": "const TOKEN = /[A-Za-z0-9+/=_-]{20,}(?:\\.[A-Za-z0-9+/=_-]{6,})*/g;"
+ },
+ {
+  "tid": "T3",
+  "file": "src/security/detect/entropy.ts",
+  "line": 231,
+  "severity": "major",
+  "problem": "isSingleTransitionTag only forgives a segment that changes character class at most once. Medium's and GitHub Gist's common '<slug>-<hex id>' URL convention interleaves letters and digits many times in the trailing id, which fails isWordSlug entirely (one bad segment poisons the whole slug check) and falls through to the entropy gate, qualifying as secret-shaped.",
+  "impact": "web_fetch refuses an entirely ordinary, public, non-credential URL, contradicting AC4's guarantee. Reproduced against a URL already present in this repository's own docs: docs/requirements/keryx-wiki-graph-next/README.md links a Medium article whose trailing hex id triggers the refusal; a GitHub Gist URL reproduces the same failure.",
+  "quote": "function isSingleTransitionTag(segment: string): boolean {\n  return /^[A-Za-z]+[0-9]+$/.test(segment) || /^[0-9]+[A-Za-z]+$/.test(segment);\n}"
+ },
+ {
+  "tid": "T4",
+  "file": "src/security/detect/entropy.ts",
+  "line": 274,
+  "severity": "major",
+  "problem": "Continuation of round-1 F-SEC-F2. The fixed label-overrides-allow-shape logic is correct, but bareShapeQualifies's own entropy floor (3.6 bits, no hex-blob match possible for a hyphenated UUID) runs BEFORE the label is ever consulted, so whether a labelled UUID is redacted depends entirely on that UUID's own digit repetition, independent of the label.",
+  "impact": "Non-deterministic protection for UUID-shaped credentials even when explicitly labelled as leaked. Sample: 6 of 8 UUIDs redacted when labelled 'leaked credential:'; 2 were not, including the canonical RFC 4122 example UUID (550e8400-e29b-41d4-a716-446655440000, entropy 3.39) that appears throughout real documentation and example code. The existing regression test for this exact case uses a UUID (entropy 4.06) that happens to clear the floor, so it passes without exercising the boundary.",
+  "quote": "function bareShapeQualifies(head: string): { qualifies: boolean; entropy: number } {"
+ }
+]

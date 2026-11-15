@@ -1,0 +1,92 @@
+[
+  {
+    "id": "G1",
+    "file": "src/harness/provider-catalog-snapshot.ts",
+    "line": 74,
+    "severity": "major",
+    "problem": "exportProviderCatalogSnapshot swallows a failed snapshot write with an empty, uncommented catch, then returns `{ ok: true, path: destPath, summary }`. `ok` is hard-coded true, so it cannot report the failure at all. This breaks error-handling.mdc Rule 3 and Iron Law 1. The docstring says the function exists so that a caller never wrongly believes it has a snapshot, but that is exactly what happens here.",
+    "impact": "Trigger: the destination is not writable (read-only config dir, disk full, a missing parent dir under an air-gapped CI layout). Outcome: syncPinnedSnapshot(dir, true), called from loadOrRefreshWith in provider-catalog.ts:270, returns a summary that reads as success. No pinned file exists, so the offline fallback this feature is for silently never works. Any future CLI caller printing `result.ok`/`result.path` would tell the operator a snapshot was written when none was.",
+    "quote": "} catch (e) {}\n  ...\n  return { ok: true, path: destPath, summary };"
+  },
+  {
+    "id": "G2",
+    "file": "src/harness/provider-catalog.ts",
+    "line": 270,
+    "severity": "major",
+    "problem": "The pin side-path can throw out of loadOrRefreshWith, which is the module's best-effort cache policy (every other cache write here swallows its failures). exportProviderCatalogSnapshot throws when the cache is absent. That happens right after saveProviderCatalogCache, which itself silently gives up on a 250 ms lock timeout. importProviderCatalogSnapshot throws on a corrupt or wrong-version pinned file (snapshot.ts:89-109). Neither call is guarded.",
+    "impact": "Trigger: lock contention makes saveProviderCatalogCache drop the write (line 270), or a hand-edited or old-version pinned file is present when a refresh comes back empty (line 274). Outcome: the provider catalog load rejects. In the first case a valid `fresh` catalog is thrown away, and in the second the caller gets an exception instead of the empty catalog it got before. So the courtesy pin feature can break the /routing picker and `providers status`.",
+    "quote": "if (deps.pinSnapshot === true) await syncPinnedSnapshot(deps.dir, true);"
+  },
+  {
+    "id": "G3",
+    "file": "src/harness/provider-catalog-snapshot.ts",
+    "line": 81,
+    "severity": "minor",
+    "problem": "The import docstring describes merge behaviour that has no code path: \"An entry already in the cache that is newer than the snapshot's copy is kept; only older or missing entries are replaced.\" The loop at line 129 calls updateProviderCatalogEntry unconditionally, and that call overwrites `[entry.name]` with no fetchedAt comparison (provider-catalog-cache.ts:234).",
+    "impact": "The next reader or caller relies on the doc and expects a stale pinned snapshot not to clobber fresher live entries. It does, so the docstring misleads whoever maintains or calls the import.",
+    "quote": "An entry already in the cache that is newer than the snapshot's copy\n * is kept; only older or missing entries are replaced."
+  },
+  {
+    "id": "G4",
+    "file": "src/harness/provider-catalog-snapshot.ts",
+    "line": 95,
+    "severity": "minor",
+    "problem": "The JSON parse catch logs to stderr and rethrows the same raw SyntaxError. Every sibling failure in the function instead throws a contextual `provider catalog snapshot: ...` Error. This breaks error-handling.mdc Rule 5: log and rethrow in one catch, with no contextual wrapper and `cause` on the rethrow.",
+    "impact": "Callers that report the error print the message twice (stderr line plus the caller's own report), and the thrown error does not say which file or operation failed. A library function writing directly to process.stderr also pollutes TUI output.",
+    "quote": "process.stderr.write(`provider catalog snapshot: ${srcPath} is not valid JSON\\n`);\n    throw e;"
+  },
+  {
+    "id": "G5",
+    "file": "src/harness/provider-catalog-snapshot.ts",
+    "line": 111,
+    "severity": "minor",
+    "problem": "A snapshot whose `catalog.providers` is missing or not an object is silently read as an empty provider set instead of being refused like the other shape errors on lines 99-109. This is a disguised failure (error-handling.mdc Rule 1): `{}` is indistinguishable from a valid empty snapshot. With `prune: true`, lines 133-137 then remove every cached entry.",
+    "impact": "No caller in the change passes `prune` yet, so this is minor. But a malformed snapshot imported with prune would wipe the operator's catalog cache while reporting `0 provider(s), 0 live` as a normal result.",
+    "quote": "const providerRecord = typeof rawProviders === \"object\" && rawProviders !== null ? (rawProviders as Record<string, unknown>) : {};"
+  },
+  {
+    "id": "G6",
+    "file": "src/harness/provider-catalog-snapshot.ts",
+    "line": 129,
+    "severity": "minor",
+    "problem": "`imported` and `accepted` are filled after `await updateProviderCatalogEntry(...)`, but that function is best-effort and swallows lock or write failures (provider-catalog-cache.ts:240). A provider whose write was dropped is still reported as imported (error-handling.mdc Rule 1, failure returned as success).",
+    "impact": "The `imported` list and the summary overstate what reached the cache. syncPinnedSnapshot returns that summary, and loadOrRefreshWith treats it as a successful restore.",
+    "quote": "await updateProviderCatalogEntry(entry, opts.dir);\n    accepted[key] = entry;\n    imported.push(key);"
+  },
+  {
+    "id": "G7",
+    "file": "src/harness/provider-catalog-snapshot.ts",
+    "line": 150,
+    "severity": "minor",
+    "problem": "Boolean flag parameter `toPinned` selects between two unrelated behaviours: export cache to pinned, or import pinned into cache. Call sites read `syncPinnedSnapshot(deps.dir, true)` and `syncPinnedSnapshot(deps.dir, false)` (provider-catalog.ts:270, 274). solid-principles.mdc flags any such flag. The two branches also have different failure contracts: one throws, the other returns `undefined` when the file is absent.",
+    "impact": "A reader of loadOrRefreshWith must open the other file to learn what `true`/`false` mean. Two functions (pinCatalogSnapshot / restorePinnedSnapshot) would read correctly at the call site.",
+    "quote": "export async function syncPinnedSnapshot(dir: string | undefined, toPinned: boolean): Promise<string | undefined> {"
+  },
+  {
+    "id": "G8",
+    "file": "src/harness/provider-catalog-snapshot.ts",
+    "line": 75,
+    "severity": "minor",
+    "problem": "The provider summary computation (sorted names, count of status \"ok\", `${n} provider(s), ${live} live`) is copy-pasted three times in this change: provider-catalog-snapshot.ts:75-77, provider-catalog-snapshot.ts:139-141 and provider-catalog.ts:363-365. formatCatalogSummaryLine was added in the same change and could own it.",
+    "impact": "The three copies must change together, for example to change what counts as live or the wording. The next editor will update one and leave the others.",
+    "quote": "const liveCount = names.filter((name) => catalog.providers[name]?.status === \"ok\").length;\n  const summary = `${names.length} provider(s), ${liveCount} live`;"
+  },
+  {
+    "id": "G9",
+    "file": "src/harness/provider-catalog-snapshot.ts",
+    "line": 86,
+    "severity": "minor",
+    "problem": "importProviderCatalogSnapshot is about 57 lines and does four separable jobs at different levels: file read and JSON/shape/version validation (lines 88-111), per-entry sanitize and age filtering (116-128), cache persistence plus pruning (129-137), and summary formatting (139-141).",
+    "impact": "The parse and validate step cannot be tested or reused (for example by a future `providers pin --check`) without also writing the cache. Each change to the snapshot format touches the same function as the merge policy.",
+    "quote": "export async function importProviderCatalogSnapshot(srcPath: string, opts: SnapshotImportOptions = {}): Promise<SnapshotImportResult> {"
+  },
+  {
+    "id": "G10",
+    "file": "src/harness/provider-catalog.ts",
+    "line": 79,
+    "severity": "minor",
+    "problem": "Docs in this change cite callers that do not exist. The pinSnapshot doc points at `keryx providers pin`, but no such command exists under src/commands (searched for \"pin\"/\"pinned\"). formatCatalogSummaryLine (line 361) is documented as \"One line for `keryx providers status`\", but nothing calls it (searched with `keryx ctx rg formatCatalogSummaryLine src --all`: only the definition).",
+    "impact": "A reader following the docs looks for a command and a call site that are not there. That makes it unclear whether the feature is wired up, and formatCatalogSummaryLine is dead code that still has to be maintained.",
+    "quote": "/** Keep a pinned copy of every saved catalog, and fall back to it when a refresh finds nothing (`keryx providers pin`). */"
+  }
+]

@@ -1,0 +1,65 @@
+[
+  {
+    "id": "G1",
+    "file": "src/commands/wiki-history-export.ts",
+    "line": 68,
+    "severity": "major",
+    "problem": "writeExportFile swallows any mkdir/writeFile failure (it only logs, and only when KERYX_VERBOSE is set) and resolves normally. Its only caller, runHistoryExport (line 122), then prints `exported N run(s) to <file>` at line 131 and leaves exitCode 0. Trigger: `keryx wiki history --runs --export /readonly/dir/runs.csv` (or a target whose parent is a file). Outcome: the user is told the export succeeded and the process exits 0, but no file exists. This breaks error-handling.mdc Rule 3 / Iron Law 1 (a catch that hides a failure from a caller who then proceeds). class_scope: this is the only catch on a write path in the new file; the other catches (line 34 rethrows, line 127 is a commented display-only fallback) are fine. Enumerated by reading every catch in src/commands/wiki-history-export.ts.",
+    "impact": "Anyone attaching an export to a review or flow journal, and any script that checks the exit code, gets a success report for a file that was never written.",
+    "quote": "} catch (error) {\n    if (process.env.KERYX_VERBOSE) {\n      process.stderr.write(`wiki history: export write failed: ${String(error)}\\n`);\n    }\n  }"
+  },
+  {
+    "id": "G2",
+    "file": "src/commands/wiki-history-export.ts",
+    "line": 25,
+    "severity": "minor",
+    "problem": "The doc comment on collectRunRows is stale. It says the function returns runs oldest first, but the function only filters listWikiRuns' result, and listWikiRuns sorts newest first (src/wiki/history.ts:495 and :508). Nothing reverses the order, so the comment states an ordering that has no code path behind it.",
+    "impact": "A reader or caller who trusts the comment expects chronological output and gets the reverse. The export reads newest first while the comment says otherwise.",
+    "quote": "Returns the runs\n * oldest first, so the exported file reads in the order the writes happened."
+  },
+  {
+    "id": "G3",
+    "file": "src/commands/wiki-history-export.ts",
+    "line": 49,
+    "severity": "minor",
+    "problem": "The same command-label normalisation chain (collapse CR/LF, collapse whitespace, trim, clip to MAX_COMMAND_WIDTH) is copied three times in this change: src/commands/wiki-history-export.ts:49-53, src/commands/wiki-history-export.ts:56-60, and src/commands/wiki-history.ts:47-51. The diff even exports MAX_COMMAND_WIDTH so the third copy can reuse the constant, but not the logic. It belongs in one helper, for example `formatCommandLabel(command)`, exported next to the constant.",
+    "impact": "A change to how labels are cleaned or clipped has to be made in three places. If one copy is missed, the terminal list and the CSV and markdown exports show different labels for the same run.",
+    "quote": "const label = run.command\n      .replace(/[\\r\\n]+/g, \" \")\n      .replace(/\\s+/g, \" \")\n      .trim()\n      .slice(0, MAX_COMMAND_WIDTH);"
+  },
+  {
+    "id": "G4",
+    "file": "src/commands/wiki-history-export.ts",
+    "line": 47,
+    "severity": "minor",
+    "problem": "renderRunLine takes a boolean flag `markdown` that switches between two unrelated renderers (a markdown table row vs a quoted CSV row), so the call site reads `renderRunLine(run, at, run.pages, format === \"md\")`. It also has 4 positional parameters, and two of them repeat data `run` already holds: `pages` is always `run.pages`, and `at` is `run.at` with fractional seconds removed. Split it into renderCsvRow(run) and renderMarkdownRow(run), or dispatch on RunExportFormat, and derive `at`/`pages` inside.",
+    "impact": "Call sites have to be decoded against the signature. Each format's escaping is tangled with the other's in one function, and the redundant parameters let a caller pass values that disagree with `run`.",
+    "quote": "export function renderRunLine(run: WikiRunSummary, at: string, pages: number, markdown: boolean): string {"
+  },
+  {
+    "id": "G5",
+    "file": "src/commands/wiki-history-export.ts",
+    "line": 35,
+    "severity": "minor",
+    "problem": "The catch rethrows a new Error without `{ cause: error }`, so the caught `error` is bound but never used. The message also omits the input it failed on (the cwd or runs-log path). This breaks error-handling.mdc Rules 2 and 5 / Iron Law 3.",
+    "impact": "When the runs log cannot be read (a permission error, or a corrupt file throwing from listWikiRuns), the original stack and reason are lost. Whoever debugs it sees only a generic message with no path.",
+    "quote": "throw new Error(\"wiki history: could not read the runs log\");"
+  },
+  {
+    "id": "G6",
+    "file": "src/commands/wiki-history-export.ts",
+    "line": 75,
+    "severity": "minor",
+    "problem": "runHistoryExport is about 57 lines (75-132) and does several separable jobs at different levels: it parses and validates three options (--export, --format with extension inference, --since with date-only normalisation), loads the data, transforms rows (the inline `.replace(/\\.\\d+Z$/, \"Z\")` timestamp trimming at line 118), writes the file, and resolves a display path. The --format and --since parsing could be pure helpers (for example parseExportOptions(args) returning a result or an error message), and the row and body building a pure function, leaving runHistoryExport as a thin I/O shell.",
+    "impact": "Option parsing and row formatting can only be tested by going through the filesystem and the global process.exitCode, and every new option grows this function further.",
+    "quote": "export async function runHistoryExport(args: string[], cwd: string = process.cwd()): Promise<void> {"
+  },
+  {
+    "id": "G7",
+    "file": "src/commands/wiki-history.ts",
+    "line": 20,
+    "severity": "minor",
+    "problem": "The help text for the new export disagrees across the three places this change documents it. HISTORY_USAGE lists only `[--export <file> [--format csv|md]]`, while EXPORT_USAGE (src/commands/wiki-history-export.ts:13) and the wiki help in src/commands/wiki.ts:925 also list `[--since <date>] [--command <text>]`.",
+    "impact": "A user who reads the history usage line does not learn the --since and --command filters exist, and the next editor has three usage strings to keep in sync.",
+    "quote": "\"Usage: keryx wiki history <page> | keryx wiki history --runs [--json] [--export <file> [--format csv|md]]\";"
+  }
+]

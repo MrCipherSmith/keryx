@@ -1,0 +1,14 @@
+[
+ {
+  "tid": "T1",
+  "verdict": "partial",
+  "gid": "G1",
+  "why": "G1 finds the same class of suppression bypass (a neighbouring segment un-redacts a real phone, trivially evadable) in isIdentifierFragment, but for the hex-run rule rather than the any-letter rule T1 names."
+ },
+ {
+  "tid": "T2",
+  "verdict": "miss",
+  "gid": null,
+  "why": "G2/G4 discuss the truncation window's correctness and tests, not the quadratic cost of enclosingToken's outward scan."
+ }
+]

@@ -1,0 +1,56 @@
+[
+  {
+    "id": "G1",
+    "file": "docs/docs/guides/review-with-a-record.md",
+    "line": 200,
+    "severity": "minor",
+    "problem": "The new copy-and-sweep rule (linked worktrees left out, submodules/embedded clones copied, own mutate-scratch never copied 'also with --scratch tmp', sweep thresholds 'two minutes' / 'ten minutes' / 'six hours') is restated by hand in five places: docs/docs/guides/review-with-a-record.md:197-202, docs/docs/cli-reference.md:5107 (mutate row), src/commands/review.ts:5087-5093 (help text), and both mirrored SKILL.detail.md files (:791-795). The same applies to the gate budget: '2 048 entries' is written as a literal at review-with-a-record.md:963 and :1142 instead of being tied to MAX_SIGNATURE_FILES. None of the numbers are derived from HEARTBEAT_MS / STALE_HEARTBEAT_MS / STALE_SCRATCH_MS / MAX_SIGNATURE_FILES.",
+    "impact": "The next person who tunes a threshold must find and edit every copy; this very diff shows the cost already paid — it has to repair review-with-a-record.md:1140, where one copy of the gate paragraph said 'two in a row' while the other copy and MAX_REVIEW_GATE_STALLS said three.",
+    "quote": "own `keryx-mutate-*` directories whose owner died (no heartbeat for two minutes)"
+  },
+  {
+    "id": "G2",
+    "file": "src/commands/agent-review-gate.test.ts",
+    "line": 168,
+    "severity": "minor",
+    "problem": "The same fake scan — `const controller = new AbortController(); const reviewGateState = async () => { controller.abort(); return openReview(); };` — is pasted into three new tests (lines 167-171, 178-182, 190-194). The diff already extracted `openReview()` for the return value but not the abort-then-resolve scan that is the actual shared fixture.",
+    "impact": "Whoever changes how the abort is simulated (e.g. aborting before vs after the resolve) must edit three copies and keep them in step; a helper such as `abortingScan()` returning `{ controller, reviewGateState }` would make the three tests differ only in what they assert.",
+    "quote": "const reviewGateState: typeof findReviewGateState = async () => {\n    controller.abort();\n    return openReview();\n  };"
+  },
+  {
+    "id": "G3",
+    "file": "src/review/completion-gate.ts",
+    "line": 65,
+    "severity": "minor",
+    "problem": "Magic number: `0o170000` is the POSIX S_IFMT file-type mask, written as a bare octal literal with no name. Node exposes it as `fs.constants.S_IFMT`, and the sibling module src/review/mutate.ts in the same diff already imports `constants` from node:fs.",
+    "impact": "A reader has to know the stat mode layout to understand what the `special:` signature encodes; a named constant documents the intent and removes the guess.",
+    "quote": "if (!info.isFile()) return `special:${(info.mode & 0o170000).toString(8)}`;"
+  },
+  {
+    "id": "G4",
+    "file": "src/review/completion-gate.ts",
+    "line": 888,
+    "severity": "minor",
+    "problem": "Naming: `stalled` holds a sentence fragment of the stop report (' and no change in the first … entries …' / ' and no new artifact in the last …'), but reads as a boolean state (and sits next to the numeric `stalls`). It is then used inside `stalls >= MAX_REVIEW_GATE_STALLS ? stalled : \"\"`, which reads as 'if stalled, then stalled'.",
+    "impact": "A reader of decideReviewGate has to trace the ternary to learn `stalled` is text; a name like `stallReason` says what it is.",
+    "quote": "const stalled = open.signature.includes(TRUNCATION_MARKER)"
+  },
+  {
+    "id": "G5",
+    "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+    "line": 788,
+    "severity": "minor",
+    "problem": "The parenthetical added to the treeHash exclusion list — 'ignored files (the scratch copy still includes them, except linked worktrees, which it leaves out)' — attaches the linked-worktree rule to the ignored-files item, implying linked worktrees are a subset of ignored files. They are a copy rule unrelated to ignoredness, and the same paragraph restates the linked-worktree rule properly four lines later (:791). The same text is in the bundled mirror src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md:788; cli-reference.md:5107 keeps the plain 'ignored files' wording, so the two documents now describe the treeHash list differently.",
+    "impact": "An agent reading the orchestrator detail may conclude that only ignored linked worktrees are left out, or that treeHash and the copy share one exclusion list.",
+    "quote": "ignored files (the scratch copy still includes them, except linked worktrees, which it leaves out)"
+  },
+  {
+    "id": "G6",
+    "file": "src/review/completion-gate.ts",
+    "line": 35,
+    "severity": "info",
+    "problem": "SIGNATURE_WALKS_PER_STOP = 2 is now the divisor of MAX_SIGNATURE_FILES, but nothing ties it to the code it describes: findReviewGateState still hand-writes its two dirSignature calls. Adding a third walk would not change the constant, so the 'budgets together stay within MAX_HASHED_FILES' invariant in its doc comment (line 38) would silently break; only the TP-006 test checks the arithmetic, not the walk count.",
+    "impact": "Observation only: settled if the walks were driven from a list whose length is the constant, or if the comment named the two call sites it must be kept in step with.",
+    "quote": "export const SIGNATURE_WALKS_PER_STOP = 2;"
+  }
+]

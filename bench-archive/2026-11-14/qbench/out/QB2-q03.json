@@ -1,0 +1,65 @@
+[
+  {
+    "id": "G1",
+    "file": "src/session/execution-plan.ts",
+    "line": 178,
+    "severity": "major",
+    "problem": "The best-effort journal is wired into the plan write with inconsistent error handling. recordPlanRevision runs after plan.json is already committed (line 177). An appendFile rejection (execution-plan-history.ts:68, e.g. EACCES or ENOSPC on plan-history.jsonl) propagates out of writePlan, while a cursor-write failure in the same function (execution-plan-history.ts:69-73) is logged and swallowed. Two failures of one auxiliary journal get opposite policies, and the fatal one fires after the real write has committed.",
+    "impact": "Trigger: appendFile rejects. Outcome: setExecutionPlan/updateExecutionPlan reject even though plan.json now holds revision N+1, notify(dir, plan) at line 181 is skipped so the sidebar stays stale, and a caller that retries with the same expectedRevision gets ExecutionPlanConflictError. Sites: execution-plan.ts:178, execution-plan-history.ts:68, execution-plan-history.ts:71-73 (enumerated by reading every await in writePlan and recordPlanRevision).",
+    "quote": "await recordPlanRevision(dir, current, result);"
+  },
+  {
+    "id": "G2",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 133,
+    "severity": "major",
+    "problem": "The cursor scheme is meant to protect against a writer that dies mid-write, but the reader parses every line before it applies the cursor filter: map(parseEntry) runs before filter(revision <= committed). appendFile is not atomic, so a writer killed mid-append leaves a partial line with no trailing newline. JSON.parse then throws a bare SyntaxError, or parseEntry throws the context-free \"Invalid entry\" (line 99), and neither message names the journal path. The next append is also glued onto the partial line, so that entry is corrupted too.",
+    "impact": "Trigger: the process is killed during the append at line 68. Outcome: every later new ExecutionPlanHistory(dir), and so every renderExecutionPlanChangelog call, throws for that session, and the error never says which file to fix. readCursor (line 92) does name its path in the same situation. Sites: execution-plan-history.ts:97, :99, :133-134.",
+    "quote": ".map(parseEntry)\n      .filter((entry) => entry.revision <= committed);"
+  },
+  {
+    "id": "G3",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 29,
+    "severity": "minor",
+    "problem": "Stale comment (C1a, a doc comment that describes no real code path). The cursor is a high-water mark (entries with revision <= cursor are trusted), so an entry orphaned by a writer that died before updating the cursor becomes visible as soon as the next write advances the cursor past it. Swallowed cursor failures (lines 71-73) behave the same way, and recordPlanRevision still returns the entry as if it were committed. The 'never shown' guarantee does not exist.",
+    "impact": "The next maintainer relies on a crash-safety property the code does not give and reasons wrongly about what the changelog can contain.",
+    "quote": "cursor is never shown as history."
+  },
+  {
+    "id": "G4",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 37,
+    "severity": "minor",
+    "problem": "Output argument (B2). diffExecutionPlans returns void and fills a caller-supplied array instead of returning the transitions. Both callers (recordPlanRevision at line 64-65 and the test) create an empty array just to pass it in.",
+    "impact": "The exported API is harder to read and compose: every caller needs a temporary array, and it invites accidental accumulation across calls.",
+    "quote": "export function diffExecutionPlans(previous: ExecutionPlan | undefined, next: ExecutionPlan, out: PlanTransition[]): void {"
+  },
+  {
+    "id": "G5",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 122,
+    "severity": "minor",
+    "problem": "Constructor does real work (F1). It reads and parses two files synchronously, using readFileSync in a module whose writes are async, and it can throw. The `readonly dir` parameter property is stored but never read after construction.",
+    "impact": "You cannot build a history from in-memory data in a test, every instantiation blocks on disk I/O, and the unused public `dir` field misleads readers into thinking the object re-reads lazily.",
+    "quote": "constructor(readonly dir: string) {\n    const committed = readCursor(dir);"
+  },
+  {
+    "id": "G6",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 113,
+    "severity": "minor",
+    "problem": "An if/else-if chain over the 5-way `kind` discriminant ends in a bare `else` that silently treats any unlisted kind as `reordered` (F2 OCP). TypeScript idiom here is a switch with an exhaustive `never` check.",
+    "impact": "If someone adds a sixth PlanTransition kind, the compiler raises no error. It renders as \"moved NaN -> NaN\" until someone notices.",
+    "quote": "} else {\n    return `^ ${change.itemId} moved ${change.from + 1} -> ${change.to + 1}`;"
+  },
+  {
+    "id": "G7",
+    "file": "src/session/execution-plan.ts",
+    "line": 276,
+    "severity": "info",
+    "problem": "Changelog rendering is split across two modules. renderExecutionPlanChangelog lives in execution-plan.ts but needs ExecutionPlanHistory and describeChange from execution-plan-history.ts, which in turn imports types from execution-plan.ts. The search over src for renderExecutionPlanChangelog found no production caller, only the test.",
+    "impact": "The history module's presentation logic sits in two files, and an exported renderer with no consumer must still be maintained. Moving it next to describeChange, or wiring it to a caller, would settle this.",
+    "quote": "export function renderExecutionPlanChangelog(dir: string, sinceRevision = 0, maxEntries = 10): string | undefined {"
+  }
+]

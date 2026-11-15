@@ -1,0 +1,18 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "match", "gid": "G3", "why": "G3 identifies the log-only catch on the cursor write that returns the entry as recorded, leaving the revision invisible while success is reported." },
+    { "tid": "T2", "verdict": "match", "gid": "G5", "why": "G5 flags the same synchronous file I/O and parsing in the ExecutionPlanHistory constructor and proposes a separate loader." },
+    { "tid": "T3", "verdict": "partial", "gid": "G6", "why": "G6 targets the same bare-else exhaustiveness gap in describeChange but proposes switch+assertNever rather than the project's Record lookup-map convention." },
+    { "tid": "T4", "verdict": "match", "gid": "G4", "why": "G4 flags diffExecutionPlans pushing into a caller-supplied out array and returning void." },
+    { "tid": "T5", "verdict": "miss", "gid": null, "why": "No candidate raises the transition/change naming inconsistency." },
+    { "tid": "T6", "verdict": "match", "gid": "G1", "why": "G1 explicitly calls out parseEntry's generic \"Invalid entry\" lacking file, line, and cause, and its fix adds the path and line number." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "truth", "why": "Matches T6 (context-free parseEntry error), with an added point about parsing before the cursor filter." },
+    { "gid": "G2", "label": "valid", "why": "Verified in writePlan: an appendFile rejection after plan.json is committed throws from the write and skips notify, so the caller sees failure for a committed plan." },
+    { "gid": "G3", "label": "truth", "why": "Matches T1." },
+    { "gid": "G4", "label": "truth", "why": "Matches T4." },
+    { "gid": "G5", "label": "truth", "why": "Matches T2." },
+    { "gid": "G6", "label": "truth", "why": "Partial for T3." }
+  ]
+}

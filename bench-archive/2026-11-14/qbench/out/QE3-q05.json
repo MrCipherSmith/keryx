@@ -1,0 +1,65 @@
+[
+  {
+    "id": "G1",
+    "file": "src/review/mutate.test.ts",
+    "line": 251,
+    "severity": "minor",
+    "problem": "The new test helper `make` takes five positional parameters (name, owner, ageMs, markerAgeMs, into) with no options object; two adjacent numbers (directory age, marker age) are distinguished only by position, so call sites read as `make(\"…\", {...}, 1000, 3 * HEARTBEAT_MS, repoScratch)`.",
+    "impact": "Every reader of the ~20 new sweep tests has to look up the signature to know which age is the directory's and which is the marker's; swapping the two numbers silently changes what a test proves. Crosses the 4+ positional-parameter threshold in solid-principles.mdc.",
+    "quote": "async function make(name: string, owner: unknown, ageMs: number, markerAgeMs: number = ageMs, into: string = scratch): Promise<string> {"
+  },
+  {
+    "id": "G2",
+    "file": "src/review/mutate.test.ts",
+    "line": 396,
+    "severity": "minor",
+    "problem": "The diff names the 'old enough to count as dead, not yet abandoned' marker age once (`staleButNotAbandoned = 3 * HEARTBEAT_MS`) inside one describe block, but repeats the raw expression `3 * HEARTBEAT_MS` at 13 other sites: lines 351, 365, 367, 381, 382, 448, 469, 471, 478, 497, 509 (and the constant's own use at 400-403).",
+    "impact": "If the sweep's dead-marker rule (two heartbeats) or the chosen margin changes, whoever edits it must find every copy; a missed one leaves a test that no longer sits in the window it claims to exercise.",
+    "quote": "const staleButNotAbandoned = 3 * HEARTBEAT_MS;"
+  },
+  {
+    "id": "G3",
+    "file": "src/commands/agent-review-gate.test.ts",
+    "line": 169,
+    "severity": "minor",
+    "problem": "Three new tests (TP-004 and the two LOGIC-003 tests) each build the identical `reviewGateState` stub (new AbortController, a scan that calls `controller.abort()` then returns `openReview()`), copied verbatim at lines ~167-171, ~178-182 and ~190-194, while `openReview` itself was already extracted.",
+    "impact": "Three copies of the same fixture must be kept in sync when the gate-state signature or abort semantics change; a helper like `abortingScan()` returning `{ controller, reviewGateState }` would make the differing assertions the only visible difference between the tests.",
+    "quote": "controller.abort();\n    return openReview();"
+  },
+  {
+    "id": "G4",
+    "file": "src/review/completion-gate.ts",
+    "line": 65,
+    "severity": "minor",
+    "problem": "Magic number: the file-type mask `0o170000` (S_IFMT) is hardcoded, and its octal rendering becomes part of the signature string (`special:10000` for a FIFO). `node:fs` already exposes `constants.S_IFMT`.",
+    "impact": "A reader has to know POSIX mode bits to see that this extracts the file type, and the encoded signature value is opaque; a named constant (or `constants.S_IFMT`) states the intent.",
+    "quote": "if (!info.isFile()) return `special:${(info.mode & 0o170000).toString(8)}`;"
+  },
+  {
+    "id": "G5",
+    "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+    "line": 788,
+    "severity": "minor",
+    "problem": "The new parenthetical inside the `treeHash` exclusion list ('the scratch copy still includes them, except linked worktrees, which it leaves out') attaches a scratch-copy rule to the sentence about what `treeHash` hashes and implies linked worktrees are a subset of ignored files; the same fact is then restated in the paragraph the diff adds three lines below. Same text in the mirror src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md:788.",
+    "impact": "The orchestrator doc is read by agents deciding what a mutation pass saw; mixing the copy rule into the hash rule makes it ambiguous whether linked worktrees affect `treeHash`, and the duplicate statement doubles the edit when the rule changes.",
+    "quote": "ignored files (the scratch copy still includes them, except linked worktrees, which it leaves out)"
+  },
+  {
+    "id": "G6",
+    "file": "src/review/completion-gate.ts",
+    "line": 888,
+    "severity": "minor",
+    "problem": "`stalled` holds a report sentence fragment, not a state, and sits beside the counter `stalls`; the participle name reads like a boolean ('is it stalled?') and is then used as `stalls >= MAX ? stalled : \"\"`.",
+    "impact": "Readers of the stop-report builder must read the ternary to learn it is text; a name like `stallReason` says what it is.",
+    "quote": "const stalled = open.signature.includes(TRUNCATION_MARKER)"
+  },
+  {
+    "id": "G7",
+    "file": "src/review/mutate.ts",
+    "line": 380,
+    "severity": "info",
+    "problem": "The abandonment policy that the sweep's doc spends six lines explaining (no marker -> staleMs; marker -> staleHeartbeatMs, or dead pid and older than two heartbeats) is an inline nested ternary with `||`/`&&` inside the I/O loop (readdir/lstat/rm), and calls `now()` three times. Extracting a pure `isAbandoned(owner, dirMtimeMs, now, thresholds)` would let the policy be read and tested without a filesystem.",
+    "impact": "The deletion decision is the irreversible part of the sweep; today it is only testable by building directories with aged markers (as the ~15 new tests do). Observation only; no wrong outcome is claimed.",
+    "quote": ": now() - owner.mtimeMs > staleHeartbeatMs || (!isAlive(owner.pid) && now() - owner.mtimeMs > 2 * heartbeatMs);"
+  }
+]

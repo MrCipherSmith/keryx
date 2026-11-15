@@ -1,0 +1,1996 @@
+diff --git a/docs/analysis/open-code-review-comparison/2026-09-15/report.md b/docs/analysis/open-code-review-comparison/2026-09-15/report.md
+new file mode 100644
+index 000000000..68dd46375
+--- /dev/null
++++ b/docs/analysis/open-code-review-comparison/2026-09-15/report.md
+@@ -0,0 +1,306 @@
++# alibaba/open-code-review vs the keryx review skills
++
++Read 2026-09-15 against `alibaba/open-code-review` at `main` (Go, Apache-2.0,
++26,835 stars, created 2026-05-18, pushed the same day this was written) and
++against keryx `main` at `b618e466` (22 bundled review skills, 0 project-local).
++
++Everything below is read from their repository and ours. No head-to-head run was
++performed, and their published numbers are self-reported — the README states the
++claims but does not print the benchmark table, so the figures here are quoted as
++claims, not as measurements we reproduced.
++
++---
++
++## 1. The one difference everything else follows from
++
++**Where the review intelligence lives.**
++
++| | open-code-review | keryx |
++|---|---|---|
++| Review logic | a compiled Go pipeline around **one** agent loop | **22 markdown reviewer skills**, dispatched as parallel subagents |
++| What the skill does | `skills/open-code-review/SKILL.md` is a *driver*: it shells out to `ocr review --audience agent --background "…"` | the skills *are* the reviewers; there is no binary to drive |
++| Where determinism sits | in **reviewing**: file selection, file bundling, rule matching, comment positioning, reflection | in **bounding and recording**: `review scope`, `review blast-radius`, `review tier`, `review ingest`, `review complete` |
++| Host | own CLI, portable to any agent | whatever agent is executing the skills |
++
++Neither is a subset of the other. They made the *review* deterministic and left
++one agent to think; we left the *thinking* to many agents and made the
++*perimeter* deterministic — what enters the round, what the round may look at,
++and what the round is allowed to claim afterwards.
++
++---
++
++## 2. Where they are ahead of us
++
++### 2.1 They have a benchmark. We do not.
++
++AACR-Bench: **50 repositories, 200 real pull requests, 10 languages, 1,505
++annotated ground-truth issues, cross-validated by 80+ senior engineers.** Claims
++higher precision and F1 than a general-purpose agent on the same model, at
++**~1/9 the tokens**, with recall deliberately traded away to suppress false
++alarms.
++
++Our equivalent is `scripts/review-precision-baseline.ts` over our own recorded
++corpus — and the pipeline's own code says what that is worth: precision measured
++over a corpus that logs only survivors "returns 100% by construction". We have
++discipline about *recording* findings and no measurement of whether they are
++*right*. That is the single widest gap in this comparison, and it is not a
++tooling gap; it is a missing dataset.
++
++### 2.2 Token cost is a design target for them and unbounded for us.
++
++Their ~1/9 claim is an engineering goal with an architecture built for it: bundle
++files, match rules, one agent, two rounds by default (`--effort medium`).
++
++The round this repository ran on 2026-09-12 (flow 260, a 707-line diff) spent
++roughly **450k subagent tokens across four reviewers plus a verifier**, then a
++second verification round on top. That bought a real blocker — see §3.1 — but
++nothing in our pipeline *budgets* it, warns about it, or reports cost per
++finding. `review budget` exists as a command; no gate consults it.
++
++### 2.3 Line-level positioning is an explicit, checked step for them.
++
++They name the failure directly: AI review comments "frequently don't match the
++actual code location, with line numbers or file references drifting off target",
++and answer it with an independent **comment-positioning** module and a
++**comment-reflection** module.
++
++We have no such check. `review-finding.schema.json` requires `file` and `line`;
++nothing verifies that the line still points at the code the finding describes. On
++a fix round — where the file has moved under the finding by construction — that
++is exactly when it is most likely to be wrong.
++
++### 2.4 Distribution.
++
++`action.yml` (GitHub Action), GitLab CI, GitFlic, Gerrit, a VSCode extension, a
++Claude Code plugin, `install.sh`/`install.ps1`, an npm package. Our review
++pipeline runs where `keryx` runs and nowhere else.
++
++### 2.5 Path-scoped prose rules.
++
++`.opencodereview/rule.json` is a list of `{path, rule, merge_system_rule}`. Their
++own entry for `internal/llm/providers.go` is worth reading in full: it dictates
++field order in a struct literal, forbids extracting single-use constants, lists
++four documentation files that must change in the same PR, and names the exact
++test function a new provider must add.
++
++That is *project convention as data*, matched by path, merged into the prompt.
++Our nearest equivalent is a repo-local convention reviewer — a whole skill, with
++a whole dispatch — and we have **zero** of them registered. Theirs costs a JSON
++object.
++
++---
++
++## 3. Where we are ahead of them
++
++### 3.1 Adversarial verification by a different actor.
++
++Their reflection module is the same pipeline checking its own comment. Ours is a
++separate agent, forbidden from verifying a finding it raised, required to state
++`method` (`execution` / `site-check` / `reasoning`) and `evidence`, where
++`reasoning` forces the verdict `unverifiable`.
++
++This is not theoretical. On 2026-09-12 a keryx fix shipped a guard that
++suppressed a phone-number match whenever the surrounding token held any letter.
++Every test passed. Two reviewers, working from different lenses, independently
++constructed the inverse case — a real phone number beside a word — and showed the
++detector had stopped redacting it. A precision-tuned single pass optimising for
++"do not raise false alarms" is structurally unlikely to go looking for that: the
++defect was invisible from the direction the author was facing, and only a
++*second, differently-pointed* reader found it.
++
++Their deliberate recall sacrifice is the right trade for the job they are
++doing — reviewing hundreds of PRs a day at scale, where a false alarm costs a
++human's attention. It is the wrong trade for ours.
++
++### 3.2 The round is a durable record with a gate behind it.
++
++A keryx round writes `manifest.json`, `scope.md`, `coverage.md`, `report.md`,
++`findings.json`, `learning.md`, `decisions.md` under the flow, and the flow's
++completion gate refuses to close while:
++
++- a finding at or above `minor` has no terminal disposition;
++- a disposition claims `acted-on` with no verifier verdict behind it;
++- a verdict's evidence does not cite the commit being merged;
++- the round ran against a stale SHA;
++- external PR comments were never collected.
++
++That gate refused flow 260 **twice**, correctly, and both refusals produced work
++rather than an argument. `ocr session list` / `--resume` records sessions; it does
++not gate anything on what the session found.
++
++### 3.3 The drop list is part of the record.
++
++`keryx review scope --json` reports what the pre-filter removed **and why, per
++drop**, and `review ingest` refuses `--scope` input that carries only counts.
++`blast-radius` reports every file the 40-file cap removed. The stated reason: a
++scope that shrank without saying so reads afterwards as "we reviewed everything".
++Their `--preview` shows which files *will* be reviewed; we could not find an
++equivalent record of what was excluded and on what ground.
++
++### 3.4 Scope B.
++
++`review blast-radius` walks `gdgraph affected` outward from each changed file and
++asks a different question — *did this change break something that was working* —
++under rules that reject a finding which is merely an opinion about untouched
++code. Their pipeline reviews the diff and the files it bundles with it.
++
++---
++
++## 4. What to take, concretely
++
++1. **Build the benchmark.** Nothing else on this list matters as much. Without a
++   labelled corpus we cannot tell a pipeline improvement from a prompt that got
++   luckier. AACR-Bench's shape — real PRs, human-annotated ground truth, held
++   out from the people tuning the reviewer — is the shape to copy.
++2. **Add a positioning check.** Cheap version: on ingest, assert that the
++   finding's `file` exists at the round's head and that `line` is within it;
++   stronger version: that the line's text still contains the token the finding
++   names. A finding that cannot be located is a finding nobody can act on.
++3. **Adopt path-scoped rules as data.** A `rule.json`-shaped file, matched by
++   path and merged into each reviewer's prompt, gives us per-file convention
++   enforcement without inventing a skill per convention. It composes with the
++   reviewer fan-out rather than replacing it.
++4. **Make cost visible per round.** Record tokens spent and findings retained in
++   `manifest.json`, and print cost-per-retained-finding at `review complete`.
++   We cannot argue our fan-out is worth its price while refusing to name the
++   price.
++5. **Ship a GitHub Action.** The review pipeline is our most differentiated
++   asset and it is reachable only from our own CLI.
++
++## 5. What not to take
++
++- **Their recall trade.** See §3.1.
++- **One agent.** The fan-out is where the blocker came from.
++- **Reflection as verification.** Self-check is a quality pass, not evidence.
++  Keep the never-self-verify rule.
++
++---
++
++## 5a. Read against the code — four changes, with the lines they touch
++
++Added after a second pass that read their Go packages and our corresponding
++TypeScript rather than their README.
++
++### A. Derive `line` from a quoted snippet; stop accepting it as a claim
++
++**Theirs.** The model does not report a line number. It reports
++`existing_code` — a snippet of the code the comment is about — and
++`ResolveComment` (`internal/diff/resolver.go`) locates that snippet by text
++match against the diff. The line is *derived*. Only when matching fails does
++`internal/diff/relocation.go` spend a second LLM call asking for a more precise
++snippet, and it reverts on failure:
++
++```go
++original := cm.ExistingCode
++cm.ExistingCode = code
++if ResolveComment(cm, d) { return true, resp }
++cm.ExistingCode = original
++```
++
++They also carry `internal/diff/relocate_across_files_test.go` — drift across
++file boundaries is a case they hit often enough to name.
++
++**Ours.** `src/gdskills/contracts/review-finding.schema.json:102-103`:
++
++```json
++"file": { "type": ["string", "null"] },
++"line": { "type": ["integer", "null"], "minimum": 1 },
++```
++
++Both are asserted by the model, both nullable, and nothing in `review ingest`
++checks either against the tree at the round's head. On a fix round the file has
++moved under the finding *by construction*, which is exactly when the anchor is
++least trustworthy and most consequential.
++
++**Change.** Require the finding to quote the code it is about, locate that quote
++at the round's head, and derive `line` from the match. A finding whose quote
++cannot be found is recorded as `unlocatable` rather than silently carrying a
++number that points at something else. This is the single highest-value item on
++the list: it converts a claim into a derived fact, and it needs no model call in
++the common case.
++
++### B. Repair mechanical malformation, with an acceptance test
++
++**Theirs.** `internal/tool/comment_args_repair.go` — 9.6 KB of code against
++25.6 KB of tests — repairs one specific failure: the model serialised an array
++as a string and under-escaped the quotes inside prose, "so the batch fails to
++parse and every comment is lost". Crucially the repair is *gated*: the result
++must contain only fields the schema defines, and the count of `"content":`
++occurrences must match the original, because "a `"content":` inside prose
++inflates the count and so makes the check stricter, which is the safe
++direction."
++
++**Ours.** `review ingest` refuses and the round is lost until the report is
++re-emitted. On 2026-09-12 that cost three consecutive refusals on one round —
++missing `id`, then missing `problem`, then missing `class_scope` — each a
++mechanical omission, none of them a judgement the pipeline could not have made
++itself. The first refusal is worth quoting because it names the cost: *"Refusing
++to record two findings under one key: …#undefined claimed by 5 findings."*
++
++**Change.** A bounded repair pass in front of ingest for omissions that are
++mechanical only: assign `F-00N` by report order when `id` is absent, derive
++`problem` from `title`. Gate it the way they gate theirs — accept the repair
++only if the result validates and introduces no field the schema does not define.
++Keep refusing everything judgemental: `class_scope`, evidence, dispositions. A
++gate that refuses a missing *argument* teaches nothing; a gate that refuses a
++missing *claim* teaches a lot.
++
++Related: `internal/agent/identity.go` plus `retry_identity_test.go` in three
++separate packages. They derive a stable identity so a retried request does not
++duplicate findings. We have no derivation at all — hence `#undefined`.
++
++### C. Estimate before spending, and record what was spent
++
++**Theirs.** `internal/agent/estimate.go`, `internal/agent/budget_test.go`,
++`internal/scan/budget_exceeded_test.go`, `internal/agent/preview.go`, and
++`internal/llmloop/compression.go` — estimate, budget, preview and in-loop
++context compression are all first-class, tested concerns.
++
++**Ours.** `keryx review budget` prints, today, on this repository:
++
++```
++spend_ceiling: 3 USD
++spent: not recorded
++spend_status: not-recorded
++  `not recorded` is not `under`: nobody reported a spend, so staying inside
++  the ceiling was never demonstrated.
++```
++
++The command is honest about being uninformed, which is the right shape — but
++nothing feeds it, and a search for `estimateTokens|tokenEstimate|estimateCost`
++across `src/review/` and `src/commands/review.ts` returns nothing.
++
++**Change.** Three small pieces: estimate prompt tokens from the scoped diff and
++print a per-reviewer projection before dispatch; record actual usage into the
++round's `manifest.json` at ingest; have `review complete` print cost per
++retained finding. We cannot argue the fan-out earns its price while declining to
++name the price — and §2.2's 450k-token round is the argument we currently
++cannot make.
++
++### D. (Optional) Deterministic grouping of related files
++
++`internal/agent/grouping.go` — 14 KB against 26.8 KB of tests — bundles related
++files into one review unit so a paired change (their example:
++`message_en.properties` beside `message_zh.properties`) is seen whole by one
++reviewer. Our `review scope` bounds and drops but never groups; every reviewer
++receives the same flat scoped diff.
++
++Listed last because it fits us least: we fan out by *domain*, not by file, so a
++paired change already reaches every reviewer. It becomes worth doing only if we
++ever shard by file.
++
++## 6. Honest limits of this analysis
++
++- No head-to-head run on the same diff. The strongest next step would be to run
++  `ocr` over flow 260's `dd7f3df0` and see whether it finds the blocker our
++  round found.
++- Their benchmark numbers are claims from the README; the table is not published
++  there and we did not reproduce it.
++- We read their architecture from the README, `skills/open-code-review/SKILL.md`,
++  `.opencodereview/rule.json`, `ASSURANCE_CASE.md` and the `internal/` package
++  layout, not from their Go source.
++- One thing we did not evaluate at all: they publish a full **security assurance
++  case** with a threat model that treats git diffs as semi-trusted adversarial
++  content and names DNS rebinding against their local viewer. Our security module
++  detects injection in tool output; whether we have an equivalent *document* is a
++  separate question this report did not open.
+diff --git a/docs/requirements/managed-review-feedback-loop/schemas/managed-review-package.schema.json b/docs/requirements/managed-review-feedback-loop/schemas/managed-review-package.schema.json
+index 3d07ccc45..b6c377752 100644
+--- a/docs/requirements/managed-review-feedback-loop/schemas/managed-review-package.schema.json
++++ b/docs/requirements/managed-review-feedback-loop/schemas/managed-review-package.schema.json
+@@ -128,6 +128,31 @@
+         }
+       }
+     },
++    "repairs": {
++      "description": "Fields `review ingest` supplied rather than the reviewer authoring them. Present only when something was repaired; an absent property means nothing was, which is a different fact from an empty list would be if it were always written. Two fields are repairable and no others — `id` from the finding's position, `problem` from the finding's own title — because both are typing rather than judgement. The record exists so a later reader can tell a statement the reviewer made from one the pipeline carried across: the round that motivated this took three consecutive refusals for mechanical omissions, and repairing them silently would trade one invisible cost for another.",
++      "type": "array",
++      "items": {
++        "type": "object",
++        "additionalProperties": false,
++        "required": ["finding", "field", "source"],
++        "properties": {
++          "finding": { "type": "string", "minLength": 1 },
++          "field": { "type": "string", "enum": ["id", "problem"] },
++          "source": { "type": "string", "minLength": 1 }
++        }
++      }
++    },
++    "cost": {
++      "description": "What the round reported having used. Absent means nobody reported it, which is NOT zero — the same distinction `filter_stats` draws between a count and a stage that never ran. `keryx review complete` divides whichever of these is present by the findings the round retained, so that the price of a fan-out is a number somebody can weigh rather than an argument. Every property is independent: a caller that knows its token counts but not its rates records the tokens alone.",
++      "type": "object",
++      "additionalProperties": false,
++      "minProperties": 1,
++      "properties": {
++        "input_tokens": { "type": "integer", "minimum": 0 },
++        "output_tokens": { "type": "integer", "minimum": 0 },
++        "spent_usd": { "type": "number", "minimum": 0 }
++      }
++    },
+     "filter_stats": {
+       "description": "What the round filtered (roadmap §5.1). Written by the code that does the filtering, never assembled from scope.md. Every count is an integer or null, and null ALWAYS means the stage did not run — it never means zero. A null count must have a matching row in `not_measured` giving the reason; `keryx review status` refuses a record where the two disagree. `dropped_prefilter` counts diff material (whole files and change blocks) and is deliberately not summed with the finding counts.",
+       "type": "object",
+diff --git a/src/commands/review.ts b/src/commands/review.ts
+index 6f477be2e..1c9289508 100644
+--- a/src/commands/review.ts
++++ b/src/commands/review.ts
+@@ -24,6 +24,7 @@ import {
+   type ManagedReviewIngestInput,
+ } from "../review/managed";
+ import { checkFilterStats, renderFilterStatsLine } from "../review/filter-stats";
++import { costFrom, renderCostPerFinding, renderScopeEstimate } from "../review/cost";
+ import { collectReviewers, renderReviewerInventoryMarkdown } from "../review/reviewers";
+ import { runImportReviewers } from "../review/import-reviewers";
+ import {
+@@ -163,6 +164,8 @@ const CREATE_FLAGS = [
+   "--max-findings",
+   "--spent",
+   "--spend-ceiling",
++  "--tokens-in",
++  "--tokens-out",
+   "--parallel",
+   "--outstanding",
+ ] as const;
+@@ -228,8 +231,20 @@ const SCOPE_FLAGS = [
+   "--json",
+   "--scoped-diff",
+   "--append",
++  // Not used to scope anything — it is how the cost estimate knows the fan-out.
++  // Every reviewer receives the scoped diff, so a per-round figure that ignored
++  // their number would understate the one thing the estimate is printed for.
++  "--reviewers",
+ ] as const;
+ 
++/** The `--reviewers a,b` list, empty when nobody said. */
++function reviewerList(args: readonly string[]): string[] {
++  return (optionValue(args as string[], "--reviewers") ?? "")
++    .split(",")
++    .map((item) => item.trim())
++    .filter(Boolean);
++}
++
+ /**
+  * No `--append` and no `--out`.
+  *
+@@ -462,6 +477,15 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
+     spend: parseMoney(optionValue(args, "--spent"), "--spent"),
+     spendCeiling: parseMoney(optionValue(args, "--spend-ceiling"), "--spend-ceiling"),
+     concurrency: parseConcurrency(args),
++    // What the round actually used. `--spent` already existed and went only into
++    // the ceiling evaluation, which is why `review budget` could print a ceiling
++    // beside `spent: not recorded` forever. Recorded on the package now, so the
++    // number outlives the terminal it was printed on.
++    cost: costFrom({
++      inputTokens: parseNonNegativeInteger(optionValue(args, "--tokens-in"), "--tokens-in"),
++      outputTokens: parseNonNegativeInteger(optionValue(args, "--tokens-out"), "--tokens-out"),
++      spentUsd: parseMoney(optionValue(args, "--spent"), "--spent"),
++    }),
+   };
+   const result = await createManagedReviewPackage(input);
+   console.log(`# managed review: ${result.reviewId}`);
+@@ -1624,6 +1648,13 @@ async function runScope(args: string[]): Promise<void> {
+     console.log(renderScopedDiff(scope));
+   } else {
+     console.log(renderReviewScopeMarkdown(scope));
++    // The price, while it is still a decision. This is the only point in the
++    // pipeline where the round has not been spent yet, so it is the only place
++    // an estimate can change what happens. Human-readable output only: `--json`
++    // is a contract other commands parse and `--scoped-diff` is what a reviewer
++    // is handed, and neither is a place to put prose about money.
++    console.log("");
++    console.log(renderScopeEstimate(renderScopedDiff(scope), reviewerList(args).length));
+   }
+ 
+   // AC5: the drop list belongs in the review record, not only on a terminal.
+@@ -2121,6 +2152,13 @@ async function runComplete(args: string[]): Promise<void> {
+   console.log(`# managed review complete: ${manifest.reviewId}`);
+   console.log(`status: ${manifest.status}`);
+   console.log(`dispositions recorded: ${dispositions.length}`);
++  // The price, now that both halves are known. This is the first moment the
++  // round's cost and what survived it are on the same screen, and it is the
++  // number the fan-out has to justify itself with. `not recorded` when nobody
++  // measured — never `0`, which would read as a round that was free.
++  for (const line of renderCostPerFinding(manifest.cost, manifest.filter_stats?.retained ?? 0)) {
++    console.log(line);
++  }
+   // Flow 207 AC5/AC6, on the attended path. A `dismissed-incorrect` whose
+   // evidence names nobody writes no note and says so here, rather than reaching
+   // the learning loop as an unattributed claim that our own reviewer was wrong.
+diff --git a/src/gdskills/bundled/skills/review/review-layout/SKILL.md b/src/gdskills/bundled/skills/review/review-layout/SKILL.md
+index 6fcd57783..b43ec49f6 100644
+--- a/src/gdskills/bundled/skills/review/review-layout/SKILL.md
++++ b/src/gdskills/bundled/skills/review/review-layout/SKILL.md
+@@ -227,7 +227,7 @@ Report done only once all of these hold:
+ - The measurement was taken at the worst real case — the longest translation in
+   the catalog, the narrowest supported host, the state where the sibling is
+   absent — not at the convenient one.
+-- Every finding names `file:line` on the component that renders the box.
++- Every finding names the `file` of the component that renders the box and `quote`s the code it is about; `line` is derived at ingest from that quote, never counted.
+ - Every `blocker` and `major` carries `class_scope` with `sites` and an
+   `enumeration_method` naming the search that derived the set of elements sharing
+   the sizing shape.
+diff --git a/src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md b/src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md
+index 30e34da98..3c42f2609 100644
+--- a/src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md
++++ b/src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md
+@@ -1350,10 +1350,10 @@ Each reviewer must return a `REVIEW_RESULT` object matching `.metaproject/skills
+ 
+ Before consolidation, validate every reviewer result:
+ - Required status: `DONE`, `DONE_WITH_CONCERNS`, `NEEDS_CONTEXT`, or `BLOCKED`.
+-- Required finding fields: id, severity, file, line (nullable only for repo-wide findings), problem, impact, suggested_fix, evidence, confidence, reviewer.
++- Required finding fields: id, severity, file, `quote`, problem, impact, suggested_fix, evidence, confidence, reviewer. **`quote`, not `line`:** copy the code the finding is about verbatim out of `file` and do not count lines — `keryx review ingest` locates the quote at the round's head and derives `line` from where it matched, so a number reported here is overwritten. A model is poor at counting lines and good at repeating text it has just read; this asks only for the second. Quote enough to be unambiguous: a snippet appearing twice in the file is recorded `unlocatable` rather than anchored to the first hit. A finding about the round rather than a site carries neither.
+ - Every blocker must include evidence and a concrete suggested fix.
+ - Findings without evidence are downgraded to `info` or returned to the reviewer for clarification.
+-- Duplicate findings are merged by `dedupe_key` or by `(file, line, problem)`.
++- Duplicate findings are merged by `dedupe_key` or by `(file, quote, problem)`.
+ - `NEEDS_CONTEXT` triggers one targeted context refill. If still unresolved, keep it as an explicit open question, not as a blocker.
+ - If a reviewer exceeds `max_findings`, keep blockers/majors first and summarize lower severity findings.
+ 
+diff --git a/src/gdskills/bundled/skills/review/review-orchestrator/reviewer-finding.schema.json b/src/gdskills/bundled/skills/review/review-orchestrator/reviewer-finding.schema.json
+index b61590339..19ad0942a 100644
+--- a/src/gdskills/bundled/skills/review/review-orchestrator/reviewer-finding.schema.json
++++ b/src/gdskills/bundled/skills/review/review-orchestrator/reviewer-finding.schema.json
+@@ -74,12 +74,20 @@
+             ]
+           },
+           "line": {
++            "description": "Do not count lines. Quote the code in `quote` instead and leave this null: `keryx review ingest` finds the quote in `file` and writes the line the match started on, overwriting anything reported here. A model is poor at counting lines and good at repeating text it has just read, and this asks it only for the second. Kept in the contract because a finding with nothing to quote — one about the round rather than a site — still has nowhere else to point.",
+             "type": [
+               "integer",
+               "null"
+             ],
+             "minimum": 1
+           },
++          "quote": {
++            "description": "The code this finding is about, copied verbatim out of `file`. A few lines is enough — it is matched against the file at the round's head, exactly first and then with whitespace collapsed. A quote that appears in more than one place is recorded as `unlocatable` rather than anchored to the first hit, so quote enough to be unambiguous.",
++            "type": [
++              "string",
++              "null"
++            ]
++          },
+           "problem": {
+             "type": "string"
+           },
+diff --git a/src/gdskills/contracts/review-finding.schema.json b/src/gdskills/contracts/review-finding.schema.json
+index c6b4de080..e1edb813b 100644
+--- a/src/gdskills/contracts/review-finding.schema.json
++++ b/src/gdskills/contracts/review-finding.schema.json
+@@ -100,7 +100,40 @@
+       "description": "Which repository `file` and `line` are in. Null, the default, means the repository under review. A cross-repo claim names the producer here and pins the ref it was read at in `evidence`; without this field a finding about another service's behaviour could not say where its evidence lived, so the rule that such a claim is `info` unless it has a `file:line` at a pinned ref could not be checked by anything but the reviewer's word. Declared in BOTH this schema and skills/review/review-orchestrator/reviewer-finding.schema.json: this one is additionalProperties:false, so a finding carrying `repo` is rejected here if only the reviewer-side schema knows about it."
+     },
+     "file": { "type": ["string", "null"] },
+-    "line": { "type": ["integer", "null"], "minimum": 1 },
++    "line": {
++      "title": "Where the finding points — DERIVED when the finding quotes code",
++      "description": "Reported by the reviewer only when there is nothing to quote. When `quote` is present this field is OUTPUT: `review ingest` finds the quote in `file` at the round's head and writes the line the match started on, overwriting whatever the reviewer said and recording both in `locator`. The reason is the failure it replaces — nothing compared a reported line to anything, so a number that had drifted travelled into findings.json, into the report, and into the disposition recorded against it. On a fix round the file has moved under the finding by construction, which is when the reported number is least trustworthy and most acted upon.",
++      "type": ["integer", "null"],
++      "minimum": 1
++    },
++    "quote": {
++      "title": "The code this finding is about, copied verbatim out of `file`",
++      "description": "What replaces asking the model for a line number: a model is poor at counting lines and good at repeating text it has just read. The quote is matched against `file` at the round's head — exactly first, then with whitespace collapsed, then not at all. A quote that matches in more than one place is `unlocatable` rather than anchored to the first hit, because choosing among them would be a guess wearing a line number. Absent for a finding that is about the round rather than a site.",
++      "type": ["string", "null"]
++    },
++    "locator": {
++      "title": "How `line` was arrived at",
++      "description": "Present exactly when the finding carries a quote. `derived` means the quote was found and `line` is where; `unlocatable` means it was not, and then `line` is null rather than a number nobody checked. `reported_line` keeps what the reviewer said, so a round can measure how far the claims drifted from the code — which is the only way to know whether deriving them repaired anything or is insurance.",
++      "type": "object",
++      "additionalProperties": false,
++      "required": ["state"],
++      "properties": {
++        "state": { "type": "string", "enum": ["derived", "unlocatable"] },
++        "method": { "type": "string", "enum": ["exact", "whitespace-normalised"] },
++        "reason": { "type": ["string", "null"] },
++        "reported_line": { "type": ["integer", "null"], "minimum": 1 }
++      },
++      "allOf": [
++        {
++          "if": { "properties": { "state": { "const": "derived" } }, "required": ["state"] },
++          "then": { "required": ["method"] }
++        },
++        {
++          "if": { "properties": { "state": { "const": "unlocatable" } }, "required": ["state"] },
++          "then": { "required": ["reason"] }
++        }
++      ]
++    },
+     "symbol": { "type": ["string", "null"] },
+     "problem": { "type": "string" },
+     "impact": { "type": "string" },
+diff --git a/src/review/cost-cli.test.ts b/src/review/cost-cli.test.ts
+new file mode 100644
+index 000000000..89df75bbb
+--- /dev/null
++++ b/src/review/cost-cli.test.ts
+@@ -0,0 +1,172 @@
++// The three points a round's price is visible at, driven through the real CLI.
++//
++// A test over `cost.ts` alone would stay green through a release in which
++// nothing called it — which is the state `review budget` was already in, with a
++// ceiling it printed and a spend nothing ever fed.
++
++import { afterEach, beforeEach, expect, test } from "bun:test";
++import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
++import { tmpdir } from "node:os";
++import path from "node:path";
++import { reviewCommand } from "../commands/review";
++import type { ManagedReviewManifest } from "./types";
++
++const ORIGINAL_CWD = process.cwd();
++let ROOT = "";
++let logs: string[] = [];
++const realLog = console.log;
++
++beforeEach(async () => {
++  ROOT = await mkdtemp(path.join(tmpdir(), "gd-cost-cli-"));
++  await mkdir(path.join(ROOT, ".metaproject"), { recursive: true });
++  await mkdir(path.join(ROOT, "docs", "requirements", "managed-review-feedback-loop", "schemas"), { recursive: true });
++  await writeFile(
++    path.join(ROOT, "docs", "requirements", "managed-review-feedback-loop", "schemas", "managed-review-package.schema.json"),
++    await readFile(
++      path.join(ORIGINAL_CWD, "docs", "requirements", "managed-review-feedback-loop", "schemas", "managed-review-package.schema.json"),
++      "utf8",
++    ),
++    "utf8",
++  );
++  logs = [];
++  console.log = (...args: unknown[]) => {
++    logs.push(args.map(String).join(" "));
++  };
++  process.exitCode = 0;
++});
++
++afterEach(async () => {
++  console.log = realLog;
++  process.chdir(ORIGINAL_CWD);
++  process.exitCode = 0;
++  if (ROOT) {
++    await rm(ROOT, { recursive: true, force: true });
++    ROOT = "";
++  }
++});
++
++const REPORT = [
++  "# Round",
++  "",
++  "```json keryx:findings",
++  JSON.stringify([
++    {
++      id: "F-001",
++      reviewer: "review-logic",
++      severity: "minor",
++      problem: "stated",
++      impact: "stated",
++      suggested_fix: "stated",
++      evidence: "stated",
++      confidence: "high",
++    },
++  ]),
++  "```",
++  "",
++].join("\n");
++
++test("point 1 — `review scope` prints an estimate before anything is dispatched", async () => {
++  const diff = path.join(ROOT, "change.diff");
++  await writeFile(
++    diff,
++    [
++      "diff --git a/src/a.ts b/src/a.ts",
++      "index 1111111..2222222 100644",
++      "--- a/src/a.ts",
++      "+++ b/src/a.ts",
++      "@@ -1,2 +1,3 @@",
++      " const a = 1;",
++      "+const b = 2;",
++      " const c = 3;",
++      "",
++    ].join("\n"),
++    "utf8",
++  );
++  process.chdir(ROOT);
++  await reviewCommand(["scope", "--diff", diff, "--reviewers", "review-logic,review-style,review-security-code"]);
++  const out = logs.join("\n");
++  expect(out).toContain("### Estimated cost");
++  expect(out).toContain("per reviewer");
++  expect(out).toContain("across 3 reviewers");
++  expect(out).toContain("an estimate, not a measurement");
++});
++
++test("point 1 — the machine-readable forms carry no prose about money", async () => {
++  const diff = path.join(ROOT, "change.diff");
++  await writeFile(diff, "diff --git a/src/a.ts b/src/a.ts\n--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1 +1,2 @@\n a\n+b\n", "utf8");
++  process.chdir(ROOT);
++  await reviewCommand(["scope", "--diff", diff, "--json"]);
++  expect(logs.join("\n")).not.toContain("Estimated cost");
++  logs = [];
++  await reviewCommand(["scope", "--diff", diff, "--scoped-diff"]);
++  expect(logs.join("\n")).not.toContain("Estimated cost");
++});
++
++test("point 2 — `review ingest` records what the round used, on the package", async () => {
++  await writeFile(path.join(ROOT, "report.md"), REPORT, "utf8");
++  process.chdir(ROOT);
++  await reviewCommand([
++    "ingest",
++    "--report",
++    "report.md",
++    "--ref",
++    "report.md",
++    "--review-id",
++    "2026-09-15-cost",
++    "--tokens-in",
++    "440000",
++    "--tokens-out",
++    "10000",
++    "--spent",
++    "1.25",
++  ]);
++  const manifest = JSON.parse(
++    await readFile(path.join(ROOT, ".metaproject", "reviews", "2026-09-15-cost", "manifest.json"), "utf8"),
++  ) as ManagedReviewManifest;
++  expect(manifest.cost).toEqual({ input_tokens: 440_000, output_tokens: 10_000, spent_usd: 1.25 });
++});
++
++test("point 2 — a round that reported nothing records NO cost, rather than zero", async () => {
++  await writeFile(path.join(ROOT, "report.md"), REPORT, "utf8");
++  process.chdir(ROOT);
++  await reviewCommand(["ingest", "--report", "report.md", "--ref", "report.md", "--review-id", "2026-09-15-silent"]);
++  const manifest = JSON.parse(
++    await readFile(path.join(ROOT, ".metaproject", "reviews", "2026-09-15-silent", "manifest.json"), "utf8"),
++  ) as ManagedReviewManifest;
++  expect(manifest.cost).toBeUndefined();
++});
++
++test("point 3 — `review complete` prints the cost per retained finding", async () => {
++  await writeFile(path.join(ROOT, "report.md"), REPORT, "utf8");
++  process.chdir(ROOT);
++  await reviewCommand([
++    "ingest",
++    "--report",
++    "report.md",
++    "--ref",
++    "report.md",
++    "--review-id",
++    "2026-09-15-priced",
++    "--tokens-in",
++    "440000",
++    "--tokens-out",
++    "10000",
++  ]);
++  logs = [];
++  await reviewCommand(["complete", "2026-09-15-priced"]);
++  const out = logs.join("\n");
++  expect(out).toContain("tokens: 450,000");
++  expect(out).toContain("retained findings: 1");
++  expect(out).toContain("per retained finding: 450,000 tokens");
++});
++
++test("point 3 — an unpriced round says `not recorded`, and says that is not zero", async () => {
++  await writeFile(path.join(ROOT, "report.md"), REPORT, "utf8");
++  process.chdir(ROOT);
++  await reviewCommand(["ingest", "--report", "report.md", "--ref", "report.md", "--review-id", "2026-09-15-unpriced"]);
++  logs = [];
++  await reviewCommand(["complete", "2026-09-15-unpriced"]);
++  const out = logs.join("\n");
++  expect(out).toContain("cost: not recorded");
++  expect(out).toContain("NOT zero");
++});
+diff --git a/src/review/cost.test.ts b/src/review/cost.test.ts
+new file mode 100644
+index 000000000..d4e29854d
+--- /dev/null
++++ b/src/review/cost.test.ts
+@@ -0,0 +1,73 @@
++// Cost is estimated before, recorded after, and never invented.
++
++import { describe, expect, test } from "bun:test";
++import { costFrom, estimateTokens, renderCostPerFinding, renderScopeEstimate } from "./cost";
++
++describe("estimateTokens", () => {
++  test("characters divided by four, rounded up", () => {
++    expect(estimateTokens("")).toBe(0);
++    expect(estimateTokens("abc")).toBe(1);
++    expect(estimateTokens("a".repeat(4000))).toBe(1000);
++  });
++});
++
++describe("renderScopeEstimate", () => {
++  test("multiplies by the fan-out, because every reviewer gets the diff", () => {
++    const rendered = renderScopeEstimate("a".repeat(4000), 5);
++    expect(rendered).toContain("1,000 prompt tokens of scoped diff per reviewer");
++    expect(rendered).toContain("5,000 across 5 reviewers");
++  });
++
++  test("says the estimate is an estimate, every time", () => {
++    expect(renderScopeEstimate("abcd", 1)).toContain("an estimate, not a measurement");
++  });
++
++  test("with no reviewer count it declines to multiply rather than assuming one", () => {
++    const rendered = renderScopeEstimate("a".repeat(400), 0);
++    expect(rendered).toContain("reviewer count not supplied");
++    expect(rendered).not.toContain("across 0 reviewers");
++  });
++});
++
++describe("costFrom", () => {
++  test("nothing reported is undefined, not a zeroed record", () => {
++    expect(costFrom({})).toBeUndefined();
++    expect(costFrom({ inputTokens: undefined, outputTokens: undefined, spentUsd: undefined })).toBeUndefined();
++  });
++
++  test("a reported zero IS a measurement and survives", () => {
++    expect(costFrom({ inputTokens: 0 })).toEqual({ input_tokens: 0 });
++  });
++
++  test("each half is independent", () => {
++    expect(costFrom({ outputTokens: 12 })).toEqual({ output_tokens: 12 });
++    expect(costFrom({ spentUsd: 1.5 })).toEqual({ spent_usd: 1.5 });
++  });
++});
++
++describe("renderCostPerFinding", () => {
++  test("an unreported cost says so, and says it is not zero", () => {
++    const lines = renderCostPerFinding(undefined, 3).join("\n");
++    expect(lines).toContain("cost: not recorded");
++    expect(lines).toContain("NOT zero");
++  });
++
++  test("tokens per retained finding", () => {
++    const lines = renderCostPerFinding({ input_tokens: 440_000, output_tokens: 10_000 }, 5).join("\n");
++    expect(lines).toContain("tokens: 450,000");
++    expect(lines).toContain("per retained finding: 90,000 tokens");
++  });
++
++  test("dollars per retained finding, to four places", () => {
++    const lines = renderCostPerFinding({ spent_usd: 1.23 }, 4).join("\n");
++    expect(lines).toContain("per retained finding: 0.3075 USD");
++  });
++
++  test("a round that retained nothing reports the bill, not an infinity", () => {
++    const lines = renderCostPerFinding({ input_tokens: 38_000 }, 0).join("\n");
++    expect(lines).toContain("tokens: 38,000");
++    expect(lines).toContain("retained findings: 0");
++    expect(lines).toContain("only the bill");
++    expect(lines).not.toContain("Infinity");
++  });
++});
+diff --git a/src/review/cost.ts b/src/review/cost.ts
+new file mode 100644
+index 000000000..ce2a582ef
+--- /dev/null
++++ b/src/review/cost.ts
+@@ -0,0 +1,136 @@
++// What a round costs, before and after.
++//
++// `keryx review budget` has printed a ceiling and `spent: not recorded` since it
++// was written, and it says so honestly — "`not recorded` is not `under`". What
++// it has never had is anything feeding it. Nothing estimated a round before it
++// was dispatched and nothing recorded what it actually used, so the one number
++// the fan-out has to justify itself with did not exist: the round on flow 260
++// spent roughly 450k subagent tokens on a 707-line diff and found a blocker,
++// and neither half of that sentence is written down anywhere a later reader
++// could find it.
++//
++// Three points, deliberately small:
++//
++//   - `review scope` estimates from the scoped diff, BEFORE the dispatch, so the
++//     price is known while it is still a decision.
++//   - `review ingest` records what the caller reports it used.
++//   - `review complete` prints the cost per retained finding.
++//
++// None of it guesses. An estimate is labelled an estimate; an unreported spend
++// stays `not recorded` and never becomes `0`, on the same rule the rest of this
++// package follows — a zero says somebody measured.
++
++/** What a round reports having used. Every field independent and optional. */
++export type ReviewRoundCost = {
++  /** Prompt tokens across every dispatch the round made. */
++  input_tokens?: number;
++  /** Completion tokens across the same. */
++  output_tokens?: number;
++  /** What it cost in USD, when the caller knows the rates. */
++  spent_usd?: number;
++};
++
++/**
++ * Characters ÷ 4.
++ *
++ * The standard rough heuristic, and rough is the honest word: real tokenisation
++ * is model-specific and this runs before a model is chosen. It exists to answer
++ * "is this round a thousand tokens or a million" while that is still a question
++ * somebody can act on, and it is labelled `≈` everywhere it is printed so no
++ * reader mistakes it for a measurement.
++ */
++export function estimateTokens(text: string): number {
++  return Math.ceil(text.length / 4);
++}
++
++/** `12,345` — digits a person reads, not `12345`. */
++function grouped(value: number): string {
++  return value.toLocaleString("en-US");
++}
++
++/**
++ * The line `review scope` prints under the scoped diff.
++ *
++ * `reviewers` multiplies because every reviewer receives the scoped diff: the
++ * fan-out is the cost model, so a per-round estimate that ignored it would
++ * understate the thing this exists to surface.
++ */
++export function renderScopeEstimate(scopedDiff: string, reviewers: number): string {
++  const per = estimateTokens(scopedDiff);
++  const lines = [
++    `### Estimated cost`,
++    "",
++    `- ≈ ${grouped(per)} prompt tokens of scoped diff per reviewer (characters ÷ 4 — an estimate, not a measurement)`,
++  ];
++  if (reviewers > 0) {
++    lines.push(
++      `- ≈ ${grouped(per * reviewers)} across ${reviewers} reviewer${reviewers === 1 ? "" : "s"}, before their own prompts, tools and any verifier wave`,
++    );
++  } else {
++    lines.push(
++      "- reviewer count not supplied, so the fan-out is not multiplied in — pass `--reviewers a,b` to see the round's total",
++    );
++  }
++  return lines.join("\n");
++}
++
++/** Nothing reported is recorded as nothing, never as zero. */
++export function costFrom(input: {
++  inputTokens?: number | undefined;
++  outputTokens?: number | undefined;
++  spentUsd?: number | undefined;
++}): ReviewRoundCost | undefined {
++  const cost: ReviewRoundCost = {};
++  if (typeof input.inputTokens === "number") {
++    cost.input_tokens = input.inputTokens;
++  }
++  if (typeof input.outputTokens === "number") {
++    cost.output_tokens = input.outputTokens;
++  }
++  if (typeof input.spentUsd === "number") {
++    cost.spent_usd = input.spentUsd;
++  }
++  return Object.keys(cost).length === 0 ? undefined : cost;
++}
++
++/**
++ * What the round cost per finding that survived it.
++ *
++ * Printed at `review complete`, which is the first moment both halves are
++ * known. A round that retained nothing is reported as its whole cost against
++ * zero findings rather than as a division — "38,000 tokens, 0 findings
++ * retained" is the fact; a per-finding figure there would be an infinity
++ * dressed as a metric.
++ */
++export function renderCostPerFinding(cost: ReviewRoundCost | undefined, retained: number): string[] {
++  if (cost === undefined) {
++    return [
++      "cost: not recorded",
++      "  Nothing reported what this round used. That is NOT zero: pass --tokens-in/--tokens-out",
++      "  or --spent at ingest so the price of a round is a number somebody can weigh.",
++    ];
++  }
++  const tokens =
++    cost.input_tokens === undefined && cost.output_tokens === undefined
++      ? undefined
++      : (cost.input_tokens ?? 0) + (cost.output_tokens ?? 0);
++  const lines: string[] = [];
++  if (tokens !== undefined) {
++    lines.push(`tokens: ${grouped(tokens)}`);
++  }
++  if (cost.spent_usd !== undefined) {
++    lines.push(`spent: ${cost.spent_usd} USD`);
++  }
++  lines.push(`retained findings: ${retained}`);
++  if (retained === 0) {
++    lines.push("  Nothing was retained, so there is no per-finding figure — only the bill.");
++    return lines;
++  }
++  if (tokens !== undefined) {
++    lines.push(`per retained finding: ${grouped(Math.round(tokens / retained))} tokens`);
++  }
++  if (cost.spent_usd !== undefined) {
++    lines.push(`per retained finding: ${(cost.spent_usd / retained).toFixed(4)} USD`);
++  }
++  return lines;
++}
+diff --git a/src/review/locate-ingest.test.ts b/src/review/locate-ingest.test.ts
+new file mode 100644
+index 000000000..8de558d6d
+--- /dev/null
++++ b/src/review/locate-ingest.test.ts
+@@ -0,0 +1,138 @@
++// The line on the record is the line the REAL ingest derived.
++//
++// `locate.test.ts` covers the matcher in isolation; this drives
++// `createManagedReviewPackage` against a real temp tree and reads
++// `findings.json` back off disk. A test over the matcher alone would have
++// stayed green through a release in which nothing called it — the same shape of
++// defect this pipeline keeps recording about itself.
++
++import { afterEach, beforeEach, expect, test } from "bun:test";
++import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
++import { tmpdir } from "node:os";
++import path from "node:path";
++import { createManagedReviewPackage, type ManagedReviewIngestInput } from "./managed";
++import type { StructuredReviewFinding } from "./types";
++
++const ORIGINAL_CWD = process.cwd();
++let ROOT = "";
++
++const SOURCE = [
++  "export function greet(name: string): string {",
++  "  const trimmed = name.trim();",
++  "  return `hello ${trimmed}`;",
++  "}",
++].join("\n");
++
++beforeEach(async () => {
++  ROOT = await mkdtemp(path.join(tmpdir(), "gd-locate-ingest-"));
++  await mkdir(path.join(ROOT, ".metaproject"), { recursive: true });
++  await mkdir(path.join(ROOT, "docs", "requirements", "managed-review-feedback-loop", "schemas"), { recursive: true });
++  await writeFile(
++    path.join(ROOT, "docs", "requirements", "managed-review-feedback-loop", "schemas", "managed-review-package.schema.json"),
++    await readFile(
++      path.join(ORIGINAL_CWD, "docs", "requirements", "managed-review-feedback-loop", "schemas", "managed-review-package.schema.json"),
++      "utf8",
++    ),
++    "utf8",
++  );
++  await mkdir(path.join(ROOT, "src"), { recursive: true });
++  await writeFile(path.join(ROOT, "src", "greet.ts"), SOURCE, "utf8");
++});
++
++afterEach(async () => {
++  if (ROOT) {
++    await rm(ROOT, { recursive: true, force: true });
++    ROOT = "";
++  }
++});
++
++function finding(over: Partial<StructuredReviewFinding> = {}): StructuredReviewFinding {
++  return {
++    id: "F-001",
++    reviewer: "review-logic",
++    severity: "minor",
++    problem: "the greeting drops an empty name",
++    impact: "an empty name renders as a trailing space",
++    suggested_fix: "return a bare hello when the name is empty",
++    evidence: "called it with an empty string",
++    confidence: "high",
++    file: "src/greet.ts",
++    ...over,
++  };
++}
++
++async function ingest(over: Partial<ManagedReviewIngestInput> = {}): Promise<StructuredReviewFinding[]> {
++  const result = await createManagedReviewPackage({
++    cwd: ROOT,
++    mode: "ingest",
++    reviewId: "2026-09-15-locate",
++    target: { kind: "report", ref: "review.md" },
++    reportText: "# Round\n\nno machine-readable block here\n",
++    findings: [finding()],
++    now: new Date("2026-09-15T12:00:00Z"),
++    ...over,
++  });
++  return JSON.parse(await readFile(path.join(ROOT, result.path, "findings.json"), "utf8")) as StructuredReviewFinding[];
++}
++
++test("AC1: the recorded line is derived from the quote, not taken from the reviewer", async () => {
++  // The reviewer says 99. The code is on line 3. 3 wins, and the record keeps
++  // 99 so the drift is measurable rather than merely corrected.
++  const [recorded] = await ingest({
++    findings: [finding({ line: 99, quote: "  return `hello ${trimmed}`;" })],
++  });
++  expect(recorded?.line).toBe(3);
++  expect(recorded?.locator).toEqual({ state: "derived", method: "exact", reported_line: 99 });
++  expect(recorded?.quote).toBe("  return `hello ${trimmed}`;");
++});
++
++test("AC2: a quote that is not in the tree yields unlocatable and NO line", async () => {
++  const [recorded] = await ingest({
++    findings: [finding({ line: 2, quote: "  return `howdy ${trimmed}`;" })],
++  });
++  expect(recorded?.line).toBeNull();
++  expect(recorded?.locator?.state).toBe("unlocatable");
++  expect(recorded?.locator).toMatchObject({ reason: "the quote does not appear in the file", reported_line: 2 });
++});
++
++test("AC2: a file that is not in the tree says THAT, not that the quote is missing", async () => {
++  const [recorded] = await ingest({
++    findings: [finding({ file: "src/gone.ts", line: 4, quote: "anything at all" })],
++  });
++  expect(recorded?.line).toBeNull();
++  expect(recorded?.locator?.state === "unlocatable" && recorded.locator.reason).toContain("no such file");
++});
++
++test("AC2: an ambiguous quote is unlocatable rather than anchored to the first hit", async () => {
++  await writeFile(path.join(ROOT, "src", "twice.ts"), ["const a = 1;", "const b = 2;", "const a = 1;"].join("\n"), "utf8");
++  const [recorded] = await ingest({
++    findings: [finding({ file: "src/twice.ts", line: 1, quote: "const a = 1;" })],
++  });
++  expect(recorded?.line).toBeNull();
++  expect(recorded?.locator?.state === "unlocatable" && recorded.locator.reason).toContain("2 places");
++});
++
++test("BOUNDARY: a finding with no quote keeps its reported line and carries no locator", async () => {
++  // Not every finding is about a site. Inventing a locator for one that never
++  // quoted anything would report a check that did not happen.
++  const [recorded] = await ingest({ findings: [finding({ line: 2 })] });
++  expect(recorded?.line).toBe(2);
++  expect(recorded?.locator).toBeUndefined();
++});
++
++test("a quote naming a file outside the round's tree is refused, not read", async () => {
++  const [recorded] = await ingest({
++    findings: [finding({ file: "../../../etc/hosts", line: 1, quote: "localhost" })],
++  });
++  expect(recorded?.line).toBeNull();
++  expect(recorded?.locator?.state).toBe("unlocatable");
++});
++
++test("the tree reader is injectable, and what it returns is what gets located", async () => {
++  const [recorded] = await ingest({
++    readTreeFile: async (relative: string) => (relative === "src/injected.ts" ? "alpha\nbeta\ngamma\n" : null),
++    findings: [finding({ file: "src/injected.ts", line: 1, quote: "gamma" })],
++  });
++  expect(recorded?.line).toBe(3);
++  expect(recorded?.locator).toMatchObject({ state: "derived", method: "exact" });
++});
+diff --git a/src/review/locate.test.ts b/src/review/locate.test.ts
+new file mode 100644
+index 000000000..84a632ec9
+--- /dev/null
++++ b/src/review/locate.test.ts
+@@ -0,0 +1,145 @@
++// The line a finding carries must be one somebody derived, not one somebody claimed.
++//
++// Written before the wiring, so every case here fails against a pipeline that
++// takes `line` as reported: none of these findings carries a usable line at all.
++
++import { describe, expect, test } from "bun:test";
++import { locateFinding, locateQuote, quoteLines } from "./locate";
++
++const FILE = [
++  "export function greet(name: string): string {", // 1
++  "  const trimmed = name.trim();", // 2
++  "  if (trimmed === \"\") {", // 3
++  "    return \"hello\";", // 4
++  "  }", // 5
++  "  return `hello ${trimmed}`;", // 6
++  "}", // 7
++  "", // 8
++  "export function farewell(name: string): string {", // 9
++  "  const trimmed = name.trim();", // 10
++  "  return `bye ${trimmed}`;", // 11
++  "}", // 12
++].join("\n");
++
++describe("locateQuote", () => {
++  test("a unique single line yields its 1-based number", () => {
++    expect(locateQuote(FILE, "  return `hello ${trimmed}`;")).toEqual({
++      state: "derived",
++      method: "exact",
++      line: 6,
++    });
++  });
++
++  test("a multi-line quote anchors at its first line", () => {
++    const quote = ["  if (trimmed === \"\") {", "    return \"hello\";", "  }"].join("\n");
++    expect(locateQuote(FILE, quote)).toEqual({ state: "derived", method: "exact", line: 3 });
++  });
++
++  test("indentation lost on the way through a code fence still matches", () => {
++    // The same two lines, re-indented to column zero — what a markdown round-trip
++    // does to a snippet. Common-indent stripping is what saves this.
++    const quote = ["if (trimmed === \"\") {", "  return \"hello\";"].join("\n");
++    expect(locateQuote(FILE, quote)).toEqual({ state: "derived", method: "exact", line: 3 });
++  });
++
++  test("blank edges around the quote are ignored", () => {
++    expect(locateQuote(FILE, "\n\n  return `bye ${trimmed}`;\n\n")).toEqual({
++      state: "derived",
++      method: "exact",
++      line: 11,
++    });
++  });
++
++  test("a quote whose spacing drifted falls through to the normalised pass", () => {
++    expect(locateQuote(FILE, "return    `bye ${trimmed}`;")).toEqual({
++      state: "derived",
++      method: "whitespace-normalised",
++      line: 11,
++    });
++  });
++
++  test("AMBIGUITY — a quote matching twice is unlocatable, never the first hit", () => {
++    // `const trimmed = name.trim();` appears at lines 2 and 10. Choosing 2
++    // because it comes first is exactly the confident wrong anchor this exists
++    // to prevent.
++    const outcome = locateQuote(FILE, "  const trimmed = name.trim();");
++    expect(outcome.state).toBe("unlocatable");
++    expect(outcome.state === "unlocatable" && outcome.reason).toContain("2 places");
++    expect(outcome.state === "unlocatable" && outcome.reason).toContain("lines 2, 10");
++  });
++
++  test("a quote that is not in the file says so", () => {
++    const outcome = locateQuote(FILE, "  return `howdy ${trimmed}`;");
++    expect(outcome).toEqual({ state: "unlocatable", reason: "the quote does not appear in the file" });
++  });
++
++  test("an empty quote is unlocatable rather than matching everything", () => {
++    expect(locateQuote(FILE, "   \n  \n")).toEqual({ state: "unlocatable", reason: "the quote is empty" });
++  });
++
++  test("CRLF on either side does not defeat the match", () => {
++    const crlf = FILE.replace(/\n/g, "\r\n");
++    expect(locateQuote(crlf, "  return `hello ${trimmed}`;\r\n")).toEqual({
++      state: "derived",
++      method: "exact",
++      line: 6,
++    });
++  });
++});
++
++describe("quoteLines", () => {
++  test("strips the common indent and nothing else", () => {
++    expect(quoteLines("    a\n      b\n    c\n")).toEqual(["a", "  b", "c"]);
++  });
++
++  test("a blank line inside the quote does not reset the common indent to zero", () => {
++    expect(quoteLines("    a\n\n    b")).toEqual(["a", "", "b"]);
++  });
++});
++
++describe("locateFinding", () => {
++  const reader = (text: string | null) => async () => text;
++
++  test("derives the line and keeps what the reviewer reported alongside it", async () => {
++    const record = await locateFinding(
++      { file: "src/greet.ts", quote: "  return `hello ${trimmed}`;", line: 42 },
++      reader(FILE),
++    );
++    expect(record).toEqual({ state: "derived", method: "exact", line: 6, reported_line: 42 });
++  });
++
++  test("REGRESSION — a reviewer's wrong line does not survive into the record", async () => {
++    // The whole point: 42 is what the reviewer said, 6 is where the code is.
++    const record = await locateFinding(
++      { file: "src/greet.ts", quote: "  return `hello ${trimmed}`;", line: 42 },
++      reader(FILE),
++    );
++    expect(record?.state === "derived" && record.line).toBe(6);
++    expect(record?.state === "derived" && record.line).not.toBe(42);
++  });
++
++  test("a missing file is its own reason, distinct from a missing quote", async () => {
++    const record = await locateFinding(
++      { file: "src/gone.ts", quote: "anything", line: 3 },
++      reader(null),
++    );
++    expect(record).toEqual({
++      state: "unlocatable",
++      reason: "no such file at this round's head: src/gone.ts",
++      reported_line: 3,
++    });
++  });
++
++  test("a quote with no file named is refused rather than searched for", async () => {
++    const record = await locateFinding({ quote: "  return `hello ${trimmed}`;", line: 6 }, reader(FILE));
++    expect(record?.state).toBe("unlocatable");
++    expect(record?.state === "unlocatable" && record.reason).toContain("names no file");
++  });
++
++  test("BOUNDARY — a finding with no quote is left entirely alone", async () => {
++    // Not every finding is about a site: an `info` about the round itself has
++    // nothing to quote, and inventing a locator for it would be noise.
++    expect(await locateFinding({ file: "src/greet.ts", line: 6 }, reader(FILE))).toBeUndefined();
++    expect(await locateFinding({ file: "src/greet.ts", quote: "   ", line: 6 }, reader(FILE))).toBeUndefined();
++  });
++});
+diff --git a/src/review/locate.ts b/src/review/locate.ts
+new file mode 100644
+index 000000000..bc35b3bc1
+--- /dev/null
++++ b/src/review/locate.ts
+@@ -0,0 +1,176 @@
++// Where a finding actually points.
++//
++// `line` used to be whatever the reviewer said it was. The schema took it as an
++// integer and `review ingest` compared it to nothing, so a number that had
++// drifted — or was never right — travelled into `findings.json`, into the round
++// report, and into the disposition somebody later recorded against it. On a FIX
++// round the file has moved under the finding by construction, which is exactly
++// when the anchor is least trustworthy and most consequential.
++//
++// So the reviewer no longer reports a line. It reports the code: `quote`, copied
++// out of the file it is talking about. This module finds that quote and the line
++// is what falls out. A model is poor at counting lines and good at repeating
++// text it has just read, and this asks it only for the second.
++//
++// Two rules keep the matcher from becoming a second guesser:
++//
++//   - Exact first, whitespace-normalised second, then give up. Nothing fuzzy.
++//     A near-match confidently anchored to the wrong site is worse than an
++//     honest `unlocatable`, because a wrong anchor is acted on and an admitted
++//     one is investigated.
++//   - A quote that matches in more than one place is `unlocatable`, not "the
++//     first one". Ambiguity is a fact about the quote, and resolving it by
++//     position would be a guess wearing a line number.
++//
++// Deliberately NOT implemented: the second model call that regenerates a more
++// precise snippet when the match fails (`internal/diff/relocation.go` in
++// alibaba/open-code-review). It buys accuracy for tokens on a path we can
++// simply label. Revisit if `unlocatable` turns out to be common — the re-ingest
++// of an existing round is how that number gets measured, not guessed.
++
++/** How a finding's `line` was arrived at. */
++export type LocatorRecord =
++  | { state: "derived"; method: "exact" | "whitespace-normalised"; line: number; reported_line?: number | null }
++  | { state: "unlocatable"; reason: string; reported_line?: number | null };
++
++export type LocateOutcome =
++  | { state: "derived"; method: "exact" | "whitespace-normalised"; line: number }
++  | { state: "unlocatable"; reason: string };
++
++/** Lines of `quote`, with blank edges dropped and common indentation removed. */
++export function quoteLines(quote: string): string[] {
++  const lines = quote.replace(/\r\n/g, "\n").split("\n");
++  while (lines.length > 0 && (lines[0] as string).trim() === "") {
++    lines.shift();
++  }
++  while (lines.length > 0 && (lines[lines.length - 1] as string).trim() === "") {
++    lines.pop();
++  }
++  if (lines.length === 0) {
++    return [];
++  }
++  // A quote lifted out of an indented block carries that indentation; the file
++  // carries it too, so exact matching still works. Stripping the COMMON indent
++  // is what makes a quote copied from a markdown code fence — which is often
++  // re-indented on the way in — still match exactly.
++  const indents = lines
++    .filter((line) => line.trim() !== "")
++    .map((line) => (line.match(/^[ \t]*/)?.[0] ?? "").length);
++  const common = indents.length === 0 ? 0 : Math.min(...indents);
++  return lines.map((line) => line.slice(common));
++}
++
++/** Whitespace runs collapsed, edges trimmed — the second and last attempt. */
++function normalise(line: string): string {
++  return line.trim().replace(/\s+/g, " ");
++}
++
++/** Drop the indentation the whole block shares, keeping relative structure. */
++function deindent(lines: readonly string[]): string[] {
++  const indents = lines
++    .filter((line) => line.trim() !== "")
++    .map((line) => (line.match(/^[ \t]*/)?.[0] ?? "").length);
++  const common = indents.length === 0 ? 0 : Math.min(...indents);
++  return lines.map((line) => line.slice(common));
++}
++
++/**
++ * Every 1-based line where `needle` runs contiguously through `haystack`.
++ *
++ * `shape` is applied to the candidate WINDOW rather than to the whole file,
++ * which is what lets a quote be compared against the file at its own
++ * indentation: the window is de-indented the same way the quote was, so a
++ * snippet that lost its leading spaces on the way through a code fence still
++ * matches the indented original, and one that kept them matches too.
++ */
++function findRuns(
++  haystack: readonly string[],
++  needle: readonly string[],
++  shape: (window: readonly string[]) => string[],
++): number[] {
++  const hits: number[] = [];
++  if (needle.length === 0 || needle.length > haystack.length) {
++    return hits;
++  }
++  for (let start = 0; start + needle.length <= haystack.length; start += 1) {
++    const window = shape(haystack.slice(start, start + needle.length));
++    if (window.every((line, offset) => line === needle[offset])) {
++      hits.push(start + 1); // 1-based, like every line number a human reads
++    }
++  }
++  return hits;
++}
++
++/**
++ * Locate `quote` in `fileText`, or say why not.
++ *
++ * Pure: the caller reads the file, so a test can state the tree in a string and
++ * the production path can state it from disk.
++ */
++export function locateQuote(fileText: string, quote: string): LocateOutcome {
++  const needle = quoteLines(quote);
++  if (needle.length === 0) {
++    return { state: "unlocatable", reason: "the quote is empty" };
++  }
++  const haystack = fileText.replace(/\r\n/g, "\n").split("\n");
++
++  // Exact: both sides de-indented and right-trimmed. Trailing spaces are
++  // invisible to whoever copied the quote, so treating them as a difference
++  // would reject a match nobody could see was not one.
++  const exact = findRuns(
++    haystack,
++    deindent(needle).map((line) => line.trimEnd()),
++    (window) => deindent(window).map((line) => line.trimEnd()),
++  );
++  if (exact.length === 1) {
++    return { state: "derived", method: "exact", line: exact[0] as number };
++  }
++  if (exact.length > 1) {
++    return {
++      state: "unlocatable",
++      reason: `the quote matches ${exact.length} places in the file (lines ${exact.join(", ")}); an anchor chosen among them would be a guess`,
++    };
++  }
++
++  const loose = findRuns(haystack, needle.map(normalise), (window) => window.map(normalise));
++  if (loose.length === 1) {
++    return { state: "derived", method: "whitespace-normalised", line: loose[0] as number };
++  }
++  if (loose.length > 1) {
++    return {
++      state: "unlocatable",
++      reason: `the quote matches ${loose.length} places once whitespace is normalised (lines ${loose.join(", ")}); an anchor chosen among them would be a guess`,
++    };
++  }
++  return { state: "unlocatable", reason: "the quote does not appear in the file" };
++}
++
++/**
++ * The same, against a tree.
++ *
++ * `readFile` returns null for a path that is not there — which is its own
++ * reason, distinct from "the quote is not in it", because the two send whoever
++ * reads the record to different places.
++ */
++export async function locateFinding(
++  finding: { file?: string | null | undefined; quote?: string | null | undefined; line?: number | null | undefined },
++  readFile: (relativePath: string) => Promise<string | null>,
++): Promise<LocatorRecord | undefined> {
++  const quote = typeof finding.quote === "string" ? finding.quote : "";
++  if (quote.trim() === "") {
++    return undefined; // Nothing to locate against; `line` stays as reported.
++  }
++  const reported = typeof finding.line === "number" ? finding.line : null;
++  const file = typeof finding.file === "string" ? finding.file : "";
++  if (file === "") {
++    return { state: "unlocatable", reason: "the finding quotes code but names no file", reported_line: reported };
++  }
++  const text = await readFile(file);
++  if (text === null) {
++    return { state: "unlocatable", reason: `no such file at this round's head: ${file}`, reported_line: reported };
++  }
++  const outcome = locateQuote(text, quote);
++  return outcome.state === "derived"
++    ? { state: "derived", method: outcome.method, line: outcome.line, reported_line: reported }
++    : { state: "unlocatable", reason: outcome.reason, reported_line: reported };
++}
+diff --git a/src/review/managed.ts b/src/review/managed.ts
+index 4174b240b..057c4385a 100644
+--- a/src/review/managed.ts
++++ b/src/review/managed.ts
+@@ -36,6 +36,8 @@ import {
+   renderFilterStatsMarkdown,
+   type ReviewFilterStats,
+ } from "./filter-stats";
++import { locateFinding } from "./locate";
++import { repairMechanicalOmissions, type FindingRepair } from "./repair";
+ import { writeReviewNotes, type ReviewNoteResult } from "./review-notes";
+ import {
+   DEFAULT_VERIFICATION_MODE,
+@@ -221,6 +223,19 @@ export async function createManagedReviewPackage(
+     source: input.findings,
+     reviewers,
+   });
++  // Typing, filled in; judgement, still refused. Runs BEFORE `assignGlobalIds`,
++  // because a finding with no `id` mints the key `<reviewId>#undefined` and five
++  // of them then collide on it — which is how a round was lost to a field the
++  // report's own ordering already contained.
++  const repairs = repairMechanicalOmissions(reported);
++
++  // The line becomes a derived fact here, BEFORE anything downstream reads it:
++  // the verifier cites a finding, the cap reports one by site, `scope.md` lists
++  // them, and every one of those would otherwise be quoting a number nobody
++  // checked. A finding with no quote is untouched — it keeps whatever it said,
++  // and says so by carrying no locator.
++  await anchorFindings(reported, input);
++
+   // Minted BEFORE the verifier runs, because a claim names a finding by
+   // `global_id` and the key has to exist for it to be resolvable. Round N+1
+   // carries round N's key verbatim; only a finding without one is minted here.
+@@ -348,6 +363,7 @@ export async function createManagedReviewPackage(
+     coverage,
+     at,
+     filterStats,
++    repairs,
+   });
+ 
+   const validation = await validateManagedReviewManifest(input.cwd, manifest);
+@@ -904,6 +920,7 @@ function buildManifest(args: {
+   coverage: ReviewCoverageEntry[];
+   at: string;
+   filterStats: ReviewFilterStats;
++  repairs: FindingRepair[];
+ }): ManagedReviewManifest {
+   // Flow 209 AC2. Written only when the caller supplied one: the property is
+   // omitted rather than set to `null`, so `keryx review status` can tell "nobody
+@@ -928,6 +945,13 @@ function buildManifest(args: {
+     },
+     coverage: args.coverage,
+     filter_stats: args.filterStats,
++    // Written only when something was repaired. An empty array on every package
++    // would say "a repair pass ran and did nothing" on records where the
++    // distinction never arose — the same rule `cross_family_review` above
++    // follows, and for the same reason.
++    ...(args.repairs.length === 0 ? {} : { repairs: args.repairs }),
++    // Same rule: absent means nobody reported, which is not the same as zero.
++    ...(args.input.cost === undefined ? {} : { cost: args.input.cost }),
+     ...(crossFamily === undefined ? {} : { cross_family_review: crossFamily }),
+     createdAt: args.at,
+     updatedAt: args.at,
+@@ -1040,6 +1064,63 @@ function triage(
+   });
+ }
+ 
++/**
++ * Replace every quoted finding's reported line with the line its quote is on.
++ *
++ * Runs over the round's own tree (`input.cwd`), which for an ingest at the
++ * round's head IS the head — and when it is not, the locator says so rather
++ * than guessing: a quote that no longer appears reads `unlocatable`, which is
++ * the honest answer for a report ingested against a moved tree.
++ *
++ * `readTreeFile` is injectable so a test can state a tree in a map instead of
++ * on disk; production reads the working tree.
++ */
++async function anchorFindings(
++  findings: Array<StructuredReviewFinding & { summary: string }>,
++  input: ManagedReviewInput,
++): Promise<void> {
++  const read =
++    input.readTreeFile ??
++    (async (relative: string): Promise<string | null> => {
++      // Contained to the round's tree: a finding naming `../../etc/passwd` is a
++      // finding about a file this round is not reviewing, and reading it would
++      // be the record doing something nobody asked for.
++      const resolved = path.resolve(input.cwd, relative);
++      if (resolved !== input.cwd && !resolved.startsWith(`${path.resolve(input.cwd)}${path.sep}`)) {
++        return null;
++      }
++      try {
++        return await readFile(resolved, "utf8");
++      } catch {
++        return null;
++      }
++    });
++
++  for (const finding of findings) {
++    const locator = await locateFinding(finding, read);
++    if (locator === undefined) {
++      continue;
++    }
++    if (locator.state === "derived") {
++      finding.line = locator.line;
++      finding.locator = {
++        state: "derived",
++        method: locator.method,
++        ...(locator.reported_line === undefined ? {} : { reported_line: locator.reported_line }),
++      };
++      continue;
++    }
++    // Null, not the reported number. A line nobody could confirm is worse than
++    // no line: it is acted on, and the acting is where the cost lands.
++    finding.line = null;
++    finding.locator = {
++      state: "unlocatable",
++      reason: locator.reason,
++      ...(locator.reported_line === undefined ? {} : { reported_line: locator.reported_line }),
++    };
++  }
++}
++
+ /** The persisted record: exactly the properties `review-finding.schema.json` allows. */
+ function toContractFinding(finding: StructuredReviewFinding): StructuredReviewFinding {
+   const record: StructuredReviewFinding = {
+@@ -1058,6 +1139,15 @@ function toContractFinding(finding: StructuredReviewFinding): StructuredReviewFi
+   if (finding.line !== undefined) {
+     record.line = finding.line;
+   }
++  // The quote is what `line` was derived FROM, so a record carrying a derived
++  // line without it would be a number no later reader could re-check. They are
++  // written as a pair or not at all.
++  if (finding.quote !== undefined) {
++    record.quote = finding.quote;
++  }
++  if (finding.locator !== undefined) {
++    record.locator = finding.locator;
++  }
+   if (finding.symbol !== undefined) {
+     record.symbol = finding.symbol;
+   }
+diff --git a/src/review/repair-ingest.test.ts b/src/review/repair-ingest.test.ts
+new file mode 100644
+index 000000000..3ee75000d
+--- /dev/null
++++ b/src/review/repair-ingest.test.ts
+@@ -0,0 +1,112 @@
++// The round that would have died, ingesting.
++//
++// On 2026-09-12 a report reached `review ingest` with no `id` on any finding
++// and was refused with "…#undefined claimed by 5 findings". Everything needed
++// to fill that in was in the report. These drive the REAL ingest, so a repair
++// that exists but is never called fails here rather than passing review.
++
++import { afterEach, beforeEach, expect, test } from "bun:test";
++import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
++import { tmpdir } from "node:os";
++import path from "node:path";
++import { createManagedReviewPackage, type ManagedReviewIngestInput } from "./managed";
++import type { ManagedReviewManifest, StructuredReviewFinding } from "./types";
++
++const ORIGINAL_CWD = process.cwd();
++let ROOT = "";
++
++beforeEach(async () => {
++  ROOT = await mkdtemp(path.join(tmpdir(), "gd-repair-ingest-"));
++  await mkdir(path.join(ROOT, ".metaproject"), { recursive: true });
++  await mkdir(path.join(ROOT, "docs", "requirements", "managed-review-feedback-loop", "schemas"), { recursive: true });
++  await writeFile(
++    path.join(ROOT, "docs", "requirements", "managed-review-feedback-loop", "schemas", "managed-review-package.schema.json"),
++    await readFile(
++      path.join(ORIGINAL_CWD, "docs", "requirements", "managed-review-feedback-loop", "schemas", "managed-review-package.schema.json"),
++      "utf8",
++    ),
++    "utf8",
++  );
++});
++
++afterEach(async () => {
++  if (ROOT) {
++    await rm(ROOT, { recursive: true, force: true });
++    ROOT = "";
++  }
++});
++
++/** A finding as a reviewer actually emits one: a title, and no `id`. */
++function untitledFinding(over: Record<string, unknown> = {}): Record<string, unknown> {
++  return {
++    reviewer: "review-logic",
++    severity: "minor",
++    title: "the guard drops a real phone number",
++    impact: "a number beside a word is no longer redacted",
++    suggested_fix: "require positive evidence of an identifier",
++    evidence: "ran the six cases before and after",
++    confidence: "high",
++    ...over,
++  };
++}
++
++async function ingest(findings: unknown[], over: Partial<ManagedReviewIngestInput> = {}): Promise<{
++  findings: StructuredReviewFinding[];
++  manifest: ManagedReviewManifest;
++}> {
++  const result = await createManagedReviewPackage({
++    cwd: ROOT,
++    mode: "ingest",
++    reviewId: "2026-09-15-repair",
++    target: { kind: "report", ref: "review.md" },
++    reportText: "# Round\n\nno machine-readable block here\n",
++    findings: findings as never,
++    now: new Date("2026-09-15T12:00:00Z"),
++    ...over,
++  });
++  return {
++    findings: JSON.parse(await readFile(path.join(ROOT, result.path, "findings.json"), "utf8")) as StructuredReviewFinding[],
++    manifest: JSON.parse(await readFile(path.join(ROOT, result.path, "manifest.json"), "utf8")) as ManagedReviewManifest,
++  };
++}
++
++test("AC3: five findings with no id ingest cleanly, numbered by report order", async () => {
++  const { findings, manifest } = await ingest([
++    untitledFinding(),
++    untitledFinding({ title: "the scan is unbounded" }),
++    untitledFinding({ title: "the branch is unreachable" }),
++    untitledFinding({ title: "the test names the wrong surface" }),
++    untitledFinding({ title: "the ssn rule has the same hole" }),
++  ]);
++  expect(findings.map((finding) => finding.id)).toEqual(["F-001", "F-002", "F-003", "F-004", "F-005"]);
++  // And the keys they used to collide on are distinct.
++  expect(new Set(findings.map((finding) => finding.global_id)).size).toBe(5);
++  expect(manifest.repairs?.filter((repair) => repair.field === "id")).toHaveLength(5);
++});
++
++test("AC3: `problem` is carried across from the reviewer's own title, and the record says so", async () => {
++  const { findings, manifest } = await ingest([untitledFinding()]);
++  expect(findings[0]?.problem).toBe("the guard drops a real phone number");
++  expect(manifest.repairs).toEqual([
++    { finding: "F-001", field: "id", source: "position 1 in the report" },
++    { finding: "F-001", field: "problem", source: "the finding's own title" },
++  ]);
++});
++
++test("AC4: a blocker with no class_scope is still refused — repair does not reach judgement", async () => {
++  await expect(
++    ingest([untitledFinding({ severity: "blocker" })]),
++  ).rejects.toThrow(/class_scope/);
++});
++
++test("AC4: a finding with neither problem nor title is still refused", async () => {
++  const { title: _dropped, ...noTitle } = untitledFinding();
++  await expect(ingest([noTitle])).rejects.toThrow(/review-finding\.schema\.json/);
++});
++
++test("BOUNDARY: a complete report records no repairs at all", async () => {
++  const { manifest } = await ingest([
++    untitledFinding({ id: "F-042", problem: "stated by the reviewer" }),
++  ]);
++  expect(manifest.repairs).toBeUndefined();
++});
+diff --git a/src/review/repair.test.ts b/src/review/repair.test.ts
+new file mode 100644
+index 000000000..7762c8c56
+--- /dev/null
++++ b/src/review/repair.test.ts
+@@ -0,0 +1,106 @@
++// The repair fills in typing and refuses judgement.
++
++import { describe, expect, test } from "bun:test";
++import { repairMechanicalOmissions } from "./repair";
++
++describe("what it fills in", () => {
++  test("an absent id is minted from the finding's position", () => {
++    const findings = [{ problem: "a" }, { problem: "b" }, { problem: "c" }];
++    const repairs = repairMechanicalOmissions(findings as never);
++    expect(findings.map((f) => (f as { id?: string }).id)).toEqual(["F-001", "F-002", "F-003"]);
++    expect(repairs).toHaveLength(3);
++    expect(repairs[0]).toEqual({ finding: "F-001", field: "id", source: "position 1 in the report" });
++  });
++
++  test("a minted id never collides with one the report already used", () => {
++    const findings = [{ id: "F-001", problem: "a" }, { problem: "b" }];
++    repairMechanicalOmissions(findings as never);
++    expect((findings[1] as { id?: string }).id).toBe("F-002");
++  });
++
++  test("and skips past a taken number rather than overwriting it", () => {
++    // Position 1 would mint F-001, which the second finding already holds.
++    const findings = [{ problem: "a" }, { id: "F-001", problem: "b" }];
++    repairMechanicalOmissions(findings as never);
++    expect((findings[0] as { id?: string }).id).toBe("F-002");
++    expect((findings[1] as { id?: string }).id).toBe("F-001");
++  });
++
++  test("an absent problem is taken from the finding's own title", () => {
++    const findings = [{ id: "F-001", title: "the guard drops a real phone number" }];
++    const repairs = repairMechanicalOmissions(findings as never);
++    expect((findings[0] as { problem?: string }).problem).toBe("the guard drops a real phone number");
++    expect(repairs).toEqual([{ finding: "F-001", field: "problem", source: "the finding's own title" }]);
++  });
++
++  test("a blank string counts as absent — an empty id is not an id", () => {
++    const findings = [{ id: "   ", problem: "  ", title: "something" }];
++    repairMechanicalOmissions(findings as never);
++    expect((findings[0] as { id?: string }).id).toBe("F-001");
++    expect((findings[0] as { problem?: string }).problem).toBe("something");
++  });
++});
++
++describe("what it leaves alone", () => {
++  test("a finding that has everything is untouched and reports no repair", () => {
++    const findings = [{ id: "F-042", problem: "stated", title: "different" }];
++    expect(repairMechanicalOmissions(findings as never)).toEqual([]);
++    expect(findings[0]).toEqual({ id: "F-042", problem: "stated", title: "different" });
++  });
++
++  test("no title means no problem is invented", () => {
++    // The reviewer never stated the defect, so the refusal downstream is right.
++    const findings = [{ id: "F-001", impact: "bad" }];
++    repairMechanicalOmissions(findings as never);
++    expect((findings[0] as { problem?: string }).problem).toBeUndefined();
++  });
++
++  test("AC4 — class_scope, evidence and disposition are never filled in", () => {
++    const findings = [{ severity: "blocker", title: "t" }];
++    repairMechanicalOmissions(findings as never);
++    const repaired = findings[0] as Record<string, unknown>;
++    expect(repaired["class_scope"]).toBeUndefined();
++    expect(repaired["evidence"]).toBeUndefined();
++    expect(repaired["disposition"]).toBeUndefined();
++    expect(repaired["impact"]).toBeUndefined();
++    expect(repaired["suggested_fix"]).toBeUndefined();
++    expect(repaired["confidence"]).toBeUndefined();
++  });
++});
++
++describe("the acceptance check", () => {
++  test("AC4 — a repair that wrote anything outside id and problem is refused", () => {
++    // Simulates the widening this guard exists to catch: the array is mutated
++    // behind the repair's back, exactly as a future edit to repair.ts would.
++    const findings = [{ id: "F-001", problem: "stated" }] as Array<Record<string, unknown>>;
++    const sneaky = new Proxy(findings, {
++      get(target, prop, receiver) {
++        if (prop === "entries") {
++          return function* entries(): Generator<[number, Record<string, unknown>]> {
++            const finding = target[0] as Record<string, unknown>;
++            finding["class_scope"] = { sites: ["invented"], enumeration_method: "none" };
++            yield [0, finding];
++          };
++        }
++        return Reflect.get(target, prop, receiver);
++      },
++    });
++    expect(() => repairMechanicalOmissions(sneaky as never)).toThrow(/class_scope/);
++  });
++
++  test("a repair that changed the number of findings is refused", () => {
++    const findings = [{ id: "F-001", problem: "stated" }] as Array<Record<string, unknown>>;
++    const growing = new Proxy(findings, {
++      get(target, prop, receiver) {
++        if (prop === "entries") {
++          return function* entries(): Generator<[number, Record<string, unknown>]> {
++            target.push({ id: "F-002", problem: "appeared from nowhere" });
++            yield [0, target[0] as Record<string, unknown>];
++          };
++        }
++        return Reflect.get(target, prop, receiver);
++      },
++    });
++    expect(() => repairMechanicalOmissions(growing as never)).toThrow(/number of findings/);
++  });
++});
+diff --git a/src/review/repair.ts b/src/review/repair.ts
+new file mode 100644
+index 000000000..d7a450244
+--- /dev/null
++++ b/src/review/repair.ts
+@@ -0,0 +1,121 @@
++// What the pipeline may fill in for a reviewer, and what it must never.
++//
++// `review ingest` refuses a report that does not satisfy the contract, and that
++// is right for anything the reviewer had to DECIDE. It was also refusing things
++// the reviewer merely had to TYPE. On 2026-09-12 one round took three
++// consecutive refusals — missing `id`, then missing `problem`, then missing
++// `class_scope` — and the first of them read:
++//
++//     Refusing to record two findings under one key:
++//     …#undefined claimed by 5 findings.
++//
++// Nothing in that is a judgement. The ids were absent, the order they were
++// reported in was right there, and the round stood still while they were typed
++// in by hand.
++//
++// So two fields are repaired and no others:
++//
++//   - `id`, from the finding's position in the report. Pure ordering, no claim.
++//   - `problem`, from the finding's own `title`, and ONLY from it. `title` is
++//     not a contract property — it is dropped on projection — so a reviewer
++//     that wrote a one-line statement of the defect currently has it discarded
++//     and is then refused for not having stated the defect. Copying the
++//     reviewer's own sentence is not the pipeline inventing a claim.
++//
++// Everything else stays refused. `class_scope` is an enumeration somebody has
++// to perform; `evidence` is a thing somebody has to have run; a disposition is
++// an outcome somebody has to have observed. Filling any of those in would
++// produce a record that validates and says nothing — which is the failure
++// `coerceStructured` already documents, and this module is deliberately its
++// narrow exception rather than a hole in it.
++//
++// The acceptance check below is copied in spirit from
++// `internal/tool/comment_args_repair.go` in alibaba/open-code-review, where a
++// repaired batch is accepted only if it introduces no field the schema does not
++// define and preserves the object count. A repair that cannot be checked is a
++// corruption nobody notices.
++
++import type { StructuredReviewFinding } from "./types";
++
++/** What was filled in, for whom, and from where. */
++export type FindingRepair = {
++  /** The finding's `id` AFTER repair — the only name it has that is stable. */
++  finding: string;
++  field: "id" | "problem";
++  /** Where the value came from: a position, or another property of the same finding. */
++  source: string;
++};
++
++/** The fields this module is permitted to write. Widening it fails `acceptRepair`. */
++const REPAIRABLE = new Set(["id", "problem"]);
++
++type LooseFinding = Partial<StructuredReviewFinding> & Record<string, unknown>;
++
++function isBlank(value: unknown): boolean {
++  return typeof value !== "string" || value.trim() === "";
++}
++
++/** `F-001`, `F-002`, … skipping any number a report already used. */
++function mintId(index: number, taken: ReadonlySet<string>): string {
++  let n = index + 1;
++  let candidate = `F-${String(n).padStart(3, "0")}`;
++  while (taken.has(candidate)) {
++    n += 1;
++    candidate = `F-${String(n).padStart(3, "0")}`;
++  }
++  return candidate;
++}
++
++/**
++ * Refuse a repair that did more than it was allowed to.
++ *
++ * Not defensive programming: it is the guard that makes "we only repair
++ * mechanics" checkable instead of merely stated. A later change that starts
++ * filling in `class_scope` fails here rather than passing review.
++ */
++function acceptRepair(before: ReadonlyArray<ReadonlySet<string>>, after: readonly LooseFinding[]): void {
++  if (before.length !== after.length) {
++    throw new Error(
++      `Refusing a repair that changed the number of findings: ${before.length} in, ${after.length} out. A repair may fill fields in; it may never add or drop a finding.`,
++    );
++  }
++  for (const [index, finding] of after.entries()) {
++    const had = before[index] as ReadonlySet<string>;
++    const added = Object.keys(finding).filter((key) => !had.has(key));
++    const illegal = added.filter((key) => !REPAIRABLE.has(key));
++    if (illegal.length > 0) {
++      throw new Error(
++        `Refusing a repair that wrote ${illegal.join(", ")} onto finding ${index + 1}: only ${[...REPAIRABLE].join(" and ")} may be filled in. Everything else is a claim the reviewer has to make.`,
++      );
++    }
++  }
++}
++
++/**
++ * Fill in `id` and `problem` where they are mechanically recoverable.
++ *
++ * Mutates in place — the caller owns the array and everything downstream reads
++ * the same objects — and returns what it did, so the package can record that a
++ * value was supplied rather than authored.
++ */
++export function repairMechanicalOmissions(findings: LooseFinding[]): FindingRepair[] {
++  const before = findings.map((finding) => new Set(Object.keys(finding)));
++  const taken = new Set(findings.map((finding) => finding.id).filter((id): id is string => !isBlank(id)));
++  const repairs: FindingRepair[] = [];
++
++  for (const [index, finding] of findings.entries()) {
++    if (isBlank(finding.id)) {
++      const minted = mintId(index, taken);
++      taken.add(minted);
++      finding.id = minted;
++      repairs.push({ finding: minted, field: "id", source: `position ${index + 1} in the report` });
++    }
++    if (isBlank(finding.problem) && !isBlank(finding["title"])) {
++      finding.problem = String(finding["title"]).trim();
++      repairs.push({ finding: finding.id as string, field: "problem", source: "the finding's own title" });
++    }
++  }
++
++  acceptRepair(before, findings);
++  return repairs;
++}
+diff --git a/src/review/types.ts b/src/review/types.ts
+index a34df577c..654902b72 100644
+--- a/src/review/types.ts
++++ b/src/review/types.ts
+@@ -11,6 +11,8 @@ import type { ReviewCapsRecord } from "./caps";
+ // filter-stats producer imports the pre-filter shapes declared below, so a value
+ // import back would close a runtime cycle. Both directions are erased.
+ import type { ReviewFilterStats } from "./filter-stats";
++import type { ReviewRoundCost } from "./cost";
++import type { FindingRepair } from "./repair";
+ import type { ReviewNoteResult } from "./review-notes";
+ // Type-only: the decision is COMPUTED in `lib/provider-config`, which is where
+ // the provider registry has its single reader, and only carried here. A value
+@@ -106,6 +108,17 @@ export type ManagedReviewManifest = {
+    * back and says `not recorded` rather than letting the silence pass.
+    */
+   filter_stats?: ReviewFilterStats | undefined;
++  /**
++   * Fields the ingest supplied rather than the reviewer authoring them.
++   * Written only when something was repaired — see
++   * {@link module:review/repair}.
++   */
++  repairs?: FindingRepair[] | undefined;
++  /**
++   * What the round reported having used. Absent means nobody reported —
++   * never zero. See {@link module:review/cost}.
++   */
++  cost?: ReviewRoundCost | undefined;
+   /**
+    * Which model family reviewed this round, and why (flow 209, AC2).
+    *
+@@ -364,7 +377,16 @@ export type StructuredReviewFinding = {
+   evidence: string;
+   confidence: ReviewFindingConfidence;
+   file?: string | null | undefined;
++  /**
++   * DERIVED at ingest whenever {@link quote} is present — see
++   * {@link module:review/locate}. Reported by the reviewer only for a finding
++   * with nothing to quote.
++   */
+   line?: number | null | undefined;
++  /** The code the finding is about, copied out of {@link file}. */
++  quote?: string | null | undefined;
++  /** How {@link line} was arrived at. Present exactly when {@link quote} is. */
++  locator?: ReviewFindingLocator | undefined;
+   symbol?: string | null | undefined;
+   dedupe_key?: string | null | undefined;
+   blocking_merge?: boolean | undefined;
+@@ -445,8 +467,27 @@ export type NormalizedReviewFinding = StructuredReviewFinding & {
+   class_scope_present?: boolean | undefined;
+ };
+ 
++/**
++ * How a finding's `line` was arrived at.
++ *
++ * `derived` carries the method that found the quote; `unlocatable` carries the
++ * reason it was not found, and then `line` is null rather than a number nobody
++ * checked. `reported_line` keeps what the reviewer claimed either way — it is
++ * the only thing that can later measure how far those claims drifted.
++ */
++export type ReviewFindingLocator =
++  | { state: "derived"; method: "exact" | "whitespace-normalised"; reported_line?: number | null }
++  | { state: "unlocatable"; reason: string; reported_line?: number | null };
++
+ export type ManagedReviewInput = {
+   cwd: string;
++  /**
++   * Read a repo-relative file from the round's tree, or null when it is not
++   * there. Defaults to reading `cwd` from disk; a test states the tree in a map
++   * instead. Used to locate a finding's quote — see
++   * {@link module:review/locate}.
++   */
++  readTreeFile?: ((relativePath: string) => Promise<string | null>) | undefined;
+   mode: ManagedReviewMode;
+   target: ManagedReviewTarget;
+   flowId?: string | undefined;
+@@ -546,6 +587,8 @@ export type ManagedReviewInput = {
+   spend?: number | undefined;
+   /** Defaults to {@link module:review/caps.DEFAULT_SPEND_CEILING_USD}. */
+   spendCeiling?: number | undefined;
++  /** What the round used, as the caller measured it. See {@link module:review/cost}. */
++  cost?: ReviewRoundCost | undefined;
+   /**
+    * The parallel dispatch plan, when the caller has one.
+    *

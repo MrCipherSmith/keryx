@@ -1,0 +1,19 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "partial", "gid": "G3", "why": "G3 says swallowed cursor failures leave the entry returned as committed and later exposed when the cursor advances, but it frames this as a stale comment, so acting on it may only change the doc." },
+    { "tid": "T2", "verdict": "match", "gid": "G5", "why": "G5 flags the same constructor doing synchronous, throwing file I/O, which makes in-memory construction impossible." },
+    { "tid": "T3", "verdict": "match", "gid": "G6", "why": "G6 flags the same if/else-if chain over kind, whose bare else absorbs new kinds without an exhaustiveness check." },
+    { "tid": "T4", "verdict": "match", "gid": "G4", "why": "G4 flags the same output-argument signature of diffExecutionPlans." },
+    { "tid": "T5", "verdict": "miss", "gid": null, "why": "No candidate raises the transition/change naming inconsistency." },
+    { "tid": "T6", "verdict": "partial", "gid": "G2", "why": "G2 notes that parseEntry's \"Invalid entry\" names no journal path, but its main point is torn-line handling, so a fix aimed at that need not add context to the error." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "valid", "why": "Real: appendFile rejecting after plan.json is committed makes writePlan reject and skip notify, although the plan was written; this is distinct from T1's swallowed-cursor defect." },
+    { "gid": "G2", "label": "truth", "why": "Partial for T6 (context-free parseEntry error); the torn-line point is also a real issue." },
+    { "gid": "G3", "label": "truth", "why": "Partial for T1: it describes the swallowed cursor failure returning an uncommitted entry." },
+    { "gid": "G4", "label": "truth", "why": "Match for T4." },
+    { "gid": "G5", "label": "truth", "why": "Match for T2." },
+    { "gid": "G6", "label": "truth", "why": "Match for T3." },
+    { "gid": "G7", "label": "noise", "why": "An info-level placement and unused-export concern that is taste, not a defect a maintainer would need to fix." }
+  ]
+}

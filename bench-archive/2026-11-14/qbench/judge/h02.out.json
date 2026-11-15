@@ -1,0 +1,18 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "match", "gid": "G1", "why": "G1 names the same swallowed mkdir/writeFile failure in writeExportFile behind KERYX_VERBOSE, leading to a false success message and exit 0." },
+    { "tid": "T2", "verdict": "match", "gid": "G3", "why": "G3 reports the same rethrow in collectRunRows that drops the original error without { cause }." },
+    { "tid": "T3", "verdict": "match", "gid": "G6", "why": "G6 flags runHistoryExport as overlong and mixing option parsing (format inference, --since regex, timestamp normalisation) with orchestration and I/O." },
+    { "tid": "T4", "verdict": "match", "gid": "G5", "why": "G5 identifies renderRunLine's four positional parameters, the behaviour-selecting boolean, and the at/pages duplication of run fields." },
+    { "tid": "T5", "verdict": "match", "gid": "G4", "why": "G4 names the same label-sanitising block copied at all three listed sites." },
+    { "tid": "T6", "verdict": "match", "gid": "G2", "why": "G2 reports the same collectRunRows doc comment claiming oldest-first while listWikiRuns returns newest first with no re-sort." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "truth", "why": "Matches T1." },
+    { "gid": "G2", "label": "truth", "why": "Matches T6." },
+    { "gid": "G3", "label": "truth", "why": "Matches T2." },
+    { "gid": "G4", "label": "truth", "why": "Matches T5." },
+    { "gid": "G5", "label": "truth", "why": "Matches T4." },
+    { "gid": "G6", "label": "truth", "why": "Matches T3." }
+  ]
+}

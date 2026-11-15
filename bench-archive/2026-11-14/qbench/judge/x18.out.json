@@ -1,0 +1,12 @@
+{
+  "truth": [],
+  "candidates": [
+    { "gid": "G1", "label": "noise", "why": "Inline three-branch decision with a documented 'two heartbeats' factor is a structural taste preference, not a defect a maintainer would need to fix." },
+    { "gid": "G2", "label": "noise", "why": "Positional parameters on a local test helper with a doc comment explaining both ages is a readability preference." },
+    { "gid": "G3", "label": "noise", "why": "Repeating a small literal expression across test cases is minor test-style duplication under a reasonable threshold." },
+    { "gid": "G4", "label": "noise", "why": "'As the base copy did' is ambiguous wording rather than a clear false claim, and the same comment lists exactly what is copied; torn, so the lower label." },
+    { "gid": "G5", "label": "valid", "why": "The stop message cites a single MAX_SIGNATURE_FILES window while the gate reads that budget per tree (working data and package separately), contradicting the guide text updated in the same change." },
+    { "gid": "G6", "label": "noise", "why": "The describe title is an unchanged context line and still describes its contents (nested git checkouts); not introduced by the change." },
+    { "gid": "G7", "label": "noise", "why": "Per-audience doc prose restating durations is the project's convention, as the reviewer itself concedes at info severity." }
+  ]
+}

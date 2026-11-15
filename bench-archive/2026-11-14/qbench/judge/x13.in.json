@@ -1,0 +1,154 @@
+{
+ "truth": [
+  {
+   "tid": "T1",
+   "file": "src/session/execution-plan-history.ts",
+   "line": 72,
+   "severity": "major",
+   "problem": "recordPlanRevision appends the journal line, then swallows a failed cursor (commit-marker) write with a stderr log only and still returns the entry as recorded; setExecutionPlan/updateExecutionPlan resolve as success.",
+   "impact": "When the cursor write fails (disk full, permission, rename error) the appended revision sits past the cursor: ExecutionPlanHistory/renderExecutionPlanChangelog omit it although the write reported success, and the next successful record advances the cursor and silently commits the stale line, so journal and marker disagree and the changelog shows wrong history.",
+   "quote": "process.stderr.write(`plan history: cursor update failed: ${message(error)}\\n`);"
+  },
+  {
+   "tid": "T2",
+   "file": "src/session/execution-plan-history.ts",
+   "line": 122,
+   "severity": "minor",
+   "problem": "ExecutionPlanHistory's constructor performs synchronous file I/O (reads cursor and journal, parses, may throw) instead of taking loaded entries or exposing a static/async load.",
+   "impact": "The class cannot be constructed without a real session dir on disk, so tests and callers must stage files; construction can throw I/O errors and blocks the event loop.",
+   "quote": "constructor(readonly dir: string) {"
+  },
+  {
+   "tid": "T3",
+   "file": "src/session/execution-plan-history.ts",
+   "line": 104,
+   "severity": "minor",
+   "problem": "describeChange dispatches on the PlanTransition kind discriminant with a five-branch if/else-if chain, while the same module family uses Record<Status, ...> lookup maps for this kind of dispatch (SNAPSHOT_STATUS_RANK in execution-plan.ts, STATUS_LABEL in flow/check-ac.ts).",
+   "impact": "Adding a transition kind needs another branch and the final bare else silently absorbs any new kind as 'moved'; a Record<PlanTransition['kind'], ...> map would be exhaustiveness-checked.",
+   "quote": "} else if (change.kind === \"renamed\") {"
+  },
+  {
+   "tid": "T4",
+   "file": "src/session/execution-plan-history.ts",
+   "line": 37,
+   "severity": "minor",
+   "problem": "diffExecutionPlans writes its result into a caller-supplied array (output argument) and returns void instead of returning the transitions.",
+   "impact": "Callers must pre-allocate and know the array is mutated; reusing a non-empty array silently mixes results; the function cannot be used in an expression.",
+   "quote": "next: ExecutionPlan, out: PlanTransition[]): void {"
+  },
+  {
+   "tid": "T5",
+   "file": "src/session/execution-plan-history.ts",
+   "line": 145,
+   "severity": "minor",
+   "problem": "The same entity is named 'transition' (PlanTransition, entry.transitions, the diff output) and 'change' (describeChange, changesFor, the `change` parameters) within the diff.",
+   "impact": "Readers must work out that changes and transitions are the same records; searching for one name misses the other.",
+   "quote": "changesFor(itemId: string): PlanTransition[] {"
+  },
+  {
+   "tid": "T6",
+   "file": "src/session/execution-plan-history.ts",
+   "line": 99,
+   "severity": "minor",
+   "problem": "parseEntry throws a generic \"Invalid entry\" with no journal path, line number, or failing field (contrast the cursor error and ExecutionPlanValidationError, which carry context).",
+   "impact": "A corrupt plan-history.jsonl makes the changelog fail with a message that does not say which file or line to fix.",
+   "quote": "throw new Error(\"Invalid entry\");"
+  }
+ ],
+ "decoys": [
+  {
+   "tid": "D1",
+   "file": "src/session/execution-plan-history.ts",
+   "line": 92,
+   "severity": "minor",
+   "problem": "Catch block around JSON.parse of the cursor file that replaces the parse error with a new Error.",
+   "impact": "None: the failure still propagates, with the original error as cause and the file path in the message.",
+   "quote": "throw new Error(`plan history cursor ${planHistoryCursorPath(dir)} is not valid JSON`, { cause: error });",
+   "why_not_a_defect": "The catch does not swallow or hide anything: it rethrows with { cause } preserved, names the offending file, and the comment explains why guessing a revision would be wrong. This is the recommended error-wrapping pattern, not an empty/log-only catch or a generic error.",
+   "did": "D1"
+  }
+ ],
+ "candidate": [
+  {
+   "id": "G1",
+   "file": "src/session/execution-plan-history.ts",
+   "line": 72,
+   "severity": "major",
+   "problem": "A failed cursor write is caught, logged to stderr, and recordPlanRevision still returns the entry as if it were committed. The catch has no comment giving a reason, and the caller (writePlan, execution-plan.ts:178) goes on to notify listeners and return success. Per error-handling.mdc Rule 3 / Iron Law 1, a catch that only logs while the caller proceeds is a defect. The journal line was appended, but the cursor never advanced, so ExecutionPlanHistory filters that revision out.",
+   "impact": "When writeFileAtomic on plan-history.cursor.json fails (EACCES, ENOSPC), the operator's changelog silently leaves out a revision that the write path reported as journaled. The revision only shows up if a later write happens to advance the cursor. The returned PlanHistoryEntry is a value the caller can mistake for a committed one.",
+   "quote": "} catch (error) {\n    process.stderr.write(`plan history: cursor update failed: ${message(error)}\\n`);\n  }\n  return entry;"
+  },
+  {
+   "id": "G2",
+   "file": "src/session/execution-plan.ts",
+   "line": 178,
+   "severity": "minor",
+   "problem": "recordPlanRevision is awaited inside the lock after plan.json has already been written atomically. If appendFile throws, writePlan rejects even though the new plan is persisted, and notify() is skipped. One operation now signals failure for an outcome that actually succeeded: the plan write and its secondary journal have no separate failure semantics.",
+   "impact": "Trigger: appendFile on plan-history.jsonl fails. The caller sees an error, keeps its old expectedRevision and retries. It then gets ExecutionPlanConflictError against its own successful write, and subscribers never hear about the new plan.",
+   "quote": "await writeFileAtomic(executionPlanPath(dir), `${JSON.stringify(result, null, 2)}\\n`);\n    await recordPlanRevision(dir, current, result);"
+  },
+  {
+   "id": "G3",
+   "file": "src/session/execution-plan-history.ts",
+   "line": 87,
+   "severity": "minor",
+   "problem": "readCursor returns 0 when the cursor parses as JSON but has no numeric revision. That is a failure returned as a valid value. It contradicts the comment a few lines below, which says the code refuses to guess a revision because guessing 'would either hide committed entries or surface uncommitted ones'. Returning 0 is exactly such a guess: it hides every committed entry.",
+   "impact": "If a cursor such as `{}` or `{\"revision\":\"3\"}` ends up on disk, the changelog shows no history and no error, while a non-JSON cursor fails loudly with the path. The same corruption class is handled in two opposite ways.",
+   "quote": "return typeof parsed.revision === \"number\" ? parsed.revision : 0;"
+  },
+  {
+   "id": "G4",
+   "file": "src/session/execution-plan-history.ts",
+   "line": 99,
+   "severity": "minor",
+   "problem": "parseEntry throws a bare 'Invalid entry' that names neither the journal file nor the line. The JSON.parse on line 97 is not wrapped either, so a malformed line surfaces as a raw SyntaxError with no path. readCursor (line 92) does this correctly with the path and `cause`, which makes the two readers in one file inconsistent (error-handling.mdc Rule 2).",
+   "impact": "An operator who hits a corrupt plan-history.jsonl gets an error that does not say which file or line to fix. Every renderExecutionPlanChangelog call then fails, with no pointer to the cause.",
+   "quote": "throw new Error(\"Invalid entry\");"
+  },
+  {
+   "id": "G5",
+   "file": "src/session/execution-plan-history.ts",
+   "line": 27,
+   "severity": "minor",
+   "problem": "The doc comment on planHistoryCursorPath says a line appended by a writer that died before updating the cursor 'is never shown as history'. That is only true for a complete line. The constructor runs parseEntry on every line before the revision filter (lines 130-134), so a torn trailing line from a crashed append throws instead of being skipped. The comment describes a guarantee the code does not provide.",
+   "impact": "A maintainer who trusts the comment will assume crash-safety that does not exist. After a mid-append crash, the history becomes unreadable instead of quietly dropping the uncommitted line.",
+   "quote": "at or below it, so a line appended by a writer that died before updating the\n * cursor is never shown as history."
+  },
+  {
+   "id": "G6",
+   "file": "src/session/execution-plan-history.ts",
+   "line": 122,
+   "severity": "minor",
+   "problem": "The ExecutionPlanHistory constructor does synchronous file I/O: it reads the cursor and the journal and parses them. solid-principles.mdc Iron Law 2 says 'A constructor performs no I/O'. The class is really a loaded value, so a static/async factory (or a load function returning the entries) would fit better.",
+   "impact": "Every `new ExecutionPlanHistory(dir)` blocks the event loop on two readFileSync calls and can throw parse errors from a constructor. The class also cannot be built from in-memory entries for tests or callers that already hold the data.",
+   "quote": "constructor(readonly dir: string) {\n    const committed = readCursor(dir);"
+  },
+  {
+   "id": "G7",
+   "file": "src/session/execution-plan.ts",
+   "line": 276,
+   "severity": "minor",
+   "problem": "renderExecutionPlanChangelog mixes I/O with a transform. It loads the journal from disk (through the ExecutionPlanHistory constructor) and then formats entries, headers and the omitted-count line in the same function. Its sibling renderExecutionPlanSnapshot takes an already-loaded plan and stays pure. The formatting of a PlanHistoryEntry[] should be a pure helper that the I/O shell calls.",
+   "impact": "The rendering can only be tested by writing files to a temp dir, as the new tests have to do. A caller that already holds a history cannot reuse the formatter without a second disk read.",
+   "quote": "export function renderExecutionPlanChangelog(dir: string, sinceRevision = 0, maxEntries = 10): string | undefined {\n  const history = new ExecutionPlanHistory(dir);"
+  },
+  {
+   "id": "G8",
+   "file": "src/session/execution-plan-history.ts",
+   "line": 37,
+   "severity": "minor",
+   "problem": "diffExecutionPlans is exported and fills a caller-supplied output array instead of returning its transitions. Both callers (recordPlanRevision at lines 64-65 and the test) just create an empty array and pass it in.",
+   "impact": "Every caller writes the boilerplate `const out = []; diffExecutionPlans(a, b, out)`. The function cannot be used in an expression, and a caller that passes a non-empty array silently mixes results.",
+   "quote": "export function diffExecutionPlans(previous: ExecutionPlan | undefined, next: ExecutionPlan, out: PlanTransition[]): void {"
+  },
+  {
+   "id": "G9",
+   "file": "src/session/execution-plan-history.ts",
+   "line": 113,
+   "severity": "info",
+   "problem": "describeChange dispatches over the PlanTransition discriminant with a 5-branch if/else chain, and the last bare `else` implicitly means 'reordered'. Nothing checks the chain for exhaustiveness, so a new transition kind would compile and render as a 'moved' line. No map or strategy precedent for this kind of dispatch was found in src/session or src/lib, so this is an observation, not a threshold finding.",
+   "impact": "Whoever adds a sixth PlanTransition kind gets no compiler error and a wrong changelog line. A `switch` with a `never` default, or a Record keyed by kind, would settle it.",
+   "quote": "} else {\n    return `^ ${change.itemId} moved ${change.from + 1} -> ${change.to + 1}`;"
+  }
+ ]
+}

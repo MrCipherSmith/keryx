@@ -1,0 +1,74 @@
+[
+  {
+    "id": "G1",
+    "file": "src/review/agents/recorded-adapter.ts",
+    "line": 83,
+    "severity": "major",
+    "problem": "loadRecordedResults signals three different failures (file missing/unreadable at line 44, invalid JSON at line 50, not an array at line 52) by returning null, with bare catches that drop the error and give no reason. The only caller, entries() in createRecordedReviewAgentAdapter, collapses null into an empty recording with `?? []`, so every execute() then returns `{ findings: [] }` with `recorded: false` as if the recorded run simply never reached the task. The sibling writeReplaySummary in the same file throws for the exact same conditions, so the two readers of one recording disagree on whether a bad file is an error.",
+    "impact": "A mistyped recordingPath or a corrupt recording produces a replay that completes cleanly with zero findings for every task; the operator running a dry run or plan-eval replay gets a plausible empty result instead of an error (error-handling.mdc Rule 1/Rule 3, Iron Laws 1-2).",
+    "quote": "const loaded = (await loadRecordedResults(options.recordingPath)) ?? [];"
+  },
+  {
+    "id": "G2",
+    "file": "src/review/agents/recorded-adapter.ts",
+    "line": 65,
+    "severity": "minor",
+    "problem": "isReplayableResult is documented and named as a predicate but mutates its argument (`entry.scopeIds.sort()`), an output-argument side effect. RecordedEntry.scopeIds (line 24) is the only non-readonly field, apparently so this can happen, and scopesMatch (line 74) silently depends on the entries having been sorted by this predicate first. The JSDoc on line 63 does not mention the mutation.",
+    "impact": "Hidden temporal coupling: anyone who builds the index without calling isReplayableResult, or reuses the predicate elsewhere, gets unsorted scopes and scopesMatch mismatches; callers of an exported predicate do not expect it to reorder their data.",
+    "quote": "entry.scopeIds.sort();"
+  },
+  {
+    "id": "G3",
+    "file": "src/review/agents/recorded-adapter.ts",
+    "line": 113,
+    "severity": "minor",
+    "problem": "LSP/ISP: the adapter declares `cancellation: false` but still implements the optional `cancel` member as a function that always throws. The ReviewAgentAdapter contract makes `cancel` optional, and the new cancelPendingDispatches (adapter-shutdown.ts:50) uses `adapter.cancel === undefined` as the 'cannot cancel' signal to skip; this adapter defeats that check, so the call is made, throws, and the rejection escapes the loop, abandoning cancellation for the remaining dispatches. No current call site reaching it with a recorded dispatch was found (the controller refuses `cancellation: false` adapters at spawn), so kept at minor.",
+    "impact": "Callers that follow the contract's own capability idiom get an exception instead of a skip; the adapter should omit `cancel` rather than stub it with a throw.",
+    "quote": "throw new Error(\"cancel is not supported by the recorded adapter\");"
+  },
+  {
+    "id": "G4",
+    "file": "src/review/agents/recorded-adapter.ts",
+    "line": 69,
+    "severity": "minor",
+    "problem": "The replay freshness window is an inline magic number `7 * 24 * 60 * 60 * 1000`, written out separately in isReplayableResult (line 69) and writeReplaySummary (line 151), plus an unnamed `3_600_000` at line 150. The two copies define one business rule (what counts as stale) that must stay identical.",
+    "impact": "Changing the window in one place makes the summary's `stale` flag disagree with what the adapter actually replays; a named constant (e.g. REPLAY_MAX_AGE_MS) would state the rule once.",
+    "quote": "return nowMs - recordedAt <= 7 * 24 * 60 * 60 * 1000;"
+  },
+  {
+    "id": "G5",
+    "file": "src/review/agents/recorded-adapter.ts",
+    "line": 129,
+    "severity": "minor",
+    "problem": "writeReplaySummary mixes I/O with a transform: it reads the file, parses, validates each entry, computes rows (age, staleness, sorting) and writes replay-summary.json, all in one function. The validation and row-building are a pure transform that should be a helper the read/write shell calls.",
+    "impact": "The summary logic cannot be tested or reused (e.g. by the adapter) without touching the filesystem (solid-principles.mdc: I/O mixed with a transform, any length).",
+    "quote": "export async function writeReplaySummary(recordingPath: string, nowMs: number = Date.now()): Promise<string> {"
+  },
+  {
+    "id": "G6",
+    "file": "src/review/agents/adapter-shutdown.ts",
+    "line": 47,
+    "severity": "minor",
+    "problem": "AdapterShutdownReport.unknownAdapter (line 15) holds dispatch ids, not adapter ids, yet its name reads as a list of unknown adapters; its sibling `skipped` is also dispatch ids. Similarly RUNNING_STATUSES (line 18) includes `queued` and `cancelling`, which are not running.",
+    "impact": "A consumer of the report will log or look up these values as adapter ids; names like `unknownAdapterDispatchIds` / `ACTIVE_STATUSES` would say what they hold.",
+    "quote": "unknownAdapter.push(dispatch.dispatchId);"
+  },
+  {
+    "id": "G7",
+    "file": "src/review/agents/adapter-shutdown.ts",
+    "line": 43,
+    "severity": "minor",
+    "problem": "Single-letter variable `n` outside a loop counter, with a trailing comment whose only job is to explain the name. The value is returned as `confirmed`, so the comment, the variable and the field use three different words for one count.",
+    "impact": "Readers must decode the name via the comment; naming it `confirmed` removes the comment.",
+    "quote": "let n = 0; // n is the number of dispatches whose adapter accepted the cancel"
+  },
+  {
+    "id": "G8",
+    "file": "src/review/agents/adapter-shutdown.ts",
+    "line": 38,
+    "severity": "minor",
+    "problem": "cancelPendingDispatches takes four positional parameters (adapters, pending, runId, reason) with two adjacent strings and no options object, while the codebase's own cancel calls pass `{ runId, dispatchId, reason }` as a named object (types.ts:156).",
+    "impact": "runId and reason are both strings and can be swapped at a call site without a type error.",
+    "quote": "reason: string,"
+  }
+]

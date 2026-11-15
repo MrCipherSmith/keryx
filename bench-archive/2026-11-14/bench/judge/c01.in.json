@@ -1,0 +1,60 @@
+{
+ "truth": [
+  {
+   "tid": "T1",
+   "file": "src/sac/fwk-service.ts",
+   "line": 191,
+   "severity": "major",
+   "problem": "The `ledgerBytes !== checkpoint.ledgerBytes` guard in `fastCheckpointState` could be deleted with the entire suite still green. Nothing observed its removal.",
+   "impact": "Without the guard the fast path reads the tail record at the STALE `tailOffset`, validates it (it is a real record), and returns the stale `headHash`. The next append then chains from a record that is no longer last — a silently broken integrity chain produced by the code whose job is to keep it intact, and worse than the tampering this flow set out to detect, because nothing refuses. The state is reachable rather than theoretical: the ledger append is the commit point and its checkpoint refresh is explicitly allowed to fail, which leaves precisely a stale checkpoint over a longer ledger.",
+   "quote": null
+  },
+  {
+   "tid": "T2",
+   "file": "src/sac/fwk-service.ts",
+   "line": 639,
+   "severity": "major",
+   "problem": "The post-append `ledgerByteLength(ledger) !== ledgerBytes` check could be deleted with the entire suite still green.",
+   "impact": "`state.digest` carries the audited pre-append bytes and the checkpoint folds the written line into it without re-reading the file. That shortcut is honest only while the file is exactly the audited prefix plus that line. Remove the check and the checkpoint commits to a byte sequence that was never on disk — this flow's own defect reintroduced one layer down, in the mechanism built to remove it.",
+   "quote": null
+  }
+ ],
+ "candidate": [
+  {
+   "id": "G1",
+   "file": "src/sac/fwk-service.ts",
+   "line": 187,
+   "severity": "major",
+   "problem": "The fast path trusts a checkpoint whose only protection is an unkeyed sha256 over its own body (checkpointHash, line 107), stored next to the ledger with the same permissions. Anyone who can rewrite a historical ledger record can also rewrite the checkpoint with contentDigest = sha256(tampered ledger) and a recomputed checkpointHash; fastCheckpointState then only compares the digest and verifies the untouched tail record, so the tampered ledger is accepted and extended. Confirmed by a probe: 3 receipts, record 0 edited same-size (cost.tokens 0 -> 9), v1.1 checkpoint re-forged with the old recordCount/headHash/tailOffset and the new digest; the 4th read succeeded and appended, while verifyAccessReceiptLedger on the resulting file reports record-hash-mismatch at index 0.",
+   "impact": "The change's stated guarantee (a historical edit is caught 'wherever it lands', the checkpoint 'can never vouch for bytes nobody verified') does not hold against the same actor the change is defending against: the append path keeps sealing new receipts onto a ledger whose chain is broken, and no full audit ever runs again while the forged checkpoint chain is carried forward by each append. The new 'legacy checkpoint over an already-tampered ledger is refused' test only covers a forged v1.0 checkpoint; the equivalent forged v1.1 checkpoint is adopted.",
+   "quote": "if (digest.copy().digest(\"hex\") !== checkpoint.contentDigest) throw new Error(\"invalid access receipt ledger: checkpoint-content-mismatch\");"
+  },
+  {
+   "id": "G2",
+   "file": "src/sac/fwk-service.ts",
+   "line": 229,
+   "severity": "major",
+   "problem": "The new truncation refusal exists only while a parseable v1.1 checkpoint is present. If the checkpoint is deleted, or replaced by anything parseCheckpoint rejects (e.g. `{}`, or a v1.0-shaped file), resolveLedgerState skips fastCheckpointState and goes straight to auditLedger, which accepts any valid prefix and writes a fresh checkpoint for it. Confirmed by a probe: two receipts, ledger rewritten to the first line only, checkpoint unlinked (and separately overwritten with `{}`); the next read succeeded in both cases. The code also deletes the checkpoint itself on any refresh failure (line 648), so the guard is routinely absent. Conversely, with an honest checkpoint the throw is permanent: every subsequent read fails with truncated-ledger / checkpoint-content-mismatch and nothing in the code repairs it.",
+   "impact": "A ledger truncated to a valid prefix is silently shortened whenever the truncating actor also removes or garbles the checkpoint file beside it, which is the claim the 'truncated to a valid prefix is refused instead of silently shortened' test and the fastCheckpointState doc comment make. Meanwhile a non-malicious divergence (restore from backup, partial sync of the two files) bricks all FWK reads for the workspace until someone hand-deletes the checkpoint, where the previous code re-audited and recovered.",
+   "quote": "if (document.checkpoint) { const fast = await fastCheckpointState(ledger, document.checkpoint, ledgerBytes); if (fast) return fast; }\n  return auditLedger(ledger, checkpointPath, verifier);"
+  },
+  {
+   "id": "G3",
+   "file": "src/sac/fwk-service.ts",
+   "line": 185,
+   "severity": "minor",
+   "problem": "The checkpoint fast path is no longer bounded: every receipt append now reads and sha256-hashes the entire ledger (digestLedgerPrefix over checkpoint.ledgerBytes) under the receipt file lock, where it previously read only the tail record (<= 1 MiB). The ledger is append-only and not rotated in this module, so per-read cost grows linearly with history. Surrounding text still describes the old property: the catch-block comment at line 646 calls the checkpoint 'a bounded verification cache', the existing test is titled 'normal receipt appends use the bounded checkpoint fast path', and the spec lists the file as the 'fast-path integrity checkpoint'.",
+   "impact": "Each FWK overview/resource read (every one emits a receipt) pays O(ledger size) I/O and hashing while holding the lock that serialises all other readers; on a long-lived workspace this turns the checkpoint from a constant-time shortcut into a full-file scan per read, only saving the JSON parse and schema validation.",
+   "quote": "const digest = await digestLedgerPrefix(handle, checkpoint.ledgerBytes);"
+  },
+  {
+   "id": "G4",
+   "file": "src/sac/fwk-service.test.ts",
+   "line": 374,
+   "severity": "minor",
+   "problem": "The 'same-size corruption of a middle receipt' test does not exercise what the change exists for. It rewrites the ledger with writeFile, which updates mtime/ctime, so the previous stat-identity checkpoint would also have missed and fallen through to the full audit, which rejects the edit; and it asserts only the generic prefix 'invalid access receipt ledger', which both the full audit (record-hash-mismatch) and the new digest check (checkpoint-content-mismatch) produce. The test therefore passes regardless of whether the content digest is compared at all. The same applies to the pre-existing first-record variant at line 341.",
+   "impact": "If the digest comparison in fastCheckpointState were removed or made to return undefined instead of throwing, this test would stay green; the mid-ledger detection the PR claims is not pinned by any assertion on the content-digest path.",
+   "quote": ".rejects.toThrow(\"invalid access receipt ledger\");"
+  }
+ ]
+}

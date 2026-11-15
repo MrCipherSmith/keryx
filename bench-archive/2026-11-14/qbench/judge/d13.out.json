@@ -1,0 +1,21 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "match", "gid": "G1", "why": "G1 names the empty catch around writeOwnerOnlyFileAtomic followed by an unconditional ok:true return." },
+    { "tid": "T2", "verdict": "match", "gid": "G4", "why": "G4 flags the JSON.parse catch that logs to stderr and rethrows the same error." },
+    { "tid": "T3", "verdict": "match", "gid": "G6", "why": "G6 flags the boolean toPinned flag switching export vs import, with the same call sites." },
+    { "tid": "T4", "verdict": "match", "gid": "G5", "why": "G5 names the same three duplicated summary blocks at the same lines." },
+    { "tid": "T5", "verdict": "match", "gid": "G3", "why": "G3 flags the JSDoc merge rule contradicted by unconditional updateProviderCatalogEntry." },
+    { "tid": "T6", "verdict": "match", "gid": "G8", "why": "G8 flags the ~57-line importProviderCatalogSnapshot mixing parsing/validation with merge/prune." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "truth", "why": "Matches T1." },
+    { "gid": "G2", "label": "valid", "why": "A missing or non-object providers field silently becomes {} while other bad fields throw, so with prune:true a malformed snapshot wipes the cache; real and introduced." },
+    { "gid": "G3", "label": "truth", "why": "Matches T5." },
+    { "gid": "G4", "label": "truth", "why": "Matches T2." },
+    { "gid": "G5", "label": "truth", "why": "Matches T4." },
+    { "gid": "G6", "label": "truth", "why": "Matches T3." },
+    { "gid": "G7", "label": "valid", "why": "The new pin step calls an export that throws on an absent cache right after a best-effort save, so a failed courtesy write can reject loadOrRefreshWith despite a valid fresh catalog; introduced by the change." },
+    { "gid": "G8", "label": "truth", "why": "Matches T6." },
+    { "gid": "G9", "label": "valid", "why": "Verified: `keryx providers pin` appears only in this new doc comment, so the doc points to a nonexistent command." }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "truth": [],
+  "candidates": [
+    { "gid": "G1", "label": "noise", "why": "The change adds about 15 lines of sweep timing and heartbeat setup to runMutation; calling that an SRP violation is a structural preference, and the two clearInterval sites are the normal signal-path and finally-path cleanup." },
+    { "gid": "G2", "label": "valid", "why": "The diff adds a fifth positional optional parameter to findReviewGateState, and about a dozen new test calls now read `findReviewGateState(root, 0, {}, undefined, now)`, while the sibling dirSignature in the same diff takes now through an options object." },
+    { "gid": "G3", "label": "noise", "why": "The duplicated stop literal already exists at 12 sites; the change follows the existing pattern and does not introduce the duplication." },
+    { "gid": "G4", "label": "noise", "why": "This is a wording complaint about a doc parenthetical whose meaning the next paragraph states correctly; it is stylistic and not a defect." },
+    { "gid": "G5", "label": "noise", "why": "The phrase 'as the base copy did' in the doc comment is a minor wording nit about historical framing; it is below the threshold a maintainer would act on." },
+    { "gid": "G6", "label": "noise", "why": "The reviewer itself calls this an observation and not a defect; prose that mirrors constants in docs and help text follows the project's convention." }
+  ]
+}

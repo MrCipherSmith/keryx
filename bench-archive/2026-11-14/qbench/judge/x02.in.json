@@ -1,0 +1,163 @@
+{
+ "truth": [
+  {
+   "tid": "T1",
+   "file": "src/harness/provider-catalog-snapshot.ts",
+   "line": 74,
+   "severity": "major",
+   "problem": "exportProviderCatalogSnapshot wraps writeOwnerOnlyFileAtomic in an empty `catch (e) {}` and then unconditionally returns { ok: true, path }.",
+   "impact": "When the destination is unwritable (missing dir, permission denied, disk full) the export reports success with a path that holds no snapshot; syncPinnedSnapshot(dir, true) and any caller tell the operator the catalog is pinned when it is not, and the later offline fallback silently finds nothing.",
+   "quote": "} catch (e) {}"
+  },
+  {
+   "tid": "T2",
+   "file": "src/harness/provider-catalog-snapshot.ts",
+   "line": 96,
+   "severity": "minor",
+   "problem": "The JSON.parse catch writes a message to stderr and then rethrows the same error.",
+   "impact": "Callers that also report the thrown error print the failure a second time; the function should either log-and-handle or wrap-and-throw, not both.",
+   "quote": "process.stderr.write(`provider catalog snapshot: ${srcPath} is not valid JSON\\n`);"
+  },
+  {
+   "tid": "T3",
+   "file": "src/harness/provider-catalog-snapshot.ts",
+   "line": 150,
+   "severity": "minor",
+   "problem": "syncPinnedSnapshot takes a boolean `toPinned` that switches between two unrelated operations (export cache to the pinned file vs import the pinned file into the cache).",
+   "impact": "Call sites read as syncPinnedSnapshot(deps.dir, true) / syncPinnedSnapshot(deps.dir, false) (provider-catalog.ts:270, 274), hiding the direction of data flow; should be two named functions.",
+   "quote": "export async function syncPinnedSnapshot(dir: string | undefined, toPinned: boolean)"
+  },
+  {
+   "tid": "T4",
+   "file": "src/harness/provider-catalog-snapshot.ts",
+   "line": 77,
+   "severity": "minor",
+   "problem": "The same three-line provider/live-count summary block (sort keys, count status === 'ok', format `N provider(s), M live`) is duplicated at provider-catalog-snapshot.ts:75-77, provider-catalog-snapshot.ts:139-141 and provider-catalog.ts:363-365.",
+   "impact": "Three copies of one formatting rule drift independently; it should be one shared helper.",
+   "quote": "const summary = `${names.length} provider(s), ${liveCount} live`;"
+  },
+  {
+   "tid": "T5",
+   "file": "src/harness/provider-catalog-snapshot.ts",
+   "line": 83,
+   "severity": "minor",
+   "problem": "The JSDoc of importProviderCatalogSnapshot says a cached entry newer than the snapshot's copy is kept and only older or missing entries are replaced, but the body calls updateProviderCatalogEntry for every accepted entry, which overwrites unconditionally.",
+   "impact": "A reader relying on the documented merge rule is misled; an import replaces fresher cached entries with older snapshot data.",
+   "quote": "An entry already in the cache that is newer than the snapshot's copy"
+  },
+  {
+   "tid": "T6",
+   "file": "src/harness/provider-catalog-snapshot.ts",
+   "line": 86,
+   "severity": "minor",
+   "problem": "importProviderCatalogSnapshot is ~57 lines mixing high-level steps (read, validate, merge, prune, summarize) with low-level detail (raw record casts, shape checks, age arithmetic).",
+   "impact": "Hard to read and test in isolation; parsing/validation, the age filter and pruning should be extracted into named helpers.",
+   "quote": "export async function importProviderCatalogSnapshot(srcPath: string, opts: SnapshotImportOptions = {})"
+  }
+ ],
+ "decoys": [
+  {
+   "tid": "D1",
+   "file": "src/harness/provider-catalog-cache.ts",
+   "line": 263,
+   "severity": "minor",
+   "problem": "removeProviderCatalogEntry swallows every lock/write error in a catch that holds only a comment.",
+   "impact": "A prune that fails leaves the entry in the cache without telling the caller.",
+   "quote": "// Best-effort, like every other write in this module.",
+   "why_not_a_defect": "This is the module's consistent, documented posture: every cache writer (saveProviderCatalogCache, clearProviderCatalogCache, updateProviderCatalogEntry) is best-effort because the cache is a courtesy. The JSDoc states the reason and it holds: the next full refresh writes only the providers it looked at, so an undropped entry is not carried over and ages out. The import result does not claim pruning happened, so no caller is misled.",
+   "did": "D1"
+  }
+ ],
+ "candidate": [
+  {
+   "id": "G1",
+   "file": "src/harness/provider-catalog-snapshot.ts",
+   "line": 74,
+   "severity": "blocker",
+   "problem": "exportProviderCatalogSnapshot swallows any write failure in an empty catch with no comment, then returns { ok: true, path, summary } as if the snapshot was written. The `ok` field can never be false, so it carries no information, and the failure is not visible anywhere. This breaks error-handling Rules 1 and 3, and Iron Laws 1 and 2.",
+   "impact": "syncPinnedSnapshot(dir, true), called from loadOrRefreshWith in provider-catalog.ts:270, reports success when the pinned file was never written (read-only dir, disk full, bad destPath). The operator turned on pinSnapshot to get an offline fallback and learns it is missing only when offline. That is the very case the feature exists for.",
+   "quote": "} catch (e) {}\n  ...\n  return { ok: true, path: destPath, summary };"
+  },
+  {
+   "id": "G2",
+   "file": "src/harness/provider-catalog-snapshot.ts",
+   "line": 96,
+   "severity": "major",
+   "problem": "The pinned-snapshot path breaks the module's best-effort posture. A caching courtesy can now throw. importProviderCatalogSnapshot throws on invalid JSON, a wrong version or a missing catalog (lines 90-108). syncPinnedSnapshot (line 156) does not catch it, and neither does loadOrRefreshWith (provider-catalog.ts:274). Every other cache operation in provider-catalog-cache.ts is documented as never throwing.",
+   "impact": "Trigger: a truncated or hand-edited provider-catalog.pinned.json, plus an empty refresh with pinSnapshot on. Outcome: the catalog load rejects instead of returning the empty fresh catalog it returned before this change, so startup and the /routing picker fail on a corrupt optional fallback file. The same applies to the export branch: it throws 'no cached catalog to export' if the best-effort saveProviderCatalogCache just before it failed silently.",
+   "quote": "process.stderr.write(`provider catalog snapshot: ${srcPath} is not valid JSON\\n`);\n    throw e;"
+  },
+  {
+   "id": "G3",
+   "file": "src/harness/provider-catalog-snapshot.ts",
+   "line": 83,
+   "severity": "minor",
+   "problem": "The doc comment states a merge rule the code does not implement. It says a cache entry newer than the snapshot's copy is kept, but the loop calls updateProviderCatalogEntry(entry) for every accepted entry (line 129), and that overwrites unconditionally. No fetchedAt comparison against the cache exists.",
+   "impact": "A reader or caller trusting the doc will assume an import cannot regress fresher cache data. A direct import over a populated cache replaces newer entries with older snapshot copies.",
+   "quote": "An entry already in the cache that is newer than the snapshot's copy\n * is kept; only older or missing entries are replaced."
+  },
+  {
+   "id": "G4",
+   "file": "src/harness/provider-catalog-snapshot.ts",
+   "line": 96,
+   "severity": "minor",
+   "problem": "Log-and-rethrow in one catch: the error is written to stderr and then rethrown unchanged. It also breaks the rethrow-with-context pattern the function uses everywhere else: a bare SyntaxError escapes instead of a contextual Error with the original as `cause`.",
+   "impact": "Whoever handles the error logs it again (a duplicate message), and the propagated error does not name the file. Callers get 'Unexpected token' with no snapshot path.",
+   "quote": "} catch (e) {\n    process.stderr.write(`provider catalog snapshot: ${srcPath} is not valid JSON\\n`);\n    throw e;"
+  },
+  {
+   "id": "G5",
+   "file": "src/harness/provider-catalog-snapshot.ts",
+   "line": 75,
+   "severity": "minor",
+   "problem": "The diff adds three copies of the same summary computation: sort the provider names, count entries with status 'ok', format '<n> provider(s), <m> live'. The copies are provider-catalog-snapshot.ts:75-77 (export), provider-catalog-snapshot.ts:139-141 (import) and provider-catalog.ts:363-365 (formatCatalogSummaryLine).",
+   "impact": "Any change to what counts as 'live', or to the wording, must be made in three places. The status line and the snapshot summaries will drift apart.",
+   "quote": "const liveCount = names.filter((name) => catalog.providers[name]?.status === \"ok\").length;\n  const summary = `${names.length} provider(s), ${liveCount} live`;"
+  },
+  {
+   "id": "G6",
+   "file": "src/harness/provider-catalog-snapshot.ts",
+   "line": 150,
+   "severity": "minor",
+   "problem": "Boolean flag parameter: `toPinned` picks between two unrelated behaviours, export (cache to file, throws when there is no cache, returns a summary) and import (file to cache, returns undefined when the file is absent). Call sites read `syncPinnedSnapshot(deps.dir, true)` and `syncPinnedSnapshot(deps.dir, false)` (provider-catalog.ts:270, :274).",
+   "impact": "At the call site you cannot tell which direction runs, and the two branches have different failure contracts hidden behind one name. Two named functions (pinCatalogSnapshot / restoreFromPinnedSnapshot) would make each contract explicit.",
+   "quote": "export async function syncPinnedSnapshot(dir: string | undefined, toPinned: boolean): Promise<string | undefined> {"
+  },
+  {
+   "id": "G7",
+   "file": "src/harness/provider-catalog-snapshot.ts",
+   "line": 86,
+   "severity": "minor",
+   "problem": "importProviderCatalogSnapshot is about 57 lines and does three separable jobs: (1) read the file and validate the snapshot envelope (version, catalog, providers), (2) filter entries by shape, name and age, (3) write to the cache (update each entry, then prune). The pure parse/filter transform sits between file I/O and the cache writes instead of living in a helper the I/O shell calls.",
+   "impact": "The envelope validation and age filter cannot be unit-tested without a file on disk and a cache dir. Changing the filter rules means editing a function that also owns lock-taking writes.",
+   "quote": "export async function importProviderCatalogSnapshot(srcPath: string, opts: SnapshotImportOptions = {}): Promise<SnapshotImportResult> {"
+  },
+  {
+   "id": "G8",
+   "file": "src/harness/provider-catalog-snapshot.ts",
+   "line": 6,
+   "severity": "minor",
+   "problem": "The module header contradicts the code in two places. It says the snapshot is written 'next to the config dir', but pinnedSnapshotFile joins it inside keryxConfigDir (line 54). It says a snapshot carries 'exactly' `models`, `status`, `balance`, `fetchedAt`, but the sanitizer also round-trips `name`, `label` and `fallbackModels`, and the snapshot wraps them in version/exportedAt/catalog.",
+   "impact": "An operator or maintainer looking for the file, or auditing which fields a snapshot exposes, is misled by the header.",
+   "quote": "// A snapshot carries exactly what the cache carries — `models`, `status`,\n// `balance`, `fetchedAt`"
+  },
+  {
+   "id": "G9",
+   "file": "src/harness/provider-catalog-snapshot.ts",
+   "line": 154,
+   "severity": "minor",
+   "problem": "syncPinnedSnapshot reads the pinned file in full only as an existence check, discards the contents, and then importProviderCatalogSnapshot reads the same file again. The 'absent means undefined' decision and the actual read live in two functions with two different failure contracts.",
+   "impact": "The file is read twice per restore, and the 'not present' case is split between an existence probe and the importer's 'cannot read' throw. A file that changes or disappears between the two reads takes the throwing path.",
+   "quote": "const pinned = readConfigFile(pinnedSnapshotFile(dir));\n  if (!pinned.ok) return undefined;"
+  },
+  {
+   "id": "G10",
+   "file": "src/harness/provider-catalog-cache.ts",
+   "line": 106,
+   "severity": "info",
+   "problem": "Exporting an alias gives one function two names in the same module (sanitizeEntry internally, sanitizeCatalogEntry externally) instead of exporting the function under one name.",
+   "impact": "Minor reading cost: a search for one name misses the other's uses. Renaming the function and exporting it directly would remove the indirection.",
+   "quote": "export const sanitizeCatalogEntry = sanitizeEntry;"
+  }
+ ]
+}

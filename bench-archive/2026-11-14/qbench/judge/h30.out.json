@@ -1,0 +1,14 @@
+{
+  "truth": [],
+  "candidates": [
+    { "gid": "G1", "label": "valid", "why": "The new parenthetical in the treeHash sentence reads as self-contradictory and restates the new paragraph three lines below in both SKILL.detail.md copies, a real doc wording problem the change introduces." },
+    { "gid": "G2", "label": "noise", "why": "A suggestion to extract helpers from runMutation; the heartbeat is cleared correctly in both exit paths, so this is refactoring taste, not a defect." },
+    { "gid": "G3", "label": "valid", "why": "The change adds `now` as a fifth positional parameter after an optional `signal`, which forces placeholder arguments at the new test call sites, while the sibling dirSignature takes the same values through an options object." },
+    { "gid": "G4", "label": "noise", "why": "Positional parameters in a test-only helper with a defaulted second age are a readability preference below the threshold for a fix." },
+    { "gid": "G5", "label": "noise", "why": "The inline `2 * heartbeatMs` grace factor is documented in the doc comment and is a minor magic-number style point." },
+    { "gid": "G6", "label": "noise", "why": "The literal is repeated at 13 existing abort sites; the new site follows that pattern, so the duplication is not introduced by this change." },
+    { "gid": "G7", "label": "noise", "why": "Naming the string `stalled` and computing it eagerly on a rare stop path is pure taste." },
+    { "gid": "G8", "label": "noise", "why": "Writing the S_IFMT mask as an octal literal in a diagnostic string is a trivial style point." },
+    { "gid": "G9", "label": "noise", "why": "Info-level wording nit on a doc comment phrase." }
+  ]
+}

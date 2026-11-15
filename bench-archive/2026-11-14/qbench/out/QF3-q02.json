@@ -1,0 +1,74 @@
+[
+  {
+    "id": "G1",
+    "file": "src/review/agents/recorded-adapter.ts",
+    "line": 43,
+    "severity": "major",
+    "problem": "loadRecordedResults swallows every read failure (missing file, EACCES, wrong path) and every JSON parse failure into `null`, and its only caller, entries() at line 83, turns that into `?? []`. An empty index then makes execute() answer every task with `{ findings: [] }, recorded: false`, so the replayed plan completes. The failure comes back as a value the caller reads as a valid empty recording, which breaks error-handling Rules 1 and 3. The doc comment at line 38 also understates this: it says null means 'missing or is not a JSON array', but invalid JSON and any other read error return null too.",
+    "impact": "If a dry run or plan-eval replay gets a mistyped or corrupt recording path, it reports a complete plan with zero findings and gives no error. Whoever reads the replay mistakes 'no recording loaded' for 'the recorded run found nothing'. Fix: throw with the path and `cause`, or return a discriminated result that entries() checks, as writeReplaySummary already does for the same file.",
+    "quote": "} catch {\n    return null;\n  }"
+  },
+  {
+    "id": "G2",
+    "file": "src/review/agents/recorded-adapter.ts",
+    "line": 65,
+    "severity": "minor",
+    "problem": "isReplayableResult is named and documented as a predicate, but it sorts `entry.scopeIds` in place. scopesMatch (line 74) compares against the sorted array element by element and relies on that hidden side effect. That is also the only reason RecordedEntry.scopeIds is the one mutable field in an otherwise readonly interface (line 24). This is a query with a command hidden inside it, plus temporal coupling between two functions.",
+    "impact": "Anyone who calls scopesMatch on an entry that did not first go through isReplayableResult, or who reorders entries() so the filter is skipped, gets false scope mismatches. Those tasks then replay as `recorded: false`. Fix: sort once in loadRecordedResults when the entry is built, make scopeIds readonly, and keep the predicate pure.",
+    "quote": "entry.scopeIds.sort();"
+  },
+  {
+    "id": "G3",
+    "file": "src/review/agents/recorded-adapter.ts",
+    "line": 113,
+    "severity": "minor",
+    "problem": "The adapter implements the optional `cancel` member of ReviewAgentAdapter only to throw 'not supported', while it also declares `cancellation: false`. That breaks Liskov substitution (solid-principles.mdc, Iron Law 1). Code holding the base type takes 'cancel is defined' to mean it can call cancel; cancelPendingDispatches in the same change does exactly that and skips only adapters whose `cancel === undefined` (adapter-shutdown.ts:50). Severity stays minor because the controller refuses adapters with `cancellation: false` (controller.ts:239), so no admitted dispatch reaches this path today.",
+    "impact": "If cancelPendingDispatches is ever given a pending dispatch on the recorded adapter, it throws instead of recording it as skipped, and the remaining adapters are never asked to stop. Fix: omit `cancel`, so the existing skip branch handles this adapter.",
+    "quote": "throw new Error(\"cancel is not supported by the recorded adapter\");"
+  },
+  {
+    "id": "G4",
+    "file": "src/review/agents/adapter-shutdown.ts",
+    "line": 54,
+    "severity": "minor",
+    "problem": "When one adapter's cancel rejects, the exception leaves the loop, so every later dispatch is never asked to stop and the AdapterShutdownReport is lost. The header (lines 1-3) promises the function 'asks every adapter that still owns a running dispatch to stop it', but the code stops at the first failure. The report type also has no place to record a failed cancel next to `skipped` and `unknownAdapter`.",
+    "impact": "A host that abandons a run after an operator interrupt or lease loss can leave provider work running behind the one adapter whose cancel threw. That is the situation this module exists to prevent. Fix: catch each cancel separately, collect failures in a `failed` list in the report, and keep going.",
+    "quote": "await adapter.cancel({ runId, dispatchId: dispatch.dispatchId, reason });"
+  },
+  {
+    "id": "G5",
+    "file": "src/review/agents/recorded-adapter.ts",
+    "line": 69,
+    "severity": "minor",
+    "problem": "The 7-day replay staleness window is a business rule, but it is written as an unnamed literal twice in this file: the replayability cutoff at line 69 and the summary's `stale` flag at line 151. The codebase names the same kind of value elsewhere, for example `ROTATED_SEGMENT_MAX_AGE_MS` in src/bus/log.ts:47 and `MAX_TIMEOUT_MS` in src/remote/config.ts:35.",
+    "impact": "If the window changes in one place but not the other, the summary flags entries as stale that the adapter still replays, or the reverse. Fix: export one `RECORDING_MAX_AGE_MS` constant and use it at both sites.",
+    "quote": "return nowMs - recordedAt <= 7 * 24 * 60 * 60 * 1000;"
+  },
+  {
+    "id": "G6",
+    "file": "src/review/agents/recorded-adapter.ts",
+    "line": 129,
+    "severity": "minor",
+    "problem": "writeReplaySummary reads the file, parses it, validates each entry, builds and sorts the summary rows, and writes replay-summary.json, all in one function. That mixes I/O with a transform (solid-principles.mdc threshold: any length). Its validation also duplicates, and contradicts, the unvalidated `parsed as ReviewAgentStoredResult[]` cast in loadRecordedResults (line 53). The same file format is now parsed two ways: one parser throws on bad entries and the other accepts them silently.",
+    "impact": "The validation and row-building cannot be tested without touching the filesystem. The adapter can also replay an entry that the summary command rejects as invalid. Fix: extract a pure `parseRecording(raw, path)` that validates, and a pure `summarizeRecording(entries, nowMs)`. Use parseRecording in both loaders, and keep writeReplaySummary as a thin read-transform-write shell.",
+    "quote": "export async function writeReplaySummary(recordingPath: string, nowMs: number = Date.now()): Promise<string> {"
+  },
+  {
+    "id": "G7",
+    "file": "src/review/agents/adapter-shutdown.ts",
+    "line": 34,
+    "severity": "minor",
+    "problem": "cancelPendingDispatches takes four positional parameters, two of them adjacent strings (`runId`, `reason`) that can be swapped without a type error. The cancel contract it forwards to already uses an options object (`{ runId, dispatchId, reason }`, types.ts:156), so this is not a natural ordered set the codebase already uses.",
+    "impact": "If a call site swaps runId and reason, it compiles, and each adapter receives a cancel for the wrong run id. Fix: take `{ adapters, pending, runId, reason }`.",
+    "quote": "export async function cancelPendingDispatches("
+  },
+  {
+    "id": "G8",
+    "file": "src/review/agents/adapter-shutdown.ts",
+    "line": 43,
+    "severity": "minor",
+    "problem": "The counter is named `n`, and an inline comment explains what it means. That comment is compensating for a bad name, while the value it counts is returned as `confirmed`.",
+    "impact": "Readers have to map `n` to the comment and then to `confirmed`. Fix: name it `confirmed` and delete the comment.",
+    "quote": "let n = 0; // n is the number of dispatches whose adapter accepted the cancel"
+  }
+]

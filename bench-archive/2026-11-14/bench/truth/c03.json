@@ -1,0 +1,29 @@
+[
+ {
+  "tid": "T1",
+  "file": "scripts/check-retired-cli-spellings.ts",
+  "line": null,
+  "severity": "major",
+  "problem": "`isWasIsRow` in scripts/check-retired-cli-spellings.ts exempted any line containing a retired spelling and its replacement anywhere in the line, so ordinary prose instructing a reader to run the retired command was exempt from the gate that exists to catch exactly that.",
+  "impact": "The gate reported 0 undeclared while a documented instruction to run `keryx mcp install` sat in docs/. A guard that cannot establish what it reports is the defect class this repository keeps recording.",
+  "quote": null
+ },
+ {
+  "tid": "T2",
+  "file": "src/mcp/client-config.ts",
+  "line": null,
+  "severity": "major",
+  "problem": "`keryx integrate --remove <editor> --dry-run` performed a real removal. `uninstallMcpClient` took no dry-run parameter, so the flag was accepted, documented, and ignored.",
+  "impact": "A user asking to preview a removal had the config removed. The behaviour pre-existed the branch, but the branch rewrote the help text and dropped the old 'install only' qualifier, turning a documented limitation into a documentation lie.",
+  "quote": null
+ },
+ {
+  "tid": "T3",
+  "file": "scripts/check-retired-cli-spellings.ts",
+  "line": null,
+  "severity": "major",
+  "problem": "The fix for R1-LOGIC-001 asked 'is this a was->is row?' once per ROW and applied the answer to every occurrence on it, so a row holding a genuine pair plus an unrelated instructional cell was exempted wholesale.",
+  "impact": "A live instruction to run a retired spelling rides out on a neighbouring cell's legitimate exemption - the same failure the original finding named, one level in.",
+  "quote": null
+ }
+]

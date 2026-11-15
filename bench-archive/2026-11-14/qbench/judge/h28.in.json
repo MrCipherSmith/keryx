@@ -1,0 +1,69 @@
+{
+ "truth": [],
+ "decoys": [],
+ "candidate": [
+  {
+   "id": "G1",
+   "file": "src/review/mutate.ts",
+   "line": 457,
+   "severity": "minor",
+   "problem": "The new heartbeat swallows every utimes failure with an empty catch, and nothing says why ignoring it is safe. Error-handling Rule 3 asks a silent fallback for a reason comment. Ignoring it is not obviously harmless here. The same change makes sweepStaleScratch delete any directory whose marker is older than STALE_HEARTBEAT_MS 'whatever its pid says', so a heartbeat that keeps failing lets a concurrent pass delete this live pass's scratch.",
+   "impact": "Whoever debugs a pass whose scratch disappeared mid-run gets no signal that the heartbeat stopped. The next editor cannot tell whether dropping the error was deliberate.",
+   "quote": "void utimes(ownerFile, at, at).catch(() => {});"
+  },
+  {
+   "id": "G2",
+   "file": "src/review/mutate.ts",
+   "line": 445,
+   "severity": "minor",
+   "problem": "runMutation was already well over 40 lines (about 135), and this change adds two more jobs to it at a different level of abstraction. One is sweep orchestration: a second sweep of the repo scratch, timing, and building sweepFields. The other is the heartbeat-timer lifecycle: setInterval, unref, and clearInterval duplicated in the signal cleanup and in finally. Both now sit inline next to the copy step, the baseline step and the mutant loop.",
+   "impact": "Anyone changing the sweep or heartbeat policy has to edit the mutant-running function and keep two clearInterval sites in step. Pulling out sweepBeforePass() and startOwnerHeartbeat() (which returns a stop function) would separate them.",
+   "quote": "const sweepStarted = Date.now();\n  let sweptScratch = await sweepStaleScratch(scratchBase);\n  if (scratchBase !== repoScratch) sweptScratch += await sweepStaleScratch(repoScratch);"
+  },
+  {
+   "id": "G3",
+   "file": "src/review/completion-gate.ts",
+   "line": 771,
+   "severity": "minor",
+   "problem": "findReviewGateState goes from 4 to 5 positional parameters (cwd, since, named, signal, now) with no options object. signal and now are both optional, so callers that only want a clock must pass a placeholder for signal. The new tests show this at every site, e.g. `findReviewGateState(root, 0, {}, undefined, now)`. The JSDoc above it mentions neither signal nor now.",
+   "impact": "Call sites read as opaque positional lists, and the next optional knob will add a sixth slot. Moving signal and now into an options object (as dirSignature's SignatureOptions already does) removes the `undefined` placeholders.",
+   "quote": "  signal?: AbortSignal,\n  now?: number,\n): Promise<OpenManagedReview | null> {"
+  },
+  {
+   "id": "G4",
+   "file": "src/commands/agent.ts",
+   "line": 4283,
+   "severity": "minor",
+   "problem": "The new abort exit adds another inline copy of the literal \"\\n[stopped] Model turn interrupted by user.\\n\". keryx ctx rg found 13 copies of it in this file before this change (e.g. lines 3226, 3488, 3510, 3767), and there is no shared constant or helper. The new comment even calls these 'the other abort sites' that this one must match.",
+   "impact": "Whoever rewords the abort notice has to find and change 14 copies, and one missed copy makes the operator see two different stop messages.",
+   "quote": "system(\"\\n[stopped] Model turn interrupted by user.\\n\");"
+  },
+  {
+   "id": "G5",
+   "file": "src/review/mutate.ts",
+   "line": 589,
+   "severity": "minor",
+   "problem": "The new Swept line says the removed copies were 'left by dead passes'. But the sweep this change rewrote also removes unmarked directories older than six hours, and markers older than STALE_HEARTBEAT_MS 'whatever its pid says' (possibly a live pid). The MutationRecord field this line renders is documented as 'dead or abandoned earlier passes'. So the same diff uses two different words for the same thing.",
+   "impact": "An operator reading the mutation table is told every swept directory belonged to a dead process, which is not always true.",
+   "quote": "left by dead passes${record.sweepMs === undefined ? \"\" : ` (${record.sweepMs} ms)`}"
+  },
+  {
+   "id": "G6",
+   "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+   "line": 788,
+   "severity": "minor",
+   "problem": "A sentence about what scratch-copy contents include has been spliced into the sentence listing what treeHash leaves out. The parenthetical now says ignored files are copied 'except linked worktrees', which suggests linked worktrees are a kind of ignored file. In fact they are left out whatever their ignore status. The new paragraph three lines below already says this correctly. The same text is in the bundled mirror src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md:788.",
+   "impact": "A reader working out treeHash coverage or the scratch-copy rules gets a muddled, duplicated statement in the middle of a list.",
+   "quote": "ignored files (the scratch copy still includes them, except linked worktrees, which it leaves out), the inside of an"
+  },
+  {
+   "id": "G7",
+   "file": "src/review/completion-gate.ts",
+   "line": 888,
+   "severity": "minor",
+   "problem": "`stalled` reads as a boolean, but it holds a sentence fragment, and it is used as `stalls >= MAX_REVIEW_GATE_STALLS ? stalled : \"\"`. That makes the ternary look like a flag test next to the real `stalls` counter.",
+   "impact": "The next editor of the stop message has to read the declaration to see that `stalled` is text, not a condition. A name like `stallReason` would say what it holds.",
+   "quote": "const stalled = open.signature.includes(TRUNCATION_MARKER)"
+  }
+ ]
+}

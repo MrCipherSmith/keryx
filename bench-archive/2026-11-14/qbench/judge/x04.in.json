@@ -1,0 +1,60 @@
+{
+ "truth": [],
+ "decoys": [],
+ "candidate": [
+  {
+   "id": "G1",
+   "file": "src/review/mutate.ts",
+   "line": 232,
+   "severity": "minor",
+   "problem": "The new doc comment of isLinkedWorktree says everything other than a linked worktree 'is copied as the base copy did', listing embedded clones, `.git` links and unreadable `.git` entries. The copy before this change did the opposite: the replaced isNestedCheckout skipped embedded clones, `.git` links and unreadable `.git` files ('skipping a directory is the safe way to be wrong'). So the comment describes a behaviour change as if it kept the old behaviour.",
+   "impact": "A maintainer who trusts the comment thinks copying embedded clones and unreadable gitfiles is the old, settled behaviour. They will miss that this change reversed it, which matters when a test starts picking up a large embedded clone or a copy gets slower.",
+   "quote": "Everything else is copied as the base copy did, because the tests may load it"
+  },
+  {
+   "id": "G2",
+   "file": "src/review/mutate.ts",
+   "line": 380,
+   "severity": "minor",
+   "problem": "The dead-owner grace period ('two heartbeats') is a business rule. It appears as a bare `2 *` inside the abandonment expression. Its sibling threshold got a named constant (STALE_HEARTBEAT_MS) and an option, but this one did not. The tests then rebuild it by hand: `3 * HEARTBEAT_MS` at mutate.test.ts:365, 367, 381, 382 and more, and `2 * HEARTBEAT_MS ± 30_000` at mutate.test.ts:419-420. A local `staleButNotAbandoned` constant (mutate.test.ts:396) names it for one describe block only.",
+   "impact": "Changing the grace means finding a bare multiplier in a ternary and about ten test literals that encode it indirectly. The docs (cli-reference, SKILL.detail, guide, review.ts help) also hard-code 'two minutes' and can drift silently.",
+   "quote": "(!isAlive(owner.pid) && now() - owner.mtimeMs > 2 * heartbeatMs)"
+  },
+  {
+   "id": "G3",
+   "file": "src/review/mutate.test.ts",
+   "line": 251,
+   "severity": "minor",
+   "problem": "The new shared helper `make` takes five positional parameters with no options object. Two of them are adjacent, same-typed durations (directory age, then marker age). Call sites read `make(name, owner, 1000, 3 * HEARTBEAT_MS, repoScratch)`, so you cannot tell from the call which number ages what.",
+   "impact": "If someone swaps ageMs and markerAgeMs in one of the 25+ calls, the test still compiles. It then exercises the 'unmarked and old' path instead of the 'stale marker' path, or the reverse, and passes for the wrong reason.",
+   "quote": "async function make(name: string, owner: unknown, ageMs: number, markerAgeMs: number = ageMs, into: string = scratch)"
+  },
+  {
+   "id": "G4",
+   "file": "src/commands/agent-review-gate.test.ts",
+   "line": 168,
+   "severity": "minor",
+   "problem": "The same 'scan that aborts the turn, then resolves an open review' stub (new AbortController, a reviewGateState that calls controller.abort() and returns openReview()) is written out three times: at lines 165-171, 178-182 and 190-194. The file already pulled openReview into a helper but not the stub.",
+   "impact": "Three copies of one scenario fixture. If the abort-during-scan setup changes (for example, aborting after the await instead of before it), all three must be edited the same way, or the LOGIC-003 tests quietly stop covering the TP-004 scenario.",
+   "quote": "const reviewGateState: typeof findReviewGateState = async () => {\n    controller.abort();\n    return openReview();\n  };"
+  },
+  {
+   "id": "G5",
+   "file": "src/review/completion-gate.ts",
+   "line": 65,
+   "severity": "minor",
+   "problem": "The file-type mask is written as the octal literal 0o170000 instead of the named `constants.S_IFMT` from node:fs. mutate.ts in the same change already imports `constants` for its O_* flags. The value ends up in every signature entry for a special file (`special:<type>`), which tests assert on.",
+   "impact": "A reader has to recognise the POSIX S_IFMT mask by its digits to understand what goes into the signature.",
+   "quote": "if (!info.isFile()) return `special:${(info.mode & 0o170000).toString(8)}`;"
+  },
+  {
+   "id": "G6",
+   "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+   "line": 788,
+   "severity": "info",
+   "problem": "The parenthetical added to the treeHash sentence mixes two subjects: what treeHash leaves out (ignored files) and what the scratch copy leaves out. It reads as if linked worktrees were a kind of ignored file. It also names only one of the copy's exclusions; the mutate-scratch exclusion is stated in the next, new paragraph (lines 791-793), which says the copy rule again on its own. The mirror in src/gdskills/bundled/.../SKILL.detail.md has the same text.",
+   "impact": "Readers of the review contract get the copy's exclusions in two places that partly overlap. Deleting the parenthetical and keeping the new paragraph would settle it.",
+   "quote": "ignored files (the scratch copy still includes them, except linked worktrees, which it leaves out)"
+  }
+ ]
+}

@@ -1,0 +1,21 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "match", "gid": "G2", "why": "G2 names the throwing cancel stub despite cancellation:false and that cancelPendingDispatches throws mid-loop; omitting cancel fixes it (severity difference is irrelevant)." },
+    { "tid": "T2", "verdict": "match", "gid": "G1", "why": "G1 identifies loadRecordedResults returning null coalesced by `?? []` so every dispatch replays as empty findings." },
+    { "tid": "T3", "verdict": "match", "gid": "G7", "why": "G7 flags writeReplaySummary mixing validation, summary transform and file IO, untestable without the filesystem." },
+    { "tid": "T4", "verdict": "match", "gid": "G5", "why": "G5 names the inline seven-day expression at both sites with no shared constant." },
+    { "tid": "T5", "verdict": "match", "gid": "G3", "why": "G3 identifies the in-place sort inside the predicate and scopesMatch's hidden dependency on it." },
+    { "tid": "T6", "verdict": "match", "gid": "G8", "why": "G8 flags the single-letter n explained by a comment instead of a name like confirmed." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "truth", "why": "Matches T2." },
+    { "gid": "G2", "label": "truth", "why": "Matches T1." },
+    { "gid": "G3", "label": "truth", "why": "Matches T5." },
+    { "gid": "G4", "label": "valid", "why": "The comment at line 106-107 claims the summary counts unrecorded replies, but writeReplaySummary only reads the recording file and nothing reads metadata.recorded, so the comment is false." },
+    { "gid": "G5", "label": "truth", "why": "Matches T4." },
+    { "gid": "G6", "label": "valid", "why": "loadRecordedResults casts parsed entries unvalidated so a malformed entry crashes with a context-free TypeError at [...stored.scopeIds] or entry.taskId.length, unlike the validating summary reader; a real, specific defect not in either list." },
+    { "gid": "G7", "label": "truth", "why": "Matches T3." },
+    { "gid": "G8", "label": "truth", "why": "Matches T6." },
+    { "gid": "G9", "label": "noise", "why": "Four positional parameters with two strings is a style preference below a reasonable threshold, not a defect a maintainer would need to fix." }
+  ]
+}

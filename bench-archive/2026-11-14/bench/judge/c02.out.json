@@ -1,0 +1,38 @@
+[
+ {
+  "tid": "T1",
+  "verdict": "match",
+  "gid": "G1",
+  "why": "G1 names the same cause: the pattern supplied via -e/--regexp/-f or attached forms leaves the operand unspent so the file path is consumed as the pattern."
+ },
+ {
+  "tid": "T2",
+  "verdict": "match",
+  "gid": "G2",
+  "why": "G2 identifies the same recursive-flag regex that cannot match --recursive/--dereference-recursive."
+ },
+ {
+  "tid": "T3",
+  "verdict": "match",
+  "gid": "G8",
+  "why": "G8 identifies operandsAllowed=0 for sed/awk so their script operand is read as a path and piped filters are refused."
+ },
+ {
+  "tid": "T4",
+  "verdict": "match",
+  "gid": "G4",
+  "why": "G4 identifies trigger tokens keeping stopwords/short words while query tokens drop them, so the every() order-free path never fires."
+ },
+ {
+  "tid": "T5",
+  "verdict": "miss",
+  "gid": null,
+  "why": "No finding flags that the per-command VALUE_FLAGS and the rg isFirst guard are unpinned by tests; G11 concerns a different module's test."
+ },
+ {
+  "tid": "T6",
+  "verdict": "miss",
+  "gid": null,
+  "why": "No finding covers word-boundary padding without stemming dropping inflected forms; G6 is about over-matching one-word triggers, the opposite problem."
+ }
+]

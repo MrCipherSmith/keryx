@@ -1,0 +1,12 @@
+{
+  "truth": [],
+  "candidates": [
+    { "gid": "G1", "label": "noise", "why": "Function-length and helper-extraction preference; the two clearInterval calls cover two distinct teardown paths (signal cleanup and finally) and are not a defect." },
+    { "gid": "G2", "label": "noise", "why": "Readability taste about a documented predicate; the expression is correct and explained by the docblock." },
+    { "gid": "G3", "label": "noise", "why": "Positional-vs-options-object style preference for one added optional test clock; no functional problem." },
+    { "gid": "G4", "label": "noise", "why": "The duplicated stopped-line literal is a pre-existing pattern at a dozen sites; the change follows it rather than introducing the duplication." },
+    { "gid": "G5", "label": "noise", "why": "Linked worktrees under .claude/worktrees and .worktrees are typically ignored paths, so 'ignored files are copied except linked worktrees' is accurate; wording taste." },
+    { "gid": "G6", "label": "valid", "why": "The new isLinkedWorktree docblock says embedded clones and unreadable .git are copied 'as the base copy did', but the previous code skipped exactly those, so the comment misstates the behaviour change." },
+    { "gid": "G7", "label": "noise", "why": "Different shapes of an injectable test clock in two modules is a naming-convention preference, not a defect." }
+  ]
+}

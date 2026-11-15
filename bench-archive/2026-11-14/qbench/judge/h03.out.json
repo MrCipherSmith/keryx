@@ -1,0 +1,16 @@
+{
+  "truth": [],
+  "candidates": [
+    { "gid": "G1", "label": "noise", "why": "SRP/extraction suggestion for a few added lines in runMutation is a structural taste call, not a concrete defect." },
+    { "gid": "G2", "label": "noise", "why": "Appending an optional positional parameter to an existing four-positional signature is consistent with the current shape; the options-object refactor is taste." },
+    { "gid": "G3", "label": "valid", "why": "The heartbeat's utimes failure is swallowed with no reason or signal, contrary to the project's error-handling Rule 3 (No Silent Failures), and a persistently failing touch lets a later sweep delete a live pass's scratch." },
+    { "gid": "G4", "label": "noise", "why": "The deletion rule is documented in the sweep's JSDoc and is tested; splitting the ternary into a pure helper is a refactoring preference." },
+    { "gid": "G5", "label": "noise", "why": "Three copies of a four-line test stub is below a reasonable duplication threshold for tests." },
+    { "gid": "G6", "label": "noise", "why": "The repeated abort message is a pre-existing pattern across a dozen sites; the change only follows it." },
+    { "gid": "G7", "label": "valid", "why": "The new code writes the raw octal 0o170000 where node:fs constants.S_IFMT names the file-type mask, a specific readability fix." },
+    { "gid": "G8", "label": "noise", "why": "Repeated 3 * HEARTBEAT_MS in test setup is self-explanatory test arithmetic; hoisting the name is taste." },
+    { "gid": "G9", "label": "noise", "why": "Naming of a local string next to its only use, with an explaining comment, is pure taste." },
+    { "gid": "G10", "label": "noise", "why": "Docs saying keryx-mutate-* for directories a pass itself creates via mkdtemp is harmless imprecision, the reviewer's own info-level nit." },
+    { "gid": "G11", "label": "noise", "why": "A slightly history-flavoured phrase in a JSDoc is a trivial wording nit." }
+  ]
+}

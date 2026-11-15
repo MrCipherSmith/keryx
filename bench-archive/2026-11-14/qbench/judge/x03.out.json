@@ -1,0 +1,19 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "match", "gid": "G1", "why": "G1 reports the same log-only catch on the cursor write that returns the entry as recorded and hides it from the changelog." },
+    { "tid": "T2", "verdict": "match", "gid": "G2", "why": "G2 flags the same synchronous, throwing I/O in the ExecutionPlanHistory constructor and proposes a load factory." },
+    { "tid": "T3", "verdict": "miss", "gid": null, "why": "No candidate addresses the if/else-if dispatch in describeChange or its non-exhaustive final else." },
+    { "tid": "T4", "verdict": "match", "gid": "G7", "why": "G7 identifies the same output-argument signature of diffExecutionPlans and the same fix." },
+    { "tid": "T5", "verdict": "miss", "gid": null, "why": "No candidate raises the transition/change naming inconsistency." },
+    { "tid": "T6", "verdict": "match", "gid": "G3", "why": "G3 reports the same context-free \"Invalid entry\" error in parseEntry." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "truth", "why": "Matches T1." },
+    { "gid": "G2", "label": "truth", "why": "Matches T2." },
+    { "gid": "G3", "label": "truth", "why": "Matches T6." },
+    { "gid": "G4", "label": "valid", "why": "readCursor line 87 does return 0 for a well-formed but wrong-shaped cursor, silently hiding all committed entries, contradicting the adjacent comment's reasoning; distinct from decoy D1 which concerns the invalid-JSON branch." },
+    { "gid": "G5", "label": "valid", "why": "The constructor parses every line before filtering by the cursor, so a torn uncommitted tail line throws and breaks the whole history, contrary to the doc comment's commit-marker guarantee." },
+    { "gid": "G6", "label": "noise", "why": "The renderer loading via the constructor is largely a consequence of T2's root cause and the remaining I/O-vs-format split in a short function is borderline design taste." },
+    { "gid": "G7", "label": "truth", "why": "Matches T4." }
+  ]
+}

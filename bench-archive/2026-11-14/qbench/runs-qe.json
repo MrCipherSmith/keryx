@@ -1,0 +1,50 @@
+[
+ {
+  "rid": "QE1-q05",
+  "case": "q05",
+  "arm": "QE",
+  "rep": 1,
+  "task": "$BENCH/qbench/tasks/QE1-q05.md",
+  "out": "$BENCH/qbench/out/QE1-q05.json"
+ },
+ {
+  "rid": "QE2-q05",
+  "case": "q05",
+  "arm": "QE",
+  "rep": 2,
+  "task": "$BENCH/qbench/tasks/QE2-q05.md",
+  "out": "$BENCH/qbench/out/QE2-q05.json"
+ },
+ {
+  "rid": "QE2-q02",
+  "case": "q02",
+  "arm": "QE",
+  "rep": 2,
+  "task": "$BENCH/qbench/tasks/QE2-q02.md",
+  "out": "$BENCH/qbench/out/QE2-q02.json"
+ },
+ {
+  "rid": "QE3-q05",
+  "case": "q05",
+  "arm": "QE",
+  "rep": 3,
+  "task": "$BENCH/qbench/tasks/QE3-q05.md",
+  "out": "$BENCH/qbench/out/QE3-q05.json"
+ },
+ {
+  "rid": "QE1-q02",
+  "case": "q02",
+  "arm": "QE",
+  "rep": 1,
+  "task": "$BENCH/qbench/tasks/QE1-q02.md",
+  "out": "$BENCH/qbench/out/QE1-q02.json"
+ },
+ {
+  "rid": "QE3-q02",
+  "case": "q02",
+  "arm": "QE",
+  "rep": 3,
+  "task": "$BENCH/qbench/tasks/QE3-q02.md",
+  "out": "$BENCH/qbench/out/QE3-q02.json"
+ }
+]

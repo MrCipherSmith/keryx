@@ -1,0 +1,12 @@
+{
+  "truth": [],
+  "candidates": [
+    { "gid": "G1", "label": "noise", "why": "A test-local helper with defaulted trailing parameters and a doc comment naming both ages; positional-arity complaint on a test fixture is taste-level." },
+    { "gid": "G2", "label": "valid", "why": "Confirmed: the diff names the stale-marker age once (staleButNotAbandoned) yet repeats the raw 3 * HEARTBEAT_MS at about a dozen other new sites in mutate.test.ts, an inconsistency a maintainer would hoist to one constant." },
+    { "gid": "G3", "label": "noise", "why": "Three short, self-explanatory test fixtures repeated inline is a test-readability preference, not a defect." },
+    { "gid": "G4", "label": "valid", "why": "Confirmed new code in fileHash hardcodes the S_IFMT mask 0o170000 when node:fs exposes constants.S_IFMT; a specific, cheap clarity fix." },
+    { "gid": "G5", "label": "valid", "why": "Confirmed the added parenthetical mixes the scratch-copy rule into the treeHash exclusion list and the same fact is restated in the paragraph added three lines below, in both mirrored SKILL.detail.md files." },
+    { "gid": "G6", "label": "noise", "why": "Variable naming preference for a local string built two lines above its use; pure taste." },
+    { "gid": "G7", "label": "noise", "why": "Info-level refactoring suggestion with no claimed defect; the policy is already testable via injected now/isAlive options." }
+  ]
+}

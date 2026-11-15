@@ -1,0 +1,56 @@
+[
+  {
+    "id": "G1",
+    "file": "src/session/execution-plan.ts",
+    "line": 178,
+    "severity": "major",
+    "problem": "The journal write is awaited inside the plan write after plan.json has already been replaced, so any appendFile failure in recordPlanRevision (src/session/execution-plan-history.ts:68, e.g. EACCES/ENOSPC on plan-history.jsonl) rejects setExecutionPlan/updateExecutionPlan even though the plan was persisted. This contradicts the module's own stated policy in notify() (lines 73-77: 'Persistence already succeeded ... must [not] turn the completed mutation into a rejected promise'), and the same function swallows the cursor failure (history.ts:71) — two opposite failure policies for one secondary side effect.",
+    "impact": "The caller is told a successful write failed: notify() never runs so the sidebar keeps the old revision, and the agent's retry with the same expectedRevision gets ExecutionPlanConflictError against a plan it did write.",
+    "quote": "await writeFileAtomic(executionPlanPath(dir), `${JSON.stringify(result, null, 2)}\\n`);\n    await recordPlanRevision(dir, current, result);"
+  },
+  {
+    "id": "G2",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 71,
+    "severity": "major",
+    "problem": "The cursor-update catch only logs to stderr and then returns the entry as if it were committed, with no comment explaining why proceeding is a correct fallback (error-handling.mdc Rule 3). The entry is now in the journal but past the cursor, so readers filter it out.",
+    "impact": "renderExecutionPlanChangelog (execution-plan.ts:276) silently omits that revision and reports a stale 'latest' revision; the operator catching up sees no record of the change until some later write happens to advance the cursor. Only a stderr line (which in the TUI shell is not where the operator looks) records it.",
+    "quote": "} catch (error) {\n    process.stderr.write(`plan history: cursor update failed: ${message(error)}\\n`);\n  }\n  return entry;"
+  },
+  {
+    "id": "G3",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 99,
+    "severity": "minor",
+    "problem": "parseEntry's error names neither the file nor the line, and the JSON.parse SyntaxError above it is not wrapped with the path either — unlike readCursor in the same file, which does exactly this ('Fail with the path so the operator knows which file to remove'). A torn trailing line from the crashed appendFile the cursor is meant to guard against throws here before the cursor filter is applied.",
+    "impact": "A single bad journal line makes every ExecutionPlanHistory construction and renderExecutionPlanChangelog call fail with 'Invalid entry' or a bare SyntaxError, and the operator has no pointer to plan-history.jsonl.",
+    "quote": "throw new Error(\"Invalid entry\");"
+  },
+  {
+    "id": "G4",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 122,
+    "severity": "minor",
+    "problem": "The ExecutionPlanHistory constructor performs synchronous file I/O (readCursor and readFileSync of the journal) and can throw on a corrupt cursor, violating solid-principles.mdc Iron Law 2 ('A constructor performs no I/O'). It also stores 'readonly dir' which nothing reads.",
+    "impact": "The class cannot be built from already-loaded entries for tests or reuse, and it forces a blocking sync read into a module (execution-plan.ts) whose other reads are all async.",
+    "quote": "constructor(readonly dir: string) {\n    const committed = readCursor(dir);"
+  },
+  {
+    "id": "G5",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 37,
+    "severity": "minor",
+    "problem": "diffExecutionPlans returns void and fills a caller-supplied array (an output argument, lens B2). Both callers (recordPlanRevision at line 65 and the test) create an empty array only to pass it in.",
+    "impact": "Callers must allocate and own the accumulator, and the signature hides that the function is a pure transformation that could just return PlanTransition[].",
+    "quote": "export function diffExecutionPlans(previous: ExecutionPlan | undefined, next: ExecutionPlan, out: PlanTransition[]): void {"
+  },
+  {
+    "id": "G6",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 29,
+    "severity": "minor",
+    "problem": "The cursor doc claims an entry appended by a writer that died before updating the cursor 'is never shown as history', but no code path keeps it hidden: the next successful write sets the cursor to a higher revision, and the filter (entry.revision <= committed, line 134) then shows the orphaned entry.",
+    "impact": "The next reader trusts a commit guarantee the code does not provide and reasons wrongly about what the changelog can contain.",
+    "quote": "cursor is never shown as history."
+  }
+]

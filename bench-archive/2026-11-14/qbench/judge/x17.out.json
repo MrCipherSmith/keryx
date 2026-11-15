@@ -1,0 +1,20 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "match", "gid": "G1", "why": "G1 names the same swallowed mkdir/writeFile failure in writeExportFile leading to a false success message and exit 0." },
+    { "tid": "T2", "verdict": "match", "gid": "G2", "why": "G2 reports the same rethrow in collectRunRows that drops the original error with no cause." },
+    { "tid": "T3", "verdict": "match", "gid": "G6", "why": "G6 identifies runHistoryExport as a ~57-line function mixing argument parsing, format inference, --since parsing, transform and I/O, and proposes extracting the parsing." },
+    { "tid": "T4", "verdict": "match", "gid": "G5", "why": "G5 flags the four positional params, the boolean format flag, and the redundant pages argument in renderRunLine." },
+    { "tid": "T5", "verdict": "match", "gid": "G3", "why": "G3 names the duplicated label-sanitising chain at all three sites and proposes one helper." },
+    { "tid": "T6", "verdict": "match", "gid": "G4", "why": "G4 reports the doc comment claiming oldest-first while listWikiRuns returns newest first with no re-sort." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "truth", "why": "Matches T1." },
+    { "gid": "G2", "label": "truth", "why": "Matches T2." },
+    { "gid": "G3", "label": "truth", "why": "Matches T5." },
+    { "gid": "G4", "label": "truth", "why": "Matches T6." },
+    { "gid": "G5", "label": "truth", "why": "Matches T4." },
+    { "gid": "G6", "label": "truth", "why": "Matches T3." },
+    { "gid": "G7", "label": "valid", "why": "Confirmed in the diff: the new HISTORY_USAGE leaves out --since and --command while EXPORT_USAGE and wiki.ts help list them, an inconsistency the change introduces." },
+    { "gid": "G8", "label": "noise", "why": "Self-described stylistic info item: deriving the type from listWikiRuns is a reasonable choice when the service facade does not re-export it." }
+  ]
+}

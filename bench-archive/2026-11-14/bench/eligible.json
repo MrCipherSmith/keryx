@@ -1,0 +1,733 @@
+[
+ {
+  "pkg": "2026-08-30-dynamic-reviewer",
+  "path": "$REPO/.metaproject/flows/206-2026-08-30-dynamic-self-learning-local-reviewer-ker/reviews/2026-08-30-dynamic-reviewer",
+  "base": "6a9d611cb42bf2c5c4e81a1aec10a8efa74e8bd2",
+  "head": "1014f29259b3c835661a7cf1c6ee21673a884cb0",
+  "lines": 3915,
+  "nfiles": 38,
+  "acted": 2,
+  "reviewers": {
+   "review-core-boundaries": 1,
+   "review-logic": 1
+  },
+  "created": "2026-08-30",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "2026-08-31-ingest-424",
+  "path": "$REPO/.metaproject/reviews/2026-08-31-ingest-424",
+  "base": "990bd146269053af792c612ab0a0d50d78c752fa",
+  "head": "2907d530f7ebb226720ac9a085f1a732b315ca34",
+  "lines": 1852,
+  "nfiles": 12,
+  "acted": 13,
+  "reviewers": {
+   "review-security-code": 5,
+   "review-architecture": 4,
+   "review-logic": 4
+  },
+  "created": "2026-08-31",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "2026-08-31-sac-mutation",
+  "path": "$REPO/.metaproject/flows/212-2026-08-31-sac-ledger-historical-tampering-is-undet/reviews/2026-08-31-sac-mutation",
+  "base": "a0f41af88585fcb41dfb0c2a4493408be1002dcc",
+  "head": "6b1c05d92c70ba4326cb8c20e6fce5434283c5e4",
+  "lines": 261,
+  "nfiles": 2,
+  "acted": 2,
+  "reviewers": {
+   "review-testing-practices": 1,
+   "review-logic": 1
+  },
+  "created": "2026-08-31",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "2026-08-31-task-implementer",
+  "path": "$REPO/.metaproject/flows/210-2026-08-31-task-implementer-the-orchestrator-with-t/reviews/2026-08-31-task-implementer",
+  "base": "71f11c8bfd7759a448d43ba698e8a474617fba9c",
+  "head": "e4692960e22a7218c5b42708f6dc1f5c02c1e4fa",
+  "lines": 1489,
+  "nfiles": 13,
+  "acted": 3,
+  "reviewers": {
+   "review-core-boundaries": 1,
+   "review-logic": 2
+  },
+  "created": "2026-08-31",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "2026-09-02-ingest-868eae95",
+  "path": "$REPO/.metaproject/flows/216-2026-09-02-review-orchestrator-context-pack-the-pr-/reviews/2026-09-02-ingest-868eae95",
+  "base": "09e8555c9079c3142125799c9e560e65d1eeae01",
+  "head": "e54718e94945efe9bce7526fe9ba034355a1a235",
+  "lines": 2305,
+  "nfiles": 23,
+  "acted": 6,
+  "reviewers": {
+   "review-logic": 4,
+   "review-testing-practices": 1,
+   "review-regression": 1
+  },
+  "created": "2026-09-02",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "2026-09-03-ingest-main",
+  "path": "$REPO/.metaproject/flows/223-2026-09-03-docs-remediation-2-4/reviews/2026-09-03-ingest-main",
+  "base": "ed3940266a2639c98efc646c3fb60a4173e7842c",
+  "head": "80f15bc0cfe1af3768683b277ba549ecd2f92f52",
+  "lines": 602,
+  "nfiles": 14,
+  "acted": 7,
+  "reviewers": {
+   "self-review (mutation pass)": 1,
+   "self-review (derived-expectation test)": 1,
+   "self-review": 5
+  },
+  "created": "2026-09-03",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "2026-09-03-ingest-main-r02",
+  "path": "$REPO/.metaproject/flows/223-2026-09-03-docs-remediation-2-4/reviews/2026-09-03-ingest-main-r02",
+  "base": "ed3940266a2639c98efc646c3fb60a4173e7842c",
+  "head": "80f15bc0cfe1af3768683b277ba549ecd2f92f52",
+  "lines": 602,
+  "nfiles": 14,
+  "acted": 7,
+  "reviewers": {
+   "self-review (mutation pass)": 1,
+   "self-review (derived-expectation test)": 1,
+   "self-review": 5
+  },
+  "created": "2026-09-03",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "2026-09-07-ingest-codex-agent-first-core-r03",
+  "path": "$REPO/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/reviews/2026-09-07-ingest-codex-agent-first-core-r03",
+  "base": "4668b4d1415ee2385df443e526400a90f49d7bad",
+  "head": "ecdbc094d02f2df6897a43ee3f911b34a8cd6fb3",
+  "lines": 3117,
+  "nfiles": 23,
+  "acted": 9,
+  "reviewers": {
+   "managed-round-2026-09-07": 9
+  },
+  "created": "2026-09-07",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "2026-09-07-ingest-codex-agent-first-core-r04",
+  "path": "$REPO/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/reviews/2026-09-07-ingest-codex-agent-first-core-r04",
+  "base": "4668b4d1415ee2385df443e526400a90f49d7bad",
+  "head": "ecdbc094d02f2df6897a43ee3f911b34a8cd6fb3",
+  "lines": 3117,
+  "nfiles": 23,
+  "acted": 9,
+  "reviewers": {
+   "managed-round-2026-09-07": 9
+  },
+  "created": "2026-09-07",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "2026-09-07-ingest-codex-agent-first-core-r05",
+  "path": "$REPO/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/reviews/2026-09-07-ingest-codex-agent-first-core-r05",
+  "base": "4668b4d1415ee2385df443e526400a90f49d7bad",
+  "head": "f593cc84de6831106d366cb5fe9265603c1d1b97",
+  "lines": 3117,
+  "nfiles": 23,
+  "acted": 9,
+  "reviewers": {
+   "managed-round-2026-09-07": 9
+  },
+  "created": "2026-09-07",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "2026-09-07-ingest-codex-agent-first-core-r06",
+  "path": "$REPO/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/reviews/2026-09-07-ingest-codex-agent-first-core-r06",
+  "base": "4668b4d1415ee2385df443e526400a90f49d7bad",
+  "head": "f593cc84de6831106d366cb5fe9265603c1d1b97",
+  "lines": 3117,
+  "nfiles": 23,
+  "acted": 9,
+  "reviewers": {
+   "managed-round-2026-09-07": 9
+  },
+  "created": "2026-09-07",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "2026-09-09-ingest-499-r06",
+  "path": "$REPO/.metaproject/flows/243-2026-09-09-mcp-naming-rename-the-publisher-surface-/reviews/2026-09-09-ingest-499-r06",
+  "base": "f46724b5075d1a1ffbf89ad94e2ba1907d3bd338",
+  "head": "f0b74c26880b8c9704910cfdc24bac1eefe8c4bf",
+  "lines": 3731,
+  "nfiles": 52,
+  "acted": 3,
+  "reviewers": {
+   "review-orchestrator": 2,
+   "independent-verifier-a": 1
+  },
+  "created": "2026-09-09",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "2026-09-10-ingest-510",
+  "path": "$REPO/.metaproject/flows/213-2026-08-31-make-registered-contracts-refuse-in-prod/reviews/2026-09-10-ingest-510",
+  "base": "ea0b396c37f7bbedf7d35adcdf303b996c1ae009",
+  "head": "e4a839a7adccb9662b78372e94e89398baeeeb80",
+  "lines": 658,
+  "nfiles": 9,
+  "acted": 3,
+  "reviewers": {
+   "review-pr510": 3
+  },
+  "created": "2026-09-10",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "2026-09-10-ingest-526",
+  "path": "$REPO/.metaproject/flows/247-2026-09-10-mcp-servers-p1/reviews/2026-09-10-ingest-526",
+  "base": "52fa6862ef33959c45d211714440a52a58f6d510",
+  "head": "5e40e4923cef4a1a6c6035a55e2d600c9ab7ddae",
+  "lines": 3685,
+  "nfiles": 22,
+  "acted": 4,
+  "reviewers": {
+   "review-security-code": 1,
+   "review-logic": 2,
+   "review-testing-practices": 1
+  },
+  "created": "2026-09-10",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "2026-09-11-ingest-527",
+  "path": "$REPO/.metaproject/flows/248-2026-09-10-mcp-servers-p2/reviews/2026-09-11-ingest-527",
+  "base": "279185c9ca2c8439dd287fcd1d7e9acab905c936",
+  "head": "8d739b0493c6e116a7d18dbd06df07ca11f4fbe2",
+  "lines": 2515,
+  "nfiles": 24,
+  "acted": 6,
+  "reviewers": {
+   "review-testing-practices": 1,
+   "review-security-code": 4,
+   "review-logic": 1
+  },
+  "created": "2026-09-11",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "2026-09-11-ingest-528",
+  "path": "$REPO/.metaproject/flows/249-2026-09-11-mcp-servers-p3a/reviews/2026-09-11-ingest-528",
+  "base": "9fba20827fee52bd66d5bff4286c92d8fb87150d",
+  "head": "0b9466e0bc39e95814ff0c8841a2ae7bb07ea938",
+  "lines": 2056,
+  "nfiles": 14,
+  "acted": 7,
+  "reviewers": {
+   "review-security-code": 4,
+   "review-testing-practices": 2,
+   "review-logic": 1
+  },
+  "created": "2026-09-11",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "2026-09-11-ingest-skills-quality-program",
+  "path": "$REPO/.metaproject/flows/256-2026-09-11-skills-hygiene/reviews/2026-09-11-ingest-skills-quality-program",
+  "base": "bb0e36b411aa8316175222ffc97869404e750074",
+  "head": "2078a9a645e34ffadbdadc544e50bc6650bd3f3f",
+  "lines": 3229,
+  "nfiles": 179,
+  "acted": 4,
+  "reviewers": {
+   "review-security-code": 1,
+   "review-logic": 1,
+   "review-architecture": 2
+  },
+  "created": "2026-09-11",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "2026-09-12-ingest-532",
+  "path": "$REPO/.metaproject/flows/253-2026-09-11-keryx-shell-expired-grok-grant-sent-on-t/reviews/2026-09-12-ingest-532",
+  "base": "620137b88e9464af1173e247d73efbfe39ea5c2f",
+  "head": "5fbc78610dd14be87ddd22a7544de4774a4fa233",
+  "lines": 380,
+  "nfiles": 11,
+  "acted": 2,
+  "reviewers": {
+   "review-logic": 2
+  },
+  "created": "2026-09-11",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "2026-09-12-ingest-532-r2",
+  "path": "$REPO/.metaproject/flows/253-2026-09-11-keryx-shell-expired-grok-grant-sent-on-t/reviews/2026-09-12-ingest-532-r2",
+  "base": "620137b88e9464af1173e247d73efbfe39ea5c2f",
+  "head": "9087c687e148ff5e7b122bf033ef24b38ae47835",
+  "lines": 391,
+  "nfiles": 11,
+  "acted": 2,
+  "reviewers": {
+   "review-logic": 2
+  },
+  "created": "2026-09-11",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-549",
+  "path": "$REPO/.metaproject/flows/260-2026-09-12-pii-redaction-mangles-uuids-the-phone-pa/reviews/2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-549",
+  "base": "b44255cbccc5f776fc4b9724cff34216aff89138",
+  "head": "2aa3d0e2ad2086ca981cb975cbc3b98cb15477dd",
+  "lines": 162,
+  "nfiles": 4,
+  "acted": 2,
+  "reviewers": {
+   "review-security-code": 2
+  },
+  "created": "2026-09-12",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-549-r02",
+  "path": "$REPO/.metaproject/flows/260-2026-09-12-pii-redaction-mangles-uuids-the-phone-pa/reviews/2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-549-r02",
+  "base": "b44255cbccc5f776fc4b9724cff34216aff89138",
+  "head": "2aa3d0e2ad2086ca981cb975cbc3b98cb15477dd",
+  "lines": 162,
+  "nfiles": 4,
+  "acted": 2,
+  "reviewers": {
+   "review-security-code": 2
+  },
+  "created": "2026-09-12",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "2026-09-16-ingest-github-com-mrciphersmith-keryx-pull-560",
+  "path": "$REPO/.metaproject/flows/262-2026-09-15-review-pipeline-derive-the-finding-s-lin/reviews/2026-09-16-ingest-github-com-mrciphersmith-keryx-pull-560",
+  "base": "b618e46632b336d3edefb99a3a7d43956e3d3900",
+  "head": "088801de0aa69e55d10f7bd2b8f9841fd8db398f",
+  "lines": 1730,
+  "nfiles": 18,
+  "acted": 4,
+  "reviewers": {
+   "review-security-code": 2,
+   "review-logic": 2
+  },
+  "created": "2026-09-16",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "2026-09-16-ingest-github-com-mrciphersmith-keryx-pull-560-r02",
+  "path": "$REPO/.metaproject/flows/262-2026-09-15-review-pipeline-derive-the-finding-s-lin/reviews/2026-09-16-ingest-github-com-mrciphersmith-keryx-pull-560-r02",
+  "base": "b618e46632b336d3edefb99a3a7d43956e3d3900",
+  "head": "4bbc968166b861a3d1dae6609d36da460d07b14d",
+  "lines": 2036,
+  "nfiles": 18,
+  "acted": 4,
+  "reviewers": {
+   "review-security-code": 2,
+   "review-logic": 2
+  },
+  "created": "2026-09-16",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "2026-09-16-ingest-github-com-mrciphersmith-keryx-pull-560-r03",
+  "path": "$REPO/.metaproject/flows/262-2026-09-15-review-pipeline-derive-the-finding-s-lin/reviews/2026-09-16-ingest-github-com-mrciphersmith-keryx-pull-560-r03",
+  "base": "b618e46632b336d3edefb99a3a7d43956e3d3900",
+  "head": "e8b62dc5af4fecb809fd6b4e56798e76444f8b4e",
+  "lines": 2036,
+  "nfiles": 18,
+  "acted": 4,
+  "reviewers": {
+   "review-security-code": 2,
+   "review-logic": 2
+  },
+  "created": "2026-09-16",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "2026-09-16-ingest-main",
+  "path": "$REPO/.metaproject/flows/263-2026-09-15-background-task-execution-p0-every-shell/reviews/2026-09-16-ingest-main",
+  "base": "b618e46632b336d3edefb99a3a7d43956e3d3900",
+  "head": "c0940dece8cf787b7a0b3c6717a3b4266db3e10d",
+  "lines": 3529,
+  "nfiles": 22,
+  "acted": 2,
+  "reviewers": {
+   "review-testing-practices": 2
+  },
+  "created": "2026-09-16",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "2026-09-16-ingest-main-r02",
+  "path": "$REPO/.metaproject/flows/263-2026-09-15-background-task-execution-p0-every-shell/reviews/2026-09-16-ingest-main-r02",
+  "base": "b618e46632b336d3edefb99a3a7d43956e3d3900",
+  "head": "c0940dece8cf787b7a0b3c6717a3b4266db3e10d",
+  "lines": 3529,
+  "nfiles": 22,
+  "acted": 2,
+  "reviewers": {
+   "review-testing-practices": 2
+  },
+  "created": "2026-09-16",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "2026-09-16-ingest-main-r03",
+  "path": "$REPO/.metaproject/flows/263-2026-09-15-background-task-execution-p0-every-shell/reviews/2026-09-16-ingest-main-r03",
+  "base": "b618e46632b336d3edefb99a3a7d43956e3d3900",
+  "head": "c0940dece8cf787b7a0b3c6717a3b4266db3e10d",
+  "lines": 3529,
+  "nfiles": 22,
+  "acted": 2,
+  "reviewers": {
+   "review-testing-practices": 2
+  },
+  "created": "2026-09-16",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "2026-09-16-ingest-main-r04",
+  "path": "$REPO/.metaproject/flows/263-2026-09-15-background-task-execution-p0-every-shell/reviews/2026-09-16-ingest-main-r04",
+  "base": "b618e46632b336d3edefb99a3a7d43956e3d3900",
+  "head": "c0940dece8cf787b7a0b3c6717a3b4266db3e10d",
+  "lines": 3529,
+  "nfiles": 22,
+  "acted": 2,
+  "reviewers": {
+   "review-testing-practices": 2
+  },
+  "created": "2026-09-16",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "2026-09-18-ingest-github-com-mrciphersmith-keryx-pull-591-r02",
+  "path": "$REPO/.metaproject/flows/269-2026-09-18-opentui-shell-ux-and-layout-remediation-/reviews/2026-09-18-ingest-github-com-mrciphersmith-keryx-pull-591-r02",
+  "base": "14311e2af88b2e602407372d62325ddde4129b11",
+  "head": "12b01eb4aaff104b4350ab688440eb6caeb7623d",
+  "lines": 1418,
+  "nfiles": 16,
+  "acted": 4,
+  "reviewers": {
+   "session-review": 4
+  },
+  "created": "2026-09-18",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "2026-09-19-ingest-github-com-mrciphersmith-keryx-pull-596-r02",
+  "path": "$REPO/.metaproject/flows/270-2026-09-19-tui-provider-and-search-provider-wizards/reviews/2026-09-19-ingest-github-com-mrciphersmith-keryx-pull-596-r02",
+  "base": "0261675d5eb7b2a0ca408616a688afa1950fe3e2",
+  "head": "360543caab89a12efb3fbebc2be7c4a310b6ff64",
+  "lines": 1829,
+  "nfiles": 13,
+  "acted": 2,
+  "reviewers": {
+   "review-logic": 2
+  },
+  "created": "2026-09-19",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "2026-09-19-ingest-github-com-mrciphersmith-keryx-pull-596-r03",
+  "path": "$REPO/.metaproject/flows/270-2026-09-19-tui-provider-and-search-provider-wizards/reviews/2026-09-19-ingest-github-com-mrciphersmith-keryx-pull-596-r03",
+  "base": "0261675d5eb7b2a0ca408616a688afa1950fe3e2",
+  "head": "c9a8a9b2be797181425d63a49ab02034d5fff7e6",
+  "lines": 1830,
+  "nfiles": 13,
+  "acted": 2,
+  "reviewers": {
+   "review-logic": 2
+  },
+  "created": "2026-09-19",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "2026-09-22-ingest-acp-live",
+  "path": "$REPO/.metaproject/flows/287-2026-09-22-acp-live-client-fixes-real-provider-by-d/reviews/2026-09-22-ingest-acp-live",
+  "base": "4e35696c333287a109fac8a8e1c3e34368669cc3",
+  "head": "a559059d84ae10c20d92bc3f1366cfa0a530ff6e",
+  "lines": 3156,
+  "nfiles": 17,
+  "acted": 5,
+  "reviewers": {
+   "code-reviewer (acp)": 4,
+   "code-reviewer (acp, third pass over the T13 fixes)": 1
+  },
+  "created": "2026-09-22",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "2026-09-22-ingest-acp-project-tools",
+  "path": "$REPO/.metaproject/flows/288-2026-09-22-acp-project-tools-keryx-graph-wiki-memor/reviews/2026-09-22-ingest-acp-project-tools",
+  "base": "4752910c00377c06ef03cbe22cbee1b107bfcc6a",
+  "head": "7e0809a2a2b170ded9d3ecf307e1c0f6f298a19a",
+  "lines": 2788,
+  "nfiles": 25,
+  "acted": 2,
+  "reviewers": {
+   "code-reviewer (acp)": 2
+  },
+  "created": "2026-09-23",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "2026-09-23-ingest-ac-update",
+  "path": "$REPO/.metaproject/flows/293-2026-09-22-flow-ac-update-amend-a-criterion-s-text-/reviews/2026-09-23-ingest-ac-update",
+  "base": "1ce983849ddae7b61be3ee7689134b4af61f0e3f",
+  "head": "9ebbb1b00942f9034330e0a7dcd58d26fd9eacfa",
+  "lines": 1267,
+  "nfiles": 9,
+  "acted": 3,
+  "reviewers": {
+   "code-reviewer (flow, pass 1)": 2,
+   "code-reviewer (flow, pass 2)": 1
+  },
+  "created": "2026-09-23",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "2026-09-23-ingest-acp-project-tools-r02",
+  "path": "$REPO/.metaproject/flows/288-2026-09-22-acp-project-tools-keryx-graph-wiki-memor/reviews/2026-09-23-ingest-acp-project-tools-r02",
+  "base": "4752910c00377c06ef03cbe22cbee1b107bfcc6a",
+  "head": "7e0809a2a2b170ded9d3ecf307e1c0f6f298a19a",
+  "lines": 2788,
+  "nfiles": 25,
+  "acted": 2,
+  "reviewers": {
+   "code-reviewer (acp)": 2
+  },
+  "created": "2026-09-23",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "2026-09-23-ingest-tui-gov-final-f4ded686",
+  "path": "$REPO/.metaproject/flows/300-2026-09-23-tui-sidebar-and-modals-for-the-governanc/reviews/2026-09-23-ingest-tui-gov-final-f4ded686",
+  "base": "d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff",
+  "head": "f4ded686dbf9a5bd8e05e3411b2a6585855416d0",
+  "lines": 269,
+  "nfiles": 12,
+  "acted": 2,
+  "reviewers": {
+   "code-reviewer (flow 300 adversarial)": 2
+  },
+  "created": "2026-09-23",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "2026-09-23-review-299",
+  "path": "$REPO/.metaproject/flows/299-2026-09-23-a-completion-signature-an-agent-cannot-m/reviews/2026-09-23-review-299",
+  "base": "ac0f1d40bcb6e41bb11d47df954157627ceb39d0",
+  "head": "21c29e76de927b55435b3edb5bad806e75e5358f",
+  "lines": 3006,
+  "nfiles": 43,
+  "acted": 2,
+  "reviewers": {
+   "security-reviewer (flow 299)": 2
+  },
+  "created": "2026-09-23",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "2026-09-23-round1",
+  "path": "$REPO/.metaproject/flows/303-2026-09-23-keryx-help-grouped-command-help-in-the-c/reviews/2026-09-23-round1",
+  "base": "5b6eb8105a866e26d2b2004d22d54f70e97f34fb",
+  "head": "6882b1ce82af478f7230019e4ce5e3ec6c398ddb",
+  "lines": 3734,
+  "nfiles": 42,
+  "acted": 2,
+  "reviewers": {
+   "code-reviewer (flow 303 PR #669 round 1)": 2
+  },
+  "created": "2026-09-23",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "2026-09-23-round2",
+  "path": "$REPO/.metaproject/flows/303-2026-09-23-keryx-help-grouped-command-help-in-the-c/reviews/2026-09-23-round2",
+  "base": "5b6eb8105a866e26d2b2004d22d54f70e97f34fb",
+  "head": "6882b1ce82af478f7230019e4ce5e3ec6c398ddb",
+  "lines": 3734,
+  "nfiles": 42,
+  "acted": 2,
+  "reviewers": {
+   "code-reviewer (flow 303 PR #669 round 2)": 2
+  },
+  "created": "2026-09-23",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "2026-09-23-verify-connect-disconnect",
+  "path": "$REPO/.metaproject/flows/304-2026-09-23-connect-test-connection-and-disconnect-a/reviews/2026-09-23-verify-connect-disconnect",
+  "base": "f4c72712f6f26a1f7af7f5fda24e5f9e1473bace",
+  "head": "5d203ec9925f83b60cb93441e09f0f01e871f882",
+  "lines": 2178,
+  "nfiles": 21,
+  "acted": 3,
+  "reviewers": {
+   "code-reviewer (flow 304, PR #673)": 3
+  },
+  "created": "2026-09-23",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "2026-09-28-pr-776-round2-2a2db6b7",
+  "path": "$REPO/.metaproject/flows/355-2026-09-28-audit-remediation-2-security-depth-entro/reviews/2026-09-28-pr-776-round2-2a2db6b7",
+  "base": "b7020b9fed35889b5fa814fdea4dd31ce5a28765",
+  "head": "2a2db6b7b05761b8f0a38bd057671cc286512c05",
+  "lines": 2976,
+  "nfiles": 34,
+  "acted": 4,
+  "reviewers": {
+   "review-security-code": 2,
+   "review-logic": 1,
+   "review-regression": 1
+  },
+  "created": "2026-09-28",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "2026-09-28-pr-779-round3-9b0b3f58",
+  "path": "$REPO/.metaproject/flows/355-2026-09-28-audit-remediation-2-security-depth-entro/reviews/2026-09-28-pr-779-round3-9b0b3f58",
+  "base": "1a11bff6fbb9fa8c05f2ba11537c6da3414959cd",
+  "head": "9b0b3f58b18caf90b2e811744133ef2364dc7e4b",
+  "lines": 396,
+  "nfiles": 7,
+  "acted": 3,
+  "reviewers": {
+   "review-security-code": 2,
+   "review-regression": 1
+  },
+  "created": "2026-09-28",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02",
+  "path": "$REPO/.metaproject/flows/355-2026-09-28-audit-remediation-2-security-depth-entro/reviews/2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02",
+  "base": "b7020b9fed35889b5fa814fdea4dd31ce5a28765",
+  "head": "dc63b9bc0469580d726379f9a03040bc7a71f6da",
+  "lines": 1690,
+  "nfiles": 31,
+  "acted": 7,
+  "reviewers": {
+   "review-security-code": 3,
+   "review-logic": 1,
+   "review-regression": 2,
+   "review-architecture": 1
+  },
+  "created": "2026-09-28",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "2026-11-10-review-flow-origin-main",
+  "path": "$REPO/.metaproject/reviews/2026-11-10-review-flow-origin-main",
+  "base": "947f6d9cf1942f00e6b7e89105831abde4ea3ca8",
+  "head": "baaaec78c057018b40a03c0b87db612dbcf68c19",
+  "lines": 567,
+  "nfiles": 13,
+  "acted": 3,
+  "reviewers": {
+   "review-logic": 3
+  },
+  "created": "2026-11-10",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "309-r01",
+  "path": "$REPO/.metaproject/flows/309-2026-09-25-live-model-catalog-at-startup-routing-pi/reviews/309-r01",
+  "base": "2aaf8372d51e418005f866f630e2943cb307f09c",
+  "head": "bd89d5a8d8411cb1f9d86d8171f8e2b068be917e",
+  "lines": 1824,
+  "nfiles": 21,
+  "acted": 2,
+  "reviewers": {
+   "sonnet-reviewer": 2
+  },
+  "created": "2026-09-25",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "326-r01",
+  "path": "$REPO/.metaproject/flows/326-2026-09-25-review-conform-one-verdict-per-clause-wi/reviews/326-r01",
+  "base": "5dd8a230f2a28cd72df209f4d2ac826826852d62",
+  "head": "def2955d589832c25694932421bb2dbc52115414",
+  "lines": 1666,
+  "nfiles": 15,
+  "acted": 2,
+  "reviewers": {
+   "sonnet-reviewer": 2
+  },
+  "created": "2026-09-25",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "327-r01",
+  "path": "$REPO/.metaproject/flows/327-2026-09-25-routing-a2-model-profiles-from-the-live-/reviews/327-r01",
+  "base": "26f000489f043ae8454b8c93c62352eab8f45b2d",
+  "head": "124f7f55d3d1dab53d08bd2f2ccb3d77d6907f44",
+  "lines": 3527,
+  "nfiles": 26,
+  "acted": 8,
+  "reviewers": {
+   "sonnet-reviewer": 8
+  },
+  "created": "2026-09-25",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "328-r01",
+  "path": "$REPO/.metaproject/flows/328-2026-09-25-jev-checks-a-flow-s-diff-against-its-fro/reviews/328-r01",
+  "base": "26f000489f043ae8454b8c93c62352eab8f45b2d",
+  "head": "d661e0851f63ff387217425f162cdb7d9025155d",
+  "lines": 2691,
+  "nfiles": 20,
+  "acted": 3,
+  "reviewers": {
+   "sonnet-reviewer": 3
+  },
+  "created": "2026-09-25",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "329-r01",
+  "path": "$REPO/.metaproject/flows/329-2026-09-25-jev-turn-guard-in-keryx-shell-after-the-/reviews/329-r01",
+  "base": "179456abb175a262a356499894162d29f8a81bd2",
+  "head": "7b05952716440f43d093e75584deb72ebc1426e9",
+  "lines": 2585,
+  "nfiles": 18,
+  "acted": 3,
+  "reviewers": {
+   "sonnet-reviewer": 3
+  },
+  "created": "2026-09-25",
+  "mode": "ingest"
+ },
+ {
+  "pkg": "flow362-pr793-review",
+  "path": "$REPO/.metaproject/flows/380-2026-09-28-product-module-p1/reviews/flow362-pr793-review",
+  "base": "d454c3a8f08140bca720576735aad7b1368aa8e9",
+  "head": "d2c60a8cfcfc36acba2eb4128002660203840703",
+  "lines": 2605,
+  "nfiles": 56,
+  "acted": 2,
+  "reviewers": {
+   "flow362-pr793-review": 2
+  },
+  "created": "2026-09-29",
+  "mode": "ingest"
+ }
+]

@@ -1,0 +1,19 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "match", "gid": "G1", "why": "G1 names the log-only cursor-write catch that returns the entry as recorded, leaving the revision invisible to readers." },
+    { "tid": "T2", "verdict": "match", "gid": "G4", "why": "G4 flags the same synchronous file I/O in the ExecutionPlanHistory constructor and proposes a static load." },
+    { "tid": "T3", "verdict": "partial", "gid": "G7", "why": "G7 targets the same if/else chain and its silent bare else, but proposes a switch with a never default and marks it info, not the Record lookup-map convention T3 asks for." },
+    { "tid": "T4", "verdict": "match", "gid": "G5", "why": "G5 flags the same output-argument signature of diffExecutionPlans returning void." },
+    { "tid": "T5", "verdict": "miss", "gid": null, "why": "No candidate raises the transition/change naming inconsistency." },
+    { "tid": "T6", "verdict": "match", "gid": "G3", "why": "G3 flags the same context-free 'Invalid entry' error in parseEntry." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "truth", "why": "Matches T1." },
+    { "gid": "G2", "label": "valid", "why": "writePlan writes plan.json and then awaits recordPlanRevision, so an appendFile failure rejects a write that is already committed, and a retry with the same expectedRevision conflicts; this is a real issue the change introduces." },
+    { "gid": "G3", "label": "truth", "why": "Matches T6." },
+    { "gid": "G4", "label": "truth", "why": "Matches T2." },
+    { "gid": "G5", "label": "truth", "why": "Matches T4." },
+    { "gid": "G6", "label": "valid", "why": "The cursor doc comment claims an orphaned entry is never shown, but the code reveals it once a later write advances the cursor; the comment is inaccurate and a maintainer would correct it." },
+    { "gid": "G7", "label": "truth", "why": "Partial for T3." }
+  ]
+}

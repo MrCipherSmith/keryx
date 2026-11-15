@@ -1,0 +1,22 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "match", "gid": "G1", "why": "G1 identifies the throwing cancel override despite cancellation:false and the unguarded call at adapter-shutdown.ts:54 aborting the loop." },
+    { "tid": "T2", "verdict": "match", "gid": "G3", "why": "G3 names loadRecordedResults returning null coalesced to [] so a bad recording replays as an empty clean result." },
+    { "tid": "T3", "verdict": "match", "gid": "G10", "why": "G10 flags writeReplaySummary doing read, validate, summarise and write in one body, untestable without the filesystem and duplicating the loader." },
+    { "tid": "T4", "verdict": "match", "gid": "G6", "why": "G6 names the inline seven-day literal at lines 69 and 151 and the drift risk." },
+    { "tid": "T5", "verdict": "match", "gid": "G4", "why": "G4 flags isReplayableResult sorting scopeIds in place and scopesMatch depending on it." },
+    { "tid": "T6", "verdict": "match", "gid": "G8", "why": "G8 flags the single-letter n explained by a trailing comment and suggests naming it confirmed." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "truth", "why": "Match for T1." },
+    { "gid": "G2", "label": "truth", "why": "Missing per-dispatch catch in the cancel loop is the unguarded call half of T1; partial for T1." },
+    { "gid": "G3", "label": "truth", "why": "Match for T2." },
+    { "gid": "G4", "label": "truth", "why": "Match for T5." },
+    { "gid": "G5", "label": "noise", "why": "Comment wording quibble that restates G3's silent-empty concern; torn, so lower label." },
+    { "gid": "G6", "label": "truth", "why": "Match for T4." },
+    { "gid": "G7", "label": "noise", "why": "Status-set naming and derivation preference is taste, not a concrete defect introduced here." },
+    { "gid": "G8", "label": "truth", "why": "Match for T6." },
+    { "gid": "G9", "label": "noise", "why": "Four positional params with adjacent strings is a style preference below a reasonable threshold." },
+    { "gid": "G10", "label": "truth", "why": "Match for T3." }
+  ]
+}

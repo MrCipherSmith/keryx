@@ -1,0 +1,20 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "match", "gid": "G1", "why": "G1 identifies the log-only cursor-write catch that returns the entry as recorded while readers omit the uncommitted line." },
+    { "tid": "T2", "verdict": "match", "gid": "G4", "why": "G4 flags the same synchronous file I/O and throwing in the ExecutionPlanHistory constructor." },
+    { "tid": "T3", "verdict": "match", "gid": "G8", "why": "G8 flags the same non-exhaustive if/else-if dispatch in describeChange with the bare else absorbing new kinds." },
+    { "tid": "T4", "verdict": "match", "gid": "G6", "why": "G6 flags the same output-argument signature of diffExecutionPlans returning void." },
+    { "tid": "T5", "verdict": "miss", "gid": null, "why": "No candidate raises the transition/change naming inconsistency." },
+    { "tid": "T6", "verdict": "match", "gid": "G7", "why": "G7 flags the same context-free Error(\"Invalid entry\") in parseEntry." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "truth", "why": "Matches T1." },
+    { "gid": "G2", "label": "valid", "why": "readCursor maps a parseable cursor with a missing or non-numeric revision to 0, silently hiding all history, contrary to the torn-JSON handling and its own comment." },
+    { "gid": "G3", "label": "valid", "why": "The commit-marker doc is contradicted by the code: the next successful write sets the cursor past an orphaned line from a crashed writer and surfaces it, a real gap distinct from the swallowed error." },
+    { "gid": "G4", "label": "truth", "why": "Matches T2." },
+    { "gid": "G5", "label": "noise", "why": "A render function that loads then formats is a taste-level layering preference, not a specific defect worth fixing." },
+    { "gid": "G6", "label": "truth", "why": "Matches T4." },
+    { "gid": "G7", "label": "truth", "why": "Matches T6." },
+    { "gid": "G8", "label": "truth", "why": "Matches T3." }
+  ]
+}

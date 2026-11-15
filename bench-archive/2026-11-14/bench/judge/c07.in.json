@@ -1,0 +1,114 @@
+{
+ "truth": [
+  {
+   "tid": "T1",
+   "file": "src/review/managed.ts",
+   "line": 1088,
+   "severity": "blocker",
+   "problem": "The round-tree containment check is lexical, not real: a symlink inside the tree defeats it and lets `review ingest` read arbitrary host files.",
+   "impact": "Anyone who can add a file to the tree under review can plant a symlink and then use the derived locator state as a line-by-line oracle for any file the ingest process can read.",
+   "quote": "const resolved = path.resolve(input.cwd, relative);\n      if (resolved !== input.cwd && !resolved.startsWith(`${path.resolve(input.cwd)}${path.sep}`)) {\n        return null;\n      }"
+  },
+  {
+   "tid": "T2",
+   "file": "src/review/locate.ts",
+   "line": 95,
+   "severity": "blocker",
+   "problem": "locateQuote is O(file lines x quote lines) with no cap on either, and anchorFindings runs it once per finding sequentially, so a report can hang review ingest for minutes.",
+   "impact": "A report is attacker-influenced data by this round's own framing; a single ingest can be made to hang with no cap, no timeout and no bailout, using inputs that look ordinary.",
+   "quote": "for (let start = 0; start + needle.length <= haystack.length; start += 1) {\n    const window = shape(haystack.slice(start, start + needle.length));\n    if (window.every((line, offset) => line === needle[offset])) {\n      hits.push(start + 1); // 1-based, like every line number a human reads\n    }\n  }"
+  },
+  {
+   "tid": "T3",
+   "file": "src/review/managed.ts",
+   "line": 1099,
+   "severity": "major",
+   "problem": "A finding carrying a stale locator and line but no quote is written through unrechecked.",
+   "impact": "On a fix round — the round type this change's own comments call out as where the anchor is least trustworthy — an unverified line/locator pair is written verbatim into the new round's findings.json, defeating the derivation guarantee for exactly that case.",
+   "quote": "for (const finding of findings) {\n    const locator = await locateFinding(finding, read);\n    if (locator === undefined) {\n      continue;\n    }"
+  },
+  {
+   "tid": "T4",
+   "file": "src/review/cost.ts",
+   "line": 129,
+   "severity": "major",
+   "problem": "The per-finding cost rounds a nonzero spend down to a printed zero, contradicting the module's own rule that a zero means somebody measured.",
+   "impact": "A reader who trusts the module's promise reads 'per retained finding: 0 tokens' as free when the round spent tokens — the exact confusion the module exists to prevent, reappearing through a different door.",
+   "quote": "if (tokens !== undefined) {\n    lines.push(`per retained finding: ${grouped(Math.round(tokens / retained))} tokens`);\n  }"
+  }
+ ],
+ "candidate": [
+  {
+   "id": "G1",
+   "file": "src/review/managed.ts",
+   "line": 1084,
+   "severity": "major",
+   "problem": "anchorFindings locates quotes in the working tree under input.cwd, not at the round's head. The schemas, SKILL and locator reason all say 'at the round's head', and the manifest records target.head from --head (resolveTargetHead prefers the declared sha over the checkout), but nothing reads that commit: the default reader is readFile(path.resolve(input.cwd, relative)). Uncommitted edits and a checkout at a different commit are matched as if they were the head.",
+   "impact": "`keryx review ingest --report r.md --ref <pr> --head <sha>` run from a checkout that is not at <sha> (another branch, a tree where fixes are already applied, or a dirty tree) either nulls every reported line as 'unlocatable: no such file at this round's head / quote does not appear' (the reviewer's correct line is discarded, where before this diff it survived), or writes a line number labelled `derived` that is true of a different tree than the head the manifest pins. The second case is the confident wrong anchor the module says it exists to prevent.",
+   "quote": "const resolved = path.resolve(input.cwd, relative);"
+  },
+  {
+   "id": "G2",
+   "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+   "line": 776,
+   "severity": "major",
+   "problem": "The cost feature is not wired into the pipeline that is supposed to use it. The orchestrator skill still calls `keryx review scope` only as `--json` and `--scoped-diff` (lines 775-776) - exactly the two forms runScope skips the estimate for - never passes `--reviewers` to scope, and its ingest surface (lines 177-180) does not mention `--tokens-in/--tokens-out`. printHelp in src/commands/review.ts (ingest and scope usage, around line 2264-2276) was not updated with the new flags either.",
+   "impact": "In an orchestrated round the pre-dispatch estimate is never printed and no token usage is ever passed to ingest, so `review complete` prints `cost: not recorded` on every round. The change claims to end the state where nothing feeds the budget; for the documented flow nothing still does. The only discoverability is the hint inside the not-recorded message.",
+   "quote": "keryx review scope --ref \"${BASE_SHA}\" --scoped-diff         # what reviewers get"
+  },
+  {
+   "id": "G3",
+   "file": "src/review/managed.ts",
+   "line": 230,
+   "severity": "minor",
+   "problem": "repairMechanicalOmissions runs only over `reported`. The `--refuted` channel (fromRefutedSource, line 299) goes through the same fromStructuredSource and is merged into the same `findings` array, but is never repaired, and the `taken` set used to mint ids does not see the refuted findings' ids.",
+   "impact": "(a) Two refuted findings without `id` still die with the exact error this change exists to remove: `<reviewId>#undefined claimed by 2 findings`; a title-only refuted finding is still refused for missing `problem`. (b) Reported findings without ids are minted F-001.. while a refuted file that numbers its own entries F-001.. is merged afterwards, so the ingest is refused with `...#F-001 claimed by 2 findings` for an id the pipeline itself invented.",
+   "quote": "const repairs = repairMechanicalOmissions(reported);"
+  },
+  {
+   "id": "G4",
+   "file": "src/review/managed.ts",
+   "line": 1115,
+   "severity": "minor",
+   "problem": "anchorFindings ignores the finding's `repo`. The contract (review-finding.schema.json `repo`, orchestrator SKILL.md 519-522) says a cross-repo finding's `file`/`line` name a path in the producer repository; the anchor resolves `file` against the repository under review regardless.",
+   "impact": "A cross-repo finding that follows the new instruction and quotes the producer's code gets `line: null` and locator `no such file at this round's head`, destroying the pinned file:line the cross-repo `info` rule depends on; if the same relative path exists locally and contains the snippet, it gets a `derived` line from the wrong repository.",
+   "quote": "finding.line = null;"
+  },
+  {
+   "id": "G5",
+   "file": "src/review/managed.ts",
+   "line": 1609,
+   "severity": "minor",
+   "problem": "`summary` is computed in coerceStructured from `finding.problem` before the repair runs, and the repair fills `problem` from `title` without refreshing `summary`. A title-only finding therefore ends with problem set and summary ''.",
+   "impact": "In `start`/`attach` modes (classification skill_learning_candidate) renderLearning (line 2192) writes `- reviewer <- F-001: ` with an empty description into learning.md for every repaired finding - the reviewer's sentence the repair was added to preserve is missing from the one artifact that prints it.",
+   "quote": "record.summary = typeof finding.problem === \"string\" ? finding.problem : \"\";"
+  },
+  {
+   "id": "G6",
+   "file": "src/commands/review.ts",
+   "line": 2159,
+   "severity": "minor",
+   "problem": "The divisor is `filter_stats.retained` as frozen at ingest, not what survived the round. It still counts findings that `review complete` (this invocation or an earlier one) dispositioned `dismissed-incorrect`/out-of-scope, and in the default `annotate` verification mode it counts findings the verifier refuted. `retained` is also typed `number | null`; null or an absent filter_stats is coerced to 0 and printed as 'Nothing was retained'.",
+   "impact": "`per retained finding` understates the price per finding that actually held: a round with 10 ingested findings of which 8 are dismissed as incorrect at completion prints cost/10, not cost/2, while the comment presents the figure as cost against 'what survived it'.",
+   "quote": "for (const line of renderCostPerFinding(manifest.cost, manifest.filter_stats?.retained ?? 0)) {"
+  },
+  {
+   "id": "G7",
+   "file": "src/commands/review.ts",
+   "line": 1657,
+   "severity": "minor",
+   "problem": "The estimate is computed from renderScopedDiff(scope), which renders only `scope.regions`. In path mode (`--path a,b`) buildPathScope returns `regions: []` (src/review/scope.ts:1116), so the scoped diff is the empty string.",
+   "impact": "`keryx review scope --path src/a.ts,src/b.ts` prints `≈ 0 prompt tokens of scoped diff per reviewer` although path mode hands reviewers whole files - the estimate reads as a free round exactly where the input is largest.",
+   "quote": "console.log(renderScopeEstimate(renderScopedDiff(scope), reviewerList(args).length));"
+  },
+  {
+   "id": "G8",
+   "file": "docs/analysis/open-code-review-comparison/2026-09-15/report.md",
+   "line": 301,
+   "severity": "minor",
+   "problem": "The report contradicts itself about its own evidence. Section 5a says it was added after a second pass 'that read their Go packages and our corresponding TypeScript rather than their README' and quotes Go source; section 6 ('Honest limits') still states the architecture was read from the README and the package layout, 'not from their Go source'.",
+   "impact": "A reader cannot tell whether the code-level claims in 5a (which this PR's locate/repair/cost modules cite as their design basis) were read from source or inferred from file names.",
+   "quote": "`internal/` package\n  layout, not from their Go source."
+  }
+ ]
+}

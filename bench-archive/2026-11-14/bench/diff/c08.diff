@@ -1,0 +1,2601 @@
+diff --git a/docs/docs/cli-reference.md b/docs/docs/cli-reference.md
+index 2f1ef8194..300e8ebb1 100644
+--- a/docs/docs/cli-reference.md
++++ b/docs/docs/cli-reference.md
+@@ -1167,18 +1167,25 @@ keryx auth status <provider> [--json]
+ ## providers
+ 
+ Report over the **provider configuration** — the built-in OpenAI-compatible
+-registry plus the operator-defined entries in `llm-providers.json`. Read-only and
+-network-free: it reads files and exits, and spends no tokens.
++registry plus the operator-defined entries in `llm-providers.json` — plus, since
++flow 304, `test` and `remove`: the CLI form of the `/connect` row buttons
++("Test connection" and "Disconnect"). `list` and `cross-family` stay read-only
++and network-free, exactly as before; `test` makes ONE network call (the live
++`/models` probe) and `remove` writes to disk only after confirmation.
+ 
+ ```
+ keryx providers list [--json]
+ keryx providers cross-family [--opt-in] [--session-provider <id>] [--session-model <id>] [--from-shell-config] [--json]
++keryx providers test <name> [--json]
++keryx providers remove <name> [--yes]
+ ```
+ 
+ | Subcommand | Flags | Description |
+ |---|---|---|
+-| `list` | `--json` | Providers this operator has actually **configured** — a custom entry in `llm-providers.json`, or a built-in with a resolvable credential — and the model family of each. |
++| `list` | `--json` | Providers this operator has actually **configured** — a custom entry in `llm-providers.json`, or a built-in with a resolvable credential — and the model family of each. Read-only, network-free. |
+ | `cross-family` | `--opt-in`, `--session-provider <id>`, `--session-model <id>`, `--from-shell-config`, `--json` | Decide whether review may run on a different model family than authored the change, and print the record the round should carry. The authoring session comes from the flags, else `KERYX_SESSION_PROVIDER`/`KERYX_SESSION_MODEL`; the selection `keryx shell` persisted only with `--from-shell-config`. |
++| `test` | `<name>`, `--json` | Run that provider's live model-list probe (the same one `/connect` uses to decide what's "connected") and report `ok` with the model count, or the humanized failure reason. Exits non-zero on a failed probe. |
++| `remove` | `<name>`, `--yes` | **Disconnect** that provider: remove its saved API key, its OAuth grant, or its `llm-providers.json` entry (together with any saved base-URL/model-param override) — whichever one it actually has. Asks for confirmation on a terminal; refuses without one unless `--yes`. A provider whose only credential is an environment variable you exported yourself is refused outright — the command names the exact variable to `unset`. Disconnecting removes only keryx's LOCAL copy of the credential: an OAuth grant is deleted from `auth.json` with no vendor revoke call, and a removed API key simply stops being read (the key itself stays valid at the vendor until you revoke it there yourself). |
+ 
+ ### Cross-family review
+ 
+diff --git a/docs/docs/commands-by-task.md b/docs/docs/commands-by-task.md
+index dca1d10be..1645c909f 100644
+--- a/docs/docs/commands-by-task.md
++++ b/docs/docs/commands-by-task.md
+@@ -26,7 +26,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
+ 
+ | Shell command | Summary |
+ |---|---|
+-| `/connect` | Switch provider / API key. |
++| `/connect` | Switch provider; row buttons test/disconnect it. |
+ | `/search-provider` | Configure and test a web search provider. |
+ | `/search-connect` | Select a connected web search provider. |
+ | `/provider` | Switch provider — /provider <name>, or no arg to re-select. |
+diff --git a/docs/docs/onboarding.md b/docs/docs/onboarding.md
+index 7b21d1ad5..e91e47188 100644
+--- a/docs/docs/onboarding.md
++++ b/docs/docs/onboarding.md
+@@ -323,19 +323,33 @@ keryx shell
+   ```bash
+   keryx providers list         # every provider you already have configured,
+                                 # and its model family
++  keryx providers test <name>  # run its live model-list probe; ok + count,
++                                # or the failure reason
++  keryx providers remove <name> [--yes]  # disconnect it: remove the saved
++                                # key/grant/custom entry (asks first)
+   keryx auth login <provider>  # subscription login (device code / OAuth,
+                                 # where the provider supports it) or API key
+   keryx auth status <provider> # is this provider currently authorized
+-  keryx auth logout <provider> # revoke a stored credential
++  keryx auth logout <provider> # delete a stored OAuth grant, LOCALLY —
++                                # no vendor revoke call is made
+   ```
+ 
+ - **Inside a running session**, `/connect` switches between providers you
+-  already configured (no key/URL prompts); `/provider` opens the same
+-  add/reconfigure wizard the startup picker used, so it also covers a
+-  provider you have not set up yet. `/model` opens a model picker for the
+-  current provider; in chat mode (`--no-tui --chat`) it instead takes an
+-  argument (`/model <name>`) and `/models` lists what is available as a
+-  numbered menu.
++  already configured (no key/URL prompts). Since flow 304, each row in that
++  list also carries two buttons, drawn and reachable the same way the queue
++  dock's Force/Edit/Delete are: `[Test]` runs the same live model-list probe
++  `keryx providers test` does and shows the result on the row; `[Disconnect]`
++  asks for confirmation, then removes that provider's saved credential the
++  same way `keryx providers remove` does. Reach both without a mouse: ↑/↓
++  picks a row, ←/→ picks Label, Test or Disconnect, Enter fires it, Esc backs
++  out. Disconnecting the provider the CURRENT session is using does not
++  switch it or interrupt a turn — the session keeps its already-loaded
++  credential until you `/connect` another provider or restart. `/provider`
++  opens the same add/reconfigure wizard the startup picker used (no row
++  buttons there), so it also covers a provider you have not set up yet.
++  `/model` opens a model picker for the current provider; in chat mode
++  (`--no-tui --chat`) it instead takes an argument (`/model <name>`) and
++  `/models` lists what is available as a numbered menu.
+ 
+ #### Pick a theme
+ 
+diff --git a/docs/requirements/keryx-shell-split/audits-tui-other.md b/docs/requirements/keryx-shell-split/audits-tui-other.md
+index 66fbc9577..12ca9b998 100644
+--- a/docs/requirements/keryx-shell-split/audits-tui-other.md
++++ b/docs/requirements/keryx-shell-split/audits-tui-other.md
+@@ -15,7 +15,10 @@ Scope: `src/tui/tui-session-lease.test.ts`, `src/tui/tui-bus.test.ts`,
+ Flow 303 (keryx help) added `src/tui/busy-dispatch.test.ts` and
+ `src/tui/help-first-run.test.ts` to this scope while its own PR review round
+ was open — both are otherwise pure/behavioural test files that gained exactly
+-one structural source-text pin each; see their own sections below.
++one structural source-text pin each; see their own sections below. Flow 304
++(`/connect`'s Test/Disconnect row buttons) added `src/tui/connect-provider-buttons.test.ts`
++the same way — one structural pin for the closure-internal session-comparison
++half of AC7, alongside its own otherwise-behavioural mouse/keyboard coverage.
+ 
+ `tui-shell.ts` is 6853 lines (`wc -l`). Production line numbers below are from
+ `keryx ctx rg` against the current worktree.
+@@ -139,6 +142,17 @@ Production region pinned: the AC8 first-run-help call site in `launchTuiAgentShe
+ 
+ ---
+ 
++## `src/tui/connect-provider-buttons.test.ts` (structural pin added alongside the behavioural row-button tests)
++
++### `the /connect command handler prints the active-provider-disconnected line` — added by flow 304
++Production region pinned: the `/connect`/`/provider` command handler's `onDisconnected` callback, `if (command.name === "/connect" || command.name === "/provider") { … }`.
++
++| test | technique | literal(s) / window | behaviour it actually protects | observable today? | proposed conversion | what cosmetic edit breaks it |
++|---|---|---|---|---|---|---|
++| `onDisconnected compares the disconnected name against the session's OWN provider` / `the system line names 'already-loaded credential'...` / `the line is NOT a forced switch` | `indexOf` window (1500 chars from the `/connect`\|`/provider` branch's `if`) + substring presence/absence | window must contain `onDisconnected: (name) => {`, `if (name === currentSel.provider) {`, `already-loaded credential`, `/connect another provider or restart`, `io.onSystem?.(`; the callback's own sub-slice must NOT contain `switchTo(` | Disconnecting the provider the session is CURRENTLY using (AC7) must neither force a provider switch nor interrupt an in-flight turn — it only prints one system line naming the provider and explaining the session keeps its already-loaded credential until `/connect` or a restart. This comparison (`name === currentSel.provider`) lives inside `launchTuiAgentShell`'s closure with no exported seam, the same reason every other row in this table exists. | no — same reason as the `busy-dispatch`/`help-first-run` rows above: `launchTuiAgentShell` is never driven end-to-end in any test. The row-list step's OWN contract — `onDisconnected` fires with the right name, exactly once, only on a CONFIRMED disconnect — IS behavioural and IS proven in the same file, driving the real `selectProviderModelInTui` (see the AC4 describe block). Only the closure-internal session-name comparison and the system line's wording needed a text audit. | Once `SelectProviderModelOptions.onDisconnected` (or the `/connect` handler itself) is extracted so the session-provider comparison is an injectable/exported decision (mirroring `busy-dispatch.ts`'s `classifyBusyDispatch` extraction proposed above), this becomes a direct unit test of that decision instead of a source slice. | Reordering the `/connect`/`/provider` if-branch's contents such that `onDisconnected` moves more than 1500 characters past the `if`; renaming `currentSel` or rewording the system line's "already-loaded credential"/"restart" phrasing (a legitimate UI copy edit that would need the audit's literals updated alongside it). |
++
++---
++
+ ## `src/tui/theme-picker.test.ts`
+ 
+ ### (bare top-level `test`) — line `117`
+diff --git a/docs/requirements/keryx-shell-split/source-text-audit-inventory.md b/docs/requirements/keryx-shell-split/source-text-audit-inventory.md
+index ca8845596..208b20005 100644
+--- a/docs/requirements/keryx-shell-split/source-text-audit-inventory.md
++++ b/docs/requirements/keryx-shell-split/source-text-audit-inventory.md
+@@ -36,6 +36,17 @@ have dropped to zero read sites because their structural audits now scan
+ `src/tui/**` instead of one file, which is what lets them survive P3 rather
+ than be broken by it.
+ 
++Flow 304 (`/connect`'s Test/Disconnect row buttons) added one more site:
++`tui/connect-provider-buttons.test.ts` pins that the `/connect` command
++handler's `onDisconnected` callback compares the disconnected provider's name
++against the session's own `currentSel.provider` and prints the operator-facing
++line, rather than forcing a provider switch — that comparison lives inside
++`launchTuiAgentShell`'s closure with no exported seam, the same reason the
++other rows in this table exist. The row-list step's OWN contract (`onDisconnected`
++fires with the right name, exactly once, only on a confirmed disconnect) is
++proven behaviourally in the same file, driving the real `selectProviderModelInTui`
++— only the closure-internal session comparison needed a text audit.
++
+ ### What the count does and does not measure
+ 
+ The manifest counts **files coupled to the two paths**, not assertions coupled
+@@ -351,6 +362,7 @@ harness/search/connection-message.test.ts | commands/shell.ts, tui/tui-shell.ts
+ mcp-servers/approval-wiring.test.ts | commands/shell.ts, tui/tui-shell.ts | 3
+ tui/boot-animation.test.ts | tui/tui-shell.ts | 2
+ tui/busy-dispatch.test.ts | tui/tui-shell.ts | 1
++tui/connect-provider-buttons.test.ts | tui/tui-shell.ts | 1
+ tui/execution-plan-panel.test.ts | tui/tui-shell.ts | 1
+ tui/help-first-run.test.ts | tui/tui-shell.ts | 1
+ tui/shell-fallback.test.ts | tui/tui-shell.ts | 1
+diff --git a/package.json b/package.json
+index 9687ea86a..5bf598a72 100644
+--- a/package.json
++++ b/package.json
+@@ -1,6 +1,6 @@
+ {
+   "name": "@mrciphersmith/keryx",
+-  "version": "0.2.160",
++  "version": "0.2.161",
+   "description": "Version-controlled project context for AI coding agents: code graph, architecture wiki, project memory, relevant tests, quality signals, and task flows.",
+   "private": false,
+   "publishConfig": {
+diff --git a/src/cli.test.ts b/src/cli.test.ts
+index dbe637149..21a0804f7 100644
+--- a/src/cli.test.ts
++++ b/src/cli.test.ts
+@@ -82,14 +82,20 @@ test("flow 303 AC5: --help, -h and bare `keryx` print the identical flat usage,
+ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned against their pre-flow output", () => {
+   const FIXTURES_ROOT = path.join(import.meta.dir, "../fixtures/cli-help-pre-flow-303");
+ 
+-  // The ONLY two lines this flow is allowed to have added to the flat block —
+-  // one in USAGE_BODY, one in the Commands: summary table.
++  // The ONLY lines these two flows are allowed to have added to the flat
++  // block. Flow 303: one in USAGE_BODY, one in the Commands: summary table.
++  // Flow 304 (review finding #5): `keryx --help` never listed the new
++  // `providers test`/`providers remove` subcommands — both added here, in
++  // USAGE_BODY only (they are subcommands of an existing verb, so no new
++  // Commands: summary row is needed, unlike flow 303's brand-new `help` verb).
+   const NEW_LINES = [
+     "  keryx help [group|command]                   Grouped command help by task (--help/-h keep this flat usage)\n",
+     "  help      Grouped command help by task: every verb, in nine onboarding-ordered groups\n",
++    "  keryx providers test <name> [--json]\n",
++    "  keryx providers remove <name> [--yes] [--json]\n",
+   ];
+ 
+-  test("the flat --help block is the pre-flow fixture plus exactly those two lines, nothing else", async () => {
++  test("the flat --help block is the pre-flow fixture plus exactly those lines, nothing else", async () => {
+     const cliPath = path.join(import.meta.dir, "cli.ts");
+     const current = await runBun([cliPath, "--help"]);
+     const preFlow = readFileSync(path.join(FIXTURES_ROOT, "flat-help.txt"), "utf8");
+diff --git a/src/cli.ts b/src/cli.ts
+index c6cc46bde..2d4abb646 100755
+--- a/src/cli.ts
++++ b/src/cli.ts
+@@ -229,6 +229,8 @@ export const USAGE_BODY = `Usage:
+   keryx sync install-hooks | uninstall-hooks
+   keryx providers list [--json]
+   keryx providers cross-family [--opt-in] [--json]
++  keryx providers test <name> [--json]
++  keryx providers remove <name> [--yes] [--json]
+   keryx auth list [--json]
+   keryx auth login <provider>
+   keryx auth logout <provider>
+diff --git a/src/commands/providers.disconnect.test.ts b/src/commands/providers.disconnect.test.ts
+new file mode 100644
+index 000000000..556e36a88
+--- /dev/null
++++ b/src/commands/providers.disconnect.test.ts
+@@ -0,0 +1,504 @@
++// flow 304: "Test connection" and "Disconnect" for a provider — the pure
++// classify/probe/remove logic behind the `/connect` row buttons and
++// `keryx providers test`/`keryx providers remove`. TUI mouse/keyboard
++// coverage lives in `src/tui/connect-provider-buttons.test.ts`; this file
++// covers the logic those buttons call, plus the CLI subcommands directly.
++import { expect, test } from "bun:test";
++import { mkdtempSync } from "node:fs";
++import { tmpdir } from "node:os";
++import path from "node:path";
++import { loadCustomCompatProviders, saveCustomCompatProvider } from "../lib/provider-config";
++import { applyOAuthAccessToEnv, saveOAuthGrant } from "../lib/oauth/grants";
++import {
++  applySavedApiKeys,
++  loadShellConfig,
++  saveApiKey,
++  saveProviderBaseUrl,
++  saveProviderModelParams,
++  savedCredentialEnvKeys,
++} from "../lib/shell-config";
++import {
++  type OpenAiCompatProvider,
++  allOpenAiCompatProviders,
++  classifyProviderConnection,
++  disconnectProvider,
++  providersCommand,
++  providersSharingEnvKey,
++  sharedCredentialWarning,
++  testProviderConnection,
++  providerByName,
++} from "./providers";
++
++function tempDir(): string {
++  return mkdtempSync(path.join(tmpdir(), "keryx-providers-disconnect-"));
++}
++
++// --- classifyProviderConnection --------------------------------------------
++
++test("classifyProviderConnection: a custom provider's llm-providers.json entry outranks everything else", () => {
++  const dir = tempDir();
++  saveCustomCompatProvider({ name: "internal-qwen", baseUrl: "http://10.0.0.1:8080", models: [] }, dir);
++  expect(classifyProviderConnection("internal-qwen", {}, dir)).toEqual({ kind: "custom", sharedWith: [] });
++});
++
++test("classifyProviderConnection: an OAuth grant classifies as oauth-grant, with the env var it maps onto", () => {
++  const dir = tempDir();
++  saveOAuthGrant("grok", { method: "device-code", access: "tok", obtainedAt: "2026-01-01T00:00:00.000Z" }, dir);
++  expect(classifyProviderConnection("grok", {}, dir)).toEqual({ kind: "oauth-grant", envKey: "XAI_API_KEY", sharedWith: [] });
++});
++
++test("classifyProviderConnection: a key keryx saved under apiKeys classifies as saved-api-key", () => {
++  const dir = tempDir();
++  saveApiKey("DEEPSEEK_API_KEY", "sk-ds", dir);
++  expect(classifyProviderConnection("deepseek", {}, dir)).toEqual({
++    kind: "saved-api-key",
++    envKey: "DEEPSEEK_API_KEY",
++    sharedWith: [],
++  });
++});
++
++test("classifyProviderConnection: a key present only in env (never saved by keryx) classifies as env-var-only", () => {
++  const dir = tempDir();
++  expect(classifyProviderConnection("deepseek", { DEEPSEEK_API_KEY: "sk-operator-exported" }, dir)).toEqual({
++    kind: "env-var-only",
++    envKey: "DEEPSEEK_API_KEY",
++    sharedWith: [],
++  });
++});
++
++test("classifyProviderConnection: no credential anywhere, and a keyless local provider, both classify as no-credential", () => {
++  const dir = tempDir();
++  expect(classifyProviderConnection("deepseek", {}, dir)).toEqual({ kind: "no-credential", sharedWith: [] });
++  expect(classifyProviderConnection("rapid-mlx", {}, dir)).toEqual({ kind: "no-credential", sharedWith: [] });
++});
++
++// flow 304 review finding #1: an OAuth grant's env var is cleared from THIS
++// process too, not just auth.json — the NEXT classification must not
++// misreport it as `env-var-only` (which would wrongly tell the operator to
++// `unset` a variable keryx itself set).
++test("classifyProviderConnection: after applyOAuthAccessToEnv + disconnect, the provider is no longer env-var-only", () => {
++  const dir = tempDir();
++  saveOAuthGrant("grok", { method: "device-code", access: "tok-grok", obtainedAt: "2026-01-01T00:00:00.000Z" }, dir);
++  const savedBefore = { ...process.env };
++  try {
++    delete process.env.XAI_API_KEY;
++    applyOAuthAccessToEnv(dir); // copies the grant onto process.env.XAI_API_KEY, marks it keryx-saved
++    expect(readEnv("XAI_API_KEY")).toBe("tok-grok");
++
++    const result = disconnectProvider("grok", process.env, dir);
++    expect(result.ok).toBe(true);
++    expect(result.kind).toBe("oauth-grant");
++    expect(readEnv("XAI_API_KEY")).toBeUndefined();
++
++    // Reclassifying now (as `/connect` would on its next open) must see a
++    // clean slate, not `env-var-only` pointing at a var keryx itself unset.
++    expect(classifyProviderConnection("grok", process.env, dir)).toEqual({ kind: "no-credential", sharedWith: [] });
++  } finally {
++    process.env = savedBefore;
++  }
++});
++
++// flow 304 review finding #1, negative case: an operator's OWN env export
++// must survive an OAuth disconnect untouched (same non-negotiable as the
++// saved-api-key case). Uses github-copilot/GITHUB_COPILOT_TOKEN rather than
++// grok/XAI_API_KEY: `savedCredentialEnvKeys()` is a process-lifetime
++// singleton, and an earlier test in this file legitimately marks
++// XAI_API_KEY keryx-saved via `applyOAuthAccessToEnv` — reusing that key here
++// would test yesterday's test run, not this scenario.
++test("classifyProviderConnection: an operator-exported GITHUB_COPILOT_TOKEN is not touched by a github-copilot OAuth disconnect", () => {
++  const dir = tempDir();
++  saveOAuthGrant("github-copilot", { method: "device-code", access: "tok-gh", obtainedAt: "2026-01-01T00:00:00.000Z" }, dir);
++  const savedBefore = { ...process.env };
++  try {
++    process.env.GITHUB_COPILOT_TOKEN = "operator-exported-token"; // NOT loaded via applyOAuthAccessToEnv
++    disconnectProvider("github-copilot", process.env, dir);
++    expect(readEnv("GITHUB_COPILOT_TOKEN")).toBe("operator-exported-token");
++  } finally {
++    process.env = savedBefore;
++  }
++});
++
++// --- providersSharingEnvKey / sharedCredentialWarning (flow 304 review #2) --
++// "Built-in zai and zai-coding share ZAI_API_KEY, so removing one silently
++// removes the other's credential." Fix: name every affected provider,
++// generically over the registry + custom providers — never special-cased.
++
++test("providersSharingEnvKey: the real zai/zai-coding pair share ZAI_API_KEY, found generically from the registry", () => {
++  const dir = tempDir();
++  const all = allOpenAiCompatProviders(dir);
++  expect(providersSharingEnvKey("ZAI_API_KEY", "zai", all)).toEqual(["zai-coding"]);
++  expect(providersSharingEnvKey("ZAI_API_KEY", "zai-coding", all)).toEqual(["zai"]);
++});
++
++test("providersSharingEnvKey: generic over ANY provider list — not special-cased to zai's names", () => {
++  // Real custom providers (`llm-providers.json`) always store their credential
++  // INLINE (`CustomCompatProvider.apiKey`) and never carry an `envKey`, so this
++  // exact collision cannot happen through today's "add custom provider"
++  // wizard. `providersSharingEnvKey` does not know or care where a provider
++  // came from, though: it scans whatever `OpenAiCompatProvider[]` it is
++  // given, matching on `.envKey` alone — proven here with a hand-built list
++  // (shaped the way a custom-provider entry would be: `requiresApiKey:
++  // false`, no registry `note`) rather than a real save/load round-trip.
++  const providers: OpenAiCompatProvider[] = [
++    { name: "openai-gateway-a", label: "Gateway A", baseUrl: "http://10.0.0.9:8080", envKey: "OPENAI_API_KEY", requiresApiKey: false, models: [] },
++    { name: "openai-gateway-b", label: "Gateway B", baseUrl: "http://10.0.0.10:8080", envKey: "OPENAI_API_KEY", requiresApiKey: false, models: [] },
++    { name: "unrelated", label: "Unrelated", baseUrl: "http://10.0.0.11:8080", envKey: "SOME_OTHER_KEY", models: [] },
++  ];
++  expect(providersSharingEnvKey("OPENAI_API_KEY", "openai-gateway-a", providers)).toEqual(["openai-gateway-b"]);
++  expect(providersSharingEnvKey("OPENAI_API_KEY", "openai-gateway-b", providers)).toEqual(["openai-gateway-a"]);
++  expect(providersSharingEnvKey("SOME_OTHER_KEY", "unrelated", providers)).toEqual([]);
++});
++
++test("sharedCredentialWarning: names every sibling and the shared env var; undefined when there is nothing to warn about", () => {
++  expect(sharedCredentialWarning(["zai-coding"], "ZAI_API_KEY")).toBe("this also disconnects zai-coding (same ZAI_API_KEY)");
++  expect(sharedCredentialWarning(["a", "b"], "OPENAI_API_KEY")).toBe("this also disconnects a, b (same OPENAI_API_KEY)");
++  expect(sharedCredentialWarning([], "ZAI_API_KEY")).toBeUndefined();
++  expect(sharedCredentialWarning(["zai-coding"], undefined)).toBeUndefined();
++});
++
++test("classifyProviderConnection: zai's sharedWith names zai-coding (real registry pair)", () => {
++  const dir = tempDir();
++  saveApiKey("ZAI_API_KEY", "sk-zai", dir);
++  const classification = classifyProviderConnection("zai", {}, dir);
++  expect(classification.kind).toBe("saved-api-key");
++  expect(classification.sharedWith).toEqual(["zai-coding"]);
++});
++
++test("disconnectProvider: disconnecting zai reports zai-coding in sharedWith, and ACTUALLY also disconnects it (one shared ZAI_API_KEY entry)", () => {
++  const dir = tempDir();
++  saveApiKey("ZAI_API_KEY", "sk-zai", dir);
++  const result = disconnectProvider("zai", {}, dir);
++  expect(result).toEqual({ ok: true, kind: "saved-api-key", sharedWith: ["zai-coding"] });
++  // The one shared `apiKeys.ZAI_API_KEY` entry is gone, so zai-coding's OWN
++  // credential is gone too — this is the fact #2 asks to be NAMED, not a
++  // fresh bug this test introduces.
++  expect(classifyProviderConnection("zai-coding", {}, dir).kind).toBe("no-credential");
++});
++
++// --- disconnectProvider (AC5, AC6, AC7) -------------------------------------
++
++test("disconnectProvider: removes a custom provider's entry AND its saved base URL / model params (AC5)", () => {
++  const dir = tempDir();
++  saveCustomCompatProvider({ name: "internal-qwen", baseUrl: "http://10.0.0.1:8080", models: [] }, dir);
++  // Simulate an operator who also edited the endpoint / model params in-TUI.
++  saveProviderBaseUrl("internal-qwen", "http://10.0.0.2:9090", dir);
++  saveProviderModelParams("internal-qwen", { temperature: 0.5 }, dir);
++  // A sibling, to prove only "internal-qwen" is touched.
++  saveCustomCompatProvider({ name: "other", baseUrl: "http://10.0.0.3:8080", models: [] }, dir);
++  saveProviderBaseUrl("other", "http://10.0.0.4:8080", dir);
++
++  const result = disconnectProvider("internal-qwen", {}, dir);
++  expect(result).toEqual({ ok: true, kind: "custom", sharedWith: [] });
++
++  const cfg = loadShellConfig(dir);
++  expect(cfg.baseUrls).toEqual({ other: "http://10.0.0.4:8080" });
++  expect(cfg.modelParams ?? {}).toEqual({});
++  expect(loadCustomCompatProviders(dir).map((p) => p.name)).toEqual(["other"]);
++});
++
++test("disconnectProvider: removes an OAuth grant via logoutProvider, leaving a sibling grant intact", () => {
++  const dir = tempDir();
++  saveOAuthGrant("grok", { method: "device-code", access: "tok-grok", obtainedAt: "2026-01-01T00:00:00.000Z" }, dir);
++  saveOAuthGrant("github-copilot", { method: "device-code", access: "tok-gh", obtainedAt: "2026-01-01T00:00:00.000Z" }, dir);
++
++  const result = disconnectProvider("grok", {}, dir);
++  expect(result).toEqual({ ok: true, kind: "oauth-grant", sharedWith: [] });
++  expect(Object.keys(loadShellConfig(dir).oauthGrants ?? {})).toEqual(["github-copilot"]);
++});
++
++test("disconnectProvider: removes a saved API key, leaving a sibling key intact", () => {
++  const dir = tempDir();
++  saveApiKey("DEEPSEEK_API_KEY", "sk-ds", dir);
++  saveApiKey("GROQ_API_KEY", "gsk-x", dir);
++
++  const result = disconnectProvider("deepseek", {}, dir);
++  expect(result).toEqual({ ok: true, kind: "saved-api-key", sharedWith: [] });
++  expect(loadShellConfig(dir).apiKeys).toEqual({ GROQ_API_KEY: "gsk-x" });
++});
++
++test("disconnectProvider: an env-var-only credential is refused, names the variable, and writes nothing (AC6)", () => {
++  const dir = tempDir();
++  const before = loadShellConfig(dir);
++  const result = disconnectProvider("deepseek", { DEEPSEEK_API_KEY: "sk-operator-exported" }, dir);
++  expect(result.ok).toBe(false);
++  expect(result.kind).toBe("env-var-only");
++  expect(result.reason).toContain("DEEPSEEK_API_KEY");
++  expect(result.reason).toContain("unset DEEPSEEK_API_KEY");
++  // Hermetic proof of "writes nothing": the config file state is unchanged
++  // (still whatever `loadShellConfig` returned for an untouched temp dir).
++  expect(loadShellConfig(dir)).toEqual(before);
++});
++
++test("disconnectProvider: a provider with nothing saved is a no-op that still reports ok (defensive; the UI never offers this)", () => {
++  const dir = tempDir();
++  const result = disconnectProvider("rapid-mlx", {}, dir);
++  expect(result).toEqual({
++    ok: true,
++    kind: "no-credential",
++    reason: "no saved credential for this provider — nothing to remove",
++    sharedWith: [],
++  });
++});
++
++function readEnv(key: string): string | undefined {
++  // A helper, not an inline `process.env.X` read: TS narrows a property
++  // access on `process.env` to `undefined` for the rest of a block after a
++  // `delete` of that same property, which a same-block re-read can't widen
++  // back out of even with an explicit annotation. A function boundary resets
++  // that narrowing.
++  return process.env[key];
++}
++
++test("disconnectProvider: a keryx-saved key is cleared from THIS process's env (AC7)", () => {
++  const dir = tempDir();
++  saveApiKey("DEEPSEEK_API_KEY", "sk-ds", dir);
++  const savedBefore = { ...process.env };
++  try {
++    delete process.env.DEEPSEEK_API_KEY;
++    applySavedApiKeys(dir); // loads it into process.env AND records it as keryx-saved
++    expect(readEnv("DEEPSEEK_API_KEY")).toBe("sk-ds");
++    expect(savedCredentialEnvKeys().has("DEEPSEEK_API_KEY")).toBe(true);
++
++    disconnectProvider("deepseek", process.env, dir);
++    expect(readEnv("DEEPSEEK_API_KEY")).toBeUndefined();
++  } finally {
++    process.env = savedBefore;
++  }
++});
++
++test("disconnectProvider: an operator-exported env var is NEVER cleared from process.env, even for a different provider's disconnect", () => {
++  const dir = tempDir();
++  saveApiKey("GROQ_API_KEY", "gsk-saved", dir);
++  const savedBefore = { ...process.env };
++  try {
++    process.env.DEEPSEEK_API_KEY = "sk-operator-exported"; // never saved by keryx
++    disconnectProvider("groq", process.env, dir); // unrelated provider
++    expect(process.env.DEEPSEEK_API_KEY).toBe("sk-operator-exported");
++  } finally {
++    process.env = savedBefore;
++  }
++});
++
++// --- testProviderConnection (AC2's underlying probe) ------------------------
++
++test("testProviderConnection: reuses the live model-list probe and reports ok/count", async () => {
++  const provider = providerByName("deepseek");
++  expect(provider).toBeDefined();
++  const fetchFn = (async () => ({
++    ok: true,
++    json: async () => ({ data: [{ id: "deepseek-chat" }, { id: "deepseek-reasoner" }] }),
++  }) as Response) as unknown as typeof fetch;
++  const result = await testProviderConnection(provider!, fetchFn, { DEEPSEEK_API_KEY: "sk-test" });
++  expect(result.source).toBe("live");
++  expect(result.models).toEqual(["deepseek-chat", "deepseek-reasoner"]);
++});
++
++test("testProviderConnection: a rejected credential reports the humanizable failure", async () => {
++  const provider = providerByName("deepseek");
++  expect(provider).toBeDefined();
++  const fetchFn = (async () => ({ ok: false, status: 401, text: async () => "" }) as Response) as unknown as typeof fetch;
++  const result = await testProviderConnection(provider!, fetchFn, { DEEPSEEK_API_KEY: "sk-bad" });
++  expect(result.source).toBe("fallback");
++  expect(result.failure).toEqual({ kind: "rejected", status: 401 });
++});
++
++// --- CLI parity: `keryx providers test` / `keryx providers remove` (AC8) ---
++
++test("keryx providers test: prints ok + model count on a live probe, --json included", async () => {
++  const dir = tempDir();
++  const logs: string[] = [];
++  const orig = console.log;
++  console.log = (line: string) => logs.push(line);
++  try {
++    const fetchFn = (async () => ({ ok: true, json: async () => ({ data: [{ id: "m1" }] }) }) as Response) as unknown as typeof fetch;
++    await providersCommand(["test", "deepseek", "--json"], { fetch: fetchFn, env: { DEEPSEEK_API_KEY: "sk-test" }, dir });
++  } finally {
++    console.log = orig;
++  }
++  const parsed = JSON.parse(logs.join("\n")) as { ok: boolean; models: number };
++  expect(parsed.ok).toBe(true);
++  expect(parsed.models).toBe(1);
++});
++
++test("keryx providers test: an unknown provider name exits non-zero without a network call", async () => {
++  let called = false;
++  const fetchFn = (async () => {
++    called = true;
++    return { ok: true, json: async () => ({ data: [] }) } as Response;
++  }) as unknown as typeof fetch;
++  const before = process.exitCode;
++  try {
++    await providersCommand(["test", "not-a-real-provider"], { fetch: fetchFn });
++  } finally {
++    expect(process.exitCode).toBe(1);
++    process.exitCode = before;
++  }
++  expect(called).toBe(false);
++});
++
++test("keryx providers remove --yes: removes a saved key without prompting", async () => {
++  const dir = tempDir();
++  saveApiKey("DEEPSEEK_API_KEY", "sk-ds", dir);
++  const logs: string[] = [];
++  const orig = console.log;
++  console.log = (line: string) => logs.push(line);
++  try {
++    await providersCommand(["remove", "deepseek", "--yes"], { dir, env: {} });
++  } finally {
++    console.log = orig;
++  }
++  expect(loadShellConfig(dir).apiKeys ?? {}).toEqual({});
++  expect(logs.join("\n")).toContain("disconnected");
++});
++
++// flow 304 review finding #3: an unknown name used to report success and exit 0.
++test("keryx providers remove: an unknown provider name errors, exits 1, and never asks to confirm", async () => {
++  const dir = tempDir();
++  let confirmCalled = false;
++  const before = process.exitCode;
++  const errors: string[] = [];
++  const orig = console.error;
++  console.error = (line: string) => errors.push(line);
++  try {
++    await providersCommand(["remove", "not-a-real-provider", "--yes"], {
++      dir,
++      env: {},
++      confirm: async () => {
++        confirmCalled = true;
++        return true;
++      },
++    });
++  } finally {
++    console.error = orig;
++    expect(process.exitCode).toBe(1);
++    process.exitCode = before;
++  }
++  expect(errors.join("\n")).toContain("Unknown provider: not-a-real-provider");
++  expect(confirmCalled).toBe(false);
++});
++
++test("keryx providers remove --json: an unknown provider name reports ok:false, exit 1", async () => {
++  const dir = tempDir();
++  const logs: string[] = [];
++  const orig = console.log;
++  console.log = (line: string) => logs.push(line);
++  const before = process.exitCode;
++  try {
++    await providersCommand(["remove", "not-a-real-provider", "--yes", "--json"], { dir, env: {} });
++  } finally {
++    console.log = orig;
++    expect(process.exitCode).toBe(1);
++    process.exitCode = before;
++  }
++  const parsed = JSON.parse(logs.join("\n")) as { provider: string; ok: boolean; reason: string };
++  expect(parsed).toEqual({ provider: "not-a-real-provider", ok: false, reason: "unknown provider" });
++});
++
++// flow 304 review finding #2: the confirmation and the result must name every
++// OTHER provider a shared env var also disconnects.
++test("keryx providers remove: the confirmation prompt names zai-coding when disconnecting zai (same ZAI_API_KEY)", async () => {
++  const dir = tempDir();
++  saveApiKey("ZAI_API_KEY", "sk-zai", dir);
++  let question = "";
++  await providersCommand(["remove", "zai"], {
++    dir,
++    env: {},
++    confirm: async (q: string) => {
++      question = q;
++      return true;
++    },
++  });
++  expect(question).toContain("zai-coding");
++  expect(question).toContain("ZAI_API_KEY");
++});
++
++test("keryx providers remove --yes: the result message and --json BOTH name zai-coding for a zai disconnect", async () => {
++  const dir = tempDir();
++  saveApiKey("ZAI_API_KEY", "sk-zai", dir);
++  const textLogs: string[] = [];
++  const orig = console.log;
++  console.log = (line: string) => textLogs.push(line);
++  try {
++    await providersCommand(["remove", "zai", "--yes"], { dir, env: {} });
++  } finally {
++    console.log = orig;
++  }
++  expect(textLogs.join("\n")).toContain("zai-coding");
++  expect(textLogs.join("\n")).toContain("ZAI_API_KEY");
++
++  // Fresh saved key for the --json run (the text run above already removed it).
++  saveApiKey("ZAI_API_KEY", "sk-zai-2", dir);
++  const jsonLogs: string[] = [];
++  console.log = (line: string) => jsonLogs.push(line);
++  try {
++    await providersCommand(["remove", "zai", "--yes", "--json"], { dir, env: {} });
++  } finally {
++    console.log = orig;
++  }
++  const parsed = JSON.parse(jsonLogs.join("\n")) as { ok: boolean; sharedWith: string[] };
++  expect(parsed.ok).toBe(true);
++  expect(parsed.sharedWith).toEqual(["zai-coding"]);
++});
++
++test("keryx providers remove: declining the confirmation writes nothing (AC4 CLI parity)", async () => {
++  const dir = tempDir();
++  saveApiKey("DEEPSEEK_API_KEY", "sk-ds", dir);
++  const before = loadShellConfig(dir);
++  await providersCommand(["remove", "deepseek"], { dir, env: {}, confirm: async () => false });
++  expect(loadShellConfig(dir)).toEqual(before);
++});
++
++test("keryx providers remove: without --yes and without a confirm seam, refuses non-interactively rather than guessing", async () => {
++  const dir = tempDir();
++  saveApiKey("DEEPSEEK_API_KEY", "sk-ds", dir);
++  const before = process.exitCode;
++  try {
++    // No `confirm` deps: falls through to the real TTY prompt, which
++    // `../lib/prompt`'s `confirm()` itself resolves to `false` off a TTY —
++    // so this exercises the REAL refusal path, not a mock of it.
++    await providersCommand(["remove", "deepseek"], { dir, env: {} });
++  } finally {
++    if (!process.stdin.isTTY) expect(process.exitCode).toBe(1);
++    process.exitCode = before;
++  }
++  expect(loadShellConfig(dir).apiKeys).toEqual({ DEEPSEEK_API_KEY: "sk-ds" }); // untouched
++});
++
++test("keryx providers remove: an env-var-only provider is refused even with --yes", async () => {
++  const dir = tempDir();
++  const logs: string[] = [];
++  const orig = console.log;
++  console.log = (line: string) => logs.push(line);
++  const before = process.exitCode;
++  try {
++    await providersCommand(["remove", "deepseek", "--yes"], { dir, env: { DEEPSEEK_API_KEY: "sk-exported" } });
++  } finally {
++    console.log = orig;
++    expect(process.exitCode).toBe(1);
++    process.exitCode = before;
++  }
++  expect(logs.join("\n")).toContain("DEEPSEEK_API_KEY");
++});
++
++test("keryx providers list stays network-free (AC8): no fetch call", async () => {
++  let called = false;
++  const originalFetch = globalThis.fetch;
++  // @ts-expect-error -- test-only stub to prove `list` never reaches for the network
++  globalThis.fetch = async () => {
++    called = true;
++    throw new Error("keryx providers list must never call fetch");
++  };
++  try {
++    const logs: string[] = [];
++    const orig = console.log;
++    console.log = (line: string) => logs.push(line);
++    try {
++      await providersCommand(["list"]);
++    } finally {
++      console.log = orig;
++    }
++  } finally {
++    globalThis.fetch = originalFetch;
++  }
++  expect(called).toBe(false);
++});
+diff --git a/src/commands/providers.ts b/src/commands/providers.ts
+index 43a4108ab..ba7d7cd6a 100644
+--- a/src/commands/providers.ts
++++ b/src/commands/providers.ts
+@@ -20,12 +20,23 @@ import {
+   decideCrossFamilyReview,
+   familyOf,
+   loadCustomCompatProviders,
++  removeCustomCompatProvider,
+ } from "../lib/provider-config";
+ import { extraRequestHeaders } from "../lib/oauth/catalog";
+-import { envWithOAuthAccess } from "../lib/oauth/grants";
++import { envWithOAuthAccess, oauthEnvKeyFor } from "../lib/oauth/grants";
++import { logoutProvider } from "../lib/oauth/login";
+ import { resolveCallerSession } from "../lib/caller-session";
+-import { type ShellConfig, envWithSavedApiKeys, loadShellConfig } from "../lib/shell-config";
++import {
++  type ShellConfig,
++  envWithSavedApiKeys,
++  loadShellConfig,
++  removeApiKey,
++  removeProviderBaseUrl,
++  removeProviderModelParams,
++  savedCredentialEnvKeys,
++} from "../lib/shell-config";
+ import { optionValue } from "../lib/args";
++import { confirm as ttyConfirm } from "../lib/prompt";
+ 
+ /** A hosted OpenAI-compatible provider offered in the picker. */
+ export interface OpenAiCompatProvider {
+@@ -811,6 +822,193 @@ export function providerApiKey(
+   return typeof raw === "string" && raw.length > 0 ? raw : undefined;
+ }
+ 
++// ---------------------------------------------------------------------------
++// Test connection / Disconnect (flow 304) — the `/connect` row buttons and
++// their CLI parity (`keryx providers test`/`keryx providers remove`).
++// ---------------------------------------------------------------------------
++
++/**
++ * Run the provider's live model-list probe for a "Test connection" action —
++ * the exact probe `filterConnectedDetectedProviders` already runs to decide
++ * whether a provider belongs in `/connect`'s list in the first place. Resolves
++ * the key the same way that filter does: an env var when the registry names
++ * one, else the provider's own in-file `apiKey` (custom/local providers).
++ * Never throws.
++ */
++export async function testProviderConnection(
++  provider: OpenAiCompatProvider,
++  fetchFn: typeof fetch = globalThis.fetch,
++  env: Record<string, string | undefined> = process.env,
++): Promise<ModelsResolveResult> {
++  const apiKey = providerApiKey(provider, env) ?? provider.apiKey;
++  return fetchOpenAiCompatModelsDetailed(fetchFn, provider, apiKey, { timeoutMs: MODELS_FETCH_TIMEOUT_MS });
++}
++
++/**
++ * Every OTHER provider (built-in or custom) whose OWN credential lives in the
++ * SAME env var as `envKey` — e.g. built-in `zai`/`zai-coding` both read
++ * `ZAI_API_KEY` (flow 304 review finding #2: disconnecting one silently
++ * disconnected the other, with no warning). Generic over whatever provider
++ * list is handed in — never special-cased by name — so it covers a custom
++ * provider that happens to share a built-in's env var the same way it covers
++ * two built-ins. Pure; `providers` is normally `allOpenAiCompatProviders(dir)`.
++ */
++export function providersSharingEnvKey(
++  envKey: string,
++  excludeName: string,
++  providers: readonly OpenAiCompatProvider[],
++): string[] {
++  return providers
++    .filter((p) => p.envKey === envKey && p.name !== excludeName)
++    .map((p) => p.name)
++    .sort();
++}
++
++/** The confirmation/result phrase naming `sharedWith`, or `undefined` when nothing is shared. */
++export function sharedCredentialWarning(sharedWith: readonly string[], envKey: string | undefined): string | undefined {
++  if (sharedWith.length === 0 || envKey === undefined) return undefined;
++  return `this also disconnects ${sharedWith.join(", ")} (same ${envKey})`;
++}
++
++/**
++ * Why a provider's credential cannot be resolved to a single owned artifact —
++ * or can, naming which one Disconnect must remove.
++ *
++ * - `custom`: an `llm-providers.json` entry (`removeCustomCompatProvider`),
++ *   together with any saved `baseUrls`/`modelParams` override for it.
++ * - `oauth-grant`: a device-code/PKCE grant in `auth.json` (`logoutProvider` —
++ *   LOCAL delete only; it does not call a vendor revoke endpoint, see
++ *   `logoutProvider`'s own doc and `docs/docs/cli-reference.md`). `envKey`
++ *   (when the grant maps onto one, via `oauthEnvKeyFor`) is the var
++ *   `envWithOAuthAccess` copied the access token onto (e.g. `grok` →
++ *   `XAI_API_KEY`) — flow 304 review finding #1: this used to go unnoticed by
++ *   `process.env`, so the NEXT `/connect` misclassified the just-disconnected
++ *   provider as `env-var-only` and told the operator to unset a variable
++ *   keryx itself had set.
++ * - `saved-api-key`: a key keryx itself saved under `apiKeys[envKey]` in
++ *   `auth.json` (`removeApiKey`).
++ * - `env-var-only`: the provider's env var IS set, but not by keryx (absent
++ *   from `savedCredentialEnvKeys()`/`apiKeys`) — the operator exported it in
++ *   their own shell. Not removable: unsetting a live process's env would
++ *   silently reappear on the next launch, which is worse than refusing.
++ * - `no-credential`: nothing keryx holds for this provider (a keyless local
++ *   provider, e.g. `rapid-mlx`, or a name with no saved credential at all).
++ */
++export type ProviderConnectionKind = "custom" | "oauth-grant" | "saved-api-key" | "env-var-only" | "no-credential";
++
++export interface ProviderConnectionClassification {
++  kind: ProviderConnectionKind;
++  /** Present for `saved-api-key`/`env-var-only`/`oauth-grant` (when mapped): the env var carrying the key. */
++  envKey?: string;
++  /** Every OTHER provider sharing that same env var (flow 304 review finding #2). Always present; empty when none. */
++  sharedWith: string[];
++}
++
++/**
++ * Classify how (if at all) `name`'s credential is held, in the SAME order
++ * Disconnect must check it: a custom provider's file entry outranks a
++ * same-named built-in (matches `allOpenAiCompatProviders`'s own precedence —
++ * a custom `name` colliding with a built-in is excluded from
++ * `customCompatProviders`, so this order never double-classifies one name).
++ * Pure; never throws.
++ */
++export function classifyProviderConnection(
++  name: string,
++  env: Record<string, string | undefined> = process.env,
++  dir?: string,
++): ProviderConnectionClassification {
++  if (customCompatProviders(dir).some((p) => p.name === name)) {
++    return { kind: "custom", sharedWith: [] };
++  }
++  if (loadShellConfig(dir).oauthGrants?.[name] !== undefined) {
++    const envKey = oauthEnvKeyFor(name);
++    const sharedWith = envKey === undefined ? [] : providersSharingEnvKey(envKey, name, allOpenAiCompatProviders(dir));
++    return { kind: "oauth-grant", ...(envKey !== undefined ? { envKey } : {}), sharedWith };
++  }
++  const registry = providerByName(name, dir);
++  const envKey = registry?.envKey;
++  if (envKey === undefined) {
++    return { kind: "no-credential", sharedWith: [] };
++  }
++  const sharedWith = providersSharingEnvKey(envKey, name, allOpenAiCompatProviders(dir));
++  if (loadShellConfig(dir).apiKeys?.[envKey] !== undefined) {
++    return { kind: "saved-api-key", envKey, sharedWith };
++  }
++  const raw = env[envKey];
++  if (typeof raw === "string" && raw.length > 0) {
++    return { kind: "env-var-only", envKey, sharedWith };
++  }
++  return { kind: "no-credential", sharedWith: [] };
++}
++
++export interface DisconnectProviderResult {
++  ok: boolean;
++  kind: ProviderConnectionKind;
++  /** Set on `ok: false` (env-var-only) and as an informational note on `no-credential`. */
++  reason?: string;
++  /** Every OTHER provider this disconnect ALSO affected, sharing the same env var. Always present. */
++  sharedWith: string[];
++}
++
++/**
++ * Disconnect one provider: remove exactly the credential
++ * {@link classifyProviderConnection} says it owns, and nothing belonging to a
++ * sibling provider'S OWN storage. Also clears `process.env[envKey]` for THIS
++ * process when (and only when) the removed key is one keryx itself loaded
++ * into it (`savedCredentialEnvKeys()`) — an operator-exported var is never
++ * touched, in `env-var-only` or any other branch. This covers BOTH a saved
++ * API key and an OAuth grant's mapped env var (flow 304 review finding #1).
++ * A shared env var (finding #2) is, by construction, actually removed for
++ * every provider in `sharedWith` too — one `apiKeys[envKey]`/env entry serves
++ * all of them — `sharedWith` is reported so a caller can say so BEFORE and
++ * AFTER acting, not because a second removal is needed. Best-effort; never
++ * throws.
++ */
++export function disconnectProvider(
++  name: string,
++  env: Record<string, string | undefined> = process.env,
++  dir?: string,
++): DisconnectProviderResult {
++  const classification = classifyProviderConnection(name, env, dir);
++  switch (classification.kind) {
++    case "custom":
++      removeCustomCompatProvider(name, dir);
++      removeProviderBaseUrl(name, dir);
++      removeProviderModelParams(name, dir);
++      return { ok: true, kind: "custom", sharedWith: classification.sharedWith };
++    case "oauth-grant": {
++      logoutProvider(name, dir);
++      const envKey = classification.envKey;
++      if (envKey !== undefined && savedCredentialEnvKeys().has(envKey)) {
++        delete process.env[envKey];
++      }
++      return { ok: true, kind: "oauth-grant", sharedWith: classification.sharedWith };
++    }
++    case "saved-api-key": {
++      const envKey = classification.envKey!;
++      removeApiKey(envKey, dir);
++      if (savedCredentialEnvKeys().has(envKey)) {
++        delete process.env[envKey];
++      }
++      return { ok: true, kind: "saved-api-key", sharedWith: classification.sharedWith };
++    }
++    case "env-var-only":
++      return {
++        ok: false,
++        kind: "env-var-only",
++        reason: `set via ${classification.envKey} in your environment — unset ${classification.envKey} in your shell to disconnect`,
++        sharedWith: classification.sharedWith,
++      };
++    case "no-credential":
++      return {
++        ok: true,
++        kind: "no-credential",
++        reason: "no saved credential for this provider — nothing to remove",
++        sharedWith: classification.sharedWith,
++      };
++  }
++}
++
+ // ---------------------------------------------------------------------------
+ // `keryx providers` — what is configured, and whether review can cross families
+ // ---------------------------------------------------------------------------
+@@ -845,15 +1043,26 @@ export function configuredProviders(
+     .map((provider) => ({ name: provider.name, models: provider.models }));
+ }
+ 
++/** Seams for `keryx providers test`/`keryx providers remove` tests: production passes none. */
++export interface ProvidersCommandDeps {
++  /** Injected fetch for `test` (never a real network call in a test). */
++  readonly fetch?: typeof fetch;
++  /** Injected env for `test`/`remove` key resolution. Default `process.env`. */
++  readonly env?: Record<string, string | undefined>;
++  /** Config dir `test`/`remove` read/write against. Default the real one. */
++  readonly dir?: string;
++  /** Confirmation prompt for `remove`. Default: a real TTY `y/N` prompt (`../lib/prompt`'s `confirm`). */
++  readonly confirm?: (question: string, defaultValue?: boolean) => Promise<boolean>;
++}
++
+ /**
+- * `keryx providers` — read-only reporting over the provider configuration.
+- *
+- * Read-only and network-free on purpose. `keryx review tier` already probes live
+- * `/models` when it needs a capability ordering; this command answers a question
+- * about CONFIGURATION, so it reads files and exits. That is also what lets it
+- * carry a `read: true` command descriptor with no side effects.
++ * `keryx providers` — reporting over the provider configuration, plus the
++ * `test`/`remove` actions (flow 304) that give CLI parity with the `/connect`
++ * row buttons. `list`/`cross-family` stay read-only/network-free (AC8);
++ * `test` makes exactly one network call, and `remove` writes to disk only
++ * after confirmation.
+  */
+-export function providersCommand(args: string[]): void {
++export async function providersCommand(args: string[], deps: ProvidersCommandDeps = {}): Promise<void> {
+   const command = args[0];
+   if (!command || command === "--help" || command === "-h") {
+     printProvidersHelp();
+@@ -867,11 +1076,127 @@ export function providersCommand(args: string[]): void {
+     runCrossFamily(args.slice(1));
+     return;
+   }
++  if (command === "test") {
++    await runProvidersTest(args.slice(1), deps);
++    return;
++  }
++  if (command === "remove") {
++    await runProvidersRemove(args.slice(1), deps);
++    return;
++  }
+   console.error(`Unknown providers command: ${command}`);
+   printProvidersHelp();
+   process.exitCode = 1;
+ }
+ 
++/** `keryx providers test <name> [--json]` — the CLI form of the `[Test]` row button. */
++async function runProvidersTest(args: string[], deps: ProvidersCommandDeps): Promise<void> {
++  const name = args[0];
++  if (name === undefined || name === "--help" || name === "-h") {
++    console.error("Usage: keryx providers test <name> [--json]");
++    process.exitCode = 1;
++    return;
++  }
++  const dir = deps.dir;
++  const provider = providerByName(name, dir);
++  if (provider === undefined) {
++    console.error(`Unknown provider: ${name}`);
++    process.exitCode = 1;
++    return;
++  }
++  const env = deps.env ?? envWithOAuthAccess(envWithSavedApiKeys(process.env, dir));
++  const fetchFn = deps.fetch ?? globalThis.fetch;
++  const result = await testProviderConnection(provider, fetchFn, env);
++  const label = provider.label ?? provider.name;
++  if (args.includes("--json")) {
++    console.log(
++      JSON.stringify(
++        { provider: name, ok: result.source === "live", models: result.models.length, failure: result.failure ?? null },
++        null,
++        2,
++      ),
++    );
++    if (result.source !== "live") process.exitCode = 1;
++    return;
++  }
++  if (result.source === "live") {
++    console.log(`${label}: ok — ${result.models.length} model(s)`);
++    return;
++  }
++  console.log(modelsFailureLine(label, result.failure ?? { kind: "empty" }));
++  process.exitCode = 1;
++}
++
++/** `keryx providers remove <name> [--yes] [--json]` — the CLI form of the `[Disconnect]` row button. */
++async function runProvidersRemove(args: string[], deps: ProvidersCommandDeps): Promise<void> {
++  const name = args[0];
++  if (name === undefined || name === "--help" || name === "-h") {
++    console.error("Usage: keryx providers remove <name> [--yes] [--json]");
++    process.exitCode = 1;
++    return;
++  }
++  const dir = deps.dir;
++  const env = deps.env ?? process.env;
++  const json = args.includes("--json");
++  // flow 304 review finding #3: an unknown name used to report success and
++  // exit 0. Validate the SAME way `test` does, before even asking to confirm.
++  if (providerByName(name, dir) === undefined) {
++    if (json) {
++      console.log(JSON.stringify({ provider: name, ok: false, reason: "unknown provider" }, null, 2));
++    } else {
++      console.error(`Unknown provider: ${name}`);
++    }
++    process.exitCode = 1;
++    return;
++  }
++  // Classified BEFORE confirming (flow 304 review finding #2) so the
++  // confirmation prompt can name every provider this ALSO disconnects —
++  // `disconnectProvider` re-classifies internally too, which is fine: this
++  // read is pure and cheap, and the two must agree since nothing external
++  // can change the classification between this call and the actual removal
++  // (a CLI invocation is single-threaded, unlike the TUI's own arm/confirm
++  // gap, which re-classifies at confirm time for the same reason).
++  const classification = classifyProviderConnection(name, env, dir);
++  const warning = sharedCredentialWarning(classification.sharedWith, classification.envKey);
++  const yes = args.includes("--yes");
++  const confirmFn = deps.confirm ?? ttyConfirm;
++  const question =
++    warning === undefined
++      ? `Disconnect provider "${name}" and remove its saved credential?`
++      : `Disconnect provider "${name}" and remove its saved credential? Note: ${warning}.`;
++  const confirmed = yes || (await confirmFn(question, false));
++  if (!confirmed) {
++    if (json) {
++      console.log(JSON.stringify({ provider: name, ok: false, reason: "not confirmed", sharedWith: classification.sharedWith }, null, 2));
++    } else {
++      console.log("keryx providers remove: not confirmed — nothing was changed.");
++    }
++    if (!yes && !process.stdin.isTTY && deps.confirm === undefined) process.exitCode = 1;
++    return;
++  }
++  const result = disconnectProvider(name, env, dir);
++  if (json) {
++    console.log(
++      JSON.stringify(
++        { provider: name, ok: result.ok, kind: result.kind, sharedWith: result.sharedWith, reason: result.reason ?? null },
++        null,
++        2,
++      ),
++    );
++    if (!result.ok) process.exitCode = 1;
++    return;
++  }
++  if (!result.ok) {
++    console.log(`keryx providers remove: "${name}" not removed — ${result.reason}`);
++    process.exitCode = 1;
++    return;
++  }
++  const sharedNote = sharedCredentialWarning(result.sharedWith, classification.envKey);
++  console.log(
++    `keryx providers remove: "${name}" disconnected (${result.kind}).${sharedNote !== undefined ? ` Note: ${sharedNote}.` : ""}${result.reason !== undefined ? ` ${result.reason}` : ""}`,
++  );
++}
++
+ function runProvidersList(args: string[]): void {
+   const env = envWithOAuthAccess(envWithSavedApiKeys());
+   const configured = configuredProviders(env).map((provider) => ({
+@@ -1011,16 +1336,37 @@ function printProvidersHelp(): void {
+ Usage:
+   keryx providers list [--json]
+   keryx providers cross-family [--opt-in] [--session-provider <id>] [--session-model <id>] [--from-shell-config] [--json]
++  keryx providers test <name> [--json]
++  keryx providers remove <name> [--yes] [--json]
+ 
+ Commands:
+   list          Providers this operator has configured, and the family of each
+   cross-family  Whether review can run on a different model family than authored
+                 the change, and the record the round should carry
++  test          Run this provider's live model-list probe and report ok/count
++                or the failure reason. Makes ONE network call — unlike list/
++                cross-family, not network-free
++  remove        Disconnect a provider: remove its saved API key, OAuth grant,
++                or custom-provider entry. Errors on an unknown name (exit 1)
++                before asking anything. Asks for confirmation on a terminal;
++                refuses without one unless --yes. A provider whose only
++                credential is an environment variable you exported yourself
++                cannot be removed — the command names the variable to unset.
++                Some built-ins share one env var (e.g. zai/zai-coding both
++                read ZAI_API_KEY): removing either ALSO disconnects the
++                other, and both the confirmation prompt and the result name
++                every provider this affects — --json lists them under
++                sharedWith
+ 
+ cross-family is OPT-IN: without --opt-in it reports what would happen and
+ chooses single-family review. Dispatching to another provider spends tokens and
+ sends the change to a second vendor, which is a decision rather than an
+ optimisation. With no second family configured it reports single-family review
+ with a stated reason and exits 0 — that is a normal configuration, not an error.
++
++Disconnecting a provider removes only keryx's LOCAL copy of its credential. It
++does not revoke anything at the vendor: an OAuth grant is deleted from
++auth.json only (no revoke call), and a saved API key simply stops being read —
++the key itself is still valid until you revoke it yourself with the vendor.
+ `);
+ }
+diff --git a/src/harness/provider/make-provider-disconnect.test.ts b/src/harness/provider/make-provider-disconnect.test.ts
+new file mode 100644
+index 000000000..45660b189
+--- /dev/null
++++ b/src/harness/provider/make-provider-disconnect.test.ts
+@@ -0,0 +1,94 @@
++// flow 304 review finding #7: AC7 ("disconnecting the provider the session
++// is using neither switches provider nor interrupts a turn — the session
++// keeps its already-loaded credential") was only proven by a source-text
++// audit (`src/tui/connect-provider-buttons.test.ts`'s AC7 describe block,
++// which pins that the `/connect` command handler prints the right system
++// line — it cannot observe what the ALREADY-BUILT provider object actually
++// sends on the wire). This file drives the real, behavioral path: build a
++// provider via `makeProvider` from a temp env/config dir, disconnect it
++// (which deletes the credential from disk AND from `process.env`), then send
++// one more request through the SAME already-built provider object with an
++// injected fetch that records the outgoing Authorization header. The
++// original credential must still be the one sent — `makeProvider` bakes the
++// key into the constructed provider's `grant` at construction time; it never
++// re-reads `env`/`process.env` on a later request.
++import { expect, test } from "bun:test";
++import { mkdtempSync, rmSync } from "node:fs";
++import { tmpdir } from "node:os";
++import path from "node:path";
++import { disconnectProvider } from "../../commands/providers";
++import { applySavedApiKeys, saveApiKey } from "../../lib/shell-config";
++import type { NormalizedRequest, StreamOptions } from "./types";
++import { makeProvider } from "./make-provider";
++
++function tempDir(): string {
++  return mkdtempSync(path.join(tmpdir(), "keryx-make-provider-disconnect-"));
++}
++
++function buildRequest(): NormalizedRequest {
++  return {
++    providerId: "deepseek",
++    modelId: "deepseek-chat",
++    systemInstruction: "",
++    messages: [{ role: "user", content: "ping" }],
++    budget: { maxOutputTokens: 64, runReservation: 64 },
++    stream: true,
++    requestId: "make-provider-disconnect-ac7",
++    parentRunId: "make-provider-disconnect-ac7",
++  };
++}
++
++/** Records every request's `Authorization` header and answers a minimal, valid SSE reply. */
++function makeRecordingSseFetch(): { fetch: typeof fetch; authorizationHeaders: (string | undefined)[] } {
++  const authorizationHeaders: (string | undefined)[] = [];
++  const fetchMock = (async (_input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
++    const headers = init?.headers as Record<string, string> | undefined;
++    authorizationHeaders.push(headers?.authorization);
++    const body =
++      'data: {"id":"x","choices":[{"index":0,"delta":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n';
++    return new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
++  }) as unknown as typeof fetch;
++  return { fetch: fetchMock, authorizationHeaders };
++}
++
++test("AC7 behavioral: a provider already built with a credential keeps using it after that credential is disconnected", async () => {
++  const configDir = tempDir();
++  const savedEnv = { ...process.env };
++  try {
++    saveApiKey("DEEPSEEK_API_KEY", "sk-original-secret", configDir);
++    delete process.env.DEEPSEEK_API_KEY;
++    applySavedApiKeys(configDir); // loads it into process.env AND marks it keryx-saved
++
++    const { fetch: fetchMock, authorizationHeaders } = makeRecordingSseFetch();
++    // Built WHILE the credential is present — `makeProvider` reads `env` (here,
++    // the live `process.env`) exactly once, at construction, and bakes the
++    // resolved key into the returned provider's own `grant`.
++    const provider = makeProvider("deepseek", "deepseek-chat", { fetch: fetchMock, env: process.env });
++
++    // Disconnect: removes `apiKeys.DEEPSEEK_API_KEY` from auth.json AND
++    // deletes `process.env.DEEPSEEK_API_KEY` for this process (flow 304 review
++    // finding #1's fix applies here too, via the SAME `savedCredentialEnvKeys()`
++    // gate saved-api-key disconnects already used).
++    const result = disconnectProvider("deepseek", process.env, configDir);
++    expect(result.ok).toBe(true);
++    expect(process.env.DEEPSEEK_API_KEY).toBeUndefined();
++
++    // One MORE request through the SAME, already-built provider object.
++    const request = buildRequest();
++    const opts: StreamOptions = { attemptId: "ac7-after-disconnect" };
++    const events = [];
++    for await (const event of provider.stream(request, opts)) {
++      events.push(event);
++    }
++
++    expect(events.length).toBeGreaterThan(0);
++    expect(events[events.length - 1]!.kind).toBe("model_end");
++    expect(authorizationHeaders).toHaveLength(1);
++    // The ORIGINAL key, not "undefined" and not a fresh (nonexistent) re-read —
++    // the session keeps its already-loaded credential, exactly as AC7 promises.
++    expect(authorizationHeaders[0]).toBe("Bearer sk-original-secret");
++  } finally {
++    process.env = savedEnv;
++    rmSync(configDir, { recursive: true, force: true });
++  }
++});
+diff --git a/src/lib/oauth/grants.ts b/src/lib/oauth/grants.ts
+index 1406a36de..0263cda5b 100644
+--- a/src/lib/oauth/grants.ts
++++ b/src/lib/oauth/grants.ts
+@@ -91,6 +91,11 @@ const OAUTH_ENV_KEYS: ReadonlyArray<{ provider: string; envKey: string }> = [
+   { provider: "github-copilot", envKey: "GITHUB_COPILOT_TOKEN" },
+ ];
+ 
++/** The env var an OAuth grant for `provider` is copied onto (`envWithOAuthAccess`), if any. */
++export function oauthEnvKeyFor(provider: string): string | undefined {
++  return OAUTH_ENV_KEYS.find((entry) => entry.provider === provider)?.envKey;
++}
++
+ /**
+  * Copy OAuth access tokens into an env map under the provider's API-key name
+  * so existing Bearer construction works. Does not overwrite a non-empty env
+diff --git a/src/lib/provider-config.test.ts b/src/lib/provider-config.test.ts
+index 008d92453..fafdabc95 100644
+--- a/src/lib/provider-config.test.ts
++++ b/src/lib/provider-config.test.ts
+@@ -1,11 +1,12 @@
+ import { describe, expect, test } from "bun:test";
+-import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
++import { existsSync, mkdtempSync, readdirSync, statSync, writeFileSync } from "node:fs";
+ import { tmpdir } from "node:os";
+ import path from "node:path";
+ import {
+   isCustomCompatProvider,
+   loadCustomCompatProviders,
+   llmProvidersConfigPath,
++  removeCustomCompatProvider,
+   saveCustomCompatProvider,
+   type CustomCompatProvider,
+ } from "./provider-config";
+@@ -37,6 +38,21 @@ describe("llm-providers.json custom provider registry", () => {
+     });
+   });
+ 
++  // flow 304 review finding #6: llm-providers.json now writes atomically too.
++  test("writes atomically: same content and mode as before, and no temp file survives a save or a remove", () => {
++    const dir = tempDir();
++    saveCustomCompatProvider({ name: "a", baseUrl: "http://localhost:1", models: [] }, dir);
++    saveCustomCompatProvider({ name: "b", baseUrl: "http://localhost:2", models: [] }, dir);
++    const file = llmProvidersConfigPath(dir);
++    expect(statSync(file).mode & 0o777).toBe(0o600);
++    expect(readdirSync(dir)).toEqual(["llm-providers.json"]);
++
++    removeCustomCompatProvider("a", dir);
++    expect(loadCustomCompatProviders(dir).map((p) => p.name)).toEqual(["b"]);
++    expect(statSync(file).mode & 0o777).toBe(0o600);
++    expect(readdirSync(dir)).toEqual(["llm-providers.json"]); // no `*.tmp` sibling left behind
++  });
++
+   test("saving a second provider preserves the first (merge)", () => {
+     const dir = tempDir();
+     saveCustomCompatProvider({ name: "a", baseUrl: "http://localhost:1", models: [] }, dir);
+@@ -52,6 +68,26 @@ describe("llm-providers.json custom provider registry", () => {
+     expect(loadCustomCompatProviders(tempDir())).toEqual([]);
+   });
+ 
++  // flow 304 (AC5): the `/connect` Disconnect button + `keryx providers remove`.
++  test("removeCustomCompatProvider deletes exactly the named entry, leaving siblings intact", () => {
++    const dir = tempDir();
++    saveCustomCompatProvider({ name: "a", baseUrl: "http://localhost:1", models: [] }, dir);
++    saveCustomCompatProvider({ name: "b", baseUrl: "http://localhost:2", models: [] }, dir);
++    removeCustomCompatProvider("a", dir);
++    expect(loadCustomCompatProviders(dir).map((p) => p.name)).toEqual(["b"]);
++  });
++
++  test("removeCustomCompatProvider on an unknown name is a no-op, not an error", () => {
++    const dir = tempDir();
++    saveCustomCompatProvider({ name: "a", baseUrl: "http://localhost:1", models: [] }, dir);
++    removeCustomCompatProvider("never-existed", dir);
++    expect(loadCustomCompatProviders(dir).map((p) => p.name)).toEqual(["a"]);
++  });
++
++  test("removeCustomCompatProvider against an absent file never throws", () => {
++    expect(() => removeCustomCompatProvider("a", tempDir())).not.toThrow();
++  });
++
+   test("malformed entries (missing baseUrl) are dropped", () => {
+     const dir = tempDir();
+     writeFileSync(
+diff --git a/src/lib/provider-config.ts b/src/lib/provider-config.ts
+index af6dccdce..ddd8b40f0 100644
+--- a/src/lib/provider-config.ts
++++ b/src/lib/provider-config.ts
+@@ -9,7 +9,7 @@
+ // stay denied on both.
+ import { existsSync } from "node:fs";
+ import path from "node:path";
+-import { ensureKeryxConfigDir, keryxConfigDir, readConfigFile, writeOwnerOnlyFile } from "./config-dir";
++import { ensureKeryxConfigDir, keryxConfigDir, readConfigFile, writeOwnerOnlyFileAtomic } from "./config-dir";
+ 
+ /** One operator-defined OpenAI-compatible provider, as persisted on disk. */
+ export interface CustomCompatProvider {
+@@ -467,7 +467,8 @@ export function saveCustomCompatProvider(provider: CustomCompatProvider, dir?: s
+       return acc;
+     }, {});
+     current[provider.name] = provider;
+-    writeOwnerOnlyFile(
++    // Atomic (flow 304 review finding #6) — same reasoning as `saveShellConfig`.
++    writeOwnerOnlyFileAtomic(
+       llmProvidersConfigPath(dir),
+       `${JSON.stringify({ schemaVersion: 1, providers: current }, null, 2)}\n`,
+     );
+@@ -475,3 +476,28 @@ export function saveCustomCompatProvider(provider: CustomCompatProvider, dir?: s
+     // best-effort persistence — a failure just means the provider is re-entered
+   }
+ }
++
++/**
++ * Remove one custom provider from the persisted registry (flow 304, the
++ * `/connect` Disconnect button + `keryx providers remove`). Merge-and-rewrite
++ * over the other entries, mirroring {@link saveCustomCompatProvider}'s own
++ * read-modify-write. A no-op when `name` is not a custom provider (nothing to
++ * remove — a built-in has no `llm-providers.json` entry at all). Best-effort;
++ * never throws.
++ */
++export function removeCustomCompatProvider(name: string, dir?: string): void {
++  try {
++    const current = loadCustomCompatProviders(dir).reduce<Record<string, CustomCompatProvider>>((acc, p) => {
++      acc[p.name] = p;
++      return acc;
++    }, {});
++    if (!(name in current)) return;
++    delete current[name];
++    writeOwnerOnlyFileAtomic(
++      llmProvidersConfigPath(dir),
++      `${JSON.stringify({ schemaVersion: 1, providers: current }, null, 2)}\n`,
++    );
++  } catch {
++    // best-effort persistence — a failure just means the entry is removed again next time
++  }
++}
+diff --git a/src/lib/shell-config.test.ts b/src/lib/shell-config.test.ts
+index 649bcd1e3..247cb5d79 100644
+--- a/src/lib/shell-config.test.ts
++++ b/src/lib/shell-config.test.ts
+@@ -1,5 +1,5 @@
+ import { expect, test } from "bun:test";
+-import { mkdtempSync, statSync } from "node:fs";
++import { mkdtempSync, readdirSync, statSync } from "node:fs";
+ import { tmpdir } from "node:os";
+ import path from "node:path";
+ import { uniqueTestRoot } from "./test-tmp";
+@@ -7,6 +7,9 @@ import {
+   applySavedApiKeys,
+   envWithSavedApiKeys,
+   loadShellConfig,
++  removeApiKey,
++  removeProviderBaseUrl,
++  removeProviderModelParams,
+   saveApiKey,
+   saveProviderBaseUrl,
+   saveProviderModelParams,
+@@ -42,6 +45,19 @@ test("saveShellConfig writes the file mode 0600 (owner-only)", () => {
+   expect(mode).toBe(0o600);
+ });
+ 
++// flow 304 review finding #6: auth.json now writes atomically (temp + rename)
++// so a crash or a racing second write can never leave it half-written.
++test("saveShellConfig writes atomically: same content and mode as before, and no temp file survives", () => {
++  const dir = tempDir();
++  saveShellConfig({ provider: "openrouter" }, dir);
++  saveShellConfig({ model: "openai/gpt-4o-mini" }, dir); // a second, merging write
++  const file = shellConfigPath(dir);
++  expect(loadShellConfig(dir)).toEqual({ provider: "openrouter", model: "openai/gpt-4o-mini" });
++  expect(statSync(file).mode & 0o777).toBe(0o600);
++  const entries = readdirSync(dir);
++  expect(entries).toEqual(["auth.json"]); // no `*.tmp` sibling left behind
++});
++
+ test("shellConfigPath honors XDG_DATA_HOME on non-Windows (cross-platform dir)", () => {
+   if (process.platform === "win32") {
+     return; // Windows uses %APPDATA%; skip the XDG assertion
+@@ -113,6 +129,38 @@ test("saveProviderModelParams merges a second patch into the SAME provider's exi
+   });
+ });
+ 
++// flow 304 (AC5): the `/connect` Disconnect button + `keryx providers remove`.
++test("removeApiKey deletes exactly the named key, leaving its siblings intact", () => {
++  const dir = tempDir();
++  saveApiKey("DEEPSEEK_API_KEY", "sk-ds", dir);
++  saveApiKey("GROQ_API_KEY", "gsk-x", dir);
++  removeApiKey("DEEPSEEK_API_KEY", dir);
++  expect(loadShellConfig(dir).apiKeys).toEqual({ GROQ_API_KEY: "gsk-x" });
++});
++
++test("removeApiKey on a key that was never saved is a no-op, not an error", () => {
++  const dir = tempDir();
++  saveApiKey("GROQ_API_KEY", "gsk-x", dir);
++  removeApiKey("DEEPSEEK_API_KEY", dir); // never saved
++  expect(loadShellConfig(dir).apiKeys).toEqual({ GROQ_API_KEY: "gsk-x" });
++});
++
++test("removeProviderBaseUrl deletes exactly one provider's override, leaving siblings intact", () => {
++  const dir = tempDir();
++  saveProviderBaseUrl("rapid-mlx", "http://127.0.0.1:8010", dir);
++  saveProviderBaseUrl("openrouter", "https://openrouter.ai/api/v1", dir);
++  removeProviderBaseUrl("rapid-mlx", dir);
++  expect(loadShellConfig(dir).baseUrls).toEqual({ openrouter: "https://openrouter.ai/api/v1" });
++});
++
++test("removeProviderModelParams deletes exactly one provider's overrides, leaving siblings intact", () => {
++  const dir = tempDir();
++  saveProviderModelParams("openrouter", { temperature: 0.2 }, dir);
++  saveProviderModelParams("deepseek", { timeoutMs: 60_000 }, dir);
++  removeProviderModelParams("openrouter", dir);
++  expect(loadShellConfig(dir).modelParams).toEqual({ deepseek: { timeoutMs: 60_000 } });
++});
++
+ test("applySavedApiKeys sets env for saved keys without overwriting an existing env var", () => {
+   const dir = tempDir();
+   saveApiKey("DEEPSEEK_API_KEY", "sk-saved", dir);
+diff --git a/src/lib/shell-config.ts b/src/lib/shell-config.ts
+index 5f05033f7..952921484 100644
+--- a/src/lib/shell-config.ts
++++ b/src/lib/shell-config.ts
+@@ -9,7 +9,7 @@
+ // unit-testable against a temp directory.
+ import { existsSync } from "node:fs";
+ import path from "node:path";
+-import { ensureKeryxConfigDir, keryxConfigDir, readConfigFile, writeOwnerOnlyFile } from "./config-dir";
++import { ensureKeryxConfigDir, keryxConfigDir, readConfigFile, writeOwnerOnlyFileAtomic } from "./config-dir";
+ 
+ export interface ShellConfig {
+   provider?: string;
+@@ -159,10 +159,14 @@ export function saveShellConfig(patch: Partial<ShellConfig>, dir?: string): void
+     // of the operator's primary group. See `config-dir.permissions.test.ts`.
+     ensureKeryxConfigDir(dir);
+     const next: ShellConfig = { ...loadShellConfig(dir), ...patch };
+-    // Same creation-only trap as the directory mode: an `auth.json` that already
+-    // exists 0664 keeps that mode through every write, and this file holds
+-    // plaintext provider API keys.
+-    writeOwnerOnlyFile(shellConfigPath(dir), `${JSON.stringify(next, null, 2)}\n`);
++    // Atomic (temp file + rename), not a direct overwrite (flow 304 review
++    // finding #6): a crash or a second concurrent write mid-write must never
++    // leave `auth.json` half-written — this file holds plaintext provider API
++    // keys and OAuth grants, and a reader that gets a truncated/corrupt parse
++    // has no recovery. Rename also sidesteps the "existing file keeps its old
++    // mode" trap `writeOwnerOnlyFile` had to `chmodSync` around: the renamed-in
++    // temp file's 0600 mode becomes the destination's mode outright.
++    writeOwnerOnlyFileAtomic(shellConfigPath(dir), `${JSON.stringify(next, null, 2)}\n`);
+   } catch {
+     // best-effort persistence — a failure just means the user re-enters next time
+   }
+@@ -199,6 +203,38 @@ export function saveProviderModelParams(
+   saveShellConfig({ modelParams: { ...existing, [provider]: merged } }, dir);
+ }
+ 
++/**
++ * Remove one provider's saved API key (flow 304, the `/connect` Disconnect
++ * button + `keryx providers remove`). Merge-and-rewrite, same shape as
++ * `saveApiKey`'s own read-modify-write — siblings under `apiKeys` are left
++ * untouched. A no-op (not an error) when `envKey` was never saved: disconnect
++ * is idempotent, and a caller that already classified the credential as
++ * "saved" before calling this never hits the absent case in practice.
++ * Best-effort; never throws.
++ */
++export function removeApiKey(envKey: string, dir?: string): void {
++  const existing = loadShellConfig(dir).apiKeys ?? {};
++  if (!(envKey in existing)) return;
++  const { [envKey]: _removed, ...rest } = existing;
++  saveShellConfig({ apiKeys: rest }, dir);
++}
++
++/** Remove a provider's saved endpoint override, if any. Best-effort; never throws. Mirrors {@link removeApiKey}. */
++export function removeProviderBaseUrl(provider: string, dir?: string): void {
++  const existing = loadShellConfig(dir).baseUrls ?? {};
++  if (!(provider in existing)) return;
++  const { [provider]: _removed, ...rest } = existing;
++  saveShellConfig({ baseUrls: rest }, dir);
++}
++
++/** Remove a provider's saved sampling/budget/timeout overrides, if any. Best-effort; never throws. Mirrors {@link removeApiKey}. */
++export function removeProviderModelParams(provider: string, dir?: string): void {
++  const existing = loadShellConfig(dir).modelParams ?? {};
++  if (!(provider in existing)) return;
++  const { [provider]: _removed, ...rest } = existing;
++  saveShellConfig({ modelParams: rest }, dir);
++}
++
+ /**
+  * Merge persisted shell API keys (auth.json) into an env map without overwriting
+  * non-empty existing entries. Pure relative to `process.env` mutation — returns
+diff --git a/src/standard/help-groups.ts b/src/standard/help-groups.ts
+index 854474204..acc622246 100644
+--- a/src/standard/help-groups.ts
++++ b/src/standard/help-groups.ts
+@@ -127,7 +127,7 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
+     group: "Connect a model provider",
+     summary: "Providers this operator has configured, and cross-family review eligibility.",
+   },
+-  { kind: "slash", name: "/connect", group: "Connect a model provider", summary: "Switch provider / API key." },
++  { kind: "slash", name: "/connect", group: "Connect a model provider", summary: "Switch provider; row buttons test/disconnect it." },
+   {
+     kind: "slash",
+     name: "/search-provider",
+diff --git a/src/tui/connect-provider-buttons.test.ts b/src/tui/connect-provider-buttons.test.ts
+new file mode 100644
+index 000000000..6c55d4c1f
+--- /dev/null
++++ b/src/tui/connect-provider-buttons.test.ts
+@@ -0,0 +1,442 @@
++// flow 304: `/connect`'s row list gets `[Test]`/`[Disconnect]` buttons drawn
++// like the queue dock's Force/Edit/Delete (AC1-AC4, AC7, AC10). The pure
++// classify/probe/remove logic these buttons call is covered in
++// `src/commands/providers.disconnect.test.ts`; this file drives the actual
++// mouse/keyboard surface, following `provider-endpoint-retry.test.ts` and
++// `picker-theme.test.ts`'s own established harness (never a replica of the
++// shipped picker — the real `selectProviderModelInTui`, mounted).
++import { mkdtempSync, readFileSync, rmSync } from "node:fs";
++import { tmpdir } from "node:os";
++import { join } from "node:path";
++import { describe, expect, test } from "bun:test";
++import type { DetectedProvider } from "../commands/select";
++import { loadShellConfig, saveApiKey } from "../lib/shell-config";
++import { themeColorToHex } from "./shell-chrome";
++import { applyThemeId, getThemeId, resolveTheme } from "./theme";
++import { selectProviderModelInTui } from "./tui-shell";
++
++function tempConfigDir(): string {
++  return mkdtempSync(join(tmpdir(), "keryx-connect-buttons-"));
++}
++
++async function loadOpenTui(): Promise<{
++  core: typeof import("@opentui/core");
++  testing: typeof import("@opentui/core/testing");
++} | undefined> {
++  try {
++    // SEQUENTIAL, never `Promise.all` — see `shell-chrome.test.ts`'s own loader.
++    const core = await import("@opentui/core");
++    const testing = await import("@opentui/core/testing");
++    return { core, testing };
++  } catch {
++    return undefined;
++  }
++}
++
++type OtuiBundle = NonNullable<Awaited<ReturnType<typeof loadOpenTui>>>;
++const OTUI = await loadOpenTui();
++const otuiTest = test.skipIf(OTUI === undefined);
++
++function requireOtui(): OtuiBundle {
++  if (OTUI === undefined) {
++    throw new Error("unreachable: otuiTest skips without @opentui/core");
++  }
++  return OTUI;
++}
++
++const ESC_PARSER_TIMEOUT_MS = 50;
++
++async function pressEscapeAndSettle(h: { mockInput: { pressEscape: () => void }; flush: () => Promise<unknown> }): Promise<void> {
++  h.mockInput.pressEscape();
++  await new Promise((resolve) => setTimeout(resolve, ESC_PARSER_TIMEOUT_MS * 3));
++  await h.flush();
++}
++
++/** Column of `needle` within the frame LINE that contains `rowNeedle`, or -1 if either is absent. */
++function columnOnRow(frame: string, rowNeedle: string, needle: string): { row: number; col: number } {
++  const lines = frame.split("\n");
++  const row = lines.findIndex((line) => line.includes(rowNeedle));
++  if (row < 0) return { row: -1, col: -1 };
++  const col = lines[row]!.indexOf(needle);
++  return { row, col: col < 0 ? -1 : col + 1 };
++}
++
++const DEEPSEEK: DetectedProvider = { name: "deepseek", label: "DeepSeek", models: ["deepseek-chat"], envKey: "DEEPSEEK_API_KEY" };
++const GROQ: DetectedProvider = { name: "groq", label: "Groq", models: ["llama-3.3-70b-versatile"], envKey: "GROQ_API_KEY" };
++const ENV = { DEEPSEEK_API_KEY: "sk-test", GROQ_API_KEY: "gsk-test" };
++
++/** Always answers a live, non-empty model list — both providers pass `filterConnectedDetectedProviders`'s own probe. */
++const alwaysLive = (async () => ({ ok: true, json: async () => ({ data: [{ id: "m1" }, { id: "m2" }] }) }) as Response) as unknown as typeof fetch;
++
++describe("AC1 — /connect's row list draws Test and Disconnect on every connected row", () => {
++  otuiTest("both buttons render for every connected provider, label/click selection unchanged", async () => {
++    const otui = requireOtui();
++    const h = await otui.testing.createTestRenderer({ width: 100, height: 30 });
++    try {
++      const pending = selectProviderModelInTui(otui.core, h.renderer, [DEEPSEEK, GROQ], { onlyConnected: true, fetch: alwaysLive, env: ENV });
++      const frame = await h.waitForFrame((f) => f.includes("DeepSeek") && f.includes("Groq"));
++      const dsRow = columnOnRow(frame, "DeepSeek", "[Test]");
++      const dsDisc = columnOnRow(frame, "DeepSeek", "[Disconnect]");
++      const groqRow = columnOnRow(frame, "Groq", "[Test]");
++      const groqDisc = columnOnRow(frame, "Groq", "[Disconnect]");
++      expect(dsRow.col).toBeGreaterThan(0);
++      expect(dsDisc.col).toBeGreaterThan(0);
++      expect(groqRow.col).toBeGreaterThan(0);
++      expect(groqDisc.col).toBeGreaterThan(0);
++
++      // Clicking the LABEL still selects the provider — unchanged from the old `SelectRenderable` behaviour.
++      const mouse = otui.testing.createMockMouse(h.renderer);
++      const labelCol = columnOnRow(frame, "DeepSeek", "DeepSeek");
++      await mouse.click(labelCol.col, labelCol.row);
++      await h.flush();
++      await h.waitForFrame((f) => f.includes("Select a model"));
++      h.mockInput.pressEnter(); // model step
++      const result = await pending;
++      expect(result?.provider).toBe("deepseek");
++    } finally {
++      h.renderer.destroy();
++    }
++  });
++});
++
++describe("AC2 — [Test] runs the live probe and shows ok/failure inline, without leaving /connect", () => {
++  otuiTest("mouse click on [Test]: success shows ok + model count", async () => {
++    const otui = requireOtui();
++    const h = await otui.testing.createTestRenderer({ width: 100, height: 30 });
++    try {
++      let calls = 0;
++      const fetchFn = (async () => {
++        calls += 1;
++        return { ok: true, json: async () => ({ data: [{ id: "deepseek-chat" }, { id: "deepseek-reasoner" }] }) } as Response;
++      }) as unknown as typeof fetch;
++      const pending = selectProviderModelInTui(otui.core, h.renderer, [DEEPSEEK], { onlyConnected: true, fetch: fetchFn, env: ENV });
++      const frame = await h.waitForFrame((f) => f.includes("[Test]"));
++      const testBtn = columnOnRow(frame, "DeepSeek", "[Test]");
++      const mouse = otui.testing.createMockMouse(h.renderer);
++      await mouse.click(testBtn.col, testBtn.row);
++      const okFrame = await h.waitForFrame((f) => f.includes("ok — 2 model"));
++      expect(okFrame).toContain("ok — 2 model");
++      expect(calls).toBeGreaterThanOrEqual(2); // the connected-filter probe, then the Test click
++
++      await pressEscapeAndSettle(h);
++      expect(await pending).toBeUndefined(); // stayed in /connect the whole time; Esc is what finally leaves
++    } finally {
++      h.renderer.destroy();
++    }
++  });
++
++  otuiTest("mouse click on [Test]: a now-broken connection shows the humanized failure reason", async () => {
++    const otui = requireOtui();
++    const h = await otui.testing.createTestRenderer({ width: 100, height: 30 });
++    try {
++      let calls = 0;
++      const fetchFn = (async () => {
++        calls += 1;
++        if (calls === 1) {
++          // The initial `filterConnectedDetectedProviders` probe: was connected.
++          return { ok: true, json: async () => ({ data: [{ id: "deepseek-chat" }] }) } as Response;
++        }
++        // The [Test] click's own probe: the credential has since been revoked.
++        return { ok: false, status: 401, text: async () => "" } as Response;
++      }) as unknown as typeof fetch;
++      const pending = selectProviderModelInTui(otui.core, h.renderer, [DEEPSEEK], { onlyConnected: true, fetch: fetchFn, env: ENV });
++      const frame = await h.waitForFrame((f) => f.includes("[Test]"));
++      const testBtn = columnOnRow(frame, "DeepSeek", "[Test]");
++      const mouse = otui.testing.createMockMouse(h.renderer);
++      await mouse.click(testBtn.col, testBtn.row);
++      const failFrame = await h.waitForFrame((f) => f.includes("rejected the credential"));
++      expect(failFrame).toContain("HTTP 401");
++
++      await pressEscapeAndSettle(h);
++      expect(await pending).toBeUndefined();
++    } finally {
++      h.renderer.destroy();
++    }
++  });
++});
++
++describe("AC3 — rows and both buttons reach without a mouse", () => {
++  otuiTest("Right lands on Test; Enter runs it; Right again arms Disconnect", async () => {
++    const otui = requireOtui();
++    const h = await otui.testing.createTestRenderer({ width: 100, height: 30 });
++    // Hermetic: arming now classifies the credential (flow 304 review #2),
++    // which reads the config dir — never the real machine's.
++    const configDir = tempConfigDir();
++    try {
++      const fetchFn = (async () => ({ ok: true, json: async () => ({ data: [{ id: "m1" }] }) }) as Response) as unknown as typeof fetch;
++      const pending = selectProviderModelInTui(otui.core, h.renderer, [DEEPSEEK], { onlyConnected: true, fetch: fetchFn, env: ENV, configDir });
++      await h.waitForFrame((f) => f.includes("[Test]"));
++
++      h.mockInput.pressArrow("right"); // Label -> Test
++      h.mockInput.pressEnter(); // fires Test
++      const okFrame = await h.waitForFrame((f) => f.includes("ok — 1 model"));
++      expect(okFrame).toContain("ok — 1 model");
++
++      h.mockInput.pressArrow("right"); // Test -> Disconnect
++      h.mockInput.pressEnter(); // arms
++      const armedFrame = await h.waitForFrame((f) => f.includes("disconnect 'DeepSeek'?"));
++      expect(armedFrame).toContain("Esc to cancel");
++
++      // flow 304 review finding #4: Esc while armed cancels ONLY the arm —
++      // the step stays open. A SECOND Esc is what finally leaves.
++      await pressEscapeAndSettle(h);
++      const clearedFrame = h.captureCharFrame();
++      expect(clearedFrame).not.toContain("disconnect 'DeepSeek'?");
++      expect(clearedFrame).toContain("[Disconnect]"); // still here — the step did not close
++      await pressEscapeAndSettle(h);
++      expect(await pending).toBeUndefined();
++    } finally {
++      h.renderer.destroy();
++      rmSync(configDir, { recursive: true, force: true });
++    }
++  });
++
++  // flow 304 review finding #4, isolated: Esc's FIRST job is cancelling an
++  // armed Disconnect, matching the hint text "Esc to cancel" literally —
++  // it does not, on its own, leave `/connect`.
++  otuiTest("Esc while Disconnect is armed cancels the arm and keeps the picker open; nothing is written", async () => {
++    const otui = requireOtui();
++    const h = await otui.testing.createTestRenderer({ width: 100, height: 30 });
++    const configDir = tempConfigDir();
++    saveApiKey("DEEPSEEK_API_KEY", "sk-real", configDir); // a real credential that a wrongly-confirmed Esc could remove
++    try {
++      const pending = selectProviderModelInTui(otui.core, h.renderer, [DEEPSEEK], { onlyConnected: true, fetch: alwaysLive, env: ENV, configDir });
++      const frame = await h.waitForFrame((f) => f.includes("[Disconnect]"));
++      const disc = columnOnRow(frame, "DeepSeek", "[Disconnect]");
++      const mouse = otui.testing.createMockMouse(h.renderer);
++      await mouse.click(disc.col, disc.row); // arm, by mouse this time
++      await h.waitForFrame((f) => f.includes("disconnect 'DeepSeek'?"));
++
++      await pressEscapeAndSettle(h); // cancel the arm only
++      const afterOneEsc = h.captureCharFrame();
++      expect(afterOneEsc).not.toContain("disconnect 'DeepSeek'?");
++      expect(afterOneEsc).toContain("DeepSeek"); // row still here, step still open
++      expect(loadShellConfig(configDir).apiKeys).toEqual({ DEEPSEEK_API_KEY: "sk-real" }); // untouched
++
++      await pressEscapeAndSettle(h); // NOW leave
++      expect(await pending).toBeUndefined();
++    } finally {
++      h.renderer.destroy();
++      rmSync(configDir, { recursive: true, force: true });
++    }
++  });
++
++  otuiTest("Down moves to the second row; Enter on Label there selects THAT provider", async () => {
++    const otui = requireOtui();
++    const h = await otui.testing.createTestRenderer({ width: 100, height: 30 });
++    try {
++      const pending = selectProviderModelInTui(otui.core, h.renderer, [DEEPSEEK, GROQ], { onlyConnected: true, fetch: alwaysLive, env: ENV });
++      await h.waitForFrame((f) => f.includes("Groq"));
++
++      h.mockInput.pressArrow("down"); // row 0 -> row 1 (Groq)
++      h.mockInput.pressEnter(); // Label column (default) -> select Groq
++      await h.waitForFrame((f) => f.includes("Select a model"));
++      h.mockInput.pressEnter(); // model step
++      const result = await pending;
++      expect(result?.provider).toBe("groq");
++    } finally {
++      h.renderer.destroy();
++    }
++  });
++});
++
++describe("AC4 — [Disconnect] asks for confirmation; declining writes nothing", () => {
++  otuiTest("clicking Disconnect once arms it; clicking Test on the SAME row cancels the arm (decline)", async () => {
++    const otui = requireOtui();
++    const h = await otui.testing.createTestRenderer({ width: 100, height: 30 });
++    let disconnected: string | undefined;
++    try {
++      const pending = selectProviderModelInTui(otui.core, h.renderer, [DEEPSEEK], {
++        onlyConnected: true,
++        fetch: alwaysLive,
++        env: ENV,
++        onDisconnected: (name) => {
++          disconnected = name;
++        },
++      });
++      const frame = await h.waitForFrame((f) => f.includes("[Disconnect]"));
++      const disc = columnOnRow(frame, "DeepSeek", "[Disconnect]");
++      const mouse = otui.testing.createMockMouse(h.renderer);
++      await mouse.click(disc.col, disc.row);
++      const armedFrame = await h.waitForFrame((f) => f.includes("disconnect 'DeepSeek'?"));
++      const test = columnOnRow(armedFrame, "DeepSeek", "[Test]");
++
++      // DECLINE: click [Test] on the same row instead of confirming.
++      await mouse.click(test.col, test.row);
++      await h.waitForFrame((f) => f.includes("ok — 2 model"));
++
++      // Nothing was removed: the row is still here, onDisconnected never fired.
++      expect(disconnected).toBeUndefined();
++      const stillHere = h.captureCharFrame();
++      expect(stillHere).toContain("DeepSeek");
++      expect(stillHere).toContain("[Disconnect]");
++
++      await pressEscapeAndSettle(h);
++      expect(await pending).toBeUndefined();
++    } finally {
++      h.renderer.destroy();
++    }
++  });
++
++  otuiTest("clicking Disconnect TWICE confirms: the row disappears, the key is gone from disk, and onDisconnected fires with its name", async () => {
++    const otui = requireOtui();
++    const h = await otui.testing.createTestRenderer({ width: 100, height: 30 });
++    const configDir = tempConfigDir();
++    // A REAL keryx-saved credential — not merely present in the injected
++    // `env` — so classification resolves to `saved-api-key` and confirming
++    // actually has something to remove, the same as a real `/connect` row.
++    saveApiKey("DEEPSEEK_API_KEY", "sk-test", configDir);
++    let disconnected: string | undefined;
++    try {
++      const pending = selectProviderModelInTui(otui.core, h.renderer, [DEEPSEEK, GROQ], {
++        onlyConnected: true,
++        fetch: alwaysLive,
++        env: ENV,
++        configDir,
++        onDisconnected: (name) => {
++          disconnected = name;
++        },
++      });
++      const frame = await h.waitForFrame((f) => f.includes("DeepSeek") && f.includes("Groq"));
++      const disc = columnOnRow(frame, "DeepSeek", "[Disconnect]");
++      const mouse = otui.testing.createMockMouse(h.renderer);
++      await mouse.click(disc.col, disc.row);
++      const armedFrame = await h.waitForFrame((f) => f.includes("disconnect 'DeepSeek'?"));
++      const discAgain = columnOnRow(armedFrame, "DeepSeek", "[Disconnect]");
++      await mouse.click(discAgain.col, discAgain.row); // CONFIRM
++
++      await h.waitForFrame((f) => !f.includes("DeepSeek") && f.includes("Groq"));
++      expect(disconnected).toBe("deepseek");
++      expect(loadShellConfig(configDir).apiKeys ?? {}).toEqual({});
++
++      // The picker is still open (Groq remains): select it to close cleanly.
++      const groqRow = h.captureCharFrame();
++      const groqLabel = columnOnRow(groqRow, "Groq", "Groq");
++      await mouse.click(groqLabel.col, groqLabel.row);
++      await h.waitForFrame((f) => f.includes("Select a model"));
++      h.mockInput.pressEnter();
++      const result = await pending;
++      expect(result?.provider).toBe("groq");
++    } finally {
++      h.renderer.destroy();
++      rmSync(configDir, { recursive: true, force: true });
++    }
++  });
++});
++
++describe("review finding #2 — arming Disconnect warns about a shared env var BEFORE confirming", () => {
++  otuiTest("arming zai's Disconnect names zai-coding and ZAI_API_KEY (real registry pair, same shared credential)", async () => {
++    const otui = requireOtui();
++    const h = await otui.testing.createTestRenderer({ width: 120, height: 30 });
++    const configDir = tempConfigDir();
++    saveApiKey("ZAI_API_KEY", "sk-zai", configDir);
++    const ZAI: DetectedProvider = { name: "zai", label: "Z.AI (GLM)", models: ["glm-5.2"] };
++    const ZAI_CODING: DetectedProvider = { name: "zai-coding", label: "Z.AI GLM Coding Plan", models: ["glm-5.2"] };
++    try {
++      const pending = selectProviderModelInTui(otui.core, h.renderer, [ZAI, ZAI_CODING], {
++        onlyConnected: true,
++        fetch: alwaysLive,
++        env: { ZAI_API_KEY: "sk-zai" },
++        configDir,
++      });
++      const frame = await h.waitForFrame((f) => f.includes("Z.AI (GLM)"));
++      const disc = columnOnRow(frame, "Z.AI (GLM)", "[Disconnect]");
++      const mouse = otui.testing.createMockMouse(h.renderer);
++      await mouse.click(disc.col, disc.row); // arm — do NOT confirm
++      const armedFrame = await h.waitForFrame((f) => f.includes("disconnect 'Z.AI (GLM)'?"));
++      expect(armedFrame).toContain("zai-coding");
++      expect(armedFrame).toContain("ZAI_API_KEY");
++
++      await pressEscapeAndSettle(h); // decline (cancels the arm; step stays open)
++      await pressEscapeAndSettle(h); // leave
++      expect(await pending).toBeUndefined();
++      // Declined: neither credential was touched.
++      expect(loadShellConfig(configDir).apiKeys).toEqual({ ZAI_API_KEY: "sk-zai" });
++    } finally {
++      h.renderer.destroy();
++      rmSync(configDir, { recursive: true, force: true });
++    }
++  });
++});
++
++describe("AC10 — button/row colours come from the active theme", () => {
++  function paintedHexes(frame: { lines: readonly { spans: readonly { fg: unknown; bg: unknown }[] }[] }): { fg: Set<string>; bg: Set<string> } {
++    const fg = new Set<string>();
++    const bg = new Set<string>();
++    for (const line of frame.lines) {
++      for (const span of line.spans) {
++        const asFg = themeColorToHex(span.fg);
++        if (asFg !== undefined) fg.add(asFg);
++        const asBg = themeColorToHex(span.bg);
++        if (asBg !== undefined) bg.add(asBg);
++      }
++    }
++    return { fg, bg };
++  }
++
++  otuiTest("Test/Disconnect paint theme.focus/theme.error, on a dark and a light theme", async () => {
++    const otui = requireOtui();
++    const previous = getThemeId();
++    try {
++      for (const id of ["groknight", "grokday"] as const) {
++        applyThemeId(id);
++        const theme = resolveTheme(id);
++        const h = await otui.testing.createTestRenderer({ width: 100, height: 30 });
++        const pending = selectProviderModelInTui(otui.core, h.renderer, [DEEPSEEK], { onlyConnected: true, fetch: alwaysLive, env: ENV });
++        await h.waitForFrame((f) => f.includes("[Test]"));
++        await h.flush();
++
++        const { fg } = paintedHexes(h.captureSpans());
++        expect(fg.has(theme.focus)).toBe(true); // [Test]
++        expect(fg.has(theme.error)).toBe(true); // [Disconnect]
++
++        await pressEscapeAndSettle(h);
++        expect(await pending).toBeUndefined();
++        h.renderer.destroy();
++      }
++    } finally {
++      applyThemeId(previous);
++    }
++  });
++});
++
++// AC7's session-side half (the `/connect` command handler comparing the
++// disconnected name against the CURRENT session's provider and printing a
++// system line) lives inside `launchTuiAgentShell`'s giant closure, which no
++// test in this file mounts end-to-end — same reason `tui-shell.test.ts`'s own
++// SLATE-3a/SLATE-3b/AC7 describe blocks (see `readFileSync`d source audits
++// there) read the source rather than driving the full interactive shell. The
++// STEP's own contract — `onDisconnected` fires with the right name, exactly
++// once, only on a CONFIRMED disconnect — is proven above (AC4's second case).
++// This audits only that the command handler actually wires that callback to
++// the session comparison and the system line the operator was promised.
++describe("AC7 — the /connect command handler prints the active-provider-disconnected line (source-text audit)", () => {
++  const tuiSource = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
++  const handlerStart = tuiSource.indexOf('if (command.name === "/connect" || command.name === "/provider")');
++  const handlerBody = tuiSource.slice(handlerStart, handlerStart + 2500);
++
++  test("onDisconnected compares the disconnected name against the session's OWN provider", () => {
++    expect(handlerBody).toContain("onDisconnected: (name, sharedWith) => {");
++    expect(handlerBody).toContain("if (name === currentSel.provider) {");
++  });
++
++  test("the system line names 'already-loaded credential' and how to move on", () => {
++    expect(handlerBody).toContain("already-loaded credential");
++    expect(handlerBody).toContain("/connect another provider or restart");
++    expect(handlerBody).toContain("io.onSystem?.(");
++  });
++
++  // flow 304 review finding #2: the result must ALSO name every provider a
++  // shared env var affected (e.g. built-in zai/zai-coding sharing ZAI_API_KEY).
++  test("the result also reports sharedWith to the operator", () => {
++    expect(handlerBody).toContain("if (sharedWith.length > 0) {");
++    expect(handlerBody).toContain("this also disconnected");
++  });
++
++  test("the line is NOT a forced switch: no call to switchTo inside the onDisconnected callback", () => {
++    const callbackStart = handlerBody.indexOf("onDisconnected: (name, sharedWith) => {");
++    const callbackEnd = handlerBody.indexOf("})", callbackStart);
++    const callbackBody = handlerBody.slice(callbackStart, callbackEnd);
++    expect(callbackBody).not.toContain("switchTo(");
++  });
++});
+diff --git a/src/tui/queue-nav.test.ts b/src/tui/queue-nav.test.ts
+index 0df29a1a2..6951742a0 100644
+--- a/src/tui/queue-nav.test.ts
++++ b/src/tui/queue-nav.test.ts
+@@ -1,5 +1,5 @@
+ import { expect, test } from "bun:test";
+-import { clampQueueNavIndex, stepQueueNavAction, stepQueueNavIndex } from "./queue-nav";
++import { clampQueueNavIndex, stepConnectNavAction, stepQueueNavAction, stepQueueNavIndex } from "./queue-nav";
+ 
+ test("stepQueueNavIndex moves up/down and wraps at both ends", () => {
+   expect(stepQueueNavIndex(1, 3, "up")).toBe(0);
+@@ -27,3 +27,12 @@ test("stepQueueNavAction cycles force -> edit -> delete -> force and back", () =
+   expect(stepQueueNavAction("force", "left")).toBe("delete"); // wraps the other way
+   expect(stepQueueNavAction("edit", "left")).toBe("force");
+ });
++
++// flow 304 AC3: /connect's row-nav mode cycles Label -> Test -> Disconnect.
++test("stepConnectNavAction cycles label -> test -> disconnect -> label and back", () => {
++  expect(stepConnectNavAction("label", "right")).toBe("test");
++  expect(stepConnectNavAction("test", "right")).toBe("disconnect");
++  expect(stepConnectNavAction("disconnect", "right")).toBe("label"); // wraps
++  expect(stepConnectNavAction("label", "left")).toBe("disconnect"); // wraps the other way
++  expect(stepConnectNavAction("test", "left")).toBe("label");
++});
+diff --git a/src/tui/queue-nav.ts b/src/tui/queue-nav.ts
+index 6ec75a150..9bc0cb6a5 100644
+--- a/src/tui/queue-nav.ts
++++ b/src/tui/queue-nav.ts
+@@ -1,4 +1,5 @@
+-// Pure keyboard queue-nav stepper helpers (flow 170 T5).
++// Pure keyboard row-nav stepper helpers: queue-nav (flow 170 T5) and, beside
++// it, connect-nav (flow 304).
+ //
+ // Kept OUT of `main-queue.ts` on purpose: that module's own header commits it
+ // to staying a pure, unit-tested, REUSED-VERBATIM layer (no signature/behavior
+@@ -6,6 +7,13 @@
+ // keyboard mode's index/action arithmetic, unit-testable without mounting a
+ // renderer, the same "pure extraction" idea `main-queue.ts` already
+ // established for the mouse/text-command paths.
++//
++// `/connect`'s row-list step (flow 304, AC3) reuses `stepQueueNavIndex`/
++// `clampQueueNavIndex` verbatim for its own up/down row movement — neither is
++// queue-specific, both are already generic over "how many rows". Only the
++// per-row ACTION set differs (Label/Test/Disconnect vs. Force/Edit/Delete),
++// so connect-nav gets its own three-state action type and stepper below,
++// following `stepQueueNavAction`'s exact shape.
+ 
+ /** The three per-item actions queue-nav mode cycles ←/→ through. */
+ export type QueueNavAction = "force" | "edit" | "delete";
+@@ -42,3 +50,21 @@ export function stepQueueNavAction(selected: QueueNavAction, direction: "left" |
+   const nextIdx = direction === "left" ? (idx > 0 ? idx - 1 : count - 1) : idx < count - 1 ? idx + 1 : 0;
+   return QUEUE_NAV_ACTIONS[nextIdx]!;
+ }
++
++/**
++ * The three per-row targets `/connect`'s row-nav mode cycles ←/→ through
++ * (flow 304, AC3). `"label"` is the default/leftmost — Enter on it selects
++ * the provider, exactly as Enter/a label click does today — `"test"` and
++ * `"disconnect"` fire the row's two buttons.
++ */
++export type ConnectNavAction = "label" | "test" | "disconnect";
++
++const CONNECT_NAV_ACTIONS: readonly ConnectNavAction[] = ["label", "test", "disconnect"];
++
++/** Move the highlighted column left/right through Label → Test → Disconnect, wrapping. Mirrors {@link stepQueueNavAction}. */
++export function stepConnectNavAction(selected: ConnectNavAction, direction: "left" | "right"): ConnectNavAction {
++  const idx = CONNECT_NAV_ACTIONS.indexOf(selected);
++  const count = CONNECT_NAV_ACTIONS.length;
++  const nextIdx = direction === "left" ? (idx > 0 ? idx - 1 : count - 1) : idx < count - 1 ? idx + 1 : 0;
++  return CONNECT_NAV_ACTIONS[nextIdx]!;
++}
+diff --git a/src/tui/tui-shell.ts b/src/tui/tui-shell.ts
+index 256cbc1d4..c51310f85 100644
+--- a/src/tui/tui-shell.ts
++++ b/src/tui/tui-shell.ts
+@@ -150,10 +150,14 @@ import type { DetectedProvider } from "../commands/select";
+ import type { ModelsFailure, ModelsResolveResult } from "../commands/providers";
+ import {
+   MODELS_FETCH_TIMEOUT_MS,
++  classifyProviderConnection,
++  disconnectProvider,
+   fetchOpenAiCompatModelsDetailed,
+   modelsFailureLine,
+   providerByName,
+   resolveModelsForPicker,
++  sharedCredentialWarning,
++  testProviderConnection,
+ } from "../commands/providers";
+ import { loadSessionLimits } from "../commands/model-limits";
+ import { collapseToolOutput, summarizeToolArgs } from "../lib/ui";
+@@ -233,8 +237,8 @@ import {
+   editMainQueueItem,
+   reinsertMainQueueItem,
+ } from "./main-queue";
+-import type { QueueNavAction } from "./queue-nav";
+-import { clampQueueNavIndex, stepQueueNavAction, stepQueueNavIndex } from "./queue-nav";
++import type { ConnectNavAction, QueueNavAction } from "./queue-nav";
++import { clampQueueNavIndex, stepConnectNavAction, stepQueueNavAction, stepQueueNavIndex } from "./queue-nav";
+ 
+ import { setSubagentFleetListener } from "./subagent-bridge";
+ import { openSubagentInspector, paintSubagentSidebar } from "./subagent-inspector";
+@@ -514,6 +518,16 @@ export interface SelectProviderModelOptions {
+    * developer's Mac.
+    */
+   configDir?: string;
++  /**
++   * `onlyConnected` only (flow 304, AC7): called synchronously right after a
++   * successful Disconnect, before the row disappears from the list — so the
++   * `/connect` command handler can tell whether the just-disconnected
++   * provider was the CURRENT session's active one and print the "session
++   * keeps its loaded credential" line. This function has no session state of
++   * its own to compare against. `sharedWith` (flow 304 review finding #2)
++   * names every OTHER provider the same disconnect also affected.
++   */
++  onDisconnected?: (name: string, sharedWith: readonly string[]) => void;
+ }
+ 
+ /**
+@@ -2396,6 +2410,64 @@ export function modelPickerNotice(label: string, result: ModelsResolveResult): s
+   return modelsFailureLine(label, result.failure);
+ }
+ 
++/**
++ * Small styled label mimicking a clickable button — mirrors
++ * `composer-choice.ts`'s "small styled label" pattern (bold/colored
++ * `TextRenderable`, no border) rather than a bordered box: a bordered child
++ * box next to a plain-text label in the same row would need its own explicit
++ * height to avoid the row's cross-axis stretch fighting its border rows (see
++ * `.metaproject/memory/lessons/tui-alignself-height-collapse.md` — this file
++ * avoids `alignSelf` entirely for exactly that class of bug).
++ *
++ * The ONE button factory behind the queue dock's Force/Edit/Delete AND
++ * `/connect`'s Test/Disconnect (flow 304) — both call this, not a parallel
++ * copy, so "built the way `mainQueueButton` builds Force/Edit/Delete" is
++ * true by construction rather than by two implementations staying in sync.
++ */
++function smallActionButton(
++  otui: OpenTui,
++  r: Renderer,
++  label: string,
++  id: string,
++  color: string,
++  onMouseDown: () => void,
++): { box: Box; setActive: (active: boolean) => void } {
++  const box = new otui.BoxRenderable(r, {
++    id,
++    flexShrink: 0,
++    marginLeft: 1,
++    paddingLeft: 1,
++    paddingRight: 1,
++    onMouseDown: (event: { stopPropagation: () => void }) => {
++      // Part A (flow 170 T5 investigation): @opentui/core's
++      // Renderable.processMouseEvent fires this handler THEN, unless told
++      // otherwise, walks up .parent and fires every ancestor's onMouseDown
++      // too (confirmed against the bundled implementation,
++      // node_modules/@opentui/core/chunk-bun-tkm837n2.js, the
++      // processMouseEvent/onMouseDown setter pair) -- mouse events bubble by
++      // default. A row/dock above this button may have its own
++      // onMouseDown (queueDock's background click, or a row's label click
++      // here); without stopping it here, every button click would ALSO fire
++      // that ancestor handler as an unwanted bubbled side effect. Stop it at
++      // the deepest, most specific handler -- the button itself.
++      event.stopPropagation();
++      onMouseDown();
++    },
++  });
++  // Theme-driven color, not `otui.red`/`otui.yellow` (fixed ANSI-bright
++  // helpers) -- plain content + `.fg` is the same pattern
++  // `transcript-blocks.ts`'s block header already uses for theme colors.
++  const text = new otui.TextRenderable(r, { id: `${id}-t`, content: `[${label}]` });
++  text.fg = color;
++  box.add(text);
++  const setActive = (active: boolean): void => {
++    box.backgroundColor = active ? getTheme().highlight : undefined;
++    text.content = active ? otui.t`${boldChunk(otui, `[${label}]`)}` : `[${label}]`;
++    text.fg = color;
++  };
++  return { box, setActive };
++}
++
+ /** Provider-selection step. Resolves the chosen provider, or `undefined` on Esc/cancel. */
+ function pickProviderStep(otui: OpenTui, target: StepTarget, detected: DetectedProvider[]): Promise<DetectedProvider | undefined> {
+   const r = stepRenderer(target);
+@@ -2439,6 +2511,306 @@ function pickProviderStep(otui: OpenTui, target: StepTarget, detected: DetectedP
+   });
+ }
+ 
++/** {@link pickConnectedProviderStep}'s dependencies for the two row buttons. */
++interface ConnectedProviderStepOptions {
++  fetch?: typeof fetch;
++  env?: Record<string, string | undefined>;
++  configDir?: string;
++  /**
++   * Called synchronously right after a successful disconnect, before the row
++   * is removed from the list — so the caller can tell whether the CURRENT
++   * session's active provider was just disconnected (AC7) without this step
++   * knowing anything about session state itself. `sharedWith` (flow 304
++   * review finding #2) names every OTHER provider this same disconnect also
++   * affected (e.g. built-in `zai`/`zai-coding` sharing `ZAI_API_KEY`) — empty
++   * when none.
++   */
++  onDisconnected?: (name: string, sharedWith: readonly string[]) => void;
++}
++
++/**
++ * `/connect`'s provider list (flow 304, AC1–AC3): one row per connected
++ * provider, drawn like the queue dock's rows — a label (Enter/click still
++ * selects the provider, unchanged from `pickProviderStep`'s old
++ * `SelectRenderable` behavior) plus `[Test]` and `[Disconnect]` buttons built
++ * by the SAME `smallActionButton` the queue dock uses. `/provider`'s own
++ * wizard keeps calling `pickProviderStep` unchanged — this step is used only
++ * for the `onlyConnected` (`/connect`) path in `selectProviderModelInTui`.
++ *
++ * Row/action navigation (AC3) reuses `stepQueueNavIndex`/`clampQueueNavIndex`
++ * verbatim for up/down, and the sibling `stepConnectNavAction` for left/right
++ * across Label/Test/Disconnect. No separate `chrome.addOverlaySource`
++ * registration is needed: this step already runs inside the caller's
++ * `chrome.withOverlay(...)` (see the `/connect` command handler), whose
++ * `overlayDepth` counter stays incremented for this step's entire lifetime —
++ * the same reason none of `pickProviderStep`/`promptApiKeyStep`/etc. register
++ * their own overlay source either.
++ */
++function pickConnectedProviderStep(
++  otui: OpenTui,
++  target: StepTarget,
++  detected: readonly DetectedProvider[],
++  opts: ConnectedProviderStepOptions,
++): Promise<DetectedProvider | undefined> {
++  const r = stepRenderer(target);
++  return new Promise((resolve) => {
++    let rows: DetectedProvider[] = [...detected];
++    let selectedIndex = 0;
++    let selectedAction: ConnectNavAction = "label";
++    let pendingDisconnect: string | undefined;
++    let resolved = false;
++    interface RowBlock {
++      name: string;
++      outer: Box;
++      label: Box;
++      labelText: InstanceType<OpenTui["TextRenderable"]>;
++      status: InstanceType<OpenTui["TextRenderable"]>;
++      test: { box: Box; setActive: (active: boolean) => void };
++      disconnect: { box: Box; setActive: (active: boolean) => void };
++    }
++    let rowBlocks: RowBlock[] = [];
++
++    const labelOf = (d: DetectedProvider): string => d.label ?? d.name;
++    const noteOf = (d: DetectedProvider): string => d.note ?? `${d.models.length} model(s)`;
++
++    // flow 304 review finding #4: Esc while a Disconnect is armed used to
++    // close the WHOLE step, even though the hint says "Esc to cancel" (of
++    // the arm, an operator reasonably assumes). Registered BEFORE
++    // `openStepSurface` below, so it is called FIRST on every keypress
++    // (OpenTUI's `InternalKeyHandler.emit` walks `renderableHandlers` in
++    // registration order and stops at the first handler that calls
++    // `stopPropagation()` — confirmed against the bundled implementation,
++    // `node_modules/@opentui/core/chunk-bun-t2myhmwd.js`'s `emit`/`onInternal`
++    // pair, the same investigation technique `mainQueueButton`'s own mouse-
++    // bubbling comment used). When nothing is armed this does nothing and
++    // the key falls through to `openStepSurface`'s own Escape handler
++    // (`onEscape` below) unchanged — so a SECOND Esc still leaves, matching
++    // AC3's "Esc leaves" and this step's own footer.
++    const unsubEscapeGuard = onKeypress(r, (key) => {
++      if (resolved || key.name !== "escape" || pendingDisconnect === undefined) return;
++      clearPending();
++      applyHighlight();
++      key.preventDefault();
++      key.stopPropagation();
++    });
++
++    const surface = openStepSurface(otui, target, {
++      id: "connect-picker",
++      title: "Connected providers",
++      tab: "Providers",
++      hint: "(↑/↓ row · ←/→ Label/Test/Disconnect · Enter · Esc to cancel)",
++      footer: [
++        { key: "↑/↓", label: "row" },
++        { key: "←/→", label: "Label/Test/Disconnect" },
++        { key: "Enter", label: "select/run" },
++        { key: "esc", label: "cancel" },
++      ],
++      contentRows: selectBoxHeight(Math.max(rows.length, 1), true),
++      onEscape: () => finish(undefined),
++    });
++    const body = surface.body;
++
++    function finish(value: DetectedProvider | undefined): void {
++      if (resolved) return;
++      resolved = true;
++      unsubEscapeGuard();
++      unsub();
++      surface.close();
++      resolve(value);
++    }
++
++    /** Cancel an armed Disconnect confirmation on any OTHER action, so it never fires from a stale arm. */
++    function clearPending(): void {
++      if (pendingDisconnect === undefined) return;
++      const armed = rowBlocks.find((b) => b.name === pendingDisconnect);
++      pendingDisconnect = undefined;
++      if (armed !== undefined) armed.status.content = "";
++    }
++
++    function applyHighlight(): void {
++      for (let i = 0; i < rowBlocks.length; i++) {
++        const block = rowBlocks[i];
++        if (block === undefined) continue;
++        const active = i === selectedIndex;
++        block.outer.backgroundColor = active ? getTheme().highlight : undefined;
++        block.labelText.content = active && selectedAction === "label" ? otui.t`${boldChunk(otui, `${labelOf(rows[i]!)}`)}  ${dimChunk(otui, noteOf(rows[i]!))}` : otui.t`${labelOf(rows[i]!)}  ${dimChunk(otui, noteOf(rows[i]!))}`;
++        block.test.setActive(active && selectedAction === "test");
++        block.disconnect.setActive(active && selectedAction === "disconnect");
++      }
++    }
++
++    async function runTest(name: string): Promise<void> {
++      const block = rowBlocks.find((b) => b.name === name);
++      const provider = providerByName(name, opts.configDir);
++      if (block === undefined) return;
++      if (provider === undefined) {
++        block.status.content = otui.t`${roleChunk(otui, "error", "✗")} unknown provider — cannot test`;
++        return;
++      }
++      block.status.content = otui.t`${dimChunk(otui, "testing…")}`;
++      const result = await testProviderConnection(provider, opts.fetch ?? globalThis.fetch, opts.env ?? process.env);
++      // The row (or the whole step) may be gone by the time the probe
++      // resolves — a disconnect elsewhere repaints `rowBlocks`, and Esc/a
++      // label selection closes the step outright. Re-look-up by name rather
++      // than trusting the captured reference; write nothing if it's gone.
++      const current = rowBlocks.find((b) => b.name === name);
++      if (current === undefined || resolved) return;
++      current.status.content =
++        result.source === "live"
++          ? otui.t`${roleChunk(otui, "ok", "✓")} ok — ${String(result.models.length)} model(s)`
++          : otui.t`${roleChunk(otui, "error", "✗")} ${modelsFailureLine(labelOf(rows.find((d) => d.name === name) ?? { name, models: [] }), result.failure ?? { kind: "empty" })}`;
++    }
++
++    function armOrConfirmDisconnect(name: string): void {
++      const block = rowBlocks.find((b) => b.name === name);
++      if (block === undefined) return;
++      if (pendingDisconnect !== name) {
++        clearPending();
++        pendingDisconnect = name;
++        // flow 304 review finding #2: warn BEFORE the irreversible action
++        // when this provider shares its env var with another (e.g. built-in
++        // zai/zai-coding both reading ZAI_API_KEY) — classified fresh here,
++        // not reused from paint time, since the credential state could have
++        // changed since this row was last drawn.
++        const env = opts.env ?? process.env;
++        const classification = classifyProviderConnection(name, env, opts.configDir);
++        const warning = sharedCredentialWarning(classification.sharedWith, classification.envKey);
++        const label = labelOf(rows.find((d) => d.name === name) ?? { name, models: [] });
++        block.status.content =
++          warning === undefined
++            ? otui.t`${roleChunk(otui, "attention", "?")} disconnect '${label}'? ${dimChunk(otui, "click/Enter Disconnect again to confirm, Esc to cancel")}`
++            : otui.t`${roleChunk(otui, "attention", "?")} disconnect '${label}'? ${roleChunk(otui, "attention", `Note: ${warning}.`)} ${dimChunk(otui, "click/Enter Disconnect again to confirm, Esc to cancel")}`;
++        return;
++      }
++      pendingDisconnect = undefined;
++      const result = disconnectProvider(name, opts.env ?? process.env, opts.configDir);
++      if (!result.ok) {
++        block.status.content = otui.t`${roleChunk(otui, "error", "✗")} not removed — ${result.reason ?? "unknown reason"}`;
++        return;
++      }
++      opts.onDisconnected?.(name, result.sharedWith);
++      rows = rows.filter((d) => d.name !== name);
++      paint();
++    }
++
++    function paint(): void {
++      for (const block of rowBlocks) {
++        try {
++          body.remove(block.outer);
++        } catch {
++          // already detached
++        }
++      }
++      rowBlocks = [];
++      if (rows.length === 0) {
++        finish(undefined);
++        return;
++      }
++      selectedIndex = clampQueueNavIndex(selectedIndex, rows.length);
++      for (let i = 0; i < rows.length; i++) {
++        const d = rows[i]!;
++        const outer = new otui.BoxRenderable(r, { id: `cp-${d.name}`, width: "100%", flexDirection: "column" });
++        const row = new otui.BoxRenderable(r, { id: `cp-${d.name}-row`, width: "100%", flexDirection: "row" });
++        const labelText = new otui.TextRenderable(r, {
++          id: `cp-${d.name}-label-t`,
++          content: otui.t`${labelOf(d)}  ${dimChunk(otui, noteOf(d))}`,
++        });
++        const label = new otui.BoxRenderable(r, {
++          id: `cp-${d.name}-label`,
++          flexGrow: 1,
++          minWidth: 0,
++          onMouseDown: (event: { stopPropagation: () => void }) => {
++            event.stopPropagation();
++            clearPending();
++            selectedIndex = i;
++            selectedAction = "label";
++            finish(d);
++          },
++        });
++        label.add(labelText);
++        row.add(label);
++        const test = smallActionButton(otui, r, "Test", `cp-test-${d.name}`, getTheme().focus, () => {
++          clearPending();
++          selectedIndex = i;
++          selectedAction = "test";
++          applyHighlight();
++          void runTest(d.name);
++        });
++        const disconnect = smallActionButton(otui, r, "Disconnect", `cp-disc-${d.name}`, getTheme().error, () => {
++          selectedIndex = i;
++          selectedAction = "disconnect";
++          applyHighlight();
++          armOrConfirmDisconnect(d.name);
++        });
++        row.add(test.box);
++        row.add(disconnect.box);
++        outer.add(row);
++        const status = new otui.TextRenderable(r, { id: `cp-${d.name}-status`, content: "", marginLeft: 1 });
++        outer.add(status);
++        body.add(outer);
++        rowBlocks.push({ name: d.name, outer, label, labelText, status, test, disconnect });
++      }
++      applyHighlight();
++    }
++
++    const unsub = onKeypress(r, (key) => {
++      if (resolved) return;
++      if (key.name === "up") {
++        clearPending();
++        selectedIndex = stepQueueNavIndex(selectedIndex, rows.length, "up");
++        applyHighlight();
++        key.preventDefault();
++        key.stopPropagation();
++        return;
++      }
++      if (key.name === "down") {
++        clearPending();
++        selectedIndex = stepQueueNavIndex(selectedIndex, rows.length, "down");
++        applyHighlight();
++        key.preventDefault();
++        key.stopPropagation();
++        return;
++      }
++      if (key.name === "left") {
++        clearPending();
++        selectedAction = stepConnectNavAction(selectedAction, "left");
++        applyHighlight();
++        key.preventDefault();
++        key.stopPropagation();
++        return;
++      }
++      if (key.name === "right") {
++        clearPending();
++        selectedAction = stepConnectNavAction(selectedAction, "right");
++        applyHighlight();
++        key.preventDefault();
++        key.stopPropagation();
++        return;
++      }
++      if (key.name === "return" || key.name === "linefeed" || key.name === "kpenter") {
++        const row = rows[selectedIndex];
++        if (row === undefined) return;
++        if (selectedAction === "label") {
++          clearPending();
++          finish(row);
++        } else if (selectedAction === "test") {
++          clearPending();
++          void runTest(row.name);
++        } else {
++          armOrConfirmDisconnect(row.name);
++        }
++        key.preventDefault();
++        key.stopPropagation();
++      }
++      // Escape is handled by `openStepSurface`'s own handler (`onEscape`
++      // above) — this step declares no interest in it, matching every other
++      // step in this file.
++    });
++
++    paint();
++  });
++}
++
+ /**
+  * In-TUI provider → model → key wizard with BACK navigation. `/provider` and
+  * startup prompt + persist a key and may edit a local endpoint. `/connect`
+@@ -2490,7 +2862,18 @@ export function selectProviderModelInTui(
+       // OpenAI-compat gateways return 401 without a Bearer key, and we would
+       // otherwise show only the short curated fallback (e.g. stale glm-4.5/4.6).
+       while (true) {
+-        const prov = await pickProviderStep(otui, rOrChrome, allCandidates);
++        // flow 304, AC1: `/connect` (`onlyConnected`) gets the row-list step
++        // with Test/Disconnect buttons; `/provider`'s fuller wizard (base-URL
++        // edit, credential prompt, "add custom provider") keeps the plain
++        // `SelectRenderable` picker unchanged.
++        const prov = options.onlyConnected
++          ? await pickConnectedProviderStep(otui, rOrChrome, allCandidates, {
++              ...(options.fetch !== undefined ? { fetch: options.fetch } : {}),
++              ...(options.env !== undefined ? { env: options.env } : {}),
++              ...(options.configDir !== undefined ? { configDir: options.configDir } : {}),
++              ...(options.onDisconnected !== undefined ? { onDisconnected: options.onDisconnected } : {}),
++            })
++          : await pickProviderStep(otui, rOrChrome, allCandidates);
+         if (prov === undefined) {
+           resolve(undefined);
+           return;
+@@ -5753,58 +6136,13 @@ export async function launchTuiAgentShell(opts: {
+       setRowActive: (active: boolean) => void;
+       buttons: Record<QueueNavAction, { box: Box; setActive: (active: boolean) => void }>;
+     }> = [];
+-    /**
+-     * Small styled label mimicking a clickable button \u2014 mirrors
+-     * `composer-choice.ts`'s "small styled label" pattern (bold/colored
+-     * `TextRenderable`, no border) rather than a bordered box: a bordered
+-     * child box next to a plain-text label in the same row would need its own
+-     * explicit height to avoid the row's cross-axis stretch fighting its
+-     * border rows (see `.metaproject/memory/lessons/
+-     * tui-alignself-height-collapse.md` \u2014 this file avoids `alignSelf`
+-     * entirely for exactly that class of bug).
+-     */
+-    const mainQueueButton = (
+-      label: string,
+-      id: string,
+-      color: string,
+-      onMouseDown: () => void,
+-    ): { box: Box; setActive: (active: boolean) => void } => {
+-      const box = new otui.BoxRenderable(r, {
+-        id,
+-        flexShrink: 0,
+-        marginLeft: 1,
+-        paddingLeft: 1,
+-        paddingRight: 1,
+-        onMouseDown: (event: { stopPropagation: () => void }) => {
+-          // Part A (flow 170 T5 investigation): @opentui/core's
+-          // Renderable.processMouseEvent fires this handler THEN, unless
+-          // told otherwise, walks up .parent and fires every ancestor's
+-          // onMouseDown too (confirmed against the bundled implementation,
+-          // node_modules/@opentui/core/chunk-bun-tkm837n2.js, the
+-          // processMouseEvent/onMouseDown setter pair) -- mouse events
+-          // bubble by default. queueDock (T6) will get its own onMouseDown
+-          // to enter queue-nav on a background click; without stopping it
+-          // here, every button click would ALSO re-enter queue-nav as an
+-          // unwanted bubbled side effect (AC9/AC10 both depend on the button
+-          // click NOT merely focusing the dock). Stop it at the deepest,
+-          // most specific handler -- the button itself.
+-          event.stopPropagation();
+-          onMouseDown();
+-        },
+-      });
+-      // Theme-driven color, not `otui.red`/`otui.yellow` (fixed ANSI-bright
+-      // helpers) -- plain content + `.fg` is the same pattern
+-      // `transcript-blocks.ts`'s block header already uses for theme colors.
+-      const text = new otui.TextRenderable(r, { id: `${id}-t`, content: `[${label}]` });
+-      text.fg = color;
+-      box.add(text);
+-      const setActive = (active: boolean): void => {
+-        box.backgroundColor = active ? getTheme().highlight : undefined;
+-        text.content = active ? otui.t`${boldChunk(otui, `[${label}]`)}` : `[${label}]`;
+-        text.fg = color;
+-      };
+-      return { box, setActive };
+-    };
++    // Small styled label mimicking a clickable button -- `smallActionButton`
++    // (module level, beside `pickProviderStep`) holds the actual
++    // implementation now; `/connect`'s row-list step (flow 304) builds its
++    // Test/Disconnect buttons the SAME way, off the SAME function, rather
++    // than a parallel copy.
++    const mainQueueButton = (label: string, id: string, color: string, onMouseDown: () => void) =>
++      smallActionButton(otui, r, label, id, color, onMouseDown);
+     /** Repaint the queue-nav highlight only -- no rebuild, mirrors
+      * composer-choice.ts's paintOptions() re-highlight-on-change shape. */
+     const applyQueueNavHighlight = (): void => {
+@@ -6918,7 +7256,34 @@ export async function launchTuiAgentShell(opts: {
+             const detected = opts.redetect !== undefined ? await opts.redetect() : opts.detected;
+             const ns = await chrome.withOverlay(() =>
+               command.name === "/connect"
+-                ? selectProviderModelInTui(otui, chrome, detected, { onlyConnected: true, env: process.env })
++                ? selectProviderModelInTui(otui, chrome, detected, {
++                    onlyConnected: true,
++                    env: process.env,
++                    // flow 304 AC7: disconnecting the provider the session is
++                    // CURRENTLY using neither switches provider nor interrupts
++                    // a turn — this only reports it. The session keeps
++                    // whatever it already loaded into memory this run;
++                    // `disconnectProvider` has already cleared the env var
++                    // for THIS process when it was keryx-saved, so a LATER
++                    // `/connect` (or a fresh launch) no longer offers it.
++                    onDisconnected: (name, sharedWith) => {
++                      // flow 304 review finding #2: the RESULT must name
++                      // every other provider a shared env var also
++                      // disconnected (e.g. built-in zai/zai-coding sharing
++                      // ZAI_API_KEY) — the row-nav step's own confirmation
++                      // text already warned about this before the operator
++                      // confirmed; this is the durable, transcript-printed
++                      // follow-up.
++                      if (sharedWith.length > 0) {
++                        io.onSystem?.(`◇ ${name} disconnected — this also disconnected: ${sharedWith.join(", ")}.\n`);
++                      }
++                      if (name === currentSel.provider) {
++                        io.onSystem?.(
++                          `◇ ${name} disconnected — this session keeps its already-loaded credential until you /connect another provider or restart.\n`,
++                        );
++                      }
++                    },
++                  })
+                 : selectProviderModelInTui(otui, chrome, detected),
+             );
+             if (ns !== undefined) {

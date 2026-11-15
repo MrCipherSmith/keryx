@@ -1,0 +1,74 @@
+[
+  {
+    "id": "G1",
+    "file": "src/review/agents/recorded-adapter.ts",
+    "line": 113,
+    "severity": "major",
+    "problem": "LSP/ISP: the recorded adapter implements the optional `ReviewAgentAdapter.cancel` only to throw \"not supported\" (and declares `cancellation: false` beside it). The base contract (types.ts:156) makes cancel optional precisely so an adapter that cannot cancel omits it; the new caller `cancelPendingDispatches` (adapter-shutdown.ts:50-54) relies on that: `cancel === undefined` means skip, otherwise `await adapter.cancel(...)`. Through the base type this override is reached and rejects.",
+    "impact": "When a host abandons a run that has a pending dispatch on the recorded adapter, `cancelPendingDispatches` rejects at that dispatch, so every later dispatch in the sorted list is never cancelled and no report is returned - the provider work the shutdown exists to stop keeps running. Fix: drop the `cancel` member so the dispatch lands in `skipped`. Sites: recorded-adapter.ts:113-115, consumed at adapter-shutdown.ts:54.",
+    "quote": "async cancel() {\n      throw new Error(\"cancel is not supported by the recorded adapter\");"
+  },
+  {
+    "id": "G2",
+    "file": "src/review/agents/recorded-adapter.ts",
+    "line": 83,
+    "severity": "major",
+    "problem": "Silent failure: `loadRecordedResults` swallows both the read error and the JSON parse error (lines 43-45, 49-51) and returns `null` with no cause; its only caller turns that into `[]` with `?? []`. A missing, unreadable or corrupt recording is then indistinguishable from an empty one, against error-handling.mdc Rules 1/3/5.",
+    "impact": "A mistyped `recordingPath` or truncated file makes every dispatch replay as `{ findings: [] }` (line 109), so an offline replay or plan-eval reports a clean review instead of failing. Whoever runs the replay pays by trusting a fabricated empty result. Fix: throw a contextual error with `cause` (as `writeReplaySummary` already does for the same file).",
+    "quote": "const loaded = (await loadRecordedResults(options.recordingPath)) ?? [];"
+  },
+  {
+    "id": "G3",
+    "file": "src/review/agents/recorded-adapter.ts",
+    "line": 65,
+    "severity": "minor",
+    "problem": "Hidden side effect in a predicate: `isReplayableResult` (doc: 'can be replayed when...') sorts `entry.scopeIds` in place, and `RecordedEntry.scopeIds` was left mutable (line 24) to allow it. `scopesMatch` (line 74) silently depends on that sort having happened, a temporal coupling between two unrelated-looking functions.",
+    "impact": "Any caller of the exported `loadRecordedResults`/`scopesMatch` path that skips or reorders the predicate gets false scope mismatches; a maintainer reading `isReplayableResult` as a pure query will not expect it. Normalise (sort) once in `loadRecordedResults` and make the field readonly.",
+    "quote": "entry.scopeIds.sort();"
+  },
+  {
+    "id": "G4",
+    "file": "src/review/agents/recorded-adapter.ts",
+    "line": 107,
+    "severity": "minor",
+    "problem": "Comment asserts a code path that does not exist: it justifies the empty `findings: []` reply by saying 'the summary counts it', but nothing reads `metadata.recorded` - `writeReplaySummary` summarises the recording file, not the replay results, and no other code in src references the flag.",
+    "impact": "The comment is the stated reason for returning an empty result a caller can read as a clean review; a reader trusts that the gap is counted somewhere when it is not.",
+    "quote": "`recorded: false`, so the replayed plan still completes and the summary counts it."
+  },
+  {
+    "id": "G5",
+    "file": "src/review/agents/recorded-adapter.ts",
+    "line": 129,
+    "severity": "minor",
+    "problem": "I/O mixed with transform, and a second parser for the same format: `writeReplaySummary` reads the file, validates and maps each entry into rows, sorts, then writes. The validation/row-building is a pure transform that should be a helper. It also re-parses the recording with strict rules while `loadRecordedResults` (line 39) parses the same file leniently with no validation, so the two disagree on what a valid recording is.",
+    "impact": "The row transform cannot be tested without the filesystem, and a recording the summary rejects is still silently replayed (or vice versa) - two places to change when the recording format changes.",
+    "quote": "export async function writeReplaySummary(recordingPath: string, nowMs: number = Date.now()): Promise<string> {"
+  },
+  {
+    "id": "G6",
+    "file": "src/review/agents/recorded-adapter.ts",
+    "line": 69,
+    "severity": "minor",
+    "problem": "Magic number with business meaning: the 7-day replay freshness window is an inline expression, written twice (line 69 `<=` and line 151 `>`) with no named constant.",
+    "impact": "Changing the staleness window means finding both expressions; they already use complementary comparisons that must stay in sync for 'replayable' and 'stale' to agree.",
+    "quote": "return nowMs - recordedAt <= 7 * 24 * 60 * 60 * 1000;"
+  },
+  {
+    "id": "G7",
+    "file": "src/review/agents/adapter-shutdown.ts",
+    "line": 43,
+    "severity": "minor",
+    "problem": "Name compensated by a comment, and two names for one concept: the counter is `n` with a comment explaining it counts adapters that 'accepted' the cancel, then it is returned as `confirmed`. `adapter.cancel` returns `void`, so nothing is confirmed - only requested without throwing.",
+    "impact": "Readers of `AdapterShutdownReport.confirmed` will take it as verified-stopped dispatches, which the code does not establish. Name the variable and field for what it counts (e.g. `cancelRequested`).",
+    "quote": "let n = 0; // n is the number of dispatches whose adapter accepted the cancel"
+  },
+  {
+    "id": "G8",
+    "file": "src/review/agents/adapter-shutdown.ts",
+    "line": 34,
+    "severity": "minor",
+    "problem": "Four positional parameters (`adapters, pending, runId, reason`) with no options object; two are adjacent strings that type-check when swapped. The adapter cancel it wraps already takes `{ runId, dispatchId, reason }` as an object.",
+    "impact": "A call site passing `(adapters, pending, reason, runId)` compiles and sends the wrong run id to every adapter.",
+    "quote": "  runId: string,\n  reason: string,"
+  }
+]

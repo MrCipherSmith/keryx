@@ -1,0 +1,20 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "match", "gid": "G1", "why": "G1 names the empty catch around writeOwnerOnlyFileAtomic followed by an unconditional ok:true return." },
+    { "tid": "T2", "verdict": "match", "gid": "G6", "why": "G6 reports the JSON.parse catch that both writes to stderr and rethrows." },
+    { "tid": "T3", "verdict": "match", "gid": "G5", "why": "G5 flags the boolean toPinned switching between export and import with the same call sites." },
+    { "tid": "T4", "verdict": "match", "gid": "G4", "why": "G4 identifies the three copies of the provider/live summary computation and proposes a shared helper." },
+    { "tid": "T5", "verdict": "match", "gid": "G3", "why": "G3 reports the JSDoc merge rule contradicted by unconditional updateProviderCatalogEntry overwrites." },
+    { "tid": "T6", "verdict": "match", "gid": "G7", "why": "G7 flags the ~57-line importProviderCatalogSnapshot mixing parsing/validation with merge orchestration and proposes extraction." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "truth", "why": "Matches T1." },
+    { "gid": "G2", "label": "valid", "why": "The awaited syncPinnedSnapshot at provider-catalog.ts:270/274 has no catch, and export throws when the best-effort save left no cache (or import throws on a malformed pinned file), so a courtesy pin step can reject loadOrRefresh despite a good fresh catalog." },
+    { "gid": "G3", "label": "truth", "why": "Matches T5." },
+    { "gid": "G4", "label": "truth", "why": "Matches T4." },
+    { "gid": "G5", "label": "truth", "why": "Matches T3." },
+    { "gid": "G6", "label": "truth", "why": "Matches T2." },
+    { "gid": "G7", "label": "truth", "why": "Matches T6." },
+    { "gid": "G8", "label": "noise", "why": "Info-level double read and repeated path computation is a minor inefficiency/taste point that overlaps G7's extraction suggestion." }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "match", "gid": "G1", "why": "G1 identifies the always-throwing cancel despite cancellation:false as an LSP violation that makes cancelPendingDispatches reject, and proposes omitting cancel." },
+    { "tid": "T2", "verdict": "match", "gid": "G3", "why": "G3 traces the null from loadRecordedResults through `?? []` to every dispatch replaying as empty findings, the same defect." },
+    { "tid": "T3", "verdict": "match", "gid": "G10", "why": "G10 names the SRP mix of read/validate/summarise/write in writeReplaySummary and proposes splitting it." },
+    { "tid": "T4", "verdict": "match", "gid": "G7", "why": "G7 flags the duplicated inline seven-day window at lines 69 and 151 and asks for a named constant." },
+    { "tid": "T5", "verdict": "match", "gid": "G4", "why": "G4 flags the in-place sort inside the isReplayableResult predicate and scopesMatch's hidden dependence on it." },
+    { "tid": "T6", "verdict": "match", "gid": "G8", "why": "G8 flags the single-letter n whose comment only explains the name and proposes renaming it." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "truth", "why": "Matches T1." },
+    { "gid": "G2", "label": "valid", "why": "The new shutdown loop has no per-dispatch catch, so any rejecting adapter cancel aborts the remaining cancels; this is a real defect in adapter-shutdown.ts separate from the recorded adapter's throw." },
+    { "gid": "G3", "label": "truth", "why": "Matches T2." },
+    { "gid": "G4", "label": "truth", "why": "Matches T5." },
+    { "gid": "G5", "label": "noise", "why": "A comment-precision nit; when torn, the lower label applies." },
+    { "gid": "G6", "label": "valid", "why": "loadRecordedResults casts without validation (a missing scopeIds throws a TypeError at the spread) while writeReplaySummary validates the same format, a real inconsistency introduced by the change." },
+    { "gid": "G7", "label": "truth", "why": "Matches T4." },
+    { "gid": "G8", "label": "truth", "why": "Matches T6." },
+    { "gid": "G9", "label": "noise", "why": "Re-declaring a status set and including queued is debatable design rather than a clear defect; when torn, noise." },
+    { "gid": "G10", "label": "truth", "why": "Matches T3." },
+    { "gid": "G11", "label": "noise", "why": "A four-parameter positional signature is a style preference, not a defect." }
+  ]
+}

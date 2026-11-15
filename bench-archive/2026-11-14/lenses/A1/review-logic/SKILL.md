@@ -1,0 +1,365 @@
+---
+name: review-logic
+model_tier: standard
+description: |
+  Use when: reviewing code for logic correctness, algorithmic bugs, missing error handling,
+  async/await mistakes, null/undefined risks, race conditions, type contract violations,
+  or spec compliance. Dispatched by review-orchestrator for --frontend, --backend, and --all.
+  Also invoked directly: "review logic", "check correctness", "are there any bugs here".
+  NOT for: security vulnerabilities, performance profiling, style/naming preferences,
+  or architectural pattern concerns — those belong in their respective specialized reviewers.
+triggers:
+  - "logic review"
+  - "bug review"
+  - "correctness"
+  - "check correctness"
+  - "are there any bugs"
+  - "check this for bugs"
+metadata:
+  author: "MrCipherSmith"
+  version: "1.1.0"
+  category: "review"
+  compatible_harnesses: "cursor,codex,zed,opencode,claude"
+license: "MIT"
+---
+
+# Review Logic
+
+Specialized reviewer for **logic correctness and algorithmic soundness**.
+Inherits from the correctness phases of two earlier profiles (the strict AI review one, since removed, and `code-learned-review`)
+and unifies them into a single focused pass. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history).
+
+This reviewer does not care about formatting, naming, or architecture opinions.
+Every finding must describe an observable, reproducible defect or a spec gap.
+
+---
+
+## Workflow
+
+```
+Logic Review Progress:
+- [ ] Step 1: Read Job Context (if provided)
+- [ ] Step 2: Determine git scope (merge-base)
+- [ ] Step 3: Collect diff
+- [ ] Step 4: Stage 1 — Spec compliance check (if issue/task provided)
+- [ ] Step 5: Scan for logic bugs and type contract violations
+- [ ] Step 6: Scan for async/race conditions and error handling gaps
+- [ ] Step 7: Scan for null/undefined/optional chaining risks
+- [ ] Step 8: Scan for edge cases and incorrect algorithm assumptions
+- [ ] Step 9: Emit findings in unified format
+```
+
+---
+
+## Input Contract
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `branch` | string | no | Branch to review. Defaults to current branch. |
+| `commit_range` | string | no | Explicit hash or range. Overrides merge-base detection. |
+| `issue_url` | string | no | GitHub issue or task URL. Required for Stage 1 spec compliance gate. |
+| `context_doc` | string | no | Path to job context document. |
+
+---
+
+## Scope Detection
+
+See shared script: `.metaproject/skills/gdskills/shared/git-merge-base.md`
+
+Review scope: **changes introduced in the current branch since merge-base only**.
+Do not review unrelated files.
+
+**Supplied text first.** When the payload carries `slices`, `context_files`, `diff` or `file_contents`, review exactly that text and never rebuild the diff. A choice's history (law 4) is read with `git log`, `git blame` and `git show` only where the host gives a read-only child git; on keryx shell a read-only child has no shell and no git tool, so read the `git log -L`/`git blame` excerpts the payload supplies, or say the history was not read. Only with none supplied, collect it:
+```bash
+git diff --name-status "${BASE_SHA}" && git diff "${BASE_SHA}" && git ls-files --others --exclude-standard
+# explicit range: <FROM_SHA>..<TO_SHA> in place of "${BASE_SHA}"
+```
+
+---
+
+## Stage 1 — Spec Compliance (run first when issue/task is provided)
+
+**ALWAYS check spec compliance before any quality pass.**
+
+1. Fetch requirements from `issue_url` or `context_doc`.
+2. For each acceptance criterion, verify it is addressed in the diff.
+3. Emit an `[F-NNN]` finding with `severity: blocker` for every unimplemented criterion.
+4. Record "spec gap" findings separately — they are always blockers.
+5. Proceed to quality pass regardless of spec gaps found.
+
+---
+
+## Focus Areas and Checklist
+
+### Logic Bugs
+
+- [ ] Conditions evaluated in wrong order or with wrong operator (`&&`/`||` swap)
+- [ ] Off-by-one errors in loops, slice indices, pagination
+- [ ] Mutating data that should be immutable (unexpected aliasing)
+- [ ] Wrong return value (returns before setting state, returns old value)
+- [ ] Incorrect boolean logic (double negation, De Morgan's law violations)
+- [ ] Unreachable branches or dead code that hides a bug
+
+### The Change That Does Nothing
+
+The diff adds a prop, guard, field or branch, and nothing can reach it. The code is
+correct — which is why every reviewer asking "is this correct" passes it — and the
+work the change was written to do is not done.
+
+- [ ] A prop passed to a component that cannot act on it: the parent unmounts the
+      child rather than disabling it, or the render site the prop guards is gated by
+      a condition that is false whenever the prop is true.
+- [ ] A field added to a type, a `Pick`, or a payload and never read. Search for the
+      reads before accepting it as plumbing for a later change; if it is, say so.
+- [ ] A guard against a value its producer cannot emit — `=== undefined` against a
+      backend that stamps `0`, a status the producer writes in one place the route
+      never reaches.
+- [ ] State set on one path and cleared on none, or cleared only on paths the
+      triggering interaction cannot take.
+- [ ] A branch whose condition is unsatisfiable given the call sites in this repo.
+
+Prove it by **negative enumeration**: name the complete candidate set and why each
+member fails to apply, in `class_scope.enumeration_method` with `sites: []`. See
+**Negative enumeration** in `review-orchestrator/SKILL.md` → Finding Format.
+
+`minor` when the change is merely dead. `major` when its deadness means the defect
+it was written to fix is still live — the usual case when the change answers an
+earlier review round, because there the finding is recorded as closed and is not.
+
+### Null / Undefined / Optional Chaining
+
+- [ ] Accessing property on value that can be `null` or `undefined` without guard
+- [ ] Optional chaining `?.` used where non-null is guaranteed (masking a real missing check)
+- [ ] Non-null assertion `!` used without justification
+- [ ] Array index access without bounds check
+- [ ] `JSON.parse` without try/catch on untrusted input
+
+### Async / Concurrency
+
+- [ ] Missing `await` on async call — result is a `Promise`, not the value
+- [ ] `await` inside a non-async function (syntax error or no-op)
+- [ ] Parallel async calls that should be sequential (shared mutable state)
+- [ ] Sequential `await` calls that could be `Promise.all` (performance is a secondary concern here; flag when correctness is affected by ordering assumption)
+- [ ] Race conditions: state updated in one branch before a concurrent operation resolves
+- [ ] Unhandled promise rejection (no `.catch`, no `try/catch`, no `Promise.allSettled`)
+- [ ] `setTimeout`/`setInterval` with shared state and no cleanup
+
+### Error Handling
+
+- [ ] Swallowed `catch` blocks (catches error, does nothing)
+- [ ] Error rethrown as generic string, losing stack trace
+- [ ] Missing error boundary in UI component tree
+- [ ] HTTP errors not checked (`response.ok` ignored)
+- [ ] Partial success treated as full success (only first item processed, error on rest silently dropped)
+
+### Type Contract Violations
+
+- [ ] Function called with wrong argument type (widened or narrowed incorrectly)
+- [ ] Return type of function does not match declared signature
+- [ ] Type cast (`as X`) that hides a genuine mismatch
+- [ ] Generic type parameter inferred as `unknown` or `any` silently
+- [ ] Interface implementation missing required property
+
+### Algorithm Assumptions
+
+- [ ] Sort stability assumed but not guaranteed by runtime
+- [ ] Hash map iteration order assumed to be insertion order
+- [ ] Float equality comparison (`=== 0.1 + 0.2`)
+- [ ] String comparison used for numeric ordering
+- [ ] Regex without anchors applied to untrusted multi-line input
+
+### Edge Cases
+
+- [ ] Empty array / empty string not handled
+- [ ] Single-element collection treated differently from multi-element
+- [ ] Timezone / locale-sensitive date comparison without normalization
+- [ ] Large number overflow (safe integer boundary)
+- [ ] Concurrent execution with zero items (division by count)
+
+---
+
+## Scope Boundaries
+
+| Concern | This skill | Use instead |
+|---------|------------|-------------|
+| Logic bugs, type contracts, async errors, null safety | YES | — |
+| Security vulnerabilities (injection, auth bypass, secrets) | NO | `review-security-code` |
+| Performance profiling (bundle size, query cost, render cycles) | NO | `review-performance` |
+| Style, naming, import organization | NO | `review-style` |
+| Layer violations, SOLID, module coupling | NO | `review-architecture` |
+| React/MobX-specific store patterns | NO | `review-frontend` |
+
+---
+
+## Orchestrated Review Contract
+
+When dispatched by `review-orchestrator`, follow the provided `reviewer-input.schema.json` payload. Return a `REVIEW_RESULT` object compatible with `.metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json`, then a concise markdown summary. Keep findings evidence-based, include concrete `suggested_fix` for every blocker/major, and return `NEEDS_CONTEXT` instead of guessing when required context is missing. On a FIX slice, also return `prior_dispositions: [{id, disposition}]` for every attached finding id.
+
+---
+
+## Finding Format
+
+### Class scope — required for `blocker` and `major`
+
+Every `blocker` and `major` finding must carry `class_scope`: **every** site that
+holds the shape you found, and **how you enumerated them** — the grep or query
+you ran, or the guard that derives the set.
+
+A finding anchored to one `file:line` is a claim about one site. The recorded
+history of this repository is that a fix then repairs that site and leaves its
+siblings: one writer of five, one operator instruction of four, six readers of
+eight. Each was found by the *next* review round, which is why reviews here have
+run to seven and four rounds instead of one.
+
+```yaml
+class_scope:
+  sites: ["src/lib/shell-config.ts:60", "src/session/store.ts:133"]
+  enumeration_method: "grep for the config-path resolvers; 7 writers, 2 unguarded"
+```
+
+"I checked the others" is not an enumeration method. A single-entry `sites` list
+is a claim that the class has exactly one member — make it deliberately, because
+`review-finding.schema.json` accepts it and the next round tests it.
+
+`minor` and `info` may omit it: enumerating the class for every low-severity
+observation is theatre, not rigour.
+
+```markdown
+### [F-NNN] Title
+
+- **Severity**: blocker | major | minor | info
+- **File**: path/to/file.ts:line
+- **Problem**: what is wrong
+- **Why it matters**: impact (data corruption / crash / silent wrong result / spec gap)
+- **Fix**: concrete suggestion
+- **Patch** (optional):
+  ```diff
+  - old line
+  + new line
+  ```
+```
+
+Severity comes from **Severity (canonical)** in `review-orchestrator/SKILL.md`.
+This reviewer keeps no table of its own; what follows is where its recurring
+conditions land under that rubric, not a second rubric.
+
+| Condition | Severity | Why, under the canonical rubric |
+|---|---|---|
+| Unhandled promise rejection reaching the process | `blocker` | Crash |
+| Corrupted or lost persisted/returned data | `blocker` | Data loss or corruption |
+| Unimplemented acceptance criterion | `blocker` | Named shape 4 |
+| Race condition on shared mutable state | `blocker` **if** the interleaving can corrupt or lose data; otherwise `major` | The outcome decides, not the word "race" |
+| Silent wrong result on a named input | `major` | Trigger and outcome are both named |
+| Swallowed error that hides a failed operation | `major` — `blocker` only if the caller then persists or returns wrong data | Silent failure is wrong behaviour; corruption is a different shape |
+| Type contract broken (declared type is not what is returned) | `major` | Callers observe the wrong value |
+| Edge case not handled, no input that reaches it named | `minor` | No trigger; the cost is to the next editor |
+| Non-null assertion without a comment | `minor` | Behaves correctly today; the cost is to the reader |
+| "Could be more defensive", no observable defect | `info` | Neither trigger nor maintenance cost named |
+
+## Iron Laws
+
+### Shared laws (every reviewer)
+
+1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot name the input, call, or condition that reaches the code, you have an observation, not a finding. Report it as `info` and say what would settle it.
+2. **Never flag the theoretical.** The path you describe must exist in the code under review. Do not report a safe API because it could be misused, or a pattern because it is often wrong elsewhere.
+3. **One finding per class, not one per occurrence.** When the same shape appears at several sites, report it once and list every site. Ten findings that are one finding hide the other nine problems.
+4. **A deliberate choice is not a defect until its reason is read and shown wrong.** An explicit override, suppression or exemption, a comment or commit giving a reason, or a sibling doing the same is a decision: read its reason (the comment, `git log -L` or `git blame`, the sibling) before you report it, and report it only when you can show that reason wrong. A project rule is checked against accepted platform practice and its known exceptions before a deviation from it is reported.
+
+Severity levels are defined once, in `review-orchestrator/SKILL.md` →
+**Severity (canonical)**. This reviewer does not restate them: `blocker` is the
+four merge-blocking shapes named there and nothing else, and the `major`/`minor`
+boundary is the trigger-and-outcome test.
+
+### Logic laws
+
+- Every `blocker` MUST include a concrete reproduction scenario or a spec reference.
+- NEVER flag a style preference (naming, formatting) as a logic bug.
+- If in doubt between `major` and `blocker`, use `major` — overstating severity loses credibility.
+
+---
+
+## Output Contract
+
+```
+STATUS: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED
+```
+
+| Status | Meaning |
+|--------|---------|
+| `DONE` | No blockers or majors found; diff is logically sound |
+| `DONE_WITH_CONCERNS` | One or more blocker or major findings present |
+| `NEEDS_CONTEXT` | Spec or business logic is ambiguous; reviewer cannot determine correctness without clarification |
+| `BLOCKED` | Cannot access diff or required files |
+
+```markdown
+## Logic Review
+
+### Review Scope
+- Branch: `<BRANCH>`
+- Parent ref: `<PARENT>`
+- Merge-base: `<BASE_SHA>`
+- Scope mode: `<default-with-uncommitted | explicit-hash-range>`
+- Spec compliance gate: <ran | skipped — no issue/task provided>
+
+### Summary
+<2-3 sentences: what changed, overall correctness verdict.>
+
+### Stats
+- blocker: N  |  major: N  |  minor: N  |  info: N
+
+### Spec Gaps (blocker)
+<[F-NNN] findings for unimplemented acceptance criteria, or "None detected.">
+
+### Logic Bugs
+<[F-NNN] findings or "None detected.">
+
+### Async & Concurrency
+<[F-NNN] findings or "None detected.">
+
+### Error Handling
+<[F-NNN] findings or "None detected.">
+
+### Null / Undefined Safety
+<[F-NNN] findings or "None detected.">
+
+### Type Contract Violations
+<[F-NNN] findings or "None detected.">
+
+### Edge Cases
+<[F-NNN] findings or "None detected.">
+
+### Suggested Patches
+<Minimal unified diffs for straightforward fixes. Omit if no patch is warranted.>
+```
+
+---
+
+## Job Context Awareness
+
+When dispatched by `review-orchestrator` or `job-orchestrator`, the prompt MAY carry `JOB_NAME` and `CONTEXT_PATH: .metaproject/jobs/<job-name>/ai/context.md`. If given and the file exists, read it before you start; use it for intentional design decisions (do not flag correct library usage), acceptance criteria when there is no `issue_url`, and the severity of edge cases the team accepted. If absent, proceed normally: context is optional and non-blocking.
+
+---
+
+## Red Flags
+
+| Rationalization | Why it is wrong |
+|----------------|-----------------|
+| "This style choice looks suspicious, so I'll flag it as a logic bug" | Style is not logic; keep concerns separated by domain |
+| "I see a potential security issue" | Security belongs in `review-security-code`; note it as info and defer |
+| "The spec is unclear so I'll skip the gate" | Unclear spec → `NEEDS_CONTEXT` status + ask for clarification |
+| "I'll mark everything blocker to be safe" | Overstated severity makes reports unactionable; calibrate per the severity guide |
+| "Async performance is slow, so that's a logic bug" | Performance lives in `review-performance` unless incorrect ordering changes the result |
+| "I didn't reproduce the bug so I won't report it" | Every blocker needs a scenario, not a repro — describe the failing code path |
+
+<!-- keryx:layers-block:start -->
+## Project layers: graph, tests, wiki, memory
+
+Your payload may carry a `layers` block for your files: the files the graph says are affected, symbol neighbours, related tests, the wiki pages that describe the files and the memory entries for their module. It is bounded, and `truncated` names what was cut and the command that fetches the rest. When the diff alone does not settle a question, ask the project. Each command below is read-only and calls no model.
+
+- `keryx gdgraph affected <file>`: who depends on the file. Use it before you call a change contained, and whenever a changed export, signature or behaviour may have callers outside your files.
+- `keryx test related <file>`: the tests that cover the file. Use it before you say a behaviour is untested, and to judge whether a test would fail if the code broke.
+- `keryx wiki ask "<q>"`: what the project wiki says a module is for and which rules bind it. Use it when the intent of the code is unclear and the diff does not state it.
+- `keryx memory search "<q>"`: recorded lessons, decisions and known mistakes. Use it before you report a pattern the project may already have decided on, and when a failure looks like one it has seen.
+
+In a review package, `keryx gdgraph affected <file> --data-dir <package>/layers/graph` reads the graph built at the PR head; the tracked graph may be from another commit. A finding still rests on the code you read: what a layer says is a lead, not evidence. If a layer is empty or a command fails, say so in the report instead of guessing.
+<!-- keryx:layers-block:end -->

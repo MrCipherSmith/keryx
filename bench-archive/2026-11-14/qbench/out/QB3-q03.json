@@ -1,0 +1,74 @@
+[
+  {
+    "id": "G1",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 87,
+    "severity": "minor",
+    "problem": "readCursor's comment says a bad cursor cannot be repaired because 'guessing a revision would either hide committed entries or surface uncommitted ones', yet a cursor that parses but has no numeric `revision` (e.g. `{}` or `{\"revision\":\"3\"}`) silently returns 0, which is exactly such a guess: it hides every committed entry. The comment states a policy the function applies to only one of its two malformed shapes.",
+    "impact": "The next reader trusts the comment's 'fail rather than guess' rule; an operator with a wrong-shaped cursor sees an empty history with no error naming the file to remove.",
+    "quote": "return typeof parsed.revision === \"number\" ? parsed.revision : 0;"
+  },
+  {
+    "id": "G2",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 99,
+    "severity": "minor",
+    "problem": "parseEntry throws a context-free `new Error(\"Invalid entry\")`, and a JSON.parse failure on a torn journal line propagates bare. The sibling readCursor in the same file deliberately wraps its failure with the file path and `cause` (and a test pins that), but the journal reader, the more likely torn file since it is append-only, gives neither path nor line.",
+    "impact": "An operator hitting a corrupt plan-history.jsonl gets 'Invalid entry' or a raw SyntaxError from the changelog with no file or line to fix; the two readers of one feature report errors inconsistently.",
+    "quote": "throw new Error(\"Invalid entry\");"
+  },
+  {
+    "id": "G3",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 37,
+    "severity": "minor",
+    "problem": "diffExecutionPlans returns void and fills a caller-supplied `out` array (output argument). Both callers (recordPlanRevision and the test) only create an empty array to pass in and read it back; nothing accumulates across calls.",
+    "impact": "Every caller has to pre-allocate and mutate; returning PlanTransition[] would make the pure diff composable and remove two lines of ceremony per call site.",
+    "quote": "export function diffExecutionPlans(previous: ExecutionPlan | undefined, next: ExecutionPlan, out: PlanTransition[]): void {"
+  },
+  {
+    "id": "G4",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 104,
+    "severity": "minor",
+    "problem": "describeChange dispatches over the PlanTransition discriminant with a 5-branch if/else-if chain whose final bare `else` assumes `reordered`. There is no exhaustive `switch` with a `never` check, so adding a sixth transition kind compiles and renders it with the reorder format (`^ id moved NaN -> NaN`) instead of failing type-checking (OCP / discriminated-union idiom).",
+    "impact": "Whoever extends PlanTransition gets no compiler help and must remember to edit this function; the fallthrough hides the omission.",
+    "quote": "} else {\n    return `^ ${change.itemId} moved ${change.from + 1} -> ${change.to + 1}`;"
+  },
+  {
+    "id": "G5",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 122,
+    "severity": "minor",
+    "problem": "ExecutionPlanHistory's constructor does synchronous file I/O (reads the cursor and the whole journal, parses and filters) and can throw. The class is otherwise a thin query wrapper over an array; the loading belongs in a factory/load function (SRP F1: constructor doing real work).",
+    "impact": "Instances cannot be built from in-memory entries for tests or reuse, and every `new ExecutionPlanHistory(dir)` (renderExecutionPlanChangelog, tests) is a hidden blocking disk read that can throw.",
+    "quote": "constructor(readonly dir: string) {\n    const committed = readCursor(dir);"
+  },
+  {
+    "id": "G6",
+    "file": "src/session/execution-plan.ts",
+    "line": 276,
+    "severity": "minor",
+    "problem": "Changelog rendering is split across two modules: the per-transition formatter describeChange lives and is exported from execution-plan-history.ts, while the changelog assembler that is its only caller lives in execution-plan.ts. This also makes execution-plan.ts import runtime values from a module that imports types back from it, for a function that touches only history data.",
+    "impact": "A change to the changelog format must be made in two files; execution-plan.ts gains a second responsibility (history presentation) unrelated to plan read/write.",
+    "quote": "export function renderExecutionPlanChangelog(dir: string, sinceRevision = 0, maxEntries = 10): string | undefined {"
+  },
+  {
+    "id": "G7",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 35,
+    "severity": "minor",
+    "problem": "Module-level helper named `message` is a generic noun for a function that extracts an error's message; it reads as a string variable at the call site (`${message(error)}`). The repo already has a named helper for this (`describeError` in src/retention/fs-deps.ts).",
+    "impact": "Readers must look up the definition to see it is a function; a second private copy of an existing helper.",
+    "quote": "const message = (error: unknown): string => error instanceof Error ? error.message : String(error);"
+  },
+  {
+    "id": "G8",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 72,
+    "severity": "info",
+    "problem": "A failed cursor write is logged to stderr and the entry is still returned as if recorded, while the planHistoryCursorPath doc says readers trust only entries at or below the cursor. So recordPlanRevision returns an entry that readers will not show until a later write advances the cursor. The return value's meaning (journaled vs committed) is ambiguous; no caller uses it today (writePlan ignores it), which would settle whether it matters.",
+    "impact": "A future caller using the returned entry as 'committed history' would be wrong after a cursor failure.",
+    "quote": "process.stderr.write(`plan history: cursor update failed: ${message(error)}\\n`);"
+  }
+]

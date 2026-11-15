@@ -1,0 +1,110 @@
+[
+  {
+    "id": "G1",
+    "file": "src/ctx/hook-classify.ts",
+    "line": 192,
+    "severity": "major",
+    "problem": "readsStdin always spends the first non-flag operand of a grep-like command as 'the pattern', even when the pattern was already supplied by -e/--regexp/-f (whose value it skips two lines earlier) or is glued to the flag (--regexp=foo, -efoo). The file operand is then counted as the pattern and the stage is declared a stdin filter and skipped. Confirmed by running classifyCommand: `grep -e foo src/file.ts`, `grep -f pats.txt src/x.ts`, `grep --regexp=foo src/x.ts`, `grep -efoo src/x.ts`, `grep -A 3 -e foo f.ts` all return block:false.",
+    "impact": "Regression: before this diff every stage whose first token was grep/egrep/fgrep was blocked. Now any agent that writes the pattern with -e (a very common form) reads project files with raw grep and the guard records a clean run - the exact false-clean under-block the change says it exists to close.",
+    "quote": "if (operandsAllowed > 0) {\n      operandsAllowed -= 1;\n      continue;\n    }"
+  },
+  {
+    "id": "G2",
+    "file": "src/ctx/hook-classify.ts",
+    "line": 187,
+    "severity": "major",
+    "problem": "The recursive-flag test only recognises short flags. `--recursive`, `--dereference-recursive` and `--directories=recurse` start with `--`, so `[a-zA-Z]*[rR]` cannot match after the first dash. With no path operand the stage is treated as a stdin filter. Confirmed: classifyCommand('grep --recursive foo') and classifyCommand('grep --directories=recurse foo') return block:false.",
+    "impact": "A full recursive tree search of the working directory passes the guard unblocked and unrecorded (was blocked before this diff, when any grep stage blocked). The function's own comment states that a recursive flag with no path still walks the tree.",
+    "quote": "if (searchLike && /^-[a-zA-Z]*[rR]/.test(token)) {"
+  },
+  {
+    "id": "G3",
+    "file": "src/ctx/orient-routing.ts",
+    "line": 31,
+    "severity": "major",
+    "problem": "routePrompt keeps only matches whose reasons include \"trigger\", but scoreProjectSkillRoute (src/commands/skills.ts:559-615) never emits that reason - it emits only exact skill/target/path/target basename/module/skill name/tokens. Every project-skill match is therefore filtered out, whatever its score (an exact project skill name scores 100+ and is still dropped).",
+    "impact": "The stated purpose of rankSkillsForQuery ('the hook could never name a project-defined skill ... even though the project's own routing rule says to prefer them') is not achieved: the orient hook still can never name a project skill. The project half of the ranking is dead for the only new caller, and no test covers a project skill through routePrompt.",
+    "quote": ".filter((match) => match.score >= ROUTING_FLOOR && match.reasons.includes(\"trigger\"))"
+  },
+  {
+    "id": "G4",
+    "file": "src/commands/skills.ts",
+    "line": 755,
+    "severity": "major",
+    "problem": "triggerTokensOf keeps every word of a trigger, including stopwords and one-letter words, while query tokens (expandTokens) drop words shorter than 2 chars and everything in ROUTE_STOPWORDS (which this diff also enlarged with to/for/up/do/на/из...). `triggerTokens.every(token => queryTokens.has(token))` can therefore never be true for a trigger containing such a word; only a verbatim substring match fires it. 17 catalog triggers are affected (e.g. \"create a reviewer\", \"run checks\", \"create issue for pr\", \"clean up\", \"issue to flow\", \"learn from review\", \"documentation package for implementation\", \"создай скилл для path\", \"создай правила из claude md\").",
+    "impact": "Regression in `keryx skills route` and the new hook: before, stopwords were stripped from the trigger and the order-free path matched. Now 'create a new reviewer' gives reviewer-skill-creator 30 (tokens only, no trigger), 'run the checks' gives code-verifier nothing, 'create an issue for this pr' and 'prepare a documentation package for the implementation' lose their trigger - routePrompt returns [] for all of them (confirmed by running).",
+    "quote": "return trigger.split(\" \").filter(Boolean);"
+  },
+  {
+    "id": "G5",
+    "file": "src/review/managed.ts",
+    "line": 1035,
+    "severity": "major",
+    "problem": "The diff adds `repo` to both finding schemas and tells reviewers (SKILL.md) to set it so a later round can locate cross-repo evidence, but the code that persists findings was not touched: StructuredReviewFinding (src/review/types.ts:359-373) has no `repo`, and toContractFinding copies an explicit property list that omits it.",
+    "impact": "A reviewer finding carrying `repo: \"vantage-backend\", file: \"src/config.ts\", line: 42` is ingested and written to findings.json without `repo`, so file/line now read as a path in the repository under review. The 'carrier' the change claims to add stops at the schema; the next round's prior_findings cannot tell where the evidence lived.",
+    "quote": "/** The persisted record: exactly the properties `review-finding.schema.json` allows. */"
+  },
+  {
+    "id": "G6",
+    "file": "src/ctx/orient-routing.ts",
+    "line": 23,
+    "severity": "major",
+    "problem": "ROUTING_FLOOR equals the score of a one-word trigger (40+15), and the filter also requires a trigger, so the floor filters nothing: any trigger hit already scores >= 55. Combined with the one-word triggers this diff adds (\"review\", \"ревью\", \"commit\", \"push\" in src/gdskills/catalog.ts:138,301,306) and prefix synonyms (`пуш` -> push), any prompt containing the bare word gets a confident arrow.",
+    "impact": "The hook runs on every prompt and injects wrong routes for ordinary questions. Confirmed via routePrompt: 'what does this commit do' -> commit (95); 'push back on this idea' -> push (95); 'what is the push notification service' -> push (95); 'пушкин написал стихи' -> push (65); 'learn from this review' -> review-orchestrator (65). This is the 'confident wrong name' the module comment says the floor prevents.",
+    "quote": "export const ROUTING_FLOOR = TRIGGER_BASE + TRIGGER_PER_TOKEN;"
+  },
+  {
+    "id": "G7",
+    "file": "src/commands/skills.ts",
+    "line": 640,
+    "severity": "major",
+    "problem": "The diff adds `[\"провер\", [\"check\",\"verify\"]]` to stop 'check' meaning 'review', but leaves the older `[\"проверк\", [\"review\",\"verify\",\"check\"]]` entry in place. Noun forms (проверка/проверки/проверку) still expand to `review`, and the new one-word \"review\" trigger on review-orchestrator then fires from that single word.",
+    "impact": "The incident the change and its test name as fixed ('проверь почту' routed to a reviewer) still happens for the noun form: routePrompt('проверка почты') and routePrompt('проверку сделай') both return review-orchestrator at 65 and the hook injects it. route-synonyms.test.ts only asserts the imperative 'проверь'.",
+    "quote": "[\"проверк\", [\"review\", \"verify\", \"check\"]],"
+  },
+  {
+    "id": "G8",
+    "file": "src/ctx/hook-classify.ts",
+    "line": 179,
+    "severity": "minor",
+    "problem": "For non-search commands operandsAllowed is 0, so the script operand of sed/awk is treated as a file path and the stage is never a stdin filter, although VALUE_FLAGS carries sed/awk entries for exactly this purpose. Likewise a piped `rg -r <replacement> pat` is read as recursive. Confirmed: `echo x | sed s/a/b/`, `echo x | awk \"{print $1}\"`, `bun test | rg -r X foo` all block.",
+    "impact": "The change's headline claim (filtering piped output is not a code search and must pass) does not hold for the two most common stream filters after grep/head/tail: `bun test 2>&1 | sed -n '1,40p'` or `... | awk '{print $1}'` is still refused. hook-pipeline.test.ts has no sed/awk specimen, so the gap is untested.",
+    "quote": "let operandsAllowed = searchLike ? 1 : 0;"
+  },
+  {
+    "id": "G9",
+    "file": "src/gdskills/bundled/skills/review/review-orchestrator/review-context.schema.json",
+    "line": 164,
+    "severity": "minor",
+    "problem": "`sha` and `pr` are typed [\"string\",\"null\"] and the if/then only adds them to `required`, which checks presence. Confirmed with validateJson: a cross_repo entry `{state:\"merged\", sha:null,...}` and `{state:\"open\", pr:null,...}` both validate with zero errors; so does `sha: \"\"` and `facts: [\"\"]`.",
+    "impact": "The rule SKILL.md states ('state: merged requires the sha, state: open requires the pr') is satisfiable by writing null, so an unpinned producer still validates clean - the 'rule that cannot be violated' defect the change says it removes. The tests only delete the key, never set it to null.",
+    "quote": "\"sha\": {\n            \"type\": [\n              \"string\",\n              \"null\"\n            ],"
+  },
+  {
+    "id": "G10",
+    "file": "src/commands/orient-stdin.test.ts",
+    "line": 100,
+    "severity": "minor",
+    "problem": "The test named 'a routed prompt is the orientation PLUS the block, inside the envelope' runs the claude runtime, whose format is plainStdout (identity), and asserts only two toContain checks identical to the first test in the file. It cannot distinguish appending before format from appending after it.",
+    "impact": "The cursor-envelope regression described in orient.ts (block emitted after the closing brace of {\"additional_context\":...}) would pass this test unchanged; nothing drives a JSON-envelope runtime with a prompt payload.",
+    "quote": "expect(out).toContain(\"Routing for THIS request\");\n    expect(out).toContain(\"review-orchestrator\");"
+  },
+  {
+    "id": "G11",
+    "file": "src/ctx/orient-routing.test.ts",
+    "line": 30,
+    "severity": "minor",
+    "problem": "'bare token overlap does not clear the floor' asserts ROUTING_FLOOR > 40 and that every match routePrompt returned has score >= ROUTING_FLOOR - the filter's own predicate read back. No query with high token overlap and no trigger is ever routed.",
+    "impact": "Removing the `reasons.includes(\"trigger\")` condition (the thing that actually stops six overlapping tokens clearing the floor, per the module comment) leaves this test green.",
+    "quote": "expect(match.score).toBeGreaterThanOrEqual(ROUTING_FLOOR);"
+  },
+  {
+    "id": "G12",
+    "file": "src/commands/skills.ts",
+    "line": 439,
+    "severity": "minor",
+    "problem": "Two doc comments describe a rule the code does not implement: triggerSpecificity's header (439-441) and scoreBundledSkillRoute (523-524) say the order-free path 'requires at least two' surviving tokens, but the code returns 1 for a one-token trigger (`sources.size >= triggerTokens.length`). Likewise rankSkillsForQuery is documented as 'one ranking ... for every caller' while routeProjectSkills (374-408) and the corpus test's topSkill still carry their own copies of the pipeline.",
+    "impact": "The stated guard against a trigger 'degenerating into a bare generic word' is absent, which is what lets a single synonym-expanded word fire the new one-word triggers (G6/G7); and the CLI route and the hook can drift again because the duplication the comment says was removed is still there.",
+    "quote": "order-free path counts only surviving tokens and requires at least two of\n * them"
+  }
+]

@@ -1,0 +1,18 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "match", "gid": "G2", "why": "G2 reports the log-only cursor catch that returns the entry as committed, leaving it past the cursor and hidden from the changelog." },
+    { "tid": "T2", "verdict": "match", "gid": "G4", "why": "G4 flags the synchronous file I/O in the ExecutionPlanHistory constructor and that it cannot be built from loaded entries." },
+    { "tid": "T3", "verdict": "miss", "gid": null, "why": "No candidate addresses the if/else-if dispatch in describeChange." },
+    { "tid": "T4", "verdict": "match", "gid": "G5", "why": "G5 reports diffExecutionPlans filling a caller-supplied output array and returning void." },
+    { "tid": "T5", "verdict": "miss", "gid": null, "why": "No candidate raises the transition/change naming inconsistency." },
+    { "tid": "T6", "verdict": "match", "gid": "G3", "why": "G3 reports parseEntry's generic 'Invalid entry' error lacking file path and line context." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "valid", "why": "Verified at execution-plan.ts:177-178: an appendFile failure in recordPlanRevision rejects the write after plan.json was already replaced, skipping notify and causing a spurious conflict on retry; distinct from T1's cursor swallow." },
+    { "gid": "G2", "label": "truth", "why": "Matches T1." },
+    { "gid": "G3", "label": "truth", "why": "Matches T6." },
+    { "gid": "G4", "label": "truth", "why": "Matches T2." },
+    { "gid": "G5", "label": "truth", "why": "Matches T4." },
+    { "gid": "G6", "label": "valid", "why": "The cursor doc claims an orphaned line from a crashed writer is never shown, but the next successful write raises the cursor and the revision<=committed filter then surfaces it; a real false guarantee in the new code." }
+  ]
+}

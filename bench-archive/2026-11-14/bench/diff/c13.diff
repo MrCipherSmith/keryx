@@ -1,0 +1,2222 @@
+diff --git a/docs/docs/cli-reference.md b/docs/docs/cli-reference.md
+index 58ba4156e..b1886c333 100644
+--- a/docs/docs/cli-reference.md
++++ b/docs/docs/cli-reference.md
+@@ -1171,10 +1171,12 @@ registry plus the operator-defined entries in `llm-providers.json` — plus, sin
+ flow 304, `test` and `remove`: the CLI form of the `/connect` row buttons
+ ("Test connection" and "Disconnect"). `list` and `cross-family` stay read-only
+ and network-free, exactly as before; `test` makes ONE network call (the live
+-`/models` probe) and `remove` writes to disk only after confirmation.
++`/models` probe), `status` (flow 309) reads or refreshes the live model
++catalog, and `remove` writes to disk only after confirmation.
+ 
+ ```
+ keryx providers list [--json]
++keryx providers status [--json] [--refresh]
+ keryx providers cross-family [--opt-in] [--session-provider <id>] [--session-model <id>] [--from-shell-config] [--json]
+ keryx providers test <name> [--json]
+ keryx providers remove <name> [--yes]
+@@ -1183,10 +1185,21 @@ keryx providers remove <name> [--yes]
+ | Subcommand | Flags | Description |
+ |---|---|---|
+ | `list` | `--json` | Providers this operator has actually **configured** — a custom entry in `llm-providers.json`, or a built-in with a resolvable credential — and the model family of each. Read-only, network-free. |
++| `status` | `--json`, `--refresh` | The **live provider catalog** (flow 309): per connected provider, its status (`ok` / `auth-failed` / `unreachable` / `timeout` / `not-supported`), its live model count (or the curated offline count, clearly marked, when the live fetch failed), its balance when the provider exposes one (OpenRouter, DeepSeek — never a guessed number), and how old that reading is. An unconnected provider is never probed and never listed. A fresh cache (already refreshed by `keryx shell` starting up, `/connect`, or `providers test`) answers immediately; `--refresh` forces a fresh probe of every connected provider now. |
+ | `cross-family` | `--opt-in`, `--session-provider <id>`, `--session-model <id>`, `--from-shell-config`, `--json` | Decide whether review may run on a different model family than authored the change, and print the record the round should carry. The authoring session comes from the flags, else `KERYX_SESSION_PROVIDER`/`KERYX_SESSION_MODEL`; the selection `keryx shell` persisted only with `--from-shell-config`. |
+-| `test` | `<name>`, `--json` | Run that provider's live model-list probe (the same one `/connect` uses to decide what's "connected") and report `ok` with the model count, or the humanized failure reason. Exits non-zero on a failed probe. |
++| `test` | `<name>`, `--json` | Run that provider's live model-list probe (the same one `/connect` uses to decide what's "connected") and report `ok` with the model count, or the humanized failure reason. Exits non-zero on a failed probe. Also updates that provider's entry in the `status` catalog. |
+ | `remove` | `<name>`, `--yes` | **Disconnect** that provider: remove its saved API key, its OAuth grant, or its `llm-providers.json` entry (together with any saved base-URL/model-param override) — whichever one it actually has. Asks for confirmation on a terminal; refuses without one unless `--yes`. A provider whose only credential is an environment variable you exported yourself is refused outright — the command names the exact variable to `unset`. Disconnecting removes only keryx's LOCAL copy of the credential: an OAuth grant is deleted from `auth.json` with no vendor revoke call, and a removed API key simply stops being read (the key itself stays valid at the vendor until you revoke it there yourself). |
+ 
++### Live provider catalog
++
++`keryx shell` refreshes this catalog during startup loading (a "checking
++providers…" step that never blocks the first prompt — a hung provider just
++never fills in), and `/routing`'s flat model picker and `/connect` read the
++same cache instead of a stale, hardcoded model list. The cache lives at
++`provider-catalog.json` in the per-user keryx config directory, mode `0600`,
++and never carries a credential — only `name`/`status`/`models`/`balance`/
++`fetchedAt`.
++
+ ### Cross-family review
+ 
+ Reviewing with a different model family than authored the code is worth ~8–10
+diff --git a/docs/docs/commands-by-task.md b/docs/docs/commands-by-task.md
+index 911a4432b..a810aa281 100644
+--- a/docs/docs/commands-by-task.md
++++ b/docs/docs/commands-by-task.md
+@@ -22,7 +22,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
+ | CLI command | Summary |
+ |---|---|
+ | `keryx auth` | Subscription login (SuperGrok, ChatGPT Plus/Pro, GitHub Copilot) and API-key status. |
+-| `keryx providers` | Providers this operator has configured, and cross-family review eligibility. |
++| `keryx providers` | Providers this operator has configured, the live model/balance catalog (status), and cross-family review eligibility. |
+ | `keryx routing` | Category -> model routing table: list, set, unset (per-user default; --project for the project layer). |
+ 
+ | Shell command | Summary |
+diff --git a/docs/requirements/keryx-shell-split/source-text-audit-inventory.md b/docs/requirements/keryx-shell-split/source-text-audit-inventory.md
+index 208b20005..62d79d40f 100644
+--- a/docs/requirements/keryx-shell-split/source-text-audit-inventory.md
++++ b/docs/requirements/keryx-shell-split/source-text-audit-inventory.md
+@@ -365,6 +365,7 @@ tui/busy-dispatch.test.ts | tui/tui-shell.ts | 1
+ tui/connect-provider-buttons.test.ts | tui/tui-shell.ts | 1
+ tui/execution-plan-panel.test.ts | tui/tui-shell.ts | 1
+ tui/help-first-run.test.ts | tui/tui-shell.ts | 1
++tui/provider-catalog-startup.test.ts | tui/tui-shell.ts | 1
+ tui/shell-fallback.test.ts | tui/tui-shell.ts | 1
+ tui/tui-bus.test.ts | tui/tui-shell.ts | 1
+ tui/tui-hold.test.ts | tui/tui-shell.ts | 1
+diff --git a/src/cli.test.ts b/src/cli.test.ts
+index e91e2f3c4..cf34c48fa 100644
+--- a/src/cli.test.ts
++++ b/src/cli.test.ts
+@@ -93,6 +93,11 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
+     "  help      Grouped command help by task: every verb, in nine onboarding-ordered groups\n",
+     "  keryx providers test <name> [--json]\n",
+     "  keryx providers remove <name> [--yes] [--json]\n",
++    // Flow 309: `keryx providers status` — the live provider catalog (model
++    // list + balance per connected provider, `/routing`'s picker and
++    // `/connect` now read the same cache). A subcommand of an existing verb,
++    // so USAGE_BODY only — same shape as flow 304's `test`/`remove` above.
++    "  keryx providers status [--json] [--refresh]\n",
+     // Flow 305: the routing table (category -> model), `keryx routing`, plus
+     // its summary row — a brand-new verb, so both a USAGE_BODY block and a
+     // Commands: summary row were added (mirrors flow 303's `help`, not flow
+diff --git a/src/cli.ts b/src/cli.ts
+index 2eaeddb49..57ca210ba 100755
+--- a/src/cli.ts
++++ b/src/cli.ts
+@@ -230,6 +230,7 @@ export const USAGE_BODY = `Usage:
+   keryx sync [--apply]
+   keryx sync install-hooks | uninstall-hooks
+   keryx providers list [--json]
++  keryx providers status [--json] [--refresh]
+   keryx providers cross-family [--opt-in] [--json]
+   keryx providers test <name> [--json]
+   keryx providers remove <name> [--yes] [--json]
+diff --git a/src/commands/providers.balance.test.ts b/src/commands/providers.balance.test.ts
+index a361fd6dc..61be00997 100644
+--- a/src/commands/providers.balance.test.ts
++++ b/src/commands/providers.balance.test.ts
+@@ -17,7 +17,7 @@ function jsonFetch(body: unknown, ok = true): typeof fetch {
+ describe("balance capability", () => {
+   test("deepseek and openrouter expose balance endpoints", () => {
+     expect(balanceCapableProvider("deepseek")?.balancePath).toBe("/user/balance");
+-    expect(balanceCapableProvider("openrouter")?.balancePath).toBe("/api/v1/credits");
++    expect(balanceCapableProvider("openrouter")?.balancePath).toBe("/v1/key");
+     expect(balanceCapableProvider("zai")).toBeUndefined();
+     expect(balanceCapableProvider("groq")).toBeUndefined();
+     expect(balanceCapableProvider("grok")).toBeUndefined();
+@@ -36,17 +36,45 @@ describe("balance capability", () => {
+     expect(balance?.exact).toBe(true);
+   });
+ 
+-  test("openrouter balance parse (used + total -> remaining)", async () => {
++  test("openrouter balance parse: /v1/key with a limit -> remaining = limit_remaining", async () => {
+     const provider = balanceCapableProvider("openrouter");
+     expect(provider).toBeDefined();
+     const balance = await fetchProviderBalance(
+-      jsonFetch({ credits: { total: 10, used: 2.5, remaining: 7.5, currency: "USD" } }),
++      jsonFetch({ data: { limit: 10, usage: 2.5, limit_remaining: 7.5 } }),
+       provider!,
+       "sk-test",
+     );
++    expect(balance?.currency).toBe("USD");
+     expect(balance?.total).toBe(10);
+     expect(balance?.used).toBe(2.5);
+     expect(balance?.remaining).toBe(7.5);
++    expect(balance?.exact).toBe(true);
++  });
++
++  test("openrouter balance parse: /v1/key with no limit (unlimited) falls back to /v1/credits -> remaining = total_credits - total_usage", async () => {
++    const provider = balanceCapableProvider("openrouter");
++    expect(provider).toBeDefined();
++    const calls: string[] = [];
++    const fetchFn = (async (url: string) => {
++      calls.push(url);
++      if (url.endsWith("/v1/key")) {
++        return new Response(JSON.stringify({ data: { limit: null, usage: 2.5, limit_remaining: null } }), {
++          status: 200,
++          headers: { "content-type": "application/json" },
++        });
++      }
++      return new Response(JSON.stringify({ data: { total_credits: 55, total_usage: 45.19 } }), {
++        status: 200,
++        headers: { "content-type": "application/json" },
++      });
++    }) as unknown as typeof fetch;
++    const balance = await fetchProviderBalance(fetchFn, provider!, "sk-test");
++    expect(balance?.total).toBe(55);
++    expect(balance?.used).toBe(45.19);
++    expect(balance?.remaining).toBeCloseTo(9.81, 5);
++    // Both endpoints were hit — the key call first, then the credits fallback.
++    expect(calls.some((u) => u.endsWith("/v1/key"))).toBe(true);
++    expect(calls.some((u) => u.endsWith("/v1/credits"))).toBe(true);
+   });
+ 
+   test("no balance endpoint -> undefined, non-2xx -> undefined", async () => {
+diff --git a/src/commands/providers.status.test.ts b/src/commands/providers.status.test.ts
+new file mode 100644
+index 000000000..dca9683fd
+--- /dev/null
++++ b/src/commands/providers.status.test.ts
+@@ -0,0 +1,105 @@
++// Flow 309 (AC7) — `keryx providers status [--json] [--refresh]`. No real
++// network anywhere: every provider here is connected only because the test
++// injects both `env` (the credential) and `fetch` (the live probe).
++
++import { expect, test } from "bun:test";
++import { mkdtempSync } from "node:fs";
++import { tmpdir } from "node:os";
++import path from "node:path";
++import { providersCommand } from "./providers";
++
++function tempDir(): string {
++  return mkdtempSync(path.join(tmpdir(), "keryx-providers-status-cli-"));
++}
++
++async function withCapturedLogs<T>(fn: () => Promise<T>): Promise<{ result: T; logs: string[] }> {
++  const logs: string[] = [];
++  const orig = console.log;
++  console.log = (line: string) => logs.push(line);
++  try {
++    const result = await fn();
++    return { result, logs };
++  } finally {
++    console.log = orig;
++  }
++}
++
++const fetchOk = (async (url: string) => {
++  if (url.includes("/api/tags")) return { ok: false } as Response;
++  if (url.includes("/user/balance")) {
++    return { ok: true, json: async () => ({ balance_infos: [{ currency: "USD", total_balance: "6.19" }] }) } as Response;
++  }
++  return { ok: true, json: async () => ({ data: [{ id: "deepseek-chat" }, { id: "deepseek-reasoner" }] }) } as Response;
++}) as unknown as typeof fetch;
++
++test("keryx providers status --json: reports a connected provider's status, model count, balance and fetchedAt", async () => {
++  const dir = tempDir();
++  const { logs } = await withCapturedLogs(async () => {
++    await providersCommand(["status", "--json"], { fetch: fetchOk, env: { DEEPSEEK_API_KEY: "sk-test" }, dir });
++  });
++  const parsed = JSON.parse(logs.join("\n")) as { fetchedAt: string; providers: Array<{ name: string; status: string; models: string[]; balance?: { total: number } }> };
++  expect(Number.isFinite(Date.parse(parsed.fetchedAt))).toBe(true);
++  const deepseek = parsed.providers.find((p) => p.name === "deepseek");
++  expect(deepseek?.status).toBe("ok");
++  expect(deepseek?.models).toEqual(["deepseek-chat", "deepseek-reasoner"]);
++  expect(deepseek?.balance?.total).toBe(6.19);
++  // An unconnected provider (no key anywhere in `env`) never appears.
++  expect(parsed.providers.some((p) => p.name === "openrouter")).toBe(false);
++});
++
++test("keryx providers status (human): names the provider, status, model count and age", async () => {
++  const dir = tempDir();
++  const { logs } = await withCapturedLogs(async () => {
++    await providersCommand(["status"], { fetch: fetchOk, env: { DEEPSEEK_API_KEY: "sk-test" }, dir });
++  });
++  const text = logs.join("\n");
++  expect(text).toContain("deepseek");
++  expect(text).toContain("ok");
++  expect(text).toContain("2 model(s)");
++  expect(text).toContain("fetched");
++});
++
++test("keryx providers status: with no credential configured, nothing shows — the synthetic fake provider is excluded and never a guessed real one", async () => {
++  const dir = tempDir();
++  const { logs } = await withCapturedLogs(async () => {
++    await providersCommand(["status"], { fetch: fetchOk, env: {}, dir });
++  });
++  const text = logs.join("\n");
++  expect(text).toContain("none — no provider is connected");
++  expect(text).not.toContain("fake");
++  expect(text).not.toContain("deepseek");
++});
++
++test("keryx providers status --refresh: bypasses a fresh cache and re-probes", async () => {
++  const dir = tempDir();
++  let calls = 0;
++  const countingFetch = (async (url: string, init?: RequestInit) => {
++    if (!url.includes("/api/tags")) calls += 1;
++    return fetchOk(url, init);
++  }) as unknown as typeof fetch;
++
++  await providersCommand(["status", "--json"], { fetch: countingFetch, env: { DEEPSEEK_API_KEY: "sk-test" }, dir });
++  const afterFirst = calls;
++  expect(afterFirst).toBeGreaterThan(0);
++
++  // Without --refresh, the just-written FRESH cache answers with no new call.
++  await providersCommand(["status", "--json"], { fetch: countingFetch, env: { DEEPSEEK_API_KEY: "sk-test" }, dir });
++  expect(calls).toBe(afterFirst);
++
++  // --refresh forces a new probe.
++  await providersCommand(["status", "--json", "--refresh"], { fetch: countingFetch, env: { DEEPSEEK_API_KEY: "sk-test" }, dir });
++  expect(calls).toBeGreaterThan(afterFirst);
++});
++
++test("keryx providers test also updates the SAME catalog cache `providers status` reads (AC3)", async () => {
++  const dir = tempDir();
++  await providersCommand(["test", "deepseek", "--json"], { fetch: fetchOk, env: { DEEPSEEK_API_KEY: "sk-test" }, dir });
++
++  const { logs } = await withCapturedLogs(async () => {
++    // No key in `env` this time — proves the STATUS command is reading the
++    // cache `test` just wrote, not re-deriving connectedness from `env`.
++    await providersCommand(["status", "--json"], { fetch: fetchOk, env: {}, dir });
++  });
++  const parsed = JSON.parse(logs.join("\n")) as { providers: Array<{ name: string; status: string }> };
++  expect(parsed.providers.find((p) => p.name === "deepseek")?.status).toBe("ok");
++});
+diff --git a/src/commands/providers.ts b/src/commands/providers.ts
+index ba7d7cd6a..d058b3526 100644
+--- a/src/commands/providers.ts
++++ b/src/commands/providers.ts
+@@ -37,6 +37,12 @@ import {
+ } from "../lib/shell-config";
+ import { optionValue } from "../lib/args";
+ import { confirm as ttyConfirm } from "../lib/prompt";
++import {
++  classifyModelsStatus,
++  formatCatalogAge,
++  updateProviderCatalogEntry,
++  type ProviderCatalogEntry,
++} from "../harness/provider-catalog-cache";
+ 
+ /** A hosted OpenAI-compatible provider offered in the picker. */
+ export interface OpenAiCompatProvider {
+@@ -315,8 +321,15 @@ export const OPENAI_COMPAT_PROVIDERS: readonly OpenAiCompatProvider[] = [
+     envKey: "OPENROUTER_API_KEY",
+     models: ["openai/gpt-4o-mini", "google/gemini-2.0-flash-001", "qwen/qwen-2.5-7b-instruct", "meta-llama/llama-3.1-8b-instruct"],
+     note: "hosted · 400+ models",
+-    // GET /api/v1/credits -> { credits: { total, used, remaining, total_usd, ... } }
+-    balancePath: "/api/v1/credits",
++    // GET /v1/key -> { data: { limit, limit_remaining, usage, ... } } (limit is
++    // null when the key has no spending cap — see `fetchProviderBalance`'s
++    // fallback to /v1/credits -> { data: { total_credits, total_usage } }).
++    // Verified live against openrouter.ai (2026-09-25) — the PREVIOUS
++    // `/api/v1/credits` path here 404'd against this `baseUrl` (which already
++    // ends in `/api`, same as `DEFAULT_MODELS_PATH` above), and the previous
++    // parser read `body.credits.{total,used,remaining}`, a shape neither live
++    // endpoint returns (flow 309 review, finding 1).
++    balancePath: "/v1/key",
+     balanceKind: "openrouter",
+   },
+   {
+@@ -606,6 +619,75 @@ export async function fetchOpenAiCompatModels(
+   return result.models;
+ }
+ 
++/**
++ * Largest a `/models` response body may be before it is refused rather than
++ * parsed (flow 309, AC1 — the live catalog reuses this exact fetch and needs
++ * a response-size cap on it). 4 MB is far above any real gateway's model list
++ * (OpenRouter's ~700 KB today, 400+ models) and far below what would matter
++ * for memory.
++ *
++ * Guarded so it only engages against a REAL streamable `Response` (one with
++ * `.headers`/`.body`) — an injected test fake shaped `{ ok, json() }` with
++ * neither falls straight through to the unbounded `res.json()` path exactly
++ * as before this constant existed, so no existing caller's fake needs to grow
++ * a `headers`/`body` it never had.
++ */
++export const MODELS_RESPONSE_BODY_LIMIT_BYTES = 4_000_000;
++
++/**
++ * Parse a `/models` response as JSON, refusing a body over `maxBytes`. Reads
++ * a declared `content-length` first; absent or lower than the truth (chunked
++ * transfer), the stream is read incrementally and abandoned once it crosses
++ * the bound — so an unbounded/compressed body cannot be read to completion
++ * regardless of what its header claimed.
++ */
++async function boundedJsonBody(res: Response, maxBytes: number): Promise<{ ok: true; value: unknown } | { ok: false }> {
++  const headers = (res as { headers?: { get?: (name: string) => string | null } }).headers;
++  const declared = typeof headers?.get === "function" ? headers.get("content-length") : null;
++  if (declared !== null && /^\d+$/.test(declared) && Number(declared) > maxBytes) {
++    const body = (res as { body?: ReadableStream<Uint8Array> | null }).body;
++    if (body != null && typeof body.cancel === "function") {
++      await body.cancel().catch(() => {});
++    }
++    return { ok: false };
++  }
++  const body = (res as { body?: ReadableStream<Uint8Array> | null }).body;
++  if (body == null || typeof body.getReader !== "function") {
++    // No streamable body on this Response (an injected fake, or a runtime
++    // without ReadableStream support) — the unbounded fallback every caller
++    // already used before this cap existed.
++    try {
++      return { ok: true, value: await res.json() };
++    } catch {
++      return { ok: false };
++    }
++  }
++  const reader = body.getReader();
++  const decoder = new TextDecoder();
++  let size = 0;
++  let text = "";
++  try {
++    for (;;) {
++      const chunk = await reader.read();
++      if (chunk.done) break;
++      size += chunk.value.byteLength;
++      if (size > maxBytes) {
++        await reader.cancel().catch(() => {});
++        return { ok: false };
++      }
++      text += decoder.decode(chunk.value, { stream: true });
++    }
++    text += decoder.decode();
++  } finally {
++    reader.releaseLock();
++  }
++  try {
++    return { ok: true, value: JSON.parse(text) };
++  } catch {
++    return { ok: false };
++  }
++}
++
+ /**
+  * Same as {@link fetchOpenAiCompatModels} but reports whether the list came from
+  * the live endpoint or the curated fallback (for UI status lines / tests).
+@@ -641,7 +723,11 @@ export async function fetchOpenAiCompatModelsDetailed(
+       const kind = res.status === 401 || res.status === 403 ? "rejected" : "http";
+       return fallback({ kind, status: res.status, ...(detail === undefined ? {} : { detail }) });
+     }
+-    const body = (await res.json()) as { data?: Array<{ id?: unknown; name?: unknown }> } | null;
++    const bounded = await boundedJsonBody(res, MODELS_RESPONSE_BODY_LIMIT_BYTES);
++    if (!bounded.ok) {
++      return fallback({ kind: "http", status: res.status, detail: "response too large or malformed" });
++    }
++    const body = bounded.value as { data?: Array<{ id?: unknown; name?: unknown }> } | null;
+     const ids = Array.isArray(body?.data)
+       ? body.data
+           .map((m) => {
+@@ -747,34 +833,94 @@ function parseDeepSeekBalance(body: unknown): ProviderBalance | undefined {
+   return undefined;
+ }
+ 
+-function parseOpenRouterBalance(body: unknown): ProviderBalance | undefined {
++/**
++ * Parse `GET /v1/key`'s response: the spending LIMIT configured on the key
++ * actually in use, and how much of it remains. `data.limit` is `null` when
++ * the key has no cap ("unlimited") — there is then no per-key budget to
++ * report, and `undefined` here tells {@link fetchProviderBalance} to fall
++ * back to {@link parseOpenRouterCreditsBalance}.
++ *
++ * Verified live against openrouter.ai (2026-09-25): `{ data: { limit,
++ * limit_remaining, usage, ... } }` — no `credits` wrapper, and no `currency`
++ * field (OpenRouter is always USD). The PREVIOUS parser read
++ * `body.credits.{total,used,remaining}`, which matches neither this nor the
++ * `/v1/credits` shape below — it silently returned `undefined` on every real
++ * response (flow 309 review, finding 1).
++ */
++function parseOpenRouterKeyBalance(body: unknown): ProviderBalance | undefined {
++  if (typeof body !== "object" || body === null) {
++    return undefined;
++  }
++  const data = (body as { data?: unknown }).data;
++  if (typeof data !== "object" || data === null) {
++    return undefined;
++  }
++  const limit = (data as { limit?: unknown }).limit;
++  if (typeof limit !== "number" || !Number.isFinite(limit)) {
++    // null (unlimited) or absent — no per-key budget to report.
++    return undefined;
++  }
++  const usage = Number((data as { usage?: unknown }).usage);
++  const limitRemaining = Number((data as { limit_remaining?: unknown }).limit_remaining);
++  return {
++    currency: "USD",
++    total: limit,
++    ...(Number.isFinite(usage) ? { used: usage } : {}),
++    ...(Number.isFinite(limitRemaining) ? { remaining: limitRemaining } : {}),
++    exact: true,
++  };
++}
++
++/**
++ * Parse `GET /v1/credits`'s response: the account's total purchased credits
++ * and lifetime usage. Verified live (2026-09-25): `{ data: { total_credits,
++ * total_usage } }`. Used as OpenRouter's balance ONLY when the key has no
++ * spending limit — with no cap, the account's remaining funds ARE what
++ * "balance" means, since the key can spend all of it.
++ */
++function parseOpenRouterCreditsBalance(body: unknown): ProviderBalance | undefined {
+   if (typeof body !== "object" || body === null) {
+     return undefined;
+   }
+-  const credits = (body as { credits?: unknown }).credits;
+-  if (typeof credits !== "object" || credits === null) {
++  const data = (body as { data?: unknown }).data;
++  if (typeof data !== "object" || data === null) {
+     return undefined;
+   }
+-  const total = Number((credits as { total?: unknown }).total);
+-  const used = Number((credits as { used?: unknown }).used);
+-  if (!Number.isFinite(total)) {
++  const totalCredits = Number((data as { total_credits?: unknown }).total_credits);
++  if (!Number.isFinite(totalCredits)) {
+     return undefined;
+   }
+-  const usedField = Number.isFinite(used) ? { used } : {};
+-  const remaining = Number.isFinite(used) ? total - used : undefined;
++  const totalUsage = Number((data as { total_usage?: unknown }).total_usage);
++  const remaining = Number.isFinite(totalUsage) ? totalCredits - totalUsage : undefined;
+   return {
+-    currency: String((credits as { currency?: unknown }).currency ?? "USD"),
+-    total,
+-    ...usedField,
++    currency: "USD",
++    total: totalCredits,
++    ...(Number.isFinite(totalUsage) ? { used: totalUsage } : {}),
+     ...(remaining !== undefined ? { remaining } : {}),
+     exact: true,
+   };
+ }
+ 
++/**
++ * Largest a balance-endpoint response body may be before it is refused
++ * rather than parsed — the same defence {@link MODELS_RESPONSE_BODY_LIMIT_BYTES}
++ * gives `/models` (flow 309 review, finding 5). A real balance payload here
++ * is well under 2 KB (OpenRouter's `/v1/key`/`/v1/credits`, DeepSeek's
++ * `/user/balance`); 1 MB is far above that and far below what would matter
++ * for memory.
++ */
++export const BALANCE_RESPONSE_BODY_LIMIT_BYTES = 1_000_000;
++
+ /**
+  * Fetch the current balance for a provider that exposes a balance endpoint.
+  * Returns `undefined` for providers without one, on network error, or on a
+- * non-2xx / malformed response. Never throws.
++ * non-2xx / malformed / oversized response. Never throws.
++ *
++ * OpenRouter is a two-call case (flow 309 review, finding 1): `/v1/key` (the
++ * registry's `balancePath`) is tried first for the key's own spending limit;
++ * only when that key has NO limit (`data.limit: null`) does this fall back
++ * to `/v1/credits` for the account's total funds. Every other `balanceKind`
++ * makes exactly one request, as before.
+  */
+ export async function fetchProviderBalance(
+   fetchFn: typeof fetch,
+@@ -785,28 +931,43 @@ export async function fetchProviderBalance(
+   if (provider.balancePath === undefined || provider.balanceKind === undefined) {
+     return undefined;
+   }
+-  const url = `${provider.baseUrl.replace(/\/+$/, "")}${provider.balancePath}`;
+   const timeoutMs = opts?.timeoutMs ?? BALANCE_FETCH_TIMEOUT_MS;
+-  const controller = new AbortController();
+-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+-  try {
+-    const init: RequestInit = { signal: controller.signal };
+-    if (apiKey !== undefined && apiKey.length > 0) {
+-      init.headers = { authorization: `Bearer ${apiKey}` };
+-    }
+-    const res = await fetchFn(url, init);
+-    if (!res.ok) {
++  const fetchBalanceBody = async (balancePath: string): Promise<unknown | undefined> => {
++    const url = `${provider.baseUrl.replace(/\/+$/, "")}${balancePath}`;
++    const controller = new AbortController();
++    const timer = setTimeout(() => controller.abort(), timeoutMs);
++    try {
++      const init: RequestInit = { signal: controller.signal };
++      if (apiKey !== undefined && apiKey.length > 0) {
++        init.headers = { authorization: `Bearer ${apiKey}` };
++      }
++      const res = await fetchFn(url, init);
++      if (!res.ok) {
++        return undefined;
++      }
++      const bounded = await boundedJsonBody(res, BALANCE_RESPONSE_BODY_LIMIT_BYTES);
++      return bounded.ok ? bounded.value : undefined;
++    } catch {
+       return undefined;
++    } finally {
++      clearTimeout(timer);
+     }
+-    const body = (await res.json()) as unknown;
+-    return provider.balanceKind === "deepseek"
+-      ? parseDeepSeekBalance(body)
+-      : parseOpenRouterBalance(body);
+-  } catch {
++  };
++
++  const body = await fetchBalanceBody(provider.balancePath);
++  if (body === undefined) {
+     return undefined;
+-  } finally {
+-    clearTimeout(timer);
+   }
++  if (provider.balanceKind === "deepseek") {
++    return parseDeepSeekBalance(body);
++  }
++  const keyBalance = parseOpenRouterKeyBalance(body);
++  if (keyBalance !== undefined) {
++    return keyBalance;
++  }
++  // The key has no spending limit — fall back to the account's total funds.
++  const creditsBody = await fetchBalanceBody("/v1/credits");
++  return creditsBody === undefined ? undefined : parseOpenRouterCreditsBalance(creditsBody);
+ }
+ 
+ /** Resolve the API key for a provider from an env-like record. */
+@@ -1072,6 +1233,10 @@ export async function providersCommand(args: string[], deps: ProvidersCommandDep
+     runProvidersList(args.slice(1));
+     return;
+   }
++  if (command === "status") {
++    await runProvidersStatus(args.slice(1), deps);
++    return;
++  }
+   if (command === "cross-family") {
+     runCrossFamily(args.slice(1));
+     return;
+@@ -1108,6 +1273,29 @@ async function runProvidersTest(args: string[], deps: ProvidersCommandDeps): Pro
+   const fetchFn = deps.fetch ?? globalThis.fetch;
+   const result = await testProviderConnection(provider, fetchFn, env);
+   const label = provider.label ?? provider.name;
++  // Flow 309 (AC3): `providers test`/the `[Test]` row button keep the SAME
++  // on-disk catalog cache `/routing`, `/connect` and `providers status` read
++  // current for THIS one provider, without a full re-refresh of every other
++  // connected provider. `updateProviderCatalogEntry` is itself best-effort
++  // (never throws) — awaited anyway so the write is deterministic rather
++  // than a fire-and-forget task that could outlive a caller's temp dir
++  // (tests) or the process (CLI).
++  const catalogStatus = classifyModelsStatus(result);
++  const apiKeyForBalance = providerApiKey(provider, env) ?? provider.apiKey;
++  const catalogBalance =
++    balanceCapableProvider(name) !== undefined
++      ? await fetchProviderBalance(fetchFn, provider, apiKeyForBalance, { timeoutMs: BALANCE_FETCH_TIMEOUT_MS }).catch(() => undefined)
++      : undefined;
++  const catalogEntry: ProviderCatalogEntry = {
++    name,
++    status: catalogStatus,
++    models: catalogStatus === "ok" ? result.models : [],
++    fallbackModels: [...provider.models],
++    fetchedAt: new Date().toISOString(),
++    ...(provider.label !== undefined ? { label: provider.label } : {}),
++    ...(catalogBalance !== undefined ? { balance: catalogBalance } : {}),
++  };
++  await updateProviderCatalogEntry(catalogEntry, dir);
+   if (args.includes("--json")) {
+     console.log(
+       JSON.stringify(
+@@ -1197,6 +1385,68 @@ async function runProvidersRemove(args: string[], deps: ProvidersCommandDeps): P
+   );
+ }
+ 
++/**
++ * `keryx providers status [--json] [--refresh]` (flow 309, AC7): the live
++ * provider catalog — per connected provider, its status, model count and
++ * balance (when known), and the age of that reading. `--refresh` forces a
++ * fresh probe of every connected provider (bypasses the cache's TTL,
++ * mirroring `providers test`'s single-provider probe but for all of them);
++ * without it, a fresh cache answers immediately and only a stale/missing one
++ * triggers a probe (AC3).
++ */
++async function runProvidersStatus(args: string[], deps: ProvidersCommandDeps): Promise<void> {
++  const dir = deps.dir;
++  const env = deps.env ?? envWithOAuthAccess(envWithSavedApiKeys(process.env, dir));
++  const fetchFn = deps.fetch ?? globalThis.fetch;
++  // Dynamic import: `../harness/provider-catalog.ts` imports THIS module
++  // (`fetchOpenAiCompatModelsDetailed`/`fetchProviderBalance`/…) to do the
++  // actual probing — a static import here would be a real circular edge.
++  // `provider-catalog-cache.ts` (statically imported above) has no such
++  // cycle, which is why `classifyModelsStatus`/`updateProviderCatalogEntry`
++  // come from there instead.
++  const { loadOrRefreshProviderCatalog } = await import("../harness/provider-catalog");
++  const catalog = await loadOrRefreshProviderCatalog(
++    { fetch: fetchFn, env, ...(dir !== undefined ? { dir } : {}) },
++    { force: args.includes("--refresh") },
++  );
++  const rows = Object.values(catalog.providers).sort((a, b) => a.name.localeCompare(b.name));
++
++  if (args.includes("--json")) {
++    console.log(JSON.stringify({ fetchedAt: catalog.fetchedAt, providers: rows }, null, 2));
++    return;
++  }
++
++  console.log("# provider catalog");
++  console.log("");
++  if (rows.length === 0) {
++    console.log("none — no provider is connected. Run `keryx providers list` to see what a credential would unlock.");
++    return;
++  }
++  for (const row of rows) {
++    const label = row.label ?? row.name;
++    const modelsNote =
++      row.status === "ok"
++        ? `${row.models.length} model(s)`
++        : row.status === "auth-failed"
++          ? "no models (credential rejected)"
++          : row.fallbackModels.length > 0
++            ? `${row.fallbackModels.length} model(s) (offline list)`
++            : "no models";
++    const balanceNote =
++      row.balance !== undefined ? ` · balance ${formatCatalogBalance(row.balance)}` : "";
++    console.log(`- ${row.name} (${label}): ${row.status} — ${modelsNote}${balanceNote} · fetched ${formatCatalogAge(row.fetchedAt)}`);
++  }
++}
++
++/** `$6.19` / `€12.00` — mirrors `src/tui/balance-panel.ts`'s `formatBalance` for the CLI's own text output (kept separate: that module lives in the TUI's client zone and this is an adapter command). */
++function formatCatalogBalance(balance: ProviderCatalogEntry["balance"]): string {
++  if (balance === undefined) return "—";
++  const amount = balance.remaining ?? balance.total;
++  const symbol =
++    balance.currency === "USD" ? "$" : balance.currency === "EUR" ? "€" : balance.currency === "GBP" ? "£" : `${balance.currency} `;
++  return `${symbol}${amount.toFixed(2)}`;
++}
++
+ function runProvidersList(args: string[]): void {
+   const env = envWithOAuthAccess(envWithSavedApiKeys());
+   const configured = configuredProviders(env).map((provider) => ({
+@@ -1335,17 +1585,25 @@ function printProvidersHelp(): void {
+ 
+ Usage:
+   keryx providers list [--json]
++  keryx providers status [--json] [--refresh]
+   keryx providers cross-family [--opt-in] [--session-provider <id>] [--session-model <id>] [--from-shell-config] [--json]
+   keryx providers test <name> [--json]
+   keryx providers remove <name> [--yes] [--json]
+ 
+ Commands:
+   list          Providers this operator has configured, and the family of each
++  status        The live catalog: per connected provider, its status (ok /
++                auth failed / unreachable / timed out / no live listing),
++                model count, balance when known, and how old that reading is.
++                A fresh cache (keryx shell startup, /routing, or /connect
++                already refreshed it) is used immediately; --refresh forces a
++                fresh probe of every connected provider now
+   cross-family  Whether review can run on a different model family than authored
+                 the change, and the record the round should carry
+   test          Run this provider's live model-list probe and report ok/count
+                 or the failure reason. Makes ONE network call — unlike list/
+-                cross-family, not network-free
++                cross-family, not network-free. Also updates that provider's
++                entry the catalog "status" reads
+   remove        Disconnect a provider: remove its saved API key, OAuth grant,
+                 or custom-provider entry. Errors on an unknown name (exit 1)
+                 before asking anything. Asks for confirmation on a terminal;
+diff --git a/src/commands/routing.ts b/src/commands/routing.ts
+index 7a7f4f3fd..8f8da913d 100644
+--- a/src/commands/routing.ts
++++ b/src/commands/routing.ts
+@@ -5,7 +5,6 @@
+ // No classifier anywhere in this file (PLAN.md Flow A). `explain`/`profile`
+ // (PRD §8) are Flow A2/B — not implemented here; `list`/`set`/`unset`/`trust`
+ // (the last two flow 305 review findings, AC10/AC11) are.
+-import { detectProviders } from "./select";
+ import { envWithSavedApiKeys } from "../lib/shell-config";
+ import {
+   loadRoutingConfig,
+@@ -33,7 +32,7 @@ export interface RoutingCommandDeps {
+   readonly cwd?: string;
+   /** Per-user config dir override — the SAME test seam `shell-config.ts` takes. Default: the real global config dir. */
+   readonly userConfigDir?: string;
+-  /** AC10: connected-provider list. Default: a real (network-free for compat providers; one `detectProviders()` call) probe, same shape `/routing`'s picker already fetches. */
++  /** AC10: connected-provider list. Default: the live provider catalog (flow 309, `../harness/provider-catalog.ts`) — same source `/routing`'s picker reads, a fresh cache answered immediately, a stale/missing one refreshed once. */
+   providers?: () => Promise<readonly { name: string; models?: readonly string[] }[]>;
+ }
+ 
+@@ -70,8 +69,14 @@ function parseCategory(raw: string | undefined): RoutingCategory | undefined {
+ }
+ 
+ async function defaultProviders(): Promise<readonly { name: string; models?: readonly string[] }[]> {
+-  const detected = await detectProviders({ fetch, env: envWithSavedApiKeys() });
+-  return detected.map((p) => ({ name: p.name, models: p.models }));
++  // Dynamic import: `../harness/provider-catalog.ts` imports `./providers`
++  // (this module's sibling, for the live `/models`/balance fetch), so a
++  // static import here — `./routing.ts` -> `../harness/provider-catalog.ts`
++  // — is fine directionally but is deferred anyway to match the same
++  // lazy-load idiom `/routing`'s own `defaultProviders` uses.
++  const { loadOrRefreshProviderCatalog, catalogToFlatPickerProviders } = await import("../harness/provider-catalog");
++  const catalog = await loadOrRefreshProviderCatalog({ fetch, env: envWithSavedApiKeys() });
++  return catalogToFlatPickerProviders(catalog);
+ }
+ 
+ async function runList(args: string[], location: RoutingConfigLocation, deps: RoutingCommandDeps): Promise<void> {
+diff --git a/src/harness/provider-catalog-cache.test.ts b/src/harness/provider-catalog-cache.test.ts
+new file mode 100644
+index 000000000..490a9906a
+--- /dev/null
++++ b/src/harness/provider-catalog-cache.test.ts
+@@ -0,0 +1,220 @@
++// Flow 309 — the on-disk provider catalog cache: round-trip, sanitization,
++// freshness, single-entry patching, status classification, and age
++// formatting. No network anywhere in this file.
++
++import { afterEach, expect, test } from "bun:test";
++import { mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
++import { rm } from "node:fs/promises";
++import { tmpdir } from "node:os";
++import path from "node:path";
++import {
++  CATALOG_CACHE_TTL_MS,
++  classifyModelsStatus,
++  formatCatalogAge,
++  isCatalogFresh,
++  loadProviderCatalogCache,
++  saveProviderCatalogCache,
++  updateProviderCatalogEntry,
++  type ProviderCatalog,
++  type ProviderCatalogEntry,
++} from "./provider-catalog-cache";
++
++const roots: string[] = [];
++afterEach(async () => {
++  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
++});
++
++function tempDir(): string {
++  const dir = mkdtempSync(path.join(tmpdir(), "keryx-provider-catalog-cache-"));
++  roots.push(dir);
++  return dir;
++}
++
++const OK_ENTRY: ProviderCatalogEntry = {
++  name: "deepseek",
++  label: "DeepSeek",
++  status: "ok",
++  models: ["deepseek-chat", "deepseek-reasoner"],
++  fallbackModels: ["deepseek-chat"],
++  fetchedAt: "2026-09-25T10:00:00.000Z",
++  balance: { currency: "USD", total: 6.19, exact: true },
++};
++
++test("saveProviderCatalogCache + loadProviderCatalogCache: round-trips a whole catalog", async () => {
++  const dir = tempDir();
++  const catalog: ProviderCatalog = { fetchedAt: OK_ENTRY.fetchedAt, providers: { deepseek: OK_ENTRY } };
++  await saveProviderCatalogCache(catalog, dir);
++  const loaded = loadProviderCatalogCache(dir);
++  expect(loaded).toEqual(catalog);
++});
++
++test("saveProviderCatalogCache: writes the cache file mode 0600 (AC3)", async () => {
++  const dir = tempDir();
++  await saveProviderCatalogCache({ fetchedAt: OK_ENTRY.fetchedAt, providers: { deepseek: OK_ENTRY } }, dir);
++  const stats = statSync(path.join(dir, "provider-catalog.json"));
++  expect(stats.mode & 0o777).toBe(0o600);
++});
++
++test("saveProviderCatalogCache: the file never contains a credential-shaped field, even hand-added", async () => {
++  const dir = tempDir();
++  await saveProviderCatalogCache({ fetchedAt: OK_ENTRY.fetchedAt, providers: { deepseek: OK_ENTRY } }, dir);
++  const raw = readFileSync(path.join(dir, "provider-catalog.json"), "utf8");
++  expect(raw).not.toMatch(/apiKey|Bearer|api_key|secret/i);
++});
++
++test("loadProviderCatalogCache: absent file returns undefined", () => {
++  const dir = tempDir();
++  expect(loadProviderCatalogCache(dir)).toBeUndefined();
++});
++
++test("loadProviderCatalogCache: malformed JSON returns undefined rather than throwing", () => {
++  const dir = tempDir();
++  writeFileSync(path.join(dir, "provider-catalog.json"), "{not json", { mode: 0o600 });
++  expect(loadProviderCatalogCache(dir)).toBeUndefined();
++});
++
++test("loadProviderCatalogCache: drops an entry with an invalid status rather than trusting a hand-edited file", () => {
++  const dir = tempDir();
++  writeFileSync(
++    path.join(dir, "provider-catalog.json"),
++    JSON.stringify({
++      fetchedAt: OK_ENTRY.fetchedAt,
++      providers: {
++        deepseek: OK_ENTRY,
++        bogus: { name: "bogus", status: "definitely-not-real", models: [], fallbackModels: [], fetchedAt: OK_ENTRY.fetchedAt },
++      },
++    }),
++    { mode: 0o600 },
++  );
++  const loaded = loadProviderCatalogCache(dir);
++  expect(loaded?.providers.deepseek).toEqual(OK_ENTRY);
++  expect(loaded?.providers.bogus).toBeUndefined();
++});
++
++test("loadProviderCatalogCache: strips an unexpected extra field (e.g. a hand-added apiKey) rather than round-tripping it", () => {
++  const dir = tempDir();
++  writeFileSync(
++    path.join(dir, "provider-catalog.json"),
++    JSON.stringify({
++      fetchedAt: OK_ENTRY.fetchedAt,
++      providers: { deepseek: { ...OK_ENTRY, apiKey: "sk-should-never-survive" } },
++    }),
++    { mode: 0o600 },
++  );
++  const loaded = loadProviderCatalogCache(dir);
++  expect(loaded?.providers.deepseek).toEqual(OK_ENTRY);
++  expect(JSON.stringify(loaded)).not.toContain("sk-should-never-survive");
++});
++
++test("isCatalogFresh: within the TTL is fresh, at/after it is not, and undefined/unparseable is never fresh", () => {
++  const now = () => Date.parse("2026-09-25T10:04:00.000Z");
++  expect(isCatalogFresh({ fetchedAt: "2026-09-25T10:00:00.000Z", providers: {} }, now)).toBe(true);
++  expect(isCatalogFresh({ fetchedAt: "2026-09-25T09:50:00.000Z", providers: {} }, now)).toBe(false);
++  expect(isCatalogFresh({ fetchedAt: "2026-09-25T10:04:00.000Z", providers: {} }, now, CATALOG_CACHE_TTL_MS)).toBe(true);
++  expect(isCatalogFresh(undefined, now)).toBe(false);
++  expect(isCatalogFresh({ fetchedAt: "not-a-date", providers: {} }, now)).toBe(false);
++  // A cache "from the future" (clock skew) is treated as not fresh, never negative-age-fresh.
++  expect(isCatalogFresh({ fetchedAt: "2026-09-25T10:10:00.000Z", providers: {} }, now)).toBe(false);
++});
++
++test("updateProviderCatalogEntry: patches ONE provider without touching a sibling entry already in the cache", async () => {
++  const dir = tempDir();
++  const other: ProviderCatalogEntry = { name: "openrouter", status: "ok", models: ["a"], fallbackModels: [], fetchedAt: "2026-09-25T09:00:00.000Z" };
++  await saveProviderCatalogCache({ fetchedAt: "2026-09-25T09:00:00.000Z", providers: { openrouter: other } }, dir);
++
++  const updated: ProviderCatalogEntry = { ...OK_ENTRY, status: "auth-failed", models: [] };
++  await updateProviderCatalogEntry(updated, dir);
++
++  const loaded = loadProviderCatalogCache(dir);
++  expect(loaded?.providers.openrouter).toEqual(other);
++  expect(loaded?.providers.deepseek).toEqual(updated);
++});
++
++test("updateProviderCatalogEntry: creates the cache when none exists yet", async () => {
++  const dir = tempDir();
++  await updateProviderCatalogEntry(OK_ENTRY, dir);
++  expect(loadProviderCatalogCache(dir)?.providers.deepseek).toEqual(OK_ENTRY);
++});
++
++test("saveProviderCatalogCache: a concurrent updateProviderCatalogEntry patch mid-refresh is not lost (flow 309 review, finding 2 — the lost-update race)", async () => {
++  const dir = tempDir();
++  const refreshStartedAt = "2026-09-25T10:00:00.000Z";
++  // The full refresh READ this provider at its own start time, before either
++  // write below happens — this is the value it will eventually try to save.
++  const staleFromRefresh: ProviderCatalogEntry = {
++    name: "deepseek",
++    status: "ok",
++    models: ["deepseek-chat"],
++    fallbackModels: [],
++    fetchedAt: refreshStartedAt,
++  };
++  // Interleaving under test: WHILE that refresh is still in flight (its own
++  // fetch can take up to CATALOG_FETCH_TIMEOUT_MS per provider), a `providers
++  // test`/`[Test]` row patch lands on disk for the SAME provider, strictly
++  // AFTER the refresh started.
++  const freshFromTest: ProviderCatalogEntry = {
++    name: "deepseek",
++    status: "auth-failed",
++    models: [],
++    fallbackModels: [],
++    fetchedAt: "2026-09-25T10:00:02.000Z",
++  };
++  await updateProviderCatalogEntry(freshFromTest, dir);
++
++  // The refresh finally finishes and writes its OLDER read for the same
++  // provider. Before the fix, `saveProviderCatalogCache` overwrote the whole
++  // file unconditionally and without a lock — clobbering the newer
++  // `providers test` patch with this staler refresh read.
++  await saveProviderCatalogCache({ fetchedAt: refreshStartedAt, providers: { deepseek: staleFromRefresh } }, dir);
++
++  const loaded = loadProviderCatalogCache(dir);
++  // The NEWER single-provider patch survives the OLDER full-refresh write.
++  expect(loaded?.providers.deepseek).toEqual(freshFromTest);
++});
++
++test("saveProviderCatalogCache: a refresh's OWN (newer) read still wins over an older on-disk entry — the merge only protects entries NEWER than the refresh start", async () => {
++  const dir = tempDir();
++  const older: ProviderCatalogEntry = { ...OK_ENTRY, fetchedAt: "2026-09-25T09:00:00.000Z", status: "auth-failed", models: [] };
++  await saveProviderCatalogCache({ fetchedAt: older.fetchedAt, providers: { deepseek: older } }, dir);
++
++  const refreshed: ProviderCatalogEntry = { ...OK_ENTRY, fetchedAt: "2026-09-25T10:00:00.000Z" };
++  await saveProviderCatalogCache({ fetchedAt: refreshed.fetchedAt, providers: { deepseek: refreshed } }, dir);
++
++  expect(loadProviderCatalogCache(dir)?.providers.deepseek).toEqual(refreshed);
++});
++
++// --- classifyModelsStatus (AC1's five states from a live probe result) -----
++
++test("classifyModelsStatus: live -> ok", () => {
++  expect(classifyModelsStatus({ models: ["m"], source: "live" })).toBe("ok");
++});
++
++test("classifyModelsStatus: a rejected credential (401/403) -> auth-failed", () => {
++  expect(classifyModelsStatus({ models: [], source: "fallback", failure: { kind: "rejected", status: 401 } })).toBe("auth-failed");
++});
++
++test("classifyModelsStatus: any other non-2xx -> unreachable", () => {
++  expect(classifyModelsStatus({ models: [], source: "fallback", failure: { kind: "http", status: 500 } })).toBe("unreachable");
++});
++
++test("classifyModelsStatus: a well-formed genuinely empty list -> ok (reached fine, nothing to offer)", () => {
++  expect(classifyModelsStatus({ models: [], source: "fallback", failure: { kind: "empty" } })).toBe("ok");
++});
++
++test("classifyModelsStatus: an abort whose detail says it timed out -> timeout, distinct from a plain network failure", () => {
++  expect(classifyModelsStatus({ models: [], source: "fallback", failure: { kind: "unreachable", detail: "timed out after 8000ms" } })).toBe("timeout");
++  expect(classifyModelsStatus({ models: [], source: "fallback", failure: { kind: "unreachable", detail: "fetch failed" } })).toBe("unreachable");
++  expect(classifyModelsStatus({ models: [], source: "fallback", failure: { kind: "unreachable" } })).toBe("unreachable");
++});
++
++// --- formatCatalogAge -------------------------------------------------------
++
++test("formatCatalogAge: just now, minutes, hours, days", () => {
++  const base = Date.parse("2026-09-25T12:00:00.000Z");
++  const now = (offsetMs: number) => () => base + offsetMs;
++  expect(formatCatalogAge("2026-09-25T12:00:00.000Z", now(0))).toBe("just now");
++  expect(formatCatalogAge("2026-09-25T12:00:00.000Z", now(3 * 60_000))).toBe("3m ago");
++  expect(formatCatalogAge("2026-09-25T12:00:00.000Z", now(2 * 3_600_000))).toBe("2h ago");
++  expect(formatCatalogAge("2026-09-25T12:00:00.000Z", now(5 * 86_400_000))).toBe("5d ago");
++  expect(formatCatalogAge("not-a-date")).toBe("unknown age");
++});
+diff --git a/src/harness/provider-catalog-cache.ts b/src/harness/provider-catalog-cache.ts
+new file mode 100644
+index 000000000..ea3233ca6
+--- /dev/null
++++ b/src/harness/provider-catalog-cache.ts
+@@ -0,0 +1,260 @@
++// Flow 309 — the live provider catalog's on-disk cache: what
++// `refreshProviderCatalog` (`./provider-catalog.ts`) writes and what every
++// reader (the `/routing` picker, `/connect`, `keryx providers status`) loads
++// between refreshes.
++//
++// Split out of `provider-catalog.ts` so this file can stay a LEAF: it depends
++// on nothing that depends back on it. `provider-catalog.ts` (the refresher)
++// imports `../commands/providers` for the live `/models`/balance fetch — and
++// `commands/providers.ts`'s own `providers test` (flow 304) needs to patch
++// THIS cache (AC3: "`providers test` updates the same cache"), which would be
++// a cycle if the cache lived in the refresher module. Kept here, both sides
++// import only what they need and neither imports the other.
++//
++// No credential ever appears in this file's types or on disk: an entry
++// carries `models`/`status`/`balance`/`fetchedAt`, never an API key or a
++// Bearer header — `sanitizeEntry` also refuses to round-trip any OTHER field
++// a hand-edited cache file might carry, so a manually added `apiKey` field
++// (however it got there) is dropped on the next load rather than echoed back
++// out by a reader of this cache.
++
++import path from "node:path";
++import { ensureKeryxConfigDir, keryxConfigDir, readConfigFile, writeOwnerOnlyFileAtomic } from "../lib/config-dir";
++import { withFileLock } from "../lib/fs";
++import type { ModelsResolveResult, ProviderBalance } from "../commands/providers";
++
++/**
++ * AC1's five states. `not-supported` is a native adapter with no live
++ * listing endpoint (anthropic/openai/gemini today) — connected (a key is
++ * present) but never probed, because there is nothing to probe.
++ */
++export type ProviderCatalogStatus = "ok" | "auth-failed" | "unreachable" | "timeout" | "not-supported";
++
++const CATALOG_STATUSES: ReadonlySet<string> = new Set(["ok", "auth-failed", "unreachable", "timeout", "not-supported"]);
++
++export interface ProviderCatalogEntry {
++  readonly name: string;
++  readonly label?: string;
++  readonly status: ProviderCatalogStatus;
++  /** LIVE fetched model ids — populated only when `status === "ok"`. Empty otherwise; a reader wanting a fallback list uses `fallbackModels`. */
++  readonly models: readonly string[];
++  /** The registry/native curated list, carried through so a caller can show it as a clearly marked "(offline list)" fallback (AC4) without a second lookup. */
++  readonly fallbackModels: readonly string[];
++  readonly fetchedAt: string;
++  /** Present only for a provider with a documented balance endpoint that answered (AC5). Never a guess. */
++  readonly balance?: ProviderBalance;
++}
++
++export interface ProviderCatalog {
++  /** When this catalog snapshot was assembled (the LATEST of its entries' `fetchedAt`, in practice all equal — one refresh pass). */
++  readonly fetchedAt: string;
++  readonly providers: Readonly<Record<string, ProviderCatalogEntry>>;
++}
++
++/** Freshness window (AC3): a cache younger than this is used immediately, without a refresh. */
++export const CATALOG_CACHE_TTL_MS = 5 * 60 * 1000;
++
++const CATALOG_CACHE_FILE = "provider-catalog.json";
++const CACHE_LOCK_TIMEOUT_MS = 250;
++const CACHE_LOCK_RETRY_MS = 10;
++const CACHE_LOCK_STALE_MS = 5_000;
++
++function catalogFile(dir?: string): string {
++  return path.join(keryxConfigDir(dir), CATALOG_CACHE_FILE);
++}
++
++function sanitizeBalance(value: unknown): ProviderBalance | undefined {
++  if (typeof value !== "object" || value === null) return undefined;
++  const record = value as Record<string, unknown>;
++  if (typeof record.currency !== "string" || typeof record.total !== "number" || typeof record.exact !== "boolean") {
++    return undefined;
++  }
++  return {
++    currency: record.currency,
++    total: record.total,
++    exact: record.exact,
++    ...(typeof record.used === "number" ? { used: record.used } : {}),
++    ...(typeof record.remaining === "number" ? { remaining: record.remaining } : {}),
++  };
++}
++
++/** Accept only the shape this module writes; a hand-edited or stale-shaped entry is dropped rather than trusted. */
++function sanitizeEntry(value: unknown): ProviderCatalogEntry | undefined {
++  if (typeof value !== "object" || value === null) return undefined;
++  const record = value as Record<string, unknown>;
++  if (typeof record.name !== "string" || record.name.length === 0) return undefined;
++  if (typeof record.status !== "string" || !CATALOG_STATUSES.has(record.status)) return undefined;
++  if (typeof record.fetchedAt !== "string") return undefined;
++  const models = Array.isArray(record.models) ? record.models.filter((m): m is string => typeof m === "string") : [];
++  const fallbackModels = Array.isArray(record.fallbackModels)
++    ? record.fallbackModels.filter((m): m is string => typeof m === "string")
++    : [];
++  const balance = sanitizeBalance(record.balance);
++  return {
++    name: record.name,
++    status: record.status as ProviderCatalogStatus,
++    models,
++    fallbackModels,
++    fetchedAt: record.fetchedAt,
++    ...(typeof record.label === "string" ? { label: record.label } : {}),
++    ...(balance !== undefined ? { balance } : {}),
++  };
++}
++
++/** Read the cache from disk. `undefined` when absent, oversized, unreadable, or not the expected shape — never throws. */
++export function loadProviderCatalogCache(dir?: string): ProviderCatalog | undefined {
++  const read = readConfigFile(catalogFile(dir));
++  if (!read.ok) return undefined;
++  try {
++    const parsed = JSON.parse(read.text) as unknown;
++    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return undefined;
++    const record = parsed as Record<string, unknown>;
++    if (typeof record.fetchedAt !== "string" || typeof record.providers !== "object" || record.providers === null) {
++      return undefined;
++    }
++    const providers: Record<string, ProviderCatalogEntry> = {};
++    for (const [key, value] of Object.entries(record.providers as Record<string, unknown>)) {
++      const entry = sanitizeEntry(value);
++      if (entry !== undefined) providers[key] = entry;
++    }
++    return { fetchedAt: record.fetchedAt, providers };
++  } catch {
++    return undefined;
++  }
++}
++
++function saveCatalogUnlocked(catalog: ProviderCatalog, dir?: string): void {
++  ensureKeryxConfigDir(dir);
++  writeOwnerOnlyFileAtomic(catalogFile(dir), `${JSON.stringify(catalog, null, 2)}\n`);
++}
++
++/**
++ * Write a FULL refresh's catalog. File-locked against a concurrent
++ * `updateProviderCatalogEntry` write — the SAME lock, so the two writers can
++ * never race each other (flow 309 review, finding 2). A full refresh can run
++ * for up to `CATALOG_FETCH_TIMEOUT_MS` per provider fetched in parallel; a
++ * single-provider patch (`providers test`/the `[Test]` row button) landing
++ * on the on-disk cache WHILE that refresh is still in flight used to be
++ * silently clobbered once the older, already-in-progress refresh finally
++ * finished and overwrote the whole file unconditionally, with no lock at
++ * all — a lost-update race, not merely a missed one: the fresher single-
++ * provider read was thrown away in favour of the STALER full-refresh read
++ * for that same provider.
++ *
++ * The fix merges under the lock: for each provider THIS refresh looked at,
++ * the on-disk entry wins only when it is NEWER than this refresh's own
++ * `fetchedAt` (i.e. it was written by something else — a concurrent
++ * `updateProviderCatalogEntry` — strictly AFTER this refresh started);
++ * otherwise this refresh's (freshest) entry wins, exactly as before. A
++ * provider this refresh did not look at (e.g. disconnected mid-refresh) is
++ * NOT carried over from disk — that half of "what's connected now" is still
++ * this refresh's call, unaffected by the race fix.
++ *
++ * Best-effort — a cache write (or lock) failure never breaks the caller that
++ * just refreshed it.
++ */
++export async function saveProviderCatalogCache(catalog: ProviderCatalog, dir?: string): Promise<void> {
++  try {
++    await withFileLock(
++      `${catalogFile(dir)}.lock`,
++      async () => {
++        const onDisk = loadProviderCatalogCache(dir);
++        const refreshStartedAtMs = Date.parse(catalog.fetchedAt);
++        const providers: Record<string, ProviderCatalogEntry> = {};
++        for (const [name, entry] of Object.entries(catalog.providers)) {
++          const onDiskEntry = onDisk?.providers[name];
++          const onDiskAtMs = onDiskEntry === undefined ? NaN : Date.parse(onDiskEntry.fetchedAt);
++          const onDiskIsNewer =
++            onDiskEntry !== undefined && Number.isFinite(onDiskAtMs) && Number.isFinite(refreshStartedAtMs) && onDiskAtMs > refreshStartedAtMs;
++          providers[name] = onDiskIsNewer ? onDiskEntry : entry;
++        }
++        saveCatalogUnlocked({ fetchedAt: catalog.fetchedAt, providers }, dir);
++      },
++      { timeoutMs: CACHE_LOCK_TIMEOUT_MS, retryMs: CACHE_LOCK_RETRY_MS, staleMs: CACHE_LOCK_STALE_MS },
++    );
++  } catch {
++    // Same posture as `version-check.ts`'s `saveCache`: a cache is a courtesy,
++    // never a dependency a caller's real result should be blocked on.
++  }
++}
++
++/** Is `catalog` younger than `ttlMs` (default {@link CATALOG_CACHE_TTL_MS})? `undefined`/an unparseable timestamp is never fresh. */
++export function isCatalogFresh(
++  catalog: ProviderCatalog | undefined,
++  now: () => number = Date.now,
++  ttlMs: number = CATALOG_CACHE_TTL_MS,
++): boolean {
++  if (catalog === undefined) return false;
++  const fetchedAtMs = Date.parse(catalog.fetchedAt);
++  if (!Number.isFinite(fetchedAtMs)) return false;
++  const age = now() - fetchedAtMs;
++  return age >= 0 && age < ttlMs;
++}
++
++/**
++ * Patch ONE provider's entry into the on-disk cache (AC3: `keryx providers
++ * test`/the `[Test]` row button keep the SAME cache current for that one
++ * provider, without a full re-refresh of every other one). File-locked
++ * against a concurrent full `refreshProviderCatalog` write; best-effort —
++ * never throws, a lock/write failure just means the next full refresh
++ * eventually overwrites it.
++ */
++export async function updateProviderCatalogEntry(entry: ProviderCatalogEntry, dir?: string): Promise<void> {
++  try {
++    await withFileLock(
++      `${catalogFile(dir)}.lock`,
++      async () => {
++        const current = loadProviderCatalogCache(dir) ?? { fetchedAt: entry.fetchedAt, providers: {} };
++        const next: ProviderCatalog = {
++          fetchedAt: entry.fetchedAt,
++          providers: { ...current.providers, [entry.name]: entry },
++        };
++        saveCatalogUnlocked(next, dir);
++      },
++      { timeoutMs: CACHE_LOCK_TIMEOUT_MS, retryMs: CACHE_LOCK_RETRY_MS, staleMs: CACHE_LOCK_STALE_MS },
++    );
++  } catch {
++    // Best-effort, like every other write in this module.
++  }
++}
++
++/**
++ * Classify a live `/models` probe result (`ModelsResolveResult`,
++ * `../commands/providers`) into one of AC1's catalog statuses. Shared by the
++ * refresher (`provider-catalog.ts`) and `providers.ts`'s `providers test` so
++ * the two never classify the SAME probe outcome two different ways.
++ */
++export function classifyModelsStatus(result: ModelsResolveResult): ProviderCatalogStatus {
++  if (result.source === "live") return "ok";
++  const failure = result.failure;
++  if (failure === undefined) return "unreachable";
++  switch (failure.kind) {
++    case "rejected":
++      return "auth-failed";
++    case "http":
++      return "unreachable";
++    case "empty":
++      // Reached fine, well-formed, genuinely zero models — not a failure.
++      return "ok";
++    case "unreachable":
++      return failure.detail !== undefined && failure.detail.startsWith("timed out") ? "timeout" : "unreachable";
++    default: {
++      const exhaustive: never = failure;
++      return exhaustive;
++    }
++  }
++}
++
++/** One relative-age phrase for a catalog entry's `fetchedAt` ("just now", "3m ago", "2h ago", "5d ago"). */
++export function formatCatalogAge(fetchedAt: string, now: () => number = Date.now): string {
++  const fetchedAtMs = Date.parse(fetchedAt);
++  if (!Number.isFinite(fetchedAtMs)) return "unknown age";
++  const deltaMs = Math.max(0, now() - fetchedAtMs);
++  const minutes = Math.floor(deltaMs / 60_000);
++  if (minutes < 1) return "just now";
++  if (minutes < 60) return `${minutes}m ago`;
++  const hours = Math.floor(minutes / 60);
++  if (hours < 24) return `${hours}h ago`;
++  const days = Math.floor(hours / 24);
++  return `${days}d ago`;
++}
+diff --git a/src/harness/provider-catalog.test.ts b/src/harness/provider-catalog.test.ts
+new file mode 100644
+index 000000000..1a8c034f2
+--- /dev/null
++++ b/src/harness/provider-catalog.test.ts
+@@ -0,0 +1,325 @@
++// Flow 309 — the live provider catalog module: AC1 (fetch only connected
++// providers, in parallel, status classification incl. auth-failed/timeout),
++// AC3 (cache freshness), AC4 (the flat-picker mapping, incl. AC8's
++// revert-check against the OLD hardcoded source), AC5 (balance never
++// guessed). Every fetch here is injected — no real network.
++
++import { afterEach, expect, test } from "bun:test";
++import { mkdtempSync } from "node:fs";
++import { rm } from "node:fs/promises";
++import { tmpdir } from "node:os";
++import path from "node:path";
++import { detectProviders } from "../commands/select";
++import { loadProviderCatalogCache, saveProviderCatalogCache } from "./provider-catalog-cache";
++import { catalogToFlatPickerProviders, loadOrRefreshProviderCatalog, refreshProviderCatalog } from "./provider-catalog";
++
++const roots: string[] = [];
++afterEach(async () => {
++  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
++});
++
++function tempDir(): string {
++  const dir = mkdtempSync(path.join(tmpdir(), "keryx-provider-catalog-"));
++  roots.push(dir);
++  return dir;
++}
++
++/**
++ * A fresh, empty config dir — every `refreshProviderCatalog`/
++ * `loadOrRefreshProviderCatalog` call below MUST pass one. Without it,
++ * `providerByName`/`allOpenAiCompatProviders` (`../commands/providers.ts`)
++ * fall back to `loadCustomCompatProviders()`'s DEFAULT directory, which is
++ * this MACHINE's real `~/.local/share/keryx/llm-providers.json` — an
++ * operator's real custom provider (confirmed while writing this file: a
++ * "MiniMax" entry) then joins `detected`, gets probed by a `fetchFn` that
++ * does not expect it, and either pollutes an assertion or — for a mock that
++ * only answers a signal's `abort` event — hangs the test on a call nothing
++ * here is driving.
++ */
++function emptyCustomProvidersDir(): string {
++  return tempDir();
++}
++
++/** Fail the ollama probe (not-ok) so `detected` never contains it — keeps every test's provider set to exactly what it configures via `env`. */
++function ollamaRefused(url: string): boolean {
++  return url.includes("/api/tags");
++}
++
++test("refreshProviderCatalog (AC1): an unconnected OpenAI-compat provider (no key) is EXCLUDED and NEVER PROBED", async () => {
++  const calledUrls: string[] = [];
++  const fetchFn = (async (url: string) => {
++    calledUrls.push(url);
++    if (ollamaRefused(url)) return { ok: false } as Response;
++    if (url.includes("deepseek")) {
++      return { ok: true, json: async () => ({ data: [{ id: "deepseek-chat" }] }) } as Response;
++    }
++    throw new Error(`unexpected fetch: ${url}`);
++  }) as unknown as typeof fetch;
++
++  const catalog = await refreshProviderCatalog({
++    fetch: fetchFn,
++    env: { DEEPSEEK_API_KEY: "sk-test" }, // ONLY deepseek is connected
++    platform: "linux",
++    dir: emptyCustomProvidersDir(),
++  });
++
++  expect(catalog.providers.deepseek?.status).toBe("ok");
++  // openrouter/groq/zai/etc. require a key none of which is set — never in the catalog, and never fetched.
++  expect(catalog.providers.openrouter).toBeUndefined();
++  expect(catalog.providers.groq).toBeUndefined();
++  expect(calledUrls.some((u) => u.includes("openrouter"))).toBe(false);
++  expect(calledUrls.some((u) => u.includes("groq"))).toBe(false);
++});
++
++test("refreshProviderCatalog (AC1): a 401 classifies as auth-failed, with an ISO fetchedAt and zero models", async () => {
++  const fetchFn = (async (url: string) => {
++    if (ollamaRefused(url)) return { ok: false } as Response;
++    return { ok: false, status: 401, text: async () => "" } as Response;
++  }) as unknown as typeof fetch;
++
++  const catalog = await refreshProviderCatalog({ fetch: fetchFn, env: { DEEPSEEK_API_KEY: "sk-bad" }, platform: "linux", dir: emptyCustomProvidersDir() });
++  const entry = catalog.providers.deepseek;
++  expect(entry?.status).toBe("auth-failed");
++  expect(entry?.models).toEqual([]);
++  expect(Number.isFinite(Date.parse(entry!.fetchedAt))).toBe(true);
++  // The curated fallback is still carried, for a caller that wants to show it
++  // — but AC4's picker mapping (tested below) deliberately does not.
++  expect(entry?.fallbackModels.length).toBeGreaterThan(0);
++});
++
++// AC2's "hanging fake provider": this fetch never resolves on its own —
++// only the internal abort timer settles it — so this is the unit-level proof
++// that a genuinely hanging provider does not hang the whole refresh past its
++// own bound. `provider-catalog-startup.test.ts` (`src/tui/`) is the
++// integration half: `tui-shell.ts` never `await`s this promise inline, so
++// even an un-injected real hang could not delay the composer either way.
++test("refreshProviderCatalog (AC1/AC2): a hanging fake provider times out rather than hanging the refresh — classified as timeout, distinct from a plain network failure — via an injected fetch, no real 8s wait", async () => {
++  const fetchFn = (async (url: string, init?: RequestInit) => {
++    // The ollama probe (`select.ts`'s `probeOllamaModels`) calls `deps.fetch`
++    // with NO `init`/signal at all — an abort-only mock must still answer it,
++    // or `detectProviders()` (and this whole refresh) hangs on THAT call
++    // forever rather than exercising the timeout path this test is about.
++    if (ollamaRefused(url)) return { ok: false } as Response;
++    return new Promise<Response>((_resolve, reject) => {
++      init?.signal?.addEventListener("abort", () => reject(new Error("aborted")));
++    });
++  }) as unknown as typeof fetch;
++
++  const catalog = await refreshProviderCatalog({
++    fetch: fetchFn,
++    env: { DEEPSEEK_API_KEY: "sk-test" },
++    platform: "linux",
++    dir: emptyCustomProvidersDir(),
++    // Test seam: the catalog's own 8s bound, shortened so this test is fast
++    // while still exercising the SAME abort path production uses.
++    timeoutMs: 20,
++  });
++  expect(catalog.providers.deepseek?.status).toBe("timeout");
++});
++
++test("refreshProviderCatalog (AC1): every connected provider is fetched IN PARALLEL, not one after another", async () => {
++  // groq/cerebras: neither has a balance endpoint, so each contributes
++  // EXACTLY one fetch call — keeps this test's start/release bookkeeping
++  // one-to-one per provider instead of per (provider, models|balance) pair.
++  const started = new Set<string>();
++  const release: Record<string, () => void> = {};
++  let resolveBothStarted: () => void = () => {};
++  const bothStarted = new Promise<void>((resolve) => {
++    resolveBothStarted = resolve;
++  });
++  const fetchFn = (async (url: string) => {
++    if (ollamaRefused(url)) return { ok: false } as Response;
++    const name = url.includes("groq") ? "groq" : "cerebras";
++    started.add(name);
++    if (started.size === 2) resolveBothStarted();
++    return new Promise<Response>((resolve) => {
++      release[name] = () => resolve({ ok: true, json: async () => ({ data: [{ id: `${name}-m` }] }) } as Response);
++    });
++  }) as unknown as typeof fetch;
++
++  const catalogPromise = refreshProviderCatalog({
++    fetch: fetchFn,
++    env: { GROQ_API_KEY: "sk-groq", CEREBRAS_API_KEY: "sk-cerebras" },
++    platform: "linux",
++    dir: emptyCustomProvidersDir(),
++  });
++  // Resolves only once BOTH fetches have been DISPATCHED. A sequential
++  // implementation (await groq fully, then start cerebras) would never reach
++  // this point — cerebras's `fetchFn` call would never run before groq's
++  // promise resolves, which it cannot without `release.groq()`, called only
++  // below — so a regression to sequential fetching times this test out
++  // instead of silently passing.
++  await bothStarted;
++  release.groq?.();
++  release.cerebras?.();
++  const catalog = await catalogPromise;
++  expect(catalog.providers.groq?.status).toBe("ok");
++  expect(catalog.providers.cerebras?.status).toBe("ok");
++});
++
++test("refreshProviderCatalog (AC5): a documented balance endpoint is read and never guessed when absent", async () => {
++  const fetchFn = (async (url: string) => {
++    if (ollamaRefused(url)) return { ok: false } as Response;
++    if (url.includes("/user/balance")) {
++      return { ok: true, json: async () => ({ is_available: true, balance_infos: [{ currency: "USD", total_balance: "6.19" }] }) } as Response;
++    }
++    if (url.includes("deepseek")) {
++      return { ok: true, json: async () => ({ data: [{ id: "deepseek-chat" }] }) } as Response;
++    }
++    if (url.includes("groq")) {
++      return { ok: true, json: async () => ({ data: [{ id: "llama-3.3-70b-versatile" }] }) } as Response;
++    }
++    throw new Error(`unexpected fetch: ${url}`);
++  }) as unknown as typeof fetch;
++
++  const catalog = await refreshProviderCatalog({
++    fetch: fetchFn,
++    env: { DEEPSEEK_API_KEY: "sk-test", GROQ_API_KEY: "sk-groq" },
++    platform: "linux",
++    dir: emptyCustomProvidersDir(),
++  });
++  expect(catalog.providers.deepseek?.balance).toEqual({ currency: "USD", total: 6.19, exact: true });
++  // groq has no documented balance endpoint in the registry — never a guessed number.
++  expect(catalog.providers.groq?.balance).toBeUndefined();
++});
++
++test("refreshProviderCatalog: a native provider with no live listing endpoint (anthropic) is not-supported, key presence alone gates it", async () => {
++  const fetchFn = (async (url: string) => {
++    if (ollamaRefused(url)) return { ok: false } as Response;
++    throw new Error(`unexpected fetch: ${url}`); // never probed — no endpoint exists
++  }) as unknown as typeof fetch;
++
++  const catalog = await refreshProviderCatalog({ fetch: fetchFn, env: { ANTHROPIC_API_KEY: "sk-ant" }, platform: "linux", dir: emptyCustomProvidersDir() });
++  const entry = catalog.providers.anthropic;
++  expect(entry?.status).toBe("not-supported");
++  expect(entry?.models).toEqual([]);
++  expect(entry?.fallbackModels.length).toBeGreaterThan(0);
++});
++
++test("refreshProviderCatalog: the synthetic fake provider is excluded from the user-facing catalog", async () => {
++  const fetchFn = (async (url: string) => {
++    if (ollamaRefused(url)) return { ok: false } as Response;
++    throw new Error(`unexpected fetch: ${url}`);
++  }) as unknown as typeof fetch;
++  const catalog = await refreshProviderCatalog({ fetch: fetchFn, env: {}, platform: "linux", dir: emptyCustomProvidersDir() });
++  expect(catalog.providers.fake).toBeUndefined();
++});
++
++// --- catalogToFlatPickerProviders (AC4) -------------------------------------
++
++test("catalogToFlatPickerProviders: ok providers pass their live models through unmarked", () => {
++  const flat = catalogToFlatPickerProviders({
++    fetchedAt: "now",
++    providers: { deepseek: { name: "deepseek", status: "ok", models: ["deepseek-chat"], fallbackModels: ["deepseek-chat"], fetchedAt: "now" } },
++  });
++  expect(flat).toEqual([{ name: "deepseek", models: ["deepseek-chat"] }]);
++});
++
++test("catalogToFlatPickerProviders: auth-failed is EXCLUDED entirely — never pretends curated models are available", () => {
++  const flat = catalogToFlatPickerProviders({
++    fetchedAt: "now",
++    providers: { deepseek: { name: "deepseek", status: "auth-failed", models: [], fallbackModels: ["deepseek-chat"], fetchedAt: "now" } },
++  });
++  expect(flat).toEqual([]);
++});
++
++test("catalogToFlatPickerProviders: unreachable/timeout/not-supported fall back to the curated list, marked offline", () => {
++  const flat = catalogToFlatPickerProviders({
++    fetchedAt: "now",
++    providers: {
++      groq: { name: "groq", status: "unreachable", models: [], fallbackModels: ["llama-3.3-70b-versatile"], fetchedAt: "now" },
++      anthropic: { name: "anthropic", status: "not-supported", models: [], fallbackModels: ["claude-sonnet-5"], fetchedAt: "now" },
++    },
++  });
++  expect(flat).toEqual([
++    { name: "groq", models: ["llama-3.3-70b-versatile"], offline: true },
++    { name: "anthropic", models: ["claude-sonnet-5"], offline: true },
++  ]);
++});
++
++test("catalogToFlatPickerProviders: unreachable with NO curated fallback (e.g. rapid-mlx) contributes nothing", () => {
++  const flat = catalogToFlatPickerProviders({
++    fetchedAt: "now",
++    providers: { "rapid-mlx": { name: "rapid-mlx", status: "unreachable", models: [], fallbackModels: [], fetchedAt: "now" } },
++  });
++  expect(flat).toEqual([]);
++});
++
++// --- AC8 revert-check: this default source must differ from the OLD one ----
++
++test("AC4/AC8 revert-check: the catalog excludes an unconnected compat provider that detectProviders() (the pre-flow-309 source) always included", async () => {
++  const fetchFn = (async (url: string) => {
++    if (ollamaRefused(url)) return { ok: false } as Response;
++    throw new Error(`unexpected fetch: ${url}`);
++  }) as unknown as typeof fetch;
++  const env = {}; // no credential anywhere
++  const dir = emptyCustomProvidersDir();
++
++  const oldSource = await detectProviders({ fetch: fetchFn, env, platform: "linux" });
++  // The bug this flow fixes: `detectProviders()` offers EVERY OpenAI-compat
++  // registry provider unconditionally, key or not.
++  expect(oldSource.some((p) => p.name === "openrouter")).toBe(true);
++  expect(oldSource.some((p) => p.name === "deepseek")).toBe(true);
++
++  const catalog = await refreshProviderCatalog({ fetch: fetchFn, env, platform: "linux", dir });
++  const flat = catalogToFlatPickerProviders(catalog);
++  // The new source excludes both — neither has a credential, so neither was
++  // probed and neither is "connected". A test on the OLD source alone would
++  // have passed with `openrouter`/`deepseek` still offered; this fails
++  // against that source, which is the point of a revert-check (AC8).
++  expect(flat.some((p) => p.name === "openrouter")).toBe(false);
++  expect(flat.some((p) => p.name === "deepseek")).toBe(false);
++});
++
++// --- loadOrRefreshProviderCatalog (AC3) -------------------------------------
++
++test("loadOrRefreshProviderCatalog: a FRESH cache is used immediately — no fetch at all", async () => {
++  const dir = tempDir();
++  await saveProviderCatalogCache(
++    { fetchedAt: new Date().toISOString(), providers: { deepseek: { name: "deepseek", status: "ok", models: ["deepseek-chat"], fallbackModels: [], fetchedAt: new Date().toISOString() } } },
++    dir,
++  );
++  let called = false;
++  const fetchFn = (async () => {
++    called = true;
++    throw new Error("should not be called");
++  }) as unknown as typeof fetch;
++
++  const catalog = await loadOrRefreshProviderCatalog({ fetch: fetchFn, env: {}, dir, platform: "linux" });
++  expect(called).toBe(false);
++  expect(catalog.providers.deepseek?.status).toBe("ok");
++});
++
++test("loadOrRefreshProviderCatalog: a STALE or missing cache triggers exactly one refresh, which is then saved", async () => {
++  const dir = tempDir();
++  await saveProviderCatalogCache(
++    { fetchedAt: "2020-01-01T00:00:00.000Z", providers: {} }, // ancient — stale under any TTL
++    dir,
++  );
++  const fetchFn = (async (url: string) => {
++    if (ollamaRefused(url)) return { ok: false } as Response;
++    if (url.includes("deepseek")) return { ok: true, json: async () => ({ data: [{ id: "deepseek-chat" }] }) } as Response;
++    throw new Error(`unexpected fetch: ${url}`);
++  }) as unknown as typeof fetch;
++
++  const catalog = await loadOrRefreshProviderCatalog({ fetch: fetchFn, env: { DEEPSEEK_API_KEY: "sk-test" }, dir, platform: "linux" });
++  expect(catalog.providers.deepseek?.status).toBe("ok");
++  // Saved — a subsequent load sees the SAME fresh result without refreshing again.
++  const persisted = loadProviderCatalogCache(dir);
++  expect(persisted?.providers.deepseek?.status).toBe("ok");
++});
++
++test("loadOrRefreshProviderCatalog: --refresh (force: true) bypasses a fresh cache", async () => {
++  const dir = tempDir();
++  await saveProviderCatalogCache(
++    { fetchedAt: new Date().toISOString(), providers: { deepseek: { name: "deepseek", status: "ok", models: ["stale-model"], fallbackModels: [], fetchedAt: new Date().toISOString() } } },
++    dir,
++  );
++  const fetchFn = (async (url: string) => {
++    if (ollamaRefused(url)) return { ok: false } as Response;
++    return { ok: true, json: async () => ({ data: [{ id: "fresh-model" }] }) } as Response;
++  }) as unknown as typeof fetch;
++
++  const catalog = await loadOrRefreshProviderCatalog({ fetch: fetchFn, env: { DEEPSEEK_API_KEY: "sk-test" }, dir, platform: "linux" }, { force: true });
++  expect(catalog.providers.deepseek?.models).toEqual(["fresh-model"]);
++});
+diff --git a/src/harness/provider-catalog.ts b/src/harness/provider-catalog.ts
+new file mode 100644
+index 000000000..5ec5970dc
+--- /dev/null
++++ b/src/harness/provider-catalog.ts
+@@ -0,0 +1,281 @@
++// Flow 309 — the live provider catalog: fetches each CONNECTED provider's
++// real model list (and balance, where one exists) during startup loading,
++// which doubles as the availability check the operator asked for. Replaces
++// `detectProviders()`'s curated/static lists as the source every PICKER over
++// "connected providers" should read (root cause: `src/tui/routing-inspector.
++// ts`'s `defaultProviders` and `src/commands/routing.ts`'s twin used to hand
++// `detectProviders()`'s result straight to the picker/CLI list — curated
++// model ids, and EVERY OpenAI-compat provider offered whether or not it had a
++// credential, because `detectProviders()`'s job (flow 022/085/183) is "what
++// could the operator pick from", not "what is actually reachable right now").
++//
++// Reuses, never duplicates:
++//   - `detectProviders()` (`./commands/select.ts`) for WHO is even a
++//     candidate — the ollama live probe and the anthropic/openai/gemini
++//     key-gate stay exactly as they are; this module only adds the missing
++//     half, verifying + fetching the OpenAI-compat registry providers
++//     `detectProviders()` offers unconditionally.
++//   - `fetchOpenAiCompatModelsDetailed`/`fetchProviderBalance`
++//     (`../commands/providers.ts`) — the SAME live `/models` and balance
++//     fetch `/model`'s picker and `providers test` (flow 304) already use.
++//
++// Client zone (no TUI import — testable and usable without a renderer),
++// mirroring `./routing/table.ts`'s own "no TUI deps" posture.
++
++import { detectProviders, type DetectedProvider, type DetectProvidersDeps } from "../commands/select";
++import {
++  balanceCapableProvider,
++  fetchOpenAiCompatModelsDetailed,
++  fetchProviderBalance,
++  providerApiKey,
++  providerByName,
++  type OpenAiCompatProvider,
++} from "../commands/providers";
++import {
++  classifyModelsStatus,
++  isCatalogFresh,
++  loadProviderCatalogCache,
++  saveProviderCatalogCache,
++  type ProviderCatalog,
++  type ProviderCatalogEntry,
++} from "./provider-catalog-cache";
++import type { FlatPickerProvider } from "./routing/table";
++
++export {
++  CATALOG_CACHE_TTL_MS,
++  classifyModelsStatus,
++  formatCatalogAge,
++  isCatalogFresh,
++  loadProviderCatalogCache,
++  saveProviderCatalogCache,
++  updateProviderCatalogEntry,
++  type ProviderCatalog,
++  type ProviderCatalogEntry,
++  type ProviderCatalogStatus,
++} from "./provider-catalog-cache";
++
++/** AC1: each fetch bounded by a timeout of at most 8s. Deliberately its OWN constant, separate from `MODELS_FETCH_TIMEOUT_MS`/`BALANCE_FETCH_TIMEOUT_MS` (both 8-10s already) — this module's timeout is a stated acceptance criterion, not borrowed from a shared default that another caller could change out from under it. */
++export const CATALOG_FETCH_TIMEOUT_MS = 8_000;
++
++export interface ProviderCatalogDeps {
++  readonly fetch: typeof fetch;
++  readonly env: Record<string, string | undefined>;
++  /** Config dir scoping the custom-provider registry lookup. Default: the real one. */
++  readonly dir?: string;
++  readonly now?: () => number;
++  /** Test seam mirroring `DetectProvidersDeps.platform`. */
++  readonly platform?: string;
++  /** Test seam mirroring `DetectProvidersDeps.baseUrl` (the ollama probe). */
++  readonly baseUrl?: string;
++  /** Test seam: overrides {@link CATALOG_FETCH_TIMEOUT_MS} so a timeout path can be exercised without a real 8s wait. Production never sets this. */
++  readonly timeoutMs?: number;
++}
++
++async function buildCatalogEntry(
++  detected: DetectedProvider,
++  deps: ProviderCatalogDeps,
++  fetchedAt: string,
++): Promise<ProviderCatalogEntry | undefined> {
++  if (detected.name === "fake") {
++    // The synthetic offline test double is never part of the USER-FACING
++    // catalog (flow 309 review): it has no real status/balance to report and
++    // showing it in `providers status`/`/connect`/the flat `/routing` picker
++    // (all readers of `catalog.providers`) would present a test fixture
++    // alongside real providers. Dropping the entry here — rather than
++    // filtering it out at each of those call sites — is the single point of
++    // exclusion; every reader of `catalog.providers` inherits it for free.
++    // `fake` stays selectable everywhere else (e.g. the per-provider
++    // `/model` picker, `keryx shell --provider fake`), which never reads
++    // this catalog and is unaffected.
++    return undefined;
++  }
++  if (detected.name === "ollama") {
++    // `detectProviders()` already ran ITS live probe (`GET {baseUrl}/api/tags`)
++    // to decide ollama belongs in `detected` at all — that probe IS this
++    // provider's availability check; re-probing here would be the exact
++    // duplication AC1 asks this module to avoid.
++    return {
++      name: detected.name,
++      status: "ok",
++      models: [...detected.models],
++      fallbackModels: [],
++      fetchedAt,
++      ...(detected.label !== undefined ? { label: detected.label } : {}),
++    };
++  }
++  const registry = providerByName(detected.name, deps.dir);
++  if (registry === undefined) {
++    // Native anthropic/openai/gemini: `detectProviders()` includes one only
++    // when its API key is present in `deps.env` (the connectedness check for
++    // a provider with no live listing endpoint — `describe().modelListing`
++    // is false for all three, see `select.ts`), so `detected.models` here IS
++    // the curated fallback a caller should show.
++    return {
++      name: detected.name,
++      status: "not-supported",
++      models: [],
++      fallbackModels: [...detected.models],
++      fetchedAt,
++      ...(detected.label !== undefined ? { label: detected.label } : {}),
++    };
++  }
++  // An OpenAI-compat registry provider — `detectProviders()` offers EVERY one
++  // of these unconditionally (flow 309's root cause). Independently verify a
++  // credential resolves the SAME way `configuredProviders()` does, so an
++  // unconnected provider is excluded here and NEVER PROBED (AC1) rather than
++  // inheriting `detected`'s "offer everything" posture.
++  const requiresApiKey = registry.requiresApiKey ?? true;
++  const apiKey = providerApiKey(registry, deps.env) ?? registry.apiKey;
++  if (requiresApiKey && (apiKey === undefined || apiKey.length === 0)) {
++    return undefined;
++  }
++  const withBase: OpenAiCompatProvider = {
++    ...registry,
++    ...(detected.baseUrl !== undefined ? { baseUrl: detected.baseUrl } : {}),
++    ...(detected.chatPath !== undefined ? { chatPath: detected.chatPath } : {}),
++    ...(detected.modelsPath !== undefined ? { modelsPath: detected.modelsPath } : {}),
++  };
++  const capableOfBalance = balanceCapableProvider(detected.name) !== undefined;
++  const timeoutMs = deps.timeoutMs ?? CATALOG_FETCH_TIMEOUT_MS;
++  const [result, balance] = await Promise.all([
++    fetchOpenAiCompatModelsDetailed(deps.fetch, withBase, apiKey, { timeoutMs }),
++    capableOfBalance
++      ? fetchProviderBalance(deps.fetch, withBase, apiKey, { timeoutMs })
++      : Promise.resolve(undefined),
++  ]);
++  const status = classifyModelsStatus(result);
++  return {
++    name: detected.name,
++    status,
++    models: status === "ok" ? result.models : [],
++    fallbackModels: [...registry.models],
++    fetchedAt,
++    ...(registry.label !== undefined ? { label: registry.label } : {}),
++    ...(balance !== undefined ? { balance } : {}),
++  };
++}
++
++/**
++ * Fetch every connected provider's live model list (and balance, where one
++ * exists) in parallel. Never throws — a single provider's fetch failing
++ * yields that provider's status, not a rejection of the whole catalog.
++ */
++export async function refreshProviderCatalog(deps: ProviderCatalogDeps): Promise<ProviderCatalog> {
++  const detectDeps: DetectProvidersDeps = {
++    fetch: deps.fetch,
++    env: deps.env,
++    ...(deps.baseUrl !== undefined ? { baseUrl: deps.baseUrl } : {}),
++    ...(deps.platform !== undefined ? { platform: deps.platform } : {}),
++  };
++  const detected = await detectProviders(detectDeps);
++  return refreshProviderCatalogFromDetected(detected, deps);
++}
++
++/**
++ * Same as {@link refreshProviderCatalog}, given an ALREADY-detected provider
++ * list rather than running `detectProviders()` itself.
++ *
++ * Two callers need this split:
++ *   - `keryx shell`'s TUI startup (`tui-shell.ts`) already ran
++ *     `detectProviders()` once, at provider-selection time, before the
++ *     catalog refresh even starts — a second call would re-run the SAME
++ *     ollama `/api/tags` probe for no reason, and its `detected` is the one
++ *     surface a TUI test already controls (`launchTuiAgentShell(opts)`'s
++ *     `opts.detected`), so routing the catalog refresh through it keeps this
++ *     module's SOLE network surface test-injectable there too, rather than
++ *     opening a second, independent path to `globalThis.fetch` a test cannot
++ *     see or bound.
++ *   - Any caller that already has a `detected` list for another reason.
++ */
++export async function refreshProviderCatalogFromDetected(
++  detected: readonly DetectedProvider[],
++  deps: ProviderCatalogDeps,
++): Promise<ProviderCatalog> {
++  const now = deps.now ?? Date.now;
++  const fetchedAt = new Date(now()).toISOString();
++  const entries = await Promise.all(detected.map((d) => buildCatalogEntry(d, deps, fetchedAt)));
++  const providers: Record<string, ProviderCatalogEntry> = {};
++  for (const entry of entries) {
++    if (entry !== undefined) providers[entry.name] = entry;
++  }
++  return { fetchedAt, providers };
++}
++
++/**
++ * AC3: a fresh cache is used immediately; a stale or missing one triggers a
++ * refresh (which is then saved, becoming the next reader's fresh cache).
++ * `force: true` bypasses the TTL (`keryx providers status --refresh`).
++ */
++export async function loadOrRefreshProviderCatalog(
++  deps: ProviderCatalogDeps,
++  opts: { force?: boolean; ttlMs?: number } = {},
++): Promise<ProviderCatalog> {
++  if (opts.force !== true) {
++    const cached = loadProviderCatalogCache(deps.dir);
++    if (isCatalogFresh(cached, deps.now ?? Date.now, opts.ttlMs)) {
++      return cached as ProviderCatalog;
++    }
++  }
++  const fresh = await refreshProviderCatalog(deps);
++  await saveProviderCatalogCache(fresh, deps.dir);
++  return fresh;
++}
++
++/** Same as {@link loadOrRefreshProviderCatalog}, given an already-detected provider list — see {@link refreshProviderCatalogFromDetected}. */
++export async function loadOrRefreshProviderCatalogFromDetected(
++  detected: readonly DetectedProvider[],
++  deps: ProviderCatalogDeps,
++  opts: { force?: boolean; ttlMs?: number } = {},
++): Promise<ProviderCatalog> {
++  if (opts.force !== true) {
++    const cached = loadProviderCatalogCache(deps.dir);
++    if (isCatalogFresh(cached, deps.now ?? Date.now, opts.ttlMs)) {
++      return cached as ProviderCatalog;
++    }
++  }
++  const fresh = await refreshProviderCatalogFromDetected(detected, deps);
++  await saveProviderCatalogCache(fresh, deps.dir);
++  return fresh;
++}
++
++/**
++ * AC4: the catalog as the flat picker's provider list — ONLY connected
++ * providers, live model ids when the fetch succeeded, the curated list
++ * clearly marked `offline: true` (rendered "(offline list)" by
++ * `flatModelOptions`) when the fetch failed or the provider has no live
++ * endpoint, and an `auth-failed` provider excluded outright rather than
++ * shown with models that are not actually available.
++ */
++export function catalogToFlatPickerProviders(catalog: ProviderCatalog): FlatPickerProvider[] {
++  const out: FlatPickerProvider[] = [];
++  for (const entry of Object.values(catalog.providers)) {
++    if (entry.status === "ok") {
++      out.push({ name: entry.name, models: entry.models });
++      continue;
++    }
++    if (entry.status === "auth-failed") {
++      continue;
++    }
++    // unreachable | timeout | not-supported
++    if (entry.fallbackModels.length > 0) {
++      out.push({ name: entry.name, models: entry.fallbackModels, offline: true });
++    }
++  }
++  return out;
++}
++
++/** One short phrase for a catalog status, for a notice/status line. */
++export function describeCatalogStatus(status: ProviderCatalogEntry["status"]): string {
++  switch (status) {
++    case "ok":
++      return "ok";
++    case "auth-failed":
++      return "auth failed";
++    case "unreachable":
++      return "unreachable";
++    case "timeout":
++      return "timed out";
++    case "not-supported":
++      return "no live listing";
++  }
++}
+diff --git a/src/harness/routing/table.ts b/src/harness/routing/table.ts
+index ca6d7bdcc..9c01b3fd5 100644
+--- a/src/harness/routing/table.ts
++++ b/src/harness/routing/table.ts
+@@ -218,6 +218,16 @@ export interface FlatModelOption {
+ export interface FlatPickerProvider {
+   readonly name: string;
+   readonly models?: readonly string[];
++  /**
++   * Flow 309, AC4 — `models` is the curated OFFLINE fallback (the provider's
++   * live `/models` fetch failed, or it has no live listing endpoint) rather
++   * than a live catalog reading. `flatModelOptions` suffixes every model row
++   * " (offline list)" so the picker never presents a stale/documentary id as
++   * though it were confirmed available. Omitted (the default, `false`) is
++   * byte-identical to every caller before flow 309 — `search` is unaffected
++   * either way, so filtering by a bare model id still works.
++   */
++  readonly offline?: boolean;
+ }
+ 
+ /**
+@@ -236,10 +246,11 @@ export function flatModelOptions(providers: readonly FlatPickerProvider[]): Flat
+       label: `${provider.name} (provider default)`,
+       search: `${provider.name} provider default`.toLowerCase(),
+     });
++    const offlineSuffix = provider.offline === true ? " (offline list)" : "";
+     for (const modelId of provider.models ?? []) {
+       options.push({
+         assignment: { kind: "model", providerId: provider.name, modelId },
+-        label: `${provider.name}/${modelId}`,
++        label: `${provider.name}/${modelId}${offlineSuffix}`,
+         search: `${provider.name}/${modelId}`.toLowerCase(),
+       });
+     }
+diff --git a/src/standard/help-groups.ts b/src/standard/help-groups.ts
+index fa63913f6..af9ce6f7d 100644
+--- a/src/standard/help-groups.ts
++++ b/src/standard/help-groups.ts
+@@ -125,7 +125,7 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
+     kind: "cli",
+     name: "providers",
+     group: "Connect a model provider",
+-    summary: "Providers this operator has configured, and cross-family review eligibility.",
++    summary: "Providers this operator has configured, the live model/balance catalog (status), and cross-family review eligibility.",
+   },
+   {
+     kind: "cli",
+diff --git a/src/tui/balance-panel.test.ts b/src/tui/balance-panel.test.ts
+index 53a62eafe..a8a22a544 100644
+--- a/src/tui/balance-panel.test.ts
++++ b/src/tui/balance-panel.test.ts
+@@ -175,7 +175,7 @@ test("setProvider re-fetches the NEW provider instead of the mount-time one", as
+     const url = String(input);
+     const total = url.includes("openrouter") ? "1.11" : "9.99";
+     const body = url.includes("openrouter")
+-      ? { credits: { total: Number(total), used: 0, currency: "USD" } }
++      ? { data: { limit: Number(total), usage: 0, limit_remaining: Number(total) } }
+       : {
+           is_available: true,
+           balance_infos: [{ currency: "USD", total_balance: total, granted_balance: "0", topped_up_balance: total }],
+diff --git a/src/tui/balance-panel.ts b/src/tui/balance-panel.ts
+index e27688495..26d1ccf70 100644
+--- a/src/tui/balance-panel.ts
++++ b/src/tui/balance-panel.ts
+@@ -3,7 +3,7 @@
+ // the operator switches provider mid-session (`setProvider`).
+ //
+ // Only providers with a real balance endpoint (DeepSeek /user/balance,
+-// OpenRouter /api/v1/credits) get the row at all; for the rest the panel is
++// OpenRouter /v1/key, falling back to /v1/credits) get the row at all; for the rest the panel is
+ // absent rather than a permanent "—" occupying rows in a fixed-height
+ // column (see `mountBalancePanel`). A capable provider whose fetch fails
+ // still renders "—" — that is a live reading that did not arrive, not a
+diff --git a/src/tui/connect-provider-buttons.test.ts b/src/tui/connect-provider-buttons.test.ts
+index 6c55d4c1f..b7d647475 100644
+--- a/src/tui/connect-provider-buttons.test.ts
++++ b/src/tui/connect-provider-buttons.test.ts
+@@ -11,6 +11,7 @@ import { join } from "node:path";
+ import { describe, expect, test } from "bun:test";
+ import type { DetectedProvider } from "../commands/select";
+ import { loadShellConfig, saveApiKey } from "../lib/shell-config";
++import { saveProviderCatalogCache, type ProviderCatalogEntry } from "../harness/provider-catalog-cache";
+ import { themeColorToHex } from "./shell-chrome";
+ import { applyThemeId, getThemeId, resolveTheme } from "./theme";
+ import { selectProviderModelInTui } from "./tui-shell";
+@@ -99,6 +100,65 @@ describe("AC1 — /connect's row list draws Test and Disconnect on every connect
+   });
+ });
+ 
++describe("flow 309 AC6 — the /connect row note shows the CACHED catalog's status, balance and reading age", () => {
++  otuiTest("a row with a catalog entry shows status, balance and age alongside its plain note", async () => {
++    const otui = requireOtui();
++    const configDir = tempConfigDir();
++    const entry: ProviderCatalogEntry = {
++      name: "deepseek",
++      label: "DeepSeek",
++      status: "ok",
++      models: ["deepseek-chat"],
++      fallbackModels: ["deepseek-chat"],
++      fetchedAt: new Date().toISOString(),
++      balance: { currency: "USD", total: 6.19, exact: true },
++    };
++    await saveProviderCatalogCache({ fetchedAt: entry.fetchedAt, providers: { deepseek: entry } }, configDir);
++
++    const h = await otui.testing.createTestRenderer({ width: 100, height: 30 });
++    try {
++      const pending = selectProviderModelInTui(otui.core, h.renderer, [DEEPSEEK], {
++        onlyConnected: true,
++        fetch: alwaysLive,
++        env: ENV,
++        configDir,
++      });
++      const frame = await h.waitForFrame((f) => f.includes("DeepSeek"));
++      expect(frame).toContain("ok");
++      expect(frame).toContain("$6.19");
++      expect(frame).toContain("just now");
++
++      await pressEscapeAndSettle(h);
++      expect(await pending).toBeUndefined();
++    } finally {
++      h.renderer.destroy();
++    }
++  });
++
++  otuiTest("a row with NO catalog entry yet renders its plain note, unchanged", async () => {
++    const otui = requireOtui();
++    const configDir = tempConfigDir(); // never seeded — no provider-catalog.json at all
++    const h = await otui.testing.createTestRenderer({ width: 100, height: 30 });
++    try {
++      const pending = selectProviderModelInTui(otui.core, h.renderer, [GROQ], {
++        onlyConnected: true,
++        fetch: alwaysLive,
++        env: ENV,
++        configDir,
++      });
++      const frame = await h.waitForFrame((f) => f.includes("Groq"));
++      // The row's own note (model count) still renders; nothing from an
++      // absent cache leaks in as "undefined" or throws.
++      expect(frame).toMatch(/Groq\s+\d+ model\(s\)/);
++
++      await pressEscapeAndSettle(h);
++      expect(await pending).toBeUndefined();
++    } finally {
++      h.renderer.destroy();
++    }
++  });
++});
++
+ describe("AC2 — [Test] runs the live probe and shows ok/failure inline, without leaving /connect", () => {
+   otuiTest("mouse click on [Test]: success shows ok + model count", async () => {
+     const otui = requireOtui();
+diff --git a/src/tui/provider-catalog-startup.test.ts b/src/tui/provider-catalog-startup.test.ts
+new file mode 100644
+index 000000000..41c79d7d1
+--- /dev/null
++++ b/src/tui/provider-catalog-startup.test.ts
+@@ -0,0 +1,76 @@
++// Flow 309 (AC2) — the live provider catalog's startup wiring inside
++// `launchTuiAgentShell` (`tui-shell.ts`).
++//
++// `launchTuiAgentShell` is never imported/invoked in a headless test (no
++// controlling TTY — it declines at its very first line, `if
++// (!process.stdout.isTTY) return false;` — matching every other precedent in
++// `tui-shell.test.ts`, e.g. its "SLATE-3a" / "SLATE-2a" source-text audits).
++// This is that same idiom, applied to AC2: the catalog refresh starts during
++// startup loading (the spinner names it), is never `await`ed inline (so a
++// hanging provider cannot delay the composer), and the promise it produces is
++// only reacted to (the AC6 notice) once it settles, whenever that is.
++//
++// The HANGING-PROVIDER half of AC2 — that a refresh genuinely does not block
++// past its own bound even when a provider's fetch never answers — is proven
++// at the unit level in `../harness/provider-catalog.test.ts` (the injected
++// fetch there returns a promise that resolves ONLY on the internal abort
++// timer, i.e. a hanging fake provider): that is what this integration is
++// wired to, so the two tests together cover AC2 end to end without a real
++// renderer.
++
++import { expect, test } from "bun:test";
++import { readFileSync } from "node:fs";
++import { join } from "node:path";
++
++const SOURCE = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
++const FN_START = SOURCE.indexOf("export async function launchTuiAgentShell(opts: {");
++
++test("flow 309 AC2: launchTuiAgentShell exists and this audit is anchored inside it", () => {
++  expect(FN_START).toBeGreaterThan(-1);
++});
++
++test("flow 309 AC2: the spinner names the provider-catalog refresh during startup loading", () => {
++  const spinnerAt = SOURCE.indexOf('startupIndicator.setStep("checking providers…")', FN_START);
++  expect(spinnerAt).toBeGreaterThan(FN_START);
++});
++
++test("flow 309 AC2: the catalog refresh is captured as a promise, not awaited inline, before the composer/chrome mounts", () => {
++  const declAt = SOURCE.indexOf(
++    "const providerCatalogReady: Promise<ProviderCatalog> = loadOrRefreshProviderCatalogFromDetected(opts.detected, {",
++    FN_START,
++  );
++  expect(declAt).toBeGreaterThan(FN_START);
++
++  // Not `await`ed at the declaration itself — a `const x = await f()` would
++  // make `x` the RESOLVED VALUE (not `Promise<ProviderCatalog>`), which is
++  // exactly the type annotation this declaration carries; grep the 40 chars
++  // immediately before the identifier for a stray `await` anyway, as a direct
++  // pin against a future edit reintroducing one.
++  const beforeDecl = SOURCE.slice(Math.max(0, declAt - 40), declAt);
++  expect(beforeDecl).not.toMatch(/await\s*$/);
++
++  // The chrome (composer, transcript, header) mounts AFTER the kickoff line —
++  // proving the refresh is dispatched before the UI becomes interactive, but
++  // the UI does not wait on it: `startupIndicator.remove()` (the loading gap
++  // this indicator covers) and `chrome.input.focus()` both appear between the
++  // kickoff and here, with no `await providerCatalogReady` anywhere in
++  // between.
++  const chromeMountAt = SOURCE.indexOf("chrome = await createShellChrome(otui, r, {", declAt);
++  expect(chromeMountAt).toBeGreaterThan(declAt);
++  const between = SOURCE.slice(declAt, chromeMountAt);
++  expect(between).not.toContain("await providerCatalogReady");
++});
++
++test("flow 309 AC6: a provider that fails at startup is surfaced through announceStartupNotice — the non-blocking, at-most-once notice path — not a blocking prompt", () => {
++  const readyReactionAt = SOURCE.indexOf("void providerCatalogReady.then((catalog) => {", FN_START);
++  expect(readyReactionAt).toBeGreaterThan(FN_START);
++  // Reacts to the SAME promise the kickoff created (never a second refresh).
++  const announceDeclAt = SOURCE.indexOf("const announceStartupNotice = (text: string): void => {", FN_START);
++  expect(announceDeclAt).toBeGreaterThan(FN_START);
++  expect(readyReactionAt).toBeGreaterThan(announceDeclAt); // attached only once safe to reference it (TDZ)
++  const reactionBody = SOURCE.slice(readyReactionAt, SOURCE.indexOf("});", readyReactionAt));
++  expect(reactionBody).toContain("announceStartupNotice(");
++  expect(reactionBody).toContain("auth-failed");
++  expect(reactionBody).toContain("unreachable");
++  expect(reactionBody).toContain("timeout");
++});
+diff --git a/src/tui/routing-inspector.ts b/src/tui/routing-inspector.ts
+index 323dc6640..c217e3ddd 100644
+--- a/src/tui/routing-inspector.ts
++++ b/src/tui/routing-inspector.ts
+@@ -95,7 +95,7 @@ export interface RoutingModalOptions {
+   /** Per-user config dir override (test seam only) — the "user" layer. Default: the real global config dir. */
+   userConfigDir?: string;
+   onKeypress: (handler: (key: KeypressEvent) => void) => () => void;
+-  /** Connected providers for the flat picker AND AC10's resolution check. Defaults to a live `detectProviders()` call, fetched ONCE per `reload()` — never a second probe for resolution alone. */
++  /** Connected providers for the flat picker AND AC10's resolution check. Defaults to the live provider catalog (flow 309, `../harness/provider-catalog.ts`), read ONCE per `reload()` — never a second probe for resolution alone. */
+   providers?: () => Promise<readonly FlatPickerProvider[]>;
+   load?: (layer: "project" | "user", location: RoutingConfigLocation) => Promise<RoutingConfigResult>;
+   loadRaw?: (layer: "project" | "user", location: RoutingConfigLocation) => Promise<RoutingConfigResult>;
+@@ -338,10 +338,18 @@ function windowLines(lines: readonly string[], rows: number): readonly string[]
+   return lines.slice(0, Math.max(1, rows));
+ }
+ 
+-/** Live connected-provider list for the flat picker, from `detectProviders()`. */
++/**
++ * Live connected-provider list for the flat picker (flow 309) — the SAME
++ * on-disk catalog `keryx shell`'s startup refresh and `keryx providers
++ * status` read/write, not a fresh probe on every `/routing` open. A fresh
++ * cache answers immediately; a stale/missing one triggers exactly one
++ * refresh (AC3). Root cause this replaces: `detectProviders()`'s result
++ * handed straight to the picker — curated model ids, and every OpenAI-compat
++ * provider offered whether or not it had a credential.
++ */
+ async function defaultProviders(): Promise<readonly FlatPickerProvider[]> {
+-  const { detectProviders } = await import("../commands/select");
++  const { loadOrRefreshProviderCatalog, catalogToFlatPickerProviders } = await import("../harness/provider-catalog");
+   const { envWithSavedApiKeys } = await import("../lib/shell-config");
+-  const detected = await detectProviders({ fetch, env: envWithSavedApiKeys() });
+-  return detected.map((p) => ({ name: p.name, models: p.models }));
++  const catalog = await loadOrRefreshProviderCatalog({ fetch, env: envWithSavedApiKeys() });
++  return catalogToFlatPickerProviders(catalog);
+ }
+diff --git a/src/tui/tui-shell.ts b/src/tui/tui-shell.ts
+index acc277cd1..70a25c8e1 100644
+--- a/src/tui/tui-shell.ts
++++ b/src/tui/tui-shell.ts
+@@ -150,7 +150,7 @@ import {
+ import { boldChunk, dimChunk, roleChunk } from "./theme-text";
+ import { openThemePicker } from "./theme-picker";
+ import { openGamesModal } from "./games";
+-import { mountBalancePanel } from "./balance-panel";
++import { formatBalance, mountBalancePanel } from "./balance-panel";
+ import type { DetectedProvider } from "../commands/select";
+ import type { ModelsFailure, ModelsResolveResult } from "../commands/providers";
+ import {
+@@ -165,6 +165,13 @@ import {
+   testProviderConnection,
+ } from "../commands/providers";
+ import { loadSessionLimits } from "../commands/model-limits";
++import {
++  describeCatalogStatus,
++  formatCatalogAge,
++  loadOrRefreshProviderCatalogFromDetected,
++  loadProviderCatalogCache,
++  type ProviderCatalog,
++} from "../harness/provider-catalog";
+ import { collapseToolOutput, summarizeToolArgs } from "../lib/ui";
+ import { classifyDiffLine, summarizeSubmittedLine } from "../lib/md-blocks";
+ import { extractPatchText } from "../lib/patch-risk";
+@@ -173,7 +180,7 @@ import { catalogAllows, catalogMethods, deviceCodeMethodLabel } from "../lib/oau
+ import { applyOAuthAccessToEnv, oauthAccessToken } from "../lib/oauth/grants";
+ import { loginDeviceCode } from "../lib/oauth/login";
+ import { openVerificationUrl } from "../lib/oauth/open-url";
+-import { loadShellConfig, noteSavedCredentialEnv, saveApiKey, saveProviderBaseUrl, saveShellConfig } from "../lib/shell-config";
++import { envWithSavedApiKeys, loadShellConfig, noteSavedCredentialEnv, saveApiKey, saveProviderBaseUrl, saveShellConfig } from "../lib/shell-config";
+ import { saveCustomCompatProvider } from "../lib/provider-config";
+ import {
+   allowShellPattern,
+@@ -2577,7 +2584,21 @@ function pickConnectedProviderStep(
+     let rowBlocks: RowBlock[] = [];
+ 
+     const labelOf = (d: DetectedProvider): string => d.label ?? d.name;
+-    const noteOf = (d: DetectedProvider): string => d.note ?? `${d.models.length} model(s)`;
++    // Flow 309 (AC6): decorate each row with the CACHED catalog's status,
++    // balance (when known) and reading age — read once, synchronously, when
++    // this step opens. Additive only: it never changes which providers are
++    // listed (that stays `filterConnectedDetectedProviders`'s live probe,
++    // called by this step's caller) or what `[Test]` does — a provider with
++    // no cache entry yet (never refreshed) just shows its plain note,
++    // unchanged from before this flow.
++    const catalogCache = loadProviderCatalogCache(opts.configDir);
++    const noteOf = (d: DetectedProvider): string => {
++      const base = d.note ?? `${d.models.length} model(s)`;
++      const entry = catalogCache?.providers[d.name];
++      if (entry === undefined) return base;
++      const balanceNote = entry.balance !== undefined ? ` · ${formatBalance(entry.balance)}` : "";
++      return `${base} · ${describeCatalogStatus(entry.status)}${balanceNote} · ${formatCatalogAge(entry.fetchedAt)}`;
++    };
+ 
+     // flow 304 review finding #4: Esc while a Disconnect is armed used to
+     // close the WHOLE step, even though the hint says "Esc to cancel" (of
+@@ -3700,7 +3721,21 @@ export async function launchTuiAgentShell(opts: {
+     // for the rest of this very long function) and assigned inside it.
+     let deps: AgentDeps;
+     let chrome: ShellChrome;
++    // Flow 309 (AC2): the live provider catalog refresh — starts during THIS
++    // startup loading phase (the spinner names it below) and is never
++    // `await`ed inline, so a hung provider cannot delay the composer taking
++    // input (same non-blocking shape as `resolveFirstRunHelp` further down).
++    // `.catch` turns a genuinely unexpected throw into an empty catalog
++    // rather than an unhandled rejection outliving this function.
++    const providerCatalogReady: Promise<ProviderCatalog> = loadOrRefreshProviderCatalogFromDetected(opts.detected, {
++      fetch: globalThis.fetch,
++      env: envWithSavedApiKeys(process.env),
++    }).catch((error: unknown) => {
++      debugEvent("provider-catalog.refresh-failed", { error: error instanceof Error ? error.message : String(error) });
++      return { fetchedAt: new Date().toISOString(), providers: {} } satisfies ProviderCatalog;
++    });
+     try {
++      startupIndicator.setStep("checking providers…");
+       startupIndicator.setStep("Loading agent tools and MCP servers…");
+       deps = await opts.makeAgentDeps(sel, liveSlateSession, busClientRef);
+       liveDeps = deps; // F-002: onDestroy reads this ref (TDZ-safe, see above)
+@@ -5244,6 +5279,28 @@ export async function launchTuiAgentShell(opts: {
+       // The wordmark would sit under the read-only view it just rendered.
+       splash.removeIfShown();
+     }
++    // Flow 309 (AC6): a provider that fails at startup is surfaced ONCE, as a
++    // non-blocking notice — never a modal, never something the operator must
++    // dismiss before the composer is usable. `providerCatalogReady` was
++    // already dispatched (background, non-blocking) during the earlier
++    // loading phase; this only reacts once it resolves, whenever that is —
++    // attached here (after `announceStartupNotice` exists) rather than at the
++    // dispatch site, since a fresh cache can resolve on the very next
++    // microtask and `announceStartupNotice` is not safe to reference before
++    // this point in the function.
++    void providerCatalogReady.then((catalog) => {
++      // Same guard as the bus-join callbacks below (`isDestroyed: () =>
++      // destroyed`): this shell may already be torn down by the time the
++      // catalog refresh resolves — a slow/timed-out provider probe racing
++      // Esc/exit — and painting into a destroyed surface is a use-after-free
++      // of whatever `announceStartupNotice`/`splash`/`io` now point at.
++      if (destroyed) return;
++      for (const entry of Object.values(catalog.providers)) {
++        if (entry.status === "auth-failed" || entry.status === "unreachable" || entry.status === "timeout") {
++          announceStartupNotice(`${entry.label ?? entry.name}: ${describeCatalogStatus(entry.status)} — /connect to fix`);
++        }
++      }
++    });
+     void refreshWorkspaceSidebar(); // resumed session may already have a bound workspace
+     void refreshReviewSidebar(); // project-wide, independent of this session's own workspace
+ 

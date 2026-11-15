@@ -1,0 +1,20 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "match", "gid": "G3", "why": "G3 identifies the recorded adapter's throwing cancel as a Liskov violation that cancelPendingDispatches calls through the base type, with the fix to omit cancel." },
+    { "tid": "T2", "verdict": "match", "gid": "G1", "why": "G1 describes loadRecordedResults returning null coalesced to [] in entries(), making a bad recording replay as a clean zero-finding result." },
+    { "tid": "T3", "verdict": "match", "gid": "G6", "why": "G6 flags writeReplaySummary mixing read, validation, transform and write in one function, duplicating the loader's parsing." },
+    { "tid": "T4", "verdict": "match", "gid": "G5", "why": "G5 names the unnamed seven-day literal at both sites (lines 69 and 151) and the drift risk." },
+    { "tid": "T5", "verdict": "match", "gid": "G2", "why": "G2 flags the predicate isReplayableResult sorting scopeIds in place and scopesMatch depending on that side effect." },
+    { "tid": "T6", "verdict": "match", "gid": "G8", "why": "G8 flags the counter named n with a comment compensating for the bad name." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "truth", "why": "Matches T2." },
+    { "gid": "G2", "label": "truth", "why": "Matches T5." },
+    { "gid": "G3", "label": "truth", "why": "Matches T1." },
+    { "gid": "G4", "label": "truth", "why": "Partial for T1: same failure path (uncaught cancel rejection aborting the shutdown loop), addressed from the caller side rather than the adapter." },
+    { "gid": "G5", "label": "truth", "why": "Matches T4." },
+    { "gid": "G6", "label": "truth", "why": "Matches T3." },
+    { "gid": "G7", "label": "noise", "why": "Four positional parameters is borderline taste; not in either list and below a clear-defect threshold, so the lower verdict applies." },
+    { "gid": "G8", "label": "truth", "why": "Matches T6." }
+  ]
+}

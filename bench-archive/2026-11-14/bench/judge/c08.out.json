@@ -1,0 +1,5 @@
+[
+{"tid":"T1","verdict":"miss","gid":null,"why":"No candidate reports the OAuth-grant credential lingering in process.env after disconnect; G4 is about a leftover saved apiKey on disk."},
+{"tid":"T2","verdict":"partial","gid":"G6","why":"G6 addresses the zai/zai-coding shared ZAI_API_KEY but only the stale sibling row in the UI, not the missing warning about silently disconnecting the other provider."},
+{"tid":"T3","verdict":"match","gid":"G1","why":"G1 says the no-credential path (including providerByName undefined) returns ok:true and the CLI remove prints success and exits 0, the same cause as the unknown-name success."}
+]

@@ -1,0 +1,45 @@
+# gdctx full file
+
+File: `$TRANSCRIPTS/memory/single-pass-review-recall-measured.md`
+Lines: `22`
+
+```text
+---
+name: single-pass-review-recall-measured
+description: Measured 2026-11-14 — one general reviewer recovers only ~1/3 of historically fixed blocker/major findings; do not collapse review lenses on text-similarity grounds
+metadata:
+  node_type: memory
+  type: project
+  originSessionId: 31f5ba09-bb99-480a-a242-68b602c1d0cf
+  modified: 2026-11-13T21:09:37.291Z
+---
+
+On 2026-11-14 the owner asked whether collapsing keryx's ~19 review lenses into 3 would hurt quality. Measured: 13 past review packages (46 acted-on blocker/major findings whose defect was still present at the reviewed head), one general reviewer with a single combined brief per diff, blind matching by separate judges.
+
+Result: 14 match + 6 partial of 46 (~37% counting partial as half; ~31% on the 24 quote-proven findings). By lens: security-code ~46-56%, logic ~14-38%, regression 0/5, testing-practices 0/2, architecture ~17%.
+
+**Why:** the audit's argument for collapsing lenses (shared boilerplate, low yield of style/performance lenses) does not show the specialised passes are redundant; the multi-lens history found roughly three times more of the fixed defects.
+
+Owner decision 2026-11-14: keep all review lenses as they are, including the zero-yield ones.
+
+**How to apply:** treat lens consolidation as rejected unless a new measurement compares like with like (e.g. N parallel general reviewers vs the lens roster, or repeated runs to bound variance). Pruning only zero-yield lenses (review-style, review-performance, review-pr-contract) was not tested and stays a separate decision. Caveats: small sample; two "fix-after-head" cases (c03, c06) had the fix partially present; one run per diff, so run-to-run variance is unmeasured. Scratch data was under the session scratchpad `bench/` (not durable).
+
+Related: [[agent-first-core-program]]
+
+```
+
+## Metadata
+
+```json
+{
+  "id": "2026-11-14T08-14-17-617Z-0927fe_read",
+  "kind": "read",
+  "command": "read $TRANSCRIPTS/memory/single-pass-review-recall-measured.md --mode full",
+  "exitCode": 0,
+  "rawPath": ".metaproject/data/gdctx/raw/2026-11-14T08-14-17-617Z-0927fe_read.log",
+  "summaryPath": ".metaproject/data/gdctx/artifacts/2026-11-14T08-14-17-617Z-0927fe_read.md",
+  "bytesIn": 1824,
+  "bytesOut": 1980,
+  "truncated": false
+}
+```

@@ -1,0 +1,12 @@
+{
+  "truth": [],
+  "candidates": [
+    { "gid": "G1", "label": "valid", "why": "The dead-pid grace period is a bare 2 * heartbeatMs in the new sweep rule while its sibling thresholds are named constants, and the same figure is repeated in tests and docs." },
+    { "gid": "G2", "label": "noise", "why": "Extracting a pure policy helper from a three-clause expression is a refactoring preference, not a defect the change introduces." },
+    { "gid": "G3", "label": "valid", "why": "MAX_SIGNATURE_FILES is defined as MAX_HASHED_FILES / SIGNATURE_WALKS_PER_STOP, so the new guard test is tautological and the constant is not tied to the two hard-coded dirSignature calls." },
+    { "gid": "G4", "label": "noise", "why": "Positional parameters in a local test helper are a taste-level readability point." },
+    { "gid": "G5", "label": "valid", "why": "The new code uses the literal 0o170000 where fs.constants.S_IFMT names the same mask, which is a specific, cheap readability fix." },
+    { "gid": "G6", "label": "valid", "why": "The new isLinkedWorktree doc refers to 'the base copy', which the code never defines, so the comment only makes sense against the replaced implementation." },
+    { "gid": "G7", "label": "noise", "why": "The reviewer itself marks this info-level and says the prose duplication across doc surfaces follows an existing project convention." }
+  ]
+}

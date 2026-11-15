@@ -1,0 +1,21 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "match", "gid": "G1", "why": "G1 reports the swallowed cursor-write failure in recordPlanRevision returning the entry as recorded, with the hidden-revision impact." },
+    { "tid": "T2", "verdict": "match", "gid": "G5", "why": "G5 flags the ExecutionPlanHistory constructor doing synchronous file I/O and parsing, suggesting a static async load." },
+    { "tid": "T3", "verdict": "match", "gid": "G9", "why": "G9 names the same five-branch if/else dispatch in describeChange and the bare else absorbing new kinds without exhaustiveness checking." },
+    { "tid": "T4", "verdict": "match", "gid": "G4", "why": "G4 reports diffExecutionPlans filling a caller-supplied out array and returning void." },
+    { "tid": "T5", "verdict": "miss", "gid": null, "why": "No candidate raises the transition-vs-change naming inconsistency." },
+    { "tid": "T6", "verdict": "match", "gid": "G7", "why": "G7 reports parseEntry's bare \"Invalid entry\" error lacking file and line context." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "truth", "why": "Matches T1." },
+    { "gid": "G2", "label": "valid", "why": "Confirmed in writePlan: an appendFile failure after plan.json is committed rejects the call, skips notify, and makes a retry hit a revision conflict." },
+    { "gid": "G3", "label": "valid", "why": "The cursor doc comment claims orphaned lines are never shown, but the next successful write advances the cursor past them, so the comment misstates the protocol." },
+    { "gid": "G4", "label": "truth", "why": "Matches T4." },
+    { "gid": "G5", "label": "truth", "why": "Matches T2." },
+    { "gid": "G6", "label": "noise", "why": "A renderer that loads its own history is a design-taste point largely overlapping G5, not a separate defect a maintainer would need to fix." },
+    { "gid": "G7", "label": "truth", "why": "Matches T6." },
+    { "gid": "G8", "label": "noise", "why": "Reading the wall clock for a timestamp is routine, and nothing in the change asserts exact timestamps, so this is taste." },
+    { "gid": "G9", "label": "truth", "why": "Matches T3." }
+  ]
+}

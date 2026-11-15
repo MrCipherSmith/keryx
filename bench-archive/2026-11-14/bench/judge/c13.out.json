@@ -1,0 +1,14 @@
+[
+ {
+  "tid": "T1",
+  "verdict": "miss",
+  "gid": null,
+  "why": "G8 touches the balance fetch but not the doubled /api path or the wrong response shape for OpenRouter."
+ },
+ {
+  "tid": "T2",
+  "verdict": "miss",
+  "gid": null,
+  "why": "G2 and G1 concern fetchedAt and empty-refresh merge semantics, not the unlocked concurrent writers clobbering a providers test patch."
+ }
+]

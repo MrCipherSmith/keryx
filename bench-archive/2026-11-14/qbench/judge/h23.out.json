@@ -1,0 +1,14 @@
+{
+  "truth": [],
+  "candidates": [
+    { "gid": "G1", "label": "noise", "why": "Readability preference about a single ternary and a 2x multiplier that the surrounding options already name via heartbeatMs; taste, not a defect." },
+    { "gid": "G2", "label": "noise", "why": "Positional optional parameter after signal is an ergonomics preference for an injectable used mostly by tests; borderline, resolved downward." },
+    { "gid": "G3", "label": "valid", "why": "The rendered Swept line says 'left by dead passes' while the sweep also removes live-pid stale-marker and unmarked old directories, so the operator-facing text is inaccurate." },
+    { "gid": "G4", "label": "noise", "why": "Doc wording redundancy between a parenthetical and the next sentence; style-level, no behavioral or factual error." },
+    { "gid": "G5", "label": "noise", "why": "The duplicated abort literal is a pre-existing pattern; the change adds one more site consistent with it, not a new problem." },
+    { "gid": "G6", "label": "noise", "why": "Generic function-length/SRP observation; not a specific defect the change introduces." },
+    { "gid": "G7", "label": "noise", "why": "Inline test fixture age constant repeated in tests is a test-style preference." },
+    { "gid": "G8", "label": "noise", "why": "Three-line stub duplicated across three tests is test-style taste." },
+    { "gid": "G9", "label": "valid", "why": "The new isLinkedWorktree docstring refers to 'the base copy', an undefined leftover from change history that makes the current behavior description unclear." }
+  ]
+}

@@ -1,0 +1,83 @@
+[
+  {
+    "id": "G1",
+    "file": "src/review/agents/recorded-adapter.ts",
+    "line": 114,
+    "severity": "major",
+    "problem": "LSP violation: the recorded adapter defines an optional `cancel` member only to throw 'not supported'. In `ReviewAgentAdapter` (types.ts:156) `cancel` is optional, and an absent `cancel` is the contract for 'cannot cancel' (capabilities.cancellation is already false here). The new `cancelPendingDispatches` relies on exactly that contract (adapter-shutdown.ts:50 `if (adapter.cancel === undefined) { skipped.push(...) }`), so a recorded dispatch is not skipped. adapter-shutdown.ts:54 calls `cancel`, gets the throw, and has no per-adapter catch, so the loop stops. Dispatches later in the sorted list are never cancelled and the caller gets a rejection instead of an `AdapterShutdownReport`. Its sibling in controller.ts:421-429 wraps each adapter's cancel in try/catch. Class scope: the only throwing `cancel` among adapters with `cancellation: false` (searched `cancellation: false` and `.cancel` call sites under src/review). It reaches call sites adapter-shutdown.ts:54 (unguarded) and controller.ts:424 (guarded).",
+    "impact": "When a host shuts down a run that includes a recorded or replay dispatch, provider work for every later pending dispatch keeps running behind a closed controller, which is what the shutdown helper is meant to prevent. Fix: omit `cancel` from the recorded adapter. Optionally catch per dispatch in cancelPendingDispatches as controller.ts does.",
+    "quote": "async cancel() {\n      throw new Error(\"cancel is not supported by the recorded adapter\");"
+  },
+  {
+    "id": "G2",
+    "file": "src/review/agents/recorded-adapter.ts",
+    "line": 44,
+    "severity": "major",
+    "problem": "Failure is signalled by a value the caller reads as success (error-handling.mdc Rule 1, Rule 3 and Iron Law 2). `loadRecordedResults` returns `null` for a missing or unreadable file and for invalid JSON, and drops the original error in both cases. Its only caller turns `null` into an empty recording (line 83 `(await loadRecordedResults(options.recordingPath)) ?? []`). `execute` (lines 108-109) then answers every dispatch with `{ findings: [] }, recorded: false`. A wrong `recordingPath` therefore produces a replay run that completes with zero findings instead of failing. Elements of the array are also cast to `ReviewAgentStoredResult[]` without validation, while `writeReplaySummary` in the same file validates the same format strictly.",
+    "impact": "Anyone using offline dry runs or plan-eval replays gets a clean-looking result from a mistyped path or a corrupt recording. Telling a real empty replay from a broken one means debugging the adapter. Fix: throw with the path and `{ cause }`, or return a discriminated result that `entries()` checks, and share one validator with writeReplaySummary.",
+    "quote": "} catch {\n    return null;\n  }"
+  },
+  {
+    "id": "G3",
+    "file": "src/review/agents/recorded-adapter.ts",
+    "line": 65,
+    "severity": "minor",
+    "problem": "Hidden side effect / output argument in a predicate. `isReplayableResult` is documented as a yes/no check, but its first statement sorts `entry.scopeIds` in place. That is the only reason `RecordedEntry.scopeIds` is the one non-readonly field (line 24). `scopesMatch` (lines 72-75) compares against `entry.scopeIds` by index and silently depends on that sort having already happened in `entries()`.",
+    "impact": "This is temporal coupling between two functions. If someone reorders or removes the filter, or calls `scopesMatch` on an entry that never went through `isReplayableResult`, recorded results stop matching and replay as empty with nothing failing. Fix: sort once when loading (line 57) and make the field readonly, or sort both sides inside `scopesMatch`.",
+    "quote": "entry.scopeIds.sort();"
+  },
+  {
+    "id": "G4",
+    "file": "src/review/agents/recorded-adapter.ts",
+    "line": 69,
+    "severity": "minor",
+    "problem": "Magic number for a business rule, written inline in two places. The 7-day replay freshness window is `7 * 24 * 60 * 60 * 1000` here and again at line 151 (`stale: ageMs > 7 * 24 * 60 * 60 * 1000`). Neither copy has a name. The two places decide 'replayable' and 'stale' for the same entries and must stay exact complements (`<=` vs `>`).",
+    "impact": "If someone changes the window in one place only, the replay summary marks entries fresh or stale differently from what the adapter actually replays. Fix: one named constant, e.g. `REPLAY_MAX_AGE_MS`, used at both sites.",
+    "quote": "return nowMs - recordedAt <= 7 * 24 * 60 * 60 * 1000;"
+  },
+  {
+    "id": "G5",
+    "file": "src/review/agents/recorded-adapter.ts",
+    "line": 129,
+    "severity": "minor",
+    "problem": "I/O mixed with a transform (solid-principles.mdc threshold: any length). `writeReplaySummary` reads the recording file, parses it, validates each entry, builds and sorts summary rows, works out the output path, and writes `replay-summary.json`. That is one function with read I/O, a validation and transform pipeline, and write I/O. The validation also duplicates, with different strictness, the parsing that `loadRecordedResults` does on the same file format.",
+    "impact": "The row-building and validation logic cannot be unit-tested without real files. The two parsers of one format will drift. Fix: extract a pure `summariseRecording(parsed, nowMs): ReplaySummaryRow[]`, and possibly a shared validator, so the exported function stays a thin read-and-write shell.",
+    "quote": "export async function writeReplaySummary(recordingPath: string, nowMs: number = Date.now()): Promise<string> {"
+  },
+  {
+    "id": "G6",
+    "file": "src/review/agents/adapter-shutdown.ts",
+    "line": 43,
+    "severity": "minor",
+    "problem": "Single-letter name with a comment that exists only to explain it (A1, C2). The counter `n` needs a trailing comment to say what it counts, and that comment says 'accepted the cancel' while the field it feeds is `confirmed`.",
+    "impact": "The comment does the name's job. Readers meet three terms ('n', 'accepted', 'confirmed') for one concept. Fix: `let confirmed = 0;` and return `{ confirmed, skipped, unknownAdapter }`.",
+    "quote": "let n = 0; // n is the number of dispatches whose adapter accepted the cancel"
+  },
+  {
+    "id": "G7",
+    "file": "src/review/agents/adapter-shutdown.ts",
+    "line": 34,
+    "severity": "minor",
+    "problem": "Four positional parameters with no options object (threshold: 4 or more), and the last two are both `string` (`runId`, `reason`), so they can be swapped without a type error. The codebase passes these same fields as a named request object, e.g. `adapter.cancel({ runId, dispatchId, reason })` (types.ts:156, controller.ts:424).",
+    "impact": "A call like `cancelPendingDispatches(adapters, pending, reason, runId)` type-checks and sends the wrong run id to every adapter. Fix: `cancelPendingDispatches(adapters, pending, { runId, reason })`.",
+    "quote": "runId: string,\n  reason: string,"
+  },
+  {
+    "id": "G8",
+    "file": "src/review/agents/recorded-adapter.ts",
+    "line": 106,
+    "severity": "minor",
+    "problem": "Comment claims a code path that does not exist (C1a). It says a task the recording never reached replays flagged `recorded: false` 'so the replayed plan still completes and the summary counts it'. Nothing in src reads `metadata.recorded` (searched `metadata?.recorded` under src). The only summary in the change, `writeReplaySummary`, summarises the recording file and never sees replayed dispatches. The same branch also covers an entity or scope mismatch on a task the recording did reach, which the comment does not mention.",
+    "impact": "Readers will assume missed replays are counted and reported somewhere, and that this branch only covers tasks the recording never reached. Neither is true, so gaps in a replay go unnoticed. Fix: describe what the code actually does, or add the counting the comment promises.",
+    "quote": "// `recorded: false`, so the replayed plan still completes and the summary counts it."
+  },
+  {
+    "id": "G9",
+    "file": "src/review/agents/recorded-adapter.ts",
+    "line": 78,
+    "severity": "minor",
+    "problem": "Inconsistent vocabulary in one file (A3). `nowMs` is a clock function in `RecordedAdapterOptions` (line 31, `nowMs?: () => number`) and inside the factory (line 78), but a number timestamp in `isReplayableResult(entry, nowMs: number)` (line 64) and `writeReplaySummary(..., nowMs: number)` (line 129). The factory then names the number `now` (line 84).",
+    "impact": "One identifier means 'clock' in some places and 'instant' in others, so readers must check each signature to know whether to call it. Fix: rename the option and factory local to `clock` (or `now: () => number`) and keep `nowMs` for the number.",
+    "quote": "const nowMs = options.nowMs ?? Date.now;"
+  }
+]

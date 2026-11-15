@@ -1,0 +1,20 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "match", "gid": "G2", "why": "G2 identifies the swallowed cursor-write failure at line 72 that still returns the entry as recorded, leaving it hidden until a later write commits it." },
+    { "tid": "T2", "verdict": "match", "gid": "G6", "why": "G6 flags the constructor doing synchronous readFileSync, parsing, and possibly throwing, which makes construction inseparable from I/O." },
+    { "tid": "T3", "verdict": "match", "gid": "G7", "why": "G7 flags describeChange's if/else-if chain on the discriminant with a bare else that silently absorbs new kinds and has no exhaustiveness check." },
+    { "tid": "T4", "verdict": "match", "gid": "G5", "why": "G5 flags diffExecutionPlans' out-parameter that returns void instead of returning the transitions." },
+    { "tid": "T5", "verdict": "miss", "gid": null, "why": "No candidate raises the inconsistent naming of the same records as both transition and change." },
+    { "tid": "T6", "verdict": "partial", "gid": "G3", "why": "G3 notes the generic \"Invalid entry\" error lacks file and line, but its main point is the torn-line and cursor-filter ordering, so acting on it would not necessarily enrich the error." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "valid", "why": "The appendFile at line 68 is uncaught, so a journal failure rejects writePlan after plan.json was committed and skips notify(), which contradicts the file's own rule for secondary failures; this is a real defect not in the truth list." },
+    { "gid": "G2", "label": "truth", "why": "Matches T1." },
+    { "gid": "G3", "label": "truth", "why": "Partial for T6." },
+    { "gid": "G4", "label": "valid", "why": "readCursor maps a parseable cursor without a numeric revision to 0, which hides all history and contradicts its own comment, and the JSON `null` case gets reported as invalid JSON; it is specific and real." },
+    { "gid": "G5", "label": "truth", "why": "Matches T4." },
+    { "gid": "G6", "label": "truth", "why": "Matches T2." },
+    { "gid": "G7", "label": "truth", "why": "Matches T3." },
+    { "gid": "G8", "label": "noise", "why": "Info-level placement preference, and the claimed mutual dependency does not hold because the history module imports only types from execution-plan.ts." }
+  ]
+}

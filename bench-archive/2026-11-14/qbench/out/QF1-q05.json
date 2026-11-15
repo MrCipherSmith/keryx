@@ -1,0 +1,65 @@
+[
+  {
+    "id": "G1",
+    "file": "src/review/mutate.ts",
+    "line": 377,
+    "severity": "minor",
+    "problem": "The new abandonment rule is computed inline in the sweep's I/O loop. One dense expression holds three time thresholds and a pid probe: no-marker age vs staleMs, marker age vs staleHeartbeatMs, and dead pid AND marker age vs 2 * heartbeatMs. It is a pure decision over (owner, dir mtime, now, isAlive) sitting between lstat/readOwner and rm. That is the 'I/O mixed with a transform' shape in solid-principles.mdc. The 'two heartbeats' grace is also a bare multiplier with no named constant, while its siblings HEARTBEAT_MS and STALE_HEARTBEAT_MS are exported constants.",
+    "impact": "The rule can only be exercised through real directories with hand-set utimes. The tests show it: every case builds a directory with `make(..., markerAgeMs)` and re-derives the hidden factor as `2 * HEARTBEAT_MS ± 30_000`. Changing the grace means editing the expression and every test that guessed the factor. An `isAbandoned(owner, dirMtimeMs, now, ...)` helper with a named grace constant would be unit-testable without the filesystem.",
+    "quote": ": now() - owner.mtimeMs > staleHeartbeatMs || (!isAlive(owner.pid) && now() - owner.mtimeMs > 2 * heartbeatMs);"
+  },
+  {
+    "id": "G2",
+    "file": "src/review/mutate.test.ts",
+    "line": 251,
+    "severity": "minor",
+    "problem": "The new shared test helper `make` takes 5 positional parameters, and two of them are adjacent same-typed millisecond ages (ageMs, markerAgeMs). There is no options object. Call sites read as unlabelled number pairs, for example `make(\"keryx-mutate-DEADDD\", {...}, 1000, 3 * HEARTBEAT_MS, repoScratch)` at line 351.",
+    "impact": "A reader has to go back to the signature to know which age is the directory's and which is the marker's. Swapping them silently turns a 'dead owner' case into a 'fresh marker' case, and the sweep tests that depend on the distinction (HL-001 and the others) would test the wrong thing.",
+    "quote": "async function make(name: string, owner: unknown, ageMs: number, markerAgeMs: number = ageMs, into: string = scratch): Promise<string> {"
+  },
+  {
+    "id": "G3",
+    "file": "src/review/mutate.test.ts",
+    "line": 365,
+    "severity": "minor",
+    "problem": "The literal `3 * HEARTBEAT_MS` means 'a marker old enough to count as dead but not abandoned'. It is repeated as a bare expression at 11 sites: lines 351, 365, 367, 381, 382, 448, 469, 471, 478, 497 and 509. Line 396 already gives it a name, `const staleButNotAbandoned = 3 * HEARTBEAT_MS`, but only inside one describe block, so the same concept appears under two names in the same change.",
+    "impact": "If the grace window or STALE_HEARTBEAT_MS changes so that 3 heartbeats is no longer between the two thresholds, every copy has to be found and fixed by hand. Missing one makes a test pass or fail for the wrong reason.",
+    "quote": "await make(\"keryx-mutate-AAAAAA\", { pid: 111, startedAt: \"x\" }, 1000, 3 * HEARTBEAT_MS);"
+  },
+  {
+    "id": "G4",
+    "file": "src/review/mutate.ts",
+    "line": 232,
+    "severity": "minor",
+    "problem": "The new doc comment on isLinkedWorktree says everything else is copied 'as the base copy did'. The base (pre-change) code did not do that. Its isNestedCheckout left out embedded clones (a `.git` directory), `.git` links and unreadable `.git` files. This change starts copying all three, as the rewritten test confirms ('clone', 'linked' and 'unreadable' are now expected in the copy).",
+    "impact": "A maintainer reading the comment will take the behaviour as unchanged and miss that embedded clones and `.git` links are newly copied. That widens what a pass copies, and the copy time.",
+    "quote": "under review. Everything else is copied as the base copy did, because the tests may load it"
+  },
+  {
+    "id": "G5",
+    "file": "src/review/completion-gate.ts",
+    "line": 888,
+    "severity": "minor",
+    "problem": "The new stall-stop text says 'no change in the first ${MAX_SIGNATURE_FILES} entries the gate reads'. That reads as one 2048-entry window. The budget is actually per tree: the working data and the package each get MAX_SIGNATURE_FILES, as SIGNATURE_WALKS_PER_STOP and the OpenManagedReview doc both state. The guide updated in the same change says 'the first 2 048 entries of each tree'. The same limit is documented two different ways. Separately, the variable `stalled` holds a message suffix, not a boolean, even though its name reads like a flag.",
+    "impact": "An operator who hits this stop is told the gate saw fewer entries than it did and has no way to tell which tree ran out of budget. The boolean-sounding name also invites a later `if (stalled)` misuse.",
+    "quote": "const stalled = open.signature.includes(TRUNCATION_MARKER)\n      ? ` and no change in the first ${MAX_SIGNATURE_FILES} entries the gate reads in the last ${stalls}`"
+  },
+  {
+    "id": "G6",
+    "file": "src/review/mutate.test.ts",
+    "line": 234,
+    "severity": "minor",
+    "problem": "The describe block whose contents this change rewrote is still titled 'nested git checkouts'. The production predicate was renamed from isNestedCheckout to isLinkedWorktree, and the new first test says the opposite of the old concept: 'a pass leaves out linked worktrees and copies submodules, embedded clones and everything else'. So the change uses two names for one concept.",
+    "impact": "Test output and the suite structure still describe the old rule (all nested checkouts skipped). That misleads anyone using the test names to find out what the copy leaves out.",
+    "quote": "describe(\"nested git checkouts and stale scratch\", () => {"
+  },
+  {
+    "id": "G7",
+    "file": "docs/docs/cli-reference.md",
+    "line": 5107,
+    "severity": "info",
+    "problem": "The sweep policy ('owner died (no heartbeat for two minutes) or stopped refreshing its marker for ten minutes, and unmarked ones older than six hours') is added as hand-written prose with hard-coded durations in 5 places: docs/docs/cli-reference.md (mutate row), docs/docs/guides/review-with-a-record.md (~line 197), src/commands/review.ts help text (~line 5090), and both copies of review-orchestrator/SKILL.detail.md (~line 792). The durations restate HEARTBEAT_MS (x2), STALE_HEARTBEAT_MS and STALE_SCRATCH_MS from mutate.ts. Reported as info because per-audience doc copies look like the project's convention.",
+    "impact": "Changing any of the three constants means five prose edits that no test checks.",
+    "quote": "whose owner died (no heartbeat for two minutes) or stopped refreshing its marker for ten minutes, and unmarked ones older than six hours"
+  }
+]

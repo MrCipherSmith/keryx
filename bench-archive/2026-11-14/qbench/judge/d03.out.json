@@ -1,0 +1,19 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "match", "gid": "G1", "why": "G1 identifies writeExportFile swallowing write failures behind KERYX_VERBOSE and the false success message with exit 0." },
+    { "tid": "T2", "verdict": "match", "gid": "G5", "why": "G5 flags the rethrow in collectRunRows without { cause: error }, losing the original error." },
+    { "tid": "T3", "verdict": "match", "gid": "G6", "why": "G6 describes runHistoryExport as ~57 lines mixing option parsing, date regex, timestamp trimming, writing and display formatting." },
+    { "tid": "T4", "verdict": "match", "gid": "G4", "why": "G4 flags the boolean format flag and redundant positional at/pages parameters on renderRunLine." },
+    { "tid": "T5", "verdict": "match", "gid": "G3", "why": "G3 names the same label-sanitising chain copied at all three sites." },
+    { "tid": "T6", "verdict": "match", "gid": "G2", "why": "G2 flags the doc comment claiming oldest-first while listWikiRuns returns newest first and nothing re-sorts." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "truth", "why": "Match for T1." },
+    { "gid": "G2", "label": "truth", "why": "Match for T6." },
+    { "gid": "G3", "label": "truth", "why": "Match for T5." },
+    { "gid": "G4", "label": "truth", "why": "Match for T4." },
+    { "gid": "G5", "label": "truth", "why": "Match for T2." },
+    { "gid": "G6", "label": "truth", "why": "Match for T3." },
+    { "gid": "G7", "label": "valid", "why": "The diff's new HISTORY_USAGE lists --export/--format but omits --since/--command that EXPORT_USAGE and the wiki help document, a real inconsistency the change introduces." }
+  ]
+}

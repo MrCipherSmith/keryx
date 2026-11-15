@@ -1,0 +1,1011 @@
+diff --git a/src/commands/shell-pty-launch.smoke.test.ts b/src/commands/shell-pty-launch.smoke.test.ts
+index 266a44046..bced393c8 100644
+--- a/src/commands/shell-pty-launch.smoke.test.ts
++++ b/src/commands/shell-pty-launch.smoke.test.ts
+@@ -41,6 +41,7 @@ import path from "node:path";
+ import { buildGovernanceReport, writeGovernanceArtifacts } from "../governance/service";
+ import { SAFE_BUN_SPAWN_ARGS } from "../lib/safe-exec";
+ import { uniqueTestRoot } from "../lib/test-tmp";
++import { createSession, loadArchive, loadContext, persistHistory } from "../session";
+ 
+ const REAL_SUBPROCESS_FLAG = process.env.KERYX_ALLOW_REAL_SUBPROCESS === "1";
+ /** BSD `script`. The util-linux spelling takes `-c "<cmd>" <file>` instead. */
+@@ -287,6 +288,111 @@ test("the pty assertions stay coupled to the renderer's real options", () => {
+ describe.skipIf(!REAL_SUBPROCESS_FLAG || !PTY_AVAILABLE)(
+   "keryx shell on an allocated pty (macOS; KERYX_ALLOW_REAL_SUBPROCESS=1)",
+   () => {
++    test.each(["full context", "destination preview"])(
++      "switching sessions restores the %s",
++      async (check) => {
++        const root = uniqueTestRoot(tmpdir(), "keryx-pty-session-switch");
++        const cwd = path.join(root, "cwd");
++        const dataHome = path.join(root, "data");
++        const dataDir = path.join(dataHome, "keryx");
++        mkdirSync(cwd, { recursive: true });
++        mkdirSync(dataDir, { recursive: true });
++        writeFileSync(path.join(dataDir, "help-first-run.json"), '{"shown":true}');
++        const messages = Array.from({ length: 208 }, (_, index) => ({
++          role: index % 2 === 0 ? "user" as const : "assistant" as const,
++          content: `Destination history ${index}`,
++          ts: "2025-01-01T00:00:00.000Z",
++        }));
++        const archive = [{ role: "user" as const, content: "Archived before compaction", ts: messages[0]!.ts }, ...messages];
++        const target = persistHistory(createSession({ cwd, dataDir, title: "Destination session" }), messages, { archive });
++        const requests: string[][] = [];
++        const server = Bun.serve({
++          hostname: "127.0.0.1",
++          port: 0,
++          async fetch(request) {
++            const pathname = new URL(request.url).pathname;
++            if (pathname === "/api/tags") return Response.json({ models: [{ name: "test-model" }] });
++            if (pathname === "/api/show") return Response.json({ capabilities: ["completion", "tools"], model_info: { "test.context_length": 65536 } });
++            if (request.method === "GET") return Response.json({ data: [{ id: "test-model", object: "model" }] });
++            const body = await request.json() as { messages: { content: string }[] };
++            requests.push(body.messages.map((message) => message.content));
++            const reply = requests.length === 1 ? "Outgoing answer" : "Destination answer";
++            const chunk = { choices: [{ index: 0, delta: { content: reply }, finish_reason: "stop" }], usage: { prompt_tokens: 19, completion_tokens: 7, total_tokens: 26 } };
++            return new Response(`data: ${JSON.stringify(chunk)}\n\ndata: [DONE]\n\n`, { headers: { "content-type": "text/event-stream" } });
++          },
++        });
++        const output: Buffer[] = [];
++        const proc = Bun.spawn([
++          process.execPath, ...SAFE_BUN_SPAWN_ARGS, CLI, "shell", "--provider", "ollama", "--model", "test-model",
++          "--base-url", `http://127.0.0.1:${server.port}`,
++        ], {
++          cwd,
++          timeout: 25_000,
++          terminal: { rows: 36, cols: 120, data: (_, chunk) => { output.push(Buffer.from(chunk)); } },
++          env: {
++            PATH: process.env.PATH ?? "",
++            HOME: root,
++            XDG_DATA_HOME: dataHome,
++            KERYX_DATA_DIR: dataDir,
++            TERM: "xterm-256color",
++            KERYX_SKIP_BOOT: "1",
++          },
++        });
++        const terminal = proc.terminal;
++        const waitFor = async (marker: string, since = 0): Promise<void> => {
++          const deadline = Date.now() + 8000;
++          while (Date.now() < deadline && proc.exitCode === null) {
++            const text = visibleText(Buffer.concat(output.slice(since)).toString("utf8"));
++            if (text.includes(marker)) return;
++            await Bun.sleep(25);
++          }
++          throw new Error(`PTY never printed ${marker}. Tail: ${visibleText(Buffer.concat(output).toString("utf8")).slice(-1000)}`);
++        };
++        try {
++          await waitFor("Enter send");
++          terminal?.write("Outgoing prompt\r");
++          await waitFor("worked for");
++          expect(requests[0]).toContain("Outgoing prompt");
++
++          terminal?.write("/sessions\r");
++          await waitFor("Session Switcher");
++          terminal?.write("\u001b[B");
++          const switchFrame = output.length;
++          terminal?.write("\r");
++          await waitFor("Resumed", switchFrame);
++
++          if (check === "destination preview") {
++            await waitFor("Destination history 206", switchFrame);
++            const preview = Buffer.concat(output.slice(switchFrame)).toString("utf8");
++            expect(visibleText(preview)).toContain("Recent prompts");
++            const expandFrame = output.length;
++            terminal?.write("/expand\r");
++            await waitFor("Nothing to expand", expandFrame);
++            return;
++          }
++          terminal?.write("After switch\r");
++          await waitFor("Destination answer", switchFrame);
++          await waitFor("worked for", switchFrame);
++          expect(requests[1]?.slice(1, -1)).toEqual(messages.map((message) => message.content));
++          terminal?.write("/exit\r");
++          expect(await proc.exited).toBe(0);
++          const savedContext = loadContext(cwd, target.summary.id, dataDir);
++          const savedArchive = loadArchive(cwd, target.summary.id, dataDir);
++          expect(savedContext.slice(0, -2)).toEqual(messages);
++          expect(savedArchive.slice(0, -2)).toEqual(archive);
++          expect(savedContext.slice(-2).map((message) => message.content)).toEqual(["After switch", "Destination answer"]);
++          expect(savedArchive.slice(-2)).toEqual(savedContext.slice(-2));
++        } finally {
++          if (proc.exitCode === null) proc.kill();
++          terminal?.close();
++          await proc.exited;
++          server.stop(true);
++          rmSync(root, { recursive: true, force: true });
++        }
++      },
++      30_000,
++    );
++
+     test(
+       "the real shell launches, draws a frame into the alternate screen, and exits cleanly",
+       async () => {
+diff --git a/src/commands/shell-types.ts b/src/commands/shell-types.ts
+index 3af9d4b8c..20dca2ebf 100644
+--- a/src/commands/shell-types.ts
++++ b/src/commands/shell-types.ts
+@@ -12,7 +12,8 @@ export interface ShellIO {
+    * assistant token deltas (still `write`) apart from system text and see turn
+    * boundaries, so it can render a spinner + markdown.
+    */
+-  onTurnStart?: () => void;
++  /** The optional callback aborts the current model stream without closing the shell. */
++  onTurnStart?: (interrupt?: () => void) => void;
+   onTurnEnd?: (full: string) => void;
+   onSystem?: (text: string) => void;
+   /** Flush queued asynchronous notices only while terminal output is safe. */
+diff --git a/src/commands/shell.ts b/src/commands/shell.ts
+index a505131c7..a85aadac7 100644
+--- a/src/commands/shell.ts
++++ b/src/commands/shell.ts
+@@ -1245,7 +1245,7 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
+     busWorking = true;
+     // Signal the start of a streamed reply so a rich wrapper can show a role
+     // label + spinner; a no-op (no output) when no wrapper is attached.
+-    io.onTurnStart?.();
++    io.onTurnStart?.(() => turn.abort.abort());
+     try {
+       const streamOptions = {
+         attemptId: deps.idSeq(),
+@@ -1253,7 +1253,7 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
+         ...(modelParams.timeoutMs !== undefined ? { timeoutMs: modelParams.timeoutMs } : {}),
+       };
+       for await (const event of provider.stream(request, streamOptions)) {
+-        if (closing) break;
++        if (closing || turn.abort.signal.aborted) break;
+         if (event.kind === "text_delta") {
+           const text = event.text ?? "";
+           io.write(text);
+@@ -1272,7 +1272,9 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
+       if (closing) break;
+       // A reused adapter emits `provider_error` events rather than throwing, but
+       // guard against an unexpected throw so one bad turn never ends the session.
+-      system(`\n[error] ${cause instanceof Error ? cause.message : String(cause)}\n`);
++      if (!turn.abort.signal.aborted) {
++        system(`\n[error] ${cause instanceof Error ? cause.message : String(cause)}\n`);
++      }
+       errored = true;
+     }
+ 
+@@ -1283,6 +1285,10 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
+     if (accumulated.length > 0) {
+       io.onTurnEnd?.(accumulated);
+     }
++    if (turn.abort.signal.aborted) {
++      system("◇ chat turn interrupted (Esc).\n");
++      errored = true;
++    }
+ 
+     if (!errored) {
+       history.push({ role: "assistant", content: accumulated, provenance: "model" });
+diff --git a/src/tui/chat-shell.test.ts b/src/tui/chat-shell.test.ts
+index 7c6e75ac2..80726906d 100644
+--- a/src/tui/chat-shell.test.ts
++++ b/src/tui/chat-shell.test.ts
+@@ -297,6 +297,82 @@ otuiTest("a turn settling never steals focus from a `/` dropdown opened while it
+   setup.renderer.destroy();
+ });
+ 
++otuiTest("flow 487 AC4: Escape dismisses local UI, then aborts the Chat stream and accepts another turn", async () => {
++  const otui = requireOtui();
++  const setup = await otui.testing.createTestRenderer({ width: 100, height: 30 });
++  const release = Promise.withResolvers<void>();
++  let firstSignal: AbortSignal | undefined;
++  const next = scriptedTextProvider(["Fresh reply"]);
++  const provider: ProviderPort = {
++    describe: next.describe,
++    stream(request, opts) {
++      if (request.messages.at(-1)?.content !== "Slow question") return next.stream(request, opts);
++      firstSignal = opts.signal;
++      const aborted = new Promise<void>((resolve) => {
++        if (opts.signal?.aborted) resolve();
++        else opts.signal?.addEventListener("abort", () => resolve(), { once: true });
++      });
++      return (async function* (): AsyncGenerator<NormalizedEvent> {
++        yield { sequence: 0, attemptId: opts.attemptId, kind: "text_delta", text: "Partial reply" };
++        await Promise.race([aborted, release.promise]);
++        // Deliberately yield again after abort to test the driver's output guard.
++        yield { sequence: 1, attemptId: opts.attemptId, kind: "text_delta", text: " Late reply" };
++        yield { sequence: 2, attemptId: opts.attemptId, kind: "model_end" };
++      })();
++    },
++  };
++  const handle = await mountChatShell(otui.core, setup.renderer, {
++    deps: { ...chatDeps([]), makeProvider: () => provider },
++    runShell,
++    persistSelection: false,
++  });
++  const submit = async (line: string): Promise<void> => {
++    handle.chrome.input.value = line;
++    await setup.flush();
++    setup.mockInput.pressEnter();
++    await settle(setup);
++  };
++  const escape = async (): Promise<void> => {
++    setup.mockInput.pressEscape();
++    // The stdin parser waits 20 ms to distinguish bare Esc from a sequence.
++    await new Promise((resolve) => setTimeout(resolve, 60));
++    await settle(setup);
++  };
++  try {
++    await submit("Slow question");
++    expect(setup.captureCharFrame()).toContain("Partial reply");
++    expect(firstSignal?.aborted).toBe(false);
++
++    await submit("/theme");
++    expect(handle.chrome.overlayActive()).toBe(true);
++    await escape();
++    expect(handle.chrome.overlayActive()).toBe(false);
++    expect(firstSignal?.aborted).toBe(false);
++
++    await setup.mockInput.pressKeys(["/"]);
++    await settle(setup);
++    expect(handle.chrome.menuActive()).toBe(true);
++    await escape();
++    expect(handle.chrome.menuActive()).toBe(false);
++    expect(firstSignal?.aborted).toBe(false);
++
++    await escape();
++    expect(firstSignal?.aborted).toBe(true);
++    expect(handle.chrome.isBusy()).toBe(false);
++    expect(setup.captureCharFrame()).toContain("chat turn interrupted");
++    expect(setup.captureCharFrame()).not.toContain("Late reply");
++
++    await submit("Next question");
++    expect(setup.captureCharFrame()).toContain("Fresh reply");
++  } finally {
++    handle.bridge.close();
++    release.resolve();
++    await handle.done;
++    handle.destroy();
++    setup.renderer.destroy();
++  }
++});
++
+ otuiTest("/new resets the estimated context counter instead of letting it keep climbing", async () => {
+   const otui = requireOtui();
+   const h = await mountChat(otui, { replies: ["A fairly long scripted answer about keryx."] });
+diff --git a/src/tui/chat-shell.ts b/src/tui/chat-shell.ts
+index 7aab76d81..41f92023a 100644
+--- a/src/tui/chat-shell.ts
++++ b/src/tui/chat-shell.ts
+@@ -124,6 +124,8 @@ export interface ChatBridge {
+   submit(line: string): ChatSubmitResult;
+   /** End the line stream so `runShell` returns and the shell tears down. */
+   close(): void;
++  /** Stop the current model stream while keeping the line stream open. */
++  interruptTurn(): boolean;
+   /** True between a line reaching the driver and the driver asking for the next. */
+   turnActive(): boolean;
+   /** Lines accepted but not yet consumed by the driver. */
+@@ -149,6 +151,7 @@ export function createChatBridge(hooks: ChatBridgeHooks = {}): ChatBridge {
+   let closed = false;
+   let turn = false;
+   let streaming = false;
++  let interruptTurn: (() => void) | undefined;
+   /**
+    * A `"\n\n"` that arrived before this turn produced anything else, held back
+    * because it is ambiguous: it is either the trailing separator of a turn that
+@@ -180,6 +183,7 @@ export function createChatBridge(hooks: ChatBridgeHooks = {}): ChatBridge {
+       return;
+     }
+     closed = true;
++    interruptTurn = undefined;
+     queue.length = 0;
+     const resolve = waiting;
+     waiting = undefined;
+@@ -194,6 +198,7 @@ export function createChatBridge(hooks: ChatBridgeHooks = {}): ChatBridge {
+         if (turn) {
+           turn = false;
+           streaming = false;
++          interruptTurn = undefined;
+           heldSeparator = false; // the turn is over; it was the trailing one
+           hooks.onTurnSettled?.();
+         }
+@@ -244,7 +249,8 @@ export function createChatBridge(hooks: ChatBridgeHooks = {}): ChatBridge {
+       streaming = true;
+       hooks.onText?.(s);
+     },
+-    onTurnStart: () => {
++    onTurnStart: (interrupt) => {
++      interruptTurn = interrupt;
+       // A separator held from the previous turn was that turn's trailing one:
+       // nothing followed it. Drop it before the new turn can flush it.
+       heldSeparator = false;
+@@ -284,6 +290,13 @@ export function createChatBridge(hooks: ChatBridgeHooks = {}): ChatBridge {
+       return "accepted";
+     },
+     close,
++    interruptTurn: () => {
++      const interrupt = interruptTurn;
++      if (interrupt === undefined) return false;
++      interruptTurn = undefined;
++      interrupt();
++      return true;
++    },
+     turnActive: () => turn,
+     pending: () => queue.length,
+   };
+@@ -465,6 +478,7 @@ export async function mountChatShell(
+       append(body.includes("[error]") ? otui.t`${roleChunk(otui, "error", body)}` : otui.t`${dimChunk(otui, body)}`);
+     },
+   });
++  chrome.onEscapeInterrupt(bridge.interruptTurn);
+ 
+   // `/models` and `/connect` route through the TUI picker (inside the chrome's
+   // overlay guard, so the `/`-menu key router stays inert while it is up) rather
+diff --git a/src/tui/hc-message.test.ts b/src/tui/hc-message.test.ts
+index c0d0eb81e..2f83a6ea3 100644
+--- a/src/tui/hc-message.test.ts
++++ b/src/tui/hc-message.test.ts
+@@ -526,7 +526,7 @@ describe("wiring (source audit)", () => {
+     expect(tuiSource).toMatch(/runAgentTurn\(foregroundIo, deps, history, modelLine,/);
+     // The scroll pin carries the same label as the echo; the resume summary decodes stored frames.
+     expect(tuiSource).toContain("chrome.registerUserPrompt(userEcho, echoLine, hcEcho?.marker);");
+-    expect(tuiSource).toContain("const hc = hcHistoryEcho(m.content);");
++    expect(tuiSource).toContain("const hc = hcHistoryEcho(message.content);");
+   });
+ 
+   test("a Telegram line is the operator's: its tg mark wins and it is never framed", () => {
+@@ -546,7 +546,7 @@ describe("wiring (source audit)", () => {
+     const queued = tuiSource.indexOf('if (agentShaped) {\n          const position = turnLoop.enqueue(line, displayLine, source, "agent-message");');
+     expect(defined).toBeGreaterThan(-1);
+     expect(busy).toBeGreaterThan(defined);
+-    const dialog = tuiSource.indexOf('title: "Main agent is busy",');
++    const dialog = tuiSource.indexOf("void routeBusyMessage(");
+     expect(busy).toBeGreaterThan(-1);
+     expect(queued).toBeGreaterThan(busy);
+     expect(dialog).toBeGreaterThan(queued);
+diff --git a/src/tui/main-queue.test.ts b/src/tui/main-queue.test.ts
+index b148f48ad..9bd9ef059 100644
+--- a/src/tui/main-queue.test.ts
++++ b/src/tui/main-queue.test.ts
+@@ -157,11 +157,13 @@ test("a late choice honours forced priority, FIFO, hold, and disposed guards", (
+ 
+ test("the busy recipient choice wires the idle drain after adding to the main queue", () => {
+   const source = readFileSync(new URL("./tui-shell.ts", import.meta.url), "utf8");
+-  const chosenIdx = source.indexOf('if (chosen === "main")');
+-  const choiceEnd = source.indexOf("} else {", chosenIdx);
+-  expect(chosenIdx).toBeGreaterThan(-1);
+-  expect(choiceEnd).toBeGreaterThan(chosenIdx);
+-  const choice = source.slice(chosenIdx, choiceEnd).replace(/\/\/[^\n]*/g, "").replace(/\s+/g, " ");
++  const routeIdx = source.indexOf("void routeBusyMessage(");
++  const mainIdx = source.indexOf("main: () => {", routeIdx);
++  const sideIdx = source.indexOf("side: () => {", mainIdx);
++  expect(routeIdx).toBeGreaterThan(-1);
++  expect(mainIdx).toBeGreaterThan(routeIdx);
++  expect(sideIdx).toBeGreaterThan(mainIdx);
++  const choice = source.slice(mainIdx, sideIdx).replace(/\/\/[^\n]*/g, "").replace(/\s+/g, " ");
+   expect(choice).toContain("turnLoop.enqueue(line, displayLine);");
+   expect(choice).toContain("turnLoop.drainAfterRecipientChoice(");
+   expect(choice.indexOf("turnLoop.enqueue(")).toBeLessThan(choice.indexOf("turnLoop.drainAfterRecipientChoice("));
+diff --git a/src/tui/shell-chrome.ts b/src/tui/shell-chrome.ts
+index bd35844b9..25d853405 100644
+--- a/src/tui/shell-chrome.ts
++++ b/src/tui/shell-chrome.ts
+@@ -73,6 +73,7 @@ type KeypressEvent = {
+   ctrl: boolean;
+   meta: boolean;
+   sequence: string;
++  readonly defaultPrevented: boolean;
+   preventDefault: () => void;
+   stopPropagation: () => void;
+ };
+@@ -481,6 +482,8 @@ export interface ShellChrome {
+   keyboardOwnedElsewhere(): boolean;
+   /** Mark an overlay active for the duration of an async run. */
+   withOverlay<T>(run: () => Promise<T>): Promise<T>;
++  /** Bind Esc after the shell's own keyboard modes. The handler reports whether a turn was interrupted. */
++  onEscapeInterrupt(interrupt: () => boolean): void;
+ 
+   /** Transient `✓ msg` in the sidebar; replaces any pending toast. */
+   showToast(message: string): void;
+@@ -517,8 +520,8 @@ export interface ShellChrome {
+   setStatus(text: string): void;
+   setHeaderMeta(text: string): void;
+ 
+-  /** Subscribe to submitted lines (composer Enter + `/`-menu selection). */
+-  onSubmit(handler: (line: string) => void): () => void;
++  /** Subscribe to the submitted line and the original text for draft restoration. */
++  onSubmit(handler: (line: string, draft: string) => void): () => void;
+ 
+   /**
+    * Show a model-suggested "next step" in the composer placeholder while the
+@@ -1470,8 +1473,8 @@ export async function createShellChrome(
+   syncComposerHeight();
+ 
+   // --- submit hook --------------------------------------------------------
+-  const submitHandlers = new Set<(line: string) => void>();
+-  const emitSubmit = (line: string): void => {
++  const submitHandlers = new Set<(line: string, draft: string) => void>();
++  const emitSubmit = (line: string, draft = line): void => {
+     // Flow 269 AC5: sending something jumps the transcript to its end and
+     // re-arms auto-follow, so the reply is on screen. A bare Enter on an empty
+     // composer sends nothing and leaves an operator reading history in place.
+@@ -1480,7 +1483,7 @@ export async function createShellChrome(
+       scroll.stickyScroll = true;
+     }
+     for (const handler of [...submitHandlers]) {
+-      handler(line);
++      handler(line, draft);
+     }
+   };
+ 
+@@ -1501,7 +1504,8 @@ export async function createShellChrome(
+       debugEvent("composer.submit-blocked", { reason: "overlay active", dockVisible: dock.visible, overlayDepth });
+       return;
+     }
+-    const line = input.value.trim();
++    const draft = input.value;
++    const line = draft.trim();
+     debugEvent("composer.submit", { chars: line.length, slash: line.startsWith("/") });
+     input.value = "";
+     hideMenu();
+@@ -1511,7 +1515,7 @@ export async function createShellChrome(
+     // empty composer with no suggestion at all (`emitSubmit("")`, which
+     // `runLine` in tui-shell.ts no-ops on for an operator-origin line). Only
+     // Tab/Right (below) accepts a suggestion into the composer.
+-    emitSubmit(line);
++    emitSubmit(line, draft);
+   };
+ 
+   // Route printable keys / Backspace / Esc for the open dropdown — via the
+@@ -1716,6 +1720,7 @@ export async function createShellChrome(
+     appliedTheme = theme;
+   };
+   const unsubTheme = onThemeChange((theme) => applyTheme(theme));
++  let offEscapeInterrupt: (() => void) | undefined;
+ 
+   {
+     const run = currentDebugRun();
+@@ -1765,6 +1770,15 @@ export async function createShellChrome(
+     addOverlaySource,
+     keyboardOwnedElsewhere,
+     withOverlay,
++    onEscapeInterrupt: (interrupt) => {
++      offEscapeInterrupt?.();
++      offEscapeInterrupt = onKeypress(r, (key) => {
++        if (key.name !== "escape" || key.ctrl || key.meta || key.defaultPrevented) return;
++        if (overlayActive() || (menu.visible && menuNav) || !interrupt()) return;
++        key.preventDefault();
++        key.stopPropagation();
++      });
++    },
+ 
+     showToast,
+     applyTheme,
+@@ -1816,6 +1830,7 @@ export async function createShellChrome(
+       destroyModalHost(r);
+       clearBusyTimer();
+       clearToastTimer();
++      offEscapeInterrupt?.();
+       unsubscribeMenuKeys();
+       unsubscribeSuggestionKeys();
+       try {
+diff --git a/src/tui/tui-bus.test.ts b/src/tui/tui-bus.test.ts
+index b6acf3a67..45ca31f35 100644
+--- a/src/tui/tui-bus.test.ts
++++ b/src/tui/tui-bus.test.ts
+@@ -522,7 +522,7 @@ describe("tui-shell.ts wiring (source-text audit — a renderer-less test cannot
+     const start = source.indexOf("const resumeSessionInteractive = ");
+     expect(start).toBeGreaterThanOrEqual(0);
+     const body = source.slice(start, source.indexOf("paintSessionHeader();\n\n", start));
+-    expect(body).toContain("applyOpened(opened, true);");
++    expect(body).toContain("applyOpened(opened);");
+   });
+ 
+   test("the join call passes surface tui, a session-lease GETTER, and status from herdrStateFor (review r1 F2)", () => {
+diff --git a/src/tui/tui-herdr-core-wiring.test.ts b/src/tui/tui-herdr-core-wiring.test.ts
+index e92bbaa91..c691472cd 100644
+--- a/src/tui/tui-herdr-core-wiring.test.ts
++++ b/src/tui/tui-herdr-core-wiring.test.ts
+@@ -173,7 +173,7 @@ describe("tui-shell wiring (source audit)", () => {
+   test("markReady runs after the resume picker and the submit handler, before the positional prompt", () => {
+     const picker = source.indexOf("opts.session?.pickOnStart === true && opts.session.resumeId === undefined");
+     const ready = source.indexOf("hostStatus.markReady();");
+-    const onSubmit = source.indexOf("chrome.onSubmit((line) => {");
++    const onSubmit = source.indexOf("chrome.onSubmit(");
+     const initial = source.indexOf("opts.takeInitialPrompt?.()");
+     expect(picker).toBeGreaterThan(0);
+     expect(ready).toBeGreaterThan(picker);
+diff --git a/src/tui/tui-hold.test.ts b/src/tui/tui-hold.test.ts
+index a8c38a411..1047c8a83 100644
+--- a/src/tui/tui-hold.test.ts
++++ b/src/tui/tui-hold.test.ts
+@@ -40,7 +40,7 @@ describe("held turns: entry-point gates (specification §4.3, AC4)", () => {
+   });
+ 
+   test("the busy-branch side-worker dispatch is gated before the Main-queue/Side-1 composer choice, with no choice offered while held", () => {
+-    const choiceIdx = source.indexOf('title: "Main agent is busy"');
++    const choiceIdx = source.indexOf("void routeBusyMessage(");
+     expect(choiceIdx).toBeGreaterThan(0);
+     const pendingEditIdx = source.indexOf("if (!agentShaped && remoteQueue.requeuePendingEdit(line, displayLine))");
+     expect(pendingEditIdx).toBeGreaterThan(0);
+@@ -49,7 +49,7 @@ describe("held turns: entry-point gates (specification §4.3, AC4)", () => {
+     expect(block).toContain("leaseView()?.held() === true");
+     expect(block).toContain("const position = turnLoop.enqueue(line, displayLine, source, agentShaped ? \"agent-message\" : undefined);");
+     expect(block).toContain("queued as q${position} (no side worker while held).\\n");
+-    // The held branch must return BEFORE the composer-choice IIFE below it.
++    // The held branch must return before opening the recipient picker.
+     const heldIdx = block.indexOf("leaseView()?.held() === true");
+     expect(block.indexOf("return;", heldIdx)).toBeGreaterThan(heldIdx);
+   });
+diff --git a/src/tui/tui-shell.test.ts b/src/tui/tui-shell.test.ts
+index b24928433..2399187a2 100644
+--- a/src/tui/tui-shell.test.ts
++++ b/src/tui/tui-shell.test.ts
+@@ -39,6 +39,7 @@ import {
+   resolveSidebarMetadata,
+   onKeypress,
+   pickShellApproval,
++  routeBusyMessage,
+   recordTurnTaskCostBestEffort,
+   shouldAutoApproveReadOnlySpawn,
+   pickSearchProviderStep,
+@@ -68,6 +69,7 @@ import { applyThemeId, getTheme, getThemeId } from "./theme";
+ import { commandsForMode, filterCommands } from "../commands/agent-commands";
+ import { runAgentTurn } from "../commands/agent";
+ import type { AgentDeps } from "../commands/agent";
++import { createForegroundOperationOwner } from "./foreground-operation";
+ import { executePlanCommand } from "../session/commands/plan";
+ import { executeReasoningCommand } from "../session/commands/reasoning";
+ import { builtinReadOnlyTools } from "../harness/tool/builtin/interactive-tools";
+@@ -1609,6 +1611,69 @@ otuiTest("AC4: nav keys stay inert while the /-menu or an overlay owns the keybo
+   h.destroy();
+ });
+ 
++otuiTest("flow 487 AC4: Escape aborts the Agent provider and a new foreground turn can reply", async () => {
++  const otui = requireOtui();
++  const setup = await otui.testing.createTestRenderer({ width: 90, height: 24 });
++  const chrome = await createShellChrome(otui.core, setup.renderer, {
++    title: "keryx · agent",
++    status: "scripted/m",
++    footerHint: "/ commands",
++    placeholder: "ask keryx",
++    commands: commandsForMode("agent"),
++  });
++  const io = createTuiAgentIo(otui.core, setup.renderer, chrome.transcript);
++  const foreground = createForegroundOperationOwner();
++  chrome.onEscapeInterrupt(() => foreground.cancel("interrupted by Escape"));
++  const started = Promise.withResolvers<AbortSignal | undefined>();
++  const release = Promise.withResolvers<void>();
++  const next = scriptedProvider([[{ kind: "text_delta", text: "Fresh agent reply" }, { kind: "model_end" }]]);
++  const deps: AgentDeps = {
++    provider: {
++      describe: next.describe,
++      stream(request, opts) {
++        if (request.messages.at(-1)?.content !== "Slow question") return next.stream(request, opts);
++        const aborted = new Promise<void>((resolve) => {
++          if (opts.signal?.aborted) resolve();
++          else opts.signal?.addEventListener("abort", () => resolve(), { once: true });
++        });
++        started.resolve(opts.signal);
++        return (async function* (): AsyncGenerator<NormalizedEvent> {
++          await Promise.race([aborted, release.promise]);
++          yield { sequence: 0, attemptId: opts.attemptId, kind: "model_end" };
++        })();
++      },
++    },
++    providerId: "scripted",
++    modelId: "m",
++    tools: [],
++    systemInstruction: "sys",
++    idSeq: fixedIdSeq(),
++  };
++  const history: NormalizedMessage[] = [];
++  const operation = foreground.begin();
++  const pending = runAgentTurn(io, deps, history, "Slow question", { signal: foreground.signal })
++    .finally(() => foreground.settle(operation));
++  try {
++    const firstSignal = await started.promise;
++    expect(firstSignal?.aborted).toBe(false);
++    await pressEscapeAndSettle(setup);
++    expect(firstSignal?.aborted).toBe(true);
++    await pending;
++    expect(foreground.isActive).toBe(false);
++
++    const followUp = foreground.begin();
++    await runAgentTurn(io, deps, history, "Next question", { signal: foreground.signal })
++      .finally(() => foreground.settle(followUp));
++    await setup.flush();
++    expect(setup.captureCharFrame()).toContain("Fresh agent reply");
++  } finally {
++    release.resolve();
++    await pending;
++    chrome.destroy();
++    setup.renderer.destroy();
++  }
++});
++
+ otuiTest("AC5: a ```ts fence renders as a framed block whose header carries the language tag (headless)", async () => {
+   const otui = requireOtui();
+   const { renderer, flush, captureCharFrame } = await otui.testing.createTestRenderer({ width: 80, height: 20 });
+@@ -2199,6 +2264,33 @@ async function settleMicrotasks(): Promise<void> {
+   }
+ }
+ 
++otuiTest("shell approval denies on bare Enter", async () => {
++  const otui = requireOtui();
++  const h = await mountApprovalDock(otui);
++  try {
++    const choice = pickShellApproval(otui.core, h.renderer, h.dock, "printf fixture", async () => "");
++    await h.flush();
++    h.mockInput.pressEnter();
++    expect(await choice).toBe("deny");
++  } finally {
++    h.renderer.destroy();
++  }
++});
++
++otuiTest("shell approval allows once after explicitly selecting Allow once", async () => {
++  const otui = requireOtui();
++  const h = await mountApprovalDock(otui);
++  try {
++    const choice = pickShellApproval(otui.core, h.renderer, h.dock, "printf fixture", async () => "");
++    await h.flush();
++    h.mockInput.pressArrow("down");
++    h.mockInput.pressEnter();
++    expect(await choice).toBe("once");
++  } finally {
++    h.renderer.destroy();
++  }
++});
++
+ otuiTest("the flow-041 approval context reaches the TUI approval dock (headless)", async () => {
+   const otui = requireOtui();
+   const h = await mountApprovalDock(otui);
+@@ -2936,7 +3028,7 @@ describe("PR 992 round 3 — tui-shell.ts refusal memory and self-answer line (s
+   const source = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
+ 
+   test.each([
+-    ["resuming or opening a session (applyOpened)", "io.trustedMcpTools?.clear();\n      io.hcLaunchGrants?.clear();\n      resetOperatorDenials();\n      history = previewHistory"],
++    ["resuming or opening a session (applyOpened)", "io.trustedMcpTools?.clear();\n      io.hcLaunchGrants?.clear();\n      resetOperatorDenials();\n      history = opened.history;"],
+     ["/new (startNewSession)", "io.trustedMcpTools?.clear();\n      io.hcLaunchGrants?.clear();\n      resetOperatorDenials();\n      stopRemoteForSessionSwitch();"],
+     ["a permission-mode change (commitPermissionMode)", "paintModeRow();\n      resetOperatorDenials();\n      chrome.showToast(`Permission mode:"],
+   ])("%s clears the remembered refusals", (_site, snippet) => {
+@@ -4341,7 +4433,7 @@ describe("session switch rebinds the slate (/resume, /sessions)", () => {
+     const start = fnBody.indexOf("const resumeSessionInteractive = async (target?: SessionSummary): Promise<void> => sessionSwitches.run(async (signal) => {");
+     expect(start).toBeGreaterThanOrEqual(0);
+     const block = fnBody.slice(start, fnBody.indexOf("\n    };\n", start));
+-    const applied = block.indexOf("applyOpened(opened, true);");
++    const applied = block.indexOf("applyOpened(opened);");
+     expect(applied).toBeGreaterThanOrEqual(0);
+     expect(block.indexOf("bindSlateToLiveSession();", applied)).toBeGreaterThan(applied);
+   });
+@@ -4618,3 +4710,65 @@ test("session replacement paths revoke foreground callbacks before replacing the
+   expect(finalizer.indexOf("if (!accepted)")).toBeLessThan(finalizer.indexOf("remoteQueue.turnSettled"));
+   expect(finalizer.indexOf("if (!accepted)")).toBeLessThan(finalizer.indexOf("flushSessionCheckpoint()"));
+ });
++
++otuiTest("busy recipient Escape restores the draft and only explicit recipients deliver it", async () => {
++  const otui = requireOtui();
++  const setup = await otui.testing.createTestRenderer({ width: 100, height: 30 });
++  const { renderer, mockInput, mockMouse, flush, captureCharFrame } = setup;
++  const cwd = await mkdtemp(join(tmpdir(), "keryx-busy-route-"));
++  const chrome = await createShellChrome(otui.core, renderer, {
++    title: "keryx · agent",
++    status: "scripted/m",
++    footerHint: "/ commands",
++    placeholder: "ask keryx",
++    commands: commandsForMode("agent"),
++  });
++  const draft = "  follow-up draft\n  with a second line  ";
++  const delivered: string[] = [];
++  let pending: Promise<void> | undefined;
++  chrome.onSubmit((line, originalDraft) => {
++    pending = routeBusyMessage(otui.core, chrome, cwd, line, originalDraft, {
++      main: () => { delivered.push(`main:${line}`); },
++      side: () => { delivered.push(`side:${line}`); },
++    });
++  });
++  const openPicker = async () => {
++    mockInput.pressEnter();
++    // The renderer can be idle while the decision journal is still writing.
++    for (let attempt = 0; attempt < 100; attempt++) {
++      await flush();
++      const frame = captureCharFrame();
++      if (frame.includes("Main agent is busy") && frame.includes("Side-1")) return frame;
++      await Bun.sleep(20);
++    }
++    throw new Error("The busy recipient picker did not open");
++  };
++  try {
++    chrome.startBusy();
++    chrome.input.value = draft;
++    await openPicker();
++    expect(chrome.input.value).toBe("");
++    await pressEscapeAndSettle(setup);
++    await pending;
++    expect(delivered).toEqual([]);
++    expect(chrome.isBusy()).toBe(true);
++    expect(chrome.input.value).toBe(draft);
++    expect(chrome.textarea.focused).toBe(true);
++
++    for (const [route, label] of [["main", "Main queue"], ["side", "Side-1"]] as const) {
++      chrome.input.value = draft;
++      const lines = (await openPicker()).split("\n");
++      const row = lines.findIndex((line) => line.includes(label));
++      expect(row).toBeGreaterThanOrEqual(0);
++      await mockMouse.click(lines[row]!.indexOf(label), row);
++      await pending;
++      expect(delivered).toEqual([`${route}:${draft.trim()}`]);
++      expect(chrome.input.value).toBe("");
++      delivered.length = 0;
++    }
++  } finally {
++    chrome.destroy();
++    renderer.destroy();
++    await rm(cwd, { recursive: true, force: true });
++  }
++});
+diff --git a/src/tui/tui-shell.ts b/src/tui/tui-shell.ts
+index 298eb10b7..f6bd5d56b 100644
+--- a/src/tui/tui-shell.ts
++++ b/src/tui/tui-shell.ts
+@@ -549,8 +549,6 @@ interface SidebarRepoMetadata {
+   prUrl?: string;
+ }
+ 
+-const SESSION_PREVIEW_MESSAGE_COUNT = 200;
+-
+ /**
+  * Flow 173 F-003: `risk === "read"` alone is NOT the side-worker safety
+  * boundary — `shell_job_kill` is intentionally `risk:"read"` (this flow's
+@@ -1782,6 +1780,48 @@ async function pickWikiEnrichMode(
+   return id === "drafts" || id === "force" || id === "cancel" ? id : "cancel";
+ }
+ 
++/** Ask where a message submitted during the main turn should go. */
++export async function routeBusyMessage(
++  otui: OpenTui,
++  chrome: ShellChrome,
++  cwd: string,
++  line: string,
++  draft: string,
++  deliver: { main(): void; side(): void },
++): Promise<void> {
++  const chosen = await journaledPick(
++    cwd,
++    {
++      source: DECISION_SOURCES.queueRoute,
++      // The message text stays out of the journal: only the choice is recorded.
++      question: "The main agent is busy. Where should this message go?",
++      recommendationReason: "The main queue keeps the message in the main history; a side answer is read-only.",
++      cancelId: "cancel",
++      options: [
++        { id: "main", label: "Main queue", description: "queue for the main agent; remove/edit/force later", recommended: true },
++        { id: "side", label: "Side-1", description: "read-only answer, outside main history (as before)" },
++      ],
++    },
++    (options, dismissId) =>
++      showComposerChoice(otui, chrome.renderer, chrome.dock, {
++        title: "Main agent is busy",
++        subtitle: line,
++        options,
++        cancelId: dismissId,
++        enqueue: false,
++        onBusy: () => chrome.showToast("Answer the open approval first, then resend."),
++      }),
++  );
++  if (chosen === "main") {
++    deliver.main();
++  } else if (chosen === "side") {
++    deliver.side();
++  } else {
++    chrome.input.value = draft;
++    if (!chrome.overlayActive()) chrome.input.focus();
++  }
++}
++
+ /** Resolves the short advisory approval context for a proposed shell command. */
+ export type ApprovalContextLoader = (command: string) => Promise<string>;
+ 
+@@ -1870,7 +1910,6 @@ export async function pickShellApproval(
+       id: "once",
+       label: "Allow once",
+       description: "Run only this time",
+-      recommended: true,
+     },
+     ...(canOfferExact
+       ? [
+@@ -1894,6 +1933,7 @@ export async function pickShellApproval(
+       id: "deny",
+       label: "Deny",
+       description: "Do not run",
++      recommended: true,
+     },
+   ];
+   // Not journaled: a pure allow/deny has no recommendation to follow or ignore, so an arm would measure nothing.
+@@ -7486,6 +7526,7 @@ export async function launchTuiAgentShell(opts: {
+       foregroundOperation.invalidateSession();
+       usageTracker = createUsageTracker();
+       usageTurnOpen = false;
++      chrome.repaintStatus();
+       io.resetStream();
+       blockIo.resetReasoningLiveState();
+       // Not `forceHandoff.clear()`: a forced line has already been taken out of
+@@ -7517,7 +7558,6 @@ export async function launchTuiAgentShell(opts: {
+         archive: NormalizedMessage[];
+         resumed: boolean;
+       },
+-      previewHistory?: boolean,
+     ): void => {
+       if (opened.history.length > 0) {
+         splash?.removeIfShown();
+@@ -7532,7 +7572,7 @@ export async function launchTuiAgentShell(opts: {
+       io.trustedMcpTools?.clear();
+       io.hcLaunchGrants?.clear();
+       resetOperatorDenials();
+-      history = previewHistory === true ? opened.history.slice(-SESSION_PREVIEW_MESSAGE_COUNT) : opened.history;
++      history = opened.history;
+       archive = opened.archive.length > 0 ? [...opened.archive] : [...opened.history];
+       nextArchiveIndex = history.length;
+       refreshRewindSidebar();
+@@ -7581,6 +7621,25 @@ export async function launchTuiAgentShell(opts: {
+     // `● live` / `◌ stale` on the picker rows (AC4).
+     const leaseState = leaseStateLookup(sessionCwd);
+ 
++    const showSessionPreview = (): void => {
++      const recentPrompts = history.filter((message) => message.role === "user").slice(-5);
++      if (recentPrompts.length === 0) return;
++      transcript.add(new otui.TextRenderable(r, {
++        id: `sesspreview${uid++}`,
++        content: otui.t`${dimChunk(otui, "Recent prompts")}`,
++      }));
++      for (const message of recentPrompts) {
++        // A framed hc message uses the same sender marker as its live echo.
++        const hc = hcHistoryEcho(message.content);
++        const text = hc?.line ?? message.content;
++        const preview = text.length > 100 ? `${text.slice(0, 97)}…` : text;
++        transcript.add(new otui.TextRenderable(r, {
++          id: `sessu${uid++}`,
++          content: otui.t`${dimChunk(otui, `  ${hc?.marker ?? "❯"} ${preview}`)}`,
++        }));
++      }
++    };
++
+     /** The transcript lines an opened session announces: skipped, degraded, resumed. */
+     const showOpenedNotes = (opened: ReturnType<typeof openLeasedSession>): void => {
+       if (opened.skipped !== undefined) {
+@@ -7612,19 +7671,7 @@ export async function launchTuiAgentShell(opts: {
+             marginTop: 1,
+           }),
+         );
+-        for (const m of history.filter((x) => x.role === "user").slice(-5)) {
+-          // An hc message is stored framed (flow 481); show it as the live echo did, sender and
+-          // body, so the long frame header does not fill the 100 characters.
+-          const hc = hcHistoryEcho(m.content);
+-          const text = hc?.line ?? m.content;
+-          const t = text.length > 100 ? `${text.slice(0, 97)}…` : text;
+-          transcript.add(
+-            new otui.TextRenderable(r, {
+-              id: `sessu${uid++}`,
+-              content: otui.t`${dimChunk(otui, `  ${hc?.marker ?? "❯"} ${t}`)}`,
+-            }),
+-          );
+-        }
++        showSessionPreview();
+       }
+     };
+ 
+@@ -8092,6 +8139,7 @@ export async function launchTuiAgentShell(opts: {
+     };
+     refreshRewindSidebar();
+     const resetSessionSurface = (): void => {
++      splash?.removeIfShown();
+       nav.exit();
+       chrome.stopBusy();
+       io.resetStream();
+@@ -8196,7 +8244,8 @@ export async function launchTuiAgentShell(opts: {
+         );
+         return;
+       }
+-      applyOpened(opened, true);
++      resetSessionSurface();
++      applyOpened(opened);
+       // Outgoing history and Slate were preserved before ownership transfer.
+       bindSlateToLiveSession();
+       // After the rebind: it reads the bound workspace from the slate ref.
+@@ -8208,6 +8257,7 @@ export async function launchTuiAgentShell(opts: {
+       io.onSystem?.(
+         `Resumed ${shortSessionId(liveSession.summary.id)} · ${liveSession.summary.title} (ctx ${history.length} · archive ${archive.length})\n`,
+       );
++      showSessionPreview();
+     });
+ 
+     paintSessionHeader();
+@@ -9620,6 +9670,7 @@ export async function launchTuiAgentShell(opts: {
+       // Flow 376: "tg" = a Telegram line; still an operator line, only labelled.
+       source?: typeof TG_SOURCE | "hub",
+       skipSlashRouting = false,
++      draft = line,
+     ): void => {
+       if (line.length === 0 && origin === "operator") {
+         return;
+@@ -9926,42 +9977,8 @@ export async function launchTuiAgentShell(opts: {
+           io.onSystem?.(`◇ ${leaseView()?.banner() ?? "held"} — queued as q${position} (no side worker while held).\n`);
+           return;
+         }
+-        void (async () => {
+-          let blockedByOpenDialog = false;
+-          const chosen = await journaledPick(
+-            sessionCwd,
+-            {
+-              source: DECISION_SOURCES.queueRoute,
+-              // the message text stays out of the journal: only the choice is recorded
+-              question: "The main agent is busy. Where should this message go?",
+-              recommendationReason: "The main queue keeps the message in the main history; a side answer is read-only.",
+-              cancelId: "side",
+-              options: [
+-                { id: "main", label: "Main queue", description: "queue for the main agent; remove/edit/force later", recommended: true },
+-                { id: "side", label: "Side-1", description: "read-only answer, outside main history (as before)" },
+-              ],
+-            },
+-            (options, dismissId) =>
+-              showComposerChoice(otui, r, chrome.dock, {
+-                title: "Main agent is busy",
+-                subtitle: line,
+-                options,
+-                cancelId: dismissId,
+-                enqueue: false,
+-                onBusy: () => {
+-                  blockedByOpenDialog = true;
+-                  chrome.showToast("Answer the open approval first, then resend.");
+-                },
+-              }),
+-          );
+-          if (blockedByOpenDialog) {
+-            // Don't silently pick "side" for a message the user never routed —
+-            // hand it back to the composer so nothing is lost.
+-            input.value = line;
+-            input.focus();
+-            return;
+-          }
+-          if (chosen === "main") {
++        void routeBusyMessage(otui, chrome, sessionCwd, line, draft, {
++          main: () => {
+             turnLoop.enqueue(line, displayLine);
+             // The recipient choice is asynchronous. The turn may have settled
+             // while its dock was open, before the settle handler saw this item.
+@@ -9974,7 +9991,8 @@ export async function launchTuiAgentShell(opts: {
+                 !forceHandoff.isAwaitingSettlement &&
+                 leaseView()?.held() !== true,
+             );
+-          } else {
++          },
++          side: () => {
+             appendUserEcho(otui, r, transcript, {
+               id: `side-q${uid++}`,
+               line: displayLine,
+@@ -9982,8 +10000,8 @@ export async function launchTuiAgentShell(opts: {
+               marginTop: 0,
+             });
+             spawnSideWorker(line, displayLine);
+-          }
+-        })();
++          },
++        });
+         return;
+       }
+ 
+@@ -11925,11 +11943,16 @@ export async function launchTuiAgentShell(opts: {
+     onKeypress(r, (key) => {
+       handleQueueNavKey(key);
+     });
++    chrome.onEscapeInterrupt(() => {
++      if (!foregroundOperation.cancel("interrupted by Escape")) return false;
++      io.onSystem?.("◇ main turn interrupted (Esc).\n");
++      return true;
++    });
+ 
+     // Both a composer Enter and a `/`-menu selection arrive here: the chrome has
+     // already trimmed the line, cleared the composer and closed the dropdown.
+-    chrome.onSubmit((line) => {
+-      runLine(line);
++    chrome.onSubmit((line, draft) => {
++      runLine(line, "operator", undefined, false, draft);
+     });
+     // Text pasted into an open dialog (herdr-core types a child's report that way) never answers it; it is
+     // queued the way a busy agent-shaped line is, framed as text of unknown authorship (HC_PASTED_HEADER).

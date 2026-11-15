@@ -1,0 +1,22 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "match", "gid": "G1", "why": "G1 names the empty catch around writeOwnerOnlyFileAtomic followed by the hard-coded ok: true return." },
+    { "tid": "T2", "verdict": "match", "gid": "G4", "why": "G4 names the JSON.parse catch that logs to stderr and rethrows, causing double reporting." },
+    { "tid": "T3", "verdict": "match", "gid": "G7", "why": "G7 names the toPinned boolean flag switching export vs import with the same call sites." },
+    { "tid": "T4", "verdict": "match", "gid": "G8", "why": "G8 names the same three duplicated summary blocks at the same three sites." },
+    { "tid": "T5", "verdict": "match", "gid": "G3", "why": "G3 names the import JSDoc's newer-entry-kept rule contradicted by the unconditional updateProviderCatalogEntry." },
+    { "tid": "T6", "verdict": "match", "gid": "G9", "why": "G9 names importProviderCatalogSnapshot as ~57 lines mixing parse/validate, filtering, persistence and summary." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "truth", "why": "Matches T1." },
+    { "gid": "G2", "label": "noise", "why": "The unguarded throws are real in code, but pinSnapshot is set by no caller in the snapshot, so the outage scenario is speculative and partly a consequence of T1-adjacent design; torn, so lower verdict." },
+    { "gid": "G3", "label": "truth", "why": "Matches T5." },
+    { "gid": "G4", "label": "truth", "why": "Matches T2." },
+    { "gid": "G5", "label": "noise", "why": "Lenient handling of a missing providers field only harms with prune, which no caller passes; the reviewer itself concedes it is latent." },
+    { "gid": "G6", "label": "noise", "why": "It faults the module's documented best-effort cache write posture (the same justification as D1), not a defect the change introduces." },
+    { "gid": "G7", "label": "truth", "why": "Matches T3." },
+    { "gid": "G8", "label": "truth", "why": "Matches T4." },
+    { "gid": "G9", "label": "truth", "why": "Matches T6." },
+    { "gid": "G10", "label": "valid", "why": "Verified: no `keryx providers pin` command exists and formatCatalogSummaryLine has no caller, so the new docs cite nonexistent callers and the helper is dead code." }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "match", "gid": "G1", "why": "G1 names the throwing cancel override, the unguarded call at adapter-shutdown.ts:54 and the aborted shutdown loop." },
+    { "tid": "T2", "verdict": "match", "gid": "G2", "why": "G2 identifies loadRecordedResults returning null coalesced to [] in entries(), replaying as a clean zero-finding review." },
+    { "tid": "T3", "verdict": "miss", "gid": null, "why": "No candidate flags writeReplaySummary mixing validation, transformation and IO in one function." },
+    { "tid": "T4", "verdict": "match", "gid": "G5", "why": "G5 flags the inline seven-day window at both sites (lines 69 and 151) and the drift risk." },
+    { "tid": "T5", "verdict": "match", "gid": "G3", "why": "G3 flags the in-place sort in the predicate isReplayableResult and scopesMatch's hidden dependency on it." },
+    { "tid": "T6", "verdict": "match", "gid": "G6", "why": "G6 flags the one-letter n with a comment explaining it, suggesting a descriptive name." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "truth", "why": "Matches T1." },
+    { "gid": "G2", "label": "truth", "why": "Matches T2." },
+    { "gid": "G3", "label": "truth", "why": "Matches T5." },
+    { "gid": "G4", "label": "noise", "why": "The comment's imprecision about stale/mismatched entries is a minor wording nit; when torn, lower verdict." },
+    { "gid": "G5", "label": "truth", "why": "Matches T4." },
+    { "gid": "G6", "label": "truth", "why": "Matches T6." },
+    { "gid": "G7", "label": "noise", "why": "Four positional parameters on an internal helper is a taste-level threshold call, not a clear defect." },
+    { "gid": "G8", "label": "noise", "why": "The nowMs function-vs-number naming is typed and checked by the compiler; a naming preference." },
+    { "gid": "G9", "label": "valid", "why": "RUNNING_STATUSES re-lists the non-terminal partition already encoded in store.ts ASSIGNMENT_STATUSES/TERMINAL, so a new status can silently be missed by shutdown." }
+  ]
+}

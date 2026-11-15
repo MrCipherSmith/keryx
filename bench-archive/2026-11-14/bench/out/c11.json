@@ -1,0 +1,110 @@
+[
+  {
+    "id": "G1",
+    "file": "src/security/credential-shape.ts",
+    "line": 284,
+    "severity": "major",
+    "problem": "Anchoring GLUED_SECRET_RE to (^|_)…($|_) to spare one name (APITOKENIZER) removes detection of every glued credential name that has a vendor/owner prefix glued on. Confirmed by running isDeniedForMcpChild: GITHUBACCESSTOKEN, AWSSESSIONTOKEN, SSHPRIVATEKEY, JWTPRIVATEKEY, SLACKAPPTOKEN, OAUTHREFRESHTOKEN, MYDBPASS, PGDBPWD, X_APITOKENS all return false now; with the previous unanchored regex they all matched. No other rule catches them (segment rule needs a boundary, substring rule has no ACCESSTOKEN/PRIVATEKEY/DBPASS).",
+    "impact": "A parent environment carrying e.g. GITHUBACCESSTOKEN or SSHPRIVATEKEY is now inherited by third-party MCP server children and external agent CLIs. This is a security regression in the filter, taken on the wrong side of the module's own stated trade-off (a false positive costs one -e). The table test only adds the APITOKENIZER negative row and has no prefixed-glued positive row, so it cannot see this.",
+    "quote": "/(^|_)(PRIVATE|SECRET|ACCESS|REFRESH|SESSION|CLIENT|API|APP)(KEY|TOKEN|SECRET)($|_)|(^|_)DB(PASS|PWD)($|_)/"
+  },
+  {
+    "id": "G2",
+    "file": "src/harness/tool/builtin/web-fetch-tool.ts",
+    "line": 53,
+    "severity": "major",
+    "problem": "containsOutboundSecret runs detectEntropy over the whole URL. TOKEN's class includes '/', '-', '_', '=' so an ordinary URL path is one 20+ char candidate, and the host or an earlier path part supplies the label ('api', 'auth', 'token', 'key' within 40 chars). Confirmed refused: https://api.github.com/repos/facebook/react/issues/12345/comments, https://api.example.com/v1/users/12345678/profile-settings, https://docs.github.com/en/rest/authentication/authenticating-to-the-rest-api-with-an-oauth-app?apiVersion=2022-11-28, https://auth0.com/docs/secure/tokens/json-web-tokens/json-web-token-claims2.",
+    "impact": "web_fetch now fails with 'outbound secret-shaped content' for common documentation and API URLs (any api.* host with a path containing a digit), and writes a false egress-blocked security incident for each. Worked before this diff. The only negative test is a bare /commit/<sha40> URL on example.com, which has no label and is allow-shaped, so it cannot catch this.",
+    "quote": "if (containsOutboundSecret(input.url)) {"
+  },
+  {
+    "id": "G3",
+    "file": "src/security/redact.ts",
+    "line": 149,
+    "severity": "major",
+    "problem": "Adding detectEntropy to redactSensitiveText masks ordinary non-secret text whenever a label substring (api/auth/key/token/...) sits within 40 chars before a 20+ char run of [A-Za-z0-9+/=_-] containing a digit. Confirmed outputs: 'import { TokenStore } from \"../../harness/oauth2/token-store-v2/index\"' -> 'from \"../..[REDACTED:entropy]\"'; \"const API = 'https://api.example.com/v1/users/12345678/profile-settings'\" -> 'https://api.example.[REDACTED:entropy]'; 'docker pull auth-service@sha256:<64hex>' -> digest masked; 'api: GET /v1/organizations/42/members/1009/roles' -> 'api: GET [REDACTED:entropy]'; 'apiVersion: networking.k8s.io/v1beta1-experimental2' and 'authorId: 64f1c2a9b3d4e5f6a7b8c9d0' masked. The doc/comment claim of zero false positives on ordinary output is false.",
+    "impact": "redactSensitiveText is on every tool output (commands/agent.ts), web content, persisted session history including toolCalls[].arguments (session/store.ts redactHistory), review diff hunks and ACP patch artifacts. The model receives source lines, import paths, URLs and image digests it cannot use, and resumed sessions replay mangled tool arguments. This is the same failure entropy.ts's own comment records as the reason '/' was dropped from the shape gate.",
+    "quote": "...detectEntropy(text),"
+  },
+  {
+    "id": "G4",
+    "file": "src/security/detect/entropy.ts",
+    "line": 33,
+    "severity": "major",
+    "problem": "The allow-shapes are applied inside the shared shape gate, before the label check, so they also change `keryx security scan` and every other detectEntropy consumer. A labelled 40-hex value, a labelled UUID, or anything prefixed sha256-/sha512- is now never a finding. Confirmed: 'api_key = 9f86d081884c7d659a2feaa0c55ad015a3bf4f1b' and 'auth_token: 7c9e6679-7425-40de-944b-e07fc1f90ae7' pass redactSensitiveText unchanged, and 'password: sha256-K9dQnR2zVbT8pXeYfWmC1oLaHsJtUvBgNq3rDcZk0AI' is not masked. Before this diff the 40-hex case was flagged (HEX_BLOB + label).",
+    "impact": "Real credentials in these shapes (40-hex API keys and legacy tokens, UUID API keys) labelled as api_key/token/secret are no longer reported by the scan nor redacted from tool output; a regression in the detector the change claims to be reusing unchanged ('the SAME thresholds'). INTEGRITY_RE has no length or context requirement, so a 'sha256-' prefix is a universal bypass. Fixture se61 now pins the regression as expected behaviour ('api_key file changed in commit <sha>').",
+    "quote": "const FULL_GIT_SHA_RE = /^[0-9a-f]{40}$/i;"
+  },
+  {
+    "id": "G5",
+    "file": "src/security/detect/injection.ts",
+    "line": 40,
+    "severity": "major",
+    "problem": "The confusables map folds Cyrillic U+0456 'і' (the homoglyph of Latin 'i') to 'o', purely so the acceptance-criterion string 'Ignіre' folds to 'Ignore'. The real substitution therefore still evades: confirmed detectInjection returns [] for 'іgnore all previous instructions', 'disregard prіor іnstructions' and 'Ignore all previous instructіons' (U+0456 in place of 'i').",
+    "impact": "The most natural single-homoglyph evasion (і for i, present in ignore/disregard/prior/instructions/rules-free words) is not caught, while findings.md records S-7 as fixed. The test in injection.test.ts asserts only the rigged string, so it passes with the mapping wrong.",
+    "quote": "\"і\": \"o\", \"І\": \"O\", // flow 355 AC3's own evasion: \"Ignіre\" (U+0456) for \"Ignore\"."
+  },
+  {
+    "id": "G6",
+    "file": "src/lib/oauth/open-url.ts",
+    "line": 33,
+    "severity": "major",
+    "problem": "ALLOWED_URL_CHARS excludes '&', justified by the claim that this function only opens device-code verification URIs. It is also the opener for MCP OAuth authorisation URLs: commands/mcp-servers.ts openAuthorisationUrl calls browserOpenPlan(url.toString(), ...) with an authorization-code URL, which carries several '&'-separated query parameters. With rundll32 and no shell the '&' is no longer dangerous, so the exclusion buys nothing.",
+    "impact": "On win32 every MCP OAuth login now gets plan === undefined: the browser is never opened and the operator is told 'No graphical session detected, so nothing was opened', which is untrue. Worked before. Any verificationUriComplete with more than one query parameter is silently not opened in auth.ts / tui-shell.ts / select.ts as well.",
+    "quote": "const ALLOWED_URL_CHARS = /^[A-Za-z0-9\\-._~:/?#[\\]@!$'()*+,;=%]+$/;"
+  },
+  {
+    "id": "G7",
+    "file": "src/harness/web/outbound-secret.ts",
+    "line": 15,
+    "severity": "major",
+    "problem": "The entropy half of the outbound check only fires when a sensitive label precedes the token, so an opaque secret without a named prefix in a URL is not caught. Confirmed containsOutboundSecret is false for 'https://x.example/c?k=K9dQnR2zVbT8pXeYfWmC1oLaHsJtUvBgNq3rDcZk0AI', for the same token as a path segment, for '?k=<40 hex>', and for a base64-encoded secret in the path. Only the named-pattern (sk-…) case is covered, and that is the only case the tests use.",
+    "impact": "The S-8 scenario (a model exfiltrating an opaque bearer token or raw key through web_fetch/web_search) still succeeds unless the model happens to name the parameter key/token/api/auth; findings.md and modules.md state it as fixed with 'patterns + entropy'. Combined with G2 the check both blocks benign URLs and passes unlabelled secrets.",
+    "quote": "return detectSecrets(text).length > 0 || detectEntropy(text).length > 0;"
+  },
+  {
+    "id": "G8",
+    "file": "src/mcp-servers/http-headers.ts",
+    "line": 351,
+    "severity": "major",
+    "problem": "Path masking inherits the git-SHA/UUID/integrity allow-shapes and the digit-or-+= requirement from looksSecretShaped. Confirmed displayUrl prints verbatim: 'https://host/v1/9f86d081884c7d659a2feaa0c55ad015a3bf4f1b/mcp' (40-hex token), 'https://host/v1/7c9e6679-7425-40de-944b-e07fc1f90ae7/mcp' (UUID token), 'https://host/v1/sha256-K9dQnR2zVbT8pXeYfWmC1oLaHsJtUvBg/mcp', and a 32-letter all-alphabetic token. entropy.test.ts even asserts looksSecretShaped(<40 hex>) is false.",
+    "impact": "S-9 is recorded as fixed, but the two most common opaque path-credential shapes (40-hex and UUID) still appear in `mcp list`, `mcp doctor --json` and the trust prompt. A git SHA is not a plausible MCP endpoint path segment, so the allow-shape has no benefit here.",
+    "quote": "return detectSecrets(segment).length > 0 || looksSecretShaped(segment) ? \"…\" : segment;"
+  },
+  {
+    "id": "G9",
+    "file": "src/security/redact.false-positive-fixture.test.ts",
+    "line": 154,
+    "severity": "major",
+    "problem": "The 200-sample fixture cannot produce an entropy false positive regardless of the implementation: detectEntropy requires a label substring in the 40 chars before the candidate on the same line, and no generated sample places one there (commit lines start with 'commit ', integrity lines use lodash/react/zod…, container ids and addresses have no label). The measured 'count 0' is therefore independent of the allow-shapes it is cited as evidence for; realistic labelled output does produce false positives (see G3).",
+    "impact": "The acceptance evidence for S-6 ('measured at zero', quoted in modules.md and findings.md) is a test that cannot fail, so the regression in G3 shipped behind it and future regressions will too.",
+    "quote": "expect(falsePositives.length).toBe(0);"
+  },
+  {
+    "id": "G10",
+    "file": "src/security/detect/entropy.test.ts",
+    "line": 116,
+    "severity": "minor",
+    "problem": "The integrity allow-shape tests use `sha512-` + 'A'.repeat(50) + '==', whose Shannon entropy is far below the 3.6 floor and which is not a hex blob, so it was never flagged before the allow-shape existed. The same value is used in redact.test.ts and fixture se63; fixture se64 uses a 7-char short SHA that is below TOKEN's 20-char minimum (SHORT_GIT_SHA_RE is dead code: a 7–12 char value can never be a candidate in detectEntropy, and displayUrl skips segments under 16).",
+    "impact": "Removing INTEGRITY_RE or SHORT_GIT_SHA_RE leaves all of these tests and corpus cases green; they assert nothing about the code they are named for.",
+    "quote": "const integrity = `sha512-${\"A\".repeat(50)}==`;"
+  },
+  {
+    "id": "G11",
+    "file": "src/security/detect/injection.ts",
+    "line": 72,
+    "severity": "minor",
+    "problem": "NFKC is applied to the whole content only if it does not change the total length, so one length-changing compatibility character anywhere in the document disables it for everything. Confirmed: fullwidth 'Ｉｇｎｏｒｅ all previous instructions' is detected alone, but prefixing the text with 'ﬁx ' (U+FB01 ligature) yields no match. A single '…', '™' or '½' anywhere in a fetched page has the same effect.",
+    "impact": "The NFKC fold described in modules.md/findings.md is trivially defeated by an attacker and is also off for most real web pages, which routinely contain such characters.",
+    "quote": "return nfkc.length === folded.length ? nfkc : folded;"
+  },
+  {
+    "id": "G12",
+    "file": "src/security/detect/injection.ts",
+    "line": 79,
+    "severity": "minor",
+    "problem": "With the gaps now `[^.]` the patterns bridge unrelated lines that carry no period, which is the normal shape of bullet lists, headings and tables. Confirmed matches: '- Ignore whitespace\\n- Show previous commit\\n- Lint rules' and 'Override defaults\\n\\nSee the system\\nrequirements and rules' both fire prompt-injection.ignore-instructions. The added negative test only covers two sentences separated by a period.",
+    "impact": "sanitizeWebContent rejects the entire fetched text/plain or markdown page ('external content contains a likely prompt injection') and web_search drops results on such benign lists; these were not matched before.",
+    "quote": "/\\b(ignore|disregard|forget|override)\\b[^.]{0,40}\\b(all\\s+)?(previous|prior|above|earlier|system|developer)\\b[^.]{0,20}\\b(instructions?|prompts?|rules?|context)\\b/gi,"
+  }
+]

@@ -1,0 +1,51 @@
+{
+ "truth": [],
+ "decoys": [],
+ "candidate": [
+  {
+   "id": "G1",
+   "file": "src/review/mutate.test.ts",
+   "line": 251,
+   "severity": "minor",
+   "problem": "The scratch-directory test helper was hoisted and grown from 3 to 5 positional parameters (name, owner, ageMs, markerAgeMs, into), three of them bare numbers/paths with two defaults. Call sites read as an undecodable sequence, e.g. make(\"keryx-mutate-DEADDD\", {...}, 1000, 3 * HEARTBEAT_MS, repoScratch) at line 351; the two age arguments are both milliseconds and easy to swap. The change crosses the 4-positional-parameter threshold with no options object.",
+   "impact": "Whoever adds or edits a sweep test has to read the helper signature to know which age is the directory's and which is the marker's; swapping them silently tests the wrong branch of the abandoned rule.",
+   "quote": "async function make(name: string, owner: unknown, ageMs: number, markerAgeMs: number = ageMs, into: string = scratch): Promise<string> {"
+  },
+  {
+   "id": "G2",
+   "file": "src/review/mutate.ts",
+   "line": 589,
+   "severity": "minor",
+   "problem": "The new Swept line labels every removed directory as 'left by dead passes', but the sweep it reports (line 380) also removes directories whose pid is alive and whose marker stopped refreshing for STALE_HEARTBEAT_MS, and unmarked ones older than STALE_SCRATCH_MS. The field it renders is documented at line 74 as 'dead or abandoned earlier passes'. Two names for one concept in the same change, and the rendered one is the narrower, inaccurate one (the tests at mutate.test.ts:593-594 pin that wording).",
+   "impact": "An operator reading research-evidence/mutation-<n>.md after a reused-pid or other-namespace pass was swept is told a dead pass was removed, which sends them looking for a crash that did not happen.",
+   "quote": "left by dead passes${record.sweepMs === undefined ? \"\" : ` (${record.sweepMs} ms)`}"
+  },
+  {
+   "id": "G3",
+   "file": "src/commands/review.ts",
+   "line": 5091,
+   "severity": "minor",
+   "problem": "The new sweep thresholds are restated as hand-written prose literals ('two minutes', 'ten minutes', 'six hours') in four hand-maintained places, each mirroring 2 * HEARTBEAT_MS, STALE_HEARTBEAT_MS and STALE_SCRATCH_MS from src/review/mutate.ts:90-94: src/commands/review.ts:5091-5093 (help), docs/docs/cli-reference.md:5107, docs/docs/guides/review-with-a-record.md:198-201, and .metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md:789-792 (plus its bundled mirror). The parenthetical 'whose owner died (no heartbeat for two minutes)' also compresses the rule: the code requires a dead pid AND a marker older than two heartbeats, and keeps a dead pid with a fresh marker.",
+   "impact": "Changing any of the three constants (they are already injectable as options) leaves four copies of the old numbers that nothing checks; the next editor must find and update every site by hand.",
+   "quote": "keryx-mutate-* directories whose owner died (no heartbeat"
+  },
+  {
+   "id": "G4",
+   "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+   "line": 788,
+   "severity": "minor",
+   "problem": "The parenthetical added inside the list of what treeHash leaves out, '(the scratch copy still includes them, except linked worktrees, which it leaves out)', ties linked worktrees to ignored files, as if a linked worktree were a kind of ignored file, and then the new sentence four lines later (789-792) states the linked-worktree rule again on its own. The same text is in the bundled mirror src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md:788.",
+   "impact": "A reviewer reading the skill to judge a mutation record has to work out whether the exception is about ignored files, about the copy, or about treeHash; the sentence reads two ways and duplicates the following one.",
+   "quote": "ignored files (the scratch copy still includes them, except linked worktrees, which it leaves out)"
+  },
+  {
+   "id": "G5",
+   "file": "src/review/completion-gate.ts",
+   "line": 35,
+   "severity": "info",
+   "problem": "SIGNATURE_WALKS_PER_STOP = 2 describes the number of dirSignature walks per stop and MAX_SIGNATURE_FILES is now derived from it, but nothing ties it to the two hard-coded dirSignature calls in findReviewGateState (lines 788 and 805). The constant documents the invariant rather than deriving from the code that has to keep it. TP-006 checks the arithmetic, not the walk count. Would be settled by deriving the walks from a list of trees or by a test that counts walks.",
+   "impact": "A third tree added to the signature without bumping the constant keeps the budgets summing above MAX_HASHED_FILES, and the cache-fit guarantee the doc at line 38 states silently stops holding.",
+   "quote": "export const SIGNATURE_WALKS_PER_STOP = 2;"
+  }
+ ]
+}

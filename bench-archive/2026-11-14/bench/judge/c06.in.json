@@ -1,0 +1,60 @@
+{
+ "truth": [
+  {
+   "tid": "T1",
+   "file": "src/security/detect/pii.ts",
+   "line": 261,
+   "severity": "blocker",
+   "problem": "isIdentifierFragment treats any adjacent letter as proof of identifier, un-redacting real phone numbers.",
+   "impact": "A real phone number adjacent to a letter across a hyphen is no longer redacted anywhere the PII detector is the last line of defence — MCP tool output, keryx security check-output, session transcripts. A single letter suffices, so it is also a trivial deliberate evasion.",
+   "quote": null
+  },
+  {
+   "tid": "T2",
+   "file": "src/security/detect/pii.ts",
+   "line": 233,
+   "severity": "major",
+   "problem": "enclosingToken's unbounded outward scan adds a second quadratic term on adversarial input.",
+   "impact": "detectPii runs on every tool output, including externally-influenced text. On a 272 KB adversarial blob the guard added ~60% to an already-quadratic cost (46.5s vs 28.8s).",
+   "quote": null
+  }
+ ],
+ "candidate": [
+  {
+   "id": "G1",
+   "file": "src/security/detect/pii.ts",
+   "line": 324,
+   "severity": "major",
+   "problem": "The 'positive evidence' rule suppresses a phone finding when ANY hyphen/underscore-separated segment anywhere in the enclosing token (up to 64 chars either side) is an 8+ char hex run with one a-f letter. It does not require the token to be an identifier, nor the hex run to be adjacent to the match or part of a UUID/digest shape. So the false-negative class this change exists to close is still open for any real number that shares a token with a short hash. Confirmed by running detectPii: 'voicemail-415-555-0199-3f9a2b1c.wav' => [], '+1-415-555-0199-a3f5c9e1' => [], 'customer_a1b2c3d4-415-555-0199' => [], 'contact-415-555-0199-deadbeef' => [], 'commit-9fceb02d...-415-555-0199' => []. The comment's claim 'Everything else is redacted' and the REGRESSION test (which only uses non-hex neighbours: contact/primary/ext205/TCK/open/key) do not cover this; no test asserts a phone next to a hex segment is caught.",
+   "impact": "A real phone number in a slug, filename or key that also carries a content hash / short commit id / hex record id passes through check-output and the MCP redaction seam verbatim. Also a trivial bypass for agent-controlled text: appending '-deadbeef' to a number disables redaction.",
+   "quote": "return [...before.split(/[-_]/), ...after.split(/[-_]/)].some(isHexIdentifierRun);"
+  },
+  {
+   "id": "G2",
+   "file": "src/security/detect/pii.ts",
+   "line": 312,
+   "severity": "minor",
+   "problem": "Truncation discards positive evidence that is fully inside the scan window. A token longer than 64 identifier chars on either side of the match is always redacted, even when the match sits inside a complete UUID whose own hex segments are adjacent. Confirmed: three UUIDs joined by '_' or '-' ('730344f3-3668-4760-9056-bf7292686b67_730344f3-..._730344f3-...') => two of the three middles are reported as phones; the same holds for a UUID embedded in any long [0-9A-Za-z_-] run (composite keys, base64url-ish blobs). The parent commit left these whole.",
+   "impact": "The original defect (a UUID corrupted to '730344f3-[REDACTED:phone]-bf7292686b67' in MCP/check-output output) is reintroduced for composite identifiers longer than the 64-char window; consumers receive ids they cannot resolve.",
+   "quote": "return false; // Evidence incomplete → redact."
+  },
+  {
+   "id": "G3",
+   "file": "src/security/detect/pii.ts",
+   "line": 293,
+   "severity": "minor",
+   "problem": "Removing the 'token carries a letter' rule without a replacement for non-hex identifiers makes numeric/timestamp ids redact again: confirmed 'run-1731234567890-12' => ['1731234567890-12'], 'job-20260912-153000-abc' => ['20260912-153000'], '01HZX3K9-3668-4760-9056-QWERTYUI' => redacted. The [a-f] requirement in isHexIdentifierRun means a compact date or epoch segment never counts as identifier evidence, and CALENDAR_DATE only recognises hyphenated dates. Only the single 'proposal-3668-4760-9056-b' shape is acknowledged in tests; the timestamp-id shape is not tested or mentioned.",
+   "impact": "Tool output, listings and JSON that contain epoch- or compact-date-based identifiers reach agents as 'run-[REDACTED:phone]', the same unusable-identifier failure the calendar-date guard was added for; these were left intact by the parent commit.",
+   "quote": "return segment.length >= 8 && /^[0-9A-Fa-f]+$/.test(segment) && /[A-Fa-f]/.test(segment);"
+  },
+  {
+   "id": "G4",
+   "file": "src/security/detect/pii-phone-identifier.test.ts",
+   "line": 82,
+   "severity": "minor",
+   "problem": "The only truncation test overruns the window on BOTH sides at once, so the two halves of the `truncated` disjunction in enclosingToken are not pinned independently: changing `||` to `&&`, or dropping either the left or the right clause, still passes. There is also no test at the boundary (a token exactly 64 chars beyond the match, which must NOT be truncated).",
+   "impact": "A later edit that breaks one-sided truncation (e.g. long hex prefix, short suffix => suppression from partial evidence) would not be caught, in the code path the comment describes as the fail-toward-redaction guarantee.",
+   "quote": "const huge = `${\"f\".repeat(200)}-3668-4760-9056-${\"a\".repeat(200)}`;"
+  }
+ ]
+}

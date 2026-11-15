@@ -1,0 +1,1242 @@
+diff --git a/.metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md b/.metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md
+index bd8ef6318..7df2d27f0 100644
+--- a/.metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md
++++ b/.metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md
+@@ -781,13 +781,18 @@ costs the time to its first failure, not the whole suite. The baseline always ru
+ a green run is the same with or without the flag, so a survivor stays a survivor. One verdict can move: a mutant that fails an early test and would hang in a later one is `killed` with bail and `timeout` without it. Any other command shape
+ (`sh script`, quotes, pipes, `bunx`) runs as given. `--no-bail` turns this off and takes no value.
+ The `.json` record carries `bail: true` when it was applied; always `startedAt`, `loadavg` (sampled
+-at the start of the pass), `provenanceMs`, `copyMs` and `mutantsMs`; `sweptScratch` only when it removed leftover scratch; and `head` and `treeHash` only
++at the start of the pass), `provenanceMs`, `copyMs` and `mutantsMs`; `sweptScratch` and `sweepMs` only when it removed leftover scratch; and `head` and `treeHash` only
+ when the worktree is the root of a git checkout and the size and time limits of that step held.
+ `treeHash` hashes the tracked changes against HEAD (staged or not) and the untracked, non-ignored
+ files, so two passes over the same code agree. It leaves out the review packages under
+-`.metaproject/reviews`, ignored files (the scratch copy still includes them), the inside of an
++`.metaproject/reviews`, ignored files (the scratch copy still includes them, except linked worktrees, which it leaves out), the inside of an
+ untracked nested repository, and the content of an untracked file over 10 MiB (counted by size).
+ Records written before these fields exist stay valid.
++The scratch copy leaves out linked worktrees (such as those under `.claude/worktrees/` and `.worktrees/`);
++submodules and embedded clones are copied, and the repository's own mutate-scratch never is, also with
++`--scratch tmp`. Before copying, a pass removes the operator's own `keryx-mutate-*` directories whose owner
++died (no heartbeat for two minutes) or stopped refreshing its marker for ten minutes, and unmarked ones older
++than six hours.
+ 
+ `keryx review complete` refuses while proposed mutants are unrun on an attended round, unless the
+ operator waived the pass themselves: the `review_waive_mutation` card in keryx shell, or their answer to
+diff --git a/docs/docs/cli-reference.md b/docs/docs/cli-reference.md
+index 322c82899..f2cfa8c1b 100644
+--- a/docs/docs/cli-reference.md
++++ b/docs/docs/cli-reference.md
+@@ -5104,7 +5104,7 @@ wider one counts. `KERYX_REVIEW_PR_BASE=off` skips the `gh` read.
+ | `learn` | Turn collected PR comments from the authors this project configured into a learning proposal for its own local review skill. Reads the collected record; never fetches. See below. |
+ | `reviewers` | List bundled and project-local reviewers (`keryx review reviewers [--json]`). The project half is `.metaproject/project-skills/review/<name>/`; each entry carries `paths` + `pathsSource`, `flags`, `flagWarnings`, `familyFlags`, `stackRequires`, `unresolvedRules`, `shadowedRules`, `unresolvedReferences` and `drift` for the orchestrator's filters and dispatch. `paths` come from `metadata.paths`, else from the globs in the description plus any literal file path named beside them; a description with no glob gives `pathsSource: none` (dispatched on every round) even when it names a file. `flags` come from `metadata.flags` when it has at least one non-empty entry — entries split on commas/whitespace, trimmed, lower-cased and `--`-prefixed; one that is still not `--name` is dropped and reported in `flagWarnings` (a `warning:` line in the text output), and the description's flags are not used even if none survives or the list holds only `--all` (no flags, and no warning for `--all`) — else from the description; an empty `metadata.flags` (`[]`, `''`) leaves the description's flags in force. `metadata.flags` and `metadata.paths` accept a comma-separated string, a flow list or a YAML block list; the frontmatter reader accepts a BOM and CRLF, drops trailing `#` comments, counts only keys directly under `metadata:`, and reads any shape outside that subset as not declared. `drift` is `clean`, `changed`, `missing`, or `none` when no origin was recorded (the text row reads `(no recorded origin)`). The top-level `bundledSource` says where the bundled half was read: `project` (this project's installed `.metaproject/skills/gdskills/review`), `package` (that directory is absent, so the keryx package's own review skills are listed — not evidence of what is installed here) or `not-found` (neither; exit `1`). |
+ | `required` | Print the reviewers a round must dispatch (`keryx review required [--mode all\|diff] [--scope <scope.json>] [--blast-radius <blast-radius.json>] [--pr-context <pr-context.md>] [--json]`). Mode `all` (the default) is every installed `review-*` reviewer plus the project reviewers, minus the router, verifier, regression, PR-contract, PR-feedback, greptile and strict entries, minus engine reviewers, minus those the stack scoping rules out, minus path-gated ones no scope-A file matches. Mode `diff` is the set derived from the changed files plus the project reviewers; it needs `--scope` with the file list. Each excluded reviewer prints with its reason. `keryx review start\|ingest --scope <scope.json>` stores the file list as `scope-files.json`, and `keryx review complete` refuses a `research.json` whose `dispatch.mode` is missing or whose `dispatch.selected` omits a required reviewer, unless `dispatch.override` carries `operatorQuote` and `reason`. `review-pr-contract` joins the set, in both modes, only when `pr-context.md` is in the package (`--pr-context` names it, as `--blast-radius` does for `review-regression`); without it the reviewer prints as excluded with that reason. The rule binds a package whose `research.json` was written by `review ledger build` of this version, which stamps `dispatch.roles` with the roles it knows; a `dispatch` without that stamp predates the role, so a package already in flight is not newly refused: the gate passes and `review complete` warns `review-pr-contract not run (package predates the role)`. `review-clean-code` and `review-style` are off by default: they print as excluded with the reason, and `--style` (or `--with-role <role>`; with `--package` the choice is recorded in `round-roles.json`) puts them back. A project switches any role off, or always on, with `reviewRoles.disabled` and `reviewRoles.enabled` in `routing.config.json`; an unknown name is a warning, a core role (`review-logic`, `review-architecture`, `review-regression`) cannot be switched off, and `disabled` is ignored, with a warning, when the change under review edits `routing.config.json`. `--all`, `--gating` and `--depth light` widen or narrow the depth, not the roster: they do not bring a switched-off role back and `--all` / `--gating` say so. `review complete` adds the line `опциональные роли не запускались: …` to `report.md` when such roles did not run. |
+-| `mutate` | Run the reviewers' proposed mutants against the tests (`keryx review mutate --test "<command>" --package <review-dir>`). Each mutant is one exact-text replacement in a scratch copy of the worktree; the worktree is never written, and the baseline must pass first or no mutant runs. A mutant is `killed` (the tests failed), `survived` (they passed: no assertion pins that behaviour), `invalid` (the anchor is missing or not unique) or `timeout`. When `--test` is a plain `bun test <paths>` command, each mutant runs with `--bail` (the first red test ends the run; the baseline still runs in full, and any other command shape runs as given); `--no-bail` turns that off and takes no value. One verdict can move: a mutant that fails an early test and would hang in a later one is `killed` with bail and `timeout` without it. The record carries `bail: true` when the bail was applied; always `startedAt`, `loadavg` (sampled at the start of the pass), `provenanceMs`, `copyMs` and `mutantsMs`; and `head` and `treeHash` only when the worktree is the root of a git checkout and the size and time limits of that step held. `treeHash` covers the tracked changes against HEAD and the untracked, non-ignored files; it leaves out the review packages under `.metaproject/reviews`, ignored files, the inside of an untracked nested repository, and the content of an untracked file over 10 MiB (counted by size only). A mutant may carry `"kind": "behavior"` (the default; it changes what the code does) or `"presentation"` (it changes only how something looks or reads: copy, class names, the order of display rows); any other `kind` is refused when the spec is read. `--cap <n>` runs the first `<n>` candidates only: the record gets `cap` and `not_reached` (the candidates it was given but did not run), the table prints `Not run: <n> candidates (cap <c>)`, and those candidates stay pending, so they still block `review complete` for an attended run exactly as a candidate nobody ran does. Without `--cap` the pass runs every candidate and the record has neither field. The testing reviewers propose a `mutant_candidates` entry for every changed branch, and on a shell host, where a reviewer cannot write, the main session writes them to `mutants.json` unchanged. The default spec is `<review-dir>/research-evidence/mutants.json`; results go to `research-evidence/mutation-<n>.json` and `.md`. For an attended run, `review complete` refuses a package with proposed mutants no pass has run, unless `dispatch.mutationWaiver` carries `operatorQuote` and `reason`; a spec with `"runnable": false` says the tests cannot be run here. |
++| `mutate` | Run the reviewers' proposed mutants against the tests (`keryx review mutate --test "<command>" --package <review-dir>`). Each mutant is one exact-text replacement in a scratch copy of the worktree; the worktree is never written, and the baseline must pass first or no mutant runs. A mutant is `killed` (the tests failed), `survived` (they passed: no assertion pins that behaviour), `invalid` (the anchor is missing or not unique) or `timeout`. When `--test` is a plain `bun test <paths>` command, each mutant runs with `--bail` (the first red test ends the run; the baseline still runs in full, and any other command shape runs as given); `--no-bail` turns that off and takes no value. One verdict can move: a mutant that fails an early test and would hang in a later one is `killed` with bail and `timeout` without it. The record carries `bail: true` when the bail was applied; always `startedAt`, `loadavg` (sampled at the start of the pass), `provenanceMs`, `copyMs` and `mutantsMs`; `sweptScratch` and `sweepMs` only when the pass removed leftover scratch; and `head` and `treeHash` only when the worktree is the root of a git checkout and the size and time limits of that step held. The copy leaves out linked worktrees (such as those under `.claude/worktrees/` and `.worktrees/`); submodules and embedded clones are copied, and the repository's own mutate-scratch never is, also with `--scratch tmp`. Before copying, a pass removes the operator's own `keryx-mutate-*` directories whose owner died (no heartbeat for two minutes) or stopped refreshing its marker for ten minutes, and unmarked ones older than six hours. `treeHash` covers the tracked changes against HEAD and the untracked, non-ignored files; it leaves out the review packages under `.metaproject/reviews`, ignored files, the inside of an untracked nested repository, and the content of an untracked file over 10 MiB (counted by size only). A mutant may carry `"kind": "behavior"` (the default; it changes what the code does) or `"presentation"` (it changes only how something looks or reads: copy, class names, the order of display rows); any other `kind` is refused when the spec is read. `--cap <n>` runs the first `<n>` candidates only: the record gets `cap` and `not_reached` (the candidates it was given but did not run), the table prints `Not run: <n> candidates (cap <c>)`, and those candidates stay pending, so they still block `review complete` for an attended run exactly as a candidate nobody ran does. Without `--cap` the pass runs every candidate and the record has neither field. The testing reviewers propose a `mutant_candidates` entry for every changed branch, and on a shell host, where a reviewer cannot write, the main session writes them to `mutants.json` unchanged. The default spec is `<review-dir>/research-evidence/mutants.json`; results go to `research-evidence/mutation-<n>.json` and `.md`. For an attended run, `review complete` refuses a package with proposed mutants no pass has run, unless `dispatch.mutationWaiver` carries `operatorQuote` and `reason`; a spec with `"runnable": false` says the tests cannot be run here. |
+ | `severity-audit` | Check the severity of findings against what the mutation pass proved (`keryx review severity-audit --package <review-dir> [--dry-run] [--json]`). A finding that cites `mutant:<id>` in its `evidence` is raised to `major` when that mutant survived a recorded run on a file the review changed, no mutant in that file was `killed` or `timeout` in any recorded pass, and the finding was rated `minor`, `nit`, `info` or `low`; the change is recorded as `severity_audit`. A survivor in a file where another mutant was killed is a gap in covered code, and a survivor of kind `presentation` changes no behaviour: in both cases the severity is held, the finding gets `severity_audit.held` (`mutant`, `kind` `covered` or `presentation`, `evidence`, `reason`; a covered note names the kill count), and the command prints `[held]` and counts it apart (`<n> held (survivor does not show wrong behaviour)`); a mutant with no `kind`, and a record written before the field existed, reads as `behavior`. A cited mutant no run executed leaves the finding as it is, labelled `unproven`. It never deletes a finding, and it is separate from the verifier. |
+ | `context-collect` | Collect what a reviewer cannot get from the diff (`keryx review context-collect --repo <owner/repo> --pr <n> --package <review-dir>`): every review comment in full, the round-1 intent, the CI status and the backend pins the pull request names, written to `pr-context.json` and `pr-context.md`. Comments by `--self` are left out. A pull-request review dispatches with `pr_context` set to the `.md`, and `dispatch-check --pr-context` refuses a payload without it. |
+ | `estimate` | Print the plan's reviewer dispatches and minutes from the slice manifest and roles, and flag a plan over the threshold: `dispatch-check` and `ledger` refuse such a plan until the operator confirms it (`confirm-plan` or `estimate --confirm --quote` at a terminal, or the `review_confirm_plan` card in keryx shell). Limits: `routing.config.json` `reviewPlan.maxDispatches` (default 40) and `reviewPlan.maxMinutes` (default 90). |
+diff --git a/docs/docs/guides/review-with-a-record.md b/docs/docs/guides/review-with-a-record.md
+index 3d4784ecd..20daf1535 100644
+--- a/docs/docs/guides/review-with-a-record.md
++++ b/docs/docs/guides/review-with-a-record.md
+@@ -194,9 +194,12 @@ is: `behavior` (the default) or `presentation` (copy, class names, display order
+ 
+ `mutate` applies each proposed mutant in a scratch copy of the worktree (the
+ worktree is never written) and records whether the tests failed. The copy leaves
+-out nested git checkouts, such as the worktrees under `.claude/worktrees/` and
+-`.worktrees/`, and a pass first removes scratch that earlier passes left behind
+-when they died. The table in
++out linked worktrees, such as those under `.claude/worktrees/` and `.worktrees/`;
++submodules and embedded clones are copied, and the repository's own mutate-scratch
++never is, also with `--scratch tmp`. Before copying, a pass removes the operator's
++own `keryx-mutate-*` directories whose owner died (no heartbeat for two minutes)
++or stopped refreshing its marker for ten minutes, and unmarked ones older than six
++hours; the record carries `sweptScratch` and `sweepMs` only when it removed some. The table in
+ `research-evidence/mutation-<n>.md` gives every mutant a row with its result, the
+ test command it was judged by and that command's exit code. A mutant that
+ **survived** means no test pins that behaviour. A survivor shows a
+@@ -956,7 +959,8 @@ model stops writing. Once the session has loaded `review-orchestrator` or run a
+ the shell does not accept a text-only finish while no package is closed: it names what is still missing
+ (no package opened yet, missing artifacts, research or dispatch errors) and the next step, prints a
+ `[review-gate]` line in the pane, and continues the turn. It gives up after 20 continues, or after three
+-in a row that added no new artifact, and then reports the state instead of looping.
++in a row that added no new artifact, and then reports the state instead of looping. Progress is judged
++on the first 2 048 entries of each tree it reads, so on a larger package the gate can give up early.
+ 
+ ## Verify the findings before you report them
+ 
+@@ -1133,8 +1137,9 @@ your own copy, because keryx holds none.
+ A review run in the shell is finished when `keryx review complete` accepts the package, not when the
+ model stops writing. While a review package is open and `review complete` would still refuse, the
+ shell does not accept a text-only finish: it names what is still missing, prints a `[review-gate]`
+-line in the pane, and continues the turn. It gives up after 20 continues, or after two in a row that
+-added no new artifact, and then reports the state instead of looping.
++line in the pane, and continues the turn. It gives up after 20 continues, or after three in a row that
++added no new artifact, and then reports the state instead of looping. Progress is judged on the first
++2 048 entries of each tree it reads, so on a larger package the gate can give up early.
+ 
+ ## Verify
+ 
+diff --git a/src/commands/agent-review-gate.test.ts b/src/commands/agent-review-gate.test.ts
+index b8ae904e8..af522e087 100644
+--- a/src/commands/agent-review-gate.test.ts
++++ b/src/commands/agent-review-gate.test.ts
+@@ -154,6 +154,48 @@ test("AC4: the turn's abort signal reaches the gate scan, and an aborted turn is
+   expect(system.join("")).not.toContain("[review-gate]");
+ });
+ 
++const openReview = (): Awaited<ReturnType<typeof findReviewGateState>> => ({
++  reviewId: "pr-1-all",
++  packageDir: path.join(root, ".metaproject", "reviews", "pr-1-all"),
++  blockers: ["missing artifacts: report.md"],
++  signature: "open",
++});
++
++test("TP-004: a scan that aborts the turn and then RESOLVES the open review is not nudged", async () => {
++  const controller = new AbortController();
++  // A scan that throws AbortError is swallowed by the caller's own `.catch`; only the check after the scan can stop a
++  // scan that settles normally once the signal has fired.
++  const reviewGateState: typeof findReviewGateState = async () => {
++    controller.abort();
++    return openReview();
++  };
++  const { history, system } = await run({ reviewGateState }, { signal: controller.signal });
++  expect(history.some((m) => m.provenance === "harness" && m.content.includes("The managed review"))).toBe(false);
++  expect(system.join("")).not.toContain("[review-gate]");
++});
++
++test("LOGIC-003: a text-only stop whose turn was aborted during the gate prints the [stopped] line", async () => {
++  const controller = new AbortController();
++  const reviewGateState: typeof findReviewGateState = async () => {
++    controller.abort();
++    return openReview();
++  };
++  const textOnly = scriptedProvider([[{ kind: "text_delta", text: "all done" }, { kind: "model_end" }]]);
++  const { history, system } = await run({ reviewGateState, provider: textOnly }, { signal: controller.signal });
++  expect(system.join("")).toContain("[stopped] Model turn interrupted by user.");
++  expect(history.some((m) => m.provenance === "harness" && m.content.includes("The managed review"))).toBe(false);
++});
++
++test("LOGIC-003: a no-progress stop whose turn was aborted during the gate prints the [stopped] line", async () => {
++  const controller = new AbortController();
++  const reviewGateState: typeof findReviewGateState = async () => {
++    controller.abort();
++    return openReview();
++  };
++  const { system } = await run({ reviewGateState }, { signal: controller.signal });
++  expect(system.join("")).toContain("[stopped] Model turn interrupted by user.");
++});
++
+ test("an unattended run is not held: there is no one to re-prompt", async () => {
+   const { history, finishReason } = await run({ unattended: true });
+   expect(history.some((m) => m.content.includes("The managed review"))).toBe(false);
+diff --git a/src/commands/agent.ts b/src/commands/agent.ts
+index d91a23b9a..3a4502a31 100644
+--- a/src/commands/agent.ts
++++ b/src/commands/agent.ts
+@@ -4278,6 +4278,11 @@ async function runAgentTurnCore(
+       // accepts the package, not when the model stops. Independent of the plan
+       // (a blocked plan item must not end it); unattended children are excluded.
+       if (await holdReviewGate()) continue;
++      // The gate returns false for an aborted turn too: the operator took the turn back, so it ends like the other abort sites.
++      if (isAborted()) {
++        system("\n[stopped] Model turn interrupted by user.\n");
++        return {};
++      }
+ 
+       if (hasActionableExecutionPlanItems(currentPlan)) {
+         const actionable = currentPlan?.items.filter(
+diff --git a/src/commands/review.ts b/src/commands/review.ts
+index bc06a4c1c..97fd4b0ad 100644
+--- a/src/commands/review.ts
++++ b/src/commands/review.ts
+@@ -5084,9 +5084,13 @@ Usage:
+                         copy of the worktree; the worktree is never written. The
+                         copy lives under .metaproject/data/review/mutate-scratch
+                         (--scratch repo, default, so ancestor node_modules still
+-                        resolve) or in the OS temp dir (--scratch tmp). Nested
+-                        git checkouts are not copied, and a pass removes the
+-                        scratch left by passes that died. The
++                        resolve) or in the OS temp dir (--scratch tmp). Linked
++                        worktrees are left out of the copy (submodules and embedded
++                        clones are copied), and the repository's own mutate-scratch
++                        never is. Before copying, a pass removes your own
++                        keryx-mutate-* directories whose owner died (no heartbeat
++                        for two minutes) or stopped refreshing its marker for ten
++                        minutes, and unmarked ones older than six hours. The
+                         baseline must pass first; a red one exits non-zero and
+                         prints the command, its cwd and the last 60 output lines.
+                         A plain "bun test <paths>" command runs each mutant with
+diff --git a/src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md b/src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md
+index bd8ef6318..7df2d27f0 100644
+--- a/src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md
++++ b/src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md
+@@ -781,13 +781,18 @@ costs the time to its first failure, not the whole suite. The baseline always ru
+ a green run is the same with or without the flag, so a survivor stays a survivor. One verdict can move: a mutant that fails an early test and would hang in a later one is `killed` with bail and `timeout` without it. Any other command shape
+ (`sh script`, quotes, pipes, `bunx`) runs as given. `--no-bail` turns this off and takes no value.
+ The `.json` record carries `bail: true` when it was applied; always `startedAt`, `loadavg` (sampled
+-at the start of the pass), `provenanceMs`, `copyMs` and `mutantsMs`; `sweptScratch` only when it removed leftover scratch; and `head` and `treeHash` only
++at the start of the pass), `provenanceMs`, `copyMs` and `mutantsMs`; `sweptScratch` and `sweepMs` only when it removed leftover scratch; and `head` and `treeHash` only
+ when the worktree is the root of a git checkout and the size and time limits of that step held.
+ `treeHash` hashes the tracked changes against HEAD (staged or not) and the untracked, non-ignored
+ files, so two passes over the same code agree. It leaves out the review packages under
+-`.metaproject/reviews`, ignored files (the scratch copy still includes them), the inside of an
++`.metaproject/reviews`, ignored files (the scratch copy still includes them, except linked worktrees, which it leaves out), the inside of an
+ untracked nested repository, and the content of an untracked file over 10 MiB (counted by size).
+ Records written before these fields exist stay valid.
++The scratch copy leaves out linked worktrees (such as those under `.claude/worktrees/` and `.worktrees/`);
++submodules and embedded clones are copied, and the repository's own mutate-scratch never is, also with
++`--scratch tmp`. Before copying, a pass removes the operator's own `keryx-mutate-*` directories whose owner
++died (no heartbeat for two minutes) or stopped refreshing its marker for ten minutes, and unmarked ones older
++than six hours.
+ 
+ `keryx review complete` refuses while proposed mutants are unrun on an attended round, unless the
+ operator waived the pass themselves: the `review_waive_mutation` card in keryx shell, or their answer to
+diff --git a/src/review/completion-gate.test.ts b/src/review/completion-gate.test.ts
+index fda299c55..9a6da9be2 100644
+--- a/src/review/completion-gate.test.ts
++++ b/src/review/completion-gate.test.ts
+@@ -2,6 +2,7 @@
+ // package is open and `keryx review complete` would still refuse.
+ 
+ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
++import { spawnSync } from "node:child_process";
+ import { readFileSync } from "node:fs";
+ import { mkdir, mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
+ import { tmpdir } from "node:os";
+@@ -13,7 +14,12 @@ import {
+   fileHash,
+   findReviewGateState,
+   hashedFileCount,
++  hashReadCount,
++  MAX_HASHED_FILES,
++  MAX_REVIEW_GATE_STALLS,
+   MAX_SIGNATURE_FILES,
++  SIGNATURE_WALKS_PER_STOP,
++  TRUNCATION_MARKER,
+   keryxArgs,
+   keryxReviewInvocations,
+   MAX_REVIEW_GATE_CONTINUES,
+@@ -725,9 +731,9 @@ describe("fileHash: a file unchanged since the last stop is not read again, a ch
+ });
+ 
+ describe("the signature walk is bounded and cancellable (flow 482)", () => {
+-  // The hash cache reuses a file only once its timestamps are older than the racy window, and utimes moves ctime to now,
+-  // so a test that needs files "remembered" has to let them age for real.
+-  const ageFiles = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 2_200));
++  // The hash cache reuses a file only once its timestamps are older than the racy window. `now` moves the clock past it,
++  // so no test sleeps for the files to age.
++  const aged = (): number => Date.now() + 60_000;
+ 
+   test("AC1: files under the mutation scratch never reach the signature or the hash cache", async () => {
+     await writePackage("live", { mode: "review-flow", status: "draft" });
+@@ -738,32 +744,81 @@ describe("the signature walk is bounded and cancellable (flow 482)", () => {
+     await mkdir(scratch, { recursive: true });
+     await writeFile(path.join(scratch, "a.txt"), "aaaa");
+     await writeFile(path.join(scratch, "b.txt"), "bbbb");
+-    await ageFiles();
++    const now = aged();
+     const before = hashedFileCount();
+-    const withScratch = await findReviewGateState(root, 0);
++    const withScratch = await findReviewGateState(root, 0, {}, undefined, now);
+     const grown = hashedFileCount() - before;
+     await rm(path.join(root, SCRATCH_DIR), { recursive: true, force: true });
+-    const withoutScratch = await findReviewGateState(root, 0);
++    const withoutScratch = await findReviewGateState(root, 0, {}, undefined, now);
+     expect(withScratch?.signature).toBe(withoutScratch?.signature as string);
+     // note.json and manifest.json are the only aged files outside the scratch.
+     expect(grown).toBeLessThanOrEqual(2);
+   });
+ 
+-  test("AC2: a tree larger than the budget stops at it, marks the signature, and is served from the cache on the next call", async () => {
++  test("AC2: a flat tree larger than the budget stops at it, ends in the marker once, and is served from the cache on the next call", async () => {
+     const dir = await writePackage("live", { mode: "review-flow", status: "draft" });
+     const total = MAX_SIGNATURE_FILES + 60;
+     for (let i = 0; i < total; i += 1) await writeFile(path.join(dir, `f${String(i).padStart(5, "0")}.txt`), String(i));
+-    await ageFiles();
++    const now = aged();
+     const before = hashedFileCount();
+-    const first = await findReviewGateState(root, 0);
++    const first = await findReviewGateState(root, 0, {}, undefined, now);
+     const grown = hashedFileCount() - before;
+-    expect(first?.signature).toContain("truncated");
+     expect(grown).toBeLessThanOrEqual(MAX_SIGNATURE_FILES);
++    // TP-M07: the walk stops at the first entry past the budget, so the marker is written once, as the last thing in the
++    // package part (the working part after the `#` is empty here).
++    expect(first?.signature.split(TRUNCATION_MARKER).length).toBe(2);
++    expect(first?.signature.endsWith(`${TRUNCATION_MARKER}#`)).toBe(true);
+     const afterFirst = hashedFileCount();
+-    const second = await findReviewGateState(root, 0);
++    const reads = hashReadCount();
++    const second = await findReviewGateState(root, 0, {}, undefined, now);
+     expect(second?.signature).toBe(first?.signature as string);
+     // Every file the walk reached is remembered, so the second call hashed none again.
+     expect(hashedFileCount()).toBe(afterFirst);
++    expect(hashReadCount()).toBe(reads);
++  });
++
++  test("TP-005: one budget covers a nested tree, so only the shared budget stops a walk whose every directory is small", async () => {
++    const dir = await writePackage("live", { mode: "review-flow", status: "draft" });
++    const dirs = 40;
++    const perDir = 60;
++    for (let d = 0; d < dirs; d += 1) {
++      const sub = path.join(dir, `d${String(d).padStart(2, "0")}`);
++      await mkdir(sub);
++      for (let f = 0; f < perDir; f += 1) await writeFile(path.join(sub, `f${String(f).padStart(2, "0")}.txt`), `${d}-${f}`);
++    }
++    // 40 x 60 = 2400 files is over MAX_SIGNATURE_FILES, yet no directory is. Directories spend budget too: each fully read
++    // directory costs 1 + perDir entries, and `d` sorts before `manifest.json`. The walk fits floor(MAX / 61) = 33 of
++    // them, then the 34th directory entry itself (1), then the files that are left.
++    const cost = 1 + perDir;
++    const whole = Math.floor(MAX_SIGNATURE_FILES / cost);
++    const left = MAX_SIGNATURE_FILES - whole * cost - 1;
++    const expected = whole * perDir + left;
++    expect(expected).toBe(33 * 60 + 34);
++    const reads = hashReadCount();
++    const state = await findReviewGateState(root, 0, {}, undefined, aged());
++    // A budget that restarted in each directory would read all 2400.
++    expect(hashReadCount() - reads).toBe(expected);
++    expect(state?.signature).toContain(TRUNCATION_MARKER);
++  });
++
++  test("TP-006 / DEG-001: both walks over budget fit the hash cache, so an unchanged second stop reads nothing", async () => {
++    expect(SIGNATURE_WALKS_PER_STOP * MAX_SIGNATURE_FILES).toBeLessThanOrEqual(MAX_HASHED_FILES);
++    const dir = await writePackage("live", { mode: "review-flow", status: "draft" });
++    const data = path.join(root, ".metaproject", "data", "review");
++    await mkdir(data, { recursive: true });
++    const total = MAX_SIGNATURE_FILES + 60;
++    for (let i = 0; i < total; i += 1) {
++      await writeFile(path.join(dir, `f${String(i).padStart(5, "0")}.txt`), String(i));
++      await writeFile(path.join(data, `n${String(i).padStart(5, "0")}.txt`), String(i));
++    }
++    const now = aged();
++    const reads = hashReadCount();
++    const first = await findReviewGateState(root, 0, {}, undefined, now);
++    expect(hashReadCount() - reads).toBe(SIGNATURE_WALKS_PER_STOP * MAX_SIGNATURE_FILES);
++    const afterFirst = hashReadCount();
++    const second = await findReviewGateState(root, 0, {}, undefined, now);
++    expect(second?.signature).toBe(first?.signature as string);
++    expect(hashReadCount()).toBe(afterFirst);
+   });
+ 
+   test("AC3: an already-aborted signal rejects with AbortError and hashes no file", async () => {
+@@ -771,11 +826,111 @@ describe("the signature walk is bounded and cancellable (flow 482)", () => {
+     const data = path.join(root, ".metaproject", "data", "review");
+     await mkdir(data, { recursive: true });
+     await writeFile(path.join(data, "note.json"), "{}");
+-    await ageFiles();
+-    const before = hashedFileCount();
++    const reads = hashReadCount();
+     const controller = new AbortController();
+     controller.abort();
+-    await expect(findReviewGateState(root, 0, {}, controller.signal)).rejects.toMatchObject({ name: "AbortError" });
+-    expect(hashedFileCount()).toBe(before);
++    await expect(findReviewGateState(root, 0, {}, controller.signal, aged())).rejects.toMatchObject({ name: "AbortError" });
++    expect(hashReadCount()).toBe(reads);
++  });
++
++  /** A signal whose `aborted` flag turns true on the `after`-th read of it, counting every read. */
++  const abortsAfterReads = (after: number): { signal: AbortSignal; reads: () => number } => {
++    let count = 0;
++    const signal = {
++      get aborted(): boolean {
++        count += 1;
++        return count > after;
++      },
++    } as AbortSignal;
++    return { signal, reads: () => count };
++  };
++
++  async function writeWorkingTree(): Promise<number> {
++    const data = path.join(root, ".metaproject", "data", "review");
++    let files = 0;
++    for (let d = 0; d < 5; d += 1) {
++      const sub = path.join(data, `sub${d}`);
++      await mkdir(sub, { recursive: true });
++      for (let f = 0; f < 10; f += 1) {
++        await writeFile(path.join(sub, `n${f}.json`), `${d}${f}`);
++        files += 1;
++      }
++    }
++    return files;
++  }
++
++  test("TP-003: an abort during the walk of the working data stops it part-way, with an open package", async () => {
++    const dir = await writePackage("live", { mode: "review-flow", status: "draft" });
++    for (let f = 0; f < 20; f += 1) await writeFile(path.join(dir, `p${f}.txt`), String(f));
++    const workingFiles = await writeWorkingTree();
++    const reads = hashReadCount();
++    // 20 reads of the signal: two before the walk, then one per entry; the working data is the first tree walked.
++    const { signal } = abortsAfterReads(20);
++    await expect(findReviewGateState(root, 0, {}, signal, aged())).rejects.toMatchObject({ name: "AbortError" });
++    const hashed = hashReadCount() - reads;
++    expect(hashed).toBeGreaterThan(0);
++    // Without the signal in the working-data walk, all its files are read before the package walk notices the abort.
++    expect(hashed).toBeLessThan(workingFiles);
++  });
++
++  test("TP-003: an abort during the walk of the working data stops it part-way, with no package", async () => {
++    const workingFiles = await writeWorkingTree();
++    const reads = hashReadCount();
++    const { signal } = abortsAfterReads(20);
++    await expect(findReviewGateState(root, 0, {}, signal, aged())).rejects.toMatchObject({ name: "AbortError" });
++    const hashed = hashReadCount() - reads;
++    expect(hashed).toBeGreaterThan(0);
++    expect(hashed).toBeLessThan(workingFiles);
++  });
++
++  test("TP-003: an abort that lands right before the completion blockers are computed stops there, not one check later", async () => {
++    await writePackage("live", { mode: "review-flow", status: "draft" });
++    const reads = hashReadCount();
++    // No working data, so the checks are: on entry (1), after the root scan (2), before the blockers (3), after them (4).
++    const { signal, reads: signalReads } = abortsAfterReads(2);
++    await expect(findReviewGateState(root, 0, {}, signal, aged())).rejects.toMatchObject({ name: "AbortError" });
++    expect(signalReads()).toBe(3);
++    expect(hashReadCount()).toBe(reads);
++  });
++
++  test("SEC-002: a FIFO in the package does not block the evaluation", async () => {
++    if (process.platform === "win32") return;
++    const dir = await writePackage("live", { mode: "review-flow", status: "draft" });
++    const made = spawnSync("mkfifo", [path.join(dir, "pipe")]);
++    expect(made.status).toBe(0);
++    const outcome = await Promise.race([
++      findReviewGateState(root, 0, {}, undefined, aged()).then((state) => state),
++      new Promise<"blocked">((resolve) => setTimeout(() => resolve("blocked"), 5_000)),
++    ]);
++    expect(outcome).not.toBe("blocked");
++    expect(typeof outcome === "object" && outcome !== null ? outcome.signature : "").toContain("pipe:special:");
++    expect(await fileHash(path.join(dir, "pipe"))).toStartWith("special:");
++  });
++});
++
++describe("a stall stop on a truncated signature says what the gate could see", () => {
++  const stalled = (signature: string) =>
++    decideReviewGate({
++      open: open({ signature }),
++      runSeen: true,
++      continues: 1,
++      stalls: MAX_REVIEW_GATE_STALLS - 1,
++      lastSignature: signature,
++    });
++
++  test("UX-003: the reason names the entries the gate reads instead of claiming no new artifact", () => {
++    const decision = stalled(`a:1,${TRUNCATION_MARKER}#`);
++    expect(decision.action).toBe("stop");
++    if (decision.action !== "stop") return;
++    expect(decision.report).toContain(`no change in the first ${MAX_SIGNATURE_FILES} entries the gate reads`);
++    expect(decision.report).not.toContain("no new artifact");
++  });
++
++  test("an untruncated signature keeps the plain reason", () => {
++    const decision = stalled("a:1#");
++    expect(decision.action).toBe("stop");
++    if (decision.action !== "stop") return;
++    expect(decision.report).toContain("no new artifact in the last");
++    expect(decision.report).not.toContain("entries the gate reads");
+   });
+ });
+diff --git a/src/review/completion-gate.ts b/src/review/completion-gate.ts
+index 85080d38d..afd530d9e 100644
+--- a/src/review/completion-gate.ts
++++ b/src/review/completion-gate.ts
+@@ -21,18 +21,24 @@ export type OpenManagedReview = {
+   reviewId: string;
+   packageDir: string;
+   blockers: string[];
+-  /** Changes whenever the package or the working data under it gains or changes an artifact. */
++  /**
++   * Changes whenever the package or the working data under it gains or changes an artifact within what the gate reads:
++   * at most {@link MAX_SIGNATURE_FILES} entries per tree (data/review and the package), in name order, with the mutation
++   * scratch left out. A tree larger than that ends in the truncation marker, and a change past that point is not seen.
++   */
+   signature: string;
+ };
+ 
+ /** At most this many file hashes are remembered between stops; the oldest goes first. */
+-const MAX_HASHED_FILES = 4096;
++export const MAX_HASHED_FILES = 4096;
++/** The trees the gate signs per stop: the working data under `data/review` and the package itself. */
++export const SIGNATURE_WALKS_PER_STOP = 2;
+ /**
+  * Entries (files and directories) one {@link dirSignature} walk visits before it stops and marks the signature
+- * truncated. The gate walks two trees per stop (data/review and the package), so two budgets together stay within
++ * truncated. The gate walks {@link SIGNATURE_WALKS_PER_STOP} trees per stop, so their budgets together stay within
+  * {@link MAX_HASHED_FILES}: an unchanged tree is then served entirely from the hash cache on the next stop.
+  */
+-export const MAX_SIGNATURE_FILES = 2048;
++export const MAX_SIGNATURE_FILES = MAX_HASHED_FILES / SIGNATURE_WALKS_PER_STOP;
+ /**
+  * A remembered hash is reused only for a file whose timestamps were already this much older than the moment it was
+  * hashed. Inside a filesystem's timestamp granularity a same-size rewrite can leave size and times unchanged (git's
+@@ -45,13 +51,22 @@ const fileHashes = new Map<string, { key: string; hash: string }>();
+ /** The number of file hashes currently remembered (for tests). */
+ export const hashedFileCount = (): number => fileHashes.size;
+ 
+-/** `now` is injectable so a test can age a file past {@link RACY_WINDOW_MS} without sleeping. */
++let fileReads = 0;
++/** How many times {@link fileHash} actually read a file's bytes (a cache miss), since the process started (for tests). */
++export const hashReadCount = (): number => fileReads;
++
++/**
++ * `now` is injectable so a test can age a file past {@link RACY_WINDOW_MS} without sleeping. Anything that is not a
++ * regular file (a FIFO, a socket, a device) is never opened: reading a FIFO blocks until a writer appears.
++ */
+ export async function fileHash(file: string, now: number = Date.now()): Promise<string> {
+   const info = await stat(file).catch(() => undefined);
+   if (info === undefined) return "unreadable";
++  if (!info.isFile()) return `special:${(info.mode & 0o170000).toString(8)}`;
+   const key = `${info.size}:${info.mtimeMs}:${info.ctimeMs}:${info.ino}`;
+   const hit = fileHashes.get(file);
+   if (hit !== undefined && hit.key === key) return hit.hash;
++  fileReads += 1;
+   const hash = await readFile(file).then((body) => createHash("sha256").update(body).digest("hex")).catch(() => "unreadable");
+   fileHashes.delete(file);
+   if (hash !== "unreadable" && now - Math.max(info.mtimeMs, info.ctimeMs) > RACY_WINDOW_MS) {
+@@ -74,7 +89,7 @@ function throwIfAborted(signal: AbortSignal | undefined): void {
+ }
+ 
+ /** Appended where a walk ran out of budget; fixed text keeps an unchanged tree's signature stable. */
+-const TRUNCATION_MARKER = "…truncated";
++export const TRUNCATION_MARKER = "…truncated";
+ 
+ type SignatureOptions = {
+   /** Absolute paths never walked or hashed. */
+@@ -82,11 +97,18 @@ type SignatureOptions = {
+   /** Entries this walk may still visit; shared by the recursion so one tree has one budget. */
+   budget?: { remaining: number };
+   signal?: AbortSignal | undefined;
++  /** The clock {@link fileHash} judges a file's age by; a test moves it instead of sleeping. */
++  now?: number | undefined;
+ };
+ 
+-/** A signature of every file under `dir` (by content; a file unchanged since the last stop is not read again). */
++/**
++ * A signature of the files under `dir` (by content; a file unchanged since the last stop is not read again): at most
++ * {@link MAX_SIGNATURE_FILES} entries (files and directories) in name order, with `skip` left out and symlinks and
++ * special files never read. When the budget runs out the signature ends in {@link TRUNCATION_MARKER}, so a change past
++ * that point is not seen.
++ */
+ async function dirSignature(dir: string, options: SignatureOptions = {}): Promise<string> {
+-  const { skip, signal } = options;
++  const { skip, signal, now } = options;
+   const budget = options.budget ?? { remaining: MAX_SIGNATURE_FILES };
+   try {
+     const entries = await readdir(dir, { withFileTypes: true });
+@@ -100,7 +122,7 @@ async function dirSignature(dir: string, options: SignatureOptions = {}): Promis
+         break;
+       }
+       budget.remaining -= 1;
+-      const content = entry.isDirectory() ? await dirSignature(file, { skip, budget, signal }) : await fileHash(file);
++      const content = entry.isDirectory() ? await dirSignature(file, { skip, budget, signal, now }) : await fileHash(file, now);
+       parts.push(`${entry.name}:${content}`);
+     }
+     return parts.join(",");
+@@ -746,6 +768,7 @@ export async function findReviewGateState(
+   since: number,
+   named: Partial<SessionReviewNames> = {},
+   signal?: AbortSignal,
++  now?: number,
+ ): Promise<OpenManagedReview | null> {
+   throwIfAborted(signal);
+   const roots = [...new Set([cwd, ...(named.roots ?? [])].map((r) => path.resolve(r)))];
+@@ -766,6 +789,7 @@ export async function findReviewGateState(
+     skip: new Set([path.join(workingRoot, SCRATCH_DIR)]),
+     budget: { remaining: MAX_SIGNATURE_FILES },
+     signal,
++    now,
+   });
+   if (best === null) {
+     return {
+@@ -778,7 +802,7 @@ export async function findReviewGateState(
+   throwIfAborted(signal);
+   const blockers = await reviewCompletionBlockers(best.dir);
+   throwIfAborted(signal);
+-  const packageSignature = await dirSignature(best.dir, { budget: { remaining: MAX_SIGNATURE_FILES }, signal });
++  const packageSignature = await dirSignature(best.dir, { budget: { remaining: MAX_SIGNATURE_FILES }, signal, now });
+   return {
+     reviewId: displayId(best.id, best.dir),
+     packageDir: best.dir,
+@@ -860,11 +884,15 @@ export function decideReviewGate(input: ReviewGateInput): ReviewGateDecision {
+   const card = input.cardAvailable !== false;
+   const stalls = input.lastSignature === open.signature ? input.stalls + 1 : 0;
+   if (input.continues >= MAX_REVIEW_GATE_CONTINUES || stalls >= MAX_REVIEW_GATE_STALLS) {
++    // A signature that ran out of budget only vouches for its first entries: say so instead of claiming no artifact is new.
++    const stalled = open.signature.includes(TRUNCATION_MARKER)
++      ? ` and no change in the first ${MAX_SIGNATURE_FILES} entries the gate reads in the last ${stalls}`
++      : ` and no new artifact in the last ${stalls}`;
+     return {
+       action: "stop",
+       report:
+         `Review ${open.reviewId} is not complete after ${input.continues} continue(s)` +
+-        `${stalls >= MAX_REVIEW_GATE_STALLS ? " and no new artifact in the last " + stalls : ""}. ` +
++        `${stalls >= MAX_REVIEW_GATE_STALLS ? stalled : ""}. ` +
+         `${card ? "The review_complete card" : "`keryx review complete`"} would still be refused on:\n${describeBlockers(open, card)}`,
+     };
+   }
+diff --git a/src/review/mutate.test.ts b/src/review/mutate.test.ts
+index c42b55a8f..14fb1bf0f 100644
+--- a/src/review/mutate.test.ts
++++ b/src/review/mutate.test.ts
+@@ -1,11 +1,12 @@
+ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+ import { createHash } from "node:crypto";
++import { spawnSync } from "node:child_process";
+ import { existsSync } from "node:fs";
+-import { mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, utimes, writeFile } from "node:fs/promises";
++import { chmod, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, utimes, writeFile } from "node:fs/promises";
+ import { tmpdir } from "node:os";
+ import path from "node:path";
+ import { reviewCommand } from "../commands/review";
+-import { BaselineError, doneMutantIds, EVIDENCE_DIR, MUTANTS_SPEC, type MutantResult, type MutationRecord, parseMutantSpec, pendingMutants, renderMutationTable, runMutation, SCRATCH_DIR, STALE_SCRATCH_MS, sweepStaleScratch, unjudgedMutants, withBail, writeMutationEvidence } from "./mutate";
++import { BaselineError, doneMutantIds, EVIDENCE_DIR, HEARTBEAT_MS, MUTANTS_SPEC, type MutantResult, type MutationRecord, parseMutantSpec, pendingMutants, renderMutationTable, runMutation, SCRATCH_DIR, STALE_HEARTBEAT_MS, STALE_SCRATCH_MS, sweepStaleScratch, unjudgedMutants, withBail, writeMutationEvidence } from "./mutate";
+ import { DEFAULT_PROVENANCE_LIMITS, REVIEW_PACKAGES_DIR, worktreeProvenance } from "./worktree-provenance";
+ 
+ let base: string;
+@@ -236,79 +237,281 @@ describe("nested git checkouts and stale scratch", () => {
+   const PROBE =
+     'const fs = require("fs");\nconst out = process.argv[2];\n' +
+     'fs.writeFileSync(out + ".ls", fs.readdirSync(".").sort().join("\\n"));\n' +
+-    'fs.writeFileSync(out + ".owner", fs.readFileSync("../owner.json", "utf8"));\n';
++    'fs.writeFileSync(out + ".owner", fs.readFileSync("../owner.json", "utf8"));\n' +
++    'const deep = [];\nfor (const a of fs.readdirSync(".", { withFileTypes: true })) {\n' +
++    '  if (!a.isDirectory()) continue;\n  deep.push(a.name);\n' +
++    '  for (const b of fs.readdirSync(a.name, { withFileTypes: true })) if (b.isDirectory()) deep.push(a.name + "/" + b.name);\n}\n' +
++    'fs.writeFileSync(out + ".deep", deep.sort().join("\\n"));\n' +
++    'fs.writeFileSync(out + ".scratch", fs.existsSync(".metaproject/data/review/mutate-scratch") ? "yes" : "no");\n';
++  const spec = () => parseMutantSpec([{ id: "A", file: "calc.js", anchor: "a + b", replacement: "a - b" }]);
++  const uid = process.getuid?.();
++  const isRoot = uid === 0;
++
++  /** A scratch directory with an owner marker (`owner` undefined: none); `ageMs` is the directory's age, `markerAgeMs` the marker's. */
++  async function make(name: string, owner: unknown, ageMs: number, markerAgeMs: number = ageMs, into: string = scratch): Promise<string> {
++    const dir = path.join(into, name);
++    await mkdir(path.join(dir, "tree"), { recursive: true });
++    if (owner !== undefined) {
++      await writeFile(path.join(dir, "owner.json"), JSON.stringify(owner));
++      const marker = new Date(Date.now() - markerAgeMs);
++      await utimes(path.join(dir, "owner.json"), marker, marker);
++    }
++    const when = new Date(Date.now() - ageMs);
++    await utimes(dir, when, when);
++    return dir;
++  }
+ 
+-  test("a pass copies a submodule and ordinary directories but not embedded clones or linked worktrees", async () => {
++  test("a pass leaves out linked worktrees and copies submodules, embedded clones and everything else", async () => {
+     await writeFile(path.join(tree, "probe.js"), PROBE);
++    // Left out: a gitfile into a worktree admin dir, the same under a `modules` path, and one whose admin dir has commondir.
+     await mkdir(path.join(tree, "nested-wt"), { recursive: true });
+     await writeFile(path.join(tree, "nested-wt", ".git"), "gitdir: /x/.git/worktrees/nested-wt\n");
+-    await mkdir(path.join(tree, "clone", ".git"), { recursive: true });
+-    await mkdir(path.join(tree, "linked"), { recursive: true });
+-    await symlink(path.join(base, "elsewhere"), path.join(tree, "linked", ".git"));
+-    await mkdir(path.join(tree, "broken"), { recursive: true });
+-    await mkdir(path.join(tree, "broken", ".git"), { recursive: true });
++    await mkdir(path.join(tree, "modules", "app"), { recursive: true });
++    await writeFile(path.join(tree, "modules", "app", ".git"), "gitdir: /x/modules/app/.git/worktrees/wt\n");
++    const admin = path.join(base, "admin", "wt-common");
++    await mkdir(admin, { recursive: true });
++    await writeFile(path.join(admin, "commondir"), "../..\n");
++    await mkdir(path.join(tree, "with-commondir"), { recursive: true });
++    await writeFile(path.join(tree, "with-commondir", ".git"), `gitdir: ${admin}\n`);
++    // Copied: submodules (their history is under .git/modules), a worktree-shaped gitfile that .gitmodules names, ...
+     await mkdir(path.join(tree, "sub"), { recursive: true });
+     await writeFile(path.join(tree, "sub", ".git"), "gitdir: ../.git/modules/sub\n");
+     await mkdir(path.join(tree, "winsub"), { recursive: true });
+     await writeFile(path.join(tree, "winsub", ".git"), "gitdir: ..\\.git\\modules\\winsub\n");
++    // A submodule checked out inside a linked worktree: its gitdir is under the worktree's admin dir, not one itself.
++    await mkdir(path.join(tree, "wtsub"), { recursive: true });
++    await writeFile(path.join(tree, "wtsub", ".git"), "gitdir: /x/.git/worktrees/wt/modules/wtsub\n");
++    await mkdir(path.join(tree, "listed"), { recursive: true });
++    await writeFile(path.join(tree, "listed", ".git"), "gitdir: /x/.git/worktrees/listed\n");
++    await mkdir(path.join(tree, "listed quoted"), { recursive: true });
++    await writeFile(path.join(tree, "listed quoted", ".git"), "gitdir: /x/.git/worktrees/listed-quoted\n");
++    await mkdir(path.join(tree, "listed-dir", ".git"), { recursive: true });
++    await writeFile(
++      path.join(tree, ".gitmodules"),
++      '[submodule "a"]\n\tpath = listed\n\turl = ../a\n[submodule "b"]\n\t path = "listed quoted"\n\turl = ../b\n[submodule "c"]\n\tpath=listed-dir\n\turl = ../c\n',
++    );
++    // ... an embedded clone, a `.git` link, a gitfile with no gitdir line, an unreadable gitfile, and ordinary directories.
++    await mkdir(path.join(tree, "clone", ".git"), { recursive: true });
++    await mkdir(path.join(tree, "linked"), { recursive: true });
++    await symlink(path.join(base, "elsewhere"), path.join(tree, "linked", ".git"));
++    await mkdir(path.join(tree, "no-gitdir"), { recursive: true });
++    await writeFile(path.join(tree, "no-gitdir", ".git"), "not a gitfile\n");
++    const unreadable = path.join(tree, "unreadable", ".git");
++    await mkdir(path.dirname(unreadable), { recursive: true });
++    await writeFile(unreadable, "gitdir: /x/.git/worktrees/unreadable\n");
++    if (!isRoot) await chmod(unreadable, 0o000);
+     await mkdir(path.join(tree, "plain"), { recursive: true });
+     await writeFile(path.join(tree, "plain", "a.txt"), "a");
+     const out = path.join(base, "seen");
+-    await runMutation({ worktree: tree, command: probe(out), scratchRoot: scratch, mutants: parseMutantSpec([{ id: "A", file: "calc.js", anchor: "a + b", replacement: "a - b" }]) });
++    try {
++      await runMutation({ worktree: tree, command: probe(out), scratchRoot: scratch, mutants: spec() });
++    } finally {
++      if (!isRoot) await chmod(unreadable, 0o600);
++    }
+     const seen = (await readFile(`${out}.ls`, "utf8")).split("\n");
+-    expect(seen).toContain("sub");
+-    expect(seen).toContain("winsub");
+-    expect(seen).toContain("plain");
+-    for (const skipped of ["nested-wt", "clone", "linked", "broken"]) expect(seen).not.toContain(skipped);
++    const deep = (await readFile(`${out}.deep`, "utf8")).split("\n");
++    for (const copied of ["sub", "winsub", "wtsub", "listed", "listed quoted", "listed-dir", "clone", "linked", "no-gitdir", "plain", "modules"]) expect(seen).toContain(copied);
++    // An unreadable gitfile is not proof of a worktree: the directory is copied (root reads it, and then it is one).
++    if (!isRoot) expect(seen).toContain("unreadable");
++    for (const skipped of ["nested-wt", "with-commondir"]) expect(seen).not.toContain(skipped);
++    expect(deep).not.toContain("modules/app");
++  });
++
++  test("a red baseline names how many linked worktrees the copy left out", async () => {
++    await writeFile(path.join(tree, "check.js"), "process.exit(1);\n");
++    for (const dir of ["wt-a", path.join("deep", "wt-b")]) {
++      await mkdir(path.join(tree, dir), { recursive: true });
++      await writeFile(path.join(tree, dir, ".git"), "gitdir: /x/.git/worktrees/w\n");
++    }
++    const error = await runMutation({ worktree: tree, command: command(), scratchRoot: scratch, mutants: spec() }).catch((e: unknown) => e);
++    expect(error).toBeInstanceOf(BaselineError);
++    expect((error as Error).message).toMatch(/the copy left out 2 linked worktree\(s\) \(first: (wt-a|deep[\\/]wt-b)\)/);
++  });
++
++  test("a red baseline with no linked worktree says nothing about them", async () => {
++    await writeFile(path.join(tree, "check.js"), "process.exit(1);\n");
++    const error = await runMutation({ worktree: tree, command: command(), scratchRoot: scratch, mutants: spec() }).catch((e: unknown) => e);
++    expect((error as Error).message).not.toContain("linked worktree");
+   });
+ 
+   test("a pass writes owner.json with its own pid beside the copy, not inside it", async () => {
+     await writeFile(path.join(tree, "probe.js"), PROBE);
+     const out = path.join(base, "seen");
+-    await runMutation({ worktree: tree, command: probe(out), scratchRoot: scratch, mutants: parseMutantSpec([{ id: "A", file: "calc.js", anchor: "a + b", replacement: "a - b" }]) });
++    await runMutation({ worktree: tree, command: probe(out), scratchRoot: scratch, mutants: spec() });
+     const owner = JSON.parse(await readFile(`${out}.owner`, "utf8")) as { pid: number; startedAt: string };
+     expect(owner.pid).toBe(process.pid);
+     expect(Number.isNaN(Date.parse(owner.startedAt))).toBe(false);
+     expect((await readFile(`${out}.ls`, "utf8")).split("\n")).not.toContain("owner.json");
+   });
+ 
++  test("LOGIC-001: the repository's own scratch is never copied, with the copy elsewhere, and dead passes in it are swept", async () => {
++    await writeFile(path.join(tree, "probe.js"), PROBE);
++    const repoScratch = path.join(tree, SCRATCH_DIR);
++    // A dead pass (its marker is old, its pid is not alive) and a live one (this process, a fresh marker).
++    const dead = await make("keryx-mutate-DEADDD", { pid: 2147483646, startedAt: "x" }, 1000, 3 * HEARTBEAT_MS, repoScratch);
++    await writeFile(path.join(dead, "tree", "stale.txt"), "stale");
++    const live = await make("keryx-mutate-LIVEEE", { pid: process.pid, startedAt: "x" }, 1000, 1000, repoScratch);
++    const out = path.join(base, "seen");
++    const record = await runMutation({ worktree: tree, command: probe(out), scratchRoot: scratch, mutants: spec() });
++    expect(await readFile(`${out}.scratch`, "utf8")).toBe("no");
++    expect(existsSync(dead)).toBe(false);
++    expect(existsSync(live)).toBe(true);
++    expect(record.sweptScratch).toBe(1);
++  });
++
+   test("sweepStaleScratch removes dead-owner and old unmarked passes and keeps live, fresh and foreign-named ones", async () => {
+-    const now = Date.now();
+-    const make = async (name: string, owner: unknown, ageMs: number) => {
+-      const dir = path.join(scratch, name);
+-      await mkdir(path.join(dir, "tree"), { recursive: true });
+-      if (owner !== undefined) await writeFile(path.join(dir, "owner.json"), JSON.stringify(owner));
+-      const when = new Date(now - ageMs);
+-      await utimes(dir, when, when);
+-    };
+     const old = STALE_SCRATCH_MS + 60_000;
+-    await make("keryx-mutate-AAAAAA", { pid: 111, startedAt: "x" }, 1000);
++    // A marker counts as dead only once it is also older than two heartbeats, so a dead owner's marker is aged past that.
++    await make("keryx-mutate-AAAAAA", { pid: 111, startedAt: "x" }, 1000, 3 * HEARTBEAT_MS);
+     await make("keryx-mutate-BBBBBB", undefined, old);
+-    await make("keryx-mutate-CCCCCC", { pid: 222, startedAt: "x" }, old);
++    await make("keryx-mutate-CCCCCC", { pid: 222, startedAt: "x" }, old, 3 * HEARTBEAT_MS);
+     await make("keryx-mutate-DDDDDD", undefined, 1000);
+     await make("keryx-mutate-test-xyz", undefined, old);
+-    const removed = await sweepStaleScratch(scratch, { now: () => now, isAlive: (pid) => pid === 222 });
++    const removed = await sweepStaleScratch(scratch, { isAlive: (pid) => pid === 222 });
+     expect(removed).toBe(2);
+     expect((await readdir(scratch)).sort()).toEqual(["keryx-mutate-CCCCCC", "keryx-mutate-DDDDDD", "keryx-mutate-test-xyz"]);
+   });
+ 
+-  test("sweepStaleScratch treats EPERM as alive and a missing base as nothing to do", async () => {
+-    await mkdir(path.join(scratch, "keryx-mutate-EEEEEE"), { recursive: true });
+-    await writeFile(path.join(scratch, "keryx-mutate-EEEEEE", "owner.json"), JSON.stringify({ pid: 1, startedAt: "x" }));
+-    expect(await sweepStaleScratch(scratch, { isAlive: () => { throw Object.assign(new Error("no"), { code: "EPERM" }); } })).toBe(0);
++  test("sweepStaleScratch: a missing base is nothing to do", async () => {
+     expect(await sweepStaleScratch(path.join(base, "absent"))).toBe(0);
+   });
+ 
+-  test("a pass sweeps a dead pass's scratch first and reports how many it removed", async () => {
+-    const stale = path.join(scratch, "keryx-mutate-ZZZZZZ");
+-    await mkdir(path.join(stale, "tree"), { recursive: true });
+-    // pid 2^31-2 is never a live process on a normal host, so process.kill(pid, 0) reports ESRCH.
+-    await writeFile(path.join(stale, "owner.json"), JSON.stringify({ pid: 2147483646, startedAt: "x" }));
+-    const record = await runMutation({ worktree: tree, command: command(), scratchRoot: scratch, mutants: parseMutantSpec([{ id: "A", file: "calc.js", anchor: "a + b", replacement: "a - b" }]) });
++  test("sweepStaleScratch: a probe that throws keeps the directory, and the sweep goes on to the next one", async () => {
++    for (let i = 1; i <= 4; i += 1) {
++      await make(`keryx-mutate-AAAAA${i}`, { pid: 111, startedAt: "x" }, 1000, 3 * HEARTBEAT_MS);
++      await make(`keryx-mutate-ZZZZZ${i}`, { pid: 222, startedAt: "x" }, 1000, 3 * HEARTBEAT_MS);
++    }
++    const removed = await sweepStaleScratch(scratch, {
++      isAlive: (pid) => {
++        if (pid === 111) throw Object.assign(new Error("no"), { code: "EPERM" });
++        return false;
++      },
++    });
++    expect(removed).toBe(4);
++    expect((await readdir(scratch)).sort()).toEqual(["keryx-mutate-AAAAA1", "keryx-mutate-AAAAA2", "keryx-mutate-AAAAA3", "keryx-mutate-AAAAA4"]);
++  });
++
++  describe("the real liveness probe", () => {
++    // The default `isAlive` is `process.kill(pid, 0)`: alive and EPERM mean the process exists, only ESRCH means it is gone.
++    const staleButNotAbandoned = 3 * HEARTBEAT_MS;
++    test("TP-001: this process and pid 1 are kept; the pid of a process that has exited is removed", async () => {
++      const exited = spawnSync(process.execPath, ["-e", ""]);
++      expect(exited.pid).toBeGreaterThan(0);
++      await make("keryx-mutate-SELFSE", { pid: process.pid, startedAt: "x" }, 1000, staleButNotAbandoned);
++      // pid 1 is EPERM for a process that is not root, and alive for root.
++      await make("keryx-mutate-INITIN", { pid: 1, startedAt: "x" }, 1000, staleButNotAbandoned);
++      await make("keryx-mutate-GONEGO", { pid: exited.pid, startedAt: "x" }, 1000, staleButNotAbandoned);
++      expect(await sweepStaleScratch(scratch)).toBe(1);
++      expect((await readdir(scratch)).sort()).toEqual(["keryx-mutate-INITIN", "keryx-mutate-SELFSE"]);
++    });
++  });
++
++  describe("a marker that stops being refreshed ages out", () => {
++    test("HL-001: a live pid whose marker is older than STALE_HEARTBEAT_MS is removed, whatever the pid says", async () => {
++      await make("keryx-mutate-REUSED", { pid: process.pid, startedAt: "x" }, 1000, STALE_HEARTBEAT_MS + 60_000);
++      await make("keryx-mutate-FRESHH", { pid: process.pid, startedAt: "x" }, 1000, STALE_HEARTBEAT_MS - 60_000);
++      expect(await sweepStaleScratch(scratch)).toBe(1);
++      expect(await readdir(scratch)).toEqual(["keryx-mutate-FRESHH"]);
++    });
++
++    test("HL-001: a dead pid with a fresh marker is kept (another PID namespace sees a live pass as gone); it goes after two heartbeats", async () => {
++      await make("keryx-mutate-FRESHH", { pid: 999, startedAt: "x" }, 1000, 1000);
++      await make("keryx-mutate-JUSTIN", { pid: 999, startedAt: "x" }, 1000, 2 * HEARTBEAT_MS - 30_000);
++      await make("keryx-mutate-JUSTAF", { pid: 999, startedAt: "x" }, 1000, 2 * HEARTBEAT_MS + 30_000);
++      expect(await sweepStaleScratch(scratch, { isAlive: () => false })).toBe(1);
++      expect((await readdir(scratch)).sort()).toEqual(["keryx-mutate-FRESHH", "keryx-mutate-JUSTIN"]);
++    });
++
++    test("the thresholds are the options' when given", async () => {
++      await make("keryx-mutate-ONEONE", { pid: 999, startedAt: "x" }, 1000, 5_000);
++      expect(await sweepStaleScratch(scratch, { isAlive: () => false, heartbeatMs: 1_000 })).toBe(1);
++      await make("keryx-mutate-TWOTWO", { pid: process.pid, startedAt: "x" }, 1000, 5_000);
++      expect(await sweepStaleScratch(scratch, { staleHeartbeatMs: 1_000 })).toBe(1);
++    });
++
++    test("HL-001: a running pass refreshes its owner marker", async () => {
++      await writeFile(
++        path.join(tree, "beat.mjs"),
++        'import fs from "node:fs";\nconst old = new Date(Date.now() - 3_600_000);\nfs.utimesSync("../owner.json", old, old);\n' +
++          'await new Promise((resolve) => setTimeout(resolve, 600));\nif (fs.statSync("../owner.json").mtimeMs < Date.now() - 300_000) process.exit(1);\n',
++      );
++      const record = await runMutation({ worktree: tree, command: `"${process.execPath}" beat.mjs`, scratchRoot: scratch, heartbeatMs: 50, mutants: spec() });
++      expect(record.baseline.exitCode).toBe(0);
++    });
++  });
++
++  describe("the sweep touches only the operator's own directories and never blocks", () => {
++    const dead = { pid: 111, startedAt: "x" };
++
++    test("SEC-001: a directory owned by another uid is kept", async () => {
++      if (uid === undefined) return;
++      await make("keryx-mutate-FOREIG", dead, 1000, 3 * HEARTBEAT_MS);
++      expect(await sweepStaleScratch(scratch, { isAlive: () => false, uid: uid + 1 })).toBe(0);
++      expect(await readdir(scratch)).toEqual(["keryx-mutate-FOREIG"]);
++      expect(await sweepStaleScratch(scratch, { isAlive: () => false, uid })).toBe(1);
++    });
++
++    test("SEC-001: a FIFO named owner.json does not stall the sweep; the directory is unmarked", async () => {
++      if (process.platform === "win32") return;
++      const old = STALE_SCRATCH_MS + 60_000;
++      const stale = await make("keryx-mutate-FIFOOL", undefined, old);
++      const fresh = await make("keryx-mutate-FIFOFR", undefined, 1000);
++      for (const dir of [stale, fresh]) expect(spawnSync("mkfifo", [path.join(dir, "owner.json")]).status).toBe(0);
++      // Creating the FIFO touched the directory; put its age back.
++      const aged = new Date(Date.now() - old);
++      await utimes(stale, aged, aged);
++      const outcome = await Promise.race([sweepStaleScratch(scratch), new Promise<"blocked">((resolve) => setTimeout(() => resolve("blocked"), 5_000))]);
++      expect(outcome).toBe(1);
++      expect(await readdir(scratch)).toEqual(["keryx-mutate-FIFOFR"]);
++    });
++
++    test("SEC-001: an oversize marker counts as unmarked, so a fresh directory is kept", async () => {
++      const dir = await make("keryx-mutate-BIGBIG", dead, 1000, 3 * HEARTBEAT_MS);
++      await writeFile(path.join(dir, "owner.json"), JSON.stringify({ ...dead, pad: "x".repeat(8192) }));
++      const marker = new Date(Date.now() - 3 * HEARTBEAT_MS);
++      await utimes(path.join(dir, "owner.json"), marker, marker);
++      expect(await sweepStaleScratch(scratch, { isAlive: () => false })).toBe(0);
++    });
++
++    test("TP-M32: a pid of 0, a negative pid or a fractional one is no marker, so a fresh directory is kept", async () => {
++      for (const [name, pid] of [["keryx-mutate-ZEROZE", 0], ["keryx-mutate-NEGNEG", -5], ["keryx-mutate-FRACFR", 1.5], ["keryx-mutate-STRSTR", "7"]] as const)
++        await make(name, { pid, startedAt: "x" }, 1000, 3 * HEARTBEAT_MS);
++      expect(await sweepStaleScratch(scratch, { isAlive: () => false })).toBe(0);
++      expect(await readdir(scratch)).toHaveLength(4);
++    });
++
++    test("TP-M34: a file or a link named like a scratch directory is left alone", async () => {
++      await writeFile(path.join(scratch, "keryx-mutate-FILEFI"), "not a directory");
++      const target = path.join(base, "target");
++      await mkdir(target);
++      await writeFile(path.join(target, "owner.json"), JSON.stringify(dead));
++      await symlink(target, path.join(scratch, "keryx-mutate-LINKLI"), "dir");
++      expect(await sweepStaleScratch(scratch, { isAlive: () => false, now: () => Date.now() + 10 * STALE_SCRATCH_MS })).toBe(0);
++      expect((await readdir(scratch)).sort()).toEqual(["keryx-mutate-FILEFI", "keryx-mutate-LINKLI"]);
++      expect(existsSync(path.join(target, "owner.json"))).toBe(true);
++    });
++  });
++
++  test("a pass sweeps a dead pass's scratch first and reports how many it removed and how long it took", async () => {
++    // pid 2^31-2 is never a live process on a normal host, so process.kill(pid, 0) reports ESRCH; the marker is old enough to count.
++    const stale = await make("keryx-mutate-ZZZZZZ", { pid: 2147483646, startedAt: "x" }, 1000, 3 * HEARTBEAT_MS);
++    const record = await runMutation({ worktree: tree, command: command(), scratchRoot: scratch, mutants: spec() });
+     expect(record.sweptScratch).toBe(1);
++    expect(typeof record.sweepMs).toBe("number");
+     expect(existsSync(stale)).toBe(false);
+-    const clean = await runMutation({ worktree: tree, command: command(), scratchRoot: scratch, mutants: parseMutantSpec([{ id: "A", file: "calc.js", anchor: "a + b", replacement: "a - b" }]) });
++    const clean = await runMutation({ worktree: tree, command: command(), scratchRoot: scratch, mutants: spec() });
+     expect("sweptScratch" in clean).toBe(false);
++    expect("sweepMs" in clean).toBe(false);
++  });
++
++  test("TP-M41: a pass whose baseline is red still carries what it swept", async () => {
++    await writeFile(path.join(tree, "check.js"), "process.exit(1);\n");
++    await make("keryx-mutate-ZZZZZZ", { pid: 2147483646, startedAt: "x" }, 1000, 3 * HEARTBEAT_MS);
++    const error = await runMutation({ worktree: tree, command: command(), scratchRoot: scratch, mutants: spec() }).catch((e: unknown) => e);
++    expect(error).toBeInstanceOf(BaselineError);
++    const record = (error as BaselineError).record;
++    expect(record.sweptScratch).toBe(1);
++    expect(typeof record.sweepMs).toBe("number");
+   });
+ });
+ 
+@@ -385,6 +588,15 @@ describe("renderMutationTable", () => {
+     expect(text).not.toContain("undefined");
+   });
+ 
++  test("a record that swept scratch copies prints one Swept line beside the Bail line, and one that swept none prints none", () => {
++    const rec = record([mutant({})]);
++    expect(renderMutationTable({ ...rec, sweptScratch: 2, sweepMs: 15 }).split("\n")).toContain("Swept: 2 scratch copies left by dead passes (15 ms).");
++    expect(renderMutationTable({ ...rec, sweptScratch: 1, sweepMs: 3 }).split("\n")).toContain("Swept: 1 scratch copy left by dead passes (3 ms).");
++    expect(renderMutationTable({ ...rec, sweptScratch: 2 })).toContain("Swept: 2 scratch copies left by dead passes.");
++    expect(renderMutationTable(rec)).not.toContain("Swept:");
++    expect(renderMutationTable({ ...rec, sweptScratch: 0, sweepMs: 1 })).not.toContain("Swept:");
++  });
++
+   test("a new record without a bail has no Bail line", () => {
+     const text = renderMutationTable({ ...record([mutant({})]), copyMs: 1, mutantsMs: 2, loadavg: [0, 0, 0] });
+     expect(text).not.toContain("Bail:");
+diff --git a/src/review/mutate.ts b/src/review/mutate.ts
+index 392388d14..9a32d4a87 100644
+--- a/src/review/mutate.ts
++++ b/src/review/mutate.ts
+@@ -1,6 +1,6 @@
+ import { spawn } from "node:child_process";
+-import { existsSync } from "node:fs";
+-import { cp, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, symlink, writeFile } from "node:fs/promises";
++import { constants, existsSync } from "node:fs";
++import { cp, lstat, mkdir, mkdtemp, open, readFile, readdir, realpath, rm, symlink, utimes, writeFile } from "node:fs/promises";
+ import { loadavg, tmpdir } from "node:os";
+ import path from "node:path";
+ import { withoutGitDiscoveryOverrides } from "../lib/git-env";
+@@ -73,6 +73,8 @@ export type MutationRecord = {
+   mutantsMs?: number | undefined;
+   /** Scratch directories of dead or abandoned earlier passes removed before this one; absent when none were. */
+   sweptScratch?: number | undefined;
++  /** Time spent sweeping them; present exactly when `sweptScratch` is. */
++  sweepMs?: number | undefined;
+ };
+ 
+ export const MUTANTS_SPEC = "mutants.json";
+@@ -86,9 +88,17 @@ export type ScratchMode = "repo" | "tmp";
+ export const SCRATCH_MODES: readonly ScratchMode[] = ["repo", "tmp"];
+ /** How long a scratch directory with no readable owner marker may sit before a later pass treats it as abandoned. */
+ export const STALE_SCRATCH_MS = 6 * 60 * 60 * 1000;
++/** How often a running pass touches its owner marker, so a sweep can tell a live pass from a dead one without trusting a pid. */
++export const HEARTBEAT_MS = 60_000;
++/** A marker nobody has touched for this long is abandoned whatever its pid says (a reused pid, or another PID namespace). */
++export const STALE_HEARTBEAT_MS = 10 * 60_000;
+ const OWNER_FILE = "owner.json";
+-/** What `mkdtemp(".../keryx-mutate-")` makes; any other name in the scratch base is not ours to remove. */
+-const SCRATCH_NAME = /^keryx-mutate-[A-Za-z0-9]{6}$/;
++/** The prefix of every scratch directory a pass makes (`mkdtemp(<base>/<prefix>)`). */
++const SCRATCH_PREFIX = "keryx-mutate-";
++/** What `mkdtemp` makes from {@link SCRATCH_PREFIX}; any other name in the scratch base is not ours to remove. */
++const SCRATCH_NAME = new RegExp(`^${SCRATCH_PREFIX}[A-Za-z0-9]{6}$`);
++/** An owner marker is a few dozen bytes; a larger file is not ours. */
++const OWNER_MAX_BYTES = 4096;
+ const BASELINE_TAIL_LINES = 60;
+ const OUTPUT_KEEP_CHARS = 256 * 1024;
+ 
+@@ -217,42 +227,74 @@ function lineOf(text: string, index: number): number {
+ }
+ 
+ /**
+- * True when `dir` is the root of a git checkout of its own: an embedded clone (`.git` directory), a
+- * linked worktree (`.git` file whose `gitdir:` is not under a `modules` directory) or a `.git` link.
+- * A submodule keeps its history under the parent's `.git/modules`, so it is part of the tree and is copied.
+- * An unreadable `.git` is treated as a checkout: skipping a directory is the safe way to be wrong.
++ * True when `dir` is a linked git worktree (`git worktree add`): the one kind of nested checkout the copy leaves out.
++ * It is a second working copy of a repository, often with hundreds of thousands of files, and not part of the tree
++ * under review. Everything else is copied as the base copy did, because the tests may load it: a submodule (listed in
++ * `submodules`, or a `.git` file pointing under `.git/modules`), an embedded clone (a `.git` directory), a `.git`
++ * link, and a `.git` that cannot be read or has no `gitdir:` line.
++ * A `.git` file is a linked worktree's when the admin directory it names holds a `commondir` file (git's own marker,
++ * the one `harness/process/sandbox/git-protect.ts` uses), or when the path it names ends in `.git/worktrees/<name>`;
++ * a `modules` segment before that decides nothing.
+  */
+-async function isNestedCheckout(dir: string): Promise<boolean> {
++async function isLinkedWorktree(dir: string, submodules: ReadonlySet<string>): Promise<boolean> {
++  if (submodules.has(dir)) return false;
+   const dotGit = path.join(dir, ".git");
+-  let info;
++  let value: string;
+   try {
+-    info = await lstat(dotGit);
+-  } catch (error) {
+-    return (error as NodeJS.ErrnoException).code !== "ENOENT";
++    if (!(await lstat(dotGit)).isFile()) return false;
++    const match = /^gitdir:\s*(.+)$/m.exec(await readFile(dotGit, "utf8"));
++    if (match === null) return false;
++    value = match[1]!.trim();
++  } catch {
++    return false;
+   }
+-  if (!info.isFile()) return true;
+   try {
+-    const match = /^gitdir:\s*(.+)$/m.exec(await readFile(dotGit, "utf8"));
+-    return match === null || !match[1]!.trim().split(/[\\/]+/).includes("modules");
++    if ((await lstat(path.join(path.resolve(dir, value), "commondir"))).isFile()) return true;
+   } catch {
+-    return true;
++    /* no such marker: fall back to the shape of the path */
+   }
++  // A worktree's admin directory is exactly `<…>/.git/worktrees/<name>`; a submodule of a linked worktree lives deeper,
++  // at `<…>/.git/worktrees/<name>/modules/<sub>`, and is copied.
++  const segments = value.split(/[\\/]+/).filter((segment) => segment !== "");
++  const at = segments.lastIndexOf(".git");
++  return at >= 0 && segments.length === at + 3 && segments[at + 1] === "worktrees";
++}
++
++/** Every `path = <value>` of a `.gitmodules` file, with one pair of surrounding double quotes removed. */
++function submodulePaths(gitmodules: string): string[] {
++  const found: string[] = [];
++  for (const match of gitmodules.matchAll(/^\s*path\s*=\s*(.+?)\s*$/gm)) found.push(match[1]!.replace(/^"(.*)"$/, "$1"));
++  return found;
+ }
+ 
+ /**
+  * Copies the tree entry by entry instead of with one `cp`: the scratch directory can sit inside the
+  * tree being copied, and `cp` refuses a destination under its own source. `skip` holds absolute paths
+- * (the scratch directory) that are left out. Nested git checkouts (`.claude/worktrees/*`, `.worktrees/*`)
+- * are left out too: a checkout can hold hundreds of thousands of files and is not part of what is reviewed.
++ * (the scratch directories) that are left out. Linked worktrees (`.claude/worktrees/*`, `.worktrees/*`) are left out
++ * too, see {@link isLinkedWorktree}; a directory a `.gitmodules` file of the walk names is a submodule and is copied.
++ * Returns the linked worktrees it left out, relative to `source`, in walk order.
+  */
+-async function copyTree(source: string, target: string, skip: ReadonlySet<string>): Promise<void> {
++async function copyTree(source: string, target: string, skip: ReadonlySet<string>): Promise<string[]> {
++  const skipped: string[] = [];
++  const submodules = new Set<string>();
+   const walk = async (from: string, to: string): Promise<void> => {
+     await mkdir(to, { recursive: true });
+-    for (const entry of await readdir(from, { withFileTypes: true })) {
++    const entries = await readdir(from, { withFileTypes: true });
++    if (entries.some((entry) => entry.name === ".gitmodules" && entry.isFile())) {
++      try {
++        for (const value of submodulePaths(await readFile(path.join(from, ".gitmodules"), "utf8"))) submodules.add(path.resolve(from, value));
++      } catch {
++        /* an unreadable .gitmodules names nothing */
++      }
++    }
++    for (const entry of entries) {
+       const entryPath = path.join(from, entry.name);
+       if (SKIP_COPY.has(entry.name) || skip.has(entryPath)) continue;
+       if (entry.isDirectory()) {
+-        if (await isNestedCheckout(entryPath)) continue;
++        if (await isLinkedWorktree(entryPath, submodules)) {
++          skipped.push(path.relative(source, entryPath));
++          continue;
++        }
+         await walk(entryPath, path.join(to, entry.name));
+       }
+       else await cp(entryPath, path.join(to, entry.name));
+@@ -261,47 +303,81 @@ async function copyTree(source: string, target: string, skip: ReadonlySet<string
+   await walk(source, target);
+   const modules = path.join(source, "node_modules");
+   if (existsSync(modules)) await symlink(modules, path.join(target, "node_modules"), "dir");
++  return skipped;
+ }
+ 
++/**
++ * Whether `pid` is a live process. Not `processIsAlive` from `lib/fs.ts`: this one is for a decision to delete, the
++ * irreversible direction, so any error but ESRCH keeps the directory (EPERM means the process exists under another user).
++ */
+ function pidAlive(pid: number): boolean {
+   try {
+     process.kill(pid, 0);
+     return true;
+   } catch (error) {
+-    // EPERM means the process exists under another user; only ESRCH means it is gone.
+     return (error as NodeJS.ErrnoException).code !== "ESRCH";
+   }
+ }
+ 
+-async function ownerPid(dir: string): Promise<number | undefined> {
++/**
++ * The owner marker of a scratch directory: its pid and when it was last touched. Opened without following a link and
++ * without blocking (a FIFO named `owner.json` must not stall a sweep), read only when it is a small regular file. Any
++ * failure, a bad shape or a pid that is not a positive integer means the directory has no marker.
++ */
++async function readOwner(dir: string): Promise<{ pid: number; mtimeMs: number } | undefined> {
++  let handle;
+   try {
+-    const owner = JSON.parse(await readFile(path.join(dir, OWNER_FILE), "utf8")) as { pid?: unknown };
+-    return typeof owner.pid === "number" && Number.isInteger(owner.pid) && owner.pid > 0 ? owner.pid : undefined;
++    handle = await open(path.join(dir, OWNER_FILE), constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
++    const info = await handle.stat();
++    if (!info.isFile() || info.size > OWNER_MAX_BYTES) return undefined;
++    const owner = JSON.parse(await handle.readFile("utf8")) as { pid?: unknown };
++    return typeof owner.pid === "number" && Number.isInteger(owner.pid) && owner.pid > 0 ? { pid: owner.pid, mtimeMs: info.mtimeMs } : undefined;
+   } catch {
+     return undefined;
++  } finally {
++    await handle?.close().catch(() => {});
+   }
+ }
+ 
+ /**
+- * Removes scratch directories that earlier passes left behind: a pass killed with SIGKILL or a crash never
+- * reaches its cleanup. A directory goes when its owner marker names a dead pid, or when it has no readable
+- * marker and is older than `staleMs`. Best effort: it returns how many it removed and never throws.
++ * Removes scratch directories that earlier passes left behind: a pass killed with SIGKILL or a crash never reaches its
++ * cleanup. Only the operator's own `keryx-mutate-XXXXXX` directories are looked at (a real directory, owned by `uid`
++ * when the platform has one). A running pass touches its owner marker every {@link HEARTBEAT_MS}. A directory with a
++ * marker goes when the marker is older than `staleHeartbeatMs` ({@link STALE_HEARTBEAT_MS}) whatever its pid says, or
++ * when its pid is not alive and the marker is older than two heartbeats (a sweep in another PID namespace cannot see a
++ * live pass's pid, but it does see that pass's fresh marker). A directory with no usable marker goes when it is older
++ * than `staleMs`. Best effort: it returns how many it removed and never throws.
+  */
+ export async function sweepStaleScratch(
+   scratchBase: string,
+-  options: { now?: (() => number) | undefined; staleMs?: number | undefined; isAlive?: ((pid: number) => boolean) | undefined } = {},
++  options: {
++    now?: (() => number) | undefined;
++    staleMs?: number | undefined;
++    isAlive?: ((pid: number) => boolean) | undefined;
++    uid?: number | undefined;
++    heartbeatMs?: number | undefined;
++    staleHeartbeatMs?: number | undefined;
++  } = {},
+ ): Promise<number> {
+   const now = options.now ?? Date.now;
+   const staleMs = options.staleMs ?? STALE_SCRATCH_MS;
+   const isAlive = options.isAlive ?? pidAlive;
++  const uid = options.uid ?? process.getuid?.();
++  const heartbeatMs = options.heartbeatMs ?? HEARTBEAT_MS;
++  const staleHeartbeatMs = options.staleHeartbeatMs ?? STALE_HEARTBEAT_MS;
+   let removed = 0;
+   try {
+     for (const entry of await readdir(scratchBase, { withFileTypes: true })) {
+       if (!entry.isDirectory() || !SCRATCH_NAME.test(entry.name)) continue;
+       const dir = path.join(scratchBase, entry.name);
+       try {
+-        const pid = await ownerPid(dir);
+-        const abandoned = pid !== undefined ? !isAlive(pid) : now() - (await stat(dir)).mtimeMs > staleMs;
++        const info = await lstat(dir);
++        if (!info.isDirectory() || (uid !== undefined && info.uid !== uid)) continue;
++        const owner = await readOwner(dir);
++        const abandoned =
++          owner === undefined
++            ? now() - info.mtimeMs > staleMs
++            : now() - owner.mtimeMs > staleHeartbeatMs || (!isAlive(owner.pid) && now() - owner.mtimeMs > 2 * heartbeatMs);
+         if (!abandoned) continue;
+         await rm(dir, { recursive: true, force: true });
+         removed += 1;
+@@ -348,6 +424,8 @@ export async function runMutation(options: {
+   cap?: number | undefined;
+   /** Run each mutant with `--bail` when the command allows it (default true); the baseline always runs in full. */
+   bail?: boolean | undefined;
++  /** How often the pass touches its owner marker; defaults to {@link HEARTBEAT_MS}. */
++  heartbeatMs?: number | undefined;
+ }): Promise<MutationRecord> {
+   const worktree = path.resolve(options.worktree);
+   const startedAt = new Date().toISOString();
+@@ -360,18 +438,32 @@ export async function runMutation(options: {
+   const passFields = { startedAt, ...provenance, loadavg: load, provenanceMs };
+   const timeoutMs = options.timeoutMs ?? 300_000;
+   const scratchBase = options.scratchRoot !== undefined ? path.resolve(options.scratchRoot) : options.scratch === "tmp" ? tmpdir() : path.join(worktree, SCRATCH_DIR);
++  // The repository's own scratch is never copied (a pass with `--scratch tmp` would otherwise copy the dead passes' trees
++  // it holds) and is swept too when the copy goes elsewhere.
++  const repoScratch = path.join(worktree, SCRATCH_DIR);
+   await mkdir(scratchBase, { recursive: true });
+-  const sweptScratch = await sweepStaleScratch(scratchBase);
+-  const scratch = await mkdtemp(path.join(scratchBase, "keryx-mutate-"));
++  const sweepStarted = Date.now();
++  let sweptScratch = await sweepStaleScratch(scratchBase);
++  if (scratchBase !== repoScratch) sweptScratch += await sweepStaleScratch(repoScratch);
++  const sweepMs = Date.now() - sweepStarted;
++  const sweepFields = sweptScratch > 0 ? { sweptScratch, sweepMs } : {};
++  const scratch = await mkdtemp(path.join(scratchBase, SCRATCH_PREFIX));
+   // Beside the copy, never inside it, so a later pass can tell a live owner from a dead one.
+-  await writeFile(path.join(scratch, OWNER_FILE), JSON.stringify({ pid: process.pid, startedAt }));
++  const ownerFile = path.join(scratch, OWNER_FILE);
++  await writeFile(ownerFile, JSON.stringify({ pid: process.pid, startedAt }));
++  // Touched while the pass runs: a sweep reads a marker that stopped being touched as abandoned.
++  const heartbeat = setInterval(() => {
++    const at = new Date();
++    void utimes(ownerFile, at, at).catch(() => {});
++  }, options.heartbeatMs ?? HEARTBEAT_MS);
++  heartbeat.unref();
+   // The copy has no .git; without a ceiling a git command run by the tests would walk up into the real repository.
+   const env = runEnv(scratchBase);
+-  return withScratchSignalCleanup(async () => { killLiveGroups(); await rm(scratch, { recursive: true, force: true }); }, async () => {
++  return withScratchSignalCleanup(async () => { clearInterval(heartbeat); killLiveGroups(); await rm(scratch, { recursive: true, force: true }); }, async () => {
+   try {
+     const copy = path.join(scratch, "tree");
+     const copyStarted = Date.now();
+-    await copyTree(worktree, copy, new Set([scratchBase, scratch]));
++    const leftOut = await copyTree(worktree, copy, new Set([scratchBase, repoScratch, scratch]));
+     const copyMs = Date.now() - copyStarted;
+     const baseline = await runCommand(options.command, copy, timeoutMs, env);
+     if (baseline.exitCode !== 0 || baseline.timedOut) {
+@@ -383,6 +475,7 @@ export async function runMutation(options: {
+         `baseline cwd: ${copy}`,
+         `last ${BASELINE_TAIL_LINES} lines of output:`,
+         tail === "" ? "(no output)" : tail,
++        ...(leftOut.length === 0 ? [] : [`the copy left out ${leftOut.length} linked worktree(s) (first: ${leftOut[0]})`]),
+       ].join("\n");
+       throw new BaselineError(message, {
+         schemaVersion: 1,
+@@ -393,7 +486,7 @@ export async function runMutation(options: {
+         totals: { killed: 0, survived: 0, invalid: 0, timeout: 0 },
+         ...passFields,
+         copyMs,
+-        ...(sweptScratch > 0 ? { sweptScratch } : {}),
++        ...sweepFields,
+       });
+     }
+ 
+@@ -445,9 +538,10 @@ export async function runMutation(options: {
+       ...passFields,
+       copyMs,
+       mutantsMs: results.reduce((sum, r) => sum + r.ms, 0),
+-      ...(sweptScratch > 0 ? { sweptScratch } : {}),
++      ...sweepFields,
+     };
+   } finally {
++    clearInterval(heartbeat);
+     await rm(scratch, { recursive: true, force: true });
+   }
+   });
+@@ -491,6 +585,9 @@ export function renderMutationTable(record: MutationRecord): string {
+     `Command: \`${record.command}\` (baseline exit ${record.baseline.exitCode}, ${record.baseline.ms} ms). Run in a scratch copy; the worktree was not written.`,
+     "",
+     ...(record.bail === true ? ["Bail: applied (mutants ran with --bail; baseline in full).", ""] : []),
++    ...(record.sweptScratch !== undefined && record.sweptScratch > 0
++      ? [`Swept: ${record.sweptScratch} scratch ${record.sweptScratch === 1 ? "copy" : "copies"} left by dead passes${record.sweepMs === undefined ? "" : ` (${record.sweepMs} ms)`}.`, ""]
++      : []),
+     ...costLine(record),
+     ...provenanceLine(record),
+     ...(record.baseline.tail === undefined

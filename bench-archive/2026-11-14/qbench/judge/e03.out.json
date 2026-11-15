@@ -1,0 +1,21 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "match", "gid": "G1", "why": "G1 identifies the throwing cancel on the recorded adapter and the unguarded call in cancelPendingDispatches aborting the loop." },
+    { "tid": "T2", "verdict": "match", "gid": "G2", "why": "G2 describes loadRecordedResults returning null coalesced to an empty recording so a bad path replays as zero findings." },
+    { "tid": "T3", "verdict": "match", "gid": "G5", "why": "G5 flags writeReplaySummary mixing read IO, validation/transform and write IO, plus duplicated parsing." },
+    { "tid": "T4", "verdict": "match", "gid": "G4", "why": "G4 names the inline seven-day window at both sites (lines 69 and 151) and the drift risk." },
+    { "tid": "T5", "verdict": "match", "gid": "G3", "why": "G3 identifies the in-place sort inside the predicate isReplayableResult and scopesMatch's hidden dependency on it." },
+    { "tid": "T6", "verdict": "match", "gid": "G6", "why": "G6 flags the single-letter n explained by a comment and proposes renaming to confirmed." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "truth", "why": "Match for T1." },
+    { "gid": "G2", "label": "truth", "why": "Match for T2." },
+    { "gid": "G3", "label": "truth", "why": "Match for T5." },
+    { "gid": "G4", "label": "truth", "why": "Match for T4." },
+    { "gid": "G5", "label": "truth", "why": "Match for T3." },
+    { "gid": "G6", "label": "truth", "why": "Match for T6." },
+    { "gid": "G7", "label": "valid", "why": "New exported function takes adjacent runId and reason strings positionally that can be swapped silently, while the codebase passes the same fields as a named object." },
+    { "gid": "G8", "label": "valid", "why": "The comment promises the summary counts unrecorded replays, but nothing reads metadata.recorded and writeReplaySummary only reads the recording file, so the comment is misleading." },
+    { "gid": "G9", "label": "noise", "why": "nowMs meaning a clock in options and a number elsewhere is a minor naming-taste inconsistency with no behavioral risk." }
+  ]
+}

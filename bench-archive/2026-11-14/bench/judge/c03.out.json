@@ -1,0 +1,20 @@
+[
+ {
+  "tid": "T1",
+  "verdict": "partial",
+  "gid": "G7",
+  "why": "G7 targets isWasIsRow's over-broad line-level exemption but describes the startsWith neighbour pairing, not exemption of any line containing both spellings anywhere."
+ },
+ {
+  "tid": "T2",
+  "verdict": "miss",
+  "gid": null,
+  "why": "G8 is about unvalidated unknown flags in integrate; no finding says uninstallMcpClient ignores a correct --dry-run and removes for real."
+ },
+ {
+  "tid": "T3",
+  "verdict": "match",
+  "gid": "G7",
+  "why": "G7 states that once any cell pairs, every retired spelling on the line is skipped, including one in an unrelated free-text cell."
+ }
+]

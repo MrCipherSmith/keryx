@@ -1,0 +1,23 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "match", "gid": "G1", "why": "G1 names the empty catch around writeOwnerOnlyFileAtomic followed by an unconditional ok:true return." },
+    { "tid": "T2", "verdict": "match", "gid": "G7", "why": "G7 flags the JSON.parse catch that logs to stderr and rethrows the same error." },
+    { "tid": "T3", "verdict": "match", "gid": "G6", "why": "G6 identifies the boolean toPinned flag switching between export and import, citing both call sites." },
+    { "tid": "T4", "verdict": "match", "gid": "G5", "why": "G5 names all three copies of the provider/live summary block at the same sites." },
+    { "tid": "T5", "verdict": "match", "gid": "G2", "why": "G2 reports the JSDoc's newer-entry-kept rule contradicted by unconditional updateProviderCatalogEntry." },
+    { "tid": "T6", "verdict": "match", "gid": "G8", "why": "G8 flags the ~57-line import function mixing I/O, validation, age filter and pruning and proposes extracting helpers." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "truth", "why": "Matches T1." },
+    { "gid": "G2", "label": "truth", "why": "Matches T5." },
+    { "gid": "G3", "label": "valid", "why": "The change documents a nonexistent `keryx providers pin` command and adds formatCatalogSummaryLine, which nothing in src calls; both are real, introduced, and fixable." },
+    { "gid": "G4", "label": "valid", "why": "syncPinnedSnapshot can throw (missing cache after a swallowed save failure, malformed pinned file) uncaught inside loadOrRefreshWith, breaking the cache-is-a-courtesy posture; real though currently gated off." },
+    { "gid": "G5", "label": "truth", "why": "Matches T4." },
+    { "gid": "G6", "label": "truth", "why": "Matches T3." },
+    { "gid": "G7", "label": "truth", "why": "Matches T2." },
+    { "gid": "G8", "label": "truth", "why": "Matches T6." },
+    { "gid": "G9", "label": "noise", "why": "Header wording nits (the cache is a ProviderCatalog too; 'next to' vs inside the config dir) are minor doc taste, not a defect a maintainer would prioritize." },
+    { "gid": "G10", "label": "noise", "why": "Info-level redundant existence read; negligible and self-rated as small." },
+    { "gid": "G11", "label": "noise", "why": "Exporting an alias of a private function is naming taste." }
+  ]
+}

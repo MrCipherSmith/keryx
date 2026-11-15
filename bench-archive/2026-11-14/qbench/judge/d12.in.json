@@ -1,0 +1,42 @@
+{
+ "truth": [],
+ "decoys": [],
+ "candidate": [
+  {
+   "id": "G1",
+   "file": "src/review/mutate.test.ts",
+   "line": 251,
+   "severity": "minor",
+   "problem": "The test helper `make` was lifted out of one test and grown from 3 to 5 positional parameters (name, owner, ageMs, markerAgeMs, into), crossing the 4-parameter threshold with no options object. Two of them are bare millisecond ages of the same type, so call sites read as positional number soup.",
+   "impact": "Anyone editing or adding a sweep test has to recall which number is the directory age and which is the marker age; calls like `make(\"keryx-mutate-DEADDD\", {...}, 1000, 3 * HEARTBEAT_MS, repoScratch)` swap silently if the two ages are transposed.",
+   "quote": "async function make(name: string, owner: unknown, ageMs: number, markerAgeMs: number = ageMs, into: string = scratch): Promise<string> {"
+  },
+  {
+   "id": "G2",
+   "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+   "line": 788,
+   "severity": "minor",
+   "problem": "The added parenthetical inside the sentence about what `treeHash` leaves out mixes in a fact about the scratch copy (linked worktrees), so it reads as if linked worktrees were a kind of ignored file. The same fact is then stated properly three lines later (line 791). The mirrored copy in src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md carries the same text.",
+   "impact": "A reader trying to learn what the hash covers gets a copy-exclusion rule woven into it and the same rule twice, which makes the paragraph harder to keep correct the next time either rule changes.",
+   "quote": "ignored files (the scratch copy still includes them, except linked worktrees, which it leaves out)"
+  },
+  {
+   "id": "G3",
+   "file": "src/review/completion-gate.ts",
+   "line": 888,
+   "severity": "minor",
+   "problem": "`stalled` holds a sentence fragment for the stop report, but the name reads like a boolean (\"is it stalled?\"). The next statement makes it worse: `stalls >= MAX_REVIEW_GATE_STALLS ? stalled : \"\"` looks like it tests one flag and returns another.",
+   "impact": "A maintainer of the gate report has to read the definition to see that `stalled` is text, not a condition. A name such as `stallClause` would say what it is.",
+   "quote": "const stalled = open.signature.includes(TRUNCATION_MARKER)"
+  },
+  {
+   "id": "G4",
+   "file": "docs/docs/cli-reference.md",
+   "line": 5107,
+   "severity": "info",
+   "problem": "The sweep thresholds (two minutes, ten minutes, six hours) are written out as prose in five places: the cli-reference `mutate` row, the guide (docs/docs/guides/review-with-a-record.md), the `review mutate` help text in src/commands/review.ts, and both SKILL.detail.md mirrors. They come from `2 * HEARTBEAT_MS`, `STALE_HEARTBEAT_MS` and `STALE_SCRATCH_MS` in src/review/mutate.ts. This follows the project's existing habit of restating CLI behaviour in each document, so it is noted, not reported as a defect.",
+   "impact": "Changing a constant in mutate.ts means finding and updating five prose copies. Nothing checks them against the constants, so they can drift without anyone noticing.",
+   "quote": "whose owner died (no heartbeat for two minutes) or stopped refreshing its marker for ten minutes, and unmarked ones older than six hours"
+  }
+ ]
+}

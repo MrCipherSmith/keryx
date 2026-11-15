@@ -1,0 +1,14 @@
+[
+ {
+  "tid": "T1",
+  "verdict": "miss",
+  "gid": null,
+  "why": "No finding says the ledgerBytes-growth guard in fastCheckpointState is unpinned by tests; G4 covers the digest-comparison check, a different guard."
+ },
+ {
+  "tid": "T2",
+  "verdict": "miss",
+  "gid": null,
+  "why": "No finding addresses the post-append ledgerByteLength check or its lack of test coverage."
+ }
+]

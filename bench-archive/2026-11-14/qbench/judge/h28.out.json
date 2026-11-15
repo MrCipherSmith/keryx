@@ -1,0 +1,12 @@
+{
+  "truth": [],
+  "candidates": [
+    { "gid": "G1", "label": "noise", "why": "Swallowing a best-effort timer utimes rejection to avoid an unhandled rejection is standard, the heartbeat already has an explanatory comment, and the deletion scenario is speculative." },
+    { "gid": "G2", "label": "noise", "why": "runMutation was already long before the change; asking to extract helpers is a structural taste suggestion, not a defect." },
+    { "gid": "G3", "label": "noise", "why": "One optional trailing parameter added to an already-positional signature is a style preference with no functional problem." },
+    { "gid": "G4", "label": "noise", "why": "The duplicated literal predates the change (13 copies); adding one more that matches the existing sites is not introduced debt." },
+    { "gid": "G5", "label": "valid", "why": "The new rendered Swept line says copies were left by dead passes, but the same change sweeps abandoned markers whatever their pid says, so the operator-facing text is inaccurate." },
+    { "gid": "G6", "label": "noise", "why": "The parenthetical correctly states that the scratch copy includes ignored files except linked worktrees; the wording complaint is taste." },
+    { "gid": "G7", "label": "noise", "why": "Naming a string `stalled` is pure naming taste with no correctness impact." }
+  ]
+}

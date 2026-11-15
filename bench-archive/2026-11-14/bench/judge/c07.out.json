@@ -1,0 +1,26 @@
+[
+ {
+  "tid": "T1",
+  "verdict": "miss",
+  "gid": null,
+  "why": "G1 quotes the same resolve line but faults reading the working tree instead of the head commit, not symlinks escaping the lexical containment check."
+ },
+ {
+  "tid": "T2",
+  "verdict": "miss",
+  "gid": null,
+  "why": "No candidate raises the unbounded O(lines x quote) cost of locateQuote."
+ },
+ {
+  "tid": "T3",
+  "verdict": "miss",
+  "gid": null,
+  "why": "No candidate flags quote-less findings with stale locator/line being written through unchecked."
+ },
+ {
+  "tid": "T4",
+  "verdict": "miss",
+  "gid": null,
+  "why": "G6 faults the divisor of the per-finding cost, not Math.round printing a nonzero spend as zero tokens."
+ }
+]

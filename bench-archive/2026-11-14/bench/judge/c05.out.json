@@ -1,0 +1,26 @@
+[
+ {
+  "tid": "T1",
+  "verdict": "miss",
+  "gid": null,
+  "why": "No candidate addresses the existsSync/readFile handling of non-regular, unreadable or oversized entries in removeUnmodifiedRetiredRules."
+ },
+ {
+  "tid": "T2",
+  "verdict": "miss",
+  "gid": null,
+  "why": "G7 concerns an unverified registry hash, not CRLF/BOM byte differences making unmodified copies hash as modified."
+ },
+ {
+  "tid": "T3",
+  "verdict": "miss",
+  "gid": null,
+  "why": "No candidate flags the implementation-plans vs documentation-management/feature-analyzer conflict over plan location."
+ },
+ {
+  "tid": "T4",
+  "verdict": "partial",
+  "gid": "G3",
+  "why": "G3 covers the nonexistent `keryx install` and wrong source-of-truth in rule-management-workflow, but not the skills-storage-workflow sync/destination/layout errors or the unwritten Sync Targets that form most of T4."
+ }
+]

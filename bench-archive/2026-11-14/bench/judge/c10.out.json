@@ -1,0 +1,5 @@
+[
+{"tid":"T1","verdict":"partial","gid":"G1","why":"G1 reports a word-slug bypass of looksSecretShaped/redaction in isWordSlug but via case-chunking, not the isSlugHexTail hex-tail carve-out, so fixing G1 would not necessarily close T1."},
+{"tid":"T2","verdict":"match","gid":"G3","why":"G3 identifies ADJACENT_LABEL requiring strict adjacency and missing labelled secrets with filler words such as 'the api key is ...'."},
+{"tid":"T3","verdict":"miss","gid":null,"why":"No candidate reports the single-segment 32-hex Gist id still refused via isHexBlob; G4 concerns mixed-case slugs."}
+]

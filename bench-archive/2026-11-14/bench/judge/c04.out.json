@@ -1,0 +1,20 @@
+[
+ {
+  "tid": "T1",
+  "verdict": "match",
+  "gid": "G2",
+  "why": "G2 shows the added allOf branch is redundant with the pre-existing if/then/else and the 'validated clean' claim is false."
+ },
+ {
+  "tid": "T2",
+  "verdict": "match",
+  "gid": "G4",
+  "why": "G4 identifies the substring match for loadSchema(\"<name>\") being satisfied by a comment rather than a live call."
+ },
+ {
+  "tid": "T3",
+  "verdict": "match",
+  "gid": "G1",
+  "why": "G1 says enforcement is behind an undocumented opt-in --result flag while the registry records it as kind production."
+ }
+]

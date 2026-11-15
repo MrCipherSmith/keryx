@@ -1,0 +1,638 @@
+[
+ {
+  "pkg": "2026-08-31-sac-mutation",
+  "base": "a0f41af88585fcb41dfb0c2a4493408be1002dcc",
+  "head": "6b1c05d92c70ba4326cb8c20e6fce5434283c5e4",
+  "lines": 261,
+  "nfiles": 2,
+  "created": "2026-08-31",
+  "findings": [
+   {
+    "id": "m-01",
+    "reviewer": "review-testing-practices",
+    "severity": "major",
+    "file": "src/sac/fwk-service.ts",
+    "line": 191,
+    "problem": "The `ledgerBytes !== checkpoint.ledgerBytes` guard in `fastCheckpointState` could be deleted with the entire suite still green. Nothing observed its removal.",
+    "impact": "Without the guard the fast path reads the tail record at the STALE `tailOffset`, validates it (it is a real record), and returns the stale `headHash`. The next append then chains from a record that is no longer last — a silently broken integrity chain produced by the code whose job is to keep it intact, and worse than the tampering this flow set out to detect, because nothing refuses. The state is reachable rather than theoretical: the ledger append is the commit point and its checkpoint refresh is explicitly allowed to fail, which leaves precisely a stale checkpoint over a longer ledger.",
+    "quote": null,
+    "proof": "fix-after-head"
+   },
+   {
+    "id": "m-02",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "file": "src/sac/fwk-service.ts",
+    "line": 639,
+    "problem": "The post-append `ledgerByteLength(ledger) !== ledgerBytes` check could be deleted with the entire suite still green.",
+    "impact": "`state.digest` carries the audited pre-append bytes and the checkpoint folds the written line into it without re-reading the file. That shortcut is honest only while the file is exactly the audited prefix plus that line. Remove the check and the checkpoint commits to a byte sequence that was never on disk — this flow's own defect reintroduced one layer down, in the mechanism built to remove it.",
+    "quote": null,
+    "proof": "fix-after-head"
+   }
+  ]
+ },
+ {
+  "pkg": "2026-09-02-ingest-868eae95",
+  "base": "09e8555c9079c3142125799c9e560e65d1eeae01",
+  "head": "e54718e94945efe9bce7526fe9ba034355a1a235",
+  "lines": 2305,
+  "nfiles": 23,
+  "created": "2026-09-02",
+  "findings": [
+   {
+    "id": "F-101",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "file": "src/ctx/hook-classify.ts",
+    "line": 179,
+    "problem": "readsStdin lets `grep -e PAT FILE` through: when the pattern arrives via a value flag the pattern operand is never spent, so operandsAllowed absorbs the first PATH instead. Attached spellings (-efoo, --regexp=foo) are missed by the value-flag set entirely.",
+    "impact": "A full file read past the guard, recorded as ctx_used-compliant — the exact false-clean the change exists to close. Regression: `grep -e foo file.ts` BLOCKED at 868eae95 and passes after the fix.",
+    "quote": null,
+    "proof": "fix-after-head"
+   },
+   {
+    "id": "F-102",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "file": "src/ctx/hook-classify.ts",
+    "line": 187,
+    "problem": "The recursive check /^-[a-zA-Z]*[rR]/ cannot match a long option: after ^- the next character is -, which [a-zA-Z]* cannot consume.",
+    "impact": "`grep --recursive foo` and `grep --dereference-recursive foo` walk the tree unguarded, including after a statement split (`cd src && grep --recursive foo`).",
+    "quote": null,
+    "proof": "fix-after-head"
+   },
+   {
+    "id": "F-103",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "file": "src/ctx/hook-classify.ts",
+    "line": 179,
+    "problem": "operandsAllowed is 1 only for search-like commands. sed and awk take a SCRIPT as their first operand exactly as grep takes a pattern, so a downstream filter's script is misread as a path.",
+    "impact": "This is the false-positive class that made the guard unusable and motivated the change in the first place. The fix moved it one command over: `bun test | sed -n '1,5p'` and `bun test | awk '{print $1}'` are refused.",
+    "quote": null,
+    "proof": "fix-after-head"
+   },
+   {
+    "id": "F-107",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "file": "src/commands/skills.ts",
+    "line": 405,
+    "problem": "The fix removed the short-token filter from the TRIGGER side only, so triggerTokens.every(t => queryTokens.has(t)) fails permanently for any trigger containing a stopword or one-character word.",
+    "impact": "Net regression measured over the whole catalog: 15 triggers lost the order-free path, 9 gained; round 1 complained about 11 and the count is now 17. It produces a WRONG route, not just silence: 'learn lessons from this review' names review-orchestrator while entity-skill-learner scores 30, below the floor.",
+    "quote": null,
+    "proof": "fix-after-head"
+   },
+   {
+    "id": "F-204",
+    "reviewer": "review-testing-practices",
+    "severity": "major",
+    "file": "src/ctx/hook-classify.ts",
+    "line": 137,
+    "problem": "Two guards added this round are unpinned: emptying the per-command VALUE_FLAGS, and dropping the isFirst half of the rg branch, both leave the suite green while over-blocking.",
+    "impact": "The file header says a false block is the failure mode that gets a hook uninstalled. `bun test | head -n 20` is the canonical form of the command the ALLOWED list protects and it flips to block under the mutation; the list exercises no value flag and contains no downstream rg.",
+    "quote": null,
+    "proof": "fix-after-head"
+   },
+   {
+    "id": "F-401",
+    "reviewer": "review-regression",
+    "severity": "major",
+    "file": "src/gdskills/catalog.ts",
+    "line": 292,
+    "problem": "The word-boundary padding matches only the standalone word and there is no stemming, so every one-word trigger in the untouched catalog stops matching the inflected forms operators type. The token fallback cannot recover it because expandTokens compares by exact equality.",
+    "impact": "Silent wrong result on the surface the project's routing rule depends on. `run the deployment` deploy(95) -> silence; `reviewing the diff now` review-orchestrator(55) -> gone, top becomes context-router(10); `commits are failing`, `brainstorming ideas`, `interviewing me first` all -> silence.",
+    "quote": null,
+    "proof": "fix-after-head"
+   }
+  ]
+ },
+ {
+  "pkg": "2026-09-09-ingest-499-r06",
+  "base": "f46724b5075d1a1ffbf89ad94e2ba1907d3bd338",
+  "head": "f0b74c26880b8c9704910cfdc24bac1eefe8c4bf",
+  "lines": 3731,
+  "nfiles": 52,
+  "created": "2026-09-09",
+  "findings": [
+   {
+    "id": "R1-LOGIC-001",
+    "reviewer": "review-orchestrator",
+    "severity": "major",
+    "file": "scripts/check-retired-cli-spellings.ts",
+    "line": null,
+    "problem": "`isWasIsRow` in scripts/check-retired-cli-spellings.ts exempted any line containing a retired spelling and its replacement anywhere in the line, so ordinary prose instructing a reader to run the retired command was exempt from the gate that exists to catch exactly that.",
+    "impact": "The gate reported 0 undeclared while a documented instruction to run `keryx mcp install` sat in docs/. A guard that cannot establish what it reports is the defect class this repository keeps recording.",
+    "quote": null,
+    "proof": "fix-after-head"
+   },
+   {
+    "id": "R1-LOGIC-002",
+    "reviewer": "review-orchestrator",
+    "severity": "major",
+    "file": "src/mcp/client-config.ts",
+    "line": null,
+    "problem": "`keryx integrate --remove <editor> --dry-run` performed a real removal. `uninstallMcpClient` took no dry-run parameter, so the flag was accepted, documented, and ignored.",
+    "impact": "A user asking to preview a removal had the config removed. The behaviour pre-existed the branch, but the branch rewrote the help text and dropped the old 'install only' qualifier, turning a documented limitation into a documentation lie.",
+    "quote": null,
+    "proof": "fix-after-head"
+   },
+   {
+    "id": "R2-LOGIC-001",
+    "reviewer": "independent-verifier-a",
+    "severity": "major",
+    "file": "scripts/check-retired-cli-spellings.ts",
+    "line": null,
+    "problem": "The fix for R1-LOGIC-001 asked 'is this a was->is row?' once per ROW and applied the answer to every occurrence on it, so a row holding a genuine pair plus an unrelated instructional cell was exempted wholesale.",
+    "impact": "A live instruction to run a retired spelling rides out on a neighbouring cell's legitimate exemption - the same failure the original finding named, one level in.",
+    "quote": null,
+    "proof": "fix-after-head"
+   }
+  ]
+ },
+ {
+  "pkg": "2026-09-10-ingest-510",
+  "base": "ea0b396c37f7bbedf7d35adcdf303b996c1ae009",
+  "head": "e4a839a7adccb9662b78372e94e89398baeeeb80",
+  "lines": 658,
+  "nfiles": 9,
+  "created": "2026-09-10",
+  "findings": [
+   {
+    "id": "R1-LOGIC-001",
+    "reviewer": "review-pr510",
+    "severity": "blocker",
+    "file": "src/gdskills/bundled/skills/review/review-pr-feedback/output-contract.schema.json",
+    "line": null,
+    "problem": "The allOf conditional added to review-pr-feedback-output's schema (analyze mode implies fix must be null) was fully redundant with a pre-existing top-level if/then/else whose else branch already required it. The commit's central claim - that the rule lived only in a description no validator reads - was false.",
+    "impact": "The PR's flagship demonstration did not demonstrate what it claimed: the AC2 payload was already refused at the parent commit. None of the sixteen new tests could tell the difference - removing the conditional left them all green - so a change that altered no behaviour shipped described as closing a gap, in a PR whose whole subject is unverified claims.",
+    "quote": null,
+    "proof": "fix-after-head"
+   },
+   {
+    "id": "R1-ARCH-002",
+    "reviewer": "review-pr510",
+    "severity": "major",
+    "file": "src/gdskills/contract-enforcement.test.ts",
+    "line": null,
+    "problem": "The enforcement guard checked its production claim with a raw substring match for loadSchema(\"<name>\"), which is satisfied by a commented-out call, a docstring example, or a call inside dead code.",
+    "impact": "The registry's central promise - that a production claim is checked rather than trusted - was weaker than stated. Proved on live code: inserting return; above the real loadSchema call left it unreachable and fully disabled the new enforcement, and the guard still passed every assertion.",
+    "quote": null,
+    "proof": "fix-after-head"
+   },
+   {
+    "id": "R1-ARCH-003",
+    "reviewer": "review-pr510",
+    "severity": "major",
+    "file": "src/commands/review.ts",
+    "line": null,
+    "problem": "review-pr-feedback-output was recorded as kind: production while its enforcement sits behind an optional --result flag that no documented invocation passed.",
+    "impact": "The registry used one word for two different guarantees. job-orchestrator-state, review-finding and subagent-result validate on every real call because keryx performs the write; this one validated only if a caller remembered a flag that nothing told them to pass - so in the documented workflow a self-contradictory result was never actually refused.",
+    "quote": null,
+    "proof": "fix-after-head"
+   }
+  ]
+ },
+ {
+  "pkg": "2026-09-11-ingest-skills-quality-program",
+  "base": "bb0e36b411aa8316175222ffc97869404e750074",
+  "head": "2078a9a645e34ffadbdadc544e50bc6650bd3f3f",
+  "lines": 3229,
+  "nfiles": 179,
+  "created": "2026-09-11",
+  "findings": [
+   {
+    "id": "S-001",
+    "reviewer": "review-security-code",
+    "severity": "major",
+    "file": "src/gdskills/install.ts",
+    "line": 130,
+    "problem": "removeUnmodifiedRetiredRules gates on existsSync (follows symlinks, true for dirs/FIFOs) then readFile with no lstat/isFile, no size bound, no try/catch. Directory -> EISDIR aborts install before catalog/manifest/contracts are written; symlink to /dev/zero -> unbounded memory; FIFO -> hang; chmod 000 -> EACCES abort.",
+    "impact": ".metaproject/rules/core is git-tracked, so a repo can plant a non-regular entry at a retired name and make every keryx init/update/skills install abort (or hang/exhaust memory) before catalog, manifest and contracts are written.",
+    "quote": null,
+    "proof": "fix-after-head"
+   },
+   {
+    "id": "L-001",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "file": "src/gdskills/install.ts",
+    "line": 133,
+    "problem": "sha256 over raw bytes; registry hashes are LF-only, BOM-less. An unmodified copy with CRLF (Windows core.autocrlf=true on a versioned .metaproject/rules/core) or a BOM is classified kept-modified forever and warned on every install.",
+    "impact": "Unmodified retired rules are never cleaned up on CRLF/BOM checkouts and produce a permanent false 'modified' warning on every install.",
+    "quote": null,
+    "proof": "fix-after-head"
+   },
+   {
+    "id": "C-002",
+    "reviewer": "review-architecture",
+    "severity": "major",
+    "file": "src/gdskills/bundled/rules/core/implementation-plans.mdc",
+    "line": 2,
+    "problem": "implementation-plans says plans live only in docs/requirements/<name>/implementation-plan.md, \"no separate plans/ tree\", and to scaffold a requirements package first; documentation-management keeps a plans/ category and analysis/<feature>/implementation-plan.md, which feature-analyzer writes.",
+    "impact": "Two core rules and a shipped skill disagree on where an implementation plan lives.",
+    "quote": null,
+    "proof": "fix-after-head"
+   },
+   {
+    "id": "C-003",
+    "reviewer": "review-architecture",
+    "severity": "major",
+    "file": "src/gdskills/bundled/rules/core/skills-storage-workflow.mdc",
+    "line": 21,
+    "problem": "skills-storage-workflow names the install mirror as source of truth, says \"sync\" with keryx update (which force-copies bundled over the installed tree and never syncs globally; global sync is `keryx skills sync --runtime <r> --target <dir>`), \"both global destinations\" vs four listed, layout omits <category>/. rule-management-workflow:15 cites nonexistent `keryx install`; its Sync Targets (~/.cursor/rules/AGENTS.md etc.) are written by no code.",
+    "impact": "An agent following these rules edits the wrong tree, runs a command that does not sync, or runs a command that does not exist.",
+    "quote": null,
+    "proof": "fix-after-head"
+   }
+  ]
+ },
+ {
+  "pkg": "2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-549",
+  "base": "b44255cbccc5f776fc4b9724cff34216aff89138",
+  "head": "2aa3d0e2ad2086ca981cb975cbc3b98cb15477dd",
+  "lines": 162,
+  "nfiles": 4,
+  "created": "2026-09-12",
+  "findings": [
+   {
+    "id": "F-001",
+    "reviewer": "review-security-code",
+    "severity": "blocker",
+    "file": "src/security/detect/pii.ts",
+    "line": 261,
+    "problem": "isIdentifierFragment treats any adjacent letter as proof of identifier, un-redacting real phone numbers.",
+    "impact": "A real phone number adjacent to a letter across a hyphen is no longer redacted anywhere the PII detector is the last line of defence — MCP tool output, keryx security check-output, session transcripts. A single letter suffices, so it is also a trivial deliberate evasion.",
+    "quote": null,
+    "proof": "fix-after-head"
+   },
+   {
+    "id": "F-002",
+    "reviewer": "review-security-code",
+    "severity": "major",
+    "file": "src/security/detect/pii.ts",
+    "line": 233,
+    "problem": "enclosingToken's unbounded outward scan adds a second quadratic term on adversarial input.",
+    "impact": "detectPii runs on every tool output, including externally-influenced text. On a 272 KB adversarial blob the guard added ~60% to an already-quadratic cost (46.5s vs 28.8s).",
+    "quote": null,
+    "proof": "fix-after-head"
+   }
+  ]
+ },
+ {
+  "pkg": "2026-09-16-ingest-github-com-mrciphersmith-keryx-pull-560",
+  "base": "b618e46632b336d3edefb99a3a7d43956e3d3900",
+  "head": "088801de0aa69e55d10f7bd2b8f9841fd8db398f",
+  "lines": 1730,
+  "nfiles": 18,
+  "created": "2026-09-16",
+  "findings": [
+   {
+    "id": "F-001",
+    "reviewer": "review-security-code",
+    "severity": "blocker",
+    "file": "src/review/managed.ts",
+    "line": 1088,
+    "problem": "The round-tree containment check is lexical, not real: a symlink inside the tree defeats it and lets `review ingest` read arbitrary host files.",
+    "impact": "Anyone who can add a file to the tree under review can plant a symlink and then use the derived locator state as a line-by-line oracle for any file the ingest process can read.",
+    "quote": "const resolved = path.resolve(input.cwd, relative);\n      if (resolved !== input.cwd && !resolved.startsWith(`${path.resolve(input.cwd)}${path.sep}`)) {\n        return null;\n      }",
+    "proof": "quote"
+   },
+   {
+    "id": "F-002",
+    "reviewer": "review-security-code",
+    "severity": "blocker",
+    "file": "src/review/locate.ts",
+    "line": 95,
+    "problem": "locateQuote is O(file lines x quote lines) with no cap on either, and anchorFindings runs it once per finding sequentially, so a report can hang review ingest for minutes.",
+    "impact": "A report is attacker-influenced data by this round's own framing; a single ingest can be made to hang with no cap, no timeout and no bailout, using inputs that look ordinary.",
+    "quote": "for (let start = 0; start + needle.length <= haystack.length; start += 1) {\n    const window = shape(haystack.slice(start, start + needle.length));\n    if (window.every((line, offset) => line === needle[offset])) {\n      hits.push(start + 1); // 1-based, like every line number a human reads\n    }\n  }",
+    "proof": "quote"
+   },
+   {
+    "id": "F-003",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "file": "src/review/managed.ts",
+    "line": 1099,
+    "problem": "A finding carrying a stale locator and line but no quote is written through unrechecked.",
+    "impact": "On a fix round — the round type this change's own comments call out as where the anchor is least trustworthy — an unverified line/locator pair is written verbatim into the new round's findings.json, defeating the derivation guarantee for exactly that case.",
+    "quote": "for (const finding of findings) {\n    const locator = await locateFinding(finding, read);\n    if (locator === undefined) {\n      continue;\n    }",
+    "proof": "quote"
+   },
+   {
+    "id": "F-004",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "file": "src/review/cost.ts",
+    "line": 129,
+    "problem": "The per-finding cost rounds a nonzero spend down to a printed zero, contradicting the module's own rule that a zero means somebody measured.",
+    "impact": "A reader who trusts the module's promise reads 'per retained finding: 0 tokens' as free when the round spent tokens — the exact confusion the module exists to prevent, reappearing through a different door.",
+    "quote": "if (tokens !== undefined) {\n    lines.push(`per retained finding: ${grouped(Math.round(tokens / retained))} tokens`);\n  }",
+    "proof": "quote"
+   }
+  ]
+ },
+ {
+  "pkg": "2026-09-23-verify-connect-disconnect",
+  "base": "f4c72712f6f26a1f7af7f5fda24e5f9e1473bace",
+  "head": "5d203ec9925f83b60cb93441e09f0f01e871f882",
+  "lines": 2178,
+  "nfiles": 21,
+  "created": "2026-09-23",
+  "findings": [
+   {
+    "id": "F-001",
+    "reviewer": "code-reviewer (flow 304, PR #673)",
+    "severity": "major",
+    "file": "src/commands/providers.ts",
+    "line": null,
+    "problem": "Disconnecting a provider authenticated via a saved OAuth grant removed the grant from auth.json but left the provider's resolved credential sitting in process.env for the rest of the running process, so a later in-process read of that env var (or a later /connect re-listing) could still observe a token that had just been disconnected.",
+    "impact": "An operator who disconnected an OAuth-backed provider believing the credential was gone would have it silently keep working for anything reading process.env directly in the same process, and a later /connect listing built from the live environment could still report the provider as connected.",
+    "quote": "oauthEnvKeyFor",
+    "proof": "quote"
+   },
+   {
+    "id": "F-002",
+    "reviewer": "code-reviewer (flow 304, PR #673)",
+    "severity": "major",
+    "file": "src/commands/providers.ts",
+    "line": 1359,
+    "problem": "zai and zai-coding resolve their credential from the same ZAI_API_KEY saved key. Disconnecting either one removed that single saved key, which silently disconnected the OTHER provider too, with no warning to the operator before or after the action.",
+    "impact": "An operator disconnecting zai because they no longer wanted THAT provider would also lose zai-coding without being told, and would only discover it was gone the next time they tried to use it - a surprising, silent side effect of an action that named only one provider.",
+    "quote": "sharedWith",
+    "proof": "quote"
+   },
+   {
+    "id": "F-003",
+    "reviewer": "code-reviewer (flow 304, PR #673)",
+    "severity": "major",
+    "file": "src/commands/providers.ts",
+    "line": null,
+    "problem": "keryx providers remove <unknown-name> printed a success-shaped message and exited 0 for a provider name that did not exist, instead of reporting the name as unrecognised.",
+    "impact": "A typo'd or stale provider name in a script or an operator's shell history would report success without touching anything, so a caller checking only the exit code (or a human reading only the first line) would believe a disconnect happened when nothing did - the opposite of keryx providers test, which already validated the name first.",
+    "quote": "providerByName",
+    "proof": "quote"
+   }
+  ]
+ },
+ {
+  "pkg": "2026-09-28-pr-776-round2-2a2db6b7",
+  "base": "b7020b9fed35889b5fa814fdea4dd31ce5a28765",
+  "head": "2a2db6b7b05761b8f0a38bd057671cc286512c05",
+  "lines": 2976,
+  "nfiles": 34,
+  "created": "2026-09-28",
+  "findings": [
+   {
+    "id": "SEC-F1",
+    "reviewer": "review-security-code",
+    "severity": "blocker",
+    "file": "src/security/detect/entropy.ts",
+    "line": 235,
+    "problem": "isWordSlug exempts a hyphen/underscore-segmented run from the entropy/hex-blob gate whenever every segment is pure-alpha, pure-digit, or a single-transition tag, with no check on the RECONSTITUTED value's own entropy. Re-segmenting any real secret into single-character-class chunks joined by '-' defeats looksSecretShaped/secretShapedCandidatesIn entirely.",
+    "impact": "Complete bypass of S-6 (redactSensitiveText) and S-8 (containsOutboundSecret) for a re-segmented secret, and of S-9 (displayUrl masking). Reproduced: a real 32-char alphanumeric secret, re-segmented into letter-run/digit-run chunks ('aK-9-dQ-2-rN-7-zVbT-4-pXeYfWmC-1-oLaHsJtU-8'), passes looksSecretShaped as false, containsOutboundSecret as false when placed in a URL path, and redactSensitiveText leaves it byte-for-byte unredacted even when explicitly labelled 'leaked api_key:'. A simpler variant using real dictionary words on either side of the secret ('log-<secret>-id') reproduces the same bypass.",
+    "quote": "function isWordSlug(value: string): boolean {\n  const segments = value.split(/[-_]/);\n  if (segments.length < 3) {\n    return false;\n  }",
+    "proof": "quote"
+   },
+   {
+    "id": "LOG-F1",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "file": "src/security/detect/entropy.ts",
+    "line": 173,
+    "problem": "The generic (non-URL) per-line scan's TOKEN character class still includes '/' and '=', so a relative path, a code assignment, or a '/'-joined list is swept as one compound run; SENSITIVE_LABEL's 40-char lookback is same-line PROXIMITY, not true adjacency, so any ordinary occurrence of a label word earlier in the line/comment triggers a match on unrelated text.",
+    "impact": "Silent corruption of tool-output/transcript content, the same impact class F-LOG-F1 was blocker for. Real-file sweep of this repository: git log -p -30 --stat (30 commits) produced 5 false positives (a relative markdown link path near the words 'Credential Masking'; a GitHub noreply-email local part near the word 'key'; a Python 'from_attributes=True' assignment near the word 'API'; a 'passlib/bcrypt/argon2' library-name comment near the word 'password'), against 0 in bun.lock and 0 in CHANGELOG.md.",
+    "quote": "const TOKEN = /[A-Za-z0-9+/=_-]{20,}(?:\\.[A-Za-z0-9+/=_-]{6,})*/g;",
+    "proof": "quote"
+   },
+   {
+    "id": "REG-F1",
+    "reviewer": "review-regression",
+    "severity": "major",
+    "file": "src/security/detect/entropy.ts",
+    "line": 231,
+    "problem": "isSingleTransitionTag only forgives a segment that changes character class at most once. Medium's and GitHub Gist's common '<slug>-<hex id>' URL convention interleaves letters and digits many times in the trailing id, which fails isWordSlug entirely (one bad segment poisons the whole slug check) and falls through to the entropy gate, qualifying as secret-shaped.",
+    "impact": "web_fetch refuses an entirely ordinary, public, non-credential URL, contradicting AC4's guarantee. Reproduced against a URL already present in this repository's own docs: docs/requirements/keryx-wiki-graph-next/README.md links a Medium article whose trailing hex id triggers the refusal; a GitHub Gist URL reproduces the same failure.",
+    "quote": "function isSingleTransitionTag(segment: string): boolean {\n  return /^[A-Za-z]+[0-9]+$/.test(segment) || /^[0-9]+[A-Za-z]+$/.test(segment);\n}",
+    "proof": "quote"
+   },
+   {
+    "id": "SEC-F2",
+    "reviewer": "review-security-code",
+    "severity": "major",
+    "file": "src/security/detect/entropy.ts",
+    "line": 274,
+    "problem": "Continuation of round-1 F-SEC-F2. The fixed label-overrides-allow-shape logic is correct, but bareShapeQualifies's own entropy floor (3.6 bits, no hex-blob match possible for a hyphenated UUID) runs BEFORE the label is ever consulted, so whether a labelled UUID is redacted depends entirely on that UUID's own digit repetition, independent of the label.",
+    "impact": "Non-deterministic protection for UUID-shaped credentials even when explicitly labelled as leaked. Sample: 6 of 8 UUIDs redacted when labelled 'leaked credential:'; 2 were not, including the canonical RFC 4122 example UUID (550e8400-e29b-41d4-a716-446655440000, entropy 3.39) that appears throughout real documentation and example code. The existing regression test for this exact case uses a UUID (entropy 4.06) that happens to clear the floor, so it passes without exercising the boundary.",
+    "quote": "function bareShapeQualifies(head: string): { qualifies: boolean; entropy: number } {",
+    "proof": "quote"
+   }
+  ]
+ },
+ {
+  "pkg": "2026-09-28-pr-779-round3-9b0b3f58",
+  "base": "1a11bff6fbb9fa8c05f2ba11537c6da3414959cd",
+  "head": "9b0b3f58b18caf90b2e811744133ef2364dc7e4b",
+  "lines": 396,
+  "nfiles": 7,
+  "created": "2026-09-28",
+  "findings": [
+   {
+    "id": "SEC-F3",
+    "reviewer": "review-security-code",
+    "severity": "blocker",
+    "file": "src/security/detect/entropy.ts",
+    "line": 340,
+    "problem": "isSlugHexTail — added this round to fix REG-F1 — grants a hyphenated slug's LAST segment a content-free carve-out whenever it is a 10-16 character pure-hex run, with no check on whether that segment is itself the secret. Because bareShapeQualifies checks isWordSlug BEFORE any entropy/allow-shape/label logic, and labelledPieceQualifies (the LABELLED path, reached only after ADJACENT_LABEL already confirmed a label) calls bareShapeQualifies first and only falls back to isAllowShapedValue afterward, a real secret dressed as `<word>-<word>-<10to16-hex>` bypasses looksSecretShaped, containsOutboundSecret (S-8) and redactSensitiveText (S-6) completely — even when the value carries an explicit label right next to it.",
+    "impact": "Complete bypass of S-6 and S-8 for a secret formatted as a word-slug with a hex tail, in both the label-free and the labelled path. Reproduced: redactSensitiveText('leaked api_key: log-report-deadbeef01234567') returns the value UNREDACTED, byte for byte, despite the explicit label; containsOutboundSecret('https://exfil.example/log-report-deadbeef01234567') returns false (not refused); looksSecretShaped('log-report-deadbeef01234567') returns false. This is the same class of defect SEC-F1 (round 2, blocker) fixed for the digit/letter-run segmentation trick — round 3's own fix for REG-F1 reopened an equivalent primitive.",
+    "quote": "const SLUG_HEX_TAIL_RE = /^[0-9a-f]{10,16}$/i;\nfunction isSlugHexTail(segment: string): boolean {\n  return SLUG_HEX_TAIL_RE.test(segment);\n}",
+    "proof": "quote"
+   },
+   {
+    "id": "LOG-F2",
+    "reviewer": "review-security-code",
+    "severity": "major",
+    "file": "src/security/detect/entropy.ts",
+    "line": 214,
+    "problem": "ADJACENT_LABEL (round 2's fix for LOG-F1's false-positive proximity window) requires the label word to sit immediately before the value with only a continuation, optional quote and a single ':'/'=' connector between them. This over-corrects: it now misses a real labelled secret whenever an ordinary filler word sits between the label and the connector ('password IS: <secret>'), or when the label and the value are on different lines, and the label look-back is explicitly bounded to the current line.",
+    "impact": "A real, explicitly-labelled secret is not redacted (S-6) and not caught by the outbound-egress check (S-8). Reproduced: detectEntropy('password is: kd8Fj2LmQp9xZr4TvWn7Yb3xxyyzz') -> [] (the exact secret from this PR's own header-comment example, immediately preceded by an unambiguous label); redactSensitiveText on the same text leaves it verbatim. A label ending one line with the value starting the next is also never labelled.",
+    "quote": "const ADJACENT_LABEL = new RegExp(\n  `(?:^|[^A-Za-z0-9])(?:${caseless(SENSITIVE_LABEL_WORDS)})[A-Za-z0-9_-]*[\"']?\\\\s*[:=]?\\\\s*[\"']?$`,\n);",
+    "proof": "quote"
+   },
+   {
+    "id": "REG-F2",
+    "reviewer": "review-regression",
+    "severity": "major",
+    "file": "src/security/detect/entropy.ts",
+    "line": 254,
+    "problem": "REG-F1 (round 2) is only partially fixed. isSlugHexTail correctly carves out a hex tail that is the LAST segment of an already-valid word-slug (fixes Medium's '<words>-<hex>' shape), but a GitHub Gist URL's real, common shape is 'gist.github.com/<user>/<32-hex-id>' — the id is a SINGLE path segment with no internal hyphenation, so it never reaches isWordSlug at all (segments.length < 3 short-circuit). That segment falls straight to bareShapeQualifies's unconditional isHexBlob check.",
+    "impact": "web_fetch still refuses an entirely ordinary, public GitHub Gist URL — REG-F1's own stated AC4 guarantee remains violated for this shape, even though the CHANGELOG and PR body describe REG-F1 as closed for 'a Medium OR GitHub Gist URL'. This is the exact reproduction the round-2 finding used, still failing.",
+    "quote": "function isHexBlob(value: string): boolean {\n  return HEX_BLOB.test(value) && /[a-f]/i.test(value);\n}",
+    "proof": "quote"
+   }
+  ]
+ },
+ {
+  "pkg": "2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02",
+  "base": "b7020b9fed35889b5fa814fdea4dd31ce5a28765",
+  "head": "dc63b9bc0469580d726379f9a03040bc7a71f6da",
+  "lines": 1690,
+  "nfiles": 31,
+  "created": "2026-09-28",
+  "findings": [
+   {
+    "id": "SEC-F1",
+    "reviewer": "review-security-code",
+    "severity": "blocker",
+    "file": "src/harness/web/outbound-secret.ts",
+    "line": null,
+    "problem": "S-8's outbound-secret check (containsOutboundSecret) is trivially bypassed: detectSecrets' URL-aware rule only fires when the query-param/path-segment name is on a small closed label list (api_key/access_token/auth_token/token/password/secret), and detectEntropy additionally requires a SENSITIVE_LABEL word within 40 chars on the same line. A secret placed under a generic param name, split across two generic params, or with the label word percent-encoded (t%6fken=) defeats both detectors.",
+    "impact": "web_fetch/web_search send a real secret to an attacker-controlled host before any network call is blocked. Reviewer constructed and ran live probes against the worktree: containsOutboundSecret returned false for a 43-char secret under '?d=', for the same secret split across '?a='/'?b=', for a 40-hex secret under a generic param, and for a percent-encoded label ('t%6fken='). web_fetch reaches the real HTTP GET whenever this returns false.",
+    "quote": "export function containsOutboundSecret(text: string): boolean {\n  return detectSecrets(text).length > 0 || detectEntropy(text).length > 0;\n}",
+    "proof": "quote"
+   },
+   {
+    "id": "SEC-F2",
+    "reviewer": "review-security-code",
+    "severity": "major",
+    "file": "src/security/detect/entropy.ts",
+    "line": 38,
+    "problem": "The S-6/S-9 allow-shapes are checked by shape alone with no provenance signal, applied even when an explicit sensitive label sits directly next to the value. A real secret that happens to be 40/7-12 hex chars, a UUID, or an npm/yarn integrity-shaped string is unconditionally exempted from redaction and from displayUrl masking.",
+    "impact": "redactSensitiveText leaves labeled real secrets in these four shapes completely unredacted; displayUrl prints the same shapes verbatim in mcp list / mcp doctor --json / the trust prompt. Reviewer verified live: redactSensitiveText('leaked token: deadbeef...deadbeef') (40-hex), '...UUID...', '...sha512-...', and a short-hex case were all returned byte-for-byte unchanged despite the explicit label.",
+    "quote": "function isAllowShapedValue(value: string): boolean {\n  return (\n    FULL_GIT_SHA_RE.test(value) ||\n    SHORT_GIT_SHA_RE.test(value) ||\n    UUID_RE.test(value) ||\n    INTEGRITY_RE.test(value)\n  );\n}",
+    "proof": "quote"
+   },
+   {
+    "id": "SEC-F3",
+    "reviewer": "review-security-code",
+    "severity": "major",
+    "file": "src/security/credential-shape.ts",
+    "line": null,
+    "problem": "R-I2's anchoring fix (added this PR to stop GLUED_SECRET_RE over-matching APITOKENIZER) requires the (^|_) boundary immediately before the glued prefix. This stops the false positive but also means the check only protects the five compounds at the very start of a name or right after an underscore; gluing any other word in front with no underscore (a common naming convention) makes the whole check stop matching for KEY/TOKEN/SECRET/PASS(WD) compounds (SECRET_SUBSTRING_RE still catches the PASSWORD family unaffected).",
+    "impact": "A real credential named PRODDBPASS, MYPRIVATEKEY, USERREFRESHTOKEN, LEGACYACCESSTOKEN, V2APITOKEN, OAUTHACCESSTOKEN or SNOWFLAKEDBPASS is copied into a spawned MCP server's environment and an external agent CLI's environment unfiltered. Reviewer verified live: isDeniedForMcpChild returns false for all of the above (credential-shaped values), true for the unprefixed forms, and false for APITOKENIZER (intended). No existing test exercises a prefixed variant.",
+    "quote": "const GLUED_SECRET_RE =\n  /(^|_)(PRIVATE|SECRET|ACCESS|REFRESH|SESSION|CLIENT|API|APP)(KEY|TOKEN|SECRET)($|_)|(^|_)DB(PASS|PWD)($|_)/;",
+    "proof": "quote"
+   },
+   {
+    "id": "LOG-F1",
+    "reviewer": "review-logic",
+    "severity": "blocker",
+    "file": "src/security/detect/entropy.ts",
+    "line": 15,
+    "problem": "The entropy detector's TOKEN regex includes '/' in its character class, so applied to a URL it does not stop at path separators: an entire host/path/segments/<hex> run becomes one compound candidate. This defeats the git-SHA/UUID/integrity allow-shapes (which only match an isolated value, not a compound blob containing it) and makes SENSITIVE_LABEL's bare substring match fire on ordinary text like the hostname 'api.github.com'. Independently confirmed by review-regression (RG-1) from the outbound-refusal angle.",
+    "impact": "redactSensitiveText mangles an ordinary https://api.github.com/repos/x/y/commits/<40-hex-sha> into '.../api.github.[REDACTED:entropy]' (silent corruption of tool-output transcripts). containsOutboundSecret refuses that same ordinary URL and an ordinary https://api.example.com/v1/webhooks/subscribe?... before any network call -- contradicting AC2's zero-false-positive claim and AC4's 'an ordinary URL with a commit SHA still fetches' guarantee for any api.*-hosted URL. Reproduced end-to-end against the real webFetchTool: api.github.com commit URL and api.stripe.com charge URL both hard-refused with zero network calls attempted; the PR's own boundary test uses a non-'api'-hosted host and dodges the bug.",
+    "quote": "const TOKEN = /[A-Za-z0-9+/=_-]{20,}(?:\\.[A-Za-z0-9+/=_-]{6,})*/g;",
+    "proof": "quote"
+   },
+   {
+    "id": "REG-F2",
+    "reviewer": "review-regression",
+    "severity": "major",
+    "file": "src/mcp-servers/http-headers.ts",
+    "line": 351,
+    "problem": "displayUrl's new per-path-segment masking calls looksSecretShaped with no label requirement, which falls back to HEX_BLOB = /^[0-9a-f]{24,}$/i whenever the entropy floor isn't met on its own. Decimal digits are a strict subset of the hex alphabet, so any purely-numeric string of 24+ characters satisfies HEX_BLOB regardless of actual entropy or credential likelihood.",
+    "impact": "A legitimate, non-credential, purely-numeric resource id (order/invoice/charge id) of 24+ digits anywhere in an MCP server's URL path is silently replaced with '…' in mcp list, mcp doctor --json, and the trust-authorisation prompt -- exactly the surfaces this feature exists to make debuggable. Verified: https://api.example.com/v1/invoices/123456789012345678901234/lines -> '.../invoices/.../lines'; a 23-digit id of the same shape is left untouched, so the boundary is arbitrary. None of the existing displayUrl masking tests exercise a purely-numeric segment.",
+    "quote": "return detectSecrets(segment).length > 0 || looksSecretShaped(segment) ? \"…\" : segment;",
+    "proof": "quote"
+   },
+   {
+    "id": "REG-F3",
+    "reviewer": "review-regression",
+    "severity": "major",
+    "file": "src/security/redact.ts",
+    "line": 145,
+    "problem": "This diff wires detectEntropy into redactSensitiveText (S-6) and into the new containsOutboundSecret (S-8) unconditionally -- neither threads a config/cwd parameter, so neither can consult SecurityConfig.backends.entropy.enabled. The only existing gate for detectEntropy is runDetectors (src/security/detect/index.ts:36), which keryx security scan/report/gate go through.",
+    "impact": "An operator who has explicitly set backends.entropy.enabled: false (a real, documented, default-true toggle) still gets every tool output/session transcript entropy-redacted and every web_fetch/web_search call entropy-checked/potentially refused, with no way to turn either off -- silently breaking the previously-consistent meaning of that flag.",
+    "quote": "const matches = [\n    ...detectSecrets(text),\n    ...detectPii(text),\n    ...detectExfil(text),\n    ...detectEntropy(text),\n  ];",
+    "proof": "quote"
+   },
+   {
+    "id": "ARCH-F1",
+    "reviewer": "review-architecture",
+    "severity": "major",
+    "file": "src/harness/external/env-deny.ts",
+    "line": 11,
+    "problem": "This diff adds a new client-zone-imports-core-internal edge (harness/external/env-deny.ts -> security/credential-shape.ts), bypassing the security/service.ts facade, and permanently raises AVOIDABLE_BYPASS_CEILING from 150 to 151. The PR justifies this as 'structurally unavoidable' because credential-shape.ts (core) cannot import env-deny.ts (client) back -- true but irrelevant, since the actual bypass exists only because security/service.ts re-exports isDeniedForMcpChild from credential-shape.ts (added in this same diff) but was not also extended to re-export EXTERNAL_ENV_DENY/EXTERNAL_ENV_PREFIX_SWEEPS.",
+    "impact": "The ratchet in import-policy.live.test.ts only ever fails on growth and does not self-correct once raised, baking in one avoidable bypass as permanent tracked debt when the fix was a two-line change to a file this diff was already editing for the identical purpose.",
+    "quote": "export { EXTERNAL_ENV_DENY, EXTERNAL_ENV_PREFIX_SWEEPS } from \"../../security/credential-shape\";",
+    "proof": "quote"
+   }
+  ]
+ },
+ {
+  "pkg": "2026-11-10-review-flow-origin-main",
+  "base": "947f6d9cf1942f00e6b7e89105831abde4ea3ca8",
+  "head": "baaaec78c057018b40a03c0b87db612dbcf68c19",
+  "lines": 567,
+  "nfiles": 13,
+  "created": "2026-11-10",
+  "findings": [
+   {
+    "id": "F-001",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "file": "src/tui/tui-shell.ts",
+    "line": 9617,
+    "problem": "A Side-1 worker from the outgoing session can paint its result in the destination after a successful switch.",
+    "impact": "The destination transcript and worker status can contain stale data from an earlier session, violating AC2.",
+    "quote": "await runAgentTurn(sideIo, sideDeps, sideHistory, prompt);",
+    "proof": "quote"
+   },
+   {
+    "id": "F-002",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "file": "src/tui/tui-shell.ts",
+    "line": 8247,
+    "problem": "A foreground turn can start during asynchronous outgoing Slate preservation. Interactive resume now clears the busy flag even though the displaced foreground operation still owns its active token.",
+    "impact": "Before the old token settles, a destination prompt can bypass busy dispatch and throw from foregroundOperation.begin. The prompt that started in the preservation window is also canceled by the successful adoption.",
+    "quote": "resetSessionSurface();\n      applyOpened(opened);",
+    "proof": "quote"
+   },
+   {
+    "id": "F-003",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "file": "src/tui/tui-shell.ts",
+    "line": 1820,
+    "problem": "Dismissing a busy recipient picker overwrites text typed while the decision journal opens the picker.",
+    "impact": "A second piece of unsent text disappears on Escape although no recipient was selected.",
+    "quote": "chrome.input.value = draft;",
+    "proof": "quote"
+   }
+  ]
+ },
+ {
+  "pkg": "309-r01",
+  "base": "2aaf8372d51e418005f866f630e2943cb307f09c",
+  "head": "bd89d5a8d8411cb1f9d86d8171f8e2b068be917e",
+  "lines": 1824,
+  "nfiles": 21,
+  "created": "2026-09-25",
+  "findings": [
+   {
+    "id": "F-001",
+    "reviewer": "sonnet-reviewer",
+    "severity": "major",
+    "file": "src/commands/providers.ts",
+    "line": null,
+    "problem": "OpenRouter's balance endpoint used a doubled `/api` path (`balancePath: \"/api/v1/credits\"` against a `baseUrl` that already ends in `/api`) and parsed a response shape neither `/v1/credits` nor any other OpenRouter endpoint returns (`body.credits.{total,used,remaining}`).",
+    "impact": "`keryx providers status`, `/connect` and the routing picker's balance column always showed OpenRouter as having no balance (a 404 or a malformed body makes `fetchProviderBalance` return `undefined`), even for a correctly connected, funded key — the AC5 balance feature silently did not work for the most common hosted provider.",
+    "quote": null,
+    "proof": "fix-after-head"
+   },
+   {
+    "id": "F-002",
+    "reviewer": "sonnet-reviewer",
+    "severity": "major",
+    "file": "src/harness/provider-catalog-cache.ts",
+    "line": null,
+    "problem": "The full-refresh cache writer (`saveProviderCatalogCache`) and the single-provider patch writer `providers test` uses (`updateProviderCatalogEntry`) both wrote `provider-catalog.json` with no lock between them. A `providers test` patch landing while a slower full refresh (up to `CATALOG_FETCH_TIMEOUT_MS` per provider, run in parallel at `keryx shell` startup) was still in flight was silently clobbered once the older refresh finally finished and overwrote the whole file unconditionally.",
+    "impact": "A provider an operator had just re-tested and fixed via `providers test` (or the `/connect` row's `[Test]` button) could have that corrected entry silently reverted to an older, still-in-flight startup refresh's result — a lost update with no error and nothing on the record showing it happened.",
+    "quote": null,
+    "proof": "fix-after-head"
+   }
+  ]
+ }
+]

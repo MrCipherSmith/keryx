@@ -1,0 +1,207 @@
+{
+ "k01": {
+  "case": "c02",
+  "arm": "B",
+  "n": 14,
+  "lens_of": {
+   "G1": "logic",
+   "G2": "logic",
+   "G3": "logic",
+   "G4": "logic",
+   "G5": "logic",
+   "G6": "security-code",
+   "G7": "regression",
+   "G8": "regression",
+   "G9": "testing-practices",
+   "G10": "testing-practices",
+   "G11": "testing-practices",
+   "G12": "testing-practices",
+   "G13": "testing-practices",
+   "G14": "testing-practices"
+  }
+ },
+ "k02": {
+  "case": "c09",
+  "arm": "A",
+  "n": 15,
+  "lens_of": {
+   "G1": "logic",
+   "G2": "security-code",
+   "G3": "regression",
+   "G4": "regression",
+   "G5": "logic",
+   "G6": "logic",
+   "G7": "logic",
+   "G8": "logic",
+   "G9": "security-code",
+   "G10": "security-code",
+   "G11": "security-code",
+   "G12": "security-code",
+   "G13": "regression",
+   "G14": "regression",
+   "G15": "regression"
+  }
+ },
+ "k03": {
+  "case": "c01",
+  "arm": "B",
+  "n": 7,
+  "lens_of": {
+   "G1": "logic",
+   "G2": "testing-practices",
+   "G3": "testing-practices",
+   "G4": "testing-practices",
+   "G5": "testing-practices",
+   "G6": "testing-practices",
+   "G7": "testing-practices"
+  }
+ },
+ "k04": {
+  "case": "c02",
+  "arm": "A",
+  "n": 17,
+  "lens_of": {
+   "G1": "logic",
+   "G2": "logic",
+   "G3": "logic",
+   "G4": "logic",
+   "G5": "logic",
+   "G6": "logic",
+   "G7": "regression",
+   "G8": "regression",
+   "G9": "regression",
+   "G10": "regression",
+   "G11": "testing-practices",
+   "G12": "testing-practices",
+   "G13": "testing-practices",
+   "G14": "testing-practices",
+   "G15": "testing-practices",
+   "G16": "testing-practices",
+   "G17": "testing-practices"
+  }
+ },
+ "k05": {
+  "case": "c01",
+  "arm": "A",
+  "n": 6,
+  "lens_of": {
+   "G1": "logic",
+   "G2": "testing-practices",
+   "G3": "testing-practices",
+   "G4": "testing-practices",
+   "G5": "testing-practices",
+   "G6": "testing-practices"
+  }
+ },
+ "k06": {
+  "case": "c03",
+  "arm": "B",
+  "n": 17,
+  "lens_of": {
+   "G1": "logic",
+   "G2": "logic",
+   "G3": "logic",
+   "G4": "logic",
+   "G5": "logic",
+   "G6": "logic",
+   "G7": "logic",
+   "G8": "logic",
+   "G9": "security-code",
+   "G10": "security-code",
+   "G11": "security-code",
+   "G12": "logic",
+   "G13": "logic",
+   "G14": "logic",
+   "G15": "logic",
+   "G16": "logic",
+   "G17": "security-code"
+  }
+ },
+ "k07": {
+  "case": "c03",
+  "arm": "A",
+  "n": 15,
+  "lens_of": {
+   "G1": "logic",
+   "G2": "logic",
+   "G3": "logic",
+   "G4": "logic",
+   "G5": "logic",
+   "G6": "security-code",
+   "G7": "security-code",
+   "G8": "security-code",
+   "G9": "logic",
+   "G10": "logic",
+   "G11": "logic",
+   "G12": "logic",
+   "G13": "security-code",
+   "G14": "security-code",
+   "G15": "security-code"
+  }
+ },
+ "k08": {
+  "case": "c11",
+  "arm": "B",
+  "n": 13,
+  "lens_of": {
+   "G1": "logic",
+   "G2": "logic",
+   "G3": "logic",
+   "G4": "logic",
+   "G5": "security-code",
+   "G6": "security-code",
+   "G7": "security-code",
+   "G8": "security-code",
+   "G9": "security-code",
+   "G10": "regression",
+   "G11": "regression",
+   "G12": "regression",
+   "G13": "regression"
+  }
+ },
+ "k09": {
+  "case": "c11",
+  "arm": "A",
+  "n": 12,
+  "lens_of": {
+   "G1": "logic",
+   "G2": "logic",
+   "G3": "logic",
+   "G4": "logic",
+   "G5": "logic",
+   "G6": "security-code",
+   "G7": "security-code",
+   "G8": "security-code",
+   "G9": "regression",
+   "G10": "regression",
+   "G11": "regression",
+   "G12": "regression"
+  }
+ },
+ "k10": {
+  "case": "c09",
+  "arm": "B",
+  "n": 19,
+  "lens_of": {
+   "G1": "logic",
+   "G2": "logic",
+   "G3": "security-code",
+   "G4": "security-code",
+   "G5": "security-code",
+   "G6": "regression",
+   "G7": "regression",
+   "G8": "regression",
+   "G9": "logic",
+   "G10": "logic",
+   "G11": "logic",
+   "G12": "logic",
+   "G13": "security-code",
+   "G14": "security-code",
+   "G15": "security-code",
+   "G16": "security-code",
+   "G17": "security-code",
+   "G18": "regression",
+   "G19": "regression"
+  }
+ }
+}

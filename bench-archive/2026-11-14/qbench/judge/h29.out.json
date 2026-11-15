@@ -1,0 +1,21 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "match", "gid": "G2", "why": "G2 identifies the throwing cancel override escaping cancelPendingDispatches' loop and says to delete the method." },
+    { "tid": "T2", "verdict": "match", "gid": "G1", "why": "G1 identifies the null-to-[] coalescing that turns a missing/corrupt recording into a clean zero-finding replay." },
+    { "tid": "T3", "verdict": "partial", "gid": "G9", "why": "G9 is mainly about nowMs naming and only mentions in passing that writeReplaySummary bundles validate/summarise/write, so acting on it would not necessarily split the function." },
+    { "tid": "T4", "verdict": "match", "gid": "G4", "why": "G4 names the duplicated inline seven-day window in both isReplayableResult and writeReplaySummary." },
+    { "tid": "T5", "verdict": "match", "gid": "G3", "why": "G3 names the in-place sort inside the predicate and scopesMatch's hidden dependence on it." },
+    { "tid": "T6", "verdict": "match", "gid": "G7", "why": "G7 flags the one-letter n explained by a comment and proposes renaming it." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "truth", "why": "Matches T2." },
+    { "gid": "G2", "label": "truth", "why": "Matches T1." },
+    { "gid": "G3", "label": "truth", "why": "Matches T5." },
+    { "gid": "G4", "label": "truth", "why": "Matches T4." },
+    { "gid": "G5", "label": "noise", "why": "A hand-listed non-terminal status set is a plausible drift concern, but it is a design preference and borderline, so the lower label applies." },
+    { "gid": "G6", "label": "valid", "why": "The comment at line 106 says only 'never reached' while the branch also covers entity/scope mismatches and stale-filtered entries, a specific misleading comment the change introduces." },
+    { "gid": "G7", "label": "truth", "why": "Matches T6." },
+    { "gid": "G8", "label": "noise", "why": "Four positional parameters with two adjacent strings is a taste-level signature preference." },
+    { "gid": "G9", "label": "truth", "why": "Partial for T3 through its note that writeReplaySummary bundles validation, summary and write." }
+  ]
+}

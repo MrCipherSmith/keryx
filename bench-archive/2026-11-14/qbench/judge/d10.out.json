@@ -1,0 +1,21 @@
+{
+  "truth": [
+    { "tid": "T1", "verdict": "match", "gid": "G1", "why": "G1 identifies the throwing cancel on the recorded adapter and the unguarded await in cancelPendingDispatches aborting the shutdown loop." },
+    { "tid": "T2", "verdict": "match", "gid": "G2", "why": "G2 describes loadRecordedResults null being coalesced with ?? [] so a bad recording replays as clean empty findings." },
+    { "tid": "T3", "verdict": "partial", "gid": "G4", "why": "G4 targets writeReplaySummary's duplicated re-read/validation versus the loader but frames it as divergent readers rather than the mixed IO/validation/transform responsibilities." },
+    { "tid": "T4", "verdict": "match", "gid": "G5", "why": "G5 names the unnamed 7-day window repeated in isReplayableResult and writeReplaySummary." },
+    { "tid": "T5", "verdict": "match", "gid": "G3", "why": "G3 names the in-place sort in the predicate isReplayableResult and scopesMatch's hidden dependency on it." },
+    { "tid": "T6", "verdict": "match", "gid": "G7", "why": "G7 flags the single-letter n counter whose comment only explains its name." }
+  ],
+  "candidates": [
+    { "gid": "G1", "label": "truth", "why": "Matches T1." },
+    { "gid": "G2", "label": "truth", "why": "Matches T2." },
+    { "gid": "G3", "label": "truth", "why": "Matches T5." },
+    { "gid": "G4", "label": "truth", "why": "Partial for T3 (duplicated parsing/validation in writeReplaySummary)." },
+    { "gid": "G5", "label": "truth", "why": "Matches T4." },
+    { "gid": "G6", "label": "valid", "why": "The comment at line 106 says the branch is for tasks never reached, but stale-filtered entries and entity/scope mismatches also land there, so the comment misleads." },
+    { "gid": "G7", "label": "truth", "why": "Matches T6." },
+    { "gid": "G8", "label": "noise", "why": "Naming quibbles; RUNNING_STATUSES is documented as dispatches an adapter may still be working on, so this is taste." },
+    { "gid": "G9", "label": "noise", "why": "Four positional parameters is a style preference below a reasonable fix threshold." }
+  ]
+}

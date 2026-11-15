@@ -1,0 +1,56 @@
+[
+  {
+    "id": "G1",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 133,
+    "severity": "major",
+    "problem": "The constructor runs `.map(parseEntry)` over every line before `.filter((entry) => entry.revision <= committed)`. Consider a writer that dies partway through `appendFile`, which is exactly the case the cursor doc comment (lines 27-31) says is handled. It leaves a torn last line, so `JSON.parse` in `parseEntry` throws a bare SyntaxError, and the uncommitted line is never filtered out. The comment says such a line \"is never shown as history\", which overstates what the code does: it does not hide the line, it makes the whole history unreadable. `parseEntry`'s own error, `new Error(\"Invalid entry\")`, names neither the file nor the line nor the revision, and no `cause` is attached. Compare `readCursor` a few lines up, which names the path for the same reason.",
+    "impact": "Once a torn or uncommitted line is in `plan-history.jsonl`, every `new ExecutionPlanHistory(dir)` throws, and so does every `renderExecutionPlanChangelog(dir, ...)` that depends on it. The operator gets \"Invalid entry\" or a JSON SyntaxError with no file path, so they cannot tell which file to repair. Fix: filter or skip lines above the cursor before parsing them, and make the parse error carry `planHistoryPath(dir)` and the line number, with `{ cause }`.",
+    "quote": ".map(parseEntry)\n      .filter((entry) => entry.revision <= committed);"
+  },
+  {
+    "id": "G2",
+    "file": "src/session/execution-plan.ts",
+    "line": 178,
+    "severity": "major",
+    "problem": "`recordPlanRevision` is awaited inside the lock right after `plan.json` has been committed by `writeFileAtomic`. If `appendFile` rejects (ENOSPC, EACCES, a read-only session dir), `writePlan` throws even though the plan write already succeeded. The failure reported belongs to the journal, a secondary side effect, but the caller reads it as a failed plan write. `notify(dir, plan)` is then skipped. The policy is also inconsistent: a cursor-write failure in the same function is swallowed and only logged (G3), while a journal-append failure is fatal to the primary write.",
+    "impact": "Trigger: any `appendFile` failure in `setExecutionPlan` or `updateExecutionPlan`. Outcome: the caller is told the plan write failed and subscribers are not notified, yet `plan.json` already holds the new revision. A caller that retries with the same `expectedRevision` then gets `ExecutionPlanConflictError`. Fix: decide one failure policy for the journal and apply it to both writes. Either treat it as best effort, with an explained catch, or make it part of the commit and say so.",
+    "quote": "await writeFileAtomic(executionPlanPath(dir), `${JSON.stringify(result, null, 2)}\\n`);\n    await recordPlanRevision(dir, current, result);"
+  },
+  {
+    "id": "G3",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 72,
+    "severity": "major",
+    "problem": "If the cursor write fails, the catch only writes to stderr and then `recordPlanRevision` returns the entry as if it had been journaled. No comment says why this fallback is correct (error-handling.mdc Rule 3). By the module's own commit-marker design, an entry above the cursor is uncommitted, so the revision that was just written is invisible to readers. Nothing the caller can see marks it as degraded.",
+    "impact": "Caller: `writePlan`, and through it `renderExecutionPlanChangelog`. Outcome: after a failed cursor write, the changelog leaves out the latest revision and the `latest` header (`history.latestRevision`) is one revision behind, while the write is reported as a success. The revision only shows up if a later write advances the cursor. If it is the last write of the session, it never does. Fix: propagate the error, or return a degraded marker that the caller can see.",
+    "quote": "} catch (error) {\n    process.stderr.write(`plan history: cursor update failed: ${message(error)}\\n`);\n  }"
+  },
+  {
+    "id": "G4",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 37,
+    "severity": "minor",
+    "problem": "`diffExecutionPlans` takes an output argument: it pushes into a caller-supplied `out: PlanTransition[]` and returns `void`, where it could simply return the array. Neither call site needs to accumulate across calls. Both `recordPlanRevision` and the test allocate an empty array just to pass it in.",
+    "impact": "Every caller pays for boilerplate (`const out = []; diff(a, b, out);`). The signature also invites accidental reuse of a non-empty array, which would mix two diffs together. Returning `PlanTransition[]` removes both costs.",
+    "quote": "export function diffExecutionPlans(previous: ExecutionPlan | undefined, next: ExecutionPlan, out: PlanTransition[]): void {"
+  },
+  {
+    "id": "G5",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 122,
+    "severity": "minor",
+    "problem": "The `ExecutionPlanHistory` constructor does synchronous file I/O and parsing: it reads the cursor file and the journal with `readFileSync` and parses every line. This breaks solid-principles.mdc Iron Law 2, \"A constructor performs no I/O\". The class mixes loading the journal from disk with querying the loaded entries (`since`, `changesFor`, `latestRevision`).",
+    "impact": "The query methods cannot be unit-tested without a real directory on disk. Corrupt-file errors surface from `new` (the test has to assert that `() => new ExecutionPlanHistory(dir)` throws). Fix: a static or free loader such as `loadExecutionPlanHistory(dir)` that reads the files and passes the parsed entries to a constructor that only assigns.",
+    "quote": "constructor(readonly dir: string) {\n    const committed = readCursor(dir);"
+  },
+  {
+    "id": "G6",
+    "file": "src/session/execution-plan-history.ts",
+    "line": 114,
+    "severity": "info",
+    "problem": "`describeChange` handles the last case of the `PlanTransition` union with a bare `else` that implicitly means `reordered`, with no exhaustiveness check (`switch` plus a `never` default). If a sixth `kind` is added to the union, the compiler will not flag this function, and the new kind will be rendered through the `moved ${from + 1} -> ${to + 1}` branch.",
+    "impact": "This is a future-maintenance risk only: it does not reach any current path. A `switch (change.kind)` with an `assertNever` default would turn that future mistake into a compile error.",
+    "quote": "} else {\n    return `^ ${change.itemId} moved ${change.from + 1} -> ${change.to + 1}`;"
+  }
+]

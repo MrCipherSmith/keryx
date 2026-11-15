@@ -1,0 +1,12 @@
+{
+  "truth": [],
+  "candidates": [
+    { "gid": "G1", "label": "noise", "why": "The abandonment rule is one short, commented two-branch expression; extracting it into a predicate is a structural preference, not a defect." },
+    { "gid": "G2", "label": "noise", "why": "The three-line path-shape check sits in a small helper and has a comment; making it a separate pure function is a matter of taste." },
+    { "gid": "G3", "label": "noise", "why": "An inline conditional template literal for one optional render line is a readability preference, not a quality problem." },
+    { "gid": "G4", "label": "valid", "why": "The diff adds the bare magic mask 0o170000 (completion-gate.ts) where Node exposes the named fs.constants.S_IFMT; a cheap, specific clarity fix." },
+    { "gid": "G5", "label": "noise", "why": "Positional parameters and repeated duration literals in a test helper are test-style taste, below a defect threshold." },
+    { "gid": "G6", "label": "noise", "why": "A three-line stub repeated in three tests is acceptable test duplication that keeps each scenario self-contained." },
+    { "gid": "G7", "label": "valid", "why": "The added parenthetical in SKILL.detail.md:788 (and its mirror) mixes scratch-copy contents into the treeHash sentence, which is confusing and repeats the linked-worktree rule stated three lines later." }
+  ]
+}

@@ -1,0 +1,87 @@
+{
+ "truth": [],
+ "decoys": [],
+ "candidate": [
+  {
+   "id": "G1",
+   "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+   "line": 788,
+   "severity": "minor",
+   "problem": "The new parenthetical is dropped into the sentence about what `treeHash` leaves out, but it talks about the scratch copy's contents instead. It reads as if linked worktrees were a kind of ignored file. The same fact is then stated again in its own paragraph three lines later (791). The cli-reference `mutate` row's treeHash sentence did not get this aside, so the two docs now describe the same field differently. The same text is mirrored in src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md:788.",
+   "impact": "A reader working out what treeHash covers runs into an unrelated statement about the copy that contradicts itself ('includes them, except ... which it leaves out'). Whoever edits the docs next has three wordings to keep in sync.",
+   "quote": "ignored files (the scratch copy still includes them, except linked worktrees, which it leaves out), the inside of an"
+  },
+  {
+   "id": "G2",
+   "file": "src/review/mutate.ts",
+   "line": 414,
+   "severity": "minor",
+   "problem": "runMutation was already about 120 lines doing provenance, scratch setup, copy, baseline and the mutant loop. The change adds two more low-level jobs inline: sweeping two scratch bases with its own timing (445-449), and the owner-marker heartbeat lifecycle with setInterval/utimes/unref (452-459), which is torn down in two places (462, 544). That mixes these jobs with the high-level orchestration (SRP / one level of abstraction).",
+   "impact": "The heartbeat start/stop has to be kept paired by hand across the signal-cleanup callback and the finally block. Extracting helpers such as `sweepBeforePass()` and `startOwnerHeartbeat()` returning a stop function would keep runMutation readable and testable as it grows.",
+   "quote": "const heartbeat = setInterval(() => {"
+  },
+  {
+   "id": "G3",
+   "file": "src/review/completion-gate.ts",
+   "line": 771,
+   "severity": "minor",
+   "problem": "findReviewGateState takes a fifth positional parameter `now`, after an optional `signal`. Every new test call site now has to pass placeholder arguments to reach it. The sibling `dirSignature` already takes these same `signal`/`now` values through an options object (`SignatureOptions`).",
+   "impact": "Call sites read as `findReviewGateState(root, 0, {}, undefined, now)` (completion-gate.test.ts:747, 762 and others), so you have to read the signature to tell which argument is which. The next injectable will make it worse.",
+   "quote": "  signal?: AbortSignal,\n  now?: number,"
+  },
+  {
+   "id": "G4",
+   "file": "src/review/mutate.test.ts",
+   "line": 251,
+   "severity": "minor",
+   "problem": "The new shared test helper `make` takes five positional parameters, with two adjacent numeric ages (`ageMs`, `markerAgeMs`) that are easy to swap. The call sites cannot be read without the signature.",
+   "impact": "Calls like `make(\"keryx-mutate-DEADDD\", {...}, 1000, 3 * HEARTBEAT_MS, repoScratch)` (line 725) hide which age is the directory's and which is the marker's. The sweep tests depend on exactly that distinction, so a swapped argument makes a test pass or fail for the wrong reason.",
+   "quote": "async function make(name: string, owner: unknown, ageMs: number, markerAgeMs: number = ageMs, into: string = scratch): Promise<string> {"
+  },
+  {
+   "id": "G5",
+   "file": "src/review/mutate.ts",
+   "line": 380,
+   "severity": "minor",
+   "problem": "The dead-pid grace period is an unnamed inline multiplier, `2 * heartbeatMs`, inside a dense ternary/OR expression. Its threshold sibling has a named constant (STALE_HEARTBEAT_MS). Meanwhile the doc comment, the user docs ('no heartbeat for two minutes') and the tests (`3 * HEARTBEAT_MS` chosen as 'old enough', `2 * HEARTBEAT_MS ± 30_000`) all encode the factor 2 separately.",
+   "impact": "Changing the grace period means finding the literal 2 here and the derived values in the tests and three docs. A named constant (for example `DEAD_OWNER_GRACE_HEARTBEATS`) and a small `isAbandoned(owner, info)` helper would make the rule readable in one place.",
+   "quote": "(!isAlive(owner.pid) && now() - owner.mtimeMs > 2 * heartbeatMs)"
+  },
+  {
+   "id": "G6",
+   "file": "src/commands/agent.ts",
+   "line": 4283,
+   "severity": "minor",
+   "problem": "The new abort exit copies the `[stopped] Model turn interrupted by user.` literal plus `return {}` once more. The file already has 13 copies of this literal (e.g. 3226, 3488, 3510, 3767), and the comment ('ends like the other abort sites') admits it is the same exit. The change adds another site instead of extracting a shared `stopInterrupted()` helper.",
+   "impact": "Changing the interruption message or what an interrupted turn returns means editing every copy. The tests that assert the exact text (agent-review-gate.test.ts LOGIC-003) are tied to whichever copy they happen to reach.",
+   "quote": "system(\"\\n[stopped] Model turn interrupted by user.\\n\");"
+  },
+  {
+   "id": "G7",
+   "file": "src/review/completion-gate.ts",
+   "line": 888,
+   "severity": "minor",
+   "problem": "`stalled` holds a sentence fragment for the report, but its name reads like a boolean ('is it stalled?'). It is also computed on the continues-limit path, where it is then discarded by the ternary at 895.",
+   "impact": "In `stalls >= MAX_REVIEW_GATE_STALLS ? stalled : \"\"` the line reads like a boolean check followed by a boolean. A name such as `stallReason`, computed inside the branch that uses it, would say what it is.",
+   "quote": "const stalled = open.signature.includes(TRUNCATION_MARKER)"
+  },
+  {
+   "id": "G8",
+   "file": "src/review/completion-gate.ts",
+   "line": 65,
+   "severity": "minor",
+   "problem": "The file-type mask is the magic number `0o170000`. Node exposes it as `constants.S_IFMT` from node:fs, which mutate.ts in the same change already imports `constants` from.",
+   "impact": "A reader has to recognise the octal as S_IFMT to understand what the `special:` signature encodes. The named constant documents itself.",
+   "quote": "return `special:${(info.mode & 0o170000).toString(8)}`;"
+  },
+  {
+   "id": "G9",
+   "file": "src/review/mutate.ts",
+   "line": 232,
+   "severity": "info",
+   "problem": "The isLinkedWorktree doc says 'Everything else is copied as the base copy did'. 'the base copy' is not defined anywhere nearby. It seems to mean the plain directory walk, or the behaviour before this change; history phrasing does not belong in a doc comment.",
+   "impact": "A small readability cost: the next reader has to guess what 'base copy' refers to.",
+   "quote": "Everything else is copied as the base copy did, because the tests may load it"
+  }
+ ]
+}

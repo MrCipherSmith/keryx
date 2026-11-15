@@ -1,0 +1,38 @@
+[
+ {
+  "tid": "T1",
+  "file": "src/review/managed.ts",
+  "line": 1088,
+  "severity": "blocker",
+  "problem": "The round-tree containment check is lexical, not real: a symlink inside the tree defeats it and lets `review ingest` read arbitrary host files.",
+  "impact": "Anyone who can add a file to the tree under review can plant a symlink and then use the derived locator state as a line-by-line oracle for any file the ingest process can read.",
+  "quote": "const resolved = path.resolve(input.cwd, relative);\n      if (resolved !== input.cwd && !resolved.startsWith(`${path.resolve(input.cwd)}${path.sep}`)) {\n        return null;\n      }"
+ },
+ {
+  "tid": "T2",
+  "file": "src/review/locate.ts",
+  "line": 95,
+  "severity": "blocker",
+  "problem": "locateQuote is O(file lines x quote lines) with no cap on either, and anchorFindings runs it once per finding sequentially, so a report can hang review ingest for minutes.",
+  "impact": "A report is attacker-influenced data by this round's own framing; a single ingest can be made to hang with no cap, no timeout and no bailout, using inputs that look ordinary.",
+  "quote": "for (let start = 0; start + needle.length <= haystack.length; start += 1) {\n    const window = shape(haystack.slice(start, start + needle.length));\n    if (window.every((line, offset) => line === needle[offset])) {\n      hits.push(start + 1); // 1-based, like every line number a human reads\n    }\n  }"
+ },
+ {
+  "tid": "T3",
+  "file": "src/review/managed.ts",
+  "line": 1099,
+  "severity": "major",
+  "problem": "A finding carrying a stale locator and line but no quote is written through unrechecked.",
+  "impact": "On a fix round — the round type this change's own comments call out as where the anchor is least trustworthy — an unverified line/locator pair is written verbatim into the new round's findings.json, defeating the derivation guarantee for exactly that case.",
+  "quote": "for (const finding of findings) {\n    const locator = await locateFinding(finding, read);\n    if (locator === undefined) {\n      continue;\n    }"
+ },
+ {
+  "tid": "T4",
+  "file": "src/review/cost.ts",
+  "line": 129,
+  "severity": "major",
+  "problem": "The per-finding cost rounds a nonzero spend down to a printed zero, contradicting the module's own rule that a zero means somebody measured.",
+  "impact": "A reader who trusts the module's promise reads 'per retained finding: 0 tokens' as free when the round spent tokens — the exact confusion the module exists to prevent, reappearing through a different door.",
+  "quote": "if (tokens !== undefined) {\n    lines.push(`per retained finding: ${grouped(Math.round(tokens / retained))} tokens`);\n  }"
+ }
+]

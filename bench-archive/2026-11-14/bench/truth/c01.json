@@ -1,0 +1,20 @@
+[
+ {
+  "tid": "T1",
+  "file": "src/sac/fwk-service.ts",
+  "line": 191,
+  "severity": "major",
+  "problem": "The `ledgerBytes !== checkpoint.ledgerBytes` guard in `fastCheckpointState` could be deleted with the entire suite still green. Nothing observed its removal.",
+  "impact": "Without the guard the fast path reads the tail record at the STALE `tailOffset`, validates it (it is a real record), and returns the stale `headHash`. The next append then chains from a record that is no longer last — a silently broken integrity chain produced by the code whose job is to keep it intact, and worse than the tampering this flow set out to detect, because nothing refuses. The state is reachable rather than theoretical: the ledger append is the commit point and its checkpoint refresh is explicitly allowed to fail, which leaves precisely a stale checkpoint over a longer ledger.",
+  "quote": null
+ },
+ {
+  "tid": "T2",
+  "file": "src/sac/fwk-service.ts",
+  "line": 639,
+  "severity": "major",
+  "problem": "The post-append `ledgerByteLength(ledger) !== ledgerBytes` check could be deleted with the entire suite still green.",
+  "impact": "`state.digest` carries the audited pre-append bytes and the checkpoint folds the written line into it without re-reading the file. That shortcut is honest only while the file is exactly the audited prefix plus that line. Remove the check and the checkpoint commits to a byte sequence that was never on disk — this flow's own defect reintroduced one layer down, in the mechanism built to remove it.",
+  "quote": null
+ }
+]

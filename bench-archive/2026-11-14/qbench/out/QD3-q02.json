@@ -1,0 +1,83 @@
+[
+  {
+    "id": "G1",
+    "file": "src/review/agents/recorded-adapter.ts",
+    "line": 114,
+    "severity": "major",
+    "problem": "LSP: the recorded adapter implements the optional `cancel` member only to throw \"not supported\" (its capabilities already say `cancellation: false`). `ReviewAgentAdapter.cancel` is optional precisely so callers can test for its absence; the new `cancelPendingDispatches` does exactly that (`adapter.cancel === undefined` -> skipped) and otherwise awaits it without a try/catch (adapter-shutdown.ts:60). A recorded dispatch therefore rejects the whole shutdown loop instead of landing in `skipped`, and every dispatch after it in the sorted list is never asked to stop. The controller's cancelTree (controller.ts:422-429) also sees a defined cancel, catches the throw and marks the dispatch `unresolved` instead of skipping it. Sites: recorded-adapter.ts:114, consumed at adapter-shutdown.ts:56-60 and controller.ts:422-424; enumerated by `keryx ctx rg 'cancel' src/review/agents/types.ts src/review/agents/controller.ts` plus the two new files.",
+    "impact": "A host abandoning a run that mixes recorded and live adapters gets a rejected cancelPendingDispatches and leaves provider work running behind a closed controller, the exact case the shutdown module exists to prevent.",
+    "quote": "async cancel() {\n      throw new Error(\"cancel is not supported by the recorded adapter\");"
+  },
+  {
+    "id": "G2",
+    "file": "src/review/agents/recorded-adapter.ts",
+    "line": 84,
+    "severity": "major",
+    "problem": "Disguised failure: `loadRecordedResults` turns a missing file, an unreadable file and malformed JSON into `null` via bare catches with no cause and no comment (lines 41-52), and its only caller collapses that to `?? []`. An empty index is indistinguishable from a recording that never reached any task, so `execute` answers every dispatch with `{ findings: [] }` as a normal result.",
+    "impact": "A dry run or plan-eval replay pointed at a wrong or corrupt recording path completes 'successfully' with zero findings everywhere; the operator gets a clean replay instead of an error naming the path, and the original read/parse error is lost.",
+    "quote": "const loaded = (await loadRecordedResults(options.recordingPath)) ?? [];"
+  },
+  {
+    "id": "G3",
+    "file": "src/review/agents/recorded-adapter.ts",
+    "line": 66,
+    "severity": "minor",
+    "problem": "Output argument / hidden side effect in a predicate: `isReplayableResult` is documented and named as a pure check but sorts `entry.scopeIds` in place, and `scopesMatch` (line 75) silently depends on that sort having happened. This is also why `RecordedEntry.scopeIds` (line 25) is the only non-readonly field. The coupling is invisible from either function's name or doc comment.",
+    "impact": "Anyone who calls scopesMatch on an entry not passed through isReplayableResult, or reorders/removes the predicate call, gets scope mismatches and empty replays with nothing pointing at the cause.",
+    "quote": "entry.scopeIds.sort();"
+  },
+  {
+    "id": "G4",
+    "file": "src/review/agents/recorded-adapter.ts",
+    "line": 130,
+    "severity": "minor",
+    "problem": "Two readers of the same recording format with divergent rules: `loadRecordedResults` casts the parsed array to `ReviewAgentStoredResult[]` with no validation and returns null on errors, while `writeReplaySummary` re-reads, re-parses and validates each field and throws. The staleness rule is also written twice: the freshness window in isReplayableResult (line 70) and `stale` here (line 152).",
+    "impact": "Format or window changes must be made in two places; the summary can call an entry valid and fresh while the adapter rejects or crashes on it (or vice versa).",
+    "quote": "for (const item of parsed as Partial<ReviewAgentStoredResult>[]) {"
+  },
+  {
+    "id": "G5",
+    "file": "src/review/agents/recorded-adapter.ts",
+    "line": 70,
+    "severity": "minor",
+    "problem": "Magic number in business logic: the 7-day replay window is an inline expression repeated at lines 70 and 152, and the hour divisor `3_600_000` (line 151) is another unnamed literal.",
+    "impact": "The replay freshness policy has no name to search for and can drift between the adapter and the summary.",
+    "quote": "return nowMs - recordedAt <= 7 * 24 * 60 * 60 * 1000;"
+  },
+  {
+    "id": "G6",
+    "file": "src/review/agents/recorded-adapter.ts",
+    "line": 107,
+    "severity": "minor",
+    "problem": "Comment does not match the condition below it: it says a task the recorded run 'never reached' replays as an empty reply, but the branch also fires when the entry exists and only its entity or scopes differ, or when it was dropped as stale.",
+    "impact": "A reader debugging an empty replay is told the task was never recorded when it may have been recorded under a different entity/scope set or aged out.",
+    "quote": "// A task the recorded run never reached replays as an empty reply flagged"
+  },
+  {
+    "id": "G7",
+    "file": "src/review/agents/adapter-shutdown.ts",
+    "line": 49,
+    "severity": "minor",
+    "problem": "Single-letter counter with a comment that exists only to explain the name; the value is returned as `confirmed`, which is the name it should have.",
+    "impact": "Readers must decode `n` via the comment; the comment and the field name can drift.",
+    "quote": "let n = 0; // n is the number of dispatches whose adapter accepted the cancel"
+  },
+  {
+    "id": "G8",
+    "file": "src/review/agents/adapter-shutdown.ts",
+    "line": 20,
+    "severity": "minor",
+    "problem": "Misleading names: `unknownAdapter` holds dispatch ids, not adapters, and is singular for a list; `RUNNING_STATUSES` (line 24) includes `queued` and `cancelling`, which are not running.",
+    "impact": "Callers reading the report must check the implementation to learn what the arrays contain.",
+    "quote": "readonly unknownAdapter: readonly string[];"
+  },
+  {
+    "id": "G9",
+    "file": "src/review/agents/adapter-shutdown.ts",
+    "line": 40,
+    "severity": "minor",
+    "problem": "Four positional parameters, two of them adjacent plain strings (`runId`, `reason`), with no options object; the existing controller cancel API takes `(dispatchId, reason)` and the adapter cancel takes a named request object, so this is not an established ordered set.",
+    "impact": "Call sites can swap runId and reason without a type error.",
+    "quote": "export async function cancelPendingDispatches("
+  }
+]
