@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-ink: #1f2933;
+  --color-paper: #fbf8f3;
+  --color-surface: #ffffff;
+  --color-line: #ddd6ca;
+  --color-muted: #566170;
+  --color-accent: #a63f27;
+  --color-accent-ink: #ffffff;
+  --color-sage: #2f5d50;
+  --color-danger: #b42318;
+  --radius-control: 4px;
+  --radius-panel: 10px;
+}
+
+html {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: Inter, system-ui, sans-serif;
+}
+
+h1,
+h2,
+h3 {
+  font-family: Fraunces, Georgia, serif;
+}

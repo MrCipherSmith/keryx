@@ -1,0 +1,40 @@
+import { defineMessages } from "../../i18n";
+
+export const homeMessages = defineMessages({
+  en: {
+    title: "Orders, kept in order",
+    lead: "Browse, filter and settle customer orders from one quiet screen.",
+    cta: "Open the orders list",
+    sectionTitle: "What the back office covers",
+    listTitle: "A list that keeps up",
+    listBody: "Up to 2,000 rows per page, filtered by status in one click.",
+    drawerTitle: "One order at a time",
+    drawerBody: "The drawer opens beside the list, so you never lose your place.",
+    customersTitle: "Customers alongside",
+    customersBody: "Search by name or email and see each customer's order count.",
+  },
+  de: {
+    title: "Bestellungen in Ordnung",
+    lead: "Kundenbestellungen auf einem ruhigen Bildschirm ansehen, filtern und abschließen.",
+    cta: "Bestellliste öffnen",
+    sectionTitle: "Was das Backoffice abdeckt",
+    listTitle: "Eine Liste, die mithält",
+    listBody: "Bis zu 2.000 Zeilen pro Seite, mit einem Klick nach Status gefiltert.",
+    drawerTitle: "Eine Bestellung nach der anderen",
+    drawerBody: "Die Schublade öffnet sich neben der Liste, sodass Sie nie die Stelle verlieren.",
+    customersTitle: "Kunden daneben",
+    customersBody: "Nach Name oder E-Mail suchen und die Bestellanzahl je Kunde sehen.",
+  },
+  ar: {
+    title: "الطلبات في نظام",
+    lead: "تصفّح طلبات العملاء وصنّفها وأنهِها من شاشة هادئة واحدة.",
+    cta: "افتح قائمة الطلبات",
+    sectionTitle: "ما الذي تغطيه لوحة الإدارة",
+    listTitle: "قائمة تواكب العمل",
+    listBody: "حتى 2000 صف في الصفحة، وتصفية حسب الحالة بنقرة واحدة.",
+    drawerTitle: "طلب واحد في كل مرة",
+    drawerBody: "يفتح الدرج بجانب القائمة فلا تفقد موضعك أبدًا.",
+    customersTitle: "العملاء إلى جانبها",
+    customersBody: "ابحث بالاسم أو البريد الإلكتروني وشاهد عدد طلبات كل عميل.",
+  },
+});
