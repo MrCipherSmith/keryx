@@ -17,7 +17,7 @@ async function runCli(args: string[], cwd?: string): Promise<{ code: number; out
   }
   env.HOME = home;
   env.XDG_DATA_HOME = home;
-  const proc = Bun.spawn(["bun", CLI, ...args], { env, cwd, stdout: "pipe", stderr: "pipe" });
+  const proc = Bun.spawn(["bun", CLI, ...args], { env, ...(cwd === undefined ? {} : { cwd }), stdout: "pipe", stderr: "pipe" });
   const [out, err] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
   return { code: await proc.exited, out, err };
 }
