@@ -1376,7 +1376,34 @@ function getLearningSource(args: string[]): { type: LearningSourceType; path: st
   return undefined;
 }
 
-const VERIFY_FLAGS = ["--bundled", "--root", "--all", "--dry-run", "--json", "--help"] as const;
+const VERIFY_FLAGS = [
+  "--bundled",
+  "--root",
+  "--all",
+  "--dry-run",
+  "--json",
+  "--json-legacy-array",
+  "--help",
+] as const;
+
+/**
+ * `skills verify --all|--bundled --json` payload version (cli-interface-design
+ * decision 3). Bump on a removed or renamed field.
+ */
+const SKILLS_VERIFY_JSON_SCHEMA_VERSION = 1;
+
+/** `--all --json` used to print a bare array; `--json-legacy-array` keeps it for one release. */
+function printVerifyAllJson(reports: unknown[], args: string[]): void {
+  if (args.includes("--json-legacy-array")) {
+    console.error(
+      "keryx skills verify --all: --json-legacy-array is deprecated and will be removed in the next release; " +
+        "read `results` from the versioned object printed by plain --json instead.",
+    );
+    console.log(JSON.stringify(reports, null, 2));
+    return;
+  }
+  console.log(JSON.stringify({ schemaVersion: SKILLS_VERIFY_JSON_SCHEMA_VERSION, results: reports }, null, 2));
+}
 
 async function verifySkillCommand(args: string[]): Promise<void> {
   rejectUnknownFlags(args.slice(1), VERIFY_FLAGS, "skills verify");
@@ -1458,7 +1485,7 @@ function verifyBundledSkills(args: string[]): void {
   const evaluation = evaluateBundledTree(root);
 
   if (args.includes("--json")) {
-    console.log(JSON.stringify(evaluation, null, 2));
+    console.log(JSON.stringify({ schemaVersion: SKILLS_VERIFY_JSON_SCHEMA_VERSION, ...evaluation }, null, 2));
   } else {
     console.log(renderBundledEvaluation(evaluation));
   }
@@ -1496,7 +1523,7 @@ async function verifyAllProjectSkills(args: string[]): Promise<void> {
   const registry = manifest.modules?.gdskills?.projectSkillRegistry ?? [];
   if (registry.length === 0) {
     if (args.includes("--json")) {
-      console.log("[]");
+      printVerifyAllJson([], args);
     } else {
       console.log("No project skills registered.");
     }
@@ -1512,7 +1539,7 @@ async function verifyAllProjectSkills(args: string[]): Promise<void> {
   }
 
   if (args.includes("--json")) {
-    console.log(JSON.stringify(reports, null, 2));
+    printVerifyAllJson(reports, args);
     return;
   }
 
@@ -2088,8 +2115,13 @@ function printVerifyHelp(): void {
 
 Usage:
   keryx skills verify <skill-or-target> [--dry-run] [--json]
-  keryx skills verify --all [--dry-run] [--json]
+  keryx skills verify --all [--dry-run] [--json [--json-legacy-array]]
   keryx skills verify --bundled [--root <dir>] [--json]
+
+--json prints an object with a numeric schemaVersion: {schemaVersion, results: [...]}
+for --all, and {schemaVersion, root, skills, documents, findings, ...} for --bundled.
+--all --json used to print a bare array; --json-legacy-array restores that shape
+for one release (stderr deprecation notice, then removed).
 
 Aliases:
   keryx skill-verify-skill <skill-or-target>
