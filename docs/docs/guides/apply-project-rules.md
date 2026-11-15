@@ -56,7 +56,18 @@ Budget: 81 of 131072 bytes (default)
 
 The project rule is listed before every bundled one. The resolver reads files on
 disk only — no model is asked — and `--for test` and `--for review` give the
-matching lists. The result is also written to
+matching lists.
+
+Two kinds of bundled rule are chosen per task rather than always:
+
+- An installed stack rule (`.metaproject/rules/stacks/<pack>/*.mdc`) is
+  `must_read` when its `paths:` match a task file, with reason `glob:<glob>`,
+  for every worker, the reviewer included.
+- `security-baseline` (implement) and `async-patterns` (implement and test) are
+  `must_read` when the task text, a file path or, for async, a file's content
+  names their subject (reason `task-text:<word>`, `file:<path>` or
+  `content:<path>`). Otherwise they are listed `on_demand` with reason
+  `when-relevant`. A project rule with the same name replaces either one. The result is also written to
 `.metaproject/data/skills/project-context/last.json`.
 
 A project **skill** takes part the same way, as a supplement to the built-in
