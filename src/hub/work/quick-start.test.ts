@@ -9,6 +9,7 @@ import { buildAnswers } from './clarify';
 import { workRead } from './domain';
 import type { FlowRevision, WorkRecord } from './model';
 import { getMode, QUICK_MODES } from './quick-modes';
+import { problemText } from './quick-start-limits';
 import { parseQuickStartBody, quickStart, type QuickStartDeps, type QuickStartRequest } from './quick-start';
 
 /*
@@ -402,6 +403,24 @@ describe('invalid requests are rejected before any write', () => {
             const room = 200 - getMode('bug').criteriaTemplate.length;
             expect(() => parseQuickStartBody(body({ criteria: Array.from({ length: room }, (_, i) => 'c' + i) }))).not.toThrow();
             expect(rejected({ criteria: Array.from({ length: room + 1 }, (_, i) => 'c' + i) }).status).toBe(400);
+        });
+
+        test('the composed problem is accepted at exactly 10000 characters and refused one past it', () => {
+            const overhead = problemText('', []).length;
+            const fits = 'x'.repeat(10000 - overhead);
+            expect(() => parseQuickStartBody(body({ description: fits }))).not.toThrow();
+            expect(rejected({ description: fits + 'x' }).status).toBe(400);
+            expect(() => quickStart(deps(), human, P, request({ description: fits, answers: [], criteria: [] }))).not.toThrow();
+        });
+
+        test('the reason names the measure that was exceeded', () => {
+            expect(rejected({ description: 'x'.repeat(10001) }).message).toMatch(/now \d+/);
+            expect(rejected({ criteria: ['z'.repeat(4001)] }).message).toContain('now 4001');
+        });
+
+        test('exactly 200 answers parse and a raw criteria array past 200 is a 400', () => {
+            expect(() => parseQuickStartBody(body({ answers: Array.from({ length: 200 }, () => ({ q: 'q', a: null, skipped: true })) }))).not.toThrow();
+            expect(rejected({ criteria: Array.from({ length: 201 }, () => '') }).status).toBe(400);
         });
 
         test('blank criteria do not count against the cap', () => {

@@ -307,18 +307,30 @@ export interface QuickStartMemory {
 
 export function createQuickStartMemory(): QuickStartMemory {
   let current: QuickStartForm | undefined;
+  // Every form ever attached reports its outcome here, so a request that settles after a newer form took over still counts.
+  const accepted = new Set<string>();
+  const rejected = new Set<string>();
   return {
     attach: (form) => {
       current = form;
+      let lastOperation = form.pendingOperation()?.operationId;
+      form.subscribe(() => {
+        const state = form.state();
+        if (state.operationId !== undefined) lastOperation = state.operationId;
+        if (lastOperation === undefined) return;
+        if (state.phase === "done") accepted.add(lastOperation);
+        else if (state.phase === "editing" && state.error?.kind === "rejected" && state.operationId === undefined) rejected.add(lastOperation);
+      });
     },
     options: () => {
       if (current === undefined) return {};
-      if (current.state().phase === "done") {
+      const pending = current.pendingOperation();
+      if (current.state().phase === "done" || (pending !== undefined && accepted.has(pending.operationId))) {
         current = undefined;
         return {};
       }
-      const pending = current.pendingOperation();
-      return { initial: current.draft(), ...(pending === undefined ? {} : { initialPending: pending }) };
+      const keep = pending !== undefined && !rejected.has(pending.operationId);
+      return { initial: current.draft(), ...(keep ? { initialPending: pending } : {}) };
     },
   };
 }

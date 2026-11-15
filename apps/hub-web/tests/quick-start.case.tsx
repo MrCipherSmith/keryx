@@ -9,7 +9,7 @@ import { useDraftStore } from "../src/state/drafts";
 import { HubContext, type HubContextValue } from "../src/app/hub-context";
 import { resetClient } from "../src/api/client";
 import { ManagedWorkView } from "../src/features/managed-work/view";
-import { clearQuickStartUnresolved } from "../src/features/managed-work/quick-start";
+import { clearQuickStartUnresolved } from "../src/features/managed-work/quick-start-unresolved";
 import { demoWorkAdapter } from "../src/features/managed-work/demo";
 import { recordOf } from "../src/features/managed-work/model";
 import type { WorkRecord } from "../src/features/managed-work/types";
@@ -132,11 +132,16 @@ describe("quick start dialog, state and event matrix", () => {
 
   test("the button is hidden from a human whose capabilities lack the three commands it composes", async () => {
     const original = capabilities.allowedCommands;
-    capabilities.allowedCommands = ["flow.create"];
+    const all = ["flow.create", "intent.create", "flow.approve-and-start"];
     try {
-      show();
-      await screen.findByRole("button", { name: "Refresh" });
-      expect(screen.queryByRole("button", { name: "New task" })).not.toBeInTheDocument();
+      // Each command alone is enough to hide the button, so dropping any one gate is caught.
+      for (const missing of all) {
+        capabilities.allowedCommands = all.filter((command) => command !== missing);
+        const view = show();
+        await screen.findByRole("button", { name: "Refresh" });
+        expect(screen.queryByRole("button", { name: "New task" })).not.toBeInTheDocument();
+        view.unmount();
+      }
     } finally {
       capabilities.allowedCommands = original;
     }
@@ -365,6 +370,27 @@ describe("quick start dialog, state and event matrix", () => {
     expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
     await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
     expect(document.activeElement).not.toBe(document.body);
+  });
+
+  test("focus stays inside the dialog while Retry itself sends and the Notice unmounts", async () => {
+    hub.script.push("network", "network");
+    show();
+    const dialog = await open();
+    describe_("Fix the login redirect");
+    fireEvent.click(submit());
+    const retry = await screen.findByRole("button", { name: "Retry" });
+    retry.focus();
+    fireEvent.click(retry);
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Retry" })).toBeInTheDocument());
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    expect(document.activeElement).not.toBe(document.body);
+    dialog.focus();
+    const controls = [...dialog.querySelectorAll<HTMLElement>("button, input, textarea, select")].filter((el) => !el.matches(":disabled"));
+    fireEvent.keyDown(dialog, { key: "Tab" });
+    expect(document.activeElement).toBe(controls[0]);
+    dialog.focus();
+    fireEvent.keyDown(dialog, { key: "Tab", shiftKey: true });
+    expect(document.activeElement).toBe(controls[controls.length - 1]);
   });
 
   test("while a request is unresolved, Tab never leaves the dialog even though the form fields are disabled", async () => {

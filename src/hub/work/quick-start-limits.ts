@@ -1,8 +1,8 @@
 import type { ClarifyAnswer } from './clarify';
 import { getMode, type QuickModeId } from './quick-modes';
 
-export const SKIPPED_LINE = 'Clarifying form: skipped';
-export const SKIPPED_ANSWER = 'Skipped';
+const SKIPPED_LINE = 'Clarifying form: skipped';
+const SKIPPED_ANSWER = 'Skipped';
 // The caps flow.create and intent.create enforce (command.schema.json); checked up front so a long form is refused on the spot, not by a late store failure.
 export const MAX_PROBLEM = 10000;
 export const MAX_CRITERION = 4000;
@@ -23,7 +23,7 @@ export function problemText(description: string, answers: readonly ClarifyAnswer
     return [description, '', ...(answered ? [] : [SKIPPED_LINE]), ...entries.flat()].join('\n');
 }
 
-/** Why a well-formed quick start body is too big for the Hub, or undefined when it fits. The server and the TUI share this check. */
+/** Why a well-formed quick start body is too big for the Hub, or undefined when it fits. */
 export function quickStartSizeProblem(body: {
     readonly mode: QuickModeId;
     readonly description: string;
@@ -31,10 +31,12 @@ export function quickStartSizeProblem(body: {
     readonly criteria: readonly string[];
 }): string | undefined {
     if (body.answers.length > MAX_ANSWERS) return 'answers holds at most ' + MAX_ANSWERS + ' entries';
+    if (body.criteria.length > MAX_CRITERIA) return 'criteria holds at most ' + MAX_CRITERIA + ' entries';
     const typed = body.criteria.map(text => text.trim()).filter(text => text.length > 0);
-    if (typed.some(text => text.length > MAX_CRITERION)) return 'A criterion is at most ' + MAX_CRITERION + ' characters';
+    const longest = typed.reduce((most, text) => Math.max(most, text.length), 0);
+    if (longest > MAX_CRITERION) return 'A criterion is at most ' + MAX_CRITERION + ' characters, now ' + longest;
     if (getMode(body.mode).criteriaTemplate.length + typed.length > MAX_CRITERIA) return 'A task holds at most ' + MAX_CRITERIA + ' criteria';
-    if (problemText(body.description.trim(), body.answers).length > MAX_PROBLEM)
-        return 'The description and answers are at most ' + MAX_PROBLEM + ' characters together';
+    const composed = problemText(body.description.trim(), body.answers).length;
+    if (composed > MAX_PROBLEM) return 'The description and answers are at most ' + MAX_PROBLEM + ' characters together, now ' + composed;
     return undefined;
 }

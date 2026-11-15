@@ -1,4 +1,5 @@
 import { MAX_COMMAND_BYTES } from './limits';
+import { MAX_ANSWERS, MAX_CRITERIA, MAX_CRITERION, MAX_PROBLEM } from './quick-start-limits';
 import domain from "../../../docs/requirements/hub-work-management/schemas/domain.schema.json";
 import command from "../../../docs/requirements/hub-work-management/schemas/command.schema.json";
 import event from "../../../docs/requirements/hub-work-management/schemas/event.schema.json";
@@ -11,7 +12,7 @@ export interface WorkSchema {
     type?: string; properties?: Record<string, WorkSchema>; required?: string[];
     additionalProperties?: boolean | WorkSchema; propertyNames?: WorkSchema;
     items?: WorkSchema; minItems?: number; maxItems?: number; minLength?: number; maxLength?: number;
-    minimum?: number; maximum?: number; maxProperties?: number; pattern?: string;
+    minimum?: number; maximum?: number; maxProperties?: number; pattern?: string; description?: string;
 }
 const ref = (name: string): WorkSchema => ({ $ref: `#/components/schemas/${name}` });
 const object = (properties: Record<string, WorkSchema>, required = Object.keys(properties)): WorkSchema => ({ type: "object", additionalProperties: false, properties, required });
@@ -47,7 +48,7 @@ for (const [name, recordType] of Object.entries({ Flow: "WorkFlow", Intent: "Wor
 schemas.AttentionPage = object({ records: array({ oneOf: [ref("WorkFlow"), ref("WorkIntent"), ref("Attempt"), ref("EvidenceRecord")] }, 200), nextCursor: nullableCursor, eventCursor: cursor });
 schemas.DocumentVersion = object({document:object({id:text,projectId:text,path:{type:'string',minLength:1,maxLength:1024},kind:{enum:['wiki','spec']},version:{type:'integer',minimum:1,maximum:Number.MAX_SAFE_INTEGER},contentDigest:{type:'string',pattern:'^[a-f0-9]{64}$'},content:{type:'string',maxLength:1048576}}),eventCursor:cursor});
 schemas.LegacyPreview = object({ receiptId: text, contentDigest: { type: "string", pattern: "^[a-f0-9]{64}$" }, legacyFlowId: text, sourceVersion: { type: "integer", minimum: 1 }, sourceDigest: { type: "string", pattern: "^[a-f0-9]{64}$" }, status: { const: "eligible" }, source: object({ flowId: text, title: { type: "string", minLength: 1, maxLength: 500 }, specification: ref("DocumentRef"), criteria: array({ type: "string", minLength: 1, maxLength: 4000 }, 200), status: { enum: ["initializing", "ready"] } }) });
-schemas.QuickStartRequest = object({ mode: { enum: QUICK_MODES.map(mode => mode.id) }, description: { type: "string", minLength: 1, maxLength: 10000 }, answers: array(object({ q: { type: "string", maxLength: 10000 }, a: { anyOf: [{ type: "string", maxLength: 10000 }, { type: "null" }] }, skipped: { type: "boolean" } }), 200), criteria: array({ type: "string", maxLength: 4000 }, 200) });
+schemas.QuickStartRequest = { ...object({ mode: { enum: QUICK_MODES.map(mode => mode.id) }, description: { type: "string", minLength: 1, maxLength: MAX_PROBLEM }, answers: array(object({ q: { type: "string", maxLength: MAX_PROBLEM }, a: { anyOf: [{ type: "string", maxLength: MAX_PROBLEM }, { type: "null" }] }, skipped: { type: "boolean" } }), MAX_ANSWERS), criteria: array({ type: "string", maxLength: MAX_CRITERION }, MAX_CRITERIA) }), description: "Beyond the per-field bounds the Hub checks the composed rules and answers 400 invalid-body: the description followed by the clarifying-form record is at most " + MAX_PROBLEM + " characters, each trimmed criterion is at most " + MAX_CRITERION + ", and the mode's template criteria plus the typed ones are at most " + MAX_CRITERIA + "." };
 schemas.QuickStartResult = object({ operationId: text, entities: array(ref("WorkRecord"), 1000), eventCursor: cursor, receiptId: text, flowId: text, intentId: text });
 schemas.GitObservation = gitObservationSchema;
 schemas.ObservationResult = object({ operationId: text, observation: ref("GitObservation"), eventCursor: cursor, receiptId: text });

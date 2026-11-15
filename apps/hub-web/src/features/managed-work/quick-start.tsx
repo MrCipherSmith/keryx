@@ -11,23 +11,10 @@ import { mergeWorkCache, requestWorkRefresh, workAttentionKey, workSnapshotKey }
 import type { QuickStartRequest } from "./quick-contract";
 import { quickStartRequest, type QuickDraft } from "./quick-request";
 import { emptyQuickDraft, QuickStartDialog, type QuickPhase } from "./quick-start-dialog";
+import { unresolved, type Pending } from "./quick-start-unresolved";
 
 export { quickStartRequest };
 
-type Pending = { id: string; request: QuickStartRequest; draft: QuickDraft };
-type Unresolved = { pending: Pending; message: string; inFlight: boolean };
-
-/**
- * Unresolved operations, keyed by principal, project and adapter mode. They live outside the component, so leaving
- * the Work tab and coming back (which unmounts it) keeps the operation id and the exact request: the next Retry
- * replays the same operation instead of minting a new one. An entry is dropped on success or a definite refusal.
- */
-const unresolved = new Map<string, Unresolved>();
-
-/** Forgets every unresolved operation. Sign-out and a scope change call it: the entries hold typed text and operation ids of the previous principal. */
-export function clearQuickStartUnresolved() {
-  unresolved.clear();
-}
 
 /**
  * One submission at a time. A definite refusal (4xx) forgets the operation id, so the next try is a new operation.
@@ -65,7 +52,7 @@ function useQuickStart(adapter: WorkAdapter, onCreated: (flowId: string, sent: Q
     try {
       const outcome = await adapter.quickStart(next.id, next.request);
       if (generation !== getClientScope()) {
-        unresolved.delete(storeKey);
+        forget();
         return;
       }
       forget();

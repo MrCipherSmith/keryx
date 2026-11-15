@@ -66,7 +66,9 @@ export function QuickStartDialog({
       return;
     }
     const container = root.current;
-    if (container && !container.contains(document.activeElement)) container.focus();
+    const active = document.activeElement;
+    // A control that was just disabled (Start while sending) keeps document.activeElement in some browsers but no longer takes keys.
+    if (container && (!container.contains(active) || (active instanceof HTMLElement && active.matches(":disabled")))) container.focus();
   }, [phase.status, confirmingStartOver]);
 
   useEffect(() => {

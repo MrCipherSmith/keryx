@@ -1,5 +1,5 @@
 import { clearPending } from "../state/pending";
-import { clearQuickStartUnresolved } from "../features/managed-work/quick-start";
+import { clearQuickStartUnresolved } from "../features/managed-work/quick-start-unresolved";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
   QueryClient,

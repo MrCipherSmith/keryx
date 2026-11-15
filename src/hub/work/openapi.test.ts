@@ -24,6 +24,16 @@ test('the quick-start request schema accepts what the surfaces send and rejects 
     expect(Object.keys(workOpenApi.paths).some(path => path.endsWith('/quick-start'))).toBe(true);
 });
 
+test('the published quick-start bounds reject the same oversize bodies the parser refuses', () => {
+    const body = { mode: 'bug', description: 'Export does nothing', answers: [], criteria: [] };
+    const schema = { $ref: '#/components/schemas/QuickStartRequest' };
+    expect(matchesWorkSchema({ ...body, description: 'x'.repeat(10000) }, schema)).toBe(true);
+    expect(matchesWorkSchema({ ...body, description: 'x'.repeat(10001) }, schema)).toBe(false);
+    expect(matchesWorkSchema({ ...body, criteria: ['z'.repeat(4000)] }, schema)).toBe(true);
+    expect(matchesWorkSchema({ ...body, criteria: ['z'.repeat(4001)] }, schema)).toBe(false);
+    expect(matchesWorkSchema({ ...body, criteria: Array.from({ length: 201 }, () => 'c') }, schema)).toBe(false);
+    expect(matchesWorkSchema({ ...body, answers: Array.from({ length: 201 }, () => ({ q: 'q', a: null, skipped: true })) }, schema)).toBe(false);
+});
 test('every published schema reference resolves within the OpenAPI document', () => {
     function check(value: unknown) {
         if (!value || typeof value !== 'object') return;

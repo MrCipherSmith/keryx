@@ -329,7 +329,7 @@ const en = {
     startOverKeep: "Back to retry",
     interrupted: "The page was left while the request was being sent.",
     unknown:
-      "The connection was interrupted and the result is unknown. Retry sends the same request again and cannot create a second Flow.",
+      "The result is unknown. Retry sends the same request again and cannot create a second Flow.",
   },
   states: {
     draft: "Draft",

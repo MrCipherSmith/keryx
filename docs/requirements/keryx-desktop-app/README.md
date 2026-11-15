@@ -1,7 +1,7 @@
 # Keryx Desktop App: solo mode, quick task start, stage timeline, diff view
 Version: 0.2.0
 
-Status: **draft; the quick task start (R6, R7) is implemented under Flow 492, the rest is planned.** Written 2026-11-14. Decisions D1–D5 taken by the operator the same day (Tauri, GitHub releases, separate app plus `keryx hub solo`, web first, template clarifying form). Flow 492 froze AC1–AC15 for quick start in the web UI and the TUI `/task` command; solo mode, the stage timeline, the diff view and the desktop shell have no Flow yet and no frozen criteria. Every other capability named here is `planned` unless a file in `src/` or `apps/hub-web/` proves otherwise.
+Status: **draft; the quick task start (R6 to R8 and the quick-start half of R14) is implemented under Flow 492, the rest is planned.** Written 2026-11-14. Decisions D1–D5 taken by the operator the same day (Tauri, GitHub releases, separate app plus `keryx hub solo`, web first, template clarifying form). Flow 492 froze AC1–AC15 for quick start in the web UI and the TUI `/task` command; solo mode, the stage timeline, the diff view and the desktop shell have no Flow yet and no frozen criteria. Every other capability named here is `planned` unless a file in `src/` or `apps/hub-web/` proves otherwise.
 
 ## Purpose
 
@@ -26,7 +26,7 @@ Four directions, each with a matching TUI requirement (project rule: every user-
 - A second orchestrator or a second agent runtime. Execution stays in keryx runs and sessions.
 - Replacing the team Hub, its auth, or its remote-v2 contracts. Solo mode is an additional local entry, never a bypass of team auth.
 - Rewriting the web in a native toolkit.
-- Freezing acceptance criteria or creating a Flow. Both wait for operator confirmation.
+- Freezing acceptance criteria or creating a Flow for the capabilities not yet implemented. Both wait for operator confirmation; quick start was frozen in Flow 492.
 
 ## Related modules
 

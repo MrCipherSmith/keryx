@@ -34,7 +34,7 @@ One installable desktop app where a single person starts a task in a few seconds
 
 ## 5. Requirements
 
-Each requirement carries one verification field. Test paths marked "planned" do not exist yet and are listed in the specification.
+Each requirement carries one verification field. Test paths marked "planned" do not exist yet and are listed in the specification; the quick start paths (R6 to R8, the quick-start half of R14) exist.
 
 ### Direction 1: Solo mode and shell
 
@@ -52,11 +52,11 @@ Each requirement carries one verification field. Test paths marked "planned" do 
 ### Direction 2: Quick task start
 
 - **R6. Modes.** A "New task" action offers quick, bug, task, epic and refactor. Each mode sets a default review depth and a default acceptance-criteria template. Modes are data, not code branches. 
-  Verification: exec `bun test src/hub/work/quick-modes.test.ts` (planned)
+  Verification: exec `bun test src/hub/work/quick-modes.test.ts`
 - **R7. Start without a pre-imported spec.** Quick start creates a Flow with no spec document, carrying the typed description and the clarifying answers in the Flow's problem text, then freezes the user-confirmed criteria, all in one idempotent server action. The user never visits Documents first. 
-  Verification: exec `bun apps/hub-web/tests/browser-journeys.e2e.mjs` extended with a quick-start journey (planned extension)
+  Verification: exec `bun test src/hub/work/quick-start.test.ts` and the web case `apps/hub-web/tests/quick-start.case.tsx`; the browser-journeys e2e extension with a quick-start journey is not done yet
 - **R8. Clarifying-question form.** Before starting, the app can show a short form of questions generated for the task (scope, constraints, done-when). Answers are stored in the Flow's problem text (as for R7), so they are shown wherever the Flow's problem is shown. Skipping is allowed and recorded: every skipped question is kept under its own name, and a wholly skipped form is marked with one skip line. 
-  Verification: exec `bun test src/hub/work/clarify.test.ts` (planned; v1 questions come from the mode template, so the question set, the storage and the skip record are all testable)
+  Verification: exec `bun test src/hub/work/clarify.test.ts` (v1 questions come from the mode template, so the question set, the storage and the skip record are all testable)
 
 ### Direction 3: Stage timeline
 
@@ -77,7 +77,7 @@ Each requirement carries one verification field. Test paths marked "planned" do 
 ### Cross-cutting: TUI parity
 
 - **R14. TUI for quick start and solo status.** The shell gets a command and menu item for quick start with the same modes and clarifying form as a keyboard-accessible modal, and a status line for the local Hub. 
-  Verification: exec `bun test src/tui/quick-start-modal.test.ts` (planned) plus judged TUI walk
+  Verification: exec `bun test src/tui/quick-start-modal.test.ts` plus judged TUI walk
 - **R15. TUI for the timeline and findings.** A sidebar section lists the current run's stages with live state, a modal shows a stage log, and a modal lists findings with file and line. The diff opens in the existing review surface. Updates arrive in the background without a refresh key. 
   Verification: exec `bun test src/tui/stage-timeline-panel.test.ts` (planned) plus judged TUI walk
 - **R16. No second implementation.** The desktop, web and TUI read the same Hub endpoints for stages, findings and artifacts. A parity test fails when a field exists in one surface and not the others. 
