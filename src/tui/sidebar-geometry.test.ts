@@ -677,3 +677,26 @@ otuiTest("flow 468 AC16: at 80x24 in default mode the Session card, the Work car
     }
   });
 });
+
+
+otuiTest("rail header has three compact rows and ASCII controls", async () => {
+  const g = await loadGeometry();
+  const otui = requireOtui();
+  await withTmpDir(async (configDir) => {
+    const geo = g.createSidebarGeometry({ columns: 80, configDir, mode: "rail" });
+    const h = await mountChrome(otui, geo, { width: 80, height: 24 });
+    try {
+      const sidebar = byId(h, "sidebar");
+      const title = byId(h, "sb-title");
+      const normal = byId(h, "sb-mode-default");
+      const wide = byId(h, "sb-mode-wide");
+      expect(byId(h, "sb-top").y - title.y).toBe(3);
+      const rows = h.captureCharFrame().split("\n");
+      expect(rows[normal.y]?.slice(sidebar.x)).toContain("-");
+      expect(rows[wide.y]?.slice(sidebar.x)).toContain("=");
+      await h.mockMouse.click(normal.x + 1, normal.y);
+      await h.flush();
+      expect(geo.state().mode).toBe("default");
+    } finally { h.destroy(); }
+  });
+});

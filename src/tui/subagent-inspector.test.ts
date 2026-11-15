@@ -201,3 +201,43 @@ test("AC2/AC6: tui-shell wires inspector through openModal, no private overlay",
   expect(moduleSource).toMatch(/openSubagentInspector/);
   expect(local).not.toMatch(/overlayBox/);
 });
+
+
+test("switching Work and Meta never updates detached nodes, including after clear", () => {
+  const store = new SubagentSessionStore();
+  store.apply({ kind: "upsert", id: "sub:1", label: "one", status: "running", task: "go" });
+  class Text {
+    content: string;
+    constructor(_renderer: unknown, opts: { content: string }) { this.content = opts.content; }
+  }
+  let render: Parameters<OpenModalFn>[2]["renderTab"] | undefined;
+  let close: Parameters<OpenModalFn>[2]["onClose"];
+  const nodes: Text[] = [];
+  const body = { add: (node: Text) => nodes.push(node) };
+  presentSubagentInspector((_otui, _chrome, input) => {
+    render = input.renderTab;
+    close = input.onClose;
+    input.renderTab("work", body);
+    return { close: () => {}, setTab: () => {}, activeTab: () => "work" };
+  }, { TextRenderable: Text }, { renderer: {} }, { store, id: "sub:1" });
+  const work = nodes[0]!;
+  const originalWork = work.content;
+  render?.("meta", body);
+  store.apply({ kind: "log", id: "sub:1", entry: { kind: "tool", text: "first-update" } });
+  expect(work.content).toBe(originalWork);
+  const meta = nodes[1]!;
+  const originalMeta = meta.content;
+  render?.("work", body);
+  const currentWork = nodes[2]!;
+  store.clear();
+  expect(currentWork.content).toBe("Subagent is gone.");
+  expect(meta.content).toBe(originalMeta);
+  expect(work.content).toBe(originalWork);
+  render?.("meta", body);
+  store.apply({ kind: "upsert", id: "sub:1", label: "returned", status: "running", task: "new task" });
+  expect(currentWork.content).toBe("Subagent is gone.");
+  close?.();
+  const before = nodes.map((node) => node.content);
+  store.apply({ kind: "log", id: "sub:1", entry: { kind: "tool", text: "after-close" } });
+  expect(nodes.map((node) => node.content)).toEqual(before);
+});

@@ -746,8 +746,9 @@ export async function createShellChrome(
     const state = geometry.state();
     const rail = state.mode === "rail";
     sbHeader.flexDirection = rail ? "column" : "row";
+    sbModes.gap = rail ? 0 : 1;
     sbTitle.content = rail
-      ? otui.t`${boldChunk(otui, "◆")}`
+      ? otui.t`${boldChunk(otui, "K")}`
       : otui.t`${boldChunk(otui, "keryx")} ${dimChunk(otui, sbVersion.length > 0 ? `v${sbVersion}` : "")}`;
     sbModes.flexDirection = rail ? "column" : "row";
     for (const mode of SIDEBAR_MODES) {
@@ -755,7 +756,7 @@ export async function createShellChrome(
       if (button === undefined) continue;
       // Two buttons: the modes the sidebar is NOT set to. The id names the mode a click switches TO.
       button.visible = mode !== state.preferred;
-      button.content = ` ${sidebarModeIcon(mode, asciiIcons)} `;
+      button.content = ` ${sidebarModeIcon(mode, rail || asciiIcons)} `;
       button.fg = theme.text;
       button.bg = theme.highlight;
     }
