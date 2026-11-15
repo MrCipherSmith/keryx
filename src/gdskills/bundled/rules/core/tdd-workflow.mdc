@@ -61,6 +61,23 @@ Every implementation must follow this exact sequence:
 
 ---
 
+## Test conventions every stack shares
+
+A stack pack's `testing.mdc` adds its framework, layout and tools on top of these and does
+not repeat them.
+
+- Match the project's test layout, framework, assertion and mocking libraries; never add a
+  second one.
+- New behaviour gets a new test in the same change. A bug fix gets a regression test that
+  fails before the fix and passes after.
+- Mock at the boundary (network, filesystem, clock, other services), never an internal
+  collaborator of the unit under test.
+- A unit test depends on no real network access or wall-clock time; fake both.
+- Never wait for async work with a sleep or a fixed delay; await the result or the signal.
+- Fix a flaky test at the cause it races, never with a retry, a longer timeout or a skip.
+
+---
+
 ## Output Contract Extension
 
 When reporting task completion, include:

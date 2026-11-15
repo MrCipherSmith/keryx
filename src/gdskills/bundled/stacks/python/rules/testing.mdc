@@ -24,7 +24,6 @@ Narrows `core-common-rules`' testing guidance to `pytest`. Applies only to `*.py
 ## Mocking
 
 - Patch at the point of use (`mocker.patch("mypkg.module.dependency")`), not at the definition site.
-- Mock only external dependencies (network, filesystem, other services, wall-clock time), not internal collaborators.
 - Use `unittest.mock.AsyncMock` (or `mocker.patch` with `new=AsyncMock()`) for an `async def` dependency, not a plain `Mock`.
 
 ## Async tests
@@ -36,7 +35,6 @@ Narrows `core-common-rules`' testing guidance to `pytest`. Applies only to `*.py
 
 - Never depend on real wall-clock time, network access or filesystem state outside `tmp_path`; freeze time (`freezegun` or equivalent) and mock the network.
 - Do not depend on dict/set iteration order beyond the guaranteed dict insertion order; sort before comparing.
-- Fix a flaky test at its root cause; never retry it into passing or skip it.
 
 ## Coverage expectations
 
