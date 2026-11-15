@@ -247,6 +247,40 @@ test("a conditional core rule is must_read when the task text, a file path or a 
   expect(forReview.entries).toEqual([]);
 });
 
+test("cli-interface-design is must_read for CLI command code or CLI wording, and on_demand for an unrelated task", async () => {
+  const root = await project();
+  await core(root, { "cli-interface-design.mdc": `---\ndescription: "CLI decisions."\nalwaysApply: false\n---\nbody\n` });
+  const view = (result: Awaited<ReturnType<typeof resolveProjectContext>>): string[][] => result.entries.map((entry) => [entry.path, entry.reason, entry.tier]);
+
+  const byPath = await resolveProjectContext({ projectRoot: root, files: ["src/commands/memory.ts"], for: "implement", taskText: "tidy a helper" });
+  expect(view(byPath)).toEqual([[C("cli-interface-design.mdc"), "file:src/commands/memory.ts", "must_read"]]);
+  const entry = await resolveProjectContext({ projectRoot: root, files: ["src/cli.ts"], for: "implement" });
+  expect(view(entry)).toEqual([[C("cli-interface-design.mdc"), "file:src/cli.ts", "must_read"]]);
+  const byText = await resolveProjectContext({ projectRoot: root, files: ["src/format.ts"], for: "implement", taskText: "rename the --json flag" });
+  expect(view(byText)).toEqual([[C("cli-interface-design.mdc"), "task-text:--json", "must_read"]]);
+
+  const unrelated = await resolveProjectContext({ projectRoot: root, files: ["src/lib/format.ts"], for: "implement", taskText: "rename a helper" });
+  expect(view(unrelated)).toEqual([[C("cli-interface-design.mdc"), "when-relevant", "on_demand"]]);
+  const forReview = await resolveProjectContext({ projectRoot: root, files: ["src/commands/memory.ts"], for: "review" });
+  expect(forReview.entries).toEqual([]);
+});
+
+test("concurrency-patterns is must_read for lock, journal or multi-session work, and on_demand otherwise", async () => {
+  const root = await project();
+  await core(root, { "concurrency-patterns.mdc": `---\ndescription: "Shared-state decisions."\nalwaysApply: false\n---\nbody\n` });
+  const view = (result: Awaited<ReturnType<typeof resolveProjectContext>>): string[][] => result.entries.map((entry) => [entry.path, entry.reason, entry.tier]);
+
+  const byPath = await resolveProjectContext({ projectRoot: root, files: ["src/flow/lock.ts"], for: "implement", taskText: "tidy a helper" });
+  expect(view(byPath)).toEqual([[C("concurrency-patterns.mdc"), "file:src/flow/lock.ts", "must_read"]]);
+  const byText = await resolveProjectContext({ projectRoot: root, files: ["src/lib/format.ts"], for: "implement", taskText: "make the journal append safe across a multi-session run" });
+  expect(view(byText)[0]?.[2]).toBe("must_read");
+
+  const unrelated = await resolveProjectContext({ projectRoot: root, files: ["src/lib/format.ts"], for: "implement", taskText: "rename a helper" });
+  expect(view(unrelated)).toEqual([[C("concurrency-patterns.mdc"), "when-relevant", "on_demand"]]);
+  const forReview = await resolveProjectContext({ projectRoot: root, files: ["src/flow/lock.ts"], for: "review" });
+  expect(forReview.entries).toEqual([]);
+});
+
 test("a project rule with a conditional rule's name replaces it", async () => {
   const root = await project();
   await core(root, { "security-baseline.mdc": "bundled security\n" });

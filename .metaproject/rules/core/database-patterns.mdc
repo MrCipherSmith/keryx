@@ -32,7 +32,7 @@ Canon applies: the PostgreSQL documentation on locking, `ALTER TABLE` and `CREAT
 | Signal | A finding when | Default | Not a finding |
 |---|---|---|---|
 | Query per item in a loop (Rule 1) | the loop size is not fixed small | `major` when a frequency or hot path is named with the loop size; else `minor` | a fixed small list, or a one-off or startup path |
-| New filter or sort column with no index (Rule 2) | the table is large or the query hot, named | `major`; else `minor` | a small table |
+| New filter or sort column with no index (Rule 2) | the table is large or the query hot, named | `major`; else `minor`; `info` when the schema is not in the payload (say that reading the schema would settle it) | a small table |
 | `NOT NULL` column with no default and no backfill (Rule 3) | the table can hold rows, or old code inserts into it | `major`; `blocker` only where wrong values or truncation are shown | a constant `DEFAULT` |
 | Rename, type change or drop in one step (Rule 3) | code still running reads the old column | `major` | — |
 | Non-concurrent index on an existing table (Rule 3) | the table is large or busy | `major`; else `minor` | a table created in the same migration |

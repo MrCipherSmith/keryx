@@ -114,6 +114,21 @@ export const CONDITIONAL_RULES: readonly ConditionalRule[] = [
     path: /(^|[/._-])(queues?|workers?|jobs?|streams?)([/._-]|$)/i,
     content: /\bawait\b|\.then\(|\bnew Promise\b/,
   },
+  {
+    // Shared state across processes: lock files, temp+rename writes, JSONL appends, child fan-out.
+    name: "concurrency-patterns",
+    for: ["implement"],
+    text: /\b(lock ?files?|file locks?|multi[- ]session|concurrent (writes?|sessions?|processes)|jsonl|atomic writes?|child process\w*|spawn\w*|fan[- ]?out)\b/i,
+    path: /(^|[/._-])(locks?|lockfile|journal|jsonl|spawn\w*)([/._-]|$)/i,
+    content: /\bwriteFileSync\b|\brenameSync\b|\bappendFile(Sync)?\b|\bspawn\(|\bexecFile\(/,
+  },
+  {
+    // keryx's own CLI decisions: exit codes, stdout vs stderr, --json shape, flag rename/removal.
+    name: "cli-interface-design",
+    for: ["implement"],
+    text: /\b(cli|command[- ]line|subcommands?|exit codes?|stdout|stderr|cli flags?)\b|(?<![\w-])--[a-z][\w-]*/i,
+    path: /^src\/(commands\/|cli(-registry)?\.ts$)/,
+  },
 ];
 
 const compare = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
