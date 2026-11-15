@@ -1,0 +1,275 @@
+diff --git a/apps/orders-web/src/api/notes.api.ts b/apps/orders-web/src/api/notes.api.ts
+new file mode 100644
+index 000000000..8f53dccd6
+--- /dev/null
++++ b/apps/orders-web/src/api/notes.api.ts
+@@ -0,0 +1,25 @@
++import { http } from "./http";
++
++export interface NoteDto {
++  id: string;
++  orderId: string;
++  text: string;
++  author: string;
++  createdAt: string;
++}
++
++export interface NotesApi {
++  listNotes(orderId: string): Promise<NoteDto[]>;
++  addNote(orderId: string, text: string): Promise<NoteDto>;
++}
++
++export const notesApi: NotesApi = {
++  async listNotes(orderId) {
++    const res = await http.get<NoteDto[]>(`/orders/${encodeURIComponent(orderId)}/notes`);
++    return res.data;
++  },
++  async addNote(orderId, text) {
++    const res = await http.post<NoteDto>(`/orders/${encodeURIComponent(orderId)}/notes`, { text });
++    return res.data;
++  },
++};
+diff --git a/apps/orders-web/src/components/OrderNotesPanel.stories.tsx b/apps/orders-web/src/components/OrderNotesPanel.stories.tsx
+new file mode 100644
+index 000000000..4695fc2f9
+--- /dev/null
++++ b/apps/orders-web/src/components/OrderNotesPanel.stories.tsx
+@@ -0,0 +1,81 @@
++import { useEffect, useState } from "react";
++import type { Meta, StoryObj } from "@storybook/react";
++import type { NoteDto, NotesApi } from "../api/notes.api";
++import { NotesStore } from "../stores/notes.store";
++import { OrderNotesPanel } from "./OrderNotesPanel";
++
++const NOTES: NoteDto[] = [
++  {
++    id: "n-2",
++    orderId: "o-1001",
++    text: "Customer asked to leave the parcel with the neighbour.",
++    author: "support-1",
++    createdAt: "2026-10-13T10:15:00Z",
++  },
++  {
++    id: "n-1",
++    orderId: "o-1001",
++    text: "Address confirmed by phone.",
++    author: "support-2",
++    createdAt: "2026-10-12T16:40:00Z",
++  },
++];
++
++function fakeApi(overrides: Partial<NotesApi> = {}): NotesApi {
++  return {
++    listNotes: async () => NOTES,
++    addNote: async (orderId, text) => ({
++      id: "n-new",
++      orderId,
++      text,
++      author: "support-1",
++      createdAt: "2026-10-14T09:00:00Z",
++    }),
++    ...overrides,
++  };
++}
++
++interface PanelDemoProps {
++  api: NotesApi;
++}
++
++function PanelDemo({ api }: PanelDemoProps) {
++  const [store] = useState(() => new NotesStore(api, "o-1001"));
++
++  useEffect(() => {
++    store.onMount();
++    return () => store.onUnmount();
++  }, [store]);
++
++  return <OrderNotesPanel store={store} />;
++}
++
++const meta: Meta<typeof PanelDemo> = {
++  title: "Components/OrderNotesPanel",
++  component: PanelDemo,
++};
++
++export default meta;
++type Story = StoryObj<typeof PanelDemo>;
++
++export const Default: Story = {
++  args: { api: fakeApi() },
++};
++
++export const Empty: Story = {
++  args: { api: fakeApi({ listNotes: async () => [] }) },
++};
++
++export const Loading: Story = {
++  args: { api: fakeApi({ listNotes: () => new Promise<NoteDto[]>(() => {}) }) },
++};
++
++export const LoadError: Story = {
++  args: {
++    api: fakeApi({
++      listNotes: async () => {
++        throw new Error("Notes service is unavailable");
++      },
++    }),
++  },
++};
+diff --git a/apps/orders-web/src/components/OrderNotesPanel.tsx b/apps/orders-web/src/components/OrderNotesPanel.tsx
+new file mode 100644
+index 000000000..2d5560a58
+--- /dev/null
++++ b/apps/orders-web/src/components/OrderNotesPanel.tsx
+@@ -0,0 +1,47 @@
++import { useState } from "react";
++import { observer } from "mobx-react-lite";
++import { Alert, Button, Empty, Input, List, Space, Typography } from "antd";
++import type { NotesStore } from "../stores/notes.store";
++
++export interface OrderNotesPanelProps {
++  store: NotesStore;
++}
++
++export const OrderNotesPanel = observer(function OrderNotesPanel({ store }: OrderNotesPanelProps) {
++  const [draft, setDraft] = useState("");
++
++  const submit = async () => {
++    await store.addNote(draft);
++    if (store.error === null) setDraft("");
++  };
++
++  return (
++    <Space direction="vertical" style={{ width: "100%" }}>
++      <Typography.Title level={5}>Notes ({store.count})</Typography.Title>
++      {store.error && <Alert type="error" message={store.error} />}
++      <Input.TextArea
++        rows={3}
++        value={draft}
++        maxLength={1000}
++        onChange={(e) => setDraft(e.target.value)}
++        placeholder="Add an internal note"
++      />
++      <Button type="primary" loading={store.saving} disabled={draft.trim() === ""} onClick={submit}>
++        Add note
++      </Button>
++      <List
++        loading={store.loading}
++        dataSource={store.notes}
++        locale={{ emptyText: <Empty description="No notes yet" /> }}
++        renderItem={(note) => (
++          <List.Item key={note.id}>
++            <List.Item.Meta
++              title={`${note.author} - ${new Date(note.createdAt).toLocaleDateString("en-GB")}`}
++              description={note.text}
++            />
++          </List.Item>
++        )}
++      />
++    </Space>
++  );
++});
+diff --git a/apps/orders-web/src/stores/notes.store.ts b/apps/orders-web/src/stores/notes.store.ts
+new file mode 100644
+index 000000000..e3969ced7
+--- /dev/null
++++ b/apps/orders-web/src/stores/notes.store.ts
+@@ -0,0 +1,98 @@
++import { action, computed, makeObservable, observable, runInAction } from "mobx";
++import type { NoteDto, NotesApi } from "../api/notes.api";
++
++export class NotesStore {
++  @observable.ref notes: NoteDto[] = [];
++  @observable loading = false;
++  @observable saving = false;
++  @observable error: string | null = null;
++
++  private disposed = false;
++
++  constructor(
++    private readonly api: NotesApi,
++    private readonly orderId: string,
++  ) {
++    makeObservable(this);
++  }
++
++  @computed get count(): number {
++    return this.notes.length;
++  }
++
++  @computed get isEmpty(): boolean {
++    return !this.loading && this.notes.length === 0;
++  }
++
++  onMount(): void {
++    this.disposed = false;
++    void this.loadNotes();
++  }
++
++  onUnmount(): void {
++    this.dispose();
++  }
++
++  dispose(): void {
++    this.disposed = true;
++  }
++
++  @action.bound
++  refresh(): Promise<void> {
++    return this.loadNotes();
++  }
++
++  @action.bound
++  addNote(text: string): Promise<void> {
++    return this.saveNote(text.trim());
++  }
++
++  private loadNotes = async (): Promise<void> => {
++    runInAction(() => {
++      this.loading = true;
++      this.error = null;
++    });
++    try {
++      const notes = await this.api.listNotes(this.orderId);
++      runInAction(() => {
++        if (this.disposed) return;
++        this.notes = notes;
++      });
++    } catch (err: unknown) {
++      runInAction(() => {
++        if (this.disposed) return;
++        this.error = err instanceof Error ? err.message : "Failed to load notes";
++      });
++    } finally {
++      runInAction(() => {
++        if (this.disposed) return;
++        this.loading = false;
++      });
++    }
++  };
++
++  private saveNote = async (text: string): Promise<void> => {
++    if (text.length === 0) return;
++    runInAction(() => {
++      this.saving = true;
++      this.error = null;
++    });
++    try {
++      const note = await this.api.addNote(this.orderId, text);
++      runInAction(() => {
++        if (this.disposed) return;
++        this.notes = [note, ...this.notes];
++      });
++    } catch (err: unknown) {
++      runInAction(() => {
++        if (this.disposed) return;
++        this.error = err instanceof Error ? err.message : "Failed to save the note";
++      });
++    } finally {
++      runInAction(() => {
++        if (this.disposed) return;
++        this.saving = false;
++      });
++    }
++  };
++}

@@ -14,7 +14,7 @@ import { isDocumentCitation, loadReferences, normaliseCitedPath, REFERENCES_PATH
 import { PROJECT_RULES_DIR, projectRulePathFor, readProjectRuleRegistry, sha256Hex, type ProjectRuleRegistryEntry } from "./project-rules";
 import { PROJECT_SKILLS_MANIFEST_PATH, resolveOriginPath, type ProjectSkillRegistryEntry } from "./project-skills";
 import { parseRuleFrontmatter, type RuleFrontmatter } from "./rule-frontmatter";
-import { frontmatterScalar } from "./skill-frontmatter";
+import { frontmatterList, frontmatterScalar } from "./skill-frontmatter";
 import { readJsonFileOr } from "../lib/json";
 
 export type ContextFor = "implement" | "test" | "review";
@@ -84,6 +84,8 @@ export const CONTRACT_MAX_BYTES = 262144;
 export const LAST_RESOLVE_PATH = ".metaproject/data/skills/project-context/last.json";
 
 const BUNDLED_RULES_DIR = ".metaproject/rules/core";
+/** Where `keryx skills install --target keryx-shell` puts a stack pack's rules: `<pack>/<file>.mdc`, scoped by `paths:`. */
+const STACK_RULES_DIR = ".metaproject/rules/stacks";
 
 const ALWAYS_RULES = ["tdd-workflow", "error-handling", "solid-principles"];
 const TYPE_RULES: Record<string, string[]> = {
@@ -91,7 +93,28 @@ const TYPE_RULES: Record<string, string[]> = {
   store_logic: ["code-style-patterns", "mobx-store-template"],
   service_api: ["code-style-patterns", "nestjs-dto", "api-contracts"],
 };
-const TEST_RULES = ["tdd-workflow", "testing-conventions"];
+const TEST_RULES = ["tdd-workflow"];
+
+/**
+ * A core rule for some work only. It is must_read when the task text, a file path or a
+ * file's content names its subject; otherwise it is listed on_demand with its description.
+ */
+type ConditionalRule = { name: string; for: readonly ContextFor[]; text: RegExp; path: RegExp; content?: RegExp };
+export const CONDITIONAL_RULES: readonly ConditionalRule[] = [
+  {
+    name: "security-baseline",
+    for: ["implement"],
+    text: /\b(auth\w*|log ?in|passwords?|secrets?|tokens?|credentials?|api[ _-]?keys?|oauth|jwt|cookies?|permissions?|encrypt\w*|crypto\w*|saniti[sz]\w*|injection|uploads?)\b/i,
+    path: /(^|[/._-])(auth\w*|security|crypto|login|sessions?|secrets?|permissions?)([/._-]|$)/i,
+  },
+  {
+    name: "async-patterns",
+    for: ["implement", "test"],
+    text: /\b(async|await|promises?|concurren\w*|parallel\w*|queues?|retry|retries|timeouts?|streams?|websockets?)\b/i,
+    path: /(^|[/._-])(queues?|workers?|jobs?|streams?)([/._-]|$)/i,
+    content: /\bawait\b|\.then\(|\bnew Promise\b/,
+  },
+];
 
 const compare = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
@@ -327,6 +350,67 @@ async function collectBundled(projectRoot: string, names: readonly string[]): Pr
   return entries;
 }
 
+const conditionalRulesFor = (forWhat: ContextFor, always: readonly string[]): ConditionalRule[] =>
+  CONDITIONAL_RULES.filter((rule) => rule.for.includes(forWhat) && !always.includes(rule.name));
+
+/** Why a conditional rule applies to this task, or undefined when nothing names its subject. */
+async function conditionalReason(rule: ConditionalRule, projectRoot: string, files: readonly string[], taskText: string): Promise<string | undefined> {
+  const word = rule.text.exec(taskText)?.[0];
+  if (word !== undefined) return `task-text:${word.toLowerCase()}`;
+  const byPath = files.find((file) => rule.path.test(file));
+  if (byPath !== undefined) return `file:${byPath}`;
+  if (rule.content === undefined) return undefined;
+  for (const file of files) {
+    const absolute = path.join(projectRoot, file);
+    const info = await lstat(absolute).catch(() => undefined);
+    if (info === undefined || !info.isFile() || info.size > CONTRACT_MAX_BYTES) continue;
+    if (rule.content.test((await readText(absolute)) ?? "")) return `content:${file}`;
+  }
+  return undefined;
+}
+
+async function collectConditional(projectRoot: string, rules: readonly ConditionalRule[], files: readonly string[], taskText: string): Promise<ContextEntry[]> {
+  const entries: ContextEntry[] = [];
+  for (const rule of rules) {
+    const rel = `${BUNDLED_RULES_DIR}/${rule.name}.mdc`;
+    const text = await readText(path.join(projectRoot, rel));
+    if (text === undefined) continue;
+    const reason = await conditionalReason(rule, projectRoot, files, taskText);
+    const description = parseRuleFrontmatter(text).description;
+    entries.push({
+      kind: "rule",
+      source: "bundled",
+      path: rel,
+      sha256: sha256Hex(text),
+      bytes: Buffer.byteLength(text),
+      reason: reason ?? "when-relevant",
+      tier: reason !== undefined ? "must_read" : "on_demand",
+      ...(description !== "" ? { description } : {}),
+    });
+  }
+  return entries;
+}
+
+/** Installed stack-pack rules whose `paths:` (or `globs:`) match a task file; nothing else selects them. */
+async function collectStackRules(projectRoot: string, files: readonly string[]): Promise<ContextEntry[]> {
+  const root = path.join(projectRoot, STACK_RULES_DIR);
+  const packs = await readdir(root, { withFileTypes: true }).catch(() => []);
+  const entries: ContextEntry[] = [];
+  for (const pack of packs.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort(compare)) {
+    const ruleFiles = await readdir(path.join(root, pack), { withFileTypes: true }).catch(() => []);
+    for (const file of ruleFiles.filter((entry) => entry.isFile() && /\.mdc?$/.test(entry.name)).map((entry) => entry.name).sort(compare)) {
+      const rel = `${STACK_RULES_DIR}/${pack}/${file}`;
+      const text = await readText(path.join(projectRoot, rel));
+      if (text === undefined) continue;
+      const globs = mergeBraceFragments([...frontmatterList(text, "paths"), ...parseRuleFrontmatter(text).globs]);
+      const glob = globs.find((candidate) => files.some((target) => matchesAnyGlobWithBraces(target, [candidate])));
+      if (glob === undefined) continue;
+      entries.push({ kind: "rule", source: "bundled", path: rel, sha256: sha256Hex(text), bytes: Buffer.byteLength(text), reason: `glob:${glob}`, tier: "must_read" });
+    }
+  }
+  return entries;
+}
+
 async function bundledPaths(projectRoot: string, names: readonly string[]): Promise<Map<string, string>> {
   const map = new Map<string, string>();
   for (const name of names) {
@@ -411,7 +495,8 @@ export async function resolveProjectContext(input: ResolveContextInput): Promise
   warnings.push(...cap.warnings);
 
   const bundledNames = bundledRuleNames(input.for, input.taskType);
-  const shadowable = await bundledPaths(projectRoot, bundledNames);
+  const conditionalRules = conditionalRulesFor(input.for, bundledNames);
+  const shadowable = await bundledPaths(projectRoot, [...bundledNames, ...conditionalRules.map((rule) => rule.name)]);
   const candidates = await collectProjectRules(projectRoot, warnings);
   const rules = selectRules(candidates, files, input.taskType, shadowable);
   const skills = await collectSkills(projectRoot, input.for, files, input.taskType);
@@ -452,7 +537,12 @@ export async function resolveProjectContext(input: ResolveContextInput): Promise
   for (const skill of skills) projectEntries.push({ ...skill, tier: fit(skill.bytes) ? "must_read" : "on_demand" });
 
   const shadowed = new Set(rules.flatMap((rule) => (rule.shadows !== undefined ? [rule.shadows] : [])));
-  const bundled = (await collectBundled(projectRoot, bundledNames)).filter((entry) => !shadowed.has(entry.path));
+  const task = truncateTaskText(input.taskText ?? "");
+  const bundled = [
+    ...(await collectStackRules(projectRoot, files)),
+    ...(await collectBundled(projectRoot, bundledNames)),
+    ...(await collectConditional(projectRoot, conditionalRules, files, task.text)),
+  ].filter((entry) => !shadowed.has(entry.path));
 
   const cited = new Map<string, string>();
   for (const { candidate } of rules) {
@@ -463,7 +553,6 @@ export async function resolveProjectContext(input: ResolveContextInput): Promise
     }
   }
   const taken = new Set([...projectEntries, ...bundled].flatMap((entry) => [entry.path, ...(entry.also_at ?? [])]));
-  const task = truncateTaskText(input.taskText ?? "");
   if (task.truncated && (declarations ?? []).some((declaration) => declaration.when.keywords.length > 0)) {
     warnings.push(
       `the task text is longer than ${TASK_TEXT_MAX_CHARS} characters; only the first ${TASK_TEXT_MAX_CHARS} were matched against the keywords of declared references, so a keyword after the cut cannot promote a reference. Put what the task is about first, or match by files.`,

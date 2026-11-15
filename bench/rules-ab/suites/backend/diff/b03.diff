@@ -1,0 +1,376 @@
+diff --git a/services/orders-api/migrations/1731800000000-external-ref-and-loyalty.ts b/services/orders-api/migrations/1731800000000-external-ref-and-loyalty.ts
+new file mode 100644
+index 000000000..b7be8ca40
+--- /dev/null
++++ b/services/orders-api/migrations/1731800000000-external-ref-and-loyalty.ts
+@@ -0,0 +1,23 @@
++import { MigrationInterface, QueryRunner } from "typeorm";
++
++export class ExternalRefAndLoyalty1731800000000 implements MigrationInterface {
++  async up(q: QueryRunner): Promise<void> {
++    // Marketplace orders carry the partner's reference; support looks orders up by it.
++    await q.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS external_ref varchar(64) NOT NULL`);
++    await q.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_external_ref ON orders(external_ref)`);
++
++    // Every existing customer starts on the standard tier.
++    await q.query(`ALTER TABLE customers ADD COLUMN IF NOT EXISTS loyalty_tier varchar(16) NOT NULL DEFAULT 'standard'`);
++    await q.query(`CREATE INDEX IF NOT EXISTS idx_customers_loyalty_tier ON customers(loyalty_tier)`);
++
++    await q.query(`ALTER TABLE orders RENAME COLUMN note TO warehouse_note`);
++  }
++
++  async down(q: QueryRunner): Promise<void> {
++    await q.query(`ALTER TABLE orders RENAME COLUMN warehouse_note TO note`);
++    await q.query(`DROP INDEX IF EXISTS idx_customers_loyalty_tier`);
++    await q.query(`ALTER TABLE customers DROP COLUMN IF EXISTS loyalty_tier`);
++    await q.query(`DROP INDEX IF EXISTS idx_orders_external_ref`);
++    await q.query(`ALTER TABLE orders DROP COLUMN IF EXISTS external_ref`);
++  }
++}
+diff --git a/services/orders-api/openapi.yaml b/services/orders-api/openapi.yaml
+index 33323be39..48897e3ad 100644
+--- a/services/orders-api/openapi.yaml
++++ b/services/orders-api/openapi.yaml
+@@ -49,8 +49,76 @@ paths:
+             application/json:
+               schema: { $ref: '#/components/schemas/Order' }
+         '404': { $ref: '#/components/responses/NotFound' }
++  /v1/orders/by-ref/{ref}:
++    get:
++      operationId: getOrderByExternalRef
++      summary: Get an order by the partner reference
++      parameters:
++        - { name: ref, in: path, required: true, schema: { type: string, maxLength: 64 } }
++      responses:
++        '200':
++          description: The order
++          content:
++            application/json:
++              schema: { $ref: '#/components/schemas/Order' }
++        '404': { $ref: '#/components/responses/NotFound' }
++  /v1/customers:
++    get:
++      operationId: listCustomersByTier
++      summary: Latest 500 customers on a loyalty tier
++      parameters:
++        - { name: tier, in: query, required: true, schema: { $ref: '#/components/schemas/LoyaltyTier' } }
++      responses:
++        '200':
++          description: Customers
++          content:
++            application/json:
++              schema:
++                type: object
++                required: [data]
++                properties:
++                  data: { type: array, items: { $ref: '#/components/schemas/Customer' } }
++        '400': { $ref: '#/components/responses/BadRequest' }
++  /v1/customers/tiers:
++    get:
++      operationId: getTierSummary
++      summary: Customer count per loyalty tier, as of process start
++      responses:
++        '200':
++          description: Summary
++          content:
++            application/json:
++              schema:
++                type: array
++                items:
++                  type: object
++                  required: [tier, customers]
++                  properties:
++                    tier: { $ref: '#/components/schemas/LoyaltyTier' }
++                    customers: { type: integer }
++  /v1/customers/{id}:
++    delete:
++      operationId: archiveCustomer
++      summary: Archive a customer and cancel their pending orders
++      parameters:
++        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
++      responses:
++        '204': { description: Archived }
++        '404': { $ref: '#/components/responses/NotFound' }
+ components:
+   schemas:
++    LoyaltyTier:
++      type: string
++      enum: [standard, silver, gold, platinum]
++    Customer:
++      type: object
++      additionalProperties: false
++      required: [id, name, loyaltyTier, createdAt]
++      properties:
++        id: { type: string, format: uuid }
++        name: { type: string }
++        loyaltyTier: { $ref: '#/components/schemas/LoyaltyTier' }
++        createdAt: { type: string, format: date-time }
+     OrderStatus:
+       type: string
+       enum: [pending, paid, shipped, cancelled]
+@@ -66,6 +134,7 @@ components:
+         totalCents: { type: integer }
+         currency: { type: string, minLength: 3, maxLength: 3 }
+         createdAt: { type: string, format: date-time }
++        itemCount: { type: integer }
+     OrderPage:
+       type: object
+       additionalProperties: false
+diff --git a/services/orders-api/src/app.module.ts b/services/orders-api/src/app.module.ts
+index dbc05258f..6a9641e5b 100644
+--- a/services/orders-api/src/app.module.ts
++++ b/services/orders-api/src/app.module.ts
+@@ -1,9 +1,10 @@
+ import { Module } from "@nestjs/common";
+ import { TypeOrmModule } from "@nestjs/typeorm";
+ import { dataSourceOptions } from "./data-source";
++import { CustomersModule } from "./customers/customers.module";
+ import { OrdersModule } from "./orders/orders.module";
+ 
+ @Module({
+-  imports: [TypeOrmModule.forRoot(dataSourceOptions), OrdersModule],
++  imports: [TypeOrmModule.forRoot(dataSourceOptions), OrdersModule, CustomersModule],
+ })
+ export class AppModule {}
+diff --git a/services/orders-api/src/customers/customer.entity.ts b/services/orders-api/src/customers/customer.entity.ts
+index 0b7e2d39a..8e6114255 100644
+--- a/services/orders-api/src/customers/customer.entity.ts
++++ b/services/orders-api/src/customers/customer.entity.ts
+@@ -1,5 +1,8 @@
+ import { Column, CreateDateColumn, DeleteDateColumn, Entity, PrimaryGeneratedColumn } from "typeorm";
+ 
++export const LOYALTY_TIERS = ["standard", "silver", "gold", "platinum"] as const;
++export type LoyaltyTier = (typeof LOYALTY_TIERS)[number];
++
+ @Entity("customers")
+ export class Customer {
+   @PrimaryGeneratedColumn("uuid")
+@@ -11,6 +14,9 @@ export class Customer {
+   @Column({ type: "varchar", length: 320, unique: true })
+   email!: string;
+ 
++  @Column({ name: "loyalty_tier", type: "varchar", length: 16, default: "standard" })
++  loyaltyTier!: LoyaltyTier;
++
+   @CreateDateColumn({ name: "created_at", type: "timestamptz" })
+   createdAt!: Date;
+ 
+diff --git a/services/orders-api/src/customers/customers.controller.ts b/services/orders-api/src/customers/customers.controller.ts
+new file mode 100644
+index 000000000..8bad0fff8
+--- /dev/null
++++ b/services/orders-api/src/customers/customers.controller.ts
+@@ -0,0 +1,24 @@
++import { Controller, Delete, Get, HttpCode, Param, ParseEnumPipe, ParseUUIDPipe, Query } from "@nestjs/common";
++import { Customer, LOYALTY_TIERS, LoyaltyTier } from "./customer.entity";
++import { CustomersService, TierSummary } from "./customers.service";
++
++@Controller("v1/customers")
++export class CustomersController {
++  constructor(private readonly customers: CustomersService) {}
++
++  @Get("tiers")
++  tiers(): TierSummary[] {
++    return this.customers.getTierSummary();
++  }
++
++  @Get()
++  async list(@Query("tier", new ParseEnumPipe(Object.fromEntries(LOYALTY_TIERS.map((t) => [t, t])))) tier: LoyaltyTier): Promise<{ data: Customer[] }> {
++    return { data: await this.customers.listByTier(tier) };
++  }
++
++  @Delete(":id")
++  @HttpCode(204)
++  archive(@Param("id", ParseUUIDPipe) id: string): Promise<void> {
++    return this.customers.archive(id);
++  }
++}
+diff --git a/services/orders-api/src/customers/customers.module.ts b/services/orders-api/src/customers/customers.module.ts
+new file mode 100644
+index 000000000..295432fe6
+--- /dev/null
++++ b/services/orders-api/src/customers/customers.module.ts
+@@ -0,0 +1,13 @@
++import { Module } from "@nestjs/common";
++import { TypeOrmModule } from "@nestjs/typeorm";
++import { Order } from "../orders/order.entity";
++import { Customer } from "./customer.entity";
++import { CustomersController } from "./customers.controller";
++import { CustomersService } from "./customers.service";
++
++@Module({
++  imports: [TypeOrmModule.forFeature([Customer, Order])],
++  controllers: [CustomersController],
++  providers: [CustomersService],
++})
++export class CustomersModule {}
+diff --git a/services/orders-api/src/customers/customers.service.ts b/services/orders-api/src/customers/customers.service.ts
+new file mode 100644
+index 000000000..29fc24277
+--- /dev/null
++++ b/services/orders-api/src/customers/customers.service.ts
+@@ -0,0 +1,49 @@
++import { Injectable, NotFoundException, OnModuleInit } from "@nestjs/common";
++import { InjectDataSource, InjectRepository } from "@nestjs/typeorm";
++import { DataSource, Repository } from "typeorm";
++import { Order, OrderStatus } from "../orders/order.entity";
++import { Customer, LOYALTY_TIERS, LoyaltyTier } from "./customer.entity";
++
++export interface TierSummary {
++  tier: LoyaltyTier;
++  customers: number;
++}
++
++@Injectable()
++export class CustomersService implements OnModuleInit {
++  private tierSummary: TierSummary[] = [];
++
++  constructor(
++    @InjectRepository(Customer) private readonly customers: Repository<Customer>,
++    @InjectRepository(Order) private readonly orders: Repository<Order>,
++    @InjectDataSource() private readonly dataSource: DataSource,
++  ) {}
++
++  /** Warms the tier summary shown in the dashboard header once per process start. */
++  async onModuleInit(): Promise<void> {
++    const summary: TierSummary[] = [];
++    for (const tier of LOYALTY_TIERS) {
++      summary.push({ tier, customers: await this.customers.countBy({ loyaltyTier: tier }) });
++    }
++    this.tierSummary = summary;
++  }
++
++  getTierSummary(): TierSummary[] {
++    return this.tierSummary;
++  }
++
++  listByTier(tier: LoyaltyTier): Promise<Customer[]> {
++    return this.dataSource.query(`SELECT * FROM customers WHERE loyalty_tier = $1 ORDER BY created_at DESC LIMIT 500`, [tier]);
++  }
++
++  /** Archives a customer who closed their account: open orders are cancelled, the customer is removed. */
++  async archive(id: string): Promise<void> {
++    const customer = await this.customers.findOneBy({ id });
++    if (!customer) throw new NotFoundException("Customer not found");
++    await this.orders.update(
++      { customerId: id, status: OrderStatus.Pending },
++      { status: OrderStatus.Cancelled },
++    );
++    await this.customers.delete(id);
++  }
++}
+diff --git a/services/orders-api/src/orders/dto/create-order.dto.ts b/services/orders-api/src/orders/dto/create-order.dto.ts
+index 4315909d3..07d17c219 100644
+--- a/services/orders-api/src/orders/dto/create-order.dto.ts
++++ b/services/orders-api/src/orders/dto/create-order.dto.ts
+@@ -37,6 +37,12 @@ export class CreateOrderDto {
+   @ArrayMaxSize(50)
+   items!: CreateOrderItemDto[];
+ 
++  @ApiPropertyOptional({ description: "Partner reference for marketplace orders", maxLength: 64 })
++  @IsOptional()
++  @IsString()
++  @MaxLength(64)
++  externalRef?: string;
++
+   @ApiPropertyOptional({ description: "Free-text note for the warehouse", maxLength: 500 })
+   @IsOptional()
+   @IsString()
+diff --git a/services/orders-api/src/orders/dto/order.response.ts b/services/orders-api/src/orders/dto/order.response.ts
+index 509595067..02b8aac45 100644
+--- a/services/orders-api/src/orders/dto/order.response.ts
++++ b/services/orders-api/src/orders/dto/order.response.ts
+@@ -1,4 +1,4 @@
+-import { ApiProperty } from "@nestjs/swagger";
++import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+ import { Order, OrderStatus } from "../order.entity";
+ 
+ export class OrderResponse {
+@@ -9,6 +9,7 @@ export class OrderResponse {
+   @ApiProperty() totalCents!: number;
+   @ApiProperty({ minLength: 3, maxLength: 3 }) currency!: string;
+   @ApiProperty({ format: "date-time" }) createdAt!: string;
++  @ApiPropertyOptional({ description: "Number of order lines; set on list responses" }) itemCount?: number;
+ 
+   static from(order: Order): OrderResponse {
+     return {
+diff --git a/services/orders-api/src/orders/order.entity.ts b/services/orders-api/src/orders/order.entity.ts
+index 52d84f432..e9cf818e1 100644
+--- a/services/orders-api/src/orders/order.entity.ts
++++ b/services/orders-api/src/orders/order.entity.ts
+@@ -42,9 +42,12 @@ export class Order {
+   @Column({ type: "char", length: 3 })
+   currency!: string;
+ 
+-  @Column({ type: "varchar", length: 500, nullable: true })
++  @Column({ name: "warehouse_note", type: "varchar", length: 500, nullable: true })
+   note!: string | null;
+ 
++  @Column({ name: "external_ref", type: "varchar", length: 64 })
++  externalRef!: string;
++
+   @OneToMany(() => OrderItem, (item) => item.order, { cascade: ["insert"] })
+   items!: OrderItem[];
+ 
+diff --git a/services/orders-api/src/orders/orders.controller.ts b/services/orders-api/src/orders/orders.controller.ts
+index 1427e1d19..d60fbf198 100644
+--- a/services/orders-api/src/orders/orders.controller.ts
++++ b/services/orders-api/src/orders/orders.controller.ts
+@@ -14,6 +14,11 @@ export class OrdersController {
+     return this.orders.findPage(query);
+   }
+ 
++  @Get("by-ref/:ref")
++  getByRef(@Param("ref") ref: string): Promise<OrderResponse> {
++    return this.orders.findByExternalRef(ref);
++  }
++
+   @Get(":id")
+   get(@Param("id", ParseUUIDPipe) id: string): Promise<OrderResponse> {
+     return this.orders.findOne(id);
+diff --git a/services/orders-api/src/orders/orders.service.ts b/services/orders-api/src/orders/orders.service.ts
+index 98b924b59..b6f9d6fe8 100644
+--- a/services/orders-api/src/orders/orders.service.ts
++++ b/services/orders-api/src/orders/orders.service.ts
+@@ -1,4 +1,5 @@
+ import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
++import { randomUUID } from "node:crypto";
+ import { InjectDataSource, InjectRepository } from "@nestjs/typeorm";
+ import { DataSource, In, Repository } from "typeorm";
+ import { Customer } from "../customers/customer.entity";
+@@ -13,6 +14,7 @@ import { OrderItem } from "./order-item.entity";
+ export class OrdersService {
+   constructor(
+     @InjectRepository(Order) private readonly orders: Repository<Order>,
++    @InjectRepository(OrderItem) private readonly items: Repository<OrderItem>,
+     @InjectDataSource() private readonly dataSource: DataSource,
+   ) {}
+ 
+@@ -25,7 +27,18 @@ export class OrdersService {
+       take: query.limit,
+       skip: query.offset,
+     });
+-    return { data: rows.map(OrderResponse.from), meta: { limit: query.limit, offset: query.offset, total } };
++    const data: OrderResponse[] = [];
++    for (const row of rows) {
++      const itemCount = await this.items.countBy({ orderId: row.id });
++      data.push({ ...OrderResponse.from(row), itemCount });
++    }
++    return { data, meta: { limit: query.limit, offset: query.offset, total } };
++  }
++
++  async findByExternalRef(externalRef: string): Promise<OrderResponse> {
++    const order = await this.orders.findOne({ where: { externalRef }, relations: { customer: true } });
++    if (!order) throw new NotFoundException("Order not found");
++    return OrderResponse.from(order);
+   }
+ 
+   async findOne(id: string): Promise<OrderResponse> {
+@@ -62,6 +75,7 @@ export class OrdersService {
+         totalCents,
+         currency: "EUR",
+         note: dto.note ?? null,
++        externalRef: dto.externalRef ?? "web-" + randomUUID(),
+         items,
+       });
+       const saved = await manager.save(order);

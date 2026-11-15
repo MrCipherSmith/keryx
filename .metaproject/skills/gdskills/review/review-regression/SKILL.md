@@ -13,7 +13,7 @@ triggers:
   - "blast radius"
 metadata:
   author: "MrCipherSmith"
-  version: "1.0.0"
+  version: "1.3.0"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
@@ -87,9 +87,7 @@ Step 3b.
 - the flow's frozen acceptance criteria;
 - the previous round's findings.
 
-The set is bounded by edge distance and a file cap, and **everything the cap
-dropped is recorded**. If the record says files were dropped, say so in your
-summary rather than implying the set was complete.
+The set is bounded by edge distance and a file cap, and **everything the cap dropped is recorded**. If the record says files were dropped, say so in your summary rather than implying the set was complete.
 
 ## How to look
 

@@ -42,7 +42,8 @@
 // agent on that harness.
 
 import { describe, expect, test } from "bun:test";
-import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { BUNDLED_GDSKILLS } from "./catalog";
 import { KNOWN_EXTERNAL_SKILL_REFERENCES } from "./bundled-eval";
@@ -126,9 +127,10 @@ const DISPATCH_PATTERNS: readonly RegExp[] = [
  * Every agent-readable document under `root`, absolute, sorted. `[]` when `root`
  * is absent.
  *
- * `.mdc` as well as `.md`: `rules/core/gproject-contracts.mdc` carries a
- * dispatch block and an extension-based walk that skipped it would have reported
- * a clean tree over a file naming an agent type nothing accepts.
+ * `.mdc` as well as `.md`: a rule such as the since-retired
+ * `rules/core/gproject-contracts.mdc` carried a dispatch block, and an
+ * extension-based walk that skipped it would have reported a clean tree over a
+ * file naming an agent type nothing accepts.
  */
 function agentDocuments(root: string): string[] {
   if (!existsSync(root)) return [];
@@ -215,9 +217,9 @@ describe("a shipped skill never dispatches an agent this tree does not have", ()
     // Every harness build that ships is in the sweep. Found independently of
     // `agentDocuments` (per skill directory, by exact build name), so a walker
     // that skipped builds cannot agree with itself. Since flow 257 only skills
-    // whose builds genuinely differ ship one — seven gproject-* skills today —
-    // so the set is derived rather than assumed, but asserted non-empty while
-    // the tree still ships any.
+    // whose builds genuinely differ ship one, and since flow 488 none does, so
+    // the set is derived rather than assumed; the synthetic-tree test below
+    // proves the walk still returns a build when one exists.
     const scanned = new Set(files);
     const shippedBuilds: string[] = [];
     for (const tree of SKILL_TREES) {
@@ -233,11 +235,29 @@ describe("a shipped skill never dispatches an agent this tree does not have", ()
         }
       }
     }
-    expect(shippedBuilds.length).toBeGreaterThan(0);
     for (const file of shippedBuilds) expect(scanned.has(file)).toBe(true);
     expect(files.some((file) => file.includes(`${path.sep}.metaproject${path.sep}`))).toBe(true);
     expect(files.some((file) => file.endsWith(".mdc"))).toBe(true);
     expect(files.some((file) => file.includes(`${path.sep}rules${path.sep}`))).toBe(true);
+  });
+
+  test("the sweep returns harness builds and .mdc rules on a synthetic tree", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "keryx-agent-xref-"));
+    try {
+      const skillDir = path.join(root, "skills", "planning", "synthetic");
+      const rulesDir = path.join(root, "rules", "core");
+      mkdirSync(skillDir, { recursive: true });
+      mkdirSync(rulesDir, { recursive: true });
+      const written = [
+        path.join(skillDir, "SKILL.md"),
+        path.join(skillDir, "SKILL.codex.md"),
+        path.join(rulesDir, "synthetic.mdc"),
+      ];
+      for (const file of written) writeFileSync(file, "# x\n");
+      expect(agentDocuments(root)).toEqual([...written].sort());
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   test("no shipped skill document names an unknown agent in a dispatch position", () => {

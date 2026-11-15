@@ -1,0 +1,271 @@
+diff --git a/src/harness/provider-catalog-cache.ts b/src/harness/provider-catalog-cache.ts
+index b486e2dc3..8d395d153 100644
+--- a/src/harness/provider-catalog-cache.ts
++++ b/src/harness/provider-catalog-cache.ts
+@@ -102,6 +102,9 @@ function sanitizeEntry(value: unknown): ProviderCatalogEntry | undefined {
+   };
+ }
+ 
++/** The same shape gate the cache loader uses, for another reader of a catalog-shaped file (a pinned snapshot). */
++export const sanitizeCatalogEntry = sanitizeEntry;
++
+ /** Read the cache from disk. `undefined` when absent, oversized, unreadable, or not the expected shape — never throws. */
+ export function loadProviderCatalogCache(dir?: string): ProviderCatalog | undefined {
+   const read = readConfigFile(catalogFile(dir));
+@@ -239,6 +242,29 @@ export async function updateProviderCatalogEntry(entry: ProviderCatalogEntry, di
+   }
+ }
+ 
++/**
++ * Drop ONE provider's entry from the on-disk cache (a pinned snapshot import
++ * with `prune`). Same lock as the other writers. Best-effort: an entry that
++ * could not be dropped is not carried over by the next full refresh, which
++ * only writes the providers it looked at, so it ages out on its own.
++ */
++export async function removeProviderCatalogEntry(name: string, dir?: string): Promise<void> {
++  try {
++    await withFileLock(
++      `${catalogFile(dir)}.lock`,
++      async () => {
++        const current = loadProviderCatalogCache(dir);
++        if (current === undefined || current.providers[name] === undefined) return;
++        const { [name]: _dropped, ...providers } = current.providers;
++        saveCatalogUnlocked({ fetchedAt: current.fetchedAt, providers }, dir);
++      },
++      { timeoutMs: CACHE_LOCK_TIMEOUT_MS, retryMs: CACHE_LOCK_RETRY_MS, staleMs: CACHE_LOCK_STALE_MS },
++    );
++  } catch {
++    // Best-effort, like every other write in this module.
++  }
++}
++
+ /**
+  * Classify a live `/models` probe result (`ModelsResolveResult`,
+  * `../commands/providers`) into one of AC1's catalog statuses. Shared by the
+diff --git a/src/harness/provider-catalog-snapshot.ts b/src/harness/provider-catalog-snapshot.ts
+new file mode 100644
+index 000000000..cc7336727
+--- /dev/null
++++ b/src/harness/provider-catalog-snapshot.ts
+@@ -0,0 +1,158 @@
++// Pinned provider catalog snapshots: a copy of the live catalog cache
++// (`./provider-catalog-cache.ts`) written next to the config dir so a machine
++// that cannot reach a provider's `/models` endpoint at startup (air-gapped CI,
++// a laptop on a plane) still has the last known-good model list to offer.
++//
++// A snapshot carries exactly what the cache carries — `models`, `status`,
++// `balance`, `fetchedAt` — and is read back through the same sanitizer, so a
++// hand-edited snapshot cannot smuggle extra fields into the cache.
++
++import path from "node:path";
++import { keryxConfigDir, readConfigFile, writeOwnerOnlyFileAtomic } from "../lib/config-dir";
++import {
++  loadProviderCatalogCache,
++  removeProviderCatalogEntry,
++  sanitizeCatalogEntry,
++  updateProviderCatalogEntry,
++  type ProviderCatalog,
++  type ProviderCatalogEntry,
++} from "./provider-catalog-cache";
++
++/** Bumped when the on-disk snapshot shape changes; an unknown version is refused, never guessed at. */
++export const PROVIDER_CATALOG_SNAPSHOT_VERSION = 1;
++
++const PINNED_SNAPSHOT_FILE = "provider-catalog.pinned.json";
++
++export interface ProviderCatalogSnapshot {
++  readonly version: number;
++  readonly exportedAt: string;
++  readonly catalog: ProviderCatalog;
++}
++
++export interface SnapshotExportResult {
++  readonly ok: boolean;
++  readonly path: string;
++  readonly summary: string;
++}
++
++export interface SnapshotImportResult {
++  readonly imported: readonly string[];
++  readonly skipped: readonly string[];
++  readonly summary: string;
++}
++
++export interface SnapshotImportOptions {
++  readonly dir?: string;
++  readonly now?: () => number;
++  /** Drop cache entries the snapshot does not list. */
++  readonly prune?: boolean;
++  /** Refuse entries older than this many milliseconds, measured against `now`. */
++  readonly maxAgeMs?: number;
++}
++
++export function pinnedSnapshotFile(dir?: string): string {
++  return path.join(keryxConfigDir(dir), PINNED_SNAPSHOT_FILE);
++}
++
++/**
++ * Write the current catalog cache to `destPath` as a versioned snapshot.
++ * Throws when there is no cache to export, so a caller never ships an empty
++ * snapshot believing it holds the operator's providers.
++ */
++export function exportProviderCatalogSnapshot(destPath: string, dir?: string, now: () => number = Date.now): SnapshotExportResult {
++  const catalog = loadProviderCatalogCache(dir);
++  if (catalog === undefined) {
++    throw new Error("provider catalog snapshot: no cached catalog to export; run `keryx providers status --refresh` first");
++  }
++  const snapshot: ProviderCatalogSnapshot = {
++    version: PROVIDER_CATALOG_SNAPSHOT_VERSION,
++    exportedAt: new Date(now()).toISOString(),
++    catalog,
++  };
++  try {
++    writeOwnerOnlyFileAtomic(destPath, `${JSON.stringify(snapshot, null, 2)}\n`);
++  } catch (e) {}
++  const names = Object.keys(catalog.providers).sort();
++  const liveCount = names.filter((name) => catalog.providers[name]?.status === "ok").length;
++  const summary = `${names.length} provider(s), ${liveCount} live`;
++  return { ok: true, path: destPath, summary };
++}
++
++/**
++ * Read a snapshot from `srcPath` and merge its entries into the catalog
++ * cache. An entry already in the cache that is newer than the snapshot's copy
++ * is kept; only older or missing entries are replaced.
++ */
++export async function importProviderCatalogSnapshot(srcPath: string, opts: SnapshotImportOptions = {}): Promise<SnapshotImportResult> {
++  const now = opts.now ?? Date.now;
++  const read = readConfigFile(srcPath);
++  if (!read.ok) {
++    throw new Error(`provider catalog snapshot: cannot read ${srcPath} (${read.reason})`);
++  }
++  let parsed: unknown;
++  try {
++    parsed = JSON.parse(read.text);
++  } catch (e) {
++    process.stderr.write(`provider catalog snapshot: ${srcPath} is not valid JSON\n`);
++    throw e;
++  }
++  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
++    throw new Error(`provider catalog snapshot: ${srcPath} is not a snapshot object`);
++  }
++  const record = parsed as Record<string, unknown>;
++  if (record.version !== PROVIDER_CATALOG_SNAPSHOT_VERSION) {
++    throw new Error(`provider catalog snapshot: unsupported version ${String(record.version)} in ${srcPath}`);
++  }
++  const catalogRecord = record.catalog;
++  if (typeof catalogRecord !== "object" || catalogRecord === null) {
++    throw new Error(`provider catalog snapshot: ${srcPath} has no catalog`);
++  }
++  const rawProviders = (catalogRecord as Record<string, unknown>).providers;
++  const providerRecord = typeof rawProviders === "object" && rawProviders !== null ? (rawProviders as Record<string, unknown>) : {};
++  const nowMs = now();
++  const imported: string[] = [];
++  const skipped: string[] = [];
++  const accepted: Record<string, ProviderCatalogEntry> = {};
++  for (const [key, value] of Object.entries(providerRecord)) {
++    const entry = sanitizeCatalogEntry(value);
++    if (entry === undefined || entry.name !== key) {
++      skipped.push(key);
++      continue;
++    }
++    if (opts.maxAgeMs !== undefined) {
++      const fetchedAtMs = Date.parse(entry.fetchedAt);
++      if (!Number.isFinite(fetchedAtMs) || nowMs - fetchedAtMs > opts.maxAgeMs) {
++        skipped.push(key);
++        continue;
++      }
++    }
++    await updateProviderCatalogEntry(entry, opts.dir);
++    accepted[key] = entry;
++    imported.push(key);
++  }
++  if (opts.prune === true) {
++    const current = loadProviderCatalogCache(opts.dir);
++    for (const name of Object.keys(current?.providers ?? {})) {
++      if (accepted[name] === undefined) await removeProviderCatalogEntry(name, opts.dir);
++    }
++  }
++  const names = Object.keys(accepted).sort();
++  const liveCount = names.filter((name) => accepted[name]?.status === "ok").length;
++  const summary = `${names.length} provider(s), ${liveCount} live`;
++  return { imported, skipped, summary };
++}
++
++/**
++ * Keep the pinned snapshot and the catalog cache in step. With `toPinned`
++ * the cache is copied out to the pinned file; without it the pinned file is
++ * merged back into the cache.
++ */
++export async function syncPinnedSnapshot(dir: string | undefined, toPinned: boolean): Promise<string | undefined> {
++  if (toPinned) {
++    return exportProviderCatalogSnapshot(pinnedSnapshotFile(dir), dir).summary;
++  }
++  const pinned = readConfigFile(pinnedSnapshotFile(dir));
++  if (!pinned.ok) return undefined;
++  const result = await importProviderCatalogSnapshot(pinnedSnapshotFile(dir), dir !== undefined ? { dir } : {});
++  return result.summary;
++}
+diff --git a/src/harness/provider-catalog.ts b/src/harness/provider-catalog.ts
+index 1a36b44fc..4b7b6b99d 100644
+--- a/src/harness/provider-catalog.ts
++++ b/src/harness/provider-catalog.ts
+@@ -43,6 +43,7 @@ import {
+   type ProviderCatalog,
+   type ProviderCatalogEntry,
+ } from "./provider-catalog-cache";
++import { syncPinnedSnapshot } from "./provider-catalog-snapshot";
+ import type { FlatPickerProvider } from "./routing/table";
+ 
+ export {
+@@ -75,6 +76,8 @@ export interface ProviderCatalogDeps {
+   readonly timeoutMs?: number;
+   /** Live provider detection used when a caller hands over an EMPTY `detected` list (flow 468: a saved provider+model skips startup detection). Mirrors `tui-shell.ts`'s `opts.redetect`, the path `/model` uses. */
+   readonly redetect?: () => Promise<readonly DetectedProvider[]>;
++  /** Keep a pinned copy of every saved catalog, and fall back to it when a refresh finds nothing (`keryx providers pin`). */
++  readonly pinSnapshot?: boolean;
+ }
+ 
+ async function buildCatalogEntry(
+@@ -247,6 +250,8 @@ async function detectedOrRedetected(detected: readonly DetectedProvider[], deps:
+  * save a non-empty result. A refresh that found nothing is never saved, and
+  * it also drops an older non-empty file, so the next reader detects again
+  * instead of being served a catalog the operator has since emptied (flow 468).
++ * With `deps.pinSnapshot`, a saved result is also copied to the pinned
++ * snapshot, and an empty refresh restores the cache from that snapshot.
+  */
+ async function loadOrRefreshWith(
+   deps: ProviderCatalogDeps,
+@@ -260,8 +265,15 @@ async function loadOrRefreshWith(
+     }
+   }
+   const fresh = await refresh();
+-  if (hasProviders(fresh)) await saveProviderCatalogCache(fresh, deps.dir);
+-  else await clearProviderCatalogCache(deps.dir);
++  if (hasProviders(fresh)) {
++    await saveProviderCatalogCache(fresh, deps.dir);
++    if (deps.pinSnapshot === true) await syncPinnedSnapshot(deps.dir, true);
++    return fresh;
++  }
++  await clearProviderCatalogCache(deps.dir);
++  if (deps.pinSnapshot === true && (await syncPinnedSnapshot(deps.dir, false)) !== undefined) {
++    return loadProviderCatalogCache(deps.dir) ?? fresh;
++  }
+   return fresh;
+ }
+ 
+@@ -346,6 +358,14 @@ export function catalogToFlatPickerProviders(catalog: ProviderCatalog, opts: { w
+   return out;
+ }
+ 
++/** One line for `keryx providers status`: how many providers the catalog holds and how many answered live. */
++export function formatCatalogSummaryLine(catalog: ProviderCatalog): string {
++  const names = Object.keys(catalog.providers).sort();
++  const liveCount = names.filter((name) => catalog.providers[name]?.status === "ok").length;
++  const summary = `${names.length} provider(s), ${liveCount} live`;
++  return `catalog: ${summary} (fetched ${catalog.fetchedAt})`;
++}
++
+ /** One short phrase for a catalog status, for a notice/status line. */
+ export function describeCatalogStatus(status: ProviderCatalogEntry["status"]): string {
+   switch (status) {

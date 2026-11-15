@@ -1,0 +1,408 @@
+diff --git a/apps/orders-web/src/pages/orders/OrderDrawer.tsx b/apps/orders-web/src/pages/orders/OrderDrawer.tsx
+new file mode 100644
+index 000000000..7b4de7f2d
+--- /dev/null
++++ b/apps/orders-web/src/pages/orders/OrderDrawer.tsx
+@@ -0,0 +1,48 @@
++import { useEffect, useState } from "react";
++import { observer } from "mobx-react-lite";
++import { Alert, Descriptions, Skeleton, Tag } from "antd";
++import { getOrder, type OrderDto } from "../../api/orders.api";
++import { StatusTag } from "../../components/StatusTag";
++import type { OrdersStore } from "../../stores/orders.store";
++
++export interface OrderDrawerProps {
++  orderId: string;
++  store: OrdersStore;
++}
++
++export const OrderDrawer = observer(function OrderDrawer({ orderId, store }: OrderDrawerProps) {
++  const [order, setOrder] = useState<OrderDto | null>(null);
++  const [error, setError] = useState<string | null>(null);
++
++  useEffect(() => {
++    let cancelled = false;
++    setOrder(null);
++    setError(null);
++    getOrder(orderId)
++      .then((dto) => {
++        if (!cancelled) setOrder(dto);
++      })
++      .catch((err: unknown) => {
++        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load order");
++      });
++    return () => {
++      cancelled = true;
++    };
++  }, [orderId]);
++
++  if (error) return <Alert type="error" message={error} />;
++  if (!order) return <Skeleton active />;
++
++  return (
++    <Descriptions column={1} title={`Order ${order.number}`}>
++      <Descriptions.Item label="Status">
++        <StatusTag status={order.status} />
++      </Descriptions.Item>
++      <Descriptions.Item label="Customer">{order.customer?.name ?? "Guest"}</Descriptions.Item>
++      <Descriptions.Item label="Total">{(order.totalCents / 100).toFixed(2)}</Descriptions.Item>
++      <Descriptions.Item label="Bulk selection">
++        {store.selectedIds.includes(order.id) ? <Tag color="blue">Selected</Tag> : "Not selected"}
++      </Descriptions.Item>
++    </Descriptions>
++  );
++});
+diff --git a/apps/orders-web/src/pages/orders/OrdersPage.tsx b/apps/orders-web/src/pages/orders/OrdersPage.tsx
+new file mode 100644
+index 000000000..eac33de6e
+--- /dev/null
++++ b/apps/orders-web/src/pages/orders/OrdersPage.tsx
+@@ -0,0 +1,61 @@
++import { useEffect, useState } from "react";
++import { observer } from "mobx-react-lite";
++import { Alert, Button, Drawer, Select, Space, Typography } from "antd";
++import { ReloadOutlined } from "@ant-design/icons";
++import * as ordersApi from "../../api/orders.api";
++import type { OrderStatus } from "../../api/orders.api";
++import { OrdersStore } from "../../stores/orders.store";
++import { OrderDrawer } from "./OrderDrawer";
++import { OrdersTable } from "./OrdersTable";
++
++const STATUS_OPTIONS: { value: OrderStatus; label: string }[] = [
++  { value: "new", label: "New" },
++  { value: "paid", label: "Paid" },
++  { value: "shipped", label: "Shipped" },
++  { value: "delivered", label: "Delivered" },
++  { value: "cancelled", label: "Cancelled" },
++];
++
++export const OrdersPage = observer(function OrdersPage() {
++  const store = new OrdersStore(ordersApi);
++  const [selectedId, setSelectedId] = useState<string | null>(null);
++  const [compact, setCompact] = useState(window.innerWidth < 900);
++
++  useEffect(() => {
++    store.loadOrders();
++  }, []);
++
++  useEffect(() => {
++    const onResize = () => setCompact(window.innerWidth < 900);
++    window.addEventListener("resize", onResize);
++  }, []);
++
++  return (
++    <>
++      <Typography.Title level={3}>Orders</Typography.Title>
++      <Space style={{ marginBottom: 12 }}>
++        <Select<OrderStatus>
++          allowClear
++          placeholder="All statuses"
++          style={{ width: 180 }}
++          options={STATUS_OPTIONS}
++          value={store.status}
++          onChange={(status) => store.setStatus(status)}
++        />
++        <Button icon={<ReloadOutlined />} onClick={() => store.loadOrders()} />
++        <Button
++          disabled={store.selectedCount === 0}
++          loading={store.updating}
++          onClick={() => store.markSelectedPaid()}
++        >
++          Mark {store.selectedCount} as paid
++        </Button>
++      </Space>
++      {store.error && <Alert type="error" message={store.error} />}
++      <OrdersTable store={store} selectedId={selectedId} compact={compact} onOpen={setSelectedId} />
++      <Drawer open={selectedId !== null} width={480} onClose={() => setSelectedId(null)}>
++        {selectedId !== null && <OrderDrawer orderId={selectedId} store={store} />}
++      </Drawer>
++    </>
++  );
++});
+diff --git a/apps/orders-web/src/pages/orders/OrdersTable.tsx b/apps/orders-web/src/pages/orders/OrdersTable.tsx
+new file mode 100644
+index 000000000..31aad9d8f
+--- /dev/null
++++ b/apps/orders-web/src/pages/orders/OrdersTable.tsx
+@@ -0,0 +1,131 @@
++import { useMemo, useState, type ReactNode } from "react";
++import { Button, Checkbox, Dropdown, Spin } from "antd";
++import { SettingOutlined } from "@ant-design/icons";
++import type { OrderDto } from "../../api/orders.api";
++import { StatusTag } from "../../components/StatusTag";
++import type { OrdersStore } from "../../stores/orders.store";
++
++type ColumnKey = "number" | "customer" | "status" | "total" | "createdAt";
++
++interface ColumnDef {
++  key: ColumnKey;
++  title: string;
++  sortValue: (order: OrderDto) => string | number;
++  render: (order: OrderDto) => ReactNode;
++}
++
++const COLUMN_DEFS: ColumnDef[] = [
++  { key: "number", title: "Number", sortValue: (o) => o.number, render: (o) => o.number },
++  {
++    key: "customer",
++    title: "Customer",
++    sortValue: (o) => o.customer?.name ?? "",
++    render: (o) => o.customer?.name ?? "Guest",
++  },
++  { key: "status", title: "Status", sortValue: (o) => o.status, render: (o) => <StatusTag status={o.status} /> },
++  {
++    key: "total",
++    title: "Total",
++    sortValue: (o) => o.totalCents,
++    render: (o) => (o.totalCents / 100).toFixed(2),
++  },
++  { key: "createdAt", title: "Created", sortValue: (o) => o.createdAt, render: (o) => o.createdAt.slice(0, 10) },
++];
++
++interface SortState {
++  key: ColumnKey;
++  dir: "asc" | "desc";
++}
++
++export interface OrdersTableProps {
++  store: OrdersStore;
++  selectedId: string | null;
++  compact: boolean;
++  onOpen: (id: string) => void;
++}
++
++export function OrdersTable({ store, selectedId, compact, onOpen }: OrdersTableProps) {
++  const [sort, setSort] = useState<SortState>({ key: "createdAt", dir: "desc" });
++  const [settingsOpen, setSettingsOpen] = useState(false);
++  const [hidden, setHidden] = useState<ColumnKey[]>([]);
++
++  // Stable menu items so the dropdown does not rebuild its menu on every sort.
++  const menuItems = useMemo(
++    () => COLUMN_DEFS.map((def) => ({ key: def.key, label: def.title })),
++    [],
++  );
++
++  const columns = COLUMN_DEFS.filter(
++    (def) => !hidden.includes(def.key) && !(compact && def.key === "createdAt"),
++  );
++
++  const sorted = useMemo(() => {
++    const def = COLUMN_DEFS.find((c) => c.key === sort.key);
++    if (!def) return store.items;
++    const factor = sort.dir === "asc" ? 1 : -1;
++    return [...store.items].sort((a, b) => {
++      const av = def.sortValue(a);
++      const bv = def.sortValue(b);
++      return av < bv ? -factor : av > bv ? factor : 0;
++    });
++  }, [store.items, sort]);
++
++  const toggleSort = (key: ColumnKey) =>
++    setSort((prev) => ({ key, dir: prev.key === key && prev.dir === "asc" ? "desc" : "asc" }));
++
++  const toggleColumn = (key: ColumnKey) =>
++    setHidden((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
++
++  return (
++    <Spin spinning={store.loading}>
++      <Dropdown
++        open={settingsOpen}
++        onOpenChange={setSettingsOpen}
++        menu={{
++          items: menuItems,
++          selectable: true,
++          multiple: true,
++          selectedKeys: COLUMN_DEFS.map((d) => d.key).filter((k) => !hidden.includes(k)),
++          onClick: ({ key }) => toggleColumn(key as ColumnKey),
++        }}
++      >
++        <Button icon={<SettingOutlined />}>Columns</Button>
++      </Dropdown>
++      <table style={{ width: "100%" }}>
++        <thead>
++          <tr>
++            <th />
++            {columns.map((col) => (
++              <th key={col.key}>
++                <Button type="link" onClick={() => toggleSort(col.key)}>
++                  {col.title}
++                  {sort.key === col.key ? (sort.dir === "asc" ? " ▲" : " ▼") : ""}
++                </Button>
++              </th>
++            ))}
++          </tr>
++        </thead>
++        <tbody>
++          {sorted.map((order, index) => (
++            <tr
++              key={index}
++              onClick={() => onOpen(order.id)}
++              style={{ background: order.id === selectedId ? "#e6f4ff" : undefined }}
++            >
++              <td onClick={(e) => e.stopPropagation()}>
++                <Checkbox
++                  aria-label={`Select order ${order.number}`}
++                  checked={store.selectedIds.includes(order.id)}
++                  onChange={(e) => store.toggleSelected(order.id, e.target.checked)}
++                />
++              </td>
++              {columns.map((col) => (
++                <td key={col.key}>{col.render(order)}</td>
++              ))}
++            </tr>
++          ))}
++        </tbody>
++      </table>
++    </Spin>
++  );
++}
+diff --git a/apps/orders-web/src/stores/orders.store.ts b/apps/orders-web/src/stores/orders.store.ts
+new file mode 100644
+index 000000000..eb67ee40e
+--- /dev/null
++++ b/apps/orders-web/src/stores/orders.store.ts
+@@ -0,0 +1,144 @@
++import { createContext, useContext } from "react";
++import {
++  action,
++  computed,
++  makeObservable,
++  observable,
++  runInAction,
++  type IObservableArray,
++} from "mobx";
++import type {
++  ListOrdersParams,
++  ListOrdersResponse,
++  OrderDto,
++  OrderStatus,
++} from "../api/orders.api";
++
++export const PAGE_SIZE = 2000;
++
++export interface OrdersApi {
++  listOrders(params: ListOrdersParams): Promise<ListOrdersResponse>;
++  updateStatus(id: string, status: OrderStatus): Promise<OrderDto>;
++}
++
++export class OrdersStore {
++  @observable.ref items: OrderDto[] = [];
++  @observable loading = false;
++  @observable updating = false;
++  @observable error: string | null = null;
++  @observable status: OrderStatus | undefined = undefined;
++  @observable.shallow selectedIds: IObservableArray<string> = observable.array<string>([]);
++
++  private disposed = false;
++
++  constructor(private readonly api: OrdersApi) {
++    makeObservable(this);
++  }
++
++  @computed get selectedCount(): number {
++    return this.selectedIds.length;
++  }
++
++  onMount(): void {
++    this.disposed = false;
++    void this.fetchOrders();
++  }
++
++  onUnmount(): void {
++    this.dispose();
++  }
++
++  dispose(): void {
++    this.disposed = true;
++  }
++
++  @action.bound
++  loadOrders(): Promise<void> {
++    return this.fetchOrders();
++  }
++
++  @action.bound
++  setStatus(status: OrderStatus | undefined): void {
++    this.status = status;
++    void this.fetchOrders();
++  }
++
++  @action.bound
++  toggleSelected(id: string, selected: boolean): void {
++    if (selected) {
++      if (!this.selectedIds.includes(id)) this.selectedIds.push(id);
++    } else {
++      this.selectedIds.remove(id);
++    }
++  }
++
++  @action.bound
++  clearSelection(): void {
++    this.selectedIds.clear();
++  }
++
++  @action.bound
++  markSelectedPaid(): Promise<void> {
++    return this.updateSelected("paid");
++  }
++
++  private fetchOrders = async (): Promise<void> => {
++    runInAction(() => {
++      this.loading = true;
++      this.error = null;
++    });
++    try {
++      const res = await this.api.listOrders({ status: this.status, page: 1, pageSize: PAGE_SIZE });
++      runInAction(() => {
++        if (this.disposed) return;
++        this.items = res.items;
++      });
++    } catch (err: unknown) {
++      runInAction(() => {
++        if (this.disposed) return;
++        this.error = err instanceof Error ? err.message : "Failed to load orders";
++      });
++    } finally {
++      runInAction(() => {
++        if (this.disposed) return;
++        this.loading = false;
++      });
++    }
++  };
++
++  private updateSelected = async (status: OrderStatus): Promise<void> => {
++    const ids = [...this.selectedIds];
++    runInAction(() => {
++      this.updating = true;
++    });
++    try {
++      const updated = await Promise.all(ids.map((id) => this.api.updateStatus(id, status)));
++      runInAction(() => {
++        if (this.disposed) return;
++        const byId = new Map(updated.map((order): [string, OrderDto] => [order.id, order]));
++        this.items = this.items.map((order) => byId.get(order.id) ?? order);
++        this.selectedIds.clear();
++      });
++    } catch (err: unknown) {
++      runInAction(() => {
++        if (this.disposed) return;
++        this.error = err instanceof Error ? err.message : "Failed to update orders";
++      });
++    } finally {
++      runInAction(() => {
++        if (this.disposed) return;
++        this.updating = false;
++      });
++    }
++  };
++}
++
++export const OrdersStoreContext = createContext<OrdersStore | null>(null);
++
++export function useOrdersStore(): OrdersStore {
++  const store = useContext(OrdersStoreContext);
++  if (!store) {
++    throw new Error("useOrdersStore must be used inside OrdersStoreContext.Provider");
++  }
++  return store;
++}

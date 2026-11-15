@@ -15,7 +15,7 @@ triggers:
   - "review NestJS"
 metadata:
   author: "MrCipherSmith"
-  version: "1.0.0"
+  version: "1.3.0"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
   stack_requires: "nestjs,prisma"
@@ -38,10 +38,9 @@ review-backend Progress:
 - [ ] Step 2: Determine git scope (merge-base) — see .metaproject/skills/gdskills/shared/git-merge-base.md
 - [ ] Step 3: Collect diff and changed file list
 - [ ] Step 4: NestJS patterns check
-- [ ] Step 5: API design check
-- [ ] Step 6: Database patterns check
-- [ ] Step 7: TypeScript correctness check
-- [ ] Step 8: Emit findings in unified format, sorted by severity
+- [ ] Step 5: API, DTO and database rules check (section 2)
+- [ ] Step 6: TypeScript correctness check
+- [ ] Step 7: Emit findings in unified format, sorted by severity
 ```
 
 ---
@@ -79,7 +78,7 @@ git diff --name-status "${BASE_SHA}" && git diff "${BASE_SHA}" && git ls-files -
 
 **Module structure**
 - `@Module()` declaration present; providers, imports, exports are correctly listed
-- Circular dependency risk: two modules importing each other — flag as `major` if detected; suggest `forwardRef()`
+- Circular dependency risk: two modules importing each other — defer the cycle to `review-architecture`; suggest `forwardRef()`
 - Feature modules do not import `AppModule`
 
 **Provider scope**
@@ -87,22 +86,14 @@ git diff --name-status "${BASE_SHA}" && git diff "${BASE_SHA}" && git ls-files -
 - `REQUEST`-scoped provider injected into a `Singleton` provider is a **blocker** (creates hidden state sharing)
 - `TRANSIENT` scope used unnecessarily when singleton would suffice — flag as `minor`
 
-**DTO validation**
-- All controller methods accepting user input (body, query, param) have a DTO class decorated with `class-validator` decorators
-- Required fields: `@IsString()`, `@IsNumber()`, `@IsEmail()`, etc. present and accurate
-- `@IsOptional()` used only on truly optional fields; non-optional fields must not have `@IsOptional()`
-- `ValidationPipe` applied globally (in `main.ts`) or explicitly via `@UsePipes(ValidationPipe)` — **blocker** if missing on any endpoint accepting user input
-- `@Transform()` used where input coercion is needed (e.g., string → number from query params)
-
 **Guards and roles**
 - Protected endpoints have `@UseGuards(...)` with appropriate guard(s)
-- Role-based access uses `@Roles(...)` decorator with a roles guard — missing guard on an endpoint that should be protected is a **blocker**
+- Role-based access uses `@Roles(...)` decorator with a roles guard — a missing guard on an endpoint that should be protected is rated by the auth-guard row of the conditions table
 - Public endpoints explicitly marked with `@Public()` or equivalent decorator, not just left unguarded
 
 **Controller responsibilities**
-- Controllers are thin: no business logic, no direct ORM calls, no computation
-- Controller methods do: parse input → delegate to service → return response
-- If business logic is in a controller method, flag as `major` ("move to service layer")
+- Controllers are thin: no business logic, no direct ORM calls, no computation; a method does parse input → delegate to service → return response
+- If business logic is in a controller method, flag it per the controller row of the conditions table (`minor`: "move to service layer")
 
 **Service layer**
 - Business logic lives in services
@@ -112,62 +103,24 @@ git diff --name-status "${BASE_SHA}" && git diff "${BASE_SHA}" && git ls-files -
 
 ---
 
-### 2. API Design
+### 2. API, DTOs and database: the standard
 
-**HTTP method conventions**
-- `GET` requests carry no body (flag as `major` if present)
-- `POST` used for resource creation
-- `PUT` for full replacement, `PATCH` for partial update — mixed usage without clear reason flagged as `minor`
-- `DELETE` on correct resource path
+These project rules hold what to check and how to rate it. Read each one that applies to the change and rate by its **Review severities** table; this lens does not restate them.
 
-**Response shape consistency**
-- All endpoints in a controller return the same envelope shape (e.g., `{ data, meta }`) — inconsistency (sometimes object, sometimes raw array) flagged as `major`
-- HTTP status codes match semantics: `201` for create, `200` for read/update, `204` for no-content delete, `404` for not found, `422` for validation failure
+- `.metaproject/rules/core/api-contracts.mdc`: spec first, versioning, error envelope (validation failure is `400`), idempotency keys, list envelopes and pagination.
+- `.metaproject/rules/core/nestjs-dto.mdc`: DTO classes, validators, nested and query transforms, Swagger decorators.
+- `.metaproject/rules/core/database-patterns.mdc`: queries in loops, indexes, migration safety, transactions, `SELECT *`, soft deletes.
+- `.metaproject/rules/core/security-baseline.mdc`: parameterized queries (string interpolation in raw SQL).
 
-**Pagination**
-- List endpoints that could return unbounded datasets must have pagination (`limit`/`offset` or `cursor`)
-- Missing pagination on a list endpoint flagged as `major` when no obvious bound exists
-
-**Error handling**
-- Async controller methods must have error handling: either `try/catch` or a global exception filter
-- Unhandled promise rejections (async method without try/catch, no global filter) — **blocker**
-- Exception messages must not leak internal details (stack traces, ORM error strings) to the HTTP response — leaking is a **blocker**
-- NestJS built-in exceptions (`NotFoundException`, `BadRequestException`, etc.) preferred over generic `Error`
+Beyond them: a `GET` with a body is `major`; `PUT` for full replacement and `PATCH` for partial; NestJS built-in exceptions over a generic `Error`; unhandled rejections are rated by `.metaproject/rules/core/error-handling.mdc` (a rejection Nest's exception layer answers with an error response is not a crash: rate that response).
 
 ---
 
-### 3. Database Patterns (ORM)
-
-**N+1 queries**
-- Relation loaded inside a loop without eager loading (`relations`, `leftJoinAndSelect`) or a DataLoader — **always major**
-- Example: `for (const user of users) { user.orders = await orderRepo.find(...) }` — flag with concrete suggestion to use `relations: ['orders']` or batch query
-
-**Transactions**
-- Multi-step operations that must be atomic (e.g., create + update + delete across tables) must use a transaction
-- Missing transaction on a multi-step mutation is a **major** finding
-- NestJS TypeORM: use `dataSource.transaction(async (manager) => { ... })` or `@Transaction()` decorator pattern
-
-**Raw query safety**
-- String interpolation in raw queries is a **blocker** (SQL injection risk)
-- Use parameterized queries: `query('SELECT * FROM users WHERE id = $1', [id])`
-- Flag `createQueryBuilder().where('id = ' + id)` as blocker
-
-**Soft deletes**
-- If the project schema uses `deletedAt` / `@DeleteDateColumn()`, deletions must use `.softRemove()` / `.softDelete()`, not `.remove()` / `.delete()`
-- Hard delete on a soft-delete entity flagged as `major`
-
-**Migration safety**
-- Column removed in migration — check that no application code still references it
-- Dropping a column without a deprecation period in a live system flagged as `major`
-- `NOT NULL` column added without a default value to a populated table — **blocker**
-
----
-
-### 4. TypeScript Correctness
+### 3. TypeScript Correctness
 
 - No `any` in new code — suggest `unknown` with type guards, or correct typed return
 - Public service methods must have explicit return types (`Promise<UserDto>`, not inferred)
-- Service contracts expressed as interfaces (`IUserService`), not just class implementations
+- Interfaces only at an I/O or substitution boundary, named without an `I` prefix (`solid-principles.mdc`, D)
 - No `as any` or unsafe casts (`as unknown as T`) without a comment explaining why
 - `@ts-ignore` / `@ts-expect-error` without explanation comment — flag as `minor`
 
@@ -205,16 +158,11 @@ is, and a condition that cannot name one is not a `blocker`.
 
 | Condition | Severity | Shape |
 |---|---|---|
-| Missing DTO validation on an endpoint accepting user input | `blocker` | Exploitable vulnerability |
-| String interpolation in raw SQL query | `blocker` | Exploitable vulnerability |
-| Leaking stack trace / raw ORM error to API response | `blocker` | Exploitable vulnerability (information disclosure) |
+| Leaking stack trace / raw ORM error to API response | `blocker` with an attack vector stated (what is disclosed, to whom, through which entry point); `major` when the leak is shown reaching a response; else `info` | Exploitable vulnerability only when the vector is shown; a shown leak is a wrong outcome |
+| Missing auth guard on an endpoint that should be protected | `blocker` with an attack vector stated (caller, entry point, impact); `major` with a named caller and the wrong outcome it gets; else `info` | Exploitable vulnerability only when the vector is shown |
 | `REQUEST`-scoped provider injected into a `Singleton` | `blocker` | Data corruption — one request's state is served to another |
-| Unhandled promise rejection in a controller method | `blocker` | Crash |
-| `NOT NULL` column added without a default to a populated table | `blocker` | Data loss — the migration fails or truncates |
-| N+1 query (relation loaded in a loop) | `major` (minimum) | Named trigger and outcome; degradation, not an outage. Same rating as `review-highload` |
-| Missing transaction on a multi-step atomic mutation | `major` — `blocker` where a partial write corrupts persisted state | The outcome decides |
-| Business logic in a controller | `major` | Layer violation. Same rating as `review-architecture` |
-| Missing pagination on an unbounded list endpoint | `major` — `blocker` where an attacker-reachable request exhausts memory | Degradation vs. crash/DoS |
+| DTO, API contract, query, migration and transaction conditions | per the rule's **Review severities** table (section 2) | The rule's row names the shape |
+| Business logic in a controller | `minor` — `major` only with a concrete defect it causes (trigger and outcome) or a stated project rule it breaks | Layer violation. Same rating as `review-architecture` |
 
 ---
 
@@ -282,7 +230,7 @@ STATUS: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED
 ```markdown
 # Backend Review Report
 
-## Verdict: APPROVE | APPROVE_WITH_SUGGESTIONS | REQUEST_CHANGES
+<!-- No merge verdict: the orchestrator owns it. A standalone run summarizes findings only. -->
 
 ## Summary
 <2-4 sentences covering what changed, overall backend health, key concerns.>
@@ -342,10 +290,8 @@ When dispatched by `review-orchestrator` or `job-orchestrator`, the prompt MAY c
 | Rationalization | Why it is wrong |
 |----------------|-----------------|
 | "ValidationPipe is probably configured somewhere" | Always verify it is applied; assumption lets injection reach service layer |
-| "The N+1 only runs on small datasets now" | Data grows; flag it now with a clear fix, not after the incident |
-| "The controller has some logic but it's minor" | The line is binary — logic in controller = untestable without HTTP stack |
-| "Stack trace in response only shows in dev" | Config can be wrong in prod; treat it as blocker always |
-| "I'll skip the migration check — it's just a column rename" | Column renames without fallback break zero-downtime deploys |
+| "The controller has some logic but it's minor" | Logic in a controller is `minor` unless a defect is named; say which, do not rate by feeling |
+| "Stack trace in response only shows in dev" | Config can be wrong in prod; report it per the stack-trace row; blocker needs a shown vector |
 
 <!-- keryx:layers-block:start -->
 ## Project layers: graph, tests, wiki, memory

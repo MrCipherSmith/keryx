@@ -64,7 +64,7 @@ export {
   selectCompletionExceptions,
   type CompletionExceptionSelection,
 } from "./completion-exceptions";
-export type { FlowService } from "./types";
+export type { FlowService, FlowTask } from "./types";
 export { CONFIRMATION_CAVEAT, completionTarget } from "./confirm-token";
 // Flow 456: the shell's operator card tools reach the GitHub adapter through this facade, not the zone's internals.
 export { githubAdapter, githubPostReview, githubPrFiles } from "./tracker/github";
@@ -77,7 +77,7 @@ export { githubAdapter, githubPostReview, githubPrFiles } from "./tracker/github
 // only excuses a `service.ts` target).
 export { acPath, assertAcIntact, readFlow, resolveFlowDir } from "./store";
 // Flow 403: the intake ports append the take card's journal line and locate the flows root.
-export { appendJournal, flowsRoot } from "./store";
+export { appendJournal, flowsRoot, listFlowDirs } from "./store";
 // The closed-flow "uncommitted state" note, reached through this facade by the CLI.
 export { uncommittedFlowStateNote, uncommittedFlowStateNotes } from "./uncommitted-state";
 // Acceptance layer W0: the verification-kind vocabulary, re-exported so the CLI,

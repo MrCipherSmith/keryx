@@ -1,151 +1,36 @@
 ---
-description: "API contract rules: OpenAPI-first design, semantic versioning, no breaking changes without major version bump, contract testing. Use when designing, modifying, or consuming HTTP APIs."
+description: "API contract standard shared by code writers and reviewers, with the severities reviewers use: spec first, no breaking change without a new major version, one error envelope, 400 for validation failures, idempotency keys on creating mutations, paginated list envelopes. Use when designing, changing or consuming HTTP APIs."
 alwaysApply: false
 stack_requires: "http-server"
 ---
 
 # API Contracts
 
-## Purpose
-Prevent silent breaking changes, version drift, and undocumented API behaviour. Enforce OpenAPI-first design and strict versioning discipline.
-
-## When To Apply
-Apply when creating new API endpoints, modifying existing endpoints, changing DTOs/schemas, or writing API client code.
-
----
-
-## Core Principle: Contract Before Code
-
-The OpenAPI spec (or equivalent schema) is the source of truth. Code is generated from or validated against the spec — not the other way around.
-
-```
-1. Design the endpoint in OpenAPI/schema first
-2. Review the contract for breaking changes
-3. Generate or update types/validators from the spec
-4. Implement the handler
-5. Write contract tests that validate the spec is honoured
-```
-
----
+Canon applies: OpenAPI 3, RFC 9110 status-code semantics, semantic versioning. This rule holds only this project's decisions.
 
 ## Rules
 
-### Rule 1: OpenAPI-First for New Endpoints
-Every new HTTP endpoint MUST have an OpenAPI 3.x definition before the handler is implemented:
-
-```yaml
-# Required fields for every endpoint definition
-paths:
-  /users/{id}:
-    get:
-      operationId: getUser          # unique, stable identifier
-      summary: Get user by ID
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string, format: uuid }
-      responses:
-        '200':
-          description: User found
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/User' }
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-```
-
-**Required for every endpoint:**
-- `operationId` (stable, unique)
-- All path/query/header parameters documented
-- All response codes documented (including 4xx, 5xx)
-- Request body schema referenced (not inlined) for reuse
-
-### Rule 2: Semantic Versioning for APIs
-
-| Change Type | Version Impact | Action Required |
-|---|---|---|
-| Add optional field to response | None / patch | Safe — backwards compatible |
-| Add optional field to request | None / patch | Safe — old clients omit it |
-| Add new endpoint | Minor bump | Document in changelog |
-| Make optional field required | **Major bump** | Breaking change |
-| Remove field from response | **Major bump** | Breaking change |
-| Rename field | **Major bump** | Breaking change |
-| Change field type | **Major bump** | Breaking change |
-| Remove endpoint | **Major bump** | Deprecate first, remove in next major |
-
-**Breaking change protocol:**
-1. Add deprecation notice to old version (`deprecated: true` in OpenAPI)
-2. Implement new version at `/v{N+1}/...` or with new operationId
-3. Run old version in parallel for ≥1 release cycle
-4. Remove old version only after clients have migrated
-
-### Rule 3: Contract Testing
-Every public API endpoint MUST have at least one contract test that:
-- Validates the response shape matches the OpenAPI schema
-- Tests the error responses (at minimum: 400, 404, 401 where applicable)
-- Uses schema validation, not string matching
-
-```typescript
-// Example: contract test using a schema validator
-describe('GET /users/:id contract', () => {
-  it('returns User schema on 200', async () => {
-    const res = await request(app).get('/users/valid-id');
-    expect(res.status).toBe(200);
-    expect(res.body).toMatchSchema(UserSchema); // validated against OpenAPI
-  });
-
-  it('returns 404 with NotFound schema on unknown id', async () => {
-    const res = await request(app).get('/users/nonexistent');
-    expect(res.status).toBe(404);
-    expect(res.body).toMatchSchema(NotFoundSchema);
-  });
-});
-```
-
-### Rule 4: No Undocumented Fields
-Every field in a request or response body MUST appear in the schema. Fields not in the schema must be stripped from responses (`additionalProperties: false` in JSON Schema).
-
-### Rule 5: Consistent Error Schema
-All error responses must use the same envelope schema:
-
-```typescript
-interface ApiError {
-  code: string;       // machine-readable, e.g. "USER_NOT_FOUND"
-  message: string;    // human-readable
-  details?: unknown;  // optional structured context
-  requestId: string;  // for traceability
-}
-```
-
-Never return raw Error objects, stack traces, or ORM error messages to API consumers.
-
-### Rule 6: Idempotency Keys for Mutations
-POST/PUT/PATCH endpoints that create or modify state MUST support idempotency via `Idempotency-Key` header or a stable `clientId` in the body. This prevents duplicate operations on network retry.
+1. **Spec first.** A new or changed endpoint is in the OpenAPI spec (or the project's equivalent schema) in the same change, before the handler: a stable `operationId`, every parameter, every response code including 4xx, request bodies by reference.
+2. **No breaking change inside a major version.** Removing, renaming or retyping a field, making an optional field required, removing an endpoint or changing what a status code means ships at `/v{N+1}` next to the old version, which is marked `deprecated` and kept for at least one release. Adding an optional field or a new endpoint is not breaking.
+3. **Every field in a request or response is in the schema**; undocumented response fields are stripped (`additionalProperties: false`).
+4. **One error envelope:** `{ code, message, details?, requestId }` for every error response. Never a raw exception, stack trace or ORM message. A validation failure answers `400`.
+5. **Creating mutations accept an `Idempotency-Key`** (POST that creates a record, moves money or reserves stock). A transition that is idempotent by itself (repeating it leaves the same state) needs none; say so in a comment.
+6. **Lists** return the same envelope as the API's other lists (e.g. `{ data, meta }`) and are paginated unless the list is bounded small by construction.
+7. **Contract tests:** each public endpoint has a test that validates its response and its error responses against the schema.
 
 ---
 
-## The three that are not negotiable
+## Review severities (shared with reviewers)
 
-Of the rules above, three carry consequences that outlive the change: no breaking
-change ships without a major version bump and a deprecation period; the OpenAPI
-spec is updated before the implementation, not after it as documentation; and
-error responses use the standard `ApiError` envelope — never a raw exception or
-an ad-hoc shape.
+`review-backend` rates these patterns by this table. Change a row here, never in a reviewer.
 
----
-
-## Red Flags — Stop and re-read this rule if you are thinking:
-
-| Rationalization | Why it's wrong |
-|---|---|
-| "It's just adding a field, that's not breaking" | Removing a field later will be breaking — document it now to establish the contract |
-| "The spec can wait, I'll document it later" | Specs written after code document what the code does, not what it should do — bugs get documented too |
-| "Renaming a field is internal, consumers will adapt" | Consumers have no way to know a field was renamed — this silently breaks every client |
-| "I'll use v2 later if needed, for now v1 is fine" | Delaying versioning means v1 can never be changed without breaking consumers |
-| "Contract tests slow down development" | Contract tests catch breaking changes before they reach consumers — not after |
-| "The error format doesn't matter as long as the status code is right" | Status codes alone are insufficient for automated error handling — codes and schemas matter |
-
-**IRON LAW: A BREAKING CHANGE WITHOUT A VERSION BUMP IS A PRODUCTION INCIDENT WAITING TO HAPPEN.**
+| Signal | A finding when | Default | Not a finding |
+|---|---|---|---|
+| Breaking change inside a major version (Rule 2) | the endpoint is published or clients are generated | `major` | an endpoint with no released consumer |
+| Endpoint, parameter or field missing from the spec (Rules 1, 3) | always | `major` when clients are generated from the spec; else `minor` | — |
+| Error response outside the envelope (Rule 4) | it reaches a client | `major`; a leaked stack trace or ORM message is rated by `review-security-code` | — |
+| Validation failure answered with a status other than `400` (Rule 4) | always | `minor` | — |
+| Creating mutation with no idempotency key (Rule 5) | a retry duplicates money, stock or a record users see | `major`; `minor` for other records | a transition idempotent by itself |
+| List with a different envelope from its siblings (Rule 6) | always | `minor`; changing an existing list's shape is Rule 2 | — |
+| Unbounded list with no pagination (Rule 6) | the size grows with stored data | `major`; `blocker` where an attacker-reachable request exhausts memory | a list bounded small by construction, with the bound read |
+| Public endpoint with no contract test (Rule 7) | always | `minor` | — |

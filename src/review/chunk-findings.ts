@@ -73,10 +73,11 @@ const SEVERITY_ALIASES: Record<string, ReviewFindingSeverity> = {
 
 const text = (value: unknown, fallback: string): string => (typeof value === "string" && value.trim() !== "" ? value : fallback);
 
+// An empty `sites` is the negative enumeration and is valid with a non-empty method (checked below).
 const validClassScope = (value: unknown): ReviewFindingClassScope | undefined => {
   if (typeof value !== "object" || value === null) return undefined;
   const { sites, enumeration_method: method } = value as { sites?: unknown; enumeration_method?: unknown };
-  if (!Array.isArray(sites) || sites.length === 0 || !sites.every((site) => typeof site === "string")) return undefined;
+  if (!Array.isArray(sites) || !sites.every((site) => typeof site === "string")) return undefined;
   if (typeof method !== "string" || method.trim() === "") return undefined;
   return { sites: sites as string[], enumeration_method: method };
 };

@@ -114,7 +114,7 @@ const GIT_ENV = {
 interface Shell {
   proc: Subprocess<"pipe", "pipe", "pipe">;
   pid: number;
-  /** stdout + stderr seen so far. */
+  /** Append-only stdout/stderr in observed chunk order; offsets stay valid. */
   output: () => string;
 }
 
@@ -197,10 +197,12 @@ function startShell(cwd: string, env: Record<string, string>, extraArgs: string[
     stderr: "pipe",
   });
   const out = { text: "" };
-  const err = { text: "" };
+  // Separate buffers would insert later stdout before previously observed
+  // stderr, invalidating offsets used to assert on newly printed notices.
+  // Diagnostics now print a startup path to stderr, exposing that bug.
   collect(proc.stdout, out);
-  collect(proc.stderr, err);
-  const shell: Shell = { proc, pid: proc.pid, output: () => out.text + err.text };
+  collect(proc.stderr, out);
+  const shell: Shell = { proc, pid: proc.pid, output: () => out.text };
   children.push(shell);
   return shell;
 }

@@ -17,7 +17,7 @@ triggers:
   - "check this for bugs"
 metadata:
   author: "MrCipherSmith"
-  version: "1.0.0"
+  version: "1.1.0"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
@@ -26,13 +26,19 @@ license: "MIT"
 # Review Logic
 
 Specialized reviewer for **logic correctness and algorithmic soundness**.
-Inherits from the original `code-ai-review` + `code-learned-review` correctness phases
+Inherits from the correctness phases of two earlier profiles (the strict AI review one, since removed, and `code-learned-review`)
 and unifies them into a single focused pass. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history).
 
 This reviewer does not care about formatting, naming, or architecture opinions.
 Every finding must describe an observable, reproducible defect or a spec gap.
 
 ---
+
+## The standard
+
+Read both rules before the diff; where this file and a rule disagree, the rule wins.
+- `.metaproject/rules/core/async-patterns.mdc` — parallel awaits, timeouts, bounded fan-out, event-loop blocking, **Review severities**.
+- `.metaproject/rules/core/error-handling.mdc` — failure signalling, silent catches, unhandled rejections, **Review severities**.
 
 ## Workflow
 
@@ -137,17 +143,12 @@ earlier review round, because there the finding is recorded as closed and is not
 ### Async / Concurrency
 
 - [ ] Missing `await` on async call — result is a `Promise`, not the value
-- [ ] `await` inside a non-async function (syntax error or no-op)
 - [ ] Parallel async calls that should be sequential (shared mutable state)
-- [ ] Sequential `await` calls that could be `Promise.all` (performance is a secondary concern here; flag when correctness is affected by ordering assumption)
 - [ ] Race conditions: state updated in one branch before a concurrent operation resolves
-- [ ] Unhandled promise rejection (no `.catch`, no `try/catch`, no `Promise.allSettled`)
 - [ ] `setTimeout`/`setInterval` with shared state and no cleanup
 
 ### Error Handling
 
-- [ ] Swallowed `catch` blocks (catches error, does nothing)
-- [ ] Error rethrown as generic string, losing stack trace
 - [ ] Missing error boundary in UI component tree
 - [ ] HTTP errors not checked (`response.ok` ignored)
 - [ ] Partial success treated as full success (only first item processed, error on rest silently dropped)
@@ -187,7 +188,7 @@ earlier review round, because there the finding is recorded as closed and is not
 | Performance profiling (bundle size, query cost, render cycles) | NO | `review-performance` |
 | Style, naming, import organization | NO | `review-style` |
 | Layer violations, SOLID, module coupling | NO | `review-architecture` |
-| React/MobX-specific store patterns | NO | `code-mobx-store-review` |
+| React/MobX-specific store patterns | NO | `review-frontend` |
 
 ---
 
@@ -245,12 +246,11 @@ conditions land under that rubric, not a second rubric.
 
 | Condition | Severity | Why, under the canonical rubric |
 |---|---|---|
-| Unhandled promise rejection reaching the process | `blocker` | Crash |
+| Unhandled rejection; swallowed error; sequential independent awaits, no timeout, unbounded fan-out, event-loop blocking | per `error-handling.mdc` / `async-patterns.mdc` **Review severities** | One table for writers and every reviewer |
 | Corrupted or lost persisted/returned data | `blocker` | Data loss or corruption |
 | Unimplemented acceptance criterion | `blocker` | Named shape 4 |
 | Race condition on shared mutable state | `blocker` **if** the interleaving can corrupt or lose data; otherwise `major` | The outcome decides, not the word "race" |
 | Silent wrong result on a named input | `major` | Trigger and outcome are both named |
-| Swallowed error that hides a failed operation | `major` — `blocker` only if the caller then persists or returns wrong data | Silent failure is wrong behaviour; corruption is a different shape |
 | Type contract broken (declared type is not what is returned) | `major` | Callers observe the wrong value |
 | Edge case not handled, no input that reaches it named | `minor` | No trigger; the cost is to the next editor |
 | Non-null assertion without a comment | `minor` | Behaves correctly today; the cost is to the reader |
@@ -348,7 +348,6 @@ When dispatched by `review-orchestrator` or `job-orchestrator`, the prompt MAY c
 | "I see a potential security issue" | Security belongs in `review-security-code`; note it as info and defer |
 | "The spec is unclear so I'll skip the gate" | Unclear spec → `NEEDS_CONTEXT` status + ask for clarification |
 | "I'll mark everything blocker to be safe" | Overstated severity makes reports unactionable; calibrate per the severity guide |
-| "Async performance is slow, so that's a logic bug" | Performance lives in `review-performance` unless incorrect ordering changes the result |
 | "I didn't reproduce the bug so I won't report it" | Every blocker needs a scenario, not a repro — describe the failing code path |
 
 <!-- keryx:layers-block:start -->

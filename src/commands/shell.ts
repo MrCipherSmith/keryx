@@ -1,4 +1,5 @@
 import { executePlanCommand } from "../session/commands/plan-command";
+import { startShellStateExports } from "../session/shell-state-exports";
 import { startShellStartupTrace } from "../lib/shell-startup-trace";
 import { replayPreservationOutbox, replayProjectPreservationOutboxes } from "../sac/service";
 import { createShellFinalizer, preservationProgress } from "../session/shell-finalizer";
@@ -2587,6 +2588,10 @@ export async function runAgentRepl(
 
   slateSession = live !== undefined ? { dir: live.dir, cwd: sessionCwd, opened: false } : undefined;
   slateSessionBox.current = slateSession;
+  const stateExports = startShellStateExports({
+    getSession: () => live !== undefined && leaseWatch.canPersist()
+      ? { cwd: sessionCwd, dir: live.dir, sessionId: live.summary.id, messages: [...archive, ...history] } : undefined,
+  });
 
   const save = (): void => {
     if (live === undefined || !leaseWatch.canPersist()) {
@@ -2632,6 +2637,7 @@ export async function runAgentRepl(
       activeAgentAbort?.abort();
       await activeAgentFlight?.catch(() => {});
       await activeSessionSwitch?.catch(() => {});
+      await stateExports.stop();
     },
     checkpoint: () => {
       if (sessionPersistTimer !== undefined) clearTimeout(sessionPersistTimer);
@@ -4099,10 +4105,12 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
   // with a consume-once notices getter fixes both the redundant rebuild and
   // the redundant print, without changing what a single surface prints.
   const shellHookSessionId = randomUUID();
-  // Flow 487: always-on tool-call diagnostics. In memory until a call stalls (or /diag), then one
-  // NDJSON dump per session under <config>/diagnostics. The timer is unref'd: it never keeps the
-  // process alive.
-  callDiagnostics.start({ sessionId: shellHookSessionId });
+  // Persist immediately, including review startup; stall dumps remain available via /diag.
+  // The periodic snapshot timer is unref'd and never keeps the process alive.
+  callDiagnostics.start({ sessionId: shellHookSessionId, continuous: true, ...(runtime.cacheDir === undefined ? {} : { configDir: runtime.cacheDir }) });
+  if (callDiagnostics.journalError() === undefined) {
+    process.stderr.write(`keryx: continuous diagnostics -> ${callDiagnostics.journalPath()}\n`);
+  }
   callDiagnostics.probe("dock", () => composerDockDiagnostics());
   callDiagnostics.probe("env", () => ({
     version: packageJson.version,

@@ -5,7 +5,7 @@ description: "Use when a frontend review is requested, checking React component 
 triggers: ["frontend review", "component review", "ui review", "review React", "review components"]
 metadata:
   author: "MrCipherSmith"
-  version: "1.1.0"
+  version: "1.5.0"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
   stack_requires: "react,mobx"
@@ -19,7 +19,7 @@ license: "MIT"
 
 Validates frontend-specific patterns in the changed code of the current branch. Covers React component correctness (observer wrapping, MVVM boundary, useEffect misuse, accessibility basics, key props), full MobX store patterns (structure, member ordering, accessibility modifiers, observable collections, reactions, async actions, bidirectional sync, lifecycle, API placement), and TypeScript safety. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history).
 
-This skill consolidates what was previously split between `code-style-review` (frontend parts) and `code-mobx-store-review`. It supersedes both for frontend changes.
+This skill consolidates what two earlier profiles (a style one and a MobX store one, both removed) used to split between them, so it is the one reviewer for frontend style, MobX and store changes.
 
 ---
 
@@ -47,7 +47,7 @@ This skill consolidates what was previously split between `code-style-review` (f
 | Cross-layer architecture (service layer design, module boundaries) | NO | `review-architecture` |
 | Security vulnerabilities (XSS, injection, auth gaps) | NO | `review-security-code` |
 | Performance bottlenecks (N+1, bundle size, re-render frequency) | NO | `review-performance` |
-| Code style, naming outside frontend conventions | NO | `code-style-review` |
+| Code style, naming outside frontend conventions | NO | `review-style` |
 
 ---
 
@@ -67,9 +67,8 @@ boundary is the trigger-and-outcome test.
 
 ### Frontend / MobX laws
 
-These say what is **always reported**. What severity each carries is the
-conditions table under Finding Format, and it is the canonical rubric applied —
-not a second opinion.
+These say what is **always reported**. Its severity is the matching rule's **Review severities** table (Parts A-C) —
+the canonical rubric applied, not a second opinion.
 
 1. **Every observable mutation outside an action or `runInAction` is reported.**
    No exception for "small stores" or "simple assignments".
@@ -129,231 +128,16 @@ If no CLAUDE.md is found, proceed normally. CLAUDE.md is optional and non-blocki
 
 ## Review Checklist
 
-### Part A: React Component Patterns
+### Parts A-C: the standard
 
-#### A1. MobX Observer Wrapping
+Components, stores, TypeScript and stories are checked against the rules the code was written to. Read each that the change touches; each ends with a **Review severities** table, and a finding takes its level from that table's row:
 
-- [ ] Every component that reads a MobX observable (directly from a store, or from `useLocalObservable`) MUST be wrapped in `observer(ComponentName)` or be a class component extending `React.Component` with `observer` applied
-- [ ] `observer` must wrap the **entire** component, not just a sub-section
-- [ ] HOC composition order: `observer` should be the **outermost** wrapper (applied last): `observer(withRouter(MyComponent))` — NOT `withRouter(observer(MyComponent))`
-- [ ] Conditional reading of observables is still observable access — `if (store.isLoaded)` triggers tracking; wrapper is required regardless of conditionality
+- `.metaproject/rules/core/code-style-patterns.mdc`: `observer`, layers (no API/IO or business logic in components), where state lives (`useState` for UI-only state is correct), store created once, effect cleanup, keys, accessibility, TypeScript (`any`, `!`, `I` prefix, `src/` imports).
+- `.metaproject/rules/core/mobx-store-template.mdc`: `makeObservable` and decorators, mutations in actions, thin public `@action.bound` over private arrow methods (`@action.bound` on a private method is a finding), async flags and the `disposed` guard, disposers and child stores, in-place collection updates, two-way sync guards, the `onMount()`/`onUnmount()` lifecycle bridge (correct, never flagged).
+- `.metaproject/rules/core/storybook-guidelines.mdc`: which states each component's stories cover, `fn()` for actions.
+- `.metaproject/rules/core/error-handling.mdc` for `catch` typing and swallowed errors.
 
-Flags:
-- Component reads `store.*` or `useLocalObservable` result but is not wrapped in `observer` — **major** (stale UI; not one of the four merge-blocking shapes)
-- `observer` applied inside another HOC wrapper instead of outside — **major**
-
-#### A2. MVVM Boundary (Business Logic in Store, Not Component)
-
-- [ ] Business logic MUST live in Store/Service, not in component
-- [ ] IO (API calls, file reads, WebSocket messages) MUST originate from private store methods
-- [ ] Component event handlers must only call store action methods — no logic between the event and the store call
-- [ ] Computed/derived values MUST be `@computed` getters in the store, not inline derivations in the component body
-
-Flags:
-- `fetch()` / `axios` / `httpClient` call directly in component (hook or handler) — **major** (layer violation; `review-architecture` rates the same condition `major`)
-- Business logic (conditionals, transformations, validation) inside a component event handler instead of a store method — **major**
-- Derived value computed inline in component that could be a `@computed` getter — **minor**
-
-#### A3. useEffect Misuse
-
-- [ ] `useEffect` must not contain business logic
-- [ ] `useEffect` must not fetch data or run business logic through the store: no `store.load()` / `store.loadX()`, and no `init()` of a child store that the parent store owns. The lifecycle bridge `useEffect(() => { store.onMount(); return () => store.onUnmount(); }, [store])` is correct and is not flagged (D6) — it hands the mount event to the store, which decides what to load
-- [ ] `useEffect` must not contain API calls or IO
-- [ ] `useEffect` used to synchronize component state with store state is a sign the component should be an `observer` instead
-- [ ] Every `useEffect` that creates a subscription, timer, or listener MUST return a cleanup function
-
-Flags:
-- `useEffect` calls `store.loadX()`, or a child store's `init()` that the parent store owns — **major** (`store.onMount()` / `store.onUnmount()` in the bridge form is not this)
-- `useEffect` contains `fetch()` or IO — **major** (API in component)
-- `useEffect` contains business logic / state derivation — **major**
-- `useEffect` creates a subscription/timer/listener with no cleanup return — **major** (memory leak)
-
-#### A4. Key Props on Lists
-
-- [ ] Every `.map()` rendering React elements MUST have a `key` prop on the root returned element
-- [ ] Keys must be stable, unique identifiers — not array index when the list can reorder or filter
-- [ ] Key must be on the element returned by `.map()`, not a child inside it
-
-Flags:
-- Missing `key` prop on list — **major** (causes reconciliation bugs)
-- `key={index}` on a list that can reorder, filter, or paginate — **minor**
-
-#### A5. Accessibility Basics
-
-- [ ] `<img>` tags MUST have `alt` attribute (can be `alt=""` for decorative images, must be descriptive for content images)
-- [ ] Interactive elements (`<button>`, `<a>`) with no visible text content MUST have `aria-label` or `aria-labelledby`
-- [ ] Form inputs MUST have an associated `<label>` (via `htmlFor` + `id`, or `aria-label`)
-- [ ] `role="button"` on a `<div>` or `<span>` without `tabIndex={0}` and keyboard handler — prefer a real `<button>`
-- [ ] `onClick` on non-interactive elements without keyboard equivalent
-
-Flags:
-- `<img>` without `alt` — **major**
-- Interactive element without accessible name — **major**
-- Non-semantic interactive element without keyboard support — **minor**
-
----
-
-### Part B: MobX Store Patterns
-
-#### B1. Store Structure
-
-- [ ] Store class MUST call `makeObservable(this)` in the constructor
-- [ ] Observable state MUST use `@observable`, `@observable.shallow`, `@observable.ref`, or `@observable.struct` decorators
-- [ ] Derived values MUST live in `@computed` getters, not recomputed in components or plain methods
-- [ ] `@observable.ref` is preferred for large external objects or objects that manage their own reactivity
-
-Flags:
-- `makeObservable(this)` missing from constructor — **major** (nothing is reactive; stale UI, not corrupted state)
-- Observable state missing `@observable` decorator — **major**
-- Derived value in plain method instead of `@computed` — **minor**
-
-#### B2. Member Ordering
-
-The canonical class member order (flag deviations):
-
-1. `private` fields (internal state, disposers, injected deps as `private readonly`)
-2. Public fields (`@observable`, `readonly`, public plain props)
-3. `constructor`
-4. Public methods: `@computed` getters, lifecycle (`init`, `dispose`, `onMount`, `onUnmount`), public helpers/selectors, public `@action.bound` UI entrypoints
-5. `private` methods
-
-Flags:
-- Constructor before field declarations — **minor**
-- Private methods before public methods — **minor**
-- `@action.bound` public method buried among private methods — **minor**
-
-#### B3. Member Accessibility Modifiers
-
-ESLint rule: `@typescript-eslint/explicit-member-accessibility: ["error", { accessibility: "no-public" }]` — the word `public` is **forbidden** on any class member.
-
-Correct accessibility:
-- *(no modifier)*: observable fields, computed getters, lifecycle methods, public helper methods, public `@action.bound` UI methods
-- `private`: internal state (`disposed`, `initialized`, `_value`), helper methods, API-call methods (`fetchX`, `performX`), inter-store callbacks (`onChangeX`, `onFireX`, `handleX`, `syncX`)
-- `private readonly`: constructor-injected dependencies, immutable configuration (`service`, `context`, `id`)
-- `readonly`: immutable public identity fields (`pipelineType`, `contextActions`)
-- `protected`: only in abstract base classes for extension points
-
-Decision rule for inter-store callbacks: ask "Is this called from JSX or a React event handler?" If NO — it is `private`.
-
-Flags:
-- `public` keyword on any member — **minor** (ESLint `no-public` already fails CI; a reviewer restating a lint rule is not a merge gate)
-- `onChangeX`, `onFireX`, `handleX`, `syncX` without `private` — **major**
-- Missing `private` on internal state or helper methods — **major**
-- Missing `private readonly` on injected dependencies — **minor**
-
-#### B4. Observable Collections
-
-- [ ] `IObservableArray` MUST be mutated in place using MobX methods (`.replace()`, `.push()`, `.splice()`, etc.) inside `runInAction` — never reassigned
-- [ ] `ObservableMap` MUST be mutated using `.set()`, `.delete()`, `.merge()`, `.replace()` — never reassigned
-- [ ] Deep `@observable` on a large external object/instance should use `@observable.ref` instead
-
-Flags:
-- `IObservableArray` field reassigned instead of using `.replace()` — **major**
-- `ObservableMap` field reassigned instead of `.replace()` or `.merge()` — **major**
-- Observable mutation outside `runInAction` in async context — **major**, or **blocker** where the interleaving can corrupt persisted state (frontend law 1)
-
-#### B5. Reactions and Disposers
-
-- [ ] Every `autorun`, `reaction`, or `when` created in the store MUST be disposed in `dispose()`
-- [ ] Disposers MUST be stored in `private disposers: IReactionDisposer[]`
-- [ ] `dispose()` MUST call `this.disposers.forEach(d => d())` (or equivalent)
-- [ ] Stores with async operations MUST have a `disposed` guard: check `if (this.disposed) return` after each `await`
-
-Flags:
-- `autorun` / `reaction` / `when` without disposer in `dispose()` — **major**
-- Missing `dispose()` in a store that creates reactions — **major**
-- Missing `disposed` guard in async store methods — **major**
-- `private disposers: IReactionDisposer[]` missing when reactions are used — **minor**
-
-#### B6. Actions and Async
-
-**Public methods (UI entrypoints):**
-- [ ] Public mutating methods called from React components or route handlers MUST be `@action.bound`
-- [ ] Public `@action.bound` methods MUST stay thin: optional guard → delegate to private method
-- [ ] Public non-mutating helpers/selectors must NOT be `@action.bound` (unnecessary and misleading)
-- [ ] Arrow method on a class used as an event handler alternative: acceptable when context must escape but generally prefer `@action.bound`
-
-**Private async methods:**
-- [ ] State mutations after `await` MUST be wrapped in `runInAction()`
-- [ ] Private async methods that own loading/error flags MUST use `try/catch/finally`
-- [ ] `catch (err: unknown)` MUST be used — NOT `catch (err: any)` or untyped `catch (err)`
-- [ ] `finally` block MUST reset loading flags (e.g., `this.isLoading = false`) inside `runInAction`
-
-Flags:
-- Public UI method missing `@action.bound` — **major**
-- Public helper method marked `@action.bound` but does not mutate state — **minor**
-- Public async action doing API/IO directly instead of delegating to private — **major**
-- State mutation after `await` outside `runInAction` — **major**, or **blocker** where the interleaving can corrupt persisted state (frontend law 1)
-- Missing `try/catch/finally` on private async method owning loading flags — **major**
-- `catch (err: any)` instead of `catch (err: unknown)` — **minor**
-
-#### B7. Inter-Store Callbacks and Internal Handlers
-
-Methods serving as callbacks between stores or internal event handlers MUST be `private`.
-
-Patterns that MUST be `private` unless called from JSX:
-- `onChangeEditorState(state)`
-- `onFireExecutorChange()`
-- `onChangeX(value)`
-- `handleX()`
-- `syncX()`
-
-The test: "Is this method called from JSX or passed as a React event handler prop?" If NO — it is `private`, full stop.
-
-Flags:
-- Public method matching `onChangeX`, `onFireX`, `handleX`, `syncX` naming not called from components — **major**
-- Inter-store callback without `private` — **major**
-- `@action.bound` on a `private` method that is not passed as a callback reference — **minor**
-
-#### B8. Bidirectional Sync Bounce Protection
-
-When two stores synchronize state in both directions, at least one direction MUST have an equality guard (`if (newValue !== currentValue)`) before writing to the other store. Without this, changes bounce indefinitely.
-
-Flags:
-- Bidirectional store sync without equality guard — **blocker** (unbounded update loop: the render hangs)
-- Store A writes to Store B in a callback from Store B without `!==` check — **blocker**
-- Truthy guard (`if (value)`) on optional/nullable field instead of equality check in sync logic — **major**
-
-#### B9. API Calls Placement
-
-- [ ] API/IO calls belong in `private` store methods only
-- [ ] Public `@action.bound` methods are thin: guard-check → delegate to private method
-- [ ] Components MUST NOT call APIs directly (fetch, axios, httpClient, service.callX) — even inside `useEffect`
-
-Flags:
-- API call inside a public `@action.bound` method body — **major**
-- API call in a component (hook, handler, useEffect) — **major** (frontend law 3)
-
-#### B10. Lifecycle Initialization and Disposal
-
-- [ ] `init()` / `onMount()` of a **child** store is called from the **parent store's** `init()` / `onMount()`, not from a component `useEffect`. The component's own store is different: its `onMount()` / `onUnmount()` are called from the component through the lifecycle bridge (D6), and that is correct
-- [ ] Components must NOT trigger store data loading via `useEffect` (e.g., `useEffect(() => { store.load() }, [])`)
-- [ ] Parent store's `onUnmount()` / `dispose()` MUST call `childStore.dispose()` to prevent stale-state updates
-- [ ] Store `dispose()` MUST set `this.disposed = true` before canceling async work
-
-Flags:
-- Component `useEffect` calls `store.loadX()`, or a child store's `init()` / `onMount()` that the parent store owns — **major**. Do not flag the bridge `useEffect(() => { store.onMount(); return () => store.onUnmount(); }, [store])`
-- Parent store does not call `child.dispose()` in `onUnmount()` / `dispose()` — **major**
-- Missing `disposed` flag in store with async operations — **major**
-
----
-
-### Part C: TypeScript Safety
-
-- [ ] No `any` type in changed code — use `unknown` + type guards or specific types
-- [ ] No `as any` or `as unknown as T` unsafe double-cast without a comment explaining why
-- [ ] No `!` non-null assertion without a comment proving the value cannot be null/undefined at that point
-- [ ] Props interface MUST use `I` prefix: `interface IMyComponentProps { ... }`
-- [ ] Prefer optional chaining (`?.`) and nullish coalescing (`??`) over `!` assertions
-- [ ] `catch (err: unknown)` — typed error handling, not `catch (err)` or `catch (err: any)`
-
-Flags:
-- `any` type in new code — **major**
-- `!` non-null assertion without justification comment — **minor**
-- Props interface without `I` prefix — **minor**
-- `catch (err: any)` — **minor**
-
----
+A pattern listed under a row's **Not a finding** is not reported. A defect no row covers is rated by the canonical rubric.
 
 ### Part D: Project-Specific Patterns (populated from CLAUDE.md in Step 0)
 
@@ -397,69 +181,7 @@ class RootStore {
 - Swappable stores MUST use `@observable.shallow`, not `@observable` — deep observation of child store internals causes double-tracking — **major** if using `@observable` on swappable stores
 - Context interface (callbacks the child calls back into the parent) should be passed as arrow functions, not raw store references — flag raw store reference leak as **minor**
 
-#### D3. Inter-Store Method Style: Arrow Functions vs. @action.bound
-
-When a project CLAUDE.md defines which binding style to use for methods passed between stores:
-
-```typescript
-// Inter-store callback: arrow function property (auto-bound; no @action.bound needed)
-handleChildChange = (value: string) => {
-  runInAction(() => { this.value = value; });
-};
-
-// UI entrypoint called from JSX: @action.bound
-@action.bound
-submit() { ... }
-```
-
-If the project follows this distinction:
-- Arrow function for store-to-store methods: correct — do NOT flag
-- `@action.bound` on an inter-store method: **minor** (stylistically wrong per project convention, functionally OK)
-- Neither arrow nor `@action.bound` on a mutating method — **major** (Iron Laws still apply regardless of style choice)
-
-#### D4. React Hooks to Avoid (MobX Equivalents)
-
-When a project CLAUDE.md explicitly forbids certain hooks in favor of MobX equivalents:
-
-| Forbidden Pattern | MobX Replacement | Severity if found |
-|-------------------|-----------------|-------------------|
-| `useState` for store-managed state | `@observable` in store | major |
-| `useMemo` for derived store values | `@computed` getter | major |
-| `useCallback` wrapping a store method | `@action.bound` or arrow method | minor |
-
-Flag only when the hook manages state that belongs in a store. Local UI-only state (`useState` for a controlled input that never persists) is acceptable.
-
-#### D5. Store Initialization in Components
-
-When a project defines a canonical store initialization pattern:
-
-```typescript
-// Canonical: useLocalObservable with lazy initializer (store created once, not on every render)
-const store = useLocalObservable(() => props.store ?? new ComponentStore(props.service));
-```
-
-- `new Store()` directly in the component body — **major** (store recreated on every render)
-- Store created with `useMemo` instead of `useLocalObservable` — **minor** (not observable-aware; `useLocalObservable` is the correct primitive)
-- `useLocalObservable(() => props.store)` when the store is always provided externally is acceptable
-
-#### D6. Store Lifecycle Bridge via useEffect
-
-The component tells its store that it mounted and unmounted; the store decides what that means:
-
-```typescript
-useEffect(() => {
-  store.onMount();
-  return () => store.onUnmount();
-}, [store]);
-```
-
-This is the correct lifecycle bridge — do not flag it under A3 or B10. Those rules target a data fetch or business logic placed in the effect, and a component reaching into a child store the parent store owns; they do not target the lifecycle hooks themselves. What `onMount()` does (load, subscribe, initialise child stores) is store code and is reviewed as store code.
-
-Distinction:
-- `useEffect(() => { store.onMount(); return () => store.onUnmount(); }, [store])` — correct lifecycle bridge — **do not flag**
-- `useEffect(() => { store.loadData(); }, [])` or `useEffect(() => { store.childStore.init(); }, [])` — data trigger, or a child store's lifecycle the parent store owns, run from the component — **major** (A3 / B10, regardless of project conventions)
-
-#### D7. JSX and Naming Conventions
+#### D3. JSX and Naming Conventions
 
 When a project CLAUDE.md defines JSX and naming rules:
 
@@ -533,7 +255,7 @@ STATUS: DONE_WITH_CONCERNS
 ### [F-001] Title
 - **Severity**: blocker | major | minor | info
 - **File**: path/to/file.ts:line
-- **Rule**: Part A3 — useEffect Misuse | Part B6 — Actions and Async | etc.
+- **Rule**: the rule and row, e.g. `code-style-patterns` Rule 5 | `mobx-store-template` Rule 2
 - **Problem**: what is wrong in the code
 - **Why it matters**: concrete impact (silent non-reactivity, stale state, memory leak, etc.)
 - **Fix**: concrete suggestion
@@ -549,20 +271,8 @@ STATUS: DONE_WITH_CONCERNS
 
 ### Where frontend conditions land
 
-Severity comes from **Severity (canonical)** in `review-orchestrator/SKILL.md`.
-This reviewer keeps no table of its own; what follows is where its recurring
-conditions land under that rubric, not a second rubric.
+Severity comes from **Severity (canonical)** in `review-orchestrator/SKILL.md`; the rules' **Review severities** tables (Parts A-C) are that rubric applied to these patterns, and this reviewer keeps no table of its own. Outside those rows: a store mutation that corrupts or loses persisted state is `blocker`, a render path that throws on an input the change admits is `blocker`, and an observation with no concrete bug is `info` (shared laws 1 and 2).
 
-| Condition | Severity | Why, under the canonical rubric |
-|---|---|---|
-| A store mutation that corrupts or loses persisted state | `blocker` | Data corruption |
-| A render path that throws on an input the change admits | `blocker` | Crash |
-| Missing `observer()` on a component that reads observables | `major` | Named trigger (the observable changes) and named outcome (the UI does not update). Stale UI is not a crash, data loss, vulnerability, or missing acceptance criterion |
-| Observable mutation outside an action or `runInAction` | `major` — `blocker` only where the interleaving can corrupt persisted state | Same wording as `review-logic` and `review-highload` for a race: the outcome decides |
-| API/IO call in a component | `major` | Layer violation. Identical to `review-architecture`'s rule for the same condition, which previously called it `major` while this file called it `blocker` |
-| `useState` for store-managed state; `useMemo` for a derived store value; a store constructed in the component body | `major` | Named trigger (a re-render) and named outcome (state lost or recreated) |
-| `public` on a class member; `useCallback` around a store method; a store created with `useMemo` instead of `useLocalObservable`; an unprivate inter-store callback | `minor` | The code behaves correctly. A lint rule that fails CI is caught by the machine, not by a reviewer, and the cost is to the next editor |
-| Observation with no concrete bug | `info` | Shared laws 1 and 2 |
 
 ---
 
@@ -573,13 +283,13 @@ Stop and re-read these rules if you are thinking:
 | Rationalization | Why it's wrong |
 |---|---|
 | "The store is small, no need for full observer wrapping" | Missing `observer()` is reported regardless of store size — frontend law 2. It is `major`, not `blocker`: stale UI is not one of the four shapes |
-| "The mutation happens in a non-async method, so runInAction isn't needed" | Mutations outside action/runInAction are always at least `major` — frontend law 1 |
-| "I'll mark the API call in component as minor to avoid friction" | API in a component is `major`, never `minor` — frontend law 3, and the same severity `review-architecture` gives it |
+| "The mutation happens in a non-async method, so runInAction isn't needed" | Mutations outside action/runInAction are always reported — frontend law 1; the rule's severity table sets the level |
+| "I'll skip the API call in component to avoid friction" | API in a component is always reported — frontend law 3; `minor` unless a named defect or a stated project rule makes it `major`, as in `review-architecture` |
 | "The `public` keyword is just a style issue, I'll call it minor" | It is `minor` — but still reported. The linter fails CI on it, which is why a reviewer does not need to block merge on it too |
 | "This inter-store callback works fine as public" | Frontend law 5: if it is not called from JSX, it must be `private` |
 | "No spec compliance check needed for this skill" | Correct — this skill covers Stage 2 (code quality) only; spec compliance is handled by the orchestrator or review-logic |
 | "I can suggest adding useCallback everywhere for safety" | With MobX+observer, useCallback is rarely needed and adds noise; only flag when concretely justified |
-| "The bidirectional sync looks fine, no equality guard needed" | Bidirectional sync without equality guard is a blocker — infinite loop risk |
+| "The bidirectional sync looks fine, no equality guard needed" | Bidirectional sync without an equality guard is always reported; its level follows the `mobx-store-template` table (reachability decides) |
 
 ---
 

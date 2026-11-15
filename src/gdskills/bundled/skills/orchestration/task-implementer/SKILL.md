@@ -204,8 +204,8 @@ Rules `resolve-context` listed are already read (2.0c); load the rest by what yo
 
 **Always load (all task types):**
 - `tdd-workflow.mdc` — red-green-refactor, STATUS: DONE requires passing tests
-- `error-handling.mdc` — Result pattern, no silent failures
-- `solid-principles.mdc` — SRP, OCP, DIP (load for any task that creates new classes/services)
+- `error-handling.mdc` — failure signalled explicitly (throw by default, a discriminated result where callers branch), context and `cause` kept, no silent failures
+- `solid-principles.mdc` — SRP, OCP, DIP and the function-design thresholds the code-quality reviewer applies (load for any task that creates or grows classes, services or functions)
 
 **Load by task type:**
 

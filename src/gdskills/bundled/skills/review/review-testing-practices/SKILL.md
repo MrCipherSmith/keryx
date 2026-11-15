@@ -21,7 +21,7 @@ triggers:
   - "review testing practices"
 metadata:
   author: "MrCipherSmith"
-  version: "1.1.0"
+  version: "1.3.0"
   category: "review"
 license: "MIT"
 ---
@@ -52,12 +52,13 @@ Reading a suite tells you whether it is *well written*. It does not tell you
 whether it can **fail**. Those are different questions, and the second one is the
 one this reviewer exists to answer.
 
-So: before the checklist, for every guard, filter, conditional or branch the diff
-**added or changed**, delete it, run the nearest suite, record the result, revert.
+So: before the checklist, list every guard, filter, conditional or branch the diff
+**added or changed** as a `mutant_candidate` (the gate deleted or inverted), and run
+each one in a scratch copy, never in the reviewed tree: other reviewers read it at once.
 
 ```
 for each gate G added or changed in scope A:
-    delete G  ->  run the nearest suite  ->  record red/green  ->  revert
+    candidate(G) -> keryx review mutate --spec <mutants.json> --test "<nearest suite>" --package <p> -> red/green
 ```
 
 **A gate whose deletion leaves the suite green is a finding**, however correct the
@@ -66,8 +67,7 @@ that separates it from the condition beside it.* It is mandatory when the gate w
 added in answer to an earlier round — that is where a regression costs most and
 where coverage is most often assumed rather than written.
 
-Publish the whole table, survivors and casualties both. The reds are what makes
-the greens mean something; a table with only survivors reads as cherry-picking.
+Publish the whole table, survivors and casualties both. The reds are what makes the greens mean something; a table with only survivors reads as cherry-picking.
 
 | mutation | result |
 |---|---|
@@ -84,8 +84,8 @@ this pass the class is unreachable for the whole round.
 
 ### Bounds
 
-- Run mutants one at a time on gates inside **scope A**, reverting each before the
-  next. Never leave a mutation in the tree.
+- Never edit the reviewed tree, not even to revert at once. With `run-tests`, run gates inside
+  **scope A** only through `keryx review mutate --spec <mutants.json>` (a scratch copy; the main session writes the file from your `mutant_candidates` to `research-evidence/mutants.json`); without it, run none: list `mutant_candidates` and stop, which is complete.
 - Run the **nearest** suite, not the full one. This is not a `test:mutation`
   sweep — those are slow, opt-in, and answer a different question.
 - Propose, do not cap: `mutant_candidates` in your `REVIEW_RESULT` names a mutant (`id`, `file`, `anchor`, `replacement`,
@@ -258,7 +258,7 @@ The moment a surviving mutation is accompanied by a **reachable input that makes
 
 | Rationalization | Why it is wrong |
 |----------------|-----------------|
-| "The suite is green, so the tests pin the behaviour." | Green is the state before the mutation pass, not its result. Delete the gate, run the nearest suite, and report what happened — that is the one question this reviewer exists to answer. |
+| "The suite is green, so the tests pin the behaviour." | Green is the state before the mutation pass, not its result. With `run-tests`, run the gate's mutant through `keryx review mutate` and report what happened; without it, list it in `mutant_candidates` and say nothing ran. |
 | "I could not run the suite, so I worked out what the mutation would do." | A predicted mutation is `info` at best and this lane has no use for one. Say which command you ran, what stopped it, and skip the pass — do not report a result you did not observe. |
 | "I only published the mutations that survived; the rest were noise." | The reds are what makes the greens mean something. A table of survivors alone reads as cherry-picking and will be discounted whole. |
 | "The fixture is named `drift-only`, so it covers the drift case." | The name is the claim under review. Open the producer and compare every field, not only the one the test pins; a fixture that carries another scenario's shape is coverage that lies. |
@@ -272,7 +272,7 @@ The moment a surviving mutation is accompanied by a **reachable input that makes
 
 Report done only once all of these hold:
 
-- The mutation table is published in full, survivors and casualties both, or the report says which command failed and that the pass was skipped.
+- The mutation table is published in full, survivors and casualties both, or the report says the pass was skipped (which command failed, or that `run-tests` was not allowed and `mutant_candidates` lists what would run).
 - The report states the cap: how many added or previously-requested gates were mutated and how many were not reached.
 - Every finding names `file:line` and the evidence that settles it — the mutation and its result, the producer line, or the selector that names the branch.
 - Every `blocker` and `major` carries `class_scope` with `sites` and an `enumeration_method` naming the search that produced them.

@@ -16,7 +16,7 @@ triggers:
   - "reactflow review"
 metadata:
   author: "MrCipherSmith"
-  version: "1.0.0"
+  version: "1.1.0"
   category: "review"
 license: "MIT"
 ---

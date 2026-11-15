@@ -2,6 +2,30 @@
 
 ## [Unreleased]
 
+## [0.4.29] - 2026-11-14
+
+### Added
+
+- **Continuous Shell and review diagnostics.** Shell startup creates a private, rotating NDJSON journal of call stages, periodic active-call snapshots and Work modal rendering measurements. `/diag` reports the journal path and write failures; evidence no longer depends on requesting a dump after a hang.
+
+
+## [0.4.28] - 2026-11-14
+
+### Added
+
+- **Shared Shell state export.** Set `KERYX_STATE_EXPORT_FILE` to publish a private JSON snapshot of the session, request, plan, open project Flows and task details. The Herdr cockpit consumes the same state through its compatibility adapter. [#1175](https://github.com/MrCipherSmith/keryx/pull/1175)
+
+### Changed
+
+- **Git publishing guidance.** Commit, push and PR workflows share one tested `git-publish` skill; obsolete bundled skills have been removed. [#1173](https://github.com/MrCipherSmith/keryx/pull/1173) [#1172](https://github.com/MrCipherSmith/keryx/pull/1172)
+
+### Fixed
+
+- **Review consistency.** Review lenses share one reviewer contract and severity rubric; routed-out reviewers no longer count as unresolved rule anchors. [#1174](https://github.com/MrCipherSmith/keryx/pull/1174) [#1171](https://github.com/MrCipherSmith/keryx/pull/1171)
+- **Shell setup routing.** The wiki-enrich pre-router no longer hijacks the `/setup` prompt. [#1169](https://github.com/MrCipherSmith/keryx/pull/1169)
+- **Dependency audit.** Updated Hono overrides clear the reported dependency vulnerabilities. [#1170](https://github.com/MrCipherSmith/keryx/pull/1170)
+
+
 ## [0.4.27] - 2026-11-13
 
 ### Added

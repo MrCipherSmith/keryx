@@ -1,0 +1,235 @@
+# Flow Journal
+
+- 2026-11-14T09:10:25.236Z - flow created
+- 2026-11-14T09:12:41.441Z - task-added: T5: Baseline recall bench for current lenses (testing-practices added)
+- 2026-11-14T09:12:41.880Z - task-added: T6: Contract and schema: reviewer command list, empty sites with enumeration_method, one known_findings
+- 2026-11-14T09:12:42.339Z - task-added: T7: No in-tree mutation: testing-practices, verifier, degradation, ui-ux
+- 2026-11-14T09:12:42.786Z - task-added: T8: One severity rubric across highload, backend, security-code, architecture, clean-code, style, performance, frontend
+- 2026-11-14T09:12:43.252Z - task-added: T9: Stale references and missing-input fallbacks
+- 2026-11-14T09:12:43.721Z - task-added: T10: Retarget performance and highload to CLI/TUI hot paths and repo concurrency
+- 2026-11-14T09:12:44.181Z - task-added: T11: Pinning test review-lens-contract.test.ts, mirror, versions, ceilings, gdskills tests
+- 2026-11-14T09:12:44.651Z - task-added: T12: Recall bench after the edits and comparison with baseline
+- 2026-11-14T09:12:45.121Z - task-done: T2: Implement per plan
+- 2026-11-14T09:12:45.601Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-11-14T09:12:46.085Z - task-done: T1: Collect remaining context
+- 2026-11-14T09:12:46.580Z - frozen: 9 criteria; checksum recorded
+- 2026-11-14T09:12:47.059Z - started
+- 2026-11-14T09:13:35.789Z - task-attempt: T5: started (attempt 1) — f490-T5 dispatch
+- 2026-11-14T09:13:36.249Z - task-attempt: T6: started (attempt 1) — f490-T6 dispatch
+- 2026-11-14T09:13:36.709Z - task-attempt: T7: started (attempt 1) — f490-T7 dispatch
+- 2026-11-14T09:13:37.175Z - task-attempt: T8: started (attempt 1) — f490-T8 dispatch
+- 2026-11-14T09:13:37.629Z - task-attempt: T9: started (attempt 1) — f490-T9 dispatch
+- 2026-11-14T09:13:38.102Z - task-attempt: T10: started (attempt 1) — f490-T10 dispatch
+- 2026-11-14T09:18:19.299Z - task-done: T6: Contract and schema: reviewer command list, empty sites with enumeration_method, one known_findings
+- 2026-11-14T09:19:27.704Z - task-done: T7: No in-tree mutation: testing-practices, verifier, degradation, ui-ux
+- 2026-11-14T09:21:48.103Z - task-done: T10: Retarget performance and highload to CLI/TUI hot paths and repo concurrency
+- 2026-11-14T09:22:11.397Z - task-done: T5: Baseline recall bench for current lenses (testing-practices added)
+- 2026-11-14T09:23:13.862Z - task-done: T8: One severity rubric across highload, backend, security-code, architecture, clean-code, style, performance, frontend
+
+## 2026-11-14 implementation (T5-T11)
+
+- T5 baseline: 21 lens runs (13 reused from the session's 150 KB slice bench, 8 new) on c01, c02, c03, c09, c11 with the bench brief; outputs in the session scratchpad `slicebench/out/`.
+- T6 orchestrator spawn bullet now lists git log/blame/show, the layers-block commands and keryx ctx rg/read, and forbids tests/health/servers/mutation/writes; `class_scope.sites` may be empty with a non-empty enumeration_method (also in the strict contracts copy, pinned identical); duplicate `known_findings` merged (the strict definition was already the effective one).
+- T7 testing-practices and verifier mutate only through `keryx review mutate`; degradation's red-test/merge-trace only from orchestrator or scratch; ui-ux never starts a server; regression FIX-slice and frozen-criteria fallbacks; pr-contract `keryx wiki query` removed.
+- T8 severity: layer violations, structural, duplication, comments, circular imports rated by the canonical boundary test (minor unless a named defect or project rule); unreachable security weakness info; verdict tokens removed. `review-skills-iron-laws.test.ts` "layer violation is major in both" became "rated the same, minor by default": its purpose (the two lenses agree) kept; the old `major` contradicted the canonical boundary test.
+- T9 covered inside T7/T8/T10; the code-style-review / code-mobx-store-review hand-offs were already gone on this base (removed with the code-* profiles in PR 1172).
+- T10 performance/highload: CLI/TUI hot-path and repo-concurrency sections first; highload's 22 inline Flags severity labels removed (conditions kept); load_profile fallback.
+- Concern (out of scope, follow-up): review-frontend still has inline `major` labels on convention conditions with no trigger (missing `private`, `any` in new code, `observer` inside another HOC, public async action doing IO).
+- `install.test.ts` "read-only rules/core directory" fails on the base branch too (EACCES in this environment): pre-existing, not this flow.
+- Execution-metrics question not asked (owner follows on a phone); no metrics collected.
+- 2026-11-14T09:25:31.853Z - task-done: T9: Stale references and missing-input fallbacks
+- 2026-11-14T09:25:32.292Z - task-done: T11: Pinning test review-lens-contract.test.ts, mirror, versions, ceilings, gdskills tests
+- 2026-11-14T09:25:47.154Z - task-attempt: T12: started (attempt 1) — after-arm bench
+
+## T12 — bench repeat (AC8), 2026-11-14
+
+The first bench showed before 14.0 and after 11.5 of 22. All the loss was on c09 and c11, and the unchanged logic lens moved too, so I repeated it. The repeat ran security-code and regression on c09 and c11, two runs per arm. Every arm went through the same blind judges (m01..m08).
+
+| arm | c09 | c11 | total | security-code | regression |
+|---|---|---|---|---|---|
+| B1 (old) | 1.5 | 4.0 | 5.5 | 3.0 | 2.5 |
+| B2 (old) | 0.5 | 4.0 | 4.5 | 2.0 | 2.5 |
+| A1 (new) | 0.5 | 3.0 | 3.5 | 2.0 | 1.5 |
+| A2 (new) | 2.0 | 3.0 | 5.0 | 3.0 | 2.0 |
+
+- **security-code:** mean 2.5 before and 2.5 after. No change.
+- **regression:** mean 2.5 before, 1.75 after (-0.75). This is within AC8's -1 tolerance.
+- **c09:** the swing between runs (0.5..2.0) is larger than the gap between arms.
+- **c11:** each new run misses one truth item, but a different one each time (A1 T1, A2 T4). That points to sampling, not to a lost check.
+- **What changed in regression:** on a non-FIX slice the diff only adds a FIX-slice paragraph, a criteria fallback, and moves "thin test" to testing-practices. No detection check was removed.
+
+AC8: met, with a residual -0.75 on regression noted. **Superseded** by the "AC8 per lens" section below, which gives the verdict "plausibly met, not proven".
+- 2026-11-14T09:44:30.023Z - task-done: T12: Recall bench after the edits and comparison with baseline
+
+## AC8 per lens (review round 1 asked for all four), 2026-11-14
+
+The judges matched each truth item to the finding that found it. Score = match + 0.5 x partial. B is the base lens, A is this flow's lens. The first bench covers cases c01, c02, c03, c09 and c11, one run per arm. The repeat covers c09 and c11 for security-code and regression only, two runs per arm. All runs went through the same blind judge brief.
+
+| lens | first bench B -> A | repeat c09+c11, B mean -> A mean | changed by this flow |
+|---|---|---|---|
+| logic | 3.0 -> 5.0 | not repeated | no (control) |
+| security-code | 4.0 -> 2.0 | 2.5 -> 2.5 | yes |
+| regression | 2.5 -> 1.0 | 2.5 -> 1.75 | yes |
+| testing-practices | 4.5 -> 3.5 | not repeated | yes |
+
+Notes:
+- **Attribution.** One truth item can be credited to more than one lens, so per-lens sums can exceed the case total. In this run they happen to equal it: 14.0 before and 11.5 after.
+- **Reading.** The unchanged logic lens moved +2 between identical runs, which shows the noise level of a single run.
+- **security-code:** the repeat shows no difference on c09 and c11, where its whole first-bench loss on those cases happened. The remaining 1 point of its first-bench loss is on c01-c03, single run, not repeated.
+- **testing-practices:** -1 in a single run, which is at the tolerance edge, not repeated.
+- **regression:** -0.75 averaged over the two repeat runs on c09 and c11.
+- **Tolerance.** AC8 does not say whether its tolerance is per lens or pooled. Read per lens, two lenses exceed -1 in the single first run:
+  - **security-code:** -2.0 in the first run, 0.0 averaged over the two repeat runs on c09 and c11.
+  - **regression:** -1.5 in the first run, -0.75 averaged over the two repeat runs.
+- **Lens text benched.** The "after" arm was benched on the lens text at T12, before review-fix commit fdf0df1f2. That commit edited all four AC8 lenses again: it bumped logic to 1.1.0 (preamble only), changed the security-code law, and changed testing-practices and regression wording. So logic is not an exact control at head, and the head text of these lenses was not benched.
+
+**Verdict for the gate judge: AC8 is plausibly met, not proven.** Proving it needs a pooled bench of at least 3 runs per arm on all five cases, which was not run within this flow's budget.
+
+- **Baseline case set.** The cases differ from plan.md (c02/c03/c05/c09): T5 ran c01, c02, c03, c09 and c11 instead. The reason for the swap was not recorded. c05 does have truth items (4), so this is a deviation from the plan, not a forced substitution.
+- **Raw outputs.** They live in the session scratchpad and are not committed.
+
+## Review round 1 notes
+
+- **AC9 locally:** `src/gdskills/install.test.ts` "read-only rules/core directory" fails with EACCES on the base branch too, so it is environmental. Judge AC9 from CI.
+- **AC3:** frozen AC3 allows ui-ux to run a server only when the payload supplies its URL. The built lens never starts a server and uses a supplied URL or screenshots only, so AC3's clause is met vacuously; AC3 itself is unchanged.
+- **Earlier concern resolved:** the T8 concern that review-frontend still had inline `major` labels was resolved in review-fix commit fdf0df1f2.
+- **Plan steps vs flow task ids:** plan step Tn is flow task T(n+5), so plan T1..T7 are flow T6..T12. Flow T5 is the baseline bench from the plan's quality-guard paragraph. Flow T12 is the after-bench (plan T7), and the repeat ran inside it. The scaffold rows T1..T4 were registered by `flow init`. T1..T3 were marked done before the freeze; that is scaffold bookkeeping and no work was done under them. T4 is this review.
+- 2026-11-14T10:56:43.046Z - task-done: T4: Self-review and prepare draft PR
+
+## AC8 re-bench on the head lens text, 2026-11-14
+
+This replaces the "plausibly met, not proven" verdict above.
+
+**Setup.**
+- Lens text: base 536da7f against head 23b47b1. Head includes the round-3 fixes.
+- Lenses: logic, regression, security-code and testing-practices.
+- Cases: the slices that carry them in c01, c02, c03, c09 and c11.
+- Runs: 3 runs per arm, 126 in total.
+  - 27 base runs were reused from the earlier benches. The other 99 were new and ran interleaved, base and head alternating.
+- Judging: 30 blind judges, one per (case, run), with the arm label sealed.
+- Score: matches + 0.5 × partials against the truth file.
+
+| case | base B1/B2/B3 | mean | head H1/H2/H3 | mean |
+|---|---|---|---|---|
+| c01 | 2.0 / 2.0 / 2.0 | 2.00 | 2.0 / 2.0 / 2.0 | 2.00 |
+| c02 | 4.5 / 4.5 / 4.5 | 4.50 | 4.0 / 4.5 / 4.0 | 4.17 |
+| c03 | 1.5 / 1.5 / 2.0 | 1.67 | 1.0 / 0.5 / 1.5 | 1.00 |
+| c09 | 2.0 / 1.0 / 1.0 | 1.33 | 0.5 / 0.5 / 0.5 | 0.50 |
+| c11 | 4.0 / 4.0 / 4.0 | 4.00 | 3.5 / 3.5 / 4.0 | 3.67 |
+| **total** | 14.0 / 13.0 / 13.5 | **13.50** | 11.0 / 11.0 / 12.0 | **11.33** |
+
+**Per lens.** Each truth item is credited to the lens that produced the finding the judge cited. The means are over 3 runs:
+- logic: 4.50 → 3.83
+- regression: 3.83 → 2.00
+- security-code: 2.00 → 3.00
+- testing-practices: 3.17 → 2.50
+
+**Candidate volume.** Base runs produced 70, 67 and 67 candidates. Head runs produced 65, 64 and 76.
+
+**Reading.**
+- The two arms do not overlap: the best head run (12.0) is below the worst base run (13.0).
+- Using only the fresh base run, B3 = 13.5 still beats every head run, so the result does not come from reusing older base outputs.
+- The pooled drop is -2.17 of about 13.5, roughly 16%. Four of the five cases lose recall; c01 is flat.
+- Security-code is the only lens that gains.
+- No reviewer in either arm called `keryx gdgraph`, `wiki ask`, `memory search` or `test related`; all used `keryx ctx rg`. So the new layer-command sentence did not draw reviewers into other tools.
+- The logic lens changed by one preamble sentence only, yet moved -0.67. Per-lens deltas below about 1 are therefore within noise.
+- The regression drop (-1.83) exceeds that bound. c09 T1, a blocker bypass of the secret detector, was found 2 times in base and 0 times in head.
+
+**Verdict: AC8 is not met.** The head lens text lowers pooled recall on this corpus, and the regression lens carries most of the loss. The flow cannot close on AC8 until the regression lens change is reverted or reworked and a re-bench shows no drop.
+
+## AC8 fix: regression lens rolled back, re-measured, 2026-11-14
+
+**Change.** `review-regression` now carries the base 536da7f text, version 1.3.0, with one edit: the contract preamble sentence (read-only layer commands, never writes in the reviewed tree).
+- Three round-fix edits are dropped:
+  - the FIX-slice mode;
+  - the missing-criteria fallback;
+  - "thin test is testing-practices' lane", and the pre-existing-code wording.
+- One wrapped paragraph is joined to a single line, so the rendered text is unchanged.
+- The length ceiling goes from 213 to 212.
+
+**Bench.** Regression lens only, on c02, c09 (slices 1 and 2) and c11, 3 runs per arm, with 27 blind judges, one per (case, arm, run).
+- B is base. H is head 23b47b1. R is the rollback.
+- The B and H runs are the regression runs from the re-bench above. R is 12 new runs.
+
+| arm | c02 | c09 | c11 | totals | mean |
+|---|---|---|---|---|---|
+| B base | 3 / 3 / 3 | 1.5 / 1 / 0.5 | 1.5 / 3 / 2.5 | 6 / 7 / 6 | **6.33** |
+| H head | 3 / 1 / 3 | 0.5 / 0.5 / 0.5 | 2 / 2.5 / 2 | 5.5 / 4 / 5.5 | **5.00** |
+| R rollback | 3 / 3 / 3 | 0.5 / 1 / 1 | 2.5 / 2 / 3 | 6 / 6 / 7 | **6.33** |
+
+**Reading.**
+- R equals B (6.33 against 6.33). Every R run is at least 6, and every H run is at most 5.5.
+- So the head regression edits caused the regression loss, and the rollback removes it.
+- In the pooled re-bench, the other per-lens deltas were each 0.67 or less, which is the noise level shown by the one-sentence logic change. Security-code gained.
+
+**Verdict: AC8 is met for the regression lens.** The pooled four-lens bench was not re-run with R. Its remaining per-lens deltas are within the measured noise.
+- 2026-11-14T13:17:15.376Z - ac-confirmed: AC1: verify exec: bun test src/gdskills/review-lens-contract.test.ts src/review/chunk-findings.test.ts -> 25 pass, 0 fail (head after c973edf94 + regression fallback edit) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-11-14T13:17:15.620Z - ac-confirmed: AC2: verify exec: bun test src/gdskills/review-lens-contract.test.ts src/review/chunk-findings.test.ts -> 25 pass, 0 fail (head after c973edf94 + regression fallback edit) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-11-14T13:17:15.922Z - ac-confirmed: AC3: verify exec: bun test src/gdskills/review-lens-contract.test.ts src/review/chunk-findings.test.ts -> 25 pass, 0 fail (head after c973edf94 + regression fallback edit) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-11-14T13:17:16.152Z - ac-confirmed: AC5: verify exec: bun test src/gdskills/review-lens-contract.test.ts src/review/chunk-findings.test.ts -> 25 pass, 0 fail (head after c973edf94 + regression fallback edit) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-11-14T13:17:16.479Z - ac-confirmed: AC9: bun test src/gdskills: 8319 pass, 1 fail = install.test.ts EACCES (local read-only dir, environmental; CI green); review-lens-contract+chunk-findings 25/25; mirrors cmp-identical; versions bumped; ceilings respected (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-11-14T13:17:27.147Z - ac-confirmed: AC4: judged: inline severity tables in highload/backend/security-code/architecture/clean-code/style/performance/frontend now defer to the canonical rubric; AC4 pins in review-lens-contract.test.ts (frontend store-load not primary major; backend stack-trace/auth-guard ladder; security unreachable=info; performance load-time cap scoped); three review rounds closed all blocker/major on this criterion (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-11-14T13:17:27.382Z - ac-confirmed: AC7: judged: review-performance Part 0 names CLI command start/per-keystroke/per-file hot paths; review-highload carries a CLI/TUI concurrency section (concurrent sessions, shared .metaproject writes, process fan-out, file locks) citable without a handler or load profile (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+
+## AC6 fallbacks for regression: measured in the lens, moved to the orchestrator, 2026-11-14
+
+**Measured arm S.** It is the R lens (1.3.0) plus two inline sentences:
+- with no frozen AC, use the PR body or issue, else say in the summary that none were supplied;
+- on a FIX slice there is no blast-radius set, so check the fix lines.
+
+S was measured on c02, c09 and c11 with 3 runs each, against the same truth set, with blind judges.
+
+| arm | c02 | c09 | c11 | totals | mean |
+|---|---|---|---|---|---|
+| B (base) | 3 / 3 / 3 | 1.5 / 1 / 0.5 | 1.5 / 3 / 2.5 | 6 / 7 / 6 | 6.33 |
+| R (1.3.0) | 3 / 3 / 3 | 0.5 / 1 / 1 | 2.5 / 2 / 3 | 6 / 6 / 7 | 6.33 |
+| S (1.4.0 draft) | 3 / 3 / 4 | 0.5 / 0.5 / 0.5 | 1.5 / 1.5 / 3 | 5 / 5 / 7.5 | 5.83 |
+
+**Reading.**
+- S is within the AC8 tolerance: -0.5 against a bound of -1.
+- But c09 T1, the blocker bypass of the secret detector, was found by S in 0 of 3 runs. Base found it in 2 of 3 and R in 1 of 3. Head lost the same item in the earlier re-bench.
+
+**Owner decision.** Keep the regression lens at 1.3.0.
+
+**Where the fallbacks went instead.** They are now stated in `review-orchestrator/SKILL.detail.md` (scope-B section, orchestrator version 1.16.1) as what the orchestrator puts into the dispatch:
+- no frozen AC: pass the PR body or issue labelled as the criteria; with neither, pass `acceptance criteria: none supplied`, and the reviewer's summary says it judged against the diff alone;
+- FIX slice: no graph blast-radius set; the radius is the names the fix changed, and the reviewer checks the fix lines before it disposes the attached findings.
+
+**Why no new bench.** The reviewer-facing lens text is byte-identical to the measured R arm (6.33), and the bench payloads carry neither AC nor FIX slices. Recall on this corpus is therefore the R measurement.
+
+**AC6 and AC8.**
+- AC6 is now covered: highload, degradation and ui-ux in their lenses, and regression through the orchestrator dispatch.
+- AC8 is met by R = 6.33 against B = 6.33.
+- 2026-11-14T13:40:56.715Z - ac-confirmed: AC6: highload/degradation/ui-ux fallbacks in their lenses; regression no-AC and FIX-slice fallbacks stated in review-orchestrator SKILL.detail.md scope-B dispatch (8cb1e52ab); lens text kept at measured 1.3.0 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-11-14T13:40:56.945Z - ac-confirmed: AC8: blind re-bench: R (shipped 1.3.0 regression lens) 6.33 vs base 6.33 on c02/c09/c11 x3; S draft 5.83 rejected for losing c09 T1; journal 2026-11-14 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-11-14T13:44:14.433Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/1174 (warning: PR is not a draft)
+- 2026-11-14T14:15:38.931Z - completing
+- 2026-11-14T14:18:23.103Z - completion-attempt-recorded: attempt 1: passed
+- 2026-11-14T14:18:23.104Z - done: completed with exceptions: review:ingested-round: no managed review package exists under `.metaproject/flows/490-2026-11-14-review-lenses-one-reviewer-contract-one-/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed.; reason: three review rounds ran as branch-mode packages under .metaproject/reviews/2026-11-14-review-flow-branch*, not flow-linked; PR merged green; operator: yes | review:terminal-dispositions: no ingested round to read findings from; reason: three review rounds ran as branch-mode packages under .metaproject/reviews/2026-11-14-review-flow-branch*, not flow-linked; PR merged green; operator: yes | review:head-commit: no ingested round to compare against the PR head; reason: three review rounds ran as branch-mode packages under .metaproject/reviews/2026-11-14-review-flow-branch*, not flow-linked; PR merged green; operator: yes | review:verifier-stats: no ingested round to read verification stats from; reason: three review rounds ran as branch-mode packages under .metaproject/reviews/2026-11-14-review-flow-branch*, not flow-linked; PR merged green; operator: yes
+
+## Post-closure: pooled recall drop traced to the restated lens clause, 2026-11-14
+
+**What prompted it.** AC8 was confirmed on a regression-only bench. A later pooled four-lens re-bench of main (logic, regression, security-code, testing-practices) scored base 13.0 against final 11.67. That is -1.33, beyond the -1 tolerance.
+
+**Ablation.** All four arms were judged in one fresh blind batch: 51 judges, the arm key sealed.
+- c01 and c02 were re-run with a private snapshot copy per run. The base testing lens mutates the snapshot in place, and the earlier interleaved runs on those cases read each other's mutations.
+- Arms:
+  - B: base;
+  - F: main;
+  - A1: main without the restated clause "the read-only layer commands the orchestrator lists (...); it never writes in the reviewed tree";
+  - A2: main with testing-practices fully base.
+
+| arm | total (3 reps) | mean | clean c01+c02 | c03+c09+c11 |
+|---|---|---|---|---|
+| B | 13.5 / 12.5 / 13.5 | 13.17 | 6.67 | 6.50 |
+| F | 13.0 / 9.5 / 12.0 | 11.50 | 6.00 | 5.50 |
+| A1 | 13.5 / 13.0 / 13.5 | 13.33 | 6.67 | 6.67 |
+| A2 | 12.5 / 10.5 / 12.0 | 11.67 | 6.17 | 5.50 |
+
+**Reading.**
+- The restated clause is the cause. Removing it recovers base recall: +1.83 over main, against judge noise of about ±0.5, and A1 is at or above F in every rep.
+- The testing-practices mutation-pass rewrite is not the cause (A2 ≈ F). It stays, since the base version mutates the reviewed tree.
+- The drop is not contamination. It reproduces on the clean c01/c02 re-runs.
+- Caveat: on c03, c09 and c11 the B and F runs are from the earlier session, while the A1 runs are new.
+
+**Change.** The clause is removed from every dispatched lens and both mirrors: the four measured lenses carry exactly the measured A1 text, and the other twelve carry the same clause removal, unmeasured. The orchestrator's "Reviewers are read-only" bullet keeps the allowed layer commands and the no-write rule for every dispatch. The contract test now pins that the rule lives there and is not restated in a lens.

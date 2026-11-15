@@ -43,12 +43,8 @@ const SHARED_HEADING = "### Shared laws (every reviewer)";
  * findings of its own has nothing for these laws to govern.
  */
 const EXEMPT: Record<string, string> = {
-  "code-ai-review":
-    "legacy opt-in profile (--legacy-profiles); emits a free-prose Russian report with no per-finding severity field, and carries four per-editor SKILL variants that would all have to be kept in step",
-  "code-learned-review": "legacy opt-in profile; same free-prose shape as code-ai-review",
-  "code-mobx-store-review":
-    "legacy opt-in profile; does not use the blocker/major vocabulary at all",
-  "code-style-review": "legacy opt-in profile; does not use the blocker/major vocabulary at all",
+  "code-learned-review":
+    "legacy opt-in profile (--legacy-profiles); emits a free-prose report with no per-finding severity field",
   "review-pr-feedback":
     "reports on other people's findings rather than raising its own, so it has no finding of its own for these laws to govern. It applies the same discipline where it does own the output — Step 8 is one plan item per class, never one per occurrence — but over comments and plan items, not over findings",
   "review-verifier":
@@ -255,11 +251,6 @@ describe("one condition, one severity, across the reviewer set (AC2)", () => {
           "`blocker` **if** the interleaving can corrupt or lose data; otherwise `major`",
         skills: ["review-logic", "review-highload"],
       },
-      {
-        clause:
-          "`major` — `blocker` only if the caller then persists or returns wrong data",
-        skills: ["review-logic", "review-clean-code"],
-      },
     ];
     const drifted: string[] = [];
     for (const { clause, skills } of shared) {
@@ -272,15 +263,42 @@ describe("one condition, one severity, across the reviewer set (AC2)", () => {
     expect(drifted).toEqual([]);
   });
 
-  test("a layer violation is `major` in both reviewers that rate it", () => {
+  test("failure-path severities live once, in error-handling.mdc, and the reviewers that rate them cite it", () => {
+    // A clause two reviewers shared verbatim still drifted from the writer's rule.
+    // The severities now live in the rule the implementer loads; a reviewer that
+    // restates one is the second ruling this guards against.
+    const rule = readFileSync(path.join(import.meta.dir, "bundled", "rules", "core", "error-handling.mdc"), "utf8");
+    const clause = "`major` — `blocker` only if the caller then persists or returns wrong data";
+    expect(normalise(rule)).toContain(normalise("## Review severities"));
+    expect(normalise(rule)).toContain(normalise(clause));
+    const raters = ["review-clean-code", "review-logic", "review-backend", "review-frontend"];
+    for (const name of raters) {
+      const text = read(name);
+      expect(text).toContain("error-handling.mdc");
+      expect(normalise(text)).not.toContain(normalise(clause));
+    }
+  });
+
+  test("a layer violation is rated the same, `minor` by default, in both reviewers that rate it", () => {
     // review-frontend called an API call in a component `blocker`;
-    // review-architecture called the same condition `major`.
-    expect(read("review-frontend")).toContain(
-      "- API call in a component (hook, handler, useEffect) — **major**",
-    );
-    expect(read("review-frontend")).not.toMatch(/API call in a component[^\n]*\*\*blocker\*\*/);
+    // review-architecture called the same condition `major`. Flow 490 applied the
+    // canonical boundary test: a layer violation whose code behaves correctly names a
+    // maintenance cost, not a trigger and a wrong outcome, so it is `minor` unless a
+    // named defect or a stated project rule makes it more.
+    // review-frontend rates it by the code-style-patterns severity table (core-rules audit, group 3).
+    const codeStyle = readFileSync(path.join(import.meta.dir, "bundled", "rules", "core", "code-style-patterns.mdc"), "utf8");
+    expect(codeStyle).toMatch(/^\| API\/IO or business logic in a component \(Rule 2\) \| always \| `minor`; `major` with a named defect/m);
+    expect(read("review-frontend")).toContain("code-style-patterns.mdc");
+    expect(read("review-frontend")).not.toMatch(/API call in a component[^\n]*\*\*(blocker|major)\*\*/);
+    // review-architecture points the frontend half at the same table and keeps only the backend row.
+    expect(read("review-architecture")).toContain("code-style-patterns.mdc");
     expect(read("review-architecture")).toMatch(
-      /API\/IO call in a component[\s\S]{0,200}\| `major` \|/,
+      /Layer violation in the backend[\s\S]{0,300}\| `minor`/,
+    );
+    // review-core-boundaries rated feature code imported into core `major` on its
+    // own; the owner settled it as the same layer-violation rating.
+    expect(read("review-core-boundaries")).toMatch(
+      /Importing feature code into core[^\n]*\| `minor` — `major` only when a concrete defect it causes is named/,
     );
   });
 

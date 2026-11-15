@@ -43,7 +43,7 @@
         "bytes": { "type": "integer", "minimum": 0 },
         "reason": {
           "type": "string",
-          "description": "glob:<g>, always, task-type:<t>, replaces-bundled, route, bundled-default, referenced-by:<path>, or for a declared reference condition:glob:<g>, condition:keyword:<k> or declared (not promoted)."
+          "description": "glob:<g> (a project rule, or an installed stack rule's paths), always, task-type:<t>, replaces-bundled, route, bundled-default, task-text:<word>, file:<path> or content:<path> (a conditional core rule made must_read), when-relevant (a conditional core rule listed on_demand), referenced-by:<path>, or for a declared reference condition:glob:<g>, condition:keyword:<k> or declared (not promoted)."
         },
         "tier": { "enum": ["must_read", "on_demand"] },
         "description": { "type": "string" },

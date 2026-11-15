@@ -214,9 +214,9 @@ following `code-review-learned-profile.mdc`. It has no opinions of its own.
 | Concern                                                        | This skill | Use instead              |
 | -------------------------------------------------------------- | ---------- | ------------------------ |
 | This project's accumulated review conventions                  | ✅ YES     | —                        |
-| General AI review (broader quality, performance, UX)           | ❌ NO      | `code-ai-review`         |
-| MobX store internals (actions, computed, reactions)            | ❌ NO      | `code-mobx-store-review` |
-| Pure style/naming/architecture pattern audit                   | ❌ NO      | `code-style-review`      |
+| General review (broader quality, performance, UX)              | ❌ NO      | `review-orchestrator`    |
+| MobX store internals (actions, computed, reactions)            | ❌ NO      | `review-frontend`        |
+| Pure style/naming/architecture pattern audit                   | ❌ NO      | `review-style`           |
 | Logic correctness with no learned lesson behind it             | ❌ NO      | `review-logic`           |
 
 ---

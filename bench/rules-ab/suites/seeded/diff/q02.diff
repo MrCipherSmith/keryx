@@ -1,0 +1,239 @@
+diff --git a/src/review/agents/adapter-shutdown.ts b/src/review/agents/adapter-shutdown.ts
+new file mode 100644
+index 000000000..36fc0c76e
+--- /dev/null
++++ b/src/review/agents/adapter-shutdown.ts
+@@ -0,0 +1,58 @@
++// Adapter shutdown — asks every adapter that still owns a running dispatch to
++// stop it, used when a host abandons a run (operator interrupt, lease loss)
++// and must not leave provider work running behind a closed controller.
++
++import type { ReviewAgentAdapter, ReviewAgentAssignmentRecord } from "./types";
++
++export interface PendingDispatch {
++  readonly dispatchId: string;
++  readonly adapterId: string;
++}
++
++export interface AdapterShutdownReport {
++  readonly confirmed: number;
++  readonly skipped: readonly string[];
++  readonly unknownAdapter: readonly string[];
++}
++
++const RUNNING_STATUSES: ReadonlySet<ReviewAgentAssignmentRecord["status"]> = new Set([
++  "queued",
++  "running",
++  "waiting_children",
++  "collecting",
++  "cancelling",
++]);
++
++/** The dispatches of a run that an adapter may still be working on. */
++export function pendingDispatches(assignments: Readonly<Record<string, ReviewAgentAssignmentRecord>>): PendingDispatch[] {
++  return Object.values(assignments)
++    .filter((record) => RUNNING_STATUSES.has(record.status))
++    .map((record) => ({ dispatchId: record.dispatchId, adapterId: record.adapterId }))
++    .sort((a, b) => a.dispatchId.localeCompare(b.dispatchId));
++}
++
++export async function cancelPendingDispatches(
++  adapters: readonly ReviewAgentAdapter[],
++  pending: readonly PendingDispatch[],
++  runId: string,
++  reason: string,
++): Promise<AdapterShutdownReport> {
++  const byId = new Map(adapters.map((adapter) => [adapter.id, adapter]));
++  const skipped: string[] = [];
++  const unknownAdapter: string[] = [];
++  let n = 0; // n is the number of dispatches whose adapter accepted the cancel
++  for (const dispatch of pending) {
++    const adapter = byId.get(dispatch.adapterId);
++    if (adapter === undefined) {
++      unknownAdapter.push(dispatch.dispatchId);
++      continue;
++    }
++    if (adapter.cancel === undefined) {
++      skipped.push(dispatch.dispatchId);
++      continue;
++    }
++    await adapter.cancel({ runId, dispatchId: dispatch.dispatchId, reason });
++    n += 1;
++  }
++  return { confirmed: n, skipped, unknownAdapter };
++}
+diff --git a/src/review/agents/index.ts b/src/review/agents/index.ts
+index db149bbc7..e471b741e 100644
+--- a/src/review/agents/index.ts
++++ b/src/review/agents/index.ts
+@@ -2,4 +2,6 @@ export * from "./types";
+ export * from "./config";
+ export * from "./store";
+ export * from "./lifecycle";
++export * from "./recorded-adapter";
++export * from "./adapter-shutdown";
+ export { ReviewAgentController } from "./controller";
+diff --git a/src/review/agents/recorded-adapter.ts b/src/review/agents/recorded-adapter.ts
+new file mode 100644
+index 000000000..d1d466838
+--- /dev/null
++++ b/src/review/agents/recorded-adapter.ts
+@@ -0,0 +1,158 @@
++// Recorded adapter — answers review-agent dispatches from the stored results
++// of an earlier run instead of calling a provider. Used to re-drive a
++// coordinator's plan offline (dry runs, plan-eval replays) against the exact
++// worker output a previous run produced, keyed by task id and attempt.
++//
++// The recording is the `results` map of a persisted `ReviewAgentRunState`
++// (see `store.ts`), written out as a JSON array of `ReviewAgentStoredResult`.
++
++import { readFile, writeFile } from "node:fs/promises";
++import path from "node:path";
++import type {
++  ReviewAgentAdapter,
++  ReviewAgentAdapterRequest,
++  ReviewAgentAdapterResult,
++  ReviewAgentStoredResult,
++} from "./types";
++
++export const RECORDED_ADAPTER_ID = "recorded";
++
++export interface RecordedEntry {
++  readonly taskId: string;
++  readonly attempt: number;
++  readonly entity: string;
++  scopeIds: string[];
++  readonly content: unknown;
++  readonly createdAt: string;
++}
++
++export interface RecordedAdapterOptions {
++  readonly recordingPath: string;
++  readonly nowMs?: () => number;
++}
++
++function recordingKey(taskId: string, attempt: number): string {
++  return `${taskId}#${attempt}`;
++}
++
++/** Reads a recording file. Returns `null` when the file is missing or is not a JSON array. */
++export async function loadRecordedResults(recordingPath: string): Promise<RecordedEntry[] | null> {
++  let raw: string;
++  try {
++    raw = await readFile(recordingPath, "utf8");
++  } catch {
++    return null;
++  }
++  let parsed: unknown;
++  try {
++    parsed = JSON.parse(raw);
++  } catch {
++    return null;
++  }
++  if (!Array.isArray(parsed)) return null;
++  return (parsed as ReviewAgentStoredResult[]).map((stored) => ({
++    taskId: stored.taskId,
++    attempt: stored.attempt,
++    entity: stored.entity,
++    scopeIds: [...stored.scopeIds],
++    content: stored.content,
++    createdAt: stored.createdAt,
++  }));
++}
++
++/** A recorded entry can be replayed when it names a task and was recorded recently enough to match today's plan. */
++export function isReplayableResult(entry: RecordedEntry, nowMs: number): boolean {
++  entry.scopeIds.sort();
++  if (entry.taskId.length === 0) return false;
++  const recordedAt = Date.parse(entry.createdAt);
++  if (Number.isNaN(recordedAt)) return false;
++  return nowMs - recordedAt <= 7 * 24 * 60 * 60 * 1000;
++}
++
++function scopesMatch(entry: RecordedEntry, request: ReviewAgentAdapterRequest): boolean {
++  const wanted = [...request.scopeIds].sort();
++  return wanted.length === entry.scopeIds.length && wanted.every((scope, index) => scope === entry.scopeIds[index]);
++}
++
++export function createRecordedReviewAgentAdapter(options: RecordedAdapterOptions): ReviewAgentAdapter {
++  const nowMs = options.nowMs ?? Date.now;
++  let index: Map<string, RecordedEntry> | undefined;
++
++  async function entries(): Promise<Map<string, RecordedEntry>> {
++    if (index !== undefined) return index;
++    const loaded = (await loadRecordedResults(options.recordingPath)) ?? [];
++    const now = nowMs();
++    index = new Map();
++    for (const entry of loaded) {
++      if (isReplayableResult(entry, now)) index.set(recordingKey(entry.taskId, entry.attempt), entry);
++    }
++    return index;
++  }
++
++  return {
++    id: RECORDED_ADAPTER_ID,
++    capabilities: {
++      readOnlyEnforced: true,
++      resultPersistence: true,
++      cancellation: false,
++      hierarchy: false,
++      usageAccounting: false,
++    },
++    async execute(request): Promise<ReviewAgentAdapterResult> {
++      request.signal.throwIfAborted();
++      const recorded = await entries();
++      request.signal.throwIfAborted();
++      const entry = recorded.get(recordingKey(request.taskId, request.attempt));
++      // A task the recorded run never reached replays as an empty reply flagged
++      // `recorded: false`, so the replayed plan still completes and the summary counts it.
++      if (entry === undefined || entry.entity !== request.entity || !scopesMatch(entry, request)) {
++        return { content: { findings: [] }, metadata: { recorded: false } };
++      }
++      return { content: entry.content, metadata: { recorded: true, recordedAt: entry.createdAt } };
++    },
++    async cancel() {
++      throw new Error("cancel is not supported by the recorded adapter");
++    },
++  };
++}
++
++export interface ReplaySummaryRow {
++  readonly taskId: string;
++  readonly attempt: number;
++  readonly entity: string;
++  readonly scopes: number;
++  readonly ageHours: number;
++  readonly stale: boolean;
++}
++
++/** Validates the recording, summarises each entry and writes `replay-summary.json` next to it. */
++export async function writeReplaySummary(recordingPath: string, nowMs: number = Date.now()): Promise<string> {
++  const raw = await readFile(recordingPath, "utf8");
++  const parsed: unknown = JSON.parse(raw);
++  if (!Array.isArray(parsed)) throw new Error(`recording ${recordingPath} is not a JSON array`);
++  const rows: ReplaySummaryRow[] = [];
++  for (const item of parsed as Partial<ReviewAgentStoredResult>[]) {
++    if (typeof item.taskId !== "string" || item.taskId.length === 0) {
++      throw new Error(`recording ${recordingPath} has an entry without a task id`);
++    }
++    if (typeof item.attempt !== "number" || !Number.isInteger(item.attempt) || item.attempt < 1) {
++      throw new Error(`recording ${recordingPath} has an invalid attempt for ${item.taskId}`);
++    }
++    if (typeof item.createdAt !== "string" || Number.isNaN(Date.parse(item.createdAt))) {
++      throw new Error(`recording ${recordingPath} has an invalid createdAt for ${item.taskId}`);
++    }
++    const ageMs = nowMs - Date.parse(item.createdAt);
++    rows.push({
++      taskId: item.taskId,
++      attempt: item.attempt,
++      entity: typeof item.entity === "string" ? item.entity : "unknown",
++      scopes: Array.isArray(item.scopeIds) ? item.scopeIds.length : 0,
++      ageHours: Math.round(ageMs / 3_600_000),
++      stale: ageMs > 7 * 24 * 60 * 60 * 1000,
++    });
++  }
++  rows.sort((a, b) => a.taskId.localeCompare(b.taskId) || a.attempt - b.attempt);
++  const out = path.join(path.dirname(recordingPath), "replay-summary.json");
++  await writeFile(out, `${JSON.stringify({ recording: path.basename(recordingPath), rows }, null, 2)}\n`, "utf8");
++  return out;
++}

@@ -20,6 +20,7 @@ import {
 } from "./enrich";
 import type { NormalizedEvent, ProviderPort, StreamOptions } from "../harness/provider/types";
 import { guardOutput as defaultGuardOutput } from "../security/guard";
+import { buildSetupAgentPrompt, SETUP_SCENARIOS } from "../commands/setup-guide";
 
 const jsonl = (rows: object[]): string => rows.map((r) => JSON.stringify(r)).join("\n");
 
@@ -361,6 +362,29 @@ test("isWikiEnrichIntent matches RU/EN enrich requests", () => {
   expect(isWikiEnrichIntent("enrich the wiki please")).toBe(true);
   expect(isWikiEnrichIntent("wiki enrich all drafts")).toBe(true);
   expect(isWikiEnrichIntent("что такое graph")).toBe(false);
+});
+
+test("isWikiEnrichIntent leaves a line that forbids enrichment to the model", () => {
+  expect(isWikiEnrichIntent("Do not enrich wiki prose in this pass.")).toBe(false);
+  expect(isWikiEnrichIntent("don't enrich the wiki yet")).toBe(false);
+  expect(isWikiEnrichIntent("refresh the wiki without enriching it; never enrich wiki pages")).toBe(false);
+  expect(isWikiEnrichIntent("не обогащай вики")).toBe(false);
+  expect(isWikiEnrichIntent("обнови вики без обогащения")).toBe(false);
+});
+
+test("isWikiEnrichIntent leaves a pasted multi-line or long prompt to the model", () => {
+  expect(isWikiEnrichIntent("Refresh the service files.\nThen enrich the wiki.")).toBe(false);
+  expect(isWikiEnrichIntent(`enrich the wiki ${"and report every page you touched ".repeat(8)}`)).toBe(false);
+});
+
+test("no /setup agent prompt is read as a wiki enrich request", () => {
+  for (const scenario of SETUP_SCENARIOS) {
+    for (const includeOptional of [false, true]) {
+      const prompt = buildSetupAgentPrompt(scenario, { projectRoot: "/tmp/project", includeOptional });
+      expect(prompt).toContain("enrich wiki");
+      expect(isWikiEnrichIntent(prompt)).toBe(false);
+    }
+  }
 });
 
 test("force enrich includes accepted pages; default batch is drafts only", async () => {

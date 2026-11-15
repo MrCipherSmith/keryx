@@ -82,7 +82,9 @@ describe("a pass finding as a round finding", () => {
     expect(passFindingToRound(finding({ severity: "medium" }), "r").class_scope).toBeUndefined();
     const own = { sites: ["a.ts:1", "b.ts:2"], enumeration_method: "grep" };
     expect(passFindingToRound(finding({ class_scope: own }), "r").class_scope).toEqual(own);
-    expect(passFindingToRound(finding({ class_scope: { sites: [], enumeration_method: "grep" } }), "r").class_scope?.enumeration_method).toStartWith("NOT ENUMERATED");
+    const negative = { sites: [], enumeration_method: "grep found no other writer" };
+    expect(passFindingToRound(finding({ class_scope: negative }), "r").class_scope).toEqual(negative);
+    expect(passFindingToRound(finding({ class_scope: { sites: [], enumeration_method: " " } }), "r").class_scope?.enumeration_method).toStartWith("NOT ENUMERATED");
   });
 
   test("text fields the pass left out say so instead of being invented", () => {

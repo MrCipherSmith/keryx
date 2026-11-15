@@ -1,0 +1,41 @@
+{
+ "suite": "seeded",
+ "note": "Seeded commits sit on the shared base; each adds planted code-quality defects. q05 is a clean control with no planted defects.",
+ "cases": [
+  {
+   "id": "q01",
+   "kind": "seeded",
+   "base": "757090dc9d73d099403397ac1774f658847b866d",
+   "head": "06fe2def3489bcb7d204e566b4deed4f58419a86",
+   "diff": "diff/q01.diff"
+  },
+  {
+   "id": "q02",
+   "kind": "seeded",
+   "base": "757090dc9d73d099403397ac1774f658847b866d",
+   "head": "11808122581aa368854dab50a38aaa13e0832f3a",
+   "diff": "diff/q02.diff"
+  },
+  {
+   "id": "q03",
+   "kind": "seeded",
+   "base": "757090dc9d73d099403397ac1774f658847b866d",
+   "head": "dfba1ffdac1b40dc57c908a6c0c569cb149eec98",
+   "diff": "diff/q03.diff"
+  },
+  {
+   "id": "q04",
+   "kind": "seeded",
+   "base": "757090dc9d73d099403397ac1774f658847b866d",
+   "head": "bf7eaf2cc1556cbe2dfa089db26cfedcfc273339",
+   "diff": "diff/q04.diff"
+  },
+  {
+   "id": "q05",
+   "kind": "control",
+   "base": "e86e31c8a220aded7495b277f134290cd546ad90~1",
+   "head": "e86e31c8a220aded7495b277f134290cd546ad90",
+   "diff": "diff/q05.diff"
+  }
+ ]
+}

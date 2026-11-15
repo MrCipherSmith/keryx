@@ -1,55 +1,43 @@
 ---
-description: "Code style and architecture patterns for TypeScript, React, and MobX."
+description: "React and TypeScript standard for the frontend, shared by code writers and reviewers, with the severities reviewers use: observer on every component that reads observables, layers (service IO, store logic, component render), where state lives, stores created once, effects that clean up, stable keys, accessibility basics, and TypeScript safety. Use when writing or reviewing React/TypeScript components."
 alwaysApply: false
 stack_requires: "react,mobx"
 ---
 
 # Code Style and Architecture Patterns
 
-## Purpose
-Enforce consistent code style and architecture patterns across TypeScript, React, and MobX code in the frontend project.
+Canon applies: the React documentation (rules of hooks, effects, keys), WAI-ARIA basics and the TypeScript handbook. Store internals are `mobx-store-template.mdc`; backend layering is `clean-architecture.mdc`. This rule holds only this project's frontend decisions.
 
-## When To Apply
-Apply when reviewing or implementing TypeScript/React/MobX code in the frontend project.
+## Rules
 
-## TypeScript
-- Enforce strict typing; avoid `any`.
-- Use interfaces for component props.
-- Prefer `?.` and `??` over unsafe assertions.
-- Do not use imports like `from \"src/...\"`; use relative paths or approved aliases.
+1. **`observer` on every component that reads an observable**, conditional reads included, as the outermost wrapper: `observer(withRouter(View))`. A component that reads only props needs none.
+2. **Layers.** A service does IO only; a store holds state, logic and state transitions; a component renders and forwards events to store actions. No API/IO call and no business logic (validation, transformation, branching on domain state) in a component, its handlers or its effects.
+3. **Where state lives.** UI-only state that one component uses (an open flag, a hover, an input draft) is `useState`. State with logic, or read by another component or a store, lives in a store; it is never copied into `useState`. `useMemo`/`useCallback` do not wrap store values or store methods.
+4. **A store is created once per mount**: `useState(() => new PageStore(api))[0]` or `useLocalObservable`, never `new Store()` in the component body.
+5. **An effect that subscribes, listens or starts a timer returns its cleanup.** Data loading is not started from an effect (see `mobx-store-template.mdc` Rule 8).
+6. **List keys** are on the element `.map()` returns and are stable ids; an index key only for a static list that never reorders or filters.
+7. **Accessibility.** `<img>` has `alt` (`""` when decorative); an icon-only button or link has `aria-label`; a form input has a label; a clickable element is a `<button>` or `<a>`, not a `<div onClick>`.
+8. **TypeScript.** No `any` (use `unknown` and a guard, or the named type). A `!` assertion carries a comment that proves it; otherwise use `?.`/`??` and handle the missing case. Props types are `XProps`, no `I` prefix. Imports use relative paths or the configured aliases, never `from "src/..."`.
 
-## MobX Patterns
+---
 
-For complete MobX store patterns, see `core/mobx-store-template.mdc`.
+## Review severities (shared with reviewers)
 
-Key principles (see canonical source for full detail with examples):
-- All state must use `makeObservable(this)` with explicit decorators
-- Store layout should stay predictable: private fields → public fields → constructor → public methods → private methods
-- Public UI entrypoints called from React should be `@action.bound`, usually as thin `on...` methods
-- Public non-mutating helpers/selectors are not actions and do not use `runInAction`
-- Private API/IO and orchestration belong in private methods; async private methods use `try/catch/finally`
-- Use `runInAction` for private mutation blocks after `await`, and for private orchestration-state updates
-- Wrap React components with `observer`
-- Inter-store callbacks and internal handlers must be private (see `core/mobx-store-template.mdc` for the canonical callback rules)
-- Use equality guards, not truthy checks, when optional values must propagate clearing
-- Implement bounce protection for bidirectional sync
+`review-frontend` rates these patterns by this table. Change a row here, never in a reviewer.
 
-## React
-- Wrap observable-consuming components with `observer`.
-- Keep business logic in stores/services.
-- Avoid heavy logic in render.
-
-## Architecture
-- Service layer: IO/API only.
-- Store layer: business logic and state transitions.
-- Component layer: view rendering.
-- UI components should preferably have their own local MobX store to manage their specific view state and encapsulate UI-specific logic, implementing reactivity via MobX instead of `useState` where possible.
-
-## Review Flags
-- API calls directly in UI components.
-- Missing `observer` where store values are consumed.
-- Direct observable mutation outside actions.
-- Large inline render logic better suited for computed/store methods.
-- Public inter-store callbacks/handlers that should be `private` (e.g. `onChangeEditorState`, `onFireExecutorChange`).
-- Bidirectional store sync without equality guard — risk of infinite callback bounce.
-- Truthy guard (`if (x && x !== y)`) on optional/nullable field — blocks propagation of `undefined`/falsy clearing.
+| Signal | A finding when | Default | Not a finding |
+|---|---|---|---|
+| Component reads observables without `observer` (Rule 1) | always | `major` (the UI does not update when the observable changes) | a component that reads only props |
+| `observer` inside another HOC (Rule 1) | always | `minor`; `major` with a named defect | — |
+| API/IO or business logic in a component (Rule 2) | always | `minor`; `major` with a named defect it causes or a stated project rule | — |
+| Shared or store-owned state kept in `useState`, or copied from a store (Rule 3) | two owners of the value can diverge, named | `major` | UI-only state one component uses |
+| `useMemo`/`useCallback` around a store value or method (Rule 3) | always | `minor` | a memo over values that are not store state |
+| Store constructed in the component body (Rule 4) | always | `major` (recreated on each render, state lost) | `useState(() => new Store())`, `useLocalObservable` |
+| Subscription, listener or timer without cleanup (Rule 5) | always | `major` | — |
+| Missing `key` (Rule 6) | always | `major` | — |
+| Index key on a list that reorders, filters or paginates (Rule 6) | always | `minor` | a static list |
+| `<img>` without `alt`; interactive element without an accessible name (Rule 7) | always | `major` | — |
+| Clickable non-semantic element without keyboard support (Rule 7) | always | `minor` | — |
+| `!` on a value the types allow to be missing (Rule 8) | a named input reaches it | `blocker` when it throws during render; `major` elsewhere; `minor` with no input shown | a `!` with a comment that proves it |
+| `any` in new code (Rule 8) | always | `minor`; `major` with a named input and the wrong value it lets through | — |
+| `I`-prefixed props type, `from "src/..."` import (Rule 8) | introduced by the change | `minor` | — |
