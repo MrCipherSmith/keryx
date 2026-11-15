@@ -290,6 +290,11 @@ describe("one condition, one severity, across the reviewer set (AC2)", () => {
     expect(read("review-architecture")).toMatch(
       /API\/IO call in a component[\s\S]{0,200}\| `minor`/,
     );
+    // review-core-boundaries rated feature code imported into core `major` on its
+    // own; the owner settled it as the same layer-violation rating.
+    expect(read("review-core-boundaries")).toMatch(
+      /Importing feature code into core[^\n]*\| `minor` — `major` only when a concrete defect it causes is named/,
+    );
   });
 
   test("no reviewer exempts itself from a law it also carries", () => {

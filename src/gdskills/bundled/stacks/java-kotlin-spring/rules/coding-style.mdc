@@ -22,9 +22,9 @@ still comes from the common rules this file `extends`.
   dependency graph, prevents the field from being `final`/`val`, and
   makes the class impossible to construct without the Spring container in
   a plain unit test.
-- A class with more than 4-5 constructor dependencies is a signal the
-  class has too many responsibilities, not a reason to fall back to field
-  injection to make the constructor shorter.
+- Overrides the `solid-principles.mdc` "Constructor dependencies" row
+  for Java/Kotlin: more than 4 is the threshold, a signal of too many
+  responsibilities, never a reason to fall back to field injection.
 
 ## Layered architecture
 
