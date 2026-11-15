@@ -99,6 +99,15 @@ Other lenses pointed at the rules (2026-11-15), 2 reps each. Arm A is the lens a
 
 `review-performance` gains most because the rules carry the store and render rows it had no checklist for; its noise rises by 2.5 per rep. `review-style` was not measured.
 
+Testing suite (2026-11-15), 2 reps, means per rep (recall out of 24):
+
+| Arm | Recall | Valid | Noise | Decoy | Control findings |
+|---|---|---|---|---|---|
+| A: `review-testing-practices` as on main, no rules | 22.5 | 5.5 | 6.5 | 0.5 | 6 |
+| B: `review-testing-practices` reading `tdd-workflow`, `playwright-testing` (shipped) | 23.25 | 3.5 | 6.5 | 0 | 4.5 |
+
+Both arms are near the ceiling, so this suite separates them weakly; B never took a decoy and raised fewer findings on the clean control.
+
 History suite: one general reviewer against the fixed blocker/major findings found 14 match + 6 partial of 46, about 37%.
 
 ## Notes
