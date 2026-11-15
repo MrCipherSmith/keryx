@@ -1,0 +1,34 @@
+{
+ "suite": "testing",
+ "note": "Tests for two small apps added on top of main: an orders API (services/orders-api, NestJS) and an orders web app (apps/orders-web, React + MobX). The base commit is main at 5bb4a5366 plus services/orders-api. t01 (API unit tests), t02 (web unit tests) and t03 (Playwright e2e) each add a change with tests that carry planted defects; t04 is a clean control. The commits are on branches bench-seeds/testing-*.",
+ "cases": [
+  {
+   "id": "t01",
+   "kind": "seeded",
+   "base": "9e00f1d555c221c1cbe920180fb58033f4cfd885",
+   "head": "b0e1a217356ff67e0efdf682219deffe474cab3d",
+   "diff": "diff/t01.diff"
+  },
+  {
+   "id": "t02",
+   "kind": "seeded",
+   "base": "9e00f1d555c221c1cbe920180fb58033f4cfd885",
+   "head": "794ec2479912532263ca7e5e1a1dbeff2b59fb4b",
+   "diff": "diff/t02.diff"
+  },
+  {
+   "id": "t03",
+   "kind": "seeded",
+   "base": "9e00f1d555c221c1cbe920180fb58033f4cfd885",
+   "head": "70693719be2d5fa4ec7af0f431afd35c80cb8d28",
+   "diff": "diff/t03.diff"
+  },
+  {
+   "id": "t04",
+   "kind": "control",
+   "base": "9e00f1d555c221c1cbe920180fb58033f4cfd885",
+   "head": "88048c22c0fd0d4d162698d3b197a961f5834eb1",
+   "diff": "diff/t04.diff"
+  }
+ ]
+}

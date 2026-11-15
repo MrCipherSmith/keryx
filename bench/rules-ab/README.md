@@ -18,6 +18,8 @@ Use it for the clean-code lens and its rules. Run at least 3 reps: single runs v
 
 **frontend** (4 cases). A small React + MobX + Ant Design app (`apps/orders-web`) added on top of `main` at the base commit; f01 (stores), f02 (components) and f03 (TypeScript and stories) each add a feature with planted defects, 24 in all; f04 is a clean control. Scored like seeded (recall out of 24). Use it for `review-frontend` and the `mobx-store-template`, `code-style-patterns` and `storybook-guidelines` rules. The case commits live on branches `bench-seeds/frontend-*`; the diffs in `suites/frontend/diff/` hold the same change.
 
+**testing** (4 cases). Tests for the two small apps (`services/orders-api`, `apps/orders-web`) on a base commit that holds both; t01 (API unit tests), t02 (web unit tests) and t03 (Playwright e2e) carry planted test defects, 24 in all; t04 is a clean control. Scored like seeded (recall out of 24). Use it for `review-testing-practices` and the testing rules. The case commits live on branches `bench-seeds/testing-*`; the diffs in `suites/testing/diff/` hold the same change. Truth: `bench-archive/2026-11-15/tbench/truth/tNN.json` and `tNN.decoys.json`.
+
 **history** (13 cases). Past review packages: for each, the base and head commits and the 46 blocker/major findings that were later confirmed and fixed. One general reviewer reads each change cold. It measures recall against real, already-fixed defects: how much of what reviews historically had to catch a single pass catches. There is no decoy or noise measure here.
 
 ## Procedure

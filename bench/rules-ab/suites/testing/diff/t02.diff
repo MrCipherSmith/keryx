@@ -1,0 +1,313 @@
+diff --git a/apps/orders-web/package.json b/apps/orders-web/package.json
+index 306095345..7027d7f1f 100644
+--- a/apps/orders-web/package.json
++++ b/apps/orders-web/package.json
+@@ -7,6 +7,7 @@
+     "dev": "vite",
+     "build": "tsc --noEmit && vite build",
+     "typecheck": "tsc --noEmit",
++    "test": "vitest run",
+     "storybook": "storybook dev -p 6006",
+     "build-storybook": "storybook build"
+   },
+@@ -23,11 +24,15 @@
+     "@storybook/react": "8.2.9",
+     "@storybook/react-vite": "8.2.9",
+     "@storybook/test": "8.2.9",
++    "@testing-library/jest-dom": "6.4.8",
++    "@testing-library/react": "16.0.0",
+     "@types/react": "18.3.3",
+     "@types/react-dom": "18.3.0",
+     "@vitejs/plugin-react": "4.3.1",
+     "storybook": "8.2.9",
+     "typescript": "5.5.4",
+-    "vite": "5.4.2"
++    "jsdom": "24.1.1",
++    "vite": "5.4.2",
++    "vitest": "2.0.5"
+   }
+ }
+diff --git a/apps/orders-web/src/__tests__/StatusTag.test.tsx b/apps/orders-web/src/__tests__/StatusTag.test.tsx
+new file mode 100644
+index 000000000..d57332389
+--- /dev/null
++++ b/apps/orders-web/src/__tests__/StatusTag.test.tsx
+@@ -0,0 +1,27 @@
++import { render, screen } from "@testing-library/react";
++import { describe, expect, it } from "vitest";
++import type { OrderStatus } from "../api/orders.api";
++import { StatusTag } from "../components/StatusTag";
++
++const statuses: OrderStatus[] = ["new", "paid", "shipped", "delivered", "cancelled"];
++
++describe("StatusTag", () => {
++  it.each(statuses)("renders the %s status", (status) => {
++    const { container } = render(<StatusTag status={status} />);
++
++    expect(container).toBeDefined();
++  });
++
++  it("shows the status text when there is no label", () => {
++    render(<StatusTag status="paid" />);
++
++    expect(screen.getByText("paid")).toBeInTheDocument();
++  });
++
++  it("prefers the label over the raw status", () => {
++    render(<StatusTag status="paid" label="Paid in full" />);
++
++    expect(screen.getByText("Paid in full")).toBeInTheDocument();
++    expect(screen.queryByText("paid")).not.toBeInTheDocument();
++  });
++});
+diff --git a/apps/orders-web/src/pages/customers/CustomersPage.test.tsx b/apps/orders-web/src/pages/customers/CustomersPage.test.tsx
+new file mode 100644
+index 000000000..94ad0135b
+--- /dev/null
++++ b/apps/orders-web/src/pages/customers/CustomersPage.test.tsx
+@@ -0,0 +1,18 @@
++import { render, screen, waitFor } from "@testing-library/react";
++import { describe, expect, it } from "vitest";
++import { CustomersPage } from "./CustomersPage";
++
++describe("CustomersPage", () => {
++  it("shows the heading and the search field", () => {
++    render(<CustomersPage />);
++
++    expect(screen.getByRole("heading", { name: /customers/i })).toBeInTheDocument();
++    expect(screen.getByPlaceholderText("Search customers")).toBeInTheDocument();
++  });
++
++  it("shows the order total once the list has loaded", async () => {
++    render(<CustomersPage />);
++
++    await waitFor(() => expect(screen.getByText(/orders in total/)).toBeInTheDocument());
++  });
++});
+diff --git a/apps/orders-web/src/pages/customers/CustomersPage.tsx b/apps/orders-web/src/pages/customers/CustomersPage.tsx
+index bbb8461c1..78777aa04 100644
+--- a/apps/orders-web/src/pages/customers/CustomersPage.tsx
++++ b/apps/orders-web/src/pages/customers/CustomersPage.tsx
+@@ -1,6 +1,6 @@
+ import { useEffect, useState } from "react";
+ import { observer } from "mobx-react-lite";
+-import { Alert, Input, Popover, Table, Typography } from "antd";
++import { Alert, Input, InputNumber, Popover, Table, Typography } from "antd";
+ import { InfoCircleOutlined } from "@ant-design/icons";
+ import { customersApi, type CustomerDto } from "../../api/customers.api";
+ import { CustomersStore, CustomersStoreContext } from "../../stores/customers.store";
+@@ -38,11 +38,17 @@ export const CustomersPage = observer(function CustomersPage() {
+         onChange={(e) => store.setQuery(e.target.value)}
+         allowClear
+       />
++      <InputNumber
++        aria-label="Minimum orders"
++        min={0}
++        value={store.minOrders}
++        onChange={(value) => store.setMinOrders(value ?? 0)}
++      />
+       {store.error && <Alert type="error" message={store.error} />}
+       <Table<CustomerDto>
+         rowKey="id"
+         columns={columns}
+-        dataSource={store.items}
++        dataSource={store.visibleItems}
+         loading={store.loading}
+         pagination={false}
+         footer={() => `${store.totalOrders} orders in total`}
+diff --git a/apps/orders-web/src/stores/customers.store.test.ts b/apps/orders-web/src/stores/customers.store.test.ts
+new file mode 100644
+index 000000000..d472b3f12
+--- /dev/null
++++ b/apps/orders-web/src/stores/customers.store.test.ts
+@@ -0,0 +1,118 @@
++import { describe, expect, it, vi, type Mock } from "vitest";
++import type { CustomerDto, CustomersApi } from "../api/customers.api";
++import { CustomersStore } from "./customers.store";
++
++const ada: CustomerDto = { id: "c1", name: "Ada", email: "ada@example.com", ordersCount: 4 };
++const grace: CustomerDto = { id: "c2", name: "Grace", email: "grace@example.com", ordersCount: 9 };
++const linus: CustomerDto = { id: "c3", name: "Linus", email: "linus@example.com", ordersCount: 1 };
++const barbara = { id: "c4", name: "Barbara", email: "barbara@example.com", ordersCount: null } as unknown as CustomerDto;
++
++type FakeApi = CustomersApi & { listCustomers: Mock<CustomersApi["listCustomers"]> };
++
++function makeApi(rows: CustomerDto[] = [ada, grace, linus]): FakeApi {
++  return { listCustomers: vi.fn(async () => rows) };
++}
++
++describe("visibleItems", () => {
++  const store = new CustomersStore(makeApi());
++
++  it("sorts by order count, most orders first", async () => {
++    await store.refresh();
++
++    expect(store.visibleItems.map((customer) => customer.name)).toEqual(["Grace", "Ada", "Linus"]);
++  });
++
++  it("hides customers under the minimum", () => {
++    store.setMinOrders(2);
++
++    expect(store.visibleItems.map((customer) => customer.name)).toEqual(["Grace", "Ada"]);
++  });
++
++  it("reports empty when nobody passes the minimum", () => {
++    store.setMinOrders(50);
++
++    expect(store.isEmpty).toBe(true);
++  });
++});
++
++describe("totalOrders", () => {
++  it("adds up the order counts", async () => {
++    const store = new CustomersStore(makeApi());
++    await store.refresh();
++
++    expect(store.totalOrders).toBe(14);
++  });
++
++  it("counts a customer without orders as zero", async () => {
++    const store = new CustomersStore(makeApi([ada, barbara]));
++    await store.refresh();
++
++    expect(store.totalOrders).toBe(4);
++  });
++});
++
++describe("loading", () => {
++  it("turns the spinner off and fills the list after a load", async () => {
++    const store = new CustomersStore(makeApi());
++
++    const pending = store.refresh();
++    expect(store.loading).toBe(true);
++    await pending;
++
++    expect(store.loading).toBe(false);
++    expect(store.items).toHaveLength(3);
++  });
++
++  it("keeps the message of a failed load", async () => {
++    const api = makeApi();
++    api.listCustomers.mockRejectedValue(new Error("boom"));
++    const store = new CustomersStore(api);
++
++    await store.refresh();
++
++    expect(api.listCustomers).toHaveBeenCalled();
++  });
++});
++
++describe("search", () => {
++  it("reloads with the query once typing pauses", async () => {
++    const api = makeApi();
++    const store = new CustomersStore(api);
++    store.onMount();
++
++    store.setQuery("gra");
++    await new Promise((resolve) => setTimeout(resolve, 400));
++
++    expect(api.listCustomers).toHaveBeenLastCalledWith("gra");
++    store.dispose();
++  });
++
++  it("sends one request for a burst of keystrokes", async () => {
++    vi.useFakeTimers();
++    const api = makeApi();
++    const store = new CustomersStore(api);
++    store.onMount();
++
++    store.setQuery("g");
++    store.setQuery("gr");
++    store.setQuery("gra");
++    await vi.advanceTimersByTimeAsync(300);
++
++    expect(api.listCustomers).toHaveBeenCalledTimes(2);
++    expect(api.listCustomers).toHaveBeenLastCalledWith("gra");
++    store.dispose();
++  });
++
++  it("stops reloading after unmount", async () => {
++    vi.useFakeTimers();
++    const api = makeApi();
++    const store = new CustomersStore(api);
++    store.onMount();
++    store.onUnmount();
++
++    store.setQuery("late");
++    await vi.advanceTimersByTimeAsync(1000);
++
++    expect(api.listCustomers).toHaveBeenCalledTimes(1);
++  });
++});
+diff --git a/apps/orders-web/src/stores/customers.store.ts b/apps/orders-web/src/stores/customers.store.ts
+index 95c6f3bee..bc689170c 100644
+--- a/apps/orders-web/src/stores/customers.store.ts
++++ b/apps/orders-web/src/stores/customers.store.ts
+@@ -15,6 +15,7 @@ export class CustomersStore {
+   @observable loading = false;
+   @observable error: string | null = null;
+   @observable query = "";
++  @observable minOrders = 0;
+ 
+   private disposed = false;
+   private disposers: IReactionDisposer[] = [];
+@@ -23,8 +24,15 @@ export class CustomersStore {
+     makeObservable(this);
+   }
+ 
++  /** Customers at or above the minimum order count, most orders first. */
++  @computed get visibleItems(): CustomerDto[] {
++    return this.items
++      .filter((customer) => customer.ordersCount >= this.minOrders)
++      .sort((a, b) => b.ordersCount - a.ordersCount || a.name.localeCompare(b.name));
++  }
++
+   @computed get isEmpty(): boolean {
+-    return !this.loading && this.items.length === 0;
++    return !this.loading && this.visibleItems.length === 0;
+   }
+ 
+   @computed get totalOrders(): number {
+@@ -58,6 +66,11 @@ export class CustomersStore {
+     this.query = query;
+   }
+ 
++  @action.bound
++  setMinOrders(value: number): void {
++    this.minOrders = Math.max(0, Math.floor(value));
++  }
++
+   @action.bound
+   refresh(): Promise<void> {
+     return this.loadCustomers();
+diff --git a/apps/orders-web/src/test-setup.ts b/apps/orders-web/src/test-setup.ts
+new file mode 100644
+index 000000000..34650d563
+--- /dev/null
++++ b/apps/orders-web/src/test-setup.ts
+@@ -0,0 +1,8 @@
++import "@testing-library/jest-dom/vitest";
++import { cleanup } from "@testing-library/react";
++import { afterEach, vi } from "vitest";
++
++afterEach(() => {
++  cleanup();
++  vi.useRealTimers();
++});
+diff --git a/apps/orders-web/vitest.config.ts b/apps/orders-web/vitest.config.ts
+new file mode 100644
+index 000000000..d838e57d2
+--- /dev/null
++++ b/apps/orders-web/vitest.config.ts
+@@ -0,0 +1,11 @@
++import react from "@vitejs/plugin-react";
++import { defineConfig } from "vitest/config";
++
++export default defineConfig({
++  plugins: [react()],
++  test: {
++    environment: "jsdom",
++    setupFiles: ["./src/test-setup.ts"],
++    include: ["src/**/*.test.{ts,tsx}"],
++  },
++});
