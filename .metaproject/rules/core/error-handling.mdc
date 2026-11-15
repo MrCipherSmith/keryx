@@ -61,7 +61,7 @@ catch { /* best effort: a leftover temp file is swept by the next run */ }
 ```
 
 ### Rule 4: No unhandled promise rejections
-Every promise is awaited inside a `try/catch` or has a `.catch()`; a fire-and-forget call handles its own rejection. Examples are in `async-patterns.mdc` Rule 4.
+Every promise is awaited inside a `try/catch` or has a `.catch()`; a fire-and-forget call handles its own rejection (`@typescript-eslint/no-floating-promises` enforces it).
 
 ### Rule 5: Keep the cause
 When catching and rethrowing, pass the original as `cause`. Do not both log and rethrow the same error in one `catch`: whoever handles it logs it.
