@@ -28,8 +28,10 @@ Consequence: R13 (visual QA) needs a new artifact kind and a new stage. R9 and R
 ```text
 src/desktop/                 shell-side code that is not UI: hub-supervisor, solo secret, update check
 src/hub/solo-auth.ts         solo login route and loopback guard
-src/hub/work/quick-modes.ts  mode table
-src/hub/work/clarify.ts      clarifying-question storage
+src/hub/work/quick-modes.ts  mode table (exists)
+src/hub/work/clarify.ts      clarifying-question storage (exists)
+src/hub/work/quick-start.ts  quick start request parser and route body (exists)
+src/hub/work/quick-start-limits.ts  size limits shared by the Hub, web and TUI (exists)
 src/hub/work/stage-timeline.ts
 src/hub/work/diff-view.ts
 src/hub/work/finding-anchor.ts

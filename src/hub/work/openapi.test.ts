@@ -34,6 +34,7 @@ test('the published quick-start bounds reject the same oversize bodies the parse
     expect(matchesWorkSchema({ ...body, criteria: Array.from({ length: 201 }, () => 'c') }, schema)).toBe(false);
     expect(matchesWorkSchema({ ...body, answers: Array.from({ length: 201 }, () => ({ q: 'q', a: null, skipped: true })) }, schema)).toBe(false);
 });
+
 test('every published schema reference resolves within the OpenAPI document', () => {
     function check(value: unknown) {
         if (!value || typeof value !== 'object') return;

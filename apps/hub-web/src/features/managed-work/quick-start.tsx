@@ -13,9 +13,6 @@ import { quickStartRequest, type QuickDraft } from "./quick-request";
 import { emptyQuickDraft, QuickStartDialog, type QuickPhase } from "./quick-start-dialog";
 import { unresolved, type Pending } from "./quick-start-unresolved";
 
-export { quickStartRequest };
-
-
 /**
  * One submission at a time. A definite refusal (4xx) forgets the operation id, so the next try is a new operation.
  * Anything ambiguous (lost connection, 5xx) keeps the id and the exact request, and only Retry may send them again:
@@ -75,7 +72,7 @@ function useQuickStart(adapter: WorkAdapter, onCreated: (flowId: string, sent: Q
         setPhase({ status: "idle" });
         return;
       }
-      const message = errorMessage(error);
+      const message = error instanceof ApiError && error.code === "invalid-body" ? t("quickStart.tooBig") : errorMessage(error);
       if (error instanceof ApiError && error.status >= 400 && error.status < 500) {
         forget();
         setPhase({ status: "rejected", message });

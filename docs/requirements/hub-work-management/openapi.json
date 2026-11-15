@@ -9342,7 +9342,7 @@
           "answers",
           "criteria"
         ],
-        "description": "Beyond the per-field bounds the Hub checks the composed rules and answers 400 invalid-body: the description followed by the clarifying-form record is at most 10000 characters, each trimmed criterion is at most 4000, and the mode's template criteria plus the typed ones are at most 200."
+        "description": "Beyond the per-field bounds the Hub checks the composed rules and answers 400 invalid-body: the description followed by the clarifying-form record is at most 10000 characters, each trimmed criterion is at most 4000, and the mode's template criteria plus the typed ones are at most 200. The description is trimmed and must not be blank; blank criteria are ignored and do not count toward that limit."
       },
       "QuickStartResult": {
         "type": "object",

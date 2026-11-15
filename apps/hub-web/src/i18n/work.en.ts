@@ -254,6 +254,8 @@ const en = {
   method: "Method",
   resultMissing: "No immutable result has been submitted.",
   quickStart: {
+    tooBig:
+      "The Hub refused this request: it is malformed or over a size limit (10000 characters of description and answers together, 4000 per criterion, 200 criteria). Shorten it and try again.",
     open: "New task",
     title: "New task",
     help: "Describe the work. It starts right away, and the criteria below are frozen when it does.",

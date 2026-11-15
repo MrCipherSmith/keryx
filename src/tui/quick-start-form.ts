@@ -316,7 +316,11 @@ export function createQuickStartMemory(): QuickStartMemory {
       let lastOperation = form.pendingOperation()?.operationId;
       form.subscribe(() => {
         const state = form.state();
-        if (state.operationId !== undefined) lastOperation = state.operationId;
+        if (state.operationId !== undefined) {
+          lastOperation = state.operationId;
+          // A re-sent id is judged by its latest outcome, not by an earlier rejection of the same id.
+          rejected.delete(lastOperation);
+        }
         if (lastOperation === undefined) return;
         if (state.phase === "done") accepted.add(lastOperation);
         else if (state.phase === "editing" && state.error?.kind === "rejected" && state.operationId === undefined) rejected.add(lastOperation);
@@ -325,12 +329,19 @@ export function createQuickStartMemory(): QuickStartMemory {
     options: () => {
       if (current === undefined) return {};
       const pending = current.pendingOperation();
-      if (current.state().phase === "done" || (pending !== undefined && accepted.has(pending.operationId))) {
+      const draft = current.draft();
+      if (current.state().phase === "done") {
         current = undefined;
         return {};
       }
+      if (pending !== undefined && accepted.has(pending.operationId)) {
+        // The request went through. Forget the draft only if it is still that request; text typed for another task stays.
+        const sent = pending.digest === JSON.stringify(buildQuickStartRequest({ ...draft, criteria: parseCriteriaField(draft.criteria) }));
+        if (sent) current = undefined;
+        return sent ? {} : { initial: draft };
+      }
       const keep = pending !== undefined && !rejected.has(pending.operationId);
-      return { initial: current.draft(), ...(keep ? { initialPending: pending } : {}) };
+      return { initial: draft, ...(keep ? { initialPending: pending } : {}) };
     },
   };
 }

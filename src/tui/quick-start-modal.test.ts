@@ -723,6 +723,43 @@ test("memory: reopening while the first request is out still learns that request
   }
 });
 
+test("memory: text typed for another task survives the first request being accepted, only the pending operation is dropped", async () => {
+  const memory = createQuickStartMemory();
+  let release: (outcome: QuickStartOutcome) => void = () => {};
+  const send: QuickStartSender = () => new Promise((resolve) => (release = resolve));
+  const first = createQuickStartForm({ send, onAccepted: () => {}, newOperationId: mintIds() });
+  memory.attach(first);
+  filled(first);
+  focusSubmit(first);
+  first.handleKey(ENTER);
+  const second = createQuickStartForm({ send: fakeSender(ACCEPTED).send, onAccepted: () => {}, newOperationId: mintIds(), ...memory.options() });
+  memory.attach(second);
+  for (let i = 0; i < 20 && second.state().focus !== "description"; i++) second.handleKey(key("up"));
+  type(second, " and more");
+  release(ACCEPTED);
+  await first.settled();
+  const next = memory.options();
+  expect(next.initialPending).toBeUndefined();
+  expect(next.initial?.description).toBe("Fix the typo and more");
+});
+
+test("memory: an id sent again after an earlier rejection of it is judged by its latest outcome", async () => {
+  const memory = createQuickStartMemory();
+  let release: (outcome: QuickStartOutcome) => void = () => {};
+  const first = createQuickStartForm({ send: () => new Promise((resolve) => (release = resolve)), onAccepted: () => {}, newOperationId: mintIds() });
+  memory.attach(first);
+  filled(first);
+  focusSubmit(first);
+  first.handleKey(ENTER);
+  const second = createQuickStartForm({ send: fakeSender({ kind: "network", message: "reset" }).send, onAccepted: () => {}, newOperationId: mintIds(), ...memory.options() });
+  memory.attach(second);
+  release({ kind: "rejected", status: 400, code: "invalid-body", message: "no" });
+  await first.settled();
+  await submitViaKeys(second);
+  expect(second.pendingOperation()?.operationId).toBe("op-1");
+  expect(memory.options().initialPending?.operationId).toBe("op-1");
+});
+
 test("pending: a form handed an unresolved operation replays the same id for the same body and mints a new one for a changed body", async () => {
   const first = fakeSender({ kind: "network", message: "connection reset" });
   const ids = mintIds();

@@ -393,6 +393,23 @@ describe("quick start dialog, state and event matrix", () => {
     expect(document.activeElement).toBe(controls[controls.length - 1]);
   });
 
+  test("focus moves to the dialog when Start disables itself while sending, so Tab and Escape keep working", async () => {
+    hub.script.push("hold");
+    show();
+    const dialog = await open();
+    describe_("Fix the login redirect");
+    const start = submit();
+    start.focus();
+    expect(document.activeElement).toBe(start);
+    fireEvent.click(start);
+    await waitFor(() => expect(hub.posts).toHaveLength(1));
+    expect(submit()).toBeDisabled();
+    await waitFor(() => expect(document.activeElement).toBe(dialog));
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    closed();
+    hub.release();
+  });
+
   test("while a request is unresolved, Tab never leaves the dialog even though the form fields are disabled", async () => {
     hub.script.push("network");
     show();
@@ -570,6 +587,20 @@ describe("quick start strings", () => {
     await waitFor(closed);
     // The template is not sent: the Hub prepends its own English wording, so what is stored never depends on the UI language.
     expect(hub.posts[0]!.body.criteria).toEqual([]);
+    await i18n.changeLanguage("en");
+  });
+
+  test.each(["en", "ru"])("a body the Hub refuses as invalid-body shows the quick-start size text in %s", async (language) => {
+    await i18n.changeLanguage(language);
+    const text = language === "en" ? workEn.quickStart : workRu.quickStart;
+    show();
+    fireEvent.click(await screen.findByRole("button", { name: text.open }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText(text.description), { target: { value: "x".repeat(10001) } });
+    fireEvent.click(within(dialog).getByRole("button", { name: text.submit }));
+    const alert = await within(dialog).findByRole("alert");
+    expect(alert).toHaveTextContent(text.tooBig);
+    expect(alert.textContent).not.toMatch(/quickStart\.|errors\./);
     await i18n.changeLanguage("en");
   });
 
