@@ -54,6 +54,55 @@ export function optionValues(args: readonly string[], name: string): string[] {
   return values;
 }
 
+export interface UnknownFlagOptions {
+  /** Also treat a single-dash token (`-x`) as a flag. Default: only `--name` tokens are flags. */
+  readonly shortFlags?: boolean;
+}
+
+/**
+ * The distinct flag names in `args` that are not in `allowed`, in argv order.
+ *
+ * A flag is any `--name` token, in either spelling (`--name value`, `--name=value`):
+ * the name is what precedes the first `=`. A bare word is a value or a positional
+ * and is never judged here.
+ */
+export function unknownFlags(args: readonly string[], allowed: readonly string[], options: UnknownFlagOptions = {}): string[] {
+  const names: string[] = [];
+  for (const argument of args) {
+    const isLong = argument.startsWith("--");
+    const isShort = options.shortFlags === true && !isLong && argument.length > 1 && argument.startsWith("-") && !/^-\d/.test(argument);
+    if (!isLong && !isShort) continue;
+    const equals = argument.indexOf("=");
+    const name = equals > 0 ? argument.slice(0, equals) : argument;
+    if (!allowed.includes(name) && !names.includes(name)) names.push(name);
+  }
+  return names;
+}
+
+/**
+ * The one refusal every keryx command uses for an unrecognised flag
+ * (`cli-interface-design.mdc`, decision 4): it throws one line naming the flag(s)
+ * and listing what is accepted, which the CLI prints on stderr with exit code 1.
+ * A dropped flag writes nothing and reports success, so it is refused instead.
+ *
+ * `command` is the invocation as the person typed it after `keryx`, e.g.
+ * `"review slice"` or `"memory search"`.
+ */
+export function rejectUnknownFlags(
+  args: readonly string[],
+  allowed: readonly string[],
+  command: string,
+  options: UnknownFlagOptions = {},
+): void {
+  const unknown = unknownFlags(args, allowed, options);
+  if (unknown.length === 0) return;
+  throw new Error(
+    `Unknown option${unknown.length > 1 ? "s" : ""} for \`keryx ${command}\`: ${unknown.join(", ")}. Accepted: ${
+      allowed.length > 0 ? allowed.join(", ") : "(none)"
+    }.`,
+  );
+}
+
 export function parseBooleanFlags<const T extends readonly string[]>(
   args: string[],
   flags: T,

@@ -1,4 +1,4 @@
-import { optionValue } from "../lib/args";
+import { optionValue, rejectUnknownFlags } from "../lib/args";
 import { requireWorkspaceReference } from "../sac/service";
 import { randomUUID } from "node:crypto";
 import { listWorkspaceViews, localWorkspaceAuthorizationServer, lookupWorkspace, newWorkspaceId, WorkspaceService, type WorkspaceResource } from "../sac/workspace-service";
@@ -25,10 +25,11 @@ function service(): WorkspaceService {
 
 export async function workspaceCommand(args: string[]): Promise<void> {
   const subcommand = args[0];
+  const guardFlags = (rest: readonly string[], allowed: readonly string[]): void => rejectUnknownFlags(rest, allowed, `workspace ${subcommand}`);
   if (!subcommand || subcommand === "help" || args.includes("--help") || args.includes("-h")) return printHelp();
   try {
     if (subcommand === "create") {
-      rejectUnknownOptions(args.slice(1), new Set(["--title", "--component"]));
+      guardFlags(args.slice(1), ["--title", "--component"]);
       const title = optionValue(args, "--title");
       const rawComponent = optionValue(args, "--component");
       const component = rawComponent === undefined ? undefined : requireWorkspaceReference(rawComponent);
@@ -44,13 +45,13 @@ export async function workspaceCommand(args: string[]): Promise<void> {
     // still listed and still shown, with the failing reference named, because
     // disappearing is indistinguishable from never having existed.
     if (subcommand === "list") {
-      rejectUnknownOptions(args.slice(1), new Set(["--include-archived"]));
+      guardFlags(args.slice(1), ["--include-archived"]);
       const includeArchived = booleanFlag(args, "--include-archived");
       const views = await listWorkspaceViews(service(), includeArchived);
       console.log(JSON.stringify(views.map((view) => ({ ...view.manifest, references: view.references })), null, 2)); return;
     }
     if (subcommand === "show") {
-      rejectUnknownOptions(args.slice(2), new Set());
+      guardFlags(args.slice(2), []);
       const id = args[1]; if (!id) throw new Error("Usage: keryx workspace show <workspace-id>");
       const found = await lookupWorkspace(service(), id);
       // The three non-workspace outcomes stay distinguishable in the text a
@@ -59,31 +60,31 @@ export async function workspaceCommand(args: string[]): Promise<void> {
       console.log(JSON.stringify({ ...found.manifest, references: found.references }, null, 2)); return;
     }
     if (subcommand === "add-resource") {
-      rejectUnknownOptions(args.slice(2), new Set(["--kind", "--uri", "--revision"]));
+      guardFlags(args.slice(2), ["--kind", "--uri", "--revision"]);
       const workspaceId = args[1]; const kind = optionValue(args, "--kind") as WorkspaceResource["kind"] | undefined; const rawUri = optionValue(args, "--uri"); const revision = optionValue(args, "--revision");
       if (!workspaceId || !kind || !rawUri) throw new Error("Usage: keryx workspace add-resource <workspace-id> --kind <kind> --uri <workspace-relative-ref> [--revision <revision>]");
       // Same normalization as create --component: --uri is the same kind of reference.
       console.log(JSON.stringify(await service().addResource({ request: undefined, requestCorrelationId: randomUUID(), workspaceId, resource: { kind, uri: requireWorkspaceReference(rawUri), ...(revision ? { revision } : {}) } }), null, 2)); return;
     }
     if (subcommand === "archive") {
-      rejectUnknownOptions(args.slice(2), new Set());
+      guardFlags(args.slice(2), []);
       const workspaceId = args[1]; if (!workspaceId) throw new Error("Usage: keryx workspace archive <workspace-id>");
       console.log(JSON.stringify(await service().archive({ request: undefined, requestCorrelationId: randomUUID(), workspaceId }), null, 2)); return;
     }
     if (subcommand === "remove-resource") {
-      rejectUnknownOptions(args.slice(2), new Set(["--uri"]));
+      guardFlags(args.slice(2), ["--uri"]);
       const workspaceId = args[1]; const uri = optionValue(args, "--uri");
       if (!workspaceId || !uri) throw new Error("Usage: keryx workspace remove-resource <workspace-id> --uri <workspace-relative-ref>");
       console.log(JSON.stringify(await service().removeResource({ request: undefined, requestCorrelationId: randomUUID(), workspaceId, uri }), null, 2)); return;
     }
     if (subcommand === "rename") {
-      rejectUnknownOptions(args.slice(2), new Set(["--title"]));
+      guardFlags(args.slice(2), ["--title"]);
       const workspaceId = args[1]; const title = optionValue(args, "--title");
       if (!workspaceId || !title) throw new Error("Usage: keryx workspace rename <workspace-id> --title <title>");
       console.log(JSON.stringify(await service().rename({ request: undefined, requestCorrelationId: randomUUID(), workspaceId, title }), null, 2)); return;
     }
     if (subcommand === "overview") {
-      rejectUnknownOptions(args.slice(2), new Set(["--max-items", "--max-tokens", "--explain"]));
+      guardFlags(args.slice(2), ["--max-items", "--max-tokens", "--explain"]);
       const workspaceId = args[1]; if (!workspaceId) throw new Error("Usage: keryx workspace overview <workspace-id> [--max-items N] [--max-tokens N] [--explain]");
       const maxItems = Number(optionValue(args, "--max-items") ?? "32"); const maxTokens = Number(optionValue(args, "--max-tokens") ?? "4096");
       if (!Number.isInteger(maxItems) || !Number.isInteger(maxTokens) || maxItems < 0 || maxTokens < 0) throw new Error("--max-items and --max-tokens must be non-negative integers");
@@ -94,7 +95,7 @@ export async function workspaceCommand(args: string[]): Promise<void> {
       return;
     }
     if (subcommand === "read") {
-      rejectUnknownOptions(args.slice(3), new Set(["--max-items", "--max-tokens", "--explain"]));
+      guardFlags(args.slice(3), ["--max-items", "--max-tokens", "--explain"]);
       const workspaceId = args[1]; const itemId = args[2];
       if (!workspaceId || !itemId) throw new Error("Usage: keryx workspace read <workspace-id> <item-id> [--max-items N] [--max-tokens N] [--explain]");
       const maxItems = Number(optionValue(args, "--max-items") ?? "1"); const maxTokens = Number(optionValue(args, "--max-tokens") ?? "4096");
@@ -106,7 +107,7 @@ export async function workspaceCommand(args: string[]): Promise<void> {
       return;
     }
     if (subcommand === "propose") {
-      rejectUnknownOptions(args.slice(2), new Set(["--kind", "--session", "--note", "--proposal-revision"]));
+      guardFlags(args.slice(2), ["--kind", "--session", "--note", "--proposal-revision"]);
       const workspaceId = args[1];
       const kind = optionValue(args, "--kind");
       const sessionRef = optionValue(args, "--session");
@@ -122,7 +123,7 @@ export async function workspaceCommand(args: string[]): Promise<void> {
       console.log(JSON.stringify(proposed.result, null, 2)); return;
     }
     if (subcommand === "confirm-review") {
-      rejectUnknownOptions(args.slice(3), new Set(["--acknowledge-security"]));
+      guardFlags(args.slice(3), ["--acknowledge-security"]);
       const workspaceId = args[1]; const proposalId = args[2];
       if (!workspaceId || !proposalId) throw new Error("Usage: keryx workspace confirm-review <workspace-id> <proposal-id> [--acknowledge-security]");
       // SLATE-20: mints the short-lived, single-use token `review --decision
@@ -161,7 +162,7 @@ export async function workspaceCommand(args: string[]): Promise<void> {
       console.log(JSON.stringify({ token, expiresAt, securityGate: security.gate, securityAcknowledged: security.gate === "needs-approval" && acknowledgeSecurity }, null, 2)); return;
     }
     if (subcommand === "review") {
-      rejectUnknownOptions(args.slice(3), new Set(["--decision", "--reason", "--idempotency-key", "--confirm-token"]));
+      guardFlags(args.slice(3), ["--decision", "--reason", "--idempotency-key", "--confirm-token"]);
       const workspaceId = args[1]; const proposalId = args[2]; const decision = optionValue(args, "--decision") as "accepted" | "rejected" | "dismissed" | undefined; const reason = optionValue(args, "--reason"); const idempotencyKey = optionValue(args, "--idempotency-key") ?? randomUUID(); const confirmToken = optionValue(args, "--confirm-token");
       if (!workspaceId || !proposalId || !decision) throw new Error("Usage: keryx workspace review <workspace-id> <proposal-id> --decision <accepted|rejected|dismissed> [--reason <reason>] [--idempotency-key <key>] [--confirm-token <token>]");
       if (decision === "accepted" && !confirmToken) throw new Error("--decision accepted requires --confirm-token — run `keryx workspace confirm-review " + workspaceId + " " + proposalId + "` first");
@@ -175,7 +176,7 @@ export async function workspaceCommand(args: string[]): Promise<void> {
       console.log(JSON.stringify(normalizeProposalLifecycleResult(result), null, 2)); return;
     }
     if (subcommand === "dismiss-candidate") {
-      rejectUnknownOptions(args.slice(2), new Set(["--reason", "--evidence"]));
+      guardFlags(args.slice(2), ["--reason", "--evidence"]);
       const target = args[1];
       const reason = optionValue(args, "--reason");
       const evidence = optionValue(args, "--evidence");
@@ -209,7 +210,7 @@ export async function workspaceCommand(args: string[]): Promise<void> {
       if (args.slice(2).some((argument) => argument === "--from" || argument.startsWith("--from="))) {
         throw new Error("--from is not accepted: a handoff's `from` is the subject the authorization server resolved for this caller, not a value a caller can state. Run the command as the subject handing over.");
       }
-      rejectUnknownOptions(args.slice(2), new Set(["--to", "--artifact"]));
+      guardFlags(args.slice(2), ["--to", "--artifact"]);
       const workspaceId = args[1];
       const to = optionValue(args, "--to");
       const artifactRef = optionValue(args, "--artifact");
@@ -223,19 +224,19 @@ export async function workspaceCommand(args: string[]): Promise<void> {
       return;
     }
     if (subcommand === "collaboration") {
-      rejectUnknownOptions(args.slice(2), new Set()); const workspaceId = args[1];
+      guardFlags(args.slice(2), []); const workspaceId = args[1];
       if (!workspaceId) throw new Error("Usage: keryx workspace collaboration <workspace-id>");
       console.log(JSON.stringify(await createLocalCollaborationService(process.cwd()).overview({ workspaceId, request: undefined, requestCorrelationId: randomUUID() }), null, 2)); return;
     }
     if (subcommand === "policy-readiness") {
-      rejectUnknownOptions(args.slice(1), new Set());
+      guardFlags(args.slice(1), []);
       const report = await diagnosePolicyReadiness(process.cwd());
       console.log(JSON.stringify(report, null, 2));
       if (!report.integrityReady) process.exitCode = 1;
       return;
     }
     if (subcommand === "catch-up") {
-      rejectUnknownOptions(args.slice(1), new Set(["--workspace", "--json", "--include-lifecycle-flags", "--retry-preservation"]));
+      guardFlags(args.slice(1), ["--workspace", "--json", "--include-lifecycle-flags", "--retry-preservation"]);
       const workspaceId = optionValue(args, "--workspace");
       const includeLifecycleFlags = booleanFlagDefaultTrue(args, "--include-lifecycle-flags");
       const retry = booleanFlag(args, "--retry-preservation");
@@ -249,7 +250,7 @@ export async function workspaceCommand(args: string[]): Promise<void> {
       return;
     }
     if (subcommand === "list-proposals") {
-      rejectUnknownOptions(args.slice(2), new Set());
+      guardFlags(args.slice(2), []);
       const workspaceId = args[1];
       const cwd = process.cwd();
       const authorizationServer = localWorkspaceAuthorizationServer();
@@ -275,14 +276,6 @@ export async function workspaceCommand(args: string[]): Promise<void> {
     throw new Error(`Unknown workspace command: ${subcommand}`);
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error)); process.exitCode = 1;
-  }
-}
-
-function rejectUnknownOptions(args: string[], allowed: Set<string>): void {
-  for (const argument of args) {
-    if (!argument.startsWith("--")) continue;
-    const name = argument.split("=", 1)[0]!;
-    if (!allowed.has(name)) throw new Error(`Unknown option: ${name}`);
   }
 }
 

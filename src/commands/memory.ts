@@ -8,7 +8,7 @@ import { renderSearchMarkdown } from "../memory/search";
 import { loadEmbeddingIndex } from "../memory/service";
 import { renderMemorySearchReport } from "../memory/report";
 import { computeLifecycle, type LifecycleResult } from "../memory/lifecycle";
-import { optionValue } from "../lib/args";
+import { optionValue, rejectUnknownFlags } from "../lib/args";
 import { shellQuote } from "../lib/shell-quote";
 import { memoryCliCommand, recordProcessCall } from "../review/orchestrator-log";
 import {
@@ -190,7 +190,10 @@ async function detectMemoryStoreUnreadable(cwd: string): Promise<string | null> 
   return null;
 }
 
+const SEARCH_FLAGS = ["--module", "--entity", "--status", "--limit", "--as-of", "--class", "--semantic", "--json", "--save-report"] as const;
+
 async function runSearch(args: string[]): Promise<void> {
+  rejectUnknownFlags(args, SEARCH_FLAGS, "memory search");
   const query = positionalArgs(args)[0] ?? "";
   if (!query) {
     console.error('Usage: keryx memory search "<query>" [--module <m>] [--entity <e>] [--status <s>] [--limit <n>]');

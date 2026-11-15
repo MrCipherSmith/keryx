@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { stdin } from "node:process";
 import path from "node:path";
+import { rejectUnknownFlags } from "../lib/args";
 import { pathExists } from "../lib/fs";
 import { confirm } from "../lib/prompt";
 import { initCommand } from "./init";
@@ -98,6 +99,12 @@ export async function modulesCommand(args: string[] = []): Promise<void> {
   if (sub === "--help" || sub === "-h" || sub === "help") {
     printHelp();
     return;
+  }
+
+  // The read-only views take `--json` and nothing else: a dropped flag would
+  // print the state and report success (cli-interface-design.mdc, decision 4).
+  if (sub === undefined || sub === "status" || sub === "list" || sub.startsWith("--")) {
+    rejectUnknownFlags(sub === "status" || sub === "list" ? args.slice(1) : args, ["--json", "--help"], sub === "status" || sub === "list" ? `modules ${sub}` : "modules");
   }
 
   // `--json` only ever describes state. It must never stand in for a

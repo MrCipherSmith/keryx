@@ -1,6 +1,6 @@
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { optionValue } from "../lib/args";
+import { optionValue, rejectUnknownFlags } from "../lib/args";
 import { pathExists } from "../lib/fs";
 import { readJsonFile, readJsonFileOr } from "../lib/json";
 import { normalizeRouteText, routeTokens } from "../lib/route-tokens";
@@ -1376,7 +1376,10 @@ function getLearningSource(args: string[]): { type: LearningSourceType; path: st
   return undefined;
 }
 
+const VERIFY_FLAGS = ["--bundled", "--root", "--all", "--dry-run", "--json", "--help"] as const;
+
 async function verifySkillCommand(args: string[]): Promise<void> {
+  rejectUnknownFlags(args.slice(1), VERIFY_FLAGS, "skills verify");
   const target = args[1];
   if (target === "--bundled" || args.includes("--bundled")) {
     verifyBundledSkills(args);

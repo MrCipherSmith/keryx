@@ -29,6 +29,7 @@ import { makeProvider } from "../harness/provider/make-provider";
 import { inspectProviderRoutingFacts } from "../harness/routing/provider-facts";
 import { externalBlockReason, loadExternalProvidersConfig } from "../lib/external-providers";
 import { resolveExternalSetting } from "../lib/external-switch";
+import { rejectUnknownFlags } from "../lib/args";
 import { summarizeRoutingPilot, type RoutingPilotObservation } from "../harness/routing/pilot";
 import { resolveProviderDefaultModelId } from "../harness/routing/provider-default";
 import { isRoutingCategory, ROUTING_CATEGORIES, type RoutingCategory } from "../harness/routing/table";
@@ -105,12 +106,6 @@ function scopeFromArgs(args: readonly string[]): RoutingScope {
   return args.includes("--project") ? "project" : "user";
 }
 
-/** Refuse a flag the subcommand does not define instead of silently ignoring it. */
-function rejectUnknownFlags(args: readonly string[], allowed: readonly string[]): void {
-  const unknown = args.filter((arg) => arg.startsWith("--") && !allowed.includes(arg));
-  if (unknown.length > 0) throw new Error(`Unknown flag ${unknown.join(", ")} for keryx routing. See keryx routing --help.`);
-}
-
 function parseCategory(raw: string | undefined): RoutingCategory | undefined {
   if (raw === undefined || !isRoutingCategory(raw)) return undefined;
   return raw;
@@ -151,7 +146,7 @@ function defaultSession(userConfigDir: string | undefined): { providerId: string
 }
 
 async function runSet(args: string[], location: RoutingLocation): Promise<void> {
-  rejectUnknownFlags(args, ["--user", "--project"]);
+  rejectUnknownFlags(args, ["--user", "--project"], "routing");
   const category = parseCategory(args[0]);
   if (category === undefined) {
     console.error(`Unknown or missing category. Expected one of ${ROUTING_CATEGORIES.join(", ")}.`);
@@ -179,7 +174,7 @@ async function runSet(args: string[], location: RoutingLocation): Promise<void> 
 }
 
 async function runUnset(args: string[], location: RoutingLocation): Promise<void> {
-  rejectUnknownFlags(args, ["--user", "--project"]);
+  rejectUnknownFlags(args, ["--user", "--project"], "routing");
   const category = parseCategory(args[0]);
   if (category === undefined) {
     console.error(`Unknown or missing category. Expected one of ${ROUTING_CATEGORIES.join(", ")}.`);
@@ -617,7 +612,7 @@ export async function routingCommand(args: string[], deps: RoutingCommandDeps = 
     return;
   }
   if (command === "list") {
-    rejectUnknownFlags(args.slice(1), ["--json"]);
+    rejectUnknownFlags(args.slice(1), ["--json"], "routing");
     const { config, notices } = loadEffectiveRouting(location);
     await listRouting(config, location, deps, args.includes("--json"), undefined, notices);
     return;
