@@ -96,15 +96,7 @@ render frame, a file in a tree walk or a command start, not a request handler.
 
 ### 1. N+1 Database Queries
 
-**Detection patterns:**
-- [ ] Loop or `.map()` containing a DB query, repository call, or Prisma/TypeORM find
-- [ ] `for (const item of items) { await repo.findOne(...) }` — classic N+1
-- [ ] ORM relation accessed without eager loading inside iteration: `order.items` where `items` is a lazy relation loaded inside a loop
-- [ ] GraphQL resolver loading a child relation per parent without a DataLoader
-
-**Correct patterns to confirm:** Prisma `include`/`select` on the parent query; TypeORM `leftJoinAndSelect()` or `relations`; MikroORM `populate`; raw SQL `JOIN` rather than a query per row.
-
-**Hot path requirement:** State whether this runs per HTTP request, per list item render, per job iteration, etc.
+The standard and its severities are `.metaproject/rules/core/database-patterns.mdc` (Rule 1 and its **Review severities** row). Also: a GraphQL resolver loading a child per parent without a DataLoader is the same shape. State whether the loop runs per HTTP request, per list item render or per job iteration, with its size.
 
 ### 2. Unnecessary React Re-renders
 
@@ -133,12 +125,7 @@ render frame, a file in a tree walk or a command start, not a request handler.
 
 ### 4. Missing Database Indexes
 
-Detectable from query patterns in changed code (not from DB schema directly):
-
-- [ ] New query filtering on a column that is not a primary key and not obviously indexed: `WHERE email = ?` without a unique constraint visible in the schema or migration
-- [ ] `ORDER BY created_at DESC` on a table with potentially large row counts — `created_at` index not evident
-- [ ] `LIKE '%term%'` — prefix wildcard prevents index use; flag as info with suggestion to use full-text search
-- [ ] Foreign key column used in JOIN without an index (common ORM footgun)
+The standard and its severities are `.metaproject/rules/core/database-patterns.mdc` (Rule 2). Also: `LIKE '%term%'` cannot use a b-tree index; flag it as `info` with full-text search as the fix.
 
 **Evidence requirement:** Cannot confirm an index is missing without seeing the migration or schema. If the schema is not in the payload, it is `info`: say that reading the schema would settle it. Schema shown with no index and the table shown large (its size named): `major`. Schema shown, size not: `minor`.
 

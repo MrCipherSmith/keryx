@@ -212,7 +212,7 @@ finding here cites that trigger; it needs no request handler and no load profile
 - [ ] `SELECT ... FOR UPDATE` on a wide row range — locks more rows than needed
 - [ ] Transaction holding a lock while performing external I/O (HTTP call, file read) — lock held far too long
 - [ ] Nested transactions with locks — can deadlock under concurrent writers
-- [ ] Long-running migration with a full-table lock on a live table, or adding a NOT NULL column without a default
+- [ ] Migration that locks a live table or fails against existing rows (`database-patterns.mdc` Rule 3)
 
 #### D3. N+1 and Unbounded Queries
 
@@ -369,10 +369,9 @@ that evidence the finding drops to the row's fallback level, and without a concr
 | Race condition on shared mutable state, including a lost update to a shared state file | `blocker` **if** the interleaving can corrupt or lose data; otherwise `major` | Same wording as `review-logic`, deliberately: the outcome decides, not the word "race" |
 | Check-then-act with no unique constraint or lock; non-idempotent retry; event handler with no deduplication; scheduled job or session work with no lock | `blocker` when the evidence shows the duplicate or lost write persisted (shape 2); otherwise `major` | The concurrent or retried path must exist in the code, not be assumed |
 | Per-user data cached under a key not scoped to the user | `blocker` when the evidence shows a second user served the first user's entry (shape 2; shape 3 too when an attacker can steer it); `major` when a second user's request path to the key is named (trigger) but serving the wrong entry is not shown; `info` when no second reader's path is named | Blocker needs both readers shown; major needs the second reader's path named |
-| `NOT NULL` column added without a default to a populated table, or a migration that fails against existing rows | `major`; `blocker` only where truncation or data loss is shown | Same rating as `review-backend` |
-| Query filtering or ordering on a column with no index on a table shown to be large | `major` with the table size named; `minor` when the schema is shown but the size is not; `info` when the schema is not in the payload | Same rule as `review-performance`: reading the schema settles it |
+| Migration that fails against existing rows or locks a live table; query in a loop; missing index | per `.metaproject/rules/core/database-patterns.mdc` **Review severities**; an index is `info` when the schema is not in the payload | One table for every reviewer |
 | Unbounded queue, collection, buffer or fan-out | `blocker` only when the evidence shows the growth reaching exhaustion (shape 1); otherwise `major` with what grows it named | Law 3: the input that grows it is the trigger |
-| External I/O inside a transaction or under a lock; connection without a pool; unbounded `Promise.all`; retry without cap or backoff; missing timeout; stale lock with no recovery; stampede on a hot key; N+1 on a hot path; long transaction; missing DLQ; blocking I/O on a thread or the event loop other work shares | `major` when the finding names the trigger and the stall, exhaustion or hang it causes; `blocker` only if it shows the crash | Degradation is not one of the four shapes |
+| External I/O inside a transaction or under a lock; connection without a pool; unbounded `Promise.all`; retry without cap or backoff; missing timeout; stale lock with no recovery; stampede on a hot key; long transaction; missing DLQ; blocking I/O on a thread or the event loop other work shares | `major` when the finding names the trigger and the stall, exhaustion or hang it causes; `blocker` only if it shows the crash | Degradation is not one of the four shapes |
 | Backoff without jitter; TTL misconfigured; per-request allocation on a hot path; full-row fetch for one field; undocumented fallback | `minor` | Correct under load; the cost is to whoever tunes it next |
 | Architectural note with no failure mode under a concrete trigger | `info` | Shared law 1 |
 
