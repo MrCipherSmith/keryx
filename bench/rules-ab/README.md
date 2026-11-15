@@ -84,6 +84,19 @@ Frontend suite (2026-11-15), 3 reps, means per rep (recall out of 24):
 
 Per case, A to B: f01 (stores) 7.17 to 8, f02 (components) 6.33 to 7, f03 (TypeScript and stories) 6.17 to 8 of 8.
 
+Other lenses pointed at the rules (2026-11-15), 2 reps each. Arm A is the lens as on main with no rules; arm B is the lens that reads the rules (shipped):
+
+| Lens, suite | Arm | Recall | Valid | Noise | Decoy | Control findings |
+|---|---|---|---|---|---|---|
+| `review-frontend-conventions`, frontend (/24) | A | 18.75 | 3 | 9.5 | 1.5 | 5 |
+| | B | 23.0 | 6 | 6.5 | 0 | 5 |
+| `review-performance`, frontend (/24) | A | 9.5 | 5 | 5.5 | 0 | 2.5 |
+| | B | 20.75 | 3 | 8 | 0.5 | 2.5 |
+| `review-architecture`, backend (/21) | A | 15.0 | 4.5 | 11 | 1.5 | 4.5 |
+| | B | 17.75 | 9 | 10 | 2 | 4.5 |
+
+`review-performance` gains most because the rules carry the store and render rows it had no checklist for; its noise rises by 2.5 per rep. `review-style` was not measured.
+
 History suite: one general reviewer against the fixed blocker/major findings found 14 match + 6 partial of 46, about 37%.
 
 ## Notes
