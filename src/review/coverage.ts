@@ -393,7 +393,7 @@ export async function installedReviewerNames(root: string): Promise<ReadonlySet<
 
 export async function requiredReviewers(root: string, mode: ReviewMode, files: readonly string[] | undefined, options: RequiredOptions = {}): Promise<RequiredSet> {
   const inventory = await collectReviewers(root);
-  const stack = await detectProjectStack(root);
+  const stack = await detectProjectStack(root, { files });
   const excluded: RequiredSet["excluded"] = [];
   const roster: string[] = [];
   for (const reviewer of inventory.bundled) {

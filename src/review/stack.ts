@@ -32,13 +32,15 @@
  * nothing, and "nothing" is not "no".
  *
  * Walking the workspace globs would give a real answer, and is deliberately not
- * done here: it needs directory traversal, which turns a single deterministic
- * read into an unbounded filesystem walk whose failure modes (a glob that
- * matches nothing, a sub-package with no manifest, a symlinked package outside
- * the tree) each need their own answer — and every wrong answer among them costs
- * a skipped reviewer. Being uncertain about a monorepo root is cheap and honest;
- * the reason names the globs so an operator can point the detector at a
- * sub-package instead.
+ * done here: it turns a single deterministic read into an unbounded filesystem
+ * walk whose failure modes (a glob that matches nothing, a sub-package with no
+ * manifest, a symlinked package outside the tree) each need their own answer.
+ * What IS done, when the caller passes the files under review, is the bounded
+ * walk: for each file, the nearest `package.json` between its directory and
+ * the root. That reads exactly the manifests that govern the change — the
+ * `apps/web/package.json` holding React in a monorepo whose root names only
+ * tooling — and the stack is the union of those and the root manifest. Without
+ * files, a workspace root stays uncertain; the reason names the globs.
  *
  * # What this module does NOT do
  *
@@ -83,38 +85,40 @@ const DEPENDENCY_FIELDS = ["dependencies", "devDependencies", "peerDependencies"
 export type DetectStackOptions = {
   /** Injectable for tests; defaults to reading the real filesystem via Bun. */
   readFile?: ((path: string) => Promise<string>) | undefined;
+  /**
+   * Repo-relative (or absolute, under `cwd`) paths of the files under review.
+   * Each one adds the nearest `package.json` found walking up from its
+   * directory to `cwd`, so a change under `apps/web/` is judged by
+   * `apps/web/package.json` as well as the root manifest. Omitted or empty:
+   * the root manifest alone.
+   */
+  files?: readonly string[] | undefined;
 };
 
-/**
- * Read `<cwd>/package.json` and report which stack tags it declares.
- *
- * Deterministic and side-effect-free beyond the one read: same manifest, same
- * answer, every time. See the module doc for why every failure path resolves
- * to `uncertain: true` (which forces every tag `true`) rather than to `false`.
- */
-export async function detectProjectStack(cwd: string, options: DetectStackOptions = {}): Promise<DetectedStack> {
-  const readFile = options.readFile ?? defaultReadFile;
-  const manifestPath = `${cwd.replace(/\/+$/, "")}/package.json`;
+type ManifestRead =
+  | { kind: "missing" }
+  | { kind: "invalid"; reason: string }
+  | { kind: "ok"; names: Set<string>; workspaces: string[] };
 
+async function readManifest(manifestPath: string, readFile: (path: string) => Promise<string>): Promise<ManifestRead> {
   let raw: string;
   try {
     raw = await readFile(manifestPath);
   } catch {
-    return uncertainStack(`package.json not found at ${manifestPath}`);
+    return { kind: "missing" };
   }
-
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch (error) {
-    return uncertainStack(
-      `package.json at ${manifestPath} did not parse as JSON: ${error instanceof Error ? error.message : String(error)}`,
-    );
+    return {
+      kind: "invalid",
+      reason: `package.json at ${manifestPath} did not parse as JSON: ${error instanceof Error ? error.message : String(error)}`,
+    };
   }
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    return uncertainStack(`package.json at ${manifestPath} is not a JSON object`);
+    return { kind: "invalid", reason: `package.json at ${manifestPath} is not a JSON object` };
   }
-
   const record = parsed as Record<string, unknown>;
   const names = new Set<string>();
   for (const field of DEPENDENCY_FIELDS) {
@@ -125,21 +129,104 @@ export async function detectProjectStack(cwd: string, options: DetectStackOption
       }
     }
   }
+  return { kind: "ok", names, workspaces: workspacePatterns(record) };
+}
+
+/**
+ * The nearest `package.json` above each scope file, strictly below `root` (the
+ * root manifest is read on its own). A file outside `root` contributes nothing;
+ * a file with no manifest between it and the root is governed by the root
+ * manifest alone. Memoised per directory, so many files in one package cost one
+ * read per directory level, not one per file. Keyed by manifest path.
+ */
+async function nearestPackageManifests(
+  root: string,
+  files: readonly string[],
+  readFile: (path: string) => Promise<string>,
+): Promise<Map<string, ManifestRead>> {
+  const nearestByDir = new Map<string, string | undefined>();
+  const reads = new Map<string, ManifestRead>();
+  for (const file of files) {
+    const absolute = file.startsWith("/") ? file : `${root}/${file.replace(/^(\.\/)+/, "")}`;
+    if (!absolute.startsWith(`${root}/`) || absolute.split("/").includes("..")) continue;
+    const visited: string[] = [];
+    let dir = absolute.slice(0, absolute.lastIndexOf("/"));
+    let nearest: string | undefined;
+    while (dir.startsWith(`${root}/`)) {
+      if (nearestByDir.has(dir)) {
+        nearest = nearestByDir.get(dir);
+        break;
+      }
+      visited.push(dir);
+      const manifestPath = `${dir}/package.json`;
+      const read = await readManifest(manifestPath, readFile);
+      if (read.kind !== "missing") {
+        reads.set(manifestPath, read);
+        nearest = manifestPath;
+        break;
+      }
+      dir = dir.slice(0, dir.lastIndexOf("/"));
+    }
+    for (const seen of visited) nearestByDir.set(seen, nearest);
+  }
+  return reads;
+}
+
+/**
+ * Read `<cwd>/package.json` and, for every file in `options.files`, the
+ * nearest `package.json` walking up from it to `cwd`; report which stack tags
+ * the union of their declared dependencies names.
+ *
+ * Deterministic and side-effect-free beyond the reads: same manifests, same
+ * answer, every time. See the module doc for why every failure path resolves
+ * to `uncertain: true` (which forces every tag `true`) rather than to `false`.
+ */
+export async function detectProjectStack(cwd: string, options: DetectStackOptions = {}): Promise<DetectedStack> {
+  const readFile = options.readFile ?? defaultReadFile;
+  const root = cwd.replace(/\/+$/, "");
+  const manifestPath = `${root}/package.json`;
+  const files = options.files ?? [];
+
+  const rootRead = await readManifest(manifestPath, readFile);
+  if (rootRead.kind === "missing") {
+    return uncertainStack(`package.json not found at ${manifestPath}`);
+  }
+  if (rootRead.kind === "invalid") {
+    return uncertainStack(rootRead.reason);
+  }
+
+  const names = new Set<string>(rootRead.names);
+  const readPaths = [manifestPath];
+  const nested = files.length > 0 ? await nearestPackageManifests(root, files, readFile) : new Map<string, ManifestRead>();
+  for (const [nestedPath, read] of [...nested.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    // A sub-package manifest that exists but cannot be read is as unknown as a
+    // broken root: the files it governs could use any stack.
+    if (read.kind === "invalid") {
+      return uncertainStack(read.reason);
+    }
+    if (read.kind !== "ok") continue;
+    readPaths.push(nestedPath);
+    for (const name of read.names) names.add(name);
+  }
 
   // A manifest that parses is not a manifest that TOLD you something. Both
   // checks below reached `uncertain: false` before, and both then excluded every
   // stack-gated reviewer from repositories that plainly use the stack.
-  const workspaceGlobs = workspacePatterns(record);
-  if (workspaceGlobs.length > 0) {
+  //
+  // A workspace root read alone is uncertain because the sub-packages that
+  // decide the stack are unread. When the scope's files are known, each one's
+  // nearest manifest has been read above, so the globs are answered for every
+  // file under review.
+  if (files.length === 0 && rootRead.workspaces.length > 0) {
     return uncertainStack(
-      `package.json at ${manifestPath} declares workspaces (${workspaceGlobs.join(
+      `package.json at ${manifestPath} declares workspaces (${rootRead.workspaces.join(
         ", ",
-      )}); the dependencies that decide the stack live in the sub-packages, which this module does not walk`,
+      )}); the dependencies that decide the stack live in the sub-packages, and no scope files were given to find them`,
     );
   }
   if (names.size === 0) {
     return uncertainStack(
-      `package.json at ${manifestPath} declares no dependencies in ${DEPENDENCY_FIELDS.join(
+      `${readPaths.join(", ")} declare${readPaths.length === 1 ? "s" : ""} no dependencies in ${DEPENDENCY_FIELDS.join(
         "/",
       )} — a manifest that declares nothing has not said the repository uses nothing`,
     );
@@ -159,7 +246,7 @@ export async function detectProjectStack(cwd: string, options: DetectStackOption
   return {
     tags,
     uncertain: false,
-    reason: `detected from ${manifestPath} (${names.size} declared dependenc${names.size === 1 ? "y" : "ies"})`,
+    reason: `detected from ${readPaths.join(", ")} (${names.size} declared dependenc${names.size === 1 ? "y" : "ies"})`,
     matched,
   };
 }

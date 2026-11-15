@@ -255,6 +255,72 @@ test("AC13: a trailing slash in cwd does not produce a doubled path", async () =
 });
 
 // ---------------------------------------------------------------------------
+// Monorepo: the nearest package.json of each scope file joins the root's
+// ---------------------------------------------------------------------------
+
+const MONOREPO = {
+  "/proj/package.json": JSON.stringify({ devDependencies: { typescript: "^5", eslint: "^9" } }),
+  "/proj/apps/web/package.json": JSON.stringify({ dependencies: { react: "^18" }, peerDependencies: { mobx: "^6" } }),
+  "/proj/services/api/package.json": JSON.stringify({ dependencies: { "@nestjs/core": "^10" } }),
+};
+
+test("monorepo: a scope file under apps/web adds apps/web/package.json to the union", async () => {
+  const detected = await detectProjectStack("/proj", { readFile: readFileFrom(MONOREPO), files: ["apps/web/src/deep/Orders.tsx"] });
+  expect(detected.uncertain).toBe(false);
+  expect(detected.tags.react).toBe(true);
+  expect(detected.tags.mobx).toBe(true);
+  expect(detected.tags.nestjs).toBe(false);
+  expect(detected.reason).toBe("detected from /proj/package.json, /proj/apps/web/package.json (4 declared dependencies)");
+  expect(scopeReviewerByStack("review-frontend", ["react", "mobx"], detected).include).toBe(true);
+});
+
+test("monorepo: files in two packages read both manifests", async () => {
+  const detected = await detectProjectStack("/proj", {
+    readFile: readFileFrom(MONOREPO),
+    files: ["apps/web/src/a.tsx", "services/api/src/orders.controller.ts", "apps/web/src/b.tsx"],
+  });
+  expect(detected.tags.react).toBe(true);
+  expect(detected.tags.nestjs).toBe(true);
+  expect(detected.reason).toContain("/proj/services/api/package.json");
+});
+
+test("monorepo: a scope of root files only is judged by the root manifest and still excludes", async () => {
+  const detected = await detectProjectStack("/proj", { readFile: readFileFrom(MONOREPO), files: ["src/cli.ts", "README.md"] });
+  expect(detected.uncertain).toBe(false);
+  expect(detected.tags.react).toBe(false);
+  expect(detected.reason).toBe("detected from /proj/package.json (2 declared dependencies)");
+  const decision = scopeReviewerByStack("review-frontend", ["react", "mobx"], detected);
+  expect(decision.include).toBe(false);
+  expect(decision.reason).toBe("none of [react, mobx] detected in package.json (detected from /proj/package.json (2 declared dependencies))");
+});
+
+test("monorepo: a file outside the root contributes nothing", async () => {
+  const detected = await detectProjectStack("/proj", {
+    readFile: readFileFrom({ ...MONOREPO, "/other/package.json": JSON.stringify({ dependencies: { react: "^18" } }) }),
+    files: ["/other/src/a.tsx", "../other/src/b.tsx"],
+  });
+  expect(detected.tags.react).toBe(false);
+});
+
+test("monorepo: a broken sub-package manifest fails open", async () => {
+  const detected = await detectProjectStack("/proj", {
+    readFile: readFileFrom({ ...MONOREPO, "/proj/apps/web/package.json": "{ not json" }),
+    files: ["apps/web/src/a.tsx"],
+  });
+  expect(detected.uncertain).toBe(true);
+  expect(detected.reason).toContain("/proj/apps/web/package.json");
+});
+
+test("monorepo: a workspace root with known scope files is answered by their manifests", async () => {
+  const files = { ...MONOREPO, "/proj/package.json": JSON.stringify({ workspaces: ["apps/*"], devDependencies: { typescript: "^5" } }) };
+  const withScope = await detectProjectStack("/proj", { readFile: readFileFrom(files), files: ["apps/web/src/a.tsx"] });
+  expect(withScope.uncertain).toBe(false);
+  expect(withScope.tags.react).toBe(true);
+  const withoutScope = await detectProjectStack("/proj", { readFile: readFileFrom(files) });
+  expect(withoutScope.uncertain).toBe(true);
+});
+
+// ---------------------------------------------------------------------------
 // Frontmatter extraction
 // ---------------------------------------------------------------------------
 
