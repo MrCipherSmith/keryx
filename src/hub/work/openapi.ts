@@ -1,8 +1,10 @@
 import { MAX_COMMAND_BYTES } from './limits';
+import { MAX_ANSWERS, MAX_CRITERIA, MAX_CRITERION, MAX_PROBLEM } from './quick-start-limits';
 import domain from "../../../docs/requirements/hub-work-management/schemas/domain.schema.json";
 import command from "../../../docs/requirements/hub-work-management/schemas/command.schema.json";
 import event from "../../../docs/requirements/hub-work-management/schemas/event.schema.json";
 import { gitObservationSchema } from "./git-observer-contract";
+import { QUICK_MODES } from "./quick-modes";
 
 /** The schema vocabulary used by the reviewed metadata protocol. No external refs. */
 export interface WorkSchema {
@@ -10,7 +12,7 @@ export interface WorkSchema {
     type?: string; properties?: Record<string, WorkSchema>; required?: string[];
     additionalProperties?: boolean | WorkSchema; propertyNames?: WorkSchema;
     items?: WorkSchema; minItems?: number; maxItems?: number; minLength?: number; maxLength?: number;
-    minimum?: number; maximum?: number; maxProperties?: number; pattern?: string;
+    minimum?: number; maximum?: number; maxProperties?: number; pattern?: string; description?: string;
 }
 const ref = (name: string): WorkSchema => ({ $ref: `#/components/schemas/${name}` });
 const object = (properties: Record<string, WorkSchema>, required = Object.keys(properties)): WorkSchema => ({ type: "object", additionalProperties: false, properties, required });
@@ -46,13 +48,15 @@ for (const [name, recordType] of Object.entries({ Flow: "WorkFlow", Intent: "Wor
 schemas.AttentionPage = object({ records: array({ oneOf: [ref("WorkFlow"), ref("WorkIntent"), ref("Attempt"), ref("EvidenceRecord")] }, 200), nextCursor: nullableCursor, eventCursor: cursor });
 schemas.DocumentVersion = object({document:object({id:text,projectId:text,path:{type:'string',minLength:1,maxLength:1024},kind:{enum:['wiki','spec']},version:{type:'integer',minimum:1,maximum:Number.MAX_SAFE_INTEGER},contentDigest:{type:'string',pattern:'^[a-f0-9]{64}$'},content:{type:'string',maxLength:1048576}}),eventCursor:cursor});
 schemas.LegacyPreview = object({ receiptId: text, contentDigest: { type: "string", pattern: "^[a-f0-9]{64}$" }, legacyFlowId: text, sourceVersion: { type: "integer", minimum: 1 }, sourceDigest: { type: "string", pattern: "^[a-f0-9]{64}$" }, status: { const: "eligible" }, source: object({ flowId: text, title: { type: "string", minLength: 1, maxLength: 500 }, specification: ref("DocumentRef"), criteria: array({ type: "string", minLength: 1, maxLength: 4000 }, 200), status: { enum: ["initializing", "ready"] } }) });
+schemas.QuickStartRequest = { ...object({ mode: { enum: QUICK_MODES.map(mode => mode.id) }, description: { type: "string", minLength: 1, maxLength: MAX_PROBLEM }, answers: array(object({ q: { type: "string", maxLength: MAX_PROBLEM }, a: { anyOf: [{ type: "string", maxLength: MAX_PROBLEM }, { type: "null" }] }, skipped: { type: "boolean" } }), MAX_ANSWERS), criteria: array({ type: "string", maxLength: MAX_CRITERION }, MAX_CRITERIA) }), description: "Beyond the per-field bounds the Hub checks the composed rules and answers 400 invalid-body: the description followed by the clarifying-form record is at most " + MAX_PROBLEM + " characters, each trimmed criterion is at most " + MAX_CRITERION + ", and the mode's template criteria plus the typed ones are at most " + MAX_CRITERIA + ". The description is trimmed and must not be blank; blank criteria are ignored and do not count toward that limit." };
+schemas.QuickStartResult = object({ operationId: text, entities: array(ref("WorkRecord"), 1000), eventCursor: cursor, receiptId: text, flowId: text, intentId: text });
 schemas.GitObservation = gitObservationSchema;
 schemas.ObservationResult = object({ operationId: text, observation: ref("GitObservation"), eventCursor: cursor, receiptId: text });
 schemas.ObservationPage = object({ observations: array(ref("GitObservation"), 200), nextCursor: nullableCursor, eventCursor: cursor });
 schemas.ObserveSubject = object({ operationId: text, expectedVersions: { type: "object", maxProperties: 210, propertyNames: text, additionalProperties: { type: "integer", minimum: 1 } }, payload: object({ subjectDigest: { type: "string", pattern: "^[a-f0-9]{64}$" } }) });
 schemas.Operation = { oneOf: [
     object({ operationId: text, status: { const: "pending" }, receiptId: { type: "null" }, result: { type: "null" }, eventCursor: { type: "null" } }),
-    object({ operationId: text, status: { const: "committed" }, receiptId: text, result: { oneOf: [ref("CommandResult"), ref("ObservationResult")] }, eventCursor: cursor }),
+    object({ operationId: text, status: { const: "committed" }, receiptId: text, result: { oneOf: [ref("CommandResult"), ref("ObservationResult"), ref("QuickStartResult")] }, eventCursor: cursor }),
 ] };
 const submission = domainSchemas.FlowSubmission!.properties!;
 schemas.AcceptancePreview = object({ flowId: submission.flowId!, flowRevisionId: submission.flowRevisionId!, acceptedIntents: submission.acceptedIntents!, knowledgeProposalIds: submission.knowledgeProposalIds!, criterionCoverage: submission.criterionCoverage!, acceptanceManifestDigest: { type: "string", pattern: "^[a-f0-9]{64}$" }, eventCursor: cursor });
@@ -106,6 +110,7 @@ export const workOpenApi = {
     paths: {
         ...Object.fromEntries(workReadRoutes.map(route => [`${prefix}${route.suffix}`, { get: readOperation(route) }])),
         [`${prefix}subjects/{subjectId}/observe`]: { post: { operationId: "work_observe_subject", tags: ["Managed work"], description: "Opt-in bounded read-only provider refresh. Authenticates contributor and guards the exact Attempt before and after external reads. Appends immutable metadata and event; never changes subject, trust-labelled Evidence or acceptance. Configured provider identity and workflow policy only; no caller URLs or credentials.", parameters: [{ name: "projectId", in: "path", required: true, schema: text }, { name: "subjectId", in: "path", required: true, schema: text }, { name: "Idempotency-Key", in: "header", required: true, schema: text }], requestBody: { required: true, content: { "application/json": { schema: ref("ObserveSubject") } } }, responses: { "200": { description: "Actor-scoped immutable observation receipt or exact replay.", content: { "application/json": { schema: ref("ObservationResult") } } }, ...errorResponses } } },
+        [`${prefix}quick-start`]: { post: { operationId: "work_quick_start", tags: ["Managed work"], description: "Creates a Flow without a specification, one required Intent, and starts it as the signed-in human, in one transaction. Idempotency-Key is the operation id; the same key with the same body replays the original receipt, another body is a 409. Human-only: an agent token is refused with 403 human-required. Starting criteria come from the mode template plus the caller's own.", parameters: [{ name: "projectId", in: "path", required: true, schema: text }, { name: "Idempotency-Key", in: "header", required: true, schema: text }], requestBody: { required: true, content: { "application/json": { schema: ref("QuickStartRequest") } } }, responses: { "200": { description: "Flow and Intent created and started, or exact authorized replay.", content: { "application/json": { schema: ref("QuickStartResult") } } }, ...errorResponses } } },
         [`${prefix}commands`]: { post: { operationId: "work_command", tags: ["Managed work"], description: "Maximum UTF-8 JSON body 65536 bytes. Cookie mutations require configured Origin. Idempotency-Key must equal operationId; preserve the entire original envelope on retry. Replay checks current project authorization before returning the original actor-scoped result. Agents cannot invoke human-only commands. Unsupported optional adapters fail closed.", parameters: [{ name: "projectId", in: "path", required: true, schema: text }, { name: "Idempotency-Key", in: "header", required: true, schema: text }], requestBody: { required: true, content: { "application/json": { schema: ref("WorkCommand") } } }, responses: { "200": { description: "Committed result or exact authorized replay.", content: { "application/json": { schema: ref("CommandResult") } } }, "202": { description: "Pending operation; poll original operationId boundedly. No committed outcome is implied.", content: { "application/json": { schema: ref("Operation") } } }, ...errorResponses } } },
     },
     components: { securitySchemes: { HubBearer: { type: "http", scheme: "bearer" }, HubSession: { type: "apiKey", in: "cookie", name: "keryx_hub_session" } }, schemas },

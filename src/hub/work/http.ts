@@ -12,6 +12,7 @@ import { authorizeAgentRequest } from '../agent-credentials';
 import { fail, HubFailure, object, sha256 } from '../domain';
 import type { HubStore } from '../store';
 import { allowedWorkCommands, workCommand, workDigest, workRead } from './domain';
+import { parseQuickStartBody, quickStart } from './quick-start';
 import type { Attempt, ResultSubject, WorkReceipt, WorkRecord, WorkState } from './model';
 export const workLimits = {
     maxCommandBytes: MAX_COMMAND_BYTES, defaultPageSize: 50, maxPageSize: 200, maxEventPageSize: 1000, maxEventBytes: 1024 * 1024, maxSnapshotBytes: 20 * 1024 * 1024, maxSnapshotCacheBytes: 64 * 1024 * 1024, maxSnapshots: 32, maxSnapshotsPerPrincipal: 4, maxSnapshotBytesPerPrincipal: 32 * 1024 * 1024, snapshotTtlMs: 5 * 60 * 1000, maxObservations: 8, maxObservationsPerPrincipal: 2
@@ -104,9 +105,11 @@ function resultEnvelope(receipt: WorkReceipt, eventCursor: string) {
     if (value && typeof value === 'object' && 'observation' in value)
         return { ...value, eventCursor };
     const entities = resultEntities(value);
+    const started = value && typeof value === 'object' && 'flowId' in value && 'intentId' in value && !('kind' in value)
+        ? { flowId: String(value.flowId), intentId: String(value.intentId) } : undefined;
     const preview = typeof value === 'object' && value !== null && 'status' in value && value.status === 'eligible' ? value : undefined;
     return {
-        operationId: receipt.operationId, entities, eventCursor, receiptId: receipt.receiptId, ...(preview ? { preview } : {})
+        operationId: receipt.operationId, entities, eventCursor, receiptId: receipt.receiptId, ...(preview ? { preview } : {}), ...(started ?? {})
     };
 }
 /** HTTP only: current identity is re-evaluated inside the serialized command turn. */
@@ -397,7 +400,8 @@ export function createWorkHttp(deps: Dependencies) {
                 return json({ ...projection, eventCursor: eventCursor(identity.actor, projectId, Number(projection.eventCursor)) });
             }
             const isObservation = suffix.length === 3 && suffix[0] === 'subjects' && suffix[2] === 'observe';
-            if (request.method !== 'POST' || !isObservation && (suffix.length !== 1 || suffix[0] !== 'commands'))
+            const isQuickStart = suffix.length === 1 && suffix[0] === 'quick-start';
+            if (request.method !== 'POST' || !isObservation && !isQuickStart && (suffix.length !== 1 || suffix[0] !== 'commands'))
                 fail(405, 'method-not-allowed', 'Unsupported work method');
             if (identity.cookie || request.headers.has('origin'))
                 deps.checkOrigin(request);
@@ -405,8 +409,25 @@ export function createWorkHttp(deps: Dependencies) {
             const serializedBody = JSON.stringify(body);
             if (deps.protectedValues?.(request).some(value => value && serializedBody.includes(JSON.stringify(value).slice(1, -1))))
                 fail(400, 'credential-in-input', 'Work metadata contains protected credential material');
-            operationId = typeof body.operationId === 'string' ? body.operationId : undefined;
             const key = request.headers.get('idempotency-key');
+            if (isQuickStart) {
+                // The Idempotency-Key header is the operation id; the body carries only the quick start fields.
+                if (!key || key.length > 200 || [...key].some(c => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127))
+                    fail(400, 'idempotency-key-required', 'Idempotency-Key header is required');
+                operationId = key;
+                return await deps.serialized(async () => {
+                    const current = await deps.authenticate(request);
+                    authorize(current.actor, projectId, request.method);
+                    if (current.cookie || request.headers.has('origin'))
+                        deps.checkOrigin(request);
+                    if (deps.store.work.observationJob(projectId, current.actor.id, key))
+                        fail(409, 'idempotency-conflict', 'Operation ID belongs to a pending observation');
+                    const fields = parseQuickStartBody(body);
+                    const receipt = quickStart({ store: deps.store, now: deps.now }, current.actor, projectId, { operationId: key, ...fields });
+                    return json(resultEnvelope(receipt, eventCursor(current.actor, projectId, receipt.eventCursor)));
+                });
+            }
+            operationId = typeof body.operationId === 'string' ? body.operationId : undefined;
             if (!key || key.length > 200 || [...key].some(c => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127) || key !== operationId)
                 fail(400, 'idempotency-key-required', 'Idempotency-Key must match the operation ID');
             if (isObservation)

@@ -1,0 +1,487 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "492",
+  "slug": "desktop-quick-start",
+  "title": "Desktop app: quick start (web and TUI) and evidence pass",
+  "status": "implemented",
+  "createdAt": "2026-11-14T16:08:36.330Z",
+  "updatedAt": "2026-11-15T19:39:08.060Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:0fb0a0ad22698bc0949f466566187814f7a6b8aabd09b9c5d0b711d091c58c2e",
+  "acConfirmed": {},
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/1179"
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "origin": {
+    "kind": "human-request",
+    "quote": "Делай",
+    "source": "Telegram 262337/262357/262387/262409"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T7, T9, T10, T11"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T6, T8, T12"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [
+        "T13",
+        "T14"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Evidence report: real field names into spec section 6, confirm document-import handler and actor identity",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Tests for mode table and clarifying templates (AC2, AC3)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Implement quick-modes.ts and clarify.ts",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Tests for quick-start handler: one transaction, replay, conflict, skip record, rollback, human-only (AC4-AC8)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [
+        "T7"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Implement quick-start handler and additive route",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Web: dialog tests, New task dialog, i18n RU/EN, rebuild embedded assets (AC9, AC10)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T9"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "TUI: modal tests, /task command, modal, menu entry (AC11)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T9"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "Surface parity test (AC12)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [
+        "T10",
+        "T11"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "Verification: run every exec criterion, typecheck, smoke run on a real Hub (AC13-AC15)",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T12"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T14",
+      "title": "Fix round 1 (idempotency key persistence web+TUI, receipt ids, focus trap, TUI window and destroy, i18n criteria, skip record, docs, readiness drift)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T13"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-11-14T16:08:36.330Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-11-14T16:10:40.288Z",
+      "event": "task-added",
+      "detail": "T5: Evidence report: real field names into spec section 6, confirm document-import handler and actor identity"
+    },
+    {
+      "at": "2026-11-14T16:10:40.582Z",
+      "event": "task-added",
+      "detail": "T6: Tests for mode table and clarifying templates (AC2, AC3)"
+    },
+    {
+      "at": "2026-11-14T16:10:40.874Z",
+      "event": "task-added",
+      "detail": "T7: Implement quick-modes.ts and clarify.ts"
+    },
+    {
+      "at": "2026-11-14T16:10:41.163Z",
+      "event": "task-added",
+      "detail": "T8: Tests for quick-start handler: one transaction, replay, conflict, skip record, rollback, human-only (AC4-AC8)"
+    },
+    {
+      "at": "2026-11-14T16:10:41.459Z",
+      "event": "task-added",
+      "detail": "T9: Implement quick-start handler and additive route"
+    },
+    {
+      "at": "2026-11-14T16:10:41.752Z",
+      "event": "task-added",
+      "detail": "T10: Web: dialog tests, New task dialog, i18n RU/EN, rebuild embedded assets (AC9, AC10)"
+    },
+    {
+      "at": "2026-11-14T16:10:42.042Z",
+      "event": "task-added",
+      "detail": "T11: TUI: modal tests, /task command, modal, menu entry (AC11)"
+    },
+    {
+      "at": "2026-11-14T16:10:42.326Z",
+      "event": "task-added",
+      "detail": "T12: Surface parity test (AC12)"
+    },
+    {
+      "at": "2026-11-14T16:10:42.611Z",
+      "event": "task-added",
+      "detail": "T13: Verification: run every exec criterion, typecheck, smoke run on a real Hub (AC13-AC15)"
+    },
+    {
+      "at": "2026-11-14T16:10:42.897Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-11-14T16:10:43.188Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-11-14T16:10:48.634Z",
+      "event": "task-depends-set",
+      "detail": "T4: dependsOn T13 (was empty) — review follows verification"
+    },
+    {
+      "at": "2026-11-14T16:10:49.083Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-11-14T16:10:49.513Z",
+      "event": "frozen",
+      "detail": "15 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-11-14T16:10:53.968Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-11-14T16:11:56.241Z",
+      "event": "task-done",
+      "detail": "T5: Evidence report: real field names into spec section 6, confirm document-import handler and actor identity"
+    },
+    {
+      "at": "2026-11-14T16:15:28.714Z",
+      "event": "task-done",
+      "detail": "T6: Tests for mode table and clarifying templates (AC2, AC3)"
+    },
+    {
+      "at": "2026-11-14T16:18:04.846Z",
+      "event": "task-done",
+      "detail": "T7: Implement quick-modes.ts and clarify.ts"
+    },
+    {
+      "at": "2026-11-14T16:27:01.065Z",
+      "event": "task-done",
+      "detail": "T8: Tests for quick-start handler: one transaction, replay, conflict, skip record, rollback, human-only (AC4-AC8)"
+    },
+    {
+      "at": "2026-11-14T16:37:31.312Z",
+      "event": "task-done",
+      "detail": "T9: Implement quick-start handler and additive route"
+    },
+    {
+      "at": "2026-11-14T16:49:12.107Z",
+      "event": "task-done",
+      "detail": "T10: Web: dialog tests, New task dialog, i18n RU/EN, rebuild embedded assets (AC9, AC10)"
+    },
+    {
+      "at": "2026-11-14T16:59:29.380Z",
+      "event": "task-done",
+      "detail": "T11: TUI: modal tests, /task command, modal, menu entry (AC11)"
+    },
+    {
+      "at": "2026-11-14T17:05:06.522Z",
+      "event": "task-done",
+      "detail": "T12: Surface parity test (AC12)"
+    },
+    {
+      "at": "2026-11-14T17:10:15.788Z",
+      "event": "task-done",
+      "detail": "T13: Verification: run every exec criterion, typecheck, smoke run on a real Hub (AC13-AC15)"
+    },
+    {
+      "at": "2026-11-14T21:20:27.794Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1179 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-11-14T21:33:13.797Z",
+      "event": "task-added",
+      "detail": "T14: Fix round 1 (idempotency key persistence web+TUI, receipt ids, focus trap, TUI window and destroy, i18n criteria, skip record, docs, readiness drift)"
+    },
+    {
+      "at": "2026-11-14T21:33:18.304Z",
+      "event": "task-depends-set",
+      "detail": "T4: dependsOn T13, T14 (was T13) — Review round 1 produced findings; the review closes only after the fix task T14"
+    },
+    {
+      "at": "2026-11-14T21:53:05.130Z",
+      "event": "task-done",
+      "detail": "T14: Fix round 1 (idempotency key persistence web+TUI, receipt ids, focus trap, TUI window and destroy, i18n criteria, skip record, docs, readiness drift)"
+    },
+    {
+      "at": "2026-11-15T19:39:08.060Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "judged"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/hub/work/quick-modes.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/hub/work/clarify.test.ts"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/hub/work/quick-start.test.ts"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/hub/work/quick-start.test.ts"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/hub/work/quick-start.test.ts"
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "bun test src/hub/work/quick-start.test.ts"
+    },
+    "AC8": {
+      "kind": "exec",
+      "check": "bun test src/hub/work/quick-start.test.ts"
+    },
+    "AC9": {
+      "kind": "exec",
+      "check": "bun run --cwd apps/hub-web test -- quick-start"
+    },
+    "AC10": {
+      "kind": "exec",
+      "check": "bun scripts/build-hub-web.ts --check"
+    },
+    "AC11": {
+      "kind": "exec",
+      "check": "bun test src/tui/quick-start-modal.test.ts"
+    },
+    "AC12": {
+      "kind": "exec",
+      "check": "bun test src/hub/work/surface-parity.test.ts"
+    },
+    "AC13": {
+      "kind": "exec",
+      "check": "bun run typecheck && bun run --cwd apps/hub-web typecheck"
+    },
+    "AC14": {
+      "kind": "judged"
+    },
+    "AC15": {
+      "kind": "invariant",
+      "check": "test -z \"$(git diff --name-only main...HEAD -- apps/desktop ':(glob,icase)**/*tauri*')\""
+    }
+  }
+}

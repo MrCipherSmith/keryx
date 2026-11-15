@@ -3,18 +3,18 @@
 export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
   "schema": 1,
   "generator": "scripts/verify-native-coverage.ts",
-  "registryDigest": "4ffeed70558759232f3fac63b783e33fdbca8b8fd59cee7059d2c58836a0a0fc",
-  "contractDigest": "7a7b7002ec177255f9709940457a0dfd9010a2385cac47fa2317ffb09b4371e7",
-  "subjectCatalogueDigest": "89c424a37e4532cab5db70d462ad03a2b42a77c44981e26051c8af90da60b2f2",
-  "inventoryDigest": "9f8568ffd1f7685528c23e89e9314ccf5ad76187545c9955b26fc42fbec27e4f",
+  "registryDigest": "96f6ac176ce1847bcc637495a22b7e217d5f472d7a97651ea1614cfe26bfc27e",
+  "contractDigest": "95fd86252f56e1ddca9e5acc8f3817e1dba30c7a576e7a7130ded3424d23b018",
+  "subjectCatalogueDigest": "f6ed92a8b7d057c867dfe4836a6c385496bd184abc670653d5adf6515277ef3a",
+  "inventoryDigest": "d41737415b8d1c6ce198c53878067292da0f7bb2b4701c4f791099a826252671",
   "releaseReady": true,
   "counts": {
-    "registeredCommands": 75,
-    "variants": 262,
+    "registeredCommands": 76,
+    "variants": 263,
     "required": 147,
     "earned": 147,
     "requiredGaps": 0,
-    "boundaries": 115,
+    "boundaries": 116,
     "otherBlockers": 0
   },
   "earned": [
@@ -273,6 +273,7 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
     "setup.execute-repair",
     "setup.navigate",
     "staledocs.working-diff",
+    "task.default",
     "theme.name",
     "think.auto",
     "think.collapse",
@@ -285,5 +286,5 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
     "workspace.navigate"
   ],
   "otherBlockers": [],
-  "descriptorDigest": "f71594b0e7613ab79f579805d7579d6e6838eefbad910bd0b17d12d5e72624db"
+  "descriptorDigest": "b1fec7452accc2f162e6c97a731d2b8b6c5505f24911250647e98d01a8159965"
 };

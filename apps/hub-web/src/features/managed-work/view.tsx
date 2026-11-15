@@ -6,6 +6,7 @@ import { DecisionForm } from "./decision-form";
 import { CreateFlow } from "./create-flow";
 import { indexWorkRecords } from "./record-index";
 import type { PreparedAction } from "./work-types";
+import { QuickStart } from "./quick-start";
 import "./work-identifiers.css";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -228,6 +229,11 @@ function WorkBoard({
             <RefreshCw size={14} />
             {t("retry")}
           </Button>
+          {human &&
+              adapter.mode === "live" &&
+              can("flow.create") &&
+              can("intent.create") &&
+              can("flow.approve-and-start") && <QuickStart adapter={adapter} onCreated={(id) => setFlow(id)} />}
           {can("flow.create") && (
             <Button onClick={() => setCreating(!creating)}>
               {t("newFlow")}

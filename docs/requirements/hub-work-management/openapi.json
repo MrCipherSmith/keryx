@@ -3764,6 +3764,159 @@
         }
       }
     },
+    "/hub/work/v1/projects/{projectId}/quick-start": {
+      "post": {
+        "operationId": "work_quick_start",
+        "tags": [
+          "Managed work"
+        ],
+        "description": "Creates a Flow without a specification, one required Intent, and starts it as the signed-in human, in one transaction. Idempotency-Key is the operation id; the same key with the same body replays the original receipt, another body is a 409. Human-only: an agent token is refused with 403 human-required. Starting criteria come from the mode template plus the caller's own.",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuickStartRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Flow and Intent created and started, or exact authorized replay.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuickStartResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Closed work error. Authorization is checked before record/receipt lookup. A conflict never replaces an earlier receipt.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Closed work error. Authorization is checked before record/receipt lookup. A conflict never replaces an earlier receipt.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Closed work error. Authorization is checked before record/receipt lookup. A conflict never replaces an earlier receipt.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Closed work error. Authorization is checked before record/receipt lookup. A conflict never replaces an earlier receipt.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Closed work error. Authorization is checked before record/receipt lookup. A conflict never replaces an earlier receipt.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Closed work error. Authorization is checked before record/receipt lookup. A conflict never replaces an earlier receipt.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Closed work error. Authorization is checked before record/receipt lookup. A conflict never replaces an earlier receipt.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Closed work error. Authorization is checked before record/receipt lookup. A conflict never replaces an earlier receipt.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Closed work error. Authorization is checked before record/receipt lookup. A conflict never replaces an earlier receipt.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Closed work error. Authorization is checked before record/receipt lookup. A conflict never replaces an earlier receipt.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/hub/work/v1/projects/{projectId}/commands": {
       "post": {
         "operationId": "work_command",
@@ -9123,6 +9276,120 @@
           "source"
         ]
       },
+      "QuickStartRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "enum": [
+              "quick",
+              "bug",
+              "task",
+              "epic",
+              "refactor"
+            ]
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 10000
+          },
+          "answers": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "q": {
+                  "type": "string",
+                  "maxLength": 10000
+                },
+                "a": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 10000
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "skipped": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "q",
+                "a",
+                "skipped"
+              ]
+            }
+          },
+          "criteria": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+              "type": "string",
+              "maxLength": 4000
+            }
+          }
+        },
+        "required": [
+          "mode",
+          "description",
+          "answers",
+          "criteria"
+        ],
+        "description": "Beyond the per-field bounds the Hub checks the composed rules and answers 400 invalid-body: the description followed by the clarifying-form record is at most 10000 characters, each trimmed criterion is at most 4000, and the mode's template criteria plus the typed ones are at most 200. The description is trimmed and must not be blank; blank criteria are ignored and do not count toward that limit."
+      },
+      "QuickStartResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "entities": {
+            "type": "array",
+            "maxItems": 1000,
+            "items": {
+              "$ref": "#/components/schemas/WorkRecord"
+            }
+          },
+          "eventCursor": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          },
+          "receiptId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "flowId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "intentId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "operationId",
+          "entities",
+          "eventCursor",
+          "receiptId",
+          "flowId",
+          "intentId"
+        ]
+      },
       "GitObservation": {
         "type": "object",
         "additionalProperties": false,
@@ -9604,6 +9871,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/ObservationResult"
+                  },
+                  {
+                    "$ref": "#/components/schemas/QuickStartResult"
                   }
                 ]
               },

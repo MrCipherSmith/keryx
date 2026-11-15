@@ -313,3 +313,25 @@ test('one principal cannot exhaust snapshot slots needed by a different reviewer
     expect((await req(base(p) + '/snapshot?limit=1')).status).toBe(413);
     expect((await req(base(p) + '/snapshot?limit=1', undefined, reviewerToken)).status).toBe(200);
 });
+test('quick-start route: starts a Flow from the Idempotency-Key, replays it, and refuses missing keys and non-human sessions', async () => {
+    const p = await project(), url = base(p) + '/quick-start', key = randomUUID();
+    const body = { mode: 'bug', description: 'Save button does nothing', answers: [{ q: 'steps-to-reproduce', a: null, skipped: true }], criteria: ['Settings persist after a reload'] };
+    const first = await req(url, body, operatorToken, { 'idempotency-key': key });
+    expect(first.status).toBe(200);
+    const created = await first.json();
+    expect(created.operationId).toBe(key);
+    expect(typeof created.flowId).toBe('string');
+    expect(typeof created.intentId).toBe('string');
+    expect(await (await req(url, body, operatorToken, { 'idempotency-key': key })).json()).toEqual(created);
+    const receipt = await (await req(base(p) + '/operations/' + key)).json();
+    expect(receipt).toMatchObject({ operationId: key, status: 'committed', result: { flowId: created.flowId, intentId: created.intentId } });
+    expect((await req(url, { ...body, description: 'Another one' }, operatorToken, { 'idempotency-key': key })).status).toBe(409);
+    const listed = await (await req(base(p) + '/snapshot?limit=200')).json();
+    expect(listed.records.find((r: { id: string }) => r.id === created.flowId)).toMatchObject({ kind: 'flow', state: 'in-progress' });
+    const withoutKey = await app.fetch(new Request('http://hub.test' + url, { method: 'POST', headers: { authorization: 'Bearer ' + operatorToken, 'content-type': 'application/json' }, body: JSON.stringify(body) }));
+    expect(withoutKey.status).toBe(400);
+    expect((await withoutKey.json()).error.code).toBe('idempotency-key-required');
+    expect((await req(url, body, agentToken, { 'idempotency-key': randomUUID() })).status).toBe(403);
+    const flows = await (await req(base(p) + '/flows')).json();
+    expect(flows.records.filter((r: { kind: string }) => r.kind === 'flow')).toHaveLength(1);
+});

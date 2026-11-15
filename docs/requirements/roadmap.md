@@ -1,5 +1,5 @@
 # Requirements Roadmap
-Version: 0.29.31
+Version: 0.29.32
 
 ## Status
 
@@ -12,6 +12,8 @@ carrying the measurement that found it and the reason it was not done then.
 
 <!-- retired-spellings-ok: section — a dated record of what each release stated at the time; renaming commands inside it would make the record claim a spelling that did not exist on that date -->
 > **Changelog**
+>
+> - **0.29.32**: [Keryx Desktop App](keryx-desktop-app/README.md) — **draft, nothing implemented; no Flow, no frozen criteria**. A thin desktop shell over the Hub web and a local Hub child process: solo login without token or SSO, quick task start, stage timeline with agent logs, working-copy diff with reviewer findings and visual QA, each with a TUI counterpart. Decisions taken 2026-11-14: Tauri shell, GitHub releases, separate app plus `keryx hub solo`, web first, template clarifying form. Acceptance criteria wait for operator review before freeze.
 >
 > - **0.29.31**: [Keryx Review V3](keryx-revview-v3/README.md) — **spec ready, D1–D7 accepted; runtime not implemented**. Schema v2/v1 compatibility, shared Keryx controller, native plus Keryx external general in first release, review-only authority, behavior-based coverage and initial large-review limits accepted. Implementation explicitly not started.
 >

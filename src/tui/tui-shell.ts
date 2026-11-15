@@ -331,6 +331,9 @@ import {
 } from "./theme";
 import { runSettingsCommand, settingsOpenDecision } from "./settings-actions";
 import { isSettingsCommand, openSettings, settingsSidebarHint } from "./settings-modal";
+import { isQuickStartCommand, quickStartAcceptedLine, resolveQuickStartSender } from "./quick-start-command";
+import { createQuickStartForm, createQuickStartMemory } from "./quick-start-form";
+import { openQuickStart } from "./quick-start-modal";
 import { buildSettingsRows, type SettingRow } from "./settings-model";
 import { loadSettingsSnapshot } from "./settings-state";
 import { boldChunk, dimChunk, roleChunk } from "./theme-text";
@@ -9206,6 +9209,28 @@ export async function launchTuiAgentShell(opts: {
         });
     };
 
+    // Flow 492 T11: `/task`. The draft and any unresolved request outlive the modal (Esc keeps what was typed); an accepted request drops both.
+    const quickStartMemory = createQuickStartMemory();
+    const showQuickStart = (): void => {
+      void resolveQuickStartSender({ cwd: sessionCwd }).then((resolved) => {
+        if (!resolved.ok) {
+          io.onSystem?.(`/task: ${resolved.reason}\n`);
+          return;
+        }
+        const form = createQuickStartForm({
+          send: resolved.send,
+          ...quickStartMemory.options(),
+          onAccepted: (flowId) => {
+            const line = quickStartAcceptedLine(flowId);
+            chrome.showToast(line);
+            io.onSystem?.(`${line}\n`);
+          },
+        });
+        quickStartMemory.attach(form);
+        openQuickStart(otui, chrome, { form, renderer: r });
+      });
+    };
+
     // `/model` and `/connect` rebuild `deps` mid-session and refresh the labels.
     const updateModelLabels = (): void => {
       paintSessionHeader();
@@ -10664,6 +10689,10 @@ export async function launchTuiAgentShell(opts: {
         }
         if (isSettingsCommand(command.name)) {
           showSettings();
+          return;
+        }
+        if (isQuickStartCommand(command.name)) {
+          showQuickStart();
           return;
         }
         if (command.name === "/bus") {

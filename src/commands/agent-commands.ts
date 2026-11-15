@@ -130,6 +130,12 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
   },
   { name: "/flows", description: "Browse project flows and inspect one", modes: BOTH },
   {
+    // Flow 492 T11: the quick start. Needs the TUI (a modal) and a Hub connection.
+    name: "/task",
+    description: "Start work from a short form: pick a mode, describe it, answer a few questions",
+    modes: AGENT_ONLY,
+  },
+  {
     // Flow 353 (P0 W5, AC2): the same aggregate report `keryx doctor` prints
     // (version, Bun floor, ripgrep, sandbox, providers, MCP, integrations,
     // standard, worktrees, graph/wiki freshness), inside the session.
