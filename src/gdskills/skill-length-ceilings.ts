@@ -168,7 +168,7 @@ const CEILINGS_BY_KEY = {
   "review/review-regression": 212,
   "review/review-security-code": 358,
   "review/review-style": 345,
-  "review/review-testing-practices": 293,
+  "review/review-testing-practices": 275,
   "review/review-ui-ux": 267,
   "review/review-verifier": 299,
 } satisfies Record<string, number>;

@@ -1,86 +1,20 @@
 ---
-description: "TDD workflow rules: red-green-refactor cycle, test-first mandate, no-done-without-green invariant. Use when implementing features, fixing bugs, or verifying acceptance criteria."
+description: "Testing standard shared by code writers and reviewers: red-green order, no done without green, tests colocated, new logic gets a test, mock at the boundary, no real network or clock, flaky tests fixed by waiting on a state, and the severities reviewers use. Use when implementing features, fixing bugs, writing or reviewing unit and integration tests."
 alwaysApply: false
 ---
 
 # TDD Workflow
 
-## Purpose
-Enforce Test-Driven Development: tests are written before implementation code. An agent MUST NOT claim `STATUS: DONE` unless all tests pass.
+Canon applies: the test framework's documentation. This rule holds this project's decisions and the order an implementer works in.
 
-## When To Apply
-Apply during any implementation task. Always loaded alongside `task-implementer` and `tests-creator` workflows.
+## Process (implementer)
 
----
+1. **RED.** Write the failing test first, from the task's `acceptance_criteria` (each criterion maps to at least one test; use `test_case_specs` or run `tests-creator` when none exist). Run it and confirm it fails for the right reason: a test that passes before the implementation is broken.
+2. **GREEN.** Write the minimal code that passes it. Run the tests after each logical chunk.
+3. **REFACTOR.** Clean up with the suite green; re-run it after every step.
+4. **Report.** The full suite (`bun test`, `npm test`, `pytest` or the project's equivalent) passes with 0 failures before `STATUS: DONE`.
 
-## The Red-Green-Refactor Cycle
-
-Every implementation must follow this exact sequence:
-
-```
-1. RED    → Write a failing test that describes the desired behaviour
-2. GREEN  → Write the minimal code to make that test pass
-3. REFACTOR → Clean up code without breaking the test
-```
-
-**CRITICAL: Never skip RED.** Writing code before a failing test exists violates TDD. Even if the test seems trivial, it must be written first.
-
----
-
-## Mandatory Steps
-
-### Step 1: Receive Acceptance Criteria
-- Parse `acceptance_criteria` from the task object (provided by `issue-analyzer` or `tests-creator`)
-- Each criterion maps to ≥1 test case
-- If no criteria exist, derive them from the task description before proceeding
-
-### Step 2: Run tests-creator (or use pre-generated specs)
-- If `test_case_specs` are provided in the task object → use them directly
-- If not → invoke `tests-creator` to generate specs before writing any code
-- **DO NOT start implementation until test specs are confirmed**
-
-### Step 3: Write tests (RED phase)
-- Create test file(s) at the correct location (co-located or in `__tests__/`)
-- Run the test suite — confirm tests FAIL for the right reason
-- A test that passes before implementation is a broken test
-
-### Step 4: Implement (GREEN phase)
-- Write the minimal code to satisfy each failing test
-- Do not add features not covered by tests
-- Run tests after each logical chunk — do not batch all implementation before running
-
-### Step 5: Refactor
-- Clean up code: extract helpers, rename variables, remove duplication
-- Re-run full test suite after every refactor step
-- Refactoring is complete only when all tests are green
-
-### Step 6: Verify and Report
-- Final `bun test` / `npm test` / `pytest` / equivalent must pass with 0 failures
-- Include test output summary in the result object
-- Report `STATUS: DONE` only when all criteria are covered by passing tests
-
----
-
-## Test conventions every stack shares
-
-A stack pack's `testing.mdc` adds its framework, layout and tools on top of these and does
-not repeat them.
-
-- Match the project's test layout, framework, assertion and mocking libraries; never add a
-  second one.
-- New behaviour gets a new test in the same change. A bug fix gets a regression test that
-  fails before the fix and passes after.
-- Mock at the boundary (network, filesystem, clock, other services), never an internal
-  collaborator of the unit under test.
-- A unit test depends on no real network access or wall-clock time; fake both.
-- Never wait for async work with a sleep or a fixed delay; await the result or the signal.
-- Fix a flaky test at the cause it races, never with a retry, a longer timeout or a skip.
-
----
-
-## Output Contract Extension
-
-When reporting task completion, include:
+Output contract on completion:
 
 ```
 tests_written: <N>
@@ -89,25 +23,37 @@ tests_failing: 0
 coverage_notes: "<which acceptance criteria are covered>"
 ```
 
+**Iron laws.** Never claim `STATUS: DONE` with a failing test. Never write implementation before a failing test exists for that behaviour. Never delete or skip a test to make the suite green; fix the code.
+
+## Rules
+
+A stack pack's `testing.mdc` adds its framework, layout and tools on top of these and does not repeat them.
+
+1. **One toolchain.** Use the project's test framework, assertion and mocking libraries; never add a second one.
+2. **Unit tests are colocated** with the code (`foo.test.ts` beside `foo.ts`). A separate folder is for e2e only.
+3. **New or changed logic gets a test in the same change**: a branch, a calculation, error handling. A bug fix gets a regression test that fails before the fix. Trivial getters, pass-through and configuration need none.
+4. **Mock at the boundary** (network, filesystem, clock, other services), never an internal collaborator of the unit under test.
+5. **A unit test uses no real network and no wall-clock time**; fake both.
+6. **Never wait with a sleep or a fixed delay.** Await the result, the event or the signal.
+7. **A flaky test is fixed by waiting on the state it races**, never with a retry, a longer timeout or a skip.
+
 ---
 
-## Iron Laws
+## Review severities (shared with reviewers)
 
-**IRON LAW 1: NEVER claim STATUS: DONE with failing tests. Zero exceptions.**
-**IRON LAW 2: NEVER write implementation before a failing test exists for that behaviour.**
-**IRON LAW 3: NEVER delete tests to make the suite green. Fix the code instead.**
+`review-testing-practices` rates these patterns by this table. Change a row here, never in the reviewer.
 
----
-
-## Red Flags — Stop and re-read this rule if you are thinking:
-
-| Rationalization | Why it's wrong |
-|---|---|
-| "The logic is simple, I don't need a test first" | Simplicity is never a reason to skip TDD — the cycle builds confidence, not just test coverage |
-| "I'll add tests after to save time" | Tests written after implementation verify what the code does, not what it should do |
-| "The tests are flaky, I'll skip them for now" | Flaky tests signal real design problems — fix the flakiness, not the test |
-| "All the important logic is covered, a few edge tests can wait" | Untested edge cases are exactly where bugs live |
-| "I'll mark it DONE and add tests in a follow-up PR" | STATUS: DONE means done — not "done except for tests" |
-| "The test framework setup is complex, I'll just verify manually" | Manual verification is not reproducible and cannot be reviewed by other agents |
-
-**IRON LAW: AN AGENT THAT SHIPS CODE WITHOUT PASSING TESTS HAS NOT COMPLETED ITS TASK.**
+| Signal | A finding when | Default | Not a finding |
+|---|---|---|---|
+| Test that passes while the behaviour it names is broken | a mutation run or a fixture that never reaches the code shows it | `blocker` | — |
+| Real network or wall-clock dependence in a unit test (Rule 5) | a real call or a time-based assertion is reachable | `major` | a faked clock or a mocked boundary |
+| Sleep or fixed delay for async work (Rule 6) | always | `major` | fake timers advanced by the test |
+| Flake "fixed" by a retry, a longer timeout or a skip (Rule 7) | one of them is added to a flaky test | `major` | a wait on the proving signal |
+| Test deleted, skipped (`.skip`, `xit`, `todo`) or its assertion weakened to go green (Iron law) | the pinned behaviour still exists and no other test covers it | `major`; `blocker` where that behaviour is now broken | the behaviour was removed in the same change |
+| Shared state mutated across tests, or a real filesystem or service hit (Rule 4) | a named order or run breaks it | `major`; else `minor` | — |
+| Internal collaborator mocked instead of the boundary (Rule 4) | always | `minor` | a collaborator that is itself a boundary |
+| New or changed logic with no test (Rule 3) | the diff adds a branch, calculation or error path with no test hunk | `minor`; `major` where an acceptance criterion has no test | a trivial getter, pass-through or config |
+| Bug fix with no regression test (Rule 3) | always | `minor`; `major` where the bug is named high-impact | — |
+| Second test framework, assertion or mocking library (Rule 1) | always | `minor` | — |
+| Unit test outside the code's folder (Rule 2) | always | `info` | an e2e spec |
+| Test on a trivial getter, pass-through or config (Rule 3) | always | `info` | — |
