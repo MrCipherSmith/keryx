@@ -1,7 +1,7 @@
 # PRD: Keryx Desktop App
 Version: 0.2.0
 
-Status: draft; decisions D1–D5 taken, acceptance criteria not yet frozen. Nothing here is implemented.
+Status: draft; decisions D1–D5 taken. Quick start (R6–R8 and the quick-start half of R14) is implemented by flow 492, whose acceptance criteria are frozen in the flow; everything else here is still planned and its acceptance criteria are not frozen.
 
 ## 1. Problem
 
@@ -55,7 +55,7 @@ Each requirement carries one verification field. Test paths marked "planned" do 
   Verification: exec `bun test src/hub/work/quick-modes.test.ts` (planned)
 - **R7. Start without a pre-imported spec.** Quick start creates a Flow with no spec document, carrying the typed description and the clarifying answers in the Flow's problem text, then freezes the user-confirmed criteria, all in one idempotent server action. The user never visits Documents first. 
   Verification: exec `bun apps/hub-web/tests/browser-journeys.e2e.mjs` extended with a quick-start journey (planned extension)
-- **R8. Clarifying-question form.** Before starting, the app can show a short form of questions generated for the task (scope, constraints, done-when). Answers are stored with the Flow as evidence and shown at acceptance. Skipping is allowed and recorded. 
+- **R8. Clarifying-question form.** Before starting, the app can show a short form of questions generated for the task (scope, constraints, done-when). Answers are stored in the Flow's problem text (as for R7), so they are shown wherever the Flow's problem is shown. Skipping is allowed and recorded: every skipped question is kept under its own name, and a wholly skipped form is marked with one skip line. 
   Verification: exec `bun test src/hub/work/clarify.test.ts` (planned; v1 questions come from the mode template, so the question set, the storage and the skip record are all testable)
 
 ### Direction 3: Stage timeline

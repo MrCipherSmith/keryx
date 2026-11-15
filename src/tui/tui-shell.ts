@@ -331,7 +331,7 @@ import {
 import { runSettingsCommand, settingsOpenDecision } from "./settings-actions";
 import { isSettingsCommand, openSettings, settingsSidebarHint } from "./settings-modal";
 import { isQuickStartCommand, quickStartAcceptedLine, resolveQuickStartSender } from "./quick-start-command";
-import { createQuickStartForm, type QuickStartDraft, type QuickStartPending } from "./quick-start-form";
+import { createQuickStartForm, createQuickStartMemory } from "./quick-start-form";
 import { openQuickStart } from "./quick-start-modal";
 import { buildSettingsRows, type SettingRow } from "./settings-model";
 import { loadSettingsSnapshot } from "./settings-state";
@@ -9203,10 +9203,8 @@ export async function launchTuiAgentShell(opts: {
         });
     };
 
-    // Flow 492 T11: `/task`. The draft outlives the modal (Esc keeps what was typed) and is dropped once the Hub accepts.
-    let quickStartDraft: QuickStartDraft | undefined;
-    // An unresolved request (lost connection, or still in flight when the modal closed) keeps its operation id, so reopening replays it.
-    let quickStartPending: QuickStartPending | undefined;
+    // Flow 492 T11: `/task`. The draft and any unresolved request outlive the modal (Esc keeps what was typed); an accepted request drops both.
+    const quickStartMemory = createQuickStartMemory();
     const showQuickStart = (): void => {
       void resolveQuickStartSender({ cwd: sessionCwd }).then((resolved) => {
         if (!resolved.ok) {
@@ -9215,26 +9213,15 @@ export async function launchTuiAgentShell(opts: {
         }
         const form = createQuickStartForm({
           send: resolved.send,
-          ...(quickStartDraft === undefined ? {} : { initial: quickStartDraft }),
-          ...(quickStartPending === undefined ? {} : { initialPending: quickStartPending }),
+          ...quickStartMemory.options(),
           onAccepted: (flowId) => {
-            quickStartDraft = undefined;
-            quickStartPending = undefined;
             const line = quickStartAcceptedLine(flowId);
             chrome.showToast(line);
             io.onSystem?.(`${line}\n`);
           },
         });
-        openQuickStart(otui, chrome, {
-          form,
-          renderer: r,
-          onClosed: () => {
-            if (form.state().phase !== "done") {
-              quickStartDraft = form.draft();
-              quickStartPending = form.pendingOperation();
-            }
-          },
-        });
+        quickStartMemory.attach(form);
+        openQuickStart(otui, chrome, { form, renderer: r });
       });
     };
 

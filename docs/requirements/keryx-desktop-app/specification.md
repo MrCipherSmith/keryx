@@ -1,7 +1,7 @@
 # Specification: Keryx Desktop App
 Version: 0.2.0
 
-Status: draft; decisions D1–D5 taken by the operator (section 9), acceptance criteria still not frozen. Everything below is `planned` unless a source path is cited as existing.
+Status: draft; decisions D1–D5 taken by the operator (section 9). Quick start (section 6, "Quick start request", criteria 3–6) is implemented by flow 492 and its acceptance criteria are frozen in that flow; the remaining criteria below are not frozen. Everything else below is `planned` unless a source path is cited as existing.
 
 ## 1. Module identity
 
@@ -147,7 +147,7 @@ Decided by the operator in Telegram message 262443 (2026-11-14), verbatim: «1-T
 3. Quick start of a one-line bug creates a Flow without a spec document, and frozen criteria, in one action. (R7)
 4. Replaying the same quick-start mutation with the same idempotency key creates no second Flow. (R7)
 5. Each of the five modes sets its default review depth and criteria template from the mode table. (R6)
-6. Skipping the clarifying form is recorded on the Flow and shown at acceptance. (R8)
+6. Skipping the clarifying form is recorded in the Flow's problem text: every skipped question under its own name, and one skip line when the whole form was skipped. (R8)
 7. A run page shows the six stages, with states derived only from stored events. (R9)
 8. A stage log shows a seeded credential masked. (R10)
 9. The diff view lists changed files and lines for a run's working copy against its base. (R11)

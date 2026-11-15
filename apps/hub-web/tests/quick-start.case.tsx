@@ -9,6 +9,7 @@ import { useDraftStore } from "../src/state/drafts";
 import { HubContext, type HubContextValue } from "../src/app/hub-context";
 import { resetClient } from "../src/api/client";
 import { ManagedWorkView } from "../src/features/managed-work/view";
+import { clearQuickStartUnresolved } from "../src/features/managed-work/quick-start";
 import { demoWorkAdapter } from "../src/features/managed-work/demo";
 import { recordOf } from "../src/features/managed-work/model";
 import type { WorkRecord } from "../src/features/managed-work/types";
@@ -80,6 +81,7 @@ function fakeHub(base: WorkRecord[]) {
 let hub: ReturnType<typeof fakeHub>;
 beforeEach(async () => {
   resetClient();
+  clearQuickStartUnresolved();
   useDraftStore.getState().clearAll();
   await i18n.changeLanguage("en");
   hub = fakeHub((await demoWorkAdapter("p").snapshot()).records);
@@ -126,6 +128,18 @@ describe("quick start dialog, state and event matrix", () => {
     const mode = within(dialog).getByRole("radio", { name: /Task/ });
     expect(mode).toBeChecked();
     expect(mode).toHaveFocus();
+  });
+
+  test("the button is hidden from a human whose capabilities lack the three commands it composes", async () => {
+    const original = capabilities.allowedCommands;
+    capabilities.allowedCommands = ["flow.create"];
+    try {
+      show();
+      await screen.findByRole("button", { name: "Refresh" });
+      expect(screen.queryByRole("button", { name: "New task" })).not.toBeInTheDocument();
+    } finally {
+      capabilities.allowedCommands = original;
+    }
   });
 
   test("the button is offered to humans only, never to an agent principal", async () => {
@@ -267,7 +281,7 @@ describe("quick start dialog, state and event matrix", () => {
     expect(hub.posts[1]!.key).not.toBe(hub.posts[0]!.key);
   });
 
-  test("network lost: Keep waiting on the start-over warning goes back to retry with the same operation id", async () => {
+  test("network lost: Back to retry on the start-over warning goes back to retry with the same operation id", async () => {
     hub.script.push("network");
     show();
     await open();
@@ -301,6 +315,56 @@ describe("quick start dialog, state and event matrix", () => {
     expect(hub.posts).toHaveLength(2);
     expect(hub.posts[1]!.key).toBe(hub.posts[0]!.key);
     expect(hub.created()).toBe(1);
+  });
+
+  test("a request still in flight when the view unmounts comes back as an interrupted operation, never a blank error", async () => {
+    hub.script.push("hold");
+    const first = show();
+    await open();
+    describe_("Fix the login redirect");
+    fireEvent.click(submit());
+    await waitFor(() => expect(hub.posts).toHaveLength(1));
+    first.unmount();
+    show();
+    await open();
+    const alert = await within(screen.getByRole("dialog")).findByRole("alert");
+    expect(alert).toHaveTextContent(workEn.quickStart.interrupted);
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(closed);
+    hub.release();
+    expect(hub.posts[1]!.key).toBe(hub.posts[0]!.key);
+    expect(hub.created()).toBe(1);
+  });
+
+  test("signing out forgets an unresolved operation, so the next principal never sees it", async () => {
+    hub.script.push("network");
+    const first = show();
+    await open();
+    describe_("Fix the login redirect");
+    fireEvent.click(submit());
+    await screen.findByRole("button", { name: "Retry" });
+    first.unmount();
+    clearQuickStartUnresolved();
+    useDraftStore.getState().clearAll();
+    show();
+    await open();
+    expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("What needs doing?")).toHaveValue("");
+  });
+
+  test("focus stays inside the dialog after the Retry notice unmounts", async () => {
+    hub.script.push("network");
+    show();
+    const dialog = await open();
+    describe_("Fix the login redirect");
+    fireEvent.click(submit());
+    await screen.findByRole("button", { name: "Retry" });
+    screen.getByRole("button", { name: "Start over" }).focus();
+    fireEvent.click(screen.getByRole("button", { name: "Start over" }));
+    fireEvent.click(screen.getByRole("button", { name: workEn.quickStart.startOverConfirm }));
+    expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
+    await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
+    expect(document.activeElement).not.toBe(document.body);
   });
 
   test("while a request is unresolved, Tab never leaves the dialog even though the form fields are disabled", async () => {

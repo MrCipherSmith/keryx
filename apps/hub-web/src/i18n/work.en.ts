@@ -326,7 +326,8 @@ const en = {
     startOverWarning:
       "The first request may already be running. Starting over abandons it and sends a new one, which can create a second Flow.",
     startOverConfirm: "Abandon and start over",
-    startOverKeep: "Keep waiting",
+    startOverKeep: "Back to retry",
+    interrupted: "The page was left while the request was being sent.",
     unknown:
       "The connection was interrupted and the result is unknown. Retry sends the same request again and cannot create a second Flow.",
   },

@@ -9,7 +9,7 @@ import { buildAnswers } from './clarify';
 import { workRead } from './domain';
 import type { FlowRevision, WorkRecord } from './model';
 import { getMode, QUICK_MODES } from './quick-modes';
-import { quickStart, type QuickStartDeps, type QuickStartRequest } from './quick-start';
+import { parseQuickStartBody, quickStart, type QuickStartDeps, type QuickStartRequest } from './quick-start';
 
 /*
  * Contract under test (src/hub/work/quick-start.ts, flow 492 T8):
@@ -202,6 +202,34 @@ describe('AC6: the clarifying form is recorded on the Flow', () => {
         expect(revision.problem.split('\n')).toContain('Clarifying form: skipped');
     });
 
+    test('a wholly skipped form records the skip line and every question under its own name', () => {
+        quickStart(deps(), human, P, request({ answers: buildAnswers('bug', {}) }));
+        const lines = problemLines();
+        expect(lines).toContain('Clarifying form: skipped');
+        for (const question of ['steps-to-reproduce', 'expected-vs-actual', 'affected-area']) {
+            expect(lines[lines.indexOf('Q: ' + question) + 1]).toBe('Skipped');
+        }
+    });
+
+    test('a blank answer reads as a skipped question, not an empty answer line', () => {
+        quickStart(deps(), human, P, request({
+            answers: [{ q: 'steps-to-reproduce', a: '   ', skipped: false }, { q: 'expected-vs-actual', a: 'Saved values', skipped: false }],
+        }));
+        const lines = problemLines();
+        expect(lines[lines.indexOf('Q: steps-to-reproduce') + 1]).toBe('Skipped');
+        expect(lines).not.toContain('Clarifying form: skipped');
+    });
+
+    test('an answer marked skipped is recorded as skipped even when it carries text', () => {
+        quickStart(deps(), human, P, request({
+            answers: [{ q: 'steps-to-reproduce', a: 'typed then skipped', skipped: true }, { q: 'expected-vs-actual', a: 'Saved values', skipped: false }],
+        }));
+        const lines = problemLines();
+        expect(lines[lines.indexOf('Q: steps-to-reproduce') + 1]).toBe('Skipped');
+        expect(lines).not.toContain('A: typed then skipped');
+        expect(lines).toContain('A: Saved values');
+    });
+
     test('a partly answered form lists Q/A lines and has no skip line', () => {
         quickStart(deps(), human, P, request({
             answers: buildAnswers('bug', { 'steps-to-reproduce': 'Open settings, press Save', 'expected-vs-actual': 'Saved values, got nothing' }),
@@ -341,6 +369,46 @@ describe('invalid requests are rejected before any write', () => {
             expectNothingWritten();
         });
     }
+
+    describe('the body is bounded to what flow.create accepts', () => {
+        const body = (over: Record<string, unknown>) => ({ mode: 'bug', description: 'Export does nothing', answers: [], criteria: [], ...over });
+        const rejected = (over: Record<string, unknown>) => failureOf(() => parseQuickStartBody(body(over)));
+
+        test('a normal body parses', () => {
+            expect(parseQuickStartBody(body({})).mode).toBe('bug');
+        });
+
+        test('a description that cannot fit the 10000-character problem is a 400', () => {
+            expect(rejected({ description: 'x'.repeat(10001) }).status).toBe(400);
+        });
+
+        test('answers that push the composed problem past 10000 characters are a 400', () => {
+            const answers = [{ q: 'steps-to-reproduce', a: 'y'.repeat(9990), skipped: false }];
+            expect(rejected({ answers }).status).toBe(400);
+            expect(() => parseQuickStartBody(body({ answers: [{ q: 'steps-to-reproduce', a: 'y'.repeat(9000), skipped: false }] }))).not.toThrow();
+        });
+
+        test('more than 200 answers is a 400', () => {
+            const answers = Array.from({ length: 201 }, () => ({ q: 'q', a: null, skipped: true }));
+            expect(rejected({ answers }).status).toBe(400);
+        });
+
+        test('a criterion over 4000 characters is a 400', () => {
+            expect(rejected({ criteria: ['z'.repeat(4001)] }).status).toBe(400);
+            expect(() => parseQuickStartBody(body({ criteria: ['z'.repeat(4000)] }))).not.toThrow();
+        });
+
+        test('typed criteria plus the mode template may not exceed 200', () => {
+            const room = 200 - getMode('bug').criteriaTemplate.length;
+            expect(() => parseQuickStartBody(body({ criteria: Array.from({ length: room }, (_, i) => 'c' + i) }))).not.toThrow();
+            expect(rejected({ criteria: Array.from({ length: room + 1 }, (_, i) => 'c' + i) }).status).toBe(400);
+        });
+
+        test('blank criteria do not count against the cap', () => {
+            const room = 200 - getMode('bug').criteriaTemplate.length;
+            expect(() => parseQuickStartBody(body({ criteria: [...Array.from({ length: room }, (_, i) => 'c' + i), '', '   '] }))).not.toThrow();
+        });
+    });
 
     test('a rejected request stores no receipt, so its operation id stays usable', () => {
         const body = request({ description: '' });

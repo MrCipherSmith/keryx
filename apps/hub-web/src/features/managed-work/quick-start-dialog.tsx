@@ -57,6 +57,17 @@ export function QuickStartDialog({
   const mode = QUICK_MODES.find((candidate) => candidate.id === draft.mode)!;
   const locked = phase.status === "sending" || phase.status === "unknown";
   const [confirmingStartOver, setConfirmingStartOver] = useState(false);
+  const firstRender = useRef(true);
+
+  // Retry and Start over unmount with the Notice that holds them. Park focus on the dialog so Tab and Escape keep working.
+  useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
+    const container = root.current;
+    if (container && !container.contains(document.activeElement)) container.focus();
+  }, [phase.status, confirmingStartOver]);
 
   useEffect(() => {
     const previous = document.activeElement;
@@ -83,7 +94,7 @@ export function QuickStartDialog({
     const last = controls[controls.length - 1];
     if (!first || !last) return;
     const active = document.activeElement;
-    if (!root.current.contains(active) || (event.shiftKey && active === first)) {
+    if (!root.current.contains(active) || active === root.current || (event.shiftKey && active === first)) {
       event.preventDefault();
       (event.shiftKey ? last : first).focus();
     } else if (!event.shiftKey && active === last) {
@@ -102,6 +113,7 @@ export function QuickStartDialog({
       <div
         ref={root}
         className="quick-start-dialog"
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
@@ -221,7 +233,7 @@ export function QuickStartDialog({
               {confirmingStartOver && <p role="alert">{t("quickStart.startOverWarning")}</p>}
               <span className="quick-start-recovery">
                 <Button variant="secondary" onClick={confirmingStartOver ? () => setConfirmingStartOver(false) : onRetry}>
-                  {confirmingStartOver ? t("quickStart.startOverKeep") : t("quickStart.retry")}
+                  {t(confirmingStartOver ? "quickStart.startOverKeep" : "quickStart.retry")}
                 </Button>
                 <Button
                   variant="ghost"
@@ -233,7 +245,7 @@ export function QuickStartDialog({
                     }
                   }}
                 >
-                  {confirmingStartOver ? t("quickStart.startOverConfirm") : t("quickStart.startOver")}
+                  {t(confirmingStartOver ? "quickStart.startOverConfirm" : "quickStart.startOver")}
                 </Button>
               </span>
             </Notice>

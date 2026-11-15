@@ -11,6 +11,7 @@
 
 import { questionsFor, type ClarifyQuestion } from "../hub/work/clarify";
 import { getMode, QUICK_MODES, type QuickModeId } from "../hub/work/quick-modes";
+import { quickStartSizeProblem } from "../hub/work/quick-start-limits";
 import { buildQuickStartRequest, parseCriteriaField, type QuickStartRequestBody } from "./quick-start-request";
 
 /** What one send attempt came to. A 5xx, a dropped connection and an unreadable answer are all `network`: the outcome is unknown. */
@@ -89,6 +90,11 @@ export interface QuickStartFormOptions {
 const ENTER_KEYS = new Set(["return", "linefeed", "enter", "kpenter"]);
 const NAMED_KEYS = new Set([...ENTER_KEYS, "tab", "up", "down", "left", "right", "backspace", "delete", "escape", "home", "end", "pageup", "pagedown"]);
 
+export const RETRY_NOTICE =
+  "The earlier request may have reached the Hub. Press Enter on Start to retry it; it cannot create a second Flow.";
+export const EDITED_PENDING_NOTICE =
+  "Editing starts a new task; the earlier request may already be running. Put the text back to retry it instead.";
+
 export const HUMAN_REQUIRED_MESSAGE =
   "The Hub only lets a signed-in human start work, and this session is not one. Start it from the web dialog instead.";
 
@@ -114,14 +120,7 @@ export function createQuickStartForm(options: QuickStartFormOptions): QuickStart
   let answers: Record<string, string> = { ...(options.initial?.answers ?? {}) };
   let phase: QuickStartPhase = "editing";
   let focus: QuickStartSlot = "mode";
-  let error: QuickStartError | undefined =
-    options.initialPending === undefined
-      ? undefined
-      : {
-          kind: "network",
-          message: "The earlier request may have reached the Hub. Press Enter on Start to retry it; it cannot create a second Flow.",
-          retry: true,
-        };
+  let error: QuickStartError | undefined;
   /** Set while a request is in flight and after a network failure; cleared by every other outcome. */
   let pending: QuickStartPending | undefined = options.initialPending;
   let inflight: Promise<void> = Promise.resolve();
@@ -140,6 +139,16 @@ export function createQuickStartForm(options: QuickStartFormOptions): QuickStart
   const body = (): QuickStartRequestBody =>
     buildQuickStartRequest({ mode, description, answers, criteria: parseCriteriaField(criteria) });
 
+  /** What an unresolved operation says while the form is idle: retry it as it was, or a warning once the body has moved on. */
+  function pendingNotice(): QuickStartError | undefined {
+    if (pending === undefined) return undefined;
+    const same = pending.digest === JSON.stringify(body());
+    return { kind: "network", message: same ? RETRY_NOTICE : EDITED_PENDING_NOTICE, retry: same };
+  }
+  // A reopened form shows its notice and starts on Start, so the window shows the message and the button together.
+  error = pendingNotice();
+  if (error?.retry === true) focus = "submit";
+
   function move(step: 1 | -1): void {
     const all = slots();
     const at = all.indexOf(focus);
@@ -152,9 +161,9 @@ export function createQuickStartForm(options: QuickStartFormOptions): QuickStart
     edited();
   }
 
-  /** Any edit retires a visible error; a changed body is detected by digest at submit time. */
+  /** Any edit retires a visible error, except that an unresolved operation keeps speaking until it is accepted or rejected. */
   function edited(): void {
-    error = undefined;
+    error = pendingNotice();
   }
 
   function edit(slot: QuickStartSlot, change: (text: string) => string): void {
@@ -170,6 +179,12 @@ export function createQuickStartForm(options: QuickStartFormOptions): QuickStart
   function submit(): void {
     if (!canSubmit()) return;
     const request = body();
+    const tooBig = quickStartSizeProblem(request);
+    if (tooBig !== undefined) {
+      error = { kind: "rejected", message: tooBig, retry: false };
+      emit();
+      return;
+    }
     const digest = JSON.stringify(request);
     const operationId = pending !== undefined && pending.digest === digest ? pending.operationId : newOperationId();
     pending = { operationId, digest };
@@ -274,6 +289,36 @@ export function createQuickStartForm(options: QuickStartFormOptions): QuickStart
     subscribe: (listener) => {
       listeners.add(listener);
       return () => listeners.delete(listener);
+    },
+  };
+}
+
+/**
+ * What `/task` carries from one modal to the next. It follows the form itself and reads it when the next modal opens,
+ * so a request that was still in flight at close and later came back rejected, or accepted, is not remembered as it was
+ * at close time.
+ */
+export interface QuickStartMemory {
+  /** Make `form` the one to remember. */
+  attach(form: QuickStartForm): void;
+  /** The options a new form starts from: the unfinished draft and its unresolved operation, or nothing after an accepted request. */
+  options(): Pick<QuickStartFormOptions, "initial" | "initialPending">;
+}
+
+export function createQuickStartMemory(): QuickStartMemory {
+  let current: QuickStartForm | undefined;
+  return {
+    attach: (form) => {
+      current = form;
+    },
+    options: () => {
+      if (current === undefined) return {};
+      if (current.state().phase === "done") {
+        current = undefined;
+        return {};
+      }
+      const pending = current.pendingOperation();
+      return { initial: current.draft(), ...(pending === undefined ? {} : { initialPending: pending }) };
     },
   };
 }

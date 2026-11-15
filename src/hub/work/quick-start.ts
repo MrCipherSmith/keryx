@@ -5,6 +5,7 @@ import type { ClarifyAnswer } from './clarify';
 import { authorize, workCommand, workDigest, workOperationKey, type WorkContext } from './domain';
 import type { Criterion, FlowRevision, IntentRevision, WorkCommand, WorkFlow, WorkIntent, WorkReceipt, WorkRecord } from './model';
 import { getMode, QUICK_MODES, type QuickModeId } from './quick-modes';
+import { problemText, quickStartSizeProblem } from './quick-start-limits';
 
 export interface QuickStartRequest {
     /** Idempotency key: the same id with the same body replays the stored receipt. */
@@ -27,7 +28,6 @@ export interface QuickStartResult {
     readonly intentId: string;
 }
 
-const SKIPPED_LINE = 'Clarifying form: skipped';
 const MAX_TITLE = 120;
 
 /** Validates an untrusted body (everything but the operation id, which travels in the Idempotency-Key header). */
@@ -39,27 +39,16 @@ export function parseQuickStartBody(body: Record<string, unknown>): Omit<QuickSt
     if (typeof description !== 'string') invalid('description must be a string');
     if (!Array.isArray(answers) || !answers.every(isAnswer)) invalid('answers must be a list of { q, a, skipped }');
     if (!Array.isArray(criteria) || !criteria.every(item => typeof item === 'string')) invalid('criteria must be a list of strings');
-    return { mode: mode as QuickModeId, description: description as string, answers: answers as ClarifyAnswer[], criteria: criteria as string[] };
+    const parsed = { mode: mode as QuickModeId, description: description as string, answers: answers as ClarifyAnswer[], criteria: criteria as string[] };
+    const tooBig = quickStartSizeProblem(parsed);
+    if (tooBig !== undefined) invalid(tooBig);
+    return parsed;
 }
 
 function isAnswer(value: unknown): value is ClarifyAnswer {
     if (!value || typeof value !== 'object') return false;
     const { q, a, skipped } = value as Record<string, unknown>;
     return typeof q === 'string' && (typeof a === 'string' || a === null) && typeof skipped === 'boolean';
-}
-
-/**
- * The description followed by the clarifying-form record. Every question the form asked is kept: an answered one as
- * Q/A lines, a skipped or blank one as the question and a `Skipped` line, never as an empty answer. When nothing was
- * answered the record opens with one skip line, so a wholly skipped form is still recognisable at a glance.
- */
-function problemText(description: string, answers: readonly ClarifyAnswer[]): string {
-    const entries = answers.map(answer => {
-        const text = answer.skipped || answer.a === null ? '' : answer.a.trim();
-        return text.length === 0 ? ['Q: ' + answer.q, 'Skipped'] : ['Q: ' + answer.q, 'A: ' + answer.a];
-    });
-    const answered = entries.some(lines => lines[1] !== 'Skipped');
-    return [description, '', ...(answered ? [] : [SKIPPED_LINE]), ...entries.flat()].join('\n');
 }
 
 function titleOf(description: string): string {

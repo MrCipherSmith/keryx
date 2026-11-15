@@ -9291,7 +9291,8 @@
           },
           "description": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 10000
           },
           "answers": {
             "type": "array",
@@ -9301,12 +9302,14 @@
               "additionalProperties": false,
               "properties": {
                 "q": {
-                  "type": "string"
+                  "type": "string",
+                  "maxLength": 10000
                 },
                 "a": {
                   "anyOf": [
                     {
-                      "type": "string"
+                      "type": "string",
+                      "maxLength": 10000
                     },
                     {
                       "type": "null"
@@ -9328,7 +9331,8 @@
             "type": "array",
             "maxItems": 200,
             "items": {
-              "type": "string"
+              "type": "string",
+              "maxLength": 4000
             }
           }
         },

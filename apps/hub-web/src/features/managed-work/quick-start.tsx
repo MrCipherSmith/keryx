@@ -14,45 +14,61 @@ import { emptyQuickDraft, QuickStartDialog, type QuickPhase } from "./quick-star
 
 export { quickStartRequest };
 
-type Pending = { id: string; request: QuickStartRequest; draft: QuickDraft | null };
+type Pending = { id: string; request: QuickStartRequest; draft: QuickDraft };
+type Unresolved = { pending: Pending; message: string; inFlight: boolean };
 
 /**
  * Unresolved operations, keyed by principal, project and adapter mode. They live outside the component, so leaving
  * the Work tab and coming back (which unmounts it) keeps the operation id and the exact request: the next Retry
  * replays the same operation instead of minting a new one. An entry is dropped on success or a definite refusal.
  */
-const unresolved = new Map<string, { pending: Pending; message: string }>();
+const unresolved = new Map<string, Unresolved>();
+
+/** Forgets every unresolved operation. Sign-out and a scope change call it: the entries hold typed text and operation ids of the previous principal. */
+export function clearQuickStartUnresolved() {
+  unresolved.clear();
+}
 
 /**
  * One submission at a time. A definite refusal (4xx) forgets the operation id, so the next try is a new operation.
  * Anything ambiguous (lost connection, 5xx) keeps the id and the exact request, and only Retry may send them again:
  * the server replays the stored receipt, so a retry can never create a second Flow.
  */
-function useQuickStart(adapter: WorkAdapter, onCreated: (flowId: string, sent: QuickDraft | null) => void) {
+function useQuickStart(adapter: WorkAdapter, onCreated: (flowId: string, sent: QuickDraft) => void) {
+  const { t } = useTranslation("work");
   const hub = useHub();
   const client = useQueryClient();
   const storeKey = hub.scopeKey + ":" + hub.projectId + ":" + adapter.mode;
   const restored = unresolved.get(storeKey);
   const [phase, setPhase] = useState<QuickPhase>(
-    restored ? { status: "unknown", message: restored.message } : { status: "idle" },
+    restored
+      ? { status: "unknown", message: restored.inFlight ? t("quickStart.interrupted") : restored.message }
+      : { status: "idle" },
   );
   const pending = useRef<Pending | null>(restored?.pending ?? null);
   const busy = useRef(false);
   const created = useRef(onCreated);
   created.current = onCreated;
 
+  const forget = () => {
+    pending.current = null;
+    unresolved.delete(storeKey);
+  };
+
   const attempt = async (next: Pending) => {
     if (busy.current) return;
     busy.current = true;
     pending.current = next;
-    unresolved.set(storeKey, { pending: next, message: "" });
+    unresolved.set(storeKey, { pending: next, message: "", inFlight: true });
     setPhase({ status: "sending" });
     const generation = getClientScope();
     try {
       const outcome = await adapter.quickStart(next.id, next.request);
-      if (generation !== getClientScope()) return;
-      pending.current = null;
-      unresolved.delete(storeKey);
+      if (generation !== getClientScope()) {
+        unresolved.delete(storeKey);
+        return;
+      }
+      forget();
       setPhase({ status: "idle" });
       const snapshot = workSnapshotKey(hub.scopeKey, hub.projectId, adapter.mode);
       if (outcome.receipt.entities)
@@ -68,18 +84,16 @@ function useQuickStart(adapter: WorkAdapter, onCreated: (flowId: string, sent: Q
       created.current(outcome.flowId, next.draft);
     } catch (error) {
       if (generation !== getClientScope()) {
-        pending.current = null;
-        unresolved.delete(storeKey);
+        forget();
         setPhase({ status: "idle" });
         return;
       }
       const message = errorMessage(error);
       if (error instanceof ApiError && error.status >= 400 && error.status < 500) {
-        pending.current = null;
-        unresolved.delete(storeKey);
+        forget();
         setPhase({ status: "rejected", message });
       } else {
-        unresolved.set(storeKey, { pending: next, message });
+        unresolved.set(storeKey, { pending: next, message, inFlight: false });
         setPhase({ status: "unknown", message });
       }
     } finally {
@@ -93,8 +107,7 @@ function useQuickStart(adapter: WorkAdapter, onCreated: (flowId: string, sent: Q
       if (pending.current) void attempt(pending.current);
     },
     startOver: () => {
-      pending.current = null;
-      unresolved.delete(storeKey);
+      forget();
       setPhase({ status: "idle" });
     },
   };
@@ -123,7 +136,7 @@ export function QuickStart({
     wasOpen.current = open;
   }, [open]);
   const operation = useQuickStart(adapter, (flowId, sent) => {
-    if (sent) clearDraft(sent);
+    clearDraft(sent);
     setOpen(false);
     onCreated(flowId);
   });

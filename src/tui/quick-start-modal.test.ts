@@ -11,6 +11,9 @@ import { formatModalFooter } from "./modal-host";
 import { loadOpenTui, mountChrome, settle } from "./ops-sidebar.test-helpers";
 import {
   createQuickStartForm,
+  createQuickStartMemory,
+  EDITED_PENDING_NOTICE,
+  RETRY_NOTICE,
   type QuickStartForm,
   type QuickStartOutcome,
   type QuickStartSender,
@@ -528,6 +531,174 @@ test("lines: windowLines keeps the whole error on screen after a failed Start", 
   expect(slice.map((line) => line.id)).toContain(errors[errors.length - 1]!.id);
 });
 
+test("lines: windowLines keeps the focus on screen when the error is further below than the window reaches", () => {
+  const form = createQuickStartForm({ send: fakeSender(ACCEPTED).send, onAccepted: () => {}, newOperationId: mintIds() });
+  filled(form);
+  const message = "x ".repeat(120);
+  const lines = quickStartLines({ ...form.state(), error: { kind: "network", message, retry: true }, focus: "mode" }, 60);
+  const slice = windowLines(lines, 10);
+  expect(slice).toHaveLength(10);
+  expect(slice.some((line) => line.focus)).toBe(true);
+  expect(slice[0]!.id).toBe("mode");
+});
+
+test("lines: with focus on an answer and an error showing, the question text above the answer stays on screen", () => {
+  const form = createQuickStartForm({ send: fakeSender(ACCEPTED).send, onAccepted: () => {}, newOperationId: mintIds() });
+  form.handleKey(RIGHT); // bug: three questions
+  filled(form, "Login fails");
+  form.handleKey(ENTER); // first question
+  const lines = quickStartLines({ ...form.state(), error: { kind: "network", message: "x ".repeat(60), retry: true } }, 60);
+  const focusAt = lines.findIndex((line) => line.focus);
+  expect(lines[focusAt - 1]!.id.startsWith("q-")).toBe(true);
+  const slice = windowLines(lines, 8);
+  expect(slice).toContain(lines[focusAt - 1]!);
+  expect(slice).toContain(lines[focusAt]!);
+});
+
+test("lines: while a request is sending nothing is focused and the window follows the Sending row", () => {
+  let release: (outcome: QuickStartOutcome) => void = () => {};
+  const send: QuickStartSender = () => new Promise((resolve) => (release = resolve));
+  const form = createQuickStartForm({ send, onAccepted: () => {}, newOperationId: mintIds() });
+  form.handleKey(RIGHT);
+  filled(form, "Login fails");
+  focusSubmit(form);
+  form.handleKey(ENTER);
+  expect(form.state().phase).toBe("submitting");
+  const lines = quickStartLines(form.state(), 60);
+  expect(lines.some((line) => line.focus)).toBe(false);
+  expect(windowLines(lines, 6).map((line) => line.id)).toContain("start");
+  release(ACCEPTED);
+});
+
+test("lines: an error taller than the window is cut to the rows given and ends in an ellipsis", () => {
+  const state = { ...createQuickStartForm({ send: fakeSender(ACCEPTED).send, onAccepted: () => {} }).state() };
+  const withError = { ...state, error: { kind: "network" as const, message: "word ".repeat(200), retry: true } };
+  const errorRows = (max?: number) => quickStartLines(withError, 40, max).filter((line) => line.id.startsWith("error-"));
+  expect(errorRows().length).toBeGreaterThan(4);
+  const cut = errorRows(4);
+  expect(cut).toHaveLength(4);
+  expect(cut[3]!.segments[0]!.text.endsWith("…")).toBe(true);
+  expect(cut[3]!.segments[0]!.text.length).toBeLessThanOrEqual(38);
+});
+
+test("pending: a reopened form on the same body starts on Start with the retry notice in the window", async () => {
+  const earlier = createQuickStartForm({ send: fakeSender({ kind: "network", message: "reset" }).send, onAccepted: () => {}, newOperationId: mintIds() });
+  filled(earlier);
+  await submitViaKeys(earlier);
+  const reopened = createQuickStartForm({
+    send: fakeSender(ACCEPTED).send,
+    onAccepted: () => {},
+    initial: earlier.draft(),
+    initialPending: earlier.pendingOperation()!,
+  });
+  expect(reopened.state().focus).toBe("submit");
+  expect(reopened.state().error).toEqual({ kind: "network", message: RETRY_NOTICE, retry: true });
+  const lines = quickStartLines(reopened.state(), 60);
+  const slice = windowLines(lines, 8);
+  expect(slice.some((line) => line.focus)).toBe(true);
+  expect(slice.some((line) => line.id.startsWith("error-"))).toBe(true);
+});
+
+test("pending: a reopened form whose body has moved on warns instead of promising a replay, and editing back restores the retry", async () => {
+  const earlier = createQuickStartForm({ send: fakeSender({ kind: "network", message: "reset" }).send, onAccepted: () => {}, newOperationId: mintIds() });
+  filled(earlier, "Fix it");
+  await submitViaKeys(earlier);
+  const form = createQuickStartForm({
+    send: fakeSender(ACCEPTED).send,
+    onAccepted: () => {},
+    initial: { ...earlier.draft(), description: "Fix it now" },
+    initialPending: earlier.pendingOperation()!,
+  });
+  expect(form.state().focus).toBe("mode");
+  expect(form.state().error).toEqual({ kind: "network", message: EDITED_PENDING_NOTICE, retry: false });
+  while (form.state().focus !== "description") form.handleKey(DOWN);
+  for (let i = 0; i < 4; i++) form.handleKey(BACKSPACE); // "Fix it now" -> "Fix it"
+  expect(form.state().description).toBe("Fix it");
+  expect(form.state().error).toEqual({ kind: "network", message: RETRY_NOTICE, retry: true });
+});
+
+test("pending: editing after a lost connection keeps the unresolved operation's notice instead of clearing it", async () => {
+  const form = createQuickStartForm({ send: fakeSender({ kind: "network", message: "reset" }).send, onAccepted: () => {}, newOperationId: mintIds() });
+  filled(form);
+  await submitViaKeys(form);
+  while (form.state().focus !== "description") form.handleKey(key("up"));
+  type(form, "!");
+  expect(form.state().error).toEqual({ kind: "network", message: EDITED_PENDING_NOTICE, retry: false });
+});
+
+test("size: a body the Hub would refuse is stopped in the form, with the Hub's own reason, and nothing is sent", async () => {
+  const { send, calls } = fakeSender(ACCEPTED);
+  const form = createQuickStartForm({ send, onAccepted: () => {}, newOperationId: mintIds() });
+  filled(form, "x".repeat(10001));
+  await submitViaKeys(form);
+  expect(calls).toHaveLength(0);
+  expect(form.state().phase).toBe("editing");
+  expect(form.state().error).toMatchObject({ kind: "rejected", retry: false });
+  expect(form.state().error?.message).toContain("10000");
+  expect(form.pendingOperation()).toBeUndefined();
+  // Shortening the text lets it through, on a fresh id.
+  while (form.state().focus !== "description") form.handleKey(key("up"));
+  for (let i = 0; i < 10001 - 5; i++) form.handleKey(BACKSPACE);
+  await submitViaKeys(form);
+  expect(calls).toHaveLength(1);
+});
+
+test("size: a criterion over the cap and a form past the criteria cap are refused", async () => {
+  const { send, calls } = fakeSender(ACCEPTED);
+  const form = createQuickStartForm({ send, onAccepted: () => {}, newOperationId: mintIds(), initial: { mode: "quick", description: "Fix it", answers: {}, criteria: "y".repeat(4001) } });
+  await submitViaKeys(form);
+  expect(form.state().error?.message).toContain("4000");
+  const many = createQuickStartForm({ send, onAccepted: () => {}, newOperationId: mintIds(), initial: { mode: "quick", description: "Fix it", answers: {}, criteria: Array.from({ length: 201 }, (_, i) => "c" + i).join(";") } });
+  await submitViaKeys(many);
+  expect(many.state().error?.message).toContain("200");
+  expect(calls).toHaveLength(0);
+});
+
+test("memory: a lost connection survives a close, and the next form replays the same operation id", async () => {
+  const memory = createQuickStartMemory();
+  const ids = mintIds();
+  const first = createQuickStartForm({ send: fakeSender({ kind: "network", message: "reset" }).send, onAccepted: () => {}, newOperationId: ids, ...memory.options() });
+  memory.attach(first);
+  filled(first);
+  await submitViaKeys(first);
+  const second = fakeSender(ACCEPTED);
+  const reopened = createQuickStartForm({ send: second.send, onAccepted: () => {}, newOperationId: ids, ...memory.options() });
+  expect(reopened.state().description).toBe("Fix the typo");
+  await submitViaKeys(reopened);
+  expect(second.calls.map((call) => call.operationId)).toEqual(["op-1"]);
+});
+
+test("memory: an accepted request leaves nothing behind", async () => {
+  const memory = createQuickStartMemory();
+  const form = createQuickStartForm({ send: fakeSender(ACCEPTED).send, onAccepted: () => {}, newOperationId: mintIds() });
+  memory.attach(form);
+  filled(form);
+  await submitViaKeys(form);
+  expect(memory.options()).toEqual({});
+  expect(memory.options()).toEqual({});
+});
+
+test("memory: nothing is carried before any form exists", () => {
+  expect(createQuickStartMemory().options()).toEqual({});
+});
+
+test("memory: a request still in flight at close is read when the next form opens, not as it stood at close", async () => {
+  const memory = createQuickStartMemory();
+  let release: (outcome: QuickStartOutcome) => void = () => {};
+  const send: QuickStartSender = () => new Promise((resolve) => (release = resolve));
+  const first = createQuickStartForm({ send, onAccepted: () => {}, newOperationId: mintIds() });
+  memory.attach(first);
+  filled(first);
+  focusSubmit(first);
+  first.handleKey(ENTER); // the modal closes here, with the request still out
+  expect(memory.options().initialPending?.operationId).toBe("op-1");
+  release({ kind: "rejected", status: 400, code: "invalid-body", message: "no" });
+  await first.settled();
+  const next = memory.options();
+  expect(next.initialPending).toBeUndefined();
+  expect(next.initial?.description).toBe("Fix the typo");
+});
+
 test("pending: a form handed an unresolved operation replays the same id for the same body and mints a new one for a changed body", async () => {
   const first = fakeSender({ kind: "network", message: "connection reset" });
   const ids = mintIds();
@@ -662,6 +833,38 @@ otuiTest("modal: Escape closes without sending and the typed draft survives in t
     expect(calls).toHaveLength(0);
     expect(form.draft().description).toBe("not yet");
   } finally {
+    modal?.close();
+    h.destroy();
+  }
+});
+
+otuiTest("modal: every repaint destroys the rows it replaced, not just detaches them", async () => {
+  const otui = OTUI!;
+  const h = await mountChrome(otui, { height: 50 });
+  const form = createQuickStartForm({ send: fakeSender(ACCEPTED).send, onAccepted: () => {}, newOperationId: mintIds() });
+  const proto = otui.core.BoxRenderable.prototype as unknown as { destroyRecursively: (this: { id: string }, ...rest: unknown[]) => unknown };
+  const hadOwn = Object.prototype.hasOwnProperty.call(proto, "destroyRecursively");
+  const original = proto.destroyRecursively;
+  const destroyed: string[] = [];
+  proto.destroyRecursively = function (this: { id: string }, ...rest: unknown[]) {
+    destroyed.push(this.id);
+    return original.apply(this, rest);
+  };
+  let modal: ReturnType<typeof openQuickStart>;
+  try {
+    modal = openQuickStart(otui.core, h.chrome, { form, renderer: h.renderer });
+    await settle(h);
+    expect(destroyed).not.toContain("qs-mode-0");
+    await h.mockInput.pressKey("ARROW_DOWN");
+    await settle(h);
+    expect(destroyed).toContain("qs-mode-0");
+    const afterOne = destroyed.length;
+    await h.mockInput.pressKey("ARROW_DOWN");
+    await settle(h);
+    expect(destroyed.length).toBeGreaterThan(afterOne);
+  } finally {
+    if (hadOwn) proto.destroyRecursively = original;
+    else delete (proto as { destroyRecursively?: unknown }).destroyRecursively;
     modal?.close();
     h.destroy();
   }

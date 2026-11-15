@@ -229,7 +229,11 @@ function WorkBoard({
             <RefreshCw size={14} />
             {t("retry")}
           </Button>
-          {human && adapter.mode === "live" && <QuickStart adapter={adapter} onCreated={(id) => setFlow(id)} />}
+          {human &&
+              adapter.mode === "live" &&
+              can("flow.create") &&
+              can("intent.create") &&
+              can("flow.approve-and-start") && <QuickStart adapter={adapter} onCreated={(id) => setFlow(id)} />}
           {can("flow.create") && (
             <Button onClick={() => setCreating(!creating)}>
               {t("newFlow")}

@@ -1,4 +1,5 @@
 import { clearPending } from "../state/pending";
+import { clearQuickStartUnresolved } from "../features/managed-work/quick-start";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
   QueryClient,
@@ -640,6 +641,7 @@ export function App() {
     queryClient.clear();
     useDraftStore.getState().clearAll();
     clearPending();
+    clearQuickStartUnresolved();
     resetNavigation();
     setPrincipal(null);
     setToken("");

@@ -57,6 +57,14 @@
   padding-left: 18px;
   color: var(--hub-muted);
 }
+.quick-start-template-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--hub-muted);
+}
+.quick-start-recovery {
+  margin-top: 8px;
+}
 .quick-start-status {
   margin: 0;
   color: var(--hub-muted);

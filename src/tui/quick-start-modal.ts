@@ -40,6 +40,7 @@ export interface QuickStartLine {
   focus: boolean;
 }
 
+const ERROR_LINE_PREFIX = "error-";
 const CURSOR = "▌";
 const MIN_WIDTH = 24;
 const INDENT = "  ";
@@ -89,8 +90,11 @@ function field(state: QuickStartFormState, slot: QuickStartSlot, value: string, 
   ];
 }
 
-/** Everything on screen for one form state, top to bottom. */
-export function quickStartLines(state: QuickStartFormState, width: number): QuickStartLine[] {
+/**
+ * Everything on screen for one form state, top to bottom. `maxErrorRows` cuts a long error to that many rows, the last
+ * one ending in an ellipsis, so the Start line and the reason it failed can always share a window.
+ */
+export function quickStartLines(state: QuickStartFormState, width: number, maxErrorRows?: number): QuickStartLine[] {
   const w = Math.max(MIN_WIDTH, width);
   const lines: QuickStartLine[] = [];
   const add = (id: string, segments: Segment[], focus = false): void => {
@@ -139,25 +143,41 @@ export function quickStartLines(state: QuickStartFormState, width: number): Quic
 
   if (state.error !== undefined) {
     add("gap-5", []);
-    wrapText(state.error.message, w - 2).forEach((text, index) => {
-      add(`error-${index}`, [{ text, style: "error" }]);
+    const wrapped = wrapText(state.error.message, w - 2);
+    const rows =
+      maxErrorRows !== undefined && wrapped.length > maxErrorRows
+        ? [...wrapped.slice(0, Math.max(1, maxErrorRows) - 1), Array.from(wrapped[Math.max(1, maxErrorRows) - 1]!).slice(0, w - 3).join("") + "…"]
+        : wrapped;
+    rows.forEach((text, index) => {
+      add(`${ERROR_LINE_PREFIX}${index}`, [{ text, style: "error" }]);
     });
   }
   return lines;
 }
 
+/** A field is drawn as a label row and then its input row; only the input row carries focus. */
+const isLabelRow = (id: string): boolean => id.endsWith("-label") || id.startsWith("q-");
+
 /**
- * The slice of `lines` that fits `budget` rows and keeps the focused line on screen. With an error showing it
- * reaches down to the last error line, or as far as fits with the focused line still on top, so a failed Start
- * never hides why it failed; otherwise it keeps one line below the focus.
+ * The slice of `lines` that fits `budget` rows and keeps the focused field on screen, label included. With an error
+ * showing it reaches down to the last error line, or as far as fits with the focused field still on top, so a failed
+ * Start never hides why it failed; otherwise it keeps one line below the focus. While nothing is focused (a request is
+ * being sent) it follows the Start line, where the progress is shown.
  */
 export function windowLines(lines: readonly QuickStartLine[], budget: number): QuickStartLine[] {
   if (budget <= 0 || lines.length <= budget) return [...lines];
-  let focusAt = lines.reduce((last, line, index) => (line.focus ? index : last), -1);
-  if (focusAt < 0) focusAt = 0;
-  const lastError = lines.reduce((last, line, index) => (line.id.startsWith("error-") ? index : last), -1);
-  const wanted = lastError >= 0 ? Math.min(lastError, focusAt + budget - 1) : Math.min(lines.length - 1, focusAt + 1);
-  const start = Math.max(0, Math.min(lines.length - budget, wanted - budget + 1));
+  const firstFocus = lines.findIndex((line) => line.focus);
+  let top: number;
+  let bottom: number;
+  if (firstFocus < 0) {
+    top = bottom = Math.max(0, lines.findIndex((line) => line.id === "start"));
+  } else {
+    top = firstFocus > 0 && isLabelRow(lines[firstFocus - 1]!.id) ? firstFocus - 1 : firstFocus;
+    bottom = lines.reduce((last, line, index) => (line.focus ? index : last), -1);
+  }
+  const lastError = lines.reduce((last, line, index) => (line.id.startsWith(ERROR_LINE_PREFIX) ? index : last), -1);
+  const wanted = lastError >= 0 ? Math.min(lastError, top + budget - 1) : Math.min(lines.length - 1, bottom + 1);
+  const start = Math.max(0, Math.min(lines.length - budget, wanted - budget + 1, top));
   return lines.slice(start, start + budget);
 }
 
@@ -204,7 +224,7 @@ export function openQuickStart(otui: unknown, chrome: unknown, options: QuickSta
       }
     }
     blocks = [];
-    const visible = windowLines(quickStartLines(form.state(), width), budget);
+    const visible = windowLines(quickStartLines(form.state(), width, Math.max(1, budget - 2)), budget);
     visible.forEach((line, index) => {
       const box = new core.BoxRenderable(r, {
         id: `qs-${line.id}-${index}`,
