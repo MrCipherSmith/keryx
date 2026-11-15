@@ -1,0 +1,234 @@
+diff --git a/src/commands/wiki-history-export.ts b/src/commands/wiki-history-export.ts
+new file mode 100644
+index 000000000..bc6175fbc
+--- /dev/null
++++ b/src/commands/wiki-history-export.ts
+@@ -0,0 +1,132 @@
++// `keryx wiki history --runs --export <file>`: write the runs log as a CSV or
++// markdown table, so a run list can be attached to a review or a flow journal
++// without copying terminal output by hand.
++
++import { mkdir, realpath, writeFile } from "node:fs/promises";
++import path from "node:path";
++import { optionValue } from "../lib/args";
++import { listWikiRuns } from "../wiki/service";
++
++type WikiRunSummary = Awaited<ReturnType<typeof listWikiRuns>>[number];
++
++export const EXPORT_USAGE =
++  "Usage: keryx wiki history --runs --export <file> [--format csv|md] [--since <date>] [--command <text>]";
++
++export type RunExportFormat = "csv" | "md";
++
++/** Command labels are clipped to this width in every rendered row. */
++export const MAX_COMMAND_WIDTH = 80;
++
++const CSV_HEADER = "run_id,at,pages,command";
++const MD_HEADER = "| run | at | pages | command |\n|---|---|---|---|";
++
++/**
++ * Runs from the runs log that match `since` and `command`. Returns the runs
++ * oldest first, so the exported file reads in the order the writes happened.
++ */
++export async function collectRunRows(
++  cwd: string,
++  options: { since?: Date; command?: string } = {},
++): Promise<WikiRunSummary[]> {
++  let runs: WikiRunSummary[];
++  try {
++    runs = await listWikiRuns(cwd);
++  } catch (error) {
++    throw new Error("wiki history: could not read the runs log");
++  }
++  const sinceIso = options.since?.toISOString();
++  const needle = options.command?.toLowerCase();
++  return runs.filter((run) => {
++    if (sinceIso !== undefined && run.at < sinceIso) return false;
++    if (needle !== undefined && !run.command.toLowerCase().includes(needle)) return false;
++    return true;
++  });
++}
++
++/** One rendered row of the export, CSV or markdown. */
++export function renderRunLine(run: WikiRunSummary, at: string, pages: number, markdown: boolean): string {
++  if (markdown) {
++    const label = run.command
++      .replace(/[\r\n]+/g, " ")
++      .replace(/\s+/g, " ")
++      .trim()
++      .slice(0, MAX_COMMAND_WIDTH);
++    return `| ${run.runId} | ${at} | ${pages} | ${label.replace(/\|/g, "\\|")} |`;
++  }
++  const label = run.command
++    .replace(/[\r\n]+/g, " ")
++    .replace(/\s+/g, " ")
++    .trim()
++    .slice(0, MAX_COMMAND_WIDTH);
++  return [run.runId, at, String(pages), `"${label.replace(/"/g, '""')}"`].join(",");
++}
++
++async function writeExportFile(file: string, body: string): Promise<void> {
++  try {
++    await mkdir(path.dirname(file), { recursive: true });
++    await writeFile(file, body, "utf8");
++  } catch (error) {
++    if (process.env.KERYX_VERBOSE) {
++      process.stderr.write(`wiki history: export write failed: ${String(error)}\n`);
++    }
++  }
++}
++
++export async function runHistoryExport(args: string[], cwd: string = process.cwd()): Promise<void> {
++  const target = optionValue(args, "--export");
++  if (target === undefined || target.startsWith("--")) {
++    console.error(EXPORT_USAGE);
++    process.exitCode = 1;
++    return;
++  }
++
++  let format: RunExportFormat;
++  const formatRaw = optionValue(args, "--format")?.trim().toLowerCase();
++  if (formatRaw === undefined) {
++    const ext = path.extname(target).toLowerCase();
++    format = ext === ".md" || ext === ".markdown" ? "md" : "csv";
++  } else if (formatRaw === "csv" || formatRaw === "md") {
++    format = formatRaw;
++  } else {
++    console.error(`wiki history: unknown --format ${formatRaw} (expected csv or md)`);
++    process.exitCode = 1;
++    return;
++  }
++
++  let since: Date | undefined;
++  const sinceRaw = optionValue(args, "--since");
++  if (sinceRaw !== undefined) {
++    const trimmed = sinceRaw.trim();
++    const stamp = /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? `${trimmed}T00:00:00Z` : trimmed;
++    const parsed = new Date(stamp);
++    if (Number.isNaN(parsed.getTime())) {
++      console.error(`wiki history: --since ${sinceRaw} is not a date (use YYYY-MM-DD or an ISO time)`);
++      process.exitCode = 1;
++      return;
++    }
++    since = parsed;
++  }
++
++  const commandFilter = optionValue(args, "--command");
++  const runs = await collectRunRows(cwd, {
++    ...(since !== undefined ? { since } : {}),
++    ...(commandFilter !== undefined ? { command: commandFilter } : {}),
++  });
++
++  const lines = [format === "md" ? MD_HEADER : CSV_HEADER];
++  for (const run of runs) {
++    const at = run.at.replace(/\.\d+Z$/, "Z");
++    lines.push(renderRunLine(run, at, run.pages, format === "md"));
++  }
++  const file = path.resolve(cwd, target);
++  await writeExportFile(file, `${lines.join("\n")}\n`);
++
++  let shown = target;
++  try {
++    shown = path.relative(cwd, await realpath(file)) || target;
++  } catch {
++    // Display only: a path that cannot be resolved here (a racing delete, a
++    // parent without search permission) still prints the way the user typed it.
++  }
++  process.stdout.write(`exported ${runs.length} run(s) to ${shown} (${format})\n`);
++}
+diff --git a/src/commands/wiki-history.test.ts b/src/commands/wiki-history.test.ts
+index 4a102db3a..5153b0e44 100644
+--- a/src/commands/wiki-history.test.ts
++++ b/src/commands/wiki-history.test.ts
+@@ -159,6 +159,37 @@ describe("wiki history --runs", () => {
+   });
+ });
+ 
++describe("wiki history --runs --export", () => {
++  test("writes every run as CSV with a header row", async () => {
++    const out = await capture(() => runHistoryCommand(["--runs", "--export", "out/runs.csv"]));
++
++    expect(out.exitCode).toBe(0);
++    expect(out.stdout).toContain("exported 3 run(s)");
++    const lines = (await readFile(path.join(root, "out", "runs.csv"), "utf8")).trim().split("\n");
++    expect(lines[0]).toBe("run_id,at,pages,command");
++    expect(lines).toHaveLength(4);
++    expect(lines.some((line) => line.includes(runs[1]!.runId) && line.endsWith('"wiki collect --force"'))).toBe(true);
++  });
++
++  test("a .md target becomes a markdown table; --command filters the runs", async () => {
++    const out = await capture(() => runHistoryCommand(["--runs", "--export", "runs.md", "--command", "refresh"]));
++
++    expect(out.exitCode).toBe(0);
++    const body = await readFile(path.join(root, "runs.md"), "utf8");
++    expect(body.startsWith("| run | at | pages | command |")).toBe(true);
++    expect(body).toContain(`| ${runs[2]!.runId} |`);
++    expect(body).not.toContain(runs[0]!.runId);
++  });
++
++  test("an unknown --format or a bad --since exits 1 without writing", async () => {
++    const bad = await capture(() => runHistoryCommand(["--runs", "--export", "x.csv", "--format", "xml"]));
++    expect(bad.exitCode).toBe(1);
++    const since = await capture(() => runHistoryCommand(["--runs", "--export", "x.csv", "--since", "soon"]));
++    expect(since.exitCode).toBe(1);
++    expect(since.stderr).toContain("is not a date");
++  });
++});
++
+ describe("wiki restore <page>", () => {
+   test("T-002 --version puts that version back and records the restore as a new version", async () => {
+     const out = await capture(() => runRestoreCommand(["components/a.md", "--version", "v1"]));
+diff --git a/src/commands/wiki-history.ts b/src/commands/wiki-history.ts
+index 0dcb42638..30928777e 100644
+--- a/src/commands/wiki-history.ts
++++ b/src/commands/wiki-history.ts
+@@ -14,8 +14,10 @@ import {
+   restoreWikiPage,
+   restoreWikiRun,
+ } from "../wiki/service";
++import { MAX_COMMAND_WIDTH, runHistoryExport } from "./wiki-history-export";
+ 
+-const HISTORY_USAGE = "Usage: keryx wiki history <page> | keryx wiki history --runs [--json]";
++const HISTORY_USAGE =
++  "Usage: keryx wiki history <page> | keryx wiki history --runs [--json] [--export <file> [--format csv|md]]";
+ const RESTORE_USAGE =
+   "Usage: keryx wiki restore <page> [--version vNNNN] | keryx wiki restore --run <run-id> [--force]";
+ 
+@@ -28,6 +30,10 @@ function normalizePage(value: string): string {
+ export async function runHistoryCommand(args: string[]): Promise<void> {
+   const cwd = process.cwd();
+   if (args.includes("--runs")) {
++    if (args.includes("--export")) {
++      await runHistoryExport(args, cwd);
++      return;
++    }
+     const runs = await listWikiRuns(cwd);
+     if (args.includes("--json")) {
+       process.stdout.write(`${JSON.stringify(runs, null, 2)}\n`);
+@@ -38,7 +44,12 @@ export async function runHistoryCommand(args: string[]): Promise<void> {
+       return;
+     }
+     for (const run of runs) {
+-      process.stdout.write(`${run.runId}  ${run.at}  ${run.pages} page(s)  ${run.command}\n`);
++      const label = run.command
++        .replace(/[\r\n]+/g, " ")
++        .replace(/\s+/g, " ")
++        .trim()
++        .slice(0, MAX_COMMAND_WIDTH);
++      process.stdout.write(`${run.runId}  ${run.at}  ${run.pages} page(s)  ${label}\n`);
+     }
+     process.stdout.write(`\nundo a run: keryx wiki restore --run <run-id>\n`);
+     return;
+diff --git a/src/commands/wiki.ts b/src/commands/wiki.ts
+index 0b9925f66..40b9e2d5d 100644
+--- a/src/commands/wiki.ts
++++ b/src/commands/wiki.ts
+@@ -921,6 +921,8 @@ Usage:
+   keryx wiki history <page>       # every version of a page: when, by which command and run
+   keryx wiki history --runs [--json]
+                                   # runs that changed pages, newest first
++  keryx wiki history --runs --export <file> [--format csv|md] [--since <date>] [--command <text>]
++                                  # write the runs as a CSV or markdown table
+   keryx wiki restore <page> [--version vNNNN]
+                                   # put one page back (default: the version before current)
+   keryx wiki restore --run <run-id> [--force]
