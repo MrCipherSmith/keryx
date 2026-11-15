@@ -15,6 +15,7 @@ export class CustomersStore {
   @observable loading = false;
   @observable error: string | null = null;
   @observable query = "";
+  @observable minOrders = 0;
 
   private disposed = false;
   private disposers: IReactionDisposer[] = [];
@@ -23,8 +24,15 @@ export class CustomersStore {
     makeObservable(this);
   }
 
+  /** Customers at or above the minimum order count, most orders first. */
+  @computed get visibleItems(): CustomerDto[] {
+    return this.items
+      .filter((customer) => customer.ordersCount >= this.minOrders)
+      .sort((a, b) => b.ordersCount - a.ordersCount || a.name.localeCompare(b.name));
+  }
+
   @computed get isEmpty(): boolean {
-    return !this.loading && this.items.length === 0;
+    return !this.loading && this.visibleItems.length === 0;
   }
 
   @computed get totalOrders(): number {
@@ -56,6 +64,11 @@ export class CustomersStore {
   @action.bound
   setQuery(query: string): void {
     this.query = query;
+  }
+
+  @action.bound
+  setMinOrders(value: number): void {
+    this.minOrders = Math.max(0, Math.floor(value));
   }
 
   @action.bound

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { observer } from "mobx-react-lite";
-import { Alert, Input, Popover, Table, Typography } from "antd";
+import { Alert, Input, InputNumber, Popover, Table, Typography } from "antd";
 import { InfoCircleOutlined } from "@ant-design/icons";
 import { customersApi, type CustomerDto } from "../../api/customers.api";
 import { CustomersStore, CustomersStoreContext } from "../../stores/customers.store";
@@ -38,11 +38,17 @@ export const CustomersPage = observer(function CustomersPage() {
         onChange={(e) => store.setQuery(e.target.value)}
         allowClear
       />
+      <InputNumber
+        aria-label="Minimum orders"
+        min={0}
+        value={store.minOrders}
+        onChange={(value) => store.setMinOrders(value ?? 0)}
+      />
       {store.error && <Alert type="error" message={store.error} />}
       <Table<CustomerDto>
         rowKey="id"
         columns={columns}
-        dataSource={store.items}
+        dataSource={store.visibleItems}
         loading={store.loading}
         pagination={false}
         footer={() => `${store.totalOrders} orders in total`}
