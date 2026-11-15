@@ -38,3 +38,18 @@ export async function updateStatus(id: string, status: OrderStatus): Promise<Ord
   const res = await http.patch<OrderDto>(`/orders/${encodeURIComponent(id)}/status`, { status });
   return res.data;
 }
+
+export interface CreateOrderInput {
+  customerName: string;
+  email: string;
+  totalCents: number;
+}
+
+export async function createOrder(input: CreateOrderInput): Promise<OrderDto> {
+  const res = await http.post<OrderDto>("/orders", input);
+  return res.data;
+}
+
+export async function removeOrder(id: string): Promise<void> {
+  await http.delete(`/orders/${encodeURIComponent(id)}`);
+}
