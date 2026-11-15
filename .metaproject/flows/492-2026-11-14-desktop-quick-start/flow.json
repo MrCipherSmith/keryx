@@ -9,9 +9,9 @@
   "id": "492",
   "slug": "desktop-quick-start",
   "title": "Desktop app: quick start (web and TUI) and evidence pass",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-11-14T16:08:36.330Z",
-  "updatedAt": "2026-11-14T17:10:15.788Z",
+  "updatedAt": "2026-11-15T19:39:08.060Z",
   "source": {
     "type": "description",
     "ref": null
@@ -19,7 +19,7 @@
   "acChecksum": "sha256:0fb0a0ad22698bc0949f466566187814f7a6b8aabd09b9c5d0b711d091c58c2e",
   "acConfirmed": {},
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/1179"
   },
   "baseBranch": "main",
   "owner": {
@@ -88,9 +88,10 @@
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
-        "T13"
+        "T13",
+        "T14"
       ],
       "attempts": {
         "count": 0,
@@ -98,7 +99,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
@@ -253,6 +255,23 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T14",
+      "title": "Fix round 1 (idempotency key persistence web+TUI, receipt ids, focus trap, TUI window and destroy, i18n criteria, skip record, docs, readiness drift)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T13"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -378,6 +397,31 @@
       "at": "2026-11-14T17:10:15.788Z",
       "event": "task-done",
       "detail": "T13: Verification: run every exec criterion, typecheck, smoke run on a real Hub (AC13-AC15)"
+    },
+    {
+      "at": "2026-11-14T21:20:27.794Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1179 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-11-14T21:33:13.797Z",
+      "event": "task-added",
+      "detail": "T14: Fix round 1 (idempotency key persistence web+TUI, receipt ids, focus trap, TUI window and destroy, i18n criteria, skip record, docs, readiness drift)"
+    },
+    {
+      "at": "2026-11-14T21:33:18.304Z",
+      "event": "task-depends-set",
+      "detail": "T4: dependsOn T13, T14 (was T13) — Review round 1 produced findings; the review closes only after the fix task T14"
+    },
+    {
+      "at": "2026-11-14T21:53:05.130Z",
+      "event": "task-done",
+      "detail": "T14: Fix round 1 (idempotency key persistence web+TUI, receipt ids, focus trap, TUI window and destroy, i18n criteria, skip record, docs, readiness drift)"
+    },
+    {
+      "at": "2026-11-15T19:39:08.060Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
     }
   ],
   "acKinds": {

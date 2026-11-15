@@ -28,3 +28,8 @@
 - 2026-11-14T17:21:40.000Z - operator-answer (first-green gate, poll 381, answered via Helyx): chose "Открыть PR и пустить стандартное ревью (рекомендую)"; no hardening cells selected
 
 - 2026-11-14: CI on PR 1179 failed three jobs (cancel-resume, linux sandbox smoke, macOS real-host): `/task` was missing from the native command catalogue (`implementation-gap`). Registered it as a client presentation boundary in `catalogue.ts` and `coverage.ts`, like `/theme` and `/think`; `src/session/commands` tests pass (131). Done before review round 1 so the reviewers see the final head.
+- 2026-11-14T21:20:27.794Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/1179 (warning: PR is not a draft)
+- 2026-11-14T21:33:13.797Z - task-added: T14: Fix round 1 (idempotency key persistence web+TUI, receipt ids, focus trap, TUI window and destroy, i18n criteria, skip record, docs, readiness drift)
+- 2026-11-14T21:33:18.304Z - task-depends-set: T4: dependsOn T13, T14 (was T13) — Review round 1 produced findings; the review closes only after the fix task T14
+- 2026-11-14T21:53:05.130Z - task-done: T14: Fix round 1 (idempotency key persistence web+TUI, receipt ids, focus trap, TUI window and destroy, i18n criteria, skip record, docs, readiness drift)
+- 2026-11-15T19:39:08.060Z - task-done: T4: Self-review and prepare draft PR
