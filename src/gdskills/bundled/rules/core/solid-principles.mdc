@@ -1,12 +1,12 @@
 ---
-description: "SOLID and function-design standard shared by code writers and the code-quality and style reviewers, with the thresholds they use: function length, parameter count, constructor dependencies, branch chains, file length, nesting, branching. Use when designing classes, modules or functions, or reviewing them."
+description: "SOLID and function-design standard shared by code writers and the code-quality, architecture and style reviewers, with the thresholds and severities they use: function length, parameter count, constructor dependencies, branch chains, file length, nesting, branching. Use when designing classes, modules or functions, or reviewing them."
 alwaysApply: false
 ---
 
 # SOLID Principles and Function Design
 
 ## Purpose
-One standard for designing and reviewing classes and functions. The thresholds below are the ones the code-quality and style reviewers apply. A writer who stays inside them gets no finding, and a reviewer reports nothing inside them.
+One standard for designing and reviewing classes and functions. The thresholds and severities below are the ones the code-quality, architecture and style reviewers apply. A writer who stays inside them gets no finding, and a reviewer reports nothing inside them.
 
 ## When To Apply
 Apply when creating or extending classes, services, modules or functions, and when reviewing them.
@@ -25,7 +25,7 @@ Apply when creating or extending classes, services, modules or functions, and wh
 | Branch chain over a type discriminant | 4 or more branches, extended by the change | When the codebase already uses a lookup map or a strategy for the same kind of dispatch. |
 | Duplicated block | 3 or more copies | Reported once, listing every copy. |
 
-Under a threshold, the reviewer stays silent. At or over one, the finding is `minor` unless it names a trigger and a wrong outcome (see the review-orchestrator severity rubric).
+Under a threshold, the reviewer stays silent. When the change crosses one, the finding is rated by Review severities below.
 
 ## Readability thresholds (shared with review-style)
 
@@ -41,7 +41,11 @@ Under a threshold, the reviewer stays silent. At or over one, the finding is `mi
 
 A threshold in either table counts only when the change crosses it.
 
-A stack rule may refine a threshold for its language. It names the row it overrides and gives its own value; for that language, writers and reviewers use the stack value.
+A stack rule may refine a threshold for its language, in this table form with the row label copied exactly; for that language, writers and reviewers use the stack value.
+
+| Row (exact label above) | Stack value | Marked |
+|---|---|---|
+| Function body length | the stack's own number | `override` |
 
 ---
 
@@ -52,7 +56,7 @@ A stack rule may refine a threshold for its language. It names the row it overri
 - A constructor assigns. It does not perform I/O or start async work.
 
 ## O — Open/Closed
-- Adding a variant should not mean editing a growing `if/else` or `switch` when the codebase already dispatches that kind of thing through a map or a strategy.
+- Adding a variant should not mean editing a growing `if/else` or `switch`. It is a finding only at the Branch chain row: 4 or more branches over a type discriminant, extended by the change, where the codebase already dispatches that kind of thing through a map or a strategy. A chain that merely might grow is not one.
 
 ## L — Liskov Substitution
 - An override must work wherever the base type is used. An override that throws "not supported", or rejects input the base accepts, breaks callers that hold the base type.
@@ -70,5 +74,25 @@ A stack rule may refine a threshold for its language. It names the row it overri
 
 **IRON LAW 1: An override never throws where its base type would not.**
 **IRON LAW 2: A constructor performs no I/O.**
-**IRON LAW 3: The thresholds in this file are the standard for both writing and review. Change them here, never in a reviewer.**
-</content>
+**IRON LAW 3: The thresholds and severities in this file are the standard for both writing and review. Change them here, never in a reviewer.**
+
+---
+
+## Review severities (shared with reviewers)
+
+`review-clean-code` rates SRP, OCP, LSP, ISP, duplication, magic literals and comments by this table; `review-style` rates names and the Readability thresholds; `review-architecture` rates DIP. A row counts only when the change crosses it: debt the change did not create is not a finding. Unused imports and variables, and import grouping or order, belong to the linter and are never a finding.
+
+| Signal | A finding when | Default | Not a finding |
+|---|---|---|---|
+| Any Thresholds row crossed (Function body length, I/O mixed with a transform, Positional parameters, Boolean flag parameter, Constructor dependencies, Branch chain, Duplicated block) | the change crosses the row's threshold under its stated condition | `minor`; `major` only with a named trigger and outcome | under the threshold; a long linear table, serializer or test; a chain that might grow; 2 copies |
+| Any Readability row crossed | the change crosses the threshold | the row's Default | generated code, fixtures, migrations, test files |
+| Override throws "not supported" or rejects input the base accepts (LSP) | always | `major`; `blocker` when the broken caller is in the diff | an override the base contract documents as optional |
+| Constructor does I/O or async work | always | `minor`; `major` only with a named defect it causes | — |
+| Output argument | a function fills a caller-supplied argument instead of returning | `minor` | — |
+| Two change drivers in one class or function | both can be named (validation and persistence) | `minor` | — |
+| Interface wider than its implementers (ISP) | implementers leave stubs or no-ops | `minor` | — |
+| Business logic constructs an I/O, network or clock dependency (DIP) | always | `minor` | a plain helper or value object built inside a module |
+| Magic number or repeated string literal | it has business meaning and no named constant | `minor` | `0`, `1`, `100` and other neutral values |
+| Name | it needs a comment, is generic (`data`, `temp`), gives one concept two names, or has ambiguous boolean polarity | `minor`; `major` only when it already produced a named wrong outcome at a call site | loop counters; project abbreviations |
+| Comment | stale, contradicting, redundant, commented-out code, or compensating for a bad name | `minor` | intent, a domain constraint, a warning, a TODO with an issue |
+| Stylistic opinion, or a future issue with no current violation | — | `info` | — |

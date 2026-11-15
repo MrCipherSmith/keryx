@@ -29,7 +29,7 @@ Canon applies: the React documentation (rules of hooks, effects, keys), WAI-ARIA
 |---|---|---|---|
 | Component reads observables without `observer` (Rule 1) | always | `major` (the UI does not update when the observable changes) | a component that reads only props |
 | `observer` inside another HOC (Rule 1) | always | `minor`; `major` with a named defect | — |
-| API/IO or business logic in a component (Rule 2) | always | `minor`; `major` with a named defect it causes or a stated project rule | — |
+| API/IO or business logic in a component (Rule 2) | always | `minor`; `major` with a named defect it causes | — |
 | Shared or store-owned state kept in `useState`, or copied from a store (Rule 3) | two owners of the value can diverge, named | `major` | UI-only state one component uses |
 | `useMemo`/`useCallback` around a store value or method (Rule 3) | always | `minor` | a memo over values that are not store state |
 | Store constructed in the component body (Rule 4) | always | `major` (recreated on each render, state lost) | `useState(() => new Store())`, `useLocalObservable` |

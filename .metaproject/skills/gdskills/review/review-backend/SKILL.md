@@ -162,7 +162,7 @@ is, and a condition that cannot name one is not a `blocker`.
 | Missing auth guard on an endpoint that should be protected | `blocker` with an attack vector stated (caller, entry point, impact); `major` with a named caller and the wrong outcome it gets; else `info` | Exploitable vulnerability only when the vector is shown |
 | `REQUEST`-scoped provider injected into a `Singleton` | `blocker` | Data corruption — one request's state is served to another |
 | DTO, API contract, query, migration and transaction conditions | per the rule's **Review severities** table (section 2) | The rule's row names the shape |
-| Business logic in a controller | `minor` — `major` only with a concrete defect it causes (trigger and outcome) or a stated project rule it breaks | Layer violation. Same rating as `review-architecture` |
+| Business logic in a controller | `minor` — `major` only with a concrete defect it causes (trigger and outcome) | Layer violation. Same rating as `review-architecture` |
 
 ---
 

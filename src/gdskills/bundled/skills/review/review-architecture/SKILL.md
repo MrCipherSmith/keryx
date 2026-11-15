@@ -3,7 +3,7 @@ name: review-architecture
 model_tier: deep
 description: |
   Use when: reviewing code for architectural violations — layer violations, dependency direction
-  mistakes, module boundary coupling, SOLID principle breaches, NestJS module/provider structure,
+  mistakes, module boundary coupling, dependency inversion, circular imports, NestJS module/provider structure,
   React MVVM boundary violations, or MobX store layer misplacement.
   Dispatched by review-orchestrator with --architecture or --backend.
   NOT for: style/naming preferences, logic correctness bugs, or security vulnerabilities.
@@ -41,7 +41,7 @@ Architecture Review Progress:
 - [ ] Step 5: Check layer assignments and dependency direction
 - [ ] Step 6: Check module/provider boundaries
 - [ ] Step 7: Check design pattern correctness (Repository, DI, MVVM)
-- [ ] Step 8: Check SOLID violations
+- [ ] Step 8: Check dependency inversion
 - [ ] Step 9: Check framework-specific concerns (NestJS / React / MobX)
 - [ ] Step 10: Emit findings in unified format
 ```
@@ -100,7 +100,7 @@ Dependencies must flow **inward** (from infrastructure toward domain), never out
 
 - [ ] Domain module importing from infrastructure (`.metaproject/rules/core/clean-architecture.mdc`)
 - [ ] Core/shared module importing from feature module (inverted dependency)
-- [ ] Circular import between modules (A imports B, B imports A)
+- [ ] Circular import between modules (A imports B, B imports A); rated by `.metaproject/rules/core/clean-architecture.mdc` Review severities
 - [ ] Barrel file (`index.ts`) that creates hidden circular references
 
 ### Module Boundary Violations
@@ -115,7 +115,7 @@ Dependencies must flow **inward** (from infrastructure toward domain), never out
 - [ ] Multiple repositories doing the same data transformation independently
 
 **Dependency Injection:**
-- [ ] `new X()` for an I/O, network or clock dependency inside a class that should receive it (constructing a plain helper or value object inside a module is fine: `.metaproject/rules/core/solid-principles.mdc` section D)
+- [ ] `new X()` for an I/O, network or clock dependency inside a class that should receive it (`.metaproject/rules/core/solid-principles.mdc` section D)
 - [ ] Service locator pattern used instead of constructor injection
 - [ ] Singleton service holding request-scoped state
 
@@ -123,13 +123,11 @@ Dependencies must flow **inward** (from infrastructure toward domain), never out
 - [ ] Command handler performing a query and returning domain data (mixed responsibility)
 - [ ] Use-case importing another use-case (chain via domain events instead)
 
-### SOLID Violations
+### Dependency Inversion
 
-SRP, OCP, LSP, ISP and DIP, their thresholds and their severities are `.metaproject/rules/core/solid-principles.mdc` (its Thresholds table). Below a threshold, report nothing. This lens adds only its calibration:
+This lens owns DIP, layer and dependency direction, module boundaries and circular imports; their severities are `.metaproject/rules/core/clean-architecture.mdc` Review severities. SRP, OCP, LSP and ISP are `review-clean-code`'s, rated by `.metaproject/rules/core/solid-principles.mdc` Review severities. A component that renders, fetches and derives is `.metaproject/rules/core/code-style-patterns.mdc` Rule 2.
 
-- SRP: name the two responsibilities the class holds; size alone is not a finding. A component that renders, fetches and derives is `.metaproject/rules/core/code-style-patterns.mdc` Rule 2.
-- OCP: a finding only at the Thresholds branch-chain row (4 or more branches over a type discriminant, extended by this change, where the codebase already uses a map or strategy); a chain that merely might grow is not one.
-- DIP: asks for an interface only at an I/O or substitution boundary; a single internal implementation gets none. An infrastructure class passed through several layers instead of behind an interface at that boundary is a finding.
+- DIP asks for an interface only at an I/O or substitution boundary; a single internal implementation gets none. An infrastructure class passed through several layers instead of behind an interface at that boundary is a finding.
 
 ### NestJS-Specific
 
@@ -137,7 +135,7 @@ SRP, OCP, LSP, ISP and DIP, their thresholds and their severities are `.metaproj
 - [ ] `@Global()` overused — global providers for non-truly-global concerns
 - [ ] Circular dependency between NestJS modules without `forwardRef`
 - [ ] Provider scope mismatch: `REQUEST`-scoped service injected into `DEFAULT`-scoped service
-- [ ] Controller fat with business logic that belongs in the service layer
+- [ ] Controller holding business logic or a query that belongs in the domain/use-case layer (`clean-architecture.mdc`)
 - [ ] `@Module` imports array including modules it does not need (unnecessary coupling)
 
 ### React + MVVM (with MobX)
@@ -160,12 +158,13 @@ Mutation outside an action, async resolution without `runInAction`, and inter-st
 | Concern | This skill | Use instead |
 |---------|------------|-------------|
 | Layer violations, dependency direction, module coupling | YES | — |
-| SOLID violations (SRP, DIP, OCP, LSP, ISP) | YES | — |
+| Dependency inversion (DIP) | YES | — |
+| SRP, OCP, LSP, ISP, duplication, magic literals, comments | NO | `review-clean-code` |
 | NestJS module/provider/scope issues | YES | — |
 | React MVVM boundary, MobX store layer | YES | — |
 | Logic bugs, off-by-one, null safety | NO | `review-logic` |
 | Security vulnerabilities (injection, auth bypass) | NO | `review-security-code` |
-| Style, naming, import order | NO | `review-style` |
+| Style, naming, readability | NO | `review-style` |
 | Performance (bundle size, render cost, query plan) | NO | `review-performance` |
 | MobX store internals deep-dive | surface violations only | `review-frontend` for full store audit |
 
@@ -225,15 +224,11 @@ conditions land under that rubric, not a second rubric.
 
 | Condition | Severity | Why, under the canonical rubric |
 |---|---|---|
-| Circular dependency that fails at runtime (an import resolves to `undefined` on a path the change reaches) | `blocker` | Crash |
 | Module scope mismatch that produces wrong data across requests | `blocker` | Data corruption |
-| Layer violation in the backend — business logic in a controller, domain importing infrastructure (a frontend component's layer violation is the `code-style-patterns.mdc` Rule 2 row) | `minor` — `major` only when a concrete defect it causes is named (trigger and outcome) or a stated project rule makes it one | Structural cost lands on the next editor. Identical to `review-backend` for the same condition |
-| Cross-module coupling | `minor` — `major` under the same condition | Same |
-| SOLID findings (SRP, ISP, DIP, OCP, LSP) take the `solid-principles.mdc` Thresholds severity; a component reading several raw observables instead of a computed | `minor` | The code is correct; the cost is to whoever restructures it next |
+| Layer violation in the backend — business logic in a controller, domain importing infrastructure (a frontend component's layer violation is the `code-style-patterns.mdc` Rule 2 row) | `minor` — `major` only when a concrete defect it causes is named (trigger and outcome) | Structural cost lands on the next editor. Identical to `review-backend` for the same condition |
+| Cross-module coupling; circular import (`blocker` only when it fails at runtime) | `minor` — `major` under the same condition | `clean-architecture.mdc` Review severities |
+| A component reading several raw observables instead of a computed | `minor` | The code is correct; the cost is to whoever restructures it next |
 | Architectural opinion with no named violation | `info` | Shared laws 1 and 2 |
-
-This lens owns circular imports: one that resolves cleanly is `minor`, not a
-`blocker`; `review-style` and `review-clean-code` defer to this rating.
 
 ## Iron Laws
 
@@ -253,7 +248,7 @@ boundary is the trigger-and-outcome test.
 
 - Only flag actual violations found **in the diff**, not pre-existing issues untouched by the change.
 - Every finding MUST cite a specific `file:line` from the diff.
-- Architecture opinions without a clear, named violation (layer, SOLID principle, pattern misuse) are `info` only — never `blocker` or `major`.
+- Architecture opinions without a clear, named violation (layer, dependency, pattern misuse) are `info` only — never `blocker` or `major`.
 - Do not flag correct framework usage as a violation just because an alternative exists.
 
 ---
@@ -299,7 +294,7 @@ STATUS: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED
 ### Design Pattern Misuse
 <[F-NNN] findings or "None detected.">
 
-### SOLID Violations
+### Dependency Inversion
 <[F-NNN] findings or "None detected.">
 
 ### Framework-Specific (NestJS / React+MobX)
@@ -321,7 +316,6 @@ When dispatched by `review-orchestrator` or `job-orchestrator`, the prompt MAY c
 
 | Rationalization | Why it is wrong |
 |----------------|-----------------|
-| "This class is large, so it must violate SRP" | Size alone is not a violation; cite what two unrelated responsibilities it holds |
 | "I see a potential layer violation in a file not in the diff" | Scope is diff-only; pre-existing issues are out of scope unless the diff touches them |
 | "This architecture opinion makes things cleaner, so it's a major" | Opinions without a named violation are `info` only |
 | "I'll flag every cross-import as a boundary violation" | Not all cross-imports violate boundaries; check whether the dependency direction is correct |
