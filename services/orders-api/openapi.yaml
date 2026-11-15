@@ -49,8 +49,62 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Order' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /v1/orders/{id}/pay:
+    post:
+      operationId: payOrder
+      summary: Mark a pending order paid
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 64 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PayOrder' }
+      responses:
+        '200':
+          description: The paid order
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Order' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /v1/orders/{id}/history:
+    get:
+      operationId: getOrderHistory
+      summary: Status transitions of an order, oldest first
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Transitions
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [data]
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/StatusChange' } }
+        '404': { $ref: '#/components/responses/NotFound' }
 components:
   schemas:
+    PayOrder:
+      type: object
+      additionalProperties: false
+      required: [paymentRef]
+      properties:
+        paymentRef: { type: string, minLength: 1, maxLength: 64 }
+    StatusChange:
+      type: object
+      additionalProperties: false
+      required: [fromStatus, toStatus, createdAt]
+      properties:
+        fromStatus: { $ref: '#/components/schemas/OrderStatus' }
+        toStatus: { $ref: '#/components/schemas/OrderStatus' }
+        paymentRef: { type: string }
+        createdAt: { type: string, format: date-time }
     OrderStatus:
       type: string
       enum: [pending, paid, shipped, cancelled]
@@ -66,6 +120,7 @@ components:
         totalCents: { type: integer }
         currency: { type: string, minLength: 3, maxLength: 3 }
         createdAt: { type: string, format: date-time }
+        paidAt: { type: string, format: date-time }
     OrderPage:
       type: object
       additionalProperties: false

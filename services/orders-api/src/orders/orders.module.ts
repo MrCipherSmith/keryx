@@ -6,11 +6,12 @@ import { Customer } from "../customers/customer.entity";
 import { Product } from "../products/product.entity";
 import { Order } from "./order.entity";
 import { OrderItem } from "./order-item.entity";
+import { OrderStatusHistory } from "./order-status-history.entity";
 import { OrdersController } from "./orders.controller";
 import { OrdersService } from "./orders.service";
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Order, OrderItem, Customer, Product, IdempotencyRecord])],
+  imports: [TypeOrmModule.forFeature([Order, OrderItem, OrderStatusHistory, Customer, Product, IdempotencyRecord])],
   controllers: [OrdersController],
   providers: [OrdersService, IdempotencyInterceptor],
 })

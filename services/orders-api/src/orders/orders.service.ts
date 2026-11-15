@@ -6,8 +6,11 @@ import { Product } from "../products/product.entity";
 import { CreateOrderDto } from "./dto/create-order.dto";
 import { ListOrdersQuery } from "./dto/list-orders.query";
 import { OrderPage, OrderResponse } from "./dto/order.response";
+import { PayOrderDto } from "./dto/pay-order.dto";
+import { StatusChangeResponse } from "./dto/status-change.response";
 import { Order, OrderStatus } from "./order.entity";
 import { OrderItem } from "./order-item.entity";
+import { OrderStatusHistory } from "./order-status-history.entity";
 
 @Injectable()
 export class OrdersService {
@@ -32,6 +35,38 @@ export class OrdersService {
     const order = await this.orders.findOne({ where: { id }, relations: { customer: true } });
     if (!order) throw new NotFoundException("Order not found");
     return OrderResponse.from(order);
+  }
+
+  /** Marks a pending order paid and records the transition, in one transaction. */
+  async pay(id: string, dto: PayOrderDto): Promise<OrderResponse> {
+    return this.dataSource.transaction(async (manager) => {
+      const order = await manager.findOne(Order, { where: { id }, lock: { mode: "pessimistic_write" } });
+      if (!order) throw new NotFoundException("Order not found");
+      if (order.status !== OrderStatus.Pending) throw new ConflictException("Only a pending order can be paid");
+      order.status = OrderStatus.Paid;
+      order.paidAt = new Date();
+      await manager.save(order);
+      await manager.insert(OrderStatusHistory, {
+        orderId: id,
+        fromStatus: OrderStatus.Pending,
+        toStatus: OrderStatus.Paid,
+        paymentRef: dto.paymentRef,
+      });
+      order.customer = await manager.findOneByOrFail(Customer, { id: order.customerId });
+      return OrderResponse.from(order);
+    });
+  }
+
+  /** An order has at most one row per status transition, so the list is short and needs no paging. */
+  async history(id: string): Promise<{ data: StatusChangeResponse[] }> {
+    const exists = await this.orders.exists({ where: { id } });
+    if (!exists) throw new NotFoundException("Order not found");
+    const rows = await this.dataSource.getRepository(OrderStatusHistory).find({
+      select: { fromStatus: true, toStatus: true, paymentRef: true, createdAt: true },
+      where: { orderId: id },
+      order: { createdAt: "ASC" },
+    });
+    return { data: rows.map(StatusChangeResponse.from) };
   }
 
   /** Creates the order and its lines and reserves stock, all or nothing. */
