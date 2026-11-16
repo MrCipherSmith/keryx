@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.4.31] - 2026-11-16
+
+### Fixed
+
+- **`keryx update` installs the current rules even when index.md was edited.** A hand-edited `index.md` or `routing.md` written by an older keryx used to stop the whole update ("published nothing"), so the project kept the previous release's rules and skills. Now only that pair is left as it is; rules, skills and the other service files install, and the run still exits 1 and names `--keep-existing` / `--accept-version` for the pair.
+
 ## [0.4.30] - 2026-11-16
 
 ### Changed
