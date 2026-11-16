@@ -4,6 +4,7 @@
 // Read-only over the project, no model, no network, and it never refuses or
 // blocks any other command.
 
+import { rejectUnknownFlags } from "../lib/args";
 import {
   buildIntentIndex,
   buildOpenReport,
@@ -43,17 +44,14 @@ export function readOpenIntents(projectRoot: string) {
 
 const FLAGS = ["--json"] as const;
 
-function rejectUnknownFlags(command: string, args: readonly string[]): void {
-  const unknown = args.filter((argument) => argument.startsWith("-") && !FLAGS.includes(argument as (typeof FLAGS)[number]));
-  if (unknown.length > 0) {
-    throw new Error(`Unknown option${unknown.length > 1 ? "s" : ""} for \`keryx product ${command}\`: ${unknown.join(", ")}. Accepted: ${FLAGS.join(", ")}.`);
-  }
+function rejectBadArguments(command: string, args: readonly string[]): void {
+  rejectUnknownFlags(args, FLAGS, `product ${command}`, { shortFlags: true });
   const extra = args.filter((argument) => !argument.startsWith("-"));
   if (extra.length > 0) throw new Error(`\`keryx product ${command}\` takes no arguments (got ${extra.join(" ")}).`);
 }
 
 async function runIndex(args: string[]): Promise<void> {
-  rejectUnknownFlags("index", args);
+  rejectBadArguments("index", args);
   const cwd = process.cwd();
   const index = await buildIntentIndex(cwd);
   const file = await writeIntentIndex(cwd, index);
@@ -63,7 +61,7 @@ async function runIndex(args: string[]): Promise<void> {
 }
 
 async function runOpen(args: string[]): Promise<void> {
-  rejectUnknownFlags("open", args);
+  rejectBadArguments("open", args);
   const loaded = await loadOpenReport(process.cwd());
   if (!loaded.ok) {
     console.error(loaded.message);

@@ -70,7 +70,9 @@ describe("the product module calls no model", () => {
   });
 
   test("the command adapter reaches the module only through its facade", async () => {
+    // Besides the facade, the adapter may import only the shared argv parser
+    // (src/lib/args.ts), which is pure string handling and calls no model.
     const adapter = await readFile(path.join(PRODUCT_DIR, "..", "commands", "product.ts"), "utf8");
-    expect(importSpecifiers(adapter)).toEqual(["../product/service"]);
+    expect(importSpecifiers(adapter)).toEqual(["../lib/args", "../product/service"]);
   });
 });

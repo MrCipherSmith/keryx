@@ -21,7 +21,7 @@
 
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { optionValue, optionValues } from "../lib/args";
+import { optionValue, optionValues, rejectUnknownFlags } from "../lib/args";
 import {
   MODEL_LABEL,
   answerDecision,
@@ -51,16 +51,6 @@ const REPORT_FLAGS = ["--json", "--line", "--exclude-legacy"] as const;
 const RATE_FLAGS = ["--note", "--blind-model", "--model", "--model-cmd", "--since", "--id", "--limit", "--json"] as const;
 const EXPORT_FLAGS = ["--since", "--format", "--exclude-legacy"] as const;
 const IMPORT_FLAGS = ["--dry-run", "--json"] as const;
-
-function rejectUnknownFlags(sub: string, args: readonly string[], accepted: readonly string[]): void {
-  const unknown = args
-    .filter((argument) => argument.startsWith("--"))
-    .map((argument) => argument.split("=")[0] as string)
-    .filter((name) => !accepted.includes(name));
-  if (unknown.length > 0) {
-    throw new Error(`Unknown option${unknown.length > 1 ? "s" : ""} for \`keryx decisions ${sub}\`: ${[...new Set(unknown)].join(", ")}. Accepted: ${accepted.join(", ")}.`);
-  }
-}
 
 /** The positional id: the first argument that is not a flag or a flag's value. */
 function positionalId(args: readonly string[]): string | undefined {
@@ -96,7 +86,7 @@ function parseOptions(args: string[]): DecisionOption[] {
 }
 
 async function runOpen(args: string[]): Promise<void> {
-  rejectUnknownFlags("open", args, OPEN_FLAGS);
+  rejectUnknownFlags(args, OPEN_FLAGS, "decisions open", { valueFlags: OPEN_FLAGS.filter((flag) => flag !== "--json") });
   const question = optionValue(args, "--question");
   if (question === undefined || question.trim().length === 0) throw new Error("keryx decisions open needs --question \"<text>\"");
   const options = parseOptions(args);
@@ -140,7 +130,7 @@ async function runAnswer(args: string[]): Promise<void> {
   const id = positionalId(args);
   if (id === undefined) throw new Error("keryx decisions answer needs the decision id: keryx decisions answer <id> --choice <id>");
   const rest = args.slice(1);
-  rejectUnknownFlags("answer", rest, ANSWER_FLAGS);
+  rejectUnknownFlags(rest, ANSWER_FLAGS, "decisions answer", { valueFlags: ["--choice", "--reason"] });
   const choice = optionValue(rest, "--choice");
   if (choice === undefined) throw new Error("keryx decisions answer needs --choice <option id>");
   const result = await answerDecision({ cwd: process.cwd(), id, choice, other: rest.includes("--other") });
@@ -169,7 +159,7 @@ async function runReason(args: string[]): Promise<void> {
   const id = positionalId(args);
   if (id === undefined) throw new Error('keryx decisions reason needs the decision id: keryx decisions reason <id> --text "<reason>"');
   const rest = args.slice(1);
-  rejectUnknownFlags("reason", rest, REASON_FLAGS);
+  rejectUnknownFlags(rest, REASON_FLAGS, "decisions reason", { valueFlags: ["--text"] });
   const recorded = await recordReason(process.cwd(), id, optionValue(rest, "--text"));
   if (rest.includes("--json")) {
     console.log(JSON.stringify({ id, recorded }, null, 2));
@@ -182,7 +172,7 @@ async function runImport(args: string[]): Promise<void> {
   const file = positionalId(args);
   if (file === undefined) throw new Error("keryx decisions import needs the file: keryx decisions import <file.jsonl> [--dry-run] [--json]");
   const rest = args.slice(1);
-  rejectUnknownFlags("import", rest, IMPORT_FLAGS);
+  rejectUnknownFlags(rest, IMPORT_FLAGS, "decisions import");
   let text: string;
   try {
     text = await readFile(path.resolve(process.cwd(), file), "utf8");
@@ -207,7 +197,7 @@ function parseSince(args: readonly string[], sub: string): Date | undefined {
 }
 
 async function runRate(args: string[]): Promise<void> {
-  rejectUnknownFlags("rate", args, RATE_FLAGS);
+  rejectUnknownFlags(args, RATE_FLAGS, "decisions rate", { valueFlags: ["--note", "--model", "--model-cmd", "--since", "--id", "--limit"] });
   const json = args.includes("--json");
   if (args.includes("--blind-model")) {
     const model = optionValue(args, "--model");
@@ -243,7 +233,7 @@ async function runRate(args: string[]): Promise<void> {
 }
 
 async function runExport(args: string[]): Promise<void> {
-  rejectUnknownFlags("export", args, EXPORT_FLAGS);
+  rejectUnknownFlags(args, EXPORT_FLAGS, "decisions export", { valueFlags: ["--since", "--format"] });
   const format = optionValue(args, "--format") ?? "jsonl";
   if (format !== "jsonl" && format !== "json") throw new Error(`keryx decisions export: --format must be jsonl or json, not "${format}"`);
   const { rows, summary } = await loadExportWithSummary(process.cwd(), { since: parseSince(args, "export"), excludeLegacy: args.includes("--exclude-legacy") });
@@ -253,7 +243,7 @@ async function runExport(args: string[]): Promise<void> {
 }
 
 async function runReport(args: string[]): Promise<void> {
-  rejectUnknownFlags("report", args, REPORT_FLAGS);
+  rejectUnknownFlags(args, REPORT_FLAGS, "decisions report");
   const options = { excludeLegacy: args.includes("--exclude-legacy") };
   if (args.includes("--line") && args.includes("--json")) throw new Error("keryx decisions report: --line and --json cannot be combined");
   if (args.includes("--line")) {

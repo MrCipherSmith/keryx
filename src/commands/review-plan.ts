@@ -135,7 +135,7 @@ export async function runPlan(args: string[], deps: PlanDeps): Promise<void> {
     "start",
     "--target",
     kind,
-    "--ref",
+    "--target-ref",
     target,
     ...(head === undefined ? [] : ["--head", head]),
     ...(base === undefined ? [] : ["--base", base]),

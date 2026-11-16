@@ -93,7 +93,7 @@ const readPlan = async (): Promise<ReviewPlan> => JSON.parse(await readFile(path
 test("a delta round: the steps run in order, plan.json carries the round, both slice kinds, the roster and the estimate, and nothing is dispatched", async () => {
   await runPlan(["--target", "https://github.com/o/r/pull/7", "--head", HEAD, "--host", "claude-code", "--json"], deps({ round: deltaRound(), slices: SPLIT }));
   expect(calls.map((call) => call[0])).toEqual(["start", "scope", "blast-radius", "slice", "required"]);
-  expect(calls[0]).toEqual(["start", "--target", "pr", "--ref", "https://github.com/o/r/pull/7", "--head", HEAD, "--host", "claude-code"]);
+  expect(calls[0]).toEqual(["start", "--target", "pr", "--target-ref", "https://github.com/o/r/pull/7", "--head", HEAD, "--host", "claude-code"]);
   // A delta round is scoped and sliced over the previous reviewed head, whatever --ref said; slice reads the range from round.json.
   // --head pins the scope too: the diff ends at that commit, not at the working tree.
   expect(calls[1]).toEqual(["scope", "--json", "--ref", BASE, "--head", HEAD]);
@@ -118,7 +118,7 @@ test("a delta round: the steps run in order, plan.json carries the round, both s
 test("a first round: --ref is the base for scope and slice, no kinds, and the human summary is short", async () => {
   await runPlan(["--target", "feature/x", "--ref", "origin/main"], deps({ round: deltaRound({ mode: "first", round: 1, previous: null, range: { base: "c".repeat(40), head: HEAD }, fixHunks: [], newHunks: [] }), slices: [entry("slice-01", ["src/a/a.ts"], { roles: ["review-logic"], depth: "deep" })] }));
   // --ref is also the base `review start` reads the merge-base from (a merged PR's merge-base with origin/main is its head).
-  expect(calls[0]).toEqual(["start", "--target", "branch", "--ref", "feature/x", "--base", "origin/main"]);
+  expect(calls[0]).toEqual(["start", "--target", "branch", "--target-ref", "feature/x", "--base", "origin/main"]);
   expect(calls[1]).toEqual(["scope", "--json", "--ref", "origin/main"]);
   expect(calls[3]).toEqual(["slice", "--package", pkg, "--ref", "origin/main", "--json"]);
   const plan = await readPlan();
@@ -152,7 +152,7 @@ test("a failing step stops the plan with the step named; nothing is written and 
 
 test("--memory-query and --unattended reach `review start` as given (start keeps its own terminal gate for --unattended)", async () => {
   await runPlan(["--target", "feature/x", "--ref", "origin/main", "--memory-query", "review rounds", "--unattended"], deps({ slices: [] }));
-  expect(calls[0]).toEqual(["start", "--target", "branch", "--ref", "feature/x", "--base", "origin/main", "--memory-query", "review rounds", "--unattended"]);
+  expect(calls[0]).toEqual(["start", "--target", "branch", "--target-ref", "feature/x", "--base", "origin/main", "--memory-query", "review rounds", "--unattended"]);
   expect(PLAN_FLAGS).toEqual(expect.arrayContaining(["--memory-query", "--unattended"]));
 });
 

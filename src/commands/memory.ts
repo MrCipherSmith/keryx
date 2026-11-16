@@ -8,7 +8,7 @@ import { renderSearchMarkdown } from "../memory/search";
 import { loadEmbeddingIndex } from "../memory/service";
 import { renderMemorySearchReport } from "../memory/report";
 import { computeLifecycle, type LifecycleResult } from "../memory/lifecycle";
-import { optionValue } from "../lib/args";
+import { optionValue, rejectUnknownFlags } from "../lib/args";
 import { shellQuote } from "../lib/shell-quote";
 import { memoryCliCommand, recordProcessCall } from "../review/orchestrator-log";
 import {
@@ -190,7 +190,17 @@ async function detectMemoryStoreUnreadable(cwd: string): Promise<string | null> 
   return null;
 }
 
+const SEARCH_FLAGS = ["--module", "--entity", "--status", "--limit", "--as-of", "--class", "--semantic", "--json", "--save-report"] as const;
+
+const SEARCH_USAGE =
+  'Usage: keryx memory search "<query>" [--module <m>] [--entity <e>] [--status <s>] [--limit <n>] [--as-of <date>] [--class <c>] [--semantic] [--json] [--save-report]';
+
 async function runSearch(args: string[]): Promise<void> {
+  if (args.includes("--help") || args.includes("-h")) {
+    console.log(SEARCH_USAGE);
+    return;
+  }
+  rejectUnknownFlags(args, SEARCH_FLAGS, "memory search", { valueFlags: ["--module", "--entity", "--status", "--limit", "--as-of", "--class"] });
   const query = positionalArgs(args)[0] ?? "";
   if (!query) {
     console.error('Usage: keryx memory search "<query>" [--module <m>] [--entity <e>] [--status <s>] [--limit <n>]');

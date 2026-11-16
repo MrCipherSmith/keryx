@@ -4,7 +4,7 @@
 // Read-only: it never re-runs a gate, never calls a model or a network
 // service, and the only files it writes are its own report artifacts.
 
-import { optionValue } from "../lib/args";
+import { optionValue, rejectUnknownFlags } from "../lib/args";
 import {
   buildGovernanceReport,
   readLatestGovernanceReport,
@@ -14,20 +14,6 @@ import {
 } from "../governance/service";
 
 const REPORT_FLAGS = ["--flow", "--owner", "--since", "--until", "--all-projects", "--json"] as const;
-
-function rejectUnknownFlags(args: readonly string[]): void {
-  const unknown = args
-    .filter((argument) => argument.startsWith("--"))
-    .map((argument) => argument.split("=")[0] as string)
-    .filter((name) => !REPORT_FLAGS.includes(name as (typeof REPORT_FLAGS)[number]));
-  if (unknown.length > 0) {
-    throw new Error(
-      `Unknown option${unknown.length > 1 ? "s" : ""} for \`keryx governance report\`: ${[...new Set(unknown)].join(
-        ", ",
-      )}. Accepted: ${REPORT_FLAGS.join(", ")}.`,
-    );
-  }
-}
 
 function parseFilters(args: readonly string[]): GovernanceFilters {
   return {
@@ -39,7 +25,7 @@ function parseFilters(args: readonly string[]): GovernanceFilters {
 }
 
 async function runReport(args: string[]): Promise<void> {
-  rejectUnknownFlags(args);
+  rejectUnknownFlags(args, REPORT_FLAGS, "governance report", { valueFlags: ["--flow", "--owner", "--since", "--until"] });
   const filters = parseFilters(args);
   const allProjects = args.includes("--all-projects");
   const asJson = args.includes("--json");

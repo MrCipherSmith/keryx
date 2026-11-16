@@ -1,0 +1,85 @@
+{
+  "schema": 1,
+  "for": "implement",
+  "files": [
+    "src/commands/memory.ts",
+    "src/commands/modules.ts",
+    "src/commands/skills.ts"
+  ],
+  "entries": [
+    {
+      "kind": "rule",
+      "source": "bundled",
+      "path": ".metaproject/rules/core/tdd-workflow.mdc",
+      "sha256": "2e0cf240967fb4124c5e932cc428eae119c601d75f02b0f98bbc15ca48d5f84b",
+      "bytes": 4428,
+      "reason": "bundled-default",
+      "tier": "must_read"
+    },
+    {
+      "kind": "rule",
+      "source": "bundled",
+      "path": ".metaproject/rules/core/error-handling.mdc",
+      "sha256": "628a63ecf5a007d527197545e08eeb9aba7c52bc6b62e684d0690e56f84973ca",
+      "bytes": 5462,
+      "reason": "bundled-default",
+      "tier": "must_read"
+    },
+    {
+      "kind": "rule",
+      "source": "bundled",
+      "path": ".metaproject/rules/core/solid-principles.mdc",
+      "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796",
+      "bytes": 7159,
+      "reason": "bundled-default",
+      "tier": "must_read"
+    },
+    {
+      "kind": "rule",
+      "source": "bundled",
+      "path": ".metaproject/rules/core/security-baseline.mdc",
+      "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee",
+      "bytes": 2523,
+      "reason": "when-relevant",
+      "tier": "on_demand",
+      "description": "Security baseline standard shared by code writers and reviewers, with the severities reviewers use: no secrets in code, fail-fast env validation, parameterized queries, input validation at boundaries, dependency hygiene. Use when writing or reviewing code that handles user input, credentials, or external data."
+    },
+    {
+      "kind": "rule",
+      "source": "bundled",
+      "path": ".metaproject/rules/core/async-patterns.mdc",
+      "sha256": "7cc3587a3b478ae984e5d831948f6112c950e273ec618b736d318548c108e4ea",
+      "bytes": 2447,
+      "reason": "content:src/commands/memory.ts",
+      "tier": "must_read",
+      "description": "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no event-loop blocking. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
+    },
+    {
+      "kind": "rule",
+      "source": "bundled",
+      "path": ".metaproject/rules/core/concurrency-patterns.mdc",
+      "sha256": "8fc3e3f16c18e8c4df73b79791f1c0d4aad0e017f18c942a44e081873aee3aae",
+      "bytes": 3160,
+      "reason": "when-relevant",
+      "tier": "on_demand",
+      "description": "Concurrency standard for the CLI and for several sessions sharing one checkout, shared by code writers and reviewers, with the severities reviewers use: a lock file is taken by exclusive create, files are written via temp file and rename, one write per JSONL record, child-process fan-out is bounded, child output is capped. Use when writing or reviewing code that touches shared state files, lock files, JSONL logs or spawned child processes."
+    },
+    {
+      "kind": "rule",
+      "source": "bundled",
+      "path": ".metaproject/rules/core/cli-interface-design.mdc",
+      "sha256": "e6712b9977a512488e53215f8eb7806e63f38a0437e954b4bfedca1b228a7043",
+      "bytes": 5195,
+      "reason": "file:src/commands/memory.ts",
+      "tier": "must_read",
+      "description": "keryx CLI decisions: exit codes (0 clean, 1 found something, 2 cannot tell), machine-readable output on stdout and diagnostics on stderr, versioned --json shapes, unknown flags refused, and flags renamed by alias with one notice or removed by refusing them by name. Use when adding, changing, or retiring a command, subcommand, flag, or --json payload that people already run."
+    }
+  ],
+  "budget": {
+    "limitBytes": 131072,
+    "usedBytes": 0,
+    "exceeded": false,
+    "limitSource": "default"
+  },
+  "warnings": []
+}

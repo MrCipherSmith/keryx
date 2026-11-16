@@ -1,0 +1,366 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "494",
+  "slug": "cli-interface-gaps-from-issue-1198-share",
+  "title": "CLI interface gaps from issue 1198: shared unknown-flag refusal, versioned skills verify JSON, --ref alias notice",
+  "status": "in-progress",
+  "createdAt": "2026-11-15T22:39:27.802Z",
+  "updatedAt": "2026-11-15T23:34:18.518Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:6eacfdd456d0b432ca93955074238826c4e48a3ce613ec248e7894955df80d8d",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-11-15T23:34:17.289Z",
+      "note": "cli-unknown-flags.test.ts pass (66/66 targeted run, e03a6479a)"
+    },
+    "AC2": {
+      "at": "2026-11-15T23:34:17.510Z",
+      "note": "ctx rg: only src/lib/args.ts:124 defines rejectUnknownFlags"
+    },
+    "AC3": {
+      "at": "2026-11-15T23:34:17.717Z",
+      "note": "skills.verify-json.test.ts pass"
+    },
+    "AC4": {
+      "at": "2026-11-15T23:34:17.921Z",
+      "note": "review-ref-alias.test.ts pass"
+    },
+    "AC5": {
+      "at": "2026-11-15T23:34:18.125Z",
+      "note": "bun test src/commands: 4710 pass, 28 fail = 26 research (fail on main) + 2 init hook tests caused by an empty GIT_TEMPLATE_DIR; both pass without it"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "context gathered in the flow package and resolve-context output"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "split into concrete tasks T5, T6, T7"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "tests added in T5-T7 and the review fix round e03a6479a"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "9-lens review round; 1 major + minors fixed in e03a6479a"
+    },
+    {
+      "id": "T5",
+      "title": "Shared unknown-flag refusal helper; migrate six copies; guard modules/skills/memory",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-15T22:42:42.824Z",
+            "outcome": "started",
+            "detail": "494-T5 task-implementer"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Versioned skills verify --json envelopes",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-15T23:01:07.610Z",
+            "outcome": "started",
+            "detail": "494-T6 task-implementer"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Stderr notice for the ref alias of target-ref in keryx review",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-15T23:01:08.087Z",
+            "outcome": "started",
+            "detail": "494-T7 task-implementer"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-11-15T22:39:27.802Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-11-15T22:42:18.512Z",
+      "event": "task-added",
+      "detail": "T5: Shared unknown-flag refusal helper; migrate six copies; guard modules/skills/memory"
+    },
+    {
+      "at": "2026-11-15T22:42:19.107Z",
+      "event": "task-added",
+      "detail": "T6: Versioned skills verify --json envelopes"
+    },
+    {
+      "at": "2026-11-15T22:42:20.368Z",
+      "event": "frozen",
+      "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-11-15T22:42:21.232Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-11-15T22:42:40.341Z",
+      "event": "task-added",
+      "detail": "T7: Stderr notice for the ref alias of target-ref in keryx review"
+    },
+    {
+      "at": "2026-11-15T22:42:41.296Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-11-15T22:42:42.071Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-11-15T22:42:42.824Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 494-T5 task-implementer"
+    },
+    {
+      "at": "2026-11-15T23:01:07.137Z",
+      "event": "task-done",
+      "detail": "T5: Shared unknown-flag refusal helper; migrate six copies; guard modules/skills/memory"
+    },
+    {
+      "at": "2026-11-15T23:01:07.610Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 494-T6 task-implementer"
+    },
+    {
+      "at": "2026-11-15T23:01:08.087Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 494-T7 task-implementer"
+    },
+    {
+      "at": "2026-11-15T23:10:28.144Z",
+      "event": "task-done",
+      "detail": "T7: Stderr notice for the ref alias of target-ref in keryx review"
+    },
+    {
+      "at": "2026-11-15T23:11:03.633Z",
+      "event": "task-done",
+      "detail": "T6: Versioned skills verify --json envelopes"
+    },
+    {
+      "at": "2026-11-15T23:34:17.290Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: cli-unknown-flags.test.ts pass (66/66 targeted run, e03a6479a) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-15T23:34:17.510Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: ctx rg: only src/lib/args.ts:124 defines rejectUnknownFlags (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-15T23:34:17.717Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: skills.verify-json.test.ts pass (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-15T23:34:17.921Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: review-ref-alias.test.ts pass (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-15T23:34:18.125Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: bun test src/commands: 4710 pass, 28 fail = 26 research (fail on main) + 2 init hook tests caused by an empty GIT_TEMPLATE_DIR; both pass without it (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-15T23:34:18.322Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-11-15T23:34:18.518Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/commands/cli-unknown-flags.test.ts"
+    },
+    "AC2": {
+      "kind": "invariant",
+      "check": "keryx ctx rg -n \"function rejectUnknown(Flags|Options)\" src"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/commands/skills.verify-json.test.ts"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/commands/review-ref-alias.test.ts"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/commands"
+    }
+  },
+  "signatures": [
+    {
+      "at": "2026-11-15T23:34:17.289Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:6eacfdd456d0b432ca93955074238826c4e48a3ce613ec248e7894955df80d8d"
+    },
+    {
+      "at": "2026-11-15T23:34:17.510Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:6eacfdd456d0b432ca93955074238826c4e48a3ce613ec248e7894955df80d8d"
+    },
+    {
+      "at": "2026-11-15T23:34:17.717Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:6eacfdd456d0b432ca93955074238826c4e48a3ce613ec248e7894955df80d8d"
+    },
+    {
+      "at": "2026-11-15T23:34:17.921Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:6eacfdd456d0b432ca93955074238826c4e48a3ce613ec248e7894955df80d8d"
+    },
+    {
+      "at": "2026-11-15T23:34:18.125Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:6eacfdd456d0b432ca93955074238826c4e48a3ce613ec248e7894955df80d8d"
+    }
+  ]
+}

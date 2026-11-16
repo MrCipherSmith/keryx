@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { closeSync, openSync } from "node:fs";
 import { mkdir, readdir, readFile } from "node:fs/promises";
 import path, { join } from "node:path";
-import { optionValue, optionValues } from "../lib/args";
+import { optionValue, optionValues, rejectUnknownFlags } from "../lib/args";
 import { pathExists, toPosix, writeFileAtomic } from "../lib/fs";
 import { assertGitRevision, revisionOperand } from "../lib/git-revision";
 // Through the security facade, not `security/redact` directly — same
@@ -644,17 +644,10 @@ function flagTokens(args: readonly string[]): Array<{ name: string; value: strin
   return tokens;
 }
 
-function rejectUnknownFlags(args: readonly string[], allowed: readonly string[], usage: string): void {
-  const unknown = flagTokens(args)
-    .map((token) => token.name)
-    .filter((name) => !allowed.includes(name));
-  if (unknown.length > 0) {
-    throw new Error(
-      `Unknown option${unknown.length > 1 ? "s" : ""} for \`keryx review ${usage}\`: ${[...new Set(unknown)].join(
-        ", ",
-      )}. Accepted: ${allowed.join(", ")}. Refused rather than ignored — a flag that is silently dropped writes nothing and reports success.`,
-    );
-  }
+/** The shared unknown-flag refusal, scoped to `keryx review <usage>`. */
+function rejectReviewFlags(args: readonly string[], allowed: readonly string[], usage: string): void {
+  // Review flags were judged by name only before the shared helper, so every one keeps its `--name=value` spelling.
+  rejectUnknownFlags(args, allowed, `review ${usage}`, { valueFlags: allowed });
 }
 
 /** Test seam: whether a person is at a terminal. Default: stdin and stdout are both TTYs. */
@@ -937,11 +930,11 @@ export async function reviewCommand(args: string[], seams?: ReviewCommandSeams):
       return;
     }
     if (command === "plan") {
-      await runPlan(args.slice(1), { rejectUnknownFlags, run: (stepArgs) => captureReviewStep(stepArgs, seams) });
+      await runPlan(args.slice(1), { rejectUnknownFlags: rejectReviewFlags, run: (stepArgs) => captureReviewStep(stepArgs, seams) });
       return;
     }
     if (command === "plan-eval") {
-      await runPlanEval(args.slice(1), { rejectUnknownFlags });
+      await runPlanEval(args.slice(1), { rejectUnknownFlags: rejectReviewFlags });
       return;
     }
     if (command === "mutate") {
@@ -961,7 +954,7 @@ export async function reviewCommand(args: string[], seams?: ReviewCommandSeams):
       return;
     }
     if (command === "import") {
-      rejectUnknownFlags(args.slice(1), IMPORT_FLAGS, "import");
+      rejectReviewFlags(args.slice(1), IMPORT_FLAGS, "import");
       await runImportReviewers(args.slice(1));
       return;
     }
@@ -1089,16 +1082,27 @@ export async function refreshCreatedPackageLayers(
   }
 }
 
+/**
+ * The target ref of `attach|start|ingest`. `--target-ref` is the preferred
+ * spelling; the older `--ref` alias keeps working and, as before the alias was
+ * documented, wins when both are given.
+ */
+export function resolveTargetRef(args: readonly string[]): string | undefined {
+  return optionValue(args as string[], "--ref") ?? optionValue(args as string[], "--target-ref");
+}
+
 async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: ReviewCommandSeams = {}): Promise<void> {
-  rejectUnknownFlags(args, CREATE_FLAGS, mode === "ingest" ? "ingest" : mode === "review-flow" ? "start" : "attach");
+  rejectReviewFlags(args, CREATE_FLAGS, mode === "ingest" ? "ingest" : mode === "review-flow" ? "start" : "attach");
   if (mode !== "review-flow" && (args.includes("--style") || flagTokens(args).some((token) => token.name === "--with-role"))) {
     throw new Error(`--style and --with-role belong to \`keryx review start\`, which records the roles a round runs; \`${mode === "ingest" ? "ingest" : "attach"}\` takes a round already run. Refused rather than ignored.`);
   }
   const optIn = optInRolesFromArgs(args);
   const targetKind = targetKindFromArgs(mode, args);
-  const targetRef = optionValue(args, "--ref") ?? optionValue(args, "--target-ref");
+  const targetRef = resolveTargetRef(args);
+  // `--target-ref` is the preferred spelling; `--ref` keeps working (and still wins) with one stderr notice per invocation.
+  if (optionValue(args, "--ref") !== undefined) console.error("keryx review: --ref is an alias of --target-ref; prefer --target-ref.");
   if (!targetRef) {
-    throw new Error("Usage: keryx review <attach|start|ingest> --target <kind> --ref <ref>");
+    throw new Error("Usage: keryx review <attach|start|ingest> --target <kind> --target-ref <ref>");
   }
   const reviewers = optionValue(args, "--reviewers")?.split(",").map((item) => item.trim()).filter(Boolean);
   const graphTimeout = parseGraphTimeout(optionValue(args, "--graph-timeout"));
@@ -1470,7 +1474,7 @@ async function resolveCreateHead(
  * a non-zero exit, which is the only signal an orchestrator reliably notices.
  */
 async function runBudget(args: string[]): Promise<void> {
-  rejectUnknownFlags(args, BUDGET_FLAGS, "budget");
+  rejectReviewFlags(args, BUDGET_FLAGS, "budget");
   const spend = evaluateSpendCap(parseMoney(optionValue(args, "--spent"), "--spent"), {
     ceiling: parseMoney(optionValue(args, "--ceiling"), "--ceiling"),
   });
@@ -1739,7 +1743,7 @@ async function runTier(args: string[]): Promise<void> {
     printTierHelp();
     return;
   }
-  rejectUnknownFlags(args, TIER_FLAGS, "tier");
+  rejectReviewFlags(args, TIER_FLAGS, "tier");
   const signals = tierSignalsFromArgs(args);
   const { session, source } = sessionModelFromArgs(args);
   const catalog = await tierCatalog(args, session);
@@ -2042,7 +2046,7 @@ async function runComments(args: string[], seams?: ReviewCommandSeams): Promise<
 }
 
 async function runCommentsCollect(args: string[]): Promise<void> {
-  rejectUnknownFlags(args, COMMENTS_COLLECT_FLAGS, "comments collect");
+  rejectReviewFlags(args, COMMENTS_COLLECT_FLAGS, "comments collect");
   const repo = requiredOption(args, "--repo", "comments collect");
   const number = requiredInteger(args, "--pr");
   const round = parseNonNegativeInteger(optionValue(args, "--round"), "--round") ?? 1;
@@ -2180,7 +2184,7 @@ export async function commentsReplyPass(args: string[], dryRunOverride?: boolean
 }
 
 async function runCommentsReply(args: string[], seams?: ReviewCommandSeams): Promise<void> {
-  rejectUnknownFlags(args, COMMENTS_REPLY_FLAGS, "comments reply");
+  rejectReviewFlags(args, COMMENTS_REPLY_FLAGS, "comments reply");
   const refused = commentsReplyGate(args, seams?.isTerminal ?? (() => process.stdin.isTTY === true && process.stdout.isTTY === true));
   if (refused !== undefined) throw new Error(refused);
   const { result, cwd, repo, number, state, dryRun } = await commentsReplyPass(args);
@@ -2408,7 +2412,7 @@ async function refuseWithoutCiTriageGate(cwd: string): Promise<boolean> {
 export const MAX_JOBS_TRIAGED = 10;
 
 async function runCiTriage(args: string[]): Promise<void> {
-  rejectUnknownFlags(args, CI_TRIAGE_FLAGS, "ci-triage");
+  rejectReviewFlags(args, CI_TRIAGE_FLAGS, "ci-triage");
   const cwd = process.cwd();
   const evalFile = optionValue(args, "--eval");
   if (evalFile !== undefined) {
@@ -3075,7 +3079,7 @@ async function scoreHunkClauses(
 }
 
 async function runConform(args: string[]): Promise<void> {
-  rejectUnknownFlags(args, CONFORM_FLAGS, "conform");
+  rejectReviewFlags(args, CONFORM_FLAGS, "conform");
   const cwd = process.cwd();
   const refPath = requiredOption(args, "--ref", "conform");
   const prArg = optionValue(args, "--pr");
@@ -3431,7 +3435,7 @@ async function runLearn(args: string[]): Promise<void> {
     printLearnHelp();
     return;
   }
-  rejectUnknownFlags(args, LEARN_FLAGS, "learn --pr <n> | --reviewer <id>");
+  rejectReviewFlags(args, LEARN_FLAGS, "learn --pr <n> | --reviewer <id>");
   // R2-F7: parse the verb's own args ONCE with `parseLearnArgs` — the same
   // parser `--reviewer` mode already used below it — instead of re-deriving
   // `--dry-run`/`--json` with `args.includes` and `--reviewer` with
@@ -3605,7 +3609,7 @@ function counts(state: PrCommentState, selection: LearningSelection): Record<str
  * escalates, and the escalation does not consult the remaining round budget.
  */
 async function runLoop(args: string[]): Promise<void> {
-  rejectUnknownFlags(args, LOOP_FLAGS, "loop --flow <id>");
+  rejectReviewFlags(args, LOOP_FLAGS, "loop --flow <id>");
   const flowRef = optionValue(args, "--flow") ?? args.find((item) => !item.startsWith("--"));
   if (!flowRef) {
     throw new Error("Usage: keryx review loop --flow <flow-id> [--task <Tn>]");
@@ -3662,7 +3666,7 @@ async function runLoop(args: string[]): Promise<void> {
  * unchanged.
  */
 export async function runReviewers(args: string[], deps: CollectReviewersDeps = {}): Promise<void> {
-  rejectUnknownFlags(args, REVIEWERS_FLAGS, "reviewers");
+  rejectReviewFlags(args, REVIEWERS_FLAGS, "reviewers");
   const inventory = await collectReviewers(process.cwd(), deps);
 
   if (args.includes("--json")) {
@@ -3680,7 +3684,7 @@ export async function runReviewers(args: string[], deps: CollectReviewersDeps = 
 }
 
 async function runRequired(args: string[]): Promise<void> {
-  rejectUnknownFlags(args, REQUIRED_FLAGS, "required");
+  rejectReviewFlags(args, REQUIRED_FLAGS, "required");
   const mode = optionValue(args, "--mode") ?? "all";
   if (mode !== "all" && mode !== "diff") throw new Error('--mode must be "all" or "diff"');
   const placed = guardReviewPaths("required", args);
@@ -3746,7 +3750,7 @@ async function runRequired(args: string[]): Promise<void> {
 }
 
 async function runEstimate(args: string[], seams?: ReviewCommandSeams): Promise<void> {
-  rejectUnknownFlags(args, ESTIMATE_FLAGS, "estimate");
+  rejectReviewFlags(args, ESTIMATE_FLAGS, "estimate");
   const placed = guardReviewPaths("estimate", args);
   const packageDir = placed("--package");
   if (packageDir === undefined) throw new Error("estimate needs --package <review-dir>");
@@ -3769,7 +3773,7 @@ async function runEstimate(args: string[], seams?: ReviewCommandSeams): Promise<
 }
 
 async function runCompareReference(args: string[]): Promise<void> {
-  rejectUnknownFlags(args, COMPARE_REFERENCE_FLAGS, "compare-reference");
+  rejectReviewFlags(args, COMPARE_REFERENCE_FLAGS, "compare-reference");
   const reference = optionValue(args, "--reference");
   const packageArg = optionValue(args, "--package");
   if (reference === undefined || packageArg === undefined) throw new Error("compare-reference needs --reference <report.md> and --package <review-dir>");
@@ -3781,7 +3785,7 @@ async function runCompareReference(args: string[]): Promise<void> {
 }
 
 async function runMutate(args: string[]): Promise<void> {
-  rejectUnknownFlags(args, MUTATE_FLAGS, "mutate");
+  rejectReviewFlags(args, MUTATE_FLAGS, "mutate");
   const testCommand = optionValue(args, "--test");
   const packageArg = optionValue(args, "--package");
   if (testCommand === undefined || packageArg === undefined) throw new Error("mutate needs --test \"<command>\" and --package <review-dir>");
@@ -3834,7 +3838,7 @@ async function readCiChecks(args: string[], repo: string, number: number): Promi
 }
 
 async function runContextCollect(args: string[]): Promise<void> {
-  rejectUnknownFlags(args, CONTEXT_COLLECT_FLAGS, "context-collect");
+  rejectReviewFlags(args, CONTEXT_COLLECT_FLAGS, "context-collect");
   const repo = requiredOption(args, "--repo", "context-collect");
   const number = requiredInteger(args, "--pr");
   const packageArg = optionValue(args, "--package");
@@ -3856,7 +3860,7 @@ async function runContextCollect(args: string[]): Promise<void> {
 }
 
 async function runSeverityAudit(args: string[]): Promise<void> {
-  rejectUnknownFlags(args, SEVERITY_AUDIT_FLAGS, "severity-audit");
+  rejectReviewFlags(args, SEVERITY_AUDIT_FLAGS, "severity-audit");
   const packageArg = optionValue(args, "--package");
   if (packageArg === undefined) throw new Error("severity-audit needs --package <review-dir>");
   const result = await auditPackage(path.resolve(packageArg), { dryRun: args.includes("--dry-run") });
@@ -3870,7 +3874,7 @@ async function runSeverityAudit(args: string[]): Promise<void> {
 }
 
 async function runStack(args: string[]): Promise<void> {
-  rejectUnknownFlags(args, STACK_FLAGS, "stack");
+  rejectReviewFlags(args, STACK_FLAGS, "stack");
   const cwd = process.cwd();
   const detected = await detectProjectStack(cwd);
   const decisions = await stackScopingForInstalledReviewers(cwd, detected);
@@ -4153,7 +4157,7 @@ async function runScope(args: string[]): Promise<void> {
     printScopeHelp();
     return;
   }
-  rejectUnknownFlags(args, SCOPE_FLAGS, "scope");
+  rejectReviewFlags(args, SCOPE_FLAGS, "scope");
   const contextLines = parseContextLines(optionValue(args, "--context"));
   const pathList = optionValue(args, "--path");
   const diffFile = optionValue(args, "--diff");
@@ -4249,7 +4253,7 @@ async function runFloor(args: string[]): Promise<void> {
   // Outside the try on purpose: an unknown flag, a flag whose value was dropped
   // and an unparseable --context are the caller getting the invocation wrong,
   // not the guard being unable to look.
-  rejectUnknownFlags(args, FLOOR_FLAGS, "floor");
+  rejectReviewFlags(args, FLOOR_FLAGS, "floor");
   rejectValuelessOptions(args, FLOOR_VALUE_FLAGS, "floor");
   const contextLines = parseContextLines(optionValue(args, "--context"));
   const asJson = args.includes("--json");
@@ -4307,7 +4311,7 @@ async function runFloor(args: string[]): Promise<void> {
  * printed and acted on rather than left to whoever remembers the rule.
  */
 async function runBlastRadius(args: string[]): Promise<void> {
-  rejectUnknownFlags(args, BLAST_RADIUS_FLAGS, "blast-radius");
+  rejectReviewFlags(args, BLAST_RADIUS_FLAGS, "blast-radius");
   const cwd = process.cwd();
   const depth = parseNonNegativeInteger(optionValue(args, "--depth"), "--depth");
   const maxFiles = parseNonNegativeInteger(optionValue(args, "--max-files"), "--max-files");
@@ -4555,7 +4559,7 @@ async function readDiffSource(source: string): Promise<string> {
   return await Bun.file(source).text();
 }
 
-const SLICE_DEPS: SliceDeps = { gitDiff, readDiffSource, parseContextLines, rejectUnknownFlags };
+const SLICE_DEPS: SliceDeps = { gitDiff, readDiffSource, parseContextLines, rejectUnknownFlags: rejectReviewFlags };
 
 /**
  * The diff the scope is built from.
@@ -4675,7 +4679,7 @@ async function mergeBaseWithHead(ref: string): Promise<string> {
 
 /** `keryx review report-parity <review>`: the Markdown to paste into report.md so the leftovers of a round are named. */
 async function runReportParity(args: string[]): Promise<void> {
-  rejectUnknownFlags(args, [], "report-parity <review-id-or-path>");
+  rejectReviewFlags(args, [], "report-parity <review-id-or-path>");
   const ref = args[0];
   if (!ref) throw new Error("Usage: keryx review report-parity <review-id-or-path>");
   const markdown = renderParityReport(await readReviewParity(await resolveReviewPackagePath(process.cwd(), ref)));
@@ -4684,7 +4688,7 @@ async function runReportParity(args: string[]): Promise<void> {
 
 /** `keryx review verdict <review> [--json]`: the verdict of a round as it stands, before ingest, ledger, mutation or `complete`. Writes `verdict-interim.md` into the package. */
 async function runVerdict(args: string[]): Promise<void> {
-  rejectUnknownFlags(args, VERDICT_FLAGS, "verdict <review-id-or-path> [--json]");
+  rejectReviewFlags(args, VERDICT_FLAGS, "verdict <review-id-or-path> [--json]");
   const ref = args.find((argument, index) => !argument.startsWith("--") && args[index - 1] !== "--raw");
   if (!ref) throw new Error("Usage: keryx review verdict <review-id-or-path> [--raw <dir>] [--json]");
   const placed = guardReviewPaths("verdict", args);
@@ -4716,7 +4720,7 @@ verdict-interim.md into the package. A package with no findings says so and exit
 }
 
 async function runStatus(args: string[]): Promise<void> {
-  rejectUnknownFlags(args, [], "status <review-id-or-path>");
+  rejectReviewFlags(args, [], "status <review-id-or-path>");
   const ref = args[0];
   if (!ref) {
     throw new Error("Usage: keryx review status <review-id-or-path>");
@@ -4850,7 +4854,7 @@ function parseReadinessWaivers(args: readonly string[]): Array<{ items: string[]
 }
 
 async function runReadiness(args: string[], seams?: ReviewCommandSeams): Promise<void> {
-  rejectUnknownFlags(args, ["--json"], "readiness <review-id-or-path> [--json]");
+  rejectReviewFlags(args, ["--json"], "readiness <review-id-or-path> [--json]");
   const ref = args.find((argument) => !argument.startsWith("--"));
   if (ref === undefined) throw new Error("Usage: keryx review readiness <review-id-or-path> [--json]");
   const packageDir = await resolveReviewPackagePath(process.cwd(), ref);
@@ -4880,7 +4884,7 @@ async function promptYes(question: string): Promise<boolean> {
 
 async function runPublish(args: string[], seams?: ReviewCommandSeams): Promise<void> {
   const usage = "publish <review-id-or-path> [--event COMMENT|REQUEST_CHANGES|APPROVE] [--partial] [--yes]";
-  rejectUnknownFlags(args, PUBLISH_FLAGS, usage);
+  rejectReviewFlags(args, PUBLISH_FLAGS, usage);
   const ref = args[0];
   if (ref === undefined || ref.startsWith("--")) throw new Error(`Usage: keryx review ${usage}`);
   const tokens = flagTokens(args);
@@ -4926,7 +4930,7 @@ async function runPublish(args: string[], seams?: ReviewCommandSeams): Promise<v
 }
 
 async function runComplete(args: string[], seams?: ReviewCommandSeams): Promise<void> {
-  rejectUnknownFlags(args, COMPLETE_FLAGS, "complete <review-id-or-path>");
+  rejectReviewFlags(args, COMPLETE_FLAGS, "complete <review-id-or-path>");
   const ref = args[0];
   if (!ref) {
     throw new Error("Usage: keryx review complete <review-id-or-path>");
@@ -5267,7 +5271,7 @@ process; past the bound the package is still created, the command returns, and t
 (log: <package>/layers-refresh.log; check with \`keryx review layers status --package <dir>\`). The cap is ${MAX_GRAPH_TIMEOUT_SECONDS} s.`;
 
 function printStartHelp(): void {
-  console.log(`keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
+  console.log(`keryx review start --target <kind> --target-ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
                    [--research <ledger.json>] [--review-id <id>] [--memory-query "<query>"] [--automatic]
                    [--graph-timeout <seconds>] [--unattended] [--host keryx-shell|claude-code|codex|other]
                    [--no-prior-round | --prior <package|reviewId>] [--style] [--with-role <role>]
@@ -5287,12 +5291,12 @@ prior_findings.json. --no-prior-round: round 1 without searching. --prior: use t
 (default: attended). --host: the agent host (default: detected). Both go to <package>/run-profile.json, with the
 caller token \`start\` prints; a package created before run-profile.json keeps the earlier operator-quote rules.
 
-Starts a managed review package for a flow. Also accepted: ${CREATE_FLAGS.join(" ")} (--target-ref is an alias of --ref).
+Starts a managed review package for a flow. Also accepted: ${CREATE_FLAGS.join(" ")} (--ref is an accepted alias of --target-ref and prints one notice).
 ${GRAPH_TIMEOUT_HELP}`);
 }
 
 function printIngestHelp(): void {
-  console.log(`keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>] [--research <ledger.json>]
+  console.log(`keryx review ingest --report <path> [--flow <id>] --target-ref <ref> [--head <sha>] [--research <ledger.json>]
                     [--review-id <id>] [--automatic] [--verifications <file|->] [--verification-mode ${VERIFICATION_MODES.join("|")}]
                     [--premises <file|->]...
                     [--scope <scope.json>] [--blast-radius <blast-radius.json>] [--cross-family-review <file|->]
@@ -5383,10 +5387,10 @@ Usage:
   keryx review agents serve --project <dir> [--runs-root <dir>] --provider <id> --model <id>
                         --config-dir <dir> --cost-mode cost-unknown --permission-mode trust
   keryx review agents <start|plan|capabilities|status|spawn|wait|cancel|result> --run-dir <dir> ...
-  keryx review attach --flow <id> --target <kind> --ref <ref> [--head <sha>]
+  keryx review attach --flow <id> --target <kind> --target-ref <ref> [--head <sha>]
                       [--reviewers a,b] [--report <path>] [--research <ledger.json>]
                       [--automatic] [--no-prior-round | --prior <package|reviewId>]
-  keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
+  keryx review start --target <kind> --target-ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
                      [--research <ledger.json>] [--review-id <id>] [--memory-query "<query>"] [--automatic]
                      [--graph-timeout <seconds>] [--unattended] [--host keryx-shell|claude-code|codex|other]
                      [--no-prior-round | --prior <package|reviewId>] [--style] [--with-role <role>]  (writes <package>/round.json)
@@ -5396,7 +5400,7 @@ Usage:
   keryx review decide-premise --package <dir> --finding <id> --answer uphold|dismiss --reason "<why>"
                                                                      (terminal; card review_decide_premise)
   keryx review verify-run --package <dir> --finding <id> -- <command…>
-  keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>]
+  keryx review ingest --report <path> [--flow <id>] --target-ref <ref> [--head <sha>]
                       [--research <ledger.json>] [--review-id <id>] [--automatic]
                       [--verifications <file|->] [--premises <file|->]... [--verification-mode ${VERIFICATION_MODES.join("|")}]
                       [--scope <scope.json>] [--blast-radius <blast-radius.json>]
