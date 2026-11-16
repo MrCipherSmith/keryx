@@ -15,7 +15,10 @@ use std::time::{Duration, Instant};
 
 const STDERR_TAIL_BYTES: usize = 4096;
 const LOG_ROTATE_BYTES: u64 = 5 * 1024 * 1024;
-const GRACEFUL_STOP: Duration = Duration::from_millis(1500);
+/// How long keryx gets after stdin closes and SIGTERM lands. Its own shutdown
+/// drains background shell tasks (2 s) and MCP servers (up to 4.5 s), so this
+/// stays above that sum; only then is the whole process group killed.
+pub const GRACEFUL_STOP: Duration = Duration::from_millis(6500);
 
 pub struct SpawnConfig {
     pub program: PathBuf,
@@ -66,6 +69,13 @@ impl AcpProcess {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
+        // Own process group: the group id equals the child's pid, so a stop can
+        // signal keryx and every shell task / MCP server it started.
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt;
+            cmd.process_group(0);
+        }
         let mut child = cmd.spawn()?;
         let stdin = child.stdin.take();
         let mut stdout = child.stdout.take().expect("stdout piped");
@@ -182,24 +192,128 @@ impl AcpProcess {
         stdin.write_all(&bytes).and_then(|_| stdin.flush()).map_err(|e| format!("write to keryx failed: {e}"))
     }
 
-    /// Stop the child: close stdin (keryx exits on EOF), wait briefly, then kill.
-    /// Suppresses the exit event.
+    /// Stop the child with the default grace period. See [`kill_with_grace`].
     pub fn kill(&self) {
+        self.kill_with_grace(GRACEFUL_STOP);
+    }
+
+    /// Stop the child: close stdin (keryx exits on EOF), send SIGTERM (the only
+    /// signal that aborts an in-flight turn), wait up to `grace` for keryx to
+    /// finish its own drain, then SIGKILL the whole process group. The group is
+    /// also swept after a clean exit so no background task outlives the window.
+    /// Suppresses the exit event.
+    pub fn kill_with_grace(&self, grace: Duration) {
         self.stopped.store(true, Ordering::SeqCst);
         drop(self.stdin.lock().unwrap().take());
-        let deadline = Instant::now() + GRACEFUL_STOP;
+        let pid = self.child.lock().unwrap().id();
+        #[cfg(unix)]
+        signal(pid as i32, libc::SIGTERM);
+        let deadline = Instant::now() + grace;
         loop {
             let done = matches!(self.child.lock().unwrap().try_wait(), Ok(Some(_)));
             if done {
-                return;
+                break;
             }
             if Instant::now() >= deadline {
                 break;
             }
             std::thread::sleep(Duration::from_millis(25));
         }
+        #[cfg(unix)]
+        signal(-(pid as i32), libc::SIGKILL);
         let mut child = self.child.lock().unwrap();
+        #[cfg(not(unix))]
         let _ = child.kill();
         let _ = child.wait();
+    }
+}
+
+/// `kill(2)`; a negative pid signals the process group. Errors (ESRCH) mean
+/// the target is already gone.
+#[cfg(unix)]
+fn signal(pid: i32, sig: i32) {
+    // SAFETY: plain syscall with integer arguments.
+    unsafe {
+        libc::kill(pid, sig);
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+
+    fn pid_alive(pid: i32) -> bool {
+        // SAFETY: signal 0 only checks existence.
+        unsafe { libc::kill(pid, 0) == 0 }
+    }
+
+    fn wait_for_file(path: &std::path::Path) -> String {
+        for _ in 0..200 {
+            if let Ok(s) = std::fs::read_to_string(path) {
+                if s.ends_with('\n') {
+                    return s;
+                }
+            }
+            std::thread::sleep(Duration::from_millis(25));
+        }
+        panic!("{} never appeared", path.display());
+    }
+
+    fn spawn_script(dir: &std::path::Path, body: &str) -> (Arc<AcpProcess>, i32) {
+        let script = dir.join("fake-keryx.sh");
+        std::fs::write(&script, body).unwrap();
+        let pidfile = dir.join("grandchild.pid");
+        let proc = AcpProcess::spawn(
+            SpawnConfig {
+                program: "/bin/sh".into(),
+                args: vec![script.display().to_string(), pidfile.display().to_string()],
+                cwd: dir.to_path_buf(),
+                env: HashMap::from([("PATH".to_string(), "/bin:/usr/bin".to_string())]),
+                log_path: None,
+            },
+            |_, _| {},
+        )
+        .unwrap();
+        let grandchild: i32 = wait_for_file(&pidfile).trim().parse().unwrap();
+        (proc, grandchild)
+    }
+
+    fn assert_gone(pid: i32) {
+        for _ in 0..80 {
+            if !pid_alive(pid) {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(25));
+        }
+        panic!("process {pid} survived the stop");
+    }
+
+    #[test]
+    fn a_child_that_ignores_term_and_its_grandchild_are_killed_after_the_grace() {
+        let dir = tempfile::tempdir().unwrap();
+        let (proc, grandchild) = spawn_script(
+            dir.path(),
+            "trap '' TERM\nsleep 300 &\necho $! > \"$1\"\nwhile true; do sleep 1; done\n",
+        );
+        assert!(pid_alive(grandchild));
+        let started = Instant::now();
+        proc.kill_with_grace(Duration::from_millis(300));
+        assert!(started.elapsed() >= Duration::from_millis(300), "SIGKILL must wait for the grace");
+        assert!(proc.is_stopped());
+        assert_gone(grandchild);
+    }
+
+    #[test]
+    fn a_child_that_exits_on_term_leaves_no_orphaned_grandchild() {
+        let dir = tempfile::tempdir().unwrap();
+        // Exits on TERM but leaves its background task running.
+        let (proc, grandchild) = spawn_script(
+            dir.path(),
+            "trap 'exit 0' TERM\nsleep 300 &\necho $! > \"$1\"\nwhile true; do sleep 1; done\n",
+        );
+        let started = Instant::now();
+        proc.kill_with_grace(Duration::from_secs(5));
+        assert!(started.elapsed() < Duration::from_secs(4), "a cooperative child stops quickly");
+        assert_gone(grandchild);
     }
 }
