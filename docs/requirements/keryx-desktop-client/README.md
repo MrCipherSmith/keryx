@@ -1,5 +1,5 @@
 # Keryx Desktop Client (macOS)
-Version: 0.1.0
+Version: 0.1.1
 
 ## Purpose
 
@@ -31,6 +31,7 @@ taken from `src/acp/*` on `origin/main` at 0.4.32.
 | [specification.md](specification.md) | Architecture, `keryx acp --profile shell` contract, `_keryx/*` extensions, client structure, packaging, acceptance criteria. |
 | [decisions.md](decisions.md) | Owner decisions taken on 2026-11-17 with the options that were rejected. |
 | [implementation-plan.md](implementation-plan.md) | Milestones M1–M3, the parity matrix and task breakdown. |
+| [flows-board.md](flows-board.md) | The local Flows board: data source, lanes, detail panel, allowlisted actions. |
 
 ## Scope
 
