@@ -746,3 +746,34 @@ describe("a pull-request package's diff is read at the repository top level agai
     expect(await lightErrors(await pkgAt(root, { base: "main", head: "0123456789abcdef0123456789abcdef01234567" }))).toContain("could not be resolved");
   });
 });
+
+describe("requiredReviewers stack scoping in a monorepo", () => {
+  async function monorepo(): Promise<void> {
+    const dir = path.join(root, ".metaproject", "skills", "gdskills", "review", "review-frontend");
+    await writeFile(
+      path.join(dir, "SKILL.md"),
+      `---\nname: review-frontend\ndescription: Use when testing review-frontend.\nmetadata:\n  stack_requires: "react,mobx"\n---\n`,
+      "utf8",
+    );
+    await writeFile(path.join(root, "package.json"), JSON.stringify({ devDependencies: { typescript: "^5", eslint: "^9" } }), "utf8");
+    await mkdir(path.join(root, "apps", "web", "src"), { recursive: true });
+    await writeFile(path.join(root, "apps", "web", "package.json"), JSON.stringify({ dependencies: { react: "^18", mobx: "^6" } }), "utf8");
+  }
+
+  test("a change under apps/web is judged by apps/web/package.json: review-frontend is required", async () => {
+    await monorepo();
+    const need = await requiredReviewers(root, "all", ["apps/web/src/Orders.tsx", "apps/web/src/orders.store.ts"]);
+    expect(need.excluded.find((e) => e.reviewer === "review-frontend")).toBeUndefined();
+    expect(need.required).toContain("review-frontend");
+  });
+
+  test("a scope of root files only still excludes review-frontend, naming the manifest that was read", async () => {
+    await monorepo();
+    const need = await requiredReviewers(root, "all", ["src/page.tsx"]);
+    expect(need.required).not.toContain("review-frontend");
+    const reason = need.excluded.find((e) => e.reviewer === "review-frontend")?.reason ?? "";
+    expect(reason).toContain("none of [react, mobx] detected in package.json");
+    expect(reason).toContain(`detected from ${root}/package.json (2 declared dependencies)`);
+    expect(reason).not.toContain("apps/web");
+  });
+});

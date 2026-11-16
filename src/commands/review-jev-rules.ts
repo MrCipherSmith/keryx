@@ -510,7 +510,7 @@ export async function computeJevRulesResult(options: JevRulesRunOptions): Promis
   const fetchFn = options.fetchFn ?? globalThis.fetch;
 
   const { sources, excluded } = await discoverRuleSources(cwd, options.explicitRulePaths ?? []);
-  const detectedStack = await detectProjectStack(cwd);
+  const detectedStack = await detectProjectStack(cwd, { files: [...new Set(regions.map((region) => region.path))] });
   const signal = options.signal;
   const env = options.env;
 
