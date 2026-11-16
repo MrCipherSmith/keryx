@@ -403,6 +403,8 @@ interface Conn {
   proc: Subprocess<"pipe", "pipe", "pipe"> | null;
   root: string | null;
   gen: number;
+  /** Resolved when acp_start sets the project root (flows requests may race ahead of it). */
+  rootWaiters: Array<() => void>;
 }
 
 function emit(ws: ServerWebSocket<Conn>, event: string, payload: unknown): void {
@@ -448,6 +450,7 @@ function acpStart(ws: ServerWebSocket<Conn>, cwd: string, noProfile: boolean) {
   const gen = conn.gen;
   conn.proc = proc;
   conn.root = root;
+  for (const wake of conn.rootWaiters.splice(0)) wake();
   let stderrTail = "";
 
   void pumpLines(proc.stdout, (line) => {
@@ -493,6 +496,30 @@ function acpStart(ws: ServerWebSocket<Conn>, cwd: string, noProfile: boolean) {
 
 // ---- dispatch ----------------------------------------------------------------
 
+/**
+ * flows_* may only touch the project this connection started (acp_start). The view requests flows
+ * in parallel with starting keryx, so wait briefly for the root before refusing.
+ */
+async function projectCwd(conn: Conn, cwd: string): Promise<string> {
+  if (!conn.root) {
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(resolve, 5000);
+      conn.rootWaiters.push(() => {
+        clearTimeout(timer);
+        resolve();
+      });
+    });
+  }
+  let real: string;
+  try {
+    real = realpathSync(cwd);
+  } catch {
+    throw new Error(`The project folder is not available (${cwd})`);
+  }
+  if (!conn.root || real !== conn.root) throw new Error("flows are only available for the project this window started");
+  return conn.root;
+}
+
 async function handle(ws: ServerWebSocket<Conn>, cmd: string, args: Json): Promise<unknown> {
   const cwd = typeof args.cwd === "string" ? args.cwd : "";
   switch (cmd) {
@@ -524,15 +551,16 @@ async function handle(ws: ServerWebSocket<Conn>, cmd: string, args: Json): Promi
       return { ok: semverAtLeast(found, MIN_KERYX_VERSION), found, required: MIN_KERYX_VERSION };
     }
     case "flows_list":
-      return flowsList(cwd);
+      return flowsList(await projectCwd(ws.data, cwd));
     case "flows_get":
-      return flowsGet(cwd, String(args.id));
+      return flowsGet(await projectCwd(ws.data, cwd), String(args.id));
     case "flows_action":
-      return flowsAction(cwd, String(args.id), (args.action ?? {}) as Json);
+      return flowsAction(await projectCwd(ws.data, cwd), String(args.id), (args.action ?? {}) as Json);
     case "flows_watch": {
-      const w = watched.get(cwd) ?? { sig: flowsSignature(cwd), sockets: new Set() };
+      const root = await projectCwd(ws.data, cwd);
+      const w = watched.get(root) ?? { sig: flowsSignature(root), sockets: new Set() };
       w.sockets.add(ws);
-      watched.set(cwd, w);
+      watched.set(root, w);
       return null;
     }
     default:
@@ -549,7 +577,7 @@ Bun.serve<Conn, undefined>({
     if (!/^http:\/\/(localhost|127\.0\.0\.1):1420$/.test(origin)) {
       return new Response("forbidden origin", { status: 403 });
     }
-    if (server.upgrade(req, { data: { proc: null, root: null, gen: 0 } })) return undefined;
+    if (server.upgrade(req, { data: { proc: null, root: null, gen: 0, rootWaiters: [] } })) return undefined;
     return new Response("keryx desktop dev bridge", { status: 426 });
   },
   websocket: {
