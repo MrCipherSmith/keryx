@@ -178,7 +178,8 @@ function upsertTool(state: SessionState, u: ToolCallFields, isNew: boolean, at: 
     startedAt: prev?.startedAt ?? at,
     endedAt: prev?.endedAt ?? null,
   };
-  if (next.endedAt === null && (next.status === "completed" || next.status === "failed")) next.endedAt = at;
+  // A replayed call has no real timing; leave its duration unknown.
+  if (!state.replaying && next.endedAt === null && (next.status === "completed" || next.status === "failed")) next.endedAt = at;
   if (prev) {
     const items = state.items.slice();
     items[idx] = next;

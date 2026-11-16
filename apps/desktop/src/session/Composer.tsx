@@ -243,7 +243,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
           </button>
         ) : null}
         <div className="grow" />
-        {!disabled ? <span className="composer-hint">{busy ? "esc to stop" : sendHint}</span> : null}
+        <span className="composer-hint truncate">{disabled ? (text ? disabledReason : "") : busy ? "esc to stop" : sendHint}</span>
         {busy ? (
           <button className="send-btn is-stop" onClick={onStop} title="Stop the current turn (Esc)" aria-label="Stop">
             <Icon name="stop" size={12} strokeWidth={0} className="filled" />

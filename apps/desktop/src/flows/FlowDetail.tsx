@@ -314,11 +314,46 @@ export function FlowDetailSheet({ cwd, card, version, onClose, onWorkOn, onChang
             </button>
           }
         >
-          <pre className="code-pre">{prettyJson(form.output)}</pre>
+          <NextTaskResult output={form.output} />
         </Dialog>
       ) : null}
     </Sheet>
   );
+}
+
+function NextTaskResult({ output }: { output: string }) {
+  const parsed = parseNext(output);
+  const task = parsed?.task;
+  return (
+    <>
+      {parsed?.kind === "none" ? (
+        <p>There is no task to take next: every task is done, or what is left waits on something else.</p>
+      ) : task?.id ? (
+        <p>
+          Next up: <strong className="mono">{task.id}</strong> {task.title}
+          {task.kind ? <span className="tag" style={{ marginLeft: 8 }}>{task.kind}</span> : null}
+        </p>
+      ) : null}
+      <details open={!parsed || (parsed.kind !== "none" && !task?.id)}>
+        <summary className="dialog-sub">Raw output of keryx flow next</summary>
+        <pre className="code-pre">{prettyJson(output)}</pre>
+      </details>
+    </>
+  );
+}
+
+interface NextJson {
+  kind?: string;
+  task?: { id?: string; title?: string; kind?: string };
+}
+
+function parseNext(output: string): NextJson | null {
+  try {
+    const v: unknown = JSON.parse(output);
+    return v && typeof v === "object" ? (v as NextJson) : null;
+  } catch {
+    return null;
+  }
 }
 
 function prettyJson(s: string): string {
