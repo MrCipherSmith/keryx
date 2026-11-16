@@ -10,19 +10,47 @@ use crate::settings::Settings;
 use crate::shellenv;
 use crate::version;
 use serde::Serialize;
-use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::mpsc;
+use std::time::{Duration, Instant};
 use std::sync::{Arc, Mutex, OnceLock};
 use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+
+/// Overall budget for stopping every window at app quit.
+pub const QUIT_DEADLINE: Duration = Duration::from_secs(7);
 
 #[derive(Default)]
 pub struct AppState {
     sessions: Mutex<HashMap<String, Arc<AcpProcess>>>,
+    /// Processes being stopped on a background thread (window closed).
+    stopping: Arc<Mutex<Vec<Arc<AcpProcess>>>>,
+    /// One lock per window label, held across spawn + insert in `acp_start`.
+    start_locks: Mutex<HashMap<String, Arc<Mutex<()>>>>,
     pending_cwd: Mutex<HashMap<String, String>>,
     login_env: OnceLock<HashMap<String, String>>,
     window_counter: AtomicU64,
+}
+
+/// Stop every process in parallel; wait for all of them, but no longer than `deadline`.
+fn kill_all(procs: Vec<Arc<AcpProcess>>, deadline: Duration) {
+    let total = procs.len();
+    let (tx, rx) = mpsc::channel();
+    for p in procs {
+        let tx = tx.clone();
+        std::thread::spawn(move || {
+            p.kill();
+            let _ = tx.send(());
+        });
+    }
+    let end = Instant::now() + deadline;
+    for _ in 0..total {
+        let left = end.saturating_duration_since(Instant::now());
+        if rx.recv_timeout(left).is_err() {
+            break;
+        }
+    }
 }
 
 impl AppState {
@@ -31,6 +59,21 @@ impl AppState {
         self.login_env.get_or_init(shellenv::resolve_environment)
     }
 
+    /// The per-window lock that serialises `acp_start` for one label.
+    fn start_lock(&self, label: &str) -> Arc<Mutex<()>> {
+        self.start_locks.lock().unwrap().entry(label.to_string()).or_default().clone()
+    }
+
+    /// Register `proc` for `label` and stop whatever it replaces, so a second
+    /// start can never leave the first process running unowned.
+    fn install(&self, label: &str, proc: Arc<AcpProcess>) {
+        let previous = self.sessions.lock().unwrap().insert(label.to_string(), proc);
+        if let Some(old) = previous {
+            old.kill();
+        }
+    }
+
+    /// Stop the window's process and wait until it is gone.
     pub fn stop_window(&self, label: &str) {
         let proc = self.sessions.lock().unwrap().remove(label);
         if let Some(p) = proc {
@@ -38,11 +81,23 @@ impl AppState {
         }
     }
 
+    /// Stop the window's process on a background thread (called from the event
+    /// loop, which must not wait out the grace period).
+    pub fn stop_window_in_background(&self, label: &str) {
+        let Some(proc) = self.sessions.lock().unwrap().remove(label) else { return };
+        self.stopping.lock().unwrap().push(proc.clone());
+        let stopping = self.stopping.clone();
+        std::thread::spawn(move || {
+            proc.kill();
+            stopping.lock().unwrap().retain(|p| !Arc::ptr_eq(p, &proc));
+        });
+    }
+
+    /// App quit: stop everything in parallel within one overall deadline.
     pub fn stop_all(&self) {
-        let all: Vec<_> = self.sessions.lock().unwrap().drain().map(|(_, p)| p).collect();
-        for p in all {
-            p.kill();
-        }
+        let mut all: Vec<_> = self.sessions.lock().unwrap().drain().map(|(_, p)| p).collect();
+        all.extend(self.stopping.lock().unwrap().iter().cloned());
+        kill_all(all, QUIT_DEADLINE);
     }
 }
 
@@ -71,19 +126,18 @@ pub fn load_settings(app: &AppHandle) -> Settings {
     settings_path(app).map(|p| Settings::load(&p)).unwrap_or_default()
 }
 
-/// If `line` is an `fs/read_text_file` request, the response line to send back.
-pub fn intercept_fs(root: &Path, line: &str) -> Option<String> {
-    let msg: Value = serde_json::from_str(line).ok()?;
-    if msg.get("method").and_then(Value::as_str) != Some("fs/read_text_file") {
-        return None;
-    }
-    let id = msg.get("id")?; // a notification has no id and is not ours to answer
-    let params = msg.get("params").cloned().unwrap_or(json!({}));
-    let response = match fs::read_text_file(root, &params) {
-        Ok(result) => fs::result_response(id, result),
-        Err(err) => fs::error_response(id, &err),
-    };
-    Some(response.to_string())
+/// Answer an `fs/read_text_file` request off the stdout reader thread: a slow
+/// disk must not stall the stream of agent messages.
+fn answer_fs_in_background(proc: &Arc<AcpProcess>, root: PathBuf, request: fs::FsRequest) {
+    let proc = proc.clone();
+    std::thread::spawn(move || {
+        let reply = fs::answer(&root, &request);
+        if proc.send_line(&reply).is_err() && !proc.is_stopped() {
+            // Never leave keryx waiting: fall back to an error for this id.
+            let err = fs::RpcError { code: fs::INTERNAL_ERROR, message: "reply could not be sent".into() };
+            let _ = proc.send_line(&fs::error_response(&request.id, &err).to_string());
+        }
+    });
 }
 
 #[tauri::command]
@@ -95,6 +149,11 @@ pub async fn acp_start(
     no_profile: Option<bool>,
 ) -> Result<StartInfo, String> {
     let label = window.label().to_string();
+    // Held from here to the insert (this function has no await points), so two
+    // starts for one window run one after the other and the second replaces
+    // and stops the first.
+    let start_lock = state.start_lock(&label);
+    let _starting = start_lock.lock().unwrap();
     state.stop_window(&label);
 
     let root = Path::new(&cwd)
@@ -105,6 +164,8 @@ pub async fn acp_start(
     }
 
     let env = state.environment().clone();
+    // Reads are confined to the git toplevel, which is what keryx binds its session to.
+    let fs_root = fs::project_root(&root, env.get("PATH").map(String::as_str));
     let settings = load_settings(&app);
     let exe_dir = std::env::current_exe().ok().and_then(|p| p.parent().map(Path::to_path_buf));
     let located = locator::locate(
@@ -127,7 +188,6 @@ pub async fn acp_start(
 
     let emit_app = app.clone();
     let emit_label = label.clone();
-    let fs_root = root.clone();
     let proc = AcpProcess::spawn(
         SpawnConfig {
             program: located.path.clone(),
@@ -142,8 +202,8 @@ pub async fn acp_start(
             }
             match event {
                 ProcessEvent::Line(line) => {
-                    if let Some(reply) = intercept_fs(&fs_root, &line) {
-                        let _ = proc.send_line(&reply);
+                    if let Some(request) = fs::parse_request(&line) {
+                        answer_fs_in_background(proc, fs_root.clone(), request);
                     } else {
                         let _ = emit_app.emit_to(emit_label.as_str(), "acp://message", line);
                     }
@@ -167,7 +227,7 @@ pub async fn acp_start(
     )
     .map_err(|e| format!("Could not start keryx at {}: {e}", located.path.display()))?;
 
-    state.sessions.lock().unwrap().insert(label, proc);
+    state.install(&label, proc);
     Ok(StartInfo {
         keryx_path: located.path.display().to_string(),
         source: located.source,
@@ -253,9 +313,61 @@ pub fn window_initial_cwd(window: WebviewWindow, state: State<'_, AppState>) -> 
     state.pending_cwd.lock().unwrap().remove(window.label())
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
+    use serde_json::{json, Value};
+
+    fn sleeper() -> Arc<AcpProcess> {
+        AcpProcess::spawn(
+            SpawnConfig {
+                program: "/bin/sleep".into(),
+                args: vec!["300".into()],
+                cwd: std::env::temp_dir(),
+                env: HashMap::new(),
+                log_path: None,
+            },
+            |_, _| {},
+        )
+        .unwrap()
+    }
+
+    fn alive(p: &Arc<AcpProcess>) -> bool {
+        !p.is_stopped()
+    }
+
+    #[test]
+    fn installing_a_second_process_stops_the_first() {
+        let state = AppState::default();
+        let first = sleeper();
+        let second = sleeper();
+        state.install("w", first.clone());
+        assert!(alive(&first));
+        state.install("w", second.clone());
+        assert!(first.is_stopped(), "the replaced process must be killed, not orphaned");
+        assert!(alive(&second));
+        state.stop_window("w");
+        assert!(second.is_stopped());
+    }
+
+    #[test]
+    fn one_start_lock_per_window_label() {
+        let state = AppState::default();
+        assert!(Arc::ptr_eq(&state.start_lock("a"), &state.start_lock("a")));
+        assert!(!Arc::ptr_eq(&state.start_lock("a"), &state.start_lock("b")));
+    }
+
+    #[test]
+    fn stop_all_stops_every_process_in_parallel_and_includes_background_stops() {
+        let state = AppState::default();
+        let (a, b, c) = (sleeper(), sleeper(), sleeper());
+        state.install("a", a.clone());
+        state.install("b", b.clone());
+        state.install("c", c.clone());
+        state.stop_window_in_background("c");
+        state.stop_all();
+        assert!(a.is_stopped() && b.is_stopped() && c.is_stopped());
+    }
 
     #[test]
     fn answers_fs_requests_and_ignores_everything_else() {
@@ -266,7 +378,7 @@ mod tests {
             "params": { "sessionId": "s", "path": "f.txt", "line": 2 }
         })
         .to_string();
-        let reply: Value = serde_json::from_str(&intercept_fs(dir.path(), &req).unwrap()).unwrap();
+        let reply: Value = serde_json::from_str(&fs::answer(dir.path(), &fs::parse_request(&req).unwrap())).unwrap();
         assert_eq!(reply["id"], 5);
         assert_eq!(reply["result"]["content"], "world\n");
 
@@ -275,14 +387,14 @@ mod tests {
             "params": { "path": "/etc/hosts" }
         })
         .to_string();
-        let reply: Value = serde_json::from_str(&intercept_fs(dir.path(), &outside).unwrap()).unwrap();
+        let reply: Value = serde_json::from_str(&fs::answer(dir.path(), &fs::parse_request(&outside).unwrap())).unwrap();
         assert_eq!(reply["id"], 6);
         assert!(reply["error"]["message"].as_str().unwrap().contains("outside"));
 
         let other = json!({"jsonrpc":"2.0","id":1,"method":"session/request_permission","params":{}}).to_string();
-        assert!(intercept_fs(dir.path(), &other).is_none());
+        assert!(fs::parse_request(&other).is_none());
         let notification = json!({"jsonrpc":"2.0","method":"fs/read_text_file","params":{"path":"f.txt"}}).to_string();
-        assert!(intercept_fs(dir.path(), &notification).is_none());
-        assert!(intercept_fs(dir.path(), "not json").is_none());
+        assert!(fs::parse_request(&notification).is_none());
+        assert!(fs::parse_request("not json").is_none());
     }
 }
