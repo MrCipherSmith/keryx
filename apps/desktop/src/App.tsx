@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { setWindowTitle, settingsAddRecent, windowInitialCwd } from "./acp/tauri";
+import { setWindowTitle, settingsAddRecent, windowInitialCwd } from "./platform/commands";
 import { SessionScreen } from "./components/SessionScreen";
 import { SettingsScreen } from "./components/SettingsScreen";
 import { Welcome } from "./components/Welcome";

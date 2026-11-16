@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:browser": "bun run dev/browser.ts",
+    "dev:bridge": "bun run dev/bridge.ts",
     "build": "tsc --noEmit && vite build",
     "tauri": "tauri"
   },

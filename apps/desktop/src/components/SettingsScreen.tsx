@@ -1,6 +1,5 @@
-import { open } from "@tauri-apps/plugin-dialog";
 import { useEffect, useState } from "react";
-import { settingsGet, settingsSet, type KeryxSource, type Settings } from "../acp/tauri";
+import { pickFile, settingsGet, settingsSet, type KeryxSource, type Settings } from "../platform/commands";
 
 const SOURCES: Array<{ id: KeryxSource; label: string; help: string }> = [
   { id: "bundled", label: "Bundled keryx", help: "The keryx that ships inside this app (recommended)." },
@@ -25,8 +24,8 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
   };
 
   const browse = async () => {
-    const picked = await open({ directory: false, multiple: false, title: "Choose a keryx executable" });
-    if (typeof picked === "string") update({ customPath: picked });
+    const picked = await pickFile("Choose a keryx executable");
+    if (picked) update({ customPath: picked });
   };
 
   const save = async () => {

@@ -2,12 +2,12 @@ import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { AcpClient, RpcError } from "../acp/client";
 import {
   acpStart,
+  acpTransport,
   acpStop,
   listenBridge,
   setWindowTitle,
-  tauriTransport,
   versionCheck,
-} from "../acp/tauri";
+} from "../platform/commands";
 import type {
   AskUserRequest,
   AskUserResult,
@@ -189,7 +189,7 @@ export function useAcpSession(cwd: string) {
       dispatch({ t: "phase", phase: "starting" });
       dispatch({ t: "clearBanners" });
 
-      const client = new AcpClient(tauriTransport);
+      const client = new AcpClient(acpTransport);
       l.client = client;
       client.onNotification = (method, params) => {
         if (method === "session/update") handleUpdate(params);

@@ -27,6 +27,39 @@ printf '#!/bin/sh\nexec bun run /path/to/keryx/src/cli.ts "$@"\n' \
 chmod +x src-tauri/binaries/keryx-aarch64-apple-darwin
 ```
 
+## Browser dev mode (no Tauri)
+
+To iterate on the web view in a plain browser:
+
+```sh
+cd apps/desktop
+bun install
+bun run dev:browser      # dev bridge on ws://127.0.0.1:1421 + Vite on http://localhost:1420
+```
+
+Open http://localhost:1420. The welcome screen lists this repository as a
+recent project (override with `KERYX_DEV_PROJECT=/path`); "Open Folder…" asks
+for a path in-app, since a browser has no folder picker.
+
+`dev/bridge.ts` is a Bun stand-in for the Rust core. It implements the same
+commands (`acp_start` / `acp_send` / `acp_stop`, `settings_*`,
+`version_check`, `flows_list` / `flows_get` / `flows_action` / `flows_watch`)
+and events (`acp://message`, `acp://exit`, `flows://changed`, polled every
+1.5 s), answers `fs/read_text_file` itself inside the project folder, and
+spawns keryx as:
+
+```sh
+$KERYX_DEV_CMD acp --profile shell     # default: bun run <repo>/src/cli.ts
+```
+
+Settings are kept in `~/.keryx-desktop-dev/settings.json`. The bridge listens
+on loopback and accepts only the Vite origin. The web view picks its host at
+runtime: Tauri when `window.__TAURI_INTERNALS__` exists, else (only in a Vite
+dev build) the bridge. Production builds do not contain the bridge client;
+`bun run build && grep -r 1421 dist` finds nothing.
+
+`bun run dev:bridge` runs the bridge alone (for example next to `bun run dev`).
+
 ## Pointing the app at a development keryx
 
 Settings has three sources: bundled, `PATH`, custom. For a dev build choose

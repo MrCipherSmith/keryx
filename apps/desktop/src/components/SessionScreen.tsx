@@ -1,11 +1,9 @@
-import { windowOpenProject } from "../acp/tauri";
 import { basename, useAcpSession } from "../session/useAcpSession";
-import { open } from "@tauri-apps/plugin-dialog";
 import { AskUserDialog, FatalDialog, PermissionDialog } from "./Dialogs";
 import { Composer } from "./Composer";
 import { SidePanel } from "./SidePanel";
 import { Transcript } from "./Transcript";
-import { acpStop } from "../acp/tauri";
+import { acpStop, pickFolder, windowOpenProject } from "../platform/commands";
 
 interface Props {
   cwd: string;
@@ -19,8 +17,8 @@ export function SessionScreen({ cwd, onSettings, onClose }: Props) {
   const running = state.phase === "ready";
 
   const openAnother = async () => {
-    const picked = await open({ directory: true, multiple: false });
-    if (typeof picked === "string") await windowOpenProject(picked);
+    const picked = await pickFolder();
+    if (picked) await windowOpenProject(picked);
   };
 
   const topPermission = s.permissions[0];

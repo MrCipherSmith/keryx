@@ -1,6 +1,5 @@
-import { open } from "@tauri-apps/plugin-dialog";
 import { useEffect, useState } from "react";
-import { settingsGet, type Settings } from "../acp/tauri";
+import { pickFolder, settingsGet, type Settings } from "../platform/commands";
 import { basename } from "../session/useAcpSession";
 
 export function Welcome({ onOpen, onSettings }: { onOpen: (cwd: string) => void; onSettings: () => void }) {
@@ -10,8 +9,8 @@ export function Welcome({ onOpen, onSettings }: { onOpen: (cwd: string) => void;
   }, []);
 
   const pick = async () => {
-    const picked = await open({ directory: true, multiple: false, title: "Open a project folder" });
-    if (typeof picked === "string") onOpen(picked);
+    const picked = await pickFolder();
+    if (picked) onOpen(picked);
   };
 
   return (
