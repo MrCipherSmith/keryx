@@ -36,6 +36,8 @@ export interface PlanEntry {
   content: string;
   priority: "high" | "medium" | "low";
   status: "pending" | "in_progress" | "completed";
+  /** keryx's own item id and status (proposed/blocked map to pending, skipped to completed). */
+  _meta?: { keryx?: { id?: string; status?: string } } & Meta;
 }
 
 export interface AvailableCommand {
@@ -99,6 +101,14 @@ export interface AskUserRequest {
   question: string;
   options?: Array<{ label: string; description?: string }>;
   multiSelect?: boolean;
+  _meta?: {
+    keryx?: {
+      recommended?: string;
+      allowFreeform?: boolean;
+      irreversible?: boolean;
+      untrustedContent?: boolean;
+    };
+  } & Meta;
 }
 
 export type AskUserResult =

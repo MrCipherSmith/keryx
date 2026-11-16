@@ -21,6 +21,7 @@ import type {
   SessionUpdate,
 } from "../acp/types";
 import { initialState, reducer } from "./reducer";
+import { basename } from "../lib/format";
 
 export interface PendingPermission {
   req: PermissionRequest;
@@ -35,11 +36,6 @@ export type Fatal =
   | { kind: "leased"; sessionId: string };
 
 const LEASE_PATTERN = /leas|lock|in use|held|another (process|keryx|client)|already (open|active|attached)/i;
-
-export function basename(p: string): string {
-  const parts = p.split("/").filter(Boolean);
-  return parts[parts.length - 1] ?? p;
-}
 
 export function modelOption(options: ConfigOption[]): ConfigOption | undefined {
   return options.find((o) => o.id === "model") ?? options.find((o) => o.category === "model");
@@ -429,5 +425,6 @@ export function useAcpSession(cwd: string) {
     answerPermission,
     answerAsk,
     dismissFatal: () => setFatal(null),
+    dismissBanner: (id: number) => dispatch({ t: "dismissBanner", id }),
   };
 }

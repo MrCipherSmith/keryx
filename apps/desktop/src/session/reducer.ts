@@ -27,6 +27,9 @@ export type Item =
       rawInput?: unknown;
       rawOutput?: unknown;
       autoApproved: boolean;
+      /** ms timestamps from the client clock, for a derived duration. */
+      startedAt: number;
+      endedAt: number | null;
     }
   | { kind: "notice"; id: number; level: "info" | "warn" | "error"; text: string };
 
@@ -36,10 +39,20 @@ export interface Banner {
   text: string;
 }
 
+export interface TokenPair {
+  inputTokens: number;
+  outputTokens: number;
+}
+
 export interface Usage {
+  /** This model call's input + output tokens. */
   used: number;
+  /** Context window; 0 when unknown. */
   size: number;
   cost?: { amount: number; currency: string } | null;
+  call: TokenPair | null;
+  turn: TokenPair | null;
+  session: TokenPair | null;
 }
 
 export type Phase = "starting" | "ready" | "exited";
@@ -85,11 +98,12 @@ export const initialState: SessionState = {
 };
 
 export type Action =
-  | { t: "update"; update: SessionUpdate }
+  | { t: "update"; update: SessionUpdate; at?: number }
   | { t: "userSent"; text: string }
   | { t: "notice"; level: "info" | "warn" | "error"; text: string }
   | { t: "banner"; level: Banner["level"]; text: string }
   | { t: "clearBanners" }
+  | { t: "dismissBanner"; id: number }
   | { t: "phase"; phase: Phase; exit?: SessionState["exit"] }
   | { t: "agent"; profile: "shell" | "editor"; version: string | null }
   | {
@@ -147,7 +161,7 @@ function isAutoApproved(meta: unknown): boolean {
   return keryx?.autoApproved === true;
 }
 
-function upsertTool(state: SessionState, u: ToolCallFields, isNew: boolean): SessionState {
+function upsertTool(state: SessionState, u: ToolCallFields, isNew: boolean, at: number): SessionState {
   const idx = state.items.findIndex((i) => i.kind === "tool" && i.toolCallId === u.toolCallId);
   const prev = idx >= 0 ? (state.items[idx] as Extract<Item, { kind: "tool" }>) : null;
   const next: Extract<Item, { kind: "tool" }> = {
@@ -161,7 +175,10 @@ function upsertTool(state: SessionState, u: ToolCallFields, isNew: boolean): Ses
     rawInput: u.rawInput !== undefined ? u.rawInput : prev?.rawInput,
     rawOutput: u.rawOutput !== undefined ? u.rawOutput : prev?.rawOutput,
     autoApproved: (prev?.autoApproved ?? false) || isAutoApproved(u._meta),
+    startedAt: prev?.startedAt ?? at,
+    endedAt: prev?.endedAt ?? null,
   };
+  if (next.endedAt === null && (next.status === "completed" || next.status === "failed")) next.endedAt = at;
   if (prev) {
     const items = state.items.slice();
     items[idx] = next;
@@ -175,7 +192,13 @@ interface ChunkUpdate {
   messageId?: string | null;
 }
 
-function applyUpdate(state: SessionState, u: SessionUpdate): SessionState {
+function tokenPair(v: unknown): TokenPair | null {
+  const o = v as { inputTokens?: unknown; outputTokens?: unknown } | null | undefined;
+  if (!o || typeof o.inputTokens !== "number" || typeof o.outputTokens !== "number") return null;
+  return { inputTokens: o.inputTokens, outputTokens: o.outputTokens };
+}
+
+function applyUpdate(state: SessionState, u: SessionUpdate, at: number): SessionState {
   switch (u.sessionUpdate) {
     case "user_message_chunk": {
       if (!state.replaying) return state; // live user text is added locally on send
@@ -191,9 +214,9 @@ function applyUpdate(state: SessionState, u: SessionUpdate): SessionState {
       return appendChunk(state, "thought", blockText(c.content), c.messageId);
     }
     case "tool_call":
-      return upsertTool(state, u as ToolCallFields, true);
+      return upsertTool(state, u as ToolCallFields, true, at);
     case "tool_call_update":
-      return upsertTool(state, u as ToolCallFields, false);
+      return upsertTool(state, u as ToolCallFields, false, at);
     case "plan":
       return { ...state, plan: (u as { entries?: PlanEntry[] }).entries ?? [] };
     case "available_commands_update":
@@ -209,8 +232,19 @@ function applyUpdate(state: SessionState, u: SessionUpdate): SessionState {
       return t === undefined ? state : { ...state, title: t };
     }
     case "usage_update": {
-      const x = u as { used: number; size: number; cost?: Usage["cost"] };
-      return { ...state, usage: { used: x.used, size: x.size, cost: x.cost } };
+      const x = u as { used?: number; size?: number; cost?: Usage["cost"]; _meta?: { keryx?: Record<string, unknown> } };
+      const k = x._meta?.keryx;
+      return {
+        ...state,
+        usage: {
+          used: typeof x.used === "number" ? x.used : 0,
+          size: typeof x.size === "number" ? x.size : 0,
+          cost: x.cost,
+          call: tokenPair(k?.call),
+          turn: tokenPair(k?.turn) ?? state.usage?.turn ?? null,
+          session: tokenPair(k?.session) ?? state.usage?.session ?? null,
+        },
+      };
     }
     default:
       return state; // an update kind this client does not know: ignore
@@ -220,7 +254,7 @@ function applyUpdate(state: SessionState, u: SessionUpdate): SessionState {
 export function reducer(state: SessionState, a: Action): SessionState {
   switch (a.t) {
     case "update":
-      return applyUpdate(state, a.update);
+      return applyUpdate(state, a.update, a.at ?? Date.now());
     case "userSent":
       return {
         ...state,
@@ -241,6 +275,8 @@ export function reducer(state: SessionState, a: Action): SessionState {
       };
     case "clearBanners":
       return { ...state, banners: [] };
+    case "dismissBanner":
+      return { ...state, banners: state.banners.filter((b) => b.id !== a.id) };
     case "phase":
       return { ...state, phase: a.phase, exit: a.exit ?? null, busy: a.phase === "ready" ? state.busy : false };
     case "agent":
