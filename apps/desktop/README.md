@@ -45,7 +45,7 @@ for a path in-app, since a browser has no folder picker.
 commands (`acp_start` / `acp_send` / `acp_stop`, `settings_*`,
 `version_check`, `flows_list` / `flows_get` / `flows_action` / `flows_watch`)
 and events (`acp://message`, `acp://exit`, `flows://changed`, polled every
-1.5 s), answers `fs/read_text_file` itself inside the project folder, and
+2 s), answers `fs/read_text_file` itself inside the project folder, and
 spawns keryx as:
 
 ```sh

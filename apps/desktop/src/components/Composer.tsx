@@ -7,9 +7,11 @@ interface Props {
   commands: AvailableCommand[];
   onSend: (text: string) => void;
   onStop: () => void;
+  /** Text to put in the composer (never sent automatically); a new nonce re-applies it. */
+  draft?: { text: string; nonce: number } | null;
 }
 
-export function Composer({ busy, disabled, commands, onSend, onStop }: Props) {
+export function Composer({ busy, disabled, commands, onSend, onStop, draft }: Props) {
   const [text, setText] = useState("");
   const [sel, setSel] = useState(0);
   const [dismissed, setDismissed] = useState(false);
@@ -22,6 +24,11 @@ export function Composer({ busy, disabled, commands, onSend, onStop }: Props) {
   }, [text, commands, dismissed]);
 
   useEffect(() => setSel(0), [text]);
+  useEffect(() => {
+    if (!draft) return;
+    setText(draft.text);
+    area.current?.focus();
+  }, [draft]);
   useEffect(() => {
     const el = area.current;
     if (!el) return;

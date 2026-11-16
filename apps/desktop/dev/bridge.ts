@@ -320,6 +320,8 @@ function flowArgv(id: string, action: Json): string[] {
   const text = (k: string) => {
     const v = action[k];
     if (typeof v !== "string" || v.trim() === "") throw new Error(`\`${k}\` is required`);
+    if (v.startsWith("-")) throw new Error(`\`${k}\` must not start with "-"`);
+    if (v.length > 4000) throw new Error(`\`${k}\` is longer than 4000 characters`);
     return v;
   };
   const task = () => {
@@ -393,7 +395,7 @@ setInterval(() => {
     w.sig = sig;
     for (const ws of w.sockets) emit(ws, "flows://changed", { cwd });
   }
-}, 1500);
+}, 2000);
 
 // ---- ACP process per connection --------------------------------------------
 

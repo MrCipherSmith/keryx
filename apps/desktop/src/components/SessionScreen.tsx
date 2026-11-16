@@ -3,6 +3,10 @@ import { AskUserDialog, FatalDialog, PermissionDialog } from "./Dialogs";
 import { Composer } from "./Composer";
 import { SidePanel } from "./SidePanel";
 import { Transcript } from "./Transcript";
+import { useState } from "react";
+import { FlowsBoard } from "../flows/FlowsBoard";
+import { useFlows } from "../flows/useFlows";
+import { workPrompt } from "../flows/model";
 import { acpStop, pickFolder, windowOpenProject } from "../platform/commands";
 
 interface Props {
@@ -15,6 +19,9 @@ export function SessionScreen({ cwd, onSettings, onClose }: Props) {
   const s = useAcpSession(cwd);
   const { state } = s;
   const running = state.phase === "ready";
+  const flows = useFlows(cwd);
+  const [view, setView] = useState<"session" | "flows">("session");
+  const [draft, setDraft] = useState<{ text: string; nonce: number } | null>(null);
 
   const openAnother = async () => {
     const picked = await pickFolder();
@@ -34,6 +41,7 @@ export function SessionScreen({ cwd, onSettings, onClose }: Props) {
         </div>
         <span className="muted">{state.title ?? ""}</span>
         <div className="grow" />
+        <button className="btn btn-small" onClick={() => setView(view === "flows" ? "session" : "flows")}>{view === "flows" ? "Session" : "Flows"}</button>
         <button className="btn btn-small" onClick={openAnother}>Open Folder…</button>
         <button className="btn btn-small" onClick={onSettings}>Settings</button>
       </header>
@@ -52,6 +60,9 @@ export function SessionScreen({ cwd, onSettings, onClose }: Props) {
       ) : null}
       {state.phase === "starting" ? <div className="banner banner-info">Starting keryx…</div> : null}
 
+      {view === "flows" ? (
+        <div className="body"><FlowsBoard cwd={cwd} flows={flows} onWorkOn={(c) => { setView("session"); setDraft({ text: workPrompt(c), nonce: Date.now() }); }} /></div>
+      ) : (
       <div className="body">
         <main className="main">
           <Transcript items={state.items} busy={state.busy} />
@@ -61,6 +72,7 @@ export function SessionScreen({ cwd, onSettings, onClose }: Props) {
             commands={state.commands}
             onSend={(t) => void s.sendPrompt(t)}
             onStop={s.cancel}
+            draft={draft}
           />
         </main>
         <SidePanel
@@ -71,6 +83,7 @@ export function SessionScreen({ cwd, onSettings, onClose }: Props) {
           onModel={(c, v) => void s.setModel(c, v)}
         />
       </div>
+      )}
 
       {s.fatal ? (
         <FatalDialog
