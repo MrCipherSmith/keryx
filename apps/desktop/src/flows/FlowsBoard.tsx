@@ -83,7 +83,7 @@ export function FlowsBoard({ cwd, flows, onWorkOn }: Props) {
     <div className="flows">
       <div className="flows-toolbar">
         <div className="flows-heading">
-          <h1>Flows</h1>
+          <h1 className="sr-only">Flows</h1>
           <span className="count-label">
             {activeCount} active · {visible.length - activeCount} done
           </span>

@@ -70,7 +70,7 @@ export function SettingsView({ onBack, agentVersion }: { onBack?: () => void; ag
               <Icon name="chevronRight" size={16} className="flip" />
             </button>
           ) : null}
-          <h1>Settings</h1>
+          {onBack ? <h1>Settings</h1> : <h1 className="sr-only">Settings</h1>}
         </header>
 
         <section className="settings-group" aria-labelledby="s-appearance">
