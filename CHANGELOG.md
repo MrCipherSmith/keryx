@@ -7,6 +7,8 @@ All notable changes to `keryx` are documented here. The format follows
 
 ### Fixed
 
+- **`keryx update help` no longer runs an update.** `update` ignored any word it did not know, so `keryx update help` refreshed managed files instead of printing help. `help` now prints help, and any other argument or unknown flag is refused with exit code 1 before anything is written.
+
 - **`<command> --help` shows the command's full help.** `mcp`, `test`, `wiki`, `update`, `workspace`, `gdgraph` and `ctx` printed a stale registry summary (`mcp --help` listed only its retired aliases); they now print their own help, as `keryx help <command>` does. `flow --help` lists `task done --result/--resolved`.
 - **`review jev-edit-guard install` reports the real default.** It no longer says the hook will stay silent when `edit_guard` is on by default (`/external` on and a Jev credential available).
 - **Generated agent instructions.** `.metaproject/index.md` points to `flow list` / `flow status <id>`, the Metaproject README uses `gdgraph find`, routing lists the `mcp` module when enabled and points to the CLI reference, `flow block` shows `--reason`, and mirrored `CLAUDE.md` rules no longer carry its Claude-only section to other agents. Run `keryx update` to refresh them.

@@ -2180,3 +2180,36 @@ describe("flow 361: Claude hooks follow agentEntrypoints.claudeSettings", () => 
     }
   }, 120_000);
 });
+
+describe("update refuses arguments it does not understand before writing anything", () => {
+  test("`update help` prints help and writes nothing", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "keryx-update-help-"));
+    try {
+      const logs: string[] = [];
+      const original = console.log;
+      console.log = (...parts: unknown[]) => logs.push(parts.join(" "));
+      try {
+        await withCwd(root, () => updateCommand(["help"]));
+      } finally {
+        console.log = original;
+      }
+      expect(logs.join("\n")).toContain("keryx update");
+      expect(await readdir(root)).toEqual([]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test.each([[["helpme"]], [["--skip-runtime", "now"]], [["--forse"]], [["--yes=1"]]])(
+    "%j is refused and writes nothing",
+    async (args) => {
+      const root = await mkdtemp(path.join(tmpdir(), "keryx-update-refuse-"));
+      try {
+        await expect(withCwd(root, () => updateCommand(args))).rejects.toThrow(/keryx update/);
+        expect(await readdir(root)).toEqual([]);
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    },
+  );
+});
