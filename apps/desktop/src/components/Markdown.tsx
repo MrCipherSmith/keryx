@@ -4,22 +4,50 @@ import { memo, useDeferredValue, useMemo } from "react";
 
 marked.setOptions({ gfm: true, breaks: false });
 
-const SANITIZE = { USE_PROFILES: { html: true }, ADD_ATTR: ["data-lang"] };
+// Agent output is untrusted: an explicit allow-list, no <style>, forms, form controls, ids or inline styles.
+const SANITIZE = {
+  ALLOWED_TAGS: [
+    "p", "br", "hr", "h1", "h2", "h3", "h4", "h5", "h6", "strong", "em", "del", "code", "pre", "blockquote",
+    "ul", "ol", "li", "a", "table", "thead", "tbody", "tr", "th", "td", "span",
+  ],
+  ALLOWED_ATTR: ["href", "title", "class", "align", "start"],
+  FORBID_TAGS: ["style", "form", "input", "button", "textarea", "select", "iframe", "object", "embed", "img", "svg", "math", "script"],
+  FORBID_ATTR: ["style", "id", "action", "formaction", "src", "srcset", "name", "target"],
+  ALLOW_DATA_ATTR: false,
+  ALLOWED_URI_REGEXP: /^(?:https?:|mailto:|#)/i,
+};
+const LANG_CLASS = /^language-[\w+#.-]+$/;
+const ALIGN = /^(?:left|right|center)$/;
+
+DOMPurify.addHook("uponSanitizeAttribute", (node, data) => {
+  const tag = node.nodeName.toLowerCase();
+  if (data.attrName === "class") {
+    if (!((tag === "code" || tag === "pre") && LANG_CLASS.test(data.attrValue))) data.keepAttr = false;
+  } else if (data.attrName === "align") {
+    if (!((tag === "th" || tag === "td") && ALIGN.test(data.attrValue))) data.keepAttr = false;
+  } else if (data.attrName === "start") {
+    if (tag !== "ol" || !/^\d{1,6}$/.test(data.attrValue)) data.keepAttr = false;
+  }
+});
 
 export function renderMarkdown(src: string): string {
   const html = marked.parse(src, { async: false }) as string;
-  return DOMPurify.sanitize(html, SANITIZE);
+  return DOMPurify.sanitize(html, SANITIZE) as string;
 }
 
 export function renderInline(src: string): string {
   const html = marked.parseInline(src, { async: false }) as string;
-  return DOMPurify.sanitize(html, SANITIZE);
+  return DOMPurify.sanitize(html, SANITIZE) as string;
+}
+
+/** Never navigate the app's web view away; links are inert (the model's links are untrusted). */
+function blockLinks(e: React.MouseEvent<HTMLElement>) {
+  if ((e.target as HTMLElement).closest("a")) e.preventDefault();
 }
 
 function onClick(e: React.MouseEvent<HTMLDivElement>) {
   const target = e.target as HTMLElement;
-  // Never navigate the app's web view away; links are inert (the model's links are untrusted).
-  if (target.closest("a")) e.preventDefault();
+  blockLinks(e);
   const copy = target.closest<HTMLButtonElement>("button.code-copy");
   if (copy) {
     const code = copy.closest(".code-block")?.querySelector("code")?.textContent ?? "";
@@ -64,10 +92,11 @@ function decorateCodeBlocks(html: string): string {
 export const Markdown = memo(function Markdown({ text, className }: { text: string; className?: string }) {
   const deferred = useDeferredValue(text);
   const html = useMemo(() => decorateCodeBlocks(renderMarkdown(deferred)), [deferred]);
-  return <div className={`md${className ? ` ${className}` : ""}`} onClick={onClick} dangerouslySetInnerHTML={{ __html: html }} />;
+  return <div className={`md${className ? ` ${className}` : ""}`} onClick={onClick} onAuxClick={blockLinks} dangerouslySetInnerHTML={{ __html: html }} />;
 });
 
 export const InlineMarkdown = memo(function InlineMarkdown({ text }: { text: string }) {
   const html = useMemo(() => renderInline(text), [text]);
-  return <span className="md-inline" dangerouslySetInnerHTML={{ __html: html }} />;
+  // Same guard as Markdown: a link must never navigate the web view.
+  return <span className="md-inline" onClick={blockLinks} onAuxClick={blockLinks} dangerouslySetInnerHTML={{ __html: html }} />;
 });
