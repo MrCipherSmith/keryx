@@ -18,7 +18,8 @@ pub const OUTPUT_CAP: usize = 1024 * 1024;
 const MAX_TEXT_CHARS: usize = 4000;
 
 const KINDS: [&str; 6] = ["context", "implement", "test", "verify", "review", "docs"];
-const OUTCOMES: [&str; 5] = ["started", "failed", "blocked", "paused", "completed"];
+/// `keryx flow task attempt` accepts exactly these outcomes.
+const OUTCOMES: [&str; 3] = ["started", "failed", "blocked"];
 
 #[derive(Deserialize, Debug, Clone, PartialEq)]
 #[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
@@ -275,6 +276,8 @@ mod tests {
             json!({"type":"taskAdd","title":"","kind":"docs"}),
             json!({"type":"taskAttempt","taskId":"3","outcome":"failed"}),
             json!({"type":"taskAttempt","taskId":"T3","outcome":"exploded"}),
+            json!({"type":"taskAttempt","taskId":"T3","outcome":"paused"}),
+            json!({"type":"taskAttempt","taskId":"T3","outcome":"completed"}),
             json!({"type":"taskAttempt","taskId":"T3; ls","outcome":"failed"}),
             json!({"type":"taskAttempt","taskId":"T3","outcome":"failed","detail":"--x"}),
             json!({"type":"taskDone","taskId":"../T1"}),
