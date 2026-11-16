@@ -33,7 +33,7 @@ What invalidates it:
 How staleness is observed:
 
 ```bash
-keryx gdgraph context   # last line: "freshness: working tree clean"
+keryx gdgraph context   # the `freshness:` line reads "freshness: working tree clean"
                         # or "freshness: N uncommitted code file(s) may not be reflected"
 ```
 
@@ -62,7 +62,6 @@ touched graph-relevant paths (see `hooks/README.md`). It never blocks the commit
 - `data/gdgraph/artifacts/module-map.json`
 - `data/gdgraph/storage/nodes.jsonl`
 - `data/gdgraph/storage/edges.jsonl`
-- `data/gdgraph/artifacts/summary.md`
 
 ## Skills
 

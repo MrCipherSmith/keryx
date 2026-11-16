@@ -90,6 +90,7 @@ export async function rulesCommand(args: string[] = [], projectRoot: string = pr
         enableMemory: moduleEnabled(manifest, "memory"),
         enableTasks,
         enableSecurity: moduleEnabled(manifest, "security"),
+        enableMcp: moduleEnabled(manifest, "mcp"),
         ruleSources: await listRootEntrypoints(projectRoot, declaredImportSources(manifest.agentEntrypoints)),
         hasDistilledEntrypoints:
           subcommand === "distill" ? true : await hasDistilledEntrypoints(metaprojectRoot),
@@ -256,6 +257,7 @@ async function refreshRoutingEntrypoints(
       enableMemory: moduleEnabled(manifest, "memory"),
       enableTasks: moduleEnabled(manifest, "tasks"),
       enableSecurity: moduleEnabled(manifest, "security"),
+      enableMcp: moduleEnabled(manifest, "mcp"),
       ruleSources,
       hasDistilledEntrypoints: hasDistilled,
     },

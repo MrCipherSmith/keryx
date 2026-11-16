@@ -576,7 +576,22 @@ const DEEP_HELP_GROUPS: ReadonlySet<string> = new Set(["agents", "shell"]);
  * `install` writes files) — see {@link SAFE_SUBCOMMAND_HELP} for the
  * per-subcommand allowlist.
  */
-const HELP_SAFE_VERBS: ReadonlySet<string> = new Set(["skills", "memory", "security"]);
+const HELP_SAFE_VERBS: ReadonlySet<string> = new Set([
+  "skills",
+  "memory",
+  "security",
+  // These handlers own a complete, current help printer reached by a bare
+  // `--help`/`-h` before any work happens. The static `USAGE_BODY` slice used
+  // to answer instead and silently hid subcommands (`mcp add|auth`,
+  // `test suggest`, `wiki enrich|freshness|…`, `update --no-tasks|--yes`, …).
+  "mcp",
+  "test",
+  "wiki",
+  "update",
+  "workspace",
+  "gdgraph",
+  "ctx",
+]);
 
 /**
  * `<verb> <subcommand> --help` pairs whose subcommand handler checks
@@ -726,6 +741,15 @@ export async function printCommandHelp(command: string, rest: readonly string[] 
     return;
   }
   if (DEEP_HELP_GROUPS.has(command)) {
+    const route = CLI_ROUTES[command];
+    if (route) {
+      await route(["--help"]);
+      return;
+    }
+  }
+  // A verb whose handler answers a bare `--help` with its own full help prints
+  // THAT, not the static `USAGE_BODY` slice, which drifts and hides subcommands.
+  if (HELP_SAFE_VERBS.has(command)) {
     const route = CLI_ROUTES[command];
     if (route) {
       await route(["--help"]);

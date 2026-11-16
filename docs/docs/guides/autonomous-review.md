@@ -18,8 +18,8 @@ keryx review run --autonomous --target pr --ref https://github.com/owner/repo/pu
     [--out <dir>] [--provider p] [--model m] [--no-notify] [--json]
 ```
 
-`--ref` must be a pull request URL. No terminal is needed on any stream, so this is the form
-to put in a script, a cron line or a CI job. `--target pr` is the only target.
+With `--target pr`, `--ref` must be a pull request URL; `--target branch --ref <base> [--head <commit>]` reviews a branch instead. No terminal is needed on any stream, so this is the form
+to put in a script, a cron line or a CI job.
 
 | Exit code | Status | Meaning |
 |---|---|---|
@@ -70,8 +70,7 @@ to put in a script, a cron line or a CI job. `--target pr` is the only target.
   `cat`, `sed`, `find` and `tail`: `keryx ctx diff`, `keryx ctx read`, `keryx ctx run --`, or a
   `# keryx:raw <why>` marker.
 - **A browser.** A check that needs one is skipped and the report says it was skipped.
-- **Rounds.** At most five review rounds, and six reviewers per wave, and no new round when the
-  last one found no new blocker or major finding.
+- **Rounds.** One review round per head (a new round only if the head moved while it worked), and up to 10 reviewers per wave.
 - **You stop it.** SIGTERM and SIGINT stop the child and write a summary with status
   `incomplete`; the package stays open and resumes later.
 

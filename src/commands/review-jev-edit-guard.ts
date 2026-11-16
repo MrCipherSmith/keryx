@@ -35,7 +35,6 @@ import {
 } from "../review/jev-edit-guard";
 import {
   readJevEditGuardConfig,
-  readJevEditGuardEnabled,
   readJevEditGuardEnabledDetailed,
   readJevEditGuardMaxCalls,
   readJevEditGuardThreshold,
@@ -333,7 +332,13 @@ export async function runJevEditGuardHook(cwd: string, deps: EditGuardCliDeps = 
   }
 }
 
-export async function handleInstall(cwd: string): Promise<void> {
+/** Credential sources `handleInstall` resolves availability from; tests inject both so the machine's real key never leaks in. */
+export interface JevEditGuardInstallDeps {
+  readonly env?: Readonly<Record<string, string | undefined>>;
+  readonly configDir?: string;
+}
+
+export async function handleInstall(cwd: string, deps: JevEditGuardInstallDeps = {}): Promise<void> {
   const root = resolveProjectRoot(cwd);
   const { relativePath, owner } = editGuardSettingsTarget(root);
   const { errors } = await installSurfaces(root, relativePath, ["jev-edit-guard"], owner);
@@ -343,10 +348,17 @@ export async function handleInstall(cwd: string): Promise<void> {
     return;
   }
   console.log(`✓ installed: ${relativePath} — PostToolUse(${EDIT_GUARD_HOOK_MATCHER}) → \`${editGuardHookCommand()}\``);
-  if (!(await readJevEditGuardEnabled(root))) {
+  // Same availability the hook itself uses at run time, so this note matches what the hook will actually do.
+  const apiKey = resolveJevApiKey(deps.env ?? process.env, deps.configDir);
+  const enabled = await readJevEditGuardEnabledDetailed(root, {
+    jevAvailable: apiKey !== undefined && apiKey.length > 0,
+    ...(deps.configDir !== undefined ? { configDir: deps.configDir } : {}),
+  });
+  if (!enabled.value) {
     console.log(
-      `  note: review.jev.edit_guard is not set in .metaproject/tasks.config.json — the hook is installed but will stay ` +
-        `silent (fail-open) until you set {"review":{"jev":{"edit_guard": true}}}, or toggle it with the TUI's /editguard.`,
+      `  note: review.jev.edit_guard is off here — the hook is installed but will stay silent ` +
+        `(fail-open) until you set {"review":{"jev":{"edit_guard": true}}} in .metaproject/tasks.config.json, ` +
+        `or toggle it with the TUI's /editguard. It defaults on only when /external is on and a Jev credential resolves.`,
     );
   }
 }

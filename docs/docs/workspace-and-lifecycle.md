@@ -211,8 +211,8 @@ Current canonical lists:
 | gdgraph | build, query, affected, repomap |
 | gdctx | status, diff, rg, read, run, show |
 | gdwiki | status, new, collect, index, check-links, validate |
-| gdskills | status, list, inspect, route, catalog, install, create, verify, learn, export, sync, contracts |
-| memory | new, index, search, ingest, check, reflect |
+| gdskills | status, list, inspect, route, catalog, install, create, import, update, verify, learn, export, sync, contracts |
+| memory | new, index, search, supersede, transition, ingest, check, reflect |
 | tasks | init, list, status, freeze, start, task, ac, implemented, complete, block, unblock, check |
 | health | run, status, gate, sources, explain, baseline, trend |
 | testing | init, analyze, run, status, context, explain, related, report |

@@ -180,7 +180,7 @@ get, and `arbiter-adversarial.fixtures.json` holds 28 cases built to push the ar
 answer it must not give: injection text in a question, a forged rule id, a model that cites a rule
 for another kind, a floor-class question. Both run in CI against a stubbed model and a recorded
 one. The first set must agree at least 95 percent, the second must end in `deny` or `escalate`
-every time. If you change the bundled rules, run them: `bun test src/review/arbiter-eval.test.ts`.
+every time. If you change the bundled rules, run them: `bun test src/commands/review-arbiter-eval.test.ts`.
 
 ## Limits worth knowing
 

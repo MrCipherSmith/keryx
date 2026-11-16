@@ -1,24 +1,39 @@
 # Changelog
 
+All notable changes to `keryx` are documented here. The format follows
+[Keep a Changelog](https://keepachangelog.com/); versions follow semver.
+
 ## [Unreleased]
+
+### Fixed
+
+- **`<command> --help` shows the command's full help.** `mcp`, `test`, `wiki`, `update`, `workspace`, `gdgraph` and `ctx` printed a stale registry summary (`mcp --help` listed only its retired aliases); they now print their own help, as `keryx help <command>` does. `flow --help` lists `task done --result/--resolved`.
+- **`review jev-edit-guard install` reports the real default.** It no longer says the hook will stay silent when `edit_guard` is on by default (`/external` on and a Jev credential available).
+- **Generated agent instructions.** `.metaproject/index.md` points to `flow list` / `flow status <id>`, the Metaproject README uses `gdgraph find`, routing lists the `mcp` module when enabled and points to the CLI reference, `flow block` shows `--reason`, and mirrored `CLAUDE.md` rules no longer carry its Claude-only section to other agents. Run `keryx update` to refresh them.
+
+### Changed
+
+- **Documentation matches the code.** README, the architecture and module references, limitations, hooks and the guides were corrected against v0.4.31 (auth login is subscription-only, turn budgets are round limits, codex write range, MCP OAuth exists, flow gate order, external agents enabled with `keryx agents external enable`, and more). Three pages joined the site navigation.
 
 ## [0.4.31] - 2026-11-16
 
 ### Fixed
 
-- **`keryx update` installs the current rules even when index.md was edited.** A hand-edited `index.md` or `routing.md` written by an older keryx used to stop the whole update ("published nothing"), so the project kept the previous release's rules and skills. Now only that pair is left as it is; rules, skills and the other service files install, and the run still exits 1 and names `--keep-existing` / `--accept-version` for the pair.
+- **`keryx update` installs the current rules even when index.md was edited.** A hand-edited `index.md` or `routing.md` written by an older keryx used to stop the whole update ("published nothing"), so the project kept the previous release's rules and skills. Now only that pair is left as it is; rules, skills and the other service files install, and the run still exits 1 and names `--keep-existing` / `--accept-version` for the pair. [#1206](https://github.com/MrCipherSmith/keryx/pull/1206)
 
 ## [0.4.30] - 2026-11-16
 
 ### Changed
 
-- **One rule per topic for implementer and reviewer.** Each core rule now ends with a `Review severities` table (signal, when it is a finding, default severity, what is not a finding), and the review lenses point at those rows instead of keeping their own rubrics. Covered: security and async, API contracts, DTOs and database, MobX stores, code style and Storybook, testing (TDD and Playwright), SOLID and clean architecture, highload, CLI design and UI. Every change was A/B-measured on the new `bench/rules-ab` suites before merge. [#1192](https://github.com/MrCipherSmith/keryx/pull/1192) [#1193](https://github.com/MrCipherSmith/keryx/pull/1193) [#1194](https://github.com/MrCipherSmith/keryx/pull/1194) [#1195](https://github.com/MrCipherSmith/keryx/pull/1195) [#1196](https://github.com/MrCipherSmith/keryx/pull/1196) [#1197](https://github.com/MrCipherSmith/keryx/pull/1197) [#1199](https://github.com/MrCipherSmith/keryx/pull/1199) [#1200](https://github.com/MrCipherSmith/keryx/pull/1200) [#1202](https://github.com/MrCipherSmith/keryx/pull/1202)
+- **One rule per topic for implementer and reviewer.** Each of these core rules now ends with a `Review severities` table (signal, when it is a finding, default severity, what is not a finding), and the review lenses point at those rows instead of keeping their own rubrics. Covered: security and async, API contracts, DTOs and database, MobX stores, code style and Storybook, testing (TDD and Playwright), SOLID and clean architecture, highload and UI. Every change was A/B-measured on the new `bench/rules-ab` suites before merge. [#1192](https://github.com/MrCipherSmith/keryx/pull/1192) [#1193](https://github.com/MrCipherSmith/keryx/pull/1193) [#1194](https://github.com/MrCipherSmith/keryx/pull/1194) [#1195](https://github.com/MrCipherSmith/keryx/pull/1195) [#1196](https://github.com/MrCipherSmith/keryx/pull/1196) [#1197](https://github.com/MrCipherSmith/keryx/pull/1197) [#1199](https://github.com/MrCipherSmith/keryx/pull/1199) [#1200](https://github.com/MrCipherSmith/keryx/pull/1200) [#1202](https://github.com/MrCipherSmith/keryx/pull/1202)
 - **New rules.** `concurrency-patterns` (lock files, temp-and-rename writes, JSONL appends, bounded child fan-out) and `layout-rendering` (measured layout, 320 px floor, locale geometry, RTL mirroring). The context resolver loads `cli-interface-design` and `concurrency-patterns` for matching implement tasks. [#1199](https://github.com/MrCipherSmith/keryx/pull/1199) [#1200](https://github.com/MrCipherSmith/keryx/pull/1200)
 - **CLI flags are refused by name.** One shared helper refuses unknown flags (one stderr line, exit 1); `modules`, `skills verify` and `memory search` no longer ignore them, and `--flag=value` is refused on a flag that takes no value. `skills verify --all --json` prints `{schemaVersion, results}` (`--json-legacy-array` keeps the bare array for one release), and `review --ref` names the preferred `--target-ref`. [#1205](https://github.com/MrCipherSmith/keryx/pull/1205), [#1198](https://github.com/MrCipherSmith/keryx/issues/1198)
+- **Leaner stack rule packs.** Restated canon is trimmed from the stack rule packs, shared testing conventions moved into `tdd-workflow`, and the `ts-js-node` rules measured before the trim are restored. [#1188](https://github.com/MrCipherSmith/keryx/pull/1188) [#1190](https://github.com/MrCipherSmith/keryx/pull/1190) [#1191](https://github.com/MrCipherSmith/keryx/pull/1191)
+- **`bench setup --cases`.** Runs a subset of benchmark cases. [7d44dfce](https://github.com/MrCipherSmith/keryx/commit/7d44dfce)
 
 ### Added
 
-- **Desktop quick start.** Web and TUI quick start in the desktop app. [#1179](https://github.com/MrCipherSmith/keryx/pull/1179)
+- **Quick task start.** Start a task from the Team Hub web "New task" dialog and from the TUI `/task` modal. [#1179](https://github.com/MrCipherSmith/keryx/pull/1179)
 - **Rules A/B bench.** `bench/rules-ab` compares versions of a lens and its rules on seeded, backend, frontend, testing, UI and history suites with blind judges. [#1189](https://github.com/MrCipherSmith/keryx/pull/1189)
 
 ### Fixed
@@ -27,11 +42,15 @@
 - **Pinned review head.** `review plan`/`review slice --head` slice the pinned range instead of the working tree. [#1201](https://github.com/MrCipherSmith/keryx/pull/1201)
 
 
-## [0.4.29] - 2026-11-14
+## [0.4.29] - 2026-11-15
 
 ### Added
 
-- **Continuous Shell and review diagnostics.** Shell startup creates a private, rotating NDJSON journal of call stages, periodic active-call snapshots and Work modal rendering measurements. `/diag` reports the journal path and write failures; evidence no longer depends on requesting a dump after a hang.
+- **Continuous Shell and review diagnostics.** Shell startup creates a private, rotating NDJSON journal of call stages, periodic active-call snapshots and Work modal rendering measurements. `/diag` reports the journal path and write failures; evidence no longer depends on requesting a dump after a hang. [#1184](https://github.com/MrCipherSmith/keryx/pull/1184)
+
+### Changed
+
+- **Rules and review lenses share one standard.** Writers and `review-clean-code`/`review-style` use one code-quality standard; the lenses drop the restated layer-command clause; `error-handling` holds the failure-path severities reviewers use; the owner's rulings on conflicting code-quality rules are applied; installed stack rules and conditional core rules now resolve for implement tasks; restated canon is cut from `clean-architecture`; and a `skill-authoring` content standard is added. [#1178](https://github.com/MrCipherSmith/keryx/pull/1178) [#1180](https://github.com/MrCipherSmith/keryx/pull/1180) [#1181](https://github.com/MrCipherSmith/keryx/pull/1181) [#1182](https://github.com/MrCipherSmith/keryx/pull/1182) [#1183](https://github.com/MrCipherSmith/keryx/pull/1183) [#1185](https://github.com/MrCipherSmith/keryx/pull/1185) [#1186](https://github.com/MrCipherSmith/keryx/pull/1186) [#1187](https://github.com/MrCipherSmith/keryx/pull/1187)
 
 
 ## [0.4.28] - 2026-11-14
@@ -82,7 +101,7 @@
 ## [0.4.25] - 2026-11-10
 
 ### Fixed
-- **Session token and cost totals in the shell footer and `/status` no longer inflate with every turn.** Usage events used to be counted once per earlier turn, so turn N was counted N times. A single usage sink is now installed once per shell and each turn attaches to it and detaches when the turn ends. The per-turn cost also no longer gets overwritten by an older turn.
+- **Session token and cost totals in the shell footer and `/status` no longer inflate with every turn.** Usage events used to be counted once per earlier turn, so turn N was counted N times. A single usage sink is now installed once per shell and each turn attaches to it and detaches when the turn ends. The per-turn cost also no longer gets overwritten by an older turn. [#1158](https://github.com/MrCipherSmith/keryx/pull/1158)
 
 ### Changed
 - **The usage footer is coloured and drops the key hint.** Input tokens, output tokens and cost use distinct theme roles. While usage is shown, the `/ commands · Ctrl+C cancels a turn` hint is omitted; it still appears before the first turn.
@@ -90,7 +109,7 @@
 ## [0.4.24] - 2026-11-09
 
 ### Fixed
-- **Review completion on Bun 1.3.14.** Directory scans now await directory closure instead of relying on an unsupported synchronous close API.
+- **Review completion on Bun 1.3.14.** Directory scans now await directory closure instead of relying on an unsupported synchronous close API. [#1157](https://github.com/MrCipherSmith/keryx/pull/1157)
 - **Deterministic mutation bail test.** The early failure and later hang share one fixture file so filesystem ordering cannot turn the expected kill into a timeout.
 
 Includes the offline routing fix from 0.4.23, whose release did not complete.
@@ -98,7 +117,7 @@ Includes the offline routing fix from 0.4.23, whose release did not complete.
 ## [0.4.23] - 2026-11-09
 
 ### Fixed
-- **Routing with offline model catalogues.** A fallback model list no longer marks a connected provider as disconnected. The current session model remains usable even when absent from that list; unverified alternatives and missing or failed credentials remain blocked.
+- **Routing with offline model catalogues.** A fallback model list no longer marks a connected provider as disconnected. The current session model remains usable even when absent from that list; unverified alternatives and missing or failed credentials remain blocked. [#1156](https://github.com/MrCipherSmith/keryx/pull/1156)
 
 ## [0.4.22] - 2026-11-08
 
@@ -128,7 +147,7 @@ Includes the offline routing fix from 0.4.23, whose release did not complete.
 - **A failed `web_fetch` fallback no longer claims the transport served the page.** The note said "this page was served by the sandbox transport" and then, in the same line, that the transport had failed.
 
 ### Upgrade notes
-- Upgrade Team Hub and the machine executor together. Start a shell on this version to use the expanded chat controls with a connected terminal. For managed sessions, the machine can advertise additional models from its configured provider with `serve --models`.
+- Upgrade Team Hub and the machine executor together. Start a shell on this version to use the expanded chat controls with a connected terminal. For managed sessions, the machine can advertise additional models from its configured provider with `keryx hub machine configure … --models <model,model>`.
 
 ## [0.4.19] - 2026-11-07
 
@@ -1164,22 +1183,12 @@ Coverage: 79 commits reviewed; 57 individual changes listed; 22 merge commits de
 
 - Bump package version to 0.3.78 and bound APT waits in the release workflow; existing publication gates remain mandatory.
 
-All notable changes to `keryx` are documented here. The format follows
-[Keep a Changelog](https://keepachangelog.com/); versions follow semver.
-
-## [Unreleased]
-
-### Fixed
-- **`web_fetch` reads large pages instead of failing them.** A page over the transport's 128 KB budget used to fail as `request failed or timed out` — measured on `bun.com/blog` (330 KB) and GitHub Releases (533 KB) — while `curl` fetched both in under a second. The worker now cuts the body at the budget and marks it truncated, so the model gets the first 128 KB and a note saying so. Oversized JSON bodies still fail, and they fail with `response exceeds size limit` instead of a timeout.
-- **`web_search` shows publication dates.** Results carried `publicationDate` but the rendered text never included it, so a request for "links with dates" could not be answered even when every provider result had one.
-- **A failed `web_fetch` fallback no longer claims the transport served the page.** The note said "this page was served by the sandbox transport" and then, in the same line, that the transport had failed.
-
-## [0.3.77] — 2026-10-05
+## [0.3.77] - 2026-10-05
 
 ### Fixed
 - **Granted `gh` JSON keeps its ids through the PII scrub (#903).** An 11-digit run or comment id matched the phone detector and was written as `[REDACTED:phone]`, so the JSON no longer parsed and `keryx intake poll` reported `gh did not answer with JSON` for the CI source. When a granted command's stdout is one JSON document, bare numbers and the digits of github.com URL ids are held aside for the detector pass and restored after it; every string value, including titles and comment bodies, is still scanned and masked, and numbers under secret-looking keys stay visible to the detector. The digest reader gets the same fix.
 
-## [0.3.76] — 2026-10-05
+## [0.3.76] - 2026-10-05
 
 ### Added
 - **Shell task controls (flow 406).** `/tasks` exposes supervised shell tasks and their controls, with matching help and command documentation.
@@ -1191,7 +1200,7 @@ All notable changes to `keryx` are documented here. The format follows
 
 These changes passed PR CI. Repeat manual shell acceptance and measurements of subagent startup and input load remain pending; this release does not claim measured performance improvements.
 
-## [0.3.75] — 2026-10-05
+## [0.3.75] - 2026-10-05
 This release also carries 0.3.74, which was bumped on main and tagged but never published: the `v0.3.74` release run failed in the test gate, where the whole suite shares one process. Two intake tests leaked state into later suites (an environment restore in the wrong order, and a board reader registered by another suite); both are fixed here. The last version on npm before this one is 0.3.73.
 
 ### Added
@@ -1207,7 +1216,7 @@ This release also carries 0.3.74, which was bumped on main and tagged but never 
 
 [Changes since 0.3.73](https://github.com/MrCipherSmith/keryx/compare/v0.3.73...v0.3.75)
 
-## [0.3.73] — 2026-10-04
+## [0.3.73] - 2026-10-04
 This release also carries 0.3.69 to 0.3.72, which were bumped on main but never published: the `v0.3.69` release run failed in the test gate and 0.3.70 to 0.3.72 were never tagged. The last version on npm before this one is 0.3.68, and their entries are below.
 
 ### Added
@@ -1224,7 +1233,7 @@ This release also carries 0.3.69 to 0.3.72, which were bumped on main but never 
 
 [Changes since 0.3.68](https://github.com/MrCipherSmith/keryx/compare/v0.3.68...v0.3.73)
 
-## [0.3.72] — 2026-10-03
+## [0.3.72] - 2026-10-03
 ### Changed
 - **The recommendation journal has four arms, not two (flow 400).** A question with a recommendation is now put to the human in one of four ways, drawn from a seeded generator on the repository's salt and the position in the journal, so an assignment can be replayed: A (the agent's order, the mark shown, the recommended option preselected), B (the mark shown, nothing preselected), C (shuffled, mark shown, nothing preselected) and D (shuffled, mark hidden, nothing preselected: the old blind question). The salt is created once outside the repository, under `$XDG_CONFIG_HOME/keryx/decisions` (`~/.config/keryx/decisions` by default, mode 0600); a record keeps only the 32-bit `seed`, never the salt. The weights are 0.4, 0.2, 0.2, 0.2 and can be set under `arms` in `.metaproject/decisions.config.json`. A release, a delete, a push, an `action` tag, an `irreversible: true` flag and a match on the built-in list are always arm A and carry `forced: true`; every other A carries `forced: false`. A question with no recommendation is arm A and not forced. The old `mode` is derived from the arm (A ordinary, D blind, B and C `partial`), so older readers still work.
 - **The agent can no longer steer or predict its own arm (flow 400, review S-1).** `open` is idempotent per question: asking a question that matches a still-unanswered one of the same repository (normalised text and option ids) returns that record's arm, seed and order and writes nothing, so repeating it cannot re-roll the arm; once the decision is answered, the same text is a new decision. The salt moved out of the repository to `<XDG_CONFIG_HOME or ~/.config>/keryx/decisions/<repository hash>.seed` (mode 0600, directory 0700, shared by every worktree of one repository); an earlier in-repo `.metaproject/data/decisions/seed` is copied there once and deleted, so earlier assignments stay reproducible. The `ask_user` description no longer says what `irreversible` or `action` do to how the question is shown; it only says what the fields mean (the host still moves an irreversible question to arm A).
@@ -1242,7 +1251,7 @@ This release also carries 0.3.69 to 0.3.72, which were bumped on main but never 
 
 [Changes since 0.3.71](https://github.com/MrCipherSmith/keryx/compare/v0.3.71...v0.3.72)
 
-## [0.3.71] — 2026-10-03
+## [0.3.71] - 2026-10-03
 ### Fixed
 - **A tall table, or a table with text around it, no longer loses its native layout in Telegram (flow 399).** A table of more than about 500 rows, narrow enough to fit one 4096-character part, went out as a single part that a rich message refuses (500 blocks, a table row is one block), so it fell back to HTML. The splitter now counts the blocks of the whole part, not only table rows: a table row, a paragraph or heading, a quote line, a list item (two blocks, three when it opens a list) and a fenced block each count, and a part that holds a table stays within the limit, with room for the `(i/n)` label. The table is split at a row boundary with its header repeated, as before, and every part stays a native table. In `html` and `plain` mode a reply that holds a table is also sent in more, shorter parts when it has that many blocks.
 - **A row larger than a message is no longer cut in half.** When one row, with the header, did not fit a message, the table was cut mid-cell: a header-only part, then the row cut at the first space. Such a row is now written as stacked `Header: value` lines (the form the text modes already use for a row over 1500 characters); the header is not repeated for it, and the next row that fits starts a table again. Only a single cell larger than a whole message is cut, at a space in the second half of the part when there is one.
@@ -1252,7 +1261,7 @@ This release also carries 0.3.69 to 0.3.72, which were bumped on main but never 
 
 [Changes since 0.3.70](https://github.com/MrCipherSmith/keryx/compare/v0.3.70...v0.3.71)
 
-## [0.3.70] — 2026-10-03
+## [0.3.70] - 2026-10-03
 ### Added
 - **The topic gets the session's history back (flow 399).** A topic is deleted when the shell exits, so a session resumed with `keryx shell --continue` got a new, empty one. `/history [N]` now posts the session's last messages into the topic: `N` is 1 to 20 (10 without a number), anything else answers the usage line. It works typed in the shell, sent from the topic (it is a built-in command there, like `/help`), and with key `h` in the `/remote-control` modal, and it runs while a turn is running because it only reads the session. The messages are what the operator typed and the agent's final answer of each turn: no tool calls, no tool output, no reasoning and no narration written before a tool call. Each goes out as its own message, oldest first, with a `You:` or `Agent:` label and no timestamp, two seconds apart so Telegram does not throttle the run. A message over 1,500 characters is cut with `…`; text that looks like a secret is redacted before the cut, so a secret is never half-shown. A turn that contains a Telegram bot token shape or a bare 32-character key-like run is not posted: it is replaced by `[сообщение скрыто: похоже на секрет]`, a guard on top of the shared redactor, which can miss a pasted token. While a turn is running its half-written answer is not posted.
 - **Automatic restore, only for a resumed session with a new topic.** When a resumed session turns remote control on and `serve` creates a new topic (not one that already existed), the last 10 messages are posted by themselves, once, and the shell prints a notice. A topic that already existed is never refilled; turning remote control off and on again in the same shell (a new, empty topic on purpose; `/history` fills it), a reconnect and a restart of `serve` post nothing, because only the first enable of the process and the first registration of the topic are looked at. `keryx serve` answers `reused` for that; the shell client now passes it on. If the restore cannot run, the shell prints the reason.
@@ -1261,7 +1270,7 @@ This release also carries 0.3.69 to 0.3.72, which were bumped on main but never 
 
 [Changes since 0.3.69](https://github.com/MrCipherSmith/keryx/compare/v0.3.69...v0.3.70)
 
-## [0.3.69] — 2026-10-03
+## [0.3.69] - 2026-10-03
 ### Added
 - **Slate as working memory (flow 393).** On a host that keeps the originals (`pruneArchive`) with a live session directory, the model no longer re-reads its own history: each request is a bounded one. The slate gains two shelves, both task-local and never promoted to workspace knowledge. The **Trail** is written by the harness, never by the model: one entry per executed tool call (step, tool, argument digest, outcome, path of the saved full output). **Notes** are the model's own working notes, set, replaced or deleted by key with the new `slate_note` tool, redacted, at most 2000 characters each and 8000 tokens for the shelf; a note never becomes a Seed. Older rounds leave the request in batches and `archive.jsonl` keeps them; one rebuilt slate frame (Anchors, the latest Trail entries, every Note) stands in for them, with the tool-call and result pairing kept valid. The system instruction states the contract (older rounds leave the request, facts belong in Notes), and while a rewrite is due a notice naming the steps about to be dropped ends every request until a Note written after those steps covers them (decided by the operator, poll 55). The Trail has no entry cap: `slate.json` keeps every step and only the frame's token budget bounds what the model is sent (also decided by the operator, poll 55).
 - **Point recall.** `slate_trail` (filter by file, tool or step range), `recall_step` (the full saved output of a step, paged) and `history_search` (search this session's archive) are read-only and confined to the live session.
@@ -1277,7 +1286,7 @@ This release also carries 0.3.69 to 0.3.72, which were bumped on main but never 
 
 [Changes since 0.3.68](https://github.com/MrCipherSmith/keryx/compare/v0.3.68...v0.3.69)
 
-## [0.3.68] — 2026-10-03
+## [0.3.68] - 2026-10-03
 ### Changed
 - **A Telegram turn now runs like a shell `trust` turn (flow 396).** Before, every tool call from a topic asked, the run was stopped after 30 minutes and an unanswered question lapsed after 5 minutes. Now the default is `permissionMode: trust`: ordinary commands in the project run without a question, and each one is recorded as an `approval` event with the Telegram user id. The floors still ask exactly as in a local trust turn: destructive commands, privilege escalation, downloaders, agent credential files, flow and acceptance confirmations, a git publish lease, a hook that asks, untrusted content, a destructive `apply_patch` and MCP `use_tool`. `/plan` still refuses mutations, and `apply_patch` outside the project root is refused in every mode. There is no Telegram-only floor for network or outside-project commands.
 - **No run limit by default, and `/stop`.** `runTimeoutMs` is now optional with no default; `0` or absent means no timer, a positive value still stops the run. `/stop` in the topic ends the run, and the topic is told `Stopped by you.` when the turn has ended.
@@ -1296,14 +1305,14 @@ To get the 0.3.64 behaviour back, set these keys in `remote/config.json`: `"perm
 
 [Changes since 0.3.67](https://github.com/MrCipherSmith/keryx/compare/v0.3.67...v0.3.68)
 
-## [0.3.67] — 2026-10-02
+## [0.3.67] - 2026-10-02
 ### Fixed
 - **Approval answers from Telegram are confirmed by the shell (flow 397).** A press on Allow or Deny used to end the message "Allowed by user N at ..." (or "Denied by ...") as soon as `serve` had written the answer to the shell's stream, whether or not the shell ever got it. The shell now acks each approval frame over the new `POST /v1/remote/approval-ack`, and the ack says whether the decision was applied to a live question in the shell (`applied: true` or `false`), not only that the frame arrived; `serve` waits 5 seconds (`approvalAckMs`) and then ends the message "Allowed by user N at ..." or "Denied by ..." with an applied ack, "Not applied at <time>: the shell was no longer waiting for this question, so the Allow from user N changed nothing." with `applied: false`, or "Sent to the shell at <time>, not confirmed; the shell denies by itself if it did not receive it." without it, with a matching short reply. Not confirmed means serve did not hear back in time, not that the answer was lost: a shell that never received an Allow lets its own question time out as a denial, while one that received it after the 5 seconds still applies it and the topic keeps saying not confirmed. A repeated press during the wait does nothing, a closed stream stops the wait at once, a late ack changes nothing, and an id that is unknown or belongs to another session is a 404. A frame with no question waiting (a stale id, a question the shell already gave up on, a reconnect) is not applied: it is parked for at most 2 seconds, because a frame can beat the response that names its id, and is acked applied only if a question claims it in that time, otherwise as not applied; the transcript says "arrived but nothing here was waiting for it; not applied" and never "allowed from Telegram". An ack without `applied`, from a shell older than this field, is read as received-only and ends the message as before. The shell acks a repeated frame again with the same outcome but applies it once, shows a notice in the transcript when an approval frame is settled, and counts answers whose ack has not gone through as "Approvals not confirmed: N" in `/remote-control` and "<topic> · N unconfirmed" in the sidebar row.
 - The shell's wiring between its message queue, session switches, turn stream and the remote-control bridge moved from `tui-shell.ts` into `src/tui/remote-queue-wiring.ts` and is tested against a real bridge: a Telegram line that is edited keeps its source, a removed one is reported to its topic, a session switch leaves no Telegram line in the queue, and narration said before a tool call is never sent as the answer.
 
 [Changes since 0.3.66](https://github.com/MrCipherSmith/keryx/compare/v0.3.66...v0.3.67)
 
-## [0.3.66] — 2026-10-02
+## [0.3.66] - 2026-10-02
 ### Added
 - **Backfilled decisions in the recommendation journal.** `keryx decisions import <file.jsonl> [--dry-run] [--json]` loads historical decisions (one JSON object per line: `id`, `at`, `flow`, `stage`, `question`, `options`, `recommendation`, `source`, `answer`, `reason`) as the "before" arm of a comparison with the live records. Each is written as an open record marked `backfilled` with its `source`, never blind (ordinary mode, the recommendation marked when there is one, options in the given order), then an answer record (first answer, not changed, time to answer 0, stamped with the time the question was asked) and a reason record when one is given. A line that cannot be read (not JSON, a duplicate option id, a recommendation or an answer that is not an option unless `answer.other` is set) is skipped, named with its line number and why, and counted (`, malformed: M` is appended to the summary only when there are any); the rest is imported. An id already in the journal is skipped and reported, so a second import changes nothing, except that a backfilled decision whose answer is missing from the journal (an interrupted write) gets just that answer (`, repaired: R`). A journal whose last line was cut short is ended with a newline before the batch is appended. With `--json` a failure is `{"error": "..."}`. It prints `Imported: N, skipped: S, with recommendation: R, answered: A, deviations: D`.
 - **The report keeps them apart.** `keryx decisions report` has a block "до (историческое, дозаполнено задним числом)" with the total, the decisions that had a recommendation, the matches and their share, and every deviation with its reason; the ordinary and blind shares, the stages, the irreversible counts and the new median time to answer count only live decisions, because a backfilled time is unknown. `--json` has a `backfilled` section, and `report --line` prints one line in Russian for the daily message (`Журнал решений: всего N (до: B, после: L). Совпадение с рекомендацией: видимая X% (a/b), скрытая Y% (c/d); до: Z% (e/f).`, `нет данных` for an empty share).
@@ -1316,7 +1325,7 @@ To get the 0.3.64 behaviour back, set these keys in `remote/config.json`: `"perm
 
 [Changes since 0.3.64](https://github.com/MrCipherSmith/keryx/compare/v0.3.64...v0.3.66)
 
-## [0.3.64] — 2026-10-02
+## [0.3.64] - 2026-10-02
 ### Added
 - **Telegram rendering through the current Bot API (flow 395).** Replies to a Telegram topic are rendered in one of four modes, the new optional `rendering` key of `remote/config.json`: `auto` (the default), `rich`, `html` and `plain`; any other value is refused with a message naming the valid ones. In `auto` a reply that holds a table is sent as a native rich message (`sendRichMessage`, and `editMessageText` with `rich_message` for an edit; Bot API 10.1 to 10.3, `blocks` input); every other reply stays on the HTML path of 0.3.63. A table is never sent as raw pipes: HTML gets an aligned `<pre>` block with the separator row dropped, rich gets a native table block. Ordered lists keep their numbers, nested bullets keep their indentation, task items show a box or a ticked box, and a rule shows as a line, in HTML and in rich. Text with none of these renders byte for byte as in 0.3.63, with one exception: a link whose visible text reads as a web address for a different host than its target (`[https://mybank.example](https://evil.example)`) shows the target host after it, ` (→ evil.example)`, in HTML and in rich; every other link is unchanged.
 - **Fallback chain.** A rich message refused with a 4xx is sent once as HTML, and HTML refused with "can't parse entities" is sent once as plain text; a reply is never dropped for its format. A 403, 404 or 405 pauses rich messages for ten minutes. Network errors, 5xx and 429 are retried by the durable queue as before. Each fallback is recorded with its step, a redacted reason and the time.
@@ -1326,13 +1335,13 @@ To get the 0.3.64 behaviour back, set these keys in `remote/config.json`: `"perm
 
 [Changes since 0.3.63](https://github.com/MrCipherSmith/keryx/compare/v0.3.63...v0.3.64)
 
-## [0.3.63] — 2026-10-02
+## [0.3.63] - 2026-10-02
 ### Fixed
 - The managed ignore block that `keryx init` and `keryx update` write now covers `.metaproject/data/decisions/`, so the recommendation journal no longer shows up in `git status` of a project that uses keryx (this repository already ignored it by hand).
 
 [Changes since 0.3.62](https://github.com/MrCipherSmith/keryx/compare/v0.3.62...v0.3.63)
 
-## [0.3.62] — 2026-10-02
+## [0.3.62] - 2026-10-02
 ### Added
 - **Recommendation journal.** Every agent question with options now writes one record to `.metaproject/data/decisions/journal.jsonl`: the flow and stage, the question, the options, the recommendation and its reason, the display mode, the option order, the human's choice, the time to answer and an optional reason for deviating. The recommendation is written before the question is shown. One question in three is asked blind (no "recommended" mark, random order) and the recommendation is revealed right after the answer; a blind question is never used for anything on the irreversible list, which has two tiers: strong terms (release, publish, unpublish, deploy, delete, push and their Russian equivalents) always count, weak terms (merge, drop, remove, force and the like) count only next to a risk target such as main, production, a branch or a table in the same question or option, or in the `--action` tag, which agents should pass for anything irreversible; the list is extendable in `.metaproject/decisions.config.json`. A changed answer after the reveal keeps both entries (`/decisions change <option>`); after a deviation the TUI asks the human once for an optional reason and the `ask_user` tool result waits for the answer (no timeout; an empty or skipped answer is recorded as absent and releases the wait), and the reason can be added or changed later with `/decisions reason <why>` or `keryx decisions reason`; `/decisions reason|change` act on the latest decision of this session (or flow), name it, and say that a changed answer may not reach the agent. Free text is collapsed to one capped line. A flow inferred from the single in-progress flow is recorded as `inferred` and marked in the report. `keryx decisions report` prints the match share by mode and stage and the deviations with their reasons, with no model call. Any agent can drive the journal with `keryx decisions open|answer|reason`. The shell has a `/decisions` report modal and a sidebar row. Journaling itself never blocks or delays a question, and a journaling failure never throws into it; the one deliberate wait is the optional reason prompt after a deviation. The flow and stage come from `KERYX_FLOW`, the branch or the only flow in progress, and inside a flow it also adds a line to that flow's `journal.md`. One journal serves every worktree of the repository. An answer must be one of the options; unreadable journal lines are skipped and counted in the report; a blind question hides a `(Recommended)` mark written into a label. The irreversible list also catches the synonyms of releasing (ship, rollout, promote, go live, tag a version, publish to npm, выпустить, залить, отправить в прод, накатить) and destructive commands (`git reset --hard`, `clean -f`, `checkout --`, `rm -rf`); an ambiguous weak verb with no real object ("Merge it now?") counts as irreversible, an identifier in a question about code (rename `deleteUser`) does not. The `ask_user` tool takes an optional `action` tag and `irreversible: true`, which force a non-blind question, and its description tells the agent to set them. `keryx decisions report` counts, per stage, the questions where blind was refused. `/decisions change` and `/decisions reason` with no id only act on a decision of the current session and otherwise name the decision they would have touched. Cutting, bumping or tagging a version ("Cut 0.3.62?", "Bump the version and tag it?", "версию поднять и затегать", зарелизить, релизнуть) counts as a release. A decision whose flow was only inferred is kept in the project-wide journal with the `inferred` flag and is not written into that flow's own `journal.md`; only a flow named by `KERYX_FLOW`, the branch or `--flow` gets the line.
 
@@ -1341,31 +1350,31 @@ To get the 0.3.64 behaviour back, set these keys in `remote/config.json`: `"perm
 
 [Changes since 0.3.61](https://github.com/MrCipherSmith/keryx/compare/v0.3.61...v0.3.62)
 
-## [0.3.61] — 2026-10-02
+## [0.3.61] - 2026-10-02
 ### Fixed
 - The orchestrator skills, their input-contract schemas and the `/goal --auto` comment no longer say the three orchestrators share one round bound of three: the review/fix bound of `flow-orchestrator` is five, the self-fix bounds of `job-orchestrator` and `task-implementer` stay at three.
 
 [Changes since 0.3.60](https://github.com/MrCipherSmith/keryx/compare/v0.3.60...v0.3.61)
 
-## [0.3.60] — 2026-10-02
+## [0.3.60] - 2026-10-02
 ### Changed
 - **Review round bound: five.** A review/fix loop may now run five rounds before the orchestrator re-plans (`REVIEW_ROUND_CAP` and the `flow-orchestrator` skill, were three). The bounds of `job-orchestrator` and `task-implementer` self-fix stay at three, the review-gate behaviour is unchanged: the cap only adds a note and only a human can dismiss a finding.
 
 [Changes since 0.3.59](https://github.com/MrCipherSmith/keryx/compare/v0.3.59...v0.3.60)
 
-## [0.3.59] — 2026-10-02
+## [0.3.59] - 2026-10-02
 ### Added
 - **Flow origin.** Every flow can record where it came from: `human-request`, `agent-finding` or `agent-proposal`, set with `keryx flow init --origin <kind> --quote "<verbatim>" --source "<ref>"`. A `human-request` is accepted only with the person's own words and a source; otherwise the origin stays `unknown` and a note says why. The Outcome criteria template carries three lines (the request verbatim, the agent's formalization, how to observe it), `outcomeAuthor` is derived from the origin unless set, `keryx flow origin set <id> <kind> --reason` changes it with a journal line, and `flow status`, `product open`, the flow inspector and the new `/flow` shell command show it. The product's G1a is counted by origin. Nothing is gated on the origin: flows without one still init, freeze and complete.
 
 [Changes since 0.3.58](https://github.com/MrCipherSmith/keryx/compare/v0.3.58...v0.3.59)
 
-## [0.3.58] — 2026-10-02
+## [0.3.58] - 2026-10-02
 ### Added
 - **Scheduled digest.** `keryx serve` can send a periodic digest to a service topic in Telegram: what changed in your pull requests, issues, reviews and CI since the previous digest, plus the product board. The schedule is stored like any other (`keryx schedule`), a slot fires at most once, GitHub is read only through a read-only `gh` allowlist, and the delivery result (sent, queued for retry, or refused) is recorded and shown in `keryx schedule list` and the schedule modal. If the summarizing sub-agent is unavailable the digest goes out as plain facts. See the scheduled-digest guide.
 
 [Changes since 0.3.57](https://github.com/MrCipherSmith/keryx/compare/v0.3.57...v0.3.58)
 
-## [0.3.57] — 2026-10-02
+## [0.3.57] - 2026-10-02
 ### Added
 - **Slash commands and button pickers from the Telegram topic.** A line that starts with `/` in a paired topic now runs through a command gateway with an explicit allowlist instead of being refused. Text commands (`/help`, `/status`, `/doctor`, `/compact`, `/think`, `/goal`, `/queue`, `/plan`, ...) answer in the topic, redacted. `/model` and `/connect` arrive as inline-keyboard pickers (provider, then model); picker buttons are single-use, expire, and are bound to the session and message. `/mode trust|auto`, `/plan off`, `/delegate` and `/external*` run only after a Yes/No button press. `/new` and `/clear` start a fresh conversation in the same topic with a separator line. Commands that handle credentials or end the shell (`/exit`, `/channels`, `/provider`, `/setup`, `/mcp trust`, `/guard`, `/route`, `/editguard`, ...) stay local and the topic says so. The bot's command menu lists exactly the allowed commands. The `/remote-control` modal lists recent remote commands.
 - **Message state in the topic.** Each operator message shows its state through a Telegram reaction (received, accepted, working, done, failed) and the topic shows the "typing" action while a turn runs.
@@ -1374,13 +1383,13 @@ To get the 0.3.64 behaviour back, set these keys in `remote/config.json`: `"perm
 
 [Changes since 0.3.56](https://github.com/MrCipherSmith/keryx/compare/v0.3.56...v0.3.57)
 
-## [0.3.56] — 2026-10-01
+## [0.3.56] - 2026-10-01
 ### Changed
 - **Telegram replies are rendered as HTML.** Replies and status texts that `keryx serve` sends to Telegram were plain text, with literal `**` and backticks. They now go out with `parse_mode` `HTML`: bold, italic, strike, inline code, fenced code blocks (with their language), headings, quotes, bullets and `http(s)` links are rendered; text outside those constructs is escaped (`&`, `<`, `>`), unclosed or ambiguous markup (`snake_case_name`, `a*b*c`, a lone `**`) stays literal, and a fenced block that crosses a split is two valid `<pre>` blocks. Telegram counts the 4096-character limit after parsing, so a rendered part is never longer than the plain one. If Telegram answers 400 "can't parse entities", that one message is sent again as plain text and a `format-fallback` event is recorded. Approval prompts are sent as a code block so the operator sees exactly what they approve.
 
 [Changes since 0.3.55](https://github.com/MrCipherSmith/keryx/compare/v0.3.55...v0.3.56)
 
-## [0.3.55] — 2026-10-01
+## [0.3.55] - 2026-10-01
 ### Fixed
 - **A timeout while starting a pairing no longer erases the bot token.** The shell wrote the new token, asked `serve` to open the pairing, and on any failure put the old file back, even when `serve` had simply not answered in time and may have taken the token, or had answered `superseded` because a newer start owns the file. It now puts the previous token back only when `serve` definitely refused (a rejected token, `already-connected`, `serve` not running and the like), and only when the file still holds exactly the token this start wrote: a token another shell wrote in between is left alone.
 - **A rejected token no longer cancels a valid start in progress.** A second `/channels` start with a token Telegram refuses used to answer `superseded` to a valid start that was still waiting for Telegram. Only a token Telegram accepted supersedes an earlier start now; of two valid starts the later one still wins.
@@ -1393,13 +1402,13 @@ To get the 0.3.64 behaviour back, set these keys in `remote/config.json`: `"perm
 
 [Changes since 0.3.54](https://github.com/MrCipherSmith/keryx/compare/v0.3.54...v0.3.55)
 
-## [0.3.54] — 2026-10-01
+## [0.3.54] - 2026-10-01
 ### Fixed
 - **`flow check` no longer fails a clone over stale remote branches.** 0.3.53 judged every remote-tracking ref alike, so a fresh clone of this repository reported about thirty `duplicate-id` failures against old branches cut before earlier renumberings (and `flow list` tagged those flows `dup id`). Only a clash with the default branch (`<remote>/main`, `<remote>/master`, the `<remote>/HEAD` target) fails the check now; a clash with any other remote branch is a warning (`flow id <n> is also used on <ref> by a different flow (...); ignore it if that branch is stale, otherwise renumber one of them before it merges`) and does not change the exit code or the `dup id` tag. `flow init` and `flow renumber --to` still reserve numbers held by every known remote branch.
 
 [Changes since 0.3.53](https://github.com/MrCipherSmith/keryx/compare/v0.3.53...v0.3.54)
 
-## [0.3.53] — 2026-10-01
+## [0.3.53] - 2026-10-01
 ### Added
 - **Flow ids no longer clash with other branches.** Flow ids come from a clone-local ledger, so a second clone or an unfetched branch could hand out a number another branch already used (on 2026-10-01 `origin/main` held 360-365 that differed from the local 360-365). `flow init` now reserves every number held by a known remote branch (the remote-tracking refs this clone has, read without a network, up to 500 refs, `<remote>/main` first; a branch that was never fetched is invisible, and `flow renumber` is the repair), `flow renumber --to` refuses such an id, and `flow check` fails a local folder whose number a remote branch holds under a different folder name as `duplicate-id`, naming the ref and ending with `keryx flow renumber <dir> --to <free id> --reason "<why>"`. No remotes, no refs or no git means nothing is known and nothing changes.
 - **`flow check` warns about a flow folder that is not committed.** After the normal output it prints `flow folder <dir> is not committed: commit it in the same PR as the code`. It is a warning: the exit code does not change. `flow list` and the TUI (the `/governance` flow list and the flow detail) tag the same flows `not committed`, and a clash with a remote branch `dup id`.
@@ -1409,7 +1418,7 @@ To get the 0.3.64 behaviour back, set these keys in `remote/config.json`: `"perm
 
 [Changes since 0.3.52](https://github.com/MrCipherSmith/keryx/compare/v0.3.52...v0.3.53)
 
-## [0.3.52] — 2026-10-01
+## [0.3.52] - 2026-10-01
 ### Security
 - **The shell now checks that the process it talks to is `serve`.** Before, nothing authenticated the listener to the shell: if `serve` died without cleanup and another local user bound its loopback port, the shell sent that listener its token and then wrote whatever "ready" pairing answer came back (an attacker's Telegram id as the operator, an attacker's group) into `config.json`. The shell now sends a nonce-bound HMAC of the shell token instead of the token, and `serve` signs every shell-route answer in `x-keryx-serve-proof`. A missing or wrong proof (another process, a tampered body, a replayed answer, a `serve` from before this version) is refused with "restart `keryx serve`" and nothing is written. This covers the seven `/channels` routes and every remote-control call (register, approval, reply, heartbeat, ack, deregister and the stream, whose fake lines and approval decisions a squatter could otherwise feed to the shell). `serve` still accepts the raw token from an older shell. A restarting `serve` now removes the previous endpoint file before it mints its token, and the shell reads the token before the endpoint, so a new token is never sent to a port left over from an earlier `serve`; the shell no longer follows redirects, so a redirect cannot replay a request at the real `serve`.
 ### Fixed
@@ -1419,7 +1428,7 @@ To get the 0.3.64 behaviour back, set these keys in `remote/config.json`: `"perm
 
 [Changes since 0.3.51](https://github.com/MrCipherSmith/keryx/compare/v0.3.51...v0.3.52)
 
-## [0.3.51] — 2026-10-01
+## [0.3.51] - 2026-10-01
 ### Fixed
 - **`/channels` pairing, review fixes.** A pairing that was cancelled or had expired while Telegram was still answering about the group can no longer come back to ready, and its status answers `no-pairing` once it was closed during the check. The bot being added to the group before the code was sent now works: the group event of the paired operator is kept and used when the code is accepted (events from anybody else are still ignored). The group step has its own 10 minutes from the moment the code is accepted, and the modal shows the time left.
 - **Disconnect and Test wait for a Telegram start that is still in flight**, so a Disconnect pressed mid-start can no longer leave a running hub with nothing on disk.
@@ -1430,7 +1439,7 @@ To get the 0.3.64 behaviour back, set these keys in `remote/config.json`: `"perm
 
 [Changes since 0.3.50](https://github.com/MrCipherSmith/keryx/compare/v0.3.50...v0.3.51)
 
-## [0.3.50] — 2026-10-01
+## [0.3.50] - 2026-10-01
 ### Added
 - **`/governance` opens on a list of flows you can act on.** The modal has a Flows tab before the report: the current project's flows, open ones first, each with a summary (its expected outcome, tasks done, the tasks still open) and its stated effect — the bullets of `## Outcome criteria` in `description.md`, or `effect: not stated` with the reason. On an open flow, `c` checks whether it can be completed; once a check passed and the PR is merged, `d` asks for the flow id typed back (Escape or any other key cancels), checks again against the live flow, and only if nothing changed runs the real `flow complete`, then re-runs the report so the list shows the result. A flow created with `--require-confirmation` is pointed at `keryx flow confirm` in a terminal instead; the modal never mints a token. The report itself is the second tab, unchanged.
 - **`keryx flow check-complete <id> [--merged <commit>] [--confirm-token <token>] [--json]`** — every gate `flow complete` would evaluate, through the same code, plus the PR's merge state (`merged`, `open`, `closed`, `not-found`, `no-pr`, `unknown`) and, under each failing gate, the command that fixes it where one is known. It writes nothing: no status change, no completion attempt, no signature, no lock, no spent token. Exits 0 when `flow complete` would pass, 1 when it would not, 2 when the check could not run (with `--json`, an `{"error":{"message"}}` object).
@@ -1441,7 +1450,7 @@ To get the 0.3.64 behaviour back, set these keys in `remote/config.json`: `"perm
 
 [Changes since 0.3.49](https://github.com/MrCipherSmith/keryx/compare/v0.3.49...v0.3.50)
 
-## [0.3.49] — 2026-10-01
+## [0.3.49] - 2026-10-01
 ### Added
 - **`/channels`: connect Telegram to a machine from the shell.** The modal lists Telegram; when it is not connected there is one button, Connect, and when it is, Test and Disconnect. Connect asks for the bot token only (hidden, paste works, never in the transcript, history or logs). Your Telegram user id comes from a one-time pairing code (10 minutes, single use) sent to the bot in a private chat, and the group id from adding the bot to the group as an administrator; the modal says when the group has no topics or the bot lacks the manage topics right. No id, path or timeout is typed, and nothing is hard-coded. Test sends one message naming the machine to the General topic; Disconnect deletes every topic, stops polling and erases the token and the config (with `serve` down it erases the files and says the topics stay in the group). A sidebar row shows the state, a menu entry opens the modal, and the readline shell prints the state and how to connect. Use one bot per machine; the group can be shared. Sessions still opt in one by one with `/remote-control`.
 - **`keryx serve` offers the connecting routes even when Telegram is not configured, and reloads without a restart.** Seven `/v1/remote/channels-*` routes take the local shell token and carry no secret: the shell writes `remote/bot-token` and `remote/config.json` itself (mode 600, atomic) and asks `serve` to reload. Pairing runs inside the single poller.
@@ -1452,7 +1461,7 @@ To get the 0.3.64 behaviour back, set these keys in `remote/config.json`: `"perm
 
 [Changes since 0.3.48](https://github.com/MrCipherSmith/keryx/compare/v0.3.48...v0.3.49)
 
-## [0.3.48] — 2026-10-01
+## [0.3.48] - 2026-10-01
 ### Added
 - **Remote control from Telegram: `/remote-control [name|off|status]`.** In the full-screen shell, `/remote-control <name>` mirrors the session into its own topic of a Telegram supergroup. A line sent in the topic runs as if typed in the shell (shown as `tg ❯` in the transcript and `[tg]` in the queue panel); the reply and any approval question, with Allow and Deny buttons, come back to the topic. `status` shows the state (`off`, `on`, `offline`), the topic, the last heartbeat and recent events; `off` deletes the topic. The sidebar has a remote row and a `/remote-control` modal. The readline shell prints that it is off. **Off by default**: it needs a separate BotFather bot whose token is in `remote/bot-token` in the global keryx directory (mode 600), `remote/config.json` with the supergroup `chatId` and the `allowedUserIds` allowlist, and a supergroup with topics where the bot is an admin with manage topics. Without those files `keryx serve` starts as before and says `remote control is off`.
 - **One Telegram poller, in `keryx serve`.** Shells never talk to Telegram: they reach seven `/v1/remote/*` routes with a local shell token, from loopback. The serve bearer token does not reach those routes and the shell token reaches nothing else. A second `serve` on the same bot token stops on Telegram's conflict answer. A sender outside the allowlist is ignored; only the id and the time go to `rejected.jsonl`.
@@ -1472,7 +1481,7 @@ To get the 0.3.64 behaviour back, set these keys in `remote/config.json`: `"perm
 
 [Changes since 0.3.47](https://github.com/MrCipherSmith/keryx/compare/v0.3.47...v0.3.48)
 
-## [0.3.47] — 2026-10-01
+## [0.3.47] - 2026-10-01
 ### Changed
 - **The opt-in `rules-export` block no longer edits `CLAUDE.md` or `AGENTS.md` by default.** `keryx integrations install --runtime claude|codex --surface rules` and `keryx bundle import --render-for` used to write the `<!-- keryx:rules -->` block into the tracked `CLAUDE.md` and `AGENTS.md` — the one keryx writer 0.3.45 left behind. It now goes where the `keryx:index` block goes, by `agentEntrypoints.root`: `CLAUDE.local.md` and the keryx-generated `AGENTS.override.md` under scope local (the default), `CLAUDE.md` and `AGENTS.md` only under scope `shared`. After installing it for both runtimes with the default scopes, `git status` lists neither `CLAUDE.md` nor `AGENTS.md`. A local file git does not ignore yet (a fresh clone before `keryx update`) is added to `.git/info/exclude` first, through the same writer `update` uses.
 - **Codex keeps the block across regenerations.** It sits in `AGENTS.override.md` right after the index block, and `keryx update`, `keryx rules sync` and `keryx rules distill` carry it into every regenerated override; the override's staleness hash is still `AGENTS.md`'s alone. With `mode: "skip"`, no `AGENTS.md`, no override generated yet in the checkout, or an `AGENTS.override.md` keryx did not generate, nothing is written for Codex and the install succeeds with a warning that says which.
@@ -1495,7 +1504,7 @@ To get the 0.3.64 behaviour back, set these keys in `remote/config.json`: `"perm
 
 [Changes since 0.3.46](https://github.com/MrCipherSmith/keryx/compare/v0.3.46...v0.3.47)
 
-## [0.3.46] — 2026-10-01
+## [0.3.46] - 2026-10-01
 ### Added
 - **`/settings` in the shell** — one screen for the settings that used to live in separate slash commands, grouped Safety, Routing, Display and External: permission mode, plan, turn guard, edit guard, classifier routing, reasoning effort, reasoning display, theme, external providers, external agents, and a read-only line for the Jev review profile. Each row shows its effective value and where it lives: `session` (gone when the shell exits: permission mode and plan), `saved` (kept on disk). In the TUI it is a modal styled like `/connect`: `↑/↓` between settings, `←/→` between the On/Off or value buttons, `Enter` or a click to apply, `Esc` to close. Every button runs the existing command's own handler, so `/settings` and the slash command cannot disagree. Switching permission mode to `auto` asks for a second `Enter`, as Disconnect does in `/connect`. In the readline shell `/settings` prints the same rows as a table, with the settings that need the TUI marked. The sidebar's mode line points at it and opens it on a click.
 ### Changed
@@ -1503,7 +1512,7 @@ To get the 0.3.64 behaviour back, set these keys in `remote/config.json`: `"perm
 
 [Changes since 0.3.45](https://github.com/MrCipherSmith/keryx/compare/v0.3.45...v0.3.46)
 
-## [0.3.45] — 2026-10-01
+## [0.3.45] - 2026-10-01
 ### Changed
 - **keryx no longer edits the files your team tracks.** `keryx init` and `keryx update` used to write the `<!-- keryx:index -->` block into `AGENTS.md` and `CLAUDE.md`, the `# keryx:begin` block into `.gitignore`, and `_keryxManaged` hooks into `.claude/settings.json`. Those edits sat uncommitted in every clone and made `git pull` refuse upstream changes to the same files. By default the block now goes to `CLAUDE.local.md`, Claude hooks to `.claude/settings.local.json`, and the ignore rules to `.git/info/exclude`; after `init` or `update`, `git status` lists none of `AGENTS.md`, `CLAUDE.md`, `.gitignore`, `.claude/settings.json`.
 - **Codex gets `AGENTS.override.md`** (`mode: "override"`, the default): the block plus the full content of `AGENTS.md`, because Codex reads the override instead of `AGENTS.md`, never both. A bare block is never written there. `mode: "skip"` writes nothing for Codex and says so; the one change it makes is removing an `AGENTS.override.md` keryx generated earlier (it carries keryx's provenance line), so a leftover cannot keep hiding `AGENTS.md`. With no `AGENTS.md`, Codex is skipped with a message, and no tracked `AGENTS.md` or `CLAUDE.md` is created.
@@ -1530,7 +1539,7 @@ To get the 0.3.64 behaviour back, set these keys in `remote/config.json`: `"perm
 
 [Changes since 0.3.44](https://github.com/MrCipherSmith/keryx/compare/v0.3.44...v0.3.45)
 
-## [0.3.44] — 2026-09-30
+## [0.3.44] - 2026-09-30
 ### Added
 - **`keryx agents external enable` and `disable`** — one command turns the external agent runtime on (or off) for this machine and this project: `externalAgents.enabled` in the user config and, when the project has a manifest, `enabled` on its `gdskills.external-agents` entry. No other key or file changes, and a manifest that is not valid JSON is refused. Before this, the project half needed `keryx init --external-agents`, which rewrites many unrelated tracked files, and the user half had no command at all.
 - **`/external-agents on|off` in the shell** — the same action from the composer; bare `/external-agents` shows the state and why. It is not `/external` (the privacy switch for external providers).
@@ -1542,7 +1551,7 @@ To get the 0.3.64 behaviour back, set these keys in `remote/config.json`: `"perm
 ### Notes
 - `enable` does not change `externalAgents.spawnDecision`: a model-initiated `spawn_subagent` call still asks for approval, and is denied where no approver is wired.
 
-## [0.3.43] — 2026-09-30
+## [0.3.43] - 2026-09-30
 ### Fixed
 - **Every `codex-cli` run failed with `invalid_json_schema`** (0.3.42, read-only and `--write`). `codex exec --output-schema` forwards to OpenAI structured output, which refuses the subagent-result schema as written (objects must list every property in `required`, and `allOf`, `if`/`then`, `pattern`, bounds and `default` are rejected). `codex` now receives a strict copy of that schema; keryx removes the nulls the copy forces on optional fields and validates the answer against the full, unchanged contract, so a null on a required field still fails.
 - **A `codex` write run was reported as `exited with code 143`.** `codex` needs about 2 s to exit after its final event in write mode, longer than the 2 s settle window, so keryx killed it mid-teardown and trusted the signal exit code. For `codex` the window is now 10 s (other agents keep 2 s), and a run ended by keryx's own kill after its terminal event takes its exit code from the child if it had already reported one, otherwise from its events, never from the signal the kill produced.
@@ -1550,7 +1559,7 @@ To get the 0.3.64 behaviour back, set these keys in `remote/config.json`: `"perm
 ### Notes
 - A `codex` result that reports a `blocker` or `major` finding must carry `class_scope` (the full contract requires it); the strict copy cannot express that conditional, so a result that leaves it null fails validation as an Error instead of being accepted. Validation stays fail-closed.
 
-## [0.3.42] — 2026-09-30
+## [0.3.42] - 2026-09-30
 ### Added
 - **Write mode for the external agent `codex-cli`** — `keryx agents external run codex-cli --task "..." --write` works the same way as for `claude-cli`: a throwaway git worktree at the base commit, a secret-redacted, hashed patch that is never applied automatically, human review, and landing only as a NEW local branch `external/<run-id>` after you type the first 12 hex digits of the patch hash. The same flagged-path gate applies, there is no auto-approve, and nothing is pushed and no pull request is opened from the landed branch.
 - **A different kind of confinement** — `claude` has a tool allow-list (`Read Grep Glob Edit Write`; no shell, no network, no MCP). `codex` has no allow-list, so keryx runs it with `-s workspace-write -c sandbox_workspace_write.exclude_slash_tmp=true -c sandbox_workspace_write.exclude_tmpdir_env_var=true -c sandbox_workspace_write.network_access=false --ignore-rules`. Measured live on 2026-09-30 with `codex` 0.159.2 in a scratch git repository: writes outside the worktree (`/tmp`, `/var/tmp`, `$HOME`, a sibling directory) fail with "read-only file system", a DNS lookup fails, and `.git` is read-only (no commit, no hook write). Without the two `exclude_*` flags the default `workspace-write` sandbox lets `codex` write to `/tmp`, which is why keryx always passes them. `--ignore-rules` is equally mandatory: without it, the exec-policy rules in the user's own `codex` configuration can let shell commands run outside the sandbox (writes to `/tmp` and `$HOME` succeeded in the test); with it they were refused.
@@ -1564,7 +1573,7 @@ To get the 0.3.64 behaviour back, set these keys in `remote/config.json`: `"perm
 ### Docs
 - [Let an external agent write](docs/docs/guides/external-agent-write.md), the harness page, the architecture and modules pages and the README now cover `codex-cli` write mode and how its confinement differs from `claude-cli`.
 
-## [0.3.41] — 2026-09-30
+## [0.3.41] - 2026-09-30
 
 ### Fixed
 
@@ -1590,7 +1599,7 @@ To get the 0.3.64 behaviour back, set these keys in `remote/config.json`: `"perm
 
 [Changes since 0.3.40](https://github.com/MrCipherSmith/keryx/compare/v0.3.40...v0.3.41)
 
-## [0.3.40] — 2026-09-30
+## [0.3.40] - 2026-09-30
 ### Added
 - **Write mode for the external agent `claude-cli`** — `keryx agents external run claude-cli --task "..." --write` runs `claude` in a throwaway git worktree cut from the current commit with only the tools `Read Grep Glob Edit Write`: no shell, no network, no MCP server (`--tools Read Grep Glob Edit Write --permission-mode acceptEdits --permission-prompts none`). The worktree's diff is captured, secret-redacted, hashed (sha256 of the redacted patch) and stored as a pending review; nothing reaches your checkout. Nothing is stored when the run changed nothing, and a changed symlink that points outside the worktree refuses the run at capture (it can only be discarded).
 - **`keryx agents external review <run-id>`** shows one stored run: flagged paths first, the file list, then the redacted patch. **`apply <run-id> [--allow-flagged]`** needs a real terminal on both ends, shows the diff and asks you to type the first 12 characters of the patch hash; only an exact match creates a NEW local branch `external/<run-id>` with one commit cut from the recorded base commit in a second throwaway worktree. Your current branch, index and working tree are never touched, a run lands at most once, and nothing is pushed and no pull request is opened. **`discard <run-id>`** drops the run and deletes its patch.
@@ -1602,7 +1611,7 @@ To get the 0.3.64 behaviour back, set these keys in `remote/config.json`: `"perm
 - The mandatory review is a human reading the shown diff. A model review is not built, there is no auto-approve, and keryx never pushes or opens a pull request.
 - Verified against the `claude` 2.1.280 narrow-permission probe (the write roster with `acceptEdits` edits inside the worktree, a write outside it is auto-denied, `--permission-prompts none` turns any other question into a refusal). A full write run through the installed CLI has NOT been recorded yet.
 
-## [0.3.39] — 2026-09-29
+## [0.3.39] - 2026-09-29
 ### Added
 - **Asynchronous remote approvals (R4d)** — an `ask` in a `keryx serve` turn becomes a durable pending approval and the turn detaches (`202`) instead of ending in a denial. `GET /v1/approvals` lists (`?state=all` adds recently resolved); `POST /v1/approvals/{id}` with `{"decision":"allow"|"deny"}` applies the first valid answer once and returns the original outcome on a replay. An expired approval answers `410`, an answer from the raising turn (declared in `x-keryx-turn`) `403`, an unknown or unseen id an indistinguishable `404`, and a malformed or extended body `400` before any state changes. `/v1/status` `pendingApprovals` is real.
 - **An answer is one call** — bound to a fingerprint of that call, consumed once (restart included), never a session grant, and a destructive, credential or hook-ask call asks again the next time. Unanswered means denied at expiry; with no consumer attached the approval is `undeliverable` at once (`approval.requireConsumer`, default on).
@@ -1611,7 +1620,7 @@ To get the 0.3.64 behaviour back, set these keys in `remote/config.json`: `"perm
 ### Notes
 - The production `keryx serve` registers no tools, so a stock listener raises no approvals; they are reachable through an injected tool registry. The self-grant rule rests on a declared header, so it stops an honest turn, not a lying caller. The chat card, remote session-wide grants and approvals for unattended trigger runs are not built.
 
-## [0.3.38] — 2026-09-29
+## [0.3.38] - 2026-09-29
 ### Added
 - **Review as a pull request bot** — `keryx review bot run --pr <n> --repo <owner/repo>` reviews the pull request diff (one reviewer turn, one verifier turn per finding), drops findings the verifier refutes, and records the rest as a managed review; `keryx review bot post` builds ONE pull request review (event `COMMENT`, `commit_id` = the head) with an inline comment per finding inside the diff and the rest in the body. A dry run unless `--post` is given; refused when the pull request is closed, merged or from a fork, when `--sha` is not the head, or when the review was made at an older commit. The GitHub allow-list gains exactly this one write (`POST repos/{owner}/{repo}/pulls/{n}/reviews`). A comment body that would carry a secret-shaped string is withheld and counted, never masked and posted. The diff is cut at `--max-diff-bytes` (default 200,000) and the cut is stated in the run output, in `report.md` and in the posted review. The review body ends with a hidden `keryx-review-bot` marker for the head commit and the post step refuses when a review with that marker is already on the pull request.
 - **`keryx review metrics [--json] [--refresh]`** — findings raised, acted on, dismissed by kind, answered, still open; precision (acted on over acted on plus dismissed as incorrect) and resolved-before-merge. A ratio with nothing behind it prints `n/a`. Resolved-before-merge is a proxy: a package's `updatedAt` stands in for when a disposition was recorded. Metrics need the managed review packages on the machine where `keryx review complete` is run; the Action's runner keeps them only for the job and nothing uploads them.
@@ -1622,14 +1631,14 @@ To get the 0.3.64 behaviour back, set these keys in `remote/config.json`: `"perm
 ### Docs
 - New guide `review-as-a-pr-bot.md` (setup, secrets, the same-repository rule, dry run, cost and diff cap, metrics and the resolved-before-merge proxy) and a README section; the guide has not been exercised against a real GitHub repository or model provider.
 
-## [0.3.37] — 2026-09-29
+## [0.3.37] - 2026-09-29
 ### Added
 - **`/rewind` — per-turn file snapshots with rollback of files and conversation.** Immediately before the first write, shell, destructive or delegate tool call of a turn (after approval), keryx snapshots the project work tree into a per-session shadow git repository under the session directory; a read-only turn snapshots nothing, and the project's own `.git` is never read or written. `/rewind` restores files, history or both to before a chosen turn: modified files come back, created files are removed, deleted files are recreated; `.git`, `node_modules`, `.metaproject/data` and gitignored paths are never touched, and files over 5 MB are skipped and named. A `pre-rewind` snapshot is taken first, so the restore can be undone (files only). History is cut by archive index, so it survives compaction, and persists through the session store; `/rewind` refuses when the session lease is held elsewhere. In the TUI it is a modal picker (time, prompt excerpt, files changed; files / history / both; confirmation) plus a sidebar section with the snapshot count; the readline shell has `/rewind`, `/rewind N [files|history|both]` and `/rewind confirm`.
 - **`keryx setup [init|refresh|repair]` and `/setup`** — a read-only guide for preparing a Metaproject from scratch, after a pull, or when something is stale. Each step shows the CLI line and a prompt to paste to an agent; the same guide opens in `keryx shell` as `/setup` (tabs in the TUI, plain text in the readline shell). It runs nothing: no init, update, sync or wiki enrichment. Merged as #802 in the same release without its own version bump, so this entry was added afterwards.
 - **Limits and retention** — 50 snapshots per session, oldest pruned; the shadow repository is removed with its session; `KERYX_REWIND=off` disables it. Unattended runs (triggers, `keryx serve`, external agents) create no shadow repository and refuse `/rewind`. Side effects of `shell_exec` outside the work tree are not undone. Documented in `docs/docs/guides/rewind.md`.
 
 
-## [0.3.36] — 2026-09-29
+## [0.3.36] - 2026-09-29
 ### Added
 - **External agents verified against real vendor processes** — `claude` 2.1.280 (2026-09-29) and `agy` 1.2.12 (2026-09-28, run again 2026-09-29) ran end to end through `keryx agents external run` and ended `Completed`; the raw transcripts, each with its vendor version, are in `fixtures/external/live/` and replay offline (claude and codex in `live-fixtures.test.ts`, agy in `antigravity-cli.runtime.test.ts`). A fixture-scan test fails on a known set of private-data patterns (home path, e-mail, token, vendor credential-store reference). With `KERYX_LIVE_EXTERNAL=1` and `KERYX_LIVE_EXTERNAL_CWD` set to a clean scratch repo, live tests assert against real vendor processes; they record nothing.
 - **The first real codex-cli failure is recorded** — a subscription usage limit on codex 0.159.0, replacing the hand-authored stand-in as the reference for the limit classifier. No successful codex run exists yet; the subscription was at its limit until 2026-10-03.
@@ -1638,7 +1647,7 @@ To get the 0.3.64 behaviour back, set these keys in `remote/config.json`: `"perm
 ### Docs
 - `harness.md` and the shell/TUI test catalog no longer say the external runtime was never run against a real vendor process; they name the verified versions and keep Gemini and a successful codex run marked unverified.
 
-## [0.3.35] — 2026-09-29
+## [0.3.35] - 2026-09-29
 
 ### Added
 - **MCP session trust is inspectable and revocable** — `/mcp trust list` prints every tool trusted for the session with its full name and server, and says `(will ask again: changed|destructive|gone)` instead of `[trusted]` for a grant the next call would not honour; `/mcp trust revoke <server__tool>` removes one and `/mcp trust revoke all` removes everything. An unknown name is reported and changes nothing, and revoke takes the full name only. Works in the TUI (also while the agent is busy) and in the readline shell, where `/mcp` was previously unhandled (plain `/mcp` there now points at `keryx mcp list`). `/mcp trust` is documented in the `/mcp` entry of the slash registry, dropdown, `/help` and the help modal.
@@ -1650,12 +1659,12 @@ To get the 0.3.64 behaviour back, set these keys in `remote/config.json`: `"perm
 ### Fixed
 - **`/new` and `/clear` in the TUI now clear the session's MCP trust grants.** Only resume did, though the docs said `/new` cleared them.
 
-## [0.3.34] — 2026-09-29
+## [0.3.34] - 2026-09-29
 
 ### Fixed
 - **`keryx flow outcome author` was unreachable from the command line in 0.3.33** — the router in `cli.ts` refuses a subcommand that `src/lib/group-subcommands.ts` does not list, and `outcome` was missing from the `flow` list, so the command answered `Unknown command: outcome` before the handler ran. The 0.3.33 tests called `flowCommand` directly and never went through the router. A new test compares every `case` in the `flow` switch with the router's list and runs the command through the real `cli.ts`.
 
-## [0.3.33] — 2026-09-29
+## [0.3.33] - 2026-09-29
 
 ### Added
 - **Who wrote the outcome criterion** — a flow's `flow.json` gains an optional `outcomeAuthor`, `agent` or `human`; a flow without it reads `unknown`, and reading never rewrites a file. `keryx flow init --outcome-author agent|human` records it: `agent` when the flag is absent, `human` only when the flag says so (never inferred from a git identity, an owner or the environment), and any other value is refused before the flow is created. With `human`, the `## Outcome criteria` section of `description.md` is the template's own text, byte for byte. `keryx flow schema` lists the field.
@@ -1665,7 +1674,7 @@ To get the 0.3.64 behaviour back, set these keys in `remote/config.json`: `"perm
 ### Changed
 - **G1a is counted in four cells and G1b split by author** (`docs/requirements/keryx-product-module/implementation-plan.md`, `metrics-and-validation.md`): `human` or `agent` crossed with a real criterion or `not measured — <reason>`. Agent flows measure compliance with the instruction; human flows measure acceptance, and conclusions about acceptance come only from human flows. This replaces the 0.3.32 passage that said authorship is classified by hand; the author is now read from flow.json.
 
-## [0.3.32] — 2026-09-29
+## [0.3.32] - 2026-09-29
 
 ### Added
 - **Uncommitted closing-state note** — `keryx flow complete` writes flow.json, journal.md and reviews/ into the working copy after the pull request has merged, and nothing commits that afterwards, so a tracked flow directory commonly stayed dirty against HEAD. After a successful completion, and in `keryx flow status` for a `done` flow, keryx now prints one `note:` saying the flow directory has uncommitted changes, naming up to five changed entries (`+N more` beyond that), when git tracks the directory and it has changes; it does not claim to know what wrote them. Each git call is read-only (`--no-optional-locks`) and time-bounded. A directory git tracks nothing in, a clean one, no repository and any git failure print nothing. Read-only git, no model call, informational: it never changes an exit code or a completion result. The TUI `/flows` detail tab shows the same note.
@@ -1673,7 +1682,7 @@ To get the 0.3.64 behaviour back, set these keys in `remote/config.json`: `"perm
 ### Changed
 - **G1a is read separately by who created the flow** (`docs/requirements/keryx-product-module/implementation-plan.md`, `metrics-and-validation.md`): flows created by a person and flows created by an agent are counted apart, and an agent-created flow is a compliance check, not acceptance — the agent has just read the instruction to fill the slot. Authorship is classified by hand when the ten flows are read (flow.json does not record it), and the split between a real criterion and `not measured — <reason>` stays as a second axis.
 
-## [0.3.31] — 2026-09-29
+## [0.3.31] - 2026-09-29
 
 ### Added
 - **Outcome verdicts** (product module, G1) — an observation is now `outcome-observed: <verdict> — <note>` at column 0 of a flow's `journal.md`, with the verdict exactly one of `helped`, `no-effect`, `harmed`, `inconclusive`. A line inside a fenced code block is ignored. The index stores the verdict and the note, `IntentCounts` splits the observed count by verdict, and the split appears in the `product index` summary, the `product open` header and the TUI `/product` view.
@@ -1688,7 +1697,7 @@ To get the 0.3.64 behaviour back, set these keys in `remote/config.json`: `"perm
 ### Notes
 - Nothing gates: no flow transition, freeze, confirm or complete reads a verdict, criterion or note. No existing flow or requirements package was edited, and the free-text `outcome-observed:` form of 0.3.30 is no longer a valid observation.
 
-## [0.3.30] — 2026-09-29
+## [0.3.30] - 2026-09-29
 
 ### Added
 - **`keryx product index [--json]`** (flow 362, product module P1) — reads every flow directory and every `docs/requirements/*/` package into one intent index at `.metaproject/data/product/index.json`. An intent is the Problem or Expected Outcome sentence, the criteria as `AcKindRecord`, the status, the close date and, for a requirements package, its outcome criteria. Deterministic: stable ordering, byte-identical on a second run, no timestamp in the body. The summary reports how many entries state no intent; a flow whose description holds only scaffold placeholders counts there and is not an error. The directory is disposable: delete it and the next `index` rebuilds an equivalent one, and nothing reads product data from anywhere else.
@@ -1699,7 +1708,7 @@ To get the 0.3.64 behaviour back, set these keys in `remote/config.json`: `"perm
 ### Notes
 - The module is one directory, two commands, no skill, no subagent and no gate. It makes no model call, and no other command calls it: no flow transition, freeze, confirm or complete waits on it.
 
-## [0.3.29] — 2026-09-28
+## [0.3.29] - 2026-09-28
 
 ### Added
 - **Verification kinds on acceptance criteria** (flow 361, W0) — a criterion may end with one trailing marker: `[verify: exec `cmd`]`, `[verify: invariant `cmd`]`, `[verify: judged]` or `[verify: none — reason]`. The marker is part of the criterion line, so the freeze checksum covers it. A marker quoted in backticks is prose; two markers outside code, or a marker that is not last or does not close with `]`, is an error. An unmarked criterion is `unclassified`, never `none`. Nothing gates on a kind: freeze, `ac update`, confirm and complete behave exactly as before, and no existing criterion is migrated.
@@ -1712,7 +1721,7 @@ To get the 0.3.64 behaviour back, set these keys in `remote/config.json`: `"perm
 ### Changed
 - `flow check-ac` strips a trailing verification marker before it extracts a criterion's tokens or decides it is not checkable, so a marker's command text is never read as the criterion's wording. Unmarked criteria are byte-identical.
 
-## [0.3.28] — 2026-09-28
+## [0.3.28] - 2026-09-28
 
 ### Added
 - **Model-tier resolution is generation-aware** (flow 358) — within one family and vendor, a newer version now outranks an older one (`sonnet 5` over `5`, `opus 5.5` over `4.8`). A session on a newer model with an older, pricier model discovered never resolves `deep` to the older model: it keeps the session model, and `tier_resolution` / `tier_reasons` record why (`resolve:kept-older-generation-pricier`). `tier_reasons` now ends with a `resolve:<reason>` entry on every decision.
@@ -1724,7 +1733,7 @@ To get the 0.3.64 behaviour back, set these keys in `remote/config.json`: `"perm
 ### Changed
 - The Claude Code subagent alias map (`deep` → `opus`, `standard` → `sonnet`, `light` → `haiku`) is unchanged and now has a regression test.
 
-## [0.3.27] — 2026-09-28
+## [0.3.27] - 2026-09-28
 
 ### Added
 - **Trust a single MCP tool for the rest of a shell session** (flow 359 hardens it) — in `trust` mode the `use_tool` approval prompt offers `T` (readline) / "Trust this tool (this session)" (TUI dock). The grant is the exact qualified tool name, lives only in memory for that interactive session, is cleared by `/new` and by resuming another session, and only a validated operator answer can add to it: the model cannot. A `PreToolUse` hook that asks still asks.
@@ -1733,7 +1742,7 @@ To get the 0.3.64 behaviour back, set these keys in `remote/config.json`: `"perm
 - **A trust grant never lifts the untrusted-content floor.** In a turn that holds external content (a web result, or any MCP tool result, the trusted tool's own included) a trusted tool asks like any other, the prompt does not offer `T`, and it says why. The grant applies again in the next turn.
 - **A trust grant is bound to the tool's definition, not only its name.** The session grant stores a fingerprint of the tool's name, description and input schema; if the server changes any of them, or the tool disappears, the grant is dropped and the call asks again.
 
-## [0.3.26] — 2026-09-28
+## [0.3.26] - 2026-09-28
 
 ### Added
 - **Google's Antigravity CLI (`agy`) ships as a third external agent, read-only** (flow 357) — a new registry row (`antigravity-cli`, label "Antigravity"), a line-stream codec (`src/harness/external/codec/antigravity-cli.ts`) parsing `agy -p --output-format stream-json`'s `init`/`step_update`/`result` events against a recorded live transcript, and an empty `EXTERNAL_RUNTIME_CREDENTIAL_ALLOW` entry (it has no API-key auth path — only its own subscription login under `HOME`). `worktree-write` is declared (the CLI supports it) and refused with `not-implemented`, same as every other line-stream agent today.
@@ -1742,18 +1751,18 @@ To get the 0.3.64 behaviour back, set these keys in `remote/config.json`: `"perm
 - **`keryx agents external run` now drives line-stream (codec) agents, not only ACP ones** — `codex-cli`, `claude-cli` and `antigravity-cli` can all be run directly (`keryx agents external run <id> --task "…"`), not only delegated to from the interactive shell; `runExternalChild` already supported both transports, only this command's own early refusal did not.
 - **A real, recorded live run proves the `antigravity-cli` path end to end** — `fixtures/external/live/antigravity-cli/2026-09-28/keryx-run-ok.{outcome,versions}.json`, produced through `keryx agents external run antigravity-cli` itself (agy 1.2.12), completed with a schema-valid structured result and zero unrecognised transcript lines.
 
-## [0.3.25] — 2026-09-28
+## [0.3.25] - 2026-09-28
 
 ### Fixed
 - **The idle-wake shell test no longer flakes on slow runners.** It fired background completions until the model was called, which left a gap after the shell took the first one where a second completion queued a second notification turn ahead of the operator's line. It now stops firing once the shell has taken one completion. This flake stopped the v0.3.24 release run once.
 - **Pull-request CI now runs the `scripts/` tests.** They ran only in the release workflow, so the retired-spelling check that stopped 0.3.23 could not fail a pull request. `test:core` includes `scripts/` (about 50 s).
 
-## [0.3.24] — 2026-09-28
+## [0.3.24] - 2026-09-28
 
 ### Fixed
 - **Release 0.3.23 did not reach npm.** Its release workflow stopped on the retired-spelling check: the help text moved from `cli.ts` to `cli-registry.ts` (flow 356) without the file-level declaration `cli.ts` carried, and two new texts spelled `keryx mcp serve`. 0.3.24 carries the declaration and the current spelling; it contains everything listed under 0.3.23.
 
-## [0.3.23] — 2026-09-28
+## [0.3.23] - 2026-09-28
 
 ### Fixed
 - **Four architecture import cycles cut** (A-1, A-2, A-3, A-5): `security/service.ts` no longer re-exports the impact-evidence module — it moved to its own `src/impact-evidence/` core zone; `CLI_ROUTES`/`printCommandHelp` moved out of `cli.ts` into a new `src/cli-registry.ts` (the `help` route resolves through a dynamic import so the module can't recreate the cycle with `commands/help.ts`); `keyFilesForPage` moved to `src/wiki/key-files.ts`; `parseJsonTolerant` moved to `src/mcp-servers/json-utils.ts`. `keryx gdgraph query cycles` now lists only the two already-accepted facade loops (A-4).
@@ -1775,7 +1784,7 @@ To get the 0.3.64 behaviour back, set these keys in `remote/config.json`: `"perm
 - fix(impact-evidence): `provider.ts` now imports `loadSecurityConfig`/`resolveImpactEvidenceConfigTrusted` through the `security/service.ts` facade instead of reaching past it into `security/config` directly, matching the module's own facade discipline (review round 1, ARCH-R1-F1).
 - fix(tests): `src/commands/bundle.test.ts`'s temp-dir helper now stamps an empty `.git` into every fresh test root the moment it is created — `bundleCommand`'s own unbounded upward `.metaproject`/`.git` walk (`resolveBundleProjectRoot`) could otherwise escape a fresh mkdtemp'd root into the OS temp directory itself and, if `/tmp` already carried a stray `.metaproject`, silently write a test's fixture there instead — reproduced directly (with a simulated `/tmp/.metaproject`, 9 of 16 tests failed and `acme-widget` landed under `/tmp/.metaproject/skills/`) and confirmed fixed.
 
-## [0.3.22] — 2026-09-28
+## [0.3.22] - 2026-09-28
 
 ### Fixed
 - **Public review reports no longer attribute a run to the operator's GitHub
@@ -1788,7 +1797,7 @@ To get the 0.3.64 behaviour back, set these keys in `remote/config.json`: `"perm
   drain takes the forced item first or the FIFO head; it never dispatches while
   the main turn, pause lease or cancellation handoff is active.
 
-## [0.3.21] — 2026-09-28
+## [0.3.21] - 2026-09-28
 
 ### Fixed
 - **A secret dressed as a word slug with a hex tail (`<word>-<word>-<hex>`) is now redacted when labelled** — the LABELLED path (`redactSensitiveText`, `security/detect/entropy.ts`) no longer consults any word-slug exemption at all; only an allow-shape, a hex blob, or separator-stripped entropy reaching the floor can qualify a labelled value. An UNLABELLED secret in the same shape, with a 10-16 character hex tail, remains an accepted, documented residual (see `findings.md` row S-8).
@@ -1798,7 +1807,7 @@ To get the 0.3.64 behaviour back, set these keys in `remote/config.json`: `"perm
 - Fixed a flaky redaction test: `redact.test.ts`'s labelled/unlabelled UUID coverage now uses 20 fixed UUIDs (committed in the test, individually confirmed not to trip the unrelated `pii.credit-card` detector) instead of unseeded `crypto.randomUUID()` values, and asserts on the entropy redaction marker specifically rather than a looser "value is gone" check.
 - Also shipped in 0.3.19–0.3.20: `LABEL=VALUE` assignment shapes (`api_key=…`, `--token=…`) and camelCase labels (`apiKey: "…"`) are now recognised and redacted, closing a gap where `=` inside the token character class fused the label into the candidate and where camelCase had no non-alphanumeric boundary character at all.
 
-## [0.3.20] — 2026-09-28
+## [0.3.20] - 2026-09-28
 
 ### Fixed
 - **A secret re-chunked into hyphenated pieces no longer bypasses redaction
@@ -1848,7 +1857,7 @@ To get the 0.3.64 behaviour back, set these keys in `remote/config.json`: `"perm
   (6 false positives — the 5 label-proximity shapes above plus the Medium
   URL), 41 after (0 false positives remaining).
 
-## [0.3.19] — 2026-09-28
+## [0.3.19] - 2026-09-28
 
 ### Fixed
 - **Browser and other MCP tools no longer ask twice for the same call.**
@@ -1994,7 +2003,7 @@ touched here — it is not an entropy or outbound-check defect.
   redacted. A label now overrides an allow-listed shape (SHA, UUID,
   integrity) only when it sits directly before the value.
 
-## [0.3.18] — 2026-09-28
+## [0.3.18] - 2026-09-28
 
 ### Fixed
 - **The four provider adapters now agree on a truncated stream, an
@@ -2085,7 +2094,7 @@ stays open pending a Gemini credential to probe against.
   deliberately-deferred gap distinct from L-1. Pinned by
   `stream-contract.test.ts`, not fixed in this round.
 
-## [0.3.17] — 2026-09-27
+## [0.3.17] - 2026-09-27
 
 ### Added
 - **`keryx doctor [--json]`.** One page, one pass: keryx's own version and
@@ -2160,7 +2169,7 @@ stays open pending a Gemini credential to probe against.
   subcommand vocabulary, or where the group already manages its own
   `--help`/error surface (`agents`, `shell`).
 
-## [0.3.16] — 2026-09-27
+## [0.3.16] - 2026-09-27
 
 ### Fixed
 - **Chat-mode `keryx shell` releases its session lease and leaves the bus on
@@ -2171,7 +2180,7 @@ stays open pending a Gemini credential to probe against.
 - **`wiki enrich --deep` no longer leaks an abort listener per failed page**
   onto the batch's shared cancellation signal.
 
-## [0.3.15] — 2026-09-27
+## [0.3.15] - 2026-09-27
 
 ### Security
 - **External agents no longer inherit the operator's credentials.** A Codex,
@@ -2196,7 +2205,7 @@ stays open pending a Gemini credential to probe against.
   `-r` does not need `--take-over`, and Ctrl-C stops background jobs as `/exit`
   does.
 
-## [0.3.14] — 2026-09-27
+## [0.3.14] - 2026-09-27
 
 ### Fixed
 - **A session on the ChatGPT subscription (`openai-codex`) or Gemini can spawn
@@ -2205,7 +2214,7 @@ stays open pending a Gemini credential to probe against.
   classifiable`: the child-model gate only knew Anthropic, Ollama and the
   OpenAI-compatible providers, not the native adapters.
 
-## [0.3.13] — 2026-09-26
+## [0.3.13] - 2026-09-26
 
 ### Fixed
 - **`wiki enrich` and other one-shot model calls can run on the ChatGPT
@@ -2214,7 +2223,7 @@ stays open pending a Gemini credential to probe against.
   access tokens of subscription providers are also loaded before `wiki enrich`,
   as `keryx shell` does.
 
-## [0.3.12] — 2026-09-26
+## [0.3.12] - 2026-09-26
 
 ### Fixed
 - **`keryx shell` no longer demands another tool call after a completed answer.**
@@ -2223,7 +2232,7 @@ stays open pending a Gemini credential to probe against.
   model could not call tools. It now matches explicit first-person action
   words instead. An unexecuted «Проверю…» still requests a tool call.
 
-## [0.3.11] — 2026-09-26
+## [0.3.11] - 2026-09-26
 
 ### Added
 - **The EXTERNAL switch — `/external on|off` and `keryx external
@@ -2264,7 +2273,7 @@ stays open pending a Gemini credential to probe against.
   external is `off` (the default `on` state costs no permanent sidebar
   space).
 
-## [0.3.10] — 2026-09-26
+## [0.3.10] - 2026-09-26
 
 ### Fixed
 - **`keryx update` no longer deletes a project's own `.metaproject/` ignore.**
@@ -2274,7 +2283,7 @@ stays open pending a Gemini credential to probe against.
   when nothing under `.metaproject/` is tracked, and dropped only where the
   project already commits `.metaproject/`.
 
-## [0.3.9] — 2026-09-26
+## [0.3.9] - 2026-09-26
 
 ### Changed
 - **`review jev-rules` and the Jev edit guard now find a Claude Code project's
@@ -2284,7 +2293,7 @@ stays open pending a Gemini credential to probe against.
   Before this, a project that keeps its rules there got no rule checks unless
   every path was passed with `--rules`.
 
-## [0.3.8] — 2026-09-26
+## [0.3.8] - 2026-09-26
 
 ### Fixed
 - **The Jev edit guard now finds the OpenRouter key saved in keryx's config.**
@@ -2293,7 +2302,7 @@ stays open pending a Gemini credential to probe against.
   skipped every edit. The key it finds is also passed to its Jev calls. A
   regression test covers a saved key with an empty environment.
 
-## [0.3.7] — 2026-09-26
+## [0.3.7] - 2026-09-26
 
 ### Added
 - **Jev EDIT GUARD**: a Claude Code `PostToolUse` hook that checks every
@@ -2345,7 +2354,7 @@ stays open pending a Gemini credential to probe against.
   both features are opt-in and pre-existing (`keryx review jev-edit-guard`,
   `keryx review ci-triage`). See [Jev in the delivery loop](docs/docs/guides/jev-in-the-delivery-loop.md).
 
-## [0.3.6] — 2026-09-25
+## [0.3.6] - 2026-09-25
 
 ### Fixed
 - **A single transient Jev/OpenRouter blip no longer kills a whole review run.**
@@ -2359,7 +2368,7 @@ stays open pending a Gemini credential to probe against.
   registered once, so a second Ctrl-C during the login took Node's default
   exit instead of the cancel path.
 
-## [0.3.5] — 2026-09-25
+## [0.3.5] - 2026-09-25
 
 Fixes from a live review of a real PR with every Jev reviewer. (0.3.4 was
 not published: its tag landed on the wrong commit and the release job refused it.)
@@ -2380,7 +2389,7 @@ not published: its tag landed on the wrong commit and the release job refused it
   server/, or code that imports an HTTP framework. The rule about endpoint
   fields no longer fires on a CLI command registry.
 
-## [0.3.3] — 2026-09-25
+## [0.3.3] - 2026-09-25
 
 A sixth Jev reviewer, Jev inside the review orchestrator, Jev-routed requests
 in the shell, routing by real task cost, model guidance for Claude Code and
@@ -2473,7 +2482,7 @@ Codex, and a precision fix for the rules reviewer.
   the profile refresh was added.
 - `keryx review` help lists `jev-risk`, `jev-scenarios` and `jev-contract`.
 
-## [0.3.2] — 2026-09-25
+## [0.3.2] - 2026-09-25
 
 Four more review reviewers on Jev, and the flow records for the Jev work in
 0.3.1 and this release. Every new reviewer is additional: it replaces none of
@@ -2525,7 +2534,7 @@ CLI-engine reviewer (`engine: jev`).
 - **Flow records for flows 326–333.** Acceptance criteria, journals, review
   packages and PR comment ledgers.
 
-## [0.3.1] — 2026-09-25
+## [0.3.1] - 2026-09-25
 
 More of the Jev plan: Jev now helps in review, in `keryx flow`, and in the
 shell after every turn. Routing works out a model for each kind of task from
@@ -2617,7 +2626,7 @@ facts itself first and asks Jev only yes/no questions.
 - `keryx review ci-triage`: a rejected cached lookup no longer poisons later
   jobs, and the pagination gap is documented.
 
-## [0.3.0] — 2026-09-25
+## [0.3.0] - 2026-09-25
 
 The agent platform release. keryx now detects a project's stack and installs
 stack packs and agents for it. It learns from how you work, carries that
@@ -2704,7 +2713,7 @@ hooks inside `keryx shell`.
   neutralise control characters, so a hook's command cannot rewrite the
   terminal to hide what it runs.
 
-## [0.2.164] — 2026-09-25
+## [0.2.164] - 2026-09-25
 
 Two more pieces of the Jev plan, and a routing picker that lists the models
 your providers actually serve today.
@@ -2777,7 +2786,7 @@ your providers actually serve today.
 - `gh` and `git` calls made by CI triage and `review conform` have a timeout
   and an output cap.
 
-## [0.2.163] — 2026-09-25
+## [0.2.163] - 2026-09-25
 
 ### Added
 - **A prompting rule for Claude Opus 5.5, loaded only by Claude.** Opus 5.5
@@ -2803,7 +2812,7 @@ your providers actually serve today.
     rules, and anything written for non-Claude agents out of scope, so a
     cleanup pass driven by the rule cannot strip them.
 
-## [0.2.162] — 2026-09-25
+## [0.2.162] - 2026-09-25
 
 The first two pieces of the Jev plan: keryx can send each kind of task to a
 model the operator chose, and it can tell a flaky CI failure from a real
@@ -2844,7 +2853,7 @@ one. Both designs are in `docs/requirements/keryx-jev-router/` and
   question carry no documented per-option probabilities, so triage asks one
   yes/no question per outcome.
 
-## [0.2.161] — 2026-09-23
+## [0.2.161] - 2026-09-23
 
 A provider can be tested and disconnected from where it was connected.
 
@@ -2877,7 +2886,7 @@ A provider can be tested and disconnected from where it was connected.
 - **`auth.json` and `llm-providers.json` are written atomically**, so a
   crash mid-write can no longer leave either truncated.
 
-## [0.2.160] — 2026-09-23
+## [0.2.160] - 2026-09-23
 
 A patch to `keryx help`, found by the 0.2.159 smoke run.
 
@@ -2895,7 +2904,7 @@ A patch to `keryx help`, found by the 0.2.159 smoke run.
   short forms only when the modal is too narrow for them, and each tab
   opens with its group's full name.
 
-## [0.2.159] — 2026-09-23
+## [0.2.159] - 2026-09-23
 
 A new user can now find their way in. `keryx help` and a tabbed `/help`
 group every command by the steps a user takes to start, the README and the
@@ -2952,7 +2961,7 @@ for a provider that cannot be priced.
   modal the shell opens.
 - **`/help` during a turn** opens the help modal instead of a busy notice.
 
-## [0.2.158] — 2026-09-23
+## [0.2.158] - 2026-09-23
 
 DeepSeek can be priced, so an unattended run may use it. The dispatcher accepts
 only providers known to report token usage on every response, and the registry
@@ -2987,7 +2996,7 @@ because they had never been measured. DeepSeek has now been measured, live.
   before anything is written" is not implemented at draft time. A follow-up,
   not a change in this release.
 
-## [0.2.157] — 2026-09-23
+## [0.2.157] - 2026-09-23
 
 A patch for the test suite, found by the 0.2.156 smoke run: a scheduler test
 could install a real, enabled `systemd --user` timer on the machine running
@@ -3008,7 +3017,7 @@ the tests.
 - **`keryx schedule add` documentation.** The CLI reference said a missing
   terminal was refused only without `--yes`; `--yes` is refused too.
 
-## [0.2.156] — 2026-09-23
+## [0.2.156] - 2026-09-23
 
 Eight flows, the day after 0.2.155: keryx can now schedule its own unattended
 turns instead of only reacting to triggers, and the record around unattended
@@ -3150,7 +3159,7 @@ for.
   refuses the run rather than executing whatever now sits at that path.
   (flow 295)
 
-## [0.2.155] — 2026-09-23
+## [0.2.155] - 2026-09-23
 
 Seven flows landed the day after 0.2.154 first reached a real editor and a
 real trigger: the operator's own Zed session and the first `flow-next`
@@ -3332,7 +3341,7 @@ instead of silently doing nothing.
   the home directory; nothing under it is bound back unless the dispatch
   opts into the host's full network. (flow 290)
 
-## [0.2.154] — 2026-09-22
+## [0.2.154] - 2026-09-22
 Two ways to start work without a person typing the first line: an editor can
 now drive the keryx harness over the Agent Client Protocol, and a repository
 event or a schedule can run a keryx action on its own.
@@ -3365,7 +3374,7 @@ event or a schedule can run a keryx action on its own.
   proceeding.** The recorded spend is now a tagged known/unknown value, so the
   one condition under which a ceiling matters most no longer reads as zero.
 
-## [0.2.153] — 2026-09-22
+## [0.2.153] - 2026-09-22
 External children of `claude-cli` run again on 2.1.278. Every external run died
 on the command line before the agent was asked anything, and was reported as a
 dead transcript.
@@ -3380,7 +3389,7 @@ dead transcript.
 - **A rejected argument VALUE is named as an argv mismatch.** `Error: --flag is
   not valid JSON` no longer reads as "transcript ended without a terminal event".
 
-## [0.2.152] — 2026-09-22
+## [0.2.152] - 2026-09-22
 A bare `.metaproject/` no longer passes for an initialized metaproject:
 the tools that can only read it are no longer offered where there is
 nothing to read, and the turn-start orientation block no longer tells
@@ -3408,7 +3417,7 @@ the model to build an index that does not exist.
   readline agent session prints why the index tools are missing and which
   command creates the workspace they read.
 
-## [0.2.151] — 2026-09-22
+## [0.2.151] - 2026-09-22
 The interactive shell paints from the active theme's own roles, so a light
 palette is readable — including the `❯` command echo in the feed that used to be
 a fixed bright cyan.
@@ -3427,7 +3436,7 @@ a fixed bright cyan.
 
 - A `/theme` switch remaps these colours in the model, but the already-painted cells keep the previous palette until that row repaints for another reason; newly painted rows are correct. Pinned in the test rather than worked around.
 
-## [0.2.150] — 2026-09-22
+## [0.2.150] - 2026-09-22
 The sidebar is four columns wider, so the working directory and the workspace
 titles stop being cut mid-segment.
 
@@ -3452,7 +3461,7 @@ titles stop being cut mid-segment.
   the constant; and the version-advisory assertion checks the two halves the
   advisory deliberately splits the install command into.
 
-## [0.2.149] — 2026-09-22
+## [0.2.149] - 2026-09-22
 A patch release carrying the same feature set as 0.2.148 — a call that follows
 untrusted content is put to the operator instead of being refused for the rest of
 the turn — with the two fixes its own verification caught.
@@ -3472,7 +3481,7 @@ the turn — with the two fixes its own verification caught.
   refusing path leaves through `continue`; `eslint`'s `no-useless-assignment`
   said so, and `check:core` was red on that commit.
 
-## [0.2.148] — 2026-09-22
+## [0.2.148] - 2026-09-22
 A call that follows untrusted content is put to the operator instead of being
 refused for the rest of the turn — that content still cannot authorize it, but a
 human now can.
@@ -3494,7 +3503,7 @@ human now can.
   refusal is unchanged; a throwing approver degrades to a per-call error rather
   than a crashed turn, and read-risk tools are untouched.
 
-## [0.2.147] — 2026-09-22
+## [0.2.147] - 2026-09-22
 A patch release carrying the same feature set as 0.2.146 — the orchestrator plan
 bridge — with the one fix that 0.2.146's own verification caught.
 
@@ -3510,7 +3519,7 @@ bridge — with the one fix that 0.2.146's own verification caught.
   are unchanged and every ceiling is still exact. The prose that needs room lives
   in the `session-plan-bridge` rule, which has no ceiling.
 
-## [0.2.146] — 2026-09-22
+## [0.2.146] - 2026-09-22
 The orchestrators' own plans are visible while they run. Every one of them already
 owned a plan — fifteen job steps, a Flow's tasks, a review's numbered checklist —
 and none of it reached the surface built for exactly that purpose, so an operator
@@ -3546,7 +3555,7 @@ saw phases announced in prose and had to ask what was happening.
   untouched: same registry entry, same two shells, same orthogonal hard floor,
   still in-memory only.
 
-## [0.2.145] — 2026-09-22
+## [0.2.145] - 2026-09-22
 A plan can now be published FOR APPROVAL. The plan vocabulary had no way to say
 "here is the plan, your call": a published plan necessarily contained `pending`
 items, and the shell's own continuation nudge fires on exactly that, so
@@ -3588,7 +3597,7 @@ sign a plan existed was prose in the reply.
   `MAX_TURN_FILE_BYTES`; the other two carry 60 s and 600 s budgets, an order of
   magnitude over their contended measurements. No product behaviour changed.
 
-## [0.2.144] — 2026-09-22
+## [0.2.144] - 2026-09-22
 Work state in the shell no longer depends on a lifecycle it does not belong to:
 the execution plan survives a Slate close, a security-flagged proposal can be
 accepted from the TUI itself, and the selected theme — canvas background
@@ -3653,7 +3662,7 @@ included — is applied from the very first frame.
   provider's own machine-readable error type or an exact phrase, never on the
   status alone.
 
-## [0.2.143] — 2026-09-22
+## [0.2.143] - 2026-09-22
 Long-running shell work now keeps its execution plan visible and persistent,
 while assistant output follows the selected theme across prose, Markdown,
 code, diffs, and tables.
@@ -3679,7 +3688,7 @@ code, diffs, and tables.
 - **Changing themes repaints existing rich content.** Styled transcript spans,
   code backgrounds, diff rows, and table cells are recolored immediately along
   with the surrounding panels.
-## [0.2.140] — 2026-09-21
+## [0.2.140] - 2026-09-21
 
 The shell theme picker now offers a broader set of accessible dark and light
 palettes.
@@ -3698,7 +3707,7 @@ palettes.
   and footers now use explicit semantic colors instead of inheriting the
   terminal's usually-white foreground.
 
-## [0.2.139] — 2026-09-21
+## [0.2.139] - 2026-09-21
 
 This release republishes the sticky-prompt interface after updating the
 release audit for the refactored user-message call site.
@@ -3709,7 +3718,7 @@ release audit for the refactored user-message call site.
   held-turn source audit follows the multiline prompt construction introduced
   with sticky prompts, allowing the complete TUI suite to pass in CI.
 
-## [0.2.138] — 2026-09-21
+## [0.2.138] - 2026-09-21
 Long agent answers keep the operator's active request visible while the
 transcript moves beneath it.
 
@@ -3724,7 +3733,7 @@ transcript moves beneath it.
   and left accent replace the content-width rounded bubble in both agent and
   chat shells, making turn boundaries easier to scan without adding height.
 
-## [0.2.137] — 2026-09-21
+## [0.2.137] - 2026-09-21
 The shell workspace now has visible breathing room and clearer surface edges,
 especially in the Tokyo Night palette.
 
@@ -3737,7 +3746,7 @@ especially in the Tokyo Night palette.
   subtler highlight color; the header and footer return to the canvas color so
   the panel surfaces no longer merge into one blue sheet.
 
-## [0.2.136] — 2026-09-21
+## [0.2.136] - 2026-09-21
 The interactive shell has a clearer Keryx identity and keeps its command
 surfaces compact across both full-screen and short terminal layouts.
 
@@ -3757,7 +3766,7 @@ surfaces compact across both full-screen and short terminal layouts.
   row now shows updated/created times and message count without repeating the
   project path on every project-scoped result.
 
-## [0.2.135] — 2026-09-21
+## [0.2.135] - 2026-09-21
 The agent view of the flow registry marks a duplicated flow id, the way `keryx
 flow list` has since flow 120.
 
@@ -3786,7 +3795,7 @@ flow list` has since flow 120.
   rounds actually scanned, and rewriting it would make the record claim a path
   that did not exist then.
 
-## [0.2.134] — 2026-09-21
+## [0.2.134] - 2026-09-21
 The startup screen stops squeezing its last line: the wordmark, the hint and the
 bus notice are broken to the pane width and centred row by row.
 
@@ -3804,7 +3813,7 @@ bus notice are broken to the pane width and centred row by row.
   transcript is empty, and falls back to an ordinary transcript line once the
   splash is gone; `bus: off (…)` follows the same rule.
 
-## [0.2.133] — 2026-09-21
+## [0.2.133] - 2026-09-21
 `keryx gdgraph build` records the freshness of what it just built, in a
 scaffolded project too.
 
@@ -3823,7 +3832,7 @@ scaffolded project too.
   only reach a project on its next `keryx update`, while this fix reaches every
   project on its next keryx upgrade.
 
-## [0.2.132] — 2026-09-21
+## [0.2.132] - 2026-09-21
 A commit that changes no code no longer freezes the freshness record, so the
 wiki baseline stops being unreachable in a project whose recent commits were
 bookkeeping.
@@ -3849,7 +3858,7 @@ bookkeeping.
   They were missing from the code-file set, which on the new path would have read
   a real code change as "nothing changed".
 
-## [0.2.131] — 2026-09-20
+## [0.2.131] - 2026-09-20
 Two SAC friction points fixed: a workspace reference no longer needs a "./"
 prefix to be accepted, and an "unknown" review item says why it is unknown.
 
@@ -3883,7 +3892,7 @@ prefix to be accepted, and an "unknown" review item says why it is unknown.
   `reason: "wrap-up-failed" | "slate-unreadable" | "no-resolution-recorded"`,
   shown on both surfaces.
 
-## [0.2.130] — 2026-09-20
+## [0.2.130] - 2026-09-20
 DuckDuckGo's rate limiting is reported as a rate limit, waited out, and told
 apart from a broken network.
 
@@ -3914,7 +3923,7 @@ apart from a broken network.
   unchanged: a page the operator named by URL is not requested as if a browser
   were loading it.
 
-## [0.2.128] — 2026-09-20
+## [0.2.128] - 2026-09-20
 A leftover local SearXNG no longer blocks the DuckDuckGo default after upgrade
 (PR #629).
 
@@ -3927,7 +3936,7 @@ A leftover local SearXNG no longer blocks the DuckDuckGo default after upgrade
   `/search-connect searxng` still re-selects it. Result headers name the
   `Provider:`. The agent is told it cannot switch engines itself.
 
-## [0.2.127] — 2026-09-20
+## [0.2.127] - 2026-09-20
 `web_search` works on a fresh install: DuckDuckGo Lite is the default, with no
 API key and no local search engine (PR #626).
 
@@ -3938,7 +3947,7 @@ API key and no local search engine (PR #626).
   or a loopback SearXNG instance; a selected provider that fails is not silently
   replaced by DuckDuckGo.
 
-## [0.2.126] — 2026-09-19
+## [0.2.126] - 2026-09-19
 
 ### Fixed
 
@@ -3955,7 +3964,7 @@ API key and no local search engine (PR #626).
   owns the terminal, `process.emitWarning` output goes to the `--debug` log
   instead of the screen, and is summarised on stderr after exit.
 
-## [0.2.125] — 2026-09-19
+## [0.2.125] - 2026-09-19
 
 ### Changed
 
@@ -3967,7 +3976,7 @@ API key and no local search engine (PR #626).
   version" section in onboarding explains the symptom and how `--debug` records
   it.
 
-## [0.2.124] — 2026-09-19
+## [0.2.124] - 2026-09-19
 
 ### Fixed
 
@@ -3992,7 +4001,7 @@ API key and no local search engine (PR #626).
   polled" every 15 s and sent SIGUSR2 for nothing. That condition now counts as
   a stall only while input is actually waiting in the terminal queue.
 
-## [0.2.123] — 2026-09-19
+## [0.2.123] - 2026-09-19
 
 ### Fixed
 
@@ -4017,7 +4026,7 @@ API key and no local search engine (PR #626).
   open. The shell logs kernel-side facts (termios, foreground group) when input
   ends.
 
-## [0.2.122] — 2026-09-19
+## [0.2.122] - 2026-09-19
 
 ### Fixed
 
@@ -4046,7 +4055,7 @@ API key and no local search engine (PR #626).
   in the tty queue (Linux) — and on a stall writes a full process snapshot and
   sends `SIGUSR2` to recover.
 
-## [0.2.121] — 2026-09-19
+## [0.2.121] - 2026-09-19
 
 ### Fixed
 
@@ -4059,7 +4068,7 @@ API key and no local search engine (PR #626).
   picker; interrupting after a concurrent spawn batch still writes tool
   results so the next provider round is not stuck on orphaned `tool_calls`.
 
-## [0.2.120] — 2026-09-19
+## [0.2.120] - 2026-09-19
 Two fixes found while checking 0.2.119 in a terminal (PR #601).
 
 ### Fixed
@@ -4071,7 +4080,7 @@ Two fixes found while checking 0.2.119 in a terminal (PR #601).
 - **The Brave search-provider key prompt says "API" once.** It read "Paste
   your Brave Search API API key".
 
-## [0.2.119] — 2026-09-19
+## [0.2.119] - 2026-09-19
 The Tools tab of `/integrations` no longer leaves blank rows under its list
 (PR #599).
 
@@ -4082,7 +4091,7 @@ The Tools tab of `/integrations` no longer leaves blank rows under its list
   sometimes eight or more. The start of that tool now fills them, and ↓ shows
   it in full.
 
-## [0.2.118] — 2026-09-19
+## [0.2.118] - 2026-09-19
 Every step of the provider and search-provider wizards now opens as a dialog
 inside the shell. `/integrations` and `/mcp` are readable at any width. The
 sidebar shows the permission mode and read-only state, and a new session opens
@@ -4124,7 +4133,7 @@ on the wordmark instead of a blank pane (PR #596, flow 270).
 - **Esc during a search-provider connection test** no longer lets the test set
   that provider active afterwards.
 
-## [0.2.117] — 2026-09-19
+## [0.2.117] - 2026-09-19
 A shell task no longer reports that it finished before its last output is
 readable (PR #594).
 
@@ -4138,7 +4147,7 @@ readable (PR #594).
   waiting at most 2 seconds for a pipe a backgrounded child keeps open. Output
   that arrived before the supervisor subscribed is no longer dropped.
 
-## [0.2.116] — 2026-09-19
+## [0.2.116] - 2026-09-19
 Dialogs in the OpenTUI shell stay inside the chat column and size to what they
 show, and the transcript follows what you send (PR #591, flow 269).
 
@@ -4166,7 +4175,7 @@ show, and the transcript follows what you send (PR #591, flow 269).
   instead of jumping back to where navigation began. New output is followed
   again only when you are at the bottom or within three rows of it.
 
-## [0.2.115] — 2026-09-17
+## [0.2.115] - 2026-09-17
 The shell no longer looks hung on a slow or reasoning-heavy model: responses
 stream, stalled connections end with an error, and model reasoning is requested,
 shown live, kept and sent back the way each provider requires.
@@ -4222,7 +4231,7 @@ does not default to 1024 output tokens — see Fixed below.
 
 See [the CLI reference](docs/docs/cli-reference.md#reasoning-effort-and-output-budget).
 
-## [0.2.114] — 2026-09-17
+## [0.2.114] - 2026-09-17
 An auto-compaction guard that keeps a long tool loop from overflowing the
 provider's context window, and per-provider `temperature`/`maxOutputTokens`/
 `timeoutMs` configuration for OpenAI-compatible gateways.
@@ -4259,7 +4268,7 @@ provider's context window, and per-provider `temperature`/`maxOutputTokens`/
   configured reproduces today's behavior exactly: `maxOutputTokens` still
   defaults to `1024`, no `temperature` is sent, no extra timeout applies.
 
-## [0.2.113] — 2026-09-17
+## [0.2.113] - 2026-09-17
 A read-only posture for the interactive agent session, and three small fixes
 to the OpenTUI shell.
 
@@ -4290,7 +4299,7 @@ to the OpenTUI shell.
 - **The sidebar's title didn't show which version was running.** The
   "keryx" title now carries the running version next to it, dim.
 
-## [0.2.112] — 2026-09-16
+## [0.2.112] - 2026-09-16
 Output from a background task reached the model provider unredacted. Releases
 0.2.109, 0.2.110 and 0.2.111 carry the defect; this release is the fix and
 contains nothing else.
@@ -4327,7 +4336,7 @@ contains nothing else.
   transcript must redact required stating what the code redacts today, and this
   path did not survive the check.
 
-## [0.2.111] — 2026-09-16
+## [0.2.111] - 2026-09-16
 Review stops acting on the wrong thing. An imported reviewer can now verify and
 brings the rules it cites; a model block no longer pins whatever `keryx shell`
 was last pointed at; and a reply pass can no longer post to a pull request that
@@ -4377,7 +4386,7 @@ has merged, at a commit it has left, from a review that was only ever a report.
   `stackRequires` and `unresolvedRules`, and review-orchestrator path-gates and
   selects project reviewers with them instead of running all of them every round.
 
-## [0.2.110] — 2026-09-16
+## [0.2.110] - 2026-09-16
 A running command is now something you can watch, wait for, interrupt and set
 aside. 0.2.108 stopped a long command from freezing the session and 0.2.109 made
 a finished one report itself; this release fills in everything in between.
@@ -4423,7 +4432,7 @@ a finished one report itself; this release fills in everything in between.
   exactly as given, because a task id from an earlier session is a dead reference
   and resolving one onto a live task would kill the wrong work.
 
-## [0.2.109] — 2026-09-16
+## [0.2.109] - 2026-09-16
 A command that outlives the wait now reports itself. 0.2.108 stopped a long
 command from freezing the session; this release closes the other half — the
 result comes back on its own, exactly once, without the agent remembering to ask.
@@ -4469,7 +4478,7 @@ result comes back on its own, exactly once, without the agent remembering to ask
   nobody asked for that kill. There is no recurring reminder: a running task
   produces no message at all, and a finished one produces exactly one.
 
-## [0.2.108] — 2026-09-16
+## [0.2.108] - 2026-09-16
 A long command no longer freezes the session. Every shell command the agent runs
 is now a supervised task that hands back control within a bounded wait, and what
 kills a stuck command is silence rather than the clock.
@@ -4532,7 +4541,7 @@ not sweep. This is phase P0 of
 that wake the agent, the `shell_task_*` tools and the documentation sweep are the
 phases after it. (#563)
 
-## [0.2.107] — 2026-09-16
+## [0.2.107] - 2026-09-16
 A review finding now points at the code it quotes, a round no longer dies on a
 field the report's own ordering already contained, and every round states what
 it cost.
@@ -4606,7 +4615,7 @@ it cost.
   stops once a second match proves ambiguity — the same three cases now measure
   11.1 ms, 2.3 ms and 1.3 ms.
 
-## [0.2.106] — 2026-09-15
+## [0.2.106] - 2026-09-15
 Review records follow a flow when it is renumbered, and records an older
 renumber left behind can be repaired with one command.
 
@@ -4631,7 +4640,7 @@ renumber left behind can be repaired with one command.
   nothing on a second run. Run it once in a project that has renumbered flows,
   then commit what it lists. (#556)
 
-## [0.2.105] — 2026-09-15
+## [0.2.105] - 2026-09-15
 MCP servers and other read tools keep working after a session has read
 untrusted web content, and `git push` no longer rewrites your commit identity.
 
@@ -4656,7 +4665,7 @@ stopped at lint. Everything they contained ships here.
   reinstall the hook, then check `git config --local --get-regexp '^user\.'`
   and remove any identity a past push left there.
 
-## [0.2.102] — 2026-09-14
+## [0.2.102] - 2026-09-14
 GitHub Copilot can list models after login. The picker was calling
 `/v1/models` on `api.githubcopilot.com`, which is a 404 HTML page, and then
 asking you to edit the host.
@@ -4670,7 +4679,7 @@ asking you to edit the host.
   generic host that 404s for some plans. Re-login once so the discovered host
   is saved.
 
-## [0.2.101] — 2026-09-14
+## [0.2.101] - 2026-09-14
 GitHub Copilot device login completes again: the token exchange no longer 403s
 because keryx used OpenCode's OAuth App instead of the Copilot GitHub App.
 
@@ -4684,7 +4693,7 @@ because keryx used OpenCode's OAuth App instead of the Copilot GitHub App.
   now send those headers. A 403 surfaces GitHub's message instead of a bare
   status. Re-login is required; an old `Ov23li` grant will still fail.
 
-## [0.2.100] — 2026-09-13
+## [0.2.100] - 2026-09-13
 `/mcp` is a modal, not a dump of lines into the transcript: name, status, and
 connect/disconnect on the same surface the other agent CLIs already have.
 
@@ -4700,7 +4709,7 @@ connect/disconnect on the same surface the other agent CLIs already have.
   config file, the same way `keryx mcp enable`/`disable` already do.
   `/integrations` remains the installer of keryx itself.
 
-## [0.2.99] — 2026-09-12
+## [0.2.99] - 2026-09-12
 The PII detector stops mangling identifiers, without starting to miss phone
 numbers. Both halves were needed: the first attempt fixed the mangling by
 suppressing any match with a letter nearby, which quietly stopped redacting real
@@ -4722,7 +4731,7 @@ round before it reached a release.
   corrupting an identifier is a smaller harm than handing out a phone number,
   and no local signal separates the two.
 
-## [0.2.98] — 2026-09-12
+## [0.2.98] - 2026-09-12
 Credentials, and what keryx says about them. `shell_exec` stops handing saved
 provider keys to the commands it runs; `/provider` stops going mute when one is
 refused, and lets you replace it; a scripted shell refreshes an expired grant
@@ -4779,7 +4788,7 @@ machine running it.
   ever been recorded in this project", with the same bound and no path; other
   trail verdicts keep their prose, with paths relative to the project.
 
-## [0.2.97] — 2026-09-11
+## [0.2.97] - 2026-09-11
 `keryx mcp auth` — OAuth for remote MCP servers, so a server that needs a
 login can be used without pasting a bearer token into a config file.
 
@@ -4809,7 +4818,7 @@ login can be used without pasting a bearer token into a config file.
   is byte-identical afterwards, including the comments and ordering in a
   hand-edited `mcp-servers.json`.
 
-## [0.2.96] — 2026-09-11
+## [0.2.96] - 2026-09-11
 
 ### Fixed
 
@@ -4830,7 +4839,7 @@ login can be used without pasting a bearer token into a config file.
   `keryx shell -p` run. The timers are now cleared as soon as the wait resolves,
   and a second `close()` returns the first one's result instead of waiting again.
 
-## [0.2.95] — 2026-09-11
+## [0.2.95] - 2026-09-11
 
 Five defects in keryx's own agent tools and error handling, read off a transcript
 of the shell on a research task. Each is a place where the shell worked against the
@@ -4907,7 +4916,7 @@ recorded here rather than by rewriting a published section.
   written beside the rendered output, never instead of it. Every string passes the
   redaction floor before it is clipped.
 
-## [0.2.94] — 2026-09-11
+## [0.2.94] - 2026-09-11
 `keryx mcp` — keryx as a CLIENT of other people's MCP servers. This entry
 covers 0.2.90 through 0.2.94: those versions were tagged in `package.json`
 during development but never published, so 0.2.94 is the first release that
@@ -4971,7 +4980,7 @@ carries any of it.
   the retired publisher spellings, so looking up `list` or `doctor` sent you
   to `serve-mcp`.
 
-## [0.2.89] — 2026-09-10
+## [0.2.89] - 2026-09-10
 
 ### Added
 
@@ -4997,7 +5006,7 @@ carries any of it.
   outside it is a liability, and any comparison that needs the roster to match
   another tool's.
 
-## [0.2.88] — 2026-09-10
+## [0.2.88] - 2026-09-10
 
 Two defects that together made `keryx shell` unusable with a subscription-based
 OpenAI-compatible provider. Both were found by a benchmark arm, which is the worst
@@ -5025,7 +5034,7 @@ place to find them: the arm completed, wrote a transcript, and reported nothing,
   not yet verified rather than unsupported, and the loopback Ollama path is left
   alone so a local model that works today keeps working.
 
-## [0.2.87] — 2026-09-10
+## [0.2.87] - 2026-09-10
 
 ### Added
 
@@ -5062,7 +5071,7 @@ place to find them: the arm completed, wrote a transcript, and reported nothing,
   count, and one-word triggers have their own inflection test — the property an
   earlier regression cost 29 of them, which a reachability count could not see.
 
-## [0.2.86] — 2026-09-10
+## [0.2.86] - 2026-09-10
 
 Two defects in the machinery that is supposed to notice defects, both found by
 clearing out stale flow records rather than by looking for them.
@@ -5108,7 +5117,7 @@ clearing out stale flow records rather than by looking for them.
   were actually run because a flow with no recorded review has not been
   reviewed.
 
-## [0.2.85] — 2026-09-09
+## [0.2.85] - 2026-09-09
 
 One theme: `keryx mcp` meant "keryx is the MCP server", and the same verb is
 needed for the opposite — the third-party servers keryx connects to, which is
@@ -5170,7 +5179,7 @@ code it did, so a script that ran before runs now.
   cell rather than per row — a genuine pair must not excuse an unrelated
   instruction sharing its table row.
 
-## [0.2.84] — 2026-09-09
+## [0.2.84] - 2026-09-09
 
 One theme: a project-skill you already have as a `SKILL.md` — in a folder,
 a file, or a GitHub blob — could not become a project-skill without being
@@ -5208,7 +5217,7 @@ a consumer project's home directory and `review-orchestrator` never saw them.
   `keryx review reviewers` rather than `missing` — listing does not open
   a socket; `skills update` re-fetches.
 
-## [0.2.83] — 2026-09-08
+## [0.2.83] - 2026-09-08
 
 One commit. `/status` already showed last-turn tokens and a labelled
 estimate, and refused to invent a 128k window. It still could not show
@@ -5226,7 +5235,7 @@ the model's actual limit, so the bar was always relative to used tokens.
   inspector and both readline surfaces. Missing is missing — never a
   guessed limit.
 
-## [0.2.82] — 2026-09-08
+## [0.2.82] - 2026-09-08
 
 One commit. SuperGrok login in the TUI spawned `xdg-open` without an
 `error` listener. On a Linux box with no display that binary is often
@@ -5242,7 +5251,7 @@ the shell dies.
   code so the operator can finish on another device, and a failed login
   stays on screen instead of vanishing.
 
-## [0.2.81] — 2026-09-08
+## [0.2.81] - 2026-09-08
 
 Six commits since 0.2.80. The agent-first core programme closed phases 0–2
 on main, then an independent review found the auto-fetch floor still leaked
@@ -5341,7 +5350,7 @@ adopted the full gdskills install profile it had been running uncommitted.
   empty and stays empty. Health gate PASS with zero blocking findings,
   the first time in this programme.
 
-## [0.2.80] — 2026-09-05
+## [0.2.80] - 2026-09-05
 
 Five commits, and three of them are one shape: a mechanism that could not
 establish something, reporting that it had. This release began by documenting
@@ -5413,7 +5422,7 @@ came from running the thing being documented rather than reading it.
   tested the claim the rest rests on, that project-local context makes an agent
   better at a task.
 
-## [0.2.79] — 2026-09-04
+## [0.2.79] - 2026-09-04
 
 One commit. It removes the last reason `.mcp.json` could not be committed: the
 absolute path of whoever ran the installer.
@@ -5471,7 +5480,7 @@ absolute path of whoever ran the installer.
   `.claude-plugin/`, which makes `claude plugin validate` check the marketplace
   manifest and never look at the plugin manifest.
 
-## [0.2.78] — 2026-09-05
+## [0.2.78] - 2026-09-05
 
 One theme, arrived at from two directions: a generated document that says
 something the code does not do is worse than no document, because an agent
@@ -5536,7 +5545,7 @@ this repository and in every project that had installed it.
   behave today: gdgraph rebuilds, and gdwiki appends to the freshness queue
   rather than printing the reminder it stopped printing in 0.2.77.
 
-## [0.2.77] — 2026-09-04
+## [0.2.77] - 2026-09-04
 
 Two threads. The larger one in line count is the wiki, which stops going
 quietly out of date. The one more likely to matter to someone installing today
@@ -5674,7 +5683,7 @@ report says otherwise.
   `PLACEHOLDER_SHA256_*` strings where the digests belong, and has no
   `on_linux` block. It has never installed keryx for anyone, on any platform.
 
-## [0.2.76] — 2026-09-03
+## [0.2.76] - 2026-09-03
 
 Six commits since 0.2.75, and four of them are about one object: the ctx routing
 guard. It refused the pipelines the routing rule itself demands, it could be
@@ -5786,7 +5795,7 @@ enforcing.
   classified-and-allowed from could-not-classify, so `ctx_used` stops asserting a
   compliance it never observed.
 
-## [0.2.75] — 2026-09-01
+## [0.2.75] - 2026-09-01
 
 A security patch. A full review of 0.2.74 — six reviewers over the release diff,
 plus a mutation pass over every gate it added — found that **0.2.74 shipped two
@@ -5867,7 +5876,7 @@ proposal flow or persist agent sessions to disk.
   they are genuinely redundant, producing the same refusal for the same input,
   so no test can discriminate them.
 
-## [0.2.74] — 2026-09-01
+## [0.2.74] - 2026-09-01
 
 Twelve commits since 0.2.73, and the theme running through most of them is the
 one 0.2.73 started: a mechanism that reports success without having done
@@ -5944,7 +5953,7 @@ claim rather than reading it.
   differs — the residual is the case where they have converged. Tracked as
   flow 214.
 
-## [0.2.73] — 2026-08-31
+## [0.2.73] - 2026-08-31
 
 A correction release. 0.2.72 completed the orchestrator-hardening roadmap; this
 one fixes what measuring that work afterwards revealed — including two defects in
@@ -6024,7 +6033,7 @@ read.
   type-check, and the test runner that already resolves the package manager the
   skill was reimplementing in shell.
 
-## [0.2.72] — 2026-08-30
+## [0.2.72] - 2026-08-30
 
 Phases 5 and 7 of the orchestrator-hardening programme, which completes it: all
 seven phases are now delivered. The theme of both is the same one the programme
@@ -6110,7 +6119,7 @@ this release is mostly the result of going looking for those on purpose.
   individual's conventions and speech markers in a public repository. Keryx now
   ships the mechanism; the conventions live in the projects that hold them.
 
-## [0.2.71] — 2026-08-30
+## [0.2.71] - 2026-08-30
 
 Phase 4 of the orchestrator-hardening programme: a pull request is now reviewed
 for what it can **break**, not only for what it changed; a flow cannot close over
@@ -6202,7 +6211,7 @@ the rounds are doing something.
   ended its sentence, under-counting a reply in the direction that lets a long
   one through. The mask no longer depends on which regex engine reads it.
 
-## [0.2.70] — 2026-08-29
+## [0.2.70] - 2026-08-29
 
 ### Fixed
 
@@ -6279,7 +6288,7 @@ the rounds are doing something.
   call because verifying it felt like spending. A tool result that is itself the
   deliverable is now checked against source before being presented as fact.
 
-## [0.2.69] — 2026-08-28
+## [0.2.69] - 2026-08-28
 
 ### Fixed
 
@@ -6307,7 +6316,7 @@ the rounds are doing something.
   have nothing to show**, rather than occupying rows with a placeholder. This
   is what reclaims the space above; `/workspace` and `/review` are unaffected.
 
-## [0.2.68] — 2026-08-26
+## [0.2.68] - 2026-08-26
 
 ### Added
 
@@ -6326,7 +6335,7 @@ the rounds are doing something.
   link-local metadata addresses (`169.254.x`) stay denied regardless. Built-in
   providers never receive the LAN grant.
 
-## [0.2.67] — 2026-08-24
+## [0.2.67] - 2026-08-24
 
 ### Added
 
@@ -6351,7 +6360,7 @@ the rounds are doing something.
   switches looked like the theme never applied. The tree is now walked with
   theme-color remapping (OpenTUI stores colors as RGBA objects).
 
-## [0.2.66] — 2026-08-24
+## [0.2.66] - 2026-08-24
 
 ### Fixed
 
@@ -6387,7 +6396,7 @@ the rounds are doing something.
   unterminated bracketed paste), present in both the installed `0.4.5` and the
   latest `0.5.7` — not fixable from here until it lands upstream.
 
-## [0.2.65] — 2026-08-23
+## [0.2.65] - 2026-08-23
 
 ### Fixed
 
@@ -6419,7 +6428,7 @@ the rounds are doing something.
   the renderer (`resolveModalPanelSize`), matching the panel's actual resolved
   size at open.
 
-## [0.2.64] — 2026-08-23
+## [0.2.64] - 2026-08-23
 
 ### Fixed
 
@@ -6430,7 +6439,7 @@ the rounds are doing something.
   j/k/↑/↓ once the scrollbar has focus) when the prompt is taller than the
   space the layout leaves it.
 
-## [0.2.63] — 2026-08-23
+## [0.2.63] - 2026-08-23
 
 ### Changed
 
@@ -6456,7 +6465,7 @@ the rounds are doing something.
   keypress handler still applies the move, so each press moves once) and only
   falls back to tab switching when the game declines the key.
 
-## [0.2.62] — 2026-08-23
+## [0.2.62] - 2026-08-23
 
 ### Added
 
@@ -6488,7 +6497,7 @@ the rounds are doing something.
   fed from the same `io.onUsage` stream that drives the header counter.
   Both are wired into the agent and chat shells.
 
-## [0.2.61] — 2026-08-23
+## [0.2.61] - 2026-08-23
 
 ### Fixed
 
@@ -6499,7 +6508,7 @@ the rounds are doing something.
   results. The profile now masks only home's secret subdirectories via
   `defaultReadDenyList`, leaving the runtime readable.
 
-## [0.2.60] — 2026-08-23
+## [0.2.60] - 2026-08-23
 
 ### Fixed
 
@@ -6530,7 +6539,7 @@ the rounds are doing something.
 - The status line read "Your turn — O" while the agent was thinking. It now
   reads "Agent's turn — O".
 
-## [0.2.59] — 2026-08-23
+## [0.2.59] - 2026-08-23
 
 ### Fixed
 
@@ -6550,7 +6559,7 @@ the rounds are doing something.
   `notice` state that `paint()` owns and renders on its own line — the same
   line that carries "agent is thinking…".
 
-## [0.2.58] — 2026-08-23
+## [0.2.58] - 2026-08-23
 
 ### Added
 
@@ -6589,7 +6598,7 @@ the rounds are doing something.
   created workspace. Internal session/flow wrap-ups keep the lazy resolve
   (AC-38, flow 182).
 
-## [0.2.57] — 2026-08-22
+## [0.2.57] - 2026-08-22
 
 ### Added
 
@@ -6622,7 +6631,7 @@ the rounds are doing something.
   `modal-host` `onArrowKeys` hook lets the tab body claim the arrows, and a
   stale-node write into destroyed `TextBuffer`s on tab switch was fixed.
 
-## [0.2.56] — 2026-08-22
+## [0.2.56] - 2026-08-22
 
 Fixes every finding from the 0.2.55 live-testing campaign
 (`docs/verification/` on the `real-test-keryx` branch): 118 real test cases
@@ -6687,7 +6696,7 @@ surface. This release closes the six flows that came out of it.
   exits immediately when stdin is not a TTY; interactive behavior is
   unchanged.
 
-## [0.2.55] — 2026-08-21
+## [0.2.55] - 2026-08-21
 
 ### Fixed
 
@@ -6705,7 +6714,7 @@ surface. This release closes the six flows that came out of it.
   Root-caused from a real local session transcript that reproduced the
   exact interleaving and the exact provider error.
 
-## [0.2.54] — 2026-08-21
+## [0.2.54] - 2026-08-21
 
 ### Fixed
 
@@ -6724,7 +6733,7 @@ surface. This release closes the six flows that came out of it.
   exact bug class was already found and fixed once before this feature
   shipped it a second time.
 
-## [0.2.53] — 2026-08-21
+## [0.2.53] - 2026-08-21
 
 ### Added
 
@@ -6774,7 +6783,7 @@ surface. This release closes the six flows that came out of it.
   in a genuine trailing space still equalled the bare command name and kept
   reopening the dropdown.
 
-## [0.2.52] — 2026-08-21
+## [0.2.52] - 2026-08-21
 
 ### Added
 
@@ -6799,7 +6808,7 @@ surface. This release closes the six flows that came out of it.
   the existing `[c]`/`[d]`-then-`[y]` keyboard gate exactly. Keyboard nav is
   unchanged.
 
-## [0.2.51] — 2026-08-21
+## [0.2.51] - 2026-08-21
 
 ### Added
 
@@ -6849,7 +6858,7 @@ surface. This release closes the six flows that came out of it.
   including a gitignored-but-unexcluded security key, no `repository`/
   `LICENSE`, no CI coverage).
 
-## [0.2.50] — 2026-08-21
+## [0.2.50] - 2026-08-21
 
 ### Added
 
@@ -6926,7 +6935,7 @@ surface. This release closes the six flows that came out of it.
   forms with an explicit id (`/search-provider <id> field=value...`,
   `/search-connect <id>`) are unchanged.
 
-## [0.2.49] — 2026-08-20
+## [0.2.49] - 2026-08-20
 
 ### Added
 
@@ -7003,7 +7012,7 @@ surface. This release closes the six flows that came out of it.
   mode, `clear`, the no-argument picker) are unblocked; the one-time
   confirmation before switching to `auto` is unchanged.
 
-## [0.2.48] — 2026-08-19
+## [0.2.48] - 2026-08-19
 
 ### Added
 
@@ -7023,7 +7032,7 @@ surface. This release closes the six flows that came out of it.
   at all three trigger points. See
   `docs/requirements/keryx-sac-wrapup-dispatch-outcome/`.
 
-## [0.2.47] — 2026-08-19
+## [0.2.47] - 2026-08-19
 
 ### Added
 
@@ -7069,7 +7078,7 @@ surface. This release closes the six flows that came out of it.
   same-reply narrate-then-act instruction in the system prompt) so the model
   keeps working instead of stopping on a claim.
 
-## [0.2.46] — 2026-08-19
+## [0.2.46] - 2026-08-19
 
 ### Added
 
@@ -7091,7 +7100,7 @@ surface. This release closes the six flows that came out of it.
   without mounting a renderer. See
   `docs/requirements/keryx-tui-busy-command-allowlist/` (flow 172).
 
-## [0.2.45] — 2026-08-18
+## [0.2.45] - 2026-08-18
 
 ### Added
 
@@ -7110,7 +7119,7 @@ surface. This release closes the six flows that came out of it.
   Build, OpenAI Codex CLI, sst/opencode). See
   `docs/requirements/keryx-multi-agent-engine/` (Phase D).
 
-## [0.2.44] — 2026-08-18
+## [0.2.44] - 2026-08-18
 
 ### Added
 
@@ -7142,7 +7151,7 @@ surface. This release closes the six flows that came out of it.
   `permissions.json` entry for either command can never auto-approve or be
   remembered.
 
-## [0.2.43] — 2026-08-18
+## [0.2.43] - 2026-08-18
 
 ### Added
 
@@ -7176,7 +7185,7 @@ surface. This release closes the six flows that came out of it.
   faded the panel's own content along with it). The panel itself stays fully
   opaque.
 
-## [0.2.42] — 2026-08-18
+## [0.2.42] - 2026-08-18
 
 ### Added
 
@@ -7216,7 +7225,7 @@ surface. This release closes the six flows that came out of it.
   quality win on a capable one, pending real classification-threshold tuning
   data.
 
-## [0.2.41] — 2026-08-18
+## [0.2.41] - 2026-08-18
 
 ### Added
 
@@ -7289,7 +7298,7 @@ surface. This release closes the six flows that came out of it.
   character cap) in a scrollable box, with `ctrl+o` toggling focus into it for
   arrow/PageUp/PageDown scrolling.
 
-## [0.2.40] — 2026-08-17
+## [0.2.40] - 2026-08-17
 
 ### Added
 
@@ -7331,7 +7340,7 @@ surface. This release closes the six flows that came out of it.
   `/status` wrapped correctly right next to it; both now wrap to the
   panel's real width.
 
-## [0.2.39] — 2026-08-17
+## [0.2.39] - 2026-08-17
 
 ### Added
 
@@ -7386,7 +7395,7 @@ surface. This release closes the six flows that came out of it.
   Archived workspaces surface identically to active ones — archival never
   hides a pending proposal.
 
-## [0.2.38] — 2026-08-16
+## [0.2.38] - 2026-08-16
 
 ### Added
 
@@ -7415,7 +7424,7 @@ surface. This release closes the six flows that came out of it.
   destructive or credential commands) lives in one module. Readline prints
   those hints and can remember an exact `shell_exec` grant.
 
-## [0.2.37] — 2026-08-16
+## [0.2.37] - 2026-08-16
 
 ### Added
 
@@ -7439,7 +7448,7 @@ surface. This release closes the six flows that came out of it.
 - **Modal size no longer jumps on tab switch.** The host no longer shrink-wraps
   to each tab body.
 
-## [0.2.36] — 2026-08-15
+## [0.2.36] - 2026-08-15
 
 ### Added
 
@@ -7459,7 +7468,7 @@ surface. This release closes the six flows that came out of it.
   block. Readline/`--no-tui` prints the same rows. The command never starts a
   model turn.
 
-## [0.2.35] — 2026-08-15
+## [0.2.35] - 2026-08-15
 
 ### Added
 
@@ -7563,7 +7572,7 @@ surface. This release closes the six flows that came out of it.
 - **TUI composer did not grow with wrapped input.** The composer now grows like
   a wrapping textarea instead of clipping the prompt.
 
-## [0.2.34] — 2026-08-14
+## [0.2.34] - 2026-08-14
 
 ### Added
 
@@ -7958,7 +7967,7 @@ surface. This release closes the six flows that came out of it.
   wrote it). 246/246 across `src/mcp`+`src/sac`+`src/commands/security`+
   `src/gdskills` after this change, typecheck clean.
 
-## [0.2.33] — 2026-08-13
+## [0.2.33] - 2026-08-13
 
 ### Added
 
@@ -7970,7 +7979,7 @@ surface. This release closes the six flows that came out of it.
   `enabled: true`. Read-only; the runtime guard and default-off posture are
   unchanged. Documented in the new Phase 6b operator playbook.
 
-## [0.2.32] — 2026-08-12
+## [0.2.32] - 2026-08-12
 
 ### Added
 
@@ -7994,7 +8003,7 @@ surface. This release closes the six flows that came out of it.
   readiness (planned) — across the package README, implementation plan and the
   phase-6 readiness document.
 
-## [0.2.31] — 2026-08-12
+## [0.2.31] - 2026-08-12
 
 ### Changed
 
@@ -8006,7 +8015,7 @@ surface. This release closes the six flows that came out of it.
   persisted per provider, and rapid-mlx detection no longer falls back to
   unrelated hardcoded models when endpoint probing fails.
 
-## [0.2.30] — 2026-08-12
+## [0.2.30] - 2026-08-12
 
 ### Fixed
 
@@ -8015,7 +8024,7 @@ surface. This release closes the six flows that came out of it.
   / `/provider` picker refactoring. This unblocks the release pipeline type check and keeps
   the shell launch API consistent.
 
-## [0.2.29] — 2026-08-12
+## [0.2.29] - 2026-08-12
 
 ### Changed
 
@@ -8024,7 +8033,7 @@ surface. This release closes the six flows that came out of it.
   `/models` checks). `/provider` remains the configuration command for provider
   credentials and model setup.
 
-## [0.2.28] — 2026-08-12
+## [0.2.28] - 2026-08-12
 
 ### Fixed
 
@@ -8032,7 +8041,7 @@ surface. This release closes the six flows that came out of it.
   the HTTP client for loopback search endpoints while retaining HTTPS-only
   policy for remote web fetches.
 
-## [0.2.27] — 2026-08-12
+## [0.2.27] - 2026-08-12
 
 ### Fixed
 
@@ -8043,7 +8052,7 @@ surface. This release closes the six flows that came out of it.
   sources, the agent now gives search-provider setup guidance instead of
   guessing URLs or repeatedly retrying an unavailable search provider.
 
-## [0.2.26] — 2026-08-12
+## [0.2.26] - 2026-08-12
 
 ### Added
 
@@ -8059,7 +8068,7 @@ surface. This release closes the six flows that came out of it.
 - **External web data is tainted.** It is bounded, redacted, provenance-labelled,
   and cannot authorize later agent tool calls across turns or session compaction.
 
-## [0.2.25] — 2026-08-11
+## [0.2.25] - 2026-08-11
 
 ### Changed
 
@@ -8068,9 +8077,7 @@ surface. This release closes the six flows that came out of it.
   endpoint URL before live model discovery; overrides are stored per provider.
   `/connect` lists only configured or currently reachable providers.
 
-### Fixed
-
-## [0.2.24] — 2026-08-11
+## [0.2.24] - 2026-08-11
 
 ### Fixed
 
@@ -8078,7 +8085,7 @@ surface. This release closes the six flows that came out of it.
   provider, API-key, and model picker in agent mode, matching `/connect` and
   avoiding a switch to chat mode solely to change providers.
 
-## [0.2.23] — 2026-08-11
+## [0.2.23] - 2026-08-11
 
 ### Added
 
@@ -8087,7 +8094,7 @@ surface. This release closes the six flows that came out of it.
   `KERYX_RAPID_MLX_BASE_URL=http://127.0.0.1:8010`. The selected endpoint is
   also used to discover the provider's live model list.
 
-## [0.2.22] — 2026-08-11
+## [0.2.22] - 2026-08-11
 
 ### Fixed
 
@@ -8096,14 +8103,14 @@ surface. This release closes the six flows that came out of it.
   text every 300 ms. `/interrupt` therefore preserves the latest partial answer
   instead of losing the active turn.
 
-## [0.2.21] — 2026-08-11
+## [0.2.21] - 2026-08-11
 
 ### Fixed
 
 - **Release verification for changed-test selection.** Updated stale test expectations
   for the existing `imports` selection strategy, restoring the release test gate.
 
-## [0.2.20] — 2026-08-11
+## [0.2.20] - 2026-08-11
 
 ### Added
 
@@ -8120,7 +8127,7 @@ surface. This release closes the six flows that came out of it.
   sequentially. This keeps the interface responsive without mutating context during
   background helper turns.
 
-## [0.2.19] — 2026-08-11
+## [0.2.19] - 2026-08-11
 
 ### Fixed
 
@@ -8132,7 +8139,7 @@ surface. This release closes the six flows that came out of it.
   Type strictness and generated graph/wiki artifacts were updated so the same provider
   registry changes (including rapid-mlx) are represented safely in runtime and docs tooling.
 
-## [0.2.18] — 2026-08-11
+## [0.2.18] - 2026-08-11
 
 ### Added
 
@@ -8154,7 +8161,7 @@ surface. This release closes the six flows that came out of it.
   yet contain, and existing projects gain the guidance only after index
   regeneration or update.
 
-## [0.2.17] — 2026-08-11
+## [0.2.17] - 2026-08-11
 
 This release makes project bootstrap reliable without inflating every agent
 turn, gives read-heavy investigation enough room to finish, and completes the
@@ -8196,7 +8203,7 @@ memory reliability work from recall through lifecycle writes.
 - Added a frozen 26-case shell benchmark protocol for comparing Keryx model
   legs with Claude Code and Codex without claiming results before a run.
 
-## [0.2.16] — 2026-08-05
+## [0.2.16] - 2026-08-05
 
 The other half of the 0.2.15 audit. That release corrected what the README
 claimed; this one closes the five gaps it found in the code — one live security
@@ -8241,7 +8248,7 @@ with no way in.
   itself, so two of the gate's three conditions stop being vacuous. Supplying
   nothing keeps the previous behaviour, which has its own test.
 
-## [0.2.15] — 2026-08-05
+## [0.2.15] - 2026-08-05
 
 A claim-by-claim audit of the README against source. Three commands turned out
 to report work they had not done, and the fixes are the substance of this
@@ -8290,7 +8297,7 @@ release; the documentation changes are what the audit found on the way.
   and `health explain` — and its `harness run` signature no longer names three
   providers out of eleven.
 
-## [0.2.14] — 2026-08-04
+## [0.2.14] - 2026-08-04
 
 ### Documentation
 
@@ -8311,7 +8318,7 @@ release; the documentation changes are what the audit found on the way.
   npm's URL rewriting. They are now pinned to `raw.githubusercontent.com`, so the
   page renders the same wherever it is displayed.
 
-## [0.2.13] — 2026-08-04
+## [0.2.13] - 2026-08-04
 
 ### Documentation
 
@@ -8329,7 +8336,7 @@ release; the documentation changes are what the audit found on the way.
   example now uses `gemma4:e4b`, which is what the capture was actually taken
   against.
 
-## [0.2.12] — 2026-08-04
+## [0.2.12] - 2026-08-04
 
 ### Documentation
 
@@ -8366,7 +8373,7 @@ release; the documentation changes are what the audit found on the way.
   which has been deploying on every push to `main` and was reachable from
   nowhere in the README.
 
-## [0.2.11] — 2026-08-04
+## [0.2.11] - 2026-08-04
 
 ### Documentation
 
@@ -8403,7 +8410,7 @@ release; the documentation changes are what the audit found on the way.
   with "metaproject workspace", a term that means nothing before the reader has
   installed the thing.
 
-## [0.2.10] — 2026-08-04
+## [0.2.10] - 2026-08-04
 
 ### Changed
 
@@ -8429,7 +8436,7 @@ release; the documentation changes are what the audit found on the way.
   were the same defect wearing different clothes — a requirement satisfied in
   one place and never written down as belonging to the suite.
 
-## [0.2.9] — 2026-08-04
+## [0.2.9] - 2026-08-04
 
 ### Documentation
 
@@ -8458,7 +8465,7 @@ release; the documentation changes are what the audit found on the way.
 
   It is a draft for a human to post. Nothing has been published.
 
-## [0.2.8] — 2026-08-04
+## [0.2.8] - 2026-08-04
 
 ### Documentation
 
@@ -8488,7 +8495,7 @@ release; the documentation changes are what the audit found on the way.
     detector is good, only that it has not got worse than a number someone wrote
     down and can defend. Every other detector's ceiling is zero.
 
-## [0.2.7] — 2026-08-03
+## [0.2.7] - 2026-08-03
 
 ### Added
 
@@ -8518,7 +8525,7 @@ release; the documentation changes are what the audit found on the way.
   documentation work. It ran over a hand-picked file list, and the result was
   generalised to the repository.
 
-## [0.2.6] — 2026-08-03
+## [0.2.6] - 2026-08-03
 
 ### Fixed
 
@@ -8559,7 +8566,7 @@ release; the documentation changes are what the audit found on the way.
   a hosted service, people on Linux who need the network allowlist, people who
   need remote approvals today, and people who expect it to do the thinking.
 
-## [0.2.5] — 2026-08-03
+## [0.2.5] - 2026-08-03
 
 ### Fixed
 
@@ -8588,7 +8595,7 @@ release; the documentation changes are what the audit found on the way.
 - `keryx modules enable|disable security` and `… mcp` now work. `security` was
   reachable only through `init` flags before this.
 
-## [0.2.4] — 2026-08-03
+## [0.2.4] - 2026-08-03
 
 ### Documentation
 
@@ -8626,7 +8633,7 @@ release; the documentation changes are what the audit found on the way.
 - Layer 1 is described as the `CLI_ROUTES` table it is, not the "flat if-chain"
   it stopped being.
 
-## [0.2.3] — 2026-08-03
+## [0.2.3] - 2026-08-03
 
 ### Fixed
 
@@ -8659,7 +8666,7 @@ than an argv. Both changes were kept: the security structure from `main`, the
 `--with-filename` fix from the branch, asserted together so neither can be
 dropped while the other still passes.
 
-## [0.2.2] — 2026-08-03
+## [0.2.2] - 2026-08-03
 
 ### Security
 
@@ -8685,7 +8692,7 @@ dropped while the other still passes.
   precedence, and the empty-list cases — `--allowed-domains ""` is not a request
   to restrict with no domains.
 
-## [0.2.1] — 2026-08-03
+## [0.2.1] - 2026-08-03
 
 ### Security
 
@@ -8719,7 +8726,7 @@ dropped while the other still passes.
 - `shared-definitions` for the rules library, so places that agree connect by
   import instead of by restatement (PR #222).
 
-## [0.2.0] — 2026-08-03
+## [0.2.0] - 2026-08-03
 
 The first release since `v0.1.0`, covering 570 commits: the OS sandbox, the
 agent harness and multi-agent engine, the OpenTUI shell, and the remote entry.
@@ -8888,7 +8895,7 @@ a reader would otherwise discover by hitting them.
 - **The source-pattern guards in `src/lib/config-dir.ast.ts` are heuristics, not
   closures**, and carry a written list of known gaps as executable tests.
 
-## [0.1.0] — 2026-07-10
+## [0.1.0] - 2026-07-10
 
 First tagged release. `keryx` installs a deterministic, local, offline,
 git-diffable `.metaproject/` workspace of agent-facing tooling, with an opt-in
@@ -8990,4 +8997,4 @@ runtime dependencies, no sockets).
 [0.2.35]: https://github.com/MrCipherSmith/keryx/compare/v0.2.34...v0.2.35
 [0.2.36]: https://github.com/MrCipherSmith/keryx/compare/v0.2.35...v0.2.36
 [0.2.37]: https://github.com/MrCipherSmith/keryx/compare/v0.2.36...v0.2.37
-[Unreleased]: https://github.com/MrCipherSmith/keryx/compare/v0.2.37...HEAD
+[Unreleased]: https://github.com/MrCipherSmith/keryx/compare/v0.4.31...HEAD

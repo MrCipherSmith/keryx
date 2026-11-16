@@ -79,6 +79,7 @@ session rather than as `keryx shell` itself.)
 | `keryx learn graduate [--domain <d>]` | Clusters accepted records and writes a graduation proposal. |
 | `keryx learn graduate apply <proposal-id>` | Terminal-only; writes an agent candidate. A skill-target proposal is not applied by this command — see below. |
 | `keryx learn prune [--dry-run] [--json]` | Deletes observation files past their 30-day TTL and expires candidates past `ttl.expiresAt`. |
+| `keryx learn probe <id> --task <task-id> [--task-set <path>] [--runs <n>] [--model <id>] [--provider <name>] [--max-usd <n>] [--dry-run] [--json]` | Spends model calls to measure one pattern against a baseline arm on a probe task and reports a comparison verdict. Needs a provider credential; no-terminal runs and a mismatched confirmation create no probe storage, and `--dry-run` plans without spending. Results land under `.metaproject/data/learning/probes/<id>/`. See [cli-reference](./cli-reference.md). |
 | `keryx review learn --reviewer <id> [--dry-run]` | Applies an accepted `review-conventions` record as a reviewer-profile `.mdc` — the reviewer-profile sibling of project-skill `apply`. |
 
 `accept`, `promote`, and `graduate apply` never take a `--yes` / `--force` /

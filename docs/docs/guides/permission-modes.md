@@ -50,7 +50,7 @@ read at the start of each turn, so `/mode auto`, `/mode trust` and `/mode ask`
 change the limit of the next turn without a restart. `/mode` and the `/mode`
 picker show the limit of each mode.
 
-Subagents keep their own limit (10 by default, at most 24 for a `max_rounds`
+Subagents keep their own limit (40 by default, at most 200 for a `max_rounds`
 request) in every mode. They never ask a person at their limit, so there is no
 question to remove.
 
@@ -325,8 +325,8 @@ names the cause, from a closed set:
 A review of a large pull request is hundreds of tool calls. The shell is built to
 carry one to the end without you typing anything after the task.
 
-- **Round limit.** A turn may use 40 tool rounds in `ask` and `auto`, and **200 in
-  `trust`**. The limit follows the mode in force when the turn starts, so `/mode
+- **Round limit.** A turn may use 40 tool rounds in `ask`, and **200 in
+  `trust` and `auto`**. The limit follows the mode in force when the turn starts, so `/mode
   trust` takes effect on the next turn. `KERYX_AGENT_MAX_ROUNDS` still overrides
   both. When the limit is hit, the "reset" choice adds the limit of the current mode.
 - **No prompt for routine commands.** In `trust` and `review-auto`, a short `&&` chain
@@ -342,7 +342,7 @@ carry one to the end without you typing anything after the task.
 - **Answers are kept.** What you answer to a question the agent asks (counterpart,
   model plan, budget, scope) is stored in the session slate, so it is not asked again
   after compaction or in a later turn. Questions marked irreversible are always asked.
-- **Waves of 10.** Up to 10 subagents run at once, each with a round budget of 40
+- **Concurrency.** Up to 16 subagents run at once (32 per turn, and 32 per review wave), each with a round budget of 40
   (at most 200 per subagent).
 - **Slash commands are queued, not dropped.** A command typed while a turn runs is
   shown as `queued as qN` and runs when the turn ends; `/queue` lists, edits and
@@ -438,7 +438,7 @@ Permission modes apply to the interactive `keryx shell` session only:
   the formal policy-profile engine described in
   [the harness page](../harness.md#the-policy-engine-three-answers-not-two)
   — completely unaffected by this feature.
-- **The MCP server** (`keryx mcp`) does not consult permission modes at all;
+- **The MCP server** (`keryx serve-mcp`) does not consult permission modes at all;
   an inbound MCP tool call from another agent is a separate code path.
 - **No remote or headless caller can set `trust`/`auto` for you.** The mode
   is local, in-session, human-set state.

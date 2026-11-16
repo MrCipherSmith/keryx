@@ -5,8 +5,11 @@
 work. It is organized as a thin dispatcher (`cli.ts`) routing to a set of loosely
 coupled feature modules, each with a `commands/<name>.ts` handler over a
 `<feature>/*.ts` domain layer, all sitting on a shared `lib/` toolkit. Modules
-never call each other's code paths directly; they integrate by reading and writing
-files under the shared `.metaproject/` workspace.
+mostly integrate by reading and writing files under the shared `.metaproject/`
+workspace; the exceptions are a small, documented set of in-process edges (for
+example `mcp` calling other modules' service facades) listed in
+[architecture.md](./architecture.md), so "loosely coupled" does not mean "never
+imports another module".
 
 This reference documents one module per section, covering the real CLI surface,
 key source files, mechanics, the `.metaproject/` paths each module reads and writes,
@@ -37,12 +40,15 @@ dispatcher (`src/cli.ts`) and the cross-cutting lifecycle commands — `init`,
 `MODULE_COMMANDS`, the single source
 of truth for each module's canonical subcommand list. Its job is to parse the
 top-level subcommand, scaffold the workspace and its nine default-configurable
-modules (plus the opt-in `mcp` module, for a possible tenth), keep
+modules (plus the opt-in `mcp` and `sac` modules, which `init` writes as
+disabled), keep
 managed "service" files in sync without ever touching user "data" artifacts, and
 emit both an agent-facing `index.md` and a human-facing HTML dashboard.
 
-**CLI surface (top-level commands).** `main()` is a flat if-chain mapping `args[0]`
-to a handler:
+**CLI surface (top-level commands).** `main()` looks `args[0]` up in the
+`CLI_ROUTES` table (`src/cli-registry.ts`, dozens of verbs) and calls the matching
+handler; the rows below are the lifecycle core, not the whole table (see the
+[CLI reference](./cli-reference.md) for every verb):
 
 | Command | Action |
 |---|---|
@@ -55,14 +61,17 @@ to a handler:
 | `modules` | view and toggle modules (`status` / `enable <name>` / `disable <name>` / interactive) |
 | `standard` | validate the workspace against the Metaproject Standard: `validate` / `doctor` / `capabilities` / `emit llms [--stdout]` |
 | `security` | agent I/O + artifact security layer (routed to `securityCommand`) |
-| `mcp` | serve module facades over the Model Context Protocol (routed to `mcpCommand`, opt-in module) |
-| `agents` | manage global agent bootstrap routing (routed to `agentsCommand`) |
+| `mcp` | manage MCP *client* servers: `list`/`add`/`remove`/`enable`/`disable`/`trust`/`untrust`/`doctor`/`auth`/`logout` (routed to `mcpCommand`; `mcp serve`/`install`/`uninstall` are retired aliases of `serve-mcp`/`integrate`) |
+| `serve-mcp`, `integrate` | serve module facades over MCP (opt-in module) and wire an editor/agent to that server |
+| `agents` | agent bootstrap routing, external agents, the agent catalog and fleet monitor (routed to `agentsCommand`) |
 | `gdgraph`, `ctx`, `wiki`, `skills`, `skill-verify-skill`, `health`, `test`, `memory`, `flow`, `rules` | routed to the feature module handler |
 | unknown | error + help + exit 1 |
 
 Key lifecycle flags: `init` accepts `--yes/-y`, `--no-<module>` for each of the 9
-modules, `--gdskills-profile <v>`, and `--no-*-hook` variants; `update` accepts
-`--hooks`, `--skip-runtime`, `--no-tasks`.
+modules, `--gdskills-profile <v>`, and `--no-*-hook` variants; `init` also takes the
+opt-in `--mcp`, `--sac` (`--no-sac`) and `--treesitter`; `update` accepts
+`--hooks`, `--skip-runtime`, `--no-tasks`, `--preview`/`--dry-run`,
+`--accept-version`, `--keep-existing` and `--yes`.
 
 **Key files.**
 - `src/cli.ts` — entrypoint `main()` argv dispatcher, `printHelp()`, version.
@@ -292,6 +301,14 @@ deterministic draft pages from sibling modules' generated data.
 | `wiki ask "<q>" [--k <n>] [--rerank]` | deterministic Q&A over wiki pages + current memory, returns cited answer | 0 |
 | `wiki context` | emit the wiki-index portion of the bounded orientation block | 0 |
 | `wiki backlinks <wiki-page-or-code-file>` | show knowledge backlinks and, for code files, graph dependents | 0 |
+| `wiki freshness [--since <rev>] [--all] [--json]` | report which pages the code moved under; always exits 0. It writes `data/wiki/freshness/latest.{json,md}` and consumes the freshness queue unless `--since` is given | 0 |
+| `wiki refresh [--page <p>] [--force] [--dry-run] [--json]` | regenerate managed `## Reference` blocks (writes pages); stamps `VerifiedAt` only while the code graph is current | 0 |
+| `wiki verify --page <path> \| --baseline` | stamp page provenance; refuses to stamp the whole corpus silently | 0 |
+| `wiki migrate-markers` | one-off: wrap existing Reference sections in markers | 0 |
+| `wiki sections [resolve "<pageId>#<sectionId>" \| sync \| migrate]` | section identity registry: list, resolve one address, sync the registry (the only write), or insert identity markers | 1 if `sync` refuses |
+| `wiki enrich [<page>\|--all] [--force] [--list] [--dry-run] ...` | model-backed prose enrichment of drafts; never accepts a page | 0 |
+| `wiki history <page>` / `wiki history --runs` | every stored version of a page, or the runs that changed pages | 0 |
+| `wiki restore <page> [--version vNNNN]` / `wiki restore --run <run-id> [--force]` | put one page back, or undo everything one run changed | 0 |
 
 Eight fixed page types (`WIKI_PAGE_TYPES`), each mapping to a folder: `architecture`,
 `domain-model`, `business-rule`, `user-scenario`, `component`, `service`,
@@ -687,15 +704,23 @@ checksums), `flow/context.ts` (deterministic context collection), `flow/types.ts
 `previousStatus`. **AC freeze:** `acChecksum` normalizes the criteria file and
 sha256s it; `freeze` refuses if there are zero real criteria; `assertAcIntact`
 recomputes the checksum before most mutations and throws (directing to `ac update`)
-if the file was edited outside the CLI. **Completion gates** (`complete`): (1)
-acceptance-criteria (intact + every criterion confirmed), (2) pull-request (PR exists
-+ checks green, or skipped if tracker unavailable), (3) health
-(`deps.healthGate(cwd)`), (4) owner — **opt-in per package** (`gates.owner`, written
-by `flow init`; flows created before flow 289 report it `skipped` rather than being
-retroactively blocked) — fails while `flow.owner` is unset, (5) folder-committed — **opt-in per
+if the file was edited outside the CLI. **Completion gates** (`complete`, evaluated in this order in
+`src/flow/service.ts`): (1) acceptance-criteria (intact + every criterion
+confirmed), (2) pull-request (PR exists + checks green, or skipped if tracker
+unavailable) — or, for a direct-merge handoff, `main-merge` (the implementation
+commit is contained in `origin/main`), (2b) base-branch (the PR or merge landed
+where the flow's recorded base said it should; reported as `not recorded` when
+the flow named no base), (3) tasks — **opt-in per package** (`gates.tasks`;
+older packages report `skipped`), (4) owner — **opt-in per package**
+(`gates.owner`, written by `flow init`; flows created before flow 289 report it
+`skipped` rather than being retroactively blocked) — fails while `flow.owner` is
+unset, (5) folder-committed — **opt-in per
 package** (`gates.folderCommitted`, written by `flow init` from 0.3.53; older packages
 report it `skipped`, as does a non-git directory) — fails while the flow folder is not in
-`HEAD`. The flow folder is committed in the same PR as the code; the commit at closing
+`HEAD`, (6) review — **opt-in per package** (`gates.review`, reads the review
+records), (7) health (`deps.healthGate(cwd)`), and (8) security — omitted
+entirely when the security module is disabled; advisory mode reports pass,
+enforced/ci mode may fail. The flow folder is committed in the same PR as the code; the commit at closing
 is a rule to follow, and the gate requires only that `flow.json` is in `HEAD` before
 closing. `flow init` and `flow renumber` avoid numbers used on known remote branches
 (`src/flow/remote-flows.ts`: up to 500 remote-tracking refs, no network; a never-fetched
@@ -1094,19 +1119,27 @@ the typed result. It is **stdio-first** (an isolated localhost HTTP/SSE transpor
 further opt-in), and `modules.mcp` **defaults off** — the module entry + config are
 scaffolded only via `init --mcp`.
 
-**CLI surface.** Dispatched by `mcpCommand`:
+**CLI surface.** `mcp` is two surfaces. The **server** side (keryx exposed as an
+MCP server) now lives under `serve-mcp` and `integrate`; the old `serve`,
+`install` and `uninstall` subcommands of `keryx mcp` are retired aliases that
+still work and print a deprecation line. The `keryx mcp` verb itself manages MCP **client** servers that
+keryx's own agent connects to (`src/commands/mcp-servers.ts`).
 
-| Subcommand | Behavior |
+| Command | Behavior |
 |---|---|
-| `mcp` / `mcp serve` | run the stdio JSON-RPC MCP server (default) |
-| `mcp serve --http` | use the isolated localhost HTTP/SSE transport (requires `http.enabled`) |
-| `mcp serve --cwd <project-root>` | expose a specific project regardless of the MCP client's launch directory |
-| `mcp install --runtime <cursor\|claude\|opencode\|generic\|all>` | write project-scoped client config with `--cwd <project-root>` |
-| `mcp uninstall --runtime <cursor\|claude\|opencode\|generic\|all>` | remove only the managed keryx client entry |
-| `mcp --help` / `-h` | usage |
+| `serve-mcp [--cwd <project-root>]` | run the stdio JSON-RPC MCP server (default) |
+| `serve-mcp --http` | use the isolated localhost HTTP/SSE transport (requires `http.enabled`) |
+| `serve-mcp --read-only` | hide every tool marked mutating |
+| `serve-mcp --harness <id>` | bind a cross-harness memory identity at launch |
+| `integrate [--remove] <cursor\|claude\|opencode\|vscode\|generic\|all> [--dry-run]` | write (or remove) the project-scoped client config with `--cwd <project-root>` and enable the module |
+| `mcp list \| add \| remove \| enable \| disable` | manage the MCP client servers keryx's agent can use (`add <name> -- <command…>` or `add --transport http <name> <url>`) |
+| `mcp trust \| untrust <name>` | approve or withdraw a project-committed server before keryx will launch it |
+| `mcp doctor [<name>]` | check that a configured server connects |
+| `mcp auth <name>` / `mcp logout <name>` | authorise (interactive) or drop the stored credential of a remote server |
+| `mcp serve \| install \| uninstall` | retired: use `serve-mcp` / `integrate` |
 
 **Key files.**
-- `src/commands/mcp.ts` — thin handler; parses `serve`/`--http`, never imports the SDK.
+- `src/commands/mcp.ts` — the `keryx mcp` router: client-server subcommands plus the retired `serve`/`install`/`uninstall` shims; `src/commands/mcp-servers.ts` implements the client-server management; `src/commands/serve-mcp.ts` and `src/commands/integrate.ts` are the current server entry points. None imports the SDK.
 - `src/mcp/server.ts` — stdio-first server loop; lazy-loads `@modelcontextprotocol/sdk` via `await import()` and hard-fails with an actionable message when it is absent (the sanctioned opt-in exception).
 - `src/mcp/tools.ts` — the Tool registry over the gdgraph/gdctx/security/memory/health/testing/wiki/flow/standard/sac facades.
 - `src/mcp/resources.ts` — the read-only `metaproject://<class>/<relpath>` Resource registry (`artifacts`/`wiki`/`memory`), path-confined to each class root.
@@ -1324,8 +1357,8 @@ rewritten on distill). Requires `.metaproject/` to exist, else throws.
 `lib/templates` (entrypoint/rules/index renderers). **Cross-cutting:**
 `syncAgentRules`/`ensureMetaprojectReference` are also invoked by `init`/`update`
 during workspace bootstrap/refresh, so this module's sync engine runs beyond its own
-command. No co-located tests exist — the heuristic classifier and policy-migration
-logic are the highest-risk untested areas.
+command. Co-located tests (`src/rules/*.test.ts`, eight files) cover the module;
+the heuristic classifier and policy-migration logic remain its highest-risk areas.
 
 ---
 
@@ -1339,8 +1372,11 @@ entrypoint so that any project the agent opens routes through keryx tooling. Unl
 per-runtime global config files under `$HOME` and is idempotent, merge-safe, and
 fully reversible.
 
-**CLI surface.** Dispatched by `agentsCommand`; the only subcommand group is
-`bootstrap`:
+**CLI surface.** Dispatched by `agentsCommand`. `bootstrap` is the group this
+section documents; the verb also carries other subcommands (see
+`keryx agents --help` and the [CLI reference](./cli-reference.md)): `monitor`,
+`external …` (enable/disable/list/probe/run/review/apply/discard), and the agent
+catalog (`list`, `show`, `export`, `verify`, `generate`).
 
 | Subcommand | Behavior |
 |---|---|
@@ -1586,7 +1622,7 @@ denied at expiry rather than auto-approved; the stock listener registers no tool
 so it raises none.
 
 **Remote control (Telegram).** Also opt-in: when `remote/bot-token` and
-`remote/config.json` exist, `serve` hosts the one Telegram poller and the eight
+`remote/config.json` exist, `serve` hosts the one Telegram poller and the nineteen
 `/v1/remote/*` routes, which a `keryx shell` reaches with a nonce-bound HMAC of a
 local shell token (not the serve bearer; `serve` proves itself back with a signed
 answer, `src/remote/shell-token.ts`) to mirror a session into a topic via `/remote-control`.
@@ -1603,24 +1639,27 @@ that remote entry addresses projects by (`projects`).
 ## shared-lib
 
 **Purpose.** `src/lib/` is the cross-cutting utility toolkit every feature module and
-command handler builds on. It provides six small, dependency-light modules: CLI
-argument extraction, filesystem predicates, JSON file I/O, interactive terminal
-prompts, terminal styling/UI output, and — by far the largest — a template library
-that renders the entire `.metaproject/` workspace scaffold (Markdown manifests, an
-HTML dashboard, shell git-hooks, config files, skill/rule docs) as strings. There is
-no orchestration or domain logic here.
+command handler builds on. It began as six small modules — CLI argument extraction,
+filesystem predicates, JSON file I/O, interactive terminal prompts, terminal
+styling/UI output, and the template library that renders the entire `.metaproject/`
+workspace scaffold (Markdown manifests, an HTML dashboard, shell git-hooks, config
+files, skill/rule docs) as strings — and has since grown to a couple of hundred
+source files (plus co-located tests): contained-path and contained-write helpers,
+command-risk classification, config-dir readers/writers, the `keryx serve` server
+and approvals broker, shell config, and more. It still holds no orchestration of
+its own, but it is no longer free of domain knowledge.
 
 **CLI surface.** None — `lib/` is a library layer, not a command. It is consumed by
-every other module (import counts: `fs` 32, `json` 10, `args` 8, `templates` 8,
-`ui` 6, `prompt` 1).
+every other module; the original six (`fs`, `json`, `args`, `templates`, `ui`,
+`prompt`) remain the most widely imported.
 
-**Key files / API.**
+**Key files / API (the original core; `ls src/lib` is the full list).**
 - `args.ts` — `optionValue(args, name)`: the token following a named flag (the project's only flag reader).
 - `fs.ts` — `pathExists` (most-used helper), `toPosix`, `isPathInside` (workspace-boundary guard).
 - `json.ts` — `readJsonFile<T>` (rethrows `Invalid JSON in <path>`), `readJsonFileOr<T>` (returns fallback on failure).
 - `prompt.ts` — `confirm`, `choice<T>`: TTY prompts that return defaults when stdin isn't a TTY (CI-safe). Depends on `ui.ts`.
 - `ui.ts` — `colorEnabled`, `style`, `symbols`, `banner`, `heading`, `statusLine`, `nextSteps`, `note`, and `help*` renderers.
-- `templates.ts` — ~23 `render*(): string` builders (~1836 LOC) that materialize the generated agent workspace: `renderIndexMarkdown`, `renderMetaprojectDashboardHtml` (+ `MetaprojectDashboardData` type), agent-entrypoint/rules renderers, config/gitignore renderers, git-hook script renderers, and gdgraph/gdctx scaffold renderers.
+- `templates.ts` — many `render*(): string` builders that materialize the generated agent workspace: `renderIndexMarkdown`, `renderMetaprojectDashboardHtml` (+ `MetaprojectDashboardData` type), agent-entrypoint/rules renderers, config/gitignore renderers, git-hook script renderers, and gdgraph/gdctx scaffold renderers.
 
 **How it works.** Flat utility library — named functions, no classes/DI/barrel;
 callers import files directly. Key patterns: **pure string templating** (the whole
@@ -1637,8 +1676,11 @@ dashboard** (all CSS/JS + page Markdown inlined because `fetch` is blocked under
 env vars `NO_COLOR`/`FORCE_COLOR`. The strings it renders become nearly every file
 `init`/`update`/`dashboard`/`rules` write to `.metaproject/`.
 
-**Dependencies / integrations.** Node/Bun builtins only (`fs/promises`, `path`,
-`process`, `readline/promises`); no third-party runtime libraries. The only intra-lib
-edge is `prompt.ts → ui.ts`; `lib/` depends on nothing else (it is the bottom layer).
+**Dependencies / integrations.** Node/Bun builtins; no third-party runtime
+libraries. The core files form the bottom layer (`prompt.ts → ui.ts` is their
+only intra-lib edge), but `lib/` as a whole is **not** dependency-free: some files
+import upward, for example `serve-server.ts` and `serve-approvals-broker.ts` reach
+into `harness/` (policy profiles, tool types), `git-worktrees.ts` lazily imports
+`rules/`, and test files import `session/` and `testing/` code.
 `templates.ts` is effectively the source of truth for the agent-facing
 `.metaproject/` contract — the workspace format lives there.

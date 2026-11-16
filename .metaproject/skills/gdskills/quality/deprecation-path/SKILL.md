@@ -42,7 +42,7 @@ dropped, the config key is skipped, the field comes back `undefined`. The
 command exits 0. The caller reads success, the operator reads success, and the
 work the flag asked for silently stopped happening. `rejectUnknownFlags` says
 it in one line — *"a flag that is silently dropped writes nothing and reports
-success"* (`src/commands/review.ts:307-318`).
+success"* (`rejectUnknownFlags` in `src/commands/review.ts`).
 
 `rules/core/cli-interface-design.mdc` sets the standard a surface must meet.
 This skill is the work of getting an existing spelling from where it is to

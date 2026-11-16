@@ -19,6 +19,7 @@ Human dashboard: [keryx-dashboard.html](keryx-dashboard.html)
 | memory | Markdown-canonical memory: pure recall, explicit reports, lifecycle, and accepted/current bounded influence | modules/memory.md |
 | tasks | Agent-first flow lifecycle: frozen acceptance criteria, status gates, PR completion | modules/tasks.md |
 | security | Policy-based scanning, redaction, guardrails, and audit reports for agent inputs/outputs and artifacts | modules/security.md |
+| mcp | Model Context Protocol server (`keryx serve-mcp`) and client config for agent runtimes | modules/mcp.md |
 ## Rules
 
 | Source | Priority | Purpose | Entry |
@@ -96,7 +97,7 @@ Human dashboard: [keryx-dashboard.html](keryx-dashboard.html)
 22. When the user asks to start, create, track, or finish a managed piece of work, use `skills/flow/SKILL.md` for state/status commands and use `skills/gdskills/orchestration/flow-orchestrator/SKILL.md` for non-trivial implementation through Task Manager. Never edit flow.json or frozen acceptance criteria by hand.
 23. Before writing external/tool content into memory, wiki, reports, or task context, or when scanning artifacts for secrets/PII/prompt-injection/egress, use `modules/security.md` and `keryx security check-output`/`security scan`; read `data/security/artifacts/latest.md` before claiming security status.
 24. Use relevant skills from `skills/`.
-25. Discover tools: each `modules/*.md` manifest lists that module's `keryx` commands; run `keryx --help` for the full CLI surface.
+25. Discover tools: each `modules/*.md` manifest lists that module's `keryx` commands; the full command reference is `docs/docs/cli-reference.md` (neither `keryx --help` nor `keryx commands` lists every command).
 26. Use module manifests before reading raw generated data.
 27. Prefer curated artifacts in `data/*/artifacts`.
 28. Run module CLI commands when generated data is stale.
@@ -105,7 +106,6 @@ Human dashboard: [keryx-dashboard.html](keryx-dashboard.html)
 
 - `data/gdgraph/artifacts/summary.md`
 - `data/gdgraph/artifacts/module-map.json`
-- `data/gdgraph/queries/latest.md`
 - `data/gdctx/artifacts/latest.md`
 - `wiki/index.md`
 - `skills/catalog.md`

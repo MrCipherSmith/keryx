@@ -544,6 +544,7 @@ export async function initCommand(args: string[]): Promise<void> {
     enableMemory,
     enableTasks,
     enableSecurity,
+    enableMcp: enableMcp || existingManifest?.modules?.mcp?.enabled === true,
   };
 
   // Preview: every decision above is made, nothing below has run, and nothing

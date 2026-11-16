@@ -212,7 +212,7 @@ The shell does this for you; the files are the same. All three inputs are needed
 Start `keryx serve` and the shell as usual. In the shell, `/remote-control
 <name>` creates the topic (the name defaults to `<project>-<short session id>`),
 `/remote-control status` shows its state and recent events, and
-`/remote-control off` removes it. In the full-screen shell the same control is the
+`/remote-control off` archives it. In the full-screen shell the same control is the
 sidebar row and the `/remote-control` modal. The readline shell can only report
 that it is off.
 
@@ -250,7 +250,7 @@ that it is off.
   call is narration and stays in the shell.
 - **Turning it off is explicit about what is dropped.** Queued Telegram lines are
   removed from the shell queue, the shell prints which, and the topic is told
-  before it is deleted. Removing one queued line with `/queue` tells its topic
+  before it is archived. Removing one queued line with `/queue` tells its topic
   too; `/queue edit` keeps its origin so the answer still goes to Telegram.
 - **Long replies are split.** A reply over 4096 characters (Telegram's limit,
   counted in UTF-16 units) goes out as numbered messages, `(1/3)`, `(2/3)`, ...,
@@ -271,7 +271,7 @@ that it is off.
   between HTML and native rich messages, are covered in
   [how replies look in Telegram](#how-replies-look-in-telegram).
 - **Orphans and limits.** If a session stops sending heartbeats, its topic gets a
-  notice and is deleted after 10 minutes (`orphanMs`); a heartbeat inside that
+  notice and is archived after 10 minutes (`orphanMs`); a heartbeat inside that
   window brings it back. A run started from Telegram has no time limit by default;
   set `runTimeoutMs` to a positive number of milliseconds and a run is interrupted
   after that long and the topic is told (`0`, or leaving it out, means no limit).
@@ -474,7 +474,7 @@ have no own-answer button.
   another session's topic resolves nothing. A reply to the box never starts a turn.
   A line you type without replying is an ordinary line for the agent, as before.
 - Pressing the button gives you at least **5 minutes** to type (the option buttons
-  keep their own timeout, `choiceTimeoutMs`, 2 minutes by default). A reply after the
+  keep their own timeout, a fixed 2 minutes that is not a `remote/config.json` setting). A reply after the
   window, or after the question was answered elsewhere, resolves nothing, and the
   topic answers each such reply (from whoever sent it) with "That question is no
   longer open".

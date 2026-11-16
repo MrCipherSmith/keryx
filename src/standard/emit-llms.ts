@@ -102,7 +102,11 @@ async function collectArtifactIndex(cwd: string): Promise<string[]> {
         await walk(full);
       } else if (entry.isFile()) {
         const rel = toPosix(path.relative(cwd, full));
-        if (rel.includes("/artifacts/")) {
+        // gdctx artifacts are local, git-ignored command summaries (one per
+        // run, plus `latest.md`); listing them makes the index churn on every
+        // search and points readers at files a clone does not have.
+        const localGdctx = rel.includes("/data/gdctx/artifacts/");
+        if (rel.includes("/artifacts/") && !localGdctx) {
           out.push(rel);
         }
       }

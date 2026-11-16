@@ -11,8 +11,12 @@
 # publishing it would bury the eight pages a reader actually needs under two
 # hundred they do not.
 #
-# The build runs with `--strict` in CI, so a broken internal link or a page
-# missing from the nav fails the job rather than shipping a site with dead ends.
+# The build runs with `--strict` in CI, so a broken internal link fails the job
+# rather than shipping a site with dead ends. A page missing from the nav does
+# NOT fail it: MkDocs reports omitted files at `info` level by default
+# (`validation.nav.omitted_files`), which `--strict` does not promote. Keep the
+# nav complete by hand: a page left out still builds but is reachable only by
+# direct link.
 site_name: keryx
 site_description: One project-local brain for your AI agents and your team.
 site_url: https://mrciphersmith.github.io/keryx/
@@ -107,9 +111,12 @@ nav:
       - Write a rubric (judge) eval scenario: guides/write-a-rubric-scenario.md
   - Architecture: architecture.md
   - The agent harness: harness.md
+  - Shell exit preservation: shell-preservation.md
+  - Interactive shell recovery: shell-recovery.md
   - Integrations: integrations.md
   - Lifecycle hooks: hooks.md
   - Modules: modules.md
+  - Jev in review (what we measured): jev-in-review.md
   - Self-learning loop: learning.md
   - CLI reference: cli-reference.md
   - Commands by task: commands-by-task.md

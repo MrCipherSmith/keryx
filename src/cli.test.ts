@@ -317,6 +317,7 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
       // Flow 469: only these additions and the declared implemented-line change are allowed.
       '  keryx flow base set <id> --base <branch> --reason "<why>"\n',
       '    [--accept-gate <gate|review:condition>]... --reason "<why>" [--answered-by <host:ref>] (fresh operator approval; no blanket --force)\n',
+      "  keryx flow task done <id> <taskId> --result <result.json> --resolved <resolved.json> [--ac AC1,AC2] [--evidence <path|ref>,...]   (pin the task result against the resolved project context)\n",
       // Flow 422: the freeze prompt for criteria with no verification kind can be skipped.
       "  keryx flow freeze <id> --yes   (or KERYX_NONINTERACTIVE=1: skip the no-verification-kind prompt; the warning is journaled)\n",
     ],
@@ -934,4 +935,25 @@ describe("flow 360 AC11: --help reaches a review/skills subcommand's own usage, 
     const reachesHandler = reviewRouterSubcommands().filter((name) => !shouldInterceptHelp("review", [name, "--help"]));
     expect(reachesHandler).toEqual(["bot", "metrics", "scope", "tier"]);
   });
+});
+
+// `<verb> --help` must show the verb's OWN complete help, not a stale slice of
+// the static USAGE_BODY that hides subcommands.
+describe("<verb> --help is the verb's complete current help", () => {
+  const cliPath = path.join(import.meta.dir, "cli.ts");
+  test.each([
+    ["mcp", ["keryx mcp add", "keryx mcp auth", "keryx mcp doctor"]],
+    ["test", ["keryx test suggest"]],
+    ["wiki", ["keryx wiki enrich", "keryx wiki freshness"]],
+    ["update", ["--no-tasks", "--yes"]],
+    ["workspace", ["keryx workspace archive", "keryx workspace catch-up"]],
+    ["gdgraph", ["keryx gdgraph find", "keryx gdgraph symbol", "keryx gdgraph path"]],
+    ["ctx", ["keryx ctx rg", "keryx ctx run", "keryx ctx read", "keryx ctx diff"]],
+  ] as const)("%s --help", async (verb, expected) => {
+    const output = await runBun([cliPath, verb, "--help"]);
+    for (const text of expected) expect(output).toContain(text);
+    // `keryx help <verb>` and `<verb> <sub> --help` print the same complete text.
+    const viaHelp = await runBun([cliPath, "help", verb]);
+    for (const text of expected) expect(viaHelp).toContain(text);
+  }, 20_000);
 });

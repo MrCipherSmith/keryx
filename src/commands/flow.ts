@@ -1845,6 +1845,7 @@ function printHelp(): void {
     "keryx flow next <id> [--json]   (first task not done whose dependsOn are all done)",
   'keryx flow task add <id> --title "<t>" [--kind context|implement|test|verify|review|docs] [--depends T1,T2]',
     'keryx flow task done <id> <taskId> [--disposition completed|blocked|failed|skipped] [--reason "<why>"]',
+    'keryx flow task done <id> <taskId> --result <result.json> --resolved <resolved.json> [--ac AC1,AC2] [--evidence <path|ref>,...]   (pin the task result against the resolved project context)',
     'keryx flow task attempt <id> <taskId> --outcome started|failed|blocked [--detail "<what happened>"]',
     'keryx flow task depends <id> <taskId> --on T1,T2|none --reason "<why>"   (repair an unsatisfiable dependsOn)',
     'keryx flow owner set <id> --owner "<name>" --reason "<why>"   (the human accountable; never inferred)',

@@ -146,8 +146,8 @@ Resolved before merge: n/a (no merged pull request on record; run with --refresh
 - The counts cover every managed review of a pull request, not only the ones the
   bot ran, and leave out findings imported from other reviewers.
 
-Record what happened to a finding with `keryx review complete --finding <id>
---disposition <state>`, as described in
+Record what happened to a finding with `keryx review complete <review-id-or-path>
+--finding <id> --disposition <state> --evidence "<text>"`, as described in
 [Review with a durable record](review-with-a-record.md).
 
 ## Inside a session

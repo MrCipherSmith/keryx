@@ -95,7 +95,8 @@ To set one up before the first run, or add another later:
 
 ```bash
 keryx providers list         # providers you already have configured
-keryx auth login <provider>  # subscription login (device code / OAuth) or API key
+keryx auth login <provider>  # subscription login: grok, openai-codex, github-copilot only
+                             # (every other provider takes an API key via /connect or its env var)
 ```
 
 Inside a running session, `/connect` opens one Providers dialog with two tabs:
@@ -137,7 +138,8 @@ first session:
   of the session — see [permission modes](docs/docs/guides/permission-modes.md).
 - `/help` lists every slash command available in the current mode.
 - `/resume`, `/sessions`, `/new` move between sessions from inside the shell;
-  `keryx sessions list` does the same from outside it.
+  `keryx sessions list` shows them from outside it, and `keryx shell -r <id>`
+  resumes one.
 
 ### Where to go next
 
@@ -145,7 +147,7 @@ Full documentation site: **<https://mrciphersmith.github.io/keryx/>**, starting
 with [Onboarding](docs/docs/onboarding.md) for the complete first-run
 walkthrough. `keryx help` groups every command by task; the same table is a
 generated reference page, [Commands by task](docs/docs/commands-by-task.md).
-Run `keryx <command> --help` for the live flag surface of any command.
+Run `keryx <command> --help` for the live flag surface of a command, or see the [CLI reference](docs/docs/cli-reference.md).
 Delivery orchestrators can also ask Jev to flag rule-breaking edits and triage
 failed CI jobs — see [Jev in the delivery loop](docs/docs/guides/jev-in-the-delivery-loop.md).
 The review orchestrator can ask Jev to triage CI and pick which reviewers to
@@ -330,12 +332,12 @@ opens once on its "Connect a model provider" tab. The readline shell,
 
 ### Turn budgets
 
-Agent mode protects each user turn with nested unique-signature budgets: `48`
-total, including at most `40` risk-`read` signatures and `8` non-read (or
-unknown-risk) signatures. An identical `tool + normalized input` may retry up
-to three times while occupying one unique slot. Reaching a limit exactly still
-gives the model a normal round to answer; only a new signature beyond a pool or
-a no-progress repeat loop forces the final tool-free wrap-up.
+Agent mode bounds each user turn by model rounds, not by distinct tool calls:
+`40` in `ask`, `200` in `trust` and `auto` (`KERYX_AGENT_MAX_ROUNDS` overrides
+them, up to `200`; see the permission modes below). Independently, an identical
+`tool + normalized input` may be attempted at most three times in a turn, which
+catches a real repeat loop without capping how many different calls a big task
+needs.
 
 ### Version update advisory
 
@@ -379,7 +381,8 @@ of guessing — the same `ask` the policy engine raises for a guarded action:
 
 What is in it today:
 
-- **Provider-neutral loop.** Anthropic, Ollama, and any OpenAI-compatible
+- **Provider-neutral loop.** Anthropic, OpenAI, Gemini, Ollama, Rapid-MLX, the
+  ChatGPT/Codex and GitHub Copilot subscriptions, and any OpenAI-compatible
   gateway — OpenRouter, DeepSeek, Z.AI, Cerebras, Groq, Moonshot, Grok — plus an
   offline fake provider for deterministic runs. Swapping the model does not
   change the loop, the tools or the policy.
@@ -411,7 +414,7 @@ What is in it today:
   `keryx sessions list|fork|export` — `fork` branches a conversation into a new
   session that keeps its ancestry, without editing a transcript by hand.
   `/status` is the session inspector (identity, context window and limits when
-  the provider reported them); `/session-info` and `/info` are not aliases.
+  the provider reported them); there is no `/session-info` or `/info`.
 - **`/rewind`: undo a turn.** Before the first mutating tool call of a turn,
   keryx snapshots the work tree into a per-session shadow git repository (your
   own `.git` is never touched). `/rewind` restores files, the conversation, or
@@ -506,8 +509,9 @@ What is in it today:
   (`side-1`) in the TUI so the shell stays usable under long-running turns.
 - **A policy engine with three answers, not two.** `allow`, `ask`, `deny` over
   seven risk classes — read, write, shell, network, credential, delegate,
-  destructive — with path and command rules underneath. Shell and destructive
-  actions are default-deny and need an explicit approval before they run.
+  destructive — with path and command rules underneath. In the interactive shell
+  a shell command asks before it runs and a destructive action needs an explicit
+  approval; only the read-only profile denies them outright.
 - **Session permission modes.** `keryx shell --trust`/`--auto`, or `/mode`
   inside a running session, decide whether that approval is asked for at all
   — `ask` (default), `trust` (safe calls run, a destructive one still asks),
@@ -570,18 +574,20 @@ What is in it today:
   `external/<run-id>` with one commit. Your current branch and working tree are
   never touched, nothing is pushed and no pull request is opened;
   `discard <run-id>` drops it. There is no flag that skips the confirmation. Only
-  `claude-cli` and `codex-cli` can write (`antigravity-cli` refuses `--write`), the
+  `claude-cli` and `codex-cli` have this reviewed write (`antigravity-cli` refuses `--write`;
+  `gemini-acp --write` is the separate ACP mechanism above, whose patch keryx never
+  applies), the
   review is a human reading the diff (a model review is not built), and neither
   has a long live history (`codex` was verified in a scratch repository on
-  `codex` 0.159.2; versions outside 0.159.2 up to 0.160.0 are refused). In the TUI: `/external-diff` and a
+  `codex` 0.159.2; versions outside 0.159.2 up to, but not including, 0.160.0 are refused, except 0.164.0 exactly, which was measured separately). In the TUI: `/external-diff` and a
   sidebar row while a diff waits. See the [external agent write
   guide](docs/docs/guides/external-agent-write.md).
 - **Completion you can audit.** The completion gate blocks on missing evidence: a
   run that cannot produce the evidence its flow requires does not get to claim
   it finished.
-- **Four doors.** The CLI (`keryx harness run|exec|extension|wave|replay`), JSONL/RPC
-  and the loopback HTTP entry (`keryx serve`, whose `ask` decisions become approvals answered once over `/v1/approvals` or `keryx approvals`) share one execution loop; the
-  interactive TUI runs its own on the same tool registry and the same policy.
+- **Three doors.** The CLI (`keryx harness run|exec|extension|wave|replay`) and the
+  loopback HTTP entry (`keryx serve`, whose `ask` decisions become approvals answered once over `/v1/approvals` or `keryx approvals`) share one execution loop; the
+  interactive TUI runs its own, with its own interactive tools under the same policy.
 - **A record you can check.** `keryx harness run --record` writes a run's
   recomputable hash surface and `keryx harness replay` validates a fixture
   against it, naming the diverging field when one moves.
@@ -819,7 +825,7 @@ Grouped by what you are trying to do, not by internal module layout.
   the same harness, so a bot or a browser workspace can drive a run.
 
 `keryx modules` toggles modules by manifest key; `keryx status` shows what is
-enabled. Nine modules are on after `init`; `mcp` is opt-in.
+enabled. Nine modules are on after `init`; `mcp` and `sac` are opt-in.
 
 ## Agent integrations
 
@@ -828,6 +834,7 @@ enabled. Nine modules are on after `init`; `mcp` is opt-in.
 | Claude Code | `CLAUDE.local.md` routing, orientation hook, security hooks, MCP server |
 | Codex | `AGENTS.override.md` routing and orientation hook |
 | Cursor | Rules/orientation, security hooks, MCP server |
+| OpenCode, VS Code | MCP server via `keryx integrate opencode\|vscode`; OpenCode, Zcode and Antigravity also take routing via `keryx agents bootstrap` |
 | Any other agent | Repository-local Markdown/JSON artifacts under `.metaproject/` |
 
 After `init`, agents follow the routing block — in `CLAUDE.local.md` and
@@ -848,8 +855,10 @@ keryx agents bootstrap install --runtime claude
 keryx integrate cursor                      # opt-in read-only MCP server
 ```
 
-Each of those commands has its own `--runtime` vocabulary — run
-`keryx <command> --help` for the values it accepts.
+`orient install-hook` and `agents bootstrap` take `--runtime`; `integrate` takes
+the editor as a positional (`cursor|claude|opencode|vscode|generic|all`, where
+`generic` prints a ready snippet and writes no file), and each has its own list
+of values — run `keryx <command> --help` for the ones it accepts.
 
 ### Using other people's MCP servers
 
@@ -882,8 +891,10 @@ and letting the server answer 401. It also refuses to follow a redirect
 into the URL itself. `keryx mcp doctor` names which of those it is, rather
 than reporting one "failed".
 
-OAuth and importing what you already configured in Cursor or Claude are
-next.
+`keryx mcp auth <name>` and `keryx mcp logout <name>` handle OAuth for remote
+servers. keryx also reads, never writes, the MCP servers you already configured
+in Cursor, Claude (`~/.cursor/mcp.json`, `~/.claude.json`), a project `.mcp.json`
+and Grok; a native entry wins over one it read from them.
 
 ## Requirements and compatibility
 
@@ -894,7 +905,7 @@ next.
 | ripgrep | Required only for `keryx ctx rg` and the agent's `search_code` tool |
 | Model provider credential | Required only for the optional AI commands below |
 | macOS | Full support, including the complete policy sandbox |
-| Linux | Full core support; filesystem containment and network on/off (needs `bubblewrap`) |
+| Linux | Full core support; filesystem containment and network on/off (needs `bubblewrap`); no `harness exec` domain allowlist, but a scheduled agent task's `network: allowlist` works |
 | Windows | Core CLI is not verified in CI; the OS sandbox is macOS/Linux only |
 | CI | Ubuntu and macOS runners on every pull request and every push to `main` |
 
@@ -943,13 +954,15 @@ graph falls back to its deterministic resolver when a grammar is absent.
 stops keryx from sending private work — code, diffs, CI-log excerpts,
 prompts, rule text — to Jev/TypeSafe and to model vendors/tiers the
 operator has not decided to trust with it. It is on by default (today's
-behavior, unchanged) and is checked at the two places that actually send
-anything out: the Jev client (`callJevSystemOne`, so every `review-jev-*`
-command, `conform`, `ci-triage`, `jev-select`, the routing classifier and
-the turn guard are covered by one change) and the routing/model-selection
-choke point (a listed provider/model is excluded from a category
-resolution, falling through to the next layer with a notice rather than
-silently).
+behavior, unchanged) and is checked at the three places that actually send
+anything out: the Jev client (`callJevSystemOne`, so every `review jev-*`
+command, `/conform`, `review ci-triage`, `review jev-select`, the routing
+classifier and the turn guard are covered by one change), the
+routing/model-selection choke point (a listed provider/model is excluded
+from a category resolution, falling through to the next layer with a notice
+rather than silently), and external-agent dispatch (`keryx agents external
+run` and a model-initiated dispatch refuse a listed agent id such as
+`antigravity-cli`).
 
 ```bash
 keryx external status         # effective on/off, source, Jev credential availability, what's blocked now
@@ -964,8 +977,8 @@ defaults on first use and never overwritten again. The defaults: Jev/
 TypeSafe System One (the OpenRouter `/api/v1/systemone` endpoint — it
 receives code and CI logs on every call); keryx's own direct provider ids
 for vendors hosted under jurisdictions/terms where a prompt may be
-retained or trained on (`deepseek`, `zai`/`zai-coding`, `moonshot`); the
-same vendors reached instead through an OpenRouter model id, plus vendors
+retained or trained on (`deepseek`, `zai`/`zai-coding`, `moonshot`); the Antigravity CLI
+(`antigravity-cli`, the external agent id); the same vendors reached instead through an OpenRouter model id, plus vendors
 with no first-class keryx provider at all (`deepseek/*`, `minimax/*`,
 `z-ai/*`/`zhipu/*`/`glm/*`, `moonshotai/*`, `qwen/*`/`alibaba/*`,
 `baidu/*`, `tencent/*`, `bytedance/*`, `01-ai/*`); OpenRouter's free tier
@@ -991,7 +1004,7 @@ on|off` toggles the per-user setting; a sidebar row appears when it is
 `off` (the default "on" state costs no permanent sidebar space, same idiom
 `/guard`/`/route` use for their own default state). See [the CLI
 reference](docs/docs/cli-reference.md#external) for the full command and
-[Jev in review](docs/docs/jev-in-review.md#recommended-profile-now-on-by-default-when-jev-is-reachable)
+[Jev in review](docs/docs/jev-in-review.md)
 for what changed there.
 
 ## Jev EDIT GUARD
@@ -1025,7 +1038,7 @@ agent is actually acting on the extra flags.
 keryx review jev-edit-guard install   # merge-safe: writes .claude/settings.local.json
 ```
 
-Then opt in per project — the hook is installed but stays silent until this is set:
+Once installed, the hook is on by default wherever Jev is reachable and `/external` is on; to pin the choice per project (`false` turns it off), set:
 
 ```json
 // .metaproject/tasks.config.json
@@ -1042,12 +1055,12 @@ untouched.
 
 | Limitation | Impact | Alternative |
 |------------|--------|-------------|
-| Remote approvals need a tool registry | The stock `keryx serve` registers no tools, so it raises no approvals; with a registry an `ask` becomes a pending approval answered over `/v1/approvals` or `keryx approvals` | Run tool-using turns locally |
-| Domain allowlist is macOS-only | Domain-level egress policy, credential masking and TLS termination refuse to run on Linux rather than silently doing less | Filesystem containment and network on/off work on both |
+| Stock `keryx serve` turns have no tools | A bare `/v1/turns` turn registers no tools, so it raises no approvals; with a registry an `ask` becomes a pending approval answered over `/v1/approvals` or `keryx approvals` | Run tool-using turns in `keryx shell`, which a Telegram topic or a Team Hub session can also drive |
+| `harness exec` domain allowlist is macOS-only | `--allowed-domains`, credential masking and TLS termination refuse to run on Linux rather than silently doing less; a scheduled agent task's `network: allowlist` does work on Linux | Filesystem containment and network on/off work on both |
 | No bundled embedding runtime | No semantic ranking in memory search | Lexical memory search remains fully available |
 | ripgrep is external | `keryx ctx rg` needs `rg` on `PATH` | Install ripgrep, or let the agent read files directly |
 | Model commands need a credential | Four of the five commands above exit non-zero without one; `wiki enrich` exits `0` and marks the affected pages skipped | Everything else runs deterministically offline |
-| External agents are read-only, except `claude-cli` and `codex-cli` write mode, which have no long live history | A delegated CLI can read and search; only `claude-cli` and `codex-cli` can write, and only as a stored diff a human reviews (`keryx agents external review\|apply\|discard`) that lands as a new local branch — never on your checkout, never pushed. `claude` is confined by a tool allow-list (no shell, no network); `codex` by an OS sandbox that still leaves it a shell that can read files your user can read (it cannot send them, but they can show up in the run output), and is refused when older than 0.159.0 — live-verified in a scratch repository on `codex` 0.159.0. `antigravity-cli` refuses `--write`. A model review is not built. The parent gets the child's result and nothing before it — supervision of a running external child is not implemented. `claude` and `agy` read-only runs are live-verified | Use keryx's own child agents for work that must mutate the tree, or the [external agent write guide](docs/docs/guides/external-agent-write.md) for a reviewed `claude-cli` or `codex-cli` diff |
+| External agents are read-only, except `claude-cli` and `codex-cli` write mode, which have no long live history | A delegated CLI can read and search; only `claude-cli` and `codex-cli` can write a reviewed diff, and only as a stored diff a human reviews (`keryx agents external review\|apply\|discard`) that lands as a new local branch — never on your checkout, never pushed. `claude` is confined by a tool allow-list (no shell, no network); `codex` by an OS sandbox that still leaves it a shell that can read files your user can read (it cannot send them, but they can show up in the run output), and is refused outside 0.159.2 up to, but not including, 0.160.0 (0.164.0 exactly is also accepted) — live-verified in a scratch repository on `codex` 0.159.2. `antigravity-cli` refuses `--write`, and `gemini-acp --write` is a separate ACP path whose patch keryx never applies. A model review is not built. The parent gets the child's result and nothing before it — supervision of a running external child is not implemented. `claude` and `agy` read-only runs are live-verified | Use keryx's own child agents for work that must mutate the tree, or the [external agent write guide](docs/docs/guides/external-agent-write.md) for a reviewed `claude-cli` or `codex-cli` diff |
 | A dispatched `flow-next` task is "done" by checks, not review | `task done` means normal end + a commit on the trigger branch + `keryx health gate` passing in the worktree; nobody has read the diff | Review and merge the `trigger/<flow>-<task>` branch yourself |
 | `trust` dispatch needs Linux + a working bubblewrap | The hardened unattended sandbox (network off, home hidden, allow-listed env) is bwrap-only; without it — or on macOS — a `trust` dispatch refuses before starting | Use `permissionMode: "ask"` (read-only), or run triggers on a Linux host with bwrap |
 | `dispatch.network: true` is the host's full network | The agent's commands then reach the internet and every host loopback service; the model call never needs it (it is made outside the sandbox) | Leave `network` off; review the `trigger/*` branch before installing or building it |
@@ -1186,7 +1199,7 @@ Every managed review start, attach or ingest (and any `dispatch-check` or `blast
 
 ### Operator decisions in a review: a card, or a host question
 
-Four review acts are the operator's: `keryx review confirm-plan`, `waive-mutation`, `override-reviewers` and `decide-premise` (a held finding's premise). In `keryx shell` the agent calls a card and you answer it in the shell or in the Telegram topic; a card press is verified by keryx. In Claude Code, Codex or another host there is no card: the agent asks you with the host's own question tool (or a Telegram poll through Helyx) and records your answer with `--answered-by <source>:<ref> --answer-text "<your words, verbatim>" --question-text "<the question as asked>"`, with no terminal. That record carries `confirmedVia: "host-question"` and is weaker than a card: keryx does not verify the answer. Free text is never a decision, an unattended run refuses the flag, and `keryx review complete` with its waivers stays on the card or terminal path. See [limitations](docs/docs/limitations.md#a-host-question-is-a-weaker-proof-than-a-card) and the [CLI reference](docs/docs/cli-reference.md#review).
+Four review acts are the operator's: `keryx review confirm-plan`, `waive-mutation`, `override-reviewers` and `decide-premise` (a held finding's premise). In `keryx shell` the agent calls a card and you answer it in the shell or in the Telegram topic; a card press is verified by keryx. In Claude Code, Codex or another host there is no card: the agent asks you with the host's own question tool (or a Telegram poll through Helyx) and records your answer with `--answered-by <source>:<ref> --answer-text "<your words, verbatim>" --question-text "<the question as asked>"`, with no terminal. That record carries `confirmedVia: "host-question"` and is weaker than a card: keryx does not verify the answer. Free text is never a decision, an unattended run refuses the flag, and `keryx review complete` with a waiver (`--waive-coverage`, `--waive`) takes the same three flags in place of a terminal. See [limitations](docs/docs/limitations.md#a-host-question-is-a-weaker-proof-than-a-card) and the [CLI reference](docs/docs/cli-reference.md#review).
 
 ### Review bot on pull requests
 
@@ -1205,6 +1218,12 @@ Set up the secret and copy [`docs/examples/review-bot.yml`](docs/examples/review
 `keryx review bot post` is a dry run until you pass `--post`; the action's
 `post: "false"` does the same. A run reviews at most `max-diff-bytes` of the diff
 (default 200,000 bytes) with one reviewer turn plus one verifier turn per finding.
+The key is exported under `api-key-env` (default `ANTHROPIC_API_KEY`), so a key
+for another provider needs that input set too (for example `api-key-env:
+OPENROUTER_API_KEY` with `provider: openrouter`). Other inputs: `provider` and
+`model` (empty means the first provider with a key and its default model),
+`github-token` (default `github.token`) and `keryx-version` (npm tag or version,
+default `latest`).
 `keryx review metrics` (and `/reviews` in the shell) reports findings acted on,
 dismissed, precision and resolved-before-merge; a ratio with no data prints
 `n/a`. Metrics need the managed review packages on the machine where you run
@@ -1229,7 +1248,7 @@ Full documentation site: **<https://mrciphersmith.github.io/keryx/>**
 - **[Permission modes](docs/docs/guides/permission-modes.md)** — `ask`/`trust`/`auto` for the interactive shell: how to set them and exactly where the per-project default is stored.
 - **[Changelog](CHANGELOG.md)** — what has landed since `v0.1.0`.
 
-Run `keryx <command> --help` for the live flag surface of any command.
+Run `keryx <command> --help` for the live flag surface of a command, or see the [CLI reference](docs/docs/cli-reference.md).
 
 ## Local development
 

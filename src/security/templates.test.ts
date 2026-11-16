@@ -70,3 +70,7 @@ test("securityCapabilities returns the canonical capability list", () => {
     "security.egress-control",
   ]);
 });
+
+test("security manifest does not cite a nonexistent specification section", () => {
+  expect(renderSecurityManifest()).not.toMatch(/specification\.md §14/);
+});

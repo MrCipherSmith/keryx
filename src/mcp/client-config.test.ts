@@ -17,6 +17,7 @@ import {
   mcpClientStatus,
   probeMcpSdk,
   renderMcpClientSnippet,
+  renderMcpManifest,
   resolveMcpRuntimes,
   uninstallMcpClient,
 } from "./client-config";
@@ -570,4 +571,10 @@ test("mcpClientStatus reports an unparseable config on that runtime only, instea
   expect(status.find((r) => r.id === "cursor")?.error).toContain("Cannot parse");
   expect(status.find((r) => r.id === "claude")).toMatchObject({ connected: false, otherServers: [] });
   expect(status.find((r) => r.id === "claude")?.error).toBeUndefined();
+});
+
+test("mcp manifest documents consumer-side session trust", () => {
+  const manifest = renderMcpManifest();
+  expect(manifest).toContain("## Session trust (consumer side)");
+  expect(manifest).toContain("destructiveHint: true");
 });

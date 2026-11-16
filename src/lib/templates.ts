@@ -13,6 +13,7 @@ export type RoutingModuleFlags = {
   enableMemory: boolean;
   enableTasks: boolean;
   enableSecurity?: boolean;
+  enableMcp?: boolean;
 };
 
 export type RoutingEntrypointOptions = RoutingModuleFlags & {
@@ -35,6 +36,7 @@ export function renderIndexMarkdown({
   enableMemory,
   enableTasks,
   enableSecurity = false,
+  enableMcp = false,
   ruleSources,
   hasDistilledEntrypoints = false,
 }: RoutingEntrypointOptions): string {
@@ -66,6 +68,9 @@ export function renderIndexMarkdown({
     enableSecurity
       ? "| security | Policy-based scanning, redaction, guardrails, and audit reports for agent inputs/outputs and artifacts | modules/security.md |"
       : "",
+    enableMcp
+      ? "| mcp | Model Context Protocol server (`keryx serve-mcp`) and client config for agent runtimes | modules/mcp.md |"
+      : "",
   ]
     .filter(Boolean)
     .join("\n");
@@ -75,7 +80,6 @@ export function renderIndexMarkdown({
       ? [
           "- `data/gdgraph/artifacts/summary.md`",
           "- `data/gdgraph/artifacts/module-map.json`",
-          "- `data/gdgraph/queries/latest.md`",
         ]
       : []),
     ...(enableGdctx ? ["- `data/gdctx/artifacts/latest.md`"] : []),
@@ -270,7 +274,7 @@ export function renderIndexMarkdown({
         ]
       : []),
     "Use relevant skills from `skills/`.",
-    "Discover tools: each `modules/*.md` manifest lists that module's `keryx` commands; run `keryx --help` for the full CLI surface.",
+    "Discover tools: each `modules/*.md` manifest lists that module's `keryx` commands; the full command reference is `docs/docs/cli-reference.md` (neither `keryx --help` nor `keryx commands` lists every command).",
     "Use module manifests before reading raw generated data.",
     "Prefer curated artifacts in `data/*/artifacts`.",
     "Run module CLI commands when generated data is stale.",
@@ -398,7 +402,7 @@ export function renderIndexGateMarkdown({
     enableMemory ? "| past decisions, lessons, constraints | `keryx memory search \"<query>\"` |" : "",
     enableTesting ? "| what tests to run, test context | `keryx test related <file>` |" : "",
     enableHealth ? "| lint/type/test/quality status | `keryx health run` |" : "",
-    enableTasks ? "| current work state | `keryx flow status` |" : "",
+    enableTasks ? "| current work state | `keryx flow list` (all flows), `keryx flow status <id>` (one flow) |" : "",
     enableTasks
       ? "| spend, confirmations, signatures, gate outcomes across flows | `keryx governance report` |"
       : "",
@@ -1829,6 +1833,30 @@ function isHeadingOnlyBody(body: string): boolean {
 // a `scope: "shared"` team file, which keeps the block, and for a team file
 // whose block `keryx update` has not moved out yet.
 function extractAgentRuleBody(content: string): string {
+  return stripClaudeOnlySection(extractManagedBody(content));
+}
+
+// The mirror in `.metaproject/rules/` is loaded by every agent, but a section
+// titled "Claude-only rules" is by contract meant for Claude sessions alone
+// (Claude reads its own entrypoint directly), so it is not mirrored.
+function stripClaudeOnlySection(body: string): string {
+  const lines = body.split("\n");
+  const out: string[] = [];
+  let skipping = false;
+  for (const line of lines) {
+    if (/^##\s+Claude-only rules\s*$/i.test(line)) {
+      skipping = true;
+      continue;
+    }
+    if (skipping && /^#{1,2}\s/.test(line)) {
+      skipping = false;
+    }
+    if (!skipping) out.push(line);
+  }
+  return out.join("\n").trim();
+}
+
+function extractManagedBody(content: string): string {
   const marker = "<!-- keryx:index -->";
   const endMarker = "<!-- /keryx:index -->";
   const markerIndex = content.indexOf(marker);
@@ -1927,7 +1955,7 @@ export function renderMetaprojectReadme({
   const commands = [
     "keryx status",
     ...(enableGdgraph
-      ? ["keryx gdgraph build", 'keryx gdgraph query "module pipelines"']
+      ? ["keryx gdgraph build", 'keryx gdgraph find "module pipelines"']
       : []),
     ...(enableGdctx ? ["keryx ctx status", "keryx ctx diff"] : []),
     ...(enableGdwiki ? ["keryx wiki status", "keryx wiki collect", "keryx wiki index"] : []),
@@ -2712,7 +2740,7 @@ What invalidates it:
 How staleness is observed:
 
 \`\`\`bash
-keryx gdgraph context   # last line: "freshness: working tree clean"
+keryx gdgraph context   # the \`freshness:\` line reads "freshness: working tree clean"
                         # or "freshness: N uncommitted code file(s) may not be reflected"
 \`\`\`
 
@@ -2741,7 +2769,6 @@ touched graph-relevant paths (see \`hooks/README.md\`). It never blocks the comm
 - \`data/gdgraph/artifacts/module-map.json\`
 - \`data/gdgraph/storage/nodes.jsonl\`
 - \`data/gdgraph/storage/edges.jsonl\`
-- \`data/gdgraph/artifacts/summary.md\`
 
 ## Skills
 
@@ -2935,7 +2962,6 @@ Runs common project context commands with token-aware filtering and stores raw o
 
 - \`data/gdctx/artifacts/latest.md\`
 - \`data/gdctx/raw/\`
-- \`data/gdctx/queries/\`
 
 ## Config
 
