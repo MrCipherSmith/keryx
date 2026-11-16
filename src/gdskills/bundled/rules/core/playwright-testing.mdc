@@ -44,5 +44,6 @@ Canon applies: the Playwright documentation on locators, web-first assertions, f
 | Screenshot test on a heavy or non-deterministic surface (Rule 6) | the repo has no visual-test setup, or nothing is masked or fixed | `minor` | a stable component with masked regions |
 | Screenshot threshold loosened inside a spec (Rule 6) | always | `info` | — |
 | Smoke tag on a slow or unreliable flow (Rule 7) | always | `minor` | — |
-| Credentials or a non-test origin hard-coded in a spec (Rule 3) | a real secret or host | `major` | a test-only value (`info`) |
+| Real secret hard-coded in a spec (Rule 3) | the value is a real credential | rated by the real-credential row of `security-baseline.mdc` Review severities | a test-only value (`info`) |
+| Shared test account or a non-test origin inlined in a spec instead of read from env or the setup project (Rule 3) | the value is a test account or host, not a secret | `major` | a test-only value with no account behind it (`info`) |
 | Non-TypeScript spec or a vague test name (Rule 8) | always | `info` | — |

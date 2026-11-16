@@ -36,8 +36,8 @@ Canon applies: the React documentation (rules of hooks, effects, keys), WAI-ARIA
 | Subscription, listener or timer without cleanup (Rule 5) | always | `major` | — |
 | Missing `key` (Rule 6) | always | `major` | — |
 | Index key on a list that reorders, filters or paginates (Rule 6) | always | `minor` | a static list |
-| `<img>` without `alt`; interactive element without an accessible name (Rule 7) | always | `major` | — |
-| Clickable non-semantic element without keyboard support (Rule 7) | always | `minor` | — |
+| `<img>` without `alt`; interactive element without an accessible name (Rule 7) | always | rated by the missing-accessible-name row of `ui-anti-slop.mdc` Review severities | — |
+| Clickable non-semantic element without keyboard support (Rule 7) | always | rated by the keyboard-reachability row of `ui-anti-slop.mdc` Review severities | — |
 | `!` on a value the types allow to be missing (Rule 8) | a named input reaches it | `blocker` when it throws during render; `major` elsewhere; `minor` with no input shown | a `!` with a comment that proves it |
 | `any` in new code (Rule 8) | always | `minor`; `major` with a named input and the wrong value it lets through | — |
 | `I`-prefixed props type, `from "src/..."` import (Rule 8) | introduced by the change | `minor` | — |
