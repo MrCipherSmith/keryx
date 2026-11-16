@@ -6,6 +6,8 @@ import { spawnSync } from "node:child_process";
 import {
   renderGdgraphCoreCli,
   renderGdgraphManifest,
+  renderGdctxManifest,
+  renderMetaprojectReadme,
   renderGdgraphSkillReadme,
   renderHooksReadme,
   renderIndexGateMarkdown,
@@ -482,4 +484,54 @@ test("imported agent rules always drop the managed keryx:index block, heading-on
     expect(rendered).not.toContain("<!-- keryx:index -->");
     expect(rendered).not.toContain("<!-- /keryx:index -->");
   }
+});
+
+test("imported agent rules drop the Claude-only section but keep other content", () => {
+  const content = `# CLAUDE Instructions
+
+Shared rule one.
+
+## Claude-only rules
+
+Never mirror this to other agents.
+
+## Other section
+
+Shared rule two.
+`;
+  const rendered = renderImportedAgentRules({ source: "CLAUDE.md", content });
+  expect(rendered).not.toContain("Claude-only");
+  expect(rendered).not.toContain("Never mirror this");
+  expect(rendered).toContain("Shared rule one.");
+  expect(rendered).toContain("## Other section");
+  expect(rendered).toContain("Shared rule two.");
+});
+
+test("generated routing and manifests carry no stale references", () => {
+  const flags = {
+    enableGdgraph: true,
+    enableGdctx: true,
+    enableGdwiki: true,
+    enableGdskills: true,
+    enableHealth: true,
+    enableTesting: true,
+    enableMemory: true,
+    enableTasks: true,
+    enableSecurity: true,
+    enableMcp: true,
+    ruleSources: [],
+  };
+  const routing = renderIndexMarkdown(flags);
+  expect(routing).toContain("| mcp |");
+  expect(renderIndexMarkdown({ ...flags, enableMcp: false })).not.toContain("| mcp |");
+  expect(routing).not.toContain("queries/latest.md");
+  expect(routing).not.toContain("run `keryx --help`");
+  expect(routing).toContain("cli-reference.md");
+  expect(renderIndexGateMarkdown(flags)).not.toContain("`keryx flow status` |");
+  expect(renderIndexGateMarkdown(flags)).toContain("keryx flow status <id>");
+  const gdgraph = renderGdgraphManifest();
+  expect(gdgraph).not.toContain("last line");
+  expect(gdgraph.match(/artifacts\/summary\.md/g)?.length).toBe(1);
+  expect(renderMetaprojectReadme(flags)).toContain('keryx gdgraph find "module pipelines"');
+  expect(renderGdctxManifest()).not.toContain("data/gdctx/queries/");
 });

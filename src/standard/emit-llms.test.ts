@@ -55,3 +55,17 @@ test("validateLlms rejects malformed content", () => {
   expect(validateLlms("no title here\n").length).toBeGreaterThan(0);
   expect(validateLlms("# Title\n> summary\n").length).toBe(0);
 });
+
+test("emitLlms omits local gdctx artifacts", async () => {
+  await writeFile(
+    path.join(root, ".metaproject", "metaproject.json"),
+    JSON.stringify({ name: "x-metaproject", standardVersion: "0.1.0", modules: {} }),
+    "utf8",
+  );
+  const dir = path.join(root, ".metaproject", "data", "gdctx", "artifacts");
+  await mkdir(dir, { recursive: true });
+  await writeFile(path.join(dir, "2026-01-01T00-00-00-000Z-abc_rg.md"), "x", "utf8");
+  await writeFile(path.join(dir, "latest.md"), "x", "utf8");
+  const { content } = await emitLlms(root);
+  expect(content).not.toContain("data/gdctx/artifacts/");
+});

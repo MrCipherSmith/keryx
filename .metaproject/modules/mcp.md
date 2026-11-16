@@ -17,16 +17,28 @@ protocol adapter — it defines no new module logic.
   requires `http.enabled=true` in this module's manifest entry).
 - `keryx serve-mcp --cwd <project-root>` — expose a specific project,
   independent of the MCP client's launch directory.
-- `keryx integrate <cursor|claude|generic|all> [--dry-run]` —
+- `keryx integrate <cursor|claude|opencode|vscode|generic|all> [--dry-run]` —
   wire this project into an editor/agent: writes a project-local client
-  config (cursor → `.cursor/mcp.json`, claude → `.mcp.json`) and sets
+  config (cursor → `.cursor/mcp.json`, claude → `.mcp.json`, opencode →
+  `opencode.json`, vscode → `.vscode/mcp.json`) and sets
   `modules.mcp.enabled=true`. `--dry-run` prints the change without
   writing anything. This is the command to run when a user asks to
   "connect" or "enable" MCP for this project — it is the full, real setup
-  step; hand-editing a client config file directly is unnecessary and
-  skips setting `modules.mcp.enabled`.
-- `keryx integrate --remove <cursor|claude|generic|all>` — remove the
-  managed client config again.
+  step; hand-editing a client config file directly is unnecessary and skips
+  setting `modules.mcp.enabled`. `all` expands to cursor + claude +
+  opencode; `vscode` is opt-in only (not bundled into `all`) — request it
+  explicitly as `keryx integrate vscode`.
+- `keryx integrate --remove <cursor|claude|opencode|vscode|generic|all>` —
+  remove the managed client config again.
+- **codex CLI**: not a `--runtime` here — codex's client config is a single
+  GLOBAL `~/.codex/config.toml`, not a project-local file, and it already
+  ships its own safe, native installer for it. Run
+  `codex mcp add keryx -- keryx serve-mcp --cwd <project-root>` once
+  (verified live: codex successfully discovers and calls this server's
+  tools headlessly with `codex exec --approve-for-me`); `codex mcp remove
+  keryx` to undo. `modules.mcp.enabled=true` still needs
+  `keryx integrate generic` (or any other editor) run once,
+  since codex's own installer has no notion of the keryx manifest.
 
 ## Session trust (consumer side)
 

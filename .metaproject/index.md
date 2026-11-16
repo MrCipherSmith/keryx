@@ -11,7 +11,7 @@ Routing pointers. Everything else is in [`routing.md`](routing.md) — read it o
 | past decisions, lessons, constraints | `keryx memory search "<query>"` |
 | what tests to run, test context | `keryx test related <file>` |
 | lint/type/test/quality status | `keryx health run` |
-| current work state | `keryx flow status` |
+| current work state | `keryx flow list` (all flows), `keryx flow status <id>` (one flow) |
 | spend, confirmations, signatures, gate outcomes across flows | `keryx governance report` |
 | put a recurring or one-off unattended agent turn on a schedule | `keryx schedule add/list/show/pause/resume/run/remove` |
 | secrets, PII, prompt injection | `keryx security check-output` |

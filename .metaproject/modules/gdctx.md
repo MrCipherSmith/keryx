@@ -18,7 +18,6 @@ Runs common project context commands with token-aware filtering and stores raw o
 
 - `data/gdctx/artifacts/latest.md`
 - `data/gdctx/raw/`
-- `data/gdctx/queries/`
 
 ## Config
 

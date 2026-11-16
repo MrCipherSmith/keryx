@@ -6,23 +6,38 @@ This folder contains local Metaproject configuration, tools, generated data, and
 
 - `gdgraph`: code graph and affected context.
 - `gdctx`: compact command/search/read output and raw output archive.
-- `gdwiki`: project wiki authoring, indexing, and link validation.
-- `gdskills`: bundled and project skills catalog, routing, and verification.
-- `memory`: long-term typed project memory with ranked search.
-- `tasks`: agent-first flow lifecycle (driven by the `keryx flow` command).
-- `health`: code-health scoring, gates, and trend tracking.
-- `testing`: test analysis, selection, and context.
-
-See `.metaproject/index.md` for the authoritative module list and per-module manifests under `.metaproject/modules/`.
+- `gdwiki`: local project knowledge base from business logic to implementation.
+- `gdskills`: project-local bundled working skills, orchestration, review, and project-skill lifecycle.
+- `health`: code quality aggregation, scoring, and quality gate.
+- `testing`: test context, related tests, and normalized test reports.
+- `memory`: long-lived lessons, decisions, constraints, and known mistakes.
+- `tasks`: agent-first flow lifecycle with frozen acceptance criteria and PR gates.
+- `security`: policy-based scanning, redaction, guardrails, and audit reports for agent inputs/outputs and artifacts.
 
 ## Common Commands
 
 ```bash
 keryx status
 keryx gdgraph build
-keryx gdgraph query "module pipelines"
+keryx gdgraph find "module pipelines"
 keryx ctx status
 keryx ctx diff
+keryx wiki status
+keryx wiki collect
+keryx wiki index
+keryx skills status
+keryx skills catalog --profile recommended
+keryx skills install --profile recommended
+keryx health run
+keryx health gate
+keryx test analyze
+keryx test run --changed
+keryx memory index
+keryx memory search "project decisions"
+keryx flow list
+keryx flow init --title "..."
+keryx security status
+keryx security scan <path>
 ```
 
 ## Editing Policy

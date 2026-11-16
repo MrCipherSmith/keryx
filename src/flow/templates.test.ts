@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { parseAcKinds } from "./ac-kinds";
 import { createFlowService } from "./service";
-import { renderAcceptanceCriteria, renderDescription, renderFlowInitSkill } from "./templates";
+import { renderAcceptanceCriteria, renderDescription, renderFlowInitSkill, renderTasksManifest } from "./templates";
 
 describe("renderDescription", () => {
   const description = renderDescription("Speed up checkout", "user description");
@@ -91,5 +91,13 @@ describe("flow-init skill criteria step", () => {
   test(".metaproject/skills/flow/init.md matches the generated text", () => {
     const copy = readFileSync(path.join(import.meta.dir, "..", "..", ".metaproject", "skills", "flow", "init.md"), "utf8");
     expect(copy).toBe(generated);
+  });
+});
+
+describe("tasks manifest", () => {
+  test("documents block with --reason", () => {
+    const text = renderTasksManifest();
+    expect(text).toContain('flow block <id> --reason "<why>"');
+    expect(text).not.toContain("block|unblock");
   });
 });

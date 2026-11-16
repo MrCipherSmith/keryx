@@ -466,6 +466,7 @@ async function previewServiceFiles(projectRoot: string, options: UpdateOptions):
       enableMemory: moduleEnabled(manifest, "memory"),
       enableTasks,
       enableSecurity: moduleEnabled(manifest, "security"),
+      enableMcp: moduleEnabled(manifest, "mcp"),
       ruleSources,
       hasDistilledEntrypoints: await hasDistilledEntrypoints(metaprojectRoot),
     },
@@ -510,6 +511,7 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
   const enableTesting = moduleEnabled(manifest, "testing");
   const enableMemory = moduleEnabled(manifest, "memory");
   const enableSecurity = moduleEnabled(manifest, "security");
+  const enableMcp = moduleEnabled(manifest, "mcp");
   const enableSac = moduleEnabled(manifest, "sac");
   const hookWarnings: string[] = [];
 
@@ -615,6 +617,7 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
         enableMemory,
         enableTasks,
         enableSecurity,
+        enableMcp,
         ruleSources,
         hasDistilledEntrypoints: await hasDistilledEntrypoints(metaprojectRoot),
       },

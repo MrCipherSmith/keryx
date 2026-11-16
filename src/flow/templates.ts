@@ -150,7 +150,7 @@ tracker reporting.
   true\`)
 - \`keryx flow recover <id> --reason "<why>"\` (moves a flow stuck in
   \`completing\` back to \`in-progress\`)
-- \`keryx flow block|unblock <id>\` / \`flow check\` (duplicate ids, including a
+- \`keryx flow block <id> --reason "<why>"\` / \`keryx flow unblock <id>\` / \`flow check\` (duplicate ids, including a
   number the default branch holds, warns about a number another remote branch holds and about a flow folder that is not
   committed) / \`flow renumber <dir> --to <id> --reason "<why>"\` (refuses an id a
   known remote branch uses)
