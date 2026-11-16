@@ -15,21 +15,25 @@ has every flag.
 | CLI | `keryx harness run\|exec\|extension\|wave\|replay` | Scriptable, CI-facing, one prompt or one contained command per invocation |
 | JSONL / RPC | `runViaRpc` (`src/harness/rpc.ts`) | The same assembly framed as JSON envelopes, for embedding rather than a CLI verb |
 | Loopback HTTP | `keryx serve` | Authenticated, loopback-bound; a bot or another product drives turns |
-| Interactive | `keryx shell` | A TUI on the same tool registry and the same policy profile |
+| Interactive | `keryx shell` | A TUI with its own interactive tool set (`InteractiveTool`) under the same policy profile |
 
 CLI and RPC delegate to the same `runOffline`, so a transport cannot upgrade a
 decision — framing carries data, the policy engine decides policy. The
-interactive shell runs its own turn loop over the same registry and profile; it
-is a different loop, not a different rulebook.
+interactive shell runs its own turn loop over its own tool set
+(`src/harness/tool/builtin/interactive-tools.ts`, not the `ToolRegistry` that
+`harness run` and `serve` use) under the same policy profile; it is a different
+loop and a different tool system, not a different rulebook.
 
 ## Providers
 
-`anthropic`, `ollama`, a deterministic offline `fake`, and the
-OpenAI-compatible gateways: `openrouter`, `deepseek`, `zai`, `zai-coding`,
-`cerebras`, `groq`, `moonshot`, `grok`. `keryx shell` offers the same set through
-its picker, listing each with the environment variable it reads.
+`anthropic`, `openai`, `gemini`, `ollama`, the local `rapid-mlx`, a
+deterministic offline `fake`, the subscription-login providers `openai-codex`
+(ChatGPT) and `github-copilot`, and the OpenAI-compatible gateways:
+`openrouter`, `deepseek`, `zai`, `zai-coding`, `cerebras`, `groq`, `moonshot`,
+`grok`. `keryx shell` offers the same set through its picker, listing each with
+the environment variable it reads (or its sign-in method).
 
-Swapping the model changes neither the loop, the tool registry, nor the policy.
+Swapping the model changes neither the loop, the tools, nor the policy.
 The `fake` provider replays a recorded transcript, which is what makes the loop
 testable with no network at all.
 
@@ -185,11 +189,12 @@ completion. Three line-stream agents ship this way, plus one ACP agent (below),
 described as data in one registry, with a pure codec each owning that CLI's argv,
 its event vocabulary and its failure classification.
 
-The whole layer is verified offline against recorded transcripts in
-`fixtures/external/`, on a machine with neither CLI installed; `antigravity-cli`
-additionally has one committed real run,
-`fixtures/external/live/antigravity-cli/2026-09-28/`, produced through
-`keryx agents external run antigravity-cli` itself, not by hand.
+The layer is verified offline against recorded transcripts in
+`fixtures/external/`, which need neither CLI installed. Real runs are also
+committed under `fixtures/external/live/` for `antigravity-cli`
+(`2026-09-28`, produced through `keryx agents external run antigravity-cli`
+itself, not by hand), `claude-cli` and `codex-cli` (`2026-09-29`; the `codex-cli`
+capture is a usage-limit failure, not a successful run).
 
 #### `agy` — install, login, consent, data collection
 

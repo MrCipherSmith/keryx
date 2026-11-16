@@ -1,6 +1,8 @@
 # Architecture
 
-> Reviewed against the source on **2026-09-23** for `0.2.157`. Where this
+> Last re-checked against the source on **2026-11-16** (`0.4.31`) for the items
+> corrected in that pass (CLI routing, `src/lib` layering, serve routes, completion
+> gates, providers, the two tool systems); other sections date from `0.2.157`. Where this
 > document and the code disagree, the code wins and the disagreement is a bug
 > in this file — the
 > [documentation audit](https://github.com/MrCipherSmith/keryx/blob/main/docs/report/release-readiness-2026-08-03/documentation-audit.md)
@@ -74,8 +76,8 @@ human in a diff and by an agent through one index, with nothing hosted.
 The whole codebase follows one consistent four-layer pattern:
 
 ```
-src/cli.ts                        Layer 1 — Dispatch
-   │  CLI_ROUTES table (~31 verbs) → <name>Command(args.slice(1))
+src/cli.ts                        Layer 1 — Dispatch (table in cli-registry.ts)
+   │  CLI_ROUTES table (src/cli-registry.ts) → <name>Command(args.slice(1))
    ▼
 src/commands/<name>.ts            Layer 2 — Command handlers
    │  parse flags, print output, set process.exitCode; NO domain logic
@@ -93,10 +95,10 @@ src/eval/        fixture-corpus precision/recall acceptance gates
 src/mcp/         stdio-first protocol surface over the service facades
 ```
 
-- **Layer 1 (`cli.ts`)** is a thin dispatcher over an exported `CLI_ROUTES` table (`src/cli.ts:51`) of roughly 31 verbs, each awaiting its handler. That table — not the hand-written `printHelp`, which has drifted — is the honest surface; `keryx commands --json` projects it. Top-level errors are caught only under `import.meta.main` and mapped to `exitCode = 1`. Handlers set `process.exitCode` and never call `process.exit`.
+- **Layer 1 (`cli.ts`)** is a thin dispatcher over an exported `CLI_ROUTES` table (`src/cli-registry.ts`, 67 entries, looked up by name rather than an if-chain), each awaiting its handler. That table — not the hand-written `printHelp`, which has drifted — is the honest surface; `keryx commands --json` projects it. Top-level errors are caught only under `import.meta.main` and mapped to `exitCode = 1`. Handlers set `process.exitCode` and never call `process.exit`.
 - **Layer 2 (`commands/*.ts`)** handlers are deliberately thin: ad-hoc flag parsing, a `switch`/if-chain over the subcommand, a call into the feature service, then console/JSON rendering. They own `process.exitCode`.
 - **Layer 3 (`<feature>/`)** holds domain logic as stateless free functions over a `cwd` argument (no classes, no DI container). Some modules add an optional service-facade object (`createGdWikiService`, `createCodeHealthService`, `createMemoryService`) for DI/testing symmetry; `flow` uniquely uses constructor dependency injection (`tracker`, `healthGate`, `now`) for a genuinely testable state machine. Presentation strings live in per-module `templates.ts`; the type surface in `types.ts`.
-- **Layer 4 (`src/lib/`)** is the bottom layer everything imports (`fs` alone has 32 importers). It depends on nothing else in the project.
+- **Layer 4 (`src/lib/`)** is the bottom layer everything imports (`fs` alone has 32 importers). It is mostly self-contained but not dependency-free: the serve stack (`serve-turn.ts`, `serve-runner.ts`, `serve-server.ts`, `serve-approvals-broker.ts`), `model-choice.ts`, `narrate.ts`, `import-policy.ts` and `project-sandbox-policy.ts` import `src/harness/`, and a few others import `security`, `session`, `learning`, `review` or `gdskills`.
 
 ### Two invariants
 
@@ -131,7 +133,7 @@ Two invariants define the system and recur across every module:
 | **capability** | `src/capability/` | — (substrate) | The opt-in seam every feature layer instantiates: `resolveCapability(cwd, spec)` gates on manifest + optional dep + verified asset, returns an adapter or `null`. Never throws. |
 | **assets** | `src/assets/` | `assets` (per module) | Local-only, sha256-verified asset resolution (`resolveAsset`); `pullAsset` is the sole network path (verify-or-refuse); `assets.lock.json` pins provenance; `assets list\|verify\|pull`. |
 | **eval** | `src/eval/` | — (test-time) | Fixture-corpus acceptance harness: `runCorpus`/`gateCorpus` produce deterministic precision/recall/FN-rate reports used as CI gates by multiple opt-in blocks. |
-| **mcp** | `src/mcp/` | `mcp` | Thin stdio-first Model Context Protocol surface over the `createXService()` facades: SDK-free dispatch core, Tool registry (including mutating `sac.propose` / `sac.review`, HTTP-denied), read-only `metaproject://` Resources, single redaction choke point. |
+| **mcp** | `src/mcp/` | `serve-mcp` (module id `mcp`; `keryx integrate` wires it into hosts) | Thin stdio-first Model Context Protocol surface over the `createXService()` facades: SDK-free dispatch core, Tool registry (including mutating `sac.propose` / `sac.review`, HTTP-denied), read-only `metaproject://` Resources, single redaction choke point. |
 | **sac** | `src/sac/` | `workspace` | Shared Agent Context: file-backed workspace registry, FWK overview/read, propose/review via guarded wiki/memory/skill writers, hash-chained access receipts. Not a default `init` module; toggled with `keryx modules enable sac`. See [the operator guide](./guides/shared-agent-context.md). |
 | **slate** | `src/session/external-slate.ts`, `slate.*` in `src/mcp/tools.ts` | — (MCP tools only) | The task-local scratchpad — Anchors, Course, Seeds — opened by keryx's own shell/TUI/`harness run`, plus the external hand: `slate.open` / `slate.writeSeed` / `slate.close` let any MCP-connected harness open one scoped to its own `externalSessionId`, and close it into the same SAC propose/review pipeline. Local stdio only; HTTP is refused with `slate_transport_denied` before storage is touched, exactly as `sac.*` is. No CLI verb. See [the guide](./guides/slate.md) and [`/goal`](./guides/goal.md). |
 | **harness** | `src/harness/` | `harness run\|exec\|extension\|wave\|replay` | The agent execution loop: session, policy engine, tool registry, provider port, resume, branching, compaction, guarded mutation, child agents, parallel scheduling, extensions, budget, replay-fixture validation, and (opt-in, off by default) the external child runtime that hosts a vendor coding CLI. See "The agent harness" above, and [the feature-level tour](./harness.md). |
@@ -186,7 +188,7 @@ The shipped `CAPABILITY_REGISTRY` was intentionally empty until the external age
 ### Dependency policy
 
 `package.json` `dependencies` stays `{}`. The shipped opt-in runtimes are
-`web-tree-sitter` and `@modelcontextprotocol/sdk`; both live only under
+`web-tree-sitter`, `@modelcontextprotocol/sdk` and `@opentui/core` (the TUI renderer); all live only under
 `optionalDependencies` and are loaded lazily on their explicit feature paths.
 The former `@xenova/transformers` runtime is no longer shipped. Memory and
 security retain deterministic fallbacks and can use an explicitly configured
@@ -209,7 +211,7 @@ A thin, **stdio-first** Model Context Protocol adapter that exposes existing cap
 - A **Tool registry** (`tools.ts`) where each tool is a thin adapter over exactly one `createXService()` facade method; `src/mcp/` imports **only** service facades + shared libs + the redaction guard — never a module's internals (an import-boundary test enforces this).
 - Read-only **`metaproject://` Resources** (`resources.ts`) over configured roots.
 - A single **`redactRaw` choke point** (`redact-seam.ts`): every tool result passes through the security engine's redaction before it reaches a transport; disabled security ⇒ byte-identical, any error ⇒ original content (never blocks a response).
-- The **MCP SDK is lazy-loaded only in `server.ts`** and only on the `mcp serve` path (the one sanctioned opt-in command allowed to *hard-fail* with an actionable message when its optional dep is absent, rather than degrade). The stdio transport is the default; an isolated HTTP/SSE transport is a separate, capability-gated opt-in.
+- The **MCP SDK is lazy-loaded only in `server.ts`** and only on the `keryx serve-mcp` path (an older spelling still forwards there as a deprecation alias; `keryx mcp` itself now manages the MCP servers keryx connects to) (the one sanctioned opt-in command allowed to *hard-fail* with an actionable message when its optional dep is absent, rather than degrade). The stdio transport is the default; an isolated HTTP/SSE transport is a separate, capability-gated opt-in.
 
 ### Per-module opt-in layers
 
@@ -224,7 +226,7 @@ In every case the seam resolving to `null` (flag off, dep absent, or asset missi
 
 ## The agent harness — and the two tool systems
 
-`src/harness/` (~171 files across ~20 subdirectories) is the execution loop that
+`src/harness/` (several hundred files across dozens of subdirectories) is the execution loop that
 lets a model operate on a project through controlled tools. It is
 ports-and-adapters over 34 frozen JSON Schemas: every decision core is pure with
 `clock` and `idSeq` injected, and the only effect surfaces are injected adapters
@@ -237,17 +239,17 @@ directions.**
 
 | | Durable tool system | Interactive tool system |
 |---|---|---|
-| Types | `ToolRegistry` / `ToolExecutorPort` (`src/harness/tool/`) | `InteractiveTool` (`src/commands/agent.ts`) |
+| Types | `ToolRegistry` / `ToolExecutorPort` (`src/harness/tool/`) | `InteractiveTool` (`src/harness/tool/builtin/interactive-tools.ts`) |
 | Returns | an `outputHash` — so it **structurally cannot** feed content back to a live model | content |
 | Used by | the schema-bound `runOffline` contract loop | the shell that people actually run |
-| Approval | `mutation/approval.ts:checkApproval`, reached only from `keryx harness extension` | a `y/N` prompt in `src/commands/agent.ts` |
+| Approval | `mutation/approval.ts:checkApproval`, reached only from `keryx harness extension` | a `y/N` prompt in the interactive shell |
 
 `tool/metaproject-operations.ts` is the only bridge, projecting one descriptor
 into both.
 
 **And no shipped path registers a tool.** Both production executors are
-refusals — `src/commands/harness.ts:247` ("Release 0 CLI runs register no
-tools") and `src/lib/serve-turn.ts:313` ("Remote turns register no tools in this
+refusals — in `src/commands/harness.ts` ("Release 0 CLI runs register no
+tools") and `src/lib/serve-turn.ts` ("Remote turns register no tools in this
 slice"). `keryx harness run` and `keryx serve` are single text turns today.
 
 So "the policy engine gates the tools your agent runs" mixes the first system's
@@ -262,8 +264,8 @@ flowchart TB
   ST -->|"disabled ⇒ nothing constructed"| X1(["refused"])
   ST --> CTX["Bounded context manifest"]
   CTX --> PR["ProviderPort<br/><i>fake · Anthropic · Ollama</i>"]
-  PR --> GA["guardAction<br/><i>mutation/guard.ts:304</i><br/>structural safety, BEFORE policy"]
-  GA --> D{"decide<br/><i>policy/engine.ts:169</i>"}
+  PR --> GA["guardAction<br/><i>mutation/guard.ts:411</i><br/>structural safety, BEFORE policy"]
+  GA --> D{"decide<br/><i>policy/engine.ts:170</i>"}
   D -->|"deny — terminal,<br/>no approval flips it"| X2(["denied"])
   D -->|"ask — headless ⇒ deny"| AP["checkApproval<br/><i>approval.ts:111</i><br/>bound to actionFingerprint"]
   D -->|"allow"| EX
@@ -279,7 +281,7 @@ carries the full list with citations; the properties worth stating in prose are:
 
 1. **The harness never writes `flow.json`** — three independent mechanisms. The
    policy engine denies a `flow.json` target *even with a matching approval*
-   (`engine.ts:92-96, 189-197`); the managed-flow port performs no filesystem
+   (`isManagedFlowFile` and the "managed flow-state guard" step in `policy/engine.ts`); the managed-flow port performs no filesystem
    write and imports only Task Manager *types*; and `child/spawn.ts` accepts no
    `FlowService` or filesystem handle, so nothing in the child path can reach a
    write structurally.
@@ -316,7 +318,8 @@ Three properties are structural rather than conventional:
   registry, all argv construction, all event parsing and all failure
   classification are pure functions, which is what lets a complete run be
   exercised offline against the recorded transcripts in `fixtures/external/`.
-  Nothing in this subsystem has been run against a real vendor process.
+  Real-process captures are committed under `fixtures/external/live/`, but
+  there is no live view of a running child.
 - **The gate resolves before configuration is read.** A remote transport or a CI
   marker disables the capability *regardless of configuration*, and that check
   runs first so the property is structural rather than a consequence of branch
@@ -346,12 +349,12 @@ carries the operator-facing tour, including what is not implemented.
 `keryx serve` is a second door into the same harness. Its security properties
 are **ordering** properties, which is why they are drawn rather than listed:
 the same nine checks in a different sequence is a finding
-(`src/lib/serve-turn.ts:3-7`, quoting `security-policy.md`).
+(the header comment of `src/lib/serve-turn.ts`, quoting `security-policy.md`).
 
 ```mermaid
 flowchart TB
   REQ["Inbound request"] --> B1["1 · Bound body size and content type<br/><i>before parsing semantics</i>"]
-  B1 --> B2["2 · Authenticate, constant-time<br/><i>serve-server.ts:680</i>"]
+  B1 --> B2["2 · Authenticate, constant-time<br/><i>serve-server.ts</i>"]
   B2 -->|"fail"| F1(["one fixed 401 on every path<br/><i>a known route is indistinguishable<br/>from an unknown one</i>"])
   B2 --> RT["Route<br/><i>URL first parsed at :709 —<br/>39 lines AFTER auth</i>"]
   RT --> B3["3 · Stamp origin from the<br/>authenticated connection"]
@@ -369,13 +372,13 @@ flowchart TB
 Two properties people get wrong when summarising this:
 
 - **The prompt is scanned but reaches the provider unredacted.** Only *outbound*
-  content is redacted (`serve-turn.ts:356-364` discards the redacted string).
+  content is redacted (`src/lib/serve-turn.ts` destructures only `findings` and discards the redacted string).
 - **The approval boundary is enforced in the policy engine, not the transport.**
-  `policy/engine.ts:233-241` converts `ask` to `deny` for a non-interactive
+  the "headless fail-closed" step of `policy/engine.ts` converts `ask` to `deny` for a non-interactive
   context, and a remote turn is non-interactive by construction. The transport
   only *reports* it.
 - **Two secrets, two route tables.** When Telegram remote control is configured,
-  the same listener also serves eight `/v1/remote/*` routes. They accept only the
+  the same listener also serves 19 `/v1/remote/*` routes (the Telegram bridge plane plus a channels plane). They accept only the
   local shell token, from loopback; the bearer token above does not reach them,
   and the shell token reaches nothing else. Which principal a caller is is decided
   by which token verified, still before the URL is read. The shell sends a
@@ -475,10 +478,12 @@ as read-only, and the module commands are its only writers.** That is what lets
 a self-update refresh the toolchain without destroying accumulated project
 knowledge.
 
-One known violation of the spirit, recorded rather than hidden: generated memory
-artifacts embed an `absolutePath` per entry, so a committed artifact encodes one
-developer's home directory — which contradicts the "committable and readable by
-anyone who clones" half of the contract.
+One former violation of the spirit has been closed: generated memory artifacts
+embedded an `absolutePath` per entry, so a committed artifact encoded one
+developer's home directory. Memory's generated views, caches and artifacts
+(`.metaproject/data/memory/artifacts/`, `index/`, `embeddings/`) are now ignored
+through the managed block written by `src/lib/metaproject-gitignore.ts` and are
+no longer committed; only the canonical memory entries are.
 
 ```
 .metaproject/
@@ -591,15 +596,18 @@ a gate a package never opted into) before a flow can complete:
    recorded, not wherever it happens to point now.
 4. **tasks** — opt-in per package (set by `flow init`); no task left open.
 5. **owner** — opt-in per package; an accountable owner is recorded.
-6. **review** — opt-in; a clean review round was actually observed (never
+6. **folder-committed** — opt-in per package (`gates.folderCommitted`, set by
+   `flow init`); the flow folder actually reached a commit, so its number is
+   not left free for another clone to take.
+7. **review** — opt-in; a clean review round was actually observed (never
    passes on silence — an unobservable review fails, not skips).
-7. **health** — `createCodeHealthService().gate`, the in-process import above.
-8. **security** — `securityFlowGate`, omitted entirely when the security
+8. **health** — `createCodeHealthService().gate`, the in-process import above.
+9. **security** — `securityFlowGate`, omitted entirely when the security
    module is disabled.
 
 This list is the source of truth for the count and order. It is a
 simplification of one thing: `src/flow/service.ts`'s own comments number these
-`Gate 1`…`Gate 6`, folding base-branch and owner in as `2b`/`3b` — that
+`Gate 1`…`Gate 6`, folding base-branch, owner and folder-committed in as `2b`/`3b`/`3c` — that
 numbering is for reading the function, not for citing a total gate count
 elsewhere; read it there if this list and the code ever disagree.
 
@@ -662,15 +670,15 @@ gdskills also ships **five JSON Schema contracts** (`subagent-dispatch`/`-result
 - **TTY-graceful UI** — `ui.ts` gates color on `NO_COLOR`/`FORCE_COLOR`/`isTTY`; `prompt.ts` returns defaults when stdin is not a TTY, so CI and piped runs never hang or emit ANSI noise.
 - **Offline-safe self-contained HTML** — the dashboard inlines all CSS/JS and embeds size-capped Markdown/JSON, because `fetch` is blocked under `file://`.
 - **Deterministic, no-ML floor (with opt-in ML ceilings)** — the *default* algorithms are deterministic and dependency-free: memory search/dedup use token/trigram Jaccard; health complexity is token-based cyclomatic counting; gdgraph parsing is regex, not AST. Time is injected (`now: Date`) for testability. Heavier ML/AST behaviors (embeddings, tree-sitter, model-based detection) exist only as Capability-Seam ceilings that fall back to this floor when unresolved — see "Capability System — opt-in layers".
-- **Co-located `*.test.ts` (bun test)** — tests sit beside sources throughout; the quality gate is `tsc --noEmit && bun test`.
+- **Co-located `*.test.ts` (bun test)** — tests sit beside sources throughout; the quality gate is `bun run check` (lint, `typecheck`, `typecheck:scripts`, then `bun test`).
 
 ## Known limitations / tech-debt
 
-- **Declared-but-unused config (aspirational flags).** testing's `changedSelection.strategies` (esp. `gdgraph`), `runner:"script"|"direct"`, and `artifacts.historyLimit`/`keepRawLogs` are surfaced but not honored (selection is always heuristic, history is never pruned, no gdgraph wiring). memory's `ingest.allowAutoAccept` is defined but never read (ingest always writes `draft`). (health's churn *is* now a scoring input — it feeds the additive D1 hotspot penalty, `churn×complexity` per file via `hotspotPenalty`, `src/health/scoring.ts` — but its `scoring.hotspotWeight` defaults to `0`, so the penalty is exactly inert until explicitly enabled.)
+- **Declared-but-unused config (aspirational flags).** testing's `changedSelection.strategies` (esp. `gdgraph`), `runner:"script"|"direct"`, and `artifacts.historyLimit`/`keepRawLogs` are surfaced but not honored (selection is always heuristic, history is never pruned, no gdgraph wiring). memory's `ingest.allowAutoAccept` is now read only to warn that it is deprecated and ignored (ingest and reflection always write `draft`). (health's churn *is* now a scoring input — it feeds the additive D1 hotspot penalty, `churn×complexity` per file via `hotspotPenalty`, `src/health/scoring.ts` — but its `scoring.hotspotWeight` defaults to `0`, so the penalty is exactly inert until explicitly enabled.)
 - **Duplication / drift risk.** cli-core keeps near-duplicate copies of `installManagedHook`, `writeTextIf*`, `copyFileIfChanged`, `runtimeSourcePath`, and `escapeRegExp` in both `init.ts` and `update.ts`. rules maintains routing-policy strings in two places and has two parallel entrypoint-discovery functions. memory has two `slugify` implementations. health's `sources` subcommand duplicates status-detection logic separate from the run path.
 - **Facades defined but not wired.** `GdWikiService` and analogous service facades exist for DI/testing symmetry, but the CLI handlers call the free functions directly. memory's `reflect`/`relevant` deliberately sit *outside* the `MemoryService` interface.
-- **Testing gap in `rules`.** `src/rules/` has no co-located tests, unlike the rest of the codebase; its highest-risk untested logic is the heuristic `classifySection` and the policy migration/de-dup in `ensureMetaprojectReference`.
+- **Thin test coverage in `rules`.** `src/rules/` has co-located tests (eight files), but its highest-risk logic is thinly covered: the heuristic `classifySection` and the policy migration/de-dup in `ensureMetaprojectReference`.
 - **Heuristic precision limits (deliberate trade-offs).** gdgraph import extraction is regex (can miss unusual syntax) and reports one representative per canonical cycle rotation; testing's failure/count parsers are bun-test-shaped (approximate for vitest/jest/playwright); health complexity is token-based, not AST.
-- **Naming skew.** module id `tasks` ↔ CLI verb `flow`; module id `gdwiki` ↔ CLI verb `wiki` (legacy `wiki` manifest key migrated forward); `gdctx` has no `src/ctx/` dir (logic lives entirely in `commands/ctx.ts`).
-- **External agent runtime — verified offline only, and supervision is unbuilt.** The whole `src/harness/external/` layer is tested against recorded transcripts in `fixtures/external/`; no part of it has been run against a real `codex` or `claude` process, so version drift in either CLI is caught by a parse-skip counter rather than by a passing test. The specification's folded, trigger-driven view of a *running* external child is not implemented at all — the parent receives the child's result and nothing before it. `worktree-write` runs only for `claude-cli` and `codex-cli` (a reviewed diff landed as a new local branch); every other dispatch is read-only. `/delegate` bypasses the policy engine and the subagent admission ledger (a recorded, reasoned amendment, not an oversight). Resume argv is built and displayed for detaching by hand; keryx never spawns a resume itself.
+- **Naming skew.** module id `tasks` ↔ CLI verb `flow`; module id `gdwiki` ↔ CLI verb `wiki` (legacy `wiki` manifest key migrated forward); `gdctx` is the `ctx` module: its logic lives in `src/ctx/` alongside the `src/commands/ctx.ts` handler.
+- **External agent runtime — verified offline only, and supervision is unbuilt.** The whole `src/harness/external/` layer is tested against recorded transcripts in `fixtures/external/`; real-process captures for `antigravity-cli`, `claude-cli` and `codex-cli` are committed under `fixtures/external/live/` (the `codex-cli` one is a usage-limit failure), but the suite never runs a real process, so version drift in a CLI is caught by a parse-skip counter rather than by a passing test. The specification's folded, trigger-driven view of a *running* external child is not implemented at all — the parent receives the child's result and nothing before it. `worktree-write` runs only for `claude-cli` and `codex-cli` (a reviewed diff landed as a new local branch); every other dispatch is read-only. `/delegate` bypasses the policy engine and the subagent admission ledger (a recorded, reasoned amendment, not an oversight). Resume argv is built and displayed for detaching by hand; keryx never spawns a resume itself.
 - **Security — gateway's Phase-4 proxy mode still pending (its blocking behavior already ships).** The `security` module ships Phase 1+2+3 (deterministic engine + CLI + the write-seam integrations wired at memory ingest, wiki collect, testing raw-log publish, gdctx raw-output redaction, and flow completion — see the cross-module data-flow section) **plus** shipped Phase-4-class surfaces: merge-safe agent security hooks (`security hooks install --runtime …`, `src/security/agent-hooks.ts`), a config-checksum self-protect tamper guard (`src/security/self-protect.ts`), and a model-eval path (`security eval --with-model`, `src/security/eval/`) that forces the asset-gated injection/PII model backends on (warn-once → deterministic fallback when the asset is absent). What remains unimplemented is chiefly the always-on gateway/proxy mode (spec §16 Phase 4).
