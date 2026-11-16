@@ -13,6 +13,7 @@
 
 import { randomUUID } from "node:crypto";
 import {
+  agentContextWindow,
   buildAgentSystemInstruction,
   generateControlNonce,
   isReasoningEffortLevel,
@@ -30,6 +31,8 @@ import { describeLeaseHolder, describeLeaseLoss, SessionLeasedError } from "../s
 import { createAcpAgentIo, toolKindFor, tryParseJson, type AcpPermissionAsker } from "./agent-io";
 import type { AcpFsReader } from "./capability-tools";
 import {
+  ACP_SHELL_SLASH_COMMANDS,
+  ACP_SLASH_COMMANDS,
   acpAvailableCommands,
   acpCommandHelpText,
   acpCommandInputProblem,
@@ -76,6 +79,7 @@ import {
   type AcpListSessionsResponse,
   type AcpLoadSessionResponse,
   type AcpNewSessionResponse,
+  type AcpPlanEntry,
   type AcpPromptResponse,
   type AcpReadTextFileRequest,
   type AcpReadTextFileResponse,
@@ -100,6 +104,27 @@ import {
 } from "./session-mcp";
 import type { ConnectFn } from "../mcp-servers/manager";
 import type { JsonRpcId } from "./jsonrpc";
+import type { McpToolBinding } from "../commands/interactive-agent-tools";
+import { DEFAULT_PERMISSION_MODE, isPermissionMode, type PermissionMode } from "../commands/permission-mode";
+import { createDefaultSearchProviderController, type SearchProviderController } from "../harness/search";
+import { ASK_USER_CANCEL, type AskUserFn } from "../harness/tool/builtin/ask-user-tool";
+import { createJobRegistry, type JobRegistry } from "../harness/tool/builtin/background-job-registry";
+import type { NormalizedUsage } from "../harness/provider/types";
+import { getProjectPermissionMode } from "../lib/permission-mode-config";
+import { mergeCatalogs } from "../mcp-servers/catalog";
+import { createMcpRuntime, type McpRuntime } from "../mcp-servers/runtime";
+import { getExecutionPlan, subscribeExecutionPlans, type ExecutionPlan } from "../session/execution-plan";
+import { askUserAnswerFromResult, askUserParams, clientAnswersAskUser } from "./ask-user";
+import {
+  acpModeState,
+  acpProfileExtensions,
+  ACP_PROFILES,
+  DEFAULT_ACP_PROFILE,
+  KERYX_ACP_EXTENSION_METHODS,
+  keryxAcpInfo,
+  type AcpProfile,
+} from "./profile";
+import { buildAcpShellSessionTools } from "./shell-roster";
 
 export interface AcpServerOptions {
   readonly input: AsyncIterable<Uint8Array | string>;
@@ -161,9 +186,53 @@ export interface AcpServerOptions {
    * is stopped before `runAcpServer` resolves.
    */
   readonly shutdown?: AbortSignal;
+  /**
+   * `keryx acp --profile` (Keryx Desktop Client M1, specification §3). `editor`
+   * (the default) is the narrowed editor agent, unchanged; `shell` adds the
+   * `keryx shell` roster, permission modes, `ask_user`, and plan/usage/title
+   * updates.
+   */
+  readonly profile?: AcpProfile;
+  /** Shell profile: a project's stored default mode. `getProjectPermissionMode` otherwise. */
+  readonly permissionModeDefault?: (projectRoot: string) => PermissionMode | undefined;
+  /**
+   * Shell profile: keryx's own configured MCP servers for a project root, built
+   * the way `keryx shell` builds them (`createMcpRuntime`). One per root per
+   * connection, closed when it ends. Test seam: return `undefined` for none.
+   */
+  readonly keryxMcp?: (projectRoot: string) => McpRuntime | undefined;
+  /** Shell profile: `web_search`/`web_fetch`'s controller. `createDefaultSearchProviderController()` otherwise. */
+  readonly searchController?: SearchProviderController;
 }
 
 export type { AcpTurnSettings } from "./models";
+
+/** The ACP plan status for one keryx execution-plan status. */
+function acpPlanStatus(status: string): AcpPlanEntry["status"] {
+  if (status === "in_progress") return "in_progress";
+  if (status === "completed" || status === "skipped") return "completed";
+  return "pending";
+}
+
+/** A keryx execution plan as ACP `plan` entries; the keryx status rides in `_meta.keryx`. */
+export function acpPlanEntries(plan: ExecutionPlan): AcpPlanEntry[] {
+  return plan.items.map((item) => ({
+    content: item.title,
+    priority: "medium",
+    status: acpPlanStatus(item.status),
+    _meta: { keryx: { id: item.id, status: item.status } },
+  }));
+}
+
+interface TokenTally {
+  inputTokens: number;
+  outputTokens: number;
+}
+
+const addUsage = (tally: TokenTally, usage: NormalizedUsage): TokenTally => ({
+  inputTokens: tally.inputTokens + (usage.inputTokens ?? 0),
+  outputTokens: tally.outputTokens + (usage.outputTokens ?? 0),
+});
 
 const DEFAULT_AGENT_INFO: AcpImplementation = { name: "keryx", version: "0" };
 
@@ -192,6 +261,9 @@ function refuse(error: JsonRpcErrorObject): never {
 export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   let initialized = false;
   let clientCapabilities: AcpClientCapabilities | undefined;
+  const profile: AcpProfile = options.profile ?? DEFAULT_ACP_PROFILE;
+  const shellProfile = profile === "shell";
+  const slashCommands = shellProfile ? ACP_SHELL_SLASH_COMMANDS : ACP_SLASH_COMMANDS;
   const idSeq = options.idSeq ?? (() => randomUUID());
   const registry = new AcpSessionRegistry({
     providerId: options.providerId,
@@ -335,6 +407,144 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     }
     return nonce;
   };
+
+  // -------------------------------------------------------------------------
+  // Shell profile state (Keryx Desktop Client M1, specification §3.3–§3.6).
+  // Every map below stays empty in the editor profile.
+  // -------------------------------------------------------------------------
+
+  /** Each session's permission mode — read fresh on every gated call (`AgentIO.permissionMode`). */
+  const sessionModes = new Map<string, PermissionMode>();
+  const permissionModeDefault = options.permissionModeDefault ?? ((root: string) => getProjectPermissionMode(root));
+  const initialModeFor = (root: string): PermissionMode => {
+    try {
+      return permissionModeDefault(root) ?? DEFAULT_PERMISSION_MODE;
+    } catch {
+      return DEFAULT_PERMISSION_MODE;
+    }
+  };
+  const modeOf = (sessionId: string): PermissionMode => sessionModes.get(sessionId) ?? DEFAULT_PERMISSION_MODE;
+
+  /**
+   * One shell-task supervisor per ACP session, kept across `session/load` of the
+   * same id (a load replaces the history, not the tasks it started), and swept —
+   * every task killed — when the connection ends: ACP gives a session no other end.
+   */
+  const sessionJobs = new Map<string, JobRegistry>();
+  const jobsFor = (sessionId: string, root: string): JobRegistry => {
+    let jobs = sessionJobs.get(sessionId);
+    if (jobs === undefined) {
+      jobs = createJobRegistry({ cwd: root });
+      sessionJobs.set(sessionId, jobs);
+    }
+    return jobs;
+  };
+
+  let searchController: SearchProviderController | undefined = options.searchController;
+  const searchControllerFor = (): SearchProviderController => (searchController ??= createDefaultSearchProviderController());
+
+  /** keryx's configured MCP servers, one runtime per project root, built lazily as `keryx shell` does. */
+  const keryxMcpRuntimes = new Map<string, McpRuntime | undefined>();
+  const keryxMcpFor = (root: string): McpRuntime | undefined => {
+    if (!keryxMcpRuntimes.has(root)) {
+      keryxMcpRuntimes.set(
+        root,
+        stopping ? undefined : (options.keryxMcp ?? ((cwd: string) => createMcpRuntime({ cwd, gitRoot: cwd })))(root),
+      );
+    }
+    return keryxMcpRuntimes.get(root);
+  };
+
+  /**
+   * ONE `search_tool`/`use_tool` pair over keryx's servers and the client's.
+   * A qualified name both provide is kept from keryx's own (`mergeCatalogs`
+   * records the other as skipped); the client's secrets are scrubbed from all output.
+   */
+  const mergedMcpFor = (sessionId: string, root: string): McpToolBinding | undefined => {
+    const keryx = keryxMcpFor(root);
+    const client = sessionMcp.get(sessionId)?.mcp;
+    const clientServers = client !== undefined && client.tools.length > 0 ? client : undefined;
+    if (keryx === undefined && clientServers === undefined) return undefined;
+    return {
+      catalog: () =>
+        mergeCatalogs([...(keryx !== undefined ? [keryx.catalog()] : []), ...(clientServers !== undefined ? [clientServers.catalog()] : [])]),
+      servers: () => [...(keryx?.servers() ?? []), ...(clientServers?.servers() ?? [])],
+      ...(keryx !== undefined ? { toolTimeoutSec: keryx.toolTimeoutSec } : {}),
+      ...(clientServers !== undefined ? { redact: clientServers.redact } : {}),
+    };
+  };
+
+  /** `_keryx/ask_user` for one session; every non-answer is a declined question. */
+  const askUserFor = (sessionId: string): AskUserFn => async (request) => {
+    const turn = activeTurns.get(sessionId);
+    if (turn?.cancelled === true) return ASK_USER_CANCEL;
+    let requestId: string | undefined;
+    const outcome = await clientRequests.request(KERYX_ACP_EXTENSION_METHODS.askUser, askUserParams(sessionId, request), (id) => {
+      requestId = id;
+      // Settled by `session/cancel` exactly like a pending permission ask.
+      turn?.permissionRequestIds.add(id);
+    });
+    if (requestId !== undefined) turn?.permissionRequestIds.delete(requestId);
+    if (outcome.kind === "error") {
+      options.logError(
+        `acp: ${KERYX_ACP_EXTENSION_METHODS.askUser} refused by the client (${outcome.error.code}: ${outcome.error.message}); ` +
+          "the question counts as declined",
+      );
+      return ASK_USER_CANCEL;
+    }
+    if (outcome.kind === "closed") {
+      options.logError(`acp: ${KERYX_ACP_EXTENSION_METHODS.askUser} went unanswered (${outcome.reason}); the question counts as declined`);
+      return ASK_USER_CANCEL;
+    }
+    return askUserAnswerFromResult(outcome.result, request);
+  };
+
+  /** Token totals per session, for `usage_update`. */
+  const sessionUsage = new Map<string, TokenTally>();
+
+  /**
+   * Execution-plan changes, from the plan tools' own store notification, mapped
+   * back to the session whose directory they were written in.
+   */
+  const planDirSessions = new Map<string, string>();
+  const unsubscribePlans = shellProfile
+    ? subscribeExecutionPlans((dir, plan) => {
+        const sessionId = planDirSessions.get(dir);
+        if (sessionId !== undefined && !stopping) {
+          sendUpdate(sessionId, { sessionUpdate: "plan", entries: acpPlanEntries(plan) });
+        }
+      })
+    : () => {};
+
+  /** Bind a new or loaded shell-profile session: its mode, its plan directory, and what the client is told after the reply. */
+  function bindShellSession(state: AcpSessionState, requestId: JsonRpcId): PermissionMode {
+    const sessionId = state.sessionId;
+    if (!sessionModes.has(sessionId)) sessionModes.set(sessionId, initialModeFor(state.resolvedRoot));
+    const dir = state.handle.dir;
+    planDirSessions.set(dir, sessionId);
+    onReplied(requestId, () => {
+      const title = state.handle.summary.title;
+      if (typeof title === "string" && title.length > 0) {
+        sendUpdate(sessionId, { sessionUpdate: "session_info_update", title, updatedAt: state.handle.summary.updatedAt });
+      }
+      void getExecutionPlan(dir)
+        .then((plan) => {
+          if (plan !== undefined && plan.items.length > 0 && !stopping) {
+            sendUpdate(sessionId, { sessionUpdate: "plan", entries: acpPlanEntries(plan) });
+          }
+        })
+        .catch(() => {
+          // An unreadable plan file is shown as no plan, as the plan tools themselves treat it.
+        });
+    });
+    return modeOf(sessionId);
+  }
+
+  /** Switch a session's mode (`session/set_mode` or `/mode`) and tell the client. */
+  function setSessionMode(sessionId: string, mode: PermissionMode): void {
+    sessionModes.set(sessionId, mode);
+    sendUpdate(sessionId, { sessionUpdate: "current_mode_update", currentModeId: mode });
+  }
 
   /**
    * Build (or rebuild) THIS session's hook runtime and fire `SessionStart`
@@ -790,7 +1000,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   /** Tell the client which commands keryx handles, once the reply creating/loading the session is out. */
   function announceCommands(sessionId: string, requestId: JsonRpcId): void {
     onReplied(requestId, () => {
-      sendUpdate(sessionId, { sessionUpdate: "available_commands_update", availableCommands: acpAvailableCommands() });
+      sendUpdate(sessionId, { sessionUpdate: "available_commands_update", availableCommands: acpAvailableCommands(slashCommands) });
     });
   }
 
@@ -938,7 +1148,43 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       agentCapabilities: KERYX_AGENT_CAPABILITIES,
       authMethods: KERYX_AUTH_METHODS,
       agentInfo: options.agentInfo ?? DEFAULT_AGENT_INFO,
+      // Shell profile only: the editor profile's answer stays byte-for-byte
+      // what it was (AC2). `_keryx/info` answers the same in either profile.
+      ...(shellProfile
+        ? { _meta: { keryx: { profile, profiles: [...ACP_PROFILES], extensions: acpProfileExtensions(profile) } } }
+        : {}),
     };
+  }
+
+  /** `_keryx/info` (any profile): what a client checks before it relies on a keryx extension. */
+  function handleKeryxInfo(): ReturnType<typeof keryxAcpInfo> {
+    return keryxAcpInfo((options.agentInfo ?? DEFAULT_AGENT_INFO).version, profile);
+  }
+
+  /** `session/set_mode` — registered in the shell profile only; the editor profile still refuses it. */
+  function handleSetMode(params: unknown, requestId: JsonRpcId): Record<string, never> {
+    const method = ACP_AGENT_METHODS.sessionSetMode;
+    requireInitialized(method);
+    refuseIfStopping(method);
+    const obj = requireObjectParams(params, method);
+    const sessionId = requireStringField(obj, "sessionId", method);
+    const modeId = requireStringField(obj, "modeId", method);
+    if (registry.get(sessionId) === undefined) {
+      refuse({
+        code: JSON_RPC_ERROR_CODES.resourceNotFound,
+        message: `Unknown ACP session: ${sessionId}`,
+        data: { sessionId },
+      });
+    }
+    if (!isPermissionMode(modeId)) {
+      refuse(invalidParams(`${method}: unknown mode "${modeId}"; choose one of: ask, trust, auto`, { modeId }));
+    }
+    // Applied now — the next gated call reads it — and announced once the reply is out.
+    sessionModes.set(sessionId, modeId);
+    onReplied(requestId, () => {
+      sendUpdate(sessionId, { sessionUpdate: "current_mode_update", currentModeId: modeId });
+    });
+    return {};
   }
 
   async function handleSessionNew(params: unknown, requestId: JsonRpcId): Promise<AcpNewSessionResponse> {
@@ -963,9 +1209,15 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     // to settle instead.
     bindSessionMcp(state.sessionId, requestId, parsed, state.resolvedRoot);
     announceCommands(state.sessionId, requestId);
+    const mode = shellProfile ? bindShellSession(state, requestId) : undefined;
     // The one await: the model list, which the connection started resolving
     // at launch (flow 288, AC5).
-    return { sessionId: state.sessionId, configOptions: await configOptionsFor(state.sessionId, ACP_AGENT_METHODS.sessionNew) };
+    const configOptions = await configOptionsFor(state.sessionId, ACP_AGENT_METHODS.sessionNew);
+    return {
+      sessionId: state.sessionId,
+      ...(mode !== undefined ? { modes: acpModeState(modeOf(state.sessionId)) } : {}),
+      configOptions,
+    };
   }
 
   /**
@@ -991,6 +1243,21 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       const content = (result as Partial<AcpReadTextFileResponse>).content;
       return typeof content === "string" ? content : undefined;
     };
+    if (shellProfile) {
+      const root = state.resolvedRoot;
+      const mcp = mergedMcpFor(sessionId, root);
+      return buildAcpShellSessionTools({
+        root,
+        clientCapabilities: state.clientCapabilities,
+        readViaClient,
+        searchController: searchControllerFor(),
+        jobRegistry: jobsFor(sessionId, root),
+        // Read through the registry, not captured: `persistHistory` replaces the handle.
+        getSessionDir: () => registry.get(sessionId)?.handle.dir,
+        ...(clientAnswersAskUser(state.clientCapabilities) ? { askUser: askUserFor(sessionId) } : {}),
+        ...(mcp !== undefined ? { mcp } : {}),
+      });
+    }
     return buildAcpSessionTools({
       root: state.resolvedRoot,
       clientCapabilities: state.clientCapabilities,
@@ -1016,7 +1283,20 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     const method = ACP_AGENT_METHODS.sessionPrompt;
     switch (name) {
       case "help":
-        return `Commands keryx handles in this editor:\n${acpCommandHelpText()}`;
+        return `Commands keryx handles in this editor:\n${acpCommandHelpText(slashCommands)}`;
+      case "mode": {
+        if (!shellProfile) {
+          return unknownAcpCommandText(name, slashCommands);
+        }
+        if (args.length === 0) {
+          return `Permission mode: ${modeOf(sessionId)}. Set with /mode <ask|trust|auto>.`;
+        }
+        if (!isPermissionMode(args)) {
+          return `Unknown permission mode "${args}"; choose one of: ask, trust, auto.`;
+        }
+        setSessionMode(sessionId, args);
+        return `Permission mode: ${args}, from the next tool call.`;
+      }
       case "model": {
         const current = sessionModel(sessionId, method);
         if (args.length === 0) {
@@ -1068,6 +1348,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
           `Project: ${state.resolvedRoot}`,
           `Model: ${model.choice.value}`,
           `Reasoning effort: ${reasoningFor(sessionId, model) ?? "off"}`,
+          ...(shellProfile ? [`Permission mode: ${modeOf(sessionId)}`] : []),
           `Tools (${tools.length}): ${tools.join(", ")}`,
           `Client MCP servers: ${
             mcp === undefined
@@ -1079,7 +1360,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         ].join("\n");
       }
       default:
-        return unknownAcpCommandText(name);
+        return unknownAcpCommandText(name, slashCommands);
     }
   }
 
@@ -1122,7 +1403,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       const slot: AcpActiveTurn = { controller: new AbortController(), cancelled: false, permissionRequestIds: new Set() };
       activeTurns.set(sessionId, slot);
       try {
-        const problem = acpCommandInputProblem(command);
+        const problem = acpCommandInputProblem(command, slashCommands);
         const reply =
           problem ?? (await runSlashCommand(sessionId, state, command.name, command.args, slot.controller.signal));
         // A cancelled command says nothing more, like a cancelled turn.
@@ -1201,7 +1482,36 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       // first turn would search an empty catalog. Awaited only AFTER the slot
       // is taken, so the busy guard above still holds while this waits.
       await sessionMcp.get(sessionId)?.mcp.ready;
-      const io = createAcpAgentIo(sessionId, sendUpdate, askPermissionFor(sessionId, turn));
+      const io = createAcpAgentIo(
+        sessionId,
+        sendUpdate,
+        askPermissionFor(sessionId, turn),
+        // The shell's own gate semantics (`resolveApprovalDecision`, read fresh
+        // per call by `executeCall`) — the mode is the only thing ACP supplies.
+        shellProfile ? { permissionMode: () => modeOf(sessionId) } : {},
+      );
+      if (shellProfile) {
+        let turnUsage: TokenTally = { inputTokens: 0, outputTokens: 0 };
+        const contextWindow = agentContextWindow(deps) ?? 0;
+        io.onUsage = (usage) => {
+          turnUsage = addUsage(turnUsage, usage);
+          const session = addUsage(sessionUsage.get(sessionId) ?? { inputTokens: 0, outputTokens: 0 }, usage);
+          sessionUsage.set(sessionId, session);
+          sendUpdate(sessionId, {
+            sessionUpdate: "usage_update",
+            // ACP's own pair: the context this model call occupied, and the window (0 = unknown).
+            used: (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0),
+            size: contextWindow,
+            _meta: {
+              keryx: {
+                call: { inputTokens: usage.inputTokens ?? 0, outputTokens: usage.outputTokens ?? 0 },
+                turn: { ...turnUsage },
+                session: { ...session },
+              },
+            },
+          });
+        };
+      }
       // Flow 387 review r1 F-001 / r2 F-021: `persistHistory` without an archive writes the
       // CONTEXT as the archive, so this host keeps the originals itself (`state.archive`). It is
       // synced on every history change (the shells' `onHistoryChange` contract) and its cursor is
@@ -1230,6 +1540,13 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         archive: archive.messages,
       });
       registry.updateHandle(sessionId, updatedHandle);
+      if (shellProfile && updatedHandle.summary.title !== state.handle.summary.title) {
+        sendUpdate(sessionId, {
+          sessionUpdate: "session_info_update",
+          title: updatedHandle.summary.title,
+          updatedAt: updatedHandle.summary.updatedAt,
+        });
+      }
       // `turn.cancelled` wins over whatever `finishReason` came back: a turn
       // `session/cancel` interrupted reports `cancelled` even though most of
       // `runAgentTurn`'s abort paths return `finishReason: undefined` — the
@@ -1491,7 +1808,10 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     // After a restart this connection has never run the session: continue on
     // the model its transcript records, when it can run here (flow 288, T14).
     await restoreRecordedModel(state, requestId, ACP_AGENT_METHODS.sessionLoad);
-    return { configOptions: await configOptionsFor(sessionId, ACP_AGENT_METHODS.sessionLoad) };
+    // A session this connection already ran keeps its mode; otherwise the project's default.
+    const mode = shellProfile ? bindShellSession(state, requestId) : undefined;
+    const configOptions = await configOptionsFor(sessionId, ACP_AGENT_METHODS.sessionLoad);
+    return { ...(mode !== undefined ? { modes: acpModeState(modeOf(sessionId)) } : {}), configOptions };
   }
 
   /**
@@ -1537,6 +1857,11 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         [ACP_AGENT_METHODS.sessionList]: (params) => handleSessionList(params),
         [ACP_AGENT_METHODS.sessionLoad]: (params, context) => handleSessionLoad(params, context.id),
         [ACP_AGENT_METHODS.sessionSetConfigOption]: (params) => handleSetConfigOption(params),
+        [KERYX_ACP_EXTENSION_METHODS.info]: () => handleKeryxInfo(),
+        // Shell profile only: the editor profile keeps refusing it with -32601.
+        ...(shellProfile
+          ? { [ACP_AGENT_METHODS.sessionSetMode]: (params: unknown, context: { id: JsonRpcId }) => handleSetMode(params, context.id) }
+          : {}),
       },
       notifications: {
         [ACP_AGENT_METHODS.sessionCancel]: (params) => handleSessionCancel(params),
@@ -1690,9 +2015,16 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     // The connection is every session's only end (no `session/close`): give
     // their leases back so a shell can resume them.
     registry.releaseAll();
+    unsubscribePlans();
     // Flow 287, AC3: every MCP server process this connection started is
     // stopped, and AWAITED — on a clean end of input, on a read loop that
     // throws, and on `shutdown`. Returning first would orphan the children.
-    await closeAllMcp();
+    // Shell profile: the same for every shell task its sessions started, and
+    // for keryx's own configured MCP servers.
+    await Promise.allSettled([
+      closeAllMcp(),
+      ...[...sessionJobs.values()].map((jobs) => jobs.sweepAll()),
+      ...[...keryxMcpRuntimes.values()].map((runtime) => runtime?.close()),
+    ]);
   }
 }

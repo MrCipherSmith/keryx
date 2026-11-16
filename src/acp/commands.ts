@@ -48,6 +48,20 @@ export const ACP_SLASH_COMMANDS: readonly AcpSlashCommandSpec[] = [
 ];
 
 /**
+ * `keryx acp --profile shell` (Keryx Desktop Client M1, specification §3.7):
+ * the editor set plus `/mode`, which has the same effect as `session/set_mode`.
+ * The full shell command set is M2.
+ */
+export const ACP_SHELL_SLASH_COMMANDS: readonly AcpSlashCommandSpec[] = [
+  ...ACP_SLASH_COMMANDS,
+  {
+    name: "mode",
+    description: "Show or set this session's permission mode (ask, trust or auto)",
+    hint: "ask | trust | auto",
+  },
+];
+
+/**
  * Shell commands that exist only as a TUI surface. Never advertised over ACP;
  * pinned so a later widening of `ACP_SLASH_COMMANDS` cannot pick one up.
  */
@@ -72,8 +86,8 @@ export const ACP_TUI_ONLY_COMMANDS: readonly string[] = [
 ];
 
 /** The `availableCommands` payload, in the published shape (`name`, `description`, optional `input.hint`). */
-export function acpAvailableCommands(): AcpAvailableCommand[] {
-  return ACP_SLASH_COMMANDS.map((command) => ({
+export function acpAvailableCommands(commands: readonly AcpSlashCommandSpec[] = ACP_SLASH_COMMANDS): AcpAvailableCommand[] {
+  return commands.map((command) => ({
     name: command.name,
     description: command.description,
     ...(command.hint !== undefined ? { input: { hint: command.hint } } : {}),
@@ -133,8 +147,11 @@ export function parseAcpSlashPrompt(blocks: readonly unknown[]): ParsedAcpSlashP
  * Why a recognised command cannot run as sent, or `undefined` when it can.
  * Refused rather than half-run: a command never drops what came with it.
  */
-export function acpCommandInputProblem(command: ParsedAcpSlashPrompt): string | undefined {
-  const spec = ACP_SLASH_COMMANDS.find((entry) => entry.name === command.name);
+export function acpCommandInputProblem(
+  command: ParsedAcpSlashPrompt,
+  commands: readonly AcpSlashCommandSpec[] = ACP_SLASH_COMMANDS,
+): string | undefined {
+  const spec = commands.find((entry) => entry.name === command.name);
   if (spec === undefined) {
     return undefined;
   }
@@ -151,8 +168,8 @@ export function acpCommandInputProblem(command: ParsedAcpSlashPrompt): string | 
 }
 
 /** The line an unlisted command is answered with. */
-export function unknownAcpCommandText(name: string): string {
-  return `keryx does not handle /${name} in this editor. Available commands:\n${acpCommandHelpText()}`;
+export function unknownAcpCommandText(name: string, commands: readonly AcpSlashCommandSpec[] = ACP_SLASH_COMMANDS): string {
+  return `keryx does not handle /${name} in this editor. Available commands:\n${acpCommandHelpText(commands)}`;
 }
 
 /** One command's rendered line, in ACP's own wording (never the shared table's generic summary). */

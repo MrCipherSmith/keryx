@@ -4,6 +4,7 @@
 
 import { randomUUID } from "node:crypto";
 import type { AgentIO, ApprovalMeta, ApprovalResponse } from "../commands/agent";
+import type { PermissionMode } from "../commands/permission-mode";
 import type { InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
 import { approvalFromPermissionResponse, permissionOptionsFor } from "./permission";
 import {
@@ -145,10 +146,21 @@ export function tryParseJson(text: string): unknown {
  * not executed"). There is no path through this bridge from silence to a
  * running tool.
  */
+export interface AcpAgentIoOptions {
+  /**
+   * The shell profile's live permission mode (`trust`/`auto` skip the ask for
+   * what `resolveApprovalDecision` allows). Absent: `ask`, the editor profile.
+   * When present, a call the mode approved is reported on its own id as a
+   * `tool_call_update` carrying `_meta.keryx.autoApproved: true`.
+   */
+  readonly permissionMode?: () => PermissionMode;
+}
+
 export function createAcpAgentIo(
   sessionId: AcpSessionId,
   send: AcpUpdateSink,
   askPermission?: AcpPermissionAsker,
+  ioOptions: AcpAgentIoOptions = {},
 ): AgentIO {
   /**
    * One entry per ACP tool call that has been ANNOUNCED and not yet closed.
@@ -283,8 +295,27 @@ export function createAcpAgentIo(
     return approved;
   };
 
+  /**
+   * A permission mode let this call run unasked. The call was already announced
+   * (`onToolCall` precedes the gate in `runAgentTurn`'s batch loop), so the mark
+   * goes on THAT id; a call with no announced entry is announced here first, so
+   * the client never sees a mark for an id it was not shown.
+   */
+  const onAutoApproved = (tool: string, input: string): void => {
+    const pending = pendingByName.get(tool)?.find((entry) => entry.input === input);
+    const toolCallId = pending?.toolCallId ?? openToolCall(tool, input, false);
+    emit({
+      sessionUpdate: "tool_call_update",
+      toolCallId,
+      status: "in_progress",
+      _meta: { keryx: { autoApproved: true } },
+    });
+  };
+
+  const permissionMode = ioOptions.permissionMode;
   return {
     ...(askPermission !== undefined ? { requestApproval } : {}),
+    ...(permissionMode !== undefined ? { permissionMode, onAutoApproved } : {}),
     write: (text) => {
       if (text.length === 0) {
         return;

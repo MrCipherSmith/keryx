@@ -10,6 +10,7 @@
 // own MUST NOT ("a stray console.log corrupts the stream", `context.md` §0).
 
 import { randomUUID } from "node:crypto";
+import { ACP_PROFILES, DEFAULT_ACP_PROFILE, isAcpProfile, type AcpProfile } from "../acp/profile";
 import { runAcpServer } from "../acp/server";
 import { loadAcpFixture } from "../acp/fixture-provider";
 import { acpModelChoice, type AcpModelChoice, type AcpModelSource, type AcpTurnSettings } from "../acp/models";
@@ -30,6 +31,19 @@ export interface ParsedAcpArgs {
   /** Test-only: a deterministic scripted provider (`../acp/fixture-provider.ts`), never used in production. */
   fixture?: string;
   dataDir?: string;
+  /**
+   * `--profile <editor|shell>` exactly as given (validated by `resolveAcpProfile`).
+   * `""` when the flag had no value.
+   */
+  profile?: string;
+}
+
+/** The profile `--profile` selects, or the usage error to exit 2 with. */
+export function resolveAcpProfile(parsed: ParsedAcpArgs): { ok: true; profile: AcpProfile } | { ok: false; message: string } {
+  if (parsed.profile === undefined) return { ok: true, profile: DEFAULT_ACP_PROFILE };
+  if (isAcpProfile(parsed.profile)) return { ok: true, profile: parsed.profile };
+  const given = parsed.profile.length === 0 ? "--profile needs a value" : `unknown --profile "${parsed.profile}"`;
+  return { ok: false, message: `keryx acp: ${given}; choose one of: ${ACP_PROFILES.join(", ")}` };
 }
 
 export function parseAcpArgs(args: readonly string[]): ParsedAcpArgs {
@@ -52,6 +66,11 @@ export function parseAcpArgs(args: readonly string[]): ParsedAcpArgs {
     } else if (arg === "--data-dir") {
       if (value !== undefined) parsed.dataDir = value;
       i += 1;
+    } else if (arg === "--profile") {
+      parsed.profile = value !== undefined && !value.startsWith("--") ? value : "";
+      if (value !== undefined && !value.startsWith("--")) i += 1;
+    } else if (arg !== undefined && arg.startsWith("--profile=")) {
+      parsed.profile = arg.slice("--profile=".length);
     }
   }
   return parsed;
@@ -430,6 +449,14 @@ export async function acpCommand(args: string[]): Promise<void> {
   const logError = (line: string): void => {
     process.stderr.write(`${line}\n`);
   };
+  // A usage error, before anything else starts: an unknown profile is not
+  // something to answer `initialize` with and then quietly ignore.
+  const selectedProfile = resolveAcpProfile(parsed);
+  if (!selectedProfile.ok) {
+    logError(selectedProfile.message);
+    process.exit(2);
+  }
+  const profile = selectedProfile.profile;
   const resolution = await resolveAcpProvider(parsed, {
     // The same bounded refresh `keryx shell` runs before any surface builds a
     // provider from a stored grant (K-013).
@@ -483,6 +510,7 @@ export async function acpCommand(args: string[]): Promise<void> {
           }
         : { providerUnavailable: resolution.message, providerId: "", modelId: "" }),
       agentInfo: { name: "keryx", version: packageJson.version },
+      profile,
       ...(parsed.dataDir !== undefined ? { dataDir: parsed.dataDir } : {}),
       idSeq: () => randomUUID(),
     });
@@ -535,7 +563,19 @@ explicit allow runs it. Writes and shell execution always stay local; there
 is no fs/write_text_file or terminal/* call in this release. Nothing but
 protocol frames is ever written to stdout; every diagnostic goes to stderr.
 
+Profiles (--profile, default editor): everything above is the editor
+profile. --profile shell is what the keryx desktop app launches: keryx
+shell's tool roster (web_fetch/web_search, keryx's own MCP servers merged
+with the client's, background shell tasks, plan tools, ask_user when the
+client advertises clientCapabilities._meta.keryx.askUser) minus
+spawn_subagent and bus tools; permission modes ask, trust and auto
+(session/set_mode, /mode, starting from the project's saved default);
+and plan, usage_update and session_info_update session updates.
+initialize reports the profile in _meta.keryx, and _keryx/info answers
+the version, profile and extensions in either profile. An unknown profile
+exits with status 2.
+
 Usage:
-  keryx acp [--provider <p> --model <m>] [--base-url <url>] [--data-dir <dir>]
+  keryx acp [--profile editor|shell] [--provider <p> --model <m>] [--base-url <url>] [--data-dir <dir>]
 `);
 }

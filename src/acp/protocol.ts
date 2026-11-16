@@ -571,6 +571,13 @@ export interface AcpNewSessionRequest {
 export interface AcpSessionMode {
   readonly id: AcpSessionModeId;
   readonly name: string;
+  readonly description?: string | null;
+  readonly _meta?: AcpMeta;
+}
+
+export interface AcpSetSessionModeRequest {
+  readonly sessionId: AcpSessionId;
+  readonly modeId: AcpSessionModeId;
   readonly _meta?: AcpMeta;
 }
 

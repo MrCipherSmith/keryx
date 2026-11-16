@@ -165,6 +165,8 @@ export type McpToolBinding = {
   readonly catalog: () => ServerCatalog;
   readonly servers: () => readonly ServerState[];
   readonly toolTimeoutSec?: ((server: string, rawName: string) => number | undefined) | undefined;
+  /** Scrubs output before it reaches the model (`keryx acp` strips a client's MCP secrets). Identity otherwise. */
+  readonly redact?: ((text: string) => string) | undefined;
 };
 
 /**
@@ -282,6 +284,7 @@ export function buildInteractiveAgentTools(input: InteractiveAgentToolsInput): I
           catalog: input.mcp.catalog,
           servers: input.mcp.servers,
           ...(input.mcp.toolTimeoutSec === undefined ? {} : { toolTimeoutSec: input.mcp.toolTimeoutSec }),
+          ...(input.mcp.redact === undefined ? {} : { redact: input.mcp.redact }),
         })),
     input.spawnTool,
   ];

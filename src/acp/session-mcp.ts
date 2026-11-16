@@ -263,6 +263,14 @@ export interface AcpSessionMcp {
   readonly ready: Promise<void>;
   /** The `search_tool`/`use_tool` pair, or nothing when this session has no stdio server. */
   readonly tools: readonly InteractiveTool[];
+  /**
+   * What `tools` reads through, exposed so the shell profile can merge these
+   * servers with keryx's own configured ones into ONE `search_tool`/`use_tool`
+   * pair (`server.ts`). `redact` scrubs the client's secrets from output.
+   */
+  readonly catalog: () => ServerCatalog;
+  readonly servers: () => readonly ServerState[];
+  readonly redact: (text: string) => string;
   /** Refusals known before any dial (http/sse, malformed entries). Scrubbed. */
   readonly refused: readonly AcpMcpServerProblem[];
   /** Servers that were dialled and did not start. Complete once `ready` has settled. Scrubbed. */
@@ -297,9 +305,13 @@ export interface StartAcpSessionMcpOptions {
 export function startAcpSessionMcp(parsed: ParsedAcpMcpServers, options: StartAcpSessionMcpOptions = {}): AcpSessionMcp {
   const refused = parsed.refused.map((problem) => ({ name: problem.name, reason: scrub(problem.reason, parsed.secrets) }));
   if (parsed.stdio.length === 0) {
+    const empty = mergeCatalogs([]);
     return {
       ready: Promise.resolve(),
       tools: [],
+      catalog: () => empty,
+      servers: () => [],
+      redact: (text) => scrub(text, parsed.secrets),
       refused,
       failed: () => [],
       revive: () => {},
@@ -363,6 +375,9 @@ export function startAcpSessionMcp(parsed: ParsedAcpMcpServers, options: StartAc
       // truncation cap cuts in two no longer matches afterwards.
       redact: (text) => scrub(text, parsed.secrets),
     }),
+    catalog: () => catalog,
+    servers: () => states,
+    redact: (text) => scrub(text, parsed.secrets),
     refused,
     failed: () =>
       states
