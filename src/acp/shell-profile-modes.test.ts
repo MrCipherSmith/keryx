@@ -227,3 +227,47 @@ describe("AC3 — the gate follows the mode", () => {
     }
   }, TIMEOUT_MS);
 });
+
+describe("auto mode tells the client when it answered ask_user itself", () => {
+  const ASK = { question: "Which scope?", options: [{ id: "full", label: "Full", recommended: true }, { id: "small", label: "Small" }] };
+  const CAPS = { _meta: { keryx: { askUser: true } } };
+
+  test("auto: an agent_message_chunk notice carries _meta.keryx.selfAnsweredQuestion and the client is never asked", async () => {
+    const h = shellHarness({
+      storedMode: "auto",
+      clientCapabilities: CAPS,
+      rounds: [toolRound("q1", "ask_user", ASK), textRound("done")],
+    });
+    try {
+      await h.initialize();
+      const { sessionId } = await h.newSession();
+      const { reply } = await driveTurn(h, sessionId, "go");
+      expect(reply.result).toEqual({ stopReason: "end_turn" });
+      expect(h.frames.some((f) => f.method === "_keryx/ask_user")).toBe(false);
+      const notices = updates(h.frames, "agent_message_chunk").filter((u) => u._meta?.keryx?.["selfAnsweredQuestion"] === true);
+      expect(notices).toHaveLength(1);
+      expect(notices[0]?.content?.text).toBe("Auto mode answered: Which scope? → Full\n");
+    } finally {
+      await h.end();
+    }
+  }, TIMEOUT_MS);
+
+  test("ask: the client is asked and no self-answer notice is emitted", async () => {
+    const h = shellHarness({
+      clientCapabilities: CAPS,
+      rounds: [toolRound("q1", "ask_user", ASK), textRound("done")],
+    });
+    try {
+      await h.initialize();
+      const { sessionId } = await h.newSession();
+      const id = h.prompt(sessionId, "go");
+      const asked = await h.waitFor((f) => f.method === "_keryx/ask_user");
+      h.respond(asked.id, { result: { outcome: { outcome: "selected", optionId: "small" } } });
+      await h.waitFor((f) => f.id === id && f.method === undefined);
+      const notices = updates(h.frames, "agent_message_chunk").filter((u) => u._meta?.keryx?.["selfAnsweredQuestion"] === true);
+      expect(notices).toHaveLength(0);
+    } finally {
+      await h.end();
+    }
+  }, TIMEOUT_MS);
+});

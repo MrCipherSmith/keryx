@@ -28,6 +28,7 @@ import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools"
 import type { NormalizedMessage, ProviderPort } from "../harness/provider/types";
 import { listSessions, persistHistory } from "../session";
 import { describeLeaseHolder, describeLeaseLoss, SessionLeasedError } from "../session/lease";
+import { selfAnsweredLine } from "../lib/terminal-safe";
 import { createAcpAgentIo, toolKindFor, tryParseJson, type AcpPermissionAsker } from "./agent-io";
 import type { AcpFsReader } from "./capability-tools";
 import {
@@ -1491,6 +1492,15 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         shellProfile ? { permissionMode: () => modeOf(sessionId) } : {},
       );
       if (shellProfile) {
+        // `auto` mode answers ask_user itself; without this the client would
+        // see the answer land in the model's context but never be told.
+        io.onQuestionSelfAnswered = (question, answerLabel) => {
+          sendUpdate(sessionId, {
+            sessionUpdate: "agent_message_chunk",
+            content: textBlock(`Auto mode answered: ${selfAnsweredLine(question, answerLabel)}\n`),
+            _meta: { keryx: { selfAnsweredQuestion: true } },
+          });
+        };
         let turnUsage: TokenTally = { inputTokens: 0, outputTokens: 0 };
         const contextWindow = agentContextWindow(deps) ?? 0;
         io.onUsage = (usage) => {
