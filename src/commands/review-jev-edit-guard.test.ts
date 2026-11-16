@@ -370,6 +370,18 @@ describe("install / uninstall: merge-safe, idempotent, no network", () => {
     expect(settings.hooks.PostToolUse[0].hooks[0].command).toBe("keryx review jev-edit-guard --hook claude");
   });
 
+  test("install prints the silent-hook note only when edit_guard is actually off", async () => {
+    // Unset + no credential -> off: the note fires.
+    await handleInstall(dir, { env: {}, configDir: emptyConfigDir });
+    expect(logLines.some((line) => line.includes("will stay silent"))).toBe(true);
+
+    // Unset + a Jev credential resolves -> defaults on: no "stay silent" note.
+    logLines = [];
+    await handleInstall(dir, { env: FAKE_ENV, configDir: emptyConfigDir });
+    expect(logLines.some((line) => line.includes("will stay silent"))).toBe(false);
+    expect(logLines.some((line) => line.includes("installed:"))).toBe(true);
+  });
+
   test("install is idempotent: running it twice writes exactly one PostToolUse group", async () => {
     await handleInstall(dir);
     await handleInstall(dir);

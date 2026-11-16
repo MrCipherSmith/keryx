@@ -147,7 +147,7 @@ Full documentation site: **<https://mrciphersmith.github.io/keryx/>**, starting
 with [Onboarding](docs/docs/onboarding.md) for the complete first-run
 walkthrough. `keryx help` groups every command by task; the same table is a
 generated reference page, [Commands by task](docs/docs/commands-by-task.md).
-Run `keryx <command> --help` for the live flag surface of most commands; `mcp`, `test`, `wiki`, `update` and `workspace` print a shortened fallback, so use the [CLI reference](docs/docs/cli-reference.md) for their full list.
+Run `keryx <command> --help` for the live flag surface of a command, or see the [CLI reference](docs/docs/cli-reference.md).
 Delivery orchestrators can also ask Jev to flag rule-breaking edits and triage
 failed CI jobs — see [Jev in the delivery loop](docs/docs/guides/jev-in-the-delivery-loop.md).
 The review orchestrator can ask Jev to triage CI and pick which reviewers to
@@ -1248,7 +1248,7 @@ Full documentation site: **<https://mrciphersmith.github.io/keryx/>**
 - **[Permission modes](docs/docs/guides/permission-modes.md)** — `ask`/`trust`/`auto` for the interactive shell: how to set them and exactly where the per-project default is stored.
 - **[Changelog](CHANGELOG.md)** — what has landed since `v0.1.0`.
 
-Run `keryx <command> --help` for the live flag surface of most commands; `mcp`, `test`, `wiki`, `update` and `workspace` print a shortened fallback there, so use the [CLI reference](docs/docs/cli-reference.md) for their full list.
+Run `keryx <command> --help` for the live flag surface of a command, or see the [CLI reference](docs/docs/cli-reference.md).
 
 ## Local development
 
