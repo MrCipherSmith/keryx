@@ -1,5 +1,5 @@
 # Keryx Desktop Client — PRD
-Version: 0.1.0
+Version: 0.1.1
 
 ## Problem
 
@@ -38,7 +38,7 @@ behaves as the shell's permission modes do.
 Verification: exec `bun test src/acp/shell-profile-modes.test.ts`
 
 R3. The `editor` profile's roster and answers are unchanged.
-Verification: invariant `bun test src/acp/`
+Verification: invariant `bun test src/acp/editor-profile-golden.test.ts`
 
 R4. In the `shell` profile keryx sends `plan`, `usage_update` and
 `session_info_update` session updates, and forwards `ask_user` to a client
@@ -58,9 +58,12 @@ R7. The desktop app lists, loads and starts sessions, switches model and
 permission mode, and shows the execution plan and token usage.
 Verification: judged
 
-R8. The app bundles a compiled keryx sidecar and can be switched to a keryx on
-`PATH` in settings; an incompatible keryx is refused with both versions named.
+R8. An incompatible keryx is refused with both versions named.
 Verification: exec `cd apps/desktop/src-tauri && cargo test`
+
+R8a. The app bundles a compiled keryx sidecar and can be switched to a keryx
+on `PATH` in settings.
+Verification: exec `test -x apps/desktop/src-tauri/target/release/bundle/macos/Keryx.app/Contents/MacOS/keryx`
 
 R9. One command builds an installable `.dmg` on the owner's Mac.
 Verification: exec `bun run desktop:build`
