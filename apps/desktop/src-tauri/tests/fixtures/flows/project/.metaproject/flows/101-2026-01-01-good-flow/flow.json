@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 2,
+  "id": "101",
+  "slug": "good-flow",
+  "title": "A good flow",
+  "status": "blocked",
+  "previousStatus": "in-progress",
+  "createdAt": "2026-01-01T10:00:00.000Z",
+  "updatedAt": "2026-01-02T11:00:00.000Z",
+  "source": { "type": "description", "ref": null },
+  "acChecksum": "sha256:abc",
+  "acConfirmed": { "AC1": { "at": "2026-01-02T09:00:00.000Z", "note": "checked by hand" } },
+  "pr": { "url": "https://github.com/o/r/pull/7" },
+  "baseBranch": "main",
+  "owner": { "value": "alice", "basis": "stated", "source": "flag" },
+  "signatures": [
+    { "at": "2026-01-02T09:00:00.000Z", "kind": "ac-confirm", "criterion": "AC1", "acChecksum": "sha256:abc", "identity": { "value": "alice", "basis": "stated" } }
+  ],
+  "completionAttempts": [
+    { "at": "2026-01-02T10:00:00.000Z", "passed": false, "acChecksum": "sha256:abc", "gates": [], "exceptions": [{ "operatorWords": "ok" }] }
+  ],
+  "acKinds": {
+    "AC1": { "kind": "exec", "check": "bun test x" },
+    "AC2": { "kind": "judged" }
+  },
+  "tasks": [
+    { "id": "T1", "title": "Collect context", "kind": "context", "status": "done", "dependsOn": [], "disposition": "completed",
+      "attempts": { "count": 0, "log": [] } },
+    { "id": "T2", "title": "Implement", "kind": "implement", "status": "in-progress", "dependsOn": ["T1"],
+      "attempts": { "count": 2, "log": [
+        { "at": "2026-01-02T08:00:00.000Z", "outcome": "started" },
+        { "at": "2026-01-02T08:30:00.000Z", "outcome": "failed", "detail": "tests red" } ] } },
+    { "id": "T3", "title": "Skipped one", "kind": "docs", "status": "done", "disposition": "skipped", "dispositionReason": "not needed" }
+  ],
+  "history": [
+    { "at": "2026-01-01T10:00:00.000Z", "event": "created" },
+    { "at": "2026-01-02T08:00:00.000Z", "event": "task-attempt", "detail": "T2 started" },
+    { "at": "2026-01-02T11:00:00.000Z", "event": "blocked", "detail": "waiting for review" }
+  ]
+}

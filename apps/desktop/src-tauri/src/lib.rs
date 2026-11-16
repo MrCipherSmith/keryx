@@ -1,5 +1,6 @@
 pub mod bridge;
 pub mod framing;
+pub mod flows;
 pub mod fs;
 pub mod locator;
 pub mod process;
@@ -13,6 +14,7 @@ pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(bridge::AppState::default())
+        .manage(flows::watch::FlowWatchers::default())
         .setup(|app| {
             // Capture the login-shell environment in the background so the
             // first project window does not wait for it.
@@ -25,6 +27,7 @@ pub fn run() {
         .on_window_event(|window, event| {
             if let WindowEvent::Destroyed = event {
                 window.app_handle().state::<bridge::AppState>().stop_window(window.label());
+                window.app_handle().state::<flows::watch::FlowWatchers>().stop_window(window.label());
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -37,6 +40,10 @@ pub fn run() {
             bridge::version_check,
             bridge::window_open_project,
             bridge::window_initial_cwd,
+            flows::flows_list,
+            flows::flows_get,
+            flows::flows_action,
+            flows::flows_watch,
         ])
         .build(tauri::generate_context!())
         .expect("error while building the Keryx app");
