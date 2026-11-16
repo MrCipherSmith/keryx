@@ -5,17 +5,22 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.32] - 2026-11-16
+
+### Upgrade notes
+
+- `keryx update` now refuses an unknown flag or any extra argument (exit 1, nothing written) instead of ignoring it. A script that passes `update` something it does not read must drop it. After upgrading, run `keryx update` once to refresh the generated `.metaproject` instructions.
+
 ### Fixed
 
-- **`keryx update help` no longer runs an update.** `update` ignored any word it did not know, so `keryx update help` refreshed managed files instead of printing help. `help` now prints help, and any other argument or unknown flag is refused with exit code 1 before anything is written.
-
-- **`<command> --help` shows the command's full help.** `mcp`, `test`, `wiki`, `update`, `workspace`, `gdgraph` and `ctx` printed a stale registry summary (`mcp --help` listed only its retired aliases); they now print their own help, as `keryx help <command>` does. `flow --help` lists `task done --result/--resolved`.
-- **`review jev-edit-guard install` reports the real default.** It no longer says the hook will stay silent when `edit_guard` is on by default (`/external` on and a Jev credential available).
-- **Generated agent instructions.** `.metaproject/index.md` points to `flow list` / `flow status <id>`, the Metaproject README uses `gdgraph find`, routing lists the `mcp` module when enabled and points to the CLI reference, `flow block` shows `--reason`, and mirrored `CLAUDE.md` rules no longer carry its Claude-only section to other agents. Run `keryx update` to refresh them.
+- **`keryx update help` no longer runs an update.** `update` ignored any word it did not know, so `keryx update help` refreshed managed files instead of printing help. `help` now prints help, and any other argument or unknown flag is refused with exit code 1 before anything is written. [#1209](https://github.com/MrCipherSmith/keryx/pull/1209)
+- **`<command> --help` shows the command's full help.** `mcp`, `test`, `wiki`, `update`, `workspace`, `gdgraph` and `ctx` printed a stale registry summary (`mcp --help` listed only its retired aliases); they now print their own help, as `keryx help <command>` does. `flow --help` lists `task done --result/--resolved`. [#1208](https://github.com/MrCipherSmith/keryx/pull/1208)
+- **`review jev-edit-guard install` reports the real default.** It no longer says the hook will stay silent when `edit_guard` is on by default (`/external` on and a Jev credential available). [#1208](https://github.com/MrCipherSmith/keryx/pull/1208)
+- **Generated agent instructions.** `.metaproject/index.md` points to `flow list` / `flow status <id>`, the Metaproject README uses `gdgraph find`, routing lists the `mcp` module when enabled and points to the CLI reference, `flow block` shows `--reason`, and mirrored `CLAUDE.md` rules no longer carry its Claude-only section to other agents. Run `keryx update` to refresh them. [#1208](https://github.com/MrCipherSmith/keryx/pull/1208)
 
 ### Changed
 
-- **Documentation matches the code.** README, the architecture and module references, limitations, hooks and the guides were corrected against v0.4.31 (auth login is subscription-only, turn budgets are round limits, codex write range, MCP OAuth exists, flow gate order, external agents enabled with `keryx agents external enable`, and more). Three pages joined the site navigation.
+- **Documentation matches the code.** README, the architecture and module references, limitations, hooks and the guides were corrected against v0.4.31 (auth login is subscription-only, turn budgets are round limits, codex write range, MCP OAuth exists, flow gate order, external agents enabled with `keryx agents external enable`, and more). Three pages joined the site navigation. [#1208](https://github.com/MrCipherSmith/keryx/pull/1208)
 
 ## [0.4.31] - 2026-11-16
 
@@ -8999,4 +9004,4 @@ runtime dependencies, no sockets).
 [0.2.35]: https://github.com/MrCipherSmith/keryx/compare/v0.2.34...v0.2.35
 [0.2.36]: https://github.com/MrCipherSmith/keryx/compare/v0.2.35...v0.2.36
 [0.2.37]: https://github.com/MrCipherSmith/keryx/compare/v0.2.36...v0.2.37
-[Unreleased]: https://github.com/MrCipherSmith/keryx/compare/v0.4.31...HEAD
+[Unreleased]: https://github.com/MrCipherSmith/keryx/compare/v0.4.32...HEAD
