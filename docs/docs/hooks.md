@@ -101,14 +101,24 @@ Ties within one event are broken by `id` (`localeCompare`).
 
 A project/user `id` that collides with a built-in's namespaced id is
 rejected at load time (`hook-id-collides-with-builtin`), never silently
-shadowed. A project may still **disable** an inherited (including built-in)
-hook with a disable-only override: `{"id": "keryx.ctx-guard", "enabled": false}`
-— exactly those two keys, nothing else. Adding any other field to an entry
-whose `id` starts with `keryx.` fails schema validation, and so does a full
-registration (with `matcher`/`command`/`class`) whose `id` starts with
-`keryx.` — these are the schema's two distinguishable shapes, so "disable a
-built-in" and "collide with a built-in" can never be confused with each
-other.
+shadowed. A config file may still **disable** an inherited built-in hook that
+has no decision power (class `observe` or `context`) with a disable-only
+override: `{"id": "keryx.learning-observer", "enabled": false}` — those two
+keys, plus the optional `acknowledge` described below, nothing else. Adding any
+other field to an entry whose `id` starts with `keryx.` fails schema
+validation, and so does a full registration (with `matcher`/`command`/`class`)
+whose `id` starts with `keryx.` — these are the schema's two distinguishable
+shapes, so "disable a built-in" and "collide with a built-in" can never be
+confused with each other.
+
+Built-in **gates** (`gate` / `gate-advisory`, e.g. `keryx.ctx-guard`) are
+protected. A **project** file can never disable one, acknowledged or not: the
+override is ignored with a `project-gate-disable-ignored` diagnostic and the
+gate stays on. A **user-scope** file (`~/.keryx/hooks.json`) can, but only with
+`"acknowledge": "disable-builtin-gate"` on the override:
+`{"id": "keryx.ctx-guard", "enabled": false, "acknowledge": "disable-builtin-gate"}`.
+Without it the override is ignored with a `gate-disable-unacknowledged`
+diagnostic.
 
 An absent config file is treated as empty (no diagnostic). Anything else
 wrong with a present file — invalid JSON, schema-invalid, an unrecognised

@@ -14,9 +14,12 @@ the one that describes shipped behaviour.
 - [agent-installation-playbook.md](./agent-installation-playbook.md) — Agent-executable Gherkin setup, repair, validation, and handoff scenarios.
 - [architecture.md](./architecture.md) — System overview, layered architecture, invariants, cross-module data flows, integrations.
 - [harness.md](./harness.md) — The agent runtime: doors, providers, sessions and forking, policy, containment, evidence and the completion gate, record/replay.
+- [shell-preservation.md](./shell-preservation.md) — What `keryx shell` preserves on a handled exit: checkpoint, immutable snapshot, and how local preservation differs from workspace delivery.
+- [shell-recovery.md](./shell-recovery.md) — How the interactive shell waits and retries a temporary model-provider failure within the original turn.
 - [integrations.md](./integrations.md) — The harness adapter registry: `keryx integrations install|doctor|uninstall|matrix`, install-state and drift, the generated capability matrix, and per-harness notes (Gemini CLI, Kiro, GitHub Copilot agent, Zed).
 - [hooks.md](./hooks.md) — The `keryx shell` lifecycle hook runtime: the ten events, config files, composition with the policy engine, built-ins, the `keryx hooks` CLI, and the W3/W8 extension points.
 - [modules.md](./modules.md) — Per-module reference: purpose, CLI surface, key files, mechanics, and data paths.
+- [jev-in-review.md](./jev-in-review.md) — What we measured putting Jev in the review domain: where it helps, where it does not, and what is still unmeasured.
 - [learning.md](./learning.md) — The self-learning loop: observe, extract, review/accept, apply, promote, graduate, prune — what is observed, what is never stored, the confidence model, and consent guarantees.
 - [cli-reference.md](./cli-reference.md) — Every command, subcommand, flag, and exit code.
 - [commands-by-task.md](./commands-by-task.md) — Every command grouped by task, generated from the same table `keryx help` and the TUI's `/help` modal use.

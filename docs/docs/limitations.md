@@ -15,7 +15,7 @@ each gap actually costs you, and what to use instead.
 | No bundled embedding runtime | No semantic ranking in memory search | Lexical memory search remains fully available |
 | No bundled ML security classifiers | Detection is rules plus entropy, not a model | Deterministic detectors run on the full corpus and are evaluated in CI |
 | ripgrep is external | `keryx ctx rg` exits non-zero without `rg` on `PATH` | Install ripgrep, or let the agent read files directly |
-| Model commands need a credential | Five commands exit non-zero without one | Every other command is deterministic and offline |
+| Model commands need a credential | The model-backed commands (see [below](#commands-that-require-a-model-credential)) exit non-zero or degrade without one | Every command not listed there is deterministic and offline |
 | Windows is unverified | The core CLI is not exercised on Windows in CI | Use macOS or Linux, or WSL |
 | No tools in the non-interactive harness | `keryx harness run` and `keryx serve` are single text turns | `keryx shell` is where tools actually run |
 | Replay validates a log, it does not re-execute | A fixture check cannot tell you whether a run would behave the same today | Record and compare fixtures for integrity |
@@ -47,17 +47,30 @@ the shipped, tested behaviour:
 
 ## Commands that require a model credential
 
-These five commands add model-generated output on top of deterministic data and
-exit non-zero without a configured provider credential:
+These commands add model-generated output on top of deterministic data. The first
+four exit non-zero without a configured provider credential:
 
 - `keryx test suggest <file>`
 - `keryx flow plan <id>`
 - `keryx memory reflect --narrate`
 - `keryx health explain <target> --narrate`
-- `keryx wiki enrich` — the exception that degrades rather than failing: it exits
-  `0` and marks the affected pages skipped.
 
-Nothing else in the CLI needs a provider.
+`keryx wiki enrich` is the exception that degrades rather than failing: it exits
+`0` and marks the affected pages skipped.
+
+Other commands also call a model, by design, and need a provider (or a Jev
+credential) to do anything useful:
+
+- `keryx shell` and `keryx harness run` run model turns. `keryx shell` opens its
+  provider picker when none is configured; `harness run` needs `--provider` and
+  `--model`.
+- `keryx learn probe` and `keryx skills judge-check` spend model calls
+  (`--provider` / `--judge`); `learn probe --dry-run` does not.
+- `keryx flow check-ac` and the `keryx review jev-*` commands use Jev. They are
+  advisory and fail open: without a credential they report that and change no
+  flow state.
+
+Everything else in the CLI is deterministic and offline.
 
 ## Code search needs ripgrep
 
