@@ -76,6 +76,7 @@ interface CardsModule {
   SIDEBAR_SECTION_IDS: readonly string[];
   SIDEBAR_SECTION_CARD: Record<string, string>;
   buildSidebarCards(snapshot: Snapshot): Card[];
+  railBadge(badge: string | undefined): string | undefined;
   mountSidebarCards(
     otui: unknown,
     renderer: unknown,
@@ -203,12 +204,27 @@ test("flow 468 AC12: rail mode is one row per card: a single-cell glyph, an opti
   for (const card of c.buildSidebarCards(fullSnapshot())) {
     const rail = card.rail();
     expect(displayWidth(rail.glyph), card.id).toBe(1);
-    if (rail.badge !== undefined) expect(displayWidth(rail.badge), card.id).toBeLessThanOrEqual(2);
+    if (rail.badge !== undefined) expect(displayWidth(rail.badge), card.id).toBe(1);
     const lines = card.lines(DEFAULT_TEXT_WIDTH, "rail");
     expect(lines, card.id).toHaveLength(1);
     expect(displayWidth(lines[0] ?? ""), card.id).toBeLessThanOrEqual(3);
-    expect(lines[0]?.startsWith(rail.glyph), card.id).toBe(true);
+    // The glyph sits in the middle cell, the column the pinned header's title and buttons use.
+    expect(lines[0], card.id).toBe(` ${rail.glyph}${rail.badge ?? ""}`);
   }
+});
+
+test("rail badges take one cell: superscript digits up to 9, a superscript plus above, one-cell markers kept", async () => {
+  const c = await loadCards();
+  expect(c.railBadge(undefined)).toBeUndefined();
+  expect(c.railBadge("2")).toBe("²");
+  expect(c.railBadge("9")).toBe("⁹");
+  expect(c.railBadge("25")).toBe("⁺");
+  expect(c.railBadge("99")).toBe("⁺");
+  expect(c.railBadge("!")).toBe("!");
+  expect(c.railBadge("↑")).toBe("↑");
+  const reviews = cardOf(c.buildSidebarCards({ reviewsNotReady: 25 }), "reviews");
+  expect(reviews.badge).toBe("25");
+  expect(reviews.lines(DEFAULT_TEXT_WIDTH, "rail")).toEqual([` ${reviews.icon}⁺`]);
 });
 
 test("flow 468 AC12: card icons are single-cell and distinct, each with a distinct single-cell ASCII fallback", async () => {
@@ -652,7 +668,7 @@ test("flow 468 AC17: a pending approval, a hold, an update and a not-ready revie
     if (signal.badge !== undefined) expect(raised.badge, signal.name).toBe(signal.badge);
     for (const mode of MODES) {
       if (mode === "rail") {
-        expect(raised.rail().badge, `${signal.name} rail`).toBe(raised.badge);
+        expect(raised.rail().badge, `${signal.name} rail`).toBe(c.railBadge(raised.badge));
       } else {
         const width = mode === "wide" ? WIDE_TEXT_WIDTH : DEFAULT_TEXT_WIDTH;
         expect(raised.lines(width, mode)[0], `${signal.name} ${mode}`).toContain(raised.badge ?? "");
@@ -689,9 +705,10 @@ otuiTest("flow 468 AC17: the badge and the raised colour are painted in all thre
           await h.flush();
           const rows = sidebarRows(h);
           const marker = mode === "rail" ? remote.rail().glyph : "Remote";
-          const row = rows.find((entry) => entry.includes(marker) && entry.includes("2")) ?? "";
+          const count = mode === "rail" ? (remote.rail().badge ?? "") : "2";
+          const row = rows.find((entry) => entry.includes(marker) && entry.includes(count)) ?? "";
           expect(row, mode).not.toBe("");
-          const painted = sidebarSpans(h).filter((span) => span.text.includes(marker) || span.text.includes("2"));
+          const painted = sidebarSpans(h).filter((span) => span.text.includes(marker) || span.text.includes(count));
           expect(
             painted.some((span) => themeColorToHex(span.fg)?.toLowerCase() === attention),
             `${mode}: the card is drawn in the attention colour`,
