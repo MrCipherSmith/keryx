@@ -747,7 +747,7 @@ export async function createShellChrome(
     const rail = state.mode === "rail";
     sbHeader.flexDirection = rail ? "column" : "row";
     sbTitle.content = rail
-      ? otui.t`${boldChunk(otui, "◆")}`
+      ? otui.t` ${boldChunk(otui, asciiIcons ? "k" : "◆")}`
       : otui.t`${boldChunk(otui, "keryx")} ${dimChunk(otui, sbVersion.length > 0 ? `v${sbVersion}` : "")}`;
     sbModes.flexDirection = rail ? "column" : "row";
     for (const mode of SIDEBAR_MODES) {

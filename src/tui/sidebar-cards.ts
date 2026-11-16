@@ -32,6 +32,8 @@ export type SidebarCardSeverity = "normal" | "attention" | "error";
 
 /** Columns a rail row has: border + one padding cell + three text cells (`SIDEBAR_RAIL_WIDTH` = 5). */
 const RAIL_CELLS = 3;
+/** Superscript digits: a rail badge sits beside its glyph like a notification dot, not as a second word. */
+const SUPERSCRIPT_DIGITS = ["⁰", "¹", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸", "⁹"] as const;
 /**
  * A card is its title row plus at most three value rows: seven cards of four lines and the gaps
  * between them still fit a 40-row terminal, and the first three stay on screen at 24.
@@ -80,8 +82,9 @@ export interface SidebarCardModel {
   severity: SidebarCardSeverity;
   badge?: string;
   tabs: SidebarCardTab[];
-  /** default|wide: 3 to 5 lines, each at most `textWidth` cells. rail: one line of at most 3 cells. */
+  /** default|wide: 3 to 5 lines, each at most `textWidth` cells. rail: one line of at most 3 cells, the glyph centred. */
   lines(textWidth: number, mode: SidebarMode): string[];
+  /** What the rail shows: the glyph (ASCII when asked) and the one-cell badge marker ({@link railBadge}). */
   rail(): { glyph: string; badge?: string };
 }
 
@@ -155,7 +158,7 @@ const CARD_DEFS: readonly CardDef[] = [
   {
     id: "work",
     title: "Work",
-    icon: "▸",
+    icon: "►",
     asciiIcon: "T",
     sections: [
       { id: "status", label: "Status" },
@@ -374,6 +377,22 @@ function signalFor(def: CardDef, snapshot: SidebarSnapshot): { severity: Sidebar
   }
 }
 
+/**
+ * The one cell a rail badge gets. The rail is three cells with the glyph centred in the
+ * middle one (the column the pinned header's title and mode buttons use), so a badge
+ * has exactly the last cell: a count of 1-9 is its superscript digit, a larger count is
+ * a superscript plus (the exact number is on the card and in its detail), and a
+ * one-cell marker (`!`, `↑`) is kept as is.
+ */
+export function railBadge(badge: string | undefined): string | undefined {
+  if (badge === undefined || badge === "") return undefined;
+  if (/^[0-9]+$/.test(badge)) {
+    const count = Number(badge);
+    return count <= 9 ? SUPERSCRIPT_DIGITS[count] : "⁺";
+  }
+  return displayWidth(badge) === 1 ? badge : "⁺";
+}
+
 function headerLine(icon: string, title: string, badge: string | undefined, width: number): string {
   const left = `${icon} ${title}`;
   if (badge === undefined) return fitCells(left, width);
@@ -416,13 +435,16 @@ function buildCard(def: CardDef, order: number, snapshot: SidebarSnapshot, ascii
     tabs,
     lines: (textWidth, mode) => {
       if (mode === "rail") {
-        return [fitCells(`${icon}${badge ?? ""}`, RAIL_CELLS)];
+        return [fitCells(` ${icon}${railBadge(badge) ?? ""}`, RAIL_CELLS)];
       }
       const lines = [headerLine(icon, def.title, badge, textWidth), ...valueRows(def, snapshot, textWidth)];
       while (lines.length < MIN_CARD_LINES) lines.push("");
       return lines;
     },
-    rail: () => ({ glyph: def.icon, ...(badge !== undefined ? { badge } : {}) }),
+    rail: () => {
+      const marker = railBadge(badge);
+      return { glyph: icon, ...(marker !== undefined ? { badge: marker } : {}) };
+    },
   };
 }
 
@@ -529,7 +551,9 @@ export function mountSidebarCards(otui: OpenTui, renderer: Renderer, parent: Par
     for (const card of cards) {
       const slot = slots.get(card.id);
       if (slot === undefined) continue;
-      slot.box.marginTop = mode === "rail" || card.order === 1 ? 0 : 1;
+      // Rail: one blank row above every glyph, the first included, so the column keeps the
+      // same rhythm as the pinned header's buttons above it instead of a packed block.
+      slot.box.marginTop = mode === "rail" ? 1 : card.order === 1 ? 0 : 1;
       const lines = card.lines(width, mode);
       const head =
         card.severity === "error" ? roleColor("error", theme) : card.severity === "attention" ? roleColor("attention", theme) : roleColor("text", theme);
