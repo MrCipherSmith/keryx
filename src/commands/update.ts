@@ -108,6 +108,7 @@ import {
 } from "../wiki/templates";
 import { renderSacCoreReadme, renderSacManifest, renderSacSkillReadme } from "../sac/templates";
 import { pathExists } from "../lib/fs";
+import { rejectUnknownFlags } from "../lib/args";
 import { resolveGitHooksRoot } from "../lib/git-hooks";
 import {
   findLegacyMemoryArtifacts,
@@ -1858,9 +1859,36 @@ function moduleEnabled(manifest: MetaprojectManifest, name: string): boolean {
   return manifest.modules?.[name]?.enabled === true;
 }
 
+const UPDATE_FLAGS = [
+  "--help",
+  "-h",
+  "--hooks",
+  "--skip-runtime",
+  "--no-tasks",
+  "--preview",
+  "--dry-run",
+  "--accept-version",
+  "--keep-existing",
+  "--yes",
+] as const;
+
+/**
+ * `update` rewrites managed files, so anything it does not understand is
+ * refused before it touches the tree: an unknown flag, and any positional
+ * argument except a bare `help` (`keryx update help` used to run a real
+ * update, because the word was silently ignored).
+ */
 function parseUpdateArgs(args: string[]): UpdateOptions {
+  const positionals = args.filter((arg) => !arg.startsWith("-"));
+  const helpWord = positionals.length === 1 && positionals[0] === "help";
+  if (positionals.length > 0 && !helpWord) {
+    throw new Error(
+      `\`keryx update\` takes no arguments (got ${positionals.join(" ")}). Run \`keryx update --help\` for its flags.`,
+    );
+  }
+  rejectUnknownFlags(args, UPDATE_FLAGS, "update");
   return {
-    help: args.includes("--help") || args.includes("-h"),
+    help: helpWord || args.includes("--help") || args.includes("-h"),
     hooks: args.includes("--hooks"),
     skipRuntime: args.includes("--skip-runtime"),
     noTasks: args.includes("--no-tasks"),
@@ -1968,7 +1996,7 @@ function runtimeSourcePath(relativePath: string): string {
 
 function printHelp(): void {
   helpTitle("keryx update", "refresh .metaproject service files (data left untouched)");
-  helpUsage(["keryx update [--skip-runtime] [--hooks] [--no-tasks] [--yes]"]);
+  helpUsage(["keryx update [--skip-runtime] [--hooks] [--no-tasks] [--preview|--dry-run] [--accept-version|--keep-existing] [--yes]"]);
   heading("Default behavior");
   for (const line of [
     "updates managed runtime when present;",

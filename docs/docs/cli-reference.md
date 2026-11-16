@@ -2255,7 +2255,7 @@ Also self-updates the runtime it was launched from and backfills newly added
 modules. Errors with exit code `1` if `.metaproject/` does not exist.
 
 ```
-keryx update [--skip-runtime] [--hooks] [--no-tasks]
+keryx update [--skip-runtime] [--hooks] [--no-tasks] [--preview|--dry-run] [--accept-version|--keep-existing] [--yes]
 ```
 
 | Flag | Description |
@@ -2263,7 +2263,14 @@ keryx update [--skip-runtime] [--hooks] [--no-tasks]
 | `--skip-runtime` | Skip the git fetch/checkout that self-updates the vendored runtime. |
 | `--hooks` | After refreshing, run every executable in `.metaproject/hooks/post-update.d`. Without it, a hint is printed instead. |
 | `--no-tasks` | Do not auto-enable (backfill) the tasks/flow module on pre-tasks workspaces. |
-| `--help`, `-h` | Print `update` usage and exit. |
+| `--preview`, `--dry-run` | Print the lifecycle plan (create/update/skip/conflict and base digests) and write nothing. |
+| `--accept-version` | Publish this version's content over lifecycle files a different version left divergent. |
+| `--keep-existing` | Leave divergent lifecycle files alone and record that this run did not publish them. |
+| `--yes` | Skip the stale-worktree prune confirmation prompt (CI). |
+| `--help`, `-h`, `help` | Print `update` usage and exit. |
+
+`update` takes no other arguments: an unknown flag or any other word is refused
+with exit code `1` before anything is written.
 
 `update` also moves keryx's own edits out of tracked files. A legacy
 `agentEntrypoints.root` string array is rewritten to the entry form; a managed
