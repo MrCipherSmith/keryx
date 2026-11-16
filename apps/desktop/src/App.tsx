@@ -12,7 +12,7 @@ import {
 } from "./platform/commands";
 import { applyTheme, setPrefs, MOD } from "./lib/prefs";
 import { basename } from "./lib/format";
-import { Dialog } from "./components/ui";
+import { Dialog, overlayOpen } from "./components/ui";
 import { AppShell, type View } from "./shell/AppShell";
 import { CommandPalette, type PaletteItem } from "./shell/CommandPalette";
 import { SettingsView } from "./shell/SettingsView";
@@ -131,6 +131,8 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
   const [palette, setPalette] = useState<string | null>(null);
   const [recents, setRecents] = useState<string[]>([]);
   const composer = useRef<ComposerHandle>(null);
+  const paletteOpen = useRef(false);
+  paletteOpen.current = palette !== null;
   const narrow = useNarrow(1000);
   const { state } = s;
 
@@ -160,9 +162,18 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
     const onKey = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
       const k = e.key.toLowerCase();
+      // While any dialog or overlay is up (an approval above all) the shortcuts stand down;
+      // only the palette itself may be toggled closed again.
+      if (overlayOpen()) {
+        if (k === "k" && paletteOpen.current) {
+          e.preventDefault();
+          setPalette(null);
+        }
+        return;
+      }
       if (k === "k") {
         e.preventDefault();
-        setPalette((p) => (p === null ? "" : null));
+        setPalette("");
       } else if (k === "1") {
         e.preventDefault();
         go("session");
@@ -174,7 +185,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
         go("settings");
       } else if (k === "n" && !e.shiftKey) {
         e.preventDefault();
-        if (state.phase === "ready" && !state.busy) {
+        if (state.phase === "ready") {
           go("session");
           void s.newSession();
         }
@@ -185,7 +196,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [go, openFolder, s, state.phase, state.busy]);
+  }, [go, openFolder, s, state.phase]);
 
   const flowsActive = useMemo(() => flows.cards.filter((c) => laneOf(c) !== "done").length, [flows.cards]);
 
@@ -256,8 +267,15 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
     return items;
   }, [go, s, state.busy, state.phase, state.modes, state.commands, state.sessions, state.sessionId, recents, cwd, openFolder, onOpenProject, fillComposer]);
 
+  // The title bar names the project and the view; the page below keeps only its own toolbar.
   const title =
-    view === "session" ? <span className="truncate">{state.title?.trim() || "New session"}</span> : view === "flows" ? "Flows" : "Settings";
+    view === "session" ? (
+      <span className="truncate">{state.title?.trim() || "New session"}</span>
+    ) : (
+      <span className="truncate">
+        {basename(cwd)} · {view === "flows" ? "Flows" : "Settings"}
+      </span>
+    );
 
   const topPermission = s.permissions[0];
   const topAsk = s.asks[0];
@@ -313,14 +331,14 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       ) : null}
       {!s.fatal && topPermission ? (
         <PermissionDialog
-          key={topPermission.req.toolCall.toolCallId + s.permissions.length}
+          key={topPermission.id}
           pending={topPermission}
           modeId={state.modes?.currentModeId ?? null}
           queued={s.permissions.length - 1}
           onAnswer={s.answerPermission}
         />
       ) : null}
-      {!s.fatal && !topPermission && topAsk ? <AskUserDialog pending={topAsk} onAnswer={s.answerAsk} /> : null}
+      {!s.fatal && !topPermission && topAsk ? <AskUserDialog key={topAsk.id} pending={topAsk} onAnswer={s.answerAsk} /> : null}
     </AppShell>
   );
 }

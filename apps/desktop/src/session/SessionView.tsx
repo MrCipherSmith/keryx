@@ -156,7 +156,7 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
             modes={state.modes}
             model={modelOption(state.configOptions)}
             sendKey={prefs.sendKey}
-            onSend={(t) => void s.sendPrompt(t)}
+            onSend={(t) => s.sendPrompt(t)}
             onStop={s.cancel}
             onMode={(id) => void s.setMode(id)}
             onModel={(c, v) => void s.setModel(c, v)}

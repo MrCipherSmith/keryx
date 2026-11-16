@@ -115,6 +115,7 @@ export type Action =
     }
   | { t: "meta"; modes?: SessionModeState | null; configOptions?: ConfigOption[] | null }
   | { t: "replayDone" }
+  | { t: "sessionLost" }
   | { t: "busy"; busy: boolean }
   | { t: "config"; configOptions: ConfigOption[] }
   | { t: "sessions"; sessions: SessionInfo[] };
@@ -304,6 +305,9 @@ export function reducer(state: SessionState, a: Action): SessionState {
       };
     case "replayDone":
       return { ...state, replaying: false };
+    case "sessionLost":
+      // A load failed and nothing could be restored: no session, so the composer disables itself.
+      return { ...state, sessionId: null, items: [], plan: [], usage: null, title: null, commands: [], busy: false, replaying: false, modes: null };
     case "busy":
       return { ...state, busy: a.busy };
     case "config":

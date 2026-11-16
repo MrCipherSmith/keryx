@@ -24,10 +24,12 @@ import { initialState, reducer } from "./reducer";
 import { basename } from "../lib/format";
 
 export interface PendingPermission {
+  id: number;
   req: PermissionRequest;
   resolve: (o: PermissionOutcome) => void;
 }
 export interface PendingAsk {
+  id: number;
   req: AskUserRequest;
   resolve: (r: AskUserResult) => void;
 }
@@ -35,7 +37,14 @@ export type Fatal =
   | { kind: "incompatible"; found: string; required: string }
   | { kind: "leased"; sessionId: string };
 
-const LEASE_PATTERN = /leas|lock|in use|held|another (process|keryx|client)|already (open|active|attached)/i;
+/** keryx answers a leased session with error.data.reason "session-leased"; the anchored text is only a fallback. */
+function isLeaseError(e: unknown): boolean {
+  if (e instanceof RpcError) {
+    const reason = (e.data as { reason?: unknown } | undefined)?.reason;
+    if (reason === "session-leased") return true;
+  }
+  return /(^|[^\w-])session-leased([^\w-]|$)/.test(errMessage(e));
+}
 
 export function modelOption(options: ConfigOption[]): ConfigOption | undefined {
   return options.find((o) => o.id === "model") ?? options.find((o) => o.category === "model");
@@ -53,6 +62,8 @@ interface Live {
   noProfile: boolean;
   unlisten: (() => void) | null;
   replaying: boolean;
+  /** The running prompt turn, tagged with its session; null when idle. */
+  turn: { sessionId: string; client: AcpClient; done: Promise<void> } | null;
   initResult: InitializeResult | null;
 }
 
@@ -69,8 +80,10 @@ export function useAcpSession(cwd: string) {
     noProfile: false,
     unlisten: null,
     replaying: false,
+    turn: null,
     initResult: null,
   });
+  const dialogSeq = useRef(0);
   const permsRef = useRef<PendingPermission[]>([]);
   const asksRef = useRef<PendingAsk[]>([]);
   permsRef.current = permissions;
@@ -110,6 +123,7 @@ export function useAcpSession(cwd: string) {
     async (client: AcpClient, loadId: string | null, gen: number): Promise<boolean> => {
       const l = live.current;
       if (loadId) {
+        const previous = l.sessionId;
         l.sessionId = loadId;
         l.replaying = true;
         dispatch({ t: "session", sessionId: loadId, replaying: true });
@@ -125,11 +139,26 @@ export function useAcpSession(cwd: string) {
         } catch (e) {
           if (l.gen !== gen) return false;
           l.sessionId = null;
-          if (LEASE_PATTERN.test(errMessage(e))) {
+          if (isLeaseError(e)) {
             setFatal({ kind: "leased", sessionId: loadId });
           } else {
             dispatch({ t: "banner", level: "error", text: `Could not load the session: ${errMessage(e)}` });
           }
+          // Put the previous session back so the composer never points at a half-loaded one.
+          if (previous && previous !== loadId) {
+            l.sessionId = previous;
+            l.replaying = true;
+            dispatch({ t: "session", sessionId: previous, replaying: true });
+            try {
+              const r = await client.request<LoadSessionResult>("session/load", { sessionId: previous, cwd, mcpServers: [] });
+              if (l.gen === gen) dispatch({ t: "meta", modes: r?.modes, configOptions: r?.configOptions });
+              return false;
+            } catch {
+              if (l.gen !== gen) return false;
+              l.sessionId = null;
+            }
+          }
+          dispatch({ t: "sessionLost" });
           return false;
         } finally {
           l.replaying = false;
@@ -150,7 +179,7 @@ export function useAcpSession(cwd: string) {
         return true;
       } catch (e) {
         if (l.gen !== gen) return false;
-        if (LEASE_PATTERN.test(errMessage(e))) {
+        if (isLeaseError(e)) {
           dispatch({ t: "banner", level: "error", text: `The session is in use by another keryx: ${errMessage(e)}` });
         } else {
           dispatch({ t: "banner", level: "error", text: `Could not start a session: ${errMessage(e)}` });
@@ -181,6 +210,7 @@ export function useAcpSession(cwd: string) {
       l.initialized = false;
       l.noProfile = opts.noProfile;
       l.sessionId = null;
+      l.turn = null;
       setFatal(null);
       dispatch({ t: "phase", phase: "starting" });
       dispatch({ t: "clearBanners" });
@@ -193,12 +223,12 @@ export function useAcpSession(cwd: string) {
       client.onRequest = async (method, params) => {
         if (method === "session/request_permission") {
           return new Promise<unknown>((resolve) => {
-            setPermissions((q) => [...q, { req: params as PermissionRequest, resolve: resolve as (o: PermissionOutcome) => void }]);
+            setPermissions((q) => [...q, { id: ++dialogSeq.current, req: params as PermissionRequest, resolve: resolve as (o: PermissionOutcome) => void }]);
           }).then((outcome) => ({ outcome }));
         }
         if (method === "_keryx/ask_user") {
           return new Promise<unknown>((resolve) => {
-            setAsks((q) => [...q, { req: params as AskUserRequest, resolve: resolve as (r: AskUserResult) => void }]);
+            setAsks((q) => [...q, { id: ++dialogSeq.current, req: params as AskUserRequest, resolve: resolve as (r: AskUserResult) => void }]);
           });
         }
         throw new RpcError(-32601, `Method not found: ${method}`);
@@ -302,33 +332,43 @@ export function useAcpSession(cwd: string) {
 
   // ---- user actions -------------------------------------------------------
 
+  /** Starts a turn; returns true only when the prompt was accepted (the caller may then clear its draft). */
   const sendPrompt = useCallback(
-    async (text: string) => {
+    (text: string): boolean => {
       const l = live.current;
       const client = l.client;
       const sessionId = l.sessionId;
-      if (!client || !sessionId || state.busy || !text.trim()) return;
+      if (!client || !sessionId || l.turn || l.replaying || !l.initialized || !text.trim()) return false;
       dispatch({ t: "userSent", text });
       dispatch({ t: "busy", busy: true });
-      try {
-        const r = await client.request<{ stopReason?: string }>("session/prompt", {
-          sessionId,
-          prompt: [{ type: "text", text }],
-        });
-        if (r?.stopReason === "max_tokens") dispatch({ t: "notice", level: "warn", text: "Stopped: the model hit its token limit." });
-        else if (r?.stopReason === "max_turn_requests") dispatch({ t: "notice", level: "warn", text: "Stopped: too many model requests in one turn." });
-        else if (r?.stopReason === "refusal") dispatch({ t: "notice", level: "warn", text: "The model refused to continue." });
-        else if (r?.stopReason === "cancelled") dispatch({ t: "notice", level: "info", text: "Stopped." });
-      } catch (e) {
-        if (l.client === client) dispatch({ t: "notice", level: "error", text: errMessage(e) });
-      } finally {
-        if (l.client === client) {
-          dispatch({ t: "busy", busy: false });
-          void refreshSessions();
+      let done!: Promise<void>;
+      done = (async () => {
+        try {
+          const r = await client.request<{ stopReason?: string }>("session/prompt", {
+            sessionId,
+            prompt: [{ type: "text", text }],
+          });
+          // An old turn must not narrate into a session the user has since switched to.
+          if (l.sessionId !== sessionId) return;
+          if (r?.stopReason === "max_tokens") dispatch({ t: "notice", level: "warn", text: "Stopped: the model hit its token limit." });
+          else if (r?.stopReason === "max_turn_requests") dispatch({ t: "notice", level: "warn", text: "Stopped: too many model requests in one turn." });
+          else if (r?.stopReason === "refusal") dispatch({ t: "notice", level: "warn", text: "The model refused to continue." });
+          else if (r?.stopReason === "cancelled") dispatch({ t: "notice", level: "info", text: "Stopped." });
+        } catch (e) {
+          if (l.client === client && l.sessionId === sessionId) dispatch({ t: "notice", level: "error", text: errMessage(e) });
+        } finally {
+          if (l.turn?.done === done) l.turn = null;
+          // Only the session that owns this turn may clear its busy flag.
+          if (l.client === client && l.sessionId === sessionId) {
+            dispatch({ t: "busy", busy: false });
+            void refreshSessions();
+          }
         }
-      }
+      })();
+      l.turn = { sessionId, client, done };
+      return true;
     },
-    [state.busy, refreshSessions],
+    [refreshSessions],
   );
 
   const cancel = useCallback(() => {
@@ -338,26 +378,50 @@ export function useAcpSession(cwd: string) {
     cancelDialogs();
   }, [cancelDialogs]);
 
+  /** Cancel a running turn and wait for its prompt to settle. False when it did not settle in time. */
+  const settleTurn = useCallback(async (): Promise<boolean> => {
+    const l = live.current;
+    const turn = l.turn;
+    if (!turn) return true;
+    l.client?.notify("session/cancel", { sessionId: turn.sessionId });
+    cancelDialogs();
+    let timer = 0;
+    const timeout = new Promise<"timeout">((resolve) => {
+      timer = window.setTimeout(() => resolve("timeout"), 8000);
+    });
+    const outcome = await Promise.race([turn.done.then(() => "done" as const), timeout]);
+    window.clearTimeout(timer);
+    if (outcome === "timeout") {
+      dispatch({ t: "notice", level: "warn", text: "The current turn did not stop in time. Try again in a moment." });
+      return false;
+    }
+    return true;
+  }, [cancelDialogs]);
+
   const newSession = useCallback(async () => {
     const l = live.current;
     const client = l.client;
     if (!client || !l.initialized) return;
+    if (!(await settleTurn())) return;
+    if (l.client !== client) return;
     setFatal(null);
     dispatch({ t: "clearBanners" });
     await startSession(client, null, l.gen);
     void refreshSessions();
-  }, [startSession, refreshSessions]);
+  }, [startSession, refreshSessions, settleTurn]);
 
   const loadSession = useCallback(
     async (id: string) => {
       const l = live.current;
       const client = l.client;
-      if (!client || !l.initialized || state.busy || id === l.sessionId) return;
+      if (!client || !l.initialized || id === l.sessionId) return;
+      if (!(await settleTurn())) return;
+      if (l.client !== client) return;
       setFatal(null);
       dispatch({ t: "clearBanners" });
       await startSession(client, id, l.gen);
     },
-    [startSession, state.busy],
+    [startSession, settleTurn],
   );
 
   const setMode = useCallback(async (modeId: string) => {

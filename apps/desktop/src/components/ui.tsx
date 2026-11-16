@@ -7,13 +7,13 @@ const FOCUSABLE =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /** Traps Tab inside `ref`, focuses the first field (or `[data-autofocus]`), restores focus on unmount. */
-export function useFocusTrap(ref: React.RefObject<HTMLElement>, active = true) {
+export function useFocusTrap(ref: React.RefObject<HTMLElement>, active = true, focusRoot = false) {
   useEffect(() => {
     if (!active) return;
     const root = ref.current;
     if (!root) return;
     const before = document.activeElement as HTMLElement | null;
-    const target = root.querySelector<HTMLElement>("[data-autofocus]") ?? root.querySelector<HTMLElement>(FOCUSABLE);
+    const target = focusRoot ? null : (root.querySelector<HTMLElement>("[data-autofocus]") ?? root.querySelector<HTMLElement>(FOCUSABLE));
     (target ?? root).focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Tab") return;
@@ -34,7 +34,7 @@ export function useFocusTrap(ref: React.RefObject<HTMLElement>, active = true) {
       root.removeEventListener("keydown", onKey);
       if (before && document.contains(before)) before.focus();
     };
-  }, [ref, active]);
+  }, [ref, active, focusRoot]);
 }
 
 // Esc closes only the topmost layer: layers register on a stack in mount order.
@@ -82,15 +82,20 @@ interface DialogProps {
   width?: number;
   /** Esc is handled by the caller (permission dialogs answer instead of closing). */
   ownEscape?: boolean;
+  /** Focus the dialog container instead of a control, so a stray Enter cannot hit a default action. */
+  focusRoot?: boolean;
+  /** Key handling scoped to the dialog: only events whose target is inside it arrive here. */
+  onKeyDown?: (e: React.KeyboardEvent<HTMLDivElement>) => void;
 }
 
-export function Dialog({ title, icon, tone = "default", onClose, children, footer, width = 460, ownEscape }: DialogProps) {
+export function Dialog({ title, icon, tone = "default", onClose, children, footer, width = 460, ownEscape, focusRoot, onKeyDown }: DialogProps) {
   const ref = useRef<HTMLDivElement>(null);
   const id = useId();
-  useFocusTrap(ref);
+  useFocusTrap(ref, true, focusRoot);
   useEscape(ownEscape ? null : onClose);
   return (
-    <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose?.()}>
+    // The backdrop never dismisses (an accidental click must not decline a request) and never steals focus.
+    <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && e.preventDefault()}>
       <div
         ref={ref}
         className={`dialog tone-${tone}`}
@@ -99,6 +104,7 @@ export function Dialog({ title, icon, tone = "default", onClose, children, foote
         aria-labelledby={id}
         tabIndex={-1}
         style={{ width }}
+        onKeyDown={onKeyDown}
       >
         <header className="dialog-head">
           {icon ? (

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { AskUserResult, PermissionOption, PermissionOutcome, ToolKind } from "../acp/types";
 import type { Fatal, PendingAsk, PendingPermission } from "./useAcpSession";
 import { Icon, type IconName } from "../components/Icon";
@@ -14,6 +14,9 @@ export function defaultAllow(options: PermissionOption[]): PermissionOption | un
 export function defaultReject(options: PermissionOption[]): PermissionOption | undefined {
   return options.find((o) => o.kind === "reject_once") ?? options.find((o) => o.kind.startsWith("reject"));
 }
+
+/** Ignore Enter this long after the dialog appears: a keystroke aimed at the composer must not approve. */
+const ENTER_GUARD_MS = 300;
 
 const KIND_COPY: Partial<Record<ToolKind, { icon: IconName; verb: string }>> = {
   execute: { icon: "terminal", verb: "run a command" },
@@ -50,21 +53,21 @@ export function PermissionDialog({
   const once = options.filter((o) => o.kind === "allow_once" || o.kind === "reject_once");
   const always = options.filter((o) => o.kind === "allow_always" || o.kind === "reject_always");
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.isComposing) return;
-      const onButton = (e.target as HTMLElement | null)?.tagName === "BUTTON";
-      if (e.key === "Enter" && !onButton && allow) {
-        e.preventDefault();
-        onAnswer(pending, { outcome: "selected", optionId: allow.optionId });
-      } else if (e.key === "Escape") {
-        e.preventDefault();
-        onAnswer(pending, reject ? { outcome: "selected", optionId: reject.optionId } : { outcome: "cancelled" });
-      }
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [pending, allow, reject, onAnswer]);
+  // Enter/Esc act only on keys that start inside this dialog, never on text fields, and never right after it opens.
+  const openedAt = useRef(performance.now());
+  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.nativeEvent.isComposing || e.defaultPrevented) return;
+    const t = e.target as HTMLElement | null;
+    if (e.key === "Enter") {
+      if (!allow || e.repeat || performance.now() - openedAt.current < ENTER_GUARD_MS) return;
+      if (t?.closest('input, textarea, select, button, a, summary, [contenteditable=""], [contenteditable="true"]')) return;
+      e.preventDefault();
+      onAnswer(pending, { outcome: "selected", optionId: allow.optionId });
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      onAnswer(pending, reject ? { outcome: "selected", optionId: reject.optionId } : { outcome: "cancelled" });
+    }
+  };
 
   const tc = req.toolCall;
   const kind = (tc.kind ?? "other") as ToolKind;
@@ -92,6 +95,8 @@ export function PermissionDialog({
       tone={danger ? "danger" : "warn"}
       onClose={null}
       ownEscape
+      focusRoot
+      onKeyDown={onKeyDown}
       width={560}
       footer={
         <div className="approval-foot">
@@ -116,7 +121,7 @@ export function PermissionDialog({
             {once
               .filter((o) => o.kind === "allow_once")
               .map((o) => (
-                <button key={o.optionId} className={`btn ${danger ? "btn-danger" : "btn-primary"}`} onClick={() => answer(o)} data-autofocus={o === allow ? true : undefined}>
+                <button key={o.optionId} className={`btn ${danger ? "btn-danger" : "btn-primary"}`} onClick={() => answer(o)}>
                   {label(o)} <Kbd>↵</Kbd>
                 </button>
               ))}

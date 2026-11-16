@@ -17,7 +17,8 @@ interface Props {
   modes: SessionModeState | null;
   model: ConfigOption | undefined;
   sendKey: "enter" | "mod-enter";
-  onSend: (text: string) => void;
+  /** Returns true when the prompt was accepted; the draft is cleared only then. */
+  onSend: (text: string) => boolean;
   onStop: () => void;
   onMode: (id: string) => void;
   onModel: (configId: string, value: string) => void;
@@ -91,8 +92,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   const send = () => {
     const t = text.trim();
     if (!t || busy || disabled) return;
-    onSend(t);
-    setText("");
+    if (onSend(t)) setText("");
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
