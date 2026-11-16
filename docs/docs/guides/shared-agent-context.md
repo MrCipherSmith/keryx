@@ -39,10 +39,11 @@ SAC never blurs these three kinds:
 
 Work from a project cwd that already has `.metaproject/`. Identity is the local
 OS user (`user:local-<uid>`). There is no `--actor` flag; adapters pass
-`request: undefined`. There is **no session↔workspace auto-bind**: every later
-call takes an explicit `workspaceId`.
+`request: undefined`. There is **no session↔workspace auto-bind for CLI and MCP calls**: every later
+call takes an explicit `workspaceId` (the shell/goal path does bind, see
+[below](#autonomous-binding-on-an-action-intent-turn-slate-v2)).
 
-Discover the **full** surface with `keryx workspace --help`. `keryx commands`
+Discover the **full** surface with `keryx workspace help`. `keryx commands`
 intentionally omits this verb (Phase 1 local-CLI only).
 
 ```bash

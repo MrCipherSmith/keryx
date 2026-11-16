@@ -12,7 +12,7 @@ the [ACP client guide](acp-client.md).
 
 Everything on this page needs the external agent capability to be on, as for any
 [external child](../harness.md#external-children-a-vendor-cli-as-a-child-agent):
-`externalAgents.enabled: true` in your user config, and the agent's CLI (`claude`
+`keryx agents external enable` (it writes `externalAgents.enabled: true` to your user config and, in a project with a manifest, the `gdskills.external-agents` entry), and the agent's CLI (`claude`
 or `codex`) installed and logged in.
 
 ## Run it

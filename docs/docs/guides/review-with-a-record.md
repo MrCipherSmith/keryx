@@ -14,8 +14,8 @@ Every command below was executed; the output is from those runs.
 Standalone, or attached to a managed flow:
 
 ```bash
-keryx review start  --target branch --ref feature/example --reviewers a,b
-keryx review attach --flow 001 --target pull-request --ref 42
+keryx review start  --target branch --target-ref feature/example --reviewers a,b
+keryx review attach --flow 001 --target pr --target-ref 42
 ```
 
 A round runs the core reviewers and the ones the stack and the change call for. `review-clean-code` and `review-style` are off by default: `keryx review required` lists them as excluded with the reason, and `report.md` ends up with the line `опциональные роли не запускались: …`. Add `--style` to `review start` (or `review required`) to run both, or `--with-role <role>` for one; the choice is kept in the package's `round-roles.json`. A project switches any role off, or always on, under `reviewRoles` in `routing.config.json` (`disabled`, `enabled`). `--all` does not bring a switched-off role back.
@@ -23,47 +23,152 @@ A round runs the core reviewers and the ones the stack and the change call for. 
 The full surface:
 
 ```console
-$ keryx review
+$ keryx review --help
 Usage:
-  keryx review attach --flow <id> --target <kind> --ref <ref> [--head <sha>]
-                      [--reviewers a,b] [--report <path>]
-  keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
-                     [--memory-query "<query>"]
-  keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>]
-                      [--verifications <file|->] [--verification-mode off|annotate|filter]
-                      [--premises <file|->]...
-                      [--scope <scope.json>] [--refuted <file|->]
+  keryx review agents serve --project <dir> [--runs-root <dir>] --provider <id> --model <id>
+                        --config-dir <dir> --cost-mode cost-unknown --permission-mode trust
+  keryx review agents <start|plan|capabilities|status|spawn|wait|cancel|result> --run-dir <dir> ...
+  keryx review attach --flow <id> --target <kind> --target-ref <ref> [--head <sha>]
+                      [--reviewers a,b] [--report <path>] [--research <ledger.json>]
+                      [--automatic] [--no-prior-round | --prior <package|reviewId>]
+  keryx review start --target <kind> --target-ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
+                     [--research <ledger.json>] [--review-id <id>] [--memory-query "<query>"] [--automatic]
+                     [--graph-timeout <seconds>] [--unattended] [--host keryx-shell|claude-code|codex|other]
+                     [--no-prior-round | --prior <package|reviewId>] [--style] [--with-role <role>]  (writes <package>/round.json)
+  keryx review waive-mutation --package <dir> --reason "<why>"       (terminal; card review_waive_mutation)
+  keryx review override-reviewers --package <dir> --reason "<why>"   (terminal; card review_override_reviewers)
+  keryx review confirm-plan --package <dir>                          (terminal; card review_confirm_plan)
+  keryx review decide-premise --package <dir> --finding <id> --answer uphold|dismiss --reason "<why>"
+                                                                     (terminal; card review_decide_premise)
+  keryx review verify-run --package <dir> --finding <id> -- <command…>
+  keryx review ingest --report <path> [--flow <id>] --target-ref <ref> [--head <sha>]
+                      [--research <ledger.json>] [--review-id <id>] [--automatic]
+                      [--verifications <file|->] [--premises <file|->]... [--verification-mode off|annotate|filter]
+                      [--scope <scope.json>] [--blast-radius <blast-radius.json>]
+                      [--cross-family-review <file|->]
+                    [--refuted <file|->]
                       [--max-findings <n>] [--spent <usd>] [--spend-ceiling <usd>]
-                      [--parallel <n>] [--outstanding <n>]
+                      [--tokens-in <n>] [--tokens-out <n>]
+                      [--parallel <n>] [--outstanding <n>] [--graph-timeout <seconds>]
   keryx review scope [--ref <base>] [--diff <file|->] [--path a,b] [--context <n>]
                      [--json | --scoped-diff] [--append <file>]
+  keryx review slice [--ref <base>] [--diff <file|->] [--context <n>]
+                     [--max-bytes <n>] [--wave-bytes <n>] [--out <dir>] [--json]
+  keryx review mutate --test "<command>" --package <review-dir> [--worktree <dir>]
+                        [--spec <mutants.json>] [--timeout-ms <n>] [--scratch repo|tmp] [--no-bail] [--json]
+  keryx review context-collect --repo <owner/repo> --pr <n> --package <review-dir>
+                        [--self <login>] [--checks <gh-checks.json>] [--json]
+  keryx review severity-audit --package <review-dir> [--dry-run] [--json]
+  keryx review compare-reference --reference <report.md> --package <review-dir>
+                        [--input <dir>] [--json]
+  keryx review required [--mode all|diff] [--scope <scope.json>]
+                        [--operator-quote "<words>"] [--blast-radius <blast-radius.json>]
+                        [--depth auto|light|full] [--diff-lines <n>] [--all] [--gating]
+                        [--style] [--with-role <role>] [--package <review-dir>] [--json]
+  keryx review estimate --package <review-dir> [--manifest <slices/manifest.json>] [--json]
+  keryx review plan --target <pr-url|branch> [--ref <base>] [--head <sha>] [--host keryx-shell|claude-code|codex|other] [--memory-query "<query>"] [--unattended] [--json]
+  keryx review plan-eval --diff <file|base..head> [--findings <file>] [--roles a,b] [--json]
+  keryx review dispatch-check --payload <file|-> [--manifest <file>] [--package <dir>]
+                              [--max-bytes <n>] [--json]
+  keryx review retry-plan --manifest <file> --result <file|-> [--reviewer <id>]
+                          [--slices a,b] [--covered a,b] [--next-wave] [--package <dir>]
+                          [--state <file>] [--dry-run] [--json]
+  keryx review next --package <review-dir> [--reviewers a,b] [--apply] [--json]
+  keryx review ledger build <input-dir> [--package <review-dir>] [--mode all|diff]
+                            [--findings <file>] [--dispositions <file>] [--out <file>]
+                            [--dry-run] [--json]
+  keryx review run --autonomous --target pr --ref <pull request URL> [--budget-minutes N]
+  keryx review floor [--ref <base>] [--diff <file|->] [--context <n>]
+                     [--json] [--report-only]
+                     --ref WIDENS the diff to the MERGE BASE of HEAD and <base>,
   keryx review blast-radius [--ref <base> | --changed a,b] [--depth <n>] [--max-files <n>]
                             [--no-related-tests] [--final] [--previous <blast-radius.json>]
                             [--package <review-dir>] [--json | --brief] [--out <file>]
+  keryx review layers refresh --package <review-dir> [--head <sha>] [--base <ref>] [--write-wiki] [--force] [--json]
+  keryx review layers status  --package <review-dir> [--json]
+  keryx review layers block   --package <review-dir> --files a,b [--max-bytes <n>] [--force] [--json]
+  keryx review chunks plan|estimate|next|record|merge --package <review-dir>
+                      [--chunk <id>] [--status <s> | --result <file|->] [--mode automatic|interactive]
+                      [--answer yes|no --quote "<words>"] [--json]
+  keryx review coverage --package <review-dir> [--json]
   keryx review budget [--spent <usd>] [--ceiling <usd>]
                       [--reviewers a,b] [--parallel <n>] [--outstanding <n>] [--full]
+  keryx review tier [--scope <scope>] [--fix-attempt <n>] [--forced-strategy-change]
+                    [--findings <n>] [--diff-lines <n>]
+                    [--verifier execution|site-check|reasoning] [--security] [--premise]
+                    [--session-provider <id>] [--session-model <id>]
+                    [--catalog <file|->] [--json]
   keryx review comments collect --repo <owner/repo> --pr <n> --sha <head-sha>
                                 [--self <login>] [--round <n>]
                                 [--out <findings.json>] [--json] [--fixtures <dir>]
   keryx review comments reply --repo <owner/repo> --pr <n> --outcomes <file|->
-                              --review <review-id> --sha <head-sha> --final [--round <n>] [--dry-run]
+                              --sha <head-sha> --final [--result <file>] [--review <review-id>]
+                              [--round <n>] [--dry-run] [--self <login>]
                               [--max-replies <n>] [--max-sentences <n>] [--max-chars <n>]
-                              [--flow-link <url>] [--fixtures <dir>] [--allow-closed-pr]
+                              [--flow-link <url>] [--allow-closed-pr] [--fixtures <dir>]
+  keryx review ci-triage --run <id> [--job <name>] [--test <name>] [--repo <owner/repo>]
+                         [--model <jev-1.13|jev-latest>] [--fixtures <dir>] [--json]
+  keryx review conform --ref <doc> (--pr <n> | --report <dir> | --diff <ref>)
+                       [--repo <owner/repo>] [--explain] [--threshold <0..1>]
+                       [--model <jev-1.13|jev-latest>] [--fixtures <dir>] [--json]
+                       [--max-hunks <n>] [--max-hunk-calls <n>] [--detail]
+  keryx review jev-rules (--diff <ref> | --pr <n> | --scope <scope.json>)
+                         [--rules <paths>] [--max-calls <n>] [--threshold <0..1>]
+                         [--repo <owner/repo>] [--model <jev-1.13|jev-latest>]
+                         [--fixtures <dir>] [--json]
+  keryx review jev-risk (--diff <ref> | --pr <n> | --scope <scope.json>)
+                        [--max-calls <n>] [--threshold <0..1>]
+                        [--repo <owner/repo>] [--model <jev-1.13|jev-latest>]
+                        [--fixtures <dir>] [--json]
+  keryx review jev-scenarios (--diff <ref> | --pr <n> | --scope <scope.json>)
+                             [--max-calls <n>] [--threshold <0..1>]
+                             [--repo <owner/repo>] [--model <jev-1.13|jev-latest>]
+                             [--fixtures <dir>] [--json]
+  keryx review jev-docs (--diff <ref> | --pr <n>) [--max-calls <n>] [--threshold <0..1>]
+                        [--repo <owner/repo>] [--model <jev-1.13|jev-latest>]
+                        [--fixtures <dir>] [--include <glob>]... [--json]
+  keryx review jev-comments --pr <n> --repo <owner/repo>
+                            [--model <jev-1.13|jev-latest>] [--fixtures <dir>] [--json]
+  keryx review jev-contract (--diff <ref> | --pr <n>) [--flow <id>]
+                            [--max-calls <n>] [--threshold <0..1>]
+                            [--repo <owner/repo>] [--model <jev-1.13|jev-latest>]
+                            [--fixtures <dir>] [--json]
+  keryx review jev-triage --report <dir|findings.json>
+                          [--max-calls <n>] [--threshold <0..1>]
+                          [--model <jev-1.13|jev-latest>] [--fixtures <dir>] [--json]
+  keryx review jev-select (--diff <file|-> | --ref <base>) [--reviewers <file|->]
+                          [--skip-below <0..1>] [--max-calls <n>]
+                          [--model <jev-1.13|jev-latest>] [--fixtures <dir>]
+                          [--json] [--out <path>]
+  keryx review jev-profile [show] [--apply recommended|show] [--json]
+  keryx review jev-edit-guard --hook claude [--fixtures <dir>]
+  keryx review jev-edit-guard install | uninstall | status [--json]
+  keryx review bot run --pr <n> [--repo <owner/repo>] [--max-diff-bytes <n>]
+                       [--provider <id>] [--model <id>] [--fixtures <dir>] [--json]
+  keryx review bot post --pr <n> [--repo <owner/repo>] [--sha <head-sha>] [--review <id>]
+                        [--post] [--fixtures <dir>] [--json]
+  keryx review metrics [--json] [--refresh] [--fixtures <dir>]
+  keryx review learn --pr <n> [--dry-run] [--json]
+  keryx review learn --reviewer <id> [--dry-run] [--json]
   keryx review loop --flow <flow-id> [--task <Tn>]
   keryx review stack [--json]
+  keryx review reviewers [--json]
+  keryx review import --from <package-dir|tree> [--only <glob>]... [--dry-run] [--force] [--json]
   keryx review status <review-id-or-path>
+  keryx review report-parity <review-id-or-path>
+  keryx review verdict <review-id-or-path> [--raw <dir>] [--json]
+  keryx review readiness <review-id-or-path> [--json]
+  keryx review publish <review-id-or-path> [--event COMMENT|REQUEST_CHANGES|APPROVE]
+                       [--partial] [--yes]
   keryx review complete <review-id-or-path>
                         [--finding <id> --disposition <state> --evidence <text>]...
+                        [--waive-coverage "<operator quote>"] [--head <sha>]
+                        [--waive <item> "<operator quote>"]...
   keryx review lightweight
-
-An unrecognised option is REFUSED, not ignored.
-
-Modes:
-  attach-review, review-flow, ingest
 ```
 
-(The help also prints a paragraph on `scope` and one on verification; both are in
-the [CLI reference](../cli-reference.md#review).)
+(Abridged: the help also prints a paragraph on every verb. Per-verb detail is in the
+[CLI reference](../cli-reference.md#review).)
 
 ### Rounds, and why a second one gets its own directory
 
@@ -961,176 +1066,6 @@ errors) and the next step, prints a `[review-gate]` line in the pane, and contin
 up after 20 continues, or after three in a row that added no new artifact, and then reports the state
 instead of looping. Progress is judged on the first 2 048 entries of each tree it reads, so on a larger
 package the gate can give up early.
-
-## Verify the findings before you report them
-
-Wave C of a review used to be `review-strict`, which re-read the findings and
-adjusted their severity with no new evidence. It is gone, because that operation
-is measured to make accuracy worse: GPT-4 on GSM8K falls 95.5 → 91.5 → 89.0 across
-self-correction rounds, GPT-3.5 on CommonSenseQA falls 75.8 → 38.1 (Huang et al.,
-ICLR 2024, arXiv:2310.01798).
-
-`review-verifier` replaced it and **can only delete**. It checks a finding by
-running something that fails if the finding is real, and merges through:
-
-```bash
-keryx review ingest --report round7.md --ref round7 \
-  --verifications verifier-result.json \
-  --scope scope.json
-```
-
-The merge cannot raise a severity, add a finding, or rewrite one; a finding is
-never verified by the reviewer that raised it; and a verdict reached by reasoning
-alone is capped at `unverifiable`. The default mode is `annotate` — verdicts are
-recorded and **nothing is removed** — so the drop rate is a measured number before
-it costs a real finding. Every package's `scope.md` carries the stage counts:
-dropped by the pre-filter, refuted by the verifier, retained.
-
-## Ingest a report someone already wrote
-
-```bash
-keryx review ingest --target report --ref round6-review.md --report path/to/report.md
-```
-
-**The parser has a shape, and it will refuse rather than guess.** Two things
-that cost real time when they are learned the hard way:
-
-- A finding must be a `## F-nnn — title` heading with `severity: <level>` in its
-  block. A heading like `## F-040 (blocker) — …` is read as **prose**, and the
-  ingest reports success having recorded **zero findings** — a ten-finding
-  review stored as an empty package.
-- A `blocker` or `major` finding **without a `class_scope`** is refused. The
-  scope must name the sites and the enumeration method: *how* you established
-  that this is the whole class, not just the instance you happened to see.
-
-The second is the more useful constraint. It is the difference between "I found
-a bug here" and "I know where else this shape occurs, and here is how I looked."
-
-## Check where one stands
-
-```console
-$ keryx review status .metaproject/reviews/2026-08-03-ingest-round6-review-md/
-# managed review: 2026-08-03-ingest-round6-review-md
-
-mode: ingest
-status: draft
-target: report round6-review.md
-flow: none
-coverage: 1
-filter_stats: total=5 prefilter=2 low_confidence=not-measured refuted=1 scope_b=not-measured findings_cap=1 merged_duplicates=0 dismissed_by_round=not-measured retained=3
-  low_confidence: not measured — this pipeline has no confidence threshold …
-  scope_b: not measured — no blast-radius record reached this ingest …
-```
-
-`filter_stats` is what the round dropped, read back out of `manifest.json` — the
-same numbers `scope.md` shows a person, in a form something else can check.
-`not-measured` is not `0`: it means that stage did not run, and the reason is
-printed underneath. `status` exits **1** when the numbers do not add up (`total`
-minus the measured finding-stage drops and `merged_duplicates` must equal
-`retained`) or when a count is absent with no reason recorded, so a stage that
-starts dropping findings without counting them is caught on the next status call
-rather than a release later.
-
-`dropped_prefilter` counts diff material — whole files and change blocks removed
-before anyone read them — so it is deliberately not summed with the rest.
-
-## Complete it — and say what became of each finding
-
-```bash
-keryx review complete <review-id-or-path> \
-  --finding F-001 --disposition acted-on --evidence "closed by 380bf3b0" \
-  --finding F-002 --disposition dismissed-incorrect \
-    --evidence "ran the writer under umask 002; the mode is 0700"
-```
-
-Completion validates the package structurally — coverage, findings and
-decisions have to be present and consistent, so "reviewed" is a state something
-had to earn.
-
-The disposition triples are the half that was missing, and the cost of missing
-it is measurable: computed over every review package in this repository,
-precision came out at **53 / (53 + 0) = 100%** — not because the reviewers were
-right, but because nothing on disk could record a finding as *wrong*. Only
-`acted-on` and `dismissed-incorrect` say anything about accuracy; the other
-dismissals (`dismissed-wont-fix`, `dismissed-out-of-scope`,
-`dismissed-deprioritised`) say the finding was correct and not worth doing now.
-Everything except `unknown` must cite where the outcome is written down, and a
-recorded state and its citation cannot be overwritten by a later close.
-
-The same applies to what a round raised and then threw away — pass it at ingest
-rather than describing it in prose nobody can count:
-
-```bash
-keryx review ingest --report round7.md --ref round7 --refuted refuted.json
-```
-
-Closing with no dispositions is allowed. It leaves every finding reading
-`unknown`, which means "nobody wrote down what happened".
-
-### The one dismissal that teaches something
-
-`dismissed-incorrect` — and only that state — writes a note into
-`.metaproject/memory/review-notes/`, naming the finding, the reviewer, why it was
-dismissed, and the round and commit it came from:
-
-```console
-$ keryx review complete <path> --finding F-002 --disposition dismissed-incorrect \
-    --evidence "human: alice ran the writer under umask 002; the mode is 0700"
-review-note: 2026-08-03-round6#F-002 -> .metaproject/memory/review-notes/2026-08-03-round6__F-002.md (attested by human)
-```
-
-The other three dismissals write nothing, deliberately. They say the finding was
-*correct* and not worth doing now; feeding them into a learning signal teaches
-the reviewer to stop raising true findings, and in the resulting `SKILL.md` that
-is indistinguishable from having learned something real.
-
-A note needs somebody behind it. The evidence must name a human decision
-(`human: <who>`, `decided-by: <who>`) or the finding must carry an independent
-verifier's `refuted` verdict with a method and evidence — which is what an
-applied `--verification-mode filter` verdict already produces at ingest. Without
-either, the dismissal is still recorded in `findings.json` and no note is
-written:
-
-```console
-review-note NOT written for 2026-08-03-round6#F-009: no recorded human decision and no independent verifier `refuted` verdict …
-```
-
-That refusal is the point. An orchestrator that could file its own finding as its
-own error, teach a skill from it and move on would be grading its own work with
-nobody in the room.
-
-## Feed what you learned back
-
-```bash
-keryx memory ingest --from-review <path>
-keryx skills learn --from-review <path> --skill <module>/<skill>
-```
-
-This is the point of the whole exercise. A finding that changes nothing is a
-finding you will make again — and this repository has the receipts: six review
-rounds on one branch, twelve blockers, and every one of them the same mistake
-in a different place until it was written down as a
-[lesson](https://github.com/MrCipherSmith/keryx/blob/main/.metaproject/memory/lessons/branching-on-a-value-whose-domain-you-never-wrote-down.md).
-
-### And the comments other people left
-
-The commands above learn from *your own* review reports. The comments humans left
-on the pull request are a second source, and the project decides whose count:
-
-```bash
-keryx review learn --pr <n>
-keryx skills learn apply .metaproject/data/gdskills/proposals/<id>.json
-```
-
-`learn` reads the record `comments collect` already wrote — no second fetch — and
-keeps only the authors named in `.metaproject/review-learning.config.json`. A
-project without that file does not learn, and that is fine. Keryx ships no
-reviewer and no checklist: which reviewers teach a project, and what they teach,
-stays in that project.
-
-Seeding a local skill from conventions you already keep elsewhere is documented
-in [CLI reference › review learn](../cli-reference.md) — the content comes from
-your own copy, because keryx holds none.
 
 ## Verify
 

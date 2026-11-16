@@ -71,7 +71,10 @@ here has a ceiling of zero, which is a much stronger statement.
 
 ### Documentation links
 
-If you keep documentation in the repository:
+`bun run check:doc-links` is a script of the keryx repository itself; your repository
+does not have it. If you keep documentation in your repository, run a link checker of
+your own as a CI step (`keryx wiki check-links` checks only the links of keryx wiki
+pages). The keryx script, for reference:
 
 ```console
 $ bun run check:doc-links
