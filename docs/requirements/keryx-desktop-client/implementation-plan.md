@@ -1,11 +1,11 @@
 # Keryx Desktop Client — Implementation Plan
-Version: 0.1.0
+Version: 0.2.0
 
 ## Milestones
 
 | Milestone | Content | Status |
 |---|---|---|
-| M1 | `shell` profile (roster, modes, plan/usage/info updates, `_keryx/ask_user`, `_keryx/info`); Tauri client (chat, tools, approvals, modes, sessions, models, plan, usage, settings); sidecar; local `.dmg`; release workflow | in implementation |
+| M1 | `shell` profile (roster, modes, plan/usage/info updates, `_keryx/ask_user`, `_keryx/info`); Tauri client (chat, tools, approvals, modes, sessions, models, plan, usage, settings); sidecar; local `.dmg`; release workflow; Flows board ([flows-board.md](flows-board.md)); browser dev mode | implemented on the branch; owner acceptance pending (see README status) |
 | M2 | images (after flow 493), `spawn_subagent` + subagent inspector events, background task list/output/kill, rewind, compact, queue, sidebar cards, full slash-command set via `_keryx/command` | future |
 | M3 | remote-control and Hub toggles, Developer ID signing on, Homebrew cask, auto-update | future |
 

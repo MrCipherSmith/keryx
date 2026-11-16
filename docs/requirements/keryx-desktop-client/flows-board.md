@@ -1,5 +1,5 @@
 # Keryx Desktop Client — Flows Board
-Version: 0.1.0
+Version: 0.1.1
 
 Added to M1 at the owner's request on 2026-11-17: the desktop client needs a
 place to see and work with the project's flows, the way the Hub web has a
@@ -29,7 +29,8 @@ The Rust core reads, inside the open project only:
 `keryx flow status` has no JSON output, so the files are the source of
 truth. A flow directory whose `flow.json` fails to parse is shown as a
 broken card with the parse error, never dropped. The board refreshes when a
-`flow.json` changes (file watcher, 300 ms debounce) and on window focus.
+`flow.json` changes (a 2 s mtime poll in M1; a burst of writes inside one
+interval gives one event) and on window focus.
 
 ## 3. Board
 
@@ -62,10 +63,14 @@ only this allowlist and builds argv itself; no shell string is ever run.
 | Start | `flow start <id>` | none |
 | Block / Unblock | `flow block <id> --reason <r>` / `flow unblock <id>` | reason prompt |
 | Add task | `flow task add <id> --title <t> --kind <k>` | form |
-| Task attempt | `flow task attempt <id> <Tn> --outcome <o> --detail <d>` | form |
+| Task attempt | `flow task attempt <id> <Tn> --outcome <started\|failed\|blocked> --detail <d>` | form |
 | Task done | `flow task done <id> <Tn>` | none |
 | Freeze criteria | `flow freeze <id>` | confirm dialog |
 | Next task | `flow next <id> --json` (read-only) | none |
+
+Free-text arguments (reason, title, detail) must be non-empty, must not start
+with `-` (the CLI would read them as a flag), contain no NUL and stay within
+4000 characters; the form and the Rust core both check this.
 
 Not offered, with a "copy command" button instead: `complete`, `confirm`,
 `recover`, `implemented`, `ac update`, `ac reseal`. Their gates and
@@ -92,3 +97,9 @@ sends it; nothing is sent automatically.
 | FB2 | an action outside the allowlist is refused before any process starts | exec `cd apps/desktop/src-tauri && cargo test flows` |
 | FB3 | the board renders this repository's real flows by status lane | judged |
 | FB4 | Start / Block / task done round-trip through keryx and the board refreshes | judged |
+
+FB4 evidence so far (2026-11-17): every allowlisted argv ran against a scratch
+project with the worktree keryx (freeze, start, task add, task attempt, next,
+block, unblock, task done — all succeeded) and the Rust parser read the result
+(`in-progress`, 1/5 tasks). The same round-trip through the app's buttons has
+not been exercised.

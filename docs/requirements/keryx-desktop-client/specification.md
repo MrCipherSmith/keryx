@@ -1,5 +1,5 @@
 # Keryx Desktop Client — Specification
-Version: 0.1.0
+Version: 0.2.0
 
 ## 1. Identity
 
@@ -75,8 +75,9 @@ over ACP.
 
 `session/new`, `session/load` responses carry
 `modes: { currentModeId, availableModes: [{id:"ask"},{id:"trust"},{id:"auto"}] }`
-with names and descriptions. The initial mode is the project's stored
-default (`src/commands/permission-mode.ts`), else `ask`.
+with names and descriptions. The initial mode is the stored default the
+shell itself resolves — the user-global `permission-mode.json` read by the
+shell's mode chain, so a project cannot inject `auto` — else `ask`.
 
 `session/set_mode { sessionId, modeId }` switches the mode and emits
 `current_mode_update`. Semantics are the shell's (`.metaproject/wiki/architecture/permission-modes.md`):
@@ -142,6 +143,12 @@ Wire details the sections above left open, as built (`src/acp/server.ts`,
 - MCP: keryx's configured servers (one runtime per project root per
   connection) and the client's are merged into one `search_tool`/`use_tool`
   pair; a qualified name both provide keeps keryx's.
+- Tasks: the shell-task tools (`shell_task_output`/`wait`/`kill`) are offered
+  in M1 because `shell_exec` is supervised; the task *panel* is M2. Workspace,
+  Slate and working-memory tools are offered through the shell factory with
+  the session directory bound.
+- In auto mode an `ask_user` the model answers itself is reported to the
+  client as an `agent_message_chunk` with `_meta.keryx.selfAnsweredQuestion: true`.
 
 ## 4. Client side
 
@@ -149,15 +156,26 @@ Wire details the sections above left open, as built (`src/acp/server.ts`,
 
 | Module | Responsibility |
 |---|---|
-| `locator.rs` | resolve the keryx binary: bundled sidecar or `PATH` (`which keryx`), per settings |
-| `process.rs` | spawn `keryx acp --profile shell` with the project folder as cwd, a login-shell `PATH`, stdin/stdout piped, stderr to a rotating log; kill on window close |
+| `locator.rs` | resolve the keryx binary: bundled sidecar (`<dir of current_exe>/keryx`, i.e. `Keryx.app/Contents/MacOS/keryx`), `keryx` on the login-shell `PATH`, or an explicit path, per settings |
+| `shellenv.rs` | capture the login-shell environment once (`$SHELL -ilc 'env -0'`, 5 s timeout) so GUI-launched keryx sees `PATH` and provider keys from shell rc files |
+| `process.rs` | spawn `keryx acp --profile shell` in its own process group with the project folder as cwd; stop = close stdin, SIGTERM, wait 6.5 s, SIGKILL the group |
 | `framing.rs` | newline-delimited JSON framing; oversized-line guard (16 MiB) |
-| `bridge.rs` | Tauri commands `acp_start(cwd)`, `acp_send(message)`, `acp_stop()`; emits `acp://message` and `acp://exit` events per window |
-| `fs.rs` | answers `fs/read_text_file` inside the session cwd only; outside → JSON-RPC error |
-| `settings.rs` | JSON settings in the app config dir: keryx source, explicit binary path, recent projects |
-| `version.rs` | semver compare against the minimum keryx version the app declares |
+| `bridge.rs` | Tauri commands `acp_start(cwd)`, `acp_send(message)`, `acp_stop()`; per-window start lock; emits `acp://message` and `acp://exit` events per window; stops run off the UI thread |
+| `fs.rs` | answers `fs/read_text_file` on a worker thread inside the git toplevel of the opened folder (the same root keryx binds); 8 MiB cap; one error for every outside path. Defence in depth only — keryx's own tools never pass through it |
+| `settings.rs` | settings |
+| `version.rs` | semver compare against `MIN_KERYX_VERSION` (0.4.32) |
+| `flows/` | the Flows board backend ([flows-board.md](flows-board.md)) |
 
-`cargo test` covers framing, locator, fs confinement and version checks.
+`cargo test` covers framing, locator, fs confinement, process-group stop,
+version checks and the flows parsers and argv builder.
+
+### 4.1.1 Storage and config
+
+| Item | Location |
+|---|---|
+| Settings | `settings.json` in the Tauri app config dir (`~/Library/Application Support/dev.keryx.desktop/`): `keryxSource` (`bundled`, `path`, `custom`), `customPath`, `recentProjects`, `theme` |
+| keryx stderr log | the Tauri app log dir (`~/Library/Logs/dev.keryx.desktop/`), one file per window process |
+| Sessions, flows | keryx's own stores; the app keeps no copy |
 
 ### 4.2 Web view (`apps/desktop/src/`)
 
@@ -182,9 +200,14 @@ Wire details the sections above left open, as built (`src/acp/server.ts`,
 
 ## 5. Packaging and distribution
 
-- `scripts/desktop/build-sidecar.sh` compiles keryx with `bun build
-  --compile` (same entry and flags as `.github/workflows/release.yml`) into
-  `apps/desktop/src-tauri/binaries/keryx-<target-triple>`.
+- `scripts/desktop/build-sidecar.sh` runs `bun install --os='*' --cpu='*'`
+  and compiles keryx with `bun build --compile` (same entry and flags as
+  `.github/workflows/release.yml`) into
+  `apps/desktop/src-tauri/binaries/keryx-<target-triple>`. The compiled binary
+  keeps the gaps recorded in
+  [keryx-native-distribution](../keryx-native-distribution/README.md): three
+  optional-dependency imports (embedding, PII NER, injection detector) fall
+  back as in the released standalone binary.
 - `bun run desktop:build` (root script) builds the sidecar for the host arch,
   then `tauri build`, producing `Keryx.app` and `Keryx_<version>_<arch>.dmg`.
   The `.app` is ad-hoc signed.
@@ -196,8 +219,9 @@ Wire details the sections above left open, as built (`src/acp/server.ts`,
 ## 6. Integration points
 
 - `src/acp/server.ts` — profile switch, modes, new updates, `_keryx/*`.
-- `src/acp/roster.ts` — shell-profile roster builder.
-- `src/acp/permission.ts` — mode-aware gate.
+- `src/acp/profile.ts`, `src/acp/shell-roster.ts`, `src/acp/ask-user.ts` — new.
+- `src/acp/protocol.ts`, `src/acp/agent-io.ts`, `src/acp/session-mcp.ts` — extended.
+- `src/acp/permission.ts` — unchanged gate; the mode is supplied to the shell's own gate.
 - `src/commands/acp.ts` — `--profile` flag and help.
 - `src/commands/interactive-agent-tools.ts` — reused, not forked.
 - root `package.json` — `desktop:build` script.
@@ -207,7 +231,7 @@ Wire details the sections above left open, as built (`src/acp/server.ts`,
 | # | Criterion | Verification |
 |---|---|---|
 | AC1 | `--profile shell` roster equals `buildInteractiveAgentTools` output minus the M2 denials | exec `bun test src/acp/shell-profile.test.ts` |
-| AC2 | `editor` profile unchanged | invariant `bun test src/acp/` |
+| AC2 | `editor` profile unchanged | invariant `bun test src/acp/editor-profile-golden.test.ts` |
 | AC3 | modes advertised; `set_mode` changes gate behaviour per §3.4 | exec `bun test src/acp/shell-profile-modes.test.ts` |
 | AC4 | `plan`, `usage_update`, `session_info_update`, `current_mode_update` emitted | exec `bun test src/acp/shell-profile.test.ts` |
 | AC5 | `_keryx/ask_user` round trip; omitted without client capability | exec `bun test src/acp/shell-profile.test.ts` |

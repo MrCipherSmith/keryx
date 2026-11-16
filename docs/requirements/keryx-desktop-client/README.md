@@ -1,5 +1,5 @@
 # Keryx Desktop Client (macOS)
-Version: 0.1.1
+Version: 0.2.0
 
 ## Purpose
 
@@ -17,10 +17,16 @@ shell's own tool roster, permission modes and keryx extensions.
 
 ## Status
 
-**draft — M1 in implementation on `feat/desktop-client`.** Nothing in this
-package is claimed as shipped until the specification's acceptance criteria
-are checked against code. Current `keryx acp` behaviour described here is
-taken from `src/acp/*` on `origin/main` at 0.4.32.
+**M1 implemented on `feat/desktop-client`, not merged, owner acceptance
+pending.** AC1–AC10 and FB1–FB2 pass their commands (`bun test src/acp/`,
+`cargo test`, `bun run build`, `bun run desktop:build` producing an arm64
+`.dmg`). AC11 (a real turn with an approved `shell_exec` in the installed
+app) and FB3/FB4 through the app's buttons are judged criteria: the UI was
+exercised in the browser dev mode against a real `keryx acp`, and the
+bundled sidecar answered the shell-profile handshake, but no click-through of
+the installed `.app` has been done. M2 and M3 are not started. The legacy
+`keryx acp` behaviour this package started from is `src/acp/*` on
+`origin/main` at 0.4.32.
 
 ## Document Index
 
