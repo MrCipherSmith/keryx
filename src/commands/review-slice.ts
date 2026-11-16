@@ -28,7 +28,8 @@ import { defaultWaveBytes, detectReviewHost, HOST_WAVE_BYTES, parseReviewHost, R
 
 /** The diff-fetching and flag helpers `review.ts` owns, passed in so this file does not import its caller. */
 export type SliceDeps = {
-  gitDiff: (ref: string | undefined, contextLines: number) => Promise<string>;
+  /** `git diff <ref> [<head>]`: with a head the diff ends at that commit, never at the working tree. */
+  gitDiff: (ref: string | undefined, contextLines: number, head?: string) => Promise<string>;
   readDiffSource: (source: string) => Promise<string>;
   parseContextLines: (raw: string | undefined) => number;
   rejectUnknownFlags: (args: readonly string[], allowed: readonly string[], usage: string) => void;
@@ -216,6 +217,8 @@ export async function runSlice(args: string[], deps: SliceDeps): Promise<void> {
   const maxBytes = validateSliceMaxBytes(rawMax === undefined ? DEFAULT_SLICE_MAX_BYTES : Number(rawMax));
   const diffFile = placed("--diff");
   const ref = optionValue(args, "--ref") ?? optionValue(args, "--base");
+  // The commit the round reviews (`review plan --head`): the first-round diff ends there, as `review scope --head` does.
+  const pinnedHead = optionValue(args, "--head");
 
   // Flow 458: a package whose `review start` found a previous round of this target at an ancestor head slices only the
   // round's range (prevHead..head), then tags each slice fix or new. A first or fallback-first round is cut as before.
@@ -231,7 +234,7 @@ export async function runSlice(args: string[], deps: SliceDeps): Promise<void> {
     const cut = await deltaSliceDiff(delta, contextLines);
     if (cut.note !== undefined) console.error(cut.note);
     diff = cut.diff;
-  } else diff = await deps.gitDiff(ref, contextLines);
+  } else diff = await deps.gitDiff(ref, contextLines, pinnedHead);
   const hostArg = optionValue(args, "--host");
   const host = hostArg === undefined ? detectReviewHost() : parseReviewHost(hostArg);
   if (host === undefined) throw new Error(`--host must be one of ${REVIEW_HOSTS.join(", ")}, got "${hostArg}"`);
@@ -240,7 +243,7 @@ export async function runSlice(args: string[], deps: SliceDeps): Promise<void> {
   const scopeConfig = { contextLines, ...(await commentRuleScopeConfig(process.cwd())) };
   const source = sliceSourceFromDiff(diff, scopeConfig);
   // Routing: each slice gets the roles its content needs and a depth by risk; the manifest carries both.
-  const head = optionValue(args, "--head") ?? delta?.range.head ?? (await currentHead()) ?? "no-head";
+  const head = pinnedHead ?? delta?.range.head ?? (await currentHead()) ?? "no-head";
   const reachFile = placed("--reach");
   const jevFile = placed("--jev-scores");
   const routing: RoutingOptions = {
