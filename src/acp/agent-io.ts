@@ -83,6 +83,28 @@ const TOOL_KIND_BY_NAME: Readonly<Record<string, AcpToolKind>> = {
   // The client's own MCP servers (flow 287).
   search_tool: "search",
   use_tool: "execute",
+  // `keryx acp --profile shell` (Keryx Desktop Client M1): the rest of keryx shell's roster.
+  shell_task_output: "read",
+  shell_task_wait: "read",
+  shell_task_kill: "execute",
+  shell_job_output: "read",
+  shell_job_kill: "execute",
+  workspace_overview: "read",
+  workspace_read: "read",
+  workspace_list: "read",
+  workspace_show: "read",
+  workspace_create: "edit",
+  workspace_propose: "edit",
+  ask_user: "think",
+  slate_read: "read",
+  slate_write_seed: "edit",
+  slate_note: "edit",
+  slate_trail: "read",
+  recall_step: "read",
+  history_search: "search",
+  plan_get: "think",
+  plan_set: "think",
+  plan_update: "think",
 };
 
 /**

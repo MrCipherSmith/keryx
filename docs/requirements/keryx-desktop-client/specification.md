@@ -112,6 +112,37 @@ the model as a declined question.
 M1 keeps `/help`, `/model`, `/reasoning`, `/status` and adds `/mode
 <ask|trust|auto>` (same effect as `session/set_mode`). The full shell set is M2.
 
+### 3.8 Amendments from the M1 implementation
+
+Wire details the sections above left open, as built (`src/acp/server.ts`,
+`src/acp/profile.ts`, `src/acp/ask-user.ts`, `src/acp/shell-roster.ts`):
+
+- `initialize._meta.keryx` is sent in the `shell` profile only, so the
+  `editor` answer stays byte-for-byte unchanged; `_keryx/info` answers in both.
+- The auto-approval mark is a `tool_call_update` (status `in_progress`) on the
+  call's own `toolCallId`, sent after the `tool_call` announcement and before
+  the result: the gate runs after the call is announced.
+- `usage_update` keeps ACP's required `used`/`size` (`used` = the model call's
+  input + output tokens, `size` = the context window, `0` when unknown); the
+  §3.5 totals ride in `_meta.keryx = { call, turn, session }`, each
+  `{ inputTokens, outputTokens }`.
+- `session_info_update` is sent after `session/new`/`session/load` with the
+  stored title, and after a turn whose persistence changed it.
+- `plan` entries carry keryx's own item id and status in `_meta.keryx`
+  (`proposed`/`blocked` map to `pending`, `skipped` to `completed`); the plan is
+  re-sent after `session/load`.
+- `_keryx/ask_user` sends the recommended label, `allowFreeform`,
+  `irreversible` and `untrustedContent` in `_meta.keryx`. An answer equal to an
+  option label (or id) picks it; any other text is the person's own answer.
+- `session/set_mode` answers `{}` and sends `current_mode_update` after the
+  reply. The mode is not written back as the project default.
+- Untrusted tools are offered: `shell-profile.test.ts` (AC7) drives an
+  untrusted MCP `use_tool` result and the gated `shell_exec` after it over the
+  real pipe — the same `untrusted` result flag `web_fetch`/`web_search` set.
+- MCP: keryx's configured servers (one runtime per project root per
+  connection) and the client's are merged into one `search_tool`/`use_tool`
+  pair; a qualified name both provide keeps keryx's.
+
 ## 4. Client side
 
 ### 4.1 Rust core (`apps/desktop/src-tauri/src/`)

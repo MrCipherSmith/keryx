@@ -410,8 +410,51 @@ its stdin/stdout — newline-delimited JSON-RPC 2.0 in both directions, no
 interactively; the client owns the process's lifetime and the conversation.
 
 ```
-keryx acp [--provider <p> --model <m>] [--base-url <url>] [--data-dir <dir>]
+keryx acp [--profile editor|shell] [--provider <p> --model <m>] [--base-url <url>] [--data-dir <dir>]
 ```
+
+**Profiles.** `--profile` picks what the connection offers. `editor` (the
+default) is everything the rest of this section describes, unchanged. `shell`
+is what the keryx desktop app launches, and is open to any ACP client:
+
+- **Tools:** the roster `keryx shell` builds, from the same factory, minus
+  `spawn_subagent` and the bus, scheduling and operator-confirm tools — so
+  `web_fetch`/`web_search`, background shell tasks (`shell_task_*`), the
+  execution-plan tools, workspace and Slate tools, and one `search_tool`/
+  `use_tool` pair over keryx's own configured MCP servers merged with the
+  client's `mcpServers` (a server name both define keeps keryx's). Each session
+  has its own shell-task supervisor; every task it started is killed when the
+  connection ends. `read_file` still goes through the client's
+  `fs/read_text_file` when the client advertises it.
+- **`ask_user`:** offered only when the client sends
+  `clientCapabilities._meta.keryx.askUser: true` at `initialize`. keryx then
+  asks with the agent → client request `_keryx/ask_user`
+  (`{sessionId, question, options: [{label, description}], multiSelect: false}`,
+  extras such as the recommended label in `_meta.keryx`); the client answers
+  `{outcome: "answered", answers: ["<label or free text>"]}` or
+  `{outcome: "cancelled"}`. A cancel, an error or a cancelled turn reaches the
+  model as a declined question.
+- **Permission modes:** `session/new` and `session/load` return
+  `modes: {currentModeId, availableModes}` with `ask`, `trust` and `auto` —
+  the shell's own modes and gate. A session starts in the project's saved
+  default mode, else `ask`; `session/set_mode {sessionId, modeId}` or
+  `/mode <ask|trust|auto>` switches it from the next tool call and sends
+  `current_mode_update`. A call a mode let run unasked gets a
+  `tool_call_update` with `_meta.keryx.autoApproved: true` on its own id;
+  escalated calls (destructive in `trust`, credential-touching in every mode,
+  anything after untrusted content entered the turn) are still asked and never
+  offered `allow_always`. The mode is not saved.
+- **Session updates:** `plan` when the execution plan changes (and on
+  `session/load`), `usage_update` after every model call (`used`/`size` per
+  ACP, plus `_meta.keryx.call`/`turn`/`session` input and output token
+  totals), and `session_info_update` with the session title.
+- **Discovery:** `initialize` carries `_meta.keryx = {profile, profiles,
+  extensions}` in this profile; `_keryx/info` answers
+  `{version, profile, profiles, extensions}` in either profile, and
+  `agentInfo.version` is the keryx version.
+
+Any other value of `--profile` is a usage error: keryx exits with status 2
+before reading stdin.
 
 **Provider and model.** With no flags, `keryx acp` uses the provider and model
 `keryx shell` would start with in the same place — it calls the shell's own
