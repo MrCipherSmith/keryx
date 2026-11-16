@@ -315,6 +315,15 @@ export async function updateCommand(args: string[] = []): Promise<void> {
     }
   }
 
+  if (summary.routingBlocked !== undefined) {
+    heading("Routing entrypoint not updated");
+    note("Rules, skills and the other service files were updated. Only index.md and routing.md were left as they are:");
+    // The shared refusal opens with "published nothing", which is no longer
+    // true here: keep its per-target lines and the two resolution flags only.
+    console.log(summary.routingBlocked.split("\n").slice(1).join("\n"));
+    process.exitCode = 1;
+  }
+
   await offerStaleWorktreePrune(projectRoot, options);
 
   const steps: string[] = [];
@@ -390,6 +399,8 @@ async function offerStaleWorktreePrune(projectRoot: string, options: UpdateOptio
 }
 
 type RefreshSummary = {
+  /** Set when index.md/routing.md diverged and were not published; everything else was. */
+  routingBlocked?: string;
   modules: {
     gdgraph: boolean;
     gdctx: boolean;
@@ -587,32 +598,41 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
   // The pair and the rules README go out under one plan, one lock and one
   // journal: an interrupted update resumes from the durable record of which
   // steps had begun instead of being merely repeatable from the top.
-  await writeRoutingEntrypointPair(
-    metaprojectRoot,
-    {
-      enableGdgraph,
-      enableGdctx,
-      enableGdwiki,
-      enableGdskills,
-      enableHealth,
-      enableTesting,
-      enableMemory,
-      enableTasks,
-      enableSecurity,
-      ruleSources,
-      hasDistilledEntrypoints: await hasDistilledEntrypoints(metaprojectRoot),
-    },
-    {
-      intent: "update",
-      steps: [rulesReadmeStep(metaprojectRoot, "managed")],
-      ...(options.resolution === undefined ? {} : { resolution: options.resolution }),
-      onNotice: (line) => {
-        if (line.trim().length > 0) {
-          console.log(`  ${line}`);
-        }
+  // A diverged index.md/routing.md (the owner edited them) blocks only the
+  // routing pair. Rules, skills and every other service file still install:
+  // stopping the whole update here left projects on the previous rule set.
+  let routingBlocked: string | undefined;
+  try {
+    await writeRoutingEntrypointPair(
+      metaprojectRoot,
+      {
+        enableGdgraph,
+        enableGdctx,
+        enableGdwiki,
+        enableGdskills,
+        enableHealth,
+        enableTesting,
+        enableMemory,
+        enableTasks,
+        enableSecurity,
+        ruleSources,
+        hasDistilledEntrypoints: await hasDistilledEntrypoints(metaprojectRoot),
       },
-    },
-  );
+      {
+        intent: "update",
+        steps: [rulesReadmeStep(metaprojectRoot, "managed")],
+        ...(options.resolution === undefined ? {} : { resolution: options.resolution }),
+        onNotice: (line) => {
+          if (line.trim().length > 0) {
+            console.log(`  ${line}`);
+          }
+        },
+      },
+    );
+  } catch (error) {
+    if (!(error instanceof InstallPlanBlockedError)) throw error;
+    routingBlocked = error.message;
+  }
   console.log(`  ${await describeModelChoiceStatus(projectRoot)}`);
   await writeTextIfChanged(
     path.join(metaprojectRoot, "keryx-dashboard.html"),
@@ -835,6 +855,7 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
     entrypointNotices,
     backfilledTasks: backfillTasks,
     recoveredManifest,
+    ...(routingBlocked === undefined ? {} : { routingBlocked }),
   };
 }
 
