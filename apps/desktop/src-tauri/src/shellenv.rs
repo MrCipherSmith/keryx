@@ -107,12 +107,20 @@ mod tests {
         assert!(capture_login_env("/definitely/not/a/shell", Duration::from_secs(1)).is_none());
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_shell_that_hangs_is_abandoned_at_the_timeout() {
-        // `sh -ilc` runs the printf then `env -0`; a shell that sleeps never answers.
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let shell = dir.path().join("hanging-shell");
+        // Ignores its arguments and really sleeps, so only the timeout ends it.
+        std::fs::write(&shell, "#!/bin/sh\nexec /bin/sleep 30\n").unwrap();
+        std::fs::set_permissions(&shell, std::fs::Permissions::from_mode(0o755)).unwrap();
         let start = std::time::Instant::now();
-        let got = capture_login_env("/bin/sleep", Duration::from_millis(300));
+        let got = capture_login_env(shell.to_str().unwrap(), Duration::from_millis(300));
+        let took = start.elapsed();
         assert!(got.is_none());
-        assert!(start.elapsed() < Duration::from_secs(4));
+        assert!(took >= Duration::from_millis(300), "returned before the timeout: {took:?}");
+        assert!(took < Duration::from_secs(4), "the hung shell was not killed: {took:?}");
     }
 }
