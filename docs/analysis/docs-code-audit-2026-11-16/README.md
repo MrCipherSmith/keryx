@@ -9,7 +9,7 @@
 | README, ч.1 | `README.md:1–602` | 9 |
 | README, ч.2 | `README.md:603–1246`, `action.yml`, `package.json` | 14 |
 | CHANGELOG | `[Unreleased]`, 0.4.20–0.4.31 + структура всего файла | 14 |
-| docs/docs | 19 страниц верхнего уровня + `mkdocs.yml` | 27 |
+| docs/docs | 19 страниц верхнего уровня + `mkdocs.yml` | 26 (+1 снята) |
 | Гайды | `docs/docs/guides/*.md` (30) | 17 |
 | Инструкции агентов | `CLAUDE.md`, `AGENTS.md`, `CONTRIBUTING.md`, `.metaproject/{index,routing,README}.md`, `llms.txt`, `modules/*`, `rules/*`, `skills/catalog.md`, `data/testing/context.md` | 15 |
 
@@ -21,7 +21,14 @@
 - `agent-catalogue-xref`, `enforcement-claims`, `cli-docs-structure` проходят.
 - Управляемые блоки `keryx:index` в `CLAUDE.md`/`AGENTS.md` байт-в-байт совпадают с генератором; все пути SKILL.md в `catalog.md` существуют.
 
-Поэтому все находки ниже — смысловые: документ описывает поведение, которого в коде нет (или оно другое). Находки, отмеченные ✔, перепроверены вручную после агентов; остальные подкреплены ссылкой на код агентом-аудитором.
+Поэтому все находки ниже — смысловые: документ описывает поведение, которого в коде нет (или оно другое).
+
+**Верификация.** Находки собраны шестью параллельными аудиторами, затем **каждая перепроверена вручную** (запуск команды или чтение кода по указанной строке). Итог: 95 из 96 подтверждены, 1 снята как ложная, у нескольких уточнены номера строк и формулировки:
+
+- Снята: «`architecture.md:248` / `harness.md:478` — no shipped path registers a tool». Фраза про durable `ToolRegistry` у `harness run`/`serve` верна (`src/commands/harness.ts:553`, `src/lib/serve-turn.ts:778` — пустой реестр); scheduled-задачи и ACP используют другую систему (`InteractiveTool`). Устарели только номера строк — учтено в P2.
+- Уточнены: состав скрытых подкоманд в `--help`, версия, под которой описаны rules-PR, «supervision unbuilt», неполнота `keryx commands`, номера строк README/run-in-ci.
+
+Значок ✔ ниже оставлен у находок, проверенных ещё в первом проходе; остальные проверены во втором.
 
 ## Сводка по приоритету
 
@@ -33,7 +40,7 @@
 | 2 ✔ | `.metaproject/index.md:14` (генератор `src/lib/templates.ts:401`) | «current work state → `keryx flow status`» | Без id: «Missing flow id», exit 1. Нужно `keryx flow list` → `flow status <id>`. |
 | 3 ✔ | `.metaproject/README.md:23` (`templates.ts:1930`) | `keryx gdgraph query "module pipelines"` | `query` принимает только `cycles`/`orphans`; для поиска — `gdgraph find`. |
 | 4 ✔ | `CHANGELOG.md:131` | Upgrade note: `serve --models` | `Unknown option: --models`; флаг у `keryx hub machine configure --models`. |
-| 5 | `README.md:576`, `README.md:1047` | codex write: «0.159.2 up to 0.160.0» / «refused when older than 0.159.0» | `dispatch.ts:104`: `min 0.159.2, before 0.160.0, exact [0.164.0]`. |
+| 5 | `README.md:576`, `README.md:1050` | codex write: «0.159.2 up to 0.160.0» / «refused when older than 0.159.0» | `dispatch.ts:104`: `min 0.159.2, before 0.160.0, exact [0.164.0]`. |
 | 6 | `action.yml` vs `README.md:1172–1185` | README описывает только `model-api-key`, `max-diff-bytes`, `post` | Есть `api-key-env` (default `ANTHROPIC_API_KEY`), `provider`, `model`, `github-token`, `keryx-version`. С не-Anthropic ключом action без `api-key-env` не заработает. |
 | 7 | `docs/docs/hooks.md:104–106` | пример: проектный файл отключает `keryx.ctx-guard` | Проект не может выключить встроенный гейт (`src/harness/hooks/config.ts` ~455), user-scope требует ключ `acknowledge`. |
 | 8 | `modules/tasks.md:29` (`src/flow/templates.ts:124`) | `keryx flow block|unblock <id>` | `block` требует `--reason "<why>"` (`src/commands/flow.ts:1607`). |
@@ -46,9 +53,8 @@
 - `README.md:509–510`: shell/деструктивные действия «default-deny». Интерактивный shell — `ask` (`profiles.ts:121–128`), `harness exec` — `allow`; deny только в read-only профиле.
 - `README.md:573`: «писать могут только `claude-cli` и `codex-cli`». ACP-агент `gemini-acp` пишет в worktree (`registry.ts:102–118`).
 - `README.md:582–584`: JSONL/RPC как одна из «четырёх дверей». `runViaRpc` вызывается только из тестов, нет ни CLI-глагола, ни экспорта из пакета.
-- `architecture.md:248`, `harness.md:478`: «No shipped path registers a tool». Регистрируют scheduled-задачи (`trigger-agent-task.ts:45`) и ACP (`src/acp/roster.ts:37`); `limitations.md:114,215` противоречит.
-- `harness.md:18`: shell — «TUI on the same tool registry». `architecture.md:235–246` прямо говорит, что это две системы (`ToolRegistry` vs `InteractiveTool`).
-- ✔ `architecture.md:675` (и `:319`): внешний рантайм «never run against a real process, supervision is unbuilt». Есть `fixtures/external/live/*` и `src/harness/external/supervise.ts`; `harness.md:190` называет прогоны live-verified.
+- `harness.md:18` и `README.md:584`: shell — «on the same tool registry». `architecture.md:235–246` прямо говорит, что это две системы (`ToolRegistry` vs `InteractiveTool`), и интерактивная живёт в `src/harness/tool/builtin/interactive-tools.ts:77`.
+- `architecture.md:675` (и `:319`): внешний рантайм «no part of it has been run against a real `codex` or `claude` process». Есть `fixtures/external/live/{antigravity-cli,claude-cli,codex-cli}`; `harness.md:190` и `README.md:1050` называют прогоны live-verified. (Вторая половина — «нет live-вида работающего внешнего ребёнка» — верна: `supervise.ts` — это запуск процесса, а не стрим в родителя.)
 - `limitations.md:18, 48–60`: «модель нужна только пяти командам». Ещё — все `review jev-*`, `learn probe`, `skills judge-check`, `flow check-ac`, `harness run`, `keryx shell`.
 
 **MCP**
@@ -64,15 +70,15 @@
 **Jev / review / external**
 
 - `README.md:1018–1025`: EDIT GUARD «молчит, пока не включишь». По умолчанию включён, если `/external` on и Jev-креды есть (`jev-edit-guard-config.ts:47–62`); `README.md:1007` противоречит. **Баг в коде:** `handleInstall` (`review-jev-edit-guard.ts:343`) зовёт `readJevEditGuardEnabled` без `jevAvailable` и всегда печатает устаревшее «will stay silent».
-- `README.md:1163`: `review complete` с waivers только через карточку/терминал. Принимает `--answered-by/--answer-text/--question-text` без TTY (`review.ts:605, 4939`).
+- `README.md:1189`: `review complete` с waivers только через карточку/терминал. Принимает `--answered-by/--answer-text/--question-text` без TTY (`review.ts:605, 4939`).
 - `README.md:916–950` `/external`: в дефолтном блок-листе нет `antigravity-cli`; не упомянута третья точка проверки (`src/capability/external-agents.ts:335`).
-- `README.md:1043, 871`: domain allowlist «macOS-only». На Linux есть `allowlist` для scheduled agent-task (`trigger/config.ts:147`); macOS-only — только `harness exec --allowed-domains`.
-- `README.md:1037`: «Remote approvals need a tool registry» читается как «удалённо инструменты нельзя»; верно только для голого `/v1/turns`.
+- `README.md:1046, 897`: domain allowlist «macOS-only». На Linux есть `allowlist` для scheduled agent-task (`trigger/config.ts:147`); macOS-only — только `harness exec --allowed-domains`.
+- `README.md:1045`: «Remote approvals need a tool registry» читается как «удалённо инструменты нельзя»; верно только для голого `/v1/turns`.
 
 **Инструкции агентов**
 
 - `CLAUDE.md` «Claude-only rules … deliberately absent from AGENTS.md», но `rules/claude-md.md:24–37` копирует их, а `routing.md:27,78` велит всем агентам грузить `rules/` — Codex их подхватит. Чинить в `renderImportedAgentRules` (`src/lib/templates.ts:1777`).
-- `routing.md:99`: «`keryx --help` for the full CLI surface» — не показывает `ctx rg`, `gdgraph find`, `test related`, `wiki ask`…; полный список даёт `keryx commands`.
+- `routing.md:99`: «`keryx --help` for the full CLI surface» — не показывает `ctx rg`, `gdgraph find`, `test related`, `wiki ask`. `keryx commands` тоже неполон (из этих четырёх есть только `ctx rg`); полный список сейчас только в `docs/docs/cli-reference.md`.
 
 **Архитектурные описания**
 
@@ -90,11 +96,11 @@
 - ✔ Второй `## [Unreleased]` на `CHANGELOG.md:1170` — дубль трёх `Fixed`-пунктов из 0.4.20 (PR #1150).
 - `CHANGELOG.md:15` (0.4.30): «Each core rule now ends with `Review severities` … CLI design». ✔ В `cli-interface-design.mdc` таблицы нет; ~20 core-правил без неё.
 - `CHANGELOG.md:22`: «quick start in the desktop app» — десктоп-приложения нет; это Hub web «New task» + TUI `/task` (PR #1179).
-- Не отражены релизами 0.4.29/0.4.30: PR #1178, #1180–#1183, #1185–#1188, #1190, #1191 (правила; #1186 — резолвер контекста грузит stack и условные core-правила — user-visible), `bench setup --cases`.
+- PR #1178, #1180–#1183, #1185–#1187 вошли в 0.4.29 (предки `fb3a661a`), но запись 0.4.29 о них молчит; часть этой работы суммарно описана под 0.4.30 («One rule per topic…») без ссылок на PR — то есть не под той версией. #1188, #1190, #1191 и `bench setup --cases` (0.4.30) не упомянуты вовсе.
 
 **Ошибка в коде, найденная через документацию**
 
-- ✔ `keryx mcp --help` (и `test`/`memory`/`wiki --help`) печатает запасную справку из `src/cli-registry.ts:406` — только retired `mcp serve`/`install`; не видно `add/list/doctor/auth`, `test suggest`, `memory reflect`, `wiki enrich`. Полная страница в `src/commands/mcp.ts:141` не используется. Голый `keryx mcp` запускает deprecated `mcp serve`.
+- ✔ `keryx mcp --help` (и `test`, `wiki`, `update`, `workspace --help`) печатает запасную справку из `src/cli-registry.ts:406` — у `mcp` только retired `serve`/`install`; не видно `add/list/doctor/auth`, `test suggest`, `wiki enrich/freshness/…`, `update --no-tasks/--yes`, большей части `workspace`. (`memory --help` при этом `reflect` показывает.) Полная страница в `src/commands/mcp.ts:141` не используется. Голый `keryx mcp` запускает deprecated `mcp serve`.
 
 ### P2 — неполнота, устаревшие числа, косметика
 
@@ -104,7 +110,7 @@
 - `README.md:925`: `conform`, `ci-triage`, `jev-select` как top-level команды — реально `/conform`, `review ci-triage`, `review jev-select`.
 - `README.md:413`: `/session-info` и `/info` «не алиасы» — их просто нет.
 - `README.md:139`: `keryx sessions list` не переключает сессию — для этого `keryx shell -r <id>`.
-- `README.md:1225`: якорь с em-dash не резолвится на GitHub (`--` в slug).
+- `README.md:994`: якорь с em-dash не резолвится на GitHub (`--` в slug).
 - `mkdocs.yml:14`: «page missing from nav fails --strict» — неверно без `validation.nav.omitted_files`; вне nav: `jev-in-review.md`, `shell-preservation.md`, `shell-recovery.md`.
 - `architecture.md`: съехавшие ссылки на строки (`harness.ts:247→297`, `serve-turn.ts:313→481`, `guard.ts:304→411`), «reviewed for 0.2.157», quality gate без lint, `InteractiveTool` переехал в `src/harness/tool/builtin/interactive-tools.ts`, `allowAutoAccept` теперь читается, memory artifacts больше не коммитятся, `@opentui/core` тоже optional.
 - `modules.md:177`: таблица `wiki` без `freshness/refresh/verify/migrate-markers/sections/enrich/history/restore`; `learning.md:70` без `learn probe`; `update --help` не показывает `--no-tasks/--force/--yes/--keep-existing`.
@@ -123,7 +129,7 @@
 | G2 | `acp-client.md:49`, `external-agent-write.md:13` | включается `externalAgents.enabled: true` в user config | В проекте с `metaproject.json` нужен ещё `gdskills.external-agents.enabled: true` (`src/capability/external-agents.ts:457`); `keryx update` пишет `false`. Правильный шаг — `keryx agents external enable`. |
 | G3 ✔ | `review-arbiter.md:183` | `bun test src/review/arbiter-eval.test.ts` | Файла нет; тест — `src/commands/review-arbiter-eval.test.ts`. |
 | G4 | `review-as-a-pr-bot.md:149` | `keryx review complete --finding <id> --disposition <state>` | Обязателен `<review-id-or-path>`, `--evidence` идёт с каждым finding. |
-| G5 | `run-in-ci.md:152` | `bun run check:doc-links` как гейт для пользовательского репо | Это скрипт репозитория keryx, у пользователя его нет. |
+| G5 | `run-in-ci.md:77` | `bun run check:doc-links` как гейт для пользовательского репо | Это скрипт репозитория keryx, у пользователя его нет. |
 
 **P1**
 
