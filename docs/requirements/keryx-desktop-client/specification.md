@@ -463,6 +463,39 @@ version checks and the flows parsers and argv builder.
 `{ fs: { readTextFile: true, writeTextFile: false }, terminal: false,
   _meta: { keryx: { askUser: true } } }`
 
+`terminal` stays `false` with the side panels: the agent reaches the panel
+terminal through the panel MCP server (§4.4), not ACP `terminal/*`.
+
+### 4.4 Side panels: terminal and browser (D-13)
+
+Rust core:
+- `pty.rs` — `PtyManager` (app state) keyed by window label and tab id.
+  `pty_open` spawns `$SHELL -l` (fallback `/bin/zsh`) through `portable-pty`
+  in the window's project root with the login-shell environment plus
+  `TERM=xterm-256color`, `COLORTERM=truecolor`, `TERM_PROGRAM=Keryx`; output
+  goes to a Tauri channel as UTF-8 text (a split multi-byte sequence waits
+  for its tail) and into a 1 MiB ring buffer. `pty_attach` replays the buffer
+  to a new channel; `pty_write`, `pty_resize`, `pty_close`. Exit is reported
+  on the channel. A destroyed window or app exit closes every PTY of that
+  window: SIGHUP to the process group, SIGKILL after 500 ms.
+- `browser.rs` — open/navigate/back/forward/reload/close/bounds/visibility of
+  browser tabs. Each tab is a child webview of the project window; `http` and
+  `https` only; new windows refused; `data_store_identifier` per project on
+  macOS 14+, a non-persistent store below; URL and title changes are emitted
+  to the window as `panel://browser`.
+- `panel_mcp.rs` — one Unix socket per app (`$TMPDIR/keryx-panels-<pid>.sock`,
+  0600), a random token per window, MCP over newline-delimited JSON-RPC
+  (`initialize`, `tools/list`, `tools/call`). `main.rs` runs the relay when
+  started as `<app binary> --panel-mcp`: it connects to `KERYX_PANEL_SOCKET`,
+  sends `KERYX_PANEL_TOKEN`, then copies stdin → socket and socket → stdout.
+
+Web view:
+- `panels/SidePanel.tsx` with the Terminal and Browser tabs; open state, tab
+  and width are per-viewer prefs.
+- `panels/panelBus.ts` — `runInTerminal(command)` used by the Run buttons.
+- `session/useAcpSession.ts` adds the panel entry to `mcpServers` of every
+  `session/new` and `session/load` inside the app.
+
 ## 5. Packaging and distribution
 
 - `scripts/desktop/build-sidecar.sh` runs `bun install --os='*' --cpu='*'`
@@ -519,3 +552,13 @@ version checks and the flows parsers and argv builder.
 | AC17 | `editor` profile unchanged | invariant `bun test src/acp/editor-profile-golden.test.ts` |
 | AC18 | palette, Providers dialog, Activity panel wiring | exec `cd apps/desktop && bun test src` (happy-dom `*.dom.test.tsx`) |
 | AC19 | `.dmg` builds; `/connect` (api key), `/tasks`, `/compact`, a subagent run and a task kill clicked through in the installed app | judged |
+
+## 9. Acceptance criteria (side panels, D-13)
+
+| ID | Criterion | Check |
+|---|---|---|
+| AC20 | PTY opens in the project root with the login env; write/resize/replay; closing a tab, the window or the app leaves no process of its group | exec `cd apps/desktop/src-tauri && cargo test pty` |
+| AC21 | Run button on single-command shell blocks and `execute` tool calls types into the active tab, opening the panel | exec `cd apps/desktop && bun test src` (happy-dom) |
+| AC22 | browser tab loads a localhost page; non-http(s) navigation and new windows refused; a page cannot invoke app commands | exec `cargo test browser` + judged in the installed app |
+| AC23 | panel MCP: token required; `tools/list`; `terminal_run` refuses a user tab; `terminal_read` returns output; browser tools round-trip | exec `cargo test panel_mcp` + judged |
+| AC24 | `.dmg` builds; terminal, Run button and browser clicked through in the installed app | judged |

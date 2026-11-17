@@ -145,3 +145,58 @@ not per turn as the TUI does; they are not persisted across a reload.
 Rejected: reusing the TUI's module-global subagent bridge (it cannot tell
 sessions apart); a model-chosen external runtime and per-subagent cancel in
 M2a (M2b).
+
+## D-13 Side panels: terminal and browser — decided 2026-11-18
+
+Owner answers 2026-11-18 (question cards; the research of 2026-11-17 compared
+the Claude desktop Code tab, the Codex app, Cursor, Warp and Zed). The brief
+named D-11, but M2 had already used D-10..D-12.
+
+Chosen:
+- **One right-side panel per project window** with two tabs, Terminal and
+  Browser. Title-bar toggles; `Ctrl+\`` opens the terminal, `Cmd+Shift+B` the
+  browser. While open, the panel takes the place of the info/activity dock.
+- **Terminal**: xterm.js in the web view, a PTY per tab in the Rust core
+  (`portable-pty`), output streamed over a Tauri `Channel`, a 1 MiB ring
+  buffer per tab for replay and for the agent. A tab starts the user's
+  `$SHELL -l` in the project root with the login-shell environment
+  (`shellenv.rs`) and `TERM=xterm-256color`. Each shell leads its own process
+  group; closing a tab or the window, or quitting the app, sends SIGHUP to the
+  group, then SIGKILL after a short grace. Tabs belong to the window, not to a
+  session.
+- **Run button**: a fenced block tagged `bash`/`sh`/`zsh`/`shell`/`console`
+  that holds one command, and an `execute` tool call's command, get a Run
+  button that types the command plus Enter into the active terminal tab,
+  opening the panel (and a tab) when needed. Nothing is sent to keryx.
+- **Browser**: a child WKWebView in the project window (Tauri multi-webview,
+  `unstable` feature), one per browser tab, laid over the panel's body.
+  Localhost and external sites; the user signs in inside the panel; no import
+  of another browser's cookies. Storage is a per-project
+  `WKWebsiteDataStore` (`data_store_identifier` from a hash of the project
+  path) on macOS 14+; on macOS 12–13 the store is non-persistent and logins
+  last until the window closes. The minimum macOS stays 12. Only `http(s)`
+  pages load; the page gets no app IPC (capabilities stay local-only), no new
+  windows, no `file:`/`tauri:` navigation.
+- **Agent tools** through one client-hosted MCP server per window, passed in
+  `session/new`/`session/load` `mcpServers` as a stdio entry whose command is
+  the app's own binary in relay mode (`--panel-mcp`): it pipes MCP JSON-RPC
+  between keryx and a 0600 Unix socket the Rust core listens on, authenticated
+  by a random per-window token in the entry's `env`. Tools: `terminal_list`,
+  `terminal_read`, `terminal_run`, `browser_tabs`, `browser_navigate`,
+  `browser_snapshot`, `browser_click`, `browser_type`, `browser_screenshot`,
+  `browser_console`. Names and arguments are backend-neutral, so a CDP
+  backend can replace WKWebView later without changing them.
+- **Approvals are keryx's ordinary ones** (owner): MCP calls go through
+  `use_tool`, which is destructive, so each call follows the session's mode
+  (ask / trust / auto) like any other tool; no per-site rules.
+- **Terminal access** (owner): the agent reads the output of any tab of the
+  window and runs commands only in tabs it opened itself (`terminal_run`
+  without a tab opens an agent tab).
+- Page text, console lines, terminal output and screenshots are untrusted
+  tool results; password fields are never read or typed into.
+
+Rejected: ACP v1 `terminal/*` (one command per terminal; removed in ACP v2);
+`_keryx/*` native tools (keryx code per tool, desktop-only); a bundled
+Chromium or a system Chrome over CDP (owner chose WKWebView now; 150–300 MB,
+or a dependency on an installed Chrome); importing Chrome cookies; per-site
+approval rules; raising the minimum macOS to 14.

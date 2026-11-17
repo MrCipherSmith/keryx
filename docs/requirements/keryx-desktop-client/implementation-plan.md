@@ -58,3 +58,14 @@ Version: 0.3.0
 | T15 shared spawn-deps factory from `makeAgentDeps`; `toolCallId` in `InteractiveToolContext`; `spawn_subagent` in the roster; `_keryx/subagent` | keryx | `src/commands/shell.ts` (extract), `src/harness/tool/builtin/{interactive-tools,spawn-subagent-tool}.ts`, `src/acp/shell-roster.ts`, `src/acp/server.ts` |
 | T16 Subagents tab, link from the tool card | client | `session/ActivityPanel.tsx`, `session/Transcript.tsx`, `session/reducer.ts` |
 | T17 dmg build and click-through in the installed app; report what was not checked by hand | all | — |
+
+## Side panels (D-13), branch `feat/desktop-side-panels`, stacked on M2a
+
+| Task | Lane | Files |
+|---|---|---|
+| T20 PTY manager: spawn in the project root with the login env, ring buffer, resize, write, kill the process group on tab/window close and quit | client | new `src-tauri/src/pty.rs`, `lib.rs` |
+| T21 right panel, Terminal tab (xterm.js + fit), tabs, title-bar toggles, shortcuts | client | new `src/panels/*`, `shell/AppShell.tsx`, `session/SessionView.tsx`, `lib/prefs.ts` |
+| T22 Run button on shell code blocks and `execute` tool calls | client | `components/Markdown.tsx`, `session/Transcript.tsx`, `src/panels/panelBus.ts` |
+| T23 browser child webviews: tabs, URL bar, back/forward/reload, per-project store, navigation policy, bounds follow the panel | client | new `src-tauri/src/browser.rs`, `src/panels/BrowserPanel.tsx`, `Cargo.toml` (`unstable`) |
+| T24 panel MCP: socket server + `--panel-mcp` relay, terminal and browser tools, `mcpServers` entry in `session/new`/`session/load` | client | new `src-tauri/src/panel_mcp.rs`, `main.rs`, `src/session/useAcpSession.ts` |
+| T25 tests (cargo, happy-dom), dmg, click-through in the installed app | all | — |
