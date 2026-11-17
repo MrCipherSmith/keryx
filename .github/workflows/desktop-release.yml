@@ -21,6 +21,10 @@ jobs:
     steps:
       - name: Check out
         uses: actions/checkout@v4
+        with:
+          # Keep the write-scoped token out of .git/config: only the release
+          # step needs it, and it gets it through GH_TOKEN.
+          persist-credentials: false
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
