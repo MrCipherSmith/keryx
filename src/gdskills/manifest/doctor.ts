@@ -17,7 +17,7 @@
 import { readdir } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../../lib/fs";
-import { destinationRootsForTarget, isKeryxPublishedDestination } from "./plan";
+import { destinationRootsForTarget, keryxPublishedIn } from "./plan";
 import { NotARegularFileError, readSkillsInstallState, resolveContainedPath, skillsInstallStateIsUnreadable, sha256OfFile } from "./state";
 
 export type DoctorStatus = "ok" | "drifted" | "missing" | "orphaned";
@@ -105,6 +105,7 @@ export async function doctorInstall(repoRoot: string, target: string): Promise<D
 
   const entries: DoctorEntry[] = [];
   const recordedPaths = new Set<string>();
+  const isKeryxPublishedDestination = keryxPublishedIn(repoRoot);
 
   for (const record of state?.installedModules ?? []) {
     for (const filePath of record.writtenPaths) {

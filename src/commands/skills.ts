@@ -662,7 +662,7 @@ export function renderSkippedInstallFiles(
   const lines: string[] = [];
   if (keryxPublished.length > 0) {
     lines.push(
-      `Skipped (keryx init/update publish these and they differ from this keryx's copy — an older version's or a local edit; run ${highlight("keryx update")} first, then re-run):`,
+      `Skipped (keryx init/update publish these and they differ from this keryx's copy — an older version's or a local edit; run ${highlight("keryx update")} first, then re-run — it overwrites local edits, so move yours to rules/project/ or project-skills/ first):`,
     );
     lines.push(...keryxPublished.map((file) => `- ${file.path}`));
     if (keryxPublished.some((file) => file.path.startsWith(".metaproject/skills/"))) {

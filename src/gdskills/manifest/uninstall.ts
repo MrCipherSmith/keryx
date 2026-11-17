@@ -9,7 +9,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../../lib/fs";
 import { removeContained } from "../../lib/contained-write";
-import { destinationRootsForTarget, isKeryxPublishedDestination } from "./plan";
+import { destinationRootsForTarget, keryxPublishedIn } from "./plan";
 import {
   NotARegularFileError,
   readSkillsInstallState,
@@ -119,6 +119,7 @@ export async function uninstallInstall(
   // touched record with an empty `writtenPaths` tells it to drop that record.
   const batch: InstalledModuleRecord[] = [];
   const keptShared: UninstallRefusal[] = [];
+  const isKeryxPublishedDestination = keryxPublishedIn(repoRoot);
   const inScope = (record: InstalledModuleRecord): boolean =>
     options.moduleId === undefined || record.moduleId === options.moduleId;
   // Who else still owns a path once this call is done: every record outside

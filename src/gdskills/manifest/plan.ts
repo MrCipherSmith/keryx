@@ -37,7 +37,9 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import { sha256OfFile } from "../../integrations/install-state";
 import { generateCapabilityMatrix, type CapabilityMatrixDocument, type MatrixSurfaceState } from "../../integrations/matrix";
+import { getBundledSkillsForProfile, normalizeGdskillsProfile } from "../catalog";
 import { isKeryxRuleLayer, KERYX_RULE_LAYERS } from "../rule-references";
+import { readMetaprojectManifest } from "../../lib/metaproject-state";
 import { resolveGlobs } from "./glob";
 import { HARNESS_IDS, type HarnessId, type InstallManifest, type ManifestModule, type ManifestProfile, type ModuleKind } from "./manifest";
 
@@ -138,20 +140,41 @@ export function destinationRootsForTarget(target: string): string[] {
   return [];
 }
 
+/** Whether `keryx init`/`update` publish a destination in one project; see {@link keryxPublishedIn}. */
+export type KeryxPublishedCheck = (destination: string) => boolean;
+
+/** Always written by `keryx init`/`update`, with or without the gdskills module (ADR-0001 P1). */
+const CONDUCT_RULE_DESTINATION = ".metaproject/rules/process/agent-conduct.mdc";
+
+type GdskillsManifest = { modules?: { gdskills?: { enabled?: boolean; profile?: string } } };
+
 /**
- * Destinations `keryx init` and `keryx update` publish themselves: every file
- * of a bundled rule layer (`installBundledRules` copies `rules/core`,
- * `rules/process` and `rules/activity` wholesale, every run) and the bundled
- * skills under `.metaproject/skills/gdskills/`. Install-state never records
- * them — `skills uninstall` would otherwise delete files those commands own —
- * and a stale copy of one is fixed by `keryx update`. A skill outside the
- * profile `keryx update` installs is never refreshed by it; its skip advice
- * says to use `--force` then, which is safe because the file stays
- * unrecorded (review R2-LS-2, `keryxPublishedSkipReason`).
+ * Destinations `keryx init` and `keryx update` publish themselves in this
+ * project, read from its `.metaproject/metaproject.json` the way `keryx update`
+ * reads it. Install-state never records them — `skills uninstall` would
+ * otherwise delete files those commands own — and a stale copy of one is fixed
+ * by `keryx update`.
+ *
+ * - the conduct rule, always;
+ * - with the gdskills module enabled: every file of a bundled rule layer
+ *   (`installBundledRules` copies `rules/core|process|activity` wholesale), the
+ *   shared skill assets, and the skills of the project's gdskills profile — not
+ *   the rest of `.metaproject/skills/gdskills/`, which `keryx update` never
+ *   writes, so a manifest install records those as before (review R3-1).
  */
-export function isKeryxPublishedDestination(destination: string): boolean {
-  if (destination.startsWith(".metaproject/skills/gdskills/")) return true;
-  return KERYX_RULE_LAYERS.some((layer) => destination.startsWith(`.metaproject/rules/${layer}/`));
+export function keryxPublishedIn(projectRoot: string): KeryxPublishedCheck {
+  const gdskills = readMetaprojectManifest<GdskillsManifest>(projectRoot)?.modules?.gdskills;
+  if (gdskills?.enabled !== true) return (destination) => destination === CONDUCT_RULE_DESTINATION;
+  const skillRoots = [
+    ".metaproject/skills/gdskills/shared/",
+    ...getBundledSkillsForProfile(normalizeGdskillsProfile(gdskills.profile)).map(
+      (skill) => `.metaproject/skills/gdskills/${skill.category}/${skill.name}/`,
+    ),
+  ];
+  return (destination) =>
+    destination === CONDUCT_RULE_DESTINATION ||
+    KERYX_RULE_LAYERS.some((layer) => destination.startsWith(`.metaproject/rules/${layer}/`)) ||
+    skillRoots.some((root) => destination.startsWith(root));
 }
 
 /** Deterministic sha256 of a stack-detection document, `detectedAt` excluded (Lane A's fingerprint convention). */

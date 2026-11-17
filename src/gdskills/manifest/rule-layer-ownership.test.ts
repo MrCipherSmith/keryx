@@ -8,7 +8,8 @@ import { MOVED_RULES } from "../retired-rules";
 import { applyInstall } from "./apply";
 import { doctorInstall } from "./doctor";
 import { defaultBundledSourceRoot, loadBundledManifest } from "./manifest";
-import { planInstall } from "./plan";
+import { getBundledSkillsForProfile } from "../catalog";
+import { keryxPublishedIn, planInstall } from "./plan";
 import { readSkillsInstallState, writeSkillsInstallState, type InstalledModuleRecord } from "./state";
 import { uninstallInstall } from "./uninstall";
 
@@ -19,9 +20,22 @@ import { uninstallInstall } from "./uninstall";
 let root: string;
 const sourceRoot = defaultBundledSourceRoot();
 
+/** What `keryx init` leaves: the gdskills module on, with the profile `keryx update` reinstalls. */
+async function writeProjectManifest(gdskills: { enabled: boolean; profile?: string }): Promise<void> {
+  await mkdir(path.join(root, ".metaproject"), { recursive: true });
+  await writeFile(path.join(root, ".metaproject", "metaproject.json"), JSON.stringify({ modules: { gdskills } }));
+}
+
 beforeEach(async () => {
   root = await mkdtemp(path.join(tmpdir(), "keryx-rule-ownership-"));
+  await writeProjectManifest({ enabled: true, profile: "recommended" });
 });
+
+/** Destination prefix of each skill `keryx update` installs for the recommended profile. */
+const recommendedSkillRoots = getBundledSkillsForProfile("recommended").map(
+  (skill) => `.metaproject/skills/gdskills/${skill.category}/${skill.name}/`,
+);
+const inUpdateProfile = (destination: string): boolean => recommendedSkillRoots.some((prefix) => destination.startsWith(prefix));
 
 afterEach(async () => {
   await rm(root, { recursive: true, force: true });
@@ -81,7 +95,7 @@ test("F2: a keryx-shell rule-layer file recorded by an older install is dropped 
 
 test("R2-LS-2: a stale bundled skill is keryx-published: never recorded, keryx update advice with the --force fallback", async () => {
   const keryxShell = await plan("keryx-shell", "core");
-  const skill = keryxShell.modules.flatMap((m) => m.files).find((f) => f.destination.startsWith(".metaproject/skills/gdskills/"));
+  const skill = keryxShell.modules.flatMap((m) => m.files).find((f) => inUpdateProfile(f.destination));
   expect(skill).toBeDefined();
   if (skill === undefined) return;
   await mkdir(path.dirname(path.join(root, skill.destination)), { recursive: true });
@@ -98,14 +112,47 @@ test("R2-LS-2: a stale bundled skill is keryx-published: never recorded, keryx u
   expect(existsSync(path.join(root, skill.destination))).toBe(true);
 });
 
-test("R2-LS-2: rule-layer and bundled-skill paths are keryx-published; stacks and project rules are not", async () => {
-  const { isKeryxPublishedDestination } = await import("./plan");
-  expect(isKeryxPublishedDestination(".metaproject/rules/process/git-rules.mdc")).toBe(true);
-  expect(isKeryxPublishedDestination(".metaproject/rules/core/error-handling.mdc")).toBe(true);
-  expect(isKeryxPublishedDestination(".metaproject/rules/stacks/react/x.mdc")).toBe(false);
-  expect(isKeryxPublishedDestination(".metaproject/rules/project/core/x.mdc")).toBe(false);
-  expect(isKeryxPublishedDestination(".metaproject/skills/gdskills/review/review-logic/SKILL.md")).toBe(true);
-  expect(isKeryxPublishedDestination(".metaproject/skills/project/house/SKILL.md")).toBe(false);
+test("R3-1: keryx-published follows the project: rule layers and the update profile's skills, only with gdskills on", async () => {
+  const published = keryxPublishedIn(root);
+  const inProfile = recommendedSkillRoots[0]!;
+  const outOfProfile = getBundledSkillsForProfile("full")
+    .map((skill) => `.metaproject/skills/gdskills/${skill.category}/${skill.name}/`)
+    .find((prefix) => !recommendedSkillRoots.includes(prefix))!;
+  expect(published(".metaproject/rules/process/git-rules.mdc")).toBe(true);
+  expect(published(".metaproject/rules/core/error-handling.mdc")).toBe(true);
+  expect(published(`${inProfile}SKILL.md`)).toBe(true);
+  expect(published(".metaproject/skills/gdskills/shared/git-merge-base.md")).toBe(true);
+  expect(published(`${outOfProfile}SKILL.md`)).toBe(false);
+  expect(published(".metaproject/rules/stacks/react/x.mdc")).toBe(false);
+  expect(published(".metaproject/rules/project/core/x.mdc")).toBe(false);
+  expect(published(".metaproject/project-skills/house/SKILL.md")).toBe(false);
+
+  // Without the gdskills module keryx update writes only the conduct rule.
+  await writeProjectManifest({ enabled: false });
+  const off = keryxPublishedIn(root);
+  expect(off(".metaproject/rules/process/agent-conduct.mdc")).toBe(true);
+  expect(off(".metaproject/rules/process/git-rules.mdc")).toBe(false);
+  expect(off(`${inProfile}SKILL.md`)).toBe(false);
+});
+
+test("R3-1: full manifest + recommended gdskills: out-of-profile skills are recorded and uninstalled, in-profile ones kept", async () => {
+  const full = await plan("keryx-shell", "full");
+  expect(full.ok).toBe(true);
+  const skillFiles = full.modules.flatMap((m) => m.files).map((f) => f.destination).filter((d) => d.startsWith(".metaproject/skills/gdskills/"));
+  const outside = skillFiles.filter((d) => !inUpdateProfile(d) && !d.startsWith(".metaproject/skills/gdskills/shared/"));
+  const inside = skillFiles.filter((d) => inUpdateProfile(d));
+  expect(outside.length).toBeGreaterThan(0);
+  expect(inside.length).toBeGreaterThan(0);
+
+  expect((await applyInstall(full, root, { sourceRoot })).ok).toBe(true);
+  const recorded = new Set(((await readSkillsInstallState(root, "keryx-shell"))?.installedModules ?? []).flatMap((m) => m.writtenPaths));
+  expect(outside.filter((d) => !recorded.has(d))).toEqual([]);
+  expect(inside.filter((d) => recorded.has(d))).toEqual([]);
+
+  const uninstall = await uninstallInstall(root, "keryx-shell");
+  expect(outside.filter((d) => existsSync(path.join(root, d)))).toEqual([]);
+  expect(inside.filter((d) => !existsSync(path.join(root, d)))).toEqual([]);
+  expect(uninstall.removed.length).toBeGreaterThanOrEqual(outside.length);
 });
 
 for (const target of ["claude", "keryx-shell"] as const) {

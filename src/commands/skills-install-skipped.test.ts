@@ -10,7 +10,7 @@ test("keryx-published skips and other skips are printed in their own groups with
     { path: ".claude/rules/house.mdc", reason: "a file already exists at this destination and is not recorded in install-state" },
   ]);
   expect(lines).toEqual([
-    "Skipped (keryx init/update publish these and they differ from this keryx's copy — an older version's or a local edit; run keryx update first, then re-run):",
+    "Skipped (keryx init/update publish these and they differ from this keryx's copy — an older version's or a local edit; run keryx update first, then re-run — it overwrites local edits, so move yours to rules/project/ or project-skills/ first):",
     "- .metaproject/rules/process/git-rules.mdc",
     "Skipped (existing file not recorded in install-state, or drifted — rerun with --force to overwrite):",
     "- .claude/rules/house.mdc: a file already exists at this destination and is not recorded in install-state",

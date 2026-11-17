@@ -17,6 +17,13 @@ let root: string;
 
 beforeEach(async () => {
   root = await mkdtemp(path.join(tmpdir(), "keryx-install-apply-"));
+  // As after `keryx init`: gdskills on, so the rule layers are keryx's (R3-1).
+  await mkdir(path.join(root, ".metaproject"), { recursive: true });
+  await writeFile(
+    path.join(root, ".metaproject", "metaproject.json"),
+    JSON.stringify({ modules: { gdskills: { enabled: true, profile: "recommended" } } }),
+    "utf8",
+  );
   await mkdir(path.join(root, "rules"), { recursive: true });
   await writeFile(path.join(root, "rules", "a.mdc"), "rule a fixture\n", "utf8");
   await mkdir(path.join(root, "src", "gdskills", "bundled", "skills", "review", "fake-skill"), { recursive: true });
@@ -684,6 +691,25 @@ test("R2-4: a recorded, unedited rule-layer file with an older bundled version i
   // ...and, being keryx-published, it is no longer recorded.
   const recorded = ((await readSkillsInstallState(root, "keryx-shell"))?.installedModules ?? []).flatMap((m) => m.writtenPaths);
   expect(recorded).not.toContain(published);
+});
+
+test("R3-2: a recorded rule-layer file the user edited since is not refreshed; it is skipped with the keryx update advice", async () => {
+  const plan = await planInstall({ manifest: MANIFEST, profileId: "base", target: "keryx-shell", repoRoot: root });
+  const published = ".metaproject/rules/core/a.mdc";
+  await mkdir(path.join(root, ".metaproject", "rules", "core"), { recursive: true });
+  const { createHash } = await import("node:crypto");
+  const recordedHash = createHash("sha256").update("rule a, previous version\n").digest("hex");
+  await writeSkillsInstallState(root, "keryx-shell", [
+    { moduleId: "rule-a", writtenPaths: [published], sha256: { [published]: recordedHash }, managedSentinel: true, installedAt: new Date(0).toISOString() },
+  ], "base");
+  // Edited after that install recorded it: neither the recorded nor the bundled bytes.
+  await writeFile(path.join(root, published), "rule a, previous version\nour own line\n", "utf8");
+
+  const result = await applyInstall(plan, root);
+  expect(result.ok).toBe(false);
+  expect(result.written).not.toContain(published);
+  expect(result.skipped).toEqual([expect.objectContaining({ path: published, keryxPublished: true })]);
+  expect(await readFile(path.join(root, published), "utf8")).toBe("rule a, previous version\nour own line\n");
 });
 
 test("R2-5: an earlier record of an unplanned module loses its keryx-published paths and keeps the rest", async () => {

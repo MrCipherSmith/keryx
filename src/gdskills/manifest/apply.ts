@@ -9,7 +9,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../../lib/fs";
 import { writeContained } from "../../lib/contained-write";
-import { destinationRootsForTarget, isKeryxPublishedDestination, type InstallPlan } from "./plan";
+import { destinationRootsForTarget, keryxPublishedIn, type KeryxPublishedCheck, type InstallPlan } from "./plan";
 import {
   NotARegularFileError,
   readSkillsInstallState,
@@ -38,13 +38,12 @@ export interface ApplySkippedFile {
   path: string;
   reason: string;
   /**
-   * The file sits where `keryx init`/`update` publish (`isKeryxPublishedDestination`)
+   * The file sits where `keryx init`/`update` publish (`keryxPublishedIn`)
    * and holds other bytes than this bundle: its fix is `keryx update`.
    */
   keryxPublished?: true;
 }
 
-export { isKeryxPublishedDestination };
 
 export interface ApplyResult {
   ok: boolean;
@@ -70,6 +69,7 @@ export async function applyInstall(
     return { ok: false, written: [], alreadyPresent: [], skipped: [], errors: ["cannot apply a plan with errors — see plan.errors"] };
   }
   const sourceRoot = options.sourceRoot ?? destRoot;
+  const isKeryxPublishedDestination = keryxPublishedIn(destRoot);
 
   // F2: a corrupt/schema-invalid prior install-state file must not be
   // silently treated as "nothing recorded" — that would make apply believe
@@ -247,7 +247,7 @@ export async function applyInstall(
     });
   }
 
-  moduleRecords.push(...releasedRecords(existing?.installedModules ?? [], moduleRecords));
+  moduleRecords.push(...releasedRecords(existing?.installedModules ?? [], moduleRecords, isKeryxPublishedDestination));
   await writeSkillsInstallState(destRoot, plan.target, moduleRecords, plan.profile);
 
   return { ok: skipped.length === 0, written, alreadyPresent, skipped, errors: [] };
@@ -296,7 +296,8 @@ async function placeKeryxPublished(
 export function keryxPublishedSkipReason(destination: string): string {
   const base =
     "keryx init/update publish this file and it differs from this keryx's bundled copy (an older keryx " +
-    "version's, or a local edit) — run `keryx update`, then re-run this install";
+    "version's, or a local edit) — run `keryx update`, then re-run this install; `keryx update` overwrites a " +
+    "local edit, so keep your own version under rules/project/ or project-skills/ first";
   return destination.startsWith(".metaproject/skills/")
     ? `${base}; if it still differs, \`keryx update\` does not install this skill — re-run with --force (it stays unrecorded)`
     : base;
@@ -315,6 +316,7 @@ export function keryxPublishedSkipReason(destination: string): string {
 function releasedRecords(
   previous: readonly InstalledModuleRecord[],
   current: readonly InstalledModuleRecord[],
+  isKeryxPublishedDestination: KeryxPublishedCheck,
 ): InstalledModuleRecord[] {
   const currentIds = new Set(current.map((record) => record.moduleId));
   const ownedNow = new Set(current.flatMap((record) => record.writtenPaths));
