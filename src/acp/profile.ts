@@ -66,6 +66,20 @@ export const KERYX_ACP_EXTENSION_METHODS = {
   tasksList: "_keryx/tasks/list",
   tasksOutput: "_keryx/tasks/output",
   tasksKill: "_keryx/tasks/kill",
+  /**
+   * Client → agent request, shell profile: `{ sessionId, cwd?, archived?,
+   * pinned?, flow? }` → `{ archivedAt?, pinnedAt?, flow? }`. Archives, pins or
+   * links to a flow package a stored session (`<sessionDir>/flags.json`;
+   * `flow: null` unlinks); `session/list` reports the flags as `_meta.keryx`.
+   */
+  sessionFlags: "_keryx/session_flags",
+  /**
+   * Client → agent request, shell profile: `{ sessionId, cwd? }` → `{ trashedTo }`.
+   * Moves a stored session to the system trash. A session this connection
+   * holds is released first; one with a running turn or task, or held by
+   * another keryx process, is refused.
+   */
+  sessionTrash: "_keryx/session_trash",
 } as const;
 
 /** The extensions a profile speaks, as `initialize._meta.keryx.extensions` and `_keryx/info` list them. */
@@ -92,6 +106,8 @@ export function acpProfileExtensions(profile: AcpProfile): string[] {
         KERYX_ACP_EXTENSION_METHODS.tasksList,
         KERYX_ACP_EXTENSION_METHODS.tasksOutput,
         KERYX_ACP_EXTENSION_METHODS.tasksKill,
+        KERYX_ACP_EXTENSION_METHODS.sessionFlags,
+        KERYX_ACP_EXTENSION_METHODS.sessionTrash,
       ]
     : [KERYX_ACP_EXTENSION_METHODS.info];
 }

@@ -3,6 +3,7 @@ pub mod child;
 pub mod framing;
 pub mod flows;
 pub mod fs;
+pub mod gitinfo;
 pub mod locator;
 pub mod navigation;
 pub mod process;
@@ -62,6 +63,7 @@ pub fn run() {
             flows::flows_get,
             flows::flows_action,
             flows::flows_watch,
+            gitinfo::git_info,
         ])
         .build(tauri::generate_context!())
         .expect("error while building the Keryx app");

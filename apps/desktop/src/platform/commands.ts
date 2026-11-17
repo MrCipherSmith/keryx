@@ -215,3 +215,16 @@ export const flowsAction = (cwd: string, dir: string, action: FlowAction) =>
 export const flowsWatch = (cwd: string) => invoke<void>("flows_watch", { cwd });
 export const onFlowsChanged = (handler: (p: { cwd: string }) => void) =>
   listen<{ cwd: string }>("flows://changed", handler, "app");
+
+/** The project's git checkout as the session panel shows it (`git status --porcelain=v2 --branch`). */
+export interface GitInfo {
+  branch: string | null;
+  commit: string | null;
+  upstream: string | null;
+  ahead: number;
+  behind: number;
+  changed: number;
+}
+
+/** `null` outside a git checkout, or when git is missing or slow. */
+export const gitInfo = (cwd: string) => invoke<GitInfo | null>("git_info", { cwd });

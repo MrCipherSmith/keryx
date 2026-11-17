@@ -4,14 +4,16 @@
 
 :root {
   color-scheme: light;
+  /* Settings → Appearance sets --font, --mono, --text-scale and --measure on the root element. */
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
   --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
+  --text-scale: 1;
 
-  --fs-xs: 11px;
-  --fs-sm: 12px;
-  --fs-md: 13px;
-  --fs-lg: 15px;
-  --fs-xl: 20px;
+  --fs-xs: calc(11px * var(--text-scale));
+  --fs-sm: calc(12px * var(--text-scale));
+  --fs-md: calc(13px * var(--text-scale));
+  --fs-lg: calc(15px * var(--text-scale));
+  --fs-xl: calc(20px * var(--text-scale));
   --lh: 1.5;
 
   --sp-1: 4px;
@@ -34,7 +36,7 @@
 
   --rail-w: 60px;
   --titlebar-h: 40px;
-  --measure: 72ch;
+  --measure: 920px;
 
   --bg-canvas: #f4f7f5;
   --bg-surface: #ffffff;

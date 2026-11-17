@@ -13,9 +13,18 @@ import { absoluteTime, copyText, errMessage, prLabel, relativeTime } from "../li
 import { Icon, type IconName } from "../components/Icon";
 import { InlineMarkdown, Markdown } from "../components/Markdown";
 import { Dialog, EmptyState, Sheet, Spinner } from "../components/ui";
+import { Menu, type MenuItem } from "../components/Menu";
 import { useToast } from "../components/Toasts";
 import { StatusPill } from "./FlowsBoard";
-import { flowRef, terminalCommands, validateArg } from "./model";
+import { flowRef, nextStepHint, stateActions, terminalCommands, validateArg, type StateActionId } from "./model";
+
+const ACTION_ICON: Record<StateActionId, IconName> = {
+  freeze: "snowflake",
+  start: "play",
+  block: "ban",
+  unblock: "circleCheck",
+  next: "target",
+};
 
 type Tab = "overview" | "criteria" | "tasks" | "journal" | "gates";
 
@@ -24,8 +33,17 @@ interface Props {
   card: FlowCard;
   version: number;
   onClose: () => void;
-  onWorkOn: () => void;
+  /** Sessions already linked to this flow, newest first. */
+  linked: LinkedSession[];
+  onWorkOn: (target: "new" | string) => void;
   onChanged: () => void;
+}
+
+/** A session the flow is linked to, as the "Work on this flow" menu lists it. */
+export interface LinkedSession {
+  id: string;
+  title: string;
+  updatedAt: string | null;
 }
 
 type Form =
@@ -36,7 +54,9 @@ type Form =
   | { kind: "commands" }
   | { kind: "next"; output: string };
 
-export function FlowDetailSheet({ cwd, card, version, onClose, onWorkOn, onChanged }: Props) {
+export function FlowDetailSheet({ cwd, card, version, onClose, linked, onWorkOn, onChanged }: Props) {
+  const workBtn = useRef<HTMLButtonElement>(null);
+  const [workMenu, setWorkMenu] = useState(false);
   const [detail, setDetail] = useState<FlowDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("overview");
@@ -90,7 +110,16 @@ export function FlowDetailSheet({ cwd, card, version, onClose, onWorkOn, onChang
   );
 
   const c = detail?.card ?? card;
-  const canStart = (c.status === "ready" || c.status === "initializing") && !c.blocked;
+  const criteriaCount = detail?.criteria.length ?? 0;
+  const actions = stateActions(c, criteriaCount);
+  const step = detail ? nextStepHint(c, criteriaCount) : null;
+  const onAction = (id: StateActionId) => {
+    if (id === "freeze") setForm({ kind: "freeze" });
+    else if (id === "start") void run({ type: "start" }, "Flow started");
+    else if (id === "block") setForm({ kind: "block" });
+    else if (id === "unblock") void run({ type: "unblock" }, "Flow unblocked");
+    else void run({ type: "next" }, "Next task");
+  };
 
   const tabs: Array<{ id: Tab; label: string; count?: number }> = [
     { id: "overview", label: "Overview" },
@@ -101,7 +130,7 @@ export function FlowDetailSheet({ cwd, card, version, onClose, onWorkOn, onChang
   ];
 
   return (
-    <Sheet label={`Flow #${c.id}`} onClose={onClose} width={600}>
+    <Sheet label={`Flow #${c.id}`} onClose={onClose} width={820}>
       <header className="sheet-head">
         <div className="sheet-head-row">
           <span className="flow-id flow-id-lg">#{c.id}</span>
@@ -156,33 +185,63 @@ export function FlowDetailSheet({ cwd, card, version, onClose, onWorkOn, onChang
           ) : null}
         </dl>
         <div className="sheet-actions">
-          <button className="btn btn-primary" onClick={onWorkOn}>
+          <button
+            ref={workBtn}
+            className="btn btn-primary"
+            onClick={() => (linked.length === 0 ? onWorkOn("new") : setWorkMenu((m) => !m))}
+            aria-haspopup={linked.length > 0 ? "menu" : undefined}
+            aria-expanded={linked.length > 0 ? workMenu : undefined}
+            title={linked.length === 0 ? "Start a new session for this flow" : "Continue in a linked session or start a new one"}
+          >
             <Icon name="chat" size={14} /> Work on this flow
+            {linked.length > 0 ? <Icon name="chevronDown" size={12} /> : null}
           </button>
-          {canStart ? (
-            <button className="btn" disabled={busy !== null} onClick={() => void run({ type: "start" }, "Flow started")}>
-              {busy === "start" ? <Spinner /> : <Icon name="play" size={13} />} Start
-            </button>
-          ) : null}
-          {c.blocked ? (
-            <button className="btn" disabled={busy !== null} onClick={() => void run({ type: "unblock" }, "Flow unblocked")}>
-              {busy === "unblock" ? <Spinner /> : <Icon name="circleCheck" size={14} />} Unblock
-            </button>
-          ) : c.status !== "done" ? (
-            <button className="btn" disabled={busy !== null} onClick={() => setForm({ kind: "block" })}>
-              <Icon name="ban" size={14} /> Block…
-            </button>
-          ) : null}
-          {c.status !== "done" ? (
-            <button className="btn" disabled={busy !== null} onClick={() => void run({ type: "next" }, "Next task")} title="keryx flow next (read-only)">
-              {busy === "next" ? <Spinner /> : <Icon name="target" size={14} />} Next task
-            </button>
+          {workMenu ? (
+            <Menu
+              anchor={workBtn.current}
+              label="Work on this flow"
+              width={300}
+              onClose={() => setWorkMenu(false)}
+              items={[
+                { kind: "header", id: "h-linked", label: "Continue in a linked session" },
+                ...linked.slice(0, 5).map<MenuItem>((sx) => ({
+                  id: `s-${sx.id}`,
+                  label: <span className="truncate">{sx.title}</span>,
+                  description: sx.updatedAt ? relativeTime(sx.updatedAt) : undefined,
+                  icon: "chat",
+                  onSelect: () => onWorkOn(sx.id),
+                })),
+                { kind: "separator", id: "sep" },
+                { id: "new", label: "Start in a new session", icon: "plus", onSelect: () => onWorkOn("new") },
+              ]}
+            />
           ) : null}
           <span className="grow" />
           <button className="btn btn-ghost" onClick={() => setForm({ kind: "commands" })} title="Commands that run in a terminal">
             <Icon name="terminal" size={14} /> Terminal commands
           </button>
         </div>
+        <div className="flow-state-bar" role="group" aria-label="Flow state">
+          {actions.map((a) => (
+            // A disabled button gets no hover events in WebKit, so the tooltip sits on a wrapper.
+            <span key={a.id} className="flow-state-item" title={a.hint}>
+              <button
+                className="btn btn-sm"
+                disabled={!a.enabled || busy !== null || !detail}
+                aria-describedby={a.enabled ? undefined : `hint-${a.id}`}
+                onClick={() => onAction(a.id)}
+              >
+                {busy === a.id ? <Spinner /> : <Icon name={ACTION_ICON[a.id]} size={13} />} {a.label}
+              </button>
+              {a.enabled ? null : (
+                <span id={`hint-${a.id}`} className="sr-only">
+                  {a.hint}
+                </span>
+              )}
+            </span>
+          ))}
+        </div>
+        {step ? <p className="flow-next-step">{step}</p> : null}
       </header>
 
       <nav className="tabs" role="tablist" aria-label="Flow sections">
@@ -223,7 +282,7 @@ export function FlowDetailSheet({ cwd, card, version, onClose, onWorkOn, onChang
           </div>
         ) : detail ? (
           tab === "overview" ? (
-            <Overview d={detail} onFreeze={() => setForm({ kind: "freeze" })} />
+            <Overview d={detail} />
           ) : tab === "criteria" ? (
             <Criteria d={detail} />
           ) : tab === "tasks" ? (
@@ -390,7 +449,7 @@ function prettyJson(s: string): string {
 
 // ---- tabs -------------------------------------------------------------------
 
-function Overview({ d, onFreeze }: { d: FlowDetail; onFreeze: () => void }) {
+function Overview({ d }: { d: FlowDetail }) {
   const c = d.card;
   const tasksPct = c.tasksTotal ? Math.round((c.tasksDone / c.tasksTotal) * 100) : 0;
   const acPct = c.acTotal ? Math.round((c.acConfirmed / c.acTotal) * 100) : 0;
@@ -422,10 +481,7 @@ function Overview({ d, onFreeze }: { d: FlowDetail; onFreeze: () => void }) {
       {unfrozen ? (
         <div className="inline-banner tone-info">
           <Icon name="snowflake" size={14} />
-          <span>Criteria are not frozen yet.</span>
-          <button className="btn btn-sm" onClick={onFreeze}>
-            Freeze…
-          </button>
+          <span>Criteria are not frozen yet: use Freeze criteria at the top.</span>
         </div>
       ) : null}
       <DocSection title="Description" text={d.docs.description} />

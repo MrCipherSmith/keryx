@@ -136,6 +136,32 @@ it for `keryx shell --resume`, and tells the app. The app keeps that
 session's last transcript read-only with a Reopen banner and reloads it,
 with its permission mode and model, when you go back to it.
 
+The list groups sessions by the day they were last active, newest first,
+with a Pinned group on top. Click a group's name to fold it; the app
+remembers folded groups. Each session's ⋯ menu pins or unpins it, archives
+it, or moves it to the Trash. The Active / Archived switch above the list
+shows one or the other. Pins and archives are stored by keryx next to the
+session (`flags.json`), so they survive a reinstall. Move to Trash asks
+first and moves the session's folder to the macOS Trash, where you can
+restore it until the Trash is emptied; it is refused while the session has
+a running turn or is open in another keryx. The ⋯ menu needs a keryx whose
+shell profile lists `_keryx/session_flags` and `_keryx/session_trash` (the
+bundled one does); with an older keryx the list has no menu and no Archived
+view.
+
+### Session info
+
+The ⓘ button in the title bar opens a panel on the right with the shown
+session's project and git branch (ahead/behind its upstream, changed
+files), model, permission mode, keryx version, context use, and tokens for
+the whole session, the latest turn and the last model call.
+
+### Appearance
+
+Settings → Appearance sets the theme, the interface font (System, Rounded,
+Serif, Mono), the code font, the text size and the conversation width
+(Narrow, Wide, Full).
+
 ### Flows board
 
 ⌘2 opens the project's flows from `.metaproject/flows/`:
@@ -147,14 +173,22 @@ with its permission mode and model, when you go back to it.
 - ⌘F searches by title or id; there is a board and a list view;
 - a card opens the detail panel: Overview, Criteria, Tasks, Journal, Gates.
 
-Actions in the detail panel run `keryx flow …` in the project: Start,
-Block/Unblock, add a task, record a task attempt, mark a task done, freeze the
-criteria (asks for confirmation) and show the next task. Commands with their
-own gates (`complete`, `confirm`, `recover`, `implemented`, `ac update`,
-`ac reseal`) are offered as "copy command" for a terminal.
+Actions in the detail panel run `keryx flow …` in the project. The state
+buttons sit together under the title in lifecycle order — Freeze criteria
+(asks for confirmation), Start, Block/Unblock, Next task — and a button keryx
+would refuse in the flow's current state is greyed out with a tooltip saying
+why (Start stays off until the criteria are frozen); a line under them names
+the next step. Adding a task, recording an attempt and marking a task done
+are in the Tasks tab. Commands with their own gates (`complete`, `confirm`,
+`recover`, `implemented`, `ac update`, `ac reseal`) are offered as "copy
+command" for a terminal.
 
-**Work on this flow** switches to the session and fills the composer with a
-prompt to continue that flow. Nothing is sent until you press Enter.
+**Work on this flow** opens a new session linked to the flow and fills its
+composer with a prompt to continue it; nothing is sent until you press
+Enter. Once a flow has linked sessions, the button asks whether to continue
+in one of them or start another new one, so you can create several flows in
+one session and work on each in its own. The link is kept by keryx with the
+session (`flags.json`).
 
 The board refreshes when a `flow.json` changes (checked every 2 seconds) and
 when the window gets focus.

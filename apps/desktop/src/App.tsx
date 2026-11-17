@@ -18,6 +18,9 @@ import { CommandPalette, type PaletteItem } from "./shell/CommandPalette";
 import { SettingsView } from "./shell/SettingsView";
 import { Welcome } from "./shell/Welcome";
 import { FlowsBoard } from "./flows/FlowsBoard";
+import type { LinkedSession } from "./flows/FlowDetail";
+import { sessionFlags } from "./acp/types";
+import type { FlowCard } from "./platform/commands";
 import { laneOf, workPrompt } from "./flows/model";
 import { useFlows } from "./flows/useFlows";
 import { AskUserDialog, FatalDialog, PermissionDialog } from "./session/Approvals";
@@ -161,6 +164,25 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
     requestAnimationFrame(() => composer.current?.setText(text));
   }, []);
 
+  /** Sessions linked to a flow package (their `_meta.keryx.flow`), newest first. */
+  const linkedSessions = useCallback(
+    (dir: string): LinkedSession[] =>
+      state.sessions
+        .filter((x) => sessionFlags(x).flow === dir && sessionFlags(x).archivedAt === undefined)
+        .map((x) => ({ id: x.sessionId, title: x.title?.trim() || "Untitled session", updatedAt: x.updatedAt ?? null })),
+    [state.sessions],
+  );
+
+  /** Work on a flow: a new session linked to it gets the work prompt; a linked one is just shown. */
+  const workOn = useCallback(
+    async (card: FlowCard, target: "new" | string) => {
+      setView("session");
+      const id = await s.workOnFlow(card.dir, target);
+      if (id && target === "new") fillComposer(workPrompt(card));
+    },
+    [s, fillComposer],
+  );
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
@@ -302,11 +324,11 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
     >
       {/* The session view stays mounted so the transcript and draft survive view switches. */}
       <div className="view" hidden={view !== "session"}>
-        <SessionView ref={composer} s={s} projectName={basename(cwd)} onGoFlows={() => go("flows")} onGoSettings={() => go("settings")} narrow={narrow} onProviders={providers.openProviders} />
+        <SessionView ref={composer} s={s} cwd={cwd} projectName={basename(cwd)} onGoFlows={() => go("flows")} onGoSettings={() => go("settings")} narrow={narrow} onProviders={providers.openProviders} />
       </div>
       {view === "flows" ? (
         <div className="view">
-          <FlowsBoard cwd={cwd} flows={flows} onWorkOn={(c) => fillComposer(workPrompt(c))} />
+          <FlowsBoard cwd={cwd} flows={flows} linkedSessions={linkedSessions} onWorkOn={(c, target) => void workOn(c, target)} />
         </div>
       ) : null}
       {view === "settings" ? (

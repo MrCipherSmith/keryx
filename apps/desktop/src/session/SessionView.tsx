@@ -8,6 +8,7 @@ import { Composer, type ComposerHandle } from "./Composer";
 import { ActivityPanel, type ActivityTab } from "./ActivityPanel";
 import { runningSubagents } from "./activity";
 import { isRunning } from "../acp/providers";
+import { SessionInfoPanel } from "./SessionInfoPanel";
 import { SessionSidebar } from "./SessionSidebar";
 import { Transcript } from "./Transcript";
 import { lostText, type QueuedPrompt, type Usage } from "./reducer";
@@ -18,6 +19,7 @@ type Session = ReturnType<typeof useAcpSession>;
 
 interface Props {
   s: Session;
+  cwd: string;
   projectName: string;
   onGoFlows: () => void;
   onGoSettings: () => void;
@@ -32,7 +34,7 @@ const SUGGESTIONS = [
   { icon: "search" as const, text: "Find TODO and FIXME comments and group them by area." },
 ];
 
-export const SessionView = forwardRef<ComposerHandle, Props>(function SessionView({ s, projectName, onGoFlows, onGoSettings, narrow, onProviders }, composerRef) {
+export const SessionView = forwardRef<ComposerHandle, Props>(function SessionView({ s, cwd, projectName, onGoFlows, onGoSettings, narrow, onProviders }, composerRef) {
   const { state } = s;
   const prefs = usePrefs();
   const sidebarOpen = prefs.sessionSidebar && !narrow;
@@ -45,6 +47,8 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
   const refreshTasks = useCallback(() => {
     if (state.sessionId) void s.refreshTasks(state.sessionId);
   }, [s, state.sessionId]);
+  // The Activity panel and the info panel share the right column; an open Activity panel hides the info panel.
+  const infoOpen = prefs.infoPanel && !activity.open;
   const ready = state.phase === "ready" && state.sessionId !== null && state.held;
   const incompatible = s.fatal?.kind === "incompatible" || s.fatal?.kind === "noShell";
 
@@ -137,17 +141,20 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
       loadingIds={state.loadingIds}
       currentId={state.sessionId}
       ready={state.phase === "ready" && !incompatible}
+      canOrganize={state.canOrganize}
       onNew={() => void s.newSession()}
       onLoad={(id) => {
         setNarrowSidebar(false);
         void s.loadSession(id);
       }}
       onCollapse={() => (narrow ? setNarrowSidebar(false) : setPrefs({ sessionSidebar: false }))}
+      onSetFlags={(id, change) => void s.setFlags(id, change)}
+      onTrash={s.trashSession}
     />
   );
 
   return (
-    <div className={`session-view${sidebarOpen ? " with-sidebar" : ""}${activity.open ? " with-activity" : ""}${narrow ? " is-narrow" : ""}`}>
+    <div className={`session-view${sidebarOpen ? " with-sidebar" : ""}${activity.open ? " with-activity" : ""}${infoOpen && !narrow ? " with-info" : ""}${narrow ? " is-narrow" : ""}`}>
       {sidebarOpen ? sidebar : null}
       {narrow && narrowSidebar ? (
         <div className="sidebar-float" onMouseDown={(e) => e.target === e.currentTarget && setNarrowSidebar(false)}>
@@ -281,6 +288,10 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
           onRefreshTasks={refreshTasks}
           onClose={() => setActivity((a) => ({ ...a, open: false }))}
         />
+      ) : infoOpen ? (
+        <div className={narrow ? "info-float" : "info-dock"}>
+          <SessionInfoPanel state={state} cwd={cwd} projectName={projectName} onClose={() => setPrefs({ infoPanel: false })} />
+        </div>
       ) : null}
     </div>
   );

@@ -427,6 +427,8 @@ describe("AC6 — initialize reports the real version and the profiles; _keryx/i
           "_keryx/tasks/list",
           "_keryx/tasks/output",
           "_keryx/tasks/kill",
+          "_keryx/session_flags",
+          "_keryx/session_trash",
         ],
         liveSessions: true,
       });

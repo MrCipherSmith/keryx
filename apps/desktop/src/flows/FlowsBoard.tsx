@@ -3,7 +3,7 @@ import type { FlowCard } from "../platform/commands";
 import { prLabel, relativeTime, absoluteTime } from "../lib/format";
 import { Icon } from "../components/Icon";
 import { EmptyState, Kbd, Spinner } from "../components/ui";
-import { FlowDetailSheet } from "./FlowDetail";
+import { FlowDetailSheet, type LinkedSession } from "./FlowDetail";
 import { LANES, STATUS_LABEL, byUpdatedDesc, laneOf, matches, type LaneId } from "./model";
 import type { useFlows } from "./useFlows";
 
@@ -12,14 +12,17 @@ type Flows = ReturnType<typeof useFlows>;
 interface Props {
   cwd: string;
   flows: Flows;
-  onWorkOn: (card: FlowCard) => void;
+  /** Sessions already linked to a flow package, newest first. */
+  linkedSessions: (dir: string) => LinkedSession[];
+  /** Work on a flow in a new session or in one already linked to it. */
+  onWorkOn: (card: FlowCard, target: "new" | string) => void;
 }
 
 const LANE_CAP = 30;
 const DONE_CAP = 20;
 const LIST_CAP = 150;
 
-export function FlowsBoard({ cwd, flows, onWorkOn }: Props) {
+export function FlowsBoard({ cwd, flows, linkedSessions, onWorkOn }: Props) {
   const [query, setQuery] = useState("");
   const [owner, setOwner] = useState<string>("");
   const [view, setView] = useState<"board" | "list">(() => {
@@ -185,7 +188,8 @@ export function FlowsBoard({ cwd, flows, onWorkOn }: Props) {
           card={openCard}
           version={flows.version}
           onClose={() => setOpenDir(null)}
-          onWorkOn={() => onWorkOn(openCard)}
+          linked={linkedSessions(openCard.dir)}
+          onWorkOn={(target) => onWorkOn(openCard, target)}
           onChanged={() => void flows.refresh()}
         />
       ) : null}
