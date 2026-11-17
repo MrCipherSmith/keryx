@@ -10,6 +10,7 @@ import {
   isKeryxRuleLayer,
   isRegularFile,
   literalRulePath,
+  preMoveRuleReferences,
   projectRulePath,
   resolveRuleReference,
   ruleReferences,
@@ -1664,14 +1665,21 @@ function versionOption(content: string): { version?: string } {
  * Only a regular file is the overlay's rule. `notRegular` is the first
  * candidate something else sits at, so a lookup that finds no file can say
  * which path was passed over.
+ *
+ * A rule keryx moved out of `core/` is cited under its new path
+ * (`canonicalRuleReference`), but an overlay written before the move keeps its
+ * copy under the old one; both are looked for, the new path first.
  */
 async function findOverlayRule(sourcePath: string, ref: string): Promise<{ found?: string; notRegular?: string }> {
+  const names = [ref, ...preMoveRuleReferences(ref)];
   let dir = path.dirname(sourcePath);
   let notRegular: string | undefined;
   for (let depth = 0; depth <= 3; depth += 1) {
-    const candidate = path.join(dir, "rules", ref);
-    if (await isRegularFile(candidate)) return { found: candidate };
-    if (notRegular === undefined && (await pathExists(candidate))) notRegular = candidate;
+    for (const name of names) {
+      const candidate = path.join(dir, "rules", name);
+      if (await isRegularFile(candidate)) return { found: candidate };
+      if (notRegular === undefined && (await pathExists(candidate))) notRegular = candidate;
+    }
     const parent = path.dirname(dir);
     if (parent === dir) break;
     dir = parent;

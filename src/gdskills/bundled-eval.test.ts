@@ -1834,7 +1834,7 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
     expect(message).not.toMatch(/raise the ceiling only/i);
 
     const rule = readFileSync(
-      path.join(defaultBundledRoot(), "rules", "core", "skills-storage-workflow.mdc"),
+      path.join(defaultBundledRoot(), "rules", "process", "skills-storage-workflow.mdc"),
       "utf8",
     );
     expect(rule).toContain("A ceiling **moves down**, never up");

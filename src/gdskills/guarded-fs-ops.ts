@@ -16,7 +16,7 @@
 // nothing else in `src/gdskills` — a raw write anywhere else, `install.ts`
 // included, is caught.
 
-import { cp, lstat, readFile, readdir, realpath, unlink } from "node:fs/promises";
+import { cp, lstat, mkdir, readFile, readdir, realpath, rename, unlink } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { createHash } from "node:crypto";
 import path from "node:path";
@@ -27,6 +27,7 @@ import {
   MOVED_RULES,
   RETIRED_RULES,
   retiredRuleSizeCapBytes,
+  type MovedDestinationCause,
   type RetiredRuleEntry,
   type RetiredRuleFailureStage,
   type RetiredRuleOutcome,
@@ -411,9 +412,13 @@ export async function removeUnmodifiedRetiredRules(
   // because on Linux Bun's `cp({ force: true })` unlinks every destination
   // first and aborts the bulk copy before this function runs.
   fsOps: { unlink: (target: string) => Promise<void> } = { unlink },
-  // Injectable so a move can be proven with a fixture entry while
-  // `MOVED_RULES` is still empty.
+  // Injectable so a move can be proven with fixture entries independent of
+  // what `MOVED_RULES` holds.
   entries: readonly RetiredRuleEntry[] = CORE_CLEANUP_ENTRIES,
+  // Whether this keryx bundle ships a moved rule's new path at all. Lets a
+  // kept old copy say "the package is incomplete" instead of blaming a layer
+  // directory that is fine. Unset means "shipped".
+  isDestinationShipped: (movedTo: string) => boolean = () => true,
 ): Promise<RetiredRuleOutcome[]> {
   const outcomes: RetiredRuleOutcome[] = [];
   for (const retired of entries) {
@@ -450,9 +455,13 @@ export async function removeUnmodifiedRetiredRules(
       if (retired.shippedSha256.includes(hash)) {
         // A move removes the old copy only once the new one is really there:
         // otherwise the rule would exist nowhere (ADR-0001 P2 review F-001).
-        if (retired.movedTo !== undefined && !(await isInstalledLayerFile(path.dirname(rulesTarget), retired.movedTo))) {
-          outcomes.push({ ...subject, action: "kept-destination-missing" });
-          continue;
+        if (retired.movedTo !== undefined) {
+          const destination = await installedLayerFileState(path.dirname(rulesTarget), retired.movedTo);
+          if (destination !== "installed") {
+            const cause = isDestinationShipped(retired.movedTo) ? destination : "not-shipped";
+            outcomes.push({ ...subject, action: "kept-destination-missing", cause });
+            continue;
+          }
         }
         stage = "unlink";
         await fsOps.unlink(installedPath);
@@ -491,13 +500,137 @@ export async function removeUnmodifiedRetiredRules(
  * a plain directory. `lstat` throughout: a symlinked layer or file is not one
  * keryx installed, and a missing one is not there at all.
  */
-async function isInstalledLayerFile(rulesRoot: string, layerRelative: string): Promise<boolean> {
+async function installedLayerFileState(
+  rulesRoot: string,
+  layerRelative: string,
+): Promise<"installed" | Exclude<MovedDestinationCause, "not-shipped">> {
   const layerDir = path.join(rulesRoot, path.dirname(layerRelative));
   try {
-    if (!(await lstat(layerDir)).isDirectory()) return false;
-    return (await lstat(path.join(rulesRoot, layerRelative))).isFile();
+    if (!(await lstat(layerDir)).isDirectory()) return "layer-unusable";
+  } catch {
+    return "layer-unusable";
+  }
+  try {
+    return (await lstat(path.join(rulesRoot, layerRelative))).isFile() ? "installed" : "missing";
+  } catch {
+    return "missing";
+  }
+}
+
+/**
+ * What one `MOVED_RULES` entry's project override — a project's own version at
+ * `rules/project/core/<fileName>` — became when the rule moved. After the move
+ * every reference resolves through `rules/project/<movedTo>`
+ * (`canonicalRuleReference`), so an override left under `core/` is read by
+ * nothing; it is moved to the new slot, or kept and reported, never dropped.
+ */
+export type ProjectOverrideOutcome = { fileName: string; movedTo: string } & (
+  | { action: "moved" }
+  /** Both the old and the new slot hold a file; the old one is no longer read. */
+  | { action: "kept-both" }
+  | { action: "kept-not-regular-file" }
+  | { action: "kept-error"; errorCode: string }
+);
+
+/**
+ * Move each moved rule's project override from `rules/project/core/` to
+ * `rules/project/<layer>/`. `lstat` first and never through a symlink: a
+ * `rules/project` or `rules/project/core` that is not a plain directory is left
+ * alone, and so is any entry that is not a regular file. One entry's failure
+ * never stops the rest.
+ */
+export async function migrateMovedRuleOverrides(
+  rulesRoot: string,
+  entries: readonly RetiredRuleEntry[] = MOVED_RULES,
+): Promise<ProjectOverrideOutcome[]> {
+  const projectDir = path.join(rulesRoot, "project");
+  const oldDir = path.join(projectDir, "core");
+  // Every directory on the way, `rules/` included, must be a real one: a
+  // symlinked `.metaproject/rules` would send the mkdir and rename outside
+  // the project, where the layer installs already refused to write (LS-4).
+  for (const dir of [rulesRoot, projectDir, oldDir]) {
+    if (!(await isPlainDirectory(dir))) return [];
+  }
+  const outcomes: ProjectOverrideOutcome[] = [];
+  for (const entry of entries) {
+    if (entry.movedTo === undefined) continue;
+    const subject = { fileName: entry.fileName, movedTo: entry.movedTo };
+    const oldPath = path.join(oldDir, entry.fileName);
+    const newPath = path.join(projectDir, entry.movedTo);
+    try {
+      const stats = await lstatOrNull(oldPath);
+      if (stats === null) continue;
+      if (!stats.isFile()) {
+        outcomes.push({ ...subject, action: "kept-not-regular-file" });
+        continue;
+      }
+      const newDir = path.dirname(newPath);
+      const newDirStats = await lstatOrNull(newDir);
+      if (newDirStats === null) {
+        // Not recursive: `projectDir` was just confirmed a plain directory and
+        // `movedTo` is one layer deep.
+        await mkdir(newDir);
+      } else if (!newDirStats.isDirectory()) {
+        outcomes.push({ ...subject, action: "kept-error", errorCode: "ENOTDIR" });
+        continue;
+      }
+      if ((await lstatOrNull(newPath)) !== null) {
+        outcomes.push({ ...subject, action: "kept-both" });
+        continue;
+      }
+      await rename(oldPath, newPath);
+      outcomes.push({ ...subject, action: "moved" });
+    } catch (error) {
+      outcomes.push({ ...subject, action: "kept-error", errorCode: isErrnoException(error) && error.code ? error.code : "UNKNOWN" });
+    }
+  }
+  return outcomes;
+}
+
+async function lstatOrNull(target: string): Promise<Awaited<ReturnType<typeof lstat>> | null> {
+  try {
+    return await lstat(target);
+  } catch (error) {
+    if (isErrnoException(error) && error.code === "ENOENT") return null;
+    throw error;
+  }
+}
+
+async function isPlainDirectory(target: string): Promise<boolean> {
+  try {
+    return (await lstat(target)).isDirectory();
   } catch {
     return false;
+  }
+}
+
+/** A notice for an override that was moved, a warning for one that was kept. */
+export function movedRuleOverrideMessage(outcome: ProjectOverrideOutcome): { kind: "notice" | "warning"; text: string } {
+  const oldSlot = `rules/project/core/${outcome.fileName}`;
+  const newSlot = `rules/project/${outcome.movedTo}`;
+  const lead = `${oldSlot} is this project's version of a rule keryx moved to rules/${outcome.movedTo}`;
+  switch (outcome.action) {
+    case "moved":
+      return { kind: "notice", text: `${lead}; moved it to ${newSlot}, where it is read now` };
+    case "kept-both":
+      return {
+        kind: "warning",
+        text: `${lead}, and ${newSlot} already exists; nothing reads the copy under core/ any more — merge it into ${newSlot}, then delete it`,
+      };
+    case "kept-not-regular-file":
+      return {
+        kind: "warning",
+        text: `${lead}, but it is not a regular file, so keryx left it alone and nothing reads it — replace it with a file at ${newSlot}`,
+      };
+    case "kept-error":
+      return {
+        kind: "warning",
+        text: `${lead}; it could not be moved to ${newSlot} (${outcome.errorCode}), so nothing reads it — move it by hand`,
+      };
+    default: {
+      const exhaustive: never = outcome;
+      throw new Error(`unhandled override outcome: ${JSON.stringify(exhaustive)}`);
+    }
   }
 }
 
@@ -550,9 +683,23 @@ export function retiredRuleWarning(
           + `rules/core/${outcome.fileName}`;
     case "kept-destination-missing": {
       const movedTo = outcome.movedTo ?? outcome.fileName;
-      return `${prefix}; the old copy was kept because rules/${movedTo} is not installed as a regular file in a `
-        + `plain rules/${movedTo.split("/")[0]}/ directory — if that folder is a symlink or a file, replace it with a `
-        + `real directory and re-run; keryx removes the old copy once the new path is in place`;
+      const layer = movedTo.split("/")[0];
+      switch (outcome.cause) {
+        case "not-shipped":
+          return `${prefix}; the old copy was kept because this keryx installation does not ship rules/${movedTo} `
+            + `— the package is incomplete; reinstall keryx, then run \`keryx update\``;
+        case "layer-unusable":
+          return `${prefix}; the old copy was kept because rules/${layer}/ is not a plain directory — if it is a `
+            + `symlink or a file, replace it with a real directory and re-run; keryx removes the old copy once `
+            + `rules/${movedTo} is in place`;
+        case "missing":
+          return `${prefix}; the old copy was kept because rules/${movedTo} was not installed — re-run \`keryx update\`; `
+            + `keryx removes the old copy once the new path is in place`;
+        default: {
+          const exhaustive: never = outcome.cause;
+          throw new Error(`unhandled destination cause: ${JSON.stringify(exhaustive)}`);
+        }
+      }
     }
     case "kept-not-regular-file":
       return `${prefix}; kept because it is not a regular file (a symlink, directory, or similar) — keryx will not read or remove it; delete or rename it yourself if appropriate`;
@@ -585,5 +732,6 @@ export function movedRuleNotice(outcome: RetiredRuleOutcome): string | null {
   if (outcome.action !== "removed" || outcome.movedTo === undefined) {
     return null;
   }
-  return `rules/core/${outcome.fileName} moved to rules/${outcome.movedTo}; removed the unmodified old copy`;
+  return `rules/core/${outcome.fileName} moved to rules/${outcome.movedTo}; removed the unmodified old copy — `
+    + `update any citation of rules/core/${outcome.fileName} in your own files (CLAUDE.md, AGENTS.md, project skills, wiki)`;
 }

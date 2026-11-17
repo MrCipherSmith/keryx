@@ -539,7 +539,7 @@ How each field of a `project` entry in `--json` is derived:
   Printed under "rules cited but not in .metaproject/rules". The reviewer is
   still dispatched; add the rule, or accept that it reviews without it.
 - **`shadowedRules`** — `[{ ref, resolved }]`: rules the text cites as
-  `<dir>/<name>.mdc` that the project-slot copy answers first — above,
+  `<dir>/<name>.mdc` that the project-slot copy (or a moved rule's new path) answers first — above,
   `{ "ref": "core/error-handling.mdc", "resolved":
   ".metaproject/rules/project/core/error-handling.mdc" }`. Printed under
   "rules read from .metaproject/rules/project". Expected after a `differs` or

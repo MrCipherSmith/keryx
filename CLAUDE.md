@@ -61,7 +61,7 @@ agents that read only `AGENTS.md` must not load them.
 
 When writing a prompt, a subagent dispatch, a skill instruction, a stopping rule, or when
 auditing existing instructions for patterns written against older models, read
-`.metaproject/rules/core/opus-5-5-prompting.mdc` first.
+`.metaproject/rules/process/opus-5-5-prompting.mdc` first.
 
 The short form, so the common case needs no file read: Claude Opus 5.5 always reasons before
 replying, so never write `think carefully`, `think step by step` or `рассуждай пошагово` — state

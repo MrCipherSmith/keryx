@@ -244,7 +244,7 @@ export function renderIndexMarkdown({
           "For Metaproject requirements packages under `docs/requirements` (README, PRD, specification, policies, schemas), use `skills/gdskills/planning/docpack-orchestrator/SKILL.md`; for current-codebase reverse-engineering documentation, use `autodoc-orchestrator` from `skills/catalog.md`.",
           "For known modules/components/stores/services/domain entities, check generated project skills under `project-skills/<module>/<entity>/` before generic guidance.",
           ORCHESTRATORS_INLINE_NOTE,
-          "When orchestrating multi-agent work, dispatch gdskills workers through the schema contracts in `core/gdskills/contracts/` (subagent-dispatch -> subagent-result) and read `rules/core/subagent-status-protocol.md`; validate a concrete message with `keryx skills contracts validate <file> --schema <name>`.",
+          "When orchestrating multi-agent work, dispatch gdskills workers through the schema contracts in `core/gdskills/contracts/` (subagent-dispatch -> subagent-result) and read `rules/process/subagent-status-protocol.md`; validate a concrete message with `keryx skills contracts validate <file> --schema <name>`.",
         ]
       : []),
     ...(enableHealth
@@ -1778,7 +1778,7 @@ skills module. A layer the installed keryx version does not ship yet has no fold
 
 ## Core rule library (\`core/*.mdc\`)
 
-\`core/*.mdc\` is an on-demand rule library, not something loaded automatically. A rule file is
+\`core/*.mdc\` (and every procedure under \`process/\`) is an on-demand rule library, not something loaded automatically. A rule file is
 read only when a skill or \`routing.md\` cites it by path.
 
 - \`alwaysApply\` and \`globs\` in each rule's frontmatter are Cursor-format metadata for Cursor's
@@ -1799,6 +1799,8 @@ read only when a skill or \`routing.md\` cites it by path.
 - a rule that moved from \`core/\` to another layer is installed at its new path, and its old
   \`core/\` copy is removed the same way once the new path is in place: an unmodified shipped copy
   goes, an edited one stays and the warning names the new path to carry your edits to.
+- a project override of a moved rule follows it: \`project/core/<name>.mdc\` is moved to
+  \`project/<layer>/<name>.mdc\`, the slot read now; when both exist, the old one is kept and reported.
 `;
 }
 

@@ -100,7 +100,7 @@ Step 0 runs on **every** round. Step 14 runs **once**, after the last one. They 
 
 ### Step 6 — the model is computed, not chosen
 
-Before dispatching each reviewer, run `keryx review tier` with the signals you hold (`--scope`, `--findings`, `--diff-lines`, `--fix-attempt`, `--verifier`, `--security`, `--forced-strategy-change`) and paste the `model` block it prints into that dispatch. The tier comes from the command, not from reading `rules/core/model-selection.mdc`.
+Before dispatching each reviewer, run `keryx review tier` with the signals you hold (`--scope`, `--findings`, `--diff-lines`, `--fix-attempt`, `--verifier`, `--security`, `--forced-strategy-change`) and paste the `model` block it prints into that dispatch. The tier comes from the command, not from reading `rules/process/model-selection.mdc`.
 
 It names a model only if you gave it your session (`--session-provider`/`--session-model` or `KERYX_SESSION_*`) and discovery found another. Otherwise it prints `inherit: true` with the tier — **adaptive**: pick your own runtime's model for that tier (`standard` = your session model; `light`/`deep` = your runtime's lighter/most capable class if its dispatch tool offers one, else the session model). A model id never goes into a dispatch by hand.
 
@@ -1464,7 +1464,7 @@ not a table cell.
 ## Skill Learning Handoff
 
 After findings are consolidated, decide whether any of them should re-train a
-project-skill (see `rules/core/skill-lifecycle.mdc`). A review is the strongest
+project-skill (see `rules/process/skill-lifecycle.mdc`). A review is the strongest
 learning signal: a finding that a project-skill *should have prevented* means the
 skill is stale or incomplete.
 

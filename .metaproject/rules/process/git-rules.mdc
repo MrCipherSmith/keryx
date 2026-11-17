@@ -23,7 +23,7 @@ Apply before any git operation: commit, branch creation, or PR creation. Always 
 4. If declined: do not create branch/commit/PR.
 
 ## Commit Message Rules
-Follow `core/commit-message-formatting.mdc`.
+Follow `process/commit-message-formatting.mdc`.
 
 ## Red Flags — Stop and re-read this rule if you are thinking:
 

@@ -26,7 +26,7 @@ function read(...parts: string[]): string {
 const SKILL = read(ENGINE, "SKILL.md");
 const DETAIL = read(ENGINE, "SKILL.detail.md");
 const FLOW = read(BUNDLED, "skills", "orchestration", "flow-orchestrator", "SKILL.md");
-const MODELS = read(BUNDLED, "rules", "core", "model-selection.mdc");
+const MODELS = read(BUNDLED, "rules", "process", "model-selection.mdc");
 const CONTEXT = JSON.parse(read(ENGINE, "review-context.schema.json")) as Schema;
 
 /** From `heading` up to the next heading of the same or a higher level. */

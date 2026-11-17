@@ -1,0 +1,39 @@
+---
+description: "Rules for creating and updating requirement documents. Layout and versioning follow requirements-package-standard.mdc."
+alwaysApply: false
+---
+
+# Requirements Management Rules
+
+## Purpose
+Standardize how requirement sets are created and maintained.
+
+## When To Apply
+Apply when creating or updating requirement documents.
+
+## Location & Layout
+Follow `requirements-package-standard.mdc` for the package layout
+(`docs/requirements/<name>/{README,prd,specification}.md` plus optional
+files), the `Version: x.y.z` field, and the verification/review contracts. Do
+not restate that layout here, and do not date-stamp the folder or fork
+`ru`/`en`/`ai` copies — one set of documents, versioned in place, is the
+standard.
+
+## Mandatory Behavior
+1. Ask for target location and requirement folder name before writing.
+2. Confirm naming convention before creation.
+3. Reuse the existing package folder for the topic; update documents in place
+   and bump their `Version` field rather than creating a parallel copy.
+4. Document assumptions and open questions explicitly.
+
+## Output Contract
+- Use Markdown (`.md`) only.
+- Keep sections explicit: context, scope, requirements, constraints, open questions.
+- Code snippets must be fenced code blocks.
+
+## Workflow
+1. Capture request.
+2. Clarify folder/location under `docs/requirements/<name>/`.
+3. Create or update the package per `requirements-package-standard.mdc`.
+4. Document assumptions and open questions.
+5. Ask whether to apply changes.

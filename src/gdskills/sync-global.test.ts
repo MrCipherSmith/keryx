@@ -13,7 +13,7 @@ import {
 
 /**
  * Flow 205: the Global Sync Mapping that
- * `src/gdskills/bundled/rules/core/skills-storage-workflow.mdc` has documented
+ * `src/gdskills/bundled/rules/process/skills-storage-workflow.mdc` has documented
  * all along, and that no code implemented.
  *
  * Every test here uses a temp HOME. Nothing in this file may write into the

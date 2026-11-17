@@ -1365,7 +1365,7 @@ export const REJECTED_CHANGES_LEDGER = {
   path: "docs/skills/rejected-skill-changes.md",
   header: "| date | skill | change tried | why rejected | evidence (before → after) | link |",
   /** The rule that requires it, bundled-tree-relative. */
-  rule: "rules/core/skills-storage-workflow.mdc",
+  rule: "rules/process/skills-storage-workflow.mdc",
 } as const;
 
 /**
@@ -1991,7 +1991,7 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
         add(
           "anatomy:length",
           null,
-          `${lines} lines exceeds ${recorded}. Split the skill, or move reference material into a sibling document, and lower the ceiling to the new count in the same change. A ceiling only ever moves DOWN: raising it is the one edit rules/core/skills-storage-workflow.mdc ("Length Ceilings") forbids, because it converts a measured limit into a record of whatever the file grew to.`,
+          `${lines} lines exceeds ${recorded}. Split the skill, or move reference material into a sibling document, and lower the ceiling to the new count in the same change. A ceiling only ever moves DOWN: raising it is the one edit rules/process/skills-storage-workflow.mdc ("Length Ceilings") forbids, because it converts a measured limit into a record of whatever the file grew to.`,
         );
       }
     }
