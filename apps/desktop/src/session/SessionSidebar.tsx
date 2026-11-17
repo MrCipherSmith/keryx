@@ -34,6 +34,20 @@ function dayBucket(iso: string | null | undefined): string {
 
 /** What the sidebar says about a session: working, waiting for you, or loading. */
 function Mark({ mark, loading }: { mark: SessionMark | undefined; loading: boolean }) {
+  const running = mark?.running ?? 0;
+  return (
+    <>
+      {running > 0 ? (
+        <span className="session-item-badge" title={`${running} running (subagents and tasks)`} aria-label={`${running} running`}>
+          {running}
+        </span>
+      ) : null}
+      <StateMark mark={mark} loading={loading} />
+    </>
+  );
+}
+
+function StateMark({ mark, loading }: { mark: SessionMark | undefined; loading: boolean }) {
   if (mark?.waiting) {
     return (
       <span className="session-item-mark is-waiting" title="Waiting for your answer" aria-label="Waiting for your answer">

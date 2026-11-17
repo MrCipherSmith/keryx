@@ -1,6 +1,7 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
 import type { ToolCallContent, ToolKind } from "../acp/types";
 import type { CommandItem, Item } from "./reducer";
+import type { Subagent } from "./activity";
 import { CommandCard } from "./CommandCard";
 import { blockText } from "./reducer";
 import { Markdown } from "../components/Markdown";
@@ -126,7 +127,7 @@ function StatusGlyph({ status }: { status: ToolItem["status"] }) {
   return <Icon name="circle" size={11} />;
 }
 
-const ToolRow = memo(function ToolRow({ item }: { item: ToolItem }) {
+const ToolRow = memo(function ToolRow({ item, subagentId, onShowSubagent }: { item: ToolItem; subagentId?: string; onShowSubagent?: (id: string) => void }) {
   const [open, setOpen] = useState(false);
   const raw = useMemo(() => pretty(item.rawOutput), [item.rawOutput]);
   const primary = useMemo(() => primaryInput(item.rawInput), [item.rawInput]);
@@ -181,6 +182,11 @@ const ToolRow = memo(function ToolRow({ item }: { item: ToolItem }) {
             </div>
           ) : null}
         </div>
+      ) : null}
+      {subagentId && onShowSubagent ? (
+        <button className="tool-link" onClick={() => onShowSubagent(subagentId)}>
+          <Icon name="external" size={12} /> Show subagent
+        </button>
       ) : null}
     </div>
   );
@@ -253,9 +259,17 @@ interface Props {
   busy: boolean;
   replaying: boolean;
   empty: ReactNode;
+  /** The session's subagents: a tool card whose call spawned one links to it. */
+  subagents?: readonly Subagent[];
+  onShowSubagent?: (id: string) => void;
 }
 
-export function Transcript({ items, busy, replaying, empty, onRunCommand }: Props) {
+export function Transcript({ items, busy, replaying, empty, onRunCommand, subagents, onShowSubagent }: Props) {
+  const spawned = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const a of subagents ?? []) if (a.parentToolCallId && !m.has(a.parentToolCallId)) m.set(a.parentToolCallId, a.id);
+    return m;
+  }, [subagents]);
   const ref = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   const [stuck, setStuck] = useState(true);
@@ -356,7 +370,7 @@ export function Transcript({ items, busy, replaying, empty, onRunCommand }: Prop
                     {b.first ? <AgentLabel /> : null}
                     <div className="tool-group">
                       {b.items.map((t) => (
-                        <ToolRow key={t.id} item={t} />
+                        <ToolRow key={t.id} item={t} subagentId={spawned.get(t.toolCallId)} onShowSubagent={onShowSubagent} />
                       ))}
                     </div>
                   </div>

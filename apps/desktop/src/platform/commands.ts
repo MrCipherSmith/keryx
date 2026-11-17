@@ -84,7 +84,18 @@ export async function windowOpenProject(cwd: string): Promise<void> {
   window.open(`${window.location.pathname}?cwd=${encodeURIComponent(cwd)}`, "_blank");
 }
 
-type FolderPrompter = (title: string) => Promise<string | null>;
+/** Open an http(s) URL in the system browser (the Tauri opener plugin; a new tab in browser dev mode). */
+export async function openExternal(url: string): Promise<void> {
+  if (!/^https?:\/\//i.test(url)) throw new Error("Only http and https links can be opened.");
+  if (isTauri()) {
+    const { openUrl } = await import("@tauri-apps/plugin-opener");
+    await openUrl(url);
+    return;
+  }
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
+type FolderPrompter =(title: string) => Promise<string | null>;
 let folderPrompter: FolderPrompter | null = null;
 
 /** Browser dev mode has no native folder picker; the app registers an in-app one. */

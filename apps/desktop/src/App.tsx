@@ -22,7 +22,7 @@ import { laneOf, workPrompt } from "./flows/model";
 import { useFlows } from "./flows/useFlows";
 import { AskUserDialog, FatalDialog, PermissionDialog } from "./session/Approvals";
 import type { ComposerHandle } from "./session/Composer";
-import { ProvidersDialog, useProvidersDialog } from "./session/ProvidersDialog";
+import { ProvidersDialog, useProvidersDialog, type ProvidersApi } from "./session/ProvidersDialog";
 import { SessionView } from "./session/SessionView";
 import { useAcpSession } from "./session/useAcpSession";
 
@@ -129,6 +129,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
   const s = useAcpSession(cwd);
   const flows = useFlows(cwd);
   const providers = useProvidersDialog();
+  const providersApi = useMemo<ProvidersApi>(() => ({ request: s.rpc, extensions: s.extensions, onChallenge: s.onLoginChallenge }), [s.rpc, s.extensions, s.onLoginChallenge]);
   const [view, setView] = useState<View>("session");
   const [palette, setPalette] = useState<string | null>(null);
   const [recents, setRecents] = useState<string[]>([]);
@@ -314,7 +315,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
         </div>
       ) : null}
 
-      {providers.request ? <ProvidersDialog request={providers.request} onClose={providers.close} /> : null}
+      {providers.request ? <ProvidersDialog request={providers.request} api={providersApi} onClose={providers.close} /> : null}
       {palette !== null ? <CommandPalette items={paletteItems} initialQuery={palette} onClose={() => setPalette(null)} /> : null}
 
       {s.fatal && !(s.fatalHidden && (s.fatal.kind === "incompatible" || s.fatal.kind === "noShell")) ? (

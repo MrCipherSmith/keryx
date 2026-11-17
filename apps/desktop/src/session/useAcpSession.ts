@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { AcpClient, RpcError } from "../acp/client";
 import { hasCommandExtension } from "../acp/commands";
+import {
+  extensionsOf,
+  PROVIDERS_LOGIN_CHALLENGE,
+  SUBAGENT_NOTIFICATION,
+  supportsTasks,
+  TASKS_EVENT,
+  TASKS_LIST,
+  toTasks,
+  type LoginChallenge,
+} from "../acp/providers";
 import { acpStart, acpTransport, acpStop, listenBridge, setWindowTitle, versionCheck } from "../platform/commands";
 import {
   hasLiveSessions,
@@ -64,6 +74,8 @@ interface Live {
   usable: boolean;
   /** keryx advertised `_keryx/command`; without it commands go as prompt text. */
   commandMethod: boolean;
+  /** `initialize._meta.keryx.extensions`: the extension methods this keryx serves. */
+  extensions: readonly string[];
   unlisten: (() => void) | null;
   /** Which sessions keryx holds for this window, their turns, and which one is shown. */
   reg: SessionRegistry<Turn>;
@@ -86,7 +98,9 @@ export function useAcpSession(cwd: string) {
   const [fatal, setFatal] = useState<Fatal | null>(null);
   /** The incompatible-keryx dialog was put away; `fatal` itself stays, so the window keeps saying so. */
   const [fatalHidden, setFatalHidden] = useState(false);
-  const live = useRef<Live>({ client: null, gen: 0, initialized: false, usable: false, commandMethod: false, unlisten: null, reg: new SessionRegistry<Turn>() });
+  const [extensions, setExtensions] = useState<readonly string[]>([]);
+  const challengeListeners = useRef(new Set<(c: LoginChallenge) => void>());
+  const live = useRef<Live>({ client: null, gen: 0, initialized: false, usable: false, commandMethod: false, extensions: [], unlisten: null, reg: new SessionRegistry<Turn>() });
 
   // session/update notifications are queued and applied once per animation frame (a timer covers a
   // hidden window, where frames do not fire), so a long replay or a fast stream is not one render per update.
@@ -147,6 +161,22 @@ export function useAcpSession(cwd: string) {
       /* listing is optional; an agent without session/list just shows none */
     }
   }, [cwd, dispatch]);
+
+  /** Re-list a session's background tasks (keryx sends no output chunks, only start/phase/exit events). */
+  const refreshTasks = useCallback(
+    async (sessionId: string) => {
+      const l = live.current;
+      const client = l.client;
+      if (!client || !l.initialized || !supportsTasks(l.extensions) || !l.reg.held.has(sessionId)) return;
+      try {
+        const r = await client.request<unknown>(TASKS_LIST, { sessionId });
+        if (l.client === client) dispatch({ t: "tasks", sessionId, tasks: toTasks(r) });
+      } catch {
+        /* the list is best effort; the panel keeps what it had */
+      }
+    },
+    [dispatch],
+  );
 
   const acceptUpdate = useCallback(
     (u: RoutedUpdate) => {
@@ -273,6 +303,8 @@ export function useAcpSession(cwd: string) {
       l.initialized = false;
       l.usable = false;
       l.commandMethod = false;
+      l.extensions = [];
+      setExtensions([]);
       l.reg.reset();
       setFatal(null);
       setFatalHidden(false);
@@ -285,6 +317,16 @@ export function useAcpSession(cwd: string) {
       client.onNotification = (method, params) => {
         if (method === "session/update") handleUpdate(params);
         else if (method === SESSION_RELEASED) handleReleased(params);
+        else if (method === SUBAGENT_NOTIFICATION) {
+          const p = params as { sessionId?: unknown; event?: unknown } | null;
+          if (typeof p?.sessionId === "string" && p.event) dispatch({ t: "subagent", sessionId: p.sessionId, event: p.event });
+        } else if (method === TASKS_EVENT) {
+          const sid = (params as { sessionId?: unknown } | null)?.sessionId;
+          if (typeof sid === "string") void refreshTasks(sid);
+        } else if (method === PROVIDERS_LOGIN_CHALLENGE) {
+          const c = params as LoginChallenge | null;
+          if (c && typeof c.userCode === "string") for (const f of challengeListeners.current) f(c);
+        }
       };
       client.onRequest = async (method, params) => {
         if (method === "session/request_permission") {
@@ -341,6 +383,8 @@ export function useAcpSession(cwd: string) {
         if (l.gen !== gen) return;
         l.initialized = true;
         l.commandMethod = hasCommandExtension(init);
+        l.extensions = extensionsOf(init);
+        setExtensions(l.extensions);
 
         const found = init.agentInfo?.version ?? "unknown";
         const profile = init._meta?.keryx?.profile === "shell" ? "shell" : "editor";
@@ -364,7 +408,7 @@ export function useAcpSession(cwd: string) {
         dispatch({ t: "phase", phase: "exited", exit: { code: null, stderrTail: errMessage(e) } });
       }
     },
-    [cwd, dialogs, dispatch, handleUpdate, handleReleased, finishStart],
+    [cwd, dialogs, dispatch, handleUpdate, handleReleased, finishStart, refreshTasks],
   );
 
   useEffect(() => {
@@ -543,10 +587,26 @@ export function useAcpSession(cwd: string) {
   const applyEffects = useCallback(
     (sessionId: string, effects: readonly CommandEffect[]) => {
       if (effects.includes("transcript")) void reloadSession(sessionId);
+      if (effects.includes("tasks")) void refreshTasks(sessionId);
       if (effects.some((e) => e === "model" || e === "config" || e === "transcript")) void refreshSessions();
     },
-    [reloadSession, refreshSessions],
+    [reloadSession, refreshSessions, refreshTasks],
   );
+
+  /** The tasks of the session on screen are listed whenever it is shown (and once keryx is ready). */
+  useEffect(() => {
+    if (win.shownId && win.phase === "ready") void refreshTasks(win.shownId);
+  }, [win.shownId, win.phase, extensions, refreshTasks]);
+
+  /** One request to keryx for the Providers dialog and the Activity panel. */
+  const rpc = useCallback(<T,>(method: string, params?: unknown): Promise<T> => {
+    const client = live.current.client;
+    return client ? client.request<T>(method, params) : Promise.reject(new Error("keryx is not running"));
+  }, []);
+  const onLoginChallenge = useCallback((f: (c: LoginChallenge) => void) => {
+    challengeListeners.current.add(f);
+    return () => void challengeListeners.current.delete(f);
+  }, []);
 
   /** Run a composer line or a view's command line: a command, the queue, or plain text for the model. Resolves true when the draft may be cleared. */
   const runCommand = useCallback(
@@ -611,6 +671,10 @@ export function useAcpSession(cwd: string) {
     hideFatal: () => setFatalHidden(true),
     sendPrompt,
     runCommand,
+    rpc,
+    extensions,
+    onLoginChallenge,
+    refreshTasks,
     /** A notice in the shown session's transcript. */
     notify: (level: "info" | "warn" | "error", text: string) => {
       const sessionId = live.current.reg.shown;

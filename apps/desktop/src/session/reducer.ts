@@ -12,6 +12,8 @@ import type {
   ToolCallStatus,
   ToolKind,
 } from "../acp/types";
+import type { TaskInfo } from "../acp/providers";
+import { applySubagentEvent, runningSubagents, type Subagent } from "./activity";
 
 export type Item =
   | { kind: "user"; id: number; text: string; messageId?: string | null }
@@ -102,6 +104,10 @@ export interface ConvState {
   held: boolean;
   /** Why it is not held: keryx's idle cap released it, or the connection was lost. Null while held. */
   lostReason: LostReason | null;
+  /** Subagents of this session, kept until a new session (not cleared per turn). Not persisted: empty after session/load. */
+  subagents: readonly Subagent[];
+  /** Background tasks, as last listed by keryx. */
+  tasks: readonly TaskInfo[];
 }
 
 export type LostReason = "idle-cap" | "connection";
@@ -110,6 +116,9 @@ export type LostReason = "idle-cap" | "connection";
 export function lostText(reason: LostReason | null): string {
   return reason === "connection" ? "The connection to keryx was lost" : "keryx closed this idle session to save memory";
 }
+
+const NO_SUBAGENTS: readonly Subagent[] = [];
+const NO_TASKS: readonly TaskInfo[] = [];
 
 export function newConv(
   sessionId: string,
@@ -130,6 +139,8 @@ export function newConv(
     queue: [],
     held: true,
     lostReason: null,
+    subagents: NO_SUBAGENTS,
+    tasks: NO_TASKS,
   };
 }
 
@@ -367,6 +378,10 @@ export type Action =
   | { t: "queueShift"; sessionId: string }
   /** Make entry `index` the next one sent. */
   | { t: "queueFront"; sessionId: string; index: number }
+  /** A `_keryx/subagent` fleet event for the session it names. */
+  | { t: "subagent"; sessionId: string; event: unknown }
+  /** The session's task list, as `_keryx/tasks/list` returned it. */
+  | { t: "tasks"; sessionId: string; tasks: readonly TaskInfo[] }
   | { t: "config"; sessionId: string; configOptions: ConfigOption[] }
   | { t: "creating"; delta: 1 | -1 }
   | { t: "created"; sessionId: string; modes?: SessionModeState | null; configOptions?: ConfigOption[] | null; show: boolean }
@@ -452,6 +467,13 @@ export function reducer(state: WindowState, a: Action): WindowState {
         const picked = c.queue[a.index]!;
         return { ...c, queue: [picked, ...c.queue.filter((_, i) => i !== a.index)] };
       });
+    case "subagent":
+      return withConv(state, a.sessionId, (c) => {
+        const next = applySubagentEvent(c.subagents, a.event);
+        return next === c.subagents ? c : { ...c, subagents: next };
+      });
+    case "tasks":
+      return withConv(state, a.sessionId, (c) => ({ ...c, tasks: a.tasks }));
     case "busy":
       return withConv(state, a.sessionId, (c) => (c.busy === a.busy ? c : { ...c, busy: a.busy }));
     case "config":
@@ -474,6 +496,8 @@ export function reducer(state: WindowState, a: Action): WindowState {
         lostReason: null,
         // A reload (after /compact or /rewind) keeps what the window itself holds.
         queue: state.convs[a.sessionId]?.queue ?? [],
+        // Tasks live in keryx and survive a replay; subagents are not persisted, so they start empty.
+        tasks: state.convs[a.sessionId]?.tasks ?? [],
         modes: a.modes ?? loaded.modes,
         configOptions: a.configOptions ?? loaded.configOptions,
       };
@@ -525,6 +549,8 @@ export interface SessionMark {
   held: boolean;
   lostReason: LostReason | null;
   title: string | null;
+  /** Running subagents plus running tasks. */
+  running: number;
 }
 
 /** The shown session flattened with the window's own fields: what SessionView and App render. */
@@ -549,6 +575,8 @@ export interface SessionState {
   usage: Usage | null;
   title: string | null;
   queue: QueuedPrompt[];
+  subagents: readonly Subagent[];
+  tasks: readonly TaskInfo[];
   /** A session/new or session/load is in flight. */
   opening: boolean;
   /** Session ids whose session/load is in flight. */
@@ -584,14 +612,21 @@ export function shownView(w: WindowState): SessionState {
     usage: c?.usage ?? null,
     title: c?.title ?? null,
     queue: c?.queue ?? NO_QUEUE,
+    subagents: c?.subagents ?? NO_SUBAGENTS,
+    tasks: c?.tasks ?? NO_TASKS,
     opening: w.creating > 0 || loadingIds.length > 0,
     loadingIds,
   };
 }
 
+/** Running subagents plus running tasks of one session. */
+export function activityCount(c: Pick<ConvState, "subagents" | "tasks">): number {
+  return runningSubagents(c.subagents) + c.tasks.filter((t) => t.status === "running").length;
+}
+
 /** Marks for every session the window has, for the sidebar. */
 export function sessionMarks(w: WindowState, waiting: ReadonlySet<string>): Record<string, SessionMark> {
   const out: Record<string, SessionMark> = {};
-  for (const [sid, c] of Object.entries(w.convs)) out[sid] = { busy: c.busy, waiting: waiting.has(sid), held: c.held, lostReason: c.lostReason, title: c.title };
+  for (const [sid, c] of Object.entries(w.convs)) out[sid] = { busy: c.busy, waiting: waiting.has(sid), held: c.held, lostReason: c.lostReason, title: c.title, running: activityCount(c) };
   return out;
 }

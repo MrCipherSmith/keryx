@@ -15,6 +15,7 @@ use tauri::{Manager, RunEvent, WebviewWindowBuilder, WindowEvent};
 pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .manage(bridge::AppState::default())
         .manage(flows::watch::FlowWatchers::default())
         .setup(|app| {

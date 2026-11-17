@@ -31,6 +31,8 @@ interface Props {
   onStop: () => void;
   onMode: (id: string) => void;
   onModel: (configId: string, value: string) => void;
+  /** Open the Providers dialog from the model picker. */
+  onProviders?: () => void;
 }
 
 const MODE_ICON: Record<string, IconName> = { ask: "shield", trust: "shieldCheck", auto: "sparkle" };
@@ -50,7 +52,7 @@ function modelName(option: ConfigOption): string {
 }
 
 export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
-  { sessionId, busy, disabledReason, commands, modes, model, sendKey, onSend, onStop, onMode, onModel },
+  { sessionId, busy, disabledReason, commands, modes, model, sendKey, onSend, onStop, onMode, onModel, onProviders },
   ref,
 ) {
   const [drafts, setDrafts] = useState<Drafts>({});
@@ -195,6 +197,12 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
             ],
       )
     : [];
+  if (onProviders) {
+    modelItems.push(
+      { kind: "separator", id: "providers-sep" },
+      { id: "providers", label: "Connect a provider…", icon: "plus", onSelect: onProviders },
+    );
+  }
 
   const sendHint = sendKey === "enter" ? "Return to send · Shift+Return for a new line" : `${MOD}Return to send`;
 

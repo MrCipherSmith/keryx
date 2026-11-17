@@ -6,6 +6,7 @@ declare module "bun:test" {
     not: Matchers;
     toBe(expected: unknown): void;
     toEqual(expected: unknown): void;
+    toMatchObject(expected: unknown): void;
     toBeNull(): void;
     toBeUndefined(): void;
     toBeTrue(): void;
@@ -20,5 +21,6 @@ declare module "bun:test" {
   export function test(name: string, fn: TestFn): void;
   export function beforeAll(fn: TestFn): void;
   export function afterAll(fn: TestFn): void;
+  export function beforeEach(fn: TestFn): void;
   export function expect(actual: unknown): Matchers;
 }

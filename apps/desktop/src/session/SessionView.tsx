@@ -1,10 +1,13 @@
-import { forwardRef, useCallback, useMemo, useState } from "react";
+import { forwardRef, useCallback, useEffect, useMemo, useState } from "react";
 import type { PlanEntry } from "../acp/types";
 import { formatTokens } from "../lib/format";
 import { setPrefs, usePrefs, MOD } from "../lib/prefs";
 import { Icon } from "../components/Icon";
 import { Kbd, Spinner } from "../components/ui";
 import { Composer, type ComposerHandle } from "./Composer";
+import { ActivityPanel, type ActivityTab } from "./ActivityPanel";
+import { runningSubagents } from "./activity";
+import { isRunning } from "../acp/providers";
 import { SessionSidebar } from "./SessionSidebar";
 import { Transcript } from "./Transcript";
 import { lostText, type QueuedPrompt, type Usage } from "./reducer";
@@ -34,6 +37,14 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
   const prefs = usePrefs();
   const sidebarOpen = prefs.sessionSidebar && !narrow;
   const [narrowSidebar, setNarrowSidebar] = useState(false);
+  const [activity, setActivity] = useState<{ open: boolean; tab: ActivityTab; subagentId: string | null }>({ open: false, tab: "subagents", subagentId: null });
+  useEffect(() => setActivity((a) => (a.subagentId === null ? a : { ...a, subagentId: null })), [state.sessionId]);
+  const activityApi = useMemo(() => ({ request: s.rpc, extensions: s.extensions }), [s.rpc, s.extensions]);
+  const activityRunning = runningSubagents(state.subagents) + state.tasks.filter(isRunning).length;
+  const showSubagent = useCallback((id: string) => setActivity({ open: true, tab: "subagents", subagentId: id }), []);
+  const refreshTasks = useCallback(() => {
+    if (state.sessionId) void s.refreshTasks(state.sessionId);
+  }, [s, state.sessionId]);
   const ready = state.phase === "ready" && state.sessionId !== null && state.held;
   const incompatible = s.fatal?.kind === "incompatible" || s.fatal?.kind === "noShell";
 
@@ -136,7 +147,7 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
   );
 
   return (
-    <div className={`session-view${sidebarOpen ? " with-sidebar" : ""}`}>
+    <div className={`session-view${sidebarOpen ? " with-sidebar" : ""}${activity.open ? " with-activity" : ""}${narrow ? " is-narrow" : ""}`}>
       {sidebarOpen ? sidebar : null}
       {narrow && narrowSidebar ? (
         <div className="sidebar-float" onMouseDown={(e) => e.target === e.currentTarget && setNarrowSidebar(false)}>
@@ -144,8 +155,8 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
         </div>
       ) : null}
       <section className="session-main" aria-label="Conversation">
-        {!sidebarOpen ? (
-          <div className="session-topbar">
+        <div className="session-topbar">
+          {!sidebarOpen ? (
             <button
               className="btn btn-sm btn-ghost"
               onClick={() => (narrow ? setNarrowSidebar(true) : setPrefs({ sessionSidebar: true }))}
@@ -154,8 +165,20 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
               <Icon name="list" size={14} /> Sessions
               {state.sessions.length ? <span className="tab-count">{state.sessions.length}</span> : null}
             </button>
-          </div>
-        ) : null}
+          ) : null}
+          <span className="grow" />
+          {state.sessionId ? (
+            <button
+              className="btn btn-sm btn-ghost activity-toggle"
+              onClick={() => setActivity((a) => ({ ...a, open: !a.open }))}
+              aria-pressed={activity.open}
+              title="Subagents and background tasks"
+            >
+              <Icon name="checklist" size={14} /> Activity
+              {activityRunning > 0 ? <span className="tab-count" title="Running">{activityRunning}</span> : null}
+            </button>
+          ) : null}
+        </div>
 
         {state.banners.length > 0 ? (
           <div className="session-banners">
@@ -218,6 +241,8 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
           items={state.items}
           busy={state.busy}
           onRunCommand={(line, o) => run(line, o)}
+          subagents={state.subagents}
+          onShowSubagent={showSubagent}
           replaying={state.replaying || (state.sessionId === null && state.opening)}
           empty={state.phase === "ready" ? empty : null}
         />
@@ -238,10 +263,25 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
             onStop={s.cancel}
             onMode={(id) => void s.setMode(id)}
             onModel={(c, v) => void s.setModel(c, v)}
+            onProviders={() => onProviders("connect", "")}
           />
           <UsageFooter usage={state.usage} version={state.agentVersion} />
         </div>
       </section>
+      {activity.open && state.sessionId ? (
+        <ActivityPanel
+          sessionId={state.sessionId}
+          subagents={state.subagents}
+          tasks={state.tasks}
+          api={activityApi}
+          tab={activity.tab}
+          onTab={(tab) => setActivity((a) => ({ ...a, tab }))}
+          subagentId={activity.subagentId}
+          onSubagent={(subagentId) => setActivity((a) => ({ ...a, subagentId }))}
+          onRefreshTasks={refreshTasks}
+          onClose={() => setActivity((a) => ({ ...a, open: false }))}
+        />
+      ) : null}
     </div>
   );
 });

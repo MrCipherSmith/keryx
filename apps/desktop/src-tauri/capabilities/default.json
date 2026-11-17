@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "Capabilities for every Keryx window (the welcome window and project windows).",
   "windows": ["*"],
-  "permissions": ["core:default", "core:window:allow-set-title", "dialog:allow-open"]
+  "permissions": ["core:default", "core:window:allow-set-title", "dialog:allow-open", "opener:allow-open-url"]
 }
