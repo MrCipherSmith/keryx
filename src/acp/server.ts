@@ -26,7 +26,7 @@ import {
 import { buildShellHookRuntime, type ShellHookContext } from "../commands/agent-hooks";
 import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
 import type { NormalizedMessage, ProviderPort } from "../harness/provider/types";
-import { listSessions, persistHistory } from "../session";
+import { listSessions, persistHistory, resolveProjectRoot } from "../session";
 import { describeLeaseHolder, describeLeaseLoss, SessionLeasedError } from "../session/lease";
 import { selfAnsweredLine } from "../lib/terminal-safe";
 import { createAcpAgentIo, toolKindFor, tryParseJson, type AcpPermissionAsker } from "./agent-io";
@@ -119,11 +119,10 @@ import { getExecutionPlan, subscribeExecutionPlans, type ExecutionPlan } from ".
 import { askUserAnswerFromResult, askUserParams, clientAnswersAskUser } from "./ask-user";
 import {
   acpModeState,
-  acpProfileExtensions,
-  ACP_PROFILES,
   DEFAULT_ACP_PROFILE,
   KERYX_ACP_EXTENSION_METHODS,
   keryxAcpInfo,
+  keryxAcpProfileMeta,
   type AcpProfile,
 } from "./profile";
 import { buildAcpShellSessionTools, type AcpShellRosterInput } from "./shell-roster";
@@ -224,7 +223,7 @@ export interface AcpKeryxMcpSource {
 }
 
 /** The production source: `keryx shell`'s runtime, which every root has (it may list no servers). */
-export const KERYX_MCP_RUNTIME: AcpKeryxMcpSource = {
+const KERYX_MCP_RUNTIME: AcpKeryxMcpSource = {
   configured: () => true,
   start: (cwd) => createMcpRuntime({ cwd, gitRoot: cwd }),
 };
@@ -234,10 +233,21 @@ export const KERYX_MCP_RUNTIME: AcpKeryxMcpSource = {
  * before the sessions are released (PR #1213 review logic-w8 LOGIC-W8-001). A
  * turn still running past it loses its persist, as the process is exiting.
  */
-export const SHUTDOWN_TURN_GRACE_MS = 2_000;
+const SHUTDOWN_TURN_GRACE_MS = 2_000;
 
-/** The `SessionEnd` reason a shell-profile switch (or an abandoned switch) gives the session it releases. */
-const SWITCH_END_REASON = "session-switch";
+/**
+ * Shell profile: the most sessions one connection holds before an idle one is
+ * released (PR #1213 r04, live sessions). Only a session with no running turn,
+ * no running shell task and no request working on it is released; when every
+ * held session is busy, all stay held and the new one is still opened.
+ */
+export const MAX_HELD_SESSIONS = 8;
+
+/** The reason, and `SessionEnd` reason, of a session the idle cap released. */
+export const IDLE_CAP_RELEASE_REASON = "idle-cap";
+
+/** The `SessionEnd` reason of a session whose shell-profile `session/new`/`session/load` failed. */
+const OPEN_FAILED_END_REASON = "session-open-failed";
 
 /** The ACP plan status for one keryx execution-plan status. */
 function acpPlanStatus(status: string): AcpPlanEntry["status"] {
@@ -335,10 +345,11 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
    *
    * Reference-counted by binding rather than kept for the whole connection:
    * ACP gives a session no end (keryx advertises no `session/close`), so the
-   * unbinds are `session/load` rebinding a session to a different list and,
-   * in the shell profile, a switch releasing the previous session
-   * (`teardownSession`) — and when that leaves a set with no session, it is stopped then instead of
-   * lingering. Everything still running is stopped when the connection ends.
+   * unbinds are an editor-profile `session/load` rebinding a session to a
+   * different list and, in the shell profile, the idle cap releasing a session
+   * (`teardownSession`) — and when that leaves a set with no session, it is
+   * stopped then instead of lingering. Everything still running is stopped when
+   * the connection ends.
    */
   interface SharedMcpSet {
     readonly key: string;
@@ -461,8 +472,9 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   /**
    * One shell-task supervisor per ACP session, kept across `session/load` of the
    * same id (a load replaces the history, not the tasks it started), and swept —
-   * every task killed — when the client switches to another session or the
-   * connection ends (`teardownSession`).
+   * every task killed — only when the session is released: by the idle cap,
+   * which never picks a session with a running task, or when the connection
+   * ends (`teardownSession`). Opening or loading another session leaves it running.
    */
   const sessionJobs = new Map<string, JobRegistry>();
   const jobsFor = (sessionId: string, root: string): JobRegistry => {
@@ -477,8 +489,9 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   let searchController: SearchProviderController | undefined = options.searchController;
   const searchControllerFor = (): SearchProviderController => (searchController ??= createDefaultSearchProviderController());
 
-  /** keryx's configured MCP servers, one runtime per project root, built lazily as `keryx shell` does. */
+  /** Where keryx's own MCP runtime comes from: the test seam, else `KERYX_MCP_RUNTIME`. */
   const keryxMcpSource = options.keryxMcp ?? KERYX_MCP_RUNTIME;
+  /** keryx's configured MCP servers, one runtime per project root, built lazily as `keryx shell` does. */
   const keryxMcpRuntimes = new Map<string, McpRuntime | undefined>();
   /**
    * Whether `keryxMcpFor(root)` gives a runtime — answered without starting
@@ -583,35 +596,101 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   }
 
   /**
-   * Shell profile: the one session this connection is showing (specification
-   * §3.8). The desktop switches sessions inside one connection, so when a
-   * `session/new` or `session/load` succeeds, the session it opened becomes
-   * the active one and the previous one is released (`teardownSession`) — its
-   * lease goes back, so `keryx shell --resume` can open it while the window
-   * stays open. A previous session with a turn still running is released when
-   * that turn ends (`releaseAfterTurn`), after its persist. The editor profile
-   * keeps every session until the connection ends, as before.
+   * Shell profile: live sessions (PR #1213 r04, owner decision on review
+   * ui-ux-w3 UX-W3-R3-002). Every session a `session/new` or `session/load`
+   * opens is HELD by the connection, beside the others: each keeps its own
+   * turn, mode, model, usage, MCP set, plan routing, hook runtime and shell
+   * tasks, and a turn in a session the client is not showing keeps running and
+   * keeps sending its updates and requests, each with its `sessionId`. Opening
+   * one session never releases another.
    *
-   * The switch is applied LAST, right before the reply (PR #1213 review
-   * highload-w1 HL-R2-003, logic-w6 LOGIC-W6-R2-001, security-code-w8
-   * SEC-W8R2-001): the new session binds its client MCP set while the previous
-   * one still holds a shared set (so the set is reused, not closed and
-   * respawned), and a `session/new` that fails leaves the previous session held
-   * and active. Every switch takes a ticket (`beginShellSwitch`); one that a
-   * later switch overtook stops at its next step (`stopIfSuperseded`) and is
-   * refused, rather than firing hooks, binding MCP and answering success for a
-   * session the connection will not keep.
+   * Memory is bounded by the idle cap instead: past `MAX_HELD_SESSIONS`, the
+   * least recently used session that is idle (`sessionIsBusy`) is released
+   * (`teardownSession`) and the client is told with
+   * `_keryx/session_released`, so a return to it does `session/load`. A
+   * session is released only by that cap or by the connection's end.
+   *
+   * The editor profile holds every session until the connection ends, as
+   * before: no cap, and its `session/load` still rebuilds the session.
    */
-  let activeShellSession: string | undefined;
-  const releaseAfterTurn = new Set<string>();
-  /** Teardowns started by a switch, awaited with the rest when the connection ends. */
+  /** Recency for the idle cap: a session is used when it is opened, prompted or configured. */
+  const lastUsed = new Map<string, number>();
+  let useClock = 0;
+  const touch = (sessionId: string): void => {
+    useClock += 1;
+    lastUsed.set(sessionId, useClock);
+  };
+  /**
+   * Requests working on a session outside its turn slot — a `session/new` or
+   * `session/load` opening it, a `session/set_config_option` building its
+   * provider. The idle cap never releases a session with one in flight.
+   */
+  const sessionWork = new Map<string, number>();
+  async function withSessionWork<T>(sessionId: string, work: () => Promise<T>): Promise<T> {
+    // Counted synchronously, before the first await, so a cap run that lands
+    // during `work` already sees it.
+    sessionWork.set(sessionId, (sessionWork.get(sessionId) ?? 0) + 1);
+    try {
+      return await work();
+    } finally {
+      const left = (sessionWork.get(sessionId) ?? 1) - 1;
+      if (left > 0) sessionWork.set(sessionId, left);
+      else sessionWork.delete(sessionId);
+    }
+  }
+  /** Shell profile: sessions a `session/new`/`session/load` is still opening. A second load of one is refused. */
+  const opening = new Set<string>();
+  /** Teardowns the idle cap or a failed open started, awaited with the rest when the connection ends. */
   const releasing = new Set<Promise<void>>();
   const track = (work: Promise<void>): void => {
     releasing.add(work);
     void work.finally(() => releasing.delete(work));
   };
-  let shellSwitchTicket = 0;
-  let latestSwitchSession: string | undefined;
+
+  /**
+   * Whether the idle cap must keep `sessionId`: a turn or slash command holds
+   * its slot (every client request keryx sends — a permission, an ask_user, a
+   * file read — belongs to one), a request is working on it, or one of its
+   * shell tasks is still running.
+   */
+  function sessionIsBusy(sessionId: string): boolean {
+    if (activeTurns.has(sessionId) || sessionWork.has(sessionId)) return true;
+    const jobs = sessionJobs.get(sessionId);
+    return jobs !== undefined && jobs.list({ includePrivate: true }).some((job) => job.status === "running");
+  }
+
+  /**
+   * Shell profile, after a `session/new`/`session/load` succeeded: while the
+   * connection holds more than `MAX_HELD_SESSIONS`, release the least recently
+   * used idle one and tell the client. Every held session busy: all are kept.
+   */
+  function enforceIdleCap(): void {
+    if (!shellProfile) return;
+    for (;;) {
+      const held = registry.ids();
+      if (held.length <= MAX_HELD_SESSIONS) return;
+      let victim: string | undefined;
+      for (const sessionId of held) {
+        if (sessionIsBusy(sessionId)) continue;
+        if (victim === undefined || (lastUsed.get(sessionId) ?? 0) < (lastUsed.get(victim) ?? 0)) victim = sessionId;
+      }
+      if (victim === undefined) return;
+      track(teardownSession(victim, IDLE_CAP_RELEASE_REASON));
+      writeMessage(
+        notificationMessage(KERYX_ACP_EXTENSION_METHODS.sessionReleased, { sessionId: victim, reason: IDLE_CAP_RELEASE_REASON }),
+      );
+    }
+  }
+
+  /**
+   * Shell profile: a `session/new`, or a `session/load` of a session the
+   * connection did not hold, failed. The session it opened goes back; the
+   * client was never told it is open. The editor profile keeps it, as before.
+   */
+  function abandonOpen(sessionId: string): void {
+    if (!shellProfile) return;
+    track(teardownSession(sessionId, OPEN_FAILED_END_REASON));
+  }
 
   /** `SessionEnd` for one session's hook runtime; a failing hook is logged, never thrown. */
   async function fireSessionEnd(hooks: ShellHookContext, endReason: string): Promise<void> {
@@ -625,20 +704,24 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   /**
    * Everything this connection holds for one session, given back: the lease
    * and registry entry, its client MCP binding, its shell tasks (swept), its
-   * plan routing, cached roster, model binding and model-switch bookkeeping,
-   * and its hook runtime, whose `SessionEnd` is fired with `endReason`.
-   * Synchronous up to the returned sweep, so the lease is free when this
-   * returns. Idempotent.
+   * plan routing, cached roster and model binding, and its hook runtime, whose
+   * `SessionEnd` is fired with `endReason`. Synchronous up to the returned
+   * sweep, so the lease is free when this returns. Idempotent. Runs on the
+   * idle cap, a failed shell-profile open, and the connection's end.
    *
    * Kept, because they are small and the session's own if the client loads it
    * again (PR #1213 review degradation-w1 DEG-R2-001): its permission mode, its
    * usage tally, its reasoning override, its control nonce, and the model it
    * was on — as a choice only (`releasedModelChoices`); the provider binding is
-   * dropped and rebuilt by `restoreRecordedModel` on the next load.
+   * dropped and rebuilt by `restoreRecordedModel` on the next load. The model
+   * switch sequence is connection-wide and a reload is a new hold
+   * (`holdGeneration`), so a switch from before the release never applies to
+   * the reloaded session (review logic-w11 LOGIC-W11R3-001, logic-w7
+   * LOGIC-W7-R3-001).
    */
   function teardownSession(sessionId: string, endReason: string): Promise<void> {
     registry.release(sessionId);
-    releaseAfterTurn.delete(sessionId);
+    lastUsed.delete(sessionId);
     for (const [dir, owner] of planDirSessions) {
       if (owner === sessionId) planDirSessions.delete(dir);
     }
@@ -647,7 +730,6 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     const model = sessionModels.get(sessionId);
     if (model !== undefined) releasedModelChoices.set(sessionId, model.choice.value);
     sessionModels.delete(sessionId);
-    switchIssued.delete(sessionId);
     switchApplied.delete(sessionId);
     pendingLateModelList.delete(sessionId);
     const jobs = sessionJobs.get(sessionId);
@@ -655,61 +737,6 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     const hooks = shellHooksBySession.get(sessionId);
     shellHooksBySession.delete(sessionId);
     return Promise.all([jobs?.sweepAll(), hooks !== undefined ? fireSessionEnd(hooks, endReason) : undefined]).then(() => undefined);
-  }
-
-  /** Release a session the connection switched away from: now, or when its running turn ends. */
-  function releaseSwitchedAway(sessionId: string): void {
-    if (activeTurns.has(sessionId)) {
-      releaseAfterTurn.add(sessionId);
-      return;
-    }
-    track(teardownSession(sessionId, SWITCH_END_REASON));
-  }
-
-  /** Shell profile: a `session/new`/`session/load` of `sessionId` begins. Returns its ticket. */
-  function beginShellSwitch(sessionId: string): number {
-    shellSwitchTicket += 1;
-    latestSwitchSession = sessionId;
-    return shellSwitchTicket;
-  }
-
-  /** Shell profile: refuse a switch a later one overtook. The caller's `catch` gives the session back. */
-  function stopIfSuperseded(method: string, sessionId: string, ticket: number): void {
-    if (!shellProfile || ticket === shellSwitchTicket) return;
-    refuse({
-      code: JSON_RPC_ERROR_CODES.invalidRequest,
-      message: `${method}: superseded by a later session/new or session/load; session ${sessionId} was not opened`,
-      data: { method, sessionId, condition: "session-superseded" },
-    });
-  }
-
-  /**
-   * Shell profile: a `session/new`/`session/load` of `sessionId` failed or was
-   * superseded. The session goes back unless the connection still needs it:
-   * it is the active one (a failed re-load of it), or a later call is opening
-   * the same id.
-   */
-  function abandonShellSwitch(sessionId: string, ticket: number): void {
-    if (!shellProfile || activeShellSession === sessionId) return;
-    if (latestSwitchSession === sessionId && ticket !== shellSwitchTicket) return;
-    releaseSwitchedAway(sessionId);
-  }
-
-  /** Shell profile, last step of a successful switch: make `sessionId` active and release the one it replaces. */
-  function activateShellSession(sessionId: string): void {
-    if (!shellProfile) return;
-    const previous = activeShellSession;
-    activeShellSession = sessionId;
-    releaseAfterTurn.delete(sessionId);
-    if (previous === undefined || previous === sessionId) return;
-    releaseSwitchedAway(previous);
-  }
-
-  /** A turn slot of `sessionId` has been freed: release the session now if a switch left it waiting. */
-  function releaseIfSwitchedAway(sessionId: string): void {
-    if (releaseAfterTurn.has(sessionId) && activeShellSession !== sessionId && !activeTurns.has(sessionId)) {
-      releaseSwitchedAway(sessionId);
-    }
   }
 
   /** Bind a new or loaded shell-profile session: its mode, its plan directory, and what the client is told after the reply. */
@@ -973,21 +1000,39 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
    * LATER-started one has been applied already. So the later request wins when
    * both succeed, and a later one that FAILS leaves the earlier one in effect
    * instead of discarding it.
+   *
+   * The number is connection-wide and never reset, and each switch also
+   * carries the HOLD it started in: every time the connection starts holding a
+   * session (`beginHold`, on a `session/new` or on a load of a session it did
+   * not hold) the session gets a new hold number. A switch that finishes in a
+   * later hold than its own — its session was released and loaded again
+   * meanwhile — binds nothing (review logic-w11 LOGIC-W11R3-001, logic-w7
+   * LOGIC-W7-R3-001).
    */
-  const switchIssued = new Map<string, number>();
+  let switchSeq = 0;
+  let holdSeq = 0;
+  const holdGeneration = new Map<string, number>();
   const switchApplied = new Map<string, number>();
-  function beginSwitch(sessionId: string): number {
-    const seq = (switchIssued.get(sessionId) ?? 0) + 1;
-    switchIssued.set(sessionId, seq);
-    return seq;
+  interface SwitchTicket {
+    readonly seq: number;
+    readonly hold: number | undefined;
   }
-  function applySwitch(sessionId: string, seq: number, next: SessionModel): void {
-    // A switch that finished after its session was released binds nothing.
-    if (registry.get(sessionId) === undefined) return;
-    if (seq > (switchApplied.get(sessionId) ?? 0)) {
-      switchApplied.set(sessionId, seq);
+  function beginHold(sessionId: string): void {
+    holdSeq += 1;
+    holdGeneration.set(sessionId, holdSeq);
+  }
+  function beginSwitch(sessionId: string): SwitchTicket {
+    switchSeq += 1;
+    return { seq: switchSeq, hold: holdGeneration.get(sessionId) };
+  }
+  /** Applies a finished switch. `false`: its session is no longer the hold it started in, and nothing was bound. */
+  function applySwitch(sessionId: string, ticket: SwitchTicket, next: SessionModel): boolean {
+    if (registry.get(sessionId) === undefined || holdGeneration.get(sessionId) !== ticket.hold) return false;
+    if (ticket.seq > (switchApplied.get(sessionId) ?? 0)) {
+      switchApplied.set(sessionId, ticket.seq);
       sessionModels.set(sessionId, next);
     }
+    return true;
   }
   /** `/reasoning <level>` for one session — the shell's session override, never saved. */
   const reasoningOverrides = new Map<string, ReasoningEffortLevel>();
@@ -1158,7 +1203,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         ),
       );
     }
-    const seq = beginSwitch(sessionId);
+    const ticket = beginSwitch(sessionId);
     const current = sessionModel(sessionId, method);
     const built = choice.value === current.choice.value ? current.binding : await bindChoice(choice, method, signal);
     if (signal?.aborted === true) {
@@ -1168,14 +1213,22 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       refuse(invalidParams(`${method}: cannot switch to ${choice.value}: ${built}`, { value: choice.value, reason: built }));
     }
     const next: SessionModel = { choice, binding: built };
-    applySwitch(sessionId, seq, next);
+    if (!applySwitch(sessionId, ticket, next)) {
+      // Released while the provider was being built: say so rather than answer
+      // success with a model the session does not run.
+      refuse({
+        code: JSON_RPC_ERROR_CODES.resourceNotFound,
+        message: `${method}: session ${sessionId} was released while its model was being switched; load it again`,
+        data: { sessionId, condition: "session-released" },
+      });
+    }
     return sessionModels.get(sessionId) ?? next;
   }
 
   /**
    * `session/load` of a session this connection holds no model binding for:
-   * continue on the model it was switched to before the shell profile released
-   * it (`releasedModelChoices`), else on the model it last ran (its transcript
+   * continue on the model it was switched to before the shell profile's idle
+   * cap released it (`releasedModelChoices`), else on the model it last ran (its transcript
    * records it), when that is still a choice here, else on the launch model —
    * and say which, and why, once the reply is out. A session this connection
    * still holds keeps whatever it runs now.
@@ -1188,11 +1241,11 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     if (sessionModels.has(sessionId)) return;
     const value = kept ?? (recorded !== undefined ? acpModelValue(recorded.providerId, recorded.modelId) : undefined);
     if (value === undefined || value === launchChoice.value) return;
-    const seq = beginSwitch(sessionId);
+    const ticket = beginSwitch(sessionId);
     const choice = findAcpModelChoice(await modelChoices(sessionId, method), value, false);
     const built = choice === undefined ? "it is not among the models keryx can run here" : await bindChoice(choice, method);
     if (choice !== undefined && typeof built !== "string") {
-      applySwitch(sessionId, seq, { choice, binding: built });
+      applySwitch(sessionId, ticket, { choice, binding: built });
       return;
     }
     const reason = typeof built === "string" ? built : "it could not be restored";
@@ -1278,6 +1331,9 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
    * failed server as the first was.
    */
   function bindSessionMcp(sessionId: string, requestId: JsonRpcId, parsed: ParsedAcpMcpServers, resolvedRoot: string): void {
+    // A set started after the shutdown's close sweep would never be stopped
+    // (review logic-w11 LOGIC-W11R3-002); `keryxMcpWouldBind` holds the same rule.
+    if (stopping) return;
     if (parsed.stdio.length === 0 && parsed.refused.length === 0) {
       unbindSessionMcp(sessionId);
       return;
@@ -1364,9 +1420,8 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       agentInfo: options.agentInfo ?? DEFAULT_AGENT_INFO,
       // Shell profile only: the editor profile's answer stays byte-for-byte
       // what it was (AC2). `_keryx/info` answers the same in either profile.
-      ...(shellProfile
-        ? { _meta: { keryx: { profile, profiles: [...ACP_PROFILES], extensions: acpProfileExtensions(profile) } } }
-        : {}),
+      // `liveSessions: true` tells a client that opening a session releases none.
+      ...(shellProfile ? { _meta: { keryx: keryxAcpProfileMeta(profile) } } : {}),
     };
   }
 
@@ -1395,6 +1450,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     }
     // Applied now — the next gated call reads it — and announced once the reply is out.
     sessionModes.set(sessionId, modeId);
+    touch(sessionId);
     onReplied(requestId, () => {
       sendUpdate(sessionId, { sessionUpdate: "current_mode_update", currentModeId: modeId });
     });
@@ -1414,37 +1470,44 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     const state = registry.create(cwd, clientCapabilities);
     const sessionId = state.sessionId;
     const method = ACP_AGENT_METHODS.sessionNew;
-    // Shell profile: one active session per connection (specification §3.8),
-    // switched to only once this call has succeeded (`activateShellSession`).
-    const ticket = shellProfile ? beginShellSwitch(sessionId) : 0;
-    try {
-      // Flow 306 (W6, T15): this session's own hook runtime, built now and
-      // fired with `SessionStart` — before the response is even returned, so a
-      // `session/prompt` racing in right after `session/new` answers always
-      // finds `shellHooksBySession` already populated. Its notices go out
-      // after the reply.
-      await ensureShellHooksAndFireStart(sessionId, state.resolvedRoot, requestId);
-      stopIfSuperseded(method, sessionId, ticket);
-      // Started in the background — the session's first prompt waits for the
-      // dials to settle. Bound before the previous session is released, so a
-      // client that sends the same list with every session keeps one set.
-      bindSessionMcp(sessionId, requestId, parsed, state.resolvedRoot);
-      announceCommands(sessionId, requestId);
-      const mode = shellProfile ? bindShellSession(state, requestId) : undefined;
-      // The model list, which the connection started resolving at launch (flow 288, AC5).
-      const configOptions = await configOptionsFor(sessionId, method);
-      stopIfSuperseded(method, sessionId, ticket);
-      activateShellSession(sessionId);
-      return {
-        sessionId,
-        ...(mode !== undefined ? { modes: acpModeState(modeOf(sessionId)) } : {}),
-        configOptions,
-      };
-    } catch (error) {
-      // The previous session stays held and active; this one goes back.
-      abandonShellSwitch(sessionId, ticket);
-      throw error;
-    }
+    beginHold(sessionId);
+    touch(sessionId);
+    if (shellProfile) opening.add(sessionId);
+    // Shell profile: held beside every other session (live sessions); nothing
+    // else is released. Each step after an await refuses once a shutdown began,
+    // so nothing is bound for a session the connection's end already released
+    // (review logic-w11 LOGIC-W11R3-002).
+    return withSessionWork(sessionId, async () => {
+      try {
+        // Flow 306 (W6, T15): this session's own hook runtime, built now and
+        // fired with `SessionStart` — before the response is even returned, so a
+        // `session/prompt` racing in right after `session/new` answers always
+        // finds `shellHooksBySession` already populated. Its notices go out
+        // after the reply.
+        await ensureShellHooksAndFireStart(sessionId, state.resolvedRoot, requestId);
+        refuseIfStopping(method);
+        // Started in the background — the session's first prompt waits for the
+        // dials to settle. A client that sends the same list with every session
+        // keeps one set.
+        bindSessionMcp(sessionId, requestId, parsed, state.resolvedRoot);
+        announceCommands(sessionId, requestId);
+        const mode = shellProfile ? bindShellSession(state, requestId) : undefined;
+        // The model list, which the connection started resolving at launch (flow 288, AC5).
+        const configOptions = await configOptionsFor(sessionId, method);
+        refuseIfStopping(method);
+        enforceIdleCap();
+        return {
+          sessionId,
+          ...(mode !== undefined ? { modes: acpModeState(modeOf(sessionId)) } : {}),
+          configOptions,
+        };
+      } catch (error) {
+        abandonOpen(sessionId);
+        throw error;
+      } finally {
+        opening.delete(sessionId);
+      }
+    });
   }
 
   /**
@@ -1658,6 +1721,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     refuseIfBusy(ACP_AGENT_METHODS.sessionPrompt, sessionId);
     refuseIfStopping(ACP_AGENT_METHODS.sessionPrompt);
     requireProvider(ACP_AGENT_METHODS.sessionPrompt);
+    touch(sessionId);
     // Read ONCE, here: this turn runs with this model to its end, whatever a
     // `session/set_config_option` arriving meanwhile does (flow 288, AC6).
     const model = sessionModel(sessionId, ACP_AGENT_METHODS.sessionPrompt);
@@ -1683,7 +1747,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         if (activeTurns.get(sessionId) === slot) {
           activeTurns.delete(sessionId);
         }
-        releaseIfSwitchedAway(sessionId);
+        touch(sessionId);
       }
     }
 
@@ -1757,7 +1821,8 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         askPermissionFor(sessionId, turn),
         // The shell's own gate semantics (`resolveApprovalDecision`, read fresh
         // per call by `executeCall`) — the mode is the only thing ACP supplies.
-        shellProfile ? { permissionMode: () => modeOf(sessionId) } : {},
+        // Every ask also says why it is asked (`_meta.keryx.reasons`).
+        shellProfile ? { permissionMode: () => modeOf(sessionId), permissionReasons: true } : {},
       );
       if (shellProfile) {
         // `auto` mode answers ask_user itself; without this the client would
@@ -1847,9 +1912,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       if (activeTurns.get(sessionId) === turn) {
         activeTurns.delete(sessionId);
       }
-      // Shell profile: a switch that happened during this turn releases the
-      // session now, after its persist.
-      releaseIfSwitchedAway(sessionId);
+      touch(sessionId);
     }
   }
 
@@ -2033,8 +2096,25 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     // A load REPLACES the registry entry, and with it the `history` array a
     // turn in flight is still writing into — refused for the same reason a
     // second prompt is (`refuseIfBusy`), and before `registry.load` does any
-    // work.
+    // work. The shell profile keeps a held session's entry, but a replay beside
+    // a running turn would still interleave with it.
     refuseIfBusy(ACP_AGENT_METHODS.sessionLoad, sessionId);
+    const method = ACP_AGENT_METHODS.sessionLoad;
+    if (shellProfile) {
+      if (opening.has(sessionId)) {
+        refuse(
+          invalidRequest({
+            reason: `${method}: session ${sessionId} is still being opened by an earlier session/new or session/load; wait for its reply`,
+            method,
+            sessionId,
+            condition: "session-opening",
+          }),
+        );
+      }
+      const held = registry.get(sessionId);
+      if (held !== undefined) return loadHeldSession(held, cwd, requestId);
+    }
+    const wasHeld = registry.get(sessionId) !== undefined;
     let state: ReturnType<typeof registry.load>;
     try {
       state = registry.load(sessionId, cwd, clientCapabilities);
@@ -2074,40 +2154,74 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         data: { sessionId, cwd },
       });
     }
+    // An editor-profile reload of a session it holds is the same hold.
+    if (!wasHeld) beginHold(sessionId);
+    touch(sessionId);
+    const loaded = state;
+    if (shellProfile) opening.add(sessionId);
+    return withSessionWork(sessionId, async () => {
+      try {
+        // Replay BEFORE responding — the spec's own ordering requirement.
+        replayHistory(sessionId, loaded.history);
+        // Flow 306 (W6, T15): the load REPLACES the registry entry, so it also
+        // replaces (or creates, if this connection has never seen this session
+        // id) this session's hook runtime — same hazard, same fix, as the MCP
+        // rebind just below.
+        await ensureShellHooksAndFireStart(sessionId, loaded.resolvedRoot, requestId);
+        refuseIfStopping(method);
+        // The load REPLACES the session's entry, so it replaces its MCP servers
+        // too: whatever an earlier `session/new`/`session/load` on this connection
+        // started for this id is stopped, and this request's list is started.
+        bindSessionMcp(sessionId, requestId, parsedMcp, loaded.resolvedRoot);
+        announceCommands(sessionId, requestId);
+        // After a restart, or a release by the idle cap, continue on the model the
+        // session was on, when it can run here (flow 288, T14).
+        await restoreRecordedModel(loaded, requestId, method);
+        refuseIfStopping(method);
+        // A session this connection ran before keeps its mode, across a release
+        // and reload too; otherwise the project's default.
+        const mode = shellProfile ? bindShellSession(loaded, requestId) : undefined;
+        const configOptions = await configOptionsFor(sessionId, method);
+        refuseIfStopping(method);
+        enforceIdleCap();
+        return { ...(mode !== undefined ? { modes: acpModeState(modeOf(sessionId)) } : {}), configOptions };
+      } catch (error) {
+        abandonOpen(sessionId);
+        throw error;
+      } finally {
+        opening.delete(sessionId);
+      }
+    });
+  }
+
+  /**
+   * Shell profile: `session/load` of a session this connection already holds
+   * (live sessions, r04). Nothing is rebuilt — its mode, model, usage, shell
+   * tasks, MCP set and hook runtime stay as they are, and the `mcpServers` this
+   * request names are not started. Its transcript is replayed, its title, plan
+   * and commands are sent again, and the reply carries its current mode and
+   * config options. A failure leaves it held.
+   */
+  async function loadHeldSession(state: AcpSessionState, cwd: string, requestId: JsonRpcId): Promise<AcpLoadSessionResponse> {
     const method = ACP_AGENT_METHODS.sessionLoad;
-    // Shell profile: one active session per connection (specification §3.8),
-    // switched to only once this load has succeeded (`activateShellSession`).
-    const ticket = shellProfile ? beginShellSwitch(sessionId) : 0;
-    try {
-      // Replay BEFORE responding — the spec's own ordering requirement.
-      replayHistory(sessionId, state.history);
-      // Flow 306 (W6, T15): the load REPLACES the registry entry, so it also
-      // replaces (or creates, if this connection has never seen this session
-      // id) this session's hook runtime — same hazard, same fix, as the MCP
-      // rebind just below.
-      await ensureShellHooksAndFireStart(sessionId, state.resolvedRoot, requestId);
-      stopIfSuperseded(method, sessionId, ticket);
-      // The load REPLACES the session's entry, so it replaces its MCP servers
-      // too: whatever an earlier `session/new`/`session/load` on this connection
-      // started for this id is stopped, and this request's list is started —
-      // before the previous session is released, so a shared set is reused.
-      bindSessionMcp(sessionId, requestId, parsedMcp, state.resolvedRoot);
-      announceCommands(sessionId, requestId);
-      // After a restart, or a switch away and back, continue on the model the
-      // session was on, when it can run here (flow 288, T14).
-      await restoreRecordedModel(state, requestId, method);
-      stopIfSuperseded(method, sessionId, ticket);
-      // A session this connection already ran keeps its mode, across a switch
-      // away and back too; otherwise the project's default.
-      const mode = shellProfile ? bindShellSession(state, requestId) : undefined;
-      const configOptions = await configOptionsFor(sessionId, method);
-      stopIfSuperseded(method, sessionId, ticket);
-      activateShellSession(sessionId);
-      return { ...(mode !== undefined ? { modes: acpModeState(modeOf(sessionId)) } : {}), configOptions };
-    } catch (error) {
-      abandonShellSwitch(sessionId, ticket);
-      throw error;
+    const sessionId = state.sessionId;
+    // Same answer as a not-held load of an id from another project.
+    if (resolveProjectRoot(cwd) !== state.resolvedRoot) {
+      refuse({
+        code: JSON_RPC_ERROR_CODES.resourceNotFound,
+        message: `Unknown ACP session: ${sessionId}`,
+        data: { sessionId, cwd },
+      });
     }
+    touch(sessionId);
+    return withSessionWork(sessionId, async () => {
+      replayHistory(sessionId, state.history);
+      announceCommands(sessionId, requestId);
+      bindShellSession(state, requestId);
+      const configOptions = await configOptionsFor(sessionId, method);
+      refuseIfStopping(method);
+      return { modes: acpModeState(modeOf(sessionId)), configOptions };
+    });
   }
 
   /**
@@ -2140,8 +2254,12 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         }),
       );
     }
-    await switchSessionModel(sessionId, value, method, false);
-    return { configOptions: await configOptionsFor(sessionId, method) };
+    touch(sessionId);
+    // Counted as work on the session, so the idle cap does not release it while its provider is built.
+    return withSessionWork(sessionId, async () => {
+      await switchSessionModel(sessionId, value, method, false);
+      return { configOptions: await configOptionsFor(sessionId, method) };
+    });
   }
 
   const dispatcher = new AcpDispatcher(
@@ -2298,7 +2416,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     // Flow 306 (W6, T15): ACP advertises no `session/close` (see the
     // `SharedMcpSet` doc comment above) — the connection itself is the only
     // boundary every session this process created actually has. The same
-    // per-session teardown a shell-profile switch runs gives their leases back
+    // per-session teardown the shell profile's idle cap runs gives their leases back
     // (synchronously, so a shell can resume them), sweeps their shell tasks,
     // and fires each hook runtime's `SessionEnd` once — never awaited past its
     // own hook timeouts (`fire()`'s own contract).
@@ -2309,7 +2427,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     // stopped, and AWAITED — on a clean end of input, on a read loop that
     // throws, and on `shutdown`. Returning first would orphan the children.
     // Shell profile: the same for every shell task its sessions started
-    // (including teardowns a switch started), and for keryx's own configured
+    // (including teardowns the idle cap started), and for keryx's own configured
     // MCP servers.
     await Promise.allSettled([
       closeAllMcp(),

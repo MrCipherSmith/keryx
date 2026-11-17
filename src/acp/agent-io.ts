@@ -6,7 +6,7 @@ import { randomUUID } from "node:crypto";
 import type { AgentIO, ApprovalMeta, ApprovalResponse } from "../commands/agent";
 import type { PermissionMode } from "../commands/permission-mode";
 import type { InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
-import { approvalFromPermissionResponse, permissionOptionsFor } from "./permission";
+import { acpPermissionReasons, approvalFromPermissionResponse, permissionOptionsFor } from "./permission";
 import {
   textBlock,
   type AcpPermissionOption,
@@ -176,6 +176,13 @@ export interface AcpAgentIoOptions {
    * `tool_call_update` carrying `_meta.keryx.autoApproved: true`.
    */
   readonly permissionMode?: () => PermissionMode;
+  /**
+   * Shell profile: each `session/request_permission` says why keryx asks, as
+   * `toolCall._meta.keryx.reasons` (`acpPermissionReasons`; PR #1213 review
+   * security-code-w7 SEC-W7R3-001). Absent: the editor profile's request is
+   * unchanged.
+   */
+  readonly permissionReasons?: boolean;
 }
 
 export function createAcpAgentIo(
@@ -301,6 +308,7 @@ export function createAcpAgentIo(
         // carried is superseded here and again by the result update.
         status: "pending",
         rawInput: tryParseJson(input),
+        ...(ioOptions.permissionReasons === true ? { _meta: { keryx: { reasons: acpPermissionReasons(meta) } } } : {}),
       },
       options,
     });

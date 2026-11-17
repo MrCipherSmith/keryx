@@ -424,9 +424,9 @@ is what the keryx desktop app launches, and is open to any ACP client:
   `use_tool` pair over keryx's own configured MCP servers merged with the
   client's `mcpServers` (a client server whose name keryx also configures is
   not used, and the session is told so). Each session has its own shell-task
-  supervisor; every task it started is killed when the client switches away
-  from the session (see **One active session** below) or when the connection
-  ends. `read_file` still goes through the client's `fs/read_text_file` when
+  supervisor; a task keeps running while the client works in other sessions
+  and is killed only when the session is released (see **Live sessions**
+  below) or the connection ends. `read_file` still goes through the client's `fs/read_text_file` when
   the client advertises it.
 - **`ask_user`:** offered only when the client sends
   `clientCapabilities._meta.keryx.askUser: true` at `initialize`. keryx then
@@ -445,26 +445,39 @@ is what the keryx desktop app launches, and is open to any ACP client:
   `tool_call_update` with `_meta.keryx.autoApproved: true` on its own id;
   escalated calls (destructive in `trust`, credential-touching in every mode,
   anything after untrusted content entered the turn) are still asked and never
-  offered `allow_always`. The mode is not saved.
-- **One active session per connection:** a `session/new` or `session/load`
-  that succeeds makes its session the connection's active one and releases the
-  previous session — after that session's running turn, if one is running.
-  Releasing it gives back its lease (so `keryx shell --resume` can open it),
-  kills its shell tasks, stops its client MCP servers unless the new session
-  uses the same list, and ends its hooks with `SessionEnd`. Later requests for
-  it get `Unknown ACP session` until it is loaded again; a load restores its
-  permission mode and model. A `session/new` or `session/load` that fails
-  leaves the previous session active, and one that a later `session/new` or
-  `session/load` overtakes is refused with `data.condition:
-  "session-superseded"`. The `editor` profile keeps every session until the
-  connection ends.
+  offered `allow_always`. The mode is not saved. Each
+  `session/request_permission` says why keryx asks in
+  `toolCall._meta.keryx.reasons`: `untrustedOrigin`, `credentials`,
+  `destructive`, `publishLease` (with `publishLeaseDetail` naming the holder
+  when known), `hcLaunch`, `hookAsk` and `alwaysAsk`, each present only when it
+  holds — an empty object is a routine ask.
+- **Live sessions:** every session a `session/new` or `session/load` opens is
+  held by the connection beside the others, and opening one releases none. Each
+  keeps its own turn, mode, model, usage, client MCP servers, plan and shell
+  tasks; a turn in a session the client is not showing keeps running, and its
+  `session/update`s, permission requests and `_keryx/ask_user` questions carry
+  its `sessionId`. A `session/load` of a session the connection holds rebuilds
+  nothing: it replays the transcript and answers with the session's current
+  mode and model (its `mcpServers` are not started), and is refused while the
+  session's turn runs. At most 8 sessions are held: past that, the least
+  recently used session with no running turn, no running shell task and no
+  request in flight is released — its lease goes back (so `keryx shell
+  --resume` can open it), its client MCP servers stop unless another session
+  uses the same list, and its hooks end with `SessionEnd` — and keryx sends the
+  notification `_keryx/session_released {sessionId, reason: "idle-cap"}`.
+  Later requests for it get `Unknown ACP session` until it is loaded again; a
+  load restores its permission mode, model and usage totals. When every held
+  session is busy none is released. A `session/new` or `session/load` that
+  fails gives back only the session it was opening. The `editor` profile keeps
+  every session until the connection ends.
 - **Session updates:** `plan` when the execution plan changes (and on
   `session/load`), `usage_update` after every model call (`used`/`size` per
   ACP, plus `_meta.keryx.call`/`turn`/`session` input and output token
   totals), and `session_info_update` with the session title.
 - **Discovery:** `initialize` carries `_meta.keryx = {profile, profiles,
-  extensions}` in this profile; `_keryx/info` answers
-  `{version, profile, profiles, extensions}` in either profile, and
+  extensions, liveSessions: true}` in this profile; `_keryx/info` answers
+  `{version, profile, profiles, extensions}` in either profile (plus
+  `liveSessions: true` in this one), and
   `agentInfo.version` is the keryx version.
 
 Any other value of `--profile` is a usage error: keryx exits with status 2

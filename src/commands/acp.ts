@@ -570,7 +570,10 @@ with the client's, background shell tasks, plan tools, ask_user when the
 client advertises clientCapabilities._meta.keryx.askUser) minus
 spawn_subagent and bus tools; permission modes ask, trust and auto
 (session/set_mode, /mode, starting from the project's saved default);
-and plan, usage_update and session_info_update session updates.
+and plan, usage_update and session_info_update session updates. Sessions
+stay live: opening or loading one releases none, and turns and shell tasks
+keep running in the others; past 8 held sessions the least recently used
+idle one is released and the client gets _keryx/session_released.
 initialize reports the profile in _meta.keryx, and _keryx/info answers
 the version, profile and extensions in either profile. An unknown profile
 exits with status 2.

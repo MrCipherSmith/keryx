@@ -71,8 +71,8 @@ export interface AcpSessionState {
   /**
    * The session lease this connection holds (agent bus D-07), taken the same
    * way `keryx shell` takes it, so ACP and a live shell never both write one
-   * transcript. Released by `release()` when the shell profile switches away
-   * from the session, and by the connection's end otherwise.
+   * transcript. Released by `release()` when the shell profile's idle cap
+   * releases the session, and by the connection's end otherwise.
    */
   readonly lease: SessionLeaseHandle;
 }
@@ -239,8 +239,9 @@ export class AcpSessionRegistry {
   /**
    * Gives one session's lease back and forgets it: a later `get` is `undefined`
    * and a later `load` leases it afresh. Idempotent. `server.ts`'s
-   * `teardownSession` calls it when the shell profile switches away from a
-   * session and, for every session still held, when the connection ends.
+   * `teardownSession` calls it when the shell profile's idle cap releases a
+   * session or a shell-profile open fails and, for every session still held,
+   * when the connection ends.
    */
   release(sessionId: string): void {
     const state = this.sessions.get(sessionId);

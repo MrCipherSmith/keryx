@@ -1,22 +1,19 @@
-// `keryx acp --profile shell` holds one active session per connection
-// (specification §3.8; PR #1213 review highload-w3 F-001, highload-w5
-// F-001/F-002): when `session/new` or `session/load` switches the connection
-// to another session, the previous one is released — its lease goes back so
-// `keryx shell --resume` can open it, and its shell tasks are swept. The
-// editor profile keeps every session until the connection ends, as before.
+// `keryx acp --profile shell` holds live sessions (PR #1213 r04, owner
+// decision on review ui-ux-w3 UX-W3-R3-002): a `session/new` or `session/load`
+// adds a session beside the ones the connection holds and releases none — a
+// turn, a shell task or an MCP set in another session keeps running. Memory is
+// bounded by an idle cap: past MAX_HELD_SESSIONS the least recently used idle
+// session is released and the client is told with `_keryx/session_released`.
+// A held session's re-load rebuilds nothing. The editor profile keeps every
+// session until the connection ends, as before.
 //
 // Also the roster cache (performance-w5 F-001/F-002): a session's shell roster
-// is built once and reused by later turns and `/status`.
-//
-// Round 3 (PR #1213 r03): the switch is applied last, so a shared client MCP
-// set is reused and a failed or overtaken switch leaves the previous session
-// held; a switch during a running turn waits for it; a session's mode survives
-// a switch away and back; and the connection's end sweeps tasks and still
-// persists the turns a shutdown aborted.
+// is built once and reused by later turns and `/status`; and the connection's
+// end sweeps tasks and still persists the turns a shutdown aborted.
 
 import { describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { McpServerConnection } from "../mcp-client/client";
@@ -25,11 +22,18 @@ import type { ConnectFn } from "../mcp-servers/manager";
 import type { McpRuntime } from "../mcp-servers/runtime";
 import { createSession, listSessions, persistHistory } from "../session";
 import { openLeasedSession, releaseSessionLease, sessionLeaseState } from "../session/lease";
+import { loadAcpFixtureProvider } from "./fixture-provider";
+import { acpModelChoice, type AcpModelSource } from "./models";
+import { KERYX_ACP_EXTENSION_METHODS } from "./profile";
 import { ACP_CLIENT_METHODS } from "./protocol";
+import { IDLE_CAP_RELEASE_REASON, MAX_HELD_SESSIONS } from "./server";
+import type { Frame } from "./server-harness.test-helpers";
 import { buildAcpShellSessionTools, type AcpShellRosterInput } from "./shell-roster";
 import { driveTurn, shellHarness, textRound, toolRound, type ShellHarness } from "./shell-profile.test-helpers";
 
 const TIMEOUT_MS = 30_000;
+
+const SESSION_RELEASED = KERYX_ACP_EXTENSION_METHODS.sessionReleased;
 
 const dataDirOf = (h: ShellHarness): string => path.join(h.projectDir, "data");
 
@@ -89,64 +93,96 @@ const taskRounds = (pidFile: string) => [
   textRound("started"),
 ];
 
-describe("shell profile — one active session per connection", () => {
-  test("session/load of B releases A: A's lease is free, A's task is swept, A is no longer served", async () => {
-    const pidFile = pidPath();
-    const h = shellHarness({ rounds: taskRounds(pidFile) });
-    let pid = 0;
+describe("shell profile — live sessions: opening a session releases none (PR #1213 r04)", () => {
+  test("two sessions are held at once; a turn keeps running in A while B is opened, prompted and another is loaded", async () => {
+    const h = shellHarness({
+      rounds: [toolRound("t1", "shell_exec", { command: "true" }), textRound("b answer"), textRound("a done")],
+    });
     try {
       await h.initialize();
       const a = (await h.newSession()).sessionId;
-      expect(leaseStateOf(h, a)).toBe("mine");
-      pid = await startTask(h, a, pidFile);
+      const { promptId, ask } = await promptUntilAsked(h, a, "run something");
+      expect(ask.params?.sessionId).toBe(a);
 
-      const b = storedSession(h);
-      await load(h, b);
-
-      expect(leaseStateOf(h, a)).toBe("free");
-      expect(leaseStateOf(h, b)).toBe("mine");
-      await until(() => !isAlive(pid), "A's task to be swept");
-      // A second holder can open A now (`keryx shell --resume` would).
-      const reopened = openLeasedSession({ cwd: h.projectDir, resumeId: a, dataDir: dataDirOf(h) });
-      releaseSessionLease(reopened.lease);
-
-      // A is no longer this connection's: a prompt on it is an unknown session.
-      const promptId = h.prompt(a, "hello");
-      expect((await h.waitFor((f) => f.id === promptId)).error?.message).toContain("Unknown ACP session");
-      // Loading A again leases it afresh and releases B.
-      await load(h, a);
-      expect(leaseStateOf(h, a)).toBe("mine");
-      expect(leaseStateOf(h, b)).toBe("free");
-    } finally {
-      if (pid > 0 && isAlive(pid)) process.kill(pid, "SIGKILL");
-      await h.end();
-    }
-  }, TIMEOUT_MS);
-
-  test("session/new of B releases A the same way", async () => {
-    const pidFile = pidPath();
-    const h = shellHarness({ rounds: taskRounds(pidFile) });
-    let pid = 0;
-    try {
-      await h.initialize();
-      const a = (await h.newSession()).sessionId;
-      pid = await startTask(h, a, pidFile);
       const b = (await h.newSession()).sessionId;
-      expect(leaseStateOf(h, a)).toBe("free");
+      const c = storedSession(h);
+      await load(h, c);
+      expect(leaseStateOf(h, a)).toBe("mine");
       expect(leaseStateOf(h, b)).toBe("mine");
-      await until(() => !isAlive(pid), "A's task to be swept");
+      expect(leaseStateOf(h, c)).toBe("mine");
+
+      // B is served while A's turn waits on its question.
+      const bStart = h.frames.length;
+      expect((await driveTurn(h, b, "hello")).reply.error).toBeUndefined();
+      const bText = h.frames
+        .slice(bStart)
+        .filter((f) => f.params?.update?.sessionUpdate === "agent_message_chunk")
+        .map((f) => ({ sessionId: f.params?.sessionId, text: f.params?.update?.content?.text }));
+      expect(bText).toContainEqual({ sessionId: b, text: "b answer" });
+
+      // A's turn was never cancelled: answered, it runs to its end.
+      h.respond(ask.id, { result: { outcome: { outcome: "selected", optionId: "allow_once" } } });
+      const reply = await h.waitFor((f) => f.id === promptId);
+      expect(reply.error).toBeUndefined();
+      expect(reply.result?.["stopReason"]).toBe("end_turn");
+      expect(
+        h.frames.some(
+          (f) => f.params?.sessionId === a && f.params?.update?.sessionUpdate === "agent_message_chunk" && f.params.update.content?.text === "a done",
+        ),
+      ).toBe(true);
+      expect(h.frames.some((f) => f.method === SESSION_RELEASED)).toBe(false);
     } finally {
-      if (pid > 0 && isAlive(pid)) process.kill(pid, "SIGKILL");
       await h.end();
     }
   }, TIMEOUT_MS);
 
-  test("re-loading the active session keeps it, and the connection's end releases the last one", async () => {
+  test("A's shell task survives a session/new and a session/load of other sessions", async () => {
+    const pidFile = pidPath();
+    const h = shellHarness({ rounds: taskRounds(pidFile) });
+    let pid = 0;
+    try {
+      await h.initialize();
+      const a = (await h.newSession()).sessionId;
+      pid = await startTask(h, a, pidFile);
+
+      await h.newSession();
+      await load(h, storedSession(h));
+      // A sweep would have begun synchronously with a release; give it time to land.
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      expect(isAlive(pid)).toBe(true);
+      expect(leaseStateOf(h, a)).toBe("mine");
+      const promptId = h.prompt(a, "/mode");
+      expect((await h.waitFor((f) => f.id === promptId)).error).toBeUndefined();
+    } finally {
+      await h.end();
+      if (pid > 0 && isAlive(pid)) process.kill(pid, "SIGKILL");
+    }
+  }, TIMEOUT_MS);
+
+  test("a session/load of a held session with a running turn is refused as busy", async () => {
+    const h = shellHarness({ rounds: [toolRound("t1", "shell_exec", { command: "true" }), textRound("done")] });
+    try {
+      await h.initialize();
+      const a = (await h.newSession()).sessionId;
+      const { promptId, ask } = await promptUntilAsked(h, a, "run something");
+      const loadId = h.request("session/load", { sessionId: a, cwd: h.projectDir, mcpServers: [] });
+      expect((await h.waitFor((f) => f.id === loadId)).error?.data?.["condition"]).toBe("session-busy");
+      h.respond(ask.id, { result: { outcome: { outcome: "selected", optionId: "allow_once" } } });
+      expect((await h.waitFor((f) => f.id === promptId)).error).toBeUndefined();
+      expect(leaseStateOf(h, a)).toBe("mine");
+    } finally {
+      await h.end();
+    }
+  }, TIMEOUT_MS);
+
+  test("re-loading a held session keeps it, and the connection's end releases every held one", async () => {
     const h = shellHarness({ storedMode: "trust" });
     let a: string;
+    let b: string;
     try {
       await h.initialize();
       a = (await h.newSession()).sessionId;
+      b = (await h.newSession()).sessionId;
       await load(h, a);
       expect(leaseStateOf(h, a)).toBe("mine");
       const promptId = h.prompt(a, "/mode");
@@ -155,6 +191,7 @@ describe("shell profile — one active session per connection", () => {
       await h.end();
     }
     expect(leaseStateOf(h, a)).toBe("free");
+    expect(leaseStateOf(h, b)).toBe("free");
   }, TIMEOUT_MS);
 
   test("editor profile is unchanged: both sessions stay held and served until the connection ends", async () => {
@@ -213,45 +250,48 @@ describe("shell profile — the roster is built once per session", () => {
     }
   }, TIMEOUT_MS);
 
-  test("a session/load with different client MCP servers rebuilds it; one adapter serves the root across sessions", async () => {
+  test("re-loading a held session rebuilds nothing: mode, roster and MCP stay, a new mcpServers list is not started, the transcript is replayed", async () => {
     const builds: AcpShellRosterInput[] = [];
+    const dial = countingConnect();
     const h = shellHarness({
-      rounds: [textRound("one"), textRound("unchanged"), textRound("two"), textRound("three")],
+      storedMode: "trust",
+      rounds: [textRound("one"), textRound("two"), textRound("three")],
       serverOptions: {
         buildShellRoster: (input) => {
           builds.push(input);
           return buildAcpShellSessionTools(input);
         },
-        // A client server that never starts: the binding changes, the dial fails fast.
-        mcpConnect: async () => {
-          throw new Error("not in this test");
-        },
+        mcpConnect: dial.connect,
       },
     });
     try {
       await h.initialize();
       const { sessionId } = await h.newSession();
-      expect((await driveTurn(h, sessionId, "first")).reply.error).toBeUndefined();
+      const setId = h.request("session/set_mode", { sessionId, modeId: "ask" });
+      expect((await h.waitFor((f) => f.id === setId)).error).toBeUndefined();
+      expect((await driveTurn(h, sessionId, "first question")).reply.error).toBeUndefined();
       expect(builds.length).toBe(1);
 
-      // A load that changes nothing keeps the cached roster (testing-practices-w2 TPF-007).
-      await load(h, sessionId);
-      expect((await driveTurn(h, sessionId, "unchanged")).reply.error).toBeUndefined();
-      expect(builds.length).toBe(1);
+      const start = h.frames.length;
+      const loadId = h.request("session/load", { sessionId, cwd: h.projectDir, mcpServers: probe });
+      const loaded = await h.waitFor((f) => f.id === loadId);
+      expect(loaded.error).toBeUndefined();
+      expect((loaded.result?.["modes"] as { currentModeId: string }).currentModeId).toBe("ask");
+      // The held transcript is replayed before the reply.
+      const replayed = h.frames
+        .slice(start, h.frames.indexOf(loaded))
+        .filter((f) => f.params?.sessionId === sessionId && f.params?.update?.sessionUpdate === "user_message_chunk")
+        .map((f) => f.params?.update?.content?.text);
+      expect(replayed).toContain("first question");
 
-      const loadId = h.request("session/load", {
-        sessionId,
-        cwd: h.projectDir,
-        mcpServers: [{ name: "probe", command: "/bin/true", args: [], env: [] }],
-      });
-      expect((await h.waitFor((f) => f.id === loadId)).error).toBeUndefined();
       expect((await driveTurn(h, sessionId, "second")).reply.error).toBeUndefined();
-      expect(builds.length).toBe(2);
+      expect(builds.length).toBe(1);
+      expect(dial.dials()).toBe(0);
 
       const other = (await h.newSession()).sessionId;
       expect((await driveTurn(h, other, "third")).reply.error).toBeUndefined();
-      expect(builds.length).toBe(3);
-      expect(builds[2]?.metaprojectPort).toBe(builds[0]?.metaprojectPort);
+      expect(builds.length).toBe(2);
+      expect(builds[1]?.metaprojectPort).toBe(builds[0]?.metaprojectPort);
     } finally {
       await h.end();
     }
@@ -263,7 +303,7 @@ async function promptUntilAsked(
   h: ShellHarness,
   sessionId: string,
   text: string,
-): Promise<{ promptId: number; ask: { id?: string | number | null } }> {
+): Promise<{ promptId: number; ask: Frame }> {
   const start = h.frames.length;
   const promptId = h.prompt(sessionId, text);
   const ask = await h.waitFor((f) => f.method === ACP_CLIENT_METHODS.sessionRequestPermission && h.frames.indexOf(f) >= start);
@@ -303,8 +343,8 @@ async function newSessionWith(h: ShellHarness, mcpServers: unknown[]): Promise<s
   return reply.result?.["sessionId"] as string;
 }
 
-describe("shell profile — the switch is applied last (PR #1213 r03)", () => {
-  test("the same client MCP list on the next session reuses the running set; switching away from it closes it", async () => {
+describe("shell profile — opening and failing (PR #1213 r04)", () => {
+  test("the same client MCP list on two sessions runs one set; both stay held; the connection's end closes it", async () => {
     const dial = countingConnect();
     const h = shellHarness({ serverOptions: { mcpConnect: dial.connect } });
     try {
@@ -312,22 +352,17 @@ describe("shell profile — the switch is applied last (PR #1213 r03)", () => {
       const a = await newSessionWith(h, probe);
       await until(() => dial.dials() === 1, "the probe dial");
       const b = await newSessionWith(h, probe);
-      expect(leaseStateOf(h, a)).toBe("free");
+      expect(leaseStateOf(h, a)).toBe("mine");
       expect(leaseStateOf(h, b)).toBe("mine");
-      // Bound by B before A was released: one dial, never closed.
       expect(dial.dials()).toBe(1);
       expect(dial.closes()).toBe(0);
-
-      await newSessionWith(h, []);
-      // B was the set's last holder: switching away from it stops the server.
-      await until(() => dial.closes() === 1, "the probe set to close");
-      expect(dial.dials()).toBe(1);
     } finally {
       await h.end();
     }
+    expect(dial.closes()).toBe(1);
   }, TIMEOUT_MS);
 
-  test("a session/new that fails after creating its session leaves the previous one held and active", async () => {
+  test("a session/new that fails after creating its session gives back only that session", async () => {
     let failNext = false;
     const h = shellHarness({
       serverOptions: {
@@ -352,7 +387,6 @@ describe("shell profile — the switch is applied last (PR #1213 r03)", () => {
       const [failed] = otherSessionIds(h, [a]);
       expect(failed).toBeDefined();
       await until(() => leaseStateOf(h, failed as string) === "free", "the failed session to be given back");
-      // A is still the connection's: it is served.
       const promptId = h.prompt(a, "/mode");
       expect((await h.waitFor((f) => f.id === promptId)).error).toBeUndefined();
     } finally {
@@ -360,75 +394,232 @@ describe("shell profile — the switch is applied last (PR #1213 r03)", () => {
     }
   }, TIMEOUT_MS);
 
-  test("overlapping switches: the overtaken one is refused and given back, the last one is the only one held", async () => {
+  test("a second session/load of a session still being opened is refused; the first one opens it (testing-practices-w2 TPF-R3-004)", async () => {
     const h = shellHarness({
       serverOptions: {
-        // Every session waits this long for a model list that never comes, so
-        // the two switches below are both in flight at once.
+        // The first load waits this long for a model list that never comes, so the second arrives while it is open.
         models: { choices: () => new Promise(() => {}), bind: async () => "unused" },
         modelListTimeoutMs: 200,
       },
     });
     try {
       await h.initialize();
-      const a = (await h.newSession()).sessionId;
       const b = storedSession(h);
-      const loadId = h.request("session/load", { sessionId: b, cwd: h.projectDir, mcpServers: [] });
-      const newId = h.request("session/new", { cwd: h.projectDir, mcpServers: [] });
-
-      const loaded = await h.waitFor((f) => f.id === loadId);
-      expect(loaded.error?.data?.["condition"]).toBe("session-superseded");
-      const created = await h.waitFor((f) => f.id === newId);
-      expect(created.error).toBeUndefined();
-      const c = created.result?.["sessionId"] as string;
-      // The refused load announced nothing after its (error) reply.
-      expect(
-        h.frames.some((f) => f.params?.sessionId === b && f.params?.update?.sessionUpdate === "available_commands_update"),
-      ).toBe(false);
-
-      await until(() => leaseStateOf(h, a) === "free" && leaseStateOf(h, b) === "free", "A and B to be released");
-      expect(leaseStateOf(h, c)).toBe("mine");
+      const firstId = h.request("session/load", { sessionId: b, cwd: h.projectDir, mcpServers: [] });
+      const secondId = h.request("session/load", { sessionId: b, cwd: h.projectDir, mcpServers: [] });
+      expect((await h.waitFor((f) => f.id === secondId)).error?.data?.["condition"]).toBe("session-opening");
+      expect((await h.waitFor((f) => f.id === firstId)).error).toBeUndefined();
+      expect(leaseStateOf(h, b)).toBe("mine");
+      const promptId = h.prompt(b, "/mode");
+      expect((await h.waitFor((f) => f.id === promptId)).error).toBeUndefined();
     } finally {
       await h.end();
     }
   }, TIMEOUT_MS);
 
-  test("a switch during a running turn holds the previous session until that turn ends, then releases it", async () => {
-    const h = shellHarness({ rounds: [toolRound("t1", "shell_exec", { command: "true" }), textRound("done")] });
+  test("a shutdown during session/new refuses the rest of it and starts no MCP set (logic-w11 LOGIC-W11R3-002)", async () => {
+    const shutdown = new AbortController();
+    const dial = countingConnect();
+    let stopAtNextId = false;
+    const h = shellHarness({
+      serverOptions: {
+        shutdown: shutdown.signal,
+        mcpConnect: dial.connect,
+        // The new session's hook set-up takes a run id before its first await: stop there.
+        idSeq: () => {
+          if (stopAtNextId) {
+            stopAtNextId = false;
+            shutdown.abort();
+          }
+          return randomUUID();
+        },
+      },
+    });
     try {
       await h.initialize();
-      const a = (await h.newSession()).sessionId;
-      const { promptId, ask } = await promptUntilAsked(h, a, "run something");
+      stopAtNextId = true;
+      const newId = h.request("session/new", { cwd: h.projectDir, mcpServers: probe });
+      const reply = await h.waitFor((f) => f.id === newId);
+      expect(reply.error?.data?.["condition"]).toBe("shutting-down");
+      await h.done;
+      expect(dial.dials()).toBe(0);
+      const [opened] = otherSessionIds(h, []);
+      expect(opened).toBeDefined();
+      expect(leaseStateOf(h, opened as string)).toBe("free");
+    } finally {
+      await h.end();
+    }
+  }, TIMEOUT_MS);
+});
 
-      const b = (await h.newSession()).sessionId;
-      expect(leaseStateOf(h, b)).toBe("mine");
-      // A's turn is still running: A stays held so the turn can persist.
-      expect(leaseStateOf(h, a)).toBe("mine");
+const LAUNCH = "test/test-model";
+const SLOW = acpModelChoice("test", "slow");
 
-      h.respond(ask.id, { result: { outcome: { outcome: "selected", optionId: "allow_once" } } });
-      const reply = await h.waitFor((f) => f.id === promptId);
+/** A model source whose `slow` provider is built only when its `/model` is cancelled: `/model` holds the turn slot. */
+function slowModelSource(): { source: AcpModelSource; binds: () => number } {
+  let binds = 0;
+  const source: AcpModelSource = {
+    choices: async () => [SLOW],
+    bind: (_choice, signal) => {
+      binds += 1;
+      return new Promise((_resolve, reject) => {
+        signal?.addEventListener("abort", () => reject(new Error("cancelled")), { once: true });
+      });
+    },
+  };
+  return { source, binds: () => binds };
+}
+
+/** Holds `sessionId` busy with a `/model` that waits; returns the prompt id. */
+async function holdBusy(h: ShellHarness, sessionId: string, binds: () => number): Promise<number> {
+  const before = binds();
+  const promptId = h.prompt(sessionId, `/model ${SLOW.value}`);
+  await until(() => binds() > before, "the /model bind to start");
+  return promptId;
+}
+
+const releasedFrames = (h: ShellHarness): { sessionId: string | undefined; reason: string | undefined }[] =>
+  h.frames
+    .filter((f) => f.method === SESSION_RELEASED)
+    .map((f) => {
+      const params = f.params as { sessionId?: string; reason?: string } | undefined;
+      return { sessionId: params?.sessionId, reason: params?.reason };
+    });
+
+describe(`shell profile — the idle cap of ${MAX_HELD_SESSIONS} held sessions (PR #1213 r04)`, () => {
+  test("past the cap the least recently used idle session is released, the client is told, and a load brings it back", async () => {
+    const slow = slowModelSource();
+    const h = shellHarness({ serverOptions: { models: slow.source } });
+    try {
+      await h.initialize();
+      const sessions: string[] = [];
+      for (let i = 0; i < MAX_HELD_SESSIONS; i += 1) sessions.push((await h.newSession()).sessionId);
+      const [busy, oldestIdle, nextIdle] = sessions as [string, string, string];
+      // The oldest session is busy; the next one is used again, so it is no longer the least recent.
+      const busyPrompt = await holdBusy(h, busy, slow.binds);
+      const touchId = h.prompt(oldestIdle, "/mode");
+      expect((await h.waitFor((f) => f.id === touchId)).error).toBeUndefined();
+      expect(releasedFrames(h)).toEqual([]);
+
+      const ninth = (await h.newSession()).sessionId;
+      expect(releasedFrames(h)).toEqual([{ sessionId: nextIdle, reason: IDLE_CAP_RELEASE_REASON }]);
+      expect(leaseStateOf(h, nextIdle)).toBe("free");
+      for (const kept of [busy, oldestIdle, ninth, ...sessions.slice(3)]) expect(leaseStateOf(h, kept)).toBe("mine");
+      const promptId = h.prompt(nextIdle, "/mode");
+      expect((await h.waitFor((f) => f.id === promptId)).error?.message).toContain("Unknown ACP session");
+
+      // A return to it loads it again, which releases the next least recently used idle one.
+      await load(h, nextIdle);
+      expect(leaseStateOf(h, nextIdle)).toBe("mine");
+      expect(releasedFrames(h)).toEqual([
+        { sessionId: nextIdle, reason: IDLE_CAP_RELEASE_REASON },
+        { sessionId: sessions[3], reason: IDLE_CAP_RELEASE_REASON },
+      ]);
+
+      h.notify("session/cancel", { sessionId: busy });
+      expect((await h.waitFor((f) => f.id === busyPrompt)).result?.["stopReason"]).toBe("cancelled");
+    } finally {
+      await h.end();
+    }
+  }, TIMEOUT_MS);
+
+  test("when every held session is busy, none is released and the new one still opens", async () => {
+    const slow = slowModelSource();
+    const h = shellHarness({ serverOptions: { models: slow.source } });
+    try {
+      await h.initialize();
+      const sessions: string[] = [];
+      const prompts: number[] = [];
+      for (let i = 0; i < MAX_HELD_SESSIONS; i += 1) {
+        const sessionId = (await h.newSession()).sessionId;
+        sessions.push(sessionId);
+        prompts.push(await holdBusy(h, sessionId, slow.binds));
+      }
+      const ninth = (await h.newSession()).sessionId;
+      expect(releasedFrames(h)).toEqual([]);
+      for (const held of [...sessions, ninth]) expect(leaseStateOf(h, held)).toBe("mine");
+
+      for (const sessionId of sessions) h.notify("session/cancel", { sessionId });
+      for (const promptId of prompts) await h.waitFor((f) => f.id === promptId);
+    } finally {
+      await h.end();
+    }
+  }, TIMEOUT_MS);
+
+  test("a session with a running shell task is not released", async () => {
+    const pidFile = pidPath();
+    const h = shellHarness({ rounds: taskRounds(pidFile) });
+    let pid = 0;
+    try {
+      await h.initialize();
+      const withTask = (await h.newSession()).sessionId;
+      pid = await startTask(h, withTask, pidFile);
+      const others: string[] = [];
+      for (let i = 0; i < MAX_HELD_SESSIONS; i += 1) others.push((await h.newSession()).sessionId);
+      // `withTask` is the least recently used, but busy: the next one goes.
+      expect(releasedFrames(h)).toEqual([{ sessionId: others[0], reason: IDLE_CAP_RELEASE_REASON }]);
+      expect(leaseStateOf(h, withTask)).toBe("mine");
+      expect(isAlive(pid)).toBe(true);
+    } finally {
+      await h.end();
+      if (pid > 0 && isAlive(pid)) process.kill(pid, "SIGKILL");
+    }
+  }, TIMEOUT_MS);
+
+  test("a reload after a release restores mode, model and usage; later switches still apply (testing-practices-w2 TPF-R3-003, logic-w7 LOGIC-W7-R3-001)", async () => {
+    const m2 = acpModelChoice("test", "m2");
+    let binds = 0;
+    const fixture = path.join(mkdtempSync(path.join(tmpdir(), "keryx-acp-m2-")), "fixture.json");
+    writeFileSync(fixture, JSON.stringify({ turns: [] }), "utf8");
+    const h = shellHarness({
+      storedMode: "trust",
+      rounds: [textRound("one", { inputTokens: 10, outputTokens: 5 }), textRound("two", { inputTokens: 1, outputTokens: 1 })],
+      serverOptions: {
+        models: {
+          choices: async () => [m2],
+          bind: async (choice) => {
+            binds += 1;
+            return { provider: loadAcpFixtureProvider(fixture), providerId: choice.providerId, modelId: choice.modelId, turnSettings: {} };
+          },
+        },
+      },
+    });
+    const sessionTally = (sessionId: string): unknown =>
+      h.frames
+        .filter((f) => f.params?.sessionId === sessionId && f.params?.update?.sessionUpdate === "usage_update")
+        .map((f) => (f.params?.update as { _meta?: { keryx?: { session?: unknown } } })._meta?.keryx?.session)
+        .at(-1);
+    const setModel = async (sessionId: string, value: string): Promise<unknown> => {
+      const id = h.request("session/set_config_option", { sessionId, configId: "model", value });
+      const reply = await h.waitFor((f) => f.id === id);
       expect(reply.error).toBeUndefined();
-      await until(() => leaseStateOf(h, a) === "free", "A to be released after its turn");
-      expect(leaseStateOf(h, b)).toBe("mine");
-    } finally {
-      await h.end();
-    }
-  }, TIMEOUT_MS);
-
-  test("A → B → A keeps A's permission mode (degradation-w1 DEG-R2-001)", async () => {
-    const h = shellHarness({ storedMode: "trust" });
+      return (reply.result?.["configOptions"] as { currentValue: string }[])[0]?.currentValue;
+    };
     try {
       await h.initialize();
       const a = (await h.newSession()).sessionId;
+      expect((await driveTurn(h, a, "count")).reply.error).toBeUndefined();
+      expect(sessionTally(a)).toEqual({ inputTokens: 10, outputTokens: 5 });
       const setId = h.request("session/set_mode", { sessionId: a, modeId: "ask" });
       expect((await h.waitFor((f) => f.id === setId)).error).toBeUndefined();
+      expect(await setModel(a, m2.value)).toBe(m2.value);
+      expect(binds).toBe(1);
 
-      const b = await h.newSession();
-      expect((b.result["modes"] as { currentModeId: string }).currentModeId).toBe("trust");
+      for (let i = 0; i < MAX_HELD_SESSIONS; i += 1) await h.newSession();
+      expect(releasedFrames(h)[0]).toEqual({ sessionId: a, reason: IDLE_CAP_RELEASE_REASON });
 
       const loadId = h.request("session/load", { sessionId: a, cwd: h.projectDir, mcpServers: [] });
       const loaded = await h.waitFor((f) => f.id === loadId);
+      expect(loaded.error).toBeUndefined();
       expect((loaded.result?.["modes"] as { currentModeId: string }).currentModeId).toBe("ask");
+      expect((loaded.result?.["configOptions"] as { currentValue: string }[])[0]?.currentValue).toBe(m2.value);
+      // The provider binding was dropped with the release and is built again.
+      expect(binds).toBe(2);
+
+      // A switch after the reload applies over the restore (the sequence did not restart).
+      expect(await setModel(a, LAUNCH)).toBe(LAUNCH);
+      expect((await driveTurn(h, a, "again")).reply.error).toBeUndefined();
+      expect(sessionTally(a)).toEqual({ inputTokens: 11, outputTokens: 6 });
     } finally {
       await h.end();
     }

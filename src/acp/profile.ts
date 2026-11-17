@@ -25,24 +25,49 @@ export const KERYX_ACP_EXTENSION_METHODS = {
   info: "_keryx/info",
   /** Agent → client request, shell profile, only when the client advertised `_meta.keryx.askUser`. */
   askUser: "_keryx/ask_user",
+  /**
+   * Agent → client notification, shell profile: `{ sessionId, reason }`. keryx
+   * released a session the connection held (the idle cap, `reason:
+   * "idle-cap"`); a later return to it needs `session/load`.
+   */
+  sessionReleased: "_keryx/session_released",
 } as const;
 
 /** The extensions a profile speaks, as `initialize._meta.keryx.extensions` and `_keryx/info` list them. */
 export function acpProfileExtensions(profile: AcpProfile): string[] {
   return profile === "shell"
-    ? [KERYX_ACP_EXTENSION_METHODS.info, KERYX_ACP_EXTENSION_METHODS.askUser]
+    ? [KERYX_ACP_EXTENSION_METHODS.info, KERYX_ACP_EXTENSION_METHODS.askUser, KERYX_ACP_EXTENSION_METHODS.sessionReleased]
     : [KERYX_ACP_EXTENSION_METHODS.info];
 }
 
-export interface KeryxAcpInfo {
-  readonly version: string;
+/**
+ * What `initialize._meta.keryx` and `_keryx/info` report for a profile.
+ * `liveSessions` (shell profile only): every session a connection opens stays
+ * held and running until the idle cap releases it (`_keryx/session_released`)
+ * or the connection ends — switching between them releases nothing.
+ */
+export interface KeryxAcpProfileMeta {
   readonly profile: AcpProfile;
   readonly profiles: readonly AcpProfile[];
   readonly extensions: readonly string[];
+  readonly liveSessions?: true;
+}
+
+export interface KeryxAcpInfo extends KeryxAcpProfileMeta {
+  readonly version: string;
+}
+
+export function keryxAcpProfileMeta(profile: AcpProfile): KeryxAcpProfileMeta {
+  return {
+    profile,
+    profiles: [...ACP_PROFILES],
+    extensions: acpProfileExtensions(profile),
+    ...(profile === "shell" ? { liveSessions: true as const } : {}),
+  };
 }
 
 export function keryxAcpInfo(version: string, profile: AcpProfile): KeryxAcpInfo {
-  return { version, profile, profiles: [...ACP_PROFILES], extensions: acpProfileExtensions(profile) };
+  return { version, ...keryxAcpProfileMeta(profile) };
 }
 
 /** The shell's three postures, as ACP session modes (`.metaproject/wiki/architecture/permission-modes.md`). */

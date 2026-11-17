@@ -110,6 +110,43 @@ export function permissionIsEscalated(meta?: ApprovalMeta): boolean {
 }
 
 /**
+ * Why keryx asks about one call, as the shell profile sends it on the
+ * permission request (`toolCall._meta.keryx.reasons`, PR #1213 review
+ * security-code-w7 SEC-W7R3-001). Only the reasons that hold are present; an
+ * empty object is a routine ask (a gated call in `ask` mode).
+ */
+export interface AcpPermissionReasons {
+  untrustedOrigin?: true;
+  credentials?: true;
+  destructive?: true;
+  publishLease?: true;
+  /** `held by @name — "reason"`, when the lease's holder is known. */
+  publishLeaseDetail?: string;
+  hcLaunch?: true;
+  hookAsk?: true;
+  alwaysAsk?: true;
+}
+
+/** The escalation reasons `meta` carries — the same fields {@link permissionIsEscalated} reads. */
+export function acpPermissionReasons(meta?: ApprovalMeta): AcpPermissionReasons {
+  const reasons: AcpPermissionReasons = {};
+  if (meta === undefined) return reasons;
+  if (meta.untrustedOrigin === true) reasons.untrustedOrigin = true;
+  if (meta.credentials === true) reasons.credentials = true;
+  if (meta.destructive) reasons.destructive = true;
+  if (meta.publishLease === true) {
+    reasons.publishLease = true;
+    if (meta.publishLeaseDetail !== undefined && meta.publishLeaseDetail.length > 0) {
+      reasons.publishLeaseDetail = meta.publishLeaseDetail;
+    }
+  }
+  if (meta.hcLaunch !== undefined) reasons.hcLaunch = true;
+  if (meta.hookAsk === true) reasons.hookAsk = true;
+  if (meta.alwaysAsk === true) reasons.alwaysAsk = true;
+  return reasons;
+}
+
+/**
  * The options keryx offers the client for one gated call.
  *
  * Always at least one allow and one reject: a client that can only cancel has

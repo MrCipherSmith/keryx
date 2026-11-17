@@ -52,7 +52,7 @@ function withoutServers(catalog: ServerCatalog, names: ReadonlySet<string>): Ser
           server: entry.server,
           rawName: entry.rawName,
           fqn: entry.fqn,
-          reason: `server "${entry.server}" is also configured in keryx; keryx's is kept`,
+          reason: `server "${entry.server}" ${SHADOWED_CLIENT_SERVER_REASON}`,
         })),
     ],
   };

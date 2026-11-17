@@ -396,7 +396,8 @@ describe("AC6 — initialize reports the real version and the profiles; _keryx/i
       expect(result._meta.keryx).toEqual({
         profile: "shell",
         profiles: ["editor", "shell"],
-        extensions: ["_keryx/info", "_keryx/ask_user"],
+        extensions: ["_keryx/info", "_keryx/ask_user", "_keryx/session_released"],
+        liveSessions: true,
       });
       const infoId = c.request("_keryx/info", {});
       const info = await c.waitFor((m) => m.id === infoId, "the _keryx/info reply");
@@ -493,6 +494,9 @@ describe("AC7 — an untrusted result, then a gated call, in the shell profile o
       expect((shellAsks[0]?.params?.["toolCall"] as { toolCallId?: string }).toolCallId).toBe(shellAnnounced[0]?.toolCallId);
       const optionIds = ((shellAsks[0]?.params?.["options"] ?? []) as { optionId: string }[]).map((o) => o.optionId);
       expect(optionIds).not.toContain(ACP_PERMISSION_OPTION_IDS.allowAlways);
+      // The ask says why it is asked (security-code-w7 SEC-W7R3-001).
+      const toolCallMeta = (shellAsks[0]?.params?.["toolCall"] as { _meta?: { keryx?: { reasons?: Record<string, unknown> } } })._meta;
+      expect(toolCallMeta?.keryx?.reasons?.["untrustedOrigin"]).toBe(true);
       expect(existsSync(marker)).toBe(false);
     } finally {
       await c.kill();

@@ -386,3 +386,49 @@ describe("createAcpAgentIo — the user_prompt pseudo tool_call (never a real to
     expect(toolResults(updates)).toHaveLength(0);
   });
 });
+
+describe("createAcpAgentIo — why keryx asks (security-code-w7 SEC-W7R3-001)", () => {
+  function gated(permissionReasons: boolean): { asks: AcpPermissionRequest[]; io: ReturnType<typeof createAcpAgentIo> } {
+    const asks: AcpPermissionRequest[] = [];
+    const io = createAcpAgentIo(
+      "s1",
+      () => {},
+      async (request) => {
+        asks.push(request);
+        return { outcome: { outcome: "selected", optionId: ACP_PERMISSION_OPTION_IDS.rejectOnce } };
+      },
+      permissionReasons ? { permissionReasons: true } : {},
+    );
+    return { asks, io };
+  }
+
+  test("the shell profile's ask carries only the reasons that hold, as toolCall._meta.keryx.reasons", async () => {
+    const { asks, io } = gated(true);
+    await io.requestApproval?.("shell_exec", "{}", {
+      fingerprint: "fp",
+      destructive: false,
+      untrustedOrigin: true,
+      publishLease: true,
+      publishLeaseDetail: 'held by @peer — "release"',
+      hcLaunch: "claude",
+      credentials: false,
+    });
+    expect(asks[0]?.toolCall._meta).toEqual({
+      keryx: {
+        reasons: { untrustedOrigin: true, publishLease: true, publishLeaseDetail: 'held by @peer — "release"', hcLaunch: true },
+      },
+    });
+  });
+
+  test("a routine ask carries an empty reasons object", async () => {
+    const { asks, io } = gated(true);
+    await io.requestApproval?.("shell_exec", "{}", { fingerprint: "fp", destructive: false });
+    expect(asks[0]?.toolCall._meta).toEqual({ keryx: { reasons: {} } });
+  });
+
+  test("the editor profile's ask is unchanged: no _meta", async () => {
+    const { asks, io } = gated(false);
+    await io.requestApproval?.("shell_exec", "{}", { fingerprint: "fp", destructive: true, credentials: true });
+    expect(asks[0]?.toolCall._meta).toBeUndefined();
+  });
+});
