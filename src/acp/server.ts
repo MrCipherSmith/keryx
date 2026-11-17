@@ -126,6 +126,7 @@ import {
   type AcpProfile,
 } from "./profile";
 import { buildAcpShellSessionTools, type AcpShellRosterInput } from "./shell-roster";
+import { createProvidersHandlers, type AcpProvidersSeams } from "./providers";
 import { busyRefusalText, findShellCommand, shellAvailableCommands, viewNotServedText } from "./shell-commands";
 import {
   createAcpSessionRewind,
@@ -222,6 +223,8 @@ export interface AcpServerOptions {
   readonly buildShellRoster?: (input: AcpShellRosterInput) => InteractiveTool[];
   /** Shell profile: the user-global config directory `_keryx/command`'s settings commands read and write. The default one otherwise. Test seam. */
   readonly shellConfigDir?: string;
+  /** Shell profile test seams for `_keryx/providers/*`: the config directory, environment and network it uses. */
+  readonly providers?: AcpProvidersSeams;
 }
 
 export type { AcpTurnSettings } from "./models";
@@ -1102,14 +1105,22 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   const modelListTimeoutMs = options.modelListTimeoutMs ?? DEFAULT_MODEL_LIST_TIMEOUT_MS;
   let listedChoices: readonly AcpModelChoice[] | undefined;
   let listing: Promise<readonly AcpModelChoice[]> | undefined;
-  const startListing = (source: AcpModelSource): Promise<readonly AcpModelChoice[]> =>
-    (listing ??= source.choices().then(
-      (listed) => (listedChoices = withLaunch(listed)),
+  /** Bumped when the providers change: a listing started before it is stale and must not become the cached list. */
+  let listingGeneration = 0;
+  const startListing = (source: AcpModelSource): Promise<readonly AcpModelChoice[]> => {
+    const generation = listingGeneration;
+    return (listing ??= source.choices().then(
+      (listed) => {
+        const choices = withLaunch(listed);
+        if (generation === listingGeneration) listedChoices = choices;
+        return choices;
+      },
       (error: unknown) => {
-        listing = undefined;
+        if (generation === listingGeneration) listing = undefined;
         throw error;
       },
     ));
+  };
   /**
    * Sessions currently holding a configOptions built from the launch-only
    * list because THEIR wait timed out (flow 288, T15). Drained by
@@ -1188,6 +1199,43 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     void startListing(options.models).catch(() => {
       // Reported when a session asks for the list.
     });
+  }
+
+  /**
+   * Shell profile, after `_keryx/providers/*` connected or disconnected a provider (specification
+   * §3.9.3): the model list is read again from the source (`keryx shell`'s picker detection over
+   * the credentials now saved) and every held session is sent a `config_option_update`, so its
+   * model option reflects the providers. A session's own model is never switched. Not awaited by
+   * the request: the live model lists can take seconds. A failed listing keeps the list the
+   * sessions already have and says so on stderr.
+   */
+  function refreshModelChoicesAfterProviderChange(): void {
+    const source = options.models;
+    if (source === undefined || stopping) return;
+    listingGeneration += 1;
+    listedChoices = undefined;
+    listing = undefined;
+    pendingLateModelList.clear();
+    const generation = listingGeneration;
+    const method = KERYX_ACP_EXTENSION_METHODS.providersList;
+    track(
+      startListing(source).then(
+        async () => {
+          if (stopping || generation !== listingGeneration) return;
+          for (const sessionId of registry.ids()) {
+            const configOptions = await configOptionsFor(sessionId, method);
+            if (stopping || generation !== listingGeneration || registry.get(sessionId) === undefined) continue;
+            sendUpdate(sessionId, { sessionUpdate: "config_option_update", configOptions });
+          }
+        },
+        (error: unknown) => {
+          options.logError(
+            `acp: listing models after a provider change failed (${error instanceof Error ? error.message : String(error)}); ` +
+              "sessions keep the list they have",
+          );
+        },
+      ),
+    );
   }
 
   async function configOptionsFor(sessionId: string, method: string): Promise<AcpSessionConfigOption[]> {
@@ -2437,6 +2485,19 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     });
   }
 
+  /** Shell profile: `_keryx/providers/*` and `_keryx/search_providers/*` (specification §3.9.3). */
+  const providers = shellProfile
+    ? createProvidersHandlers({
+        ...options.providers,
+        ...(options.providers?.configDir === undefined && options.shellConfigDir !== undefined ? { configDir: options.shellConfigDir } : {}),
+        searchController: searchControllerFor,
+        requireInitialized,
+        notify: (method, params) => writeMessage(notificationMessage(method, params)),
+        onProvidersChanged: refreshModelChoicesAfterProviderChange,
+        newId: idSeq,
+      })
+    : undefined;
+
   const dispatcher = new AcpDispatcher(
     {
       requests: {
@@ -2452,6 +2513,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
           ? {
               [ACP_AGENT_METHODS.sessionSetMode]: (params: unknown, context: { id: JsonRpcId }) => handleSetMode(params, context.id),
               [KERYX_ACP_EXTENSION_METHODS.command]: (params: unknown) => handleKeryxCommand(params),
+              ...(providers?.requests ?? {}),
             }
           : {}),
       },
@@ -2604,6 +2666,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     endReason = ended === "shutdown" ? "shutdown" : "connection-closed";
   } finally {
     stopping = true;
+    providers?.close();
     // Flow 306 (W6, T15): ACP advertises no `session/close` (see the
     // `SharedMcpSet` doc comment above) — the connection itself is the only
     // boundary every session this process created actually has. The same

@@ -396,7 +396,23 @@ describe("AC6 — initialize reports the real version and the profiles; _keryx/i
       expect(result._meta.keryx).toEqual({
         profile: "shell",
         profiles: ["editor", "shell"],
-        extensions: ["_keryx/info", "_keryx/ask_user", "_keryx/session_released", "_keryx/session_shown", "_keryx/command"],
+        extensions: [
+          "_keryx/info",
+          "_keryx/ask_user",
+          "_keryx/session_released",
+          "_keryx/session_shown",
+          "_keryx/command",
+          "_keryx/providers/list",
+          "_keryx/providers/test",
+          "_keryx/providers/disconnect",
+          "_keryx/providers/connect",
+          "_keryx/providers/login",
+          "_keryx/providers/login_cancel",
+          "_keryx/providers/login_challenge",
+          "_keryx/search_providers/list",
+          "_keryx/search_providers/connect",
+          "_keryx/search_providers/select",
+        ],
         liveSessions: true,
       });
       const infoId = c.request("_keryx/info", {});

@@ -44,6 +44,20 @@ export const KERYX_ACP_EXTENSION_METHODS = {
    * to the model's history (specification §3.9.1).
    */
   command: "_keryx/command",
+  /** Client → agent requests, shell profile (specification §3.9.3): connect a model provider without a terminal. */
+  providersList: "_keryx/providers/list",
+  providersTest: "_keryx/providers/test",
+  providersDisconnect: "_keryx/providers/disconnect",
+  providersConnect: "_keryx/providers/connect",
+  /** Answered when the device login ends; `providersLoginChallenge` is sent while it runs. */
+  providersLogin: "_keryx/providers/login",
+  providersLoginCancel: "_keryx/providers/login_cancel",
+  /** Agent → client notification, shell profile: `{ loginId, providerId, userCode, verificationUri, verificationUriComplete?, instructions? }`. */
+  providersLoginChallenge: "_keryx/providers/login_challenge",
+  /** Client → agent requests, shell profile (§3.9.3): the `/search-provider` dialog. */
+  searchProvidersList: "_keryx/search_providers/list",
+  searchProvidersConnect: "_keryx/search_providers/connect",
+  searchProvidersSelect: "_keryx/search_providers/select",
 } as const;
 
 /** The extensions a profile speaks, as `initialize._meta.keryx.extensions` and `_keryx/info` list them. */
@@ -55,6 +69,16 @@ export function acpProfileExtensions(profile: AcpProfile): string[] {
         KERYX_ACP_EXTENSION_METHODS.sessionReleased,
         KERYX_ACP_EXTENSION_METHODS.sessionShown,
         KERYX_ACP_EXTENSION_METHODS.command,
+        KERYX_ACP_EXTENSION_METHODS.providersList,
+        KERYX_ACP_EXTENSION_METHODS.providersTest,
+        KERYX_ACP_EXTENSION_METHODS.providersDisconnect,
+        KERYX_ACP_EXTENSION_METHODS.providersConnect,
+        KERYX_ACP_EXTENSION_METHODS.providersLogin,
+        KERYX_ACP_EXTENSION_METHODS.providersLoginCancel,
+        KERYX_ACP_EXTENSION_METHODS.providersLoginChallenge,
+        KERYX_ACP_EXTENSION_METHODS.searchProvidersList,
+        KERYX_ACP_EXTENSION_METHODS.searchProvidersConnect,
+        KERYX_ACP_EXTENSION_METHODS.searchProvidersSelect,
       ]
     : [KERYX_ACP_EXTENSION_METHODS.info];
 }
