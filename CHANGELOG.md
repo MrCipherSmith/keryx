@@ -5,6 +5,12 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.33] - 2026-11-17
+
+### Fixed
+
+- **The collapsed sidebar lines up.** In rail mode the title, the mode buttons and the card glyphs now sit in one centred column, cards are spaced like the header buttons, and an attention badge takes a single cell beside its glyph (a superscript digit, `⁺` above 9) instead of filling the row. The Work glyph is the full-size `►`. [#1211](https://github.com/MrCipherSmith/keryx/pull/1211)
+
 ## [0.4.32] - 2026-11-16
 
 ### Upgrade notes
