@@ -121,10 +121,99 @@ export const RETIRED_RULES: RetiredRuleEntry[] = [
  * that also edits the file in the same release needs nothing extra: the new
  * content ships only at `movedTo`, never under `core/`.
  *
- * Empty until P3 moves the first rule; `install.test.ts` proves the mechanism
- * with a fixture entry.
+ * Hashes were collected from the bundled file at every `v*` release tag and at
+ * the commit that moved it (normalised as above); `largestShippedBytes` is the
+ * largest of those blobs.
  */
-export const MOVED_RULES: MovedRuleEntry[] = [];
+export const MOVED_RULES: MovedRuleEntry[] = [
+  // ADR-0001 P3: engineering procedures leave core for the process layer.
+  movedProcedure("git-rules.mdc", 1860, [
+    // 1 version shipped under core/, first in v0.1.0.
+    "a05ecc4e2fb58d0b2682f3001f0265b9e22cb2d6c9cd971a286c02a884e01ce5",
+  ]),
+  movedProcedure("git-concurrency.mdc", 6190, [
+    // 1 version shipped under core/, first in v0.2.98.
+    "4a353db8f8fe2d32be10de0f55c7d6c4f1beeb0b9c456df061bb7814b99d296d",
+  ]),
+  movedProcedure("commit-message-formatting.mdc", 709, [
+    // 1 version shipped under core/, first in v0.1.0.
+    "5c828dc756c77485f45ff032dc7db357b352dcc7df3abb4bc8bfa2515db8cd91",
+  ]),
+  movedProcedure("documentation-management.mdc", 4743, [
+    // 2 versions shipped under core/, first in v0.1.0.
+    "7da069e6538d7330bcf84120cd2e1f3058f75652364532d9fa9d255fe4adccc0",
+    "0a78b912ff19ea2297e4d7ec2e69a2068f5f669eebb9614d89351ebe0ce245fd",
+  ]),
+  movedProcedure("skill-authoring.mdc", 8867, [
+    // 1 version shipped under core/, first in v0.4.29.
+    "5dabb3c43ff3162526fb1f4d421c3e617ebbf230bee2308cd999ec3fc7e9ed21",
+  ]),
+  movedProcedure("skill-lifecycle.mdc", 4775, [
+    // 4 versions shipped under core/, first in v0.1.0.
+    "c5c5d10d2fbfb469ff2f82eb5fa5a39288081ed80f962e9209c2ab2c45b867fb",
+    "1421433c5398a29ac2eafa5d09665271dc5467d6bc6df9860969e5235acd3e1c",
+    "da5e28558fafea452b46523a0082d28204f6e8c04c8d338dbf1be20eb0581ff9",
+    "fc47bf698eb340f7f5961901b492c765a4cb5b9b65384923cb647b96317fd522",
+  ]),
+  movedProcedure("skills-storage-workflow.mdc", 14418, [
+    // 8 versions shipped under core/, first in v0.1.0.
+    "63acfd421e837763d79c65f2c819a9ccd776af44aff20a1731a31d3474084b9f",
+    "385323f727e0facea21a49c9a217db62ecf1550739ae5fe377abf5c7aed1fccb",
+    "fbde33232944a30eb62919a4887ac71c7801443b7f377ba1a106c8f22ec641df",
+    "c9a3815377d764a7cf906024ec38909fb3630f6e9f0213ae53c4a5ff15e945bf",
+    "1a81023a223456c64a17991a61f20419256ac1ec034231a905aabfa75715ab02",
+    "9cfc4bc18c3976859e59d7511ab98fd263bbb503c8f1a0ca8108127751acc397",
+    "afa8b9cd2e06ec7d16b8c1954def8cb37b7de397d58663c17e313c0d913c738e",
+    "bda0bd6be44316ce683dfd0224e7a683ddde7f685419bdf1a6bd2d719eac5b66",
+  ]),
+  movedProcedure("model-selection.mdc", 18597, [
+    // 8 versions shipped under core/, first in v0.1.0.
+    "975a7c432c07bfa2a0b86fea302e79fa797916f6eb69cf9f963fa2d4a108a953",
+    "b59361a362acef4184993289dd8005f5d76e55cc96d07337d2862716bb4001d0",
+    "3ebaccbe473c8c50594f776e1a32ba98aad22908c2ecfde7c66813ed1ea180ba",
+    "f73cd7a917ba9b9439acd4130ddadce4d643670b0075fffd8227163953f31b33",
+    "58678df6acf1cc35f7218261b2289bf482dac6c195269eb4beea91101326b0fe",
+    "5e9972f49d75a37da4c95d9a63f47a79b961c38b1622e64563293127634888f7",
+    "5f0837347e95b70d791991989c6f526d61813dfa9236d479be85e5b0b3d26157",
+    "67fed6cdbb1b75747db44b10cadc898915ffc0f345aa0dce27192d98f2fa0fd8",
+  ]),
+  movedProcedure("opus-5-5-prompting.mdc", 5999, [
+    // 1 version shipped under core/, first in v0.2.163.
+    "6f102d82adda6902dca8d8b3ca8c6282e822af1a28f6e609434134ce51a1443c",
+  ]),
+  movedProcedure("jobs-documentation.mdc", 9012, [
+    // 4 versions shipped under core/, first in v0.1.0.
+    "3c0167aa2b746d768da794b82077e2ec90b66b895219d6c9bc8e5408395fbbef",
+    "01b1af1ad773a9d51aab5b1ceeb10e1e934f545ac10e3c07ca091e6df0f24103",
+    "895a5edbbcc06d7a9bfd6563d6d9931300409701b3d7ef82e9fe8fa99b10e53a",
+    "8ffab0515f92109df778f519f2cc72e9da8a85cd319390bd00b93d3a84b725e8",
+  ]),
+  movedProcedure("requirements-management.mdc", 1502, [
+    // 2 versions shipped under core/, first in v0.1.0.
+    "b4c303fe1e5ee84ef71ee4edca2f0e48bdcfef0a65d0ca96119dcdd02f5ed117",
+    "212a53ccec34d2924d322297017d5776c2747bdd578a1ee8c6ac6c7fd23c62d5",
+  ]),
+  movedProcedure("requirements-package-standard.mdc", 3889, [
+    // 2 versions shipped under core/, first in v0.1.0.
+    "27f88ba1e3081dbd53bf418b598068e4e7dc99ad5e0b70dd6ffb23088fd5dedb",
+    "305b93e48c21ad2cf21b02ada335e47e14ba624231077323efc6c136f938c6b3",
+  ]),
+  movedProcedure("implementation-plans.mdc", 2959, [
+    // 2 versions shipped under core/, first in v0.1.0.
+    "b71331adbb20b999a3be89f4d30695cb075c04d03dd16be0b0a7dd2b4fdfa0f1",
+    "875b4de145ee96cbe763ca1830a0792efafcf3f52ab7f7e07ecb97e864078599",
+  ]),
+];
+
+function movedProcedure(fileName: string, largestShippedBytes: number, shippedSha256: string[]): MovedRuleEntry {
+  return {
+    fileName,
+    shippedSha256,
+    reason: "an engineering procedure, not a coding principle — ADR-0001 P3 moved it to the process layer",
+    movedTo: `process/${fileName}`,
+    largestShippedBytes,
+  };
+}
 
 /**
  * Byte size of the largest content version `RETIRED_RULES` has ever shipped,
@@ -164,6 +253,14 @@ export function retiredRuleSizeCapBytes(entry: RetiredRuleEntry): number {
 export type RetiredRuleFailureStage = "lstat" | "read" | "unlink";
 
 /**
+ * Why a moved rule's new path is not there, so the warning names the real fix:
+ * `not-shipped` — this keryx bundle lacks the file (an incomplete package);
+ * `layer-unusable` — the installed layer is a symlink, a file, or absent;
+ * `missing` — the layer is a plain directory but the file did not land in it.
+ */
+export type MovedDestinationCause = "not-shipped" | "layer-unusable" | "missing";
+
+/**
  * One installed retired-rule file the installer found and what it did with it.
  * `movedTo` is copied from a `MOVED_RULES` entry, so the report can say where
  * the rule went.
@@ -172,7 +269,7 @@ export type RetiredRuleOutcome = { fileName: string; movedTo?: string } & (
   | { action: "removed" }
   | { action: "kept-modified" }
   /** A moved rule's old copy matched a shipped version, but its new path is not an installed regular file. */
-  | { action: "kept-destination-missing" }
+  | { action: "kept-destination-missing"; cause: MovedDestinationCause }
   | { action: "kept-not-regular-file" }
   | { action: "kept-oversized"; sizeBytes: number }
   | { action: "kept-error"; stage: RetiredRuleFailureStage; errorCode: string }

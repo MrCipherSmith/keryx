@@ -15,10 +15,14 @@ import {
 import {
   bundledSkillSourcePath,
   copyDirectoryContained,
+  CORE_CLEANUP_ENTRIES,
   errorCodeOf,
   isErrnoException,
   isMissingPathError,
+  migrateMovedRuleOverrides,
   movedRuleNotice,
+  movedRuleOverrideMessage,
+  type ProjectOverrideOutcome,
   removeStaleRuntimeBuilds,
   removeUnmodifiedRetiredRules,
   retiredRuleWarning,
@@ -34,7 +38,7 @@ import {
   PROJECT_SKILLS_DIR,
 } from "./project-skills";
 import type { RetiredRuleEntry, RetiredRuleOutcome } from "./retired-rules";
-import { KERYX_RULE_LAYERS, type KeryxRuleLayer } from "./rule-references";
+import { isKeryxRuleLayer, KERYX_RULE_LAYERS, type KeryxRuleLayer } from "./rule-references";
 
 /**
  * `mkdirContained`, but a containment refusal becomes a warning string
@@ -215,8 +219,11 @@ export async function installGdskills(
       .filter((outcome) => staleRuntimeBuildSeverity(outcome) === "warning")
       .map((outcome) => staleRuntimeBuildMessage(outcome, projectRoot)),
   ];
+  const overrideMessages = rulesInstall.overrideOutcomes.map(movedRuleOverrideMessage);
+  warnings.push(...overrideMessages.filter((message) => message.kind === "warning").map((message) => message.text));
   const notices = [
     ...retiredRuleOutcomes.map(movedRuleNotice).filter((notice): notice is string => notice !== null),
+    ...overrideMessages.filter((message) => message.kind === "notice").map((message) => message.text),
     ...staleBuildOutcomes
       .filter((outcome) => staleRuntimeBuildSeverity(outcome) === "notice")
       .map((outcome) => staleRuntimeBuildMessage(outcome, projectRoot)),
@@ -363,8 +370,9 @@ export type InstallBundledRulesSeams = {
 export async function installBundledRules(
   metaprojectRoot: string,
   seams: InstallBundledRulesSeams = {},
-): Promise<{ outcomes: RetiredRuleOutcome[]; warning: string | null }> {
+): Promise<{ outcomes: RetiredRuleOutcome[]; overrideOutcomes: ProjectOverrideOutcome[]; warning: string | null }> {
   const sourcePathFor = seams.sourcePathFor ?? bundledRulesSourcePath;
+  const cleanupEntries = seams.cleanupEntries ?? CORE_CLEANUP_ENTRIES;
   const warnings: string[] = [];
   let coreTarget: string | null = null;
   for (const layer of KERYX_RULE_LAYERS) {
@@ -372,12 +380,24 @@ export async function installBundledRules(
     if (installed.warning !== null) warnings.push(installed.warning);
     if (layer === "core") coreTarget = installed.target;
   }
+  // A moved rule's new path is shipped when this bundle carries the file in
+  // its layer source; otherwise a kept old copy is the package's fault, not
+  // the project's.
+  const isDestinationShipped = (movedTo: string): boolean => {
+    const layer = movedTo.slice(0, movedTo.indexOf("/"));
+    return isKeryxRuleLayer(layer) && existsSync(path.join(sourcePathFor(layer), path.basename(movedTo)));
+  };
   // Cleanup runs after every layer is in place, so a moved rule's new path is
   // installed before its old copy is removed.
   const outcomes = coreTarget === null
     ? []
-    : await removeUnmodifiedRetiredRules(coreTarget, undefined, seams.cleanupEntries);
-  return { outcomes, warning: warnings.length === 0 ? null : warnings.join("; ") };
+    : await removeUnmodifiedRetiredRules(coreTarget, undefined, cleanupEntries, isDestinationShipped);
+  // A project's own version of a moved rule follows it to the new slot.
+  const overrideOutcomes = await migrateMovedRuleOverrides(
+    path.join(metaprojectRoot, "rules"),
+    cleanupEntries.filter((entry) => entry.movedTo !== undefined),
+  );
+  return { outcomes, overrideOutcomes, warning: warnings.length === 0 ? null : warnings.join("; ") };
 }
 
 /**

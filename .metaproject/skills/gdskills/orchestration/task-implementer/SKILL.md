@@ -167,7 +167,7 @@ If the orchestrator provided `JOB_NAME` and `CONTEXT_PATH`:
 - Use this context throughout Phase 2-4 to guide implementation decisions
 - If the file does not exist, proceed without it — context is optional
 
-**2.0b Verify the project-skill covering the target (see `rules/core/skill-lifecycle.mdc`):**
+**2.0b Verify the project-skill covering the target (see `rules/process/skill-lifecycle.mdc`):**
 
 Before you rely on a project-skill's guidance, confirm it still matches the code:
 - `keryx skills route <target_file>` — find the project-skill for this module/entity (if any).
@@ -294,7 +294,7 @@ Execute the change plan. Write production-quality code.
 
 **4.5 Commit after implementation:**
 
-When auto-commit is enabled, create a conventional commit with the changes. Stage explicit paths only — never `-A`/`--all`/`.` — and run every git command as `git -C "<codebase_path>"` (`rules/core/git-concurrency.mdc`). Include the `refs #<issue_number>` line below only when a positive real issue number was supplied; otherwise omit that entire line:
+When auto-commit is enabled, create a conventional commit with the changes. Stage explicit paths only — never `-A`/`--all`/`.` — and run every git command as `git -C "<codebase_path>"` (`rules/process/git-concurrency.mdc`). Include the `refs #<issue_number>` line below only when a positive real issue number was supplied; otherwise omit that entire line:
 ```bash
 git -C "<codebase_path>" add <modified files, explicit paths>
 git -C "<codebase_path>" commit -m "<type>(<scope>): <description>
@@ -306,7 +306,7 @@ task: <task_id>"
 When auto-commit is disabled, do not commit. Report the exact list of files you
 changed — nothing inferred — in the Phase 6 STATUS response and the result
 file's `files_modified`/`files_created`/`files_deleted`; the orchestrator stages
-and commits those exact paths at the task boundary (`rules/core/git-concurrency.mdc`,
+and commits those exact paths at the task boundary (`rules/process/git-concurrency.mdc`,
 "Reporting Back").
 
 Commit type mapping:
@@ -382,10 +382,10 @@ said. Report the block instead, naming what repeated.
 
 **Never run `git reset --hard`, `git clean`, or any unscoped revert.** You do not own the worktree. `job-orchestrator` dispatches implementers in PARALLEL WAVES sharing a single worktree, so an unscoped reset destroys a wave-mate's uncommitted work — work that is not yours, cannot be recovered, and whose loss is invisible to you because the other agent's failure surfaces somewhere else entirely. If you cannot identify which files are yours, leave the tree exactly as it is and say so in the report: a dirty tree is recoverable, a destroyed one is not.
 
-**Same reasoning bans `git stash` and unscoped `git add`.** Never `git stash` — the stash stack is shared by every worktree, so even a scoped `push -- <file>` can be popped by another lane. Stage only the files this task changed (`git -C "<codebase_path>" add <path> <path>`), never `-A`/`--all`/`.`. Every git command runs as `git -C <this worktree's absolute path>`. See `rules/core/git-concurrency.mdc`.
+**Same reasoning bans `git stash` and unscoped `git add`.** Never `git stash` — the stash stack is shared by every worktree, so even a scoped `push -- <file>` can be popped by another lane. Stage only the files this task changed (`git -C "<codebase_path>" add <path> <path>`), never `-A`/`--all`/`.`. Every git command runs as `git -C <this worktree's absolute path>`. See `rules/process/git-concurrency.mdc`.
 
 **5.5 Re-commit fixes if any:**
-When auto-commit is enabled, use the template below — explicit paths only, `git -C "<codebase_path>"` for every command (`rules/core/git-concurrency.mdc`). Include `refs #<issue_number>` only for a supplied positive real issue number; otherwise omit that entire line.
+When auto-commit is enabled, use the template below — explicit paths only, `git -C "<codebase_path>"` for every command (`rules/process/git-concurrency.mdc`). Include `refs #<issue_number>` only for a supplied positive real issue number; otherwise omit that entire line.
 ```bash
 git -C "<codebase_path>" add <fixed files, explicit paths>
 git -C "<codebase_path>" commit -m "fix(<scope>): resolve lint/type/test issues
@@ -434,7 +434,7 @@ Write full JSON to `<JOBS_ROOT>/<JOB_NAME>/results/<task_id>.json`:
 }
 ```
 
-Set `skill_drift` from Phase 2.0b: if the project-skill you used was not `fresh`, or the code you wrote diverged from what a skill documents, name the skill and the divergence. The orchestrator uses this to decide whether to trigger `skills learn` (do NOT run `learn` yourself — it is a mutating step the orchestrator dispatches; see `rules/core/skill-lifecycle.mdc`).
+Set `skill_drift` from Phase 2.0b: if the project-skill you used was not `fresh`, or the code you wrote diverged from what a skill documents, name the skill and the divergence. The orchestrator uses this to decide whether to trigger `skills learn` (do NOT run `learn` yourself — it is a mutating step the orchestrator dispatches; see `rules/process/skill-lifecycle.mdc`).
 
 Four of those fields have a bar, and a field that collects noise trains the reader to skim all of them. Omit one rather than pad it. The first three are adapted (MIT; see THIRD_PARTY_NOTICES.md) as contract fields rather than a free-text template; the bars below are ours.
 

@@ -715,7 +715,7 @@ describe("AC14: skills declare a tier, never a model name", () => {
 });
 
 describe("AC17: the model-selection rule permits adaptive selection", () => {
-  const RULE = path.join("rules", "core", "model-selection.mdc");
+  const RULE = path.join("rules", "process", "model-selection.mdc");
   const trees = [
     path.join(import.meta.dir, "bundled", RULE),
     path.join(REPO_ROOT, ".metaproject", RULE),

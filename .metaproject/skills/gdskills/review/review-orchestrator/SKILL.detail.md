@@ -418,7 +418,7 @@ records them under `### How this review was run`.
    the per-role tier `keryx review tier` prints for each planned dispatch, and
    the model each tier resolves to on this host. Choices: accept the plan (the
    default), all `deep`, or custom. The plan is shown once per round, never per
-   dispatch (`rules/core/model-selection.mdc`). Skills, rules and this file name
+   dispatch (`rules/process/model-selection.mdc`). Skills, rules and this file name
    tiers only; model ids appear in the rendered question and the report.
 
 ```text

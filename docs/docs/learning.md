@@ -322,7 +322,7 @@ path that moves one to another machine explicitly.
   outside `~/.keryx/learning/`.
 
 See also the skill-lifecycle amendment in
-[`.metaproject/rules/core/skill-lifecycle.mdc`](https://github.com/MrCipherSmith/keryx/blob/main/.metaproject/rules/core/skill-lifecycle.mdc)
+[`.metaproject/rules/process/skill-lifecycle.mdc`](https://github.com/MrCipherSmith/keryx/blob/main/.metaproject/rules/process/skill-lifecycle.mdc)
 ("Passive observation is not mutation"): a hook may append an observation
 event, and nothing more — extraction, accept, apply, promote, and graduate
 are all agent-loop, human-triggered work, never hook-triggered.

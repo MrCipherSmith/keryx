@@ -141,6 +141,42 @@ test("apply leaves an unrecorded byte-identical file alone, unrecorded, and unin
   expect(await readFile(path.join(root, ".claude", "rules", "a.mdc"), "utf8")).toBe("rule a fixture\n");
 });
 
+test("R3-1: an older keryx-published rule is skipped with `keryx update` advice, and --force writes it without recording it", async () => {
+  // After a keryx upgrade and before `keryx update`: keryx init wrote the
+  // rule, from the previous bundle, and install-state never recorded it.
+  const published = path.join(root, ".metaproject", "rules", "core", "a.mdc");
+  await mkdir(path.dirname(published), { recursive: true });
+  await writeFile(published, "rule a, as the previous keryx shipped it\n", "utf8");
+
+  const plan = await planInstall({ manifest: MANIFEST, profileId: "base", target: "keryx-shell", repoRoot: root });
+  const result = await applyInstall(plan, root);
+  expect(result.ok).toBe(false);
+  const [skipped] = result.skipped;
+  expect(skipped).toMatchObject({ path: ".metaproject/rules/core/a.mdc", keryxPublished: true });
+  expect(skipped?.reason).toContain("run `keryx update` first");
+  expect(await readFile(published, "utf8")).toBe("rule a, as the previous keryx shipped it\n");
+
+  const forced = await applyInstall(plan, root, { force: true });
+  expect(forced.ok).toBe(true);
+  expect(forced.written).toContain(".metaproject/rules/core/a.mdc");
+  expect(await readFile(published, "utf8")).toBe("rule a fixture\n");
+  // Still not recorded, so uninstall leaves the file keryx init/update owns.
+  const state = await readSkillsInstallState(root, "keryx-shell");
+  expect(state!.installedModules.flatMap((m) => m.writtenPaths)).not.toContain(".metaproject/rules/core/a.mdc");
+  const uninstall = await uninstallInstall(root, "keryx-shell");
+  expect(uninstall.removed).not.toContain(".metaproject/rules/core/a.mdc");
+  expect(await readFile(published, "utf8")).toBe("rule a fixture\n");
+});
+
+test("R3-1: a hand-written unrecorded file outside the keryx-published roots keeps the --force advice", async () => {
+  await mkdir(path.join(root, ".claude", "rules"), { recursive: true });
+  await writeFile(path.join(root, ".claude", "rules", "a.mdc"), "hand-written\n", "utf8");
+  const plan = await planInstall({ manifest: MANIFEST, profileId: "base", target: "claude", repoRoot: root });
+  const [skipped] = (await applyInstall(plan, root)).skipped;
+  expect(skipped?.keryxPublished).toBeUndefined();
+  expect(skipped?.reason).toBe("a file already exists at this destination and is not recorded in install-state");
+});
+
 test("a recorded file another writer already updated to the new bundled bytes is up to date, not drift", async () => {
   const plan = await planInstall({ manifest: MANIFEST, profileId: "base", target: "claude", repoRoot: root });
   expect((await applyInstall(plan, root)).ok).toBe(true);

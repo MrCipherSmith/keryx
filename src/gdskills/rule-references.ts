@@ -1,6 +1,7 @@
 import { stat } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
+import { MOVED_RULES } from "./retired-rules";
 
 /**
  * Rules a skill names as its standard — `core/reviewing.mdc`,
@@ -24,13 +25,33 @@ import { pathExists } from "../lib/fs";
  * ships-with-keryx check, where it writes, the row it reports and the
  * `shadowedRules` of `keryx review reviewers`) must see one reference, and
  * this is the one place that spelling is decided.
+ *
+ * The same holds for a rule keryx moved out of `core/` (`MOVED_RULES`,
+ * ADR-0001): a skill written before the move still cites `core/git-rules.mdc`,
+ * the file keryx now ships — and the installer leaves — at
+ * `process/git-rules.mdc`. The reference is the moved path, so the reviewer
+ * reads the rule that exists and an overlay's copy goes to the project slot
+ * the new path resolves through.
  */
 export function ruleReferences(content: string): string[] {
   const refs = new Set<string>();
   for (const match of content.matchAll(/`(?:\.metaproject\/)?(?:rules\/)?([a-z0-9_-]+\/[a-z0-9._-]+\.mdc)`/gi)) {
-    if (match[1]) refs.add(withKeryxDirSpelling(match[1]));
+    if (match[1]) refs.add(canonicalRuleReference(match[1]));
   }
   return [...refs].sort();
+}
+
+/** The `core/` path a moved rule was cited under before it moved; empty for any other reference. */
+export function preMoveRuleReferences(ref: string): string[] {
+  return MOVED_RULES.filter((entry) => entry.movedTo === ref).map((entry) => `core/${entry.fileName}`);
+}
+
+/** `Core/x.mdc` -> `core/x.mdc`, then a moved `core/<name>` -> its new layer path. */
+export function canonicalRuleReference(ref: string): string {
+  const spelled = withKeryxDirSpelling(ref);
+  if (!spelled.startsWith("core/")) return spelled;
+  const moved = MOVED_RULES.find((entry) => `core/${entry.fileName}` === spelled);
+  return moved === undefined ? spelled : moved.movedTo;
 }
 
 /**

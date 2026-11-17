@@ -9,6 +9,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../../lib/fs";
 import { writeContained } from "../../lib/contained-write";
+import { KERYX_RULE_LAYERS } from "../rule-references";
 import { destinationRootsForTarget, type InstallPlan } from "./plan";
 import {
   NotARegularFileError,
@@ -24,7 +25,7 @@ export interface ApplyOptions {
   force?: boolean;
   /**
    * Root that `file.source` (repo-relative bundled paths, e.g.
-   * `src/gdskills/bundled/rules/core/git-rules.mdc`) resolves against.
+   * `src/gdskills/bundled/rules/process/git-rules.mdc`) resolves against.
    * Defaults to `destRoot` — correct for tests and fixtures that build a
    * fake bundled tree alongside the destination, but WRONG for a real
    * install: source content ships inside the keryx package
@@ -37,6 +38,22 @@ export interface ApplyOptions {
 export interface ApplySkippedFile {
   path: string;
   reason: string;
+  /**
+   * The file sits where `keryx init`/`update` publish (`isKeryxPublishedDestination`).
+   * Its fix is `keryx update`, not `--force`: forcing would record it, and
+   * `skills uninstall` would then delete a file the init/update pair owns.
+   */
+  keryxPublished?: true;
+}
+
+/**
+ * Destinations `keryx init` and `keryx update` write themselves (the bundled
+ * skills and the rule layers, `installGdskills`), for the keryx-shell target.
+ * A file there that install-state does not record is theirs, not drift.
+ */
+export function isKeryxPublishedDestination(destination: string): boolean {
+  if (destination.startsWith(".metaproject/skills/gdskills/")) return true;
+  return KERYX_RULE_LAYERS.some((layer) => destination.startsWith(`.metaproject/rules/${layer}/`));
 }
 
 export interface ApplyResult {
@@ -162,6 +179,19 @@ export async function applyInstall(
           alreadyPresent.push(file.destination);
           continue;
         }
+        if (recordedHash === undefined && isKeryxPublishedDestination(file.destination)) {
+          // R3-1: after a keryx upgrade and before `keryx update`, the file
+          // keryx init/update wrote still holds the older bundled bytes.
+          skipped.push({
+            path: file.destination,
+            reason:
+              "written by keryx init/update from another keryx version and not recorded in install-state — " +
+              "run `keryx update` first, then re-run this install (--force would record it, and " +
+              "`skills uninstall` would then delete a file keryx init/update owns)",
+            keryxPublished: true,
+          });
+          continue;
+        }
         if (recordedHash === undefined) {
           skipped.push({
             path: file.destination,
@@ -194,9 +224,16 @@ export async function applyInstall(
         }
       }
 
+      // --force over an unrecorded file keryx init/update published: write the
+      // bundled bytes, but leave it unrecorded for the same reason the
+      // byte-identical case above does — uninstall must not delete it.
+      const forcedOverKeryxPublished =
+        alreadyExists && options.force === true && !recordedHashes.has(file.destination) &&
+        isKeryxPublishedDestination(file.destination);
       const sourceBytes = await readFile(path.join(sourceRoot, file.source));
       await writeContained(destRoot, file.destination, sourceBytes);
       written.push(file.destination);
+      if (forcedOverKeryxPublished) continue;
       writtenPaths.push(file.destination);
       const hash = await sha256OfFile(destRoot, file.destination);
       if (hash !== undefined) sha256[file.destination] = hash;

@@ -50,7 +50,7 @@ Other sessions and lanes may share the checkout, the stash stack and the branch.
 - No blanket `git add -A` / `git add .` while parallel lanes share a checkout — stage explicit paths.
 - No force-push to a shared branch.
 
-Details and the safe alternatives: `rules/core/git-concurrency.mdc`.
+Details and the safe alternatives: `rules/process/git-concurrency.mdc`.
 
 ### 4. No secrets or personal data
 No API keys, tokens, passwords, private keys, connection strings, or personal data (names, emails, phone numbers of real people) in agent output, logs, commit messages, PR text or committed files. Redact before quoting a log or a config. `keryx security check-output` scans a text before it leaves the session.

@@ -529,7 +529,7 @@ describe("real bundled manifest (flow 309, W1 T14 — python stack pack destinat
       expect(shellDestinations).toContain(".metaproject/rules/process/agent-conduct.mdc");
       expect(shellDestinations).not.toContain(".metaproject/rules/core/agent-conduct.mdc");
       // Core rules stay where they were.
-      expect(shellDestinations).toContain(".metaproject/rules/core/skill-lifecycle.mdc");
+      expect(shellDestinations).toContain(".metaproject/rules/process/skill-lifecycle.mdc");
 
       const claudePlan = await planInstall({ manifest, profileId, target: "claude", repoRoot });
       expect(claudePlan.modules.flatMap((m) => m.files.map((f) => f.destination))).toContain(

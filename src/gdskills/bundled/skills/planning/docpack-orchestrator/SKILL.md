@@ -41,7 +41,7 @@ dir. Never ask or emit it when dispatched as a subagent. Plan bridge: publish `p
 | # | Law |
 |---|---|
 | 1 | Never create a single loose doc when a package is needed. |
-| 2 | Always follow `rules/core/requirements-package-standard.mdc`. |
+| 2 | Always follow `rules/process/requirements-package-standard.mdc`. |
 | 3 | Every Markdown doc must have `Version`. |
 | 4 | README, PRD and specification are required for module packages. |
 | 5 | Verification and documentation review are mandatory before final output. |

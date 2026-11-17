@@ -99,6 +99,30 @@ describe("a reference whose directory differs only in case from the one keryx in
   });
 });
 
+describe("a citation of a rule keryx moved out of core/ (ADR-0001 P3)", () => {
+  test("is read as the moved path, in any spelling, so a skill written before the move still finds the rule", () => {
+    expect(ruleReferences("`core/git-rules.mdc`, `rules/Core/model-selection.mdc`, `.metaproject/rules/core/skill-lifecycle.mdc`")).toEqual([
+      "process/git-rules.mdc",
+      "process/model-selection.mdc",
+      "process/skill-lifecycle.mdc",
+    ]);
+    // A rule that stayed in core keeps its path; the old and new spelling are one reference.
+    expect(ruleReferences("`core/error-handling.mdc`, `core/git-rules.mdc`, `process/git-rules.mdc`")).toEqual([
+      "core/error-handling.mdc",
+      "process/git-rules.mdc",
+    ]);
+  });
+
+  test("resolves to the installed process/ file, and a process/ project slot shadows it", async () => {
+    await writeRule("process/git-rules.mdc");
+    expect(await unresolvedRuleReferences(cwd, "Git: `core/git-rules.mdc`.")).toEqual([]);
+    await writeRule("project/process/git-rules.mdc");
+    expect(await shadowedRuleReferences(cwd, "Git: `core/git-rules.mdc`.")).toEqual([
+      { ref: "process/git-rules.mdc", resolved: ".metaproject/rules/project/process/git-rules.mdc" },
+    ]);
+  });
+});
+
 describe("a cited path that exists but is not a regular file", () => {
   test("resolves no reference, and is named in the resolution", async () => {
     await mkdir(path.join(cwd, ".metaproject", "rules", "house", "x.mdc"), { recursive: true });

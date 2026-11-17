@@ -91,7 +91,7 @@ docs/analysis/<feature-name>/
 - `jobs/` — orchestrator pipeline artifacts. Each job folder documents one orchestrated task end-to-end.
 
 Standalone skill invocations continue to use `docs/analysis/`. Only orchestrator-driven work produces output in `jobs/`.
-See `core/jobs-documentation.mdc` for the `jobs/` system.
+See `process/jobs-documentation.mdc` for the `jobs/` system.
 
 ## Prohibited
 - Date-stamped folders anywhere under `<DOCS_ROOT>`.

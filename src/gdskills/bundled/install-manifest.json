@@ -2,10 +2,9 @@
   "schemaVersion": "1.0.0",
   "profiles": {
     "minimal": {
-      "description": "Bare minimum: the stack-agnostic core rules plus skill-lifecycle governance. No orchestration/review/quality skills, no stack components.",
+      "description": "Bare minimum: the stack-agnostic core rules plus the process layer (agent conduct and engineering procedures, skill-lifecycle governance included). No orchestration/review/quality skills, no stack components.",
       "modules": [
         "core-common-rules",
-        "skill-lifecycle",
         "process-activity-rules"
       ],
       "components": []
@@ -14,7 +13,6 @@
       "description": "Today's curated subset made explicit: common rules plus orchestration, quality, and generic review skill modules. No stack-specific components.",
       "modules": [
         "core-common-rules",
-        "skill-lifecycle",
         "process-activity-rules",
         "orchestration-skills",
         "quality-skills",
@@ -26,7 +24,6 @@
       "description": "Common rules plus the TypeScript/JavaScript (Node.js) stack pack component (`ts-js-node-rules` + `ts-js-node-skills`, from src/gdskills/bundled/stacks/ts-js-node/), installed when `keryx stack detect` finds a matching tag.",
       "modules": [
         "core-common-rules",
-        "skill-lifecycle",
         "process-activity-rules"
       ],
       "components": [
@@ -38,7 +35,6 @@
       "description": "Common rules plus the React/MobX-aware review component set, installed when `keryx stack detect` finds a matching tag (fail open when detection is unavailable or uncertain).",
       "modules": [
         "core-common-rules",
-        "skill-lifecycle",
         "process-activity-rules"
       ],
       "components": [
@@ -52,7 +48,6 @@
       "description": "Common rules plus the Go stack pack component (`go-rules` + `go-skills`, from src/gdskills/bundled/stacks/go/), installed when `keryx stack detect` finds a matching tag.",
       "modules": [
         "core-common-rules",
-        "skill-lifecycle",
         "process-activity-rules"
       ],
       "components": [
@@ -64,7 +59,6 @@
       "description": "Common rules plus the NestJS-aware review component set, installed when `keryx stack detect` finds a matching tag (fail open when detection is unavailable or uncertain).",
       "modules": [
         "core-common-rules",
-        "skill-lifecycle",
         "process-activity-rules"
       ],
       "components": [
@@ -77,7 +71,6 @@
       "description": "Common rules plus the Python stack pack component (`python-rules` + `python-skills`, from src/gdskills/bundled/stacks/python/), installed when `keryx stack detect` finds a matching tag.",
       "modules": [
         "core-common-rules",
-        "skill-lifecycle",
         "process-activity-rules"
       ],
       "components": [
@@ -89,7 +82,6 @@
       "description": "Common rules plus the Vue stack pack component (`vue-rules` + `vue-skills`, from src/gdskills/bundled/stacks/vue/), installed when `keryx stack detect` finds a matching tag.",
       "modules": [
         "core-common-rules",
-        "skill-lifecycle",
         "process-activity-rules"
       ],
       "components": [
@@ -102,7 +94,6 @@
       "description": "Common rules plus the Angular stack pack component (`angular-rules` + `angular-skills`, from src/gdskills/bundled/stacks/angular/), installed when `keryx stack detect` finds a matching tag.",
       "modules": [
         "core-common-rules",
-        "skill-lifecycle",
         "process-activity-rules"
       ],
       "components": [
@@ -115,7 +106,6 @@
       "description": "Common rules plus the Next.js/Nuxt meta-framework stack pack component (`nextjs-nuxt-rules` + `nextjs-nuxt-skills`, from src/gdskills/bundled/stacks/nextjs-nuxt/) alongside its React and Vue bases, installed when `keryx stack detect` finds a matching tag (nextjs or nuxt).",
       "modules": [
         "core-common-rules",
-        "skill-lifecycle",
         "process-activity-rules"
       ],
       "components": [
@@ -130,7 +120,6 @@
       "description": "Common rules plus the Django-aware component set (extends `python`), installed when `keryx stack detect` finds a matching tag (fail open when detection is unavailable or uncertain).",
       "modules": [
         "core-common-rules",
-        "skill-lifecycle",
         "process-activity-rules"
       ],
       "components": [
@@ -143,7 +132,6 @@
       "description": "Common rules plus the FastAPI-aware component set (extends `python`), installed when `keryx stack detect` finds a matching tag (fail open when detection is unavailable or uncertain).",
       "modules": [
         "core-common-rules",
-        "skill-lifecycle",
         "process-activity-rules"
       ],
       "components": [
@@ -156,7 +144,6 @@
       "description": "Common rules plus the Rust stack pack component (`rust-rules` + `rust-skills`, from src/gdskills/bundled/stacks/rust/), installed when `keryx stack detect` finds a matching tag.",
       "modules": [
         "core-common-rules",
-        "skill-lifecycle",
         "process-activity-rules"
       ],
       "components": [
@@ -168,7 +155,6 @@
       "description": "Common rules plus the Java/Kotlin + Spring Boot stack pack component (`java-kotlin-spring-rules` + `java-kotlin-spring-skills`, from src/gdskills/bundled/stacks/java-kotlin-spring/), installed when `keryx stack detect` finds a matching tag.",
       "modules": [
         "core-common-rules",
-        "skill-lifecycle",
         "process-activity-rules"
       ],
       "components": [
@@ -180,7 +166,6 @@
       "description": "Common rules plus the Docker/Kubernetes/Terraform tool pack component, installed when `keryx stack detect` finds a matching tag (docker, docker-compose, or terraform). Experimental: has not cleared the honest behavioral eval gate yet.",
       "modules": [
         "core-common-rules",
-        "skill-lifecycle",
         "process-activity-rules"
       ],
       "components": [
@@ -192,7 +177,6 @@
       "description": "Common rules plus the CI (GitHub Actions & GitLab CI) tool pack component, installed when `keryx stack detect` finds a matching tag (github-actions or gitlab-ci). Experimental: has not cleared the honest behavioral eval gate yet.",
       "modules": [
         "core-common-rules",
-        "skill-lifecycle",
         "process-activity-rules"
       ],
       "components": [
@@ -204,7 +188,6 @@
       "description": "Common rules plus the PHP/Laravel stack pack component (`php-laravel-rules` + `php-laravel-skills`, from src/gdskills/bundled/stacks/php-laravel/), installed when `keryx stack detect` finds a matching tag.",
       "modules": [
         "core-common-rules",
-        "skill-lifecycle",
         "process-activity-rules"
       ],
       "components": [
@@ -216,7 +199,6 @@
       "description": "Common rules plus the Ruby on Rails stack pack component (`ruby-rails-rules` + `ruby-rails-skills`, from src/gdskills/bundled/stacks/ruby-rails/), installed when `keryx stack detect` finds a matching tag.",
       "modules": [
         "core-common-rules",
-        "skill-lifecycle",
         "process-activity-rules"
       ],
       "components": [
@@ -228,7 +210,6 @@
       "description": "Common rules plus the C/C++ stack pack component (`c-cpp-rules` + `c-cpp-skills`, from src/gdskills/bundled/stacks/c-cpp/), installed when `keryx stack detect` finds a matching tag.",
       "modules": [
         "core-common-rules",
-        "skill-lifecycle",
         "process-activity-rules"
       ],
       "components": [
@@ -240,7 +221,6 @@
       "description": "Common rules plus the SQL/database stack pack component (`sql-db-rules` + `sql-db-skills`, from src/gdskills/bundled/stacks/sql-db/), installed when `keryx stack detect` finds a matching tag.",
       "modules": [
         "core-common-rules",
-        "skill-lifecycle",
         "process-activity-rules"
       ],
       "components": [
@@ -252,7 +232,6 @@
       "description": "Common rules plus the C#/.NET stack pack component (`csharp-dotnet-rules` + `csharp-dotnet-skills`, from src/gdskills/bundled/stacks/csharp-dotnet/), installed when `keryx stack detect` finds a matching tag.",
       "modules": [
         "core-common-rules",
-        "skill-lifecycle",
         "process-activity-rules"
       ],
       "components": [
@@ -264,7 +243,6 @@
       "description": "Common rules plus the Swift/iOS stack pack component (`swift-ios-rules` + `swift-ios-skills`, from src/gdskills/bundled/stacks/swift-ios/), installed when `keryx stack detect` finds a matching tag. Standalone pack: no `lang:swift` base exists yet (flow 336 description.md).",
       "modules": [
         "core-common-rules",
-        "skill-lifecycle",
         "process-activity-rules"
       ],
       "components": [
@@ -276,7 +254,6 @@
       "description": "Common rules plus the Kotlin/Android (Jetpack Compose) stack pack component (`kotlin-android-rules` + `kotlin-android-skills`), installed when `keryx stack detect` finds a matching tag. Standalone pack (flow 336 description.md).",
       "modules": [
         "core-common-rules",
-        "skill-lifecycle",
         "process-activity-rules"
       ],
       "components": [
@@ -288,7 +265,6 @@
       "description": "Common rules plus the Flutter/Dart stack pack component (`flutter-dart-rules` + `flutter-dart-skills`), installed when `keryx stack detect` finds a matching tag. Standalone pack (flow 336 description.md).",
       "modules": [
         "core-common-rules",
-        "skill-lifecycle",
         "process-activity-rules"
       ],
       "components": [
@@ -300,7 +276,6 @@
       "description": "Every registered module and component, unconditionally.",
       "modules": [
         "core-common-rules",
-        "skill-lifecycle",
         "process-activity-rules",
         "orchestration-skills",
         "quality-skills",
@@ -386,7 +361,7 @@
   "modules": {
     "core-common-rules": {
       "kind": "rule",
-      "description": "Stack-agnostic core rules (coding standards, process, review baselines) shared by every profile.",
+      "description": "Stack-agnostic core rules (language-neutral coding standards and review baselines) shared by every profile. Engineering procedures are in process-activity-rules (ADR-0001 P3).",
       "paths": [
         "src/gdskills/bundled/rules/core/api-contracts.mdc",
         "src/gdskills/bundled/rules/core/async-patterns.mdc",
@@ -394,30 +369,19 @@
         "src/gdskills/bundled/rules/core/cli-interface-design.mdc",
         "src/gdskills/bundled/rules/core/code-review-learned-profile.mdc",
         "src/gdskills/bundled/rules/core/code-style-patterns.mdc",
-        "src/gdskills/bundled/rules/core/commit-message-formatting.mdc",
         "src/gdskills/bundled/rules/core/concurrency-patterns.mdc",
         "src/gdskills/bundled/rules/core/database-patterns.mdc",
         "src/gdskills/bundled/rules/core/definition-of-done.mdc",
-        "src/gdskills/bundled/rules/core/documentation-management.mdc",
         "src/gdskills/bundled/rules/core/error-handling.mdc",
         "src/gdskills/bundled/rules/core/execution-metrics.md",
         "src/gdskills/bundled/rules/core/frontend-assistant.mdc",
-        "src/gdskills/bundled/rules/core/git-concurrency.mdc",
-        "src/gdskills/bundled/rules/core/git-rules.mdc",
         "src/gdskills/bundled/rules/core/implementation-doc-mandate.mdc",
-        "src/gdskills/bundled/rules/core/implementation-plans.mdc",
-        "src/gdskills/bundled/rules/core/jobs-documentation.mdc",
         "src/gdskills/bundled/rules/core/layout-rendering.mdc",
-        "src/gdskills/bundled/rules/core/model-selection.mdc",
         "src/gdskills/bundled/rules/core/playwright-testing.mdc",
-        "src/gdskills/bundled/rules/core/requirements-management.mdc",
-        "src/gdskills/bundled/rules/core/requirements-package-standard.mdc",
         "src/gdskills/bundled/rules/core/rule-management-workflow.mdc",
         "src/gdskills/bundled/rules/core/security-baseline.mdc",
         "src/gdskills/bundled/rules/core/session-plan-bridge.mdc",
         "src/gdskills/bundled/rules/core/shared-definitions.mdc",
-        "src/gdskills/bundled/rules/core/skill-authoring.mdc",
-        "src/gdskills/bundled/rules/core/skills-storage-workflow.mdc",
         "src/gdskills/bundled/rules/core/solid-principles.mdc",
         "src/gdskills/bundled/rules/core/storybook-guidelines.mdc",
         "src/gdskills/bundled/rules/core/subagent-context-construction.md",
@@ -432,21 +396,6 @@
       "dependencies": [],
       "defaultInstall": true,
       "cost": "medium",
-      "stability": "stable"
-    },
-    "skill-lifecycle": {
-      "kind": "rule",
-      "description": "Skill freshness verification and drift-triggered learn proposals.",
-      "paths": [
-        "src/gdskills/bundled/rules/core/skill-lifecycle.mdc"
-      ],
-      "targets": [
-        "claude",
-        "keryx-shell"
-      ],
-      "dependencies": [],
-      "defaultInstall": true,
-      "cost": "light",
       "stability": "stable"
     },
     "process-activity-rules": {

@@ -637,9 +637,23 @@ async function installFromManifest(opts: {
       );
     }
     if (result.skipped.length > 0) {
-      console.log("Skipped (existing file not recorded in install-state, or drifted — rerun with --force to overwrite):");
-      for (const skipped of result.skipped) {
-        console.log(`- ${skipped.path}: ${skipped.reason}`);
+      // R3-1: a file keryx init/update published is fixed by `keryx update`,
+      // never by --force (which would record it for uninstall to delete).
+      const keryxPublished = result.skipped.filter((skipped) => skipped.keryxPublished === true);
+      const others = result.skipped.filter((skipped) => skipped.keryxPublished !== true);
+      if (keryxPublished.length > 0) {
+        console.log(
+          `Skipped (written by keryx init/update from another keryx version — run ${style.cyan("keryx update")} first, then re-run; do not use --force):`,
+        );
+        for (const skipped of keryxPublished) {
+          console.log(`- ${skipped.path}`);
+        }
+      }
+      if (others.length > 0) {
+        console.log("Skipped (existing file not recorded in install-state, or drifted — rerun with --force to overwrite):");
+        for (const skipped of others) {
+          console.log(`- ${skipped.path}: ${skipped.reason}`);
+        }
       }
     }
     if (result.errors.length > 0) {
@@ -2215,7 +2229,7 @@ Usage:
   keryx skills sync --runtime <runtime> --target <dir> [--dry-run] [--json]
   keryx skills sync --runtime <runtime> --global [--dry-run] [--json]
 
-Global sync mapping (rules/core/skills-storage-workflow.mdc):
+Global sync mapping (rules/process/skills-storage-workflow.mdc):
 ${mapping}
 
 Notes:
