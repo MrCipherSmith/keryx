@@ -51,6 +51,7 @@ import { currentDebugRun, debugEvent } from "./debug-log";
 import { attachRendererGuards } from "./renderer-debug";
 import { isCtrlC } from "./ctrl-c-policy";
 import { SIDEBAR_WIDTH } from "./sidebar-metrics";
+import { SHELL_FRAME_GUTTER_X, SHELL_FRAME_GUTTER_Y, shellFrameFits, shellInnerColumns } from "./shell-frame";
 import { SIDEBAR_MODES, sidebarModeIcon, type SidebarGeometry, type SidebarMode } from "./sidebar-geometry";
 import { BUSY_FOOTER_MIN_HINT, formatBusyFooter, type BusyFooterInfo } from "./busy-footer";
 import { formatDuration } from "./duration-format";
@@ -666,8 +667,32 @@ export async function createShellChrome(
 
   // --- layout skeleton ----------------------------------------------------
   // Keryx workspace: a calm transcript canvas with a persistent telemetry rail.
+  // A thin rounded frame with a one-column gutter outside it (`shell-frame.ts`):
+  // without it the transcript and the sidebar run into the terminal's edges and
+  // read as clipped, most of all inside a multiplexer pane.
+  // On a small terminal (`shellFrameFits`) the frame is dropped so the shell keeps
+  // every cell; `fitFrame` re-decides on each resize.
+  const frame = new otui.BoxRenderable(r, {
+    id: "shell-frame",
+    flexGrow: 1,
+    flexDirection: "row",
+    borderStyle: "rounded",
+    borderColor: getTheme().border,
+  });
+  r.root.add(frame);
+  const innerColumns = (): number => shellInnerColumns(r.width, r.height);
+  const fitFrame = (): void => {
+    const on = typeof r.width === "number" && typeof r.height === "number" && shellFrameFits(r.width, r.height);
+    frame.border = on;
+    frame.marginLeft = on ? SHELL_FRAME_GUTTER_X : 0;
+    frame.marginRight = on ? SHELL_FRAME_GUTTER_X : 0;
+    frame.marginTop = on ? SHELL_FRAME_GUTTER_Y : 0;
+    frame.marginBottom = on ? SHELL_FRAME_GUTTER_Y : 0;
+  };
+  fitFrame();
+  r.on(otui.CliRenderEvents.RESIZE, fitFrame);
   const rootRow = new otui.BoxRenderable(r, { id: "root-row", flexGrow: 1, flexDirection: "row" });
-  r.root.add(rootRow);
+  frame.add(rootRow);
   const main = new otui.BoxRenderable(r, {
     id: "main",
     flexGrow: 1,
@@ -680,7 +705,7 @@ export async function createShellChrome(
   rootRow.add(main);
   const geometry = opts.sidebar?.geometry;
   // The renderer's width is the truth: a store built before the terminal reported its size catches up here.
-  if (geometry !== undefined && typeof r.width === "number" && r.width > 0) geometry.resize(r.width);
+  if (geometry !== undefined && typeof r.width === "number" && r.width > 0) geometry.resize(innerColumns());
   const sidebarWidth = (): number => geometry?.state().width ?? SIDEBAR_WIDTH;
   const sidebar = new otui.BoxRenderable(r, {
     id: "sidebar",
@@ -1309,7 +1334,7 @@ export async function createShellChrome(
     // The footer's laid-out width lags a resize by a frame, so also bound it by the
     // terminal width less the sidebar and the workspace gutters, and take the smaller.
     const laidOut = typeof footer.width === "number" && footer.width > 0 ? footer.width : Number.POSITIVE_INFINITY;
-    const termWidth = typeof r.width === "number" && r.width > 0 ? r.width : Number.POSITIVE_INFINITY;
+    const termWidth = typeof r.width === "number" && r.width > 0 ? innerColumns() : Number.POSITIVE_INFINITY;
     const rowWidth = Math.min(laidOut, termWidth - sidebarWidth() - 2 * WORKSPACE_GUTTER_X);
     if (!Number.isFinite(rowWidth)) return Number.POSITIVE_INFINITY;
     const room = rowWidth - 2 - rightText.length;
@@ -1641,7 +1666,7 @@ export async function createShellChrome(
   let unsubscribeGeometry: (() => void) | undefined;
   let offSidebarKeys: (() => void) | undefined;
   const onGeometryResize = (): void => {
-    if (geometry !== undefined && typeof r.width === "number" && r.width > 0) geometry.resize(r.width);
+    if (geometry !== undefined && typeof r.width === "number" && r.width > 0) geometry.resize(innerColumns());
   };
   if (geometry !== undefined) {
     unsubscribeGeometry = geometry.subscribe((state) => {
@@ -1676,6 +1701,7 @@ export async function createShellChrome(
     // The renderer's own clear colour: the same call `createShellRenderer`
     // makes at boot, so a switch and a fresh start cannot disagree.
     paintRendererBackground(r, theme);
+    frame.borderColor = theme.border;
     sidebar.borderColor = theme.border;
     sidebar.backgroundColor = theme.panel;
     // The composer's text was painted from the theme at mount; move it too.
@@ -1836,6 +1862,7 @@ export async function createShellChrome(
       try {
         textarea.off(otui.LayoutEvents.RESIZED, onComposerResized);
         footer.off(otui.LayoutEvents.RESIZED, onFooterResized);
+        r.off(otui.CliRenderEvents.RESIZE, fitFrame);
         r.off(otui.CliRenderEvents.RESIZE, onFooterResized);
         r.off(otui.CliRenderEvents.RESIZE, onGeometryResize);
       } catch {

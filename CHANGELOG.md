@@ -5,6 +5,10 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **`keryx shell` sits inside a rounded frame.** The full-screen shell no longer runs into the terminal's edges: a thin rounded border with a one-column gutter outside it frames the transcript and the sidebar, which reads better inside a multiplexer pane (herdr, tmux, zellij). The frame is drawn only when at least 80x24 is left inside it (a terminal of 84x26 or larger), so dialogs and the footer keep the size they are fitted to; a smaller terminal looks as before.
+
 ## [0.4.34] - 2026-11-17
 
 ### Changed

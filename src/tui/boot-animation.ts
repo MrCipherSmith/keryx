@@ -13,6 +13,7 @@
 import { getTheme } from "./theme";
 import { boldChunk, dimChunk } from "./theme-text";
 import { SIDEBAR_WIDTH } from "./shell-chrome";
+import { shellInnerColumns, shellInnerRows } from "./shell-frame";
 
 type OpenTui = typeof import("@opentui/core");
 type Renderer = Awaited<ReturnType<OpenTui["createCliRenderer"]>>;
@@ -316,7 +317,7 @@ export function centerWrappedLines(text: string, width: number): string[] {
  */
 export function mountEmptyTranscriptSplash(otui: OpenTui, r: Renderer, transcript: Box): SplashHandle {
   const rows = WORDMARK.length + 2;
-  const paneRows = Math.max(0, r.height - SHELL_CHROME_ROWS);
+  const paneRows = Math.max(0, shellInnerRows(r.height, r.width) - SHELL_CHROME_ROWS);
   const box: Box = new otui.BoxRenderable(r, {
     id: "transcript-splash",
     width: "100%",
@@ -343,7 +344,7 @@ export function mountEmptyTranscriptSplash(otui: OpenTui, r: Renderer, transcrip
     const width =
       box.width > 0
         ? box.width
-        : Math.max(SPLASH_MIN_COLS, (r.width > 0 ? r.width : 80) - SIDEBAR_WIDTH - 2);
+        : Math.max(SPLASH_MIN_COLS, shellInnerColumns(r.width > 0 ? r.width : 80, r.height) - SIDEBAR_WIDTH - 2);
     for (const child of painted) {
       box.remove(child);
     }

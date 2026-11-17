@@ -29,6 +29,7 @@ import {
 } from "./modal-host";
 import { SIDEBAR_WIDTH } from "./sidebar-metrics";
 import { applyThemeId, getThemeId, resolveTheme } from "./theme";
+import { shellInnerColumns } from "./shell-frame";
 
 async function loadOpenTui(): Promise<{
   core: typeof import("@opentui/core");
@@ -786,7 +787,7 @@ otuiTest("Flow 269 AC2: ModalHost bounds dialog width strictly within main pane 
   await h.flush();
 
   const mainWidth = resolveModalAvailableWidth(h.chrome);
-  expect(mainWidth).toBe(120 - SIDEBAR_WIDTH);
+  expect(mainWidth).toBe(shellInnerColumns(120, 40) - SIDEBAR_WIDTH); // the shell frame takes its columns first
 
   const panel = h.renderer.root.findDescendantById("modal-panel") as { width: number };
   expect(panel).toBeDefined();
@@ -814,7 +815,7 @@ otuiTest("flow 468 AC13: with a wide sidebar on a 100-column terminal the modal 
   const h = await mountChrome(otui, { width: 100, height: 40 });
   (h.chrome.sidebar as unknown as { width: number }).width = WIDE_SIDEBAR;
   await h.flush();
-  expect((h.chrome.main as unknown as { width: number }).width).toBe(100 - WIDE_SIDEBAR); // squeezed, as the plan says
+  expect((h.chrome.main as unknown as { width: number }).width).toBe(shellInnerColumns(100, 40) - WIDE_SIDEBAR); // squeezed, as the plan says
   const handle = openModal(otui.core, h.chrome, {
     title: "Wide Sidebar Modal",
     tabs: [{ id: "tab", label: "Tab" }],
