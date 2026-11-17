@@ -5,6 +5,12 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.34] - 2026-11-17
+
+### Changed
+
+- **The testing review lens raises less noise.** Four rows fired outside the case they were written for: an inlined test account is now a finding only when the spec uses it with no env read in front (a placeholder or empty fallback after an env read is not), any `getByRole` / `getByLabel` locator satisfies the locator rule whatever its accessible name, a thin wrapper with no state of its own needs no default story, and the mutation pass skips gates the change neither added, changed nor sits downstream of. Run `keryx update` to install the narrowed rules. [#1214](https://github.com/MrCipherSmith/keryx/pull/1214)
+
 ## [0.4.33] - 2026-11-17
 
 ### Fixed
