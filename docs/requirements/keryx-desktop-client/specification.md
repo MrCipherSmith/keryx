@@ -372,13 +372,22 @@ Where the implementation differs from the text above
   sends that text as `session/prompt` on the same session; a busy session
   refuses `/goal` as the shell does. The command itself still never enters
   model history; the turn it starts does.
+  As built: `prepareGoalRun` (`goal-command.ts`) is the shell's own part of
+  `runGoalCommand` before its first turn; the session keeps one slate ref,
+  and later turns run with it. `/goal --auto` is refused (its continuation
+  rounds and verifier are turns the shell drives itself), as is a goal with a
+  rejected `--workspace`.
 - `/delegate` (owner, 2026-11-18): the ACP host gets the shell's external-run
   port (`createLazyRunExternal`). Starting a run needs approval: keryx sends
   `session/request_permission` (kind `execute`, the vendor CLI and task in
   `rawInput`) in place of the TUI's `approveExternalSpawn` card; a rejection
   answers the command refused. The run's events go out as `_keryx/subagent`
   with `runtime: "external"` and no `parentToolCallId`. A model-chosen
-  external runtime for `spawn_subagent` stays M2b.
+  external runtime for `spawn_subagent` stays M2b. As built: the approval is
+  asked first and offers only allow once / reject once; the capability gate
+  runs after it, so a disabled agent answers refused after an approval.
+  `session/cancel`, a release of the session and the connection's end stop
+  the run (and withdraw an approval still being asked).
 - Refused with a reason, not served: every `/bus` subcommand (the ACP
   host does not join the bus), `/autoreview start|stop` (detached process
   with no supervisor), `/mcp connect|disconnect`, `/task` without a Hub

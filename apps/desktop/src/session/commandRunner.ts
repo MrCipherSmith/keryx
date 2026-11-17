@@ -29,6 +29,8 @@ export interface RunDeps {
   dispatch(a: Action): void;
   /** Starts a prompt turn (the M1 path); false when it was not accepted. */
   sendPrompt(text: string): boolean;
+  /** Starts a turn in the session the command ran in (`startTurn`), even if another one is shown by now. */
+  startTurn(sessionId: string, text: string): boolean;
   newSession(): void;
   interrupt(): void;
   applyEffects(sessionId: string, effects: readonly CommandEffect[]): void;
@@ -87,6 +89,12 @@ export async function runCommandLine(line: string, deps: RunDeps, opts: RunOptio
     const refused = k?.refused === true;
     card(typeof r?.text === "string" ? r.text : "", refused, k?.view ?? null);
     if (!refused && k?.effects?.length) deps.applyEffects(sessionId, k.effects);
+    // `/goal`: keryx did the shell's setup and answers the turn text; the turn is an ordinary prompt, sent once.
+    if (!refused && k?.effects?.includes("startTurn") && typeof k.prompt === "string" && k.prompt.trim()) {
+      if (!deps.startTurn(sessionId, k.prompt)) {
+        deps.dispatch({ t: "notice", sessionId, level: "warn", text: "The goal's turn was not started: the session is busy. Send the goal as a message when it is free." });
+      }
+    }
     return !refused;
   } catch (e) {
     return refuse(errText(e));

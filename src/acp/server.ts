@@ -139,6 +139,9 @@ import type { ShellView } from "./shell-views";
 import { withSessionProvider } from "../commands/spawn-deps";
 import { createProvidersHandlers, type AcpProvidersSeams } from "./providers";
 import { createTasksHandlers, taskEventSink } from "./shell-tasks";
+import { createSessionExternalRuns, type SessionExternalRuns } from "./shell-delegate";
+import type { RunExternalFn, CreateRunExternalOptions } from "../harness/run-external-factory";
+import type { SlateSessionRef } from "../session/slate-lifecycle";
 import { busyRefusalText, findShellCommand, shellAvailableCommands, viewNotServedText } from "./shell-commands";
 import {
   createAcpSessionRewind,
@@ -242,6 +245,8 @@ export interface AcpServerOptions {
   readonly buildShellRoster?: (input: AcpShellRosterInput) => InteractiveTool[];
   /** Shell profile: the user-global config directory `_keryx/command`'s settings commands read and write. The default one otherwise. Test seam. */
   readonly shellConfigDir?: string;
+  /** Shell profile test seam for `/delegate`: the external-run port. `createLazyRunExternal` otherwise. */
+  readonly makeRunExternal?: (options: CreateRunExternalOptions) => RunExternalFn;
   /** Shell profile test seams for `_keryx/providers/*`: the config directory, environment and network it uses. */
   readonly providers?: AcpProvidersSeams;
 }
@@ -543,6 +548,13 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   const sessionReadOnly = new Map<string, boolean>();
   /** `/rewind`: one snapshot recorder and readline state machine per session, built on first use. */
   const sessionRewinds = new Map<string, AcpSessionRewind>();
+  /** `/delegate`: each session's external runs (§3.9.4), built on first use; stopped by a cancel or a release. */
+  const sessionExternalRuns = new Map<string, SessionExternalRuns>();
+  /**
+   * `/goal`: each session's slate ref, as the shells keep one per session (`opened: false` until the
+   * goal opens it) and the goal turn text a turn must carry to skip the close-phrase check once.
+   */
+  const sessionSlates = new Map<string, { ref: SlateSessionRef; goalPrompt?: string }>();
 
   let searchController: SearchProviderController | undefined = options.searchController;
   const searchControllerFor = (): SearchProviderController => (searchController ??= createDefaultSearchProviderController());
@@ -792,6 +804,9 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     pendingLateModelList.delete(sessionId);
     sessionReadOnly.delete(sessionId);
     sessionRewinds.delete(sessionId);
+    sessionExternalRuns.get(sessionId)?.stop("the session was released");
+    sessionExternalRuns.delete(sessionId);
+    sessionSlates.delete(sessionId);
     const jobs = sessionJobs.get(sessionId);
     sessionJobs.delete(sessionId);
     const hooks = shellHooksBySession.get(sessionId);
@@ -1881,6 +1896,33 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     return created;
   }
 
+  /** `/delegate`'s runs for one session: the approval is a `session/request_permission`, the events `_keryx/subagent`. */
+  function externalRunsFor(sessionId: string, state: AcpSessionState): SessionExternalRuns {
+    const held = sessionExternalRuns.get(sessionId);
+    if (held !== undefined) return held;
+    const created = createSessionExternalRuns({
+      cwd: state.resolvedRoot,
+      configDir: options.shellConfigDir,
+      sessionId,
+      makeRunExternal: options.makeRunExternal,
+      emitFleet: (event) => {
+        if (!stopping) writeMessage(notificationMessage(KERYX_ACP_EXTENSION_METHODS.subagent, { sessionId, event }));
+      },
+      ask: async (request, onSent) => {
+        if (!clientAnswersPermissions) return undefined;
+        const outcome = await clientRequests.request(ACP_CLIENT_METHODS.sessionRequestPermission, request, onSent);
+        if (outcome.kind !== "result") return undefined;
+        const result = outcome.result;
+        return typeof result === "object" && result !== null && !Array.isArray(result) ? (result as AcpRequestPermissionResponse) : undefined;
+      },
+      withdraw: (requestId, reason) => {
+        clientRequests.cancel(requestId, reason);
+      },
+    });
+    sessionExternalRuns.set(sessionId, created);
+    return created;
+  }
+
   /** The session as a transcript command sees it. Read through the registry: `session/load` and `persistHistory` replace entries. */
   function commandSession(sessionId: string): ShellCommandHost["session"] {
     const live = (): AcpSessionState => {
@@ -1924,6 +1966,20 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       jobs: () => jobsFor(sessionId, state.resolvedRoot),
       searchController: searchControllerFor,
       rewind: () => rewindFor(sessionId).command,
+      slate: () => {
+        const held = sessionSlates.get(sessionId);
+        if (held !== undefined) return held.ref;
+        const dir = registry.get(sessionId)?.handle.dir;
+        if (dir === undefined) return undefined;
+        const ref: SlateSessionRef = { dir, cwd: state.resolvedRoot, opened: false };
+        sessionSlates.set(sessionId, { ref });
+        return ref;
+      },
+      goalStarted: (prompt) => {
+        const held = sessionSlates.get(sessionId);
+        if (held !== undefined) held.goalPrompt = prompt;
+      },
+      externalRuns: () => externalRunsFor(sessionId, state),
       serverCommand: async (name, args): Promise<ShellCommandOutcome> => {
         const before = { mode: modeOf(sessionId), model: sessionModel(sessionId, method).choice.value, reasoning: reasoningOverrides.get(sessionId) };
         // Not tied to `session/cancel`: this is not a turn, so there is nothing for a cancel to reach.
@@ -1945,7 +2001,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
    * The two that rewrite the transcript (`/compact`, `/rewind`) hold the session's slot while
    * they run, so a prompt cannot interleave with the rewrite.
    */
-  async function handleKeryxCommand(params: unknown): Promise<{ text: string; _meta: { keryx: { effects?: ShellCommandEffect[]; refused?: true; view?: ShellView } } }> {
+  async function handleKeryxCommand(params: unknown): Promise<{ text: string; _meta: { keryx: { effects?: ShellCommandEffect[]; refused?: true; view?: ShellView; prompt?: string } } }> {
     const method = KERYX_ACP_EXTENSION_METHODS.command;
     requireInitialized(method);
     const obj = requireObjectParams(params, method);
@@ -1986,7 +2042,10 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         // A view command with no text form for these arguments: T10b's views replace this answer.
         if (outcome === undefined) return refusedResult(viewNotServedText(name));
         if (outcome.refused === true) return refusedResult(outcome.text);
-        return { text: outcome.text, _meta: { keryx: { effects: [...(outcome.effects ?? [])], ...(outcome.view !== undefined ? { view: outcome.view } : {}) } } };
+        return {
+          text: outcome.text,
+          _meta: { keryx: { effects: [...(outcome.effects ?? [])], ...(outcome.view !== undefined ? { view: outcome.view } : {}), ...(outcome.prompt !== undefined ? { prompt: outcome.prompt } : {}) } },
+        };
       } finally {
         if (slot !== undefined && activeTurns.get(sessionId) === slot) activeTurns.delete(sessionId);
         touch(sessionId);
@@ -2181,7 +2240,15 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         io.beforeMutation = () => rewind.recorder.beforeMutation();
         rewind.recorder.beginTurn({ archiveIndex: archive.messages.length, prompt: userLine });
       }
-      const result = await runAgentTurn(io, deps, state.history, userLine, { signal: turn.controller.signal });
+      // After a `/goal` the session keeps its slate, as the shells do; the goal's own turn skips the
+      // close-phrase check once, since `/goal` has just opened the slate it would archive.
+      const slate = sessionSlates.get(sessionId);
+      const goalTurn = slate !== undefined && slate.goalPrompt !== undefined && slate.goalPrompt === userLine;
+      if (slate !== undefined) delete slate.goalPrompt;
+      const result = await runAgentTurn(io, deps, state.history, userLine, {
+        signal: turn.controller.signal,
+        ...(slate !== undefined ? { slateSession: slate.ref, ...(goalTurn ? { skipCloseTrigger: true } : {}) } : {}),
+      });
       syncAcpArchive(archive, state.history);
       if (!registry.canPersist(sessionId)) {
         // Another instance took the lease over mid-turn: its transcript is not
@@ -2275,6 +2342,8 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   function handleSessionCancel(params: unknown): void {
     const obj = requireObjectParams(params, ACP_AGENT_METHODS.sessionCancel);
     const sessionId = requireStringField(obj, "sessionId", ACP_AGENT_METHODS.sessionCancel);
+    // A `/delegate` run is not a turn, but a cancel stops it all the same.
+    sessionExternalRuns.get(sessionId)?.stop("cancelled by session/cancel");
     const turn = activeTurns.get(sessionId);
     if (turn === undefined) {
       options.logError(
@@ -2819,6 +2888,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         turn.cancelled = true;
         turn.controller.abort();
       }
+      for (const runs of sessionExternalRuns.values()) runs.stop("keryx acp is shutting down");
       await within(Promise.allSettled([...inflight]), SHUTDOWN_TURN_GRACE_MS);
     } else {
       // Shell profile: nobody is left to watch a turn, and a trust or auto
@@ -2829,6 +2899,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
           turn.cancelled = true;
           turn.controller.abort();
         }
+        for (const runs of sessionExternalRuns.values()) runs.stop("the client closed the connection");
       }
       // A turn started before the close still has a response to write, and the
       // stream it writes to is still open. Draining is what makes the denial

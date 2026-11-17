@@ -215,6 +215,16 @@ test("a subagent shows its task and transcript entries by kind", async () => {
   expect(d.querySelector(".entry-result pre")!.textContent).toBe("1 file");
 });
 
+test("a /delegate run (runtime external, no parent tool call) is marked as external in the list and the detail", async () => {
+  const external: Subagent = { ...AGENT, id: "ext:1", label: "Claude", runtime: "external", parentToolCallId: undefined, detail: "delegated", model: undefined };
+  await renderPanel({ tab: "subagents", subagents: [external] });
+  const row = document.querySelector('[data-subagent="ext:1"]')!;
+  expect(row.querySelector(".activity-label")!.textContent).toContain("Claude");
+  expect(row.querySelector(".activity-runtime")!.textContent).toBe("external");
+  await click(row);
+  expect(document.querySelector('[data-subagent-detail="ext:1"] .field-hint')!.textContent).toBe("external");
+});
+
 test("the Show subagent link on a spawn_subagent tool card opens the subagent whose parentToolCallId matches", async () => {
   const items: Item[] = [
     { kind: "tool", id: 1, toolCallId: "call-1", title: "read", toolKind: "read", status: "completed", content: [], autoApproved: false, startedAt: 1, endedAt: 2 },

@@ -672,6 +672,7 @@ export function useAcpSession(cwd: string) {
           queue: conv?.queue ?? [],
           dispatch,
           sendPrompt: (t) => sendPrompt(t),
+          startTurn: (target, t) => sendPrompt(t, target),
           newSession: () => void newSession(),
           interrupt: cancel,
           applyEffects,

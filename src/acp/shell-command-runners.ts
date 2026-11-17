@@ -72,13 +72,16 @@ import { ACP_SHELL_COMMAND_TABLE, type ShellCommandRow } from "./shell-commands"
 import { join as joinPath } from "node:path";
 import type { ScheduleSlashDeps } from "../tui/schedule-command";
 import type { ShellView } from "./shell-views";
+import { runAcpGoal } from "./shell-goal";
+import type { SessionExternalRuns } from "./shell-delegate";
+import type { SlateSessionRef } from "../session/slate-lifecycle";
 import { busView, editGuardView, guardView, mcpView, projectContextView, runJevProfile, runRouting } from "./shell-views-config";
 import { runAc, runCi, runConform, runDecisions, runReadOnlyView, runReview } from "./shell-views-review";
 import { runAutoReview, runGovernance, runSchedule, runSchedules, runTask, runTriggers } from "./shell-views-ops";
 import { refusal, viewOutcome } from "./shell-views-outcome";
 
 /** What a command changed, so the client refreshes without parsing text (§3.9.1). */
-export type ShellCommandEffect = "mode" | "model" | "config" | "plan" | "transcript" | "tasks";
+export type ShellCommandEffect = "mode" | "model" | "config" | "plan" | "transcript" | "tasks" | "startTurn";
 
 export interface ShellCommandOutcome {
   readonly text: string;
@@ -87,6 +90,8 @@ export interface ShellCommandOutcome {
   readonly refused?: true;
   /** A picker, modal or form command's structured view (§3.9.1 "Views"); `text` is its plain rendering. */
   readonly view?: ShellView;
+  /** With the `startTurn` effect: the exact turn text the client sends as `session/prompt` (`/goal`). */
+  readonly prompt?: string;
 }
 
 /** The session a transcript command works on: the live history (mutated in place) and what persists it. */
@@ -116,6 +121,12 @@ export interface ShellCommandHost {
   /** `/help`'s `/status`-style answers the server owns: `status`, `model`, `reasoning`, `mode`. */
   serverCommand(name: string, args: string): Promise<ShellCommandOutcome>;
   rewind(): RewindReadlineCommand;
+  /** `/goal`: the session's slate, kept for its life (a `SlateSessionRef` is per session, as in the shells). */
+  slate(): SlateSessionRef | undefined;
+  /** `/goal`: the turn text the client is about to send. */
+  goalStarted(prompt: string): void;
+  /** `/delegate`: this session's external runs, with the approval and the fleet events the server owns. */
+  externalRuns(): SessionExternalRuns;
   /** Test seam for `/schedule`: the timer host, clock and credential checks `runScheduleSlashCommand` takes. Production leaves it unset. */
   readonly scheduleOverrides?: Omit<Partial<ScheduleSlashDeps>, "cwd" | "defaults" | "print" | "confirm"> | undefined;
 }
@@ -359,12 +370,6 @@ async function externalText(host: ShellCommandHost, args: string): Promise<Shell
 }
 
 const NO_BUS = "The agent bus is not joined over keryx acp, so /bus send, ask and reply have no peers to reach. Use keryx shell for bus messaging.";
-const NO_EXTERNAL_RUN =
-  "keryx acp has no external-run port yet, so /delegate cannot start an external agent from the desktop. " +
-  "Use keryx shell, or run it from a terminal: keryx agents external run.";
-const NO_GOAL =
-  "/goal starts an agent turn, and a command is not a turn: it holds no prompt slot and adds nothing to the transcript. " +
-  "Send the goal as a message instead.";
 
 const RUNNERS: Readonly<Record<string, Runner>> = {
   server: (host, args, row) => host.serverCommand(row.name, args),
@@ -448,8 +453,25 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
   projectctx: (host, args) => projectContextText(host, args),
   external: (host, args) => externalText(host, args),
   "external-agents": async (host, args) => text(await runExternalAgentsCommand(args, host.cwd, host.configDir)),
-  goal: async () => refused(NO_GOAL),
-  delegate: async () => refused(NO_EXTERNAL_RUN),
+  goal: async (host, args) => {
+    const answer = await runAcpGoal(
+      {
+        cwd: host.cwd,
+        history: host.session.history,
+        slate: () => host.slate(),
+        modelIds: () => host.session.modelIds(),
+        onHistoryChange: () => syncAcpArchive(host.session.archive, host.session.history),
+        goalStarted: (prompt) => host.goalStarted(prompt),
+      },
+      args,
+    );
+    if (answer.refused === true) return refused(answer.text.trim());
+    return { text: answer.text, ...(answer.prompt !== undefined ? { effects: ["startTurn" as const], prompt: answer.prompt } : {}) };
+  },
+  delegate: async (host, args) => {
+    const answer = await host.externalRuns().delegate(args);
+    return answer.refused === true ? refused(answer.text.trim()) : text(answer.text);
+  },
   bus: async (_host, args) => {
     const sub = words(args)[0];
     return sub === "send" || sub === "ask" || sub === "reply" || sub === "name" || (sub !== undefined && sub.startsWith("@"))

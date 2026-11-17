@@ -235,14 +235,12 @@ describe("_keryx/command over the wire", () => {
     }
   }, TIMEOUT_MS);
 
-  test("commands that need a terminal, a bus or the turn slot are refused with a reason, not faked", async () => {
+  test("commands that need a bus are refused with a reason, not faked", async () => {
     const h = shellHarness();
     try {
       await h.initialize();
       const { sessionId } = await h.newSession();
       for (const [name, args, reason] of [
-        ["goal", "ship it", "starts an agent turn"],
-        ["delegate", "claude fix", "no external-run port"],
         ["bus", "send @x hi", "agent bus is not joined"],
       ] as const) {
         const reply = await command(h, sessionId, name, args);

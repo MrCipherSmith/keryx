@@ -179,6 +179,10 @@ import {
 } from "../lib/version-check";
 import packageJson from "../../package.json" with { type: "json" };
 import { commandsForMode, describeUnavailableCommand, isHistoryCommand, parseDemoteCommand, removedCommandHint } from "./agent-commands";
+import { matchSharedSubcommand, runSharedSubcommand, SHARED_SUBCOMMAND_HELP } from "./shell-subcommand-route";
+import { armsText, decisionsFollowup, parseDecisionsCommand } from "../tui/decisions-surface";
+import { reportText } from "../decisions/service";
+import { runScheduleSlashCommand } from "../tui/schedule-command";
 // Flow 303 (AC7): grouped `/help` text for the readline surfaces — reached
 // ONLY through this core facade (see the zone note in
 // `src/standard/help-groups.ts`), never `../standard/help-groups` directly.
@@ -314,6 +318,8 @@ const READLINE_AGENT_COMMANDS: readonly string[] = [
   "/doctor",
   "/setup",
   "/reviews",
+  "/schedule",
+  "/decisions",
   "/remote-control",
   "/history",
   "/channels",
@@ -342,6 +348,7 @@ export function readlineAgentHelpText(): string {
     "Agent mode — describe a task; tools: get_cwd, list_dir, read_file, search_code, " +
     "graph_affected, memory_search, web_fetch, web_search, shell_exec (approval).\n" +
     renderGroupedNamedHelp(commandsForMode("agent").filter((c) => READLINE_AGENT_COMMANDS.includes(c.name))) +
+    SHARED_SUBCOMMAND_HELP +
     "Sessions are per-project: keryx shell -c | -r [id] | keryx sessions list\n"
   );
 }
@@ -2889,6 +2896,7 @@ export async function runAgentRepl(
       const parts = line.trim().split(/\s+/);
       const command = parts[0] ?? "";
       const rest = parts.slice(1).join(" ").trim();
+      const sharedSubcommand = matchSharedSubcommand(line, { cwd: sessionCwd, configDir });
       if (command === "/exit" || command === "/quit") {
         // SLATE-5 close trigger: shell exit (explicit command).
         await finalizeShell();
@@ -2908,6 +2916,39 @@ export async function runAgentRepl(
         agentIo.onSystem?.(`${formatDoctorReport(report)}\n`);
       } else if (command === "/setup") {
         agentIo.onSystem?.(renderSetupSlash(rest));
+      } else if (sharedSubcommand !== undefined) {
+        // The text forms of what the full-screen shell's modals do (`/schedules pause <name>`, `/routing set ...`,
+        // `/review accept ...`): one vocabulary with the desktop. An action that deletes, spends or decides asks
+        // [y/N] on this REPL's own line reader first and never runs unasked.
+        await runSharedSubcommand(sharedSubcommand, {
+          confirm: async (question) => {
+            out(`\n${GUTTER}${style.yellow(question)}\n`);
+            out(`${GUTTER}${style.dim("[y/N] ")}`);
+            return /^y(es)?$/i.test(((await readLine()) ?? "").trim());
+          },
+          print: (text) => agentIo.onSystem?.(text),
+        });
+      } else if (command === "/schedule") {
+        await runScheduleSlashCommand(rest, {
+          cwd: sessionCwd,
+          defaults: () => ({ provider: deps.providerId, model: deps.modelId }),
+          print: (text, tone) => agentIo.onSystem?.(`${tone === "error" ? style.red(text) : tone === "dim" ? style.dim(text) : text}\n`),
+          confirm: async (card) => {
+            out(`\n${indentBlock(card.join("\n"), GUTTER)}\n`);
+            out(`${GUTTER}${style.dim("Create this schedule and install its background timer? [y/N] ")}`);
+            return /^y(es)?$/i.test(((await readLine()) ?? "").trim());
+          },
+        });
+      } else if (command === "/decisions") {
+        const decisions = parseDecisionsCommand(line);
+        if (decisions.kind === "show") {
+          agentIo.onSystem?.(`${await reportText(sessionCwd).catch(() => "The recommendation journal could not be read.")}`.replace(/\n?$/, "\n"));
+        } else if (decisions.kind === "arms") {
+          agentIo.onSystem?.(`${await armsText(sessionCwd)}`.replace(/\n?$/, "\n"));
+        } else {
+          const followed = await decisionsFollowup(decisions, { cwd: sessionCwd, ...(live !== undefined ? { session: live.summary.id } : {}) });
+          agentIo.onSystem?.(`${followed.text}\n`);
+        }
       } else if (isReviewLayersCommand(line)) {
         try {
           agentIo.onSystem?.(renderReviewLayersText(await loadReviewDepth(sessionCwd)));

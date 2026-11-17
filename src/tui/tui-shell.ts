@@ -311,6 +311,7 @@ import {
   parseDemoteCommand,
   renderCommandHelp,
 } from "../commands/agent-commands";
+import { routeSharedSubcommandLine } from "../commands/shell-subcommand-route";
 // Flow 266 (AC8): the demote EFFECT lives with the registry so both shells
 // dispatch into one rule rather than growing two.
 import { demoteTask } from "../harness/tool/builtin/background-job-registry";
@@ -9375,6 +9376,23 @@ export async function launchTuiAgentShell(opts: {
     // A slash command whose work outlives its handler (it returns before the work ends) holds the
     // queue until the work ends, then drains what waited behind it.
     const detachSlashWork = (work: Promise<unknown>): void => drainSites.detach(work);
+    // The text subcommands the modals' keys also have (`/schedules pause <name>`, `/routing set ...`,
+    // `/review accept ...`): the same vocabulary the desktop sends. A destructive or costly one asks on the
+    // operator-card dialog first and never runs unasked; a bare command or an unknown word is not matched
+    // and opens its modal as before. Returns whether the line was one of them.
+    const runSharedSubcommandLine = (line: string): boolean => {
+      const pending = routeSharedSubcommandLine(
+        line,
+        { cwd: inspectorCwd() },
+        {
+          confirm: (question) => confirmOperatorCard(question.split("\n"), undefined, "Run this command?"),
+          print: (text) => io.onSystem?.(text),
+        },
+      );
+      if (pending === undefined) return false;
+      detachSlashWork(pending);
+      return true;
+    };
     const paintMainQueue = (): void => {
       // Remove stale blocks (same "remove stale, rebuild all" strategy as before).
       for (const entry of mainQueueBlocks) {
@@ -9958,11 +9976,15 @@ export async function launchTuiAgentShell(opts: {
             return;
           }
           case "review": {
+            // `/review accept|accept-ack|decline <ws> <proposal>` is the modal's own accept, as a line:
+            // allowed here for the same reason the modal is, and asked first like the modal asks.
+            if (runSharedSubcommandLine(line)) return;
             showReview();
             return;
           }
           case "governance":
           case "triggers": {
+            if (runSharedSubcommandLine(line)) return;
             routeOpsCommand(line, true, ops);
             return;
           }
@@ -9987,6 +10009,7 @@ export async function launchTuiAgentShell(opts: {
             return;
           }
           case "schedules": {
+            if (runSharedSubcommandLine(line)) return;
             routeSchedulesCommand(line, true, schedules);
             return;
           }
@@ -10210,6 +10233,9 @@ export async function launchTuiAgentShell(opts: {
             },
             confirm: (card) => confirmOperatorCard(card),
           }));
+          return;
+        }
+        if (runSharedSubcommandLine(line)) {
           return;
         }
         if (command.name === "/goal") {
