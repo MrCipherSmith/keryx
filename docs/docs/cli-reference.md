@@ -470,7 +470,14 @@ is what the keryx desktop app launches, and is open to any ACP client:
   switches the shown session locally sends the notification
   `_keryx/session_shown {sessionId}` (no reply; an id the connection does not
   hold is ignored), so the switch counts as use for the least-recently-used
-  choice. When every held
+  choice. The request `_keryx/session_flags {sessionId, cwd?, archived?,
+  pinned?}` archives/unarchives or pins/unpins a stored session (kept in its
+  `flags.json`) and answers `{archivedAt?, pinnedAt?}`; `session/list` reports
+  set flags as `_meta.keryx`. The request `_keryx/session_trash {sessionId,
+  cwd?}` moves a stored session to the system trash (macOS `~/.Trash`, the
+  freedesktop trash on Linux) and answers `{trashedTo}`: a held idle session
+  is released first; one with a running turn or task, or held by another
+  keryx process, is refused. When every held
   session is busy none is released. A `session/new` or `session/load` that
   fails gives back only the session it was opening. The `editor` profile keeps
   every session until the connection ends.

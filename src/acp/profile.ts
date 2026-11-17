@@ -37,6 +37,20 @@ export const KERYX_ACP_EXTENSION_METHODS = {
    * use for the idle cap. An unknown or not-held id is ignored; no reply.
    */
   sessionShown: "_keryx/session_shown",
+  /**
+   * Client → agent request, shell profile: `{ sessionId, cwd?, archived?,
+   * pinned? }` → `{ archivedAt?, pinnedAt? }`. Archives or pins a stored
+   * session (`<sessionDir>/flags.json`); `session/list` reports the flags as
+   * `_meta.keryx.archivedAt` / `pinnedAt`.
+   */
+  sessionFlags: "_keryx/session_flags",
+  /**
+   * Client → agent request, shell profile: `{ sessionId, cwd? }` → `{ trashedTo }`.
+   * Moves a stored session to the system trash. A session this connection
+   * holds is released first; one with a running turn or task, or held by
+   * another keryx process, is refused.
+   */
+  sessionTrash: "_keryx/session_trash",
 } as const;
 
 /** The extensions a profile speaks, as `initialize._meta.keryx.extensions` and `_keryx/info` list them. */
@@ -47,6 +61,8 @@ export function acpProfileExtensions(profile: AcpProfile): string[] {
         KERYX_ACP_EXTENSION_METHODS.askUser,
         KERYX_ACP_EXTENSION_METHODS.sessionReleased,
         KERYX_ACP_EXTENSION_METHODS.sessionShown,
+        KERYX_ACP_EXTENSION_METHODS.sessionFlags,
+        KERYX_ACP_EXTENSION_METHODS.sessionTrash,
       ]
     : [KERYX_ACP_EXTENSION_METHODS.info];
 }

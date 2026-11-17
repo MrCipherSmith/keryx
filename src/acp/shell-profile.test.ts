@@ -396,7 +396,14 @@ describe("AC6 — initialize reports the real version and the profiles; _keryx/i
       expect(result._meta.keryx).toEqual({
         profile: "shell",
         profiles: ["editor", "shell"],
-        extensions: ["_keryx/info", "_keryx/ask_user", "_keryx/session_released", "_keryx/session_shown"],
+        extensions: [
+          "_keryx/info",
+          "_keryx/ask_user",
+          "_keryx/session_released",
+          "_keryx/session_shown",
+          "_keryx/session_flags",
+          "_keryx/session_trash",
+        ],
         liveSessions: true,
       });
       const infoId = c.request("_keryx/info", {});

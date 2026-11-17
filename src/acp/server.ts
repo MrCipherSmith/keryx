@@ -28,6 +28,15 @@ import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools"
 import type { NormalizedMessage, ProviderPort } from "../harness/provider/types";
 import { listSessions, persistHistory, resolveProjectRoot } from "../session";
 import { describeLeaseHolder, describeLeaseLoss, SessionLeasedError } from "../session/lease";
+import {
+  readSessionFlags,
+  setSessionFlags,
+  trashSession,
+  type SessionFlags,
+  type SessionFlagsChange,
+  type TrashOptions,
+} from "../session/organize";
+import { sessionDir } from "../session/paths";
 import { selfAnsweredLine } from "../lib/terminal-safe";
 import { createAcpAgentIo, toolKindFor, tryParseJson, type AcpPermissionAsker } from "./agent-io";
 import type { AcpFsReader } from "./capability-tools";
@@ -146,6 +155,8 @@ export interface AcpServerOptions {
   readonly modelId: string;
   readonly agentInfo?: AcpImplementation;
   readonly dataDir?: string;
+  /** Test seam for `_keryx/session_trash`: where the trash is (default: the user's real one). */
+  readonly trash?: Pick<TrashOptions, "home" | "platform" | "env">;
   readonly idSeq?: () => string;
   /** Test seam: how a client-supplied MCP server is dialled. The shared dial procedure otherwise. */
   readonly mcpConnect?: ConnectFn;
@@ -248,6 +259,9 @@ export const IDLE_CAP_RELEASE_REASON = "idle-cap";
 
 /** The `SessionEnd` reason of a session whose shell-profile `session/new`/`session/load` failed. */
 const OPEN_FAILED_END_REASON = "session-open-failed";
+
+/** The `SessionEnd` reason of a held session the client moved to the trash. */
+const TRASHED_END_REASON = "session-trashed";
 
 /** The ACP plan status for one keryx execution-plan status. */
 function acpPlanStatus(status: string): AcpPlanEntry["status"] {
@@ -2022,8 +2036,77 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       cwd: summary.projectPath,
       title: summary.title,
       updatedAt: summary.updatedAt,
+      // Shell profile: how the person organised it (archived, pinned). The editor profile's wire stays as it was.
+      ...(shellProfile ? flagsMeta(readSessionFlags(sessionDir(summary.projectPath, summary.id, options.dataDir))) : {}),
     }));
     return { sessions };
+  }
+
+  function flagsMeta(flags: SessionFlags): { _meta?: { keryx: SessionFlags } } {
+    return flags.archivedAt !== undefined || flags.pinnedAt !== undefined ? { _meta: { keryx: flags } } : {};
+  }
+
+  /** The `sessionId` and optional `cwd` of an organise request; `cwd` defaults like `session/list`'s. */
+  function organiseTarget(params: unknown, method: string): { obj: Record<string, unknown>; sessionId: string; cwd: string } {
+    requireInitialized(method);
+    const obj = requireObjectParams(params, method);
+    const sessionId = requireStringField(obj, "sessionId", method);
+    const rawCwd = obj["cwd"];
+    if (rawCwd !== undefined && rawCwd !== null && typeof rawCwd !== "string") {
+      refuse(invalidParams(`${method}: cwd must be a string, null or omitted`, { received: rawCwd }));
+    }
+    return { obj, sessionId, cwd: typeof rawCwd === "string" && rawCwd.length > 0 ? rawCwd : process.cwd() };
+  }
+
+  function refuseStore(method: string, sessionId: string, error: unknown): never {
+    refuse(invalidRequest({ reason: `${method}: ${error instanceof Error ? error.message : String(error)}`, method, sessionId }));
+  }
+
+  /** `_keryx/session_flags` (shell profile): archive/unarchive, pin/unpin a stored session. */
+  function handleSessionFlags(params: unknown): SessionFlags {
+    const method = KERYX_ACP_EXTENSION_METHODS.sessionFlags;
+    const { obj, sessionId, cwd } = organiseTarget(params, method);
+    const change: SessionFlagsChange = {};
+    for (const key of ["archived", "pinned"] as const) {
+      const value = obj[key];
+      if (value === undefined) continue;
+      if (typeof value !== "boolean") refuse(invalidParams(`${method}: ${key} must be a boolean or omitted`, { received: value }));
+      change[key] = value;
+    }
+    try {
+      return setSessionFlags(cwd, sessionId, change, options.dataDir);
+    } catch (error) {
+      refuseStore(method, sessionId, error);
+    }
+  }
+
+  /**
+   * `_keryx/session_trash` (shell profile): moves a stored session to the
+   * system trash. A held session is released first (no `session_released`
+   * follows: the client asked); a busy or opening one is refused.
+   */
+  async function handleSessionTrash(params: unknown): Promise<{ trashedTo: string }> {
+    const method = KERYX_ACP_EXTENSION_METHODS.sessionTrash;
+    const { sessionId, cwd } = organiseTarget(params, method);
+    refuseIfOpening(method, sessionId);
+    if (registry.get(sessionId) !== undefined) {
+      if (sessionIsBusy(sessionId)) {
+        refuse(
+          invalidRequest({
+            reason: `${method}: session ${sessionId} has a running turn or task; stop it first`,
+            method,
+            sessionId,
+            condition: "session-busy",
+          }),
+        );
+      }
+      await teardownSession(sessionId, TRASHED_END_REASON);
+    }
+    try {
+      return { trashedTo: trashSession(cwd, sessionId, { ...options.trash, dataDir: options.dataDir }) };
+    } catch (error) {
+      refuseStore(method, sessionId, error);
+    }
   }
 
   /**
@@ -2288,7 +2371,11 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         [KERYX_ACP_EXTENSION_METHODS.info]: () => handleKeryxInfo(),
         // Shell profile only: the editor profile keeps refusing it with -32601.
         ...(shellProfile
-          ? { [ACP_AGENT_METHODS.sessionSetMode]: (params: unknown, context: { id: JsonRpcId }) => handleSetMode(params, context.id) }
+          ? {
+              [ACP_AGENT_METHODS.sessionSetMode]: (params: unknown, context: { id: JsonRpcId }) => handleSetMode(params, context.id),
+              [KERYX_ACP_EXTENSION_METHODS.sessionFlags]: (params: unknown) => handleSessionFlags(params),
+              [KERYX_ACP_EXTENSION_METHODS.sessionTrash]: (params: unknown) => handleSessionTrash(params),
+            }
           : {}),
       },
       notifications: {
