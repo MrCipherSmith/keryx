@@ -3,11 +3,14 @@ import type { AvailableCommand, ConfigOption, ConfigSelectGroup, ConfigSelectOpt
 import { MOD } from "../lib/prefs";
 import { Icon, type IconName } from "../components/Icon";
 import { Menu, type MenuItem } from "../components/Menu";
+import { flattenGroups, groupCommands } from "../acp/commands";
 import { adoptNoSessionDraft, draftOf, withDraft, type Drafts } from "./drafts";
 
 export interface ComposerHandle {
   focus(): void;
   setText(text: string): void;
+  /** Open the mode or model picker (the /mode and /model commands). */
+  openMenu(kind: "mode" | "model"): void;
 }
 
 interface Props {
@@ -20,8 +23,11 @@ interface Props {
   modes: SessionModeState | null;
   model: ConfigOption | undefined;
   sendKey: "enter" | "mod-enter";
-  /** Returns true when the prompt was accepted; the draft is cleared only then. */
-  onSend: (text: string) => boolean;
+  /**
+   * Everything the user submits: a command line, plain text, or text for the queue while a turn runs.
+   * True when it was handled; the draft is cleared only then (a refused command keeps it).
+   */
+  onSend: (text: string) => boolean | Promise<boolean>;
   onStop: () => void;
   onMode: (id: string) => void;
   onModel: (configId: string, value: string) => void;
@@ -52,6 +58,8 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   useLayoutEffect(() => setDrafts((d) => adoptNoSessionDraft(d, sessionId)), [sessionId]);
   const text = draftOf(drafts, sessionId);
   const setText = (t: string) => setDrafts((d) => withDraft(d, sessionId, t));
+  const textRef = useRef(text);
+  textRef.current = text;
   const [sel, setSel] = useState(0);
   const [dismissed, setDismissed] = useState(false);
   const [menu, setMenu] = useState<"mode" | "model" | null>(null);
@@ -71,15 +79,20 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
         el.setSelectionRange(t.length, t.length);
       });
     },
+    openMenu: (kind) => setMenu(kind),
   }));
 
-  const matches = useMemo(() => {
+  // `/` opens the palette over every advertised command, grouped; a space ends the name and closes it.
+  const groups = useMemo(() => {
     if (dismissed || !text.startsWith("/") || /\s/.test(text)) return [];
-    const q = text.slice(1).toLowerCase();
-    return commands.filter((c) => c.name.toLowerCase().startsWith(q)).slice(0, 8);
+    return groupCommands(commands, text.slice(1));
   }, [text, commands, dismissed]);
+  const matches = useMemo(() => flattenGroups(groups), [groups]);
 
   useEffect(() => setSel(0), [text]);
+  useEffect(() => {
+    document.getElementById(`slash-opt-${sel}`)?.scrollIntoView?.({ block: "nearest" });
+  }, [sel, matches]);
   useEffect(() => {
     const el = area.current;
     if (!el) return;
@@ -96,10 +109,12 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     area.current?.focus();
   };
 
-  const send = () => {
-    const t = text.trim();
-    if (!t || busy || disabled) return;
-    if (onSend(t)) setText("");
+  const send = async () => {
+    // A command line is trimmed; other text keeps a leading space, which is what makes "/x" text for the model.
+    const t = text.startsWith("/") ? text.trim() : text.replace(/^[\r\n]+/, "").trimEnd();
+    if (!t.trim() || disabled) return;
+    const ok = await onSend(t);
+    if (ok && textRef.current === text) setText("");
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -116,7 +131,8 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
         return;
       }
       const chosen = matches[sel];
-      if (chosen && (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey && text !== `/${chosen.name}`))) {
+      const exact = matches.some((c) => `/${c.name}` === text);
+      if (chosen && (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey && !exact))) {
         e.preventDefault();
         complete(chosen);
         return;
@@ -137,10 +153,10 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     const mod = e.metaKey || e.ctrlKey;
     if (sendKey === "enter" ? !e.shiftKey && !mod : mod) {
       e.preventDefault();
-      send();
+      void send();
     } else if (sendKey === "enter" && mod) {
       e.preventDefault();
-      send();
+      void send();
     }
   };
 
@@ -186,21 +202,32 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     <div className={`composer${disabled ? " is-disabled" : ""}${busy ? " is-busy" : ""}`}>
       {matches.length > 0 ? (
         <ul className="slash-pop" role="listbox" aria-label="Slash commands">
-          {matches.map((c, i) => (
-            <li
-              key={c.name}
-              role="option"
-              aria-selected={i === sel}
-              className={i === sel ? "is-sel" : ""}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                complete(c);
-              }}
-              onMouseMove={() => i !== sel && setSel(i)}
-            >
-              <span className="slash-name">/{c.name}</span>
-              <span className="slash-desc truncate">{c.description}</span>
-              {c.input?.hint ? <span className="slash-hint">{c.input.hint}</span> : null}
+          {groups.map((g) => (
+            <li key={g.group} role="presentation" className="slash-group-wrap">
+              <div className="slash-group">{g.group}</div>
+              <ul role="presentation">
+                {g.items.map((c) => {
+                  const i = matches.indexOf(c);
+                  return (
+                    <li
+                      key={c.name}
+                      id={`slash-opt-${i}`}
+                      role="option"
+                      aria-selected={i === sel}
+                      className={i === sel ? "is-sel" : ""}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        complete(c);
+                      }}
+                      onMouseMove={() => i !== sel && setSel(i)}
+                    >
+                      <span className="slash-name">/{c.name}</span>
+                      {c.input?.hint ? <span className="slash-hint">{c.input.hint}</span> : null}
+                      <span className="slash-desc truncate">{c.description}</span>
+                    </li>
+                  );
+                })}
+              </ul>
             </li>
           ))}
         </ul>
@@ -211,7 +238,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
         value={text}
         disabled={disabled}
         aria-label="Message keryx"
-        placeholder={disabledReason ?? (busy ? "keryx is working — you can draft the next message" : "Ask keryx, or type / for commands")}
+        placeholder={disabledReason ?? (busy ? "keryx is working. Enter queues your next message" : "Ask keryx, or type / for commands")}
         onChange={(e) => {
           setText(e.target.value);
           setDismissed(false);
@@ -256,7 +283,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
             <Icon name="stop" size={12} strokeWidth={0} className="filled" />
           </button>
         ) : (
-          <button className="send-btn" onClick={send} disabled={disabled || !text.trim()} title="Send" aria-label="Send">
+          <button className="send-btn" onClick={() => void send()} disabled={disabled || !text.trim()} title="Send" aria-label="Send">
             <Icon name="arrowUp" size={16} strokeWidth={2.25} />
           </button>
         )}

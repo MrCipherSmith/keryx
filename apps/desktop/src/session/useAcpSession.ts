@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { AcpClient, RpcError } from "../acp/client";
+import { hasCommandExtension } from "../acp/commands";
 import { acpStart, acpTransport, acpStop, listenBridge, setWindowTitle, versionCheck } from "../platform/commands";
 import {
   hasLiveSessions,
   SESSION_RELEASED,
   SESSION_SHOWN,
   type AskUserRequest,
+  type CommandEffect,
   type AskUserResult,
   type ConfigOption,
   type InitializeResult,
@@ -16,7 +18,8 @@ import {
   type SessionInfo,
   type SessionUpdate,
 } from "../acp/types";
-import { initialState, reducer, sessionMarks, shownView, type Action, type RoutedUpdate } from "./reducer";
+import { initialState, pendingQueueSend, reducer, sessionMarks, shownView, type Action, type RoutedUpdate } from "./reducer";
+import { runCommandLine, type RunOptions, type UiActions } from "./commandRunner";
 import { DialogQueue, type PendingAsk, type PendingPermission } from "./dialogQueue";
 import { SessionRegistry } from "./sessionRegistry";
 import { basename } from "../lib/format";
@@ -59,6 +62,8 @@ interface Live {
   initialized: boolean;
   /** This keryx passed the profile, live-sessions and version checks (or the user chose to continue anyway). */
   usable: boolean;
+  /** keryx advertised `_keryx/command`; without it commands go as prompt text. */
+  commandMethod: boolean;
   unlisten: (() => void) | null;
   /** Which sessions keryx holds for this window, their turns, and which one is shown. */
   reg: SessionRegistry<Turn>;
@@ -72,6 +77,8 @@ interface Live {
  */
 export function useAcpSession(cwd: string) {
   const [win, rawDispatch] = useReducer(reducer, initialState);
+  const winRef = useRef(win);
+  winRef.current = win;
   const [dialogVersion, setDialogVersion] = useState(0);
   const dialogsRef = useRef<DialogQueue | null>(null);
   if (!dialogsRef.current) dialogsRef.current = new DialogQueue(() => setDialogVersion((v) => v + 1));
@@ -79,7 +86,7 @@ export function useAcpSession(cwd: string) {
   const [fatal, setFatal] = useState<Fatal | null>(null);
   /** The incompatible-keryx dialog was put away; `fatal` itself stays, so the window keeps saying so. */
   const [fatalHidden, setFatalHidden] = useState(false);
-  const live = useRef<Live>({ client: null, gen: 0, initialized: false, usable: false, unlisten: null, reg: new SessionRegistry<Turn>() });
+  const live = useRef<Live>({ client: null, gen: 0, initialized: false, usable: false, commandMethod: false, unlisten: null, reg: new SessionRegistry<Turn>() });
 
   // session/update notifications are queued and applied once per animation frame (a timer covers a
   // hidden window, where frames do not fire), so a long replay or a fast stream is not one render per update.
@@ -265,6 +272,7 @@ export function useAcpSession(cwd: string) {
       dialogs.dropAll();
       l.initialized = false;
       l.usable = false;
+      l.commandMethod = false;
       l.reg.reset();
       setFatal(null);
       setFatalHidden(false);
@@ -332,6 +340,7 @@ export function useAcpSession(cwd: string) {
         });
         if (l.gen !== gen) return;
         l.initialized = true;
+        l.commandMethod = hasCommandExtension(init);
 
         const found = init.agentInfo?.version ?? "unknown";
         const profile = init._meta?.keryx?.profile === "shell" ? "shell" : "editor";
@@ -396,10 +405,10 @@ export function useAcpSession(cwd: string) {
 
   /** Starts a turn in the shown session; returns true only when the prompt was accepted (the caller may then clear its draft). */
   const sendPrompt = useCallback(
-    (text: string): boolean => {
+    (text: string, target?: string): boolean => {
       const l = live.current;
       const client = l.client;
-      const sessionId = l.reg.shown;
+      const sessionId = target ?? l.reg.shown;
       if (!client || !l.initialized || !sessionId || !l.reg.held.has(sessionId) || l.reg.turns.has(sessionId) || !text.trim()) return false;
       dispatch({ t: "userSent", sessionId, text });
       dispatch({ t: "busy", sessionId, busy: true });
@@ -504,6 +513,69 @@ export function useAcpSession(cwd: string) {
     [dispatch],
   );
 
+  /** Prompts queued while a turn ran go out in order, one per ended turn. */
+  useEffect(() => {
+    const l = live.current;
+    for (const c of Object.values(win.convs)) {
+      const next = pendingQueueSend(c, l.reg.turns.has(c.sessionId));
+      if (next && sendPrompt(next.text, c.sessionId)) dispatch({ t: "queueShift", sessionId: c.sessionId });
+    }
+  }, [win.convs, sendPrompt, dispatch]);
+
+  /** Replay a held session from keryx (after /compact or /rewind changed its history). */
+  const reloadSession = useCallback(
+    async (sessionId: string) => {
+      const l = live.current;
+      const client = l.client;
+      if (!client || !l.usable || !l.reg.held.has(sessionId)) return;
+      l.reg.held.delete(sessionId); // so the switch plan is "load"
+      const ok = await openLoad(client, l.gen, sessionId);
+      if (!ok && l.client === client && !l.reg.loading.has(sessionId)) l.reg.held.add(sessionId);
+    },
+    [openLoad],
+  );
+
+  /**
+   * What a command changed. mode, model, config and plan reach the window through keryx's own
+   * session updates (already applied by the reducer); the session list is refreshed because a title may
+   * have changed; a rewritten transcript is replayed. Unknown effects are ignored.
+   */
+  const applyEffects = useCallback(
+    (sessionId: string, effects: readonly CommandEffect[]) => {
+      if (effects.includes("transcript")) void reloadSession(sessionId);
+      if (effects.some((e) => e === "model" || e === "config" || e === "transcript")) void refreshSessions();
+    },
+    [reloadSession, refreshSessions],
+  );
+
+  /** Run a composer line or a view's command line: a command, the queue, or plain text for the model. Resolves true when the draft may be cleared. */
+  const runCommand = useCallback(
+    (line: string, ui: UiActions, opts: RunOptions = {}): Promise<boolean> => {
+      const l = live.current;
+      const sid = l.reg.shown;
+      const conv = sid ? winRef.current.convs[sid] : undefined;
+      return runCommandLine(
+        line,
+        {
+          client: l.client,
+          sessionId: sid,
+          busy: conv?.busy ?? false,
+          commands: conv?.commands ?? [],
+          hasCommandMethod: l.commandMethod,
+          queue: conv?.queue ?? [],
+          dispatch,
+          sendPrompt: (t) => sendPrompt(t),
+          newSession: () => void newSession(),
+          interrupt: cancel,
+          applyEffects,
+          ui,
+        },
+        opts,
+      );
+    },
+    [dispatch, sendPrompt, newSession, cancel, applyEffects],
+  );
+
   /** A new keryx process; the shown session is reloaded (a new one when that fails). */
   const restart = useCallback(() => {
     void connect({ loadSessionId: live.current.reg.shown, fallbackToNew: true });
@@ -538,6 +610,16 @@ export function useAcpSession(cwd: string) {
     fatalHidden,
     hideFatal: () => setFatalHidden(true),
     sendPrompt,
+    runCommand,
+    /** A notice in the shown session's transcript. */
+    notify: (level: "info" | "warn" | "error", text: string) => {
+      const sessionId = live.current.reg.shown;
+      if (sessionId) dispatch({ t: "notice", sessionId, level, text });
+    },
+    removeQueued: (index: number) => {
+      const sessionId = live.current.reg.shown;
+      if (sessionId) dispatch({ t: "queueRemove", sessionId, index });
+    },
     cancel,
     newSession,
     loadSession,

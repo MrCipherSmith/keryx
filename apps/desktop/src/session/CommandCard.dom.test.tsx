@@ -1,0 +1,136 @@
+import { afterAll, beforeAll, expect, test } from "bun:test";
+import type { Root } from "react-dom/client";
+import type { CommandView } from "../acp/types";
+import type { CommandItem } from "./reducer";
+import { registerDom, unregisterDom } from "../test/dom";
+
+let root: Root;
+let host: HTMLElement;
+let act: (fn: () => void | Promise<void>) => Promise<void>;
+let CommandCard: typeof import("./CommandCard").CommandCard;
+let createElement: typeof import("react").createElement;
+
+beforeAll(async () => {
+  registerDom();
+  const React = await import("react");
+  const client = await import("react-dom/client");
+  act = React.act as unknown as typeof act;
+  createElement = React.createElement;
+  CommandCard = (await import("./CommandCard")).CommandCard;
+  host = document.createElement("div");
+  document.body.append(host);
+  root = client.createRoot(host);
+});
+
+afterAll(async () => {
+  await act(() => root.unmount());
+  await unregisterDom();
+});
+
+const item = (over: Partial<CommandItem> = {}): CommandItem => ({ kind: "command", id: 7, line: "/schedules", text: "", refused: false, view: null, ...over });
+
+type Run = Array<{ line: string; opts: { display?: string; replaceId: number } }>;
+let renders = 0;
+async function render(it: CommandItem) {
+  const runs: Run = [];
+  const onRun = (line: string, opts: { display?: string; replaceId: number }) => {
+    runs.push({ line, opts });
+  };
+  await act(() => root.render(createElement(CommandCard, { key: ++renders, item: it, onRun })));
+  return runs;
+}
+
+const click = (el: Element) => act(async () => void (el as HTMLElement).dispatchEvent(new MouseEvent("click", { bubbles: true })));
+const button = (label: string) => Array.from(document.querySelectorAll("button")).find((b) => b.textContent === label)!;
+const setValue = (el: HTMLInputElement, value: string) =>
+  act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(el, value);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+
+const VIEW: CommandView = {
+  title: "Schedules",
+  body: "2 schedules",
+  rows: [
+    {
+      id: "s1",
+      label: "nightly review",
+      detail: "every night",
+      status: "paused",
+      actions: [
+        { label: "Resume", command: "/schedules resume s1" },
+        { label: "Delete", command: "/schedules delete s1", confirm: "Delete nightly review?" },
+      ],
+    },
+  ],
+};
+
+test("a text card shows the line and output and collapses", async () => {
+  await render(item({ line: "/tasks", text: "t1 running" }));
+  expect(host.querySelector(".command-line")!.textContent).toBe("/tasks");
+  expect(host.querySelector("pre")!.textContent).toBe("t1 running");
+  await click(host.querySelector(".command-head")!);
+  expect(host.querySelector("pre")).toBeNull();
+});
+
+test("a refused card is a notice", async () => {
+  await render(item({ line: "/rewind", text: "Not while a turn runs", refused: true }));
+  expect(host.querySelector(".notice.notice-warn")!.textContent).toContain("Not while a turn runs");
+  expect(host.querySelector("pre")).toBeNull();
+});
+
+test("a view renders title, rows, status, body; an action sends its command replacing this card", async () => {
+  const runs = await render(item({ view: VIEW }));
+  expect(host.querySelector(".command-view-title")!.textContent).toBe("Schedules");
+  expect(host.querySelector(".command-row-label")!.textContent).toBe("nightly review");
+  expect(host.textContent).toContain("paused");
+  expect(host.textContent).toContain("2 schedules");
+  await click(button("Resume"));
+  expect(runs).toEqual([{ line: "/schedules resume s1", opts: { display: undefined, replaceId: 7 } }]);
+});
+
+test("an action with confirm asks first and sends only after the user confirms", async () => {
+  const runs = await render(item({ view: VIEW }));
+  await click(button("Delete"));
+  expect(document.querySelector('[role="dialog"]')!.textContent).toContain("Delete nightly review?");
+  expect(runs).toHaveLength(0);
+  // Cancel sends nothing.
+  await click(button("Cancel"));
+  expect(runs).toHaveLength(0);
+  await click(button("Delete"));
+  const confirmBtn = Array.from(document.querySelectorAll('[role="dialog"] button')).find((b) => b.textContent === "Delete")!;
+  await click(confirmBtn);
+  expect(runs.map((r) => r.line)).toEqual(["/schedules delete s1"]);
+});
+
+test("a form submit fills the template; a secret is a password input and is masked in the shown line", async () => {
+  const form: CommandView = {
+    title: "Connect",
+    form: {
+      submit: "/connect {provider} {key}",
+      submitLabel: "Connect",
+      fields: [
+        { id: "provider", label: "Provider", kind: "text" },
+        { id: "key", label: "API key", kind: "secret" },
+      ],
+    },
+  };
+  const runs = await render(item({ line: "/connect", view: form }));
+  const inputs = Array.from(host.querySelectorAll("input"));
+  expect(inputs[1]!.getAttribute("type")).toBe("password");
+  await setValue(inputs[0]!, "openai");
+  await setValue(inputs[1]!, "sk-live-123");
+  await click(button("Connect"));
+  expect(runs).toHaveLength(1);
+  expect(runs[0]!.line).toBe("/connect openai sk-live-123");
+  expect(runs[0]!.opts.display).toBe("/connect openai ••••••");
+  expect(runs[0]!.opts.display!.includes("sk-live-123")).toBe(false);
+  // The secret does not linger in the form, and the page never shows it.
+  expect((host.querySelectorAll("input")[1] as HTMLInputElement).value).toBe("");
+  expect(host.textContent!.includes("sk-live-123")).toBe(false);
+});
+
+test("a masked line from a secret submit is what the card shows", async () => {
+  await render(item({ line: "/connect openai ••••••", text: "connected" }));
+  expect(host.querySelector(".command-line")!.textContent).toBe("/connect openai ••••••");
+});

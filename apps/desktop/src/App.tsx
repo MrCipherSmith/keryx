@@ -22,6 +22,7 @@ import { laneOf, workPrompt } from "./flows/model";
 import { useFlows } from "./flows/useFlows";
 import { AskUserDialog, FatalDialog, PermissionDialog } from "./session/Approvals";
 import type { ComposerHandle } from "./session/Composer";
+import { ProvidersDialog, useProvidersDialog } from "./session/ProvidersDialog";
 import { SessionView } from "./session/SessionView";
 import { useAcpSession } from "./session/useAcpSession";
 
@@ -127,6 +128,7 @@ type Status = { tone: "ok" | "busy" | "warn" | "danger" | "idle"; label: string;
 function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; onOpenProject: (cwd: string) => void; onCloseProject: () => void }) {
   const s = useAcpSession(cwd);
   const flows = useFlows(cwd);
+  const providers = useProvidersDialog();
   const [view, setView] = useState<View>("session");
   const [palette, setPalette] = useState<string | null>(null);
   const [recents, setRecents] = useState<string[]>([]);
@@ -299,7 +301,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
     >
       {/* The session view stays mounted so the transcript and draft survive view switches. */}
       <div className="view" hidden={view !== "session"}>
-        <SessionView ref={composer} s={s} projectName={basename(cwd)} onGoFlows={() => go("flows")} onGoSettings={() => go("settings")} narrow={narrow} />
+        <SessionView ref={composer} s={s} projectName={basename(cwd)} onGoFlows={() => go("flows")} onGoSettings={() => go("settings")} narrow={narrow} onProviders={providers.openProviders} />
       </div>
       {view === "flows" ? (
         <div className="view">
@@ -312,6 +314,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
         </div>
       ) : null}
 
+      {providers.request ? <ProvidersDialog request={providers.request} onClose={providers.close} /> : null}
       {palette !== null ? <CommandPalette items={paletteItems} initialQuery={palette} onClose={() => setPalette(null)} /> : null}
 
       {s.fatal && !(s.fatalHidden && (s.fatal.kind === "incompatible" || s.fatal.kind === "noShell")) ? (

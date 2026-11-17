@@ -40,10 +40,74 @@ export interface PlanEntry {
   _meta?: { keryx?: { id?: string; status?: string } } & Meta;
 }
 
+/** `_meta.keryx` of an advertised command (shell profile). Absent on an older keryx or the editor profile. */
+export interface CommandMeta {
+  group?: string;
+  /** text: run with _keryx/command; view: the answer carries a view; dialog / client: the app acts alone. */
+  surface?: "text" | "view" | "dialog" | "client";
+  /** What the shell does while a turn runs: run the command, or refuse it. */
+  busy?: "run" | "refuse";
+}
+
 export interface AvailableCommand {
   name: string;
   description: string;
   input?: { hint: string } | null;
+  _meta?: { keryx?: CommandMeta } & Meta;
+}
+
+/** `_keryx/command` request params. */
+export interface CommandParams {
+  sessionId: string;
+  name: string;
+  args: string;
+}
+
+/** Names of state a command changed, so the client can refresh without parsing text. */
+export type CommandEffect = "mode" | "model" | "config" | "plan" | "transcript" | "tasks" | (string & {});
+
+export interface ViewAction {
+  label: string;
+  /** A command line, sent back through _keryx/command. */
+  command: string;
+  /** Ask first; the text is the question. */
+  confirm?: string;
+}
+
+export interface ViewRow {
+  id: string;
+  label: string;
+  detail?: string | null;
+  status?: string | null;
+  actions?: ViewAction[];
+}
+
+export interface ViewField {
+  id: string;
+  label: string;
+  kind: "text" | "secret" | "choice" | "toggle" | (string & {});
+  options?: Array<string | { value: string; label?: string }>;
+  value?: string | boolean | null;
+}
+
+export interface ViewForm {
+  fields: ViewField[];
+  /** A command line with `{fieldId}` placeholders. */
+  submit: string;
+  submitLabel?: string;
+}
+
+export interface CommandView {
+  title: string;
+  rows?: ViewRow[];
+  body?: string | null;
+  form?: ViewForm | null;
+}
+
+/** Result of `_keryx/command`. */
+export interface CommandResult {
+  text?: string;
+  _meta?: { keryx?: { effects?: CommandEffect[]; refused?: boolean; view?: CommandView | null } } & Meta;
 }
 
 export interface SessionMode { id: string; name: string; description?: string | null }

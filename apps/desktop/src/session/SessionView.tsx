@@ -1,4 +1,4 @@
-import { forwardRef, useMemo, useState } from "react";
+import { forwardRef, useCallback, useMemo, useState } from "react";
 import type { PlanEntry } from "../acp/types";
 import { formatTokens } from "../lib/format";
 import { setPrefs, usePrefs, MOD } from "../lib/prefs";
@@ -7,7 +7,8 @@ import { Kbd, Spinner } from "../components/ui";
 import { Composer, type ComposerHandle } from "./Composer";
 import { SessionSidebar } from "./SessionSidebar";
 import { Transcript } from "./Transcript";
-import { lostText, type Usage } from "./reducer";
+import { lostText, type QueuedPrompt, type Usage } from "./reducer";
+import { resolveMode, resolveModel, type UiActions } from "./commandRunner";
 import { modelOption, type useAcpSession } from "./useAcpSession";
 
 type Session = ReturnType<typeof useAcpSession>;
@@ -18,6 +19,8 @@ interface Props {
   onGoFlows: () => void;
   onGoSettings: () => void;
   narrow: boolean;
+  /** Open the Providers dialog (`/connect`, `/search-provider`). */
+  onProviders: (name: string, args: string) => void;
 }
 
 const SUGGESTIONS = [
@@ -26,7 +29,7 @@ const SUGGESTIONS = [
   { icon: "search" as const, text: "Find TODO and FIXME comments and group them by area." },
 ];
 
-export const SessionView = forwardRef<ComposerHandle, Props>(function SessionView({ s, projectName, onGoFlows, onGoSettings, narrow }, composerRef) {
+export const SessionView = forwardRef<ComposerHandle, Props>(function SessionView({ s, projectName, onGoFlows, onGoSettings, narrow, onProviders }, composerRef) {
   const { state } = s;
   const prefs = usePrefs();
   const sidebarOpen = prefs.sessionSidebar && !narrow;
@@ -55,6 +58,33 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
     const handle = composerRef && typeof composerRef !== "function" ? composerRef.current : null;
     handle?.setText(text);
   };
+
+  const handle = () => (composerRef && typeof composerRef !== "function" ? composerRef.current : null);
+  const focusSessions = useCallback(() => {
+    if (narrow) setNarrowSidebar(true);
+    else if (!prefs.sessionSidebar) setPrefs({ sessionSidebar: true });
+    requestAnimationFrame(() => document.querySelector<HTMLElement>(".session-sidebar .session-item.is-current, .session-sidebar .session-item")?.focus());
+  }, [narrow, prefs.sessionSidebar]);
+
+  const ui: UiActions = {
+    focusSessions,
+    fillComposer: fill,
+    openProviders: onProviders,
+    mode: (arg) => {
+      if (!arg) return handle()?.openMenu("mode");
+      const id = resolveMode(state.modes, arg);
+      if (id) void s.setMode(id);
+      else s.notify("warn", `No mode named "${arg}". Modes: ${(state.modes?.availableModes ?? []).map((m) => m.id).join(", ")}.`);
+    },
+    model: (arg) => {
+      const option = modelOption(state.configOptions);
+      if (!arg) return handle()?.openMenu("model");
+      const value = resolveModel(option, arg);
+      if (option && value) void s.setModel(option.id, value);
+      else s.notify("warn", `No model named "${arg}".`);
+    },
+  };
+  const run = (line: string, opts: { display?: string; replaceId?: number } = {}) => s.runCommand(line, ui, opts);
 
   const empty = (
     <div className="session-empty">
@@ -187,12 +217,14 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
           key={state.sessionId ?? ""}
           items={state.items}
           busy={state.busy}
+          onRunCommand={(line, o) => run(line, o)}
           replaying={state.replaying || (state.sessionId === null && state.opening)}
           empty={state.phase === "ready" ? empty : null}
         />
 
         <div className="composer-dock">
           {state.plan.length > 0 ? <PlanCard plan={state.plan} /> : null}
+          <QueueChips queue={state.queue} onRemove={s.removeQueued} />
           <Composer
             ref={composerRef}
             sessionId={state.sessionId}
@@ -202,7 +234,7 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
             modes={state.modes}
             model={modelOption(state.configOptions)}
             sendKey={prefs.sendKey}
-            onSend={(t) => s.sendPrompt(t)}
+            onSend={(t) => run(t)}
             onStop={s.cancel}
             onMode={(id) => void s.setMode(id)}
             onModel={(c, v) => void s.setModel(c, v)}
@@ -213,6 +245,23 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
     </div>
   );
 });
+
+function QueueChips({ queue, onRemove }: { queue: QueuedPrompt[]; onRemove: (index: number) => void }) {
+  if (queue.length === 0) return null;
+  return (
+    <ul className="queue-chips" aria-label="Queued prompts">
+      {queue.map((q, i) => (
+        <li key={q.id} className="queue-chip" title={q.text}>
+          <span className="queue-chip-n">{i + 1}</span>
+          <span className="queue-chip-text truncate">{q.text}</span>
+          <button className="icon-btn icon-btn-sm" onClick={() => onRemove(i)} aria-label={`Remove queued prompt ${i + 1}`} title="Remove">
+            <Icon name="x" size={12} />
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 function ExitBanner({ exit, onRestart }: { exit: { code: number | null; stderrTail: string } | null; onRestart: () => void }) {
   const [open, setOpen] = useState(false);

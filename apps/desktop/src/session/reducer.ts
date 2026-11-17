@@ -1,5 +1,6 @@
 import type {
   AvailableCommand,
+  CommandView,
   ConfigOption,
   ContentBlock,
   PlanEntry,
@@ -31,7 +32,29 @@ export type Item =
       startedAt: number;
       endedAt: number | null;
     }
-  | { kind: "notice"; id: number; level: "info" | "warn" | "error"; text: string };
+  | { kind: "notice"; id: number; level: "info" | "warn" | "error"; text: string }
+  | CommandItem;
+
+/**
+ * The card a slash command leaves in the transcript. Client-only: it is never sent to the model and a
+ * session/load replay does not bring it back.
+ */
+export interface CommandItem {
+  kind: "command";
+  id: number;
+  /** The command line as shown (a secret field's value is already masked). */
+  line: string;
+  text: string;
+  /** keryx (or the app, while a turn runs) refused the command: shown as a notice. */
+  refused: boolean;
+  view: CommandView | null;
+}
+
+/** A prompt typed while the turn runs; sent in order when it ends. */
+export interface QueuedPrompt {
+  id: number;
+  text: string;
+}
 
 export interface Banner {
   id: number;
@@ -73,6 +96,8 @@ export interface ConvState {
   plan: PlanEntry[];
   usage: Usage | null;
   title: string | null;
+  /** Prompts waiting for the running turn to end. Client-side only. */
+  queue: QueuedPrompt[];
   /** keryx holds it on this connection. False after `_keryx/session_released` or a lost connection: read-only until reloaded. */
   held: boolean;
   /** Why it is not held: keryx's idle cap released it, or the connection was lost. Null while held. */
@@ -102,6 +127,7 @@ export function newConv(
     plan: [],
     usage: null,
     title: null,
+    queue: [],
     held: true,
     lostReason: null,
   };
@@ -281,6 +307,15 @@ export function applyUpdates(conv: ConvState, updates: readonly QueuedUpdate[]):
   return changed ? d : conv;
 }
 
+/**
+ * The queued prompt to send now: the front one, once the session is idle (no turn, held, not replaying).
+ * One per call: sending it makes the session busy again, so the next waits for that turn to end.
+ */
+export function pendingQueueSend(conv: ConvState, turnRunning: boolean): QueuedPrompt | null {
+  if (conv.busy || turnRunning || !conv.held || conv.replaying) return null;
+  return conv.queue[0] ?? null;
+}
+
 // ---- the window -----------------------------------------------------------
 
 /**
@@ -324,6 +359,14 @@ export type Action =
   | { t: "userSent"; sessionId: string; text: string }
   | { t: "notice"; sessionId: string; level: "info" | "warn" | "error"; text: string }
   | { t: "busy"; sessionId: string; busy: boolean }
+  /** A command card; with `replaceId` it takes the place of that card (a view acting on itself). */
+  | { t: "command"; sessionId: string; card: Omit<CommandItem, "kind" | "id">; replaceId?: number }
+  | { t: "queueAdd"; sessionId: string; text: string }
+  | { t: "queueRemove"; sessionId: string; index: number }
+  /** The prompt at the front was sent. */
+  | { t: "queueShift"; sessionId: string }
+  /** Make entry `index` the next one sent. */
+  | { t: "queueFront"; sessionId: string; index: number }
   | { t: "config"; sessionId: string; configOptions: ConfigOption[] }
   | { t: "creating"; delta: 1 | -1 }
   | { t: "created"; sessionId: string; modes?: SessionModeState | null; configOptions?: ConfigOption[] | null; show: boolean }
@@ -388,6 +431,27 @@ export function reducer(state: WindowState, a: Action): WindowState {
         nextId: c.nextId + 1,
         items: [...c.items, { kind: "notice", id: c.nextId, level: a.level, text: a.text }],
       }));
+    case "command":
+      return withConv(state, a.sessionId, (c) => {
+        if (a.replaceId !== undefined && c.items.some((i) => i.kind === "command" && i.id === a.replaceId)) {
+          return { ...c, items: c.items.map((i) => (i.kind === "command" && i.id === a.replaceId ? { ...a.card, kind: "command" as const, id: i.id } : i)) };
+        }
+        return { ...c, nextId: c.nextId + 1, items: [...c.items, { ...a.card, kind: "command", id: c.nextId }] };
+      });
+    case "queueAdd":
+      return withConv(state, a.sessionId, (c) =>
+        a.text.trim() ? { ...c, nextId: c.nextId + 1, queue: [...c.queue, { id: c.nextId, text: a.text }] } : c,
+      );
+    case "queueRemove":
+      return withConv(state, a.sessionId, (c) => (a.index >= 0 && a.index < c.queue.length ? { ...c, queue: c.queue.filter((_, i) => i !== a.index) } : c));
+    case "queueShift":
+      return withConv(state, a.sessionId, (c) => (c.queue.length ? { ...c, queue: c.queue.slice(1) } : c));
+    case "queueFront":
+      return withConv(state, a.sessionId, (c) => {
+        if (a.index <= 0 || a.index >= c.queue.length) return c;
+        const picked = c.queue[a.index]!;
+        return { ...c, queue: [picked, ...c.queue.filter((_, i) => i !== a.index)] };
+      });
     case "busy":
       return withConv(state, a.sessionId, (c) => (c.busy === a.busy ? c : { ...c, busy: a.busy }));
     case "config":
@@ -408,6 +472,8 @@ export function reducer(state: WindowState, a: Action): WindowState {
         replaying: false,
         held: true,
         lostReason: null,
+        // A reload (after /compact or /rewind) keeps what the window itself holds.
+        queue: state.convs[a.sessionId]?.queue ?? [],
         modes: a.modes ?? loaded.modes,
         configOptions: a.configOptions ?? loaded.configOptions,
       };
@@ -482,6 +548,7 @@ export interface SessionState {
   plan: PlanEntry[];
   usage: Usage | null;
   title: string | null;
+  queue: QueuedPrompt[];
   /** A session/new or session/load is in flight. */
   opening: boolean;
   /** Session ids whose session/load is in flight. */
@@ -492,6 +559,7 @@ const NO_ITEMS: Item[] = [];
 const NO_COMMANDS: AvailableCommand[] = [];
 const NO_CONFIG: ConfigOption[] = [];
 const NO_PLAN: PlanEntry[] = [];
+const NO_QUEUE: QueuedPrompt[] = [];
 
 export function shownView(w: WindowState): SessionState {
   const c = w.shownId ? w.convs[w.shownId] : undefined;
@@ -515,6 +583,7 @@ export function shownView(w: WindowState): SessionState {
     plan: c?.plan ?? NO_PLAN,
     usage: c?.usage ?? null,
     title: c?.title ?? null,
+    queue: c?.queue ?? NO_QUEUE,
     opening: w.creating > 0 || loadingIds.length > 0,
     loadingIds,
   };

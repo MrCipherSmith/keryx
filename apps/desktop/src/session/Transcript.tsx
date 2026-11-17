@@ -1,6 +1,7 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
 import type { ToolCallContent, ToolKind } from "../acp/types";
-import type { Item } from "./reducer";
+import type { CommandItem, Item } from "./reducer";
+import { CommandCard } from "./CommandCard";
 import { blockText } from "./reducer";
 import { Markdown } from "../components/Markdown";
 import { Icon, type IconName } from "../components/Icon";
@@ -213,7 +214,8 @@ type Block =
   | { type: "agent"; item: Extract<Item, { kind: "agent" }>; first: boolean }
   | { type: "thought"; item: Extract<Item, { kind: "thought" }>; first: boolean }
   | { type: "tools"; items: ToolItem[]; first: boolean }
-  | { type: "notice"; item: Extract<Item, { kind: "notice" }> };
+  | { type: "notice"; item: Extract<Item, { kind: "notice" }> }
+  | { type: "command"; item: CommandItem };
 
 function toBlocks(items: Item[]): Block[] {
   const out: Block[] = [];
@@ -226,6 +228,10 @@ function toBlocks(items: Item[]): Block[] {
     }
     if (it.kind === "notice") {
       out.push({ type: "notice", item: it });
+      continue;
+    }
+    if (it.kind === "command") {
+      out.push({ type: "command", item: it });
       continue;
     }
     const first = !agentTurnOpen;
@@ -242,12 +248,14 @@ function toBlocks(items: Item[]): Block[] {
 
 interface Props {
   items: Item[];
+  /** Runs a command line a card's view sends; returns when its result is shown. */
+  onRunCommand?: (line: string, opts: { display?: string; replaceId: number }) => void | Promise<unknown>;
   busy: boolean;
   replaying: boolean;
   empty: ReactNode;
 }
 
-export function Transcript({ items, busy, replaying, empty }: Props) {
+export function Transcript({ items, busy, replaying, empty, onRunCommand }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   const [stuck, setStuck] = useState(true);
@@ -353,6 +361,8 @@ export function Transcript({ items, busy, replaying, empty }: Props) {
                     </div>
                   </div>
                 );
+              case "command":
+                return <CommandCard key={b.item.id} item={b.item} onRun={onRunCommand} />;
               case "notice":
                 return (
                   <div key={b.item.id} className={`notice notice-${b.item.level}`} role={b.item.level === "error" ? "alert" : undefined}>
