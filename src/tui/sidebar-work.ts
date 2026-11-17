@@ -6,9 +6,37 @@ import { presentJobInspector, type JobKillCapability } from "./background-job-in
 import type { SubagentSession, SubagentSessionStore } from "./subagent-session";
 import type { BackgroundJobEntry, BackgroundJobStore } from "./background-job-session";
 import { roleColor } from "./theme";
+import { formatDuration } from "./duration-format";
 
 type AgentRow = Pick<SubagentSession, "id" | "label" | "status">;
-type JobRow = Pick<BackgroundJobEntry, "jobId" | "command" | "status">;
+type JobRow = Pick<BackgroundJobEntry, "jobId" | "command" | "status">
+  & Partial<Pick<BackgroundJobEntry, "startedAt" | "endedAt" | "exitCode">>;
+
+/** Characters a detail tab's label keeps of a command before "…". */
+const DETAIL_LABEL_CHARS = 28;
+
+/** One line of `text`: whitespace (newlines included) collapsed. */
+function oneLine(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
+}
+
+/** `text` on one line, cut to `max` characters with a trailing "…". */
+export function shortLabel(text: string, max = DETAIL_LABEL_CHARS): string {
+  const line = oneLine(text);
+  return line.length <= max ? line : `${line.slice(0, Math.max(1, max - 1))}…`;
+}
+
+/** Exit code and run time of a finished job; nothing while it runs. */
+function jobMeta(job: JobRow): string | undefined {
+  if (job.status === "running") return undefined;
+  const parts: string[] = [];
+  if (job.exitCode !== undefined) parts.push(`exit ${job.exitCode}`);
+  if (job.startedAt !== undefined && job.endedAt !== undefined) {
+    const ms = Date.parse(job.endedAt) - Date.parse(job.startedAt);
+    if (Number.isFinite(ms) && ms >= 0) parts.push(formatDuration(ms));
+  }
+  return parts.length > 0 ? parts.join(" · ") : undefined;
+}
 
 function counts(label: string, statuses: readonly string[], done: string): string {
   const n = (status: string): number => statuses.filter((value) => value === status).length;
@@ -26,8 +54,16 @@ export function workSidebarSnapshot(agents: readonly AgentRow[], jobs: readonly 
       ...(jobs.length > 0 ? { jobs: counts("Jobs", jobs.map((j) => j.status), "completed") } : {}),
     },
     items: {
-      subagents: agents.map((a) => ({ id: a.id, label: a.label, text: `${a.status} · ${a.label}` })),
-      jobs: jobs.map((j) => ({ id: j.jobId, label: j.command, text: `${j.status} · ${j.command}` })),
+      subagents: agents.map((a) => ({
+        id: a.id, label: shortLabel(a.label), text: `${a.status} · ${a.label}`, status: a.status, title: a.label,
+      })),
+      jobs: jobs.map((j) => {
+        const meta = jobMeta(j);
+        return {
+          id: j.jobId, label: shortLabel(j.command), text: `${j.status} · ${j.command}`, status: j.status, title: j.command,
+          ...(meta !== undefined ? { meta } : {}),
+        };
+      }),
     },
   };
 }

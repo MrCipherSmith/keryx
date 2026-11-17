@@ -25,10 +25,12 @@ import {
   resolveModalAvailableWidth,
   resolveModalInnerWidth,
   resolveModalPanelSize,
+  modalAvailableRows,
   type ModalTabContext,
 } from "./modal-host";
 import { SIDEBAR_WIDTH } from "./sidebar-metrics";
 import { applyThemeId, getThemeId, resolveTheme } from "./theme";
+import { shellInnerColumns } from "./shell-frame";
 
 async function loadOpenTui(): Promise<{
   core: typeof import("@opentui/core");
@@ -189,7 +191,7 @@ otuiTest("renderTab receives the resolved panel-body size, not the pre-layout fl
     },
   });
   await h.flush();
-  const sized = resolveModalPanelSize(resolveModalAvailableWidth(h.chrome), 40);
+  const sized = resolveModalPanelSize(resolveModalAvailableWidth(h.chrome), modalAvailableRows(h.chrome));
   expect(ctx).toEqual({
     width: resolveModalInnerWidth(sized.width) - MODAL_BODY_SCROLLBAR_COLS, // the body loses a column to the scrollbar
     height: modalBodyRows(sized.height),
@@ -233,7 +235,7 @@ otuiTest("AC1: one tab paints a titled near-fullscreen panel over an opaque back
   const panel = h.renderer.root.findDescendantById("modal-panel");
   expect(backdrop).toBeDefined();
   expect(panel).toBeDefined();
-  const sized = resolveModalPanelSize(resolveModalAvailableWidth(h.chrome), h.renderer.height);
+  const sized = resolveModalPanelSize(resolveModalAvailableWidth(h.chrome), modalAvailableRows(h.chrome));
   expect((panel as { width: number }).width).toBe(sized.width);
   expect((panel as { height: number }).height).toBe(sized.height);
   expect(frame).toContain("[x] esc");
@@ -335,7 +337,7 @@ otuiTest("panel size does not change when switching short and long tab bodies", 
   });
   await h.flush();
   const panel = h.renderer.root.findDescendantById("modal-panel") as { width: number; height: number };
-  const sized = resolveModalPanelSize(resolveModalAvailableWidth(h.chrome), h.renderer.height);
+  const sized = resolveModalPanelSize(resolveModalAvailableWidth(h.chrome), modalAvailableRows(h.chrome));
   expect(panel.width).toBe(sized.width);
   expect(panel.height).toBe(sized.height);
   const first = { width: panel.width, height: panel.height };
@@ -786,7 +788,7 @@ otuiTest("Flow 269 AC2: ModalHost bounds dialog width strictly within main pane 
   await h.flush();
 
   const mainWidth = resolveModalAvailableWidth(h.chrome);
-  expect(mainWidth).toBe(120 - SIDEBAR_WIDTH);
+  expect(mainWidth).toBe(shellInnerColumns(120, 40) - SIDEBAR_WIDTH); // the shell frame takes its columns first
 
   const panel = h.renderer.root.findDescendantById("modal-panel") as { width: number };
   expect(panel).toBeDefined();
@@ -814,7 +816,7 @@ otuiTest("flow 468 AC13: with a wide sidebar on a 100-column terminal the modal 
   const h = await mountChrome(otui, { width: 100, height: 40 });
   (h.chrome.sidebar as unknown as { width: number }).width = WIDE_SIDEBAR;
   await h.flush();
-  expect((h.chrome.main as unknown as { width: number }).width).toBe(100 - WIDE_SIDEBAR); // squeezed, as the plan says
+  expect((h.chrome.main as unknown as { width: number }).width).toBe(shellInnerColumns(100, 40) - WIDE_SIDEBAR); // squeezed, as the plan says
   const handle = openModal(otui.core, h.chrome, {
     title: "Wide Sidebar Modal",
     tabs: [{ id: "tab", label: "Tab" }],

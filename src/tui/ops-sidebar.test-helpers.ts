@@ -10,6 +10,7 @@ import { commandsForMode } from "../commands/agent-commands";
 import { buildGovernanceReport, writeGovernanceArtifacts } from "../governance/service";
 import type { TriggerRunRecord } from "../trigger/record";
 import { createShellChrome, themeColorToHex, type ShellChrome } from "./shell-chrome";
+import { SHELL_FRAME_COLUMNS, SHELL_FRAME_ROWS } from "./shell-frame";
 
 export async function loadOpenTui(): Promise<
   { core: typeof import("@opentui/core"); testing: typeof import("@opentui/core/testing") } | undefined
@@ -42,9 +43,11 @@ export async function mountChrome(
 ): Promise<MountedChrome> {
   // `kittyKeyboard`: Esc arrives as an unambiguous CSI-u sequence, so a test
   // can press it and wait on state instead of on the legacy ESC parser's timer.
+  // The defaults leave the 120x40 these surfaces were laid out against INSIDE
+  // the shell frame (`shell-frame.ts`), which takes its columns and rows first.
   const setup = await otui.testing.createTestRenderer({
-    width: opts.width ?? 120,
-    height: opts.height ?? 40,
+    width: opts.width ?? 120 + SHELL_FRAME_COLUMNS,
+    height: opts.height ?? 40 + SHELL_FRAME_ROWS,
     ...(opts.kittyKeyboard === true ? { kittyKeyboard: true } : {}),
   });
   const chrome = await createShellChrome(otui.core, setup.renderer, {

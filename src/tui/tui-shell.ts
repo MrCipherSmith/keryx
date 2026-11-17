@@ -453,6 +453,7 @@ import { choicePasteDecision, setChoicePasteSink, showComposerChoice, showCompos
 import { mountFilterList } from "./filter-list";
 import { createShellChrome, createShellRenderer, selectThemeColors, SIDEBAR_TEXT_WIDTH, type ShellChrome } from "./shell-chrome";
 import { createSidebarGeometry, type SidebarGeometry } from "./sidebar-geometry";
+import { shellInnerColumns } from "./shell-frame";
 import { collectRenderableText, mountSidebarCards, openSidebarCard, type SidebarSnapshot } from "./sidebar-cards";
 import { workSidebarSnapshot, renderWorkInspector } from "./sidebar-work";
 import {
@@ -5026,7 +5027,7 @@ export async function launchTuiAgentShell(opts: {
       startupTrace.mark("session-start-dispatch");
       // Flow 468 phase C: the sidebar mode (default | wide | rail) is restored from tui.json and
       // owned by one store; the chrome pins the header with its three buttons and follows it.
-      sidebarGeometry = createSidebarGeometry({ columns: r.width > 0 ? r.width : 80 });
+      sidebarGeometry = createSidebarGeometry({ columns: shellInnerColumns(r.width > 0 ? r.width : 80, r.height > 0 ? r.height : 24) });
       chrome = await createShellChrome(otui, r, {
         title: `keryx · agent · ${sel.provider}/${sel.model}`,
         sidebar: { geometry: sidebarGeometry, version: packageJson.version },
