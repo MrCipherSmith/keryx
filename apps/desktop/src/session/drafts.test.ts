@@ -31,10 +31,10 @@ describe("a draft made before the first session", () => {
     expect(draftOf(d, null)).toBe("");
   });
 
-  test("does not overwrite a draft the session already has", () => {
+  test("does not overwrite a draft the session already has, and keeps the pending one", () => {
     const d = adoptNoSessionDraft(withDraft(withDraft({}, null, "pending"), "A", "mine"), "A");
     expect(draftOf(d, "A")).toBe("mine");
-    expect(draftOf(d, null)).toBe("");
+    expect(draftOf(d, null)).toBe("pending");
   });
 
   test("changes nothing without a session or a pending draft", () => {

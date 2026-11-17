@@ -18,5 +18,7 @@ declare module "bun:test" {
   }
   export function describe(name: string, fn: () => void): void;
   export function test(name: string, fn: TestFn): void;
+  export function beforeAll(fn: TestFn): void;
+  export function afterAll(fn: TestFn): void;
   export function expect(actual: unknown): Matchers;
 }

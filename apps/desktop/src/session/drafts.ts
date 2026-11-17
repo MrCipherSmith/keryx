@@ -28,8 +28,10 @@ export function adoptNoSessionDraft(drafts: Drafts, sessionId: string | null): D
   if (sessionId === null) return drafts;
   const pending = drafts[draftKey(null)] ?? "";
   if (pending === "") return drafts;
+  // A session that already has a draft keeps it, and the pending one stays where it is.
+  if ((drafts[sessionId] ?? "") !== "") return drafts;
   const next = { ...drafts };
   delete next[draftKey(null)];
-  if ((next[sessionId] ?? "") === "") next[sessionId] = pending;
+  next[sessionId] = pending;
   return next;
 }

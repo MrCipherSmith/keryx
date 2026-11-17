@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { AvailableCommand, ConfigOption, ConfigSelectGroup, ConfigSelectOption, SessionModeState } from "../acp/types";
 import { MOD } from "../lib/prefs";
 import { Icon, type IconName } from "../components/Icon";
@@ -49,7 +49,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
 ) {
   const [drafts, setDrafts] = useState<Drafts>({});
   // A prefill made before the first session exists waits in the no-session slot; the session inherits it.
-  useEffect(() => setDrafts((d) => adoptNoSessionDraft(d, sessionId)), [sessionId]);
+  useLayoutEffect(() => setDrafts((d) => adoptNoSessionDraft(d, sessionId)), [sessionId]);
   const text = draftOf(drafts, sessionId);
   const setText = (t: string) => setDrafts((d) => withDraft(d, sessionId, t));
   const [sel, setSel] = useState(0);

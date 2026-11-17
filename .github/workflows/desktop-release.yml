@@ -183,7 +183,7 @@ jobs:
               echo "::error::could not read the expected entitlement keys from $PLIST"
               exit 1
             fi
-            if ! ENTITLEMENTS="$(codesign -d --entitlements :- "$SIDECAR" 2>/dev/null)" || [ -z "$ENTITLEMENTS" ]; then
+            if ! ENTITLEMENTS="$(codesign -d --entitlements - --xml "$SIDECAR" 2>/dev/null)" || [ -z "$ENTITLEMENTS" ]; then
               echo "::error::could not read the signed entitlements of the sidecar"
               exit 1
             fi
