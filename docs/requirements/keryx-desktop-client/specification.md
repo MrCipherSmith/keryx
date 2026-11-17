@@ -168,8 +168,10 @@ Wire details the sections above left open, as built (`src/acp/server.ts`,
 
 ### 3.9 M2 part 1 — commands, subagents, tasks (proposed 2026-11-17)
 
-Status: proposed, awaiting the owner's confirmation of scope and order
-(implementation-plan M2a). Decisions D-10..D-12.
+Status: scope and order confirmed by the owner on 2026-11-17: every shell
+command including the picker/modal ones; `/connect` as an in-app dialog;
+order commands → tasks → subagents; the Subagents tab keeps a session's
+subagents until `/new`. Decisions D-10..D-12.
 
 #### 3.9.1 `_keryx/command` (client → agent request, `shell` profile)
 
@@ -207,8 +209,39 @@ Jev one-shots, `renderReviewsText`, `renderSetupSlash`, `formatSettingsTable`
 and the readline status texts of `/channels`, `/intake`, `/remote-control`,
 `/rendering`). No TUI module is imported for its renderer; where a runner
 lives in `src/tui/` and pulls OpenTUI, it moves to a neutral module first.
-`ACP_TUI_ONLY_COMMANDS` drops `/approvals`, `/permissions`, `/remote-policy`,
-`/external-diff`, `/mcp` (served as their text subsets).
+`ACP_TUI_ONLY_COMMANDS` shrinks to the D rows of §3.9.2.
+
+**Views.** A command whose shell surface is a picker, list/detail modal or
+form answers with a structured view instead of (or beside) text, in
+`_meta.keryx.view`:
+
+```json
+{ "title": "Schedules",
+  "rows": [ { "id": "s1", "label": "nightly review", "detail": "…", "status": "paused",
+              "actions": [ { "label": "Resume", "command": "/schedules resume s1" },
+                           { "label": "Delete", "command": "/schedules delete s1", "confirm": "Delete nightly review?" } ] } ],
+  "body": "optional detail text",
+  "form": { "fields": [ { "id": "text", "label": "Task", "kind": "text|secret|choice|toggle", "options": [] } ],
+            "submit": "/task {text}" } }
+```
+
+Every action and form submit is itself a command line, sent back with
+`_keryx/command`; so each view needs a text subcommand for each action. Where
+the TUI modal acts through a closure and the shell has no such subcommand
+(`/routing` model pick, `/ci` triage, `/conform`, `/task`, `/review` accept,
+`/product`, `/governance`, `/triggers` run-now, `/schedule` confirm,
+`/autoreview`, `/jevprofile` toggles, `/ac` re-check, `/settings` buttons,
+`/guard`/`/editguard`/`/projectctx` bare inspectors, bare `/bus`,
+`/search-connect`, `/workspace`), the subcommand is added to the shell's
+command module so both surfaces share it. A confirmation the TUI shows as a
+card (`/schedule`, `/mode auto`, `/external-diff apply` hash) is the action's
+`confirm`; destructive actions always carry one.
+
+`/queue` and `/delegate`: while a turn runs the desktop holds the composer's
+queued prompts itself (one queue per session, sent in order when the turn
+ends); `/queue` is a `client` command over that queue (list, remove, edit,
+force = cancel and send next). `/delegate` is a `text` command whose external
+run appears in the Subagents tab (§3.9.4, `runtime: "external"`).
 
 #### 3.9.2 `available_commands_update` in the `shell` profile
 
@@ -223,12 +256,11 @@ Lists every served command plus the client-handled ones, each with
   model picker).
 - `busy`: `run` or `refuse`, from `busy-dispatch.ts`.
 
-Not advertised (D in the inventory): `/think`, `/expand`, `/copy`, `/theme`,
-`/game`, `/exit`, `/quit`, `/workspace`, `/integrate`. Picker and modal
-commands with no text path (`/routing`, `/ci`, `/conform`, `/task`,
-`/review`, `/product`, `/governance`, `/triggers`, `/schedule`,
-`/schedules`, `/autoreview`, `/jevprofile`, `/ac`, `/queue`, `/delegate`,
-bare `/bus`) are M2b.
+- `surface` adds `view` for commands answering with §3.9.1 views.
+
+Not advertised (meaningless outside a terminal): `/think`, `/expand`,
+`/copy`, `/theme`, `/game`, `/exit`, `/quit`, `/integrate` (wires an editor
+to keryx; the desktop is already wired).
 
 #### 3.9.3 Provider connection — `_keryx/providers/*` (D-11)
 
@@ -264,8 +296,10 @@ new providers; switching the session's provider stays the client's
 
 #### 3.9.4 Subagents (D-12)
 
-`spawn_subagent` is offered in the `shell` profile, native children only
-(`nativeOnly: true`; external runtimes and `/delegate` are M2b). Its own call
+`spawn_subagent` is offered in the `shell` profile with native children only
+(`nativeOnly: true`; an external runtime chosen by the model is M2b). Runs
+started by `/delegate` use the shell's external path and send the same
+events with `runtime: "external"`. Its own call
 goes through the session's gate (risk `delegate`) like any gated tool;
 children never ask the user (unchanged invariant). The ACP host builds the
 spawn deps the way `keryx shell` does (`makeAgentDeps`, shell.ts), from a

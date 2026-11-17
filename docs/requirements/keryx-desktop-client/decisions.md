@@ -99,22 +99,25 @@ with a Reopen banner.
 Rejected: one active session per connection (switching killed background work
 and surprised users).
 
-## D-10 Commands: `_keryx/command`, not prompt text — proposed 2026-11-17
+## D-10 Commands: `_keryx/command`, not prompt text — decided 2026-11-17
 
 Chosen: the desktop runs a slash command with the `_keryx/command` request.
 It is not a turn: it does not take the prompt slot, stays out of the model's
 history and can run during a turn under the shell's own busy rules
 (`busy-dispatch.ts`). The command set is the shell's `AGENT_SLASH_COMMANDS`
-narrowed to rows with a text runner, never a second vocabulary. Commands
+(the owner chose every command, pickers included), never a second
+vocabulary. A picker or modal command answers with a generic view (rows,
+actions, form) whose every action is another command line, so each TUI modal
+action gets a shared text subcommand instead of a desktop-only dialog. Commands
 whose meaning is a client surface (`/new`, `/resume`, `/interrupt`, `/mode`,
 `/model`, `/connect`) are advertised with `surface: client|dialog` and handled
 by the app. `session/prompt` slash text stays for editors (§3.7).
 
 Rejected: sending commands as `session/prompt` text (blocks while a turn runs,
-mixes command output into the session as if it were a turn); porting each TUI
-modal now (picker commands without a text path wait for M2b).
+mixes command output into the session as if it were a turn); a bespoke
+desktop dialog per TUI modal (two implementations of each action).
 
-## D-11 Provider login without a terminal — proposed 2026-11-17
+## D-11 Provider login without a terminal — decided 2026-11-17
 
 Chosen: `/connect` is an in-app dialog over `_keryx/providers/*`. API keys
 are typed into a password field and sent once to keryx over the stdio pipe;
@@ -129,12 +132,16 @@ Rejected: opening Terminal with `keryx auth login` (leaves the app, no
 feedback); keeping keys in the web view's storage (keys stay in keryx's
 `auth.json` only).
 
-## D-12 Subagents over ACP — proposed 2026-11-17
+## D-12 Subagents over ACP — decided 2026-11-17
 
-Chosen: native subagents only in M2a, sent as the shell's own fleet events in
+Chosen: `spawn_subagent` with native children (plus `/delegate` external
+runs), sent as the shell's own fleet events in
 `_keryx/subagent` per session, linked to the spawning tool call by a new
 `toolCallId` in the tool context. Spawn deps come from one factory shared
 with `keryx shell`. Children keep never asking the user. Cancel is per turn.
+The desktop keeps a session's subagents until `/new` (owner, 2026-11-17),
+not per turn as the TUI does; they are not persisted across a reload.
 
 Rejected: reusing the TUI's module-global subagent bridge (it cannot tell
-sessions apart); external runtimes and per-subagent cancel in M2a (M2b).
+sessions apart); a model-chosen external runtime and per-subagent cancel in
+M2a (M2b).
