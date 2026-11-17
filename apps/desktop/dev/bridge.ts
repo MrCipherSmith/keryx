@@ -133,12 +133,21 @@ function flowsRoot(cwd: string): string {
   return join(cwd, ".metaproject", "flows");
 }
 
+/**
+ * Same rule as the Rust `is_flow_dir_name`: the names keryx's `listFlowDirs` lists (`^\d{3}-`), with
+ * the characters its `slugify` and date stamp produce. keryx resolves such a name by exact match; any
+ * other name would fall through to its slug matching and could address a different flow.
+ */
+const FLOW_DIR = /^\d{3}-[a-z0-9-]{0,196}$/;
+
+/** Flow packages only: real directories (a Dirent of a symlink is not one) with a package name. */
 function flowDirs(cwd: string): string[] {
   const root = flowsRoot(cwd);
   if (!existsSync(root)) return [];
   return readdirSync(root, { withFileTypes: true })
-    .filter((d) => d.isDirectory() && /^\d+-/.test(d.name))
-    .map((d) => d.name);
+    .filter((d) => d.isDirectory() && FLOW_DIR.test(d.name))
+    .map((d) => d.name)
+    .sort();
 }
 
 function readOptional(path: string): string | null {
@@ -188,13 +197,21 @@ function str(v: unknown): string | null {
   return typeof v === "string" && v !== "" ? v : null;
 }
 
+/** Same rule as the Rust `is_command_id`: an id fit for a command is 1 to 9 ASCII digits. */
+const COMMAND_ID = /^\d{1,9}$/;
+
+/** The flow id as the Rust core reads it: a string, or a number written as one. */
+function idOf(v: unknown): string | null {
+  return typeof v === "number" && Number.isFinite(v) ? String(v) : str(v);
+}
+
 function cardFor(cwd: string, dir: string): { card: FlowCard; state: Json | null; criteria: ReturnType<typeof parseCriteria> } {
   const base = join(flowsRoot(cwd), dir);
   const idFromDir = /^(\d+)-/.exec(dir)?.[1] ?? dir;
   const criteria = parseCriteria(readOptional(join(base, "acceptance-criteria.md")));
   const empty: FlowCard = {
     id: idFromDir,
-    idValid: /^\d{1,9}$/.test(idFromDir),
+    idValid: COMMAND_ID.test(idFromDir),
     dir,
     title: dir.replace(/^\d+-\d{4}-\d{2}-\d{2}-/, "").replace(/-/g, " "),
     status: "unknown",
@@ -227,8 +244,8 @@ function cardFor(cwd: string, dir: string): { card: FlowCard; state: Json | null
   return {
     card: {
       ...empty,
-      id: str(state.id) ?? idFromDir,
-      idValid: /^\d{1,9}$/.test(str(state.id) ?? idFromDir),
+      id: idOf(state.id) ?? idFromDir,
+      idValid: COMMAND_ID.test(idOf(state.id) ?? idFromDir),
       title: str(state.title) ?? empty.title,
       status,
       previousStatus: str(state.previousStatus),
@@ -253,12 +270,9 @@ function flowsList(cwd: string): FlowCard[] {
   return flowDirs(cwd).map((d) => cardFor(cwd, d).card);
 }
 
-/** Same rule as the Rust `validate_flow_dir`: one path component, no leading "-". */
-const SAFE_DIR = /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/;
-
 /** A flow is addressed by its directory name (ids are shared across packages): exact match only. */
 function findDir(cwd: string, dir: string): string {
-  if (!SAFE_DIR.test(dir)) throw new Error(`Invalid flow directory: ${JSON.stringify(dir)}`);
+  if (!FLOW_DIR.test(dir)) throw new Error(`Invalid flow directory: ${JSON.stringify(dir)}`);
   if (!flowDirs(cwd).includes(dir)) throw new Error(`Flow ${dir} was not found in this project`);
   return dir;
 }
@@ -322,9 +336,8 @@ const TASK_KINDS = new Set(["context", "implement", "test", "verify", "review", 
 const OUTCOMES = new Set(["started", "failed", "blocked"]);
 
 /** The allowlist: argv is built here, never from a client string. */
-function flowArgv(id: string, action: Json): string[] {
-  // `id` is the validated flow directory name; keryx accepts the exact name.
-  if (!SAFE_DIR.test(id)) throw new Error(`Invalid flow directory: ${id}`);
+function flowArgv(dir: string, action: Json): string[] {
+  if (!FLOW_DIR.test(dir)) throw new Error(`Invalid flow directory: ${dir}`);
   const text = (k: string) => {
     const v = action[k];
     if (typeof v !== "string" || v.trim() === "") throw new Error(`\`${k}\` is required`);
@@ -339,27 +352,27 @@ function flowArgv(id: string, action: Json): string[] {
   };
   switch (action.type) {
     case "start":
-      return ["flow", "start", id];
+      return ["flow", "start", dir];
     case "block":
-      return ["flow", "block", id, "--reason", text("reason")];
+      return ["flow", "block", dir, "--reason", text("reason")];
     case "unblock":
-      return ["flow", "unblock", id];
+      return ["flow", "unblock", dir];
     case "taskAdd": {
       const kind = text("kind");
       if (!TASK_KINDS.has(kind)) throw new Error(`Unknown task kind: ${kind}`);
-      return ["flow", "task", "add", id, "--title", text("title"), "--kind", kind];
+      return ["flow", "task", "add", dir, "--title", text("title"), "--kind", kind];
     }
     case "taskAttempt": {
       const outcome = text("outcome");
       if (!OUTCOMES.has(outcome)) throw new Error(`Unknown outcome: ${outcome}`);
-      return ["flow", "task", "attempt", id, task(), "--outcome", outcome, "--detail", text("detail")];
+      return ["flow", "task", "attempt", dir, task(), "--outcome", outcome, "--detail", text("detail")];
     }
     case "taskDone":
-      return ["flow", "task", "done", id, task()];
+      return ["flow", "task", "done", dir, task()];
     case "freeze":
-      return ["flow", "freeze", id];
+      return ["flow", "freeze", dir];
     case "next":
-      return ["flow", "next", id, "--json"];
+      return ["flow", "next", dir, "--json"];
     default:
       throw new Error(`Action not allowed: ${String(action.type)}`);
   }
@@ -576,7 +589,7 @@ async function handle(ws: ServerWebSocket<Conn>, cmd: string, args: Json): Promi
   }
 }
 
-Bun.serve<Conn, undefined>({
+Bun.serve<Conn>({
   hostname: "127.0.0.1",
   port: PORT,
   fetch(req, server) {

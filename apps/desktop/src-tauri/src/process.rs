@@ -7,29 +7,36 @@
 //!
 //! Two invariants keep a stop safe:
 //! - No lock the stop path takes is ever held across a pipe write: lines go to
-//!   the writer thread through a bounded queue, so a keryx that stops reading
-//!   stdin can stall that thread but never a stop or a caller of `send_line`.
+//!   the writer thread through a byte-bounded queue, so a keryx that stops
+//!   reading stdin can stall that thread but never a stop or a caller of
+//!   `send_line`. Only `send_response` waits, and only for queue room: a stop
+//!   closes the queue and wakes it.
 //! - The child is reaped only under the `child` mutex, and only after its
 //!   process group was swept. Every raw signal is sent under that mutex after
 //!   checking the child is not yet reaped, so a signal never reaches a pid or
 //!   process group the kernel may have handed to another process.
 
 use crate::framing::{self, Frame, LineDecoder};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::process::{Child, ChildStdin, Command, ExitStatus, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{self, SyncSender, TrySendError};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
 const STDERR_TAIL_BYTES: usize = 4096;
 const LOG_ROTATE_BYTES: u64 = 5 * 1024 * 1024;
-/// Lines waiting for the stdin writer. A keryx that reads its input keeps this
-/// near empty; a full queue means keryx stopped reading, and `send_line` fails
-/// instead of blocking.
-const STDIN_QUEUE_LINES: usize = 32;
+/// Bytes waiting for the stdin writer (the line being written is not counted).
+/// A keryx that reads its input keeps this near empty. Bounded by bytes, not
+/// lines: one `fs/read_text_file` reply alone can be several MiB. An empty
+/// queue still takes one line of any size, so no single message is refused.
+#[cfg(not(test))]
+const STDIN_QUEUE_BYTES: usize = 64 * 1024 * 1024;
+#[cfg(test)]
+const STDIN_QUEUE_BYTES: usize = 1024 * 1024;
+const NOT_RUNNING: &str = "keryx is not running";
+const NOT_READING: &str = "keryx is not reading its input; the message was not sent";
 const EXIT_POLL: Duration = Duration::from_millis(40);
 /// How long keryx gets after stdin closes and SIGTERM lands. Its own shutdown
 /// drains background shell tasks (2 s) and MCP servers (up to 4.5 s), so this
@@ -61,11 +68,78 @@ struct ChildSlot {
     status: Option<ExitStatus>,
 }
 
+#[derive(Default)]
+struct QueueState {
+    lines: VecDeque<Vec<u8>>,
+    bytes: usize,
+    /// Set by a stop or a failed write; the writer still drains what is queued.
+    closed: bool,
+}
+
+/// The queue to the stdin writer thread, bounded by `budget` bytes.
+struct StdinQueue {
+    state: Mutex<QueueState>,
+    changed: Condvar,
+    budget: usize,
+}
+
+impl StdinQueue {
+    fn new(budget: usize) -> Self {
+        Self { state: Mutex::new(QueueState::default()), changed: Condvar::new(), budget }
+    }
+
+    /// Queue one line. With `wait` false a full queue fails at once; with
+    /// `wait` true the caller waits for room until the queue closes. The lock is
+    /// never held across a pipe write, so neither form waits on the pipe itself.
+    fn push(&self, line: Vec<u8>, wait: bool) -> Result<(), String> {
+        let mut s = self.state.lock().unwrap();
+        loop {
+            if s.closed {
+                return Err(NOT_RUNNING.into());
+            }
+            if s.lines.is_empty() || s.bytes + line.len() <= self.budget {
+                break;
+            }
+            if !wait {
+                return Err(NOT_READING.into());
+            }
+            s = self.changed.wait(s).unwrap();
+        }
+        s.bytes += line.len();
+        s.lines.push_back(line);
+        self.changed.notify_all();
+        Ok(())
+    }
+
+    /// The next line for the writer; waits for one. `None` once the queue is
+    /// closed and drained.
+    fn pop(&self) -> Option<Vec<u8>> {
+        let mut s = self.state.lock().unwrap();
+        loop {
+            if let Some(line) = s.lines.pop_front() {
+                s.bytes -= line.len();
+                self.changed.notify_all();
+                return Some(line);
+            }
+            if s.closed {
+                return None;
+            }
+            s = self.changed.wait(s).unwrap();
+        }
+    }
+
+    /// Refuse further lines and wake every waiter. Never waits on the writer.
+    fn close(&self) {
+        self.state.lock().unwrap().closed = true;
+        self.changed.notify_all();
+    }
+}
+
 pub struct AcpProcess {
     child: Mutex<ChildSlot>,
-    /// The queue to the stdin writer thread. `None` once stopped; dropping the
-    /// sender closes stdin after the queued lines are written.
-    stdin: Mutex<Option<SyncSender<Vec<u8>>>>,
+    /// Lines for the stdin writer thread. Closed once stopped; the writer then
+    /// writes what is queued and closes stdin.
+    stdin: Arc<StdinQueue>,
     stopped: AtomicBool,
     /// Every raw signal sent, for tests: `(target, signal)`.
     #[cfg(test)]
@@ -73,10 +147,12 @@ pub struct AcpProcess {
 }
 
 /// Owns the child's stdin: writes queued lines until the queue closes (stop)
-/// or a write fails (keryx gone). Blocking here blocks nobody else.
-fn run_stdin_writer(mut stdin: ChildStdin, lines: mpsc::Receiver<Vec<u8>>) {
-    for bytes in lines {
+/// or a write fails (keryx gone). Blocking here blocks nobody else; a failed
+/// write closes the queue so a `send_response` waiting for room returns.
+fn run_stdin_writer(mut stdin: ChildStdin, queue: Arc<StdinQueue>) {
+    while let Some(bytes) = queue.pop() {
         if stdin.write_all(&bytes).and_then(|_| stdin.flush()).is_err() {
+            queue.close();
             return;
         }
     }
@@ -119,12 +195,15 @@ impl AcpProcess {
         let mut stdout = child.stdout.take().expect("stdout piped");
         let mut stderr = child.stderr.take().expect("stderr piped");
 
-        let (stdin_tx, stdin_rx) = mpsc::sync_channel(STDIN_QUEUE_LINES);
-        std::thread::spawn(move || run_stdin_writer(stdin, stdin_rx));
+        let queue = Arc::new(StdinQueue::new(STDIN_QUEUE_BYTES));
+        {
+            let queue = queue.clone();
+            std::thread::spawn(move || run_stdin_writer(stdin, queue));
+        }
 
         let proc = Arc::new(AcpProcess {
             child: Mutex::new(ChildSlot { child, reaped: false, status: None }),
-            stdin: Mutex::new(Some(stdin_tx)),
+            stdin: queue,
             stopped: AtomicBool::new(false),
             #[cfg(test)]
             signals: Mutex::new(Vec::new()),
@@ -219,19 +298,26 @@ impl AcpProcess {
         self.stopped.load(Ordering::SeqCst)
     }
 
-    /// Queue one framed message for the child's stdin. Never blocks on the
-    /// pipe: fails when keryx is stopped, gone, or no longer reading its input.
+    /// Queue one framed message for the child's stdin. Never waits: fails when
+    /// keryx is stopped, gone, or no longer reading its input. For callers that
+    /// must not stall (the UI path).
     pub fn send_line(&self, message: &str) -> Result<(), String> {
+        self.enqueue(message, false)
+    }
+
+    /// Queue the answer to a request keryx is waiting for. Waits for queue room
+    /// instead of dropping it, until keryx is stopped or gone. Call it only
+    /// from a thread that may block (never the UI or the stdout reader).
+    pub fn send_response(&self, message: &str) -> Result<(), String> {
+        self.enqueue(message, true)
+    }
+
+    fn enqueue(&self, message: &str, wait: bool) -> Result<(), String> {
         if self.is_stopped() {
-            return Err("keryx is not running".into());
+            return Err(NOT_RUNNING.into());
         }
         let bytes = framing::encode(message).map_err(|e| e.to_string())?;
-        let guard = self.stdin.lock().unwrap();
-        let queue = guard.as_ref().ok_or("keryx is not running")?;
-        queue.try_send(bytes).map_err(|e| match e {
-            TrySendError::Full(_) => "keryx is not reading its input; the message was not sent".to_string(),
-            TrySendError::Disconnected(_) => "keryx is not running".to_string(),
-        })
+        self.stdin.push(bytes, wait)
     }
 
     /// Stop the child with the default grace period. See [`kill_with_grace`].
@@ -247,9 +333,9 @@ impl AcpProcess {
     /// Suppresses the exit event.
     pub fn kill_with_grace(&self, grace: Duration) {
         self.stopped.store(true, Ordering::SeqCst);
-        // Dropping the sender never waits on the writer thread, even one stuck
-        // in a write to a keryx that stopped reading.
-        drop(self.stdin.lock().unwrap().take());
+        // Closing never waits on the writer thread, even one stuck in a write
+        // to a keryx that stopped reading, and wakes a waiting `send_response`.
+        self.stdin.close();
         {
             let slot = self.child.lock().unwrap();
             if slot.reaped {
@@ -326,6 +412,7 @@ impl AcpProcess {
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;
+    use std::sync::mpsc;
 
     fn pid_alive(pid: i32) -> bool {
         // SAFETY: signal 0 only checks existence.
@@ -446,10 +533,118 @@ mod tests {
         let big = "x".repeat(1024 * 1024);
         let sender = proc.clone();
         let results = within(Duration::from_secs(5), "queued sends", move || {
-            (0..STDIN_QUEUE_LINES + 4).map(|_| sender.send_line(&big)).collect::<Vec<_>>()
+            (0..8).map(|_| sender.send_line(&big)).collect::<Vec<_>>()
         });
         assert!(results.iter().any(|r| r.is_err()), "an unread stdin must surface as an error");
         proc.kill_with_grace(Duration::from_millis(100));
+    }
+
+    #[test]
+    fn a_full_queue_refuses_send_line_but_send_response_waits_for_room() {
+        let q = Arc::new(StdinQueue::new(10));
+        q.push(vec![b'a'; 8], false).unwrap();
+        assert_eq!(q.push(vec![b'b'; 5], false).unwrap_err(), NOT_READING);
+        let (tx, rx) = mpsc::channel();
+        let waiter = q.clone();
+        std::thread::spawn(move || {
+            let _ = tx.send(waiter.push(vec![b'c'; 5], true));
+        });
+        assert!(rx.recv_timeout(Duration::from_millis(150)).is_err(), "a response waits while the queue is full");
+        assert_eq!(q.pop().unwrap().len(), 8);
+        rx.recv_timeout(Duration::from_secs(2)).expect("the waiting response is queued once there is room").unwrap();
+        assert_eq!(q.pop().unwrap(), vec![b'c'; 5], "nothing was dropped");
+    }
+
+    #[test]
+    fn closing_the_queue_wakes_a_waiting_response_and_keeps_what_is_queued() {
+        let q = Arc::new(StdinQueue::new(4));
+        q.push(vec![b'a'; 4], false).unwrap();
+        let (tx, rx) = mpsc::channel();
+        let waiter = q.clone();
+        std::thread::spawn(move || {
+            let _ = tx.send(waiter.push(vec![b'b'; 4], true));
+        });
+        std::thread::sleep(Duration::from_millis(50));
+        q.close();
+        let result = rx.recv_timeout(Duration::from_secs(2)).expect("close must wake the waiter");
+        assert_eq!(result.unwrap_err(), NOT_RUNNING);
+        assert_eq!(q.pop().unwrap().len(), 4, "lines queued before the stop are still written");
+        assert!(q.pop().is_none());
+    }
+
+    #[test]
+    fn an_empty_queue_takes_one_line_larger_than_the_budget() {
+        let q = StdinQueue::new(4);
+        q.push(vec![b'a'; 100], false).unwrap();
+        assert!(q.push(vec![b'b'; 1], false).is_err());
+    }
+
+    /// A child that reads nothing for `delay` seconds, then copies its stdin
+    /// to `<pidfile>.stdin`.
+    fn spawn_slow_reader(dir: &std::path::Path, delay: &str) -> (Arc<AcpProcess>, PathBuf) {
+        let script = dir.join("slow-reader.sh");
+        std::fs::write(&script, format!("echo $$ > \"$1\"\nsleep {delay}\nexec cat > \"$1.stdin\"\n")).unwrap();
+        let pidfile = dir.join("child.pid");
+        let proc = AcpProcess::spawn(
+            SpawnConfig {
+                program: "/bin/sh".into(),
+                args: vec![script.display().to_string(), pidfile.display().to_string()],
+                cwd: dir.to_path_buf(),
+                env: HashMap::from([("PATH".to_string(), "/bin:/usr/bin".to_string())]),
+                log_path: None,
+            },
+            |_, _| {},
+        )
+        .unwrap();
+        wait_for_file(&pidfile);
+        (proc, dir.join("child.pid.stdin"))
+    }
+
+    /// Fill the queue behind a writer stuck on a child that is not reading:
+    /// one line inside the pipe write, one budget-sized line queued.
+    fn fill_queue(proc: &Arc<AcpProcess>) {
+        let p = proc.clone();
+        within(Duration::from_secs(5), "filling the queue", move || {
+            p.send_response(&"x".repeat(2 * 1024 * 1024)).unwrap();
+            p.send_response(&"y".repeat(STDIN_QUEUE_BYTES)).unwrap();
+        });
+        assert_eq!(proc.send_line("{}").unwrap_err(), NOT_READING, "the queue must be full now");
+    }
+
+    #[test]
+    fn a_reply_keryx_waits_for_is_delivered_after_a_full_queue_not_dropped() {
+        let dir = tempfile::tempdir().unwrap();
+        let (proc, stdin_copy) = spawn_slow_reader(dir.path(), "1");
+        fill_queue(&proc);
+        let reply = r#"{"jsonrpc":"2.0","id":7,"result":{"content":"ok"}}"#;
+        let sender = proc.clone();
+        within(Duration::from_secs(10), "send_response", move || sender.send_response(reply)).unwrap();
+        let expected_tail = format!("{reply}\n");
+        let delivered = (0..200).any(|_| {
+            let done = std::fs::read_to_string(&stdin_copy).is_ok_and(|s| s.ends_with(&expected_tail));
+            if !done {
+                std::thread::sleep(Duration::from_millis(25));
+            }
+            done
+        });
+        assert!(delivered, "the reply must reach keryx's stdin");
+        proc.kill_with_grace(Duration::from_millis(100));
+    }
+
+    #[test]
+    fn a_reply_waiting_for_room_returns_when_the_process_is_stopped() {
+        let dir = tempfile::tempdir().unwrap();
+        let (proc, _) = spawn_slow_reader(dir.path(), "300");
+        fill_queue(&proc);
+        let (tx, rx) = mpsc::channel();
+        let sender = proc.clone();
+        std::thread::spawn(move || {
+            let _ = tx.send(sender.send_response("{}"));
+        });
+        assert!(rx.recv_timeout(Duration::from_millis(150)).is_err(), "the reply waits for room");
+        let stopper = proc.clone();
+        within(Duration::from_secs(5), "kill_with_grace", move || stopper.kill_with_grace(Duration::from_millis(200)));
+        assert!(rx.recv_timeout(Duration::from_secs(2)).expect("the stop wakes the reply").is_err());
     }
 
     #[test]

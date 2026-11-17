@@ -9,6 +9,9 @@ use serde_json::{json, Value};
 use std::fs::{File, OpenOptions};
 use std::io::Read;
 use std::path::{Component, Path, PathBuf};
+use std::process::{Command, Stdio};
+use std::sync::mpsc;
+use std::time::{Duration, Instant};
 
 pub const INVALID_PARAMS: i64 = -32602;
 pub const INTERNAL_ERROR: i64 = -32603;
@@ -96,6 +99,9 @@ pub fn confine(root: &Path, requested: &str) -> Result<PathBuf, RpcError> {
     }
 }
 
+/// How long `git rev-parse` may take before the folder itself is used.
+pub const GIT_TIMEOUT: Duration = Duration::from_secs(3);
+
 /// The folder reads are confined to: the git toplevel of `dir` when it is in a
 /// repository (keryx binds its session there), else `dir` itself.
 ///
@@ -103,23 +109,48 @@ pub fn confine(root: &Path, requested: &str) -> Result<PathBuf, RpcError> {
 /// client. It is not the agent's security boundary: keryx's own tools read the
 /// disk directly and never pass through here.
 pub fn project_root(dir: &Path, path_env: Option<&str>) -> PathBuf {
-    let mut cmd = std::process::Command::new("git");
+    git_toplevel(dir, path_env, "git", GIT_TIMEOUT).unwrap_or_else(|| dir.to_path_buf())
+}
+
+/// `git rev-parse --show-toplevel` in `dir`, bounded by `timeout` (a hung git,
+/// say on a stalled network volume, must not hang the start). `None` when it
+/// fails, times out, or names a folder that does not contain `dir`.
+fn git_toplevel(dir: &Path, path_env: Option<&str>, git: &str, timeout: Duration) -> Option<PathBuf> {
+    let mut cmd = Command::new(git);
     cmd.args(["rev-parse", "--show-toplevel"])
         .current_dir(dir)
-        .stdin(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null());
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
     if let Some(p) = path_env {
         cmd.env("PATH", p);
     }
-    let top = cmd
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .map(|s| PathBuf::from(s.trim_end_matches(['\n', '\r'])))
-        .and_then(|p| p.canonicalize().ok())
-        .filter(|p| dir.canonicalize().map(|d| d.starts_with(p)).unwrap_or(false));
-    top.unwrap_or_else(|| dir.to_path_buf())
+    let mut child = cmd.spawn().ok()?;
+    let mut stdout = child.stdout.take()?;
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let mut out = String::new();
+        let ok = stdout.read_to_string(&mut out).is_ok();
+        let _ = tx.send(ok.then_some(out));
+    });
+    let deadline = Instant::now() + timeout;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(10)),
+            _ => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+        }
+    };
+    let out = rx.recv_timeout(Duration::from_millis(500)).ok().flatten()?;
+    if !status.success() {
+        return None;
+    }
+    let top = PathBuf::from(out.trim_end_matches(['\n', '\r'])).canonicalize().ok()?;
+    dir.canonicalize().is_ok_and(|d| d.starts_with(&top)).then_some(top)
 }
 
 /// Apply ACP's 1-based `line` and `limit` to `text`.
@@ -357,6 +388,21 @@ mod tests {
             let top = project_root(&sub, None);
             assert_eq!(top, dir.path().canonicalize().unwrap());
         }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_hung_git_falls_back_to_the_folder_at_the_timeout() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let git = dir.path().join("hung-git");
+        fs::write(&git, "#!/bin/sh\nexec /bin/sleep 30\n").unwrap();
+        fs::set_permissions(&git, fs::Permissions::from_mode(0o755)).unwrap();
+        let start = Instant::now();
+        let got = git_toplevel(dir.path(), None, git.to_str().unwrap(), Duration::from_millis(300));
+        assert!(got.is_none());
+        assert!(start.elapsed() < Duration::from_secs(3), "the hung git was not stopped: {:?}", start.elapsed());
+        assert_eq!(project_root(dir.path(), Some("/nonexistent")), dir.path(), "no git: the folder itself");
     }
 
     #[test]

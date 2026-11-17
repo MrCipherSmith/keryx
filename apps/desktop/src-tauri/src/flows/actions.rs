@@ -48,14 +48,28 @@ pub struct ActionResult {
     pub stderr: String,
 }
 
+/// Longest flow directory name accepted (keryx's own names stay far below:
+/// three digits, a date and a slug of at most 40 characters).
+const MAX_DIR_LEN: usize = 200;
+
+/// True when `name` has the shape of a keryx flow package directory: what
+/// keryx's `listFlowDirs` lists (`^\d{3}-`) followed by the characters its
+/// `slugify` and date stamp produce (`[a-z0-9-]`). keryx resolves such a name by
+/// exact match; any other name would fall through to its slug matching and
+/// could address a different flow. Also one path component that never starts
+/// with `-`, so it is safe as an argv entry.
+pub fn is_flow_dir_name(name: &str) -> bool {
+    let b = name.as_bytes();
+    b.len() >= 4
+        && b.len() <= MAX_DIR_LEN
+        && b[..3].iter().all(u8::is_ascii_digit)
+        && b[3] == b'-'
+        && b[4..].iter().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == b'-')
+}
+
 /// A flow is addressed by its directory name: ids are shared across packages.
-/// One path component of `[A-Za-z0-9._-]`, starting with a letter or digit (so
-/// no `..`, no separator, no leading `-` that keryx would read as an option).
 pub fn validate_flow_dir(dir: &str) -> Result<(), String> {
-    let ok = dir.len() <= 200
-        && dir.bytes().next().is_some_and(|b| b.is_ascii_alphanumeric())
-        && dir.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'));
-    if ok {
+    if is_flow_dir_name(dir) {
         Ok(())
     } else {
         Err(format!("Invalid flow directory: {dir:?}"))
@@ -95,22 +109,22 @@ fn one_of<'a>(what: &str, value: &'a str, allowed: &[&str]) -> Result<&'a str, S
     }
 }
 
-/// Validate and turn an action into the `keryx` argv (without the program).
-pub fn build_argv(id: &str, action: &FlowAction) -> Result<Vec<String>, String> {
-    // `id` here is the flow directory name (see `validate_flow_dir`).
-    validate_flow_dir(id)?;
+/// Validate and turn an action on the flow directory `dir` into the `keryx`
+/// argv (without the program).
+pub fn build_argv(dir: &str, action: &FlowAction) -> Result<Vec<String>, String> {
+    validate_flow_dir(dir)?;
     let mut argv: Vec<String> = vec!["flow".into()];
     let mut push = |items: &[&str]| argv.extend(items.iter().map(|s| s.to_string()));
     match action {
-        FlowAction::Start => push(&["start", id]),
-        FlowAction::Unblock => push(&["unblock", id]),
-        FlowAction::Freeze => push(&["freeze", id]),
-        FlowAction::Next => push(&["next", id, "--json"]),
-        FlowAction::Block { reason } => push(&["block", id, "--reason", validate_text("reason", reason)?]),
+        FlowAction::Start => push(&["start", dir]),
+        FlowAction::Unblock => push(&["unblock", dir]),
+        FlowAction::Freeze => push(&["freeze", dir]),
+        FlowAction::Next => push(&["next", dir, "--json"]),
+        FlowAction::Block { reason } => push(&["block", dir, "--reason", validate_text("reason", reason)?]),
         FlowAction::TaskAdd { title, kind } => push(&[
             "task",
             "add",
-            id,
+            dir,
             "--title",
             validate_text("title", title)?,
             "--kind",
@@ -118,14 +132,14 @@ pub fn build_argv(id: &str, action: &FlowAction) -> Result<Vec<String>, String> 
         ]),
         FlowAction::TaskAttempt { task_id, outcome, detail } => {
             validate_task_id(task_id)?;
-            push(&["task", "attempt", id, task_id, "--outcome", one_of("outcome", outcome, &OUTCOMES)?]);
+            push(&["task", "attempt", dir, task_id, "--outcome", one_of("outcome", outcome, &OUTCOMES)?]);
             if let Some(d) = detail.as_deref().filter(|d| !d.trim().is_empty()) {
                 push(&["--detail", validate_text("detail", d)?]);
             }
         }
         FlowAction::TaskDone { task_id } => {
             validate_task_id(task_id)?;
-            push(&["task", "done", id, task_id]);
+            push(&["task", "done", dir, task_id]);
         }
     }
     Ok(argv)
@@ -226,33 +240,69 @@ mod tests {
         serde_json::from_value(v).unwrap()
     }
 
+    /// A real package name, as keryx creates it.
+    const DIR: &str = "012-2026-01-01-write-docs";
+
     #[test]
     fn every_allowlisted_action_builds_the_documented_argv() {
         let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
-        assert_eq!(build_argv("12", &act(json!({"type":"start"}))).unwrap(), s(&["flow", "start", "12"]));
+        assert_eq!(build_argv(DIR, &act(json!({"type":"start"}))).unwrap(), s(&["flow", "start", DIR]));
         assert_eq!(
-            build_argv("12", &act(json!({"type":"block","reason":"waiting on review"}))).unwrap(),
-            s(&["flow", "block", "12", "--reason", "waiting on review"])
+            build_argv(DIR, &act(json!({"type":"block","reason":"waiting on review"}))).unwrap(),
+            s(&["flow", "block", DIR, "--reason", "waiting on review"])
         );
-        assert_eq!(build_argv("12", &act(json!({"type":"unblock"}))).unwrap(), s(&["flow", "unblock", "12"]));
+        assert_eq!(build_argv(DIR, &act(json!({"type":"unblock"}))).unwrap(), s(&["flow", "unblock", DIR]));
         assert_eq!(
-            build_argv("12", &act(json!({"type":"taskAdd","title":"Write docs; rm -rf /","kind":"docs"}))).unwrap(),
-            s(&["flow", "task", "add", "12", "--title", "Write docs; rm -rf /", "--kind", "docs"])
-        );
-        assert_eq!(
-            build_argv("12", &act(json!({"type":"taskAttempt","taskId":"T3","outcome":"failed","detail":"red"}))).unwrap(),
-            s(&["flow", "task", "attempt", "12", "T3", "--outcome", "failed", "--detail", "red"])
+            build_argv(DIR, &act(json!({"type":"taskAdd","title":"Write docs; rm -rf /","kind":"docs"}))).unwrap(),
+            s(&["flow", "task", "add", DIR, "--title", "Write docs; rm -rf /", "--kind", "docs"])
         );
         assert_eq!(
-            build_argv("12", &act(json!({"type":"taskAttempt","taskId":"T3","outcome":"started"}))).unwrap(),
-            s(&["flow", "task", "attempt", "12", "T3", "--outcome", "started"])
+            build_argv(DIR, &act(json!({"type":"taskAttempt","taskId":"T3","outcome":"failed","detail":"red"}))).unwrap(),
+            s(&["flow", "task", "attempt", DIR, "T3", "--outcome", "failed", "--detail", "red"])
         );
         assert_eq!(
-            build_argv("12", &act(json!({"type":"taskDone","taskId":"T3"}))).unwrap(),
-            s(&["flow", "task", "done", "12", "T3"])
+            build_argv(DIR, &act(json!({"type":"taskAttempt","taskId":"T3","outcome":"started"}))).unwrap(),
+            s(&["flow", "task", "attempt", DIR, "T3", "--outcome", "started"])
         );
-        assert_eq!(build_argv("12", &act(json!({"type":"freeze"}))).unwrap(), s(&["flow", "freeze", "12"]));
-        assert_eq!(build_argv("12", &act(json!({"type":"next"}))).unwrap(), s(&["flow", "next", "12", "--json"]));
+        assert_eq!(
+            build_argv(DIR, &act(json!({"type":"taskDone","taskId":"T3"}))).unwrap(),
+            s(&["flow", "task", "done", DIR, "T3"])
+        );
+        assert_eq!(build_argv(DIR, &act(json!({"type":"freeze"}))).unwrap(), s(&["flow", "freeze", DIR]));
+        assert_eq!(build_argv(DIR, &act(json!({"type":"next"}))).unwrap(), s(&["flow", "next", DIR, "--json"]));
+    }
+
+    #[test]
+    fn package_names_keryx_lists_are_accepted() {
+        for dir in ["001-x", "487-2026-11-10-shell-product-review-p1", "999-", "103-2026-01-04-duplicate-id"] {
+            assert!(is_flow_dir_name(dir), "{dir}");
+            assert!(build_argv(dir, &act(json!({"type":"start"}))).is_ok(), "{dir}");
+        }
+    }
+
+    #[test]
+    fn names_keryx_would_not_resolve_exactly_are_refused() {
+        let start = act(json!({"type":"start"}));
+        for dir in [
+            // A bare id passed the old digits-and-letters rule; keryx reads it as a
+            // fuzzy reference (by id, then by slug), so it must not reach argv.
+            "12",
+            "012",
+            "101",
+            // Names keryx's listFlowDirs (^\d{3}-) does not list.
+            "1234-2026-01-01-x",
+            "12-x",
+            "shell-images",
+            "notes",
+            // Characters keryx's slugify never produces.
+            "012-Write-Docs",
+            "012-a.b",
+            "012-a_b",
+            "012-a b",
+        ] {
+            assert!(!is_flow_dir_name(dir), "{dir:?}");
+            assert!(build_argv(dir, &start).is_err(), "{dir:?}");
+        }
     }
 
     #[test]
@@ -272,8 +322,9 @@ mod tests {
     #[test]
     fn invalid_arguments_are_refused_before_any_process() {
         let start = act(json!({"type":"start"}));
-        for id in ["", "../1", "1; ls", "12 ", "-1", "-12-x", "..", ".", "a/b", "12\n", "١٢-x", &"1".repeat(201)] {
-            assert!(build_argv(id, &start).is_err(), "id {id:?}");
+        let too_long = format!("001-{}", "a".repeat(MAX_DIR_LEN));
+        for dir in ["", "../1", "1; ls", "012-x ", "-1", "-12-x", "..", ".", "012-a/b", "012-x\n", "١٢٣-x", &too_long] {
+            assert!(build_argv(dir, &start).is_err(), "dir {dir:?}");
         }
         let bad = [
             json!({"type":"block","reason":""}),
@@ -291,7 +342,7 @@ mod tests {
             json!({"type":"taskDone","taskId":"T"}),
         ];
         for v in bad {
-            assert!(build_argv("1", &act(v.clone())).is_err(), "{v}");
+            assert!(build_argv(DIR, &act(v.clone())).is_err(), "{v}");
         }
     }
 

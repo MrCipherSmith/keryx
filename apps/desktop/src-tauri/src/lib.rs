@@ -3,12 +3,13 @@ pub mod framing;
 pub mod flows;
 pub mod fs;
 pub mod locator;
+pub mod navigation;
 pub mod process;
 pub mod settings;
 pub mod shellenv;
 pub mod version;
 
-use tauri::{Manager, RunEvent, WindowEvent};
+use tauri::{Manager, RunEvent, WebviewWindowBuilder, WindowEvent};
 
 pub fn run() {
     let app = tauri::Builder::default()
@@ -16,6 +17,20 @@ pub fn run() {
         .manage(bridge::AppState::default())
         .manage(flows::watch::FlowWatchers::default())
         .setup(|app| {
+            // The main window is declared in tauri.conf.json with `create: false`
+            // and built here, so it gets the same navigation guard as every
+            // project window.
+            let main = app
+                .config()
+                .app
+                .windows
+                .iter()
+                .find(|w| w.label == "main")
+                .cloned()
+                .ok_or("tauri.conf.json declares no `main` window")?;
+            let handle = app.handle();
+            navigation::guard(WebviewWindowBuilder::from_config(handle, &main)?, navigation::dev_url(handle)).build()?;
+
             // Capture the login-shell environment in the background so the
             // first project window does not wait for it.
             let handle = app.handle().clone();

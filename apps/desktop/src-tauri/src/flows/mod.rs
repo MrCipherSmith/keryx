@@ -13,7 +13,7 @@ use crate::bridge::{self, AppState};
 use serde::Serialize;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
-use tauri::{AppHandle, State, WebviewWindow};
+use tauri::{AppHandle, Manager, State, WebviewWindow};
 
 const MAX_FILE_BYTES: u64 = 512 * 1024;
 const FLOWS_SUBDIR: &str = ".metaproject/flows";
@@ -135,32 +135,44 @@ fn read_inside(dir: &Path, name: &str) -> Option<String> {
     std::fs::read_to_string(&path).ok()
 }
 
-/// Canonical flow directories under `root` (name, path); anything that is not a
-/// directory or resolves outside `root` is skipped. Sorted by name.
+/// The package name of `entry` when it is a flow package keryx would list: a
+/// real directory (a symlink is not, as in keryx's `listFlowDirs`, which reads
+/// the entry type without following links) with a package-shaped name.
+pub(crate) fn package_name(entry: &std::fs::DirEntry) -> Option<String> {
+    let name = entry.file_name().to_str()?.to_string();
+    let is_real_dir = entry.file_type().is_ok_and(|t| t.is_dir());
+    (is_real_dir && actions::is_flow_dir_name(&name)).then_some(name)
+}
+
+/// Flow packages under `root` (name, canonical path), sorted by name. Only what
+/// keryx itself lists as a flow is returned: anything else (a file, a symlink,
+/// a folder with another name) is never shown and never offered an action.
 fn flow_dirs(root: &Path) -> Vec<(String, PathBuf)> {
     let Ok(entries) = std::fs::read_dir(root) else { return Vec::new() };
     let mut dirs: Vec<(String, PathBuf)> = entries
         .filter_map(Result::ok)
         .filter_map(|e| {
-            let name = e.file_name().to_str()?.to_string();
+            let name = package_name(&e)?;
             let path = e.path().canonicalize().ok()?;
-            (path.is_dir() && path.starts_with(root)).then_some((name, path))
+            path.starts_with(root).then_some((name, path))
         })
         .collect();
     dirs.sort_by(|a, b| a.0.cmp(&b.0));
     dirs
 }
 
-fn card_for(name: &str, dir: &Path) -> (FlowCard, Option<String>) {
+/// The card of one package, with its parsed `flow.json` when that parsed.
+fn card_for(name: &str, dir: &Path) -> (FlowCard, Option<Value>) {
     let Some(text) = read_inside(dir, "flow.json") else {
         return (parse::broken_card(name, "flow.json is missing, unreadable or too large".to_string()), None);
     };
+    let flow = match parse::parse_flow_json(&text) {
+        Ok(flow) => flow,
+        Err(e) => return (parse::broken_card(name, e), None),
+    };
     let criteria_total = read_inside(dir, "acceptance-criteria.md")
         .map(|md| parse::parse_criteria(&md, &Default::default(), &Default::default()).len());
-    match parse::parse_card(&text, name, criteria_total) {
-        Ok(card) => (card, Some(text)),
-        Err(e) => (parse::broken_card(name, e), None),
-    }
+    (parse::card_from_value(&flow, name, criteria_total), Some(flow))
 }
 
 pub fn list_flows(cwd: &Path) -> Result<Vec<FlowCard>, String> {
@@ -176,11 +188,9 @@ pub fn get_flow(cwd: &Path, dir_name: &str) -> Result<FlowDetail, String> {
         if name != dir_name {
             continue;
         }
-        let (card, text) = card_for(&name, &dir);
-        let body = match &text {
-            Some(t) => Some(parse::parse_body(t)?),
-            None => None,
-        };
+        // flow.json is parsed once, for the card and the body alike.
+        let (card, flow) = card_for(&name, &dir);
+        let body = flow.as_ref().map(parse::body_from_value);
         let (kinds, confirmed) = body.as_ref().map(|b| (b.kinds.clone(), b.confirmed.clone())).unwrap_or_default();
         let criteria = read_inside(&dir, "acceptance-criteria.md")
             .map(|md| parse::parse_criteria(&md, &kinds, &confirmed))
@@ -232,30 +242,33 @@ pub async fn flows_get(cwd: String, dir: String) -> Result<FlowDetail, String> {
         .map_err(|e| e.to_string())?
 }
 
+/// The argv for `action` on the package `dir` of the project at `cwd`, or why
+/// it is refused. Validates before anything is resolved or spawned, and the
+/// directory must be exactly one existing package: a name that does not
+/// resolve here would otherwise be handed to keryx as a fuzzy reference.
+pub fn prepare_action(cwd: &Path, dir: &str, action: &actions::FlowAction) -> Result<Vec<String>, String> {
+    let argv = actions::build_argv(dir, action)?;
+    require_flow_dir(cwd, dir)?;
+    Ok(argv)
+}
+
 #[tauri::command]
 pub async fn flows_action(
     app: AppHandle,
-    state: State<'_, AppState>,
     cwd: String,
     dir: String,
     action: actions::FlowAction,
 ) -> Result<actions::ActionResult, String> {
-    // Validate before anything is resolved or spawned.
-    let argv = actions::build_argv(&dir, &action)?;
-    // The directory must be exactly one existing package: a name that does not
-    // resolve here would otherwise be handed to keryx as a fuzzy reference.
-    {
-        let cwd = cwd.clone();
-        let dir = dir.clone();
-        tauri::async_runtime::spawn_blocking(move || require_flow_dir(Path::new(&cwd), &dir))
-            .await
-            .map_err(|e| e.to_string())??;
-    }
-    let env = state.environment().clone();
-    let settings = bridge::load_settings(&app);
-    tauri::async_runtime::spawn_blocking(move || actions::run_action(&cwd, argv, env, &settings))
-        .await
-        .map_err(|e| e.to_string())?
+    // Everything here blocks (the listing, the first login-env capture, the
+    // settings file, keryx itself): none of it runs on an async worker.
+    tauri::async_runtime::spawn_blocking(move || {
+        let argv = prepare_action(Path::new(&cwd), &dir, &action)?;
+        let env = app.state::<AppState>().environment().clone();
+        let settings = bridge::load_settings(&app);
+        actions::run_action(&cwd, argv, env, &settings)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -341,8 +354,8 @@ mod tests {
         assert!(get_flow(&fixture(), "101/../x").is_err());
         assert!(get_flow(&fixture(), "-101").is_err());
         assert!(get_flow(&fixture(), "999-nope").unwrap_err().contains("not found"));
-        // a bare id is not a directory name
-        assert!(get_flow(&fixture(), "101").unwrap_err().contains("not found"));
+        // a bare id is not a directory name: refused before any lookup
+        assert!(get_flow(&fixture(), "101").unwrap_err().contains("Invalid flow directory"));
         assert!(require_flow_dir(&fixture(), "101-2026-01-01-good-flow").is_ok());
         assert!(require_flow_dir(&fixture(), "101").is_err());
         assert!(require_flow_dir(&fixture(), "../flows").is_err());
@@ -386,6 +399,58 @@ mod tests {
         std::fs::create_dir_all(project2.join(".metaproject")).unwrap();
         std::os::unix::fs::symlink(&flows, project2.join(".metaproject/flows")).unwrap();
         assert!(list_flows(&project2).is_err());
+    }
+
+    #[test]
+    fn only_real_package_directories_are_listed_and_offered_actions() {
+        let tmp = tempfile::tempdir().unwrap();
+        let flows = tmp.path().join(".metaproject/flows");
+        let live = flows.join("493-2026-11-15-shell-images");
+        std::fs::create_dir_all(&live).unwrap();
+        std::fs::write(live.join("flow.json"), r#"{"id":"493","title":"live","status":"ready","tasks":[]}"#).unwrap();
+        // Not packages: keryx would resolve `shell-images` by slug to the live
+        // flow above, so an action from such a card would hit the wrong flow.
+        for other in ["shell-images", "notes", "1234-2026-01-01-x", "494-2026-11-15-Upper", "495-a.b"] {
+            std::fs::create_dir_all(flows.join(other)).unwrap();
+            std::fs::write(flows.join(other).join("flow.json"), r#"{"id":"9","status":"ready"}"#).unwrap();
+        }
+        // A package-named symlink to a package inside the flows folder.
+        std::os::unix::fs::symlink(&live, flows.join("496-2026-11-15-alias")).unwrap();
+
+        let cards = list_flows(tmp.path()).unwrap();
+        assert_eq!(cards.iter().map(|c| c.dir.as_str()).collect::<Vec<_>>(), ["493-2026-11-15-shell-images"]);
+
+        let block = actions::FlowAction::Block { reason: "waiting".into() };
+        assert_eq!(
+            prepare_action(tmp.path(), "493-2026-11-15-shell-images", &block).unwrap(),
+            ["flow", "block", "493-2026-11-15-shell-images", "--reason", "waiting"]
+        );
+        for refused in [
+            "shell-images",
+            "notes",
+            "1234-2026-01-01-x",
+            "494-2026-11-15-Upper",
+            "495-a.b",
+            "496-2026-11-15-alias",
+            "493",
+        ] {
+            assert!(prepare_action(tmp.path(), refused, &block).is_err(), "{refused}");
+            assert!(get_flow(tmp.path(), refused).is_err(), "{refused}");
+        }
+        // A well-formed name that is not on disk is refused too.
+        assert!(prepare_action(tmp.path(), "497-2026-11-15-gone", &block).unwrap_err().contains("not found"));
+    }
+
+    #[test]
+    fn prepare_action_builds_argv_for_a_fixture_package_and_refuses_a_bare_id() {
+        let next = actions::FlowAction::Next;
+        assert_eq!(
+            prepare_action(&fixture(), "103-2026-01-04-duplicate-id", &next).unwrap(),
+            ["flow", "next", "103-2026-01-04-duplicate-id", "--json"]
+        );
+        assert!(prepare_action(&fixture(), "103", &next).is_err());
+        let bad_text = actions::FlowAction::Block { reason: "--force".into() };
+        assert!(prepare_action(&fixture(), "103-2026-01-04-duplicate-id", &bad_text).is_err());
     }
 
     #[test]

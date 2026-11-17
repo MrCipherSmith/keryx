@@ -5,6 +5,7 @@
 
 use crate::fs;
 use crate::locator::{self, KeryxSource};
+use crate::navigation;
 use crate::process::{AcpProcess, ProcessEvent, SpawnConfig};
 use crate::settings::Settings;
 use crate::shellenv;
@@ -34,7 +35,9 @@ pub struct AppState {
     sessions: Mutex<Sessions>,
     /// Processes being stopped (window closed, replaced, or started late).
     stopping: Arc<Mutex<Vec<Arc<AcpProcess>>>>,
-    /// One lock per window label, held across spawn + insert in `acp_start`.
+    /// One lock per live window label, held by `start_session` across stop,
+    /// launch and install, and by `stop_session`; removed when the window is
+    /// destroyed.
     start_locks: Mutex<HashMap<String, Arc<Mutex<()>>>>,
     pending_cwd: Mutex<HashMap<String, String>>,
     login_env: OnceLock<HashMap<String, String>>,
@@ -123,6 +126,19 @@ impl AppState {
         self.stopping.lock().unwrap().retain(|p| !Arc::ptr_eq(p, &proc));
     }
 
+    /// `acp_stop`: wait for a start in flight for this window, then stop what
+    /// it installed. Without the start lock a stop that lands while keryx is
+    /// still starting finds nothing to stop, and the start then installs a
+    /// process no view owns.
+    pub fn stop_session(&self, label: &str) {
+        let Some(start_lock) = self.start_lock(label) else {
+            // Destroyed: `window_destroyed` already stops what it had.
+            return;
+        };
+        let _starting = start_lock.lock().unwrap();
+        self.stop_window(label);
+    }
+
     /// Stop the window's process and wait until it is gone.
     pub fn stop_window(&self, label: &str) {
         let proc = self.sessions.lock().unwrap().live.remove(label);
@@ -190,15 +206,19 @@ pub fn load_settings(app: &AppHandle) -> Settings {
 }
 
 /// Answer an `fs/read_text_file` request off the stdout reader thread: a slow
-/// disk must not stall the stream of agent messages.
+/// disk must not stall the stream of agent messages. keryx waits for this
+/// reply with no timeout, so it goes through `send_response`, which waits for
+/// queue room on this thread instead of dropping the reply.
 fn answer_fs_in_background(proc: &Arc<AcpProcess>, root: PathBuf, request: fs::FsRequest) {
     let proc = proc.clone();
     std::thread::spawn(move || {
         let reply = fs::answer(&root, &request);
-        if proc.send_line(&reply).is_err() && !proc.is_stopped() {
-            // Never leave keryx waiting: fall back to an error for this id.
+        if proc.send_response(&reply).is_err() && !proc.is_stopped() {
+            // Only a reply that cannot be framed gets here (`fs::answer` already
+            // turns those into errors, so this is a last resort): never leave
+            // keryx waiting, send an error for this id.
             let err = fs::RpcError { code: fs::INTERNAL_ERROR, message: "reply could not be sent".into() };
-            let _ = proc.send_line(&fs::error_response(&request.id, &err).to_string());
+            let _ = proc.send_response(&fs::error_response(&request.id, &err).to_string());
         }
     });
 }
@@ -215,20 +235,14 @@ pub async fn acp_start(
     // the spawn all block: keep them off the async runtime's workers.
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
-        state.start_session(&label, || launch(&app, &state, &label, &cwd, no_profile.unwrap_or(false)))
+        state.start_session(&label, || launch(&app, &label, &cwd, no_profile.unwrap_or(false)))
     })
     .await
     .map_err(|e| format!("keryx start failed: {e}"))?
 }
 
 /// Locate and spawn keryx for one window; the caller installs the process.
-fn launch(
-    app: &AppHandle,
-    state: &AppState,
-    label: &str,
-    cwd: &str,
-    no_profile: bool,
-) -> Result<(Arc<AcpProcess>, StartInfo), String> {
+fn launch(app: &AppHandle, label: &str, cwd: &str, no_profile: bool) -> Result<(Arc<AcpProcess>, StartInfo), String> {
     let root = Path::new(cwd)
         .canonicalize()
         .map_err(|e| format!("The project folder is not available ({cwd}): {e}"))?;
@@ -236,7 +250,7 @@ fn launch(
         return Err(format!("Not a folder: {cwd}"));
     }
 
-    let env = state.environment().clone();
+    let env = app.state::<AppState>().environment().clone();
     // Reads are confined to the git toplevel, which is what keryx binds its session to.
     let fs_root = fs::project_root(&root, env.get("PATH").map(String::as_str));
     let settings = load_settings(app);
@@ -310,10 +324,16 @@ fn launch(
     Ok((proc, info))
 }
 
-/// Queue a message for the window's keryx. Async so it never runs on the main
-/// thread; `send_line` itself never waits on the pipe.
+/// Queue a message for the window's keryx.
+///
+/// Deliberately a sync command: Tauri runs sync commands on the main thread
+/// one after another, in the order the web view invoked them, so messages
+/// reach the stdin queue in send order. An async command runs on a pool of
+/// workers, and two sends issued back to back could be queued swapped. Sync is
+/// safe here because `send_line` never waits: it only pushes onto the queue
+/// under a short lock and fails at once when the queue is full.
 #[tauri::command]
-pub async fn acp_send(window: WebviewWindow, state: State<'_, AppState>, message: String) -> Result<(), String> {
+pub fn acp_send(window: WebviewWindow, state: State<'_, AppState>, message: String) -> Result<(), String> {
     let proc = state.session(window.label()).ok_or("keryx is not running in this window")?;
     proc.send_line(&message)
 }
@@ -321,34 +341,51 @@ pub async fn acp_send(window: WebviewWindow, state: State<'_, AppState>, message
 #[tauri::command]
 pub async fn acp_stop(app: AppHandle, window: WebviewWindow) -> Result<(), String> {
     let label = window.label().to_string();
-    // The stop waits out the grace period: keep it off the async runtime.
-    tauri::async_runtime::spawn_blocking(move || app.state::<AppState>().stop_window(&label))
+    // The stop waits for a start in flight and out the grace period: keep it
+    // off the async runtime.
+    tauri::async_runtime::spawn_blocking(move || app.state::<AppState>().stop_session(&label))
         .await
         .map_err(|e| format!("keryx stop failed: {e}"))
 }
 
-#[tauri::command]
-pub fn settings_get(app: AppHandle) -> Settings {
-    load_settings(&app)
+/// Run blocking settings file I/O off the main thread and the async workers.
+async fn settings_io<T: Send + 'static>(
+    app: AppHandle,
+    io: impl FnOnce(&AppHandle) -> Result<T, String> + Send + 'static,
+) -> Result<T, String> {
+    tauri::async_runtime::spawn_blocking(move || io(&app))
+        .await
+        .map_err(|e| format!("settings failed: {e}"))?
 }
 
 #[tauri::command]
-pub fn settings_set(app: AppHandle, settings: Settings) -> Result<Settings, String> {
-    let path = settings_path(&app)?;
-    // Recents are owned by `settings_add_recent`; a stale form must not clobber them.
-    let mut next = settings;
-    next.recent_projects = Settings::load(&path).recent_projects;
-    next.save(&path).map_err(|e| e.to_string())?;
-    Ok(next)
+pub async fn settings_get(app: AppHandle) -> Result<Settings, String> {
+    settings_io(app, |app| Ok(load_settings(app))).await
 }
 
 #[tauri::command]
-pub fn settings_add_recent(app: AppHandle, project: String) -> Result<Settings, String> {
-    let path = settings_path(&app)?;
-    let mut s = Settings::load(&path);
-    s.add_recent(&project);
-    s.save(&path).map_err(|e| e.to_string())?;
-    Ok(s)
+pub async fn settings_set(app: AppHandle, settings: Settings) -> Result<Settings, String> {
+    settings_io(app, move |app| {
+        let path = settings_path(app)?;
+        // Recents are owned by `settings_add_recent`; a stale form must not clobber them.
+        let mut next = settings;
+        next.recent_projects = Settings::load(&path).recent_projects;
+        next.save(&path).map_err(|e| e.to_string())?;
+        Ok(next)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn settings_add_recent(app: AppHandle, project: String) -> Result<Settings, String> {
+    settings_io(app, move |app| {
+        let path = settings_path(app)?;
+        let mut s = Settings::load(&path);
+        s.add_recent(&project);
+        s.save(&path).map_err(|e| e.to_string())?;
+        Ok(s)
+    })
+    .await
 }
 
 #[derive(Serialize)]
@@ -370,12 +407,11 @@ pub async fn window_open_project(app: AppHandle, state: State<'_, AppState>, cwd
     let n = state.window_counter.fetch_add(1, Ordering::SeqCst) + 1;
     let label = format!("project-{n}");
     state.pending_cwd.lock().unwrap().insert(label.clone(), cwd);
-    WebviewWindowBuilder::new(&app, &label, WebviewUrl::App("index.html".into()))
+    let builder = WebviewWindowBuilder::new(&app, &label, WebviewUrl::App("index.html".into()))
         .title("Keryx")
         .inner_size(1180.0, 780.0)
-        .min_inner_size(720.0, 480.0)
-        .build()
-        .map_err(|e| e.to_string())?;
+        .min_inner_size(720.0, 480.0);
+    navigation::guard(builder, navigation::dev_url(&app)).build().map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -463,6 +499,38 @@ mod tests {
         assert!(result.is_err());
         assert!(!launched, "nothing is spawned for a closed window");
         assert!(!state.start_locks.lock().unwrap().contains_key("w"));
+    }
+
+    #[test]
+    fn a_stop_during_a_start_waits_for_it_and_stops_what_it_installed() {
+        let state = Arc::new(AppState::default());
+        let spawned: Arc<Mutex<Option<Arc<AcpProcess>>>> = Arc::default();
+        let (launching_tx, launching_rx) = mpsc::channel();
+        let (starter, slot) = (state.clone(), spawned.clone());
+        let start = std::thread::spawn(move || {
+            starter.start_session("w", || {
+                launching_tx.send(()).unwrap();
+                // keryx is still being located and spawned when the stop arrives.
+                std::thread::sleep(Duration::from_millis(300));
+                let p = sleeper();
+                *slot.lock().unwrap() = Some(p.clone());
+                Ok((p, ()))
+            })
+        });
+        launching_rx.recv().unwrap();
+        state.stop_session("w");
+        start.join().unwrap().unwrap();
+        let late = spawned.lock().unwrap().clone().expect("the start finished before the stop returned");
+        assert!(late.is_stopped(), "the stop must reach the process the start installed");
+        assert!(state.session("w").is_none());
+    }
+
+    #[test]
+    fn a_stop_for_a_destroyed_window_is_a_no_op() {
+        let state = AppState::default();
+        state.window_destroyed("w");
+        state.stop_session("w");
+        assert!(state.start_lock("w").is_none(), "a stop must not resurrect the start lock");
     }
 
     #[test]

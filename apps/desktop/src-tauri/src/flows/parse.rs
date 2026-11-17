@@ -67,14 +67,26 @@ fn has_exceptions(list: Option<&Value>) -> bool {
     })
 }
 
+/// Parse `flow.json` text into a JSON object; the one parse of a flow that
+/// both the card and the detail body read from.
+pub fn parse_flow_json(text: &str) -> Result<Value, String> {
+    let v: Value = serde_json::from_str(text).map_err(|e| format!("flow.json: {e}"))?;
+    if v.is_object() {
+        Ok(v)
+    } else {
+        Err("flow.json: not a JSON object".to_string())
+    }
+}
+
 /// Parse `flow.json` text into a card. `criteria_total` is the count from
 /// `acceptance-criteria.md`, when that file was read; otherwise `acKinds` is used.
 pub fn parse_card(text: &str, dir_name: &str, criteria_total: Option<usize>) -> Result<FlowCard, String> {
-    let v: Value = serde_json::from_str(text).map_err(|e| format!("flow.json: {e}"))?;
-    if !v.is_object() {
-        return Err("flow.json: not a JSON object".to_string());
-    }
-    let status = field(&v, "status").unwrap_or_else(|| "unknown".to_string());
+    Ok(card_from_value(&parse_flow_json(text)?, dir_name, criteria_total))
+}
+
+/// The card for an already parsed `flow.json` object.
+pub fn card_from_value(v: &Value, dir_name: &str, criteria_total: Option<usize>) -> FlowCard {
+    let status = field(v, "status").unwrap_or_else(|| "unknown".to_string());
     let tasks = v.get("tasks").and_then(Value::as_array);
     let tasks_total = tasks.map_or(0, Vec::len);
     let tasks_done = tasks.map_or(0, |t| t.iter().filter(|x| field(x, "status").as_deref() == Some("done")).count());
@@ -86,26 +98,26 @@ pub fn parse_card(text: &str, dir_name: &str, criteria_total: Option<usize>) -> 
         Value::Object(_) => field(o, "value"),
         other => str_of(other),
     });
-    let id = field(&v, "id").unwrap_or_else(|| dir_id(dir_name));
-    Ok(FlowCard {
+    let id = field(v, "id").unwrap_or_else(|| dir_id(dir_name));
+    FlowCard {
         id_valid: is_command_id(&id),
         id,
         dir: dir_name.to_string(),
-        title: field(&v, "title").unwrap_or_else(|| dir_name.to_string()),
+        title: field(v, "title").unwrap_or_else(|| dir_name.to_string()),
         blocked: status == "blocked",
         status,
-        previous_status: field(&v, "previousStatus"),
+        previous_status: field(v, "previousStatus"),
         owner,
         pr_url: v.get("pr").and_then(|p| field(p, "url")),
-        base_branch: field(&v, "baseBranch"),
+        base_branch: field(v, "baseBranch"),
         tasks_done,
         tasks_total,
         ac_total,
         ac_confirmed,
-        updated_at: field(&v, "updatedAt"),
+        updated_at: field(v, "updatedAt"),
         completion_exceptions: has_exceptions(v.get("signatures")) || has_exceptions(v.get("completionAttempts")),
         error: None,
-    })
+    }
 }
 
 /// Tasks, signatures, completion attempts, history and acKinds of a parsed flow.
@@ -118,8 +130,8 @@ pub struct FlowBody {
     pub kinds: HashMap<String, String>,
 }
 
-pub fn parse_body(text: &str) -> Result<FlowBody, String> {
-    let v: Value = serde_json::from_str(text).map_err(|e| format!("flow.json: {e}"))?;
+/// The detail body of an already parsed `flow.json` object.
+pub fn body_from_value(v: &Value) -> FlowBody {
     let tasks = v
         .get("tasks")
         .and_then(Value::as_array)
@@ -146,14 +158,14 @@ pub fn parse_body(text: &str) -> Result<FlowBody, String> {
         .and_then(Value::as_object)
         .map(|m| m.iter().filter_map(|(k, c)| Some((k.clone(), field(c, "kind")?))).collect())
         .unwrap_or_default();
-    Ok(FlowBody {
+    FlowBody {
         tasks,
         signatures: list("signatures"),
         completion_attempts: list("completionAttempts"),
         history,
         confirmed,
         kinds,
-    })
+    }
 }
 
 fn parse_task(t: &Value) -> TaskRow {

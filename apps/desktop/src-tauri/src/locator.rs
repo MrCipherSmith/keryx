@@ -50,11 +50,13 @@ fn is_executable_file(p: &Path) -> bool {
     }
 }
 
-/// Search `path_var` for an executable called `name`.
+/// Search the absolute entries of `path_var` for an executable called `name`.
+/// Relative (and empty) entries are skipped: they resolve against the current
+/// directory, which must never supply the program.
 pub fn which(name: &str, path_var: Option<&OsStr>) -> Option<PathBuf> {
     let path_var = path_var?;
     std::env::split_paths(path_var)
-        .filter(|d| !d.as_os_str().is_empty())
+        .filter(|d| d.is_absolute())
         .map(|d| d.join(name))
         .find(|c| is_executable_file(c))
 }
@@ -185,6 +187,20 @@ mod tests {
         assert!(locate(KeryxSource::Custom, Some("  "), None, None).is_err());
         // A directory is not an executable file.
         assert!(locate(KeryxSource::Custom, dir.path().to_str(), None, None).is_err());
+    }
+
+    #[test]
+    fn relative_path_entries_are_never_searched() {
+        let bin = tempfile::tempdir().unwrap();
+        make_exec(bin.path(), "keryx");
+        // A relative entry that does resolve to `bin` from the test's working
+        // directory (`..` stops at `/`), so only the absolute-entry rule refuses it.
+        let rel = format!("{}{}", "../".repeat(64), bin.path().strip_prefix("/").unwrap().display());
+        assert!(Path::new(&rel).join("keryx").exists(), "the relative entry must point at the real file");
+        assert!(which("keryx", Some(OsStr::new(&rel))).is_none());
+        assert!(locate(KeryxSource::Path, None, None, Some(OsStr::new(&rel))).is_err());
+        let abs = std::env::join_paths([bin.path()]).unwrap();
+        assert!(which("keryx", Some(&abs)).is_some());
     }
 
     #[test]
