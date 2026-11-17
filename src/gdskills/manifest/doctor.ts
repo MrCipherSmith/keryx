@@ -17,7 +17,7 @@
 import { readdir } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../../lib/fs";
-import { destinationRootsForTarget } from "./plan";
+import { destinationRootsForTarget, isKeryxPublishedDestination } from "./plan";
 import { NotARegularFileError, readSkillsInstallState, resolveContainedPath, skillsInstallStateIsUnreadable, sha256OfFile } from "./state";
 
 export type DoctorStatus = "ok" | "drifted" | "missing" | "orphaned";
@@ -138,7 +138,9 @@ export async function doctorInstall(repoRoot: string, target: string): Promise<D
     const files = await listFilesRecursive(path.join(repoRoot, root));
     for (const abs of files) {
       const rel = path.relative(repoRoot, abs).split(path.sep).join("/");
-      if (!recordedPaths.has(rel)) {
+      // A rule-layer file is keryx init/update's, never recorded here, so it
+      // is not an orphan either.
+      if (!recordedPaths.has(rel) && !isKeryxPublishedDestination(rel)) {
         entries.push({ moduleId: undefined, path: rel, status: "orphaned" });
       }
     }

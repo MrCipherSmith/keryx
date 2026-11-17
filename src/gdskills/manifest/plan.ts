@@ -82,6 +82,12 @@ export interface InstallPlan {
   modules: PlanModuleEntry[];
   errors: string[];
   ok: boolean;
+  /**
+   * Every module id the manifest defines, planned or not. A recorded module
+   * missing from it was dropped from the manifest (`skill-lifecycle`, ADR-0001
+   * P3), and `applyInstall` retires its install-state record.
+   */
+  manifestModuleIds?: string[];
 }
 
 export interface PlanInstallInput {
@@ -136,6 +142,22 @@ export function destinationRootsForTarget(target: string): string[] {
     ];
   }
   return [];
+}
+
+/**
+ * Destinations `keryx init` and `keryx update` publish themselves: every file
+ * of a bundled rule layer (`installBundledRules` copies `rules/core`,
+ * `rules/process` and `rules/activity` wholesale, every run). Install-state
+ * never records them — `skills uninstall` would otherwise delete files those
+ * commands own — and a stale copy of one is fixed by `keryx update`, not
+ * `--force`.
+ *
+ * `.metaproject/skills/gdskills/` is NOT included: `keryx update` writes only
+ * its own profile's skills there, so it may never refresh a given skill file
+ * (review LS-5).
+ */
+export function isKeryxPublishedDestination(destination: string): boolean {
+  return KERYX_RULE_LAYERS.some((layer) => destination.startsWith(`.metaproject/rules/${layer}/`));
 }
 
 /** Deterministic sha256 of a stack-detection document, `detectedAt` excluded (Lane A's fingerprint convention). */
@@ -625,6 +647,7 @@ export async function planInstall(input: PlanInstallInput): Promise<InstallPlan>
     stackInput,
     components: componentEntries,
     modules,
+    manifestModuleIds: Object.keys(input.manifest.modules).sort(),
     errors,
     ok: errors.length === 0,
   };

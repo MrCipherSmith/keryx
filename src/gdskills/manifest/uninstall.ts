@@ -9,7 +9,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../../lib/fs";
 import { removeContained } from "../../lib/contained-write";
-import { destinationRootsForTarget } from "./plan";
+import { destinationRootsForTarget, isKeryxPublishedDestination } from "./plan";
 import {
   NotARegularFileError,
   readSkillsInstallState,
@@ -41,9 +41,9 @@ export interface UninstallResult {
   ok: boolean;
   removed: string[];
   /**
-   * Paths the uninstalled module recorded that another module in this
-   * install-state still records: left on disk for that module, and dropped
-   * from the uninstalled module's record.
+   * Paths the uninstalled module recorded that another owner still holds —
+   * another module in this install-state, or `keryx init`/`update` for a
+   * rule-layer file: left on disk, and dropped from the uninstalled record.
    */
   keptShared?: UninstallRefusal[];
   refused: UninstallRefusal[];
@@ -142,6 +142,12 @@ export async function uninstallInstall(
       const owners = otherOwners.get(filePath);
       if (owners !== undefined) {
         keptShared.push({ path: filePath, reason: `also recorded by module ${owners.join(", ")} — left in place for it` });
+        continue;
+      }
+      // An install-state written before review F2 may record a rule-layer
+      // file; `keryx init`/`update` own it, so it stays.
+      if (isKeryxPublishedDestination(filePath)) {
+        keptShared.push({ path: filePath, reason: "published by keryx init/update — left in place for them" });
         continue;
       }
       const abs = path.join(repoRoot, filePath);

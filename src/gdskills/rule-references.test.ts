@@ -121,12 +121,20 @@ describe("a citation of a rule keryx moved out of core/ (ADR-0001 P3)", () => {
     expect(await unresolvedReferences(cwd, content)).toEqual([]);
   });
 
-  test("resolves to the installed process/ file, and a process/ project slot shadows it", async () => {
+  test("resolves to the installed process/ file and reports a redirect from the cited spelling (LS-1)", async () => {
     await writeRule("process/git-rules.mdc");
-    expect(await unresolvedRuleReferences(cwd, "Git: `core/git-rules.mdc`.")).toEqual([]);
+    const content = "Git: `.metaproject/rules/core/git-rules.mdc`. Errors: `core/error-handling.mdc`.";
+    expect(await unresolvedRuleReferences(cwd, content)).toEqual(["core/error-handling.mdc"]);
+    // The reviewer is told the file to read in place of the deleted core/ path.
+    expect(await shadowedRuleReferences(cwd, content)).toEqual([
+      { ref: "core/git-rules.mdc", resolved: ".metaproject/rules/process/git-rules.mdc" },
+    ]);
+    // A citation of the new path needs no redirect.
+    expect(await shadowedRuleReferences(cwd, "Git: `process/git-rules.mdc`.")).toEqual([]);
+    // A process/ project slot answers the old spelling too.
     await writeRule("project/process/git-rules.mdc");
-    expect(await shadowedRuleReferences(cwd, "Git: `core/git-rules.mdc`.")).toEqual([
-      { ref: "process/git-rules.mdc", resolved: ".metaproject/rules/project/process/git-rules.mdc" },
+    expect(await shadowedRuleReferences(cwd, content)).toEqual([
+      { ref: "core/git-rules.mdc", resolved: ".metaproject/rules/project/process/git-rules.mdc" },
     ]);
   });
 });

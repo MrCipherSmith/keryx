@@ -67,3 +67,71 @@ test("the scan pattern matches an old citation and spares the override slot and 
   const sample = "`rules/core/git-rules.mdc` `rules/project/core/git-rules.mdc` `rules/process/git-rules.mdc` `core/error-handling.mdc`";
   expect([...sample.matchAll(pattern)].map((match) => match[0])).toEqual(["core/git-rules.mdc"]);
 });
+
+// Review F3: keryx's own sources also hand agents rule paths — help text, the
+// generators of CLAUDE.md / AGENTS.md / routing.md / index.md (`templates.ts`),
+// flow templates. They are scanned too, for literal and path.join spellings.
+
+/** The move machinery itself, which must name the old path to clean it up. */
+const MOVE_MACHINERY = new Set([
+  "src/gdskills/retired-rules.ts",
+  "src/gdskills/rule-references.ts",
+  "src/gdskills/guarded-fs-ops.ts",
+  "src/gdskills/project-rules.ts",
+  // Loads only rules that stay in core (pinned below); its `core/${cite}` flip
+  // resolves a project rule's own citations, not a moved keryx rule.
+  "src/gdskills/context-resolver.ts",
+]);
+
+async function listSources(dir: string): Promise<string[]> {
+  const out: string[] = [];
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (entry.name === "__fixtures__" || entry.name === "bundled" || entry.name === "node_modules") continue;
+      out.push(...(await listSources(full)));
+    } else if (entry.isFile() && entry.name.endsWith(".ts") && !entry.name.endsWith(".test.ts")) {
+      out.push(full);
+    }
+  }
+  return out;
+}
+
+function joinedMovedCorePath(): RegExp {
+  const names = MOVED_RULES.map((entry) => entry.fileName.replace(/[.-]/g, (c) => `\\${c}`));
+  return new RegExp(`["']rules["'],\\s*["']core["'],\\s*["'](?:${names.join("|")})["']`, "g");
+}
+
+/** A path into rules/core built from a variable: whoever adds one must make it move-aware (and list the file above). */
+const BUILT_CORE_PATH = /core\/\$\{|["']rules["'],\s*["']core["'],\s*[A-Za-z_$]/g;
+
+test("no keryx source outside the move machinery names a moved rule's core/ path, literally or built", async () => {
+  const offenders: string[] = [];
+  for (const file of await listSources(path.join(REPO_ROOT, "src"))) {
+    const relative = path.relative(REPO_ROOT, file).split(path.sep).join("/");
+    if (MOVE_MACHINERY.has(relative)) continue;
+    const text = await readFile(file, "utf8");
+    for (const pattern of [movedCorePath(), joinedMovedCorePath(), BUILT_CORE_PATH]) {
+      for (const match of text.matchAll(pattern)) offenders.push(`${relative}: ${match[0]}`);
+    }
+  }
+  expect(offenders).toEqual([]);
+});
+
+test("the source patterns catch a literal citation, a path.join spelling and a built path", () => {
+  const sample = 'see rules/core/skills-storage-workflow.mdc; path.join(root, "rules", "core", "git-rules.mdc"); `rules/core/${name}`';
+  expect([...sample.matchAll(movedCorePath())].map((m) => m[0])).toEqual(["core/skills-storage-workflow.mdc"]);
+  expect([...sample.matchAll(joinedMovedCorePath())]).toHaveLength(1);
+  expect([...sample.matchAll(BUILT_CORE_PATH)].map((m) => m[0])).toEqual(["core/${"]);
+});
+
+test("the context resolver loads no moved rule from rules/core", async () => {
+  const { CONDITIONAL_RULES } = await import("./context-resolver");
+  const source = await readFile(path.join(REPO_ROOT, "src", "gdskills", "context-resolver.ts"), "utf8");
+  const moved = MOVED_RULES.map((entry) => entry.fileName.replace(/\.mdc?$/, ""));
+  const named = [...source.matchAll(/"([a-z0-9-]+)"/g)].map((match) => match[1]);
+  expect(named.filter((name) => name !== undefined && moved.includes(name))).toEqual([]);
+  for (const rule of CONDITIONAL_RULES) {
+    expect(existsSync(path.join(REPO_ROOT, "src", "gdskills", "bundled", "rules", "core", `${rule.name}.mdc`))).toBe(true);
+  }
+});

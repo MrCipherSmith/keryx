@@ -545,7 +545,12 @@ export async function migrateMovedRuleOverrides(
 ): Promise<ProjectOverrideOutcome[]> {
   const projectDir = path.join(rulesRoot, "project");
   const oldDir = path.join(projectDir, "core");
-  if (!(await isPlainDirectory(projectDir)) || !(await isPlainDirectory(oldDir))) return [];
+  // Every directory on the way, `rules/` included, must be a real one: a
+  // symlinked `.metaproject/rules` would send the mkdir and rename outside
+  // the project, where the layer installs already refused to write (LS-4).
+  for (const dir of [rulesRoot, projectDir, oldDir]) {
+    if (!(await isPlainDirectory(dir))) return [];
+  }
   const outcomes: ProjectOverrideOutcome[] = [];
   for (const entry of entries) {
     if (entry.movedTo === undefined) continue;
@@ -727,5 +732,6 @@ export function movedRuleNotice(outcome: RetiredRuleOutcome): string | null {
   if (outcome.action !== "removed" || outcome.movedTo === undefined) {
     return null;
   }
-  return `rules/core/${outcome.fileName} moved to rules/${outcome.movedTo}; removed the unmodified old copy`;
+  return `rules/core/${outcome.fileName} moved to rules/${outcome.movedTo}; removed the unmodified old copy — `
+    + `update any citation of rules/core/${outcome.fileName} in your own files (CLAUDE.md, AGENTS.md, project skills, wiki)`;
 }

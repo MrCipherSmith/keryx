@@ -37,6 +37,7 @@ import {
   PROJECT_SKILLS_CATALOG_START,
   PROJECT_SKILLS_DIR,
 } from "./project-skills";
+import { migrateMovedRuleRegistry, type MovedRegistryEntry } from "./project-rules";
 import type { RetiredRuleEntry, RetiredRuleOutcome } from "./retired-rules";
 import { isKeryxRuleLayer, KERYX_RULE_LAYERS, type KeryxRuleLayer } from "./rule-references";
 
@@ -224,6 +225,8 @@ export async function installGdskills(
   const notices = [
     ...retiredRuleOutcomes.map(movedRuleNotice).filter((notice): notice is string => notice !== null),
     ...overrideMessages.filter((message) => message.kind === "notice").map((message) => message.text),
+    ...rulesInstall.registryMoves.map((move) =>
+      `the imported rule ${move.from} follows its move: \`skills update --rules\` now writes rules/project/${move.to}`),
     ...staleBuildOutcomes
       .filter((outcome) => staleRuntimeBuildSeverity(outcome) === "notice")
       .map((outcome) => staleRuntimeBuildMessage(outcome, projectRoot)),
@@ -370,7 +373,12 @@ export type InstallBundledRulesSeams = {
 export async function installBundledRules(
   metaprojectRoot: string,
   seams: InstallBundledRulesSeams = {},
-): Promise<{ outcomes: RetiredRuleOutcome[]; overrideOutcomes: ProjectOverrideOutcome[]; warning: string | null }> {
+): Promise<{
+  outcomes: RetiredRuleOutcome[];
+  overrideOutcomes: ProjectOverrideOutcome[];
+  registryMoves: MovedRegistryEntry[];
+  warning: string | null;
+}> {
   const sourcePathFor = seams.sourcePathFor ?? bundledRulesSourcePath;
   const cleanupEntries = seams.cleanupEntries ?? CORE_CLEANUP_ENTRIES;
   const warnings: string[] = [];
@@ -393,11 +401,13 @@ export async function installBundledRules(
     ? []
     : await removeUnmodifiedRetiredRules(coreTarget, undefined, cleanupEntries, isDestinationShipped);
   // A project's own version of a moved rule follows it to the new slot.
-  const overrideOutcomes = await migrateMovedRuleOverrides(
-    path.join(metaprojectRoot, "rules"),
-    cleanupEntries.filter((entry) => entry.movedTo !== undefined),
-  );
-  return { outcomes, overrideOutcomes, warning: warnings.length === 0 ? null : warnings.join("; ") };
+  const moves = cleanupEntries.filter((entry): entry is RetiredRuleEntry & { movedTo: string } => entry.movedTo !== undefined);
+  const overrideOutcomes = await migrateMovedRuleOverrides(path.join(metaprojectRoot, "rules"), moves);
+  // ...and so does its `skills import --rules` registry entry (review LS-2).
+  const projectRoot = path.dirname(metaprojectRoot);
+  const registryMoves = await migrateMovedRuleRegistry(projectRoot, moves, async (ref) =>
+    (await lstat(path.join(metaprojectRoot, "rules", "project", ref)).catch(() => null)) !== null);
+  return { outcomes, overrideOutcomes, registryMoves, warning: warnings.length === 0 ? null : warnings.join("; ") };
 }
 
 /**

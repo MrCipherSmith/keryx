@@ -1525,7 +1525,7 @@ test("installBundledRules installs an activity layer when the bundle ships one, 
       sourcePathFor: await layeredBundle(path.join(root, "a"), false),
       cleanupEntries: [],
     });
-    expect(without).toEqual({ outcomes: [], overrideOutcomes: [], warning: null });
+    expect(without).toEqual({ outcomes: [], overrideOutcomes: [], registryMoves: [], warning: null });
     expect(existsSync(path.join(metaprojectRoot, "rules", "activity"))).toBe(false);
     expect(existsSync(path.join(metaprojectRoot, "rules", "core", "keep.mdc"))).toBe(true);
     expect(existsSync(path.join(metaprojectRoot, "rules", "process", "moved.mdc"))).toBe(true);
@@ -1560,7 +1560,8 @@ test("a moved rule: every shipped version of the stale core copy is removed and 
       expect(existsSync(stale)).toBe(false);
       expect(await readFile(path.join(metaprojectRoot, "rules", "process", "moved.mdc"), "utf8")).toBe("moved rule, new home\n");
       expect(result.outcomes.map(movedRuleNotice)).toEqual([
-        "rules/core/moved.mdc moved to rules/process/moved.mdc; removed the unmodified old copy",
+        "rules/core/moved.mdc moved to rules/process/moved.mdc; removed the unmodified old copy — "
+          + "update any citation of rules/core/moved.mdc in your own files (CLAUDE.md, AGENTS.md, project skills, wiki)",
       ]);
       expect(result.outcomes.map((outcome) => retiredRuleWarning(outcome, [FIXTURE_MOVE]))).toEqual([null]);
     } finally {
@@ -1705,7 +1706,7 @@ test("a move is idempotent: the second run finds nothing to do and keeps the new
     const seams = { sourcePathFor: await layeredBundle(root, false), cleanupEntries: [FIXTURE_MOVE] };
 
     expect((await installBundledRules(metaprojectRoot, seams)).outcomes.map((o) => o.action)).toEqual(["removed"]);
-    expect(await installBundledRules(metaprojectRoot, seams)).toEqual({ outcomes: [], overrideOutcomes: [], warning: null });
+    expect(await installBundledRules(metaprojectRoot, seams)).toEqual({ outcomes: [], overrideOutcomes: [], registryMoves: [], warning: null });
     expect(existsSync(stale)).toBe(false);
     expect(await readFile(path.join(metaprojectRoot, "rules", "process", "moved.mdc"), "utf8")).toBe("moved rule, new home\n");
   } finally {
@@ -1735,7 +1736,8 @@ test("installGdskills reports a completed move as a notice, not a warning", asyn
 
     expect(existsSync(stale)).toBe(false);
     expect(result.notices).toContain(
-      "rules/core/agent-conduct.mdc moved to rules/process/agent-conduct.mdc; removed the unmodified old copy",
+      "rules/core/agent-conduct.mdc moved to rules/process/agent-conduct.mdc; removed the unmodified old copy — "
+        + "update any citation of rules/core/agent-conduct.mdc in your own files (CLAUDE.md, AGENTS.md, project skills, wiki)",
     );
     expect(result.warnings.filter((warning) => warning.includes("agent-conduct"))).toEqual([]);
   } finally {
@@ -1850,14 +1852,14 @@ async function seedPreMoveCore(metaprojectRoot: string): Promise<void> {
 }
 
 /**
- * The last text a moved rule shipped under core/. P3 changed nothing in a moved
- * file but its own citations of other moved rules (`core/x.mdc` became
- * `process/x.mdc`), so reversing exactly that rewrite reproduces it.
+ * The last text a moved rule shipped under core/: the blob at 9f45c6eb0 (the
+ * commit before ADR-0001 P3 moved anything), pinned as a fixture so a later edit
+ * of the process/ file cannot change what these tests call "shipped" (review F4).
  */
 async function preMoveText(fileName: string): Promise<string> {
-  const moved = MOVED_RULES.map((entry) => entry.fileName.replace(/\.mdc?$/, "")).join("|");
-  const text = await readFile(path.join(bundledRulesSourcePath("process"), fileName), "utf8");
-  return text.replace(new RegExp(`(?<!project/)\\bprocess/(${moved})\\b`, "g"), "core/$1");
+  const dot = fileName.lastIndexOf(".");
+  const fixture = `${fileName.slice(0, dot)}.9f45c6eb${fileName.slice(dot)}`;
+  return readFile(path.join(path.dirname(fileURLToPath(import.meta.url)), "__fixtures__", "moved-rules", fixture), "utf8");
 }
 
 test("P3: every moved procedure records the last version it shipped under core/", async () => {
@@ -1909,7 +1911,8 @@ test("P3: updating a project installed before the move removes every unmodified 
       expect({ file: entry.fileName, stale: existsSync(path.join(metaprojectRoot, "rules", "core", entry.fileName)) })
         .toEqual({ file: entry.fileName, stale: false });
       expect(result.notices).toContain(
-        `rules/core/${entry.fileName} moved to rules/${entry.movedTo}; removed the unmodified old copy`,
+        `rules/core/${entry.fileName} moved to rules/${entry.movedTo}; removed the unmodified old copy — `
+          + `update any citation of rules/core/${entry.fileName} in your own files (CLAUDE.md, AGENTS.md, project skills, wiki)`,
       );
     }
     // The edited copy stays, and the warning says where the edits belong now.
@@ -1997,6 +2000,64 @@ test("P3: a symlinked rules/project/core is not read through", async () => {
     expect(await migrateMovedRuleOverrides(rulesRoot, [FIXTURE_MOVE])).toEqual([]);
     expect(await readFile(path.join(elsewhere, "moved.mdc"), "utf8")).toBe("# elsewhere\n");
     expect(existsSync(path.join(rulesRoot, "project", "process"))).toBe(false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("LS-2: an imported project rule follows its move in the skills import --rules registry, and skills update --rules writes the new slot", async () => {
+  const { readProjectRuleRegistry, sha256Hex, updateProjectRuleRegistry } = await import("./project-rules");
+  const { updateProjectRules } = await import("./update-rules");
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-p3-registry-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    const origin = path.join(root, "house-rules", "git-rules.mdc");
+    await mkdir(path.dirname(origin), { recursive: true });
+    await writeFile(origin, "# house git v1\n");
+    const oldSlot = ".metaproject/rules/project/core/git-rules.mdc";
+    await mkdir(path.dirname(path.join(root, oldSlot)), { recursive: true });
+    await writeFile(path.join(root, oldSlot), "# house git v1\n");
+    const hash = sha256Hex("# house git v1\n");
+    await updateProjectRuleRegistry(root, {
+      upsert: [{
+        kind: "rule", ref: "core/git-rules.mdc", path: oldSlot, mode: "copy", origin: "house-rules/git-rules.mdc",
+        sha256: hash, originSha256: hash, description: "house git", globs: [], alwaysApply: false, updatedAt: new Date(0).toISOString(),
+      }],
+    });
+
+    const result = await installGdskills(metaprojectRoot, "recommended");
+
+    const [entry] = await readProjectRuleRegistry(root);
+    expect(entry).toMatchObject({ ref: "process/git-rules.mdc", path: ".metaproject/rules/project/process/git-rules.mdc" });
+    expect(result.notices).toContain(
+      "the imported rule core/git-rules.mdc follows its move: `skills update --rules` now writes rules/project/process/git-rules.mdc",
+    );
+    // A second update has nothing left to warn about.
+    const again = await installGdskills(metaprojectRoot, "recommended");
+    expect(again.warnings.filter((warning) => warning.includes("project/core/git-rules.mdc"))).toEqual([]);
+
+    await writeFile(origin, "# house git v2\n");
+    await updateProjectRules({ projectRoot: root });
+    expect(await readFile(path.join(root, ".metaproject", "rules", "project", "process", "git-rules.mdc"), "utf8")).toBe("# house git v2\n");
+    expect(existsSync(path.join(root, oldSlot))).toBe(false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("LS-4: a symlinked .metaproject/rules is not written through by the override migration", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-p3-override-"));
+  try {
+    const outside = path.join(root, "outside-rules");
+    await mkdir(path.join(outside, "project", "core"), { recursive: true });
+    await writeFile(path.join(outside, "project", "core", "moved.mdc"), "# outside\n");
+    const metaprojectRoot = path.join(root, ".metaproject");
+    await mkdir(metaprojectRoot, { recursive: true });
+    await symlink(outside, path.join(metaprojectRoot, "rules"));
+
+    expect(await migrateMovedRuleOverrides(path.join(metaprojectRoot, "rules"), [FIXTURE_MOVE])).toEqual([]);
+    expect(await readFile(path.join(outside, "project", "core", "moved.mdc"), "utf8")).toBe("# outside\n");
+    expect(existsSync(path.join(outside, "project", "process"))).toBe(false);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

@@ -9,8 +9,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../../lib/fs";
 import { writeContained } from "../../lib/contained-write";
-import { KERYX_RULE_LAYERS } from "../rule-references";
-import { destinationRootsForTarget, type InstallPlan } from "./plan";
+import { destinationRootsForTarget, isKeryxPublishedDestination, type InstallPlan } from "./plan";
 import {
   NotARegularFileError,
   readSkillsInstallState,
@@ -39,22 +38,13 @@ export interface ApplySkippedFile {
   path: string;
   reason: string;
   /**
-   * The file sits where `keryx init`/`update` publish (`isKeryxPublishedDestination`).
-   * Its fix is `keryx update`, not `--force`: forcing would record it, and
-   * `skills uninstall` would then delete a file the init/update pair owns.
+   * The file sits where `keryx init`/`update` publish (`isKeryxPublishedDestination`)
+   * and holds other bytes than this bundle: its fix is `keryx update`.
    */
   keryxPublished?: true;
 }
 
-/**
- * Destinations `keryx init` and `keryx update` write themselves (the bundled
- * skills and the rule layers, `installGdskills`), for the keryx-shell target.
- * A file there that install-state does not record is theirs, not drift.
- */
-export function isKeryxPublishedDestination(destination: string): boolean {
-  if (destination.startsWith(".metaproject/skills/gdskills/")) return true;
-  return KERYX_RULE_LAYERS.some((layer) => destination.startsWith(`.metaproject/rules/${layer}/`));
-}
+export { isKeryxPublishedDestination };
 
 export interface ApplyResult {
   ok: boolean;
@@ -154,6 +144,17 @@ export async function applyInstall(
       }
       const destinationAbs = contained.abs;
       const alreadyExists = await pathExists(destinationAbs);
+      if (isKeryxPublishedDestination(file.destination)) {
+        // Review F2: `keryx init`/`update` own every file of a bundled rule
+        // layer, so this install never records one — existing or not. A
+        // recorded one would be deleted by `skills uninstall` after the next
+        // `keryx update` had rewritten it.
+        const outcome = await placeKeryxPublished(destRoot, sourceRoot, file, alreadyExists, options.force === true);
+        if (outcome === "written") written.push(file.destination);
+        else if (outcome === "present") alreadyPresent.push(file.destination);
+        else skipped.push(outcome);
+        continue;
+      }
       if (alreadyExists && !options.force) {
         const recordedHash = recordedHashes.get(file.destination);
         // R3-3: a planned destination that already exists as a directory
@@ -177,19 +178,6 @@ export async function applyInstall(
           // NOT recorded: recording it would hand it to `skills uninstall`,
           // which would then delete a file this install never wrote.
           alreadyPresent.push(file.destination);
-          continue;
-        }
-        if (recordedHash === undefined && isKeryxPublishedDestination(file.destination)) {
-          // R3-1: after a keryx upgrade and before `keryx update`, the file
-          // keryx init/update wrote still holds the older bundled bytes.
-          skipped.push({
-            path: file.destination,
-            reason:
-              "written by keryx init/update from another keryx version and not recorded in install-state — " +
-              "run `keryx update` first, then re-run this install (--force would record it, and " +
-              "`skills uninstall` would then delete a file keryx init/update owns)",
-            keryxPublished: true,
-          });
           continue;
         }
         if (recordedHash === undefined) {
@@ -224,56 +212,92 @@ export async function applyInstall(
         }
       }
 
-      // --force over an unrecorded file keryx init/update published: write the
-      // bundled bytes, but leave it unrecorded for the same reason the
-      // byte-identical case above does — uninstall must not delete it.
-      const forcedOverKeryxPublished =
-        alreadyExists && options.force === true && !recordedHashes.has(file.destination) &&
-        isKeryxPublishedDestination(file.destination);
       const sourceBytes = await readFile(path.join(sourceRoot, file.source));
       await writeContained(destRoot, file.destination, sourceBytes);
       written.push(file.destination);
-      if (forcedOverKeryxPublished) continue;
       writtenPaths.push(file.destination);
       const hash = await sha256OfFile(destRoot, file.destination);
       if (hash !== undefined) sha256[file.destination] = hash;
     }
 
-    if (writtenPaths.length > 0) {
-      moduleRecords.push({
-        moduleId: module.id,
-        writtenPaths,
-        sha256,
-        managedSentinel: true,
-        installedAt: new Date().toISOString(),
-      });
-    }
+    // Pushed even when empty: an empty record removes this module's earlier
+    // one, e.g. one that recorded rule-layer files before review F2.
+    moduleRecords.push({
+      moduleId: module.id,
+      writtenPaths,
+      sha256,
+      managedSentinel: true,
+      installedAt: new Date().toISOString(),
+    });
   }
 
-  moduleRecords.push(...releasedRecords(existing?.installedModules ?? [], moduleRecords));
+  moduleRecords.push(...releasedRecords(existing?.installedModules ?? [], moduleRecords, plan.manifestModuleIds));
   await writeSkillsInstallState(destRoot, plan.target, moduleRecords, plan.profile);
 
   return { ok: skipped.length === 0, written, alreadyPresent, skipped, errors: [] };
 }
 
 /**
- * One owner per recorded path. A path this apply recorded under a module is
- * dropped from every OTHER module's earlier record — a module the manifest no
- * longer has (`skill-lifecycle`, folded into `process-activity-rules` by
- * ADR-0001 P3) would otherwise keep claiming the file, and
- * `skills uninstall --module <old>` would delete what the new module owns. A
+ * Put a file `keryx init`/`update` publish, never recording it: byte-identical
+ * is already present; missing is written; different is written only with
+ * `--force`, and otherwise skipped with the `keryx update` advice (R3-1).
+ */
+async function placeKeryxPublished(
+  destRoot: string,
+  sourceRoot: string,
+  file: { source: string; destination: string; sha256: string },
+  alreadyExists: boolean,
+  force: boolean,
+): Promise<"written" | "present" | ApplySkippedFile> {
+  if (alreadyExists) {
+    let currentHash: string | undefined;
+    try {
+      currentHash = await sha256OfFile(destRoot, file.destination);
+    } catch (error) {
+      if (error instanceof NotARegularFileError) {
+        return { path: file.destination, reason: `${error.message} — refusing to overwrite it` };
+      }
+      throw error;
+    }
+    if (currentHash === file.sha256) return "present";
+    if (!force) {
+      return {
+        path: file.destination,
+        reason:
+          "keryx init/update publish this file and it holds another keryx version's content — run " +
+          "`keryx update` first, then re-run this install",
+        keryxPublished: true,
+      };
+    }
+  }
+  await writeContained(destRoot, file.destination, await readFile(path.join(sourceRoot, file.source)));
+  return "written";
+}
+
+/**
+ * One owner per recorded path, and none for a file `keryx init`/`update` own.
+ * From every earlier record this apply did not rewrite, drop the paths a
+ * planned module now records and every keryx-published path; drop the whole
+ * record of a module the manifest no longer defines (`skill-lifecycle`, folded
+ * into `process-activity-rules` by ADR-0001 P3) — otherwise
+ * `skills uninstall --module <old>` would delete what another owner holds. A
  * record left with no paths is returned empty, which removes it.
  */
 function releasedRecords(
   previous: readonly InstalledModuleRecord[],
   current: readonly InstalledModuleRecord[],
+  manifestModuleIds: readonly string[] | undefined,
 ): InstalledModuleRecord[] {
   const currentIds = new Set(current.map((record) => record.moduleId));
   const ownedNow = new Set(current.flatMap((record) => record.writtenPaths));
+  const known = manifestModuleIds === undefined ? undefined : new Set(manifestModuleIds);
   const released: InstalledModuleRecord[] = [];
   for (const record of previous) {
     if (currentIds.has(record.moduleId)) continue;
-    const kept = record.writtenPaths.filter((filePath) => !ownedNow.has(filePath));
+    const retired = known !== undefined && !known.has(record.moduleId);
+    const kept = retired
+      ? []
+      : record.writtenPaths.filter((filePath) => !ownedNow.has(filePath) && !isKeryxPublishedDestination(filePath));
     if (kept.length === record.writtenPaths.length) continue;
     const keptSet = new Set(kept);
     released.push({

@@ -29,6 +29,7 @@ import {
   uninstallInstall,
   HARNESS_IDS,
   SUPPORTED_TARGETS,
+  type ApplySkippedFile,
   type HarnessId,
   type InstallPlan,
 } from "../gdskills/manifest";
@@ -636,26 +637,7 @@ async function installFromManifest(opts: {
           "(written by keryx init/update) — left alone and not recorded, so uninstall will not remove them.",
       );
     }
-    if (result.skipped.length > 0) {
-      // R3-1: a file keryx init/update published is fixed by `keryx update`,
-      // never by --force (which would record it for uninstall to delete).
-      const keryxPublished = result.skipped.filter((skipped) => skipped.keryxPublished === true);
-      const others = result.skipped.filter((skipped) => skipped.keryxPublished !== true);
-      if (keryxPublished.length > 0) {
-        console.log(
-          `Skipped (written by keryx init/update from another keryx version — run ${style.cyan("keryx update")} first, then re-run; do not use --force):`,
-        );
-        for (const skipped of keryxPublished) {
-          console.log(`- ${skipped.path}`);
-        }
-      }
-      if (others.length > 0) {
-        console.log("Skipped (existing file not recorded in install-state, or drifted — rerun with --force to overwrite):");
-        for (const skipped of others) {
-          console.log(`- ${skipped.path}: ${skipped.reason}`);
-        }
-      }
-    }
+    for (const line of renderSkippedInstallFiles(result.skipped, style.cyan)) console.log(line);
     if (result.errors.length > 0) {
       console.log("Errors:");
       for (const error of result.errors) {
@@ -664,6 +646,31 @@ async function installFromManifest(opts: {
     }
   }
   if (!result.ok) process.exitCode = 1;
+}
+
+/**
+ * The skipped files of a manifest install, in two groups (R3-1): a rule-layer
+ * file `keryx init`/`update` publish is fixed by `keryx update`; any other by
+ * `--force`. Exported so the grouping is pinned by a test.
+ */
+export function renderSkippedInstallFiles(
+  skipped: readonly ApplySkippedFile[],
+  highlight: (text: string) => string = (text) => text,
+): string[] {
+  const keryxPublished = skipped.filter((file) => file.keryxPublished === true);
+  const others = skipped.filter((file) => file.keryxPublished !== true);
+  const lines: string[] = [];
+  if (keryxPublished.length > 0) {
+    lines.push(
+      `Skipped (keryx init/update publish these and they hold another keryx version — run ${highlight("keryx update")} first, then re-run):`,
+    );
+    lines.push(...keryxPublished.map((file) => `- ${file.path}`));
+  }
+  if (others.length > 0) {
+    lines.push("Skipped (existing file not recorded in install-state, or drifted — rerun with --force to overwrite):");
+    lines.push(...others.map((file) => `- ${file.path}: ${file.reason}`));
+  }
+  return lines;
 }
 
 async function doctorSkillsCommand(args: string[]): Promise<void> {

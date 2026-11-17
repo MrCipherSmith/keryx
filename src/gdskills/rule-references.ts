@@ -31,14 +31,25 @@ import { MOVED_RULES } from "./retired-rules";
  * the file keryx now ships — and the installer leaves — at
  * `process/git-rules.mdc`. The reference is the moved path, so the reviewer
  * reads the rule that exists and an overlay's copy goes to the project slot
- * the new path resolves through.
+ * the new path resolves through. The spelling the text used is not lost:
+ * `citedRuleReferences` keeps it, and `shadowedRuleReferences` reports a
+ * redirect from it, so a reviewer is told which file to open instead.
  */
 export function ruleReferences(content: string): string[] {
-  const refs = new Set<string>();
+  return [...new Set(citedRuleReferences(content).map((citation) => citation.ref))].sort();
+}
+
+/** One rule citation: `cited` as the text spells it (layer case normalised), `ref` after a move. */
+export type RuleCitationSpelling = { cited: string; ref: string };
+
+export function citedRuleReferences(content: string): RuleCitationSpelling[] {
+  const byCited = new Map<string, RuleCitationSpelling>();
   for (const match of content.matchAll(/`(?:\.metaproject\/)?(?:rules\/)?([a-z0-9_-]+\/[a-z0-9._-]+\.mdc)`/gi)) {
-    if (match[1]) refs.add(canonicalRuleReference(match[1]));
+    if (!match[1]) continue;
+    const cited = withKeryxDirSpelling(match[1]);
+    byCited.set(cited, { cited, ref: canonicalRuleReference(cited) });
   }
-  return [...refs].sort();
+  return [...byCited.values()].sort((a, b) => (a.cited < b.cited ? -1 : a.cited > b.cited ? 1 : 0));
 }
 
 /** The `core/` path a moved rule was cited under before it moved; empty for any other reference. */
@@ -184,13 +195,19 @@ export async function unresolvedRuleReferences(projectRoot: string, content: str
 
 export type ShadowedRule = { ref: string; resolved: string };
 
-/** The subset of {@link ruleReferences} that a `rules/project/<ref>` copy answers instead of the named file. */
+/**
+ * Citations the reviewer must read from another file than the one its text
+ * names: a `rules/project/<ref>` copy that answers instead of the named file,
+ * and a rule keryx moved out of `core/` (review LS-1) — `ref` is the spelling
+ * the text uses, `resolved` the file that exists. Without the redirect a
+ * reviewer citing `core/git-rules.mdc` would open a path `keryx update` deleted.
+ */
 export async function shadowedRuleReferences(projectRoot: string, content: string): Promise<ShadowedRule[]> {
   const shadowed: ShadowedRule[] = [];
-  for (const ref of ruleReferences(content)) {
+  for (const { cited, ref } of citedRuleReferences(content)) {
     const resolution = await resolveRuleReference(projectRoot, ref);
-    if (resolution.shadowed && resolution.resolved !== undefined) {
-      shadowed.push({ ref, resolved: resolution.resolved });
+    if (resolution.resolved !== undefined && (resolution.shadowed || cited !== ref)) {
+      shadowed.push({ ref: cited, resolved: resolution.resolved });
     }
   }
   return shadowed;
