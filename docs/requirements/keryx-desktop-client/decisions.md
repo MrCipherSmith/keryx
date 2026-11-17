@@ -79,3 +79,22 @@ that package specifies. No second Tauri project is created.
 
 Rejected: a separate Tauri project for the Hub work loop, which would
 duplicate packaging, signing, sidecar and auto-update.
+
+## D-09 Live sessions in the desktop app — decided 2026-11-17
+
+Owner decision from the round-3 review (finding UX-W3-R3-002). It supersedes
+the earlier rule of one active session per connection, under which opening a
+session released the previous one and ended its shell tasks.
+
+Chosen: in `keryx acp --profile shell` a connection holds several sessions at
+once. Opening or creating a session releases nothing; turns, shell tasks and
+MCP servers of other sessions keep running. The desktop keeps every held
+session's transcript and switches locally; Stop cancels only the shown
+session; dialogs queue per session; the sidebar marks busy and waiting
+sessions. keryx holds at most 8 sessions and, past that, releases the least
+recently used idle one (no turn, no running shell task, no request in flight)
+and sends `_keryx/session_released`; the app keeps that transcript read-only
+with a Reopen banner.
+
+Rejected: one active session per connection (switching killed background work
+and surprised users).

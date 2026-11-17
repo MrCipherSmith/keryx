@@ -80,10 +80,12 @@ with `-` (the CLI would read them as a flag), contain no NUL and stay within
 
 Not offered, with a "copy command" button instead: `complete`, `confirm`,
 `recover`, `implemented`, `ac update`, `ac reseal`. Their gates and
-confirmation tokens belong to a terminal. The copied command names the directory
-(or the id, only when it is 1 to 9 digits); a flow whose directory name and id
-both fail that check shows no copyable command (`FlowCard.idValid` marks a
-non-numeric id, which stays visible on the card). A required flag the board
+confirmation tokens belong to a terminal. The copied command names only the package
+directory, and only when the core marks it shell-safe (`commandRef`: everything
+after `\d{3}-` is in `[A-Za-z0-9._+-]`). A flow package is any real directory
+named `^\d{3}-…` (one path component, no control characters). A card whose
+directory is not shell-safe shows no copyable command; there is no fallback to
+the id. A required flag the board
 cannot fill in (`--reason` for `recover`, `ac update`, `ac reseal`) is copied
 as an unquoted `<placeholder>`, which the shell refuses to run until it is
 replaced.

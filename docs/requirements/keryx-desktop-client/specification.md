@@ -150,16 +150,21 @@ Wire details the sections above left open, as built (`src/acp/server.ts`,
   the session directory bound.
 - In auto mode an `ask_user` the model answers itself is reported to the
   client as an `agent_message_chunk` with `_meta.keryx.selfAnsweredQuestion: true`.
-- The `shell` profile treats one active session per connection: when a
-  `session/new` or `session/load` succeeds, its session becomes the active one
-  and the previous one is released (lease, shell tasks, client MCP binding,
-  hooks with `SessionEnd`; after its running turn, if any), so `keryx shell
-  --resume` can open it. The switch is applied last, just before the reply: a
-  failed `session/new`/`session/load` leaves the previous session active, one
-  overtaken by a later switch is refused (`session-superseded`), and a client
-  MCP list both sessions send is kept running. The permission mode, usage tally
-  and model choice survive a switch away and back. The `editor` profile keeps
-  every session until the connection ends.
+- The `shell` profile holds live sessions (owner decision 2026-11-17, see
+  D-09): every session a `session/new` or `session/load` opens stays held by
+  the connection beside the others, and opening one releases none. Each keeps
+  its own turn, mode, model, usage, client MCP servers, plan and shell tasks;
+  a turn in a session the client is not showing keeps running, and its
+  updates, permission requests and `_keryx/ask_user` questions carry its
+  `sessionId`. At most 8 sessions are held (`MAX_HELD_SESSIONS`,
+  `enforceIdleCap`): past that, the least recently used session with no
+  running turn, no running shell task and no request in flight is released
+  (lease, client MCP binding, hooks with `SessionEnd`) and keryx sends
+  `_keryx/session_released {sessionId, reason: "idle-cap"}`; a later load
+  restores its mode, model and usage. When every held session is busy none is
+  released. The client reads `initialize._meta.keryx.liveSessions` and treats
+  a keryx without it as too old. The `editor` profile keeps every session
+  until the connection ends.
 
 ## 4. Client side
 
@@ -174,7 +179,7 @@ Wire details the sections above left open, as built (`src/acp/server.ts`,
 | `bridge.rs` | Tauri commands `acp_start(cwd)`, `acp_send(message)`, `acp_stop()`; per-window start lock; emits `acp://message` and `acp://exit` events per window; stops run off the UI thread |
 | `fs.rs` | answers `fs/read_text_file` on a worker thread inside the git toplevel of the opened folder (the same root keryx binds); 8 MiB cap; one error for every outside path. Defence in depth only — keryx's own tools never pass through it |
 | `settings.rs` | settings |
-| `version.rs` | semver compare against `MIN_KERYX_VERSION` (0.4.32) |
+| `version.rs` | semver compare against `MIN_KERYX_VERSION` (0.4.32, the protocol floor; the app also requires the shell profile with live sessions) |
 | `flows/` | the Flows board backend ([flows-board.md](flows-board.md)) |
 
 `cargo test` covers framing, locator, fs confinement, process-group stop,

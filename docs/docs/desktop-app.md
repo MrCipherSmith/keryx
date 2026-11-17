@@ -58,8 +58,12 @@ the `APPLE_*` secrets exist.
 | PATH | The `keryx` on your login-shell `PATH`, for example a global npm install. |
 | Custom path | Any executable, for example a wrapper that runs a development checkout. |
 
-The minimum supported keryx is 0.4.32. An older keryx, or one without the
-`shell` profile, is reported in the window instead of starting silently.
+The app needs a keryx whose `initialize` answer reports the `shell` profile
+with live sessions. 0.4.32 is only the protocol floor the app checks; the
+released 0.4.32 to 0.4.35 have no shell profile, so they do not qualify. With
+a keryx that does not qualify the start fails with a "This keryx is too old
+for the app" dialog (use the bundled keryx or update) instead of starting
+silently. The bundled keryx, the default source, always qualifies.
 
 The app reads your login-shell environment once at startup, so `PATH` and the
 provider API keys you export in `~/.zshrc` reach keryx even when the app is
@@ -100,7 +104,9 @@ The same three modes as `keryx shell`:
 ### Approvals
 
 When the agent wants to run something that needs approval, a dialog shows
-exactly what will run. Inside the dialog, Enter allows once and Esc denies;
+exactly what will run and why keryx asks (content from an untrusted source,
+credentials, a destructive call, a publish lease, an agent launch, a hook, or
+an always-ask rule; a routine ask shows no reason). Inside the dialog, Enter allows once and Esc denies;
 when keryx offers it, the dialog also has allow or deny "for the rest of
 this session". Keys typed in the
 composer, and ⌘K, never answer an approval: only the dialog does.
@@ -111,14 +117,24 @@ appears; you can also type your own answer.
 ### Sessions
 
 The session list holds this project's keryx sessions, the same store
-`keryx shell` uses. ⌘N starts a new one (a running turn is stopped first);
-picking an old one loads it. A session another `keryx shell` currently holds
-cannot be opened at the same time; the app says so.
+`keryx shell` uses. ⌘N starts a new one; picking an old one loads it. A
+session another `keryx shell` currently holds cannot be opened at the same
+time; the app says so.
 
-The app keeps one session open at a time. Switching to another session ends
-the previous session's running shell tasks (a dev server or watcher it started
-stops) and frees it for `keryx shell --resume`; a turn still running there
-finishes first. Switching back reloads it with its permission mode and model.
+Sessions are live. One connection holds several at once, and opening or
+creating a session releases nothing: turns, shell tasks (a dev server or
+watcher) and MCP servers of the other sessions keep running. The app keeps
+every held session's transcript and switches between them locally. Stop (Esc)
+cancels only the turn of the session you are showing. A permission or
+`ask_user` dialog from a session you are not showing queues on that session
+and appears when you show it. The sidebar marks sessions that are busy or
+waiting for your input.
+
+keryx holds up to 8 sessions. Past that it releases the least recently used
+idle one (no turn, no running shell task, no request in flight), which frees
+it for `keryx shell --resume`, and tells the app. The app keeps that
+session's last transcript read-only with a Reopen banner and reloads it,
+with its permission mode and model, when you go back to it.
 
 ### Flows board
 
@@ -172,8 +188,9 @@ While a dialog is open the shortcuts are off.
 - **The model call fails with an auth error** — the provider login expired or
   the key is missing. Run `keryx auth login <provider>` in a terminal, or
   export the key in your shell rc file and restart the app.
-- **"this keryx has no shell profile"** — the selected keryx is older than
-  0.4.32. Switch the source to Bundled or update the global install.
+- **"This keryx is too old for the app"** — the selected keryx does not report
+  the shell profile with live sessions (released 0.4.32 to 0.4.35 do not).
+  Switch the source to Bundled or update the global install.
 - **Something else** — the per-window log above holds keryx's stderr.
 
 ## Develop the app
