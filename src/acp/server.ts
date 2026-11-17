@@ -127,6 +127,7 @@ import {
 } from "./profile";
 import { buildAcpShellSessionTools, type AcpShellRosterInput } from "./shell-roster";
 import { createProvidersHandlers, type AcpProvidersSeams } from "./providers";
+import { createTasksHandlers, taskEventSink } from "./shell-tasks";
 import { busyRefusalText, findShellCommand, shellAvailableCommands, viewNotServedText } from "./shell-commands";
 import {
   createAcpSessionRewind,
@@ -494,7 +495,24 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   const jobsFor = (sessionId: string, root: string): JobRegistry => {
     let jobs = sessionJobs.get(sessionId);
     if (jobs === undefined) {
-      jobs = createJobRegistry({ cwd: root });
+      // Shell profile: the Tasks panel hears of a task starting, going to the background and
+      // exiting (`_keryx/tasks/event`, specification §3.9.5). The editor profile has no panel.
+      const created: { registry?: JobRegistry } = {};
+      jobs = createJobRegistry({
+        cwd: root,
+        ...(shellProfile
+          ? {
+              onEvent: taskEventSink(
+                sessionId,
+                () => created.registry,
+                (method, params) => {
+                  if (!stopping) writeMessage(notificationMessage(method, params));
+                },
+              ),
+            }
+          : {}),
+      });
+      created.registry = jobs;
       sessionJobs.set(sessionId, jobs);
     }
     return jobs;
@@ -2514,6 +2532,13 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
               [ACP_AGENT_METHODS.sessionSetMode]: (params: unknown, context: { id: JsonRpcId }) => handleSetMode(params, context.id),
               [KERYX_ACP_EXTENSION_METHODS.command]: (params: unknown) => handleKeryxCommand(params),
               ...(providers?.requests ?? {}),
+              ...createTasksHandlers({
+                requireInitialized,
+                jobsOf: (sessionId) => {
+                  const state = registry.get(sessionId);
+                  return state === undefined ? undefined : jobsFor(sessionId, state.resolvedRoot);
+                },
+              }).requests,
             }
           : {}),
       },

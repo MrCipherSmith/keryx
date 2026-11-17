@@ -412,6 +412,10 @@ describe("AC6 — initialize reports the real version and the profiles; _keryx/i
           "_keryx/search_providers/list",
           "_keryx/search_providers/connect",
           "_keryx/search_providers/select",
+          "_keryx/tasks/event",
+          "_keryx/tasks/list",
+          "_keryx/tasks/output",
+          "_keryx/tasks/kill",
         ],
         liveSessions: true,
       });

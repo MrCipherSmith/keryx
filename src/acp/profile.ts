@@ -58,6 +58,12 @@ export const KERYX_ACP_EXTENSION_METHODS = {
   searchProvidersList: "_keryx/search_providers/list",
   searchProvidersConnect: "_keryx/search_providers/connect",
   searchProvidersSelect: "_keryx/search_providers/select",
+  /** Agent → client notification, shell profile (§3.9.5): `{ sessionId, event }` for a task's start, phase and exit (never output). */
+  tasksEvent: "_keryx/tasks/event",
+  /** Client → agent requests, shell profile (§3.9.5): `{ sessionId }`, `{ sessionId, taskId, since? }`, `{ sessionId, taskId }`. */
+  tasksList: "_keryx/tasks/list",
+  tasksOutput: "_keryx/tasks/output",
+  tasksKill: "_keryx/tasks/kill",
 } as const;
 
 /** The extensions a profile speaks, as `initialize._meta.keryx.extensions` and `_keryx/info` list them. */
@@ -79,6 +85,10 @@ export function acpProfileExtensions(profile: AcpProfile): string[] {
         KERYX_ACP_EXTENSION_METHODS.searchProvidersList,
         KERYX_ACP_EXTENSION_METHODS.searchProvidersConnect,
         KERYX_ACP_EXTENSION_METHODS.searchProvidersSelect,
+        KERYX_ACP_EXTENSION_METHODS.tasksEvent,
+        KERYX_ACP_EXTENSION_METHODS.tasksList,
+        KERYX_ACP_EXTENSION_METHODS.tasksOutput,
+        KERYX_ACP_EXTENSION_METHODS.tasksKill,
       ]
     : [KERYX_ACP_EXTENSION_METHODS.info];
 }
