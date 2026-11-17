@@ -6,7 +6,7 @@
 use crate::fs;
 use crate::locator::{self, KeryxSource};
 use crate::navigation;
-use crate::process::{AcpProcess, ProcessEvent, SpawnConfig};
+use crate::process::{AcpProcess, ProcessEvent, SpawnConfig, GRACEFUL_STOP};
 use crate::settings;
 use crate::shellenv;
 use crate::version;
@@ -19,8 +19,9 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
-/// Overall budget for stopping every window at app quit.
-pub const QUIT_DEADLINE: Duration = Duration::from_secs(7);
+/// Overall budget for stopping every window at app quit. It must outlast one
+/// graceful stop, or the quit gives up before the process-group SIGKILL.
+pub const QUIT_DEADLINE: Duration = Duration::from_millis(GRACEFUL_STOP.as_millis() as u64 + 2500);
 
 /// A process installed for a window, with the start that installed it.
 struct Installed {
@@ -153,7 +154,7 @@ impl AppState {
         if sessions.epochs.get(label).is_some_and(|e| start <= e.stopped_through) {
             return Some(START_CANCELLED);
         }
-        if sessions.live.get(label).is_some_and(|i| i.start > start) {
+        if sessions.epochs.get(label).is_some_and(|e| e.started > start) {
             return Some(START_SUPERSEDED);
         }
         None
@@ -656,6 +657,25 @@ mod tests {
         assert!(!launched);
         assert!(alive(&current));
         state.stop_session("w", state.begin_stop("w"));
+    }
+
+    #[test]
+    fn an_older_start_is_refused_even_when_the_newer_one_has_not_installed_yet() {
+        let state = AppState::default();
+        let older = state.begin_start("w");
+        let _newer = state.begin_start("w");
+        let mut launched = false;
+        let late = state.start_session("w", older, || {
+            launched = true;
+            Ok((sleeper(), ()))
+        });
+        assert_eq!(late.unwrap_err(), START_SUPERSEDED);
+        assert!(!launched);
+    }
+
+    #[test]
+    fn the_quit_deadline_outlasts_a_graceful_stop() {
+        assert!(QUIT_DEADLINE > GRACEFUL_STOP, "quit must reach the process-group SIGKILL");
     }
 
     #[test]

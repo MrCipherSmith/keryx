@@ -174,7 +174,7 @@ Wire details the sections above left open, as built (`src/acp/server.ts`,
 |---|---|
 | `locator.rs` | resolve the keryx binary: bundled sidecar (`<dir of current_exe>/keryx`, i.e. `Keryx.app/Contents/MacOS/keryx`), `keryx` on the login-shell `PATH`, or an explicit path, per settings |
 | `shellenv.rs` | capture the login-shell environment once (`$SHELL -ilc 'env -0'`, 5 s timeout) so GUI-launched keryx sees `PATH` and provider keys from shell rc files |
-| `process.rs` | spawn `keryx acp --profile shell` in its own process group with the project folder as cwd; stop = close stdin, SIGTERM, wait 6.5 s, SIGKILL the group |
+| `process.rs` | spawn `keryx acp --profile shell` in its own process group with the project folder as cwd; stop = close stdin, SIGTERM, wait 9.5 s, SIGKILL the group |
 | `framing.rs` | newline-delimited JSON framing; oversized-line guard (16 MiB) |
 | `bridge.rs` | Tauri commands `acp_start(cwd)`, `acp_send(message)`, `acp_stop()`; per-window start lock; emits `acp://message` and `acp://exit` events per window; stops run off the UI thread |
 | `fs.rs` | answers `fs/read_text_file` on a worker thread inside the git toplevel of the opened folder (the same root keryx binds); 8 MiB cap; one error for every outside path. Defence in depth only — keryx's own tools never pass through it |
