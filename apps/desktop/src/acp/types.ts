@@ -65,6 +65,8 @@ export interface ConfigOption {
 export interface SessionFlags {
   archivedAt?: string;
   pinnedAt?: string;
+  /** The flow package directory this session works on. */
+  flow?: string;
 }
 
 export interface SessionInfo {

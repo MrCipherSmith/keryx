@@ -54,6 +54,14 @@ describe("shell profile: organise sessions", () => {
         const cleared = (again.result?.["sessions"] as Array<Record<string, unknown>>).find((s) => s["sessionId"] === id);
         expect(cleared?.["_meta"]).toBeUndefined();
 
+        const linked = await call(h, FLAGS, { sessionId: id, cwd: h.projectDir, flow: "495-2026-11-17-cards" });
+        expect(linked.result?.["flow"]).toBe("495-2026-11-17-cards");
+        const withFlow = await call(h, "session/list", { cwd: h.projectDir });
+        const entry = (withFlow.result?.["sessions"] as Array<Record<string, any>>).find((s) => s["sessionId"] === id);
+        expect(entry?.["_meta"]?.keryx?.flow).toBe("495-2026-11-17-cards");
+        await call(h, FLAGS, { sessionId: id, cwd: h.projectDir, flow: null });
+        expect((await call(h, FLAGS, { sessionId: id, cwd: h.projectDir, flow: 7 })).error?.code).toBe(-32602);
+
         expect((await call(h, FLAGS, { sessionId: id, archived: "yes" })).error?.code).toBe(-32602);
         expect((await call(h, FLAGS, { sessionId: "missing", cwd: h.projectDir, archived: true })).error).toBeDefined();
       } finally {

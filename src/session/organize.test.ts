@@ -38,6 +38,17 @@ describe("session flags", () => {
     expect(setSessionFlags(cwd, id, { archived: false, pinned: false }, dataDir)).toEqual({});
   });
 
+  test("a flow link is stored, replaced and cleared; a path-like name is refused", () => {
+    const { cwd, dataDir } = project();
+    const id = stored(cwd, dataDir);
+    expect(setSessionFlags(cwd, id, { flow: "495-2026-11-17-live-cards" }, dataDir).flow).toBe("495-2026-11-17-live-cards");
+    expect(setSessionFlags(cwd, id, { pinned: true }, dataDir).flow).toBe("495-2026-11-17-live-cards");
+    expect(setSessionFlags(cwd, id, { flow: null }, dataDir).flow).toBeUndefined();
+    for (const bad of ["../etc", "a/b", "-x", "a b", ""]) {
+      expect(() => setSessionFlags(cwd, id, { flow: bad }, dataDir)).toThrow(/not a flow package name/);
+    }
+  });
+
   test("an unreadable flags file reads as none; an unknown session is refused", () => {
     const { cwd, dataDir } = project();
     const id = stored(cwd, dataDir);

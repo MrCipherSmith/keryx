@@ -39,9 +39,9 @@ export const KERYX_ACP_EXTENSION_METHODS = {
   sessionShown: "_keryx/session_shown",
   /**
    * Client → agent request, shell profile: `{ sessionId, cwd?, archived?,
-   * pinned? }` → `{ archivedAt?, pinnedAt? }`. Archives or pins a stored
-   * session (`<sessionDir>/flags.json`); `session/list` reports the flags as
-   * `_meta.keryx.archivedAt` / `pinnedAt`.
+   * pinned?, flow? }` → `{ archivedAt?, pinnedAt?, flow? }`. Archives, pins or
+   * links to a flow package a stored session (`<sessionDir>/flags.json`;
+   * `flow: null` unlinks); `session/list` reports the flags as `_meta.keryx`.
    */
   sessionFlags: "_keryx/session_flags",
   /**

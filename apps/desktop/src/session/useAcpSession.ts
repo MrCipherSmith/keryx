@@ -122,6 +122,27 @@ export function useAcpSession(cwd: string) {
     [flushUpdates],
   );
 
+  /** Flow links waiting for keryx to store a new session (it lists one only after its first save). */
+  const pendingFlow = useRef(new Map<string, string>());
+
+  /** Link `sessionId` to its pending flow; quiet, kept for the next try when keryx does not have the session yet. */
+  const applyPendingFlow = useCallback(
+    async (sessionId: string) => {
+      const l = live.current;
+      const client = l.client;
+      const flow = pendingFlow.current.get(sessionId);
+      if (!client || flow === undefined) return;
+      try {
+        const flags = await client.request<SessionFlags>(SESSION_FLAGS, { sessionId, cwd, flow });
+        pendingFlow.current.delete(sessionId);
+        if (l.client === client) dispatch({ t: "flags", sessionId, flags: flags ?? {} });
+      } catch {
+        /* not stored yet: retried after its turn */
+      }
+    },
+    [cwd, dispatch],
+  );
+
   const refreshSessions = useCallback(async () => {
     const l = live.current;
     const client = l.client;
@@ -214,24 +235,24 @@ export function useAcpSession(cwd: string) {
 
   /** session/new. The new session is added and shown unless the user switched elsewhere meanwhile; a failure changes nothing on screen. */
   const openNew = useCallback(
-    async (client: AcpClient, gen: number): Promise<boolean> => {
+    async (client: AcpClient, gen: number): Promise<string | null> => {
       const l = live.current;
       const intent = l.reg.beginCreate();
       dispatch({ t: "creating", delta: 1 });
       try {
         const r = await client.request<NewSessionResult>("session/new", { cwd, mcpServers: [] });
-        if (l.gen !== gen) return false;
+        if (l.gen !== gen) return null;
         if (typeof r?.sessionId !== "string") throw new Error("keryx returned no session id");
         const show = l.reg.created(r.sessionId, intent);
         dispatch({ t: "created", sessionId: r.sessionId, modes: r.modes, configOptions: r.configOptions, show });
         // Updates keryx may have sent for it before the reply was read.
         for (const u of l.reg.takeOrphans(r.sessionId)) acceptUpdate(u);
-        return true;
+        return r.sessionId;
       } catch (e) {
-        if (l.gen !== gen) return false;
+        if (l.gen !== gen) return null;
         const why = isLeaseError(e) ? "The session is in use by another keryx" : "Could not start a session";
         dispatch({ t: "banner", level: "error", text: `${why}: ${errMessage(e)}` });
-        return false;
+        return null;
       } finally {
         if (l.gen === gen) {
           l.reg.endCreate();
@@ -249,7 +270,7 @@ export function useAcpSession(cwd: string) {
       if (l.gen !== gen) return;
       if (!ok && (!loadId || fallbackToNew)) {
         if (loadId) dispatch({ t: "clearBanners" });
-        ok = await openNew(client, gen);
+        ok = (await openNew(client, gen)) !== null;
         // The reload's lease dialog is moot once the fresh session is up.
         if (ok && loadId && l.gen === gen) setFatal((f) => (f?.kind === "leased" ? null : f));
       }
@@ -425,14 +446,14 @@ export function useAcpSession(cwd: string) {
             // keryx sends no request for a turn after its prompt reply: anything still queued is stale.
             dialogs.dropSession(sessionId);
             dispatch({ t: "busy", sessionId, busy: false });
-            void refreshSessions();
+            void applyPendingFlow(sessionId).finally(() => void refreshSessions());
           }
         }
       })();
       l.reg.turns.set(sessionId, turn);
       return true;
     },
-    [dialogs, dispatch, refreshSessions],
+    [dialogs, dispatch, refreshSessions, applyPendingFlow],
   );
 
   /** Stop the shown session's turn only; every other session keeps running. */
@@ -464,15 +485,37 @@ export function useAcpSession(cwd: string) {
     [openLoad, dispatch],
   );
 
-  const newSession = useCallback(async () => {
+  /** A new session, shown when it opens; resolves its id, or null when it could not start. */
+  const newSession = useCallback(async (): Promise<string | null> => {
     const l = live.current;
     const client = l.client;
-    if (!client || !l.usable) return;
+    if (!client || !l.usable) return null;
     setFatal((f) => (f?.kind === "leased" ? null : f));
     dispatch({ t: "clearBanners" });
-    await openNew(client, l.gen);
+    const id = await openNew(client, l.gen);
     void refreshSessions();
+    return id;
   }, [openNew, refreshSessions, dispatch]);
+
+  /**
+   * Work on a flow: in a new session linked to the flow (`target` "new"), or in a session already
+   * linked to it. Resolves the session that is now shown, or null when none could be opened.
+   */
+  const workOnFlow = useCallback(
+    async (flowDir: string, target: "new" | string): Promise<string | null> => {
+      if (target !== "new") {
+        await loadSession(target);
+        return target;
+      }
+      const id = await newSession();
+      if (id) {
+        pendingFlow.current.set(id, flowDir);
+        await applyPendingFlow(id);
+      }
+      return id;
+    },
+    [loadSession, newSession, applyPendingFlow],
+  );
 
   const setMode = useCallback(
     async (modeId: string) => {
@@ -510,7 +553,7 @@ export function useAcpSession(cwd: string) {
 
   /** Archive/unarchive or pin/unpin a stored session. Errors show as a banner. */
   const setFlags = useCallback(
-    async (sessionId: string, change: { archived?: boolean; pinned?: boolean }) => {
+    async (sessionId: string, change: { archived?: boolean; pinned?: boolean; flow?: string | null }) => {
       const l = live.current;
       const client = l.client;
       if (!client || !l.usable) return;
@@ -596,6 +639,7 @@ export function useAcpSession(cwd: string) {
     reopen,
     setFlags,
     trashSession,
+    workOnFlow,
     setMode,
     setModel,
     restart,

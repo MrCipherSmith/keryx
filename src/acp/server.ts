@@ -2043,7 +2043,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   }
 
   function flagsMeta(flags: SessionFlags): { _meta?: { keryx: SessionFlags } } {
-    return flags.archivedAt !== undefined || flags.pinnedAt !== undefined ? { _meta: { keryx: flags } } : {};
+    return flags.archivedAt !== undefined || flags.pinnedAt !== undefined || flags.flow !== undefined ? { _meta: { keryx: flags } } : {};
   }
 
   /** The `sessionId` and optional `cwd` of an organise request; `cwd` defaults like `session/list`'s. */
@@ -2062,7 +2062,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     refuse(invalidRequest({ reason: `${method}: ${error instanceof Error ? error.message : String(error)}`, method, sessionId }));
   }
 
-  /** `_keryx/session_flags` (shell profile): archive/unarchive, pin/unpin a stored session. */
+  /** `_keryx/session_flags` (shell profile): archive/unarchive, pin/unpin a stored session, link it to a flow. */
   function handleSessionFlags(params: unknown): SessionFlags {
     const method = KERYX_ACP_EXTENSION_METHODS.sessionFlags;
     const { obj, sessionId, cwd } = organiseTarget(params, method);
@@ -2072,6 +2072,11 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       if (value === undefined) continue;
       if (typeof value !== "boolean") refuse(invalidParams(`${method}: ${key} must be a boolean or omitted`, { received: value }));
       change[key] = value;
+    }
+    const flow = obj["flow"];
+    if (flow !== undefined) {
+      if (flow !== null && typeof flow !== "string") refuse(invalidParams(`${method}: flow must be a string, null or omitted`, { received: flow }));
+      change.flow = flow;
     }
     try {
       return setSessionFlags(cwd, sessionId, change, options.dataDir);

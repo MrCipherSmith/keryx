@@ -19,12 +19,19 @@ export interface SessionFlags {
   archivedAt?: string;
   /** ISO time the session was pinned; absent when it is not. */
   pinnedAt?: string;
+  /** The flow package (its directory name) this session works on; absent when none. */
+  flow?: string;
 }
 
 export interface SessionFlagsChange {
   archived?: boolean;
   pinned?: boolean;
+  /** A flow package directory name to link, or null to unlink. */
+  flow?: string | null;
 }
+
+/** A flow package directory name as keryx writes them (`<id>-<date>-<slug>`): no path, no shell metacharacters. */
+export const FLOW_REF = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,199}$/;
 
 const FLAGS_FILE = "flags.json";
 
@@ -41,6 +48,7 @@ export function readSessionFlags(dir: string): SessionFlags {
     return {
       ...(isIso(raw["archivedAt"]) ? { archivedAt: raw["archivedAt"] } : {}),
       ...(isIso(raw["pinnedAt"]) ? { pinnedAt: raw["pinnedAt"] } : {}),
+      ...(typeof raw["flow"] === "string" && FLOW_REF.test(raw["flow"]) ? { flow: raw["flow"] } : {}),
     };
   } catch {
     return {};
@@ -80,6 +88,11 @@ export function setSessionFlags(
   if (change.archived === false) delete next.archivedAt;
   if (change.pinned === true) next.pinnedAt ??= stamp;
   if (change.pinned === false) delete next.pinnedAt;
+  if (typeof change.flow === "string") {
+    if (!FLOW_REF.test(change.flow)) throw new Error(`not a flow package name: ${change.flow}`);
+    next.flow = change.flow;
+  }
+  if (change.flow === null) delete next.flow;
   writeFlags(dir, next);
   return next;
 }

@@ -173,14 +173,22 @@ Serif, Mono), the code font, the text size and the conversation width
 - ⌘F searches by title or id; there is a board and a list view;
 - a card opens the detail panel: Overview, Criteria, Tasks, Journal, Gates.
 
-Actions in the detail panel run `keryx flow …` in the project: Start,
-Block/Unblock, add a task, record a task attempt, mark a task done, freeze the
-criteria (asks for confirmation) and show the next task. Commands with their
-own gates (`complete`, `confirm`, `recover`, `implemented`, `ac update`,
-`ac reseal`) are offered as "copy command" for a terminal.
+Actions in the detail panel run `keryx flow …` in the project. The state
+buttons sit together under the title in lifecycle order — Freeze criteria
+(asks for confirmation), Start, Block/Unblock, Next task — and a button keryx
+would refuse in the flow's current state is greyed out with a tooltip saying
+why (Start stays off until the criteria are frozen); a line under them names
+the next step. Adding a task, recording an attempt and marking a task done
+are in the Tasks tab. Commands with their own gates (`complete`, `confirm`,
+`recover`, `implemented`, `ac update`, `ac reseal`) are offered as "copy
+command" for a terminal.
 
-**Work on this flow** switches to the session and fills the composer with a
-prompt to continue that flow. Nothing is sent until you press Enter.
+**Work on this flow** opens a new session linked to the flow and fills its
+composer with a prompt to continue it; nothing is sent until you press
+Enter. Once a flow has linked sessions, the button asks whether to continue
+in one of them or start another new one, so you can create several flows in
+one session and work on each in its own. The link is kept by keryx with the
+session (`flags.json`).
 
 The board refreshes when a `flow.json` changes (checked every 2 seconds) and
 when the window gets focus.

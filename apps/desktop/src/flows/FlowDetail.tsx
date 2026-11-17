@@ -13,6 +13,7 @@ import { absoluteTime, copyText, errMessage, prLabel, relativeTime } from "../li
 import { Icon, type IconName } from "../components/Icon";
 import { InlineMarkdown, Markdown } from "../components/Markdown";
 import { Dialog, EmptyState, Sheet, Spinner } from "../components/ui";
+import { Menu, type MenuItem } from "../components/Menu";
 import { useToast } from "../components/Toasts";
 import { StatusPill } from "./FlowsBoard";
 import { flowRef, nextStepHint, stateActions, terminalCommands, validateArg, type StateActionId } from "./model";
@@ -32,8 +33,17 @@ interface Props {
   card: FlowCard;
   version: number;
   onClose: () => void;
-  onWorkOn: () => void;
+  /** Sessions already linked to this flow, newest first. */
+  linked: LinkedSession[];
+  onWorkOn: (target: "new" | string) => void;
   onChanged: () => void;
+}
+
+/** A session the flow is linked to, as the "Work on this flow" menu lists it. */
+export interface LinkedSession {
+  id: string;
+  title: string;
+  updatedAt: string | null;
 }
 
 type Form =
@@ -44,7 +54,9 @@ type Form =
   | { kind: "commands" }
   | { kind: "next"; output: string };
 
-export function FlowDetailSheet({ cwd, card, version, onClose, onWorkOn, onChanged }: Props) {
+export function FlowDetailSheet({ cwd, card, version, onClose, linked, onWorkOn, onChanged }: Props) {
+  const workBtn = useRef<HTMLButtonElement>(null);
+  const [workMenu, setWorkMenu] = useState(false);
   const [detail, setDetail] = useState<FlowDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("overview");
@@ -173,9 +185,37 @@ export function FlowDetailSheet({ cwd, card, version, onClose, onWorkOn, onChang
           ) : null}
         </dl>
         <div className="sheet-actions">
-          <button className="btn btn-primary" onClick={onWorkOn}>
+          <button
+            ref={workBtn}
+            className="btn btn-primary"
+            onClick={() => (linked.length === 0 ? onWorkOn("new") : setWorkMenu((m) => !m))}
+            aria-haspopup={linked.length > 0 ? "menu" : undefined}
+            aria-expanded={linked.length > 0 ? workMenu : undefined}
+            title={linked.length === 0 ? "Start a new session for this flow" : "Continue in a linked session or start a new one"}
+          >
             <Icon name="chat" size={14} /> Work on this flow
+            {linked.length > 0 ? <Icon name="chevronDown" size={12} /> : null}
           </button>
+          {workMenu ? (
+            <Menu
+              anchor={workBtn.current}
+              label="Work on this flow"
+              width={300}
+              onClose={() => setWorkMenu(false)}
+              items={[
+                { kind: "header", id: "h-linked", label: "Continue in a linked session" },
+                ...linked.slice(0, 5).map<MenuItem>((sx) => ({
+                  id: `s-${sx.id}`,
+                  label: <span className="truncate">{sx.title}</span>,
+                  description: sx.updatedAt ? relativeTime(sx.updatedAt) : undefined,
+                  icon: "chat",
+                  onSelect: () => onWorkOn(sx.id),
+                })),
+                { kind: "separator", id: "sep" },
+                { id: "new", label: "Start in a new session", icon: "plus", onSelect: () => onWorkOn("new") },
+              ]}
+            />
+          ) : null}
           <span className="grow" />
           <button className="btn btn-ghost" onClick={() => setForm({ kind: "commands" })} title="Commands that run in a terminal">
             <Icon name="terminal" size={14} /> Terminal commands

@@ -18,6 +18,9 @@ import { CommandPalette, type PaletteItem } from "./shell/CommandPalette";
 import { SettingsView } from "./shell/SettingsView";
 import { Welcome } from "./shell/Welcome";
 import { FlowsBoard } from "./flows/FlowsBoard";
+import type { LinkedSession } from "./flows/FlowDetail";
+import { sessionFlags } from "./acp/types";
+import type { FlowCard } from "./platform/commands";
 import { laneOf, workPrompt } from "./flows/model";
 import { useFlows } from "./flows/useFlows";
 import { AskUserDialog, FatalDialog, PermissionDialog } from "./session/Approvals";
@@ -157,6 +160,25 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
     setView("session");
     requestAnimationFrame(() => composer.current?.setText(text));
   }, []);
+
+  /** Sessions linked to a flow package (their `_meta.keryx.flow`), newest first. */
+  const linkedSessions = useCallback(
+    (dir: string): LinkedSession[] =>
+      state.sessions
+        .filter((x) => sessionFlags(x).flow === dir && sessionFlags(x).archivedAt === undefined)
+        .map((x) => ({ id: x.sessionId, title: x.title?.trim() || "Untitled session", updatedAt: x.updatedAt ?? null })),
+    [state.sessions],
+  );
+
+  /** Work on a flow: a new session linked to it gets the work prompt; a linked one is just shown. */
+  const workOn = useCallback(
+    async (card: FlowCard, target: "new" | string) => {
+      setView("session");
+      const id = await s.workOnFlow(card.dir, target);
+      if (id && target === "new") fillComposer(workPrompt(card));
+    },
+    [s, fillComposer],
+  );
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -303,7 +325,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       </div>
       {view === "flows" ? (
         <div className="view">
-          <FlowsBoard cwd={cwd} flows={flows} onWorkOn={(c) => fillComposer(workPrompt(c))} />
+          <FlowsBoard cwd={cwd} flows={flows} linkedSessions={linkedSessions} onWorkOn={(c, target) => void workOn(c, target)} />
         </div>
       ) : null}
       {view === "settings" ? (
