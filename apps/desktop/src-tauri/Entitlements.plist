@@ -2,14 +2,16 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
   Hardened-runtime entitlements for the Developer ID build (bundle.macOS.entitlements).
-  The bundled keryx sidecar is a `bun build --compile` executable:
+  No double hyphen may appear in this comment: codesign's XML parser (AMFI)
+  rejects it, as the XML spec does, while plutil -lint accepts it.
+  The bundled keryx sidecar is a compiled bun executable (bun build, compile flag):
   - allow-jit, allow-unsigned-executable-memory: JavaScriptCore's JIT maps
     writable+executable memory; the hardened runtime refuses it without these.
   - disable-library-validation: the compiled keryx extracts native libraries it
     embeds (for example the @opentui/core platform library) and dlopens them at
     run time; they are not signed by this team, so library validation would
     refuse to load them.
-  desktop-release.yml checks the signed sidecar carries these and runs `--version`.
+  desktop-release.yml checks the signed sidecar carries these and runs its version check.
 -->
 <plist version="1.0">
 <dict>
