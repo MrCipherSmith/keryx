@@ -12,6 +12,7 @@ import {
   type LoginChallenge,
 } from "../acp/providers";
 import { acpStart, acpTransport, acpStop, listenBridge, setWindowTitle, versionCheck } from "../platform/commands";
+import { panelMcpServers } from "../platform/panels";
 import {
   canOrganizeSessions,
   hasLiveSessions,
@@ -253,7 +254,7 @@ export function useAcpSession(cwd: string) {
       l.reg.beginLoad(sessionId);
       dispatch({ t: "loadStart", sessionId });
       try {
-        const r = await client.request<LoadSessionResult>("session/load", { sessionId, cwd, mcpServers: [] });
+        const r = await client.request<LoadSessionResult>("session/load", { sessionId, cwd, mcpServers: await panelMcpServers(cwd) });
         if (l.gen !== gen) return false;
         const show = l.reg.loadDone(sessionId);
         dispatch({ t: "loadDone", sessionId, modes: r?.modes, configOptions: r?.configOptions, show });
@@ -277,7 +278,7 @@ export function useAcpSession(cwd: string) {
       const intent = l.reg.beginCreate();
       dispatch({ t: "creating", delta: 1 });
       try {
-        const r = await client.request<NewSessionResult>("session/new", { cwd, mcpServers: [] });
+        const r = await client.request<NewSessionResult>("session/new", { cwd, mcpServers: await panelMcpServers(cwd) });
         if (l.gen !== gen) return null;
         if (typeof r?.sessionId !== "string") throw new Error("keryx returned no session id");
         const show = l.reg.created(r.sessionId, intent);

@@ -39,3 +39,13 @@
 }
 .code-run:hover, .tool-run:hover { border-color: var(--accent); }
 .tool-label .tool-run { margin-left: 8px; text-transform: none; letter-spacing: 0; vertical-align: 1px; }
+
+.browser-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.browser-bar { display: flex; align-items: center; gap: 2px; padding: 4px var(--sp-2); border-bottom: 1px solid var(--border); flex: none; }
+.browser-address {
+  flex: 1; min-width: 0; height: 24px; margin-left: 4px; padding: 0 8px; border: 1px solid var(--border); border-radius: var(--r-md);
+  font: var(--fs-sm) var(--font); color: var(--fg); background: var(--bg-surface); outline: none;
+}
+.browser-address:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.browser-error { display: flex; align-items: center; gap: 6px; padding: 6px var(--sp-2); font-size: var(--fs-sm); color: var(--danger); border-bottom: 1px solid var(--border); flex: none; }
+.browser-body { position: relative; flex: 1; min-height: 0; display: flex; background: var(--bg-surface); }

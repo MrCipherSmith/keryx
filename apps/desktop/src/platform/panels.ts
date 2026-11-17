@@ -30,3 +30,59 @@ export async function ptyAttach(id: number, onEvent: (e: PtyEvent) => void): Pro
 
 /** A tab the agent opened through the panel MCP server. */
 export const onAgentTerminal = (handler: (tab: PtyTab) => void): Promise<Unlisten> => listen<PtyTab>("panel://terminal", handler);
+
+// ---- browser tabs ----------------------------------------------------------
+
+export interface BrowserTab {
+  id: number;
+  url: string;
+  title: string;
+  loading: boolean;
+  active: boolean;
+}
+
+export interface Bounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export type BrowserEvent = { kind: "tab"; tab: BrowserTab } | { kind: "closed"; id: number } | { kind: "show"; id: number };
+
+export const browserList = () => invoke<BrowserTab[]>("browser_list");
+export const browserOpen = (cwd: string, url: string) => invoke<BrowserTab>("browser_open", { cwd, url });
+export const browserNavigate = (id: number, url: string) => invoke<void>("browser_navigate", { id, url });
+export const browserGo = (id: number, action: "back" | "forward" | "reload") => invoke<void>("browser_go", { id, action });
+export const browserClose = (id: number) => invoke<void>("browser_close", { id });
+export const browserSelect = (id: number) => invoke<void>("browser_select", { id });
+export const browserLayout = (bounds: Bounds | null, visible: boolean) => invoke<void>("browser_layout", { bounds, visible });
+export const onBrowserEvent = (handler: (e: BrowserEvent) => void): Promise<Unlisten> => listen<BrowserEvent>("panel://browser", handler);
+
+// ---- the panel's MCP server, for keryx sessions -----------------------------
+
+export interface McpServerEntry {
+  name: string;
+  command: string;
+  args: string[];
+  env: Array<{ name: string; value: string }>;
+}
+
+const entries = new Map<string, Promise<McpServerEntry[]>>();
+
+/** `mcpServers` for session/new and session/load: the side panel's tools inside the app, none elsewhere. */
+export function panelMcpServers(cwd: string): Promise<McpServerEntry[]> {
+  if (!isTauri()) return Promise.resolve([]);
+  let p = entries.get(cwd);
+  if (!p) {
+    p = invoke<McpServerEntry>("panel_mcp_entry", { cwd })
+      .then((e) => [e])
+      .catch((err: unknown) => {
+        entries.delete(cwd);
+        console.warn("side panel tools unavailable:", err);
+        return [];
+      });
+    entries.set(cwd, p);
+  }
+  return p;
+}

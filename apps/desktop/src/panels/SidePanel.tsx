@@ -1,4 +1,5 @@
-import { lazy, Suspense, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { onAgentTerminal, onBrowserEvent } from "../platform/panels";
 import { Icon } from "../components/Icon";
 import { setPrefs, SIDE_PANEL_MAX, SIDE_PANEL_MIN, usePrefs, type SidePanelTab } from "../lib/prefs";
 import { Spinner } from "../components/ui";
@@ -11,9 +12,27 @@ const TABS: Array<{ id: SidePanelTab; label: string; icon: "terminal" | "globe" 
   { id: "browser", label: "Browser", icon: "globe" },
 ];
 
+/** The agent used a panel tool: show that tab of the panel, even when the panel is closed. */
+function useAgentReveal(): void {
+  useEffect(() => {
+    let live = true;
+    const offs: Array<() => void> = [];
+    const keep = (u: () => void) => (live ? offs.push(u) : u());
+    void onAgentTerminal(() => setPrefs({ sidePanel: "terminal" })).then(keep);
+    void onBrowserEvent((e) => {
+      if (e.kind === "show") setPrefs({ sidePanel: "browser" });
+    }).then(keep);
+    return () => {
+      live = false;
+      offs.forEach((u) => u());
+    };
+  }, []);
+}
+
 /** The right side panel of a project window (D-13): terminal and browser tabs. */
 export function SidePanel({ cwd }: { cwd: string }) {
   const prefs = usePrefs();
+  useAgentReveal();
   const tab = prefs.sidePanel;
   const panel = useRef<HTMLElement>(null);
   // A tab is mounted once first shown (a terminal is not started for a panel opened on the browser).

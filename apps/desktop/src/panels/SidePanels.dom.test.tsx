@@ -3,7 +3,8 @@ import type { Root } from "react-dom/client";
 import { registerDom, unregisterDom } from "../test/dom";
 import type { PtyTab } from "../platform/panels";
 
-// The host side and xterm are replaced: this checks the panel's wiring, not the PTY.
+// The host side and xterm are replaced: this checks the panel's wiring, not the PTY. bun's module
+// mocks hold for the whole test run, so every export other files import is stubbed too.
 const calls: Array<[string, ...unknown[]]> = [];
 let tabs: PtyTab[] = [];
 let nextId = 1;
@@ -22,6 +23,15 @@ mock.module("../platform/panels", () => ({
   ptyResize: async () => {},
   ptyAttach: async () => tab(0),
   onAgentTerminal: async () => () => {},
+  onBrowserEvent: async () => () => {},
+  browserList: async () => [],
+  browserOpen: async (cwd: string, url: string) => (calls.push(["bopen", cwd, url]), { id: 9, url: "http://localhost:3000/", title: "", loading: true, active: true }),
+  browserNavigate: async (id: number, url: string) => void calls.push(["bnav", id, url]),
+  browserGo: async () => {},
+  browserClose: async () => {},
+  browserSelect: async () => {},
+  browserLayout: async () => {},
+  panelMcpServers: async () => [],
 }));
 mock.module("./TermView", () => ({
   TermView: ({ id, active }: { id: number; active: boolean }) => {
@@ -37,6 +47,7 @@ let createElement: typeof import("react").createElement;
 let TerminalPanel: typeof import("./TerminalPanel").TerminalPanel;
 let ToastProvider: typeof import("../components/Toasts").ToastProvider;
 let bus: typeof import("./panelBus");
+let browser: typeof import("./BrowserPanel");
 
 beforeAll(async () => {
   registerDom();
@@ -47,6 +58,7 @@ beforeAll(async () => {
   TerminalPanel = (await import("./TerminalPanel")).TerminalPanel;
   ToastProvider = (await import("../components/Toasts")).ToastProvider;
   bus = await import("./panelBus");
+  browser = await import("./BrowserPanel");
   host = document.createElement("div");
   document.body.append(host);
   root = client.createRoot(host);
@@ -91,4 +103,37 @@ test("reopening the panel reattaches to running tabs instead of starting a shell
   await flush();
   expect(calls.some((c) => c[0] === "open")).toBe(false);
   expect(host.querySelector('[data-term="7"]')).not.toBeNull();
+});
+
+test("the browser opens a tab from the address bar, then navigates that tab", async () => {
+  await act(() => root.render(createElement("div")));
+  calls.length = 0;
+  await act(() => root.render(createElement(browser.BrowserPanel, { cwd: "/proj", visible: true })));
+  await flush();
+  const addr = host.querySelector<HTMLInputElement>('input[aria-label="Address"]')!;
+  const form = host.querySelector<HTMLFormElement>("form.browser-bar")!;
+  const type = async (v: string) => {
+    await act(async () => {
+      const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+      set.call(addr, v);
+      addr.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => form.requestSubmit());
+    await flush();
+  };
+  await type("localhost:3000");
+  expect(calls).toContainEqual(["bopen", "/proj", "localhost:3000"]);
+  expect(host.querySelector('[role="tab"][aria-selected="true"]')!.textContent).toContain("localhost:3000");
+  await type("localhost:3000/about");
+  expect(calls).toContainEqual(["bnav", 9, "localhost:3000/about"]);
+});
+
+test("browser tab labels and updates", () => {
+  const t = { id: 1, url: "http://localhost:5173/x", title: "", loading: false, active: false };
+  expect(browser.tabLabel(t)).toBe("localhost:5173");
+  expect(browser.tabLabel({ ...t, title: " App " })).toBe("App");
+  const list = browser.applyBrowserTab([t], { ...t, title: "Loaded" });
+  expect(list).toHaveLength(1);
+  expect(list[0]!.title).toBe("Loaded");
+  expect(browser.applyBrowserTab(list, { ...t, id: 2 })).toHaveLength(2);
 });
