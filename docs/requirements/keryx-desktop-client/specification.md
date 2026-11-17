@@ -1,5 +1,5 @@
 # Keryx Desktop Client — Specification
-Version: 0.2.0
+Version: 0.3.0
 
 ## 1. Identity
 
@@ -166,6 +166,150 @@ Wire details the sections above left open, as built (`src/acp/server.ts`,
   a keryx without it as too old. The `editor` profile keeps every session
   until the connection ends.
 
+### 3.9 M2 part 1 — commands, subagents, tasks (proposed 2026-11-17)
+
+Status: proposed, awaiting the owner's confirmation of scope and order
+(implementation-plan M2a). Decisions D-10..D-12.
+
+#### 3.9.1 `_keryx/command` (client → agent request, `shell` profile)
+
+```json
+{ "sessionId": "…", "name": "tasks", "args": "kill t3" }
+```
+
+Result `{ "text": "<what the shell would print>", "_meta": { "keryx": { "effects": [...] } } }`.
+`effects` names state the command changed so the client can refresh without
+parsing text: `mode`, `model`, `config`, `plan`, `transcript` (after
+`/compact`, `/rewind`), `tasks`. A command keryx does not serve is a JSON-RPC
+error `-32602` naming it; a known command refused in the current state
+(busy, lease lost, `KERYX_REWIND=off`) answers `{ text }` with the reason and
+`_meta.keryx.refused: true`.
+
+The request is not a turn: it does not take the session's prompt slot, its
+text is not added to the model's history, and it can run while a turn is
+running. During a turn it follows `src/tui/busy-dispatch.ts`: commands the
+shell runs while busy run; commands the shell refuses while busy
+(`BUSY_REFUSED_COMMANDS`: `/new`, `/clear`, `/resume`, `/sessions`,
+`/rewind`) and commands the shell would queue are refused with the shell's
+own wording. Text-only `session/prompt` slash handling (§3.7) stays for
+editors; the desktop sends commands only through `_keryx/command` (D-10).
+
+Implementation: one served table in `src/acp/commands.ts`
+(`ACP_SHELL_SLASH_COMMANDS`) built from `AGENT_SLASH_COMMANDS`, each row
+naming its runner. Runners reuse the readline/text functions the inventory
+found (`runTasksCommand`, `compactSession`, `createRewindReadlineCommand`,
+`buildDoctorReport`, `formatFlowListText`, `conversationHistoryText`,
+`runTrailCommand`, `runNotesCommand`, `runDiagCommand`, `runGoalCommand`,
+`executePlanCommand`, `parseDemoteCommand`/`demoteTask`,
+`permissionsSlashText`, `approvalsSlashText`, `remotePolicyText`,
+`runMcpTrustCommand`, `externalDiffSlashText` (list only), the `run*ForShell`
+Jev one-shots, `renderReviewsText`, `renderSetupSlash`, `formatSettingsTable`
+and the readline status texts of `/channels`, `/intake`, `/remote-control`,
+`/rendering`). No TUI module is imported for its renderer; where a runner
+lives in `src/tui/` and pulls OpenTUI, it moves to a neutral module first.
+`ACP_TUI_ONLY_COMMANDS` drops `/approvals`, `/permissions`, `/remote-policy`,
+`/external-diff`, `/mcp` (served as their text subsets).
+
+#### 3.9.2 `available_commands_update` in the `shell` profile
+
+Lists every served command plus the client-handled ones, each with
+`_meta.keryx = { group, surface, busy }`:
+
+- `group`: the `HELP_GROUPS` group, for a grouped palette.
+- `surface`: `text` (run with `_keryx/command`), `dialog` (the client opens
+  its own dialog: `/connect`, `/search-provider`), `client` (the client acts
+  alone: `/new`, `/clear` → `session/new`; `/resume`, `/sessions` → session
+  list; `/interrupt` → `session/cancel`; `/mode` → mode picker; `/model` →
+  model picker).
+- `busy`: `run` or `refuse`, from `busy-dispatch.ts`.
+
+Not advertised (D in the inventory): `/think`, `/expand`, `/copy`, `/theme`,
+`/game`, `/exit`, `/quit`, `/workspace`, `/integrate`. Picker and modal
+commands with no text path (`/routing`, `/ci`, `/conform`, `/task`,
+`/review`, `/product`, `/governance`, `/triggers`, `/schedule`,
+`/schedules`, `/autoreview`, `/jevprofile`, `/ac`, `/queue`, `/delegate`,
+bare `/bus`) are M2b.
+
+#### 3.9.3 Provider connection — `_keryx/providers/*` (D-11)
+
+`/connect` opens the client's Providers dialog. It needs no terminal: every
+step already exists outside the TUI (`detectProviders`,
+`PROVIDER_AUTH_CATALOG`, `testProviderConnection`, `disconnectProvider`,
+`saveApiKey`, `loginDeviceCode`, `saveCustomCompatProvider`,
+`resolveModelsForPicker`); `runProviderConnectSequence` is re-expressed as
+these requests.
+
+| Method | Params | Result |
+|---|---|---|
+| `_keryx/providers/list` | `{}` | `{ providers: [{ id, label, connected, authMethods: ["api-key"\|"device-code"\|"none"], needsBaseUrl, baseUrl?, refusal? }] }` |
+| `_keryx/providers/test` | `{ providerId }` | `{ ok, models?: number, error? }` |
+| `_keryx/providers/disconnect` | `{ providerId }` | `{ sharedEnvWith: [id] }` |
+| `_keryx/providers/connect` | `{ providerId, method: "api-key", apiKey, baseUrl? }` or custom `{ custom: { name, baseUrl, apiKey? } }` | `{ ok, error?, retry?: "credential"\|"base-url" }` |
+| `_keryx/providers/login` | `{ providerId }` (device code) | answered when the login ends: `{ outcome: "connected"\|"cancelled"\|"failed", error? }` |
+| `_keryx/providers/login_cancel` | `{ loginId }` | `{}` |
+
+During a login keryx sends the notification
+`_keryx/providers/login_challenge { loginId, providerId, userCode,
+verificationUri, verificationUriComplete?, instructions? }`; the client shows
+the code, offers Copy and opens the URL in the system browser. keryx polls and
+writes the grant exactly as the shell does (`auth.json`, 0600). The API key
+travels only inside the `connect` params over the private stdio pipe; it is
+never echoed, logged or added to the transcript, and keryx's stderr log
+redacts it. After any connect or disconnect keryx sends
+`config_option_update` to every held session so the model list reflects the
+new providers; switching the session's provider stays the client's
+`session/set_config_option model` choice — Connect alone never switches.
+`/search-provider` uses the same pattern with
+`_keryx/search_providers/{list,connect,select}` (key as a secret field).
+
+#### 3.9.4 Subagents (D-12)
+
+`spawn_subagent` is offered in the `shell` profile, native children only
+(`nativeOnly: true`; external runtimes and `/delegate` are M2b). Its own call
+goes through the session's gate (risk `delegate`) like any gated tool;
+children never ask the user (unchanged invariant). The ACP host builds the
+spawn deps the way `keryx shell` does (`makeAgentDeps`, shell.ts), from a
+shared factory extracted from that code rather than a copy.
+
+Each session gets its own `onFleetEvent` closure (never the TUI's
+module-global bridge) that sends
+`_keryx/subagent { sessionId, event }`, where `event` is the shell's
+`SpawnSubagentFleetEvent` unchanged:
+
+- `{ kind: "upsert", id, label, status: "running"|"done"|"failed", detail?, model?, task?, parentToolCallId? }`
+- `{ kind: "log", id, entry: { kind: "task"|"text"|"reasoning"|"tool"|"result"|"system", text } }`
+
+`parentToolCallId` links a subagent to the `spawn_subagent` tool call: the ACP
+host passes the call's `toolCallId` in `InteractiveToolContext` (new optional
+field) and the tool copies it into its upserts. A `log` `text` entry carries the
+whole assistant text so far: the client replaces the subagent's last `text`
+entry when the previous entry is also `text`, else appends. Client limits
+mirror `src/tui/subagent-session.ts` (200 entries, 2,000 characters each).
+Cancelling the turn (`session/cancel`) cancels its subagents; there is no
+per-subagent cancel in M2a. Subagents are not persisted: after `session/load`
+the panel is empty.
+
+#### 3.9.5 Background tasks — `_keryx/tasks/*`
+
+The session's job registry is created with `onEvent`, which sends
+`_keryx/tasks/event { sessionId, event }` for `start`, `phase` and `exit`
+(never `output` chunks). Requests:
+
+| Method | Params | Result |
+|---|---|---|
+| `_keryx/tasks/list` | `{ sessionId }` | `{ tasks: [BackgroundJobInfo minus private] }` |
+| `_keryx/tasks/output` | `{ sessionId, taskId, since? }` | `{ output, nextCursor, missed, status }` (`readOutputSince`, no shared cursor) |
+| `_keryx/tasks/kill` | `{ sessionId, taskId }` | `{ status }` (`kill(id, "operator")`) |
+
+Private tasks are never listed. A released session's tasks are gone (they are
+killed on release, §3.8).
+
+#### 3.9.6 Advertising
+
+All new methods join `KERYX_ACP_EXTENSION_METHODS` and appear in
+`initialize._meta.keryx.extensions`; the client checks for them and hides a
+feature the connected keryx does not advertise.
+
 ## 4. Client side
 
 ### 4.1 Rust core (`apps/desktop/src-tauri/src/`)
@@ -208,6 +352,25 @@ version checks and the flows parsers and argv builder.
 - Dialogs: permission (options from the request; `allow_always` only when
   offered), `ask_user`, incompatible-keryx error, session-leased error with
   a "new session" action.
+
+### 4.2.1 Web view additions (M2a)
+
+- Composer palette: typing `/` opens a grouped, filterable list of every
+  advertised command with its hint; Tab/Enter completes; a `text` command is
+  sent with `_keryx/command` and shown as a command card (input + output) in
+  the transcript; `dialog` and `client` commands open their UI. A command
+  refused while busy shows the reason inline and keeps the draft.
+- Providers dialog (`/connect`, also from the model picker): Connected and
+  Add tabs, Test, Disconnect, API-key field (password input), base URL,
+  custom provider form, device-code panel (code, Copy, Open browser, Cancel).
+- Activity panel (right side, collapsible) with two tabs:
+  - Subagents: one row per subagent (label, status, detail, model), linked
+    from the `spawn_subagent` tool card; selecting one shows its task and
+    transcript (text, reasoning, tool, result entries).
+  - Tasks: one row per task (command, status, phase, elapsed, exit code);
+    selecting one shows its output (polled with `_keryx/tasks/output` while
+    shown and running); Kill with a confirmation.
+  - Badges for running subagents and tasks per session in the sidebar.
 
 ### 4.3 Client capabilities sent at `initialize`
 
@@ -258,3 +421,15 @@ version checks and the flows parsers and argv builder.
 | AC10 | `.dmg` builds locally on arm64 | exec `bun run desktop:build` |
 | AC11 | installed app completes a real turn with an approved `shell_exec` | judged |
 | AC12 | release workflow present and reviewed | judged |
+
+## 8. Acceptance criteria (M2a)
+
+| # | Criterion | Verification |
+|---|---|---|
+| AC13 | `_keryx/command` runs every `text` row, refuses per busy rules, never touches model history; `available_commands_update` carries `_meta.keryx` | exec `bun test src/acp/shell-commands.test.ts` |
+| AC14 | `_keryx/providers/*`: list, api-key connect (key never in any outbound message or log), device-code login with challenge and cancel against a fake OAuth server, disconnect, `config_option_update` after | exec `bun test src/acp/shell-providers.test.ts` |
+| AC15 | `spawn_subagent` offered; `_keryx/subagent` events carry `sessionId` and `parentToolCallId`; cancel reaches children; children never request permission | exec `bun test src/acp/shell-subagents.test.ts` |
+| AC16 | `_keryx/tasks/list/output/kill` and `_keryx/tasks/event`; private tasks hidden | exec `bun test src/acp/shell-tasks.test.ts` |
+| AC17 | `editor` profile unchanged | invariant `bun test src/acp/editor-profile-golden.test.ts` |
+| AC18 | palette, Providers dialog, Activity panel wiring | exec `cd apps/desktop && bun test src` (happy-dom `*.dom.test.tsx`) |
+| AC19 | `.dmg` builds; `/connect` (api key), `/tasks`, `/compact`, a subagent run and a task kill clicked through in the installed app | judged |
