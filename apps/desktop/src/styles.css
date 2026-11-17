@@ -146,6 +146,9 @@ button { font: inherit; }
 .session-item.is-current { background: var(--bg-selected); }
 .session-item-title { flex: 1; }
 .session-item-time { flex: none; font-size: var(--fs-xs); color: var(--fg-subtle); }
+.session-item-mark { flex: none; display: inline-flex; align-items: center; align-self: center; color: var(--fg-subtle); }
+.session-item-mark.is-waiting { color: var(--warn); }
+.session-item.is-released .session-item-title { color: var(--fg-muted); }
 .sidebar-empty { padding: var(--sp-3) var(--sp-2); color: var(--fg-muted); font-size: var(--fs-sm); line-height: 1.45; }
 .sidebar-float { position: absolute; inset: 0; z-index: 20; background: var(--bg-overlay); animation: fade-in var(--dur) ease-out; }
 .sidebar-float .session-sidebar { width: 280px; height: 100%; box-shadow: var(--shadow-pop); animation: slide-left var(--dur) var(--ease-out); }
@@ -349,14 +352,26 @@ button { font: inherit; }
 .approval-title { font-weight: 600; overflow-wrap: anywhere; }
 .approval-what { display: grid; gap: 4px; margin-bottom: var(--sp-3); }
 .out-pre.is-command { font-size: 12.5px; }
-/* What a call acts on is shown as written: no bidi reordering, left to right whatever it contains. */
-.out-pre.is-faithful { unicode-bidi: plaintext; direction: ltr; text-align: left; }
-.out-pre.is-expanded { max-height: none; }
+/*
+ * What a call acts on is shown in logical order, the order the shell or tool receives it: bidi-override
+ * turns off implicit reordering too, so RTL letters cannot move the text around them (they read
+ * reversed, the price of showing the bytes in order). Explicit bidi controls are escaped by visibleText.
+ */
+.out-pre.is-faithful, .diff.is-faithful .diff-line { unicode-bidi: bidi-override; direction: ltr; text-align: left; }
+.out-pre.is-expanded, .diff-body.is-expanded { max-height: none; }
+.review-box { display: grid; gap: 4px; min-width: 0; }
+.approval-content > .review-box { margin-bottom: var(--sp-3); }
+/* Prose (a question, an option) keeps its own direction, isolated from what is around it. */
+.is-prose { unicode-bidi: isolate; }
 .review-warn { display: flex; align-items: center; gap: 6px; font-size: var(--fs-sm); color: var(--fg-muted); }
 .review-warn.is-unread { color: var(--warn); font-weight: 500; }
 .review-warn .link-btn { margin-left: auto; }
 .approval-why { display: flex; gap: 6px; align-items: flex-start; margin: var(--sp-3) 0 0 !important; font-size: var(--fs-sm); color: var(--fg-muted); }
-.approval-why .icon { margin-top: 2px; }
+.approval-why .icon { margin-top: 2px; flex: none; }
+.approval-why ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }
+.approval-content > .inline-banner { margin-bottom: var(--sp-3); }
+.approval-hint { margin: 0 auto 0 0 !important; align-self: center; font-size: var(--fs-sm); color: var(--fg-muted); }
+.approval-hint.is-blocked { color: var(--warn); font-weight: 500; }
 .approval-queue { margin: 4px 0 0 !important; font-size: var(--fs-sm); color: var(--fg-subtle); }
 .approval-foot { display: grid; gap: var(--sp-3); width: 100%; }
 .approval-main { display: flex; justify-content: flex-end; gap: var(--sp-2); }

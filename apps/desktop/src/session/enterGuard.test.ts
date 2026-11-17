@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { askEnter, ENTER_GUARD_MS, permissionEnter, type EnterKey } from "./enterGuard";
+import { ASK_CONTROLS, askEnter, ENTER_GUARD_MS, enterKeyOf, PERMISSION_CONTROLS, permissionEnter, type EnterKey } from "./enterGuard";
 
 const key = (over: Partial<EnterKey> = {}): EnterKey => ({
   key: "Enter",
@@ -33,21 +33,50 @@ describe("askEnter", () => {
 });
 
 describe("permissionEnter", () => {
-  const perm = (over: Partial<EnterKey & { canAllow: boolean; unread: boolean }> = {}) =>
-    permissionEnter({ ...key(), canAllow: true, unread: false, ...over });
+  const allow = { optionId: "allow" };
+  const perm = (over: Partial<EnterKey & { allow: typeof allow | undefined; unread: boolean }> = {}) =>
+    permissionEnter({ ...key(), allow, unread: false, ...over });
 
-  test("approves on a fresh Enter when everything has been seen", () => {
-    expect(perm()).toBe("submit");
+  test("approves the allow option on a fresh Enter when everything has been seen", () => {
+    expect(perm()).toEqual({ verdict: "submit", option: allow });
   });
 
-  test("does not approve while an argument box is partly hidden", () => {
-    expect(perm({ unread: true })).toBe("swallow");
+  test("does not approve while a box is partly hidden", () => {
+    expect(perm({ unread: true })).toEqual({ verdict: "swallow" });
   });
 
   test("never right after open, on repeat, on a control, or without an allow option", () => {
-    expect(perm({ sinceOpenMs: 0 })).toBe("pass");
-    expect(perm({ repeat: true })).toBe("pass");
-    expect(perm({ onControl: true })).toBe("pass");
-    expect(perm({ canAllow: false })).toBe("pass");
+    expect(perm({ sinceOpenMs: 0 })).toEqual({ verdict: "pass" });
+    expect(perm({ repeat: true })).toEqual({ verdict: "pass" });
+    expect(perm({ onControl: true })).toEqual({ verdict: "pass" });
+    expect(perm({ allow: undefined })).toEqual({ verdict: "pass" });
+  });
+
+  test("IME composition, a handled key and other keys pass", () => {
+    expect(perm({ isComposing: true })).toEqual({ verdict: "pass" });
+    expect(perm({ defaultPrevented: true })).toEqual({ verdict: "pass" });
+    expect(perm({ key: "a" })).toEqual({ verdict: "pass" });
+  });
+});
+
+describe("enterKeyOf", () => {
+  const target = (matches: string[]) => ({ closest: (sel: string) => (matches.includes(sel) ? {} : null) });
+
+  test("reads the event, the time since open and the dialog's own control set", () => {
+    const e = { key: "Enter", repeat: false, defaultPrevented: false, nativeEvent: { isComposing: true }, target: target([PERMISSION_CONTROLS]) };
+    expect(enterKeyOf(e, 100, PERMISSION_CONTROLS, 600)).toEqual({
+      key: "Enter",
+      repeat: false,
+      isComposing: true,
+      defaultPrevented: false,
+      sinceOpenMs: 500,
+      onControl: true,
+    });
+    expect(enterKeyOf(e, 100, ASK_CONTROLS, 600).onControl).toBeFalse();
+  });
+
+  test("a target without closest is not a control", () => {
+    const e = { key: "Enter", repeat: false, defaultPrevented: false, target: null };
+    expect(enterKeyOf(e, 0, ASK_CONTROLS, 1).onControl).toBeFalse();
   });
 });

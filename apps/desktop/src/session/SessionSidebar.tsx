@@ -3,12 +3,16 @@ import type { SessionInfo } from "../acp/types";
 import { absoluteTime, relativeTime } from "../lib/format";
 import { MOD } from "../lib/prefs";
 import { Icon } from "../components/Icon";
+import { Spinner } from "../components/ui";
+import type { SessionMark } from "./reducer";
 
 interface Props {
   sessions: SessionInfo[];
+  /** Every session the window has, held or released, with its marks. */
+  marks: Readonly<Record<string, SessionMark>>;
+  /** Sessions whose session/load is in flight. */
+  loadingIds: readonly string[];
   currentId: string | null;
-  currentTitle: string | null;
-  busy: boolean;
   ready: boolean;
   onNew: () => void;
   onLoad: (id: string) => void;
@@ -28,13 +32,42 @@ function dayBucket(iso: string | null | undefined): string {
   return d.toLocaleDateString(undefined, { month: "long", year: "numeric" });
 }
 
-export const SessionSidebar = memo(function SessionSidebar({ sessions, currentId, currentTitle, busy, ready, onNew, onLoad, onCollapse }: Props) {
+/** What the sidebar says about a session: working, waiting for you, or loading. */
+function Mark({ mark, loading }: { mark: SessionMark | undefined; loading: boolean }) {
+  if (mark?.waiting) {
+    return (
+      <span className="session-item-mark is-waiting" title="Waiting for your answer" aria-label="Waiting for your answer">
+        <Icon name="alert" size={12} />
+      </span>
+    );
+  }
+  if (mark?.busy || loading) {
+    return (
+      <span className="session-item-mark" title={loading ? "Opening" : "Working"} aria-label={loading ? "Opening" : "Working"}>
+        <Spinner size={11} />
+      </span>
+    );
+  }
+  return null;
+}
+
+function markTitle(mark: SessionMark | undefined, fallback: string): string {
+  if (mark && !mark.held) return "Closed by keryx to save memory; opening it loads it again";
+  return fallback;
+}
+
+export const SessionSidebar = memo(function SessionSidebar({ sessions, marks, loadingIds, currentId, ready, onNew, onLoad, onCollapse }: Props) {
   const [q, setQ] = useState("");
   const list = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return needle ? sessions.filter((s) => (s.title ?? "").toLowerCase().includes(needle)) : sessions;
   }, [sessions, q]);
-  const hasCurrent = currentId !== null && sessions.some((s) => s.sessionId === currentId);
+  // Sessions the window has that keryx has not listed yet (a new one, before its first save).
+  const unlisted = useMemo(() => {
+    const listed = new Set(sessions.map((s) => s.sessionId));
+    return Object.entries(marks).filter(([sid]) => !listed.has(sid));
+  }, [sessions, marks]);
+  const loading = useMemo(() => new Set(loadingIds), [loadingIds]);
 
   let last = "";
   return (
@@ -42,7 +75,7 @@ export const SessionSidebar = memo(function SessionSidebar({ sessions, currentId
       <div className="sidebar-head">
         <h2>Sessions</h2>
         <div className="grow" />
-        <button className="icon-btn" onClick={onNew} disabled={!ready || busy} title={`New session (${MOD}N)`} aria-label="New session">
+        <button className="icon-btn" onClick={onNew} disabled={!ready} title={`New session (${MOD}N)`} aria-label="New session">
           <Icon name="plus" size={16} />
         </button>
         <button className="icon-btn" onClick={onCollapse} title="Hide sessions" aria-label="Hide sessions">
@@ -56,36 +89,46 @@ export const SessionSidebar = memo(function SessionSidebar({ sessions, currentId
         </div>
       ) : null}
       <ul className="session-list">
-        {!hasCurrent && currentId ? (
-          <li>
-            <div className="session-item is-current" aria-current="true">
-              <span className="session-item-title truncate">{currentTitle?.trim() || "New session"}</span>
-              <span className="session-item-time">now</span>
-            </div>
-          </li>
-        ) : null}
+        {unlisted.map(([sid, mark]) => {
+          const current = sid === currentId;
+          return (
+            <li key={sid}>
+              <button
+                className={`session-item${current ? " is-current" : ""}${mark.held ? "" : " is-released"}`}
+                aria-current={current ? "true" : undefined}
+                onClick={() => onLoad(sid)}
+                title={markTitle(mark, "Open in this window")}
+              >
+                <span className="session-item-title truncate">{mark.title?.trim() || "New session"}</span>
+                <Mark mark={mark} loading={loading.has(sid)} />
+                <span className="session-item-time">now</span>
+              </button>
+            </li>
+          );
+        })}
         {list.map((s) => {
           const bucket = dayBucket(s.updatedAt);
           const header = bucket !== last ? bucket : null;
           last = bucket;
           const current = s.sessionId === currentId;
+          const mark = marks[s.sessionId];
           return (
             <li key={s.sessionId}>
               {header ? <div className="session-bucket">{header}</div> : null}
               <button
-                className={`session-item${current ? " is-current" : ""}`}
+                className={`session-item${current ? " is-current" : ""}${mark && !mark.held ? " is-released" : ""}`}
                 aria-current={current ? "true" : undefined}
                 onClick={() => onLoad(s.sessionId)}
-                disabled={busy && !current}
-                title={busy && !current ? "Wait for the current turn to finish" : absoluteTime(s.updatedAt)}
+                title={markTitle(mark, absoluteTime(s.updatedAt))}
               >
-                <span className="session-item-title truncate">{s.title?.trim() || "Untitled session"}</span>
+                <span className="session-item-title truncate">{(mark?.title ?? s.title)?.trim() || "Untitled session"}</span>
+                <Mark mark={mark} loading={loading.has(s.sessionId)} />
                 <span className="session-item-time">{relativeTime(s.updatedAt)}</span>
               </button>
             </li>
           );
         })}
-        {sessions.length === 0 && !currentId ? <li className="sidebar-empty">Sessions you start here are saved by keryx and listed here.</li> : null}
+        {sessions.length === 0 && unlisted.length === 0 ? <li className="sidebar-empty">Sessions you start here are saved by keryx and listed here.</li> : null}
         {sessions.length > 0 && list.length === 0 ? <li className="sidebar-empty">No session matches “{q}”.</li> : null}
       </ul>
     </aside>

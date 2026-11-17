@@ -119,7 +119,33 @@ export interface InitializeResult {
   protocolVersion: number;
   agentInfo?: { name?: string; version?: string } | null;
   agentCapabilities?: Record<string, unknown>;
-  _meta?: { keryx?: { profile?: string; profiles?: string[]; extensions?: string[] } } & Meta;
+  _meta?: { keryx?: { profile?: string; profiles?: string[]; extensions?: string[]; liveSessions?: boolean } } & Meta;
+}
+
+/** ext notification: keryx stopped holding a session for this connection (idle cap); a return to it needs session/load. */
+export const SESSION_RELEASED = "_keryx/session_released";
+export interface SessionReleasedParams {
+  sessionId: string;
+  reason: string;
+}
+
+/** Why keryx asks before a call: `toolCall._meta.keryx.reasons`, only the fields that are set. */
+export interface PermissionReasons {
+  untrustedOrigin?: boolean;
+  credentials?: boolean;
+  destructive?: boolean;
+  publishLease?: boolean;
+  publishLeaseDetail?: string;
+  hcLaunch?: boolean;
+  hookAsk?: boolean;
+  alwaysAsk?: boolean;
+}
+
+/** Whether this keryx keeps every session of a connection alive (`liveSessions`), wherever it advertises it. */
+export function hasLiveSessions(init: InitializeResult): boolean {
+  if (init._meta?.keryx?.liveSessions === true) return true;
+  const caps = init.agentCapabilities?._meta as { keryx?: { liveSessions?: unknown } } | undefined;
+  return caps?.keryx?.liveSessions === true;
 }
 
 export interface NewSessionResult {

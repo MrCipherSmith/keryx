@@ -1,41 +1,31 @@
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { AcpClient, RpcError } from "../acp/client";
+import { acpStart, acpTransport, acpStop, listenBridge, setWindowTitle, versionCheck } from "../platform/commands";
 import {
-  acpStart,
-  acpTransport,
-  acpStop,
-  listenBridge,
-  setWindowTitle,
-  versionCheck,
-} from "../platform/commands";
-import type {
-  AskUserRequest,
-  AskUserResult,
-  ConfigOption,
-  InitializeResult,
-  LoadSessionResult,
-  NewSessionResult,
-  PermissionOutcome,
-  PermissionRequest,
-  SessionInfo,
-  SessionUpdate,
+  hasLiveSessions,
+  SESSION_RELEASED,
+  type AskUserRequest,
+  type AskUserResult,
+  type ConfigOption,
+  type InitializeResult,
+  type LoadSessionResult,
+  type NewSessionResult,
+  type PermissionOutcome,
+  type PermissionRequest,
+  type SessionInfo,
+  type SessionUpdate,
 } from "../acp/types";
-import { initialState, reducer, type Action, type QueuedUpdate } from "./reducer";
-import { NewSessionBuffer, SwitchToken } from "./switchToken";
+import { initialState, reducer, sessionMarks, shownView, type Action, type RoutedUpdate } from "./reducer";
+import { DialogQueue, type PendingAsk, type PendingPermission } from "./dialogQueue";
+import { SessionRegistry } from "./sessionRegistry";
 import { basename } from "../lib/format";
 
-export interface PendingPermission {
-  id: number;
-  req: PermissionRequest;
-  resolve: (o: PermissionOutcome) => void;
-}
-export interface PendingAsk {
-  id: number;
-  req: AskUserRequest;
-  resolve: (r: AskUserResult) => void;
-}
+export type { PendingAsk, PendingPermission } from "./dialogQueue";
+
 export type Fatal =
   | { kind: "incompatible"; found: string; required: string }
+  /** This keryx cannot serve the app at all: no shell profile, or one without live sessions. */
+  | { kind: "noShell"; found: string; reason: "no-profile" | "no-live-sessions" }
   | { kind: "leased"; sessionId: string };
 
 /** keryx answers a leased session with error.data.reason "session-leased"; the anchored text is only a fallback. */
@@ -55,66 +45,42 @@ function errMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-/** What the two halves of a session switch share. */
-interface SwitchContext {
+const CANCELLED: PermissionOutcome = { outcome: "cancelled" };
+
+interface Turn {
   client: AcpClient;
-  /** The switch still owns the token and the connection is the same. */
-  current: () => boolean;
-  load: (sessionId: string) => Promise<LoadSessionResult>;
-  /** No session could be shown: the composer disables itself. */
-  lost: () => void;
-  /** Reload the last settled session (or show none) so the view never points at a dead one. */
-  restore: (target: string | null) => Promise<void>;
+  done: Promise<void>;
 }
 
 interface Live {
   client: AcpClient | null;
-  sessionId: string | null;
   gen: number;
   initialized: boolean;
-  noProfile: boolean;
+  /** This keryx passed the profile, live-sessions and version checks (or the user chose to continue anyway). */
+  usable: boolean;
   unlisten: (() => void) | null;
-  /** The replay of a session/load is running; owned by the switch token that set it. */
-  replaying: boolean;
-  /** Session switches: the token, and whether one is in flight (then the composer must not send). */
-  switches: SwitchToken;
-  /** Updates for a session the client does not know yet, held while a session/new is in flight. */
-  unborn: NewSessionBuffer<SessionUpdate>;
-  /** The last session that finished loading or starting: the one to restore when a switch fails. */
-  settled: string | null;
-  /** The running prompt turn, tagged with its session; null when idle. */
-  turn: { sessionId: string; client: AcpClient; done: Promise<void> } | null;
-  initResult: InitializeResult | null;
+  /** Which sessions keryx holds for this window, their turns, and which one is shown. */
+  reg: SessionRegistry<Turn>;
 }
 
+/**
+ * One window over one `keryx acp --profile shell` connection. Every session the window opens stays
+ * alive in keryx: its turn, tasks and dialogs keep going while another one is on screen. Switching to
+ * a held session is local; only a session the window does not hold (history, or released by keryx's
+ * idle cap) is loaded.
+ */
 export function useAcpSession(cwd: string) {
-  const [state, rawDispatch] = useReducer(reducer, initialState);
-  const [permissions, setPermissions] = useState<PendingPermission[]>([]);
-  const [asks, setAsks] = useState<PendingAsk[]>([]);
+  const [win, rawDispatch] = useReducer(reducer, initialState);
+  const [dialogVersion, setDialogVersion] = useState(0);
+  const dialogsRef = useRef<DialogQueue | null>(null);
+  if (!dialogsRef.current) dialogsRef.current = new DialogQueue(() => setDialogVersion((v) => v + 1));
+  const dialogs = dialogsRef.current;
   const [fatal, setFatal] = useState<Fatal | null>(null);
-  const live = useRef<Live>({
-    client: null,
-    sessionId: null,
-    gen: 0,
-    initialized: false,
-    noProfile: false,
-    unlisten: null,
-    replaying: false,
-    switches: new SwitchToken(),
-    unborn: new NewSessionBuffer<SessionUpdate>(),
-    settled: null,
-    turn: null,
-    initResult: null,
-  });
-  const dialogSeq = useRef(0);
-  const permsRef = useRef<PendingPermission[]>([]);
-  const asksRef = useRef<PendingAsk[]>([]);
-  permsRef.current = permissions;
-  asksRef.current = asks;
+  const live = useRef<Live>({ client: null, gen: 0, initialized: false, usable: false, unlisten: null, reg: new SessionRegistry<Turn>() });
 
   // session/update notifications are queued and applied once per animation frame (a timer covers a
   // hidden window, where frames do not fire), so a long replay or a fast stream is not one render per update.
-  const queue = useRef<QueuedUpdate[]>([]);
+  const queue = useRef<RoutedUpdate[]>([]);
   const flushTimers = useRef({ raf: 0, timeout: 0 });
   const cancelFlush = useCallback(() => {
     const t = flushTimers.current;
@@ -131,8 +97,8 @@ export function useAcpSession(cwd: string) {
     rawDispatch({ t: "updates", updates: batch });
   }, [cancelFlush]);
   const enqueueUpdate = useCallback(
-    (update: SessionUpdate) => {
-      queue.current.push({ update, at: Date.now() });
+    (u: RoutedUpdate) => {
+      queue.current.push(u);
       const t = flushTimers.current;
       if (t.raf || t.timeout) return;
       t.raf = requestAnimationFrame(flushUpdates);
@@ -148,37 +114,6 @@ export function useAcpSession(cwd: string) {
     },
     [flushUpdates],
   );
-
-  /** Take a fresh switch token; synchronous, so it is set before the caller's first await. */
-  const beginSwitch = useCallback((): number => {
-    const seq = live.current.switches.begin();
-    dispatch({ t: "switching", on: true });
-    return seq;
-  }, [dispatch]);
-
-  /**
-   * End switch `seq`: only the switch that still owns the token may end the replay and re-enable the
-   * composer. The one place the in-flight state is cleared (besides a restart).
-   */
-  const endSwitch = useCallback(
-    (seq: number) => {
-      const l = live.current;
-      if (!l.switches.finish(seq)) return;
-      if (l.replaying) {
-        l.replaying = false;
-        dispatch({ t: "replayDone" });
-      }
-      dispatch({ t: "switching", on: false });
-    },
-    [dispatch],
-  );
-
-  const cancelDialogs = useCallback(() => {
-    for (const p of permsRef.current) p.resolve({ outcome: "cancelled" });
-    for (const a of asksRef.current) a.resolve({ outcome: "cancelled" });
-    setPermissions([]);
-    setAsks([]);
-  }, []);
 
   const refreshSessions = useCallback(async () => {
     const l = live.current;
@@ -197,147 +132,139 @@ export function useAcpSession(cwd: string) {
         if (!cursor) break;
       }
       all.sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
-      dispatch({ t: "sessions", sessions: all });
+      if (l.client === client) dispatch({ t: "sessions", sessions: all });
     } catch {
       /* listing is optional; an agent without session/list just shows none */
     }
-  }, [cwd]);
+  }, [cwd, dispatch]);
 
-  /** An update for the session on screen. */
   const acceptUpdate = useCallback(
-    (update: SessionUpdate) => {
-      enqueueUpdate(update);
-      if (update.sessionUpdate === "session_info_update") void refreshSessions();
+    (u: RoutedUpdate) => {
+      enqueueUpdate(u);
+      if (u.update.sessionUpdate === "session_info_update") void refreshSessions();
     },
     [enqueueUpdate, refreshSessions],
   );
 
-  /** session/load: on failure show why (a lease gets its own dialog) and put the previous session back. */
-  const loadExisting = useCallback(async (sw: SwitchContext, loadId: string): Promise<boolean> => {
-    const l = live.current;
-    const previous = l.settled;
-    l.sessionId = loadId;
-    l.replaying = true;
-    dispatch({ t: "session", sessionId: loadId, replaying: true });
-    try {
-      const r = await sw.load(loadId);
-      if (!sw.current()) return false;
-      l.settled = loadId;
-      dispatch({ t: "meta", modes: r?.modes, configOptions: r?.configOptions });
-      return true;
-    } catch (e) {
-      if (!sw.current()) return false;
-      l.sessionId = null;
-      if (isLeaseError(e)) setFatal({ kind: "leased", sessionId: loadId });
-      else dispatch({ t: "banner", level: "error", text: `Could not load the session: ${errMessage(e)}` });
-      if (previous && previous !== loadId) await sw.restore(previous);
-      else sw.lost();
-      return false;
-    }
-  }, [dispatch]);
-
-  /**
-   * session/new. keryx may already have released the previous session when the request fails, so a
-   * failure always reloads the previous one. Updates for the new id that arrive before the reply are
-   * held and shown once the id is known.
-   */
-  const createFresh = useCallback(async (sw: SwitchContext, seq: number): Promise<boolean> => {
-    const l = live.current;
-    const previous = l.settled;
-    // From here on the old session's updates, prompts and dialogs are refused.
-    l.sessionId = null;
-    l.unborn.open(seq);
-    try {
-      const r = await sw.client.request<NewSessionResult>("session/new", { cwd, mcpServers: [] });
-      if (!sw.current()) return false;
-      l.sessionId = r.sessionId;
-      l.settled = r.sessionId;
-      l.replaying = false;
-      dispatch({ t: "session", sessionId: r.sessionId, modes: r.modes, configOptions: r.configOptions, replaying: false });
-      for (const update of l.unborn.take(seq, r.sessionId)) acceptUpdate(update);
-      return true;
-    } catch (e) {
-      if (!sw.current()) return false;
-      const why = isLeaseError(e) ? "The session is in use by another keryx" : "Could not start a session";
-      dispatch({ t: "banner", level: "error", text: `${why}: ${errMessage(e)}` });
-      await sw.restore(previous);
-      return false;
-    } finally {
-      l.unborn.close(seq);
-    }
-  }, [cwd, dispatch, acceptUpdate]);
-
-  /**
-   * Show session `loadId`, or a new one when it is null, under switch token `seq`. Returns whether it
-   * is now on screen. Whatever happens, the composer never points at a half-loaded session: a failure
-   * puts the last settled session back (reloading it, so keryx re-activates it) or shows none.
-   */
-  const startSession = useCallback(
-    async (client: AcpClient, loadId: string | null, gen: number, seq: number): Promise<boolean> => {
-      const l = live.current;
-      const current = () => l.gen === gen && l.switches.isCurrent(seq);
-      if (!current()) return false;
-      const sw: SwitchContext = {
-        client,
-        current,
-        load: (sessionId) => client.request<LoadSessionResult>("session/load", { sessionId, cwd, mcpServers: [] }),
-        lost: () => {
-          l.sessionId = null;
-          l.settled = null;
-          dispatch({ t: "sessionLost" });
-        },
-        restore: async (target) => {
-          if (!target) return sw.lost();
-          l.sessionId = target;
-          l.replaying = true;
-          dispatch({ t: "session", sessionId: target, replaying: true });
-          try {
-            const r = await sw.load(target);
-            if (!current()) return;
-            l.settled = target;
-            dispatch({ t: "meta", modes: r?.modes, configOptions: r?.configOptions });
-          } catch {
-            if (current()) sw.lost();
-          }
-        },
-      };
-      try {
-        return loadId ? await loadExisting(sw, loadId) : await createFresh(sw, seq);
-      } finally {
-        endSwitch(seq);
-      }
-    },
-    [cwd, dispatch, endSwitch, loadExisting, createFresh],
-  );
-
+  /** Every session/update goes to the session it names, shown or not. */
   const handleUpdate = useCallback(
     (params: unknown) => {
-      const p = params as { sessionId?: string; update?: SessionUpdate };
-      const l = live.current;
+      const p = params as { sessionId?: unknown; update?: SessionUpdate } | null;
       if (!p?.update || typeof p.sessionId !== "string") return;
-      if (p.sessionId === l.sessionId) acceptUpdate(p.update);
-      else if (l.sessionId === null) l.unborn.offer(p.sessionId, p.update);
+      const u: RoutedUpdate = { sessionId: p.sessionId, update: p.update, at: Date.now() };
+      if (live.current.reg.route(u) === "apply") acceptUpdate(u);
     },
     [acceptUpdate],
   );
 
+  /** keryx's idle cap released a session: it stays visible read-only; a return to it loads it. */
+  const handleReleased = useCallback(
+    (params: unknown) => {
+      const sid = (params as { sessionId?: unknown } | null)?.sessionId;
+      if (typeof sid !== "string" || !live.current.reg.release(sid)) return;
+      dialogs.dropSession(sid);
+      dispatch({ t: "released", sessionId: sid });
+    },
+    [dialogs, dispatch],
+  );
+
+  /**
+   * session/load of a session the window does not hold. Its replay lands off screen; the session is
+   * shown on success unless the user has switched elsewhere since. A failure changes nothing on screen.
+   */
+  const openLoad = useCallback(
+    async (client: AcpClient, gen: number, sessionId: string): Promise<boolean> => {
+      const l = live.current;
+      const plan = l.reg.planSwitch(sessionId);
+      if (plan === "show") {
+        l.reg.showLocal(sessionId);
+        dispatch({ t: "show", sessionId });
+        return true;
+      }
+      if (plan === "pending") {
+        l.reg.wantLoad(sessionId);
+        return true;
+      }
+      l.reg.beginLoad(sessionId);
+      dispatch({ t: "loadStart", sessionId });
+      try {
+        const r = await client.request<LoadSessionResult>("session/load", { sessionId, cwd, mcpServers: [] });
+        if (l.gen !== gen) return false;
+        const show = l.reg.loadDone(sessionId);
+        dispatch({ t: "loadDone", sessionId, modes: r?.modes, configOptions: r?.configOptions, show });
+        return true;
+      } catch (e) {
+        if (l.gen !== gen) return false;
+        l.reg.loadFailed(sessionId);
+        dispatch({ t: "loadFailed", sessionId });
+        if (isLeaseError(e)) setFatal({ kind: "leased", sessionId });
+        else dispatch({ t: "banner", level: "error", text: `Could not load the session: ${errMessage(e)}` });
+        return false;
+      }
+    },
+    [cwd, dispatch],
+  );
+
+  /** session/new. The new session is added and shown unless the user switched elsewhere meanwhile; a failure changes nothing on screen. */
+  const openNew = useCallback(
+    async (client: AcpClient, gen: number): Promise<boolean> => {
+      const l = live.current;
+      const intent = l.reg.beginCreate();
+      dispatch({ t: "creating", delta: 1 });
+      try {
+        const r = await client.request<NewSessionResult>("session/new", { cwd, mcpServers: [] });
+        if (l.gen !== gen) return false;
+        if (typeof r?.sessionId !== "string") throw new Error("keryx returned no session id");
+        const show = l.reg.created(r.sessionId, intent);
+        dispatch({ t: "created", sessionId: r.sessionId, modes: r.modes, configOptions: r.configOptions, show });
+        // Updates keryx may have sent for it before the reply was read.
+        for (const u of l.reg.takeOrphans(r.sessionId)) acceptUpdate(u);
+        return true;
+      } catch (e) {
+        if (l.gen !== gen) return false;
+        const why = isLeaseError(e) ? "The session is in use by another keryx" : "Could not start a session";
+        dispatch({ t: "banner", level: "error", text: `${why}: ${errMessage(e)}` });
+        return false;
+      } finally {
+        if (l.gen === gen) {
+          l.reg.endCreate();
+          dispatch({ t: "creating", delta: -1 });
+        }
+      }
+    },
+    [cwd, dispatch, acceptUpdate],
+  );
+
+  const finishStart = useCallback(
+    async (client: AcpClient, gen: number, loadId: string | null, fallbackToNew: boolean) => {
+      const l = live.current;
+      let ok = loadId ? await openLoad(client, gen, loadId) : false;
+      if (l.gen !== gen) return;
+      if (!ok && (!loadId || fallbackToNew)) {
+        if (loadId) dispatch({ t: "clearBanners" });
+        ok = await openNew(client, gen);
+        // The reload's lease dialog is moot once the fresh session is up.
+        if (ok && loadId && l.gen === gen) setFatal((f) => (f?.kind === "leased" ? null : f));
+      }
+      if (l.gen !== gen) return;
+      dispatch({ t: "phase", phase: "ready" });
+      void refreshSessions();
+    },
+    [openLoad, openNew, refreshSessions, dispatch],
+  );
+
   const connect = useCallback(
-    async (opts: { noProfile: boolean; loadSessionId: string | null; fallbackToNew: boolean }) => {
+    async (opts: { loadSessionId: string | null; fallbackToNew: boolean }) => {
       const l = live.current;
       const gen = ++l.gen;
       l.unlisten?.();
       l.client?.close("restarting keryx");
-      cancelDialogs();
+      dialogs.dropAll();
       l.initialized = false;
-      l.noProfile = opts.noProfile;
-      l.sessionId = null;
-      l.settled = null;
-      l.replaying = false;
-      l.switches.reset();
-      l.unborn.close();
-      l.turn = null;
+      l.usable = false;
+      l.reg.reset();
       setFatal(null);
-      dispatch({ t: "switching", on: false });
+      dispatch({ t: "connectionReset" });
       dispatch({ t: "phase", phase: "starting" });
       dispatch({ t: "clearBanners" });
 
@@ -345,24 +272,23 @@ export function useAcpSession(cwd: string) {
       l.client = client;
       client.onNotification = (method, params) => {
         if (method === "session/update") handleUpdate(params);
+        else if (method === SESSION_RELEASED) handleReleased(params);
       };
       client.onRequest = async (method, params) => {
-        // A dialog from a session the window has left must not appear over the current one.
-        const sid = (params as { sessionId?: unknown } | null)?.sessionId;
-        const stale = typeof sid === "string" && sid !== l.sessionId;
         if (method === "session/request_permission") {
-          if (stale) return { outcome: { outcome: "cancelled" } satisfies PermissionOutcome };
-          return new Promise<unknown>((resolve) => {
-            setPermissions((q) => [...q, { id: ++dialogSeq.current, req: params as PermissionRequest, resolve: resolve as (o: PermissionOutcome) => void }]);
-          }).then((outcome) => ({ outcome }));
+          const sid = l.reg.admit(params);
+          if (!sid) return { outcome: CANCELLED };
+          return { outcome: await dialogs.permission(sid, params as PermissionRequest) };
         }
         if (method === "_keryx/ask_user") {
-          if (stale) return { outcome: "cancelled" } satisfies AskUserResult;
-          return new Promise<unknown>((resolve) => {
-            setAsks((q) => [...q, { id: ++dialogSeq.current, req: params as AskUserRequest, resolve: resolve as (r: AskUserResult) => void }]);
-          });
+          const sid = l.reg.admit(params);
+          if (!sid) return { outcome: "cancelled" } satisfies AskUserResult;
+          return dialogs.ask(sid, params as AskUserRequest);
         }
         throw new RpcError(-32601, `Method not found: ${method}`);
+      };
+      client.onReplyFailed = (method, error) => {
+        if (l.gen === gen) dispatch({ t: "banner", level: "error", text: `Could not send keryx the answer to ${method}: ${error}` });
       };
 
       try {
@@ -376,21 +302,20 @@ export function useAcpSession(cwd: string) {
           onExit: (info) => {
             if (l.gen !== gen) return;
             client.close();
-            cancelDialogs();
+            dialogs.dropAll();
+            const initialized = l.initialized;
+            l.reg.reset();
+            dispatch({ t: "connectionReset" });
             const usageError =
               info.code === 2 || /usage|unknown (value|option|profile)|unrecognized|invalid (value|profile)|--profile/i.test(info.stderrTail);
-            if (!l.initialized && !opts.noProfile && usageError) {
-              // An older keryx rejects --profile: run it without the flag.
-              void connect({ ...opts, noProfile: true });
-              return;
-            }
+            // A keryx that rejects --profile shell is too old for the app.
+            if (!initialized && usageError) setFatal({ kind: "noShell", found: "unknown", reason: "no-profile" });
             dispatch({ t: "phase", phase: "exited", exit: info });
           },
         });
-        const start = await acpStart(cwd, opts.noProfile);
+        const start = await acpStart(cwd, false);
         if (l.gen !== gen) return;
         if (start.note) dispatch({ t: "banner", level: "info", text: start.note });
-        if (opts.noProfile) dispatch({ t: "banner", level: "warn", text: "This keryx has no shell profile; running as an editor-profile agent." });
 
         const init = await client.request<InitializeResult>("initialize", {
           protocolVersion: 1,
@@ -403,13 +328,14 @@ export function useAcpSession(cwd: string) {
         });
         if (l.gen !== gen) return;
         l.initialized = true;
-        l.initResult = init;
 
         const found = init.agentInfo?.version ?? "unknown";
         const profile = init._meta?.keryx?.profile === "shell" ? "shell" : "editor";
         dispatch({ t: "agent", profile, version: init.agentInfo?.version ?? null });
-        if (!opts.noProfile && profile === "editor") {
-          dispatch({ t: "banner", level: "warn", text: "This keryx has no shell profile; running as an editor-profile agent." });
+        if (profile !== "shell" || !hasLiveSessions(init)) {
+          setFatal({ kind: "noShell", found, reason: profile !== "shell" ? "no-profile" : "no-live-sessions" });
+          dispatch({ t: "phase", phase: "ready" });
+          return;
         }
         const check = await versionCheck(found);
         if (l.gen !== gen) return;
@@ -417,6 +343,7 @@ export function useAcpSession(cwd: string) {
           setFatal({ kind: "incompatible", found: check.found, required: check.required });
           return;
         }
+        l.usable = true;
         await finishStart(client, gen, opts.loadSessionId, opts.fallbackToNew);
       } catch (e) {
         if (l.gen !== gen) return;
@@ -424,31 +351,11 @@ export function useAcpSession(cwd: string) {
         dispatch({ t: "phase", phase: "exited", exit: { code: null, stderrTail: errMessage(e) } });
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [cwd, cancelDialogs, handleUpdate],
-  );
-
-  const finishStart = useCallback(
-    async (client: AcpClient, gen: number, loadId: string | null, fallbackToNew: boolean) => {
-      const l = live.current;
-      let seq = beginSwitch();
-      const ok = await startSession(client, loadId, gen, seq);
-      if (!ok && loadId && fallbackToNew && l.gen === gen && l.switches.isCurrent(seq)) {
-        dispatch({ t: "clearBanners" });
-        seq = beginSwitch();
-        const fellBack = await startSession(client, null, gen, seq);
-        // The reload's lease dialog is moot once the fresh session is up.
-        if (fellBack && l.gen === gen && l.switches.isCurrent(seq)) setFatal((f) => (f?.kind === "leased" ? null : f));
-      }
-      if (l.gen !== gen) return;
-      dispatch({ t: "phase", phase: "ready" });
-      void refreshSessions();
-    },
-    [startSession, refreshSessions, beginSwitch, dispatch],
+    [cwd, dialogs, dispatch, handleUpdate, handleReleased, finishStart],
   );
 
   useEffect(() => {
-    void connect({ noProfile: false, loadSessionId: null, fallbackToNew: false });
+    void connect({ loadSessionId: null, fallbackToNew: false });
     return () => {
       const l = live.current;
       l.gen++;
@@ -456,12 +363,25 @@ export function useAcpSession(cwd: string) {
       queue.current = [];
       l.unlisten?.();
       l.client?.close("window closed");
-      cancelDialogs();
+      dialogs.dropAll();
       void acpStop();
     };
     // connect once per window/cwd
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cwd]);
+
+  const state = useMemo(() => shownView(win), [win]);
+  const shownDialogs = useMemo(
+    () => dialogs.forSession(win.shownId),
+    // dialogVersion changes whenever the queue does
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [dialogs, dialogVersion, win.shownId],
+  );
+  const marks = useMemo(
+    () => sessionMarks(win, dialogs.waiting()),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [win, dialogs, dialogVersion],
+  );
 
   useEffect(() => {
     const title = state.title && state.title.trim() ? state.title : "New session";
@@ -470,172 +390,148 @@ export function useAcpSession(cwd: string) {
 
   // ---- user actions -------------------------------------------------------
 
-  /** Starts a turn; returns true only when the prompt was accepted (the caller may then clear its draft). */
+  /** Starts a turn in the shown session; returns true only when the prompt was accepted (the caller may then clear its draft). */
   const sendPrompt = useCallback(
     (text: string): boolean => {
       const l = live.current;
       const client = l.client;
-      const sessionId = l.sessionId;
-      if (!client || !sessionId || l.turn || l.replaying || l.switches.switching || !l.initialized || !text.trim()) return false;
-      dispatch({ t: "userSent", text });
-      dispatch({ t: "busy", busy: true });
-      let done!: Promise<void>;
-      done = (async () => {
+      const sessionId = l.reg.shown;
+      if (!client || !l.initialized || !sessionId || !l.reg.held.has(sessionId) || l.reg.turns.has(sessionId) || !text.trim()) return false;
+      dispatch({ t: "userSent", sessionId, text });
+      dispatch({ t: "busy", sessionId, busy: true });
+      const turn = { client } as Turn;
+      turn.done = (async () => {
         try {
-          const r = await client.request<{ stopReason?: string }>("session/prompt", {
-            sessionId,
-            prompt: [{ type: "text", text }],
-          });
-          // An old turn must not narrate into a session the user has since switched to.
-          if (l.sessionId !== sessionId) return;
-          if (r?.stopReason === "max_tokens") dispatch({ t: "notice", level: "warn", text: "Stopped: the model hit its token limit." });
-          else if (r?.stopReason === "max_turn_requests") dispatch({ t: "notice", level: "warn", text: "Stopped: too many model requests in one turn." });
-          else if (r?.stopReason === "refusal") dispatch({ t: "notice", level: "warn", text: "The model refused to continue." });
-          else if (r?.stopReason === "cancelled") dispatch({ t: "notice", level: "info", text: "Stopped." });
+          const r = await client.request<{ stopReason?: string }>("session/prompt", { sessionId, prompt: [{ type: "text", text }] });
+          if (l.client !== client) return;
+          const notice = (level: "info" | "warn", t: string) => dispatch({ t: "notice", sessionId, level, text: t });
+          if (r?.stopReason === "max_tokens") notice("warn", "Stopped: the model hit its token limit.");
+          else if (r?.stopReason === "max_turn_requests") notice("warn", "Stopped: too many model requests in one turn.");
+          else if (r?.stopReason === "refusal") notice("warn", "The model refused to continue.");
+          else if (r?.stopReason === "cancelled") notice("info", "Stopped.");
         } catch (e) {
-          if (l.client === client && l.sessionId === sessionId) dispatch({ t: "notice", level: "error", text: errMessage(e) });
+          if (l.client === client) dispatch({ t: "notice", sessionId, level: "error", text: errMessage(e) });
         } finally {
-          if (l.turn?.done === done) l.turn = null;
-          // Only the session that owns this turn may clear its busy flag.
-          if (l.client === client && l.sessionId === sessionId) {
-            dispatch({ t: "busy", busy: false });
+          if (l.reg.turns.get(sessionId) === turn) l.reg.turns.delete(sessionId);
+          if (l.client === client) {
+            // keryx sends no request for a turn after its prompt reply: anything still queued is stale.
+            dialogs.dropSession(sessionId);
+            dispatch({ t: "busy", sessionId, busy: false });
             void refreshSessions();
           }
         }
       })();
-      l.turn = { sessionId, client, done };
+      l.reg.turns.set(sessionId, turn);
       return true;
     },
-    [refreshSessions],
+    [dialogs, dispatch, refreshSessions],
   );
 
+  /** Stop the shown session's turn only; every other session keeps running. */
   const cancel = useCallback(() => {
     const l = live.current;
-    // Stop the running turn in the session it runs in, which is not always the current one.
-    if (l.turn) l.turn.client.notify("session/cancel", { sessionId: l.turn.sessionId });
-    else if (l.client && l.sessionId) l.client.notify("session/cancel", { sessionId: l.sessionId });
-    else return;
-    cancelDialogs();
-  }, [cancelDialogs]);
+    const sessionId = l.reg.shown;
+    const client = l.client;
+    if (!client || !sessionId || !l.reg.held.has(sessionId)) return;
+    client.notify("session/cancel", { sessionId });
+    dialogs.dropSession(sessionId);
+  }, [dialogs]);
 
-  /** Cancel a running turn and wait for its prompt to settle. False when it did not settle in time. */
-  const settleTurn = useCallback(async (): Promise<boolean> => {
-    const l = live.current;
-    const turn = l.turn;
-    if (!turn) return true;
-    l.client?.notify("session/cancel", { sessionId: turn.sessionId });
-    cancelDialogs();
-    let timer = 0;
-    const timeout = new Promise<"timeout">((resolve) => {
-      timer = window.setTimeout(() => resolve("timeout"), 8000);
-    });
-    const outcome = await Promise.race([turn.done.then(() => "done" as const), timeout]);
-    window.clearTimeout(timer);
-    if (outcome === "timeout") {
-      dispatch({ t: "notice", level: "warn", text: "The current turn did not stop in time. Try again in a moment." });
-      return false;
-    }
-    return true;
-  }, [cancelDialogs]);
-
-  /** A newer switch supersedes an older one: the older one's continuations see a stale token and stop. */
-  const switchTo = useCallback(
-    async (loadId: string | null): Promise<void> => {
+  /** Show a session: local when the window holds it, session/load otherwise. Nothing is cancelled or released. */
+  const loadSession = useCallback(
+    async (id: string) => {
       const l = live.current;
       const client = l.client;
-      if (!client || !l.initialized) return;
-      const gen = l.gen;
-      const seq = beginSwitch();
-      if (!(await settleTurn())) {
-        endSwitch(seq);
-        return;
+      if (!client || !l.usable) return;
+      if (l.reg.planSwitch(id) === "load") {
+        setFatal((f) => (f?.kind === "leased" ? null : f));
+        dispatch({ t: "clearBanners" });
       }
-      if (l.client !== client || l.gen !== gen || !l.switches.isCurrent(seq)) return;
-      setFatal(null);
-      dispatch({ t: "clearBanners" });
-      await startSession(client, loadId, gen, seq);
+      await openLoad(client, l.gen, id);
     },
-    [beginSwitch, endSwitch, settleTurn, startSession, dispatch],
+    [openLoad, dispatch],
   );
 
   const newSession = useCallback(async () => {
-    await switchTo(null);
+    const l = live.current;
+    const client = l.client;
+    if (!client || !l.usable) return;
+    setFatal((f) => (f?.kind === "leased" ? null : f));
+    dispatch({ t: "clearBanners" });
+    await openNew(client, l.gen);
     void refreshSessions();
-  }, [switchTo, refreshSessions]);
+  }, [openNew, refreshSessions, dispatch]);
 
-  const loadSession = useCallback(
-    async (id: string) => {
-      if (id === live.current.sessionId) return;
-      await switchTo(id);
+  const setMode = useCallback(
+    async (modeId: string) => {
+      const l = live.current;
+      const client = l.client;
+      const sessionId = l.reg.shown;
+      if (!client || !sessionId || !l.reg.held.has(sessionId)) return;
+      try {
+        await client.request("session/set_mode", { sessionId, modeId });
+        if (l.client === client) {
+          dispatch({ t: "updates", updates: [{ sessionId, at: Date.now(), update: { sessionUpdate: "current_mode_update", currentModeId: modeId } }] });
+        }
+      } catch (e) {
+        if (l.client === client) dispatch({ t: "notice", sessionId, level: "error", text: `Could not change mode: ${errMessage(e)}` });
+      }
     },
-    [switchTo],
+    [dispatch],
   );
 
-  const setMode = useCallback(async (modeId: string) => {
-    const l = live.current;
-    const client = l.client;
-    const sessionId = l.sessionId;
-    if (!client || !sessionId || l.switches.switching) return;
-    // The reply applies only while the session it was sent for is still on screen.
-    const stillCurrent = () => l.client === client && l.sessionId === sessionId;
-    try {
-      await client.request("session/set_mode", { sessionId, modeId });
-      if (stillCurrent()) dispatch({ t: "update", update: { sessionUpdate: "current_mode_update", currentModeId: modeId } });
-    } catch (e) {
-      if (stillCurrent()) dispatch({ t: "notice", level: "error", text: `Could not change mode: ${errMessage(e)}` });
-    }
-  }, [dispatch]);
+  const setModel = useCallback(
+    async (configId: string, value: string) => {
+      const l = live.current;
+      const client = l.client;
+      const sessionId = l.reg.shown;
+      if (!client || !sessionId || !l.reg.held.has(sessionId)) return;
+      try {
+        const r = await client.request<{ configOptions?: ConfigOption[] }>("session/set_config_option", { sessionId, configId, value });
+        if (r?.configOptions && l.client === client) dispatch({ t: "config", sessionId, configOptions: r.configOptions });
+      } catch (e) {
+        if (l.client === client) dispatch({ t: "notice", sessionId, level: "error", text: `Could not change model: ${errMessage(e)}` });
+      }
+    },
+    [dispatch],
+  );
 
-  const setModel = useCallback(async (configId: string, value: string) => {
-    const l = live.current;
-    const client = l.client;
-    const sessionId = l.sessionId;
-    if (!client || !sessionId || l.switches.switching) return;
-    const stillCurrent = () => l.client === client && l.sessionId === sessionId;
-    try {
-      const r = await client.request<{ configOptions?: ConfigOption[] }>("session/set_config_option", {
-        sessionId,
-        configId,
-        value,
-      });
-      if (r?.configOptions && stillCurrent()) dispatch({ t: "config", configOptions: r.configOptions });
-    } catch (e) {
-      if (stillCurrent()) dispatch({ t: "notice", level: "error", text: `Could not change model: ${errMessage(e)}` });
-    }
-  }, [dispatch]);
-
+  /** A new keryx process; the shown session is reloaded (a new one when that fails). */
   const restart = useCallback(() => {
-    const id = live.current.sessionId;
-    void connect({ noProfile: live.current.noProfile, loadSessionId: id, fallbackToNew: true });
+    void connect({ loadSessionId: live.current.reg.shown, fallbackToNew: true });
   }, [connect]);
+
+  /** Reopen the shown session after keryx released it. */
+  const reopen = useCallback(() => {
+    const id = live.current.reg.shown;
+    if (id) void loadSession(id);
+  }, [loadSession]);
 
   const continueAnyway = useCallback(() => {
     const l = live.current;
     const client = l.client;
     if (!client) return;
     setFatal(null);
+    l.usable = true;
     void finishStart(client, l.gen, null, false);
   }, [finishStart]);
 
-  const answerPermission = useCallback((p: PendingPermission, outcome: PermissionOutcome) => {
-    p.resolve(outcome);
-    setPermissions((q) => q.filter((x) => x !== p));
-  }, []);
-
-  const answerAsk = useCallback((a: PendingAsk, result: AskUserResult) => {
-    a.resolve(result);
-    setAsks((q) => q.filter((x) => x !== a));
-  }, []);
+  const answerPermission = useCallback((p: PendingPermission, outcome: PermissionOutcome) => dialogs.answerPermission(p, outcome), [dialogs]);
+  const answerAsk = useCallback((a: PendingAsk, result: AskUserResult) => dialogs.answerAsk(a, result), [dialogs]);
 
   return {
     state,
-    permissions,
-    asks,
+    /** The shown session's dialogs; other sessions keep theirs queued. */
+    permissions: shownDialogs.permissions,
+    asks: shownDialogs.asks,
+    /** Busy / waiting / held marks for every session the window has. */
+    marks,
     fatal,
     sendPrompt,
     cancel,
     newSession,
     loadSession,
+    reopen,
     setMode,
     setModel,
     restart,

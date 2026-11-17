@@ -1,11 +1,11 @@
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
 import type { ToolCallContent, ToolKind } from "../acp/types";
 import type { Item } from "./reducer";
 import { blockText } from "./reducer";
 import { Markdown } from "../components/Markdown";
 import { Icon, type IconName } from "../components/Icon";
 import { Spinner } from "../components/ui";
-import { argLabel, primaryInput, restInput, visibleText } from "./toolInput";
+import { argLabel, hasRestArgs, primaryInput, restArgs, visibleProse, visibleText } from "./toolInput";
 
 type ToolItem = Extract<Item, { kind: "tool" }>;
 
@@ -45,8 +45,26 @@ function formatDuration(ms: number): string {
   return `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`;
 }
 
-/** Common prefix/suffix trimmed, with two lines of context: a readable change without a diff library. */
-export function DiffView({ path, oldText, newText }: { path: string; oldText?: string | null; newText: string }) {
+/**
+ * Common prefix/suffix trimmed, with two lines of context: a readable change without a diff library.
+ * The path and every line are escaped like a call's input. The approval dialog passes `bodyRef` to
+ * measure the scroll box, `expanded` to lift its height cap, and `faithful` to keep it left to right.
+ */
+export function DiffView({
+  path,
+  oldText,
+  newText,
+  bodyRef,
+  expanded = false,
+  faithful = false,
+}: {
+  path: string;
+  oldText?: string | null;
+  newText: string;
+  bodyRef?: Ref<HTMLPreElement>;
+  expanded?: boolean;
+  faithful?: boolean;
+}) {
   const rows = useMemo(() => {
     const a = (oldText ?? "").split("\n");
     const b = newText.split("\n");
@@ -63,20 +81,20 @@ export function DiffView({ path, oldText, newText }: { path: string; oldText?: s
     for (let i = pre; i < b.length - suf; i++) out.push({ t: b[i]!, k: "add" });
     for (let i = a.length - suf; i < Math.min(a.length, a.length - suf + ctx); i++) out.push({ t: a[i]!, k: "ctx" });
     if (suf > ctx) out.push({ t: `… ${suf - ctx} unchanged lines`, k: "gap" });
-    return out;
+    return out.map((r) => (r.k === "gap" ? r : { ...r, t: visibleText(r.t) }));
   }, [oldText, newText]);
   const added = rows.filter((r) => r.k === "add").length;
   const removed = rows.filter((r) => r.k === "del").length;
   return (
-    <div className="diff">
+    <div className={`diff${faithful ? " is-faithful" : ""}`}>
       <div className="diff-head">
         <Icon name="file" size={13} />
-        <span className="mono truncate">{path}</span>
+        <span className="mono truncate">{visibleText(path)}</span>
         <span className="grow" />
         <span className="diff-stat add">+{added}</span>
         <span className="diff-stat del">−{removed}</span>
       </div>
-      <pre className="diff-body">
+      <pre ref={bodyRef} className={`diff-body${expanded ? " is-expanded" : ""}`}>
         {rows.map((r, i) => (
           <div key={i} className={`diff-line diff-${r.k}`}>
             <span className="diff-sign" aria-hidden>
@@ -108,11 +126,12 @@ function StatusGlyph({ status }: { status: ToolItem["status"] }) {
 
 const ToolRow = memo(function ToolRow({ item }: { item: ToolItem }) {
   const [open, setOpen] = useState(false);
-  const raw = pretty(item.rawOutput);
-  const primary = primaryInput(item.rawInput);
-  const args = useMemo(() => restInput(item.rawInput), [item.rawInput]);
-  const title = visibleText(item.title);
-  const hasBody = item.content.length > 0 || raw !== "" || args.length > 0;
+  const raw = useMemo(() => pretty(item.rawOutput), [item.rawOutput]);
+  const primary = useMemo(() => primaryInput(item.rawInput), [item.rawInput]);
+  // The arguments are serialised only once the row is opened; a closed row needs just "are there any".
+  const args = useMemo(() => (open ? restArgs(item.rawInput) : []), [open, item.rawInput]);
+  const title = useMemo(() => visibleProse(item.title), [item.title]);
+  const hasBody = item.content.length > 0 || raw !== "" || hasRestArgs(item.rawInput);
   const dur = item.endedAt !== null ? item.endedAt - item.startedAt : null;
   return (
     <div className={`tool status-${item.status}${open ? " is-open" : ""}`}>
@@ -145,7 +164,7 @@ const ToolRow = memo(function ToolRow({ item }: { item: ToolItem }) {
             </div>
           ) : null}
           {args.map((a) => (
-            <div key={a.key} className="tool-section">
+            <div key={a.id} className="tool-section">
               <div className="tool-label">{argLabel(a, primary !== null)}</div>
               <pre className="out-pre is-faithful">{a.text}</pre>
             </div>
@@ -232,6 +251,8 @@ export function Transcript({ items, busy, replaying, empty }: Props) {
   const innerRef = useRef<HTMLDivElement>(null);
   const [stuck, setStuck] = useState(true);
   const stick = useRef(true);
+  /** The user just opened or closed something: the growth that follows is theirs, not the stream's. */
+  const userGrew = useRef(false);
   const blocks = useMemo(() => toBlocks(items), [items]);
   const last = items[items.length - 1];
   const streamingAgent = busy && last?.kind === "agent";
@@ -261,6 +282,10 @@ export function Transcript({ items, busy, replaying, empty }: Props) {
     const inner = innerRef.current;
     if (!el || !inner || typeof ResizeObserver === "undefined") return;
     const ro = new ResizeObserver(() => {
+      if (userGrew.current) {
+        userGrew.current = false;
+        return;
+      }
       if (stick.current) el.scrollTop = el.scrollHeight;
     });
     ro.observe(inner);
@@ -277,7 +302,16 @@ export function Transcript({ items, busy, replaying, empty }: Props) {
   return (
     <div className="transcript-wrap">
       <div className="transcript" ref={ref} aria-live="off">
-        <div className="transcript-inner" ref={innerRef}>
+        <div
+          className="transcript-inner"
+          ref={innerRef}
+          onClickCapture={(e) => {
+            if (!(e.target as HTMLElement).closest(".tool-row, .thought-row, details > summary")) return;
+            userGrew.current = true;
+            // Only the resize this click causes; a click that changes nothing must not skip a later pin.
+            window.setTimeout(() => (userGrew.current = false), 150);
+          }}
+        >
           {replaying ? (
             <div className="loading-row centered">
               <Spinner /> Loading session…

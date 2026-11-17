@@ -57,78 +57,54 @@ export interface Usage {
 
 export type Phase = "starting" | "ready" | "exited";
 
-export interface SessionState {
-  phase: Phase;
-  exit: { code: number | null; stderrTail: string } | null;
-  profile: "shell" | "editor";
-  agentVersion: string | null;
+// ---- one session ----------------------------------------------------------
+
+/** Everything the window keeps for one session it holds (or held: see `held`). */
+export interface ConvState {
+  sessionId: string;
   items: Item[];
   nextId: number;
-  sessionId: string | null;
   busy: boolean;
+  /** Its session/load replay is running. */
   replaying: boolean;
-  /** A session switch (new or load) is in flight; the composer must not send. Only the `switching` action changes it. */
-  switching: boolean;
   commands: AvailableCommand[];
   modes: SessionModeState | null;
   configOptions: ConfigOption[];
   plan: PlanEntry[];
   usage: Usage | null;
   title: string | null;
-  sessions: SessionInfo[];
-  banners: Banner[];
+  /** keryx holds it on this connection. False after `_keryx/session_released` or a lost connection: read-only until reloaded. */
+  held: boolean;
 }
 
-export const initialState: SessionState = {
-  phase: "starting",
-  exit: null,
-  profile: "editor",
-  agentVersion: null,
-  items: [],
-  nextId: 1,
-  sessionId: null,
-  busy: false,
-  replaying: false,
-  switching: false,
-  commands: [],
-  modes: null,
-  configOptions: [],
-  plan: [],
-  usage: null,
-  title: null,
-  sessions: [],
-  banners: [],
-};
-
-export type Action =
-  | { t: "update"; update: SessionUpdate; at?: number }
-  /** Session updates coalesced into one render (one per animation frame, and at replay end). */
-  | { t: "updates"; updates: QueuedUpdate[] }
-  | { t: "switching"; on: boolean }
-  | { t: "userSent"; text: string }
-  | { t: "notice"; level: "info" | "warn" | "error"; text: string }
-  | { t: "banner"; level: Banner["level"]; text: string }
-  | { t: "clearBanners" }
-  | { t: "dismissBanner"; id: number }
-  | { t: "phase"; phase: Phase; exit?: SessionState["exit"] }
-  | { t: "agent"; profile: "shell" | "editor"; version: string | null }
-  | {
-      t: "session";
-      sessionId: string;
-      modes?: SessionModeState | null;
-      configOptions?: ConfigOption[] | null;
-      replaying: boolean;
-    }
-  | { t: "meta"; modes?: SessionModeState | null; configOptions?: ConfigOption[] | null }
-  | { t: "replayDone" }
-  | { t: "sessionLost" }
-  | { t: "busy"; busy: boolean }
-  | { t: "config"; configOptions: ConfigOption[] }
-  | { t: "sessions"; sessions: SessionInfo[] };
+export function newConv(
+  sessionId: string,
+  opts: { replaying: boolean; modes?: SessionModeState | null; configOptions?: ConfigOption[] | null },
+): ConvState {
+  return {
+    sessionId,
+    items: [],
+    nextId: 1,
+    busy: false,
+    replaying: opts.replaying,
+    commands: [],
+    modes: opts.modes ?? null,
+    configOptions: opts.configOptions ?? [],
+    plan: [],
+    usage: null,
+    title: null,
+    held: true,
+  };
+}
 
 export interface QueuedUpdate {
   update: SessionUpdate;
   at: number;
+}
+
+/** A session/update with the session it names. */
+export interface RoutedUpdate extends QueuedUpdate {
+  sessionId: string;
 }
 
 export function blockText(block: ContentBlock): string {
@@ -149,11 +125,11 @@ export function blockText(block: ContentBlock): string {
 }
 
 /**
- * The update helpers below mutate a draft: a shallow copy of the state whose `items` array is
+ * The update helpers below mutate a draft: a shallow copy of the conversation whose `items` array is
  * already a private copy. Item objects themselves are never mutated (memoised rows compare them).
  */
 function appendChunk(
-  d: SessionState,
+  d: ConvState,
   kind: "user" | "agent" | "thought",
   text: string,
   messageId: string | null | undefined,
@@ -184,7 +160,7 @@ export function findTool(items: readonly Item[], toolCallId: string): number {
   return -1;
 }
 
-function upsertTool(d: SessionState, u: ToolCallFields, isNew: boolean, at: number): true {
+function upsertTool(d: ConvState, u: ToolCallFields, isNew: boolean, at: number): true {
   const idx = findTool(d.items, u.toolCallId);
   const prev = idx >= 0 ? (d.items[idx] as Extract<Item, { kind: "tool" }>) : null;
   const next: Extract<Item, { kind: "tool" }> = {
@@ -223,8 +199,11 @@ function tokenPair(v: unknown): TokenPair | null {
   return { inputTokens: o.inputTokens, outputTokens: o.outputTokens };
 }
 
-/** Apply one update to the draft; false when it changed nothing. */
-function applyUpdate(d: SessionState, u: SessionUpdate, at: number): boolean {
+/**
+ * Apply one update to the draft. False only when the update certainly changed nothing; the branches
+ * that replace a whole field (plan, commands, config options, usage) report true without comparing.
+ */
+function applyUpdate(d: ConvState, u: SessionUpdate, at: number): boolean {
   switch (u.sessionUpdate) {
     case "user_message_chunk": {
       if (!d.replaying) return false; // live user text is added locally on send
@@ -282,80 +261,254 @@ function applyUpdate(d: SessionState, u: SessionUpdate, at: number): boolean {
   }
 }
 
-/** A batch of updates in one render; the same state back when none of them changed anything. */
-export function applyUpdates(state: SessionState, updates: readonly QueuedUpdate[]): SessionState {
-  if (updates.length === 0) return state;
+/** A batch of updates for one session in one render; the same conversation back when none of them changed anything. */
+export function applyUpdates(conv: ConvState, updates: readonly QueuedUpdate[]): ConvState {
+  if (updates.length === 0) return conv;
   // One copy of the item list per batch, however many updates it carries.
-  const d: SessionState = { ...state, items: state.items.slice() };
+  const d: ConvState = { ...conv, items: conv.items.slice() };
   let changed = false;
   for (const q of updates) if (applyUpdate(d, q.update, q.at)) changed = true;
-  return changed ? d : state;
+  return changed ? d : conv;
 }
 
-export function reducer(state: SessionState, a: Action): SessionState {
+// ---- the window -----------------------------------------------------------
+
+/**
+ * The window over one keryx connection. It keeps a conversation for every session it holds and routes
+ * every update by its sessionId; which one is on screen is `shownId`, a local choice.
+ */
+export interface WindowState {
+  phase: Phase;
+  exit: { code: number | null; stderrTail: string } | null;
+  profile: "shell" | "editor";
+  agentVersion: string | null;
+  /** Sessions the window holds, or held and was told it no longer holds (read-only). */
+  convs: Readonly<Record<string, ConvState>>;
+  /** A session/load in flight: its replay lands here, off screen, and moves to `convs` on success. */
+  loading: Readonly<Record<string, ConvState>>;
+  /** session/new requests in flight. */
+  creating: number;
+  shownId: string | null;
+  sessions: SessionInfo[];
+  banners: Banner[];
+  nextBannerId: number;
+}
+
+export const initialState: WindowState = {
+  phase: "starting",
+  exit: null,
+  profile: "editor",
+  agentVersion: null,
+  convs: {},
+  loading: {},
+  creating: 0,
+  shownId: null,
+  sessions: [],
+  banners: [],
+  nextBannerId: 1,
+};
+
+export type Action =
+  /** Session updates coalesced into one render, each routed to the session it names. */
+  | { t: "updates"; updates: readonly RoutedUpdate[] }
+  | { t: "userSent"; sessionId: string; text: string }
+  | { t: "notice"; sessionId: string; level: "info" | "warn" | "error"; text: string }
+  | { t: "busy"; sessionId: string; busy: boolean }
+  | { t: "config"; sessionId: string; configOptions: ConfigOption[] }
+  | { t: "creating"; delta: 1 | -1 }
+  | { t: "created"; sessionId: string; modes?: SessionModeState | null; configOptions?: ConfigOption[] | null; show: boolean }
+  | { t: "loadStart"; sessionId: string }
+  | { t: "loadDone"; sessionId: string; modes?: SessionModeState | null; configOptions?: ConfigOption[] | null; show: boolean }
+  | { t: "loadFailed"; sessionId: string }
+  /** Show a session the window already has: local, no request. */
+  | { t: "show"; sessionId: string }
+  | { t: "released"; sessionId: string }
+  /** The connection is gone or restarting: every conversation stays visible, read-only. */
+  | { t: "connectionReset" }
+  | { t: "banner"; level: Banner["level"]; text: string }
+  | { t: "clearBanners" }
+  | { t: "dismissBanner"; id: number }
+  | { t: "phase"; phase: Phase; exit?: WindowState["exit"] }
+  | { t: "agent"; profile: "shell" | "editor"; version: string | null }
+  | { t: "sessions"; sessions: SessionInfo[] };
+
+function withConv(state: WindowState, sessionId: string, f: (c: ConvState) => ConvState): WindowState {
+  const c = state.convs[sessionId];
+  if (!c) return state;
+  const next = f(c);
+  return next === c ? state : { ...state, convs: { ...state.convs, [sessionId]: next } };
+}
+
+function without<T>(rec: Readonly<Record<string, T>>, key: string): Record<string, T> {
+  const out = { ...rec };
+  delete out[key];
+  return out;
+}
+
+function routeUpdates(state: WindowState, updates: readonly RoutedUpdate[]): WindowState {
+  const bySession = new Map<string, QueuedUpdate[]>();
+  for (const u of updates) {
+    const list = bySession.get(u.sessionId);
+    if (list) list.push(u);
+    else bySession.set(u.sessionId, [u]);
+  }
+  let convs = state.convs;
+  let loading = state.loading;
+  for (const [sid, list] of bySession) {
+    const target = loading[sid] ?? convs[sid];
+    // A session the window does not hold, or no longer holds, is not narrated into.
+    if (!target || (!loading[sid] && !target.held)) continue;
+    const next = applyUpdates(target, list);
+    if (next === target) continue;
+    if (loading[sid]) loading = { ...loading, [sid]: next };
+    else convs = { ...convs, [sid]: next };
+  }
+  return convs === state.convs && loading === state.loading ? state : { ...state, convs, loading };
+}
+
+export function reducer(state: WindowState, a: Action): WindowState {
   switch (a.t) {
-    case "update":
-      return applyUpdates(state, [{ update: a.update, at: a.at ?? Date.now() }]);
     case "updates":
-      return applyUpdates(state, a.updates);
-    case "switching":
-      return state.switching === a.on ? state : { ...state, switching: a.on };
+      return routeUpdates(state, a.updates);
     case "userSent":
-      return {
-        ...state,
-        nextId: state.nextId + 1,
-        items: [...state.items, { kind: "user", id: state.nextId, text: a.text }],
-      };
+      return withConv(state, a.sessionId, (c) => ({ ...c, nextId: c.nextId + 1, items: [...c.items, { kind: "user", id: c.nextId, text: a.text }] }));
     case "notice":
+      return withConv(state, a.sessionId, (c) => ({
+        ...c,
+        nextId: c.nextId + 1,
+        items: [...c.items, { kind: "notice", id: c.nextId, level: a.level, text: a.text }],
+      }));
+    case "busy":
+      return withConv(state, a.sessionId, (c) => (c.busy === a.busy ? c : { ...c, busy: a.busy }));
+    case "config":
+      return withConv(state, a.sessionId, (c) => ({ ...c, configOptions: a.configOptions }));
+    case "creating":
+      return { ...state, creating: Math.max(0, state.creating + a.delta) };
+    case "created": {
+      const conv = newConv(a.sessionId, { replaying: false, modes: a.modes, configOptions: a.configOptions });
+      return { ...state, convs: { ...state.convs, [a.sessionId]: conv }, shownId: a.show ? a.sessionId : state.shownId };
+    }
+    case "loadStart":
+      return { ...state, loading: { ...state.loading, [a.sessionId]: newConv(a.sessionId, { replaying: true }) } };
+    case "loadDone": {
+      const loaded = state.loading[a.sessionId];
+      if (!loaded) return state;
+      const conv: ConvState = {
+        ...loaded,
+        replaying: false,
+        held: true,
+        modes: a.modes ?? loaded.modes,
+        configOptions: a.configOptions ?? loaded.configOptions,
+      };
       return {
         ...state,
-        nextId: state.nextId + 1,
-        items: [...state.items, { kind: "notice", id: state.nextId, level: a.level, text: a.text }],
+        loading: without(state.loading, a.sessionId),
+        convs: { ...state.convs, [a.sessionId]: conv },
+        shownId: a.show ? a.sessionId : state.shownId,
       };
+    }
+    case "loadFailed":
+      // The view, and any read-only copy of the session, stay as they were.
+      return state.loading[a.sessionId] ? { ...state, loading: without(state.loading, a.sessionId) } : state;
+    case "show":
+      return state.convs[a.sessionId] && state.shownId !== a.sessionId ? { ...state, shownId: a.sessionId } : state;
+    case "released":
+      return withConv(state, a.sessionId, (c) => (c.held || c.busy ? { ...c, held: false, busy: false } : c));
+    case "connectionReset": {
+      const convs: Record<string, ConvState> = {};
+      for (const [sid, c] of Object.entries(state.convs)) convs[sid] = c.held || c.busy ? { ...c, held: false, busy: false } : c;
+      return { ...state, convs, loading: {}, creating: 0 };
+    }
     case "banner":
       return {
         ...state,
-        nextId: state.nextId + 1,
-        banners: [...state.banners.filter((b) => b.text !== a.text), { id: state.nextId, level: a.level, text: a.text }],
+        nextBannerId: state.nextBannerId + 1,
+        banners: [...state.banners.filter((b) => b.text !== a.text), { id: state.nextBannerId, level: a.level, text: a.text }],
       };
     case "clearBanners":
-      return { ...state, banners: [] };
+      return state.banners.length === 0 ? state : { ...state, banners: [] };
     case "dismissBanner":
       return { ...state, banners: state.banners.filter((b) => b.id !== a.id) };
     case "phase":
-      return { ...state, phase: a.phase, exit: a.exit ?? null, busy: a.phase === "ready" ? state.busy : false };
+      return { ...state, phase: a.phase, exit: a.exit ?? null };
     case "agent":
       return { ...state, profile: a.profile, agentVersion: a.version };
-    case "session":
-      return {
-        ...state,
-        sessionId: a.sessionId,
-        items: [],
-        plan: [],
-        usage: null,
-        title: null,
-        commands: [],
-        busy: false,
-        replaying: a.replaying,
-        modes: a.modes ?? null,
-        configOptions: a.configOptions ?? [],
-      };
-    case "meta":
-      return {
-        ...state,
-        modes: a.modes ?? state.modes,
-        configOptions: a.configOptions ?? state.configOptions,
-      };
-    case "replayDone":
-      return state.replaying ? { ...state, replaying: false } : state;
-    case "sessionLost":
-      // A load failed and nothing could be restored: no session, so the composer disables itself.
-      return { ...state, sessionId: null, items: [], plan: [], usage: null, title: null, commands: [], busy: false, replaying: false, modes: null };
-    case "busy":
-      return { ...state, busy: a.busy };
-    case "config":
-      return { ...state, configOptions: a.configOptions };
     case "sessions":
       return { ...state, sessions: a.sessions };
   }
+}
+
+// ---- what the UI reads ----------------------------------------------------
+
+/** The sidebar's marks for one session the window has. */
+export interface SessionMark {
+  busy: boolean;
+  /** A permission or ask_user dialog waits for the user. */
+  waiting: boolean;
+  held: boolean;
+  title: string | null;
+}
+
+/** The shown session flattened with the window's own fields: what SessionView and App render. */
+export interface SessionState {
+  phase: Phase;
+  exit: WindowState["exit"];
+  profile: "shell" | "editor";
+  agentVersion: string | null;
+  sessions: SessionInfo[];
+  banners: Banner[];
+  sessionId: string | null;
+  items: Item[];
+  busy: boolean;
+  replaying: boolean;
+  /** The shown session is still held by keryx; false means read-only until it is reopened. */
+  held: boolean;
+  commands: AvailableCommand[];
+  modes: SessionModeState | null;
+  configOptions: ConfigOption[];
+  plan: PlanEntry[];
+  usage: Usage | null;
+  title: string | null;
+  /** A session/new or session/load is in flight. */
+  opening: boolean;
+  /** Session ids whose session/load is in flight. */
+  loadingIds: readonly string[];
+}
+
+const NO_ITEMS: Item[] = [];
+const NO_COMMANDS: AvailableCommand[] = [];
+const NO_CONFIG: ConfigOption[] = [];
+const NO_PLAN: PlanEntry[] = [];
+
+export function shownView(w: WindowState): SessionState {
+  const c = w.shownId ? w.convs[w.shownId] : undefined;
+  const loadingIds = Object.keys(w.loading);
+  return {
+    phase: w.phase,
+    exit: w.exit,
+    profile: w.profile,
+    agentVersion: w.agentVersion,
+    sessions: w.sessions,
+    banners: w.banners,
+    sessionId: c?.sessionId ?? null,
+    items: c?.items ?? NO_ITEMS,
+    busy: c?.busy ?? false,
+    replaying: c?.replaying ?? false,
+    held: c?.held ?? false,
+    commands: c?.commands ?? NO_COMMANDS,
+    modes: c?.modes ?? null,
+    configOptions: c?.configOptions ?? NO_CONFIG,
+    plan: c?.plan ?? NO_PLAN,
+    usage: c?.usage ?? null,
+    title: c?.title ?? null,
+    opening: w.creating > 0 || loadingIds.length > 0,
+    loadingIds,
+  };
+}
+
+/** Marks for every session the window has, for the sidebar. */
+export function sessionMarks(w: WindowState, waiting: ReadonlySet<string>): Record<string, SessionMark> {
+  const out: Record<string, SessionMark> = {};
+  for (const [sid, c] of Object.entries(w.convs)) out[sid] = { busy: c.busy, waiting: waiting.has(sid), held: c.held, title: c.title };
+  return out;
 }

@@ -203,7 +203,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
   const status = useMemo<Status>(() => {
     if (state.phase === "starting") return { tone: "idle", label: "Starting" };
     if (state.phase === "exited") return { tone: "danger", label: "Stopped", detail: "keryx is not running" };
-    if (s.fatal?.kind === "incompatible") return { tone: "warn", label: "Incompatible" };
+    if (s.fatal?.kind === "incompatible" || s.fatal?.kind === "noShell") return { tone: "warn", label: "Incompatible" };
     if (state.busy) return { tone: "busy", label: "Working" };
     return { tone: "ok", label: "Ready", detail: state.agentVersion ? `keryx ${state.agentVersion} · ${state.profile} profile` : undefined };
   }, [state.phase, state.busy, state.agentVersion, state.profile, s.fatal]);

@@ -30,22 +30,25 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
   const prefs = usePrefs();
   const sidebarOpen = prefs.sessionSidebar && !narrow;
   const [narrowSidebar, setNarrowSidebar] = useState(false);
-  const ready = state.phase === "ready" && state.sessionId !== null;
+  const ready = state.phase === "ready" && state.sessionId !== null && state.held;
+  const incompatible = s.fatal?.kind === "incompatible" || s.fatal?.kind === "noShell";
 
   const disabledReason =
     state.phase === "starting"
       ? "Starting keryx…"
       : state.phase === "exited"
         ? "keryx is not running. Restart it to continue."
-        : s.fatal?.kind === "incompatible"
+        : incompatible
           ? "This keryx is not compatible with the app."
           : state.replaying
             ? "Loading session…"
-            : state.switching
-              ? "Switching session…"
-              : !state.sessionId
-              ? "No session. Start a new one to continue."
-              : null;
+            : !state.sessionId
+              ? state.opening
+                ? "Opening a session…"
+                : "No session. Start a new one to continue."
+              : !state.held
+                ? "keryx closed this idle session to save memory. Reopen it to continue."
+                : null;
 
   const fill = (text: string) => {
     const handle = composerRef && typeof composerRef !== "function" ? composerRef.current : null;
@@ -88,10 +91,10 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
   const sidebar = (
     <SessionSidebar
       sessions={state.sessions}
+      marks={s.marks}
+      loadingIds={state.loadingIds}
       currentId={state.sessionId}
-      currentTitle={state.title}
-      busy={state.busy}
-      ready={state.phase === "ready"}
+      ready={state.phase === "ready" && !incompatible}
       onNew={() => void s.newSession()}
       onLoad={(id) => {
         setNarrowSidebar(false);
@@ -137,6 +140,17 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
           </div>
         ) : null}
         {state.phase === "exited" ? <ExitBanner exit={state.exit} onRestart={s.restart} /> : null}
+        {state.phase === "ready" && state.sessionId && !state.held && !state.loadingIds.includes(state.sessionId) ? (
+          <div className="session-banners">
+            <div className="inline-banner tone-neutral">
+              <Icon name="info" size={14} />
+              <span>keryx closed this idle session to save memory. What you see is its last state.</span>
+              <button className="btn btn-sm btn-primary" onClick={s.reopen}>
+                <Icon name="refresh" size={13} /> Reopen
+              </button>
+            </div>
+          </div>
+        ) : null}
         {state.phase === "starting" ? (
           <div className="session-banners">
             <div className="inline-banner tone-neutral">
@@ -146,7 +160,14 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
           </div>
         ) : null}
 
-        <Transcript items={state.items} busy={state.busy} replaying={state.replaying} empty={state.phase === "ready" ? empty : null} />
+        {/* Keyed by session: item ids restart in every session, so rows must not carry state across. */}
+        <Transcript
+          key={state.sessionId ?? ""}
+          items={state.items}
+          busy={state.busy}
+          replaying={state.replaying || (state.sessionId === null && state.opening)}
+          empty={state.phase === "ready" ? empty : null}
+        />
 
         <div className="composer-dock">
           {state.plan.length > 0 ? <PlanCard plan={state.plan} /> : null}

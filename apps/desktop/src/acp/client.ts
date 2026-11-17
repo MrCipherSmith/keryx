@@ -31,8 +31,14 @@ export class AcpClient {
   onRequest: RequestHandler = async (method) => {
     throw new RpcError(-32601, `Method not found: ${method}`);
   };
+  /** A reply to one of keryx's requests could not be sent even after retrying. */
+  onReplyFailed: (method: string, error: string) => void = () => {};
 
-  constructor(private transport: Transport) {}
+  /** Pauses between attempts to send a reply keryx is waiting for (about 6 s in all). */
+  constructor(
+    private transport: Transport,
+    private readonly replyBackoffMs: readonly number[] = [50, 100, 200, 400, 800, 1600, 3000],
+  ) {}
 
   request<T>(method: string, params?: unknown): Promise<T> {
     if (this.closed) return Promise.reject(new Error("keryx is not running"));
@@ -88,16 +94,40 @@ export class AcpClient {
   }
 
   private async answer(id: Id, method: string, params: unknown): Promise<void> {
+    let frame: Record<string, unknown>;
     try {
       const result = await this.onRequest(method, params);
-      await this.write({ jsonrpc: "2.0", id, result: result ?? null });
+      frame = { jsonrpc: "2.0", id, result: result ?? null };
     } catch (e) {
       const err =
         e instanceof RpcError
           ? { code: e.code, message: e.message, data: e.data }
           : { code: -32603, message: e instanceof Error ? e.message : String(e) };
-      await this.write({ jsonrpc: "2.0", id, error: err }).catch(() => {});
+      frame = { jsonrpc: "2.0", id, error: err };
     }
+    await this.reply(frame, method);
+  }
+
+  /**
+   * keryx waits for every reply without a timeout, so a reply is not given up on a full input queue:
+   * it is retried with a growing pause while the client is open. Each reply names its id, so a retry
+   * never confuses another one. If it still cannot be sent, `onReplyFailed` says so.
+   */
+  private async reply(frame: Record<string, unknown>, method: string): Promise<void> {
+    let lastError: unknown = null;
+    for (let attempt = 0; attempt < this.replyBackoffMs.length + 1; attempt++) {
+      if (this.closed) return;
+      try {
+        await this.write(frame);
+        return;
+      } catch (e) {
+        lastError = e;
+      }
+      const pause = this.replyBackoffMs[attempt];
+      if (pause === undefined) break;
+      await new Promise<void>((r) => setTimeout(r, pause));
+    }
+    if (!this.closed) this.onReplyFailed(method, lastError instanceof Error ? lastError.message : String(lastError));
   }
 
   /**
