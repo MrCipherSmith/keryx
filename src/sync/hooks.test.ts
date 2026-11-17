@@ -17,7 +17,7 @@ async function withGitRepo(run: (root: string) => Promise<void>): Promise<void> 
 test("installs post-merge + post-checkout hooks that call keryx sync", async () => {
   await withGitRepo(async (root) => {
     const installed = await installSyncHooks(root);
-    expect(installed.sort()).toEqual([...SYNC_HOOKS].sort());
+    expect(installed.sort()).toEqual([...SYNC_HOOKS, "commit-msg"].sort());
     for (const hook of SYNC_HOOKS) {
       const content = await readFile(path.join(root, ".git", "hooks", hook), "utf8");
       expect(content).toContain("# keryx:keryx-sync:begin");

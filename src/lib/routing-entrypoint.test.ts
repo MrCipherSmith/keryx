@@ -50,7 +50,7 @@ test("planning the routing pair writes neither member nor a journal", async () =
   const metaprojectRoot = await fixture();
   try {
     const plan = await planRoutingEntrypointPair(metaprojectRoot, OPTIONS, { intent: "update" });
-    expect(plan.steps.map((step) => step.id)).toEqual(["routing:full", "routing:index"]);
+    expect(plan.steps.map((step) => step.id)).toEqual(["rules:process:agent-conduct", "routing:full", "routing:index"]);
     expect(plan.steps.every((step) => step.outcome === "create")).toBe(true);
     expect(await pathExists(path.join(metaprojectRoot, "routing.md"))).toBe(false);
     expect(await pathExists(path.join(metaprojectRoot, "index.md"))).toBe(false);

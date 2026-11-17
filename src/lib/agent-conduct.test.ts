@@ -6,19 +6,21 @@ import {
   AGENT_CONDUCT_PROMPT_BLOCK,
   containsAgentConduct,
   renderAgentConductMarkdown,
-  withAgentConduct,
 } from "./agent-conduct";
 import { renderProjectMetaprojectReferenceBlock } from "./agent-entrypoint-blocks";
 import { buildAgentSystemInstruction } from "../commands/agent";
 import { EXTERNAL_RUNTIME_DIRECTIVE, EXTERNAL_WRITE_RUNTIME_DIRECTIVE } from "../harness/external/prompt";
 import { REVIEWER_SYSTEM_PROMPT, VERIFIER_SYSTEM_PROMPT } from "../review/bot/run";
 import { HERDR_TEMPLATE_MD } from "../commands/herdr";
+import { loadSchema, validateJson } from "../gdskills/contracts";
+import { validateAgainstSchemaObject } from "../contracts/validator";
 
 describe("agent conduct block (ADR-0001 D2)", () => {
   test("holds exactly the five constraints", () => {
     expect(AGENT_CONDUCT_CONSTRAINTS).toHaveLength(5);
     expect(AGENT_CONDUCT_CONSTRAINTS[0]).toContain("Co-Authored-By:");
     expect(AGENT_CONDUCT_CONSTRAINTS[0]).toContain("technical provenance");
+    expect(AGENT_CONDUCT_CONSTRAINTS[0]).toContain("human co-author");
     expect(AGENT_CONDUCT_CONSTRAINTS[1]).toContain("explicit ask");
     expect(AGENT_CONDUCT_CONSTRAINTS[2]).toContain("git stash");
     expect(AGENT_CONDUCT_CONSTRAINTS[3]).toContain("secrets");
@@ -30,16 +32,10 @@ describe("agent conduct block (ADR-0001 D2)", () => {
       renderAgentConductMarkdown(),
       AGENT_CONDUCT_PROMPT_BLOCK,
       AGENT_CONDUCT_DISPATCH_CONSTRAINT,
-      withAgentConduct("task"),
     ]) {
       expect(containsAgentConduct(rendered)).toBe(true);
     }
     expect(AGENT_CONDUCT_DISPATCH_CONSTRAINT.startsWith("Agent conduct (mandatory):")).toBe(true);
-  });
-
-  test("withAgentConduct appends after a blank line and handles an empty prompt", () => {
-    expect(withAgentConduct("do X\n\n")).toBe(`do X\n\n${AGENT_CONDUCT_PROMPT_BLOCK}`);
-    expect(withAgentConduct("")).toBe(AGENT_CONDUCT_PROMPT_BLOCK);
   });
 
   test("reaches every delivery path", () => {
@@ -86,6 +82,43 @@ describe("agent conduct block (ADR-0001 D2)", () => {
     expect(new RegExp(reviewer.properties.conduct.pattern).test(AGENT_CONDUCT_DISPATCH_CONSTRAINT)).toBe(true);
   });
 
+  test("both validators refuse a dispatch whose constraints lack the conduct entry", async () => {
+    const schema = await loadSchema("subagent-dispatch");
+    const dispatch = (constraints: string[]) => ({
+      contract_version: "1.1.0",
+      run_id: "r1",
+      dispatch_id: "d1",
+      orchestrator: "flow-orchestrator",
+      target_skill: "task-implementer",
+      task: { title: "t", description: "d" },
+      acceptance_criteria: ["AC1"],
+      context_refs: [],
+      files_to_read: [],
+      constraints,
+      allowed_actions: ["read"],
+      output_contract: { schema: "subagent-result", artifact_path: "a.json" },
+      budget: {},
+      provenance: { created_at: "2026-11-17T00:00:00Z", created_by: "test" },
+    });
+    const placeholder = 'Agent conduct (mandatory): <the "Dispatch form" line of .metaproject/rules/process/agent-conduct.mdc, verbatim>';
+    for (const constraints of [[], ["Never edit flow.json."], [placeholder]]) {
+      expect((await validateJson(dispatch(constraints), schema)).length, JSON.stringify(constraints)).toBeGreaterThan(0);
+      expect(validateAgainstSchemaObject(schema as Record<string, unknown>, dispatch(constraints)).valid).toBe(false);
+    }
+    const ok = dispatch(["Never edit flow.json.", AGENT_CONDUCT_DISPATCH_CONSTRAINT]);
+    expect(await validateJson(ok, schema)).toEqual([]);
+    expect(validateAgainstSchemaObject(schema as Record<string, unknown>, ok).valid).toBe(true);
+  });
+
+  test("the herdr template text is pinned, so a conduct wording change cannot strand installed copies", () => {
+    // The herdr template embeds AGENT_CONDUCT_PROMPT_BLOCK. `keryx herdr install`
+    // recognises keryx's own older copies only through HERDR_TEMPLATE_PREVIOUS
+    // (src/commands/herdr.ts). When this hash changes, append the PREVIOUS text of
+    // HERDR_TEMPLATE_MD to that list (never edit an entry), then update the hash.
+    const digest = new Bun.CryptoHasher("sha256").update(HERDR_TEMPLATE_MD).digest("hex");
+    expect(digest).toBe("d55d396f14fc3359923e20526c0a8daa43a946a72cc3fce2f7ac5599f9fd1897");
+  });
+
   test("prompt builders without an exported surface append the shared block", () => {
     // spawn_subagent, native review agents and the general worker build their
     // instruction inside a closure; pin the source so the append cannot drift away.
@@ -95,7 +128,9 @@ describe("agent conduct block (ADR-0001 D2)", () => {
       "../commands/review-agents-runtime/keryx-general-worker.ts",
     ]) {
       const source = readFileSync(new URL(file, import.meta.url), "utf8");
-      expect(source, file).toContain("AGENT_CONDUCT_PROMPT_BLOCK");
+      // A use, not just the import line.
+      const uses = source.split("\n").filter((line) => line.includes("AGENT_CONDUCT_PROMPT_BLOCK") && !/^\s*import\b/.test(line));
+      expect(uses.length, file).toBeGreaterThan(0);
     }
   });
 });

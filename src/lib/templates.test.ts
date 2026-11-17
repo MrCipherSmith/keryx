@@ -1,3 +1,4 @@
+import { MAX_INDEX_CHARS, MAX_INDEX_LINES } from "../ctx/orient";
 import { AGENT_CONDUCT_CONSTRAINTS, AGENT_CONDUCT_RULE_PATH } from "./agent-conduct";
 import { expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile, copyFile, readFile } from "node:fs/promises";
@@ -188,13 +189,11 @@ test("the gate carries the mandatory agent-conduct block and stays inside the or
   // excerpt in src/ctx/orient.ts (3,200 chars, 60 lines). Past that it is
   // truncated line by line and the conduct block, which comes last, is what
   // falls off.
-  const ORIENT_MAX_INDEX_CHARS = 3_200;
-  const ORIENT_MAX_INDEX_LINES = 60;
   for (const flags of [{ ...ALL_MODULES }, { ...ALL_MODULES, enableSecurity: false, enableTasks: false }]) {
     const gate = renderIndexGateMarkdown(flags);
     const excerpt = gate.trim();
-    expect(excerpt.length).toBeLessThanOrEqual(ORIENT_MAX_INDEX_CHARS);
-    expect(excerpt.split("\n").length).toBeLessThanOrEqual(ORIENT_MAX_INDEX_LINES);
+    expect(excerpt.length).toBeLessThanOrEqual(MAX_INDEX_CHARS);
+    expect(excerpt.split("\n").length).toBeLessThanOrEqual(MAX_INDEX_LINES);
     for (const constraint of AGENT_CONDUCT_CONSTRAINTS) {
       expect(gate).toContain(constraint);
     }

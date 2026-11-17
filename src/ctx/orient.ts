@@ -26,9 +26,9 @@ const WIKI_END = "<!-- keryx:wiki-index:end -->";
 const CODE_EXT = /\.(ts|tsx|js|jsx|mjs|cjs|py|go|rs|java|rb|php|c|h|cc|cpp|hpp|cs|swift|kt|scala|sh)$/;
 
 const INDEX_SECTIONS = ["Purpose", "Intent Router", "Enabled Modules", "Agent Operating Model"] as const;
-const MAX_INDEX_CHARS = 3_200;
+export const MAX_INDEX_CHARS = 3_200;
 const MAX_INDEX_LINE_CHARS = 180;
-const MAX_INDEX_LINES = 60;
+export const MAX_INDEX_LINES = 60;
 const MAX_MODULE_ROWS = 12;
 const MAX_WIKI_LINES = 40;
 

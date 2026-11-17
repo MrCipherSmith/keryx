@@ -15,6 +15,9 @@ worker reply is a `subagent-result`
 (`.metaproject/core/gdskills/contracts/subagent-result.schema.json`) whose first
 line is `STATUS:` (`.metaproject/rules/core/subagent-status-protocol.md`). Set
 `run_id` to the flow id and `dispatch_id` to `<flow-id>-<step>`.
+Every dispatch's `constraints` carries the mandatory agent-conduct entry: the
+"Dispatch form" line of `.metaproject/rules/process/agent-conduct.mdc`, verbatim
+(the schema refuses a dispatch without it).
 
 ## Workflow
 

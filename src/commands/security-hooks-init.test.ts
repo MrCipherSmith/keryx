@@ -444,3 +444,21 @@ test("flow 361: init --preview writes neither Claude settings file", async () =>
     await rm(root, { recursive: true, force: true });
   }
 }, 120_000);
+
+test("init and update install the commit-msg hook and the conduct rule, even without the gdskills module", async () => {
+  await withProject(async (root) => {
+    const commitMsgPath = path.join(root, ".git", "hooks", "commit-msg");
+    const conductRule = path.join(root, ".metaproject", "rules", "process", "agent-conduct.mdc");
+
+    await initCommand(["--yes", ...SECURITY_ONLY]);
+    expect(await readFile(commitMsgPath, "utf8")).toContain("# keryx:commit-msg-attribution:begin");
+    // index.md and the CLAUDE.md/AGENTS.md block point at the rule unconditionally (ADR-0001 D2).
+    expect(existsSync(conductRule)).toBe(true);
+
+    await rm(commitMsgPath);
+    await rm(conductRule);
+    await updateCommand([]);
+    expect(await readFile(commitMsgPath, "utf8")).toContain("# keryx:commit-msg-attribution:begin");
+    expect(existsSync(conductRule)).toBe(true);
+  });
+});

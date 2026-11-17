@@ -53,10 +53,10 @@
     },
     "constraints": {
       "type": "array",
-      "description": "Constraints the worker must honour. One entry must be the mandatory agent-conduct block (ADR-0001 D2), rendered from src/lib/agent-conduct.ts and starting with \"Agent conduct (mandatory):\".",
+      "description": "Constraints the worker must honour. Since contract 1.1.0 one entry must be the mandatory agent-conduct block (ADR-0001 D2) with all five numbered constraints: the \"Dispatch form\" line of rules/process/agent-conduct.mdc, rendered from src/lib/agent-conduct.ts. An unfilled template placeholder does not match.",
       "items": { "type": "string" },
       "minItems": 1,
-      "contains": { "type": "string", "pattern": "^Agent conduct \\(mandatory\\):" }
+      "contains": { "type": "string", "pattern": "^Agent conduct \\(mandatory\\): \\(1\\) .+ \\(2\\) .+ \\(3\\) .+ \\(4\\) .+ \\(5\\) .+" }
     },
     "allowed_actions": {
       "type": "array",

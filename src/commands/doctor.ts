@@ -489,13 +489,13 @@ export async function checkCommitMsgHook(cwd: string): Promise<DoctorCheck> {
     case "no-git":
       return { id: "commit-msg-hook", status: "ok", detail: "not a git repository — no commit-msg hook to check" };
     case "missing":
-      return { id: "commit-msg-hook", status: "warn", detail: "the keryx commit-msg hook (refuses Co-Authored-By and Generated-by lines) is not installed", fix: UPDATE_FIX };
+      return { id: "commit-msg-hook", status: "warn", detail: "the keryx commit-msg hook (refuses AI Co-Authored-By and Generated-by lines) is not installed", fix: UPDATE_FIX };
     case "inactive":
       return {
         id: "commit-msg-hook",
         status: "warn",
-        detail: `the keryx commit-msg hook is inactive: git runs hooks from ${result.effectiveHooksDir} (core.hooksPath), not ${result.managedHooksDir} where it is installed`,
-        fix: `install the commit-msg check in ${result.effectiveHooksDir}, or unset core.hooksPath`,
+        detail: `the keryx commit-msg hook is inactive: ${result.reason}`,
+        fix: result.fix ?? UPDATE_FIX,
       };
     case "active":
       return { id: "commit-msg-hook", status: "ok", detail: "commit-msg hook installed and active" };

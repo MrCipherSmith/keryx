@@ -17,6 +17,7 @@ import path from "node:path";
 import { mkdir, symlink, writeFile } from "node:fs/promises";
 import {
   buildDoctorReport,
+  checkCommitMsgHook,
   doctorCommand,
   doctorFailed,
   formatDoctorReport,
@@ -336,5 +337,44 @@ describe("keryx doctor (CLI) — --json shape and exit codes", () => {
     );
     expect(out).toContain("✗ bun:");
     expect(code).toBe(1);
+  });
+});
+
+describe("checkCommitMsgHook", () => {
+  async function gitRepo(): Promise<string> {
+    const root = await mkdtemp(path.join(tmpdir(), "keryx-doctor-commit-msg-"));
+    const proc = Bun.spawn(["git", "init", "-q"], { cwd: root, stdout: "ignore", stderr: "ignore" });
+    await proc.exited;
+    return root;
+  }
+
+  test("warns with the reason when the hook file cannot reach the managed block", async () => {
+    const root = await gitRepo();
+    try {
+      const hookPath = path.join(root, ".git", "hooks", "commit-msg");
+      await writeFile(hookPath, "#!/usr/bin/env python3\nprint('x')\n", "utf8");
+      const { installCommitMsgHookOrWarn } = await import("../lib/managed-git-hook");
+      expect(await installCommitMsgHookOrWarn(root)).toContain("non-POSIX-shell shebang");
+      // Force the block in anyway (as an older keryx or a manual edit could have).
+      await writeFile(hookPath, `#!/bin/sh\n# keryx:commit-msg-attribution:begin\ntrue\n# keryx:commit-msg-attribution:end\nexec true\n`, "utf8");
+      const check = await checkCommitMsgHook(root);
+      expect(check.status).toBe("warn");
+      expect(check.detail).toContain("inactive");
+      expect(check.detail).toContain("never reaches");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("ok when installed and active, warn when missing", async () => {
+    const root = await gitRepo();
+    try {
+      expect((await checkCommitMsgHook(root)).status).toBe("warn");
+      const { installCommitMsgHookOrWarn } = await import("../lib/managed-git-hook");
+      expect(await installCommitMsgHookOrWarn(root)).toBeNull();
+      expect((await checkCommitMsgHook(root)).status).toBe("ok");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });

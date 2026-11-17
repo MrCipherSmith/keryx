@@ -324,7 +324,7 @@ Dispatch payload, bound to the flow (map `target_skill` from the routing table):
 
 ```json
 {
-  "contract_version": "1.0.0",
+  "contract_version": "1.1.0",
   "run_id": "<flow-id>",
   "dispatch_id": "<flow-id>-<Tn>",
   "orchestrator": "flow-orchestrator",
@@ -511,7 +511,7 @@ answered it and who is behind it.
 | Input | Obey it as |
 |---|---|
 | `base_branch` | Cut the flow branch from **that** branch and merge back into it. Never substitute the repository default: a fix aimed at a pull request's own branch has to land inside that pull request, and the default branch is a different review. Absent, resolve the base yourself and record what you resolved. |
-| `completion_outcome: create-pr-and-merge` | Skip the Completion Choice question and run the PR review/fix loop. Merge into `base_branch` only on the explicit merge ask (`rules/process/agent-conduct.mdc` rule 2): `operator_confirmed` naming the human who asked. Without it, stop at the mergeable PR, report it, and leave the flow `in-progress` until the ask arrives. |
+| `completion_outcome: create-pr-and-merge` | Skip the Completion Choice question and run the PR review/fix loop. Merge into `base_branch` only on the explicit merge ask (`rules/process/agent-conduct.mdc` rule 2). For a dispatch that ask is `operator_confirmed`, which the input contract requires with this outcome: it must name the human who asked. |
 | `operator_confirmed` | The human decision behind an outward-facing completion. See the row below for when its absence is a refusal. |
 | `review: the caller owns the reply on #<n>` | Pass it through to every `review-orchestrator` dispatch. Reviews of **this flow's own** PR reply as normal — that is a separate conversation. What the round must not do is answer `#<n>`, which the caller is already answering. |
 | `attempt budget: at most <n> attempts` | A numeric ceiling BELOW your own bound is obeyed. One at or above it is not — the bound is yours, and the paragraph under this table says why. |
