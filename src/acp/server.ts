@@ -859,6 +859,19 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     );
   }
 
+  /** Shell profile: refuses a request for a session whose open may still fail and tear it down. */
+  function refuseIfOpening(method: string, sessionId: string): void {
+    if (!opening.has(sessionId)) return;
+    refuse(
+      invalidRequest({
+        reason: `${method}: session ${sessionId} is still being opened by an earlier session/new or session/load; wait for its reply`,
+        method,
+        sessionId,
+        condition: "session-opening",
+      }),
+    );
+  }
+
   /** Shapes, sends and interprets one `session/request_permission`. `undefined` = could not be asked. */
   const askPermissionFor = (sessionId: string, turn: AcpActiveTurn): AcpPermissionAsker => {
     return async (ask): Promise<AcpRequestPermissionResponse | undefined> => {
@@ -1438,6 +1451,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     const obj = requireObjectParams(params, method);
     const sessionId = requireStringField(obj, "sessionId", method);
     const modeId = requireStringField(obj, "modeId", method);
+    refuseIfOpening(method, sessionId);
     if (registry.get(sessionId) === undefined) {
       refuse({
         code: JSON_RPC_ERROR_CODES.resourceNotFound,
@@ -1718,6 +1732,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     // and this whole prologue — including the `activeTurns.set` below — runs
     // before the first `await`, so no second prompt can slip between the check
     // and the registration.
+    refuseIfOpening(ACP_AGENT_METHODS.sessionPrompt, sessionId);
     refuseIfBusy(ACP_AGENT_METHODS.sessionPrompt, sessionId);
     refuseIfStopping(ACP_AGENT_METHODS.sessionPrompt);
     requireProvider(ACP_AGENT_METHODS.sessionPrompt);
@@ -1950,6 +1965,13 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
    * logged, not refused (this is a notification; there is nothing to refuse
    * TO).
    */
+  /** `_keryx/session_shown` (shell profile): the client shows this held session now, so it counts as used. */
+  function handleSessionShown(params: unknown): void {
+    if (typeof params !== "object" || params === null) return;
+    const sessionId = (params as Record<string, unknown>)["sessionId"];
+    if (typeof sessionId === "string" && registry.get(sessionId) !== undefined) touch(sessionId);
+  }
+
   function handleSessionCancel(params: unknown): void {
     const obj = requireObjectParams(params, ACP_AGENT_METHODS.sessionCancel);
     const sessionId = requireStringField(obj, "sessionId", ACP_AGENT_METHODS.sessionCancel);
@@ -2101,16 +2123,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     refuseIfBusy(ACP_AGENT_METHODS.sessionLoad, sessionId);
     const method = ACP_AGENT_METHODS.sessionLoad;
     if (shellProfile) {
-      if (opening.has(sessionId)) {
-        refuse(
-          invalidRequest({
-            reason: `${method}: session ${sessionId} is still being opened by an earlier session/new or session/load; wait for its reply`,
-            method,
-            sessionId,
-            condition: "session-opening",
-          }),
-        );
-      }
+      refuseIfOpening(method, sessionId);
       const held = registry.get(sessionId);
       if (held !== undefined) return loadHeldSession(held, cwd, requestId);
     }
@@ -2240,6 +2253,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     if (typeof value !== "string" || value.length === 0) {
       refuse(invalidParams(`${method}: value must be a non-empty string`, { received: value }));
     }
+    refuseIfOpening(method, sessionId);
     if (registry.get(sessionId) === undefined) {
       refuse({
         code: JSON_RPC_ERROR_CODES.resourceNotFound,
@@ -2279,6 +2293,10 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       },
       notifications: {
         [ACP_AGENT_METHODS.sessionCancel]: (params) => handleSessionCancel(params),
+        // Shell profile only: the editor profile leaves it unhandled (logged, ignored).
+        ...(shellProfile
+          ? { [KERYX_ACP_EXTENSION_METHODS.sessionShown]: (params: unknown) => handleSessionShown(params) }
+          : {}),
       },
     },
     {
@@ -2403,6 +2421,15 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       }
       await within(Promise.allSettled([...inflight]), SHUTDOWN_TURN_GRACE_MS);
     } else {
+      // Shell profile: nobody is left to watch a turn, and a trust or auto
+      // turn would keep acting unattended. Aborted the way a Stop aborts it,
+      // then drained below so it still unwinds and replies.
+      if (shellProfile) {
+        for (const turn of activeTurns.values()) {
+          turn.cancelled = true;
+          turn.controller.abort();
+        }
+      }
       // A turn started before the close still has a response to write, and the
       // stream it writes to is still open. Draining is what makes the denial
       // observable to the client instead of dying with the process.

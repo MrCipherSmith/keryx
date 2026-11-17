@@ -11,7 +11,7 @@
 
 import { randomUUID } from "node:crypto";
 import { ACP_PROFILES, DEFAULT_ACP_PROFILE, isAcpProfile, type AcpProfile } from "../acp/profile";
-import { runAcpServer } from "../acp/server";
+import { MAX_HELD_SESSIONS, runAcpServer } from "../acp/server";
 import { loadAcpFixture } from "../acp/fixture-provider";
 import { acpModelChoice, type AcpModelChoice, type AcpModelSource, type AcpTurnSettings } from "../acp/models";
 import { FakeProvider } from "../harness/provider/fake-provider";
@@ -568,12 +568,14 @@ profile. --profile shell is what the keryx desktop app launches: keryx
 shell's tool roster (web_fetch/web_search, keryx's own MCP servers merged
 with the client's, background shell tasks, plan tools, ask_user when the
 client advertises clientCapabilities._meta.keryx.askUser) minus
-spawn_subagent and bus tools; permission modes ask, trust and auto
+spawn_subagent and the bus, scheduling and operator-confirm tools; permission modes ask, trust and auto
 (session/set_mode, /mode, starting from the project's saved default);
 and plan, usage_update and session_info_update session updates. Sessions
 stay live: opening or loading one releases none, and turns and shell tasks
-keep running in the others; past 8 held sessions the least recently used
-idle one is released and the client gets _keryx/session_released.
+keep running in the others; past ${MAX_HELD_SESSIONS} held sessions the least recently used
+idle one is released and the client gets _keryx/session_released. The client
+tells keryx which held session it is showing with the notification
+_keryx/session_shown, which counts as use.
 initialize reports the profile in _meta.keryx, and _keryx/info answers
 the version, profile and extensions in either profile. An unknown profile
 exits with status 2.

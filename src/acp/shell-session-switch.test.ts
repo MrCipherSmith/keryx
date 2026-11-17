@@ -147,8 +147,9 @@ describe("shell profile — live sessions: opening a session releases none (PR #
 
       await h.newSession();
       await load(h, storedSession(h));
-      // A sweep would have begun synchronously with a release; give it time to land.
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      // A release starts synchronously (the lease goes back and the notification is written before
+      // the reply), so by the time the load replied there is nothing left to wait for.
+      expect(h.frames.some((f) => f.method === SESSION_RELEASED)).toBe(false);
       expect(isAlive(pid)).toBe(true);
       expect(leaseStateOf(h, a)).toBe("mine");
       const promptId = h.prompt(a, "/mode");
@@ -417,6 +418,30 @@ describe("shell profile — opening and failing (PR #1213 r04)", () => {
     }
   }, TIMEOUT_MS);
 
+  test("session/prompt, set_mode and set_config_option for a session still being opened are refused as session-opening (logic-w13 LOGIC-R4-001)", async () => {
+    const h = shellHarness({
+      serverOptions: {
+        models: { choices: () => new Promise(() => {}), bind: async () => "unused" },
+        modelListTimeoutMs: 200,
+      },
+    });
+    try {
+      await h.initialize();
+      const b = storedSession(h);
+      const loadId = h.request("session/load", { sessionId: b, cwd: h.projectDir, mcpServers: [] });
+      const promptId = h.prompt(b, "/mode");
+      const modeId = h.request("session/set_mode", { sessionId: b, modeId: "trust" });
+      const configId = h.request("session/set_config_option", { sessionId: b, configId: "model", value: "test-model" });
+      for (const id of [promptId, modeId, configId]) {
+        expect((await h.waitFor((f) => f.id === id)).error?.data?.["condition"]).toBe("session-opening");
+      }
+      expect((await h.waitFor((f) => f.id === loadId)).error).toBeUndefined();
+      expect(leaseStateOf(h, b)).toBe("mine");
+    } finally {
+      await h.end();
+    }
+  }, TIMEOUT_MS);
+
   test("a shutdown during session/new refuses the rest of it and starts no MCP set (logic-w11 LOGIC-W11R3-002)", async () => {
     const shutdown = new AbortController();
     const dial = countingConnect();
@@ -518,6 +543,25 @@ describe(`shell profile — the idle cap of ${MAX_HELD_SESSIONS} held sessions (
 
       h.notify("session/cancel", { sessionId: busy });
       expect((await h.waitFor((f) => f.id === busyPrompt)).result?.["stopReason"]).toBe("cancelled");
+    } finally {
+      await h.end();
+    }
+  }, TIMEOUT_MS);
+
+  test("_keryx/session_shown counts as use: the shown session is kept and the next least recent one is released (highload-w1 HL-R4-002)", async () => {
+    const h = shellHarness();
+    try {
+      await h.initialize();
+      const sessions: string[] = [];
+      for (let i = 0; i < MAX_HELD_SESSIONS; i += 1) sessions.push((await h.newSession()).sessionId);
+      const [oldest, second] = sessions as [string, string];
+      // An unknown id is ignored, and the notification has no reply.
+      h.notify(KERYX_ACP_EXTENSION_METHODS.sessionShown, { sessionId: "not-held" });
+      h.notify(KERYX_ACP_EXTENSION_METHODS.sessionShown, { sessionId: oldest });
+      const ninth = (await h.newSession()).sessionId;
+      expect(releasedFrames(h)).toEqual([{ sessionId: second, reason: IDLE_CAP_RELEASE_REASON }]);
+      expect(leaseStateOf(h, oldest)).toBe("mine");
+      expect(leaseStateOf(h, ninth)).toBe("mine");
     } finally {
       await h.end();
     }
@@ -725,6 +769,23 @@ describe("shell profile — the connection's end", () => {
       expect(reopened.history.some((message) => message.role === "user" && message.content.includes("persist me"))).toBe(true);
     } finally {
       releaseSessionLease(reopened.lease);
+    }
+  }, TIMEOUT_MS);
+
+  test("stdin ending aborts a running turn in the shell profile, as a Stop would (security-code-w7 SEC-R4-001)", async () => {
+    const h = shellHarness({ rounds: [toolRound("t1", "shell_exec", { command: "true" }), textRound("never reached")] });
+    try {
+      await h.initialize();
+      const a = (await h.newSession()).sessionId;
+      const { promptId } = await promptUntilAsked(h, a, "keep going unattended");
+      // The permission ask is still open when input ends: the turn must not carry on to its next round.
+      await h.end();
+      const reply = await h.waitFor((f) => f.id === promptId);
+      expect(reply.error).toBeUndefined();
+      expect(reply.result?.["stopReason"]).toBe("cancelled");
+      expect(h.frames.some((f) => f.params?.update?.content?.text === "never reached")).toBe(false);
+    } finally {
+      await h.end();
     }
   }, TIMEOUT_MS);
 });

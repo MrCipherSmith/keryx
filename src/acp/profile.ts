@@ -31,12 +31,23 @@ export const KERYX_ACP_EXTENSION_METHODS = {
    * "idle-cap"`); a later return to it needs `session/load`.
    */
   sessionReleased: "_keryx/session_released",
+  /**
+   * Client → agent notification, shell profile: `{ sessionId }`. The client
+   * switched the session it shows to a held one locally; keryx counts it as
+   * use for the idle cap. An unknown or not-held id is ignored; no reply.
+   */
+  sessionShown: "_keryx/session_shown",
 } as const;
 
 /** The extensions a profile speaks, as `initialize._meta.keryx.extensions` and `_keryx/info` list them. */
 export function acpProfileExtensions(profile: AcpProfile): string[] {
   return profile === "shell"
-    ? [KERYX_ACP_EXTENSION_METHODS.info, KERYX_ACP_EXTENSION_METHODS.askUser, KERYX_ACP_EXTENSION_METHODS.sessionReleased]
+    ? [
+        KERYX_ACP_EXTENSION_METHODS.info,
+        KERYX_ACP_EXTENSION_METHODS.askUser,
+        KERYX_ACP_EXTENSION_METHODS.sessionReleased,
+        KERYX_ACP_EXTENSION_METHODS.sessionShown,
+      ]
     : [KERYX_ACP_EXTENSION_METHODS.info];
 }
 

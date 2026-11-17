@@ -466,7 +466,11 @@ is what the keryx desktop app launches, and is open to any ACP client:
   uses the same list, and its hooks end with `SessionEnd` — and keryx sends the
   notification `_keryx/session_released {sessionId, reason: "idle-cap"}`.
   Later requests for it get `Unknown ACP session` until it is loaded again; a
-  load restores its permission mode, model and usage totals. When every held
+  load restores its permission mode, model and usage totals. A client that
+  switches the shown session locally sends the notification
+  `_keryx/session_shown {sessionId}` (no reply; an id the connection does not
+  hold is ignored), so the switch counts as use for the least-recently-used
+  choice. When every held
   session is busy none is released. A `session/new` or `session/load` that
   fails gives back only the session it was opening. The `editor` profile keeps
   every session until the connection ends.
