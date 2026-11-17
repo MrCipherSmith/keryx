@@ -7,7 +7,7 @@ import { Kbd, Spinner } from "../components/ui";
 import { Composer, type ComposerHandle } from "./Composer";
 import { SessionSidebar } from "./SessionSidebar";
 import { Transcript } from "./Transcript";
-import type { Usage } from "./reducer";
+import { lostText, type Usage } from "./reducer";
 import { modelOption, type useAcpSession } from "./useAcpSession";
 
 type Session = ReturnType<typeof useAcpSession>;
@@ -16,6 +16,7 @@ interface Props {
   s: Session;
   projectName: string;
   onGoFlows: () => void;
+  onGoSettings: () => void;
   narrow: boolean;
 }
 
@@ -25,7 +26,7 @@ const SUGGESTIONS = [
   { icon: "search" as const, text: "Find TODO and FIXME comments and group them by area." },
 ];
 
-export const SessionView = forwardRef<ComposerHandle, Props>(function SessionView({ s, projectName, onGoFlows, narrow }, composerRef) {
+export const SessionView = forwardRef<ComposerHandle, Props>(function SessionView({ s, projectName, onGoFlows, onGoSettings, narrow }, composerRef) {
   const { state } = s;
   const prefs = usePrefs();
   const sidebarOpen = prefs.sessionSidebar && !narrow;
@@ -34,20 +35,20 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
   const incompatible = s.fatal?.kind === "incompatible" || s.fatal?.kind === "noShell";
 
   const disabledReason =
-    state.phase === "starting"
+    incompatible
+      ? "This keryx is not compatible with the app."
+      : state.phase === "starting"
       ? "Starting keryx…"
       : state.phase === "exited"
         ? "keryx is not running. Restart it to continue."
-        : incompatible
-          ? "This keryx is not compatible with the app."
-          : state.replaying
+        : state.replaying
             ? "Loading session…"
             : !state.sessionId
               ? state.opening
                 ? "Opening a session…"
                 : "No session. Start a new one to continue."
               : !state.held
-                ? "keryx closed this idle session to save memory. Reopen it to continue."
+                ? `${lostText(state.lostReason)}. Reopen it to continue.`
                 : null;
 
   const fill = (text: string) => {
@@ -144,14 +145,35 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
           <div className="session-banners">
             <div className="inline-banner tone-neutral">
               <Icon name="info" size={14} />
-              <span>keryx closed this idle session to save memory. What you see is its last state.</span>
+              <span>{lostText(state.lostReason)}. What you see is its last state.</span>
               <button className="btn btn-sm btn-primary" onClick={s.reopen}>
                 <Icon name="refresh" size={13} /> Reopen
               </button>
             </div>
           </div>
         ) : null}
-        {state.phase === "starting" ? (
+        {s.fatal && s.fatal.kind !== "leased" ? (
+          <div className="session-banners">
+            <div className="inline-banner tone-warn" role="alert">
+              <Icon name="alert" size={14} />
+              <span>
+                {s.fatal.kind === "incompatible"
+                  ? `This keryx (${s.fatal.found}) is older than the ${s.fatal.required} the app needs.`
+                  : s.fatal.reason === "no-profile"
+                    ? "This keryx has no shell profile, which the app runs on."
+                    : "This keryx closes a session whenever another one opens, so the app cannot use it."}{" "}
+                Nothing works until you pick another keryx.
+              </span>
+              <button className="btn btn-sm" onClick={onGoSettings}>
+                Choose keryx
+              </button>
+              <button className="btn btn-sm btn-primary" onClick={s.restart}>
+                <Icon name="refresh" size={13} /> Restart
+              </button>
+            </div>
+          </div>
+        ) : null}
+        {state.phase === "starting" && !incompatible ? (
           <div className="session-banners">
             <div className="inline-banner tone-neutral">
               <Spinner size={13} />
@@ -173,6 +195,7 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
           {state.plan.length > 0 ? <PlanCard plan={state.plan} /> : null}
           <Composer
             ref={composerRef}
+            sessionId={state.sessionId}
             busy={state.busy}
             disabledReason={disabledReason}
             commands={state.commands}

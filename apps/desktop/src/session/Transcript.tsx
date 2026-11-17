@@ -47,8 +47,9 @@ function formatDuration(ms: number): string {
 
 /**
  * Common prefix/suffix trimmed, with two lines of context: a readable change without a diff library.
- * The path and every line are escaped like a call's input. The approval dialog passes `bodyRef` to
- * measure the scroll box, `expanded` to lift its height cap, and `faithful` to keep it left to right.
+ * The approval dialog passes `bodyRef` to measure the scroll box, `expanded` to lift its height cap,
+ * and `faithful` to escape the path and every line like a call's input and keep them left to right;
+ * the read-only transcript shows the text as it is.
  */
 export function DiffView({
   path,
@@ -81,15 +82,15 @@ export function DiffView({
     for (let i = pre; i < b.length - suf; i++) out.push({ t: b[i]!, k: "add" });
     for (let i = a.length - suf; i < Math.min(a.length, a.length - suf + ctx); i++) out.push({ t: a[i]!, k: "ctx" });
     if (suf > ctx) out.push({ t: `… ${suf - ctx} unchanged lines`, k: "gap" });
-    return out.map((r) => (r.k === "gap" ? r : { ...r, t: visibleText(r.t) }));
-  }, [oldText, newText]);
+    return faithful ? out.map((r) => (r.k === "gap" ? r : { ...r, t: visibleText(r.t) })) : out;
+  }, [oldText, newText, faithful]);
   const added = rows.filter((r) => r.k === "add").length;
   const removed = rows.filter((r) => r.k === "del").length;
   return (
-    <div className={`diff${faithful ? " is-faithful" : ""}`}>
+    <div className={`diff${faithful ? " is-strict" : ""}`}>
       <div className="diff-head">
         <Icon name="file" size={13} />
-        <span className="mono truncate">{visibleText(path)}</span>
+        <span className="mono truncate">{faithful ? visibleText(path) : path}</span>
         <span className="grow" />
         <span className="diff-stat add">+{added}</span>
         <span className="diff-stat del">−{removed}</span>
@@ -160,13 +161,13 @@ const ToolRow = memo(function ToolRow({ item }: { item: ToolItem }) {
           {primary ? (
             <div className="tool-section">
               <div className="tool-label">{primary.label}</div>
-              <pre className="out-pre mono-strong is-faithful">{primary.value}</pre>
+              <pre className="out-pre mono-strong">{primary.value}</pre>
             </div>
           ) : null}
           {args.map((a) => (
             <div key={a.id} className="tool-section">
               <div className="tool-label">{argLabel(a, primary !== null)}</div>
-              <pre className="out-pre is-faithful">{a.text}</pre>
+              <pre className="out-pre">{a.text}</pre>
             </div>
           ))}
           {item.content.map((c, i) => (

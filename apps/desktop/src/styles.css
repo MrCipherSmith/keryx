@@ -353,11 +353,11 @@ button { font: inherit; }
 .approval-what { display: grid; gap: 4px; margin-bottom: var(--sp-3); }
 .out-pre.is-command { font-size: 12.5px; }
 /*
- * What a call acts on is shown in logical order, the order the shell or tool receives it: bidi-override
+ * In the approval dialog (opt-in: is-strict) what a call acts on is shown in logical order, the order the shell or tool receives it: bidi-override
  * turns off implicit reordering too, so RTL letters cannot move the text around them (they read
  * reversed, the price of showing the bytes in order). Explicit bidi controls are escaped by visibleText.
  */
-.out-pre.is-faithful, .diff.is-faithful .diff-line { unicode-bidi: bidi-override; direction: ltr; text-align: left; }
+.out-pre.is-strict, .diff.is-strict .diff-line { unicode-bidi: bidi-override; direction: ltr; text-align: left; }
 .out-pre.is-expanded, .diff-body.is-expanded { max-height: none; }
 .review-box { display: grid; gap: 4px; min-width: 0; }
 .approval-content > .review-box { margin-bottom: var(--sp-3); }

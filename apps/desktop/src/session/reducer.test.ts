@@ -201,6 +201,15 @@ describe("window: switching", () => {
     expect(s.convs.s1?.busy).toBeFalse();
     expect(s.loading).toEqual({});
     expect(shownView(s).held).toBeFalse();
+    expect(shownView(s).lostReason).toBe("connection");
+  });
+
+  test("an idle-cap release and a lost connection are told apart, and a reload clears the reason", () => {
+    const released = run(twoHeld, { t: "released", sessionId: "s2" }, { t: "connectionReset" });
+    expect(released.convs.s2?.lostReason).toBe("idle-cap");
+    expect(released.convs.s1?.lostReason).toBe("connection");
+    const back = run(released, { t: "loadStart", sessionId: "s2" }, { t: "loadDone", sessionId: "s2", show: true });
+    expect(back.convs.s2?.lostReason).toBeNull();
   });
 });
 
@@ -208,7 +217,7 @@ describe("window: sidebar marks", () => {
   test("busy, waiting and released are marked per session", () => {
     const s = run(twoHeld, { t: "busy", sessionId: "s2", busy: true }, { t: "released", sessionId: "s1" });
     const marks = sessionMarks(s, new Set(["s2"]));
-    expect(marks.s1).toEqual({ busy: false, waiting: false, held: false, title: null });
-    expect(marks.s2).toEqual({ busy: true, waiting: true, held: true, title: null });
+    expect(marks.s1).toEqual({ busy: false, waiting: false, held: false, lostReason: "idle-cap", title: null });
+    expect(marks.s2).toEqual({ busy: true, waiting: true, held: true, lostReason: null, title: null });
   });
 });

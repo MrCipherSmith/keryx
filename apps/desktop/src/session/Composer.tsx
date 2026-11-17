@@ -3,6 +3,7 @@ import type { AvailableCommand, ConfigOption, ConfigSelectGroup, ConfigSelectOpt
 import { MOD } from "../lib/prefs";
 import { Icon, type IconName } from "../components/Icon";
 import { Menu, type MenuItem } from "../components/Menu";
+import { draftOf, withDraft, type Drafts } from "./drafts";
 
 export interface ComposerHandle {
   focus(): void;
@@ -10,6 +11,8 @@ export interface ComposerHandle {
 }
 
 interface Props {
+  /** The session the draft belongs to; each session keeps its own draft. */
+  sessionId: string | null;
   busy: boolean;
   /** Why sending is impossible right now; null when it is possible. */
   disabledReason: string | null;
@@ -41,10 +44,12 @@ function modelName(option: ConfigOption): string {
 }
 
 export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
-  { busy, disabledReason, commands, modes, model, sendKey, onSend, onStop, onMode, onModel },
+  { sessionId, busy, disabledReason, commands, modes, model, sendKey, onSend, onStop, onMode, onModel },
   ref,
 ) {
-  const [text, setText] = useState("");
+  const [drafts, setDrafts] = useState<Drafts>({});
+  const text = draftOf(drafts, sessionId);
+  const setText = (t: string) => setDrafts((d) => withDraft(d, sessionId, t));
   const [sel, setSel] = useState(0);
   const [dismissed, setDismissed] = useState(false);
   const [menu, setMenu] = useState<"mode" | "model" | null>(null);

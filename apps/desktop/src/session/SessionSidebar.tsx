@@ -4,7 +4,7 @@ import { absoluteTime, relativeTime } from "../lib/format";
 import { MOD } from "../lib/prefs";
 import { Icon } from "../components/Icon";
 import { Spinner } from "../components/ui";
-import type { SessionMark } from "./reducer";
+import { lostText, type SessionMark } from "./reducer";
 
 interface Props {
   sessions: SessionInfo[];
@@ -52,7 +52,7 @@ function Mark({ mark, loading }: { mark: SessionMark | undefined; loading: boole
 }
 
 function markTitle(mark: SessionMark | undefined, fallback: string): string {
-  if (mark && !mark.held) return "Closed by keryx to save memory; opening it loads it again";
+  if (mark && !mark.held) return `${lostText(mark.lostReason)}; opening it loads it again`;
   return fallback;
 }
 

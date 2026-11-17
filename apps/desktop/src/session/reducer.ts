@@ -75,6 +75,15 @@ export interface ConvState {
   title: string | null;
   /** keryx holds it on this connection. False after `_keryx/session_released` or a lost connection: read-only until reloaded. */
   held: boolean;
+  /** Why it is not held: keryx's idle cap released it, or the connection was lost. Null while held. */
+  lostReason: LostReason | null;
+}
+
+export type LostReason = "idle-cap" | "connection";
+
+/** What the window says about a session it no longer holds. */
+export function lostText(reason: LostReason | null): string {
+  return reason === "connection" ? "The connection to keryx was lost" : "keryx closed this idle session to save memory";
 }
 
 export function newConv(
@@ -94,6 +103,7 @@ export function newConv(
     usage: null,
     title: null,
     held: true,
+    lostReason: null,
   };
 }
 
@@ -397,6 +407,7 @@ export function reducer(state: WindowState, a: Action): WindowState {
         ...loaded,
         replaying: false,
         held: true,
+        lostReason: null,
         modes: a.modes ?? loaded.modes,
         configOptions: a.configOptions ?? loaded.configOptions,
       };
@@ -413,10 +424,10 @@ export function reducer(state: WindowState, a: Action): WindowState {
     case "show":
       return state.convs[a.sessionId] && state.shownId !== a.sessionId ? { ...state, shownId: a.sessionId } : state;
     case "released":
-      return withConv(state, a.sessionId, (c) => (c.held || c.busy ? { ...c, held: false, busy: false } : c));
+      return withConv(state, a.sessionId, (c) => (c.held || c.busy ? { ...c, held: false, busy: false, lostReason: c.held ? "idle-cap" : c.lostReason } : c));
     case "connectionReset": {
       const convs: Record<string, ConvState> = {};
-      for (const [sid, c] of Object.entries(state.convs)) convs[sid] = c.held || c.busy ? { ...c, held: false, busy: false } : c;
+      for (const [sid, c] of Object.entries(state.convs)) convs[sid] = c.held || c.busy ? { ...c, held: false, busy: false, lostReason: c.held ? "connection" : c.lostReason } : c;
       return { ...state, convs, loading: {}, creating: 0 };
     }
     case "banner":
@@ -446,6 +457,7 @@ export interface SessionMark {
   /** A permission or ask_user dialog waits for the user. */
   waiting: boolean;
   held: boolean;
+  lostReason: LostReason | null;
   title: string | null;
 }
 
@@ -463,6 +475,7 @@ export interface SessionState {
   replaying: boolean;
   /** The shown session is still held by keryx; false means read-only until it is reopened. */
   held: boolean;
+  lostReason: LostReason | null;
   commands: AvailableCommand[];
   modes: SessionModeState | null;
   configOptions: ConfigOption[];
@@ -495,6 +508,7 @@ export function shownView(w: WindowState): SessionState {
     busy: c?.busy ?? false,
     replaying: c?.replaying ?? false,
     held: c?.held ?? false,
+    lostReason: c?.lostReason ?? null,
     commands: c?.commands ?? NO_COMMANDS,
     modes: c?.modes ?? null,
     configOptions: c?.configOptions ?? NO_CONFIG,
@@ -509,6 +523,6 @@ export function shownView(w: WindowState): SessionState {
 /** Marks for every session the window has, for the sidebar. */
 export function sessionMarks(w: WindowState, waiting: ReadonlySet<string>): Record<string, SessionMark> {
   const out: Record<string, SessionMark> = {};
-  for (const [sid, c] of Object.entries(w.convs)) out[sid] = { busy: c.busy, waiting: waiting.has(sid), held: c.held, title: c.title };
+  for (const [sid, c] of Object.entries(w.convs)) out[sid] = { busy: c.busy, waiting: waiting.has(sid), held: c.held, lostReason: c.lostReason, title: c.title };
   return out;
 }

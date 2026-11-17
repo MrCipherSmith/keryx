@@ -201,9 +201,11 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
   const flowsActive = useMemo(() => flows.cards.filter((c) => laneOf(c) !== "done").length, [flows.cards]);
 
   const status = useMemo<Status>(() => {
+    if (s.fatal?.kind === "incompatible" || s.fatal?.kind === "noShell") {
+      return { tone: "warn", label: "Incompatible", detail: "This keryx cannot run the app. Restart it or choose another keryx in Settings." };
+    }
     if (state.phase === "starting") return { tone: "idle", label: "Starting" };
     if (state.phase === "exited") return { tone: "danger", label: "Stopped", detail: "keryx is not running" };
-    if (s.fatal?.kind === "incompatible" || s.fatal?.kind === "noShell") return { tone: "warn", label: "Incompatible" };
     if (state.busy) return { tone: "busy", label: "Working" };
     return { tone: "ok", label: "Ready", detail: state.agentVersion ? `keryx ${state.agentVersion} · ${state.profile} profile` : undefined };
   }, [state.phase, state.busy, state.agentVersion, state.profile, s.fatal]);
@@ -297,7 +299,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
     >
       {/* The session view stays mounted so the transcript and draft survive view switches. */}
       <div className="view" hidden={view !== "session"}>
-        <SessionView ref={composer} s={s} projectName={basename(cwd)} onGoFlows={() => go("flows")} narrow={narrow} />
+        <SessionView ref={composer} s={s} projectName={basename(cwd)} onGoFlows={() => go("flows")} onGoSettings={() => go("settings")} narrow={narrow} />
       </div>
       {view === "flows" ? (
         <div className="view">
@@ -312,7 +314,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
 
       {palette !== null ? <CommandPalette items={paletteItems} initialQuery={palette} onClose={() => setPalette(null)} /> : null}
 
-      {s.fatal ? (
+      {s.fatal && !(s.fatalHidden && (s.fatal.kind === "incompatible" || s.fatal.kind === "noShell")) ? (
         <FatalDialog
           fatal={s.fatal}
           agentVersion={state.agentVersion}
@@ -320,7 +322,8 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
           onNewSession={() => void s.newSession()}
           onDismiss={s.dismissFatal}
           onSettings={() => {
-            s.dismissFatal();
+            // The failure stays on the window (banner, status); only the dialog gives way to Settings.
+            s.hideFatal();
             go("settings");
           }}
           onClose={() => {

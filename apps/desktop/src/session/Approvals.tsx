@@ -264,7 +264,7 @@ export function PermissionDialog({
             <ReviewPre
               id="primary"
               text={primary.value}
-              className={`out-pre mono-strong is-faithful${kind === "execute" ? " is-command" : ""}`}
+              className={`out-pre mono-strong is-strict${kind === "execute" ? " is-command" : ""}`}
               prefix={kind === "execute" ? <span className="prompt-sign">$ </span> : null}
               reportUnread={reportUnread}
             />
@@ -274,12 +274,12 @@ export function PermissionDialog({
           d.type === "diff" ? <ReviewDiff key={i} id={`diff-${i}`} path={d.path} oldText={d.oldText} newText={d.newText} reportUnread={reportUnread} /> : null,
         )}
         {texts.map((t, i) => (
-          <ReviewPre key={i} id={`content-${i}`} text={visibleText(t)} className="out-pre is-faithful" reportUnread={reportUnread} />
+          <ReviewPre key={i} id={`content-${i}`} text={visibleText(t)} className="out-pre is-strict" reportUnread={reportUnread} />
         ))}
         {args.map((a) => (
           <div key={a.id} className="approval-what">
             <div className="tool-label">{argLabel(a, primary !== null)}</div>
-            <ReviewPre id={a.id} text={a.text} className="out-pre is-faithful" reportUnread={reportUnread} />
+            <ReviewPre id={a.id} text={a.text} className="out-pre is-strict" reportUnread={reportUnread} />
           </div>
         ))}
         {why.length > 0 ? (

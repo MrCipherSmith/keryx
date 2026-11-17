@@ -24,6 +24,12 @@ export function visibleText(s: string): string {
   return s.replace(HIDDEN, (ch) => (ch === "\n" || ch === "\t" ? ch : escapeChar(ch)));
 }
 
+/** A code block's text with hidden characters shown as escapes; `changed` says whether any were found (Trojan Source). */
+export function revealHidden(s: string): { text: string; changed: boolean } {
+  const text = visibleText(s);
+  return { text, changed: text !== s };
+}
+
 /** visibleText for prose: also keeps the joiners and emoji selectors that change no order. */
 export function visibleProse(s: string): string {
   return s.replace(HIDDEN, (ch) => (ch === "\n" || ch === "\t" || PROSE_KEEP.has(ch) ? ch : escapeChar(ch)));

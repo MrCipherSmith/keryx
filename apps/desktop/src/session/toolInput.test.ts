@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { argLabel, hasRestArgs, lineCount, primaryInput, quoteArgv, restArgs, visibleProse, visibleText } from "./toolInput";
+import { argLabel, hasRestArgs, lineCount, primaryInput, quoteArgv, restArgs, revealHidden, visibleProse, visibleText } from "./toolInput";
 
 const ch = (code: number) => String.fromCodePoint(code);
 const RLO = ch(0x202e);
@@ -165,5 +165,15 @@ describe("restArgs", () => {
     for (const raw of [undefined, null, "ls", 5, [1], { command: "ls" }, { command: "ls", cwd: "/" }, { patch: "x" }, { command: ["a"], x: 1 }]) {
       expect(hasRestArgs(raw)).toBe(restArgs(raw).length > 0);
     }
+  });
+});
+
+describe("revealHidden: code blocks", () => {
+  test("a Trojan Source override is shown as an escape and flagged", () => {
+    expect(revealHidden(`if (admin ${RLO}) {`)).toEqual({ text: "if (admin ⟨U+202E⟩) {", changed: true });
+  });
+
+  test("plain code, newlines and tabs are untouched", () => {
+    expect(revealHidden("a\n\tb")).toEqual({ text: "a\n\tb", changed: false });
   });
 });

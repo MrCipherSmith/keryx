@@ -124,6 +124,8 @@ export interface InitializeResult {
 
 /** ext notification: keryx stopped holding a session for this connection (idle cap); a return to it needs session/load. */
 export const SESSION_RELEASED = "_keryx/session_released";
+/** Notification to keryx: the user switched the shown session locally (counts for its idle-cap LRU). */
+export const SESSION_SHOWN = "_keryx/session_shown";
 export interface SessionReleasedParams {
   sessionId: string;
   reason: string;

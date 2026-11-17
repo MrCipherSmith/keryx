@@ -4,6 +4,7 @@ import { acpStart, acpTransport, acpStop, listenBridge, setWindowTitle, versionC
 import {
   hasLiveSessions,
   SESSION_RELEASED,
+  SESSION_SHOWN,
   type AskUserRequest,
   type AskUserResult,
   type ConfigOption,
@@ -76,6 +77,8 @@ export function useAcpSession(cwd: string) {
   if (!dialogsRef.current) dialogsRef.current = new DialogQueue(() => setDialogVersion((v) => v + 1));
   const dialogs = dialogsRef.current;
   const [fatal, setFatal] = useState<Fatal | null>(null);
+  /** The incompatible-keryx dialog was put away; `fatal` itself stays, so the window keeps saying so. */
+  const [fatalHidden, setFatalHidden] = useState(false);
   const live = useRef<Live>({ client: null, gen: 0, initialized: false, usable: false, unlisten: null, reg: new SessionRegistry<Turn>() });
 
   // session/update notifications are queued and applied once per animation frame (a timer covers a
@@ -264,6 +267,7 @@ export function useAcpSession(cwd: string) {
       l.usable = false;
       l.reg.reset();
       setFatal(null);
+      setFatalHidden(false);
       dispatch({ t: "connectionReset" });
       dispatch({ t: "phase", phase: "starting" });
       dispatch({ t: "clearBanners" });
@@ -443,9 +447,13 @@ export function useAcpSession(cwd: string) {
       const l = live.current;
       const client = l.client;
       if (!client || !l.usable) return;
-      if (l.reg.planSwitch(id) === "load") {
+      const plan = l.reg.planSwitch(id);
+      if (plan === "load") {
         setFatal((f) => (f?.kind === "leased" ? null : f));
         dispatch({ t: "clearBanners" });
+      } else if (plan === "show" && l.reg.shown !== id) {
+        // A local switch sends no request; tell keryx so its idle cap counts this session as in use.
+        client.notify(SESSION_SHOWN, { sessionId: id });
       }
       await openLoad(client, l.gen, id);
     },
@@ -527,6 +535,8 @@ export function useAcpSession(cwd: string) {
     /** Busy / waiting / held marks for every session the window has. */
     marks,
     fatal,
+    fatalHidden,
+    hideFatal: () => setFatalHidden(true),
     sendPrompt,
     cancel,
     newSession,
