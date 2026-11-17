@@ -1,3 +1,4 @@
+import { AGENT_CONDUCT_CONSTRAINTS, AGENT_CONDUCT_RULE_PATH } from "./agent-conduct";
 import { expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile, copyFile, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -36,7 +37,9 @@ const ALL_MODULES = {
 };
 
 /** Token budget for the index gate (pointer-only routing table). */
-const INDEX_GATE_TOKEN_BUDGET = 400;
+// 400 before ADR-0001 P1; the mandatory agent-conduct block (~190 tokens,
+// src/lib/agent-conduct.ts) is the only addition the raise pays for.
+const INDEX_GATE_TOKEN_BUDGET = 600;
 
 test("generated index uses supported refresh commands only", () => {
   const index = renderIndexMarkdown({
@@ -177,6 +180,26 @@ test("the gate carries pointers and the rules that bind, not prose", () => {
   expect(gate).not.toContain("## Intent Router");
   expect(gate).not.toContain("## Agent Workflow");
   expect(gate).not.toContain("## Enabled Modules");
+});
+
+test("the gate carries the mandatory agent-conduct block and stays inside the orient ceiling", () => {
+  // ADR-0001 D2: index.md is one delivery path for the conduct block, and
+  // `keryx shell` embeds index.md verbatim only while it fits the bounded
+  // excerpt in src/ctx/orient.ts (3,200 chars, 60 lines). Past that it is
+  // truncated line by line and the conduct block, which comes last, is what
+  // falls off.
+  const ORIENT_MAX_INDEX_CHARS = 3_200;
+  const ORIENT_MAX_INDEX_LINES = 60;
+  for (const flags of [{ ...ALL_MODULES }, { ...ALL_MODULES, enableSecurity: false, enableTasks: false }]) {
+    const gate = renderIndexGateMarkdown(flags);
+    const excerpt = gate.trim();
+    expect(excerpt.length).toBeLessThanOrEqual(ORIENT_MAX_INDEX_CHARS);
+    expect(excerpt.split("\n").length).toBeLessThanOrEqual(ORIENT_MAX_INDEX_LINES);
+    for (const constraint of AGENT_CONDUCT_CONSTRAINTS) {
+      expect(gate).toContain(constraint);
+    }
+    expect(gate).toContain(AGENT_CONDUCT_RULE_PATH);
+  }
 });
 
 test("the gate names only the modules that are enabled", () => {

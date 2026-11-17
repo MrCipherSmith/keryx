@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { optionValue } from "../lib/args";
 import { mkdirContained, removeContained, writeContained } from "../lib/contained-write";
-import { installManagedHookOrWarn, removeManagedHookOrWarn } from "../lib/managed-git-hook";
+import { installCommitMsgHookOrWarn, installManagedHookOrWarn, removeManagedHookOrWarn } from "../lib/managed-git-hook";
 import { moduleCommands } from "./module-commands";
 import { registerInitializedProject } from "./projects";
 import { sanitizeForDisplay } from "../lib/project-registry";
@@ -745,6 +745,11 @@ export async function initCommand(args: string[]): Promise<void> {
     const warning = await removeManagedHookOrWarn(projectRoot, "pre-push", "security-pre-push");
     if (warning) hookWarnings.push(warning);
   }
+
+  // ADR-0001 D3: the attribution-refusing commit-msg hook is a default of every
+  // Keryx project, not a module option; merge-safe like the pre-push blocks.
+  const commitMsgWarning = await installCommitMsgHookOrWarn(projectRoot);
+  if (commitMsgWarning) hookWarnings.push(commitMsgWarning);
 
   const manifest = buildManifest({
     projectName: path.basename(projectRoot),

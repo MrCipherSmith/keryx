@@ -2,6 +2,7 @@ import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
 import { resolveGitHooksRoot } from "../lib/git-hooks";
+import { commitMsgHookInstalled, removeCommitMsgHookOrWarn } from "../lib/managed-git-hook";
 
 // Install merge/checkout git hooks that run `keryx sync` — so a `git pull`
 // (post-merge) or branch switch / `fetch`+checkout (post-checkout) reports what
@@ -89,6 +90,12 @@ export async function uninstallSyncHooks(projectRoot: string): Promise<string[]>
   const removed: string[] = [];
   for (const hook of SYNC_HOOKS) {
     if (await stripManagedHook(projectRoot, hook)) removed.push(hook);
+  }
+  // ADR-0001 D3: the managed commit-msg hook goes with the other keryx git hooks.
+  if (await commitMsgHookInstalled(projectRoot)) {
+    const warning = await removeCommitMsgHookOrWarn(projectRoot);
+    if (warning === null) removed.push("commit-msg");
+    else console.warn(warning);
   }
   return removed;
 }

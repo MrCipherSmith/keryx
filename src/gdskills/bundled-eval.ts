@@ -1680,21 +1680,22 @@ export function bundledSkillCompanionDocuments(root: string): string[] {
 }
 
 /**
- * Every rule file under `<root>/rules/core` — the tree `installBundledRules`
- * (`src/gdskills/install.ts`) copies verbatim to `.metaproject/rules/core/`.
- * Flat by construction: `bundledRulesSourcePath` names one directory and
- * `cp(..., { recursive: true })` mirrors whatever is in it, so a walk one
- * level deep is enough today and still correct if a subdirectory is added
- * later. `[]` for a root with no `rules/core`, same convention as
- * `bundledSkillFiles`, so an absent tree reads as "swept zero", not "passed".
+ * Every rule file under `<root>/rules/core` and `<root>/rules/process` — the
+ * trees `installBundledRules` (`src/gdskills/install.ts`) copies verbatim to
+ * `.metaproject/rules/<layer>/`. Flat by construction: `bundledRulesSourcePath`
+ * names one directory per layer and `cp(..., { recursive: true })` mirrors
+ * whatever is in it, so a walk one level deep is enough today. `[]` for a root
+ * with no rule layers, same convention as `bundledSkillFiles`, so an absent
+ * tree reads as "swept zero", not "passed".
  */
 export function bundledRuleFiles(root: string): string[] {
-  const rulesRoot = path.join(root, "rules", "core");
-  if (!existsSync(rulesRoot)) return [];
-  return readdirSync(rulesRoot, { withFileTypes: true })
-    .filter((entry) => entry.isFile())
-    .map((entry) => path.join(rulesRoot, entry.name))
-    .sort();
+  return ["core", "process"].flatMap((layer) => {
+    const rulesRoot = path.join(root, "rules", layer);
+    if (!existsSync(rulesRoot)) return [];
+    return readdirSync(rulesRoot, { withFileTypes: true })
+      .filter((entry) => entry.isFile())
+      .map((entry) => path.join(rulesRoot, entry.name));
+  }).sort();
 }
 
 /**

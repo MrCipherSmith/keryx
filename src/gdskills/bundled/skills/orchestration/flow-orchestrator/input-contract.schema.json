@@ -53,7 +53,7 @@
         "verified-handoff",
         "keep-open"
       ],
-      "description": "Answers the Phase 4 Completion Choice for a dispatched run, which has no user to ask. REQUIRED: an absent outcome used to mean 'ask', prescribed by the same section that says asking is how a dispatched run stalls on a prompt nobody reads \u2014 and it left the create-pr-and-merge conditional below unreachable by simply omitting the field. A dispatch that cannot name its outcome is BLOCKED, not questioned."
+      "description": "Answers the Phase 4 Completion Choice for a dispatched run, which has no user to ask. REQUIRED: an absent outcome used to mean 'ask', prescribed by the same section that says asking is how a dispatched run stalls on a prompt nobody reads \u2014 and it left the create-pr-and-merge conditional below unreachable by simply omitting the field. A dispatch that cannot name its outcome is BLOCKED, not questioned. `create-pr-and-merge` merges only on the explicit merge ask (agent-conduct rule 2), which for a dispatched run is `operator_confirmed`; without it the run stops at a mergeable PR."
     },
     "operator_confirmed": {
       "type": "object",

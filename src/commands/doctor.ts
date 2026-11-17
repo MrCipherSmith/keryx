@@ -37,6 +37,7 @@ import { readWikiFreshnessMetric } from "../health/service";
 import { resolveMainCheckoutRoot } from "../lib/git-worktrees";
 import { gitToplevel } from "../lib/clone-scope";
 import { claudeHooksExpected, inspectEntrypoints, rulesBlockFix, rulesBlockKeptReason, type EntrypointInspection } from "../rules/entrypoint-inspection";
+import { inspectCommitMsgHook } from "../lib/managed-git-hook";
 import { CODEX_PROJECT_DOC_MAX_BYTES } from "../rules/entrypoint-writers";
 
 export type DoctorStatus = "ok" | "warn" | "fail";
@@ -466,6 +467,41 @@ function describeEntrypoints(inspection: EntrypointInspection): string {
   return parts.length > 0 ? parts.join("; ") : "no managed entrypoint content to check";
 }
 
+/**
+ * ADR-0001 D3: the managed `commit-msg` hook only protects commits when git
+ * actually runs it. Warns when it is absent, or present but inactive because a
+ * `core.hooksPath` points git at another hooks directory.
+ */
+export async function checkCommitMsgHook(cwd: string): Promise<DoctorCheck> {
+  const projectRoot = resolveProjectRoot(cwd);
+  let result: Awaited<ReturnType<typeof inspectCommitMsgHook>>;
+  try {
+    result = await inspectCommitMsgHook(projectRoot);
+  } catch (error) {
+    return {
+      id: "commit-msg-hook",
+      status: "warn",
+      detail: `could not inspect the commit-msg hook: ${error instanceof Error ? error.message : String(error)}`,
+      fix: UPDATE_FIX,
+    };
+  }
+  switch (result.state) {
+    case "no-git":
+      return { id: "commit-msg-hook", status: "ok", detail: "not a git repository — no commit-msg hook to check" };
+    case "missing":
+      return { id: "commit-msg-hook", status: "warn", detail: "the keryx commit-msg hook (refuses Co-Authored-By and Generated-by lines) is not installed", fix: UPDATE_FIX };
+    case "inactive":
+      return {
+        id: "commit-msg-hook",
+        status: "warn",
+        detail: `the keryx commit-msg hook is inactive: git runs hooks from ${result.effectiveHooksDir} (core.hooksPath), not ${result.managedHooksDir} where it is installed`,
+        fix: `install the commit-msg check in ${result.effectiveHooksDir}, or unset core.hooksPath`,
+      };
+    case "active":
+      return { id: "commit-msg-hook", status: "ok", detail: "commit-msg hook installed and active" };
+  }
+}
+
 async function checkGraphFreshness(cwd: string): Promise<DoctorCheck> {
   const result = await checkGraphStaleness(cwd);
   if (result.status === "fresh") {
@@ -638,6 +674,7 @@ export async function buildDoctorReport(
     checkIntegrations(cwd),
     checkStandard(cwd),
     checkEntrypoints(cwd),
+    checkCommitMsgHook(cwd),
     checkWorktrees(cwd),
     checkGraphFreshness(cwd),
     checkWikiFreshness(cwd),

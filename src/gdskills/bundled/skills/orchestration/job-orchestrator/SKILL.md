@@ -1884,7 +1884,7 @@ Task({
 
     ## Constraints
     - Do NOT modify <file or pattern>
-    - <other hard stops>
+    - Agent conduct (mandatory): <the "Dispatch form" line of .metaproject/rules/process/agent-conduct.mdc, verbatim>; then <other hard stops>
 })
 ```
 

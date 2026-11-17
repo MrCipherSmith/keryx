@@ -343,7 +343,7 @@ Dispatch payload, bound to the flow (map `target_skill` from the routing table):
     "Never edit frozen acceptance criteria.",
     "resolved_context_file: .metaproject/flows/<dir>/resolved/<Tn>.<for>.json — read its must_read entries and cite each in project_context_applied; an entry promoted by a condition also needs its anchor and a summary.",
     "Return a subagent-result; first line must be STATUS:.",
-    "Follow rules/core/git-concurrency.mdc: never git stash; never git add -A.",
+    "Agent conduct (mandatory): <the \"Dispatch form\" line of .metaproject/rules/process/agent-conduct.mdc, verbatim>", "Follow rules/core/git-concurrency.mdc: never git stash; never git add -A.",
     "Root: <worktree_path>. Before the first write run `cd <worktree_path> && pwd && git branch --show-current`; run every git command as `git -C <worktree_path>`.",
     "Auto-commit is off (automation.auto_commit: false): do not commit; list every path you changed in changed_files. flow-orchestrator commits them at the task boundary."
   ],
@@ -511,7 +511,7 @@ answered it and who is behind it.
 | Input | Obey it as |
 |---|---|
 | `base_branch` | Cut the flow branch from **that** branch and merge back into it. Never substitute the repository default: a fix aimed at a pull request's own branch has to land inside that pull request, and the default branch is a different review. Absent, resolve the base yourself and record what you resolved. |
-| `completion_outcome: create-pr-and-merge` | Skip the Completion Choice question, run the PR review/fix loop, merge into `base_branch`, complete the flow. |
+| `completion_outcome: create-pr-and-merge` | Skip the Completion Choice question and run the PR review/fix loop. Merge into `base_branch` only on the explicit merge ask (`rules/process/agent-conduct.mdc` rule 2): `operator_confirmed` naming the human who asked. Without it, stop at the mergeable PR, report it, and leave the flow `in-progress` until the ask arrives. |
 | `operator_confirmed` | The human decision behind an outward-facing completion. See the row below for when its absence is a refusal. |
 | `review: the caller owns the reply on #<n>` | Pass it through to every `review-orchestrator` dispatch. Reviews of **this flow's own** PR reply as normal — that is a separate conversation. What the round must not do is answer `#<n>`, which the caller is already answering. |
 | `attempt budget: at most <n> attempts` | A numeric ceiling BELOW your own bound is obeyed. One at or above it is not — the bound is yours, and the paragraph under this table says why. |
@@ -572,7 +572,7 @@ the bound plus an escalation — never an unbounded loop.
    re-planned approach still cannot produce a mergeable PR, leave the flow
    `in-progress` and report the blocker instead of forcing completion.
 
-When the PR is mergeable and required checks are green, merge it into the
+When the PR is mergeable, required checks are green and the merge was explicitly asked for (the user picked A in this session, or `operator_confirmed`; otherwise stop and ask — agent-conduct rule 2), merge it into the
 recorded base branch (the branch from which the flow branch was created),
 verify that the merge completed, and only then record it through the CLI:
 

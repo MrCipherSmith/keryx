@@ -330,7 +330,7 @@ export async function checkInstallDestination(
  * absent from the target directory produces no outcome; that is the steady
  * state once every installation has caught up.
  *
- * If `rules/core` itself is not a plain directory (`checkInstallDestination`),
+ * If a layer directory (`rules/core`, `rules/process`) is not a plain directory (`checkInstallDestination`),
  * neither the copy nor the retired-rule cleanup runs: cleanup walks the same
  * directory, and reading or unlinking through a link the operator put there is
  * the same hazard as writing through it.
@@ -338,8 +338,21 @@ export async function checkInstallDestination(
 async function installBundledRules(
   metaprojectRoot: string,
 ): Promise<{ outcomes: RetiredRuleOutcome[]; warning: string | null }> {
-  const rulesSource = bundledRulesSourcePath();
-  const rulesTarget = path.join(metaprojectRoot, "rules", "core");
+  const core = await installBundledRuleLayer(metaprojectRoot, "core");
+  // ADR-0001 P1: the process layer (`rules/process/`, the mandatory agent
+  // conduct rule) installs beside core. Retired-rule cleanup stays core-only
+  // until P2 teaches it to record moves between layers.
+  const processLayer = await installBundledRuleLayer(metaprojectRoot, "process");
+  const warnings = [core.warning, processLayer.warning].filter((warning): warning is string => warning !== null);
+  return { outcomes: core.outcomes, warning: warnings.length === 0 ? null : warnings.join("; ") };
+}
+
+async function installBundledRuleLayer(
+  metaprojectRoot: string,
+  layer: BundledRuleLayer,
+): Promise<{ outcomes: RetiredRuleOutcome[]; warning: string | null }> {
+  const rulesSource = bundledRulesSourcePath(layer);
+  const rulesTarget = path.join(metaprojectRoot, "rules", layer);
   if (!existsSync(rulesSource)) {
     return { outcomes: [], warning: null };
   }
@@ -357,6 +370,9 @@ async function installBundledRules(
     return { outcomes: [], warning: mkdirWarning };
   }
   await copyDirectoryContained(rulesSource, rulesTarget);
+  if (layer !== "core") {
+    return { outcomes: [], warning: null };
+  }
   return { outcomes: await removeUnmodifiedRetiredRules(rulesTarget), warning: null };
 }
 
@@ -522,8 +538,11 @@ function bundledSharedSourcePath(): string {
   return directPath;
 }
 
-export function bundledRulesSourcePath(): string {
-  const directPath = fileURLToPath(new URL("./bundled/rules/core", import.meta.url));
+/** Rule layers this release installs (ADR-0001 D1; `activity` arrives in P2). */
+export type BundledRuleLayer = "core" | "process";
+
+export function bundledRulesSourcePath(layer: BundledRuleLayer = "core"): string {
+  const directPath = fileURLToPath(new URL(`./bundled/rules/${layer}`, import.meta.url));
   if (existsSync(directPath)) {
     return directPath;
   }
@@ -535,7 +554,7 @@ export function bundledRulesSourcePath(): string {
     "gdskills",
     "bundled",
     "rules",
-    "core",
+    layer,
   );
   if (existsSync(packagedSourcePath)) {
     return packagedSourcePath;

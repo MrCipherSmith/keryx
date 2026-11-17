@@ -4,7 +4,7 @@ import { access, constants, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { mkdirContained, writeContained } from "../lib/contained-write";
-import { installManagedHookOrWarn, removeManagedHookOrWarn } from "../lib/managed-git-hook";
+import { installCommitMsgHookOrWarn, installManagedHookOrWarn, removeManagedHookOrWarn } from "../lib/managed-git-hook";
 import {
   claudeWorktreesDir,
   findStaleWorktrees,
@@ -811,6 +811,11 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
     const warning = await removeManagedHookOrWarn(projectRoot, "pre-push", "security-pre-push");
     if (warning) hookWarnings.push(warning);
   }
+
+  // ADR-0001 D3: refresh the attribution-refusing commit-msg hook (installed by
+  // `keryx init`); merge-safe, never touches other blocks or user content.
+  const commitMsgWarning = await installCommitMsgHookOrWarn(projectRoot);
+  if (commitMsgWarning) hookWarnings.push(commitMsgWarning);
 
   if (!manifestState.exists || !manifestState.valid) {
     await writeRecoveredManifest(metaprojectRoot, {

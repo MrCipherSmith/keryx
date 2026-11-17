@@ -35,6 +35,7 @@ const EXPECTED_CHECK_IDS = [
   "integrations",
   "standard",
   "entrypoints",
+  "commit-msg-hook",
   "worktrees",
   "graph-freshness",
   "wiki-freshness",
