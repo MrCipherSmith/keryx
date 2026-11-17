@@ -55,6 +55,18 @@ snapshots every 30 seconds, and Work modal opening, painting, layout, closing
 and errors. Work measurements contain counts, dimensions and flags, not item
 labels or results. It does not record prompts, responses or file contents.
 
+Each agent turn is journaled too: `turn.begin`, a `turn.phase` row for each step
+of the turn (model request, tool batch, a call's execution, result shown,
+output persisted, result accepted into history, batch end) carrying the turn,
+batch (`r<round>`) and call ids, and `turn.end` with the last phase reached.
+Snapshots list open turns with the phase each is in. A turn that stays more
+than 10 minutes in a step that should take milliseconds, or keeps waiting on
+tool calls after none is in flight, is written as `turn.stall` with a
+diagnostics dump. `session.lease_lost`, `session.save_refused` (once per loss)
+and `session.detached.output_skipped` mark the moment this Shell stopped
+saving the conversation; an operator line sent after that is answered with a
+"Not saved" notice.
+
 Files are private to the owner and rotate at 1 MB, retaining one `.1` copy.
 A write failure warns without stopping the review. A blocked event loop also
 stops periodic snapshots: inspect the last persisted events, not an assumed

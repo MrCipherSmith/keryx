@@ -54,6 +54,28 @@ export interface DiagMetrics {
 
 export type DiagProbe = () => unknown;
 
+/**
+ * One agent turn the process is running. A turn can stall with no tool call in flight (between a
+ * batch settling and the next model request), which the call registry cannot see; this can.
+ */
+export interface DiagTurn {
+  readonly id: string;
+  readonly startedAt: number;
+  phase: string;
+  phaseSince: number;
+  phaseChanges: number;
+  /** The model-round batch the phase belongs to, when it belongs to one. */
+  batchId: string | undefined;
+  /** The tool call the phase belongs to, when it belongs to one. */
+  callId: string | undefined;
+}
+
+/** Correlation ids carried by one turn phase. Ids only: never inputs, outputs or paths. */
+export interface TurnPhaseIds {
+  batchId?: string;
+  callId?: string;
+}
+
 export interface DiagSnapshot {
   readonly ts: string;
   readonly reason: string;
@@ -61,6 +83,7 @@ export interface DiagSnapshot {
   readonly sessionId: string | undefined;
   readonly uptimeMs: number;
   readonly calls: ReadonlyArray<{ id: string; name: string; ageMs: number; stage: string; stageAgeMs: number; stageChanges: number }>;
+  readonly turns: ReadonlyArray<TurnSnapshot>;
   readonly metrics: DiagMetrics;
   readonly probes: Record<string, unknown>;
   readonly loop: { lastLagMs: number; maxLagMs: number };
@@ -92,6 +115,25 @@ export interface WatcherOptions {
   onJournalError?: (code: string) => void;
 }
 
+export interface TurnSnapshot {
+  id: string;
+  ageMs: number;
+  phase: string;
+  phaseAgeMs: number;
+  phaseChanges: number;
+  batchId?: string;
+  callId?: string;
+}
+
+/**
+ * Turn phases that may legitimately last minutes: a model stream, and the waits for tool calls,
+ * which the call registry (and its own stall check) covers while those calls are in flight.
+ * Every other phase is bookkeeping between two such waits and should take milliseconds.
+ */
+const LONG_TURN_PHASES: ReadonlySet<string> = new Set(["model.request", "batch.spawn.wait", "call.exec"]);
+/** Long phases that only wait on tool calls: once no call is in flight, waiting in them is a stall. */
+const TOOL_WAIT_TURN_PHASES: ReadonlySet<string> = new Set(["batch.spawn.wait", "call.exec"]);
+
 export const DEFAULT_WATCH_INTERVAL_MS = 30_000;
 /** Above the 8 min spawn backstop, below the 12 min call watchdog. */
 export const DEFAULT_STALL_MS = 10 * 60_000;
@@ -110,6 +152,15 @@ export interface CallDiagnostics {
   begin(id: string, name: string, opts?: { watched?: boolean }): string;
   stage(id: string, stage: string): void;
   end(id: string, outcome: DiagOutcome): void;
+  /**
+   * Register an agent turn. Returns the key to pass to `turnPhase`/`turnEnd` (the id, or `id~n`
+   * when a turn with that id is already open).
+   */
+  turnBegin(id: string): string;
+  /** The turn moved to `phase`; journaled with the batch/call ids it belongs to. */
+  turnPhase(id: string, phase: string, ids?: TurnPhaseIds): void;
+  turnEnd(id: string, outcome: "completed" | "error"): void;
+  openTurns(): readonly DiagTurn[];
   /** A countable moment (also lands in the ring buffer). */
   event(kind: string, detail?: string): void;
   /** One phase label for the ring buffer (what `tracePhase` feeds). */
@@ -145,6 +196,7 @@ export function createCallDiagnostics(options: CallDiagnosticsOptions = {}): Cal
   let sink = options.sink;
   const bornAt = now();
   const calls = new Map<string, DiagCall>();
+  const turns = new Map<string, DiagTurn>();
   const probes = new Map<string, DiagProbe>();
   let ring: string[] = [];
   const metrics = emptyMetrics();
@@ -172,9 +224,20 @@ export function createCallDiagnostics(options: CallDiagnosticsOptions = {}): Cal
       catch { journalFailure = "JOURNAL_WARNING_FAILED"; }
     }
   };
+  const turnSnapshots = (at: number): TurnSnapshot[] =>
+    [...turns.values()].map((t) => ({
+      id: t.id,
+      ageMs: at - t.startedAt,
+      phase: t.phase,
+      phaseAgeMs: at - t.phaseSince,
+      phaseChanges: t.phaseChanges,
+      ...(t.batchId !== undefined ? { batchId: t.batchId } : {}),
+      ...(t.callId !== undefined ? { callId: t.callId } : {}),
+    }));
   const persistSnapshot = (): void => persist("snapshot", {
     calls: [...calls.values()].map((c) => ({ id: c.id, name: c.name, stage: c.stage,
       ageMs: now() - c.startedAt, stageAgeMs: now() - c.stageSince, stageChanges: c.stageChanges })),
+    turns: turnSnapshots(now()),
     callsStarted: metrics.callsStarted, callsSettled: metrics.callsSettled, lastLagMs,
   });
 
@@ -231,6 +294,7 @@ export function createCallDiagnostics(options: CallDiagnosticsOptions = {}): Cal
         stageAgeMs: at - c.stageSince,
         stageChanges: c.stageChanges,
       })),
+      turns: turnSnapshots(at),
       metrics: structuredClone(metrics),
       probes: probed,
       loop: { lastLagMs: lastLagMs, maxLagMs: metrics.maxLoopLagMs },
@@ -271,18 +335,39 @@ export function createCallDiagnostics(options: CallDiagnosticsOptions = {}): Cal
     const suspects = [...calls.values()].filter(
       (c) => c.watched && at - c.stageSince >= (HUMAN_STAGES.has(c.stage) ? stallMs * HUMAN_STAGE_FACTOR : stallMs),
     );
-    if (suspects.length === 0) {
+    // A turn can park with nothing in flight: the incident this exists for had every tool call
+    // settled while the parent turn never wrote a result or asked the model again.
+    const noCallInFlight = calls.size === 0;
+    const stuckTurns = [...turns.values()].filter(
+      (t) =>
+        at - t.phaseSince >= stallMs &&
+        (!LONG_TURN_PHASES.has(t.phase) || (TOOL_WAIT_TURN_PHASES.has(t.phase) && noCallInFlight)),
+    );
+    if (suspects.length === 0 && stuckTurns.length === 0) {
       lastDumpIds = new Set();
       return;
     }
-    const ids = new Set(suspects.map((c) => c.id));
+    const ids = new Set([...suspects.map((c) => c.id), ...stuckTurns.map((t) => `turn:${t.id}`)]);
     const fresh = [...ids].some((id) => !lastDumpIds.has(id));
     const due = lastDumpAt === undefined || at - lastDumpAt >= repeatMs;
     if (!fresh && !due) return;
     lastDumpAt = at;
     lastDumpIds = ids;
-    record(`diag stall suspected: ${suspects.map((c) => `${c.name}#${c.id}@${c.stage}`).join(", ")}`);
-    dump("stall");
+    const labels = [
+      ...suspects.map((c) => `${c.name}#${c.id}@${c.stage}`),
+      ...stuckTurns.map((t) => `turn#${t.id}@${t.phase}`),
+    ];
+    record(`diag stall suspected: ${labels.join(", ")}`);
+    for (const t of stuckTurns) {
+      persist("turn.stall", {
+        turnId: t.id,
+        phase: t.phase,
+        phaseAgeMs: at - t.phaseSince,
+        ...(t.batchId !== undefined ? { batchId: t.batchId } : {}),
+        ...(t.callId !== undefined ? { callId: t.callId } : {}),
+      });
+    }
+    dump(suspects.length === 0 ? "turn-stall" : "stall");
   };
 
   return {
@@ -314,6 +399,37 @@ export function createCallDiagnostics(options: CallDiagnosticsOptions = {}): Cal
       metrics.callsByOutcome[outcome] = (metrics.callsByOutcome[outcome] ?? 0) + 1;
       persist("call.end", { id, outcome, ageMs: now() - call.startedAt });
     },
+    turnBegin(id) {
+      const at = now();
+      let key = id;
+      for (let n = 2; turns.has(key); n += 1) key = `${id}~${n}`;
+      turns.set(key, { id: key, startedAt: at, phase: "start", phaseSince: at, phaseChanges: 0, batchId: undefined, callId: undefined });
+      persist("turn.begin", { turnId: key });
+      return key;
+    },
+    turnPhase(id, phase, ids) {
+      const turn = turns.get(id);
+      if (turn === undefined) return;
+      turn.phase = phase;
+      turn.phaseSince = now();
+      turn.phaseChanges += 1;
+      turn.batchId = ids?.batchId;
+      turn.callId = ids?.callId;
+      record(`turn ${id} ${phase}${ids?.batchId !== undefined ? ` batch=${ids.batchId}` : ""}${ids?.callId !== undefined ? ` call=${ids.callId}` : ""}`);
+      persist("turn.phase", {
+        turnId: id,
+        phase,
+        ...(ids?.batchId !== undefined ? { batchId: ids.batchId } : {}),
+        ...(ids?.callId !== undefined ? { callId: ids.callId } : {}),
+      });
+    },
+    turnEnd(id, outcome) {
+      const turn = turns.get(id);
+      if (turn === undefined) return;
+      turns.delete(id);
+      persist("turn.end", { turnId: id, outcome, ageMs: now() - turn.startedAt, lastPhase: turn.phase });
+    },
+    openTurns: () => [...turns.values()],
     event(kind, detail) {
       metrics.events[kind] = (metrics.events[kind] ?? 0) + 1;
       record(detail === undefined ? `event ${kind}` : `event ${kind} ${detail}`);
