@@ -50,12 +50,17 @@ describe("R700-01: ACP session-start hook notices", () => {
     expect(typeof sessionId).toBe("string");
 
     // `ensureShellHooksAndFireStart` reports every notice line as its own
-    // `agent_message_chunk` BEFORE `session/new` replies — both lines are
-    // already in `h.frames` by the time the reply above resolved.
-    const noticeText = h.frames
-      .filter((f) => f.params?.sessionId === sessionId && f.params?.update?.sessionUpdate === "agent_message_chunk")
-      .map((f) => f.params?.update?.content?.text ?? "")
-      .join("");
+    // `agent_message_chunk` right AFTER `session/new` replies (PR #1213 review
+    // frontend-w3 FE-S03-002): a client learns the new session's id from that
+    // reply, so a notice sent before it would be for a session it does not
+    // know. They are written in the same tick as the reply.
+    const replyIndex = h.frames.indexOf(reply);
+    const notices = h.frames.filter(
+      (f) => f.params?.sessionId === sessionId && f.params?.update?.sessionUpdate === "agent_message_chunk",
+    );
+    expect(notices.length).toBeGreaterThan(0);
+    for (const notice of notices) expect(h.frames.indexOf(notice)).toBeGreaterThan(replyIndex);
+    const noticeText = notices.map((f) => f.params?.update?.content?.text ?? "").join("");
     expect(noticeText).toContain("not trusted");
     expect(noticeText).toContain("repo-poc");
     expect(noticeText).toContain("keryx hooks trust");

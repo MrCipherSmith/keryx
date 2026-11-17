@@ -54,7 +54,8 @@ export function shellHarness(options: ShellHarnessOptions = {}): ShellHarness {
     provider: loadAcpFixtureProvider(fixtureFile),
     profile: options.profile ?? "shell",
     permissionModeDefault: () => options.storedMode,
-    keryxMcp: () => undefined,
+    // No keryx MCP config: the rule `/status` reads and the turn builds by agree.
+    keryxMcp: { configured: () => false, start: () => undefined },
     ...options.serverOptions,
   });
   const initialize = async (): Promise<Frame> => {

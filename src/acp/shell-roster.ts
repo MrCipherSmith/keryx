@@ -5,13 +5,20 @@
 // session-scoped inputs, never a fork of it. Like `keryx shell`, a session
 // builds it once and reuses it across turns: `server.ts` caches it per session
 // and rebuilds only when an input below changes (the session's root, or its
-// client MCP servers after a `session/load`).
+// client MCP servers after a `session/load`). What the factory reads from the
+// project at build time — whether the metaproject tools are offered
+// (`offersIndexTools`) — is therefore read once per session too, exactly as
+// `keryx shell` reads it once per session: a `keryx init` run while the
+// session is open shows up in the next session, not the next turn.
+//
+// `mcp` is `merged-mcp.ts`'s one binding over keryx's servers and the
+// client's; a client server named like a keryx one is dropped and reported.
 //
 //   cwd / metaprojectPort   the session's resolved root, one `createMetaprojectAdapter(root)`
 //                           per root per connection (`server.ts`)
 //   searchController        `createDefaultSearchProviderController()`, as `keryx shell` builds it
 //   jobRegistry             one per ACP session (`server.ts`), swept when the client switches
-//                           to another session or the connection ends
+//                           to another session (after its running turn) or the connection ends
 //   getSessionDir           the session's own directory in the keryx session store
 //   askUser                 `_keryx/ask_user` to the client (`ask-user.ts`) — or, when the
 //                           client did not advertise it, the tool is denied

@@ -238,21 +238,15 @@ export class AcpSessionRegistry {
 
   /**
    * Gives one session's lease back and forgets it: a later `get` is `undefined`
-   * and a later `load` leases it afresh. Idempotent. The shell profile calls it
-   * when the client switches to another session (`server.ts`, `teardownSession`).
+   * and a later `load` leases it afresh. Idempotent. `server.ts`'s
+   * `teardownSession` calls it when the shell profile switches away from a
+   * session and, for every session still held, when the connection ends.
    */
   release(sessionId: string): void {
     const state = this.sessions.get(sessionId);
     if (state === undefined) return;
     this.sessions.delete(sessionId);
     releaseSessionLease(state.lease);
-  }
-
-  /** Releases every session lease this connection holds. Idempotent. */
-  releaseAll(): void {
-    for (const sessionId of this.ids()) {
-      this.release(sessionId);
-    }
   }
 
   /** Replaces the stored handle (e.g. after a `persistHistory` call returns an updated one). */
