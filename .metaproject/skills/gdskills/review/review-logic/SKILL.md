@@ -253,7 +253,7 @@ conditions land under that rubric, not a second rubric.
 | Silent wrong result on a named input | `major` | Trigger and outcome are both named |
 | Type contract broken (declared type is not what is returned) | `major` | Callers observe the wrong value |
 | Edge case not handled, no input that reaches it named | `minor` | No trigger; the cost is to the next editor |
-| Non-null assertion (`!`) | the `!` row of `.metaproject/rules/stacks/ts-js-node/coding-style.mdc` Review severities | That table owns the rating; do not restate it here |
+| Non-null assertion (`!`) | the `!` row of `.metaproject/rules/stacks/ts-js-node/coding-style.mdc` Review severities | That table owns the rating; without the pack, rate a `!` on a value the types allow to be missing `blocker` when it throws during render, `major` elsewhere, `minor` with no input shown |
 | "Could be more defensive", no observable defect | `info` | Neither trigger nor maintenance cost named |
 
 ## Iron Laws

@@ -33,6 +33,7 @@ import {
   type RetiredRuleFailureStage,
   type RetiredRuleOutcome,
 } from "./retired-rules";
+import { stackPackInstallCommand } from "./stack-rules-install";
 
 /** Every entry the core cleanup checks: rules dropped outright and rules moved to another layer. */
 export const CORE_CLEANUP_ENTRIES: readonly RetiredRuleEntry[] = [...RETIRED_RULES, ...MOVED_RULES];
@@ -420,10 +421,11 @@ export async function removeUnmodifiedRetiredRules(
   // kept old copy say "the package is incomplete" instead of blaming a layer
   // directory that is fine. Unset means "shipped".
   isDestinationShipped: (movedTo: string) => boolean = () => true,
-  // Whether this project needs the moved rule at its new path at all. A rule
-  // moved to a stack pack the project's stack does not select (ADR-0001 P4) no
-  // longer applies here, so its unmodified old copy goes without waiting for a
-  // destination that is never installed. Unset means "required".
+  // Whether this project's detected stack selects the moved rule's new path.
+  // Unset means "required". A rule moved to a pack the stack does not select
+  // (ADR-0001 P4) keeps its unmodified old copy until the pack is installed:
+  // detection reads the repository root only, so a monorepo or an app in a
+  // subfolder can miss a stack the project uses (review M1).
   isDestinationRequired: (movedTo: string) => boolean = () => true,
 ): Promise<RetiredRuleOutcome[]> {
   const outcomes: RetiredRuleOutcome[] = [];
@@ -461,9 +463,16 @@ export async function removeUnmodifiedRetiredRules(
       if (retired.shippedSha256.includes(hash)) {
         // A move removes the old copy only once the new one is really there:
         // otherwise the rule would exist nowhere (ADR-0001 P2 review F-001).
-        if (retired.movedTo !== undefined && isDestinationRequired(retired.movedTo)) {
+        // An installed destination is enough, selected or not: a pack added
+        // with `keryx skills install --with` counts.
+        if (retired.movedTo !== undefined) {
           const destination = await installedLayerFileState(path.dirname(rulesTarget), retired.movedTo);
           if (destination !== "installed") {
+            const pack = movedToPackId(retired.movedTo);
+            if (pack !== undefined && !isDestinationRequired(retired.movedTo)) {
+              outcomes.push({ ...subject, action: "kept-pack-not-selected", pack });
+              continue;
+            }
             const cause = isDestinationShipped(retired.movedTo) ? destination : "not-shipped";
             outcomes.push({ ...subject, action: "kept-destination-missing", cause });
             continue;
@@ -691,12 +700,26 @@ export function retiredRuleWarning(
     ? `${outcome.fileName} is no longer shipped by keryx (${reason})`
     : `rules/core/${outcome.fileName} moved to rules/${outcome.movedTo} (${reason})`;
   switch (outcome.action) {
-    case "kept-modified":
-      return outcome.movedTo === undefined
-        ? `${prefix}; kept because it differs from every shipped version — delete it, or rename it if you still rely on it`
-        : `${prefix}; the old copy was kept because it differs from every shipped version, and keryx no longer updates `
-          + `it or points its own skills at it — carry your edits into rules/project/${outcome.movedTo}, then delete `
-          + `rules/core/${outcome.fileName}`;
+    case "kept-modified": {
+      if (outcome.movedTo === undefined) {
+        return `${prefix}; kept because it differs from every shipped version — delete it, or rename it if you still rely on it`;
+      }
+      const pack = movedToPackId(outcome.movedTo);
+      // rules/project/stacks/<pack>/ replaces the pack's copy only where the
+      // pack is installed, so name how to install it (review LS-5).
+      const packNote = pack === undefined
+        ? ""
+        : ` (read in place of the ${pack} pack's copy once that pack is installed: it installs where the ${pack} `
+          + `stack is detected, or run \`${stackPackInstallCommand(pack)}\`)`;
+      return `${prefix}; the old copy was kept because it differs from every shipped version, and keryx no longer updates `
+        + `it or points its own skills at it — carry your edits into rules/project/${outcome.movedTo}${packNote}, then delete `
+        + `rules/core/${outcome.fileName}`;
+    }
+    case "kept-pack-not-selected":
+      return `${prefix}; the old copy was kept because this project's stack was not detected as ${outcome.pack} `
+        + `(detection reads the repository root only, so a workspace monorepo or an app in a subfolder can be missed) — `
+        + `if the project uses ${outcome.pack}, run \`${stackPackInstallCommand(outcome.pack)}\` and keryx removes the old `
+        + `copy on the next \`keryx update\`; if it does not, delete rules/core/${outcome.fileName}`;
     case "kept-destination-missing": {
       const movedTo = outcome.movedTo ?? outcome.fileName;
       const layer = path.posix.dirname(movedTo);

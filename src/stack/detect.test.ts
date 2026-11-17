@@ -204,17 +204,48 @@ describe("no signal for a family", () => {
 });
 
 describe("bounded extension scan", () => {
-  test("hitting the file cap marks c-cpp uncertain", async () => {
+  test("hitting the file cap with no C/C++ file seen selects nothing (review R-4: every large repo got c-cpp), and says so", async () => {
     const files: Record<string, string> = {};
     for (let i = 0; i < 10; i += 1) {
       files[`/repo/file${i}.txt`] = "x";
     }
     const fs = fakeFs(files);
     const result = await detectStack("/repo", { fs, maxFiles: 3 });
-    expect(result.tags["c-cpp"]).toBe(true);
-    expect(result.uncertain).toBe(true);
+    expect(result.tags["c-cpp"]).toBe(false);
+    expect(result.uncertain).toBe(false);
     const scanSignal = result.perSignal.find((s) => s.signal === "scan:extensions");
-    expect(scanSignal?.uncertain).toBe(true);
+    expect(scanSignal?.uncertain).toBe(false);
+    expect(scanSignal?.reason).toContain("hit its file cap (3) with no C/C++ source");
+  });
+
+  test("hitting the file cap after a C/C++ file was seen still sets c-cpp", async () => {
+    const fs = fakeFs({ "/repo/a.c": "int main(void) { return 0; }\n", "/repo/b.txt": "x", "/repo/c.txt": "x", "/repo/d.txt": "x" });
+    const result = await detectStack("/repo", { fs, maxFiles: 2 });
+    expect(result.tags["c-cpp"]).toBe(true);
+  });
+});
+
+describe("JS workspace-root markers (review M1: a monorepo root names only build tooling)", () => {
+  for (const marker of ["pnpm-workspace.yaml", "lerna.json", "nx.json", "turbo.json", "rush.json"]) {
+    test(`${marker} marks the js family uncertain, with or without a root package.json`, async () => {
+      for (const files of [
+        { [`/repo/${marker}`]: "{}\n", "/repo/package.json": JSON.stringify({ devDependencies: { typescript: "^5.0.0" } }) },
+        { [`/repo/${marker}`]: "{}\n" },
+      ]) {
+        const result = await detectStack("/repo", { fs: fakeFs(files) });
+        expect(result.uncertain).toBe(true);
+        for (const tag of jsTags()) expect({ marker, tag, value: result.tags[tag] }).toEqual({ marker, tag, value: true });
+        expect(result.tags.python).toBe(false);
+        const signal = result.perSignal.find((s) => s.signal === "marker:js-workspace");
+        expect(signal?.reason).toContain(marker);
+      }
+    });
+  }
+
+  test("a plain app with no workspace marker stays certain", async () => {
+    const result = await detectStack("/repo", { fs: fakeFs({ "/repo/package.json": JSON.stringify({ dependencies: { react: "^18.0.0" } }) }) });
+    expect(result.uncertain).toBe(false);
+    expect(result.perSignal.some((s) => s.signal === "marker:js-workspace")).toBe(false);
   });
 });
 

@@ -269,7 +269,7 @@ When focus specified: boost files matching focus keywords to P0; select ALL focu
    - Large files (> 500 lines): use outline/grep to locate relevant sections, then read only those ranges
 2. **Understand context**: architecture role, dependencies, what depends on it
 3. **Find and analyze tests**: look for matching test files, understand coverage
-4. **Check rules compliance**: verify against `code-style-patterns.mdc`
+4. **Check rules compliance**: verify against `stacks/react/code-style-patterns.mdc` (installed where React is detected)
 
 ---
 
@@ -284,7 +284,7 @@ When focus specified: boost files matching focus keywords to P0; select ALL focu
 
 ## Step 7: UI Analysis (if applicable)
 
-Check `AGENTS.md` for available tools (`playwright-testing.mdc`, `storybook-guidelines.mdc`). Analyze visual regression requirements, component behavior changes, accessibility impact.
+Check `AGENTS.md` for available tools (`stacks/playwright/playwright-testing.mdc`, `stacks/storybook/storybook-guidelines.mdc`). Analyze visual regression requirements, component behavior changes, accessibility impact.
 
 ---
 
@@ -403,7 +403,7 @@ Follow `documentation-management.mdc`: update `<DOCS_ROOT>/readme.md`, add entry
 ## Rules and Guidelines
 
 1. **Always follow** `documentation-management.mdc` for doc structure
-2. **Always check** `code-style-patterns.mdc` for compliance
+2. **Always check** `stacks/react/code-style-patterns.mdc` (where installed) for compliance
 3. **Always use** AGENTS.md to discover available skills and tools
 4. **Never assume** — ask user when unclear
 5. **Never skip** intermediate review for complex analyses (P0 files > 3)

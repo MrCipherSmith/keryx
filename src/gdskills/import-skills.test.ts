@@ -1090,6 +1090,17 @@ describe("rules the imported skills cite", () => {
     expect(result.rules[0]?.reason).toContain("run `keryx skills install` to restore it");
   });
 
+  test("a pack rule keryx ships that the overlay does not provide names the command that installs its pack (review LS-6)", async () => {
+    await writeOverlaySkill("review-house", "Components: `stacks/react/code-style-patterns.mdc`.");
+
+    const result = await importProjectSkills({ projectRoot: cwd, from: source, module: "review" });
+    expect(result.rules[0]).toMatchObject({
+      ref: "stacks/react/code-style-patterns.mdc",
+      status: "unresolved",
+      reason: "ships with keryx in the react stack pack — run `keryx skills install --profile core --target keryx-shell --with framework:react` to install it",
+    });
+  });
+
   test("a rule name keryx ships that the overlay provides lands in rules/project, never rules/core", async () => {
     await writeOverlaySkill("review-house", "Errors: `core/error-handling.mdc`.");
     await mkdir(path.join(source, "rules", "core"), { recursive: true });

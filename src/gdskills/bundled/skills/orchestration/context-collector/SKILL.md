@@ -168,11 +168,11 @@ Scan local sources for relevant context. Be selective — only include what is d
    
    | Focus Area | Relevant Rules |
    |------------|---------------|
-   | React components | code-style-patterns.mdc, frontend-assistant.mdc, storybook-guidelines.mdc |
-   | MobX stores | code-style-patterns.mdc, mobx-store-template.mdc |
-   | API / DTOs | nestjs-dto.mdc, api-contracts.mdc |
-   | Testing | playwright-testing.mdc, storybook-guidelines.mdc, tdd-workflow.mdc |
-   | General code | code-style-patterns.mdc, frontend-assistant.mdc |
+   | React components | stacks/react/code-style-patterns.mdc, frontend-assistant.mdc, stacks/storybook/storybook-guidelines.mdc |
+   | MobX stores | stacks/react/code-style-patterns.mdc, stacks/mobx/mobx-store-template.mdc |
+   | API / DTOs | stacks/nestjs/nestjs-dto.mdc, api-contracts.mdc |
+   | Testing | stacks/playwright/playwright-testing.mdc, stacks/storybook/storybook-guidelines.mdc, tdd-workflow.mdc |
+   | General code | stacks/react/code-style-patterns.mdc, frontend-assistant.mdc |
    | TDD / test-first | tdd-workflow.mdc |
    | Architecture / layers | clean-architecture.mdc, solid-principles.mdc |
    | Error handling | error-handling.mdc |

@@ -1,8 +1,17 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "bun:test";
-import { bundledStacksSourcePath, detectStackPacks, readBundledStackPacks, selectStackPacks, type BundledStackPack } from "./stack-rules-install";
+import {
+  bundledStackPackProblems,
+  bundledStacksSourcePath,
+  detectStackPacks,
+  readBundledStackPacks,
+  selectStackPacks,
+  stackPackComponent,
+  stackPackInstallCommand,
+  type BundledStackPack,
+} from "./stack-rules-install";
 
 const pack = (id: string, detectionMarkers: string[], parents: string[] = []): BundledStackPack => ({ id, detectionMarkers, extends: parents });
 
@@ -48,5 +57,33 @@ test("detection on a real tree: a Storybook + React project selects storybook, r
     for (const id of ["ts-js-node", "react", "mobx", "nestjs", "playwright", "storybook"]) expect(selected).not.toContain(id);
   } finally {
     await rm(go, { recursive: true, force: true });
+  }
+});
+
+test("the opt-in command names the manifest component that installs each pack's rules (review LS-5, LS-6)", () => {
+  expect(stackPackComponent("react")).toBe("framework:react");
+  expect(stackPackComponent("mobx")).toBe("capability:mobx");
+  expect(stackPackComponent("nestjs")).toBe("framework:nestjs");
+  expect(stackPackComponent("playwright")).toBe("tool:playwright");
+  expect(stackPackComponent("storybook")).toBe("tool:storybook");
+  expect(stackPackComponent("ts-js-node")).toBe("lang:ts-js-node");
+  expect(stackPackInstallCommand("mobx")).toBe("keryx skills install --profile core --target keryx-shell --with capability:mobx");
+  // An unreadable manifest still gives a usable hint.
+  expect(stackPackInstallCommand("react", "/no/such/manifest.json")).toBe("keryx skills install --profile core --target keryx-shell --with react");
+});
+
+test("the bundled stacks tree reports an unreadable root or a pack.json that does not parse (review LS-3)", async () => {
+  expect(bundledStackPackProblems(bundledStacksSourcePath())).toEqual([]);
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-stacks-"));
+  try {
+    expect(bundledStackPackProblems(path.join(root, "missing"))[0]).toContain("could not be read (ENOENT)");
+    await mkdir(path.join(root, "broken", "rules"), { recursive: true });
+    await writeFile(path.join(root, "broken", "pack.json"), "{ not json");
+    await mkdir(path.join(root, "no-rules"), { recursive: true });
+    expect(bundledStackPackProblems(root)).toEqual([
+      "the bundled broken stack pack has no readable pack.json, so it cannot be selected; its rules were not installed — reinstall keryx, then run `keryx update`",
+    ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
   }
 });

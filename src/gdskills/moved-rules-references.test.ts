@@ -69,6 +69,44 @@ test("the scan pattern matches an old citation and spares the override slot and 
   expect([...sample.matchAll(pattern)].map((match) => match[0])).toEqual(["core/git-rules.mdc"]);
 });
 
+/**
+ * A moved rule named by its bare file name where `rules/core/` is the stated
+ * location: on a line that names `rules/core/`, or in the section a heading
+ * naming `rules/core/` opens. `stacks/<pack>/<name>` and `process/<name>`
+ * citations carry a `/` before the name and are not flagged.
+ */
+function bareMovedNameLines(text: string): string[] {
+  const names = MOVED_RULES.map((entry) => entry.fileName.replace(/[.-]/g, (c) => `\\${c}`));
+  const bare = new RegExp(`(?<![\\w/.-])(?:${names.join("|")})\\b`);
+  const hits: string[] = [];
+  let inCoreSection = false;
+  for (const line of text.split("\n")) {
+    if (/^#{1,6}\s/.test(line)) inCoreSection = /rules\/core\//.test(line);
+    if ((inCoreSection || /rules\/core\//.test(line)) && bare.test(line)) hits.push(line.trim());
+  }
+  return hits;
+}
+
+test("no shipped file names a moved rule by bare file name under a rules/core/ location", async () => {
+  const offenders: string[] = [];
+  for (const root of SHIPPED_ROOTS) {
+    for (const file of await listFiles(path.join(REPO_ROOT, root))) {
+      const relative = path.relative(REPO_ROOT, file);
+      if (!/(^|\/)skills\/.*SKILL\.md$/.test(relative)) continue;
+      for (const line of bareMovedNameLines(await readFile(file, "utf8"))) offenders.push(`${relative}: ${line}`);
+    }
+  }
+  expect(offenders).toEqual([]);
+});
+
+test("the bare-name check catches a table under a core heading and spares pack citations", () => {
+  const old = "### 2.3 Rules (`rules/core/`)\n| MobX stores | code-style-patterns.mdc, mobx-store-template.mdc |\n### Next\n| x | code-style-patterns.mdc |";
+  expect(bareMovedNameLines(old)).toHaveLength(1);
+  const fixed = "### 2.3 Rules (`rules/core/`)\n| MobX stores | stacks/react/code-style-patterns.mdc, stacks/mobx/mobx-store-template.mdc |";
+  expect(bareMovedNameLines(fixed)).toEqual([]);
+  expect(bareMovedNameLines("see rules/core/ and `code-style-patterns.mdc` here")).toHaveLength(1);
+});
+
 // Review F3: keryx's own sources also hand agents rule paths — help text, the
 // generators of CLAUDE.md / AGENTS.md / routing.md / index.md (`templates.ts`),
 // flow templates. They are scanned too, for literal and path.join spellings.

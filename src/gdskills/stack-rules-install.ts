@@ -84,6 +84,59 @@ export function selectStackPacks(packs: readonly BundledStackPack[], tags: Reado
   return [...selected].sort();
 }
 
+/**
+ * What is wrong with the bundled `stacks/` tree, one line each: the directory
+ * cannot be listed, or a pack that ships `rules/` has a `pack.json` that does
+ * not parse. Such a pack can never be selected, so `keryx update` says so
+ * instead of silently selecting nothing (review LS-3). Empty when all is well.
+ */
+export function bundledStackPackProblems(stacksRoot: string): string[] {
+  let names: string[];
+  try {
+    names = readdirSync(stacksRoot, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+  } catch (error) {
+    const code = error instanceof Error && "code" in error ? String((error as NodeJS.ErrnoException).code) : "unknown error";
+    return [`the bundled stack packs at ${stacksRoot} could not be read (${code}); no pack rules were installed — reinstall keryx, then run \`keryx update\``];
+  }
+  const problems: string[] = [];
+  for (const name of names.sort()) {
+    if (!existsSync(bundledPackRulesPath(stacksRoot, name))) continue;
+    try {
+      JSON.parse(readFileSync(path.join(stacksRoot, name, "pack.json"), "utf8"));
+    } catch {
+      problems.push(`the bundled ${name} stack pack has no readable pack.json, so it cannot be selected; its rules were not installed — reinstall keryx, then run \`keryx update\``);
+    }
+  }
+  return problems;
+}
+
+/** The bundled install manifest, from the source tree or the published package. */
+function bundledInstallManifestPath(): string {
+  return path.join(path.dirname(bundledStacksSourcePath()), "install-manifest.json");
+}
+
+/**
+ * The manifest component that installs a pack's rules: the one whose modules
+ * carry `<pack>-rules` (`framework:react`, `capability:mobx`, `tool:storybook`,
+ * …), or the pack id when the manifest does not say.
+ */
+export function stackPackComponent(pack: string, manifestPath: string = bundledInstallManifestPath()): string {
+  try {
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as { components?: Record<string, { modules?: unknown }> };
+    const found = Object.entries(manifest.components ?? {})
+      .find(([, entry]) => Array.isArray(entry.modules) && entry.modules.includes(`${pack}-rules`));
+    if (found !== undefined) return found[0];
+  } catch {
+    // An unreadable manifest still leaves a usable hint: the pack id.
+  }
+  return pack;
+}
+
+/** The command that installs one pack's rules into `.metaproject/rules/stacks/<pack>/` when detection did not select it. */
+export function stackPackInstallCommand(pack: string, manifestPath?: string): string {
+  return `keryx skills install --profile core --target keryx-shell --with ${stackPackComponent(pack, manifestPath)}`;
+}
+
 /** Run stack detection on `projectRoot` and select the bundled packs it matches. */
 export async function detectStackPacks(projectRoot: string, stacksRoot: string = bundledStacksSourcePath()): Promise<string[]> {
   const detection = await detectStack(projectRoot);

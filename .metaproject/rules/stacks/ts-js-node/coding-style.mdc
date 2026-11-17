@@ -1,6 +1,6 @@
 ---
 extends: common
-paths: ["**/*.ts", "**/*.js", "**/*.mjs", "**/*.cjs"]
+paths: ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", "**/*.mjs", "**/*.cjs"]
 metadata:
   origin: authored
 ---

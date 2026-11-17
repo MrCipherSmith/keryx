@@ -573,6 +573,32 @@ async function markerFileSignal(
   return present(tags, [fileName], `detected from ${fileName}`);
 }
 
+/**
+ * Workspace-root markers of JS monorepo tools. Like `package.json`
+ * `workspaces`, they say the dependencies that decide the stack live in
+ * sub-packages this module does not walk, so the js family is uncertain
+ * rather than read from a root that may declare only build tooling.
+ */
+const JS_WORKSPACE_MARKERS = ["pnpm-workspace.yaml", "lerna.json", "nx.json", "turbo.json", "rush.json"] as const;
+
+async function jsWorkspaceMarkerSignal(cwd: string, fs: StackDetectFs): Promise<SignalOutcome | undefined> {
+  const found: string[] = [];
+  for (const name of JS_WORKSPACE_MARKERS) {
+    try {
+      await fs.readTextFile(joinPath(cwd, name));
+      found.push(name);
+    } catch (error) {
+      const failure = readFailureOutcome("js", name, error);
+      if (failure !== undefined) return failure;
+    }
+  }
+  if (found.length === 0) return undefined;
+  return uncertainFamily(
+    "js",
+    `${found.join(", ")} marks a workspace root; the dependencies that decide the stack live in the sub-packages, which this module does not walk`,
+  );
+}
+
 async function goModSignal(cwd: string, fs: StackDetectFs): Promise<SignalOutcome | undefined> {
   return markerFileSignal(cwd, fs, "go.mod", ["go"], "go");
 }
@@ -856,14 +882,14 @@ async function extensionScanSignal(cwd: string, fs: StackDetectFs, maxFiles: num
       `extension scan could not read a subdirectory: ${erredCode ?? "unknown error"}`,
     );
   }
-  if (capHit) {
-    return uncertainFamily(
-      "c-cpp",
-      `extension scan hit its file cap (${maxFiles}) before finishing — the scan cannot say whether C/C++ sources exist beyond what it already saw`,
-    );
-  }
   if (cCppFiles.length === 0) {
-    return undefined;
+    // A large repository hits the cap long before it ends; without one C/C++
+    // file among what was seen that is no evidence of C/C++, so the family is
+    // not marked uncertain (that would select the c-cpp pack for every big
+    // repository). The cap still shows up in the reason.
+    return capHit
+      ? present([], [], `extension scan hit its file cap (${maxFiles}) with no C/C++ source among the files it saw`)
+      : undefined;
   }
   return present(
     ["c-cpp"],
@@ -901,6 +927,7 @@ export async function detectStack(cwd: string, opts: DetectStackOptions = {}): P
 
   const raw: RawSignal[] = [
     { id: "manifest:package.json", outcome: await packageJsonSignal(root, fs) },
+    { id: "marker:js-workspace", outcome: await jsWorkspaceMarkerSignal(root, fs) },
     { id: "manifest:pyproject.toml", outcome: await pyprojectSignal(root, fs) },
     { id: "manifest:setup.cfg", outcome: await simplePythonManifestSignal(root, fs, "setup.cfg") },
     { id: "manifest:requirements.txt", outcome: await simplePythonManifestSignal(root, fs, "requirements.txt") },

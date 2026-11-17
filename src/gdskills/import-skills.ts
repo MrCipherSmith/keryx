@@ -7,7 +7,7 @@ import { pathExists, toPosix } from "../lib/fs";
 import { BUNDLED_GDSKILLS } from "./catalog";
 import { bundledRulesSourcePath } from "./install";
 import { movedToPackId } from "./retired-rules";
-import { bundledPackRulesPath, bundledStacksSourcePath } from "./stack-rules-install";
+import { bundledPackRulesPath, bundledStacksSourcePath, stackPackInstallCommand } from "./stack-rules-install";
 import {
   isKeryxRuleLayer,
   isRegularFile,
@@ -1837,8 +1837,12 @@ async function decideRule(options: ImportProjectSkillsOptions, citation: RuleCit
       // Nothing to compare it with: the project's file is the only version.
       return { row: { ...base, status: "present", existing } };
     }
+    // A pack rule installs only with its pack; plain `keryx skills install`
+    // does not add a pack the project's stack was not detected as (LS-6).
     const reason = shipsWithKeryx
-      ? "ships with keryx — run `keryx skills install` to restore it"
+      ? pack !== undefined
+        ? `ships with keryx in the ${pack} stack pack — run \`${stackPackInstallCommand(pack)}\` to install it`
+        : "ships with keryx — run `keryx skills install` to restore it"
       : notRegularFiles[0] !== undefined
         ? `${notRegularFiles[0]} is not a regular file`
         : overlayNotRegular !== undefined

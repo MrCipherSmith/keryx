@@ -26,7 +26,8 @@ import {
 } from "./guarded-fs-ops";
 import { MOVED_RULES, type MovedRuleEntry, movedToPackId, RETIRED_RULE_SIZE_CAP_BYTES, RETIRED_RULES } from "./retired-rules";
 import { isKeryxRuleLayer, type KeryxRuleLayer } from "./rule-references";
-import { bundledPackRulesPath, bundledStacksSourcePath } from "./stack-rules-install";
+import { bundledPackRulesPath, bundledStacksSourcePath, stackPackInstallCommand } from "./stack-rules-install";
+import { resolveProjectContext } from "./context-resolver";
 
 test("installs real bundled gdskills, contracts, shared assets, and rules", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "keryx-gdskills-"));
@@ -2084,7 +2085,8 @@ test("LS-4: a symlinked .metaproject/rules is not written through by the overrid
 
 // ADR-0001 P4: stack content moved out of core into the stack packs. Detection is
 // load-bearing now: a project whose stack selects a pack still receives the moved
-// rows, from `keryx init`/`update` alone; a project whose stack does not, loses them.
+// rows, from `keryx init`/`update` alone; a project whose stack detection misses
+// keeps its old core copies, reported with the command that installs the pack.
 
 type StackCase = { label: string; manifest: Record<string, string>; gets: string[]; lacks: string[]; rows: Record<string, RegExp[]> };
 
@@ -2148,7 +2150,10 @@ const STACK_CASES: StackCase[] = [
 
 async function projectWithStack(files: Record<string, string>): Promise<{ root: string; metaprojectRoot: string }> {
   const root = await mkdtemp(path.join(tmpdir(), "keryx-p4-stack-"));
-  for (const [name, text] of Object.entries(files)) await writeFile(path.join(root, name), text);
+  for (const [name, text] of Object.entries(files)) {
+    await mkdir(path.dirname(path.join(root, name)), { recursive: true });
+    await writeFile(path.join(root, name), text);
+  }
   const metaprojectRoot = path.join(root, ".metaproject");
   await seedPreMoveCore(metaprojectRoot, P4_MOVES);
   return { root, metaprojectRoot };
@@ -2169,6 +2174,28 @@ test("P4: every rule moved to a pack records the last version it shipped under c
   }
 });
 
+/**
+ * An unmodified pre-move core copy is removed once its pack is installed; while
+ * the pack is not, the copy stays (a missed detection must not delete it,
+ * review M1) and one warning names the command that installs the pack.
+ */
+function expectPreMoveCopies(rules: string, warnings: readonly string[]): void {
+  const moveWarnings = warnings.filter((warning) => warning.includes("moved to rules/stacks/"));
+  const kept: string[] = [];
+  for (const entry of P4_MOVES) {
+    const installed = existsSync(path.join(rules, entry.movedTo!));
+    expect({ file: entry.fileName, stale: existsSync(path.join(rules, "core", entry.fileName)) }).toEqual({ file: entry.fileName, stale: !installed });
+    if (installed) continue;
+    kept.push(entry.fileName);
+    const pack = movedToPackId(entry.movedTo!)!;
+    const warning = moveWarnings.find((text) => text.startsWith(`rules/core/${entry.fileName} moved`));
+    expect({ file: entry.fileName, warned: warning !== undefined }).toEqual({ file: entry.fileName, warned: true });
+    expect(warning).toContain(`this project's stack was not detected as ${pack}`);
+    expect(warning).toContain(`\`${stackPackInstallCommand(pack)}\``);
+  }
+  expect(moveWarnings).toHaveLength(kept.length);
+}
+
 for (const stackCase of STACK_CASES) {
   test(`P4 detection: a ${stackCase.label} project still receives its moved rows, and only its packs`, async () => {
     const { root, metaprojectRoot } = await projectWithStack(stackCase.manifest);
@@ -2185,9 +2212,7 @@ for (const stackCase of STACK_CASES) {
         const text = await readFile(path.join(rules, destination), "utf8");
         for (const pattern of patterns) expect({ destination, row: pattern.source, present: pattern.test(text) }).toEqual({ destination, row: pattern.source, present: true });
       }
-      // Every unmodified pre-move core copy is gone, whether its pack installed here or not.
-      for (const entry of P4_MOVES) expect({ file: entry.fileName, stale: existsSync(path.join(rules, "core", entry.fileName)) }).toEqual({ file: entry.fileName, stale: false });
-      expect(result.warnings.filter((warning) => warning.includes("moved to rules/stacks/"))).toEqual([]);
+      expectPreMoveCopies(rules, result.warnings);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -2205,13 +2230,9 @@ test("P4 detection: a Python project gets none of the moved stack rows, and core
       expect({ destination, installed: existsSync(path.join(rules, destination)) }).toEqual({ destination, installed: false });
     }
     expect(existsSync(path.join(rules, "stacks", "python"))).toBe(true);
-    for (const entry of P4_MOVES) {
-      expect(existsSync(path.join(rules, "core", entry.fileName))).toBe(false);
-      expect(result.notices).toContain(
-        `rules/core/${entry.fileName} moved to rules/${entry.movedTo} (the ${movedToPackId(entry.movedTo)} stack pack, installed where that stack is detected); `
-          + `removed the unmodified old copy — update any citation of rules/core/${entry.fileName} in your own files (CLAUDE.md, AGENTS.md, project skills, wiki)`,
-      );
-    }
+    // No JS pack is installed, so every unmodified pre-move copy is kept and reported.
+    expectPreMoveCopies(rules, result.warnings);
+    expect(result.notices.filter((notice) => notice.includes("moved to rules/stacks/"))).toEqual([]);
     // D4: a core row applies without knowing the language.
     for (const name of ["async-patterns.mdc", "concurrency-patterns.mdc"]) {
       const core = await readFile(path.join(rules, "core", name), "utf8");
@@ -2256,6 +2277,215 @@ test("P4: a project's own override of a rule moved to a pack follows it to rules
     await rm(root, { recursive: true, force: true });
   }
 });
+
+// Review round 1 (M1): detection reads the repository root only. A miss must not
+// delete a moved rule the project used.
+
+const JS_PACKS_WITH_MOVES = ["mobx", "nestjs", "playwright", "react", "storybook", "ts-js-node"];
+
+for (const marker of ["pnpm-workspace.yaml", "lerna.json", "nx.json", "turbo.json", "rush.json"]) {
+  test(`P4 M1: a ${marker} workspace root with root devDependencies only gets every JS pack, so no moved rule is lost`, async () => {
+    const { root, metaprojectRoot } = await projectWithStack({
+      "package.json": JSON.stringify({ name: "monorepo", private: true, devDependencies: { typescript: "^5.6.0", turbo: "^2.0.0" } }),
+      [marker]: marker.endsWith(".yaml") ? "packages:\n  - apps/*\n" : "{}\n",
+      "apps/web/package.json": JSON.stringify({ name: "web", dependencies: { react: "^18.3.1", mobx: "^6.13.0" } }),
+    });
+    try {
+      const result = await installGdskills(metaprojectRoot, "recommended");
+      const rules = path.join(metaprojectRoot, "rules");
+      for (const pack of JS_PACKS_WITH_MOVES) {
+        expect({ pack, installed: existsSync(path.join(rules, "stacks", pack)) }).toEqual({ pack, installed: true });
+      }
+      expectPreMoveCopies(rules, result.warnings);
+      for (const entry of P4_MOVES) expect(existsSync(path.join(rules, "core", entry.fileName))).toBe(false);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+}
+
+test("P4 M1: a project with no root package.json (frontend/ + backend/) keeps every unmodified moved copy and is told how to install each pack", async () => {
+  const { root, metaprojectRoot } = await projectWithStack({
+    "frontend/package.json": JSON.stringify({ name: "frontend", dependencies: { react: "^18.3.1", mobx: "^6.13.0" } }),
+    "backend/package.json": JSON.stringify({ name: "backend", dependencies: { "@nestjs/core": "^10.4.0" } }),
+  });
+  try {
+    const result = await installGdskills(metaprojectRoot, "recommended");
+    const rules = path.join(metaprojectRoot, "rules");
+    expect(existsSync(path.join(rules, "stacks", "react"))).toBe(false);
+    for (const entry of P4_MOVES) {
+      expect(await readFile(path.join(rules, "core", entry.fileName), "utf8")).toBe(await preMoveText(entry.fileName));
+    }
+    expectPreMoveCopies(rules, result.warnings);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("P4 M1: once the pack is installed by hand (as --with does), the next update removes the kept core copy", async () => {
+  const { root, metaprojectRoot } = await projectWithStack({ "pyproject.toml": '[project]\nname = "fixture"\n' });
+  try {
+    await installGdskills(metaprojectRoot, "recommended");
+    const rules = path.join(metaprojectRoot, "rules");
+    expect(existsSync(path.join(rules, "core", "nestjs-dto.mdc"))).toBe(true);
+    // What `keryx skills install --target keryx-shell --with framework:nestjs` writes.
+    await mkdir(path.join(rules, "stacks", "nestjs"), { recursive: true });
+    await writeFile(
+      path.join(rules, "stacks", "nestjs", "nestjs-dto.mdc"),
+      await readFile(path.join(bundledPackRulesPath(bundledStacksSourcePath(), "nestjs"), "nestjs-dto.mdc")),
+    );
+    const again = await installGdskills(metaprojectRoot, "recommended");
+    expect(existsSync(path.join(rules, "core", "nestjs-dto.mdc"))).toBe(false);
+    expect(again.notices.some((notice) => notice.startsWith("rules/core/nestjs-dto.mdc moved to rules/stacks/nestjs/nestjs-dto.mdc"))).toBe(true);
+    // The other packs are still not installed: their copies stay.
+    expect(existsSync(path.join(rules, "core", "code-style-patterns.mdc"))).toBe(true);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("P4 T-1: an edited core copy of a rule moved to a pack the stack does not select is kept, and the remedy names a slot that loads", async () => {
+  const { root, metaprojectRoot } = await projectWithStack({ "pyproject.toml": '[project]\nname = "fixture"\n' });
+  try {
+    const edited = path.join(metaprojectRoot, "rules", "core", "code-style-patterns.mdc");
+    await writeFile(edited, `${await readFile(edited, "utf8")}\nOur own component rule.\n`);
+    const result = await installGdskills(metaprojectRoot, "recommended");
+    expect(await readFile(edited, "utf8")).toContain("Our own component rule.");
+    const warning = result.warnings.find((text) => text.startsWith("rules/core/code-style-patterns.mdc moved"));
+    expect(warning).toContain("differs from every shipped version");
+    expect(warning).toContain("carry your edits into rules/project/stacks/react/code-style-patterns.mdc");
+    expect(warning).toContain(`\`${stackPackInstallCommand("react")}\``);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("P4 T-4: a MobX-only manifest installs mobx and, through extends, react and ts-js-node", async () => {
+  const { root, metaprojectRoot } = await projectWithStack(pkg({ mobx: "^6.13.0" }));
+  try {
+    const result = await installGdskills(metaprojectRoot, "recommended");
+    const stacks = path.join(metaprojectRoot, "rules", "stacks");
+    for (const pack of ["mobx", "react", "ts-js-node"]) {
+      expect({ pack, installed: existsSync(path.join(stacks, pack)) }).toEqual({ pack, installed: true });
+    }
+    expect(existsSync(path.join(stacks, "nestjs"))).toBe(false);
+    expect(existsSync(path.join(metaprojectRoot, "rules", "core", "code-style-patterns.mdc"))).toBe(false);
+    expect(existsSync(path.join(metaprojectRoot, "rules", "core", "mobx-store-template.mdc"))).toBe(false);
+    expectPreMoveCopies(path.join(metaprojectRoot, "rules"), result.warnings);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("P4 T-5: keryx update saves a hand-edited stack rule before replacing it and says where; an unedited older version is replaced silently", async () => {
+  const { root, metaprojectRoot } = await projectWithStack(pkg({ typescript: "^5.6.0" }));
+  try {
+    await installGdskills(metaprojectRoot, "recommended");
+    const installed = path.join(metaprojectRoot, "rules", "stacks", "ts-js-node", "coding-style.mdc");
+    const patterns = path.join(metaprojectRoot, "rules", "stacks", "ts-js-node", "patterns.mdc");
+    const bundled = await readFile(path.join(bundledPackRulesPath(bundledStacksSourcePath(), "ts-js-node"), "coding-style.mdc"), "utf8");
+    await writeFile(installed, `${bundled}\nOur own team rule.\n`);
+    // An older keryx version of patterns.mdc that keryx recorded writing: not an edit.
+    const older = "# an older keryx version\n";
+    const recordPath = path.join(root, ".metaproject", "data", "gdskills", "stack-rules-installed.json");
+    const record = JSON.parse(await readFile(recordPath, "utf8")) as Record<string, string>;
+    record[".metaproject/rules/stacks/ts-js-node/patterns.mdc"] = createHash("sha256").update(older).digest("hex");
+    await writeFile(recordPath, JSON.stringify(record));
+    await writeFile(patterns, older);
+
+    const result = await installGdskills(metaprojectRoot, "recommended");
+    expect(await readFile(installed, "utf8")).toBe(bundled);
+    const backup = path.join(root, ".metaproject", "data", "gdskills", "stack-rule-backups", "ts-js-node", "coding-style.mdc");
+    expect(await readFile(backup, "utf8")).toContain("Our own team rule.");
+    const stackWarnings = result.warnings.filter((warning) => warning.startsWith("rules/stacks/"));
+    expect(stackWarnings).toEqual([
+      "rules/stacks/ts-js-node/coding-style.mdc differed from every version keryx installed there and was replaced by keryx's copy; "
+        + "your version is saved at .metaproject/data/gdskills/stack-rule-backups/ts-js-node/coding-style.mdc — carry your edits into "
+        + "rules/project/stacks/ts-js-node/coding-style.mdc, which keryx reads in place of the pack's copy",
+    ]);
+    expect(existsSync(path.join(root, ".metaproject", "data", "gdskills", "stack-rule-backups", "ts-js-node", "patterns.mdc"))).toBe(false);
+    // A third run is quiet: everything matches what keryx recorded.
+    const third = await installGdskills(metaprojectRoot, "recommended");
+    expect(third.warnings.filter((warning) => warning.startsWith("rules/stacks/"))).toEqual([]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("P4 LS-3: an unreadable bundled stacks/ tree is reported, and no unmodified moved copy is removed", async () => {
+  const { root, metaprojectRoot } = await projectWithStack(pkg({ react: "^18.3.1", typescript: "^5.6.0" }));
+  try {
+    const result = await installBundledRules(metaprojectRoot, { stacksSourceRoot: path.join(root, "no-such-stacks") });
+    expect(result.warning).toContain("the bundled stack packs at");
+    expect(result.warning).toContain("could not be read (ENOENT)");
+    for (const entry of P4_MOVES) {
+      expect({ file: entry.fileName, kept: existsSync(path.join(metaprojectRoot, "rules", "core", entry.fileName)) }).toEqual({ file: entry.fileName, kept: true });
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("P4 LS-7: a pre-P4 flat .claude/rules copy of a moved rule is reported, not deleted", async () => {
+  const { root, metaprojectRoot } = await projectWithStack({
+    ...pkg({ react: "^18.3.1", typescript: "^5.6.0" }),
+    ".claude/rules/code-style-patterns.mdc": await preMoveText("code-style-patterns.mdc"),
+  });
+  try {
+    const result = await installGdskills(metaprojectRoot, "recommended");
+    expect(existsSync(path.join(root, ".claude", "rules", "code-style-patterns.mdc"))).toBe(true);
+    expect(result.warnings).toContain(
+      ".claude/rules/code-style-patterns.mdc is a copy of a core rule from before keryx moved it to the react stack pack; Claude still "
+        + "loads it, with rows keryx has since moved — delete it, and if the project uses react run "
+        + "`keryx skills install --profile core --target claude --with framework:react` to get .claude/rules/react-code-style-patterns.mdc",
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+// Review round 1 (M2, M3): the resolver on a real install, real pack frontmatter.
+
+test("P4 M3: a .tsx task reaches the ts-js-node `!`/`any` rows, by glob and by the ui_component task type", async () => {
+  const { root, metaprojectRoot } = await projectWithStack(pkg({ react: "^18.3.1", mobx: "^6.13.0", typescript: "^5.6.0" }));
+  try {
+    await installGdskills(metaprojectRoot, "recommended");
+    await mkdir(path.join(root, "src"), { recursive: true });
+    await writeFile(path.join(root, "src", "Button.tsx"), "export const Button = () => null;\n");
+    for (const input of [{ files: ["src/Button.tsx"] }, { files: [], taskType: "ui_component" }]) {
+      const resolved = await resolveProjectContext({ projectRoot: root, for: "implement", ...input });
+      const coding = resolved.entries.find((entry) => entry.path === ".metaproject/rules/stacks/ts-js-node/coding-style.mdc");
+      expect({ input, tier: coding?.tier }).toEqual({ input, tier: "must_read" });
+      expect(await readFile(path.join(root, coding!.path), "utf8")).toMatch(/^\| `!` on a value the types allow to be missing/m);
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+for (const slot of ["code-style-patterns.mdc", "core/code-style-patterns.mdc", "stacks/react/code-style-patterns.mdc"]) {
+  test(`P4 M2: a project override at rules/project/${slot} replaces the react pack's copy, as a flat override replaced the core copy before the move`, async () => {
+    const { root, metaprojectRoot } = await projectWithStack(pkg({ react: "^18.3.1", typescript: "^5.6.0" }));
+    try {
+      await installGdskills(metaprojectRoot, "recommended");
+      const override = path.join(metaprojectRoot, "rules", "project", slot);
+      await mkdir(path.dirname(override), { recursive: true });
+      await writeFile(override, "# our component rules\n");
+      const packCopy = ".metaproject/rules/stacks/react/code-style-patterns.mdc";
+      for (const input of [{ files: [], taskType: "ui_component" }, { files: ["src/Card.tsx"] }]) {
+        const resolved = await resolveProjectContext({ projectRoot: root, for: "implement", ...input });
+        const ours = resolved.entries.find((entry) => entry.path === `.metaproject/rules/project/${slot}`);
+        expect({ input, shadows: ours?.shadows }).toEqual({ input, shadows: packCopy });
+        expect({ input, packListed: resolved.entries.some((entry) => entry.path === packCopy) }).toEqual({ input, packListed: false });
+      }
+      // A task that selects no react rule does not pull the override in either.
+      const backend = await resolveProjectContext({ projectRoot: root, for: "implement", files: ["src/server.ts"] });
+      expect(backend.entries.some((entry) => entry.path === `.metaproject/rules/project/${slot}`)).toBe(false);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+}
 
 test("P4: an override whose pack slot is blocked by a file is kept and reported, not dropped", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "keryx-p4-override-"));

@@ -365,6 +365,13 @@ export type RetiredRuleOutcome = { fileName: string; movedTo?: string } & (
   | { action: "kept-modified" }
   /** A moved rule's old copy matched a shipped version, but its new path is not an installed regular file. */
   | { action: "kept-destination-missing"; cause: MovedDestinationCause }
+  /**
+   * A rule moved to a stack pack this project's detected stack does not select,
+   * and the pack is not installed: the old copy stays, because a missed
+   * detection (a workspace root, an app in a subfolder) must not delete a rule
+   * the project used. The operator opts in to the pack or deletes the copy.
+   */
+  | { action: "kept-pack-not-selected"; pack: string }
   | { action: "kept-not-regular-file" }
   | { action: "kept-oversized"; sizeBytes: number }
   | { action: "kept-error"; stage: RetiredRuleFailureStage; errorCode: string }

@@ -1,5 +1,8 @@
-import { lstat, readFile, readlink } from "node:fs/promises";
+import { lstat, readdir, readFile, readlink } from "node:fs/promises";
 import { existsSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { readJsonFileOr } from "../lib/json";
+import { readSkillsInstallState } from "./manifest/state";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { pathExists } from "../lib/fs";
@@ -40,7 +43,14 @@ import {
 import { migrateMovedRuleRegistry, type MovedRegistryEntry } from "./project-rules";
 import { movedToPackId, type RetiredRuleEntry, type RetiredRuleOutcome } from "./retired-rules";
 import { isKeryxRuleLayer, KERYX_RULE_LAYERS, type KeryxRuleLayer } from "./rule-references";
-import { bundledPackRulesPath, bundledStacksSourcePath, detectStackPacks, STACK_RULES_LAYER_DIR } from "./stack-rules-install";
+import {
+  bundledPackRulesPath,
+  bundledStackPackProblems,
+  bundledStacksSourcePath,
+  detectStackPacks,
+  STACK_RULES_LAYER_DIR,
+  stackPackComponent,
+} from "./stack-rules-install";
 
 /**
  * `mkdirContained`, but a containment refusal becomes a warning string
@@ -402,6 +412,7 @@ export async function installBundledRules(
   // stack selects. Since P4 they carry rows core used to ship, so they install
   // with the layers rather than only through `keryx skills install`.
   const selectedPacks = [...await (seams.selectStackPacks ?? detectStackPacks)(projectRoot, stacksSourceRoot)].sort();
+  warnings.push(...bundledStackPackProblems(stacksSourceRoot));
   const stackInstall = await installStackPackRules(metaprojectRoot, stacksSourceRoot, selectedPacks);
   warnings.push(...stackInstall.warnings);
   // A moved rule's new path is shipped when this bundle carries the file in
@@ -413,9 +424,9 @@ export async function installBundledRules(
     const layer = movedTo.slice(0, movedTo.indexOf("/"));
     return isKeryxRuleLayer(layer) && existsSync(path.join(sourcePathFor(layer), path.basename(movedTo)));
   };
-  // A rule moved to a pack this project's stack does not select no longer
-  // applies here: its stale core copy goes without waiting for a destination
-  // that is never installed.
+  // A rule moved to a pack this project's stack does not select keeps its old
+  // core copy, reported with the command that installs the pack: a missed
+  // detection must not delete a rule the project used (review M1).
   const isDestinationRequired = (movedTo: string): boolean => {
     const pack = movedToPackId(movedTo);
     return pack === undefined || selectedPacks.includes(pack);
@@ -431,6 +442,7 @@ export async function installBundledRules(
   // ...and so does its `skills import --rules` registry entry (review LS-2).
   const registryMoves = await migrateMovedRuleRegistry(projectRoot, moves, async (ref) =>
     (await lstat(path.join(metaprojectRoot, "rules", "project", ref)).catch(() => null)) !== null);
+  warnings.push(...await staleClaudeRuleCopies(projectRoot, cleanupEntries));
   return {
     outcomes,
     overrideOutcomes,
@@ -459,6 +471,9 @@ async function installStackPackRules(
   const stacksTarget = path.join(metaprojectRoot, "rules", STACK_RULES_LAYER_DIR);
   const root = await checkInstallDestination(stacksTarget, path.relative(metaprojectRoot, stacksTarget));
   if (!root.usable) return { installed, warnings: [root.warning] };
+  const projectRoot = path.dirname(metaprojectRoot);
+  const known = await knownStackRuleHashes(projectRoot);
+  const record: Record<string, string> = { ...known.recorded };
   for (const pack of toInstall) {
     const target = path.join(stacksTarget, pack);
     const destination = await checkInstallDestination(target, path.relative(metaprojectRoot, target));
@@ -471,12 +486,122 @@ async function installStackPackRules(
       warnings.push(mkdirWarning);
       continue;
     }
+    const source = bundledPackRulesPath(stacksSourceRoot, pack);
+    warnings.push(...await preserveEditedStackRules(projectRoot, pack, source, known.all));
     // See the note in installGdskills's per-skill loop: containment is
     // confirmed by mkdirContainedOrWarn before the recursive copy.
-    await copyDirectoryContained(bundledPackRulesPath(stacksSourceRoot, pack), target);
+    await copyDirectoryContained(source, target);
+    for (const file of await readdir(source).catch(() => [] as string[])) {
+      const bytes = await readFile(path.join(source, file)).catch(() => undefined);
+      if (bytes !== undefined) record[stackRuleRel(pack, file)] = sha256Bytes(bytes);
+    }
     installed.push(pack);
   }
+  try {
+    await writeContained(projectRoot, STACK_RULES_RECORD, `${JSON.stringify(sortedRecord(record), null, 2)}\n`);
+  } catch (error) {
+    warnings.push(`${STACK_RULES_RECORD} could not be written (${errorCodeOf(error)}); the next \`keryx update\` cannot tell an edited stack rule from an older keryx version of it`);
+  }
   return { installed, warnings };
+}
+
+/**
+ * A `keryx skills install --target claude` before ADR-0001 P4 copied each
+ * moved rule flat into `.claude/rules/<file>`; Claude still auto-loads it, with
+ * the rows P4 moved elsewhere, beside (or instead of) the new
+ * `.claude/rules/<pack>-<file>`. The manifest install-state records it, so it
+ * is reported, never deleted here (review LS-7).
+ */
+async function staleClaudeRuleCopies(projectRoot: string, entries: readonly RetiredRuleEntry[]): Promise<string[]> {
+  const warnings: string[] = [];
+  for (const entry of entries) {
+    const pack = entry.movedTo === undefined ? undefined : movedToPackId(entry.movedTo);
+    if (pack === undefined) continue;
+    const rel = `.claude/rules/${entry.fileName}`;
+    const stats = await lstat(path.join(projectRoot, rel)).catch(() => undefined);
+    if (stats === undefined || !stats.isFile()) continue;
+    warnings.push(
+      `${rel} is a copy of a core rule from before keryx moved it to the ${pack} stack pack; Claude still `
+        + `loads it, with rows keryx has since moved — delete it, and if the project uses ${pack} run `
+        + `\`keryx skills install --profile core --target claude --with ${stackPackComponent(pack)}\` to get .claude/rules/${pack}-${entry.fileName}`,
+    );
+  }
+  return warnings;
+}
+
+/**
+ * What keryx itself wrote under `rules/stacks/`, so `keryx update` can tell a
+ * hand edit there from an older keryx version of the same file (review R-3).
+ */
+const STACK_RULES_RECORD = ".metaproject/data/gdskills/stack-rules-installed.json";
+/** Where a hand-edited stack rule is saved before `keryx update` replaces it. */
+const STACK_RULE_BACKUPS = ".metaproject/data/gdskills/stack-rule-backups";
+
+const stackRuleRel = (pack: string, file: string): string => `.metaproject/rules/${STACK_RULES_LAYER_DIR}/${pack}/${file}`;
+const sha256Bytes = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex");
+const sortedRecord = (record: Record<string, string>): Record<string, string> =>
+  Object.fromEntries(Object.entries(record).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
+
+/**
+ * Hashes of every stack-rule version keryx is known to have put in place: this
+ * installer's own record (`recorded`), plus what a `keryx skills install
+ * --target keryx-shell` recorded in its install-state (in `all` only).
+ */
+async function knownStackRuleHashes(projectRoot: string): Promise<{ recorded: Record<string, string>; all: Map<string, Set<string>> }> {
+  const recorded: Record<string, string> = {};
+  const all = new Map<string, Set<string>>();
+  const add = (rel: string, hash: string): void => void all.set(rel, (all.get(rel) ?? new Set()).add(hash));
+  const raw = await readJsonFileOr<unknown>(path.join(projectRoot, STACK_RULES_RECORD), {});
+  if (typeof raw === "object" && raw !== null && !Array.isArray(raw)) {
+    for (const [rel, hash] of Object.entries(raw as Record<string, unknown>)) {
+      if (typeof hash !== "string" || !rel.startsWith(`.metaproject/rules/${STACK_RULES_LAYER_DIR}/`)) continue;
+      recorded[rel] = hash;
+      add(rel, hash);
+    }
+  }
+  const state = await readSkillsInstallState(projectRoot, "keryx-shell").catch(() => undefined);
+  for (const module of state?.installedModules ?? []) {
+    for (const [rel, hash] of Object.entries(module.sha256)) add(rel, hash);
+  }
+  return { recorded, all };
+}
+
+/**
+ * Save every installed rule of `pack` that differs both from the bundled copy
+ * and from every version keryx is known to have written there — a hand edit —
+ * before the force-copy replaces it, and say where it went. Edits belong in
+ * `rules/project/stacks/<pack>/`, which replaces the pack's copy.
+ */
+async function preserveEditedStackRules(
+  projectRoot: string,
+  pack: string,
+  source: string,
+  known: ReadonlyMap<string, ReadonlySet<string>>,
+): Promise<string[]> {
+  const warnings: string[] = [];
+  for (const file of await readdir(source).catch(() => [] as string[])) {
+    const rel = stackRuleRel(pack, file);
+    const installedPath = path.join(projectRoot, rel);
+    const stats = await lstat(installedPath).catch(() => undefined);
+    if (stats === undefined || !stats.isFile()) continue;
+    const current = await readFile(installedPath).catch(() => undefined);
+    const bundled = await readFile(path.join(source, file)).catch(() => undefined);
+    if (current === undefined || bundled === undefined) continue;
+    const hash = sha256Bytes(current);
+    if (hash === sha256Bytes(bundled) || known.get(rel)?.has(hash)) continue;
+    const backup = `${STACK_RULE_BACKUPS}/${pack}/${file}`;
+    try {
+      await writeContained(projectRoot, backup, current);
+    } catch (error) {
+      warnings.push(`${rel.slice(".metaproject/".length)} differs from every version keryx installed there, and saving it to ${backup} failed (${errorCodeOf(error)}); it was replaced by keryx's copy`);
+      continue;
+    }
+    warnings.push(
+      `${rel.slice(".metaproject/".length)} differed from every version keryx installed there and was replaced by keryx's copy; `
+        + `your version is saved at ${backup} — carry your edits into rules/project/${STACK_RULES_LAYER_DIR}/${pack}/${file}, which keryx reads in place of the pack's copy`,
+    );
+  }
+  return warnings;
 }
 
 /**
