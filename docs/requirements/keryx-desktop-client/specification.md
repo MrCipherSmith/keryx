@@ -366,9 +366,20 @@ Where the implementation differs from the text above
   `/tasks`, `/status`, `/model`, `/compact`) is refused with "main is busy:
   command deferred"; the Tasks tab (`_keryx/tasks/kill`) is the way to stop a
   task mid-turn.
-- Refused with a reason, not served: `/goal` (it starts a turn; a command is
-  not one), `/delegate` (no external-run port in `keryx acp` yet, so no
-  `runtime: "external"` subagents either), every `/bus` subcommand (the ACP
+- `/goal` (owner, 2026-11-18): the command does the shell's deterministic
+  part (slate, seed) and answers `_meta.keryx.effects: ["startTurn"]` with
+  `_meta.keryx.prompt`, the exact turn text the shell would send. The client
+  sends that text as `session/prompt` on the same session; a busy session
+  refuses `/goal` as the shell does. The command itself still never enters
+  model history; the turn it starts does.
+- `/delegate` (owner, 2026-11-18): the ACP host gets the shell's external-run
+  port (`createLazyRunExternal`). Starting a run needs approval: keryx sends
+  `session/request_permission` (kind `execute`, the vendor CLI and task in
+  `rawInput`) in place of the TUI's `approveExternalSpawn` card; a rejection
+  answers the command refused. The run's events go out as `_keryx/subagent`
+  with `runtime: "external"` and no `parentToolCallId`. A model-chosen
+  external runtime for `spawn_subagent` stays M2b.
+- Refused with a reason, not served: every `/bus` subcommand (the ACP
   host does not join the bus), `/autoreview start|stop` (detached process
   with no supervisor), `/mcp connect|disconnect`, `/task` without a Hub
   connection, `/governance close` of a flow that needs a confirmation token.
