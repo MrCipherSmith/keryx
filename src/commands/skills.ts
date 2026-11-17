@@ -662,9 +662,12 @@ export function renderSkippedInstallFiles(
   const lines: string[] = [];
   if (keryxPublished.length > 0) {
     lines.push(
-      `Skipped (keryx init/update publish these and they hold another keryx version — run ${highlight("keryx update")} first, then re-run):`,
+      `Skipped (keryx init/update publish these and they differ from this keryx's copy — an older version's or a local edit; run ${highlight("keryx update")} first, then re-run):`,
     );
     lines.push(...keryxPublished.map((file) => `- ${file.path}`));
+    if (keryxPublished.some((file) => file.path.startsWith(".metaproject/skills/"))) {
+      lines.push("  A skill that still differs after keryx update is not in its profile: re-run with --force (the file stays unrecorded).");
+    }
   }
   if (others.length > 0) {
     lines.push("Skipped (existing file not recorded in install-state, or drifted — rerun with --force to overwrite):");
@@ -751,7 +754,7 @@ async function uninstallSkillsCommand(args: string[]): Promise<void> {
     }
     console.log(`  ${style.green(symbols.ok)} Removed ${result.removed.length} file(s).`);
     if (result.keptShared !== undefined) {
-      console.log("Kept (another installed module still records them):");
+      console.log("Kept (another owner holds them — another installed module, or keryx init/update):");
       for (const kept of result.keptShared) {
         console.log(`- ${kept.path}: ${kept.reason}`);
       }

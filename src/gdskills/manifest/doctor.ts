@@ -109,6 +109,10 @@ export async function doctorInstall(repoRoot: string, target: string): Promise<D
   for (const record of state?.installedModules ?? []) {
     for (const filePath of record.writtenPaths) {
       recordedPaths.add(filePath);
+      // A record written before review F2 may name a file `keryx init`/`update`
+      // own; they move or rewrite it, and the next install drops the record
+      // (R2-2). Not this install's to judge, so neither missing nor drifted.
+      if (isKeryxPublishedDestination(filePath)) continue;
       const abs = path.join(repoRoot, filePath);
       if (!(await pathExists(abs))) {
         entries.push({ moduleId: record.moduleId, path: filePath, status: "missing" });

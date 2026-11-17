@@ -79,7 +79,7 @@ test("F2: a keryx-shell rule-layer file recorded by an older install is dropped 
   expect(existsSync(path.join(root, conduct))).toBe(true);
 });
 
-test("LS-5: a stale skill under .metaproject/skills/gdskills keeps the --force advice — keryx update may never refresh it", async () => {
+test("R2-LS-2: a stale bundled skill is keryx-published: never recorded, keryx update advice with the --force fallback", async () => {
   const keryxShell = await plan("keryx-shell", "core");
   const skill = keryxShell.modules.flatMap((m) => m.files).find((f) => f.destination.startsWith(".metaproject/skills/gdskills/"));
   expect(skill).toBeDefined();
@@ -88,16 +88,24 @@ test("LS-5: a stale skill under .metaproject/skills/gdskills keeps the --force a
   await writeFile(path.join(root, skill.destination), "an older skill\n");
   const [skipped] = (await applyInstall(keryxShell, root, { sourceRoot })).skipped;
   expect(skipped?.path).toBe(skill.destination);
-  expect(skipped?.keryxPublished).toBeUndefined();
+  expect(skipped?.keryxPublished).toBe(true);
+  expect(skipped?.reason).toContain("re-run with --force (it stays unrecorded)");
+  // --force writes it and still does not record it, so uninstall keeps it.
+  await applyInstall(keryxShell, root, { sourceRoot, force: true });
+  const recorded = ((await readSkillsInstallState(root, "keryx-shell"))?.installedModules ?? []).flatMap((m) => m.writtenPaths);
+  expect(recorded).not.toContain(skill.destination);
+  await uninstallInstall(root, "keryx-shell");
+  expect(existsSync(path.join(root, skill.destination))).toBe(true);
 });
 
-test("LS-5: only rule-layer paths count as keryx-published", async () => {
+test("R2-LS-2: rule-layer and bundled-skill paths are keryx-published; stacks and project rules are not", async () => {
   const { isKeryxPublishedDestination } = await import("./plan");
   expect(isKeryxPublishedDestination(".metaproject/rules/process/git-rules.mdc")).toBe(true);
   expect(isKeryxPublishedDestination(".metaproject/rules/core/error-handling.mdc")).toBe(true);
   expect(isKeryxPublishedDestination(".metaproject/rules/stacks/react/x.mdc")).toBe(false);
   expect(isKeryxPublishedDestination(".metaproject/rules/project/core/x.mdc")).toBe(false);
-  expect(isKeryxPublishedDestination(".metaproject/skills/gdskills/review/review-logic/SKILL.md")).toBe(false);
+  expect(isKeryxPublishedDestination(".metaproject/skills/gdskills/review/review-logic/SKILL.md")).toBe(true);
+  expect(isKeryxPublishedDestination(".metaproject/skills/project/house/SKILL.md")).toBe(false);
 });
 
 for (const target of ["claude", "keryx-shell"] as const) {

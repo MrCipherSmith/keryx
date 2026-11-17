@@ -153,7 +153,7 @@ test("R3-1: an older keryx-published rule is skipped with `keryx update` advice,
   expect(result.ok).toBe(false);
   const [skipped] = result.skipped;
   expect(skipped).toMatchObject({ path: ".metaproject/rules/core/a.mdc", keryxPublished: true });
-  expect(skipped?.reason).toContain("run `keryx update` first");
+  expect(skipped?.reason).toContain("run `keryx update`, then re-run this install");
   expect(await readFile(published, "utf8")).toBe("rule a, as the previous keryx shipped it\n");
 
   const forced = await applyInstall(plan, root, { force: true });
@@ -162,7 +162,7 @@ test("R3-1: an older keryx-published rule is skipped with `keryx update` advice,
   expect(await readFile(published, "utf8")).toBe("rule a fixture\n");
   // Still not recorded, so uninstall leaves the file keryx init/update owns.
   const state = await readSkillsInstallState(root, "keryx-shell");
-  expect(state!.installedModules.flatMap((m) => m.writtenPaths)).not.toContain(".metaproject/rules/core/a.mdc");
+  expect((state?.installedModules ?? []).flatMap((m) => m.writtenPaths)).not.toContain(".metaproject/rules/core/a.mdc");
   const uninstall = await uninstallInstall(root, "keryx-shell");
   expect(uninstall.removed).not.toContain(".metaproject/rules/core/a.mdc");
   expect(await readFile(published, "utf8")).toBe("rule a fixture\n");
@@ -638,4 +638,75 @@ test("F17: doctor's orphan scan roots include the stack-pack-namespaced rules ro
   const doctor = await doctorInstall(root, "keryx-shell");
   const byPath = new Map(doctor.entries.map((e) => [e.path, e.status]));
   expect(byPath.get(".metaproject/rules/stacks/fixture-lang/extra.mdc")).toBe("orphaned");
+});
+
+/** A plan for the fixture manifest with `rules/a.mdc` installed at a stack-pack path, which is not keryx-published. */
+async function keryxShellRecord(moduleId: string, writtenPaths: string[]): Promise<void> {
+  const sha256 = Object.fromEntries(writtenPaths.map((p) => [p, "0".repeat(64)]));
+  const state = await readSkillsInstallState(root, "keryx-shell");
+  await writeSkillsInstallState(root, "keryx-shell", [
+    ...(state?.installedModules ?? []),
+    { moduleId, writtenPaths, sha256, managedSentinel: true, installedAt: new Date(0).toISOString() },
+  ], "base");
+}
+
+test("R2-LS-3: a module whose recorded file is skipped this time keeps its record with the old hash", async () => {
+  const plan = await planInstall({ manifest: MANIFEST, profileId: "base", target: "claude", repoRoot: root });
+  expect((await applyInstall(plan, root)).ok).toBe(true);
+  const before = (await readSkillsInstallState(root, "claude"))!.installedModules.find((m) => m.moduleId === "rule-a")!;
+  // The recorded file became a directory: apply skips it.
+  await rm(path.join(root, ".claude", "rules", "a.mdc"));
+  await mkdir(path.join(root, ".claude", "rules", "a.mdc"));
+
+  const result = await applyInstall(plan, root);
+  expect(result.skipped.map((s) => s.path)).toEqual([".claude/rules/a.mdc"]);
+  const after = (await readSkillsInstallState(root, "claude"))!.installedModules.find((m) => m.moduleId === "rule-a");
+  expect(after?.writtenPaths).toEqual([".claude/rules/a.mdc"]);
+  expect(after?.sha256).toEqual(before.sha256);
+});
+
+test("R2-4: a recorded, unedited rule-layer file with an older bundled version is refreshed, not skipped", async () => {
+  const plan = await planInstall({ manifest: MANIFEST, profileId: "base", target: "keryx-shell", repoRoot: root });
+  const published = ".metaproject/rules/core/a.mdc";
+  await mkdir(path.join(root, ".metaproject", "rules", "core"), { recursive: true });
+  await writeFile(path.join(root, published), "rule a, previous version\n", "utf8");
+  // What an install before review F2 recorded: the file with its then-current hash.
+  const { createHash } = await import("node:crypto");
+  const oldHash = createHash("sha256").update("rule a, previous version\n").digest("hex");
+  await writeSkillsInstallState(root, "keryx-shell", [
+    { moduleId: "rule-a", writtenPaths: [published], sha256: { [published]: oldHash }, managedSentinel: true, installedAt: new Date(0).toISOString() },
+  ], "base");
+
+  const result = await applyInstall(plan, root);
+  expect(result.ok).toBe(true);
+  expect(result.written).toContain(published);
+  expect(await readFile(path.join(root, published), "utf8")).toBe("rule a fixture\n");
+  // ...and, being keryx-published, it is no longer recorded.
+  const recorded = ((await readSkillsInstallState(root, "keryx-shell"))?.installedModules ?? []).flatMap((m) => m.writtenPaths);
+  expect(recorded).not.toContain(published);
+});
+
+test("R2-5: an earlier record of an unplanned module loses its keryx-published paths and keeps the rest", async () => {
+  const plan = await planInstall({ manifest: MANIFEST, profileId: "base", target: "keryx-shell", repoRoot: root });
+  await keryxShellRecord("stack-x", [".metaproject/rules/core/old.mdc", ".metaproject/rules/stacks/x/house.mdc"]);
+
+  await applyInstall(plan, root);
+
+  const stack = (await readSkillsInstallState(root, "keryx-shell"))!.installedModules.find((m) => m.moduleId === "stack-x");
+  expect(stack?.writtenPaths).toEqual([".metaproject/rules/stacks/x/house.mdc"]);
+});
+
+test("R2-3: the record of a module this manifest does not define is kept (a newer keryx may have written it)", async () => {
+  const plan = await planInstall({ manifest: MANIFEST, profileId: "base", target: "keryx-shell", repoRoot: root });
+  await keryxShellRecord("from-a-newer-keryx", [".metaproject/rules/stacks/new/rule.mdc"]);
+  await applyInstall(plan, root);
+  const ids = (await readSkillsInstallState(root, "keryx-shell"))!.installedModules.map((m) => m.moduleId);
+  expect(ids).toContain("from-a-newer-keryx");
+});
+
+test("R2-2: doctor does not report a recorded rule-layer file missing after keryx update moved it", async () => {
+  await keryxShellRecord("core-common-rules", [".metaproject/rules/core/git-rules.mdc"]);
+  const doctor = await doctorInstall(root, "keryx-shell");
+  expect(doctor.entries.filter((e) => e.path === ".metaproject/rules/core/git-rules.mdc")).toEqual([]);
+  expect(doctor.ok).toBe(true);
 });

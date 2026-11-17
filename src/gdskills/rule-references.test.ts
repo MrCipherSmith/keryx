@@ -114,11 +114,29 @@ describe("a citation of a rule keryx moved out of core/ (ADR-0001 P3)", () => {
     ]);
   });
 
-  test("a moved .md rule cited at its old rules/core/ path is looked for at the new one", async () => {
-    const content = "Protocol: `rules/core/subagent-status-protocol.md`.";
+  test("a moved .md rule cited at its old rules/core/ path is found at the new one and redirected (R2-1)", async () => {
+    const content = "Protocol: `.metaproject/rules/core/subagent-status-protocol.md`.";
     expect(await unresolvedReferences(cwd, content)).toEqual([{ ref: "rules/core/subagent-status-protocol.md", reason: "missing" }]);
+    expect(await shadowedRuleReferences(cwd, content)).toEqual([]);
     await writeRule("process/subagent-status-protocol.md");
     expect(await unresolvedReferences(cwd, content)).toEqual([]);
+    // Not silent: the reviewer is told which file to open.
+    expect(await shadowedRuleReferences(cwd, content)).toEqual([
+      { ref: "core/subagent-status-protocol.md", resolved: ".metaproject/rules/process/subagent-status-protocol.md" },
+    ]);
+    // A .md rule that did not move is not a redirect.
+    expect(await shadowedRuleReferences(cwd, "Notes: `rules/core/notes.md`.")).toEqual([]);
+  });
+
+  test("a project keryx has not updated yet still resolves the core/ copy, with no redirect (R2-LS-4)", async () => {
+    await writeRule("core/git-rules.mdc");
+    await writeRule("core/execution-metrics.md");
+    const content = "Git: `core/git-rules.mdc`. Metrics: `rules/core/execution-metrics.md`.";
+    expect(await unresolvedRuleReferences(cwd, content)).toEqual([]);
+    expect(await unresolvedReferences(cwd, content)).toEqual([]);
+    expect(await shadowedRuleReferences(cwd, content)).toEqual([]);
+    // Neither copy anywhere: reported missing under the moved ref.
+    expect(await unresolvedRuleReferences(cwd, "Docs: `core/documentation-management.mdc`.")).toEqual(["process/documentation-management.mdc"]);
   });
 
   test("resolves to the installed process/ file and reports a redirect from the cited spelling (LS-1)", async () => {

@@ -18,13 +18,14 @@ const SHIPPED_ROOTS = [
   ".metaproject/rules",
   ".metaproject/routing.md",
   ".metaproject/index.md",
+  ".metaproject/keryx-dashboard.html",
   "docs/docs",
   "README.md",
   "AGENTS.md",
   "CLAUDE.md",
 ];
 
-const TEXT = /\.(md|mdc|json|ya?ml|txt|toml)$/;
+const TEXT = /\.(md|mdc|json|ya?ml|txt|toml|html)$/;
 
 async function listFiles(target: string): Promise<string[]> {
   if (!existsSync(target)) return [];

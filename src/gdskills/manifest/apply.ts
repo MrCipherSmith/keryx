@@ -128,6 +128,15 @@ export async function applyInstall(
   for (const module of plan.modules) {
     const writtenPaths: string[] = [];
     const sha256: Record<string, string> = {};
+    // A skipped file this module recorded before keeps its record, with the
+    // old hash (review R2-LS-3): otherwise a module whose files were all
+    // skipped would lose its record, and uninstall would stop removing them.
+    const keepRecorded = (destination: string): void => {
+      const recordedHash = recordedHashes.get(destination);
+      if (recordedHash === undefined || isKeryxPublishedDestination(destination)) return;
+      writtenPaths.push(destination);
+      sha256[destination] = recordedHash;
+    };
 
     for (const file of module.files) {
       // F2 (class scope): guard the WRITE side too — even though
@@ -140,6 +149,7 @@ export async function applyInstall(
           path: file.destination,
           reason: `destination resolves outside the project root (${contained.reason}) — refusing to write it`,
         });
+        keepRecorded(file.destination);
         continue;
       }
       const destinationAbs = contained.abs;
@@ -149,7 +159,11 @@ export async function applyInstall(
         // layer, so this install never records one — existing or not. A
         // recorded one would be deleted by `skills uninstall` after the next
         // `keryx update` had rewritten it.
-        const outcome = await placeKeryxPublished(destRoot, sourceRoot, file, alreadyExists, options.force === true);
+        const outcome = await placeKeryxPublished(destRoot, sourceRoot, file, {
+          alreadyExists,
+          force: options.force === true,
+          recordedHash: recordedHashes.get(file.destination),
+        });
         if (outcome === "written") written.push(file.destination);
         else if (outcome === "present") alreadyPresent.push(file.destination);
         else skipped.push(outcome);
@@ -166,6 +180,7 @@ export async function applyInstall(
         } catch (error) {
           if (error instanceof NotARegularFileError) {
             skipped.push({ path: file.destination, reason: `${error.message} — refusing to overwrite it` });
+            keepRecorded(file.destination);
             continue;
           }
           throw error;
@@ -221,7 +236,8 @@ export async function applyInstall(
     }
 
     // Pushed even when empty: an empty record removes this module's earlier
-    // one, e.g. one that recorded rule-layer files before review F2.
+    // one, e.g. one that recorded rule-layer files before review F2. Skipped
+    // files it still owns were carried forward above.
     moduleRecords.push({
       moduleId: module.id,
       writtenPaths,
@@ -231,7 +247,7 @@ export async function applyInstall(
     });
   }
 
-  moduleRecords.push(...releasedRecords(existing?.installedModules ?? [], moduleRecords, plan.manifestModuleIds));
+  moduleRecords.push(...releasedRecords(existing?.installedModules ?? [], moduleRecords));
   await writeSkillsInstallState(destRoot, plan.target, moduleRecords, plan.profile);
 
   return { ok: skipped.length === 0, written, alreadyPresent, skipped, errors: [] };
@@ -239,16 +255,18 @@ export async function applyInstall(
 
 /**
  * Put a file `keryx init`/`update` publish, never recording it: byte-identical
- * is already present; missing is written; different is written only with
- * `--force`, and otherwise skipped with the `keryx update` advice (R3-1).
+ * is already present; missing is written; one an older install recorded and
+ * nobody edited since is refreshed (review R2-4); any other difference is
+ * written only with `--force`, and otherwise skipped with the `keryx update`
+ * advice (R3-1).
  */
 async function placeKeryxPublished(
   destRoot: string,
   sourceRoot: string,
   file: { source: string; destination: string; sha256: string },
-  alreadyExists: boolean,
-  force: boolean,
+  state: { alreadyExists: boolean; force: boolean; recordedHash: string | undefined },
 ): Promise<"written" | "present" | ApplySkippedFile> {
+  const { alreadyExists, force, recordedHash } = state;
   if (alreadyExists) {
     let currentHash: string | undefined;
     try {
@@ -260,14 +278,9 @@ async function placeKeryxPublished(
       throw error;
     }
     if (currentHash === file.sha256) return "present";
-    if (!force) {
-      return {
-        path: file.destination,
-        reason:
-          "keryx init/update publish this file and it holds another keryx version's content — run " +
-          "`keryx update` first, then re-run this install",
-        keryxPublished: true,
-      };
+    const uneditedSinceRecorded = recordedHash !== undefined && currentHash === recordedHash;
+    if (!force && !uneditedSinceRecorded) {
+      return { path: file.destination, reason: keryxPublishedSkipReason(file.destination), keryxPublished: true };
     }
   }
   await writeContained(destRoot, file.destination, await readFile(path.join(sourceRoot, file.source)));
@@ -275,29 +288,40 @@ async function placeKeryxPublished(
 }
 
 /**
+ * Why a keryx-published file was skipped. It differs from this bundle — an
+ * older keryx's copy or a local edit — and `keryx update` rewrites it. A skill
+ * file `keryx update` does not install (not in its profile) still differs
+ * afterwards; `--force` is then safe, since the file stays unrecorded.
+ */
+export function keryxPublishedSkipReason(destination: string): string {
+  const base =
+    "keryx init/update publish this file and it differs from this keryx's bundled copy (an older keryx " +
+    "version's, or a local edit) — run `keryx update`, then re-run this install";
+  return destination.startsWith(".metaproject/skills/")
+    ? `${base}; if it still differs, \`keryx update\` does not install this skill — re-run with --force (it stays unrecorded)`
+    : base;
+}
+
+/**
  * One owner per recorded path, and none for a file `keryx init`/`update` own.
  * From every earlier record this apply did not rewrite, drop the paths a
- * planned module now records and every keryx-published path; drop the whole
- * record of a module the manifest no longer defines (`skill-lifecycle`, folded
- * into `process-activity-rules` by ADR-0001 P3) — otherwise
- * `skills uninstall --module <old>` would delete what another owner holds. A
- * record left with no paths is returned empty, which removes it.
+ * planned module now records and every keryx-published path — otherwise
+ * `skills uninstall --module <old>` would delete what another owner holds
+ * (the removed `skill-lifecycle` module: its `.claude/rules` file is now
+ * `process-activity-rules`', its keryx-shell file keryx's). A record left with
+ * no paths is returned empty, which removes it. A record of a module this
+ * manifest does not define is otherwise kept: a newer keryx may have written it.
  */
 function releasedRecords(
   previous: readonly InstalledModuleRecord[],
   current: readonly InstalledModuleRecord[],
-  manifestModuleIds: readonly string[] | undefined,
 ): InstalledModuleRecord[] {
   const currentIds = new Set(current.map((record) => record.moduleId));
   const ownedNow = new Set(current.flatMap((record) => record.writtenPaths));
-  const known = manifestModuleIds === undefined ? undefined : new Set(manifestModuleIds);
   const released: InstalledModuleRecord[] = [];
   for (const record of previous) {
     if (currentIds.has(record.moduleId)) continue;
-    const retired = known !== undefined && !known.has(record.moduleId);
-    const kept = retired
-      ? []
-      : record.writtenPaths.filter((filePath) => !ownedNow.has(filePath) && !isKeryxPublishedDestination(filePath));
+    const kept = record.writtenPaths.filter((filePath) => !ownedNow.has(filePath) && !isKeryxPublishedDestination(filePath));
     if (kept.length === record.writtenPaths.length) continue;
     const keptSet = new Set(kept);
     released.push({
