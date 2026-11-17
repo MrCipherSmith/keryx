@@ -25,6 +25,7 @@ import {
   resolveModalAvailableWidth,
   resolveModalInnerWidth,
   resolveModalPanelSize,
+  modalAvailableRows,
   type ModalTabContext,
 } from "./modal-host";
 import { SIDEBAR_WIDTH } from "./sidebar-metrics";
@@ -190,7 +191,7 @@ otuiTest("renderTab receives the resolved panel-body size, not the pre-layout fl
     },
   });
   await h.flush();
-  const sized = resolveModalPanelSize(resolveModalAvailableWidth(h.chrome), 40);
+  const sized = resolveModalPanelSize(resolveModalAvailableWidth(h.chrome), modalAvailableRows(h.chrome));
   expect(ctx).toEqual({
     width: resolveModalInnerWidth(sized.width) - MODAL_BODY_SCROLLBAR_COLS, // the body loses a column to the scrollbar
     height: modalBodyRows(sized.height),
@@ -234,7 +235,7 @@ otuiTest("AC1: one tab paints a titled near-fullscreen panel over an opaque back
   const panel = h.renderer.root.findDescendantById("modal-panel");
   expect(backdrop).toBeDefined();
   expect(panel).toBeDefined();
-  const sized = resolveModalPanelSize(resolveModalAvailableWidth(h.chrome), h.renderer.height);
+  const sized = resolveModalPanelSize(resolveModalAvailableWidth(h.chrome), modalAvailableRows(h.chrome));
   expect((panel as { width: number }).width).toBe(sized.width);
   expect((panel as { height: number }).height).toBe(sized.height);
   expect(frame).toContain("[x] esc");
@@ -336,7 +337,7 @@ otuiTest("panel size does not change when switching short and long tab bodies", 
   });
   await h.flush();
   const panel = h.renderer.root.findDescendantById("modal-panel") as { width: number; height: number };
-  const sized = resolveModalPanelSize(resolveModalAvailableWidth(h.chrome), h.renderer.height);
+  const sized = resolveModalPanelSize(resolveModalAvailableWidth(h.chrome), modalAvailableRows(h.chrome));
   expect(panel.width).toBe(sized.width);
   expect(panel.height).toBe(sized.height);
   const first = { width: panel.width, height: panel.height };

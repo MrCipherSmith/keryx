@@ -216,6 +216,42 @@ otuiTest("the shell sits inside a rounded frame with a gutter, and drops it on a
   }
 });
 
+otuiTest("a press on a clickable text or row starts no selection; plain transcript text still selects", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui, { width: 100, height: 30 });
+  try {
+    let clicks = 0;
+    const button = new otui.core.TextRenderable(h.renderer, {
+      id: "probe-button", content: "[ Answer ]", onMouseDown: () => { clicks += 1; },
+    });
+    const row = new otui.core.BoxRenderable(h.renderer, { id: "probe-row", flexDirection: "row", onMouseDown: () => { clicks += 1; } });
+    row.add(new otui.core.TextRenderable(h.renderer, { id: "probe-row-text", content: "failed  brew install" }));
+    h.chrome.transcript.add(button);
+    h.chrome.transcript.add(row);
+    h.chrome.transcript.add(new otui.core.TextRenderable(h.renderer, { id: "probe-plain", content: "plain transcript line to copy" }));
+    await h.flush();
+
+    const at = (id: string): { x: number; y: number } => h.renderer.root.findDescendantById(id) as unknown as { x: number; y: number };
+    const selected = (): string => h.renderer.getSelection()?.getSelectedText() ?? "";
+
+    // A press-and-drag across a button or a row clicks it and selects nothing.
+    await h.mockMouse.drag(at("probe-button").x, at("probe-button").y, at("probe-button").x + 6, at("probe-button").y);
+    await h.flush();
+    expect(selected()).toBe("");
+    await h.mockMouse.drag(at("probe-row-text").x, at("probe-row-text").y, at("probe-row-text").x + 6, at("probe-row-text").y);
+    await h.flush();
+    expect(selected()).toBe("");
+    expect(clicks).toBe(2);
+
+    // Ordinary text keeps copy-on-select.
+    await h.mockMouse.drag(at("probe-plain").x, at("probe-plain").y, at("probe-plain").x + 5, at("probe-plain").y);
+    await h.flush();
+    expect(selected()).toContain("plain");
+  } finally {
+    h.destroy();
+  }
+});
+
 otuiTest("flow 413: trimming preserves a retained viewport anchor", async () => {
   const otui = requireOtui();
   const h = await mountChrome(otui);

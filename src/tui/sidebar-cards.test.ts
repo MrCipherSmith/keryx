@@ -501,6 +501,67 @@ otuiTest("Work item click opens a temporary tab and cleans up on return", async 
   });
 });
 
+otuiTest("Work list: one row per job with a status badge, arrows pick, Enter opens, Backspace and Esc go back", async () => {
+  const otui = requireOtui();
+  const g = await loadGeometry();
+  const c = await loadCards();
+  await withTmpDir(async (configDir) => {
+    const geo = g.createSidebarGeometry({ columns: 140, configDir, mode: "default" });
+    const h = await mountChrome(otui, geo);
+    const long = `JAVA_HOME=/opt/homebrew/opt/openjdk@25/libexec/openjdk.jdk/Contents/Home ./cli --all --no-frontend --no-backend --no-seed > /tmp/start.log 2>&1`;
+    try {
+      const handle = c.openSidebarCard(otui.core, h.chrome, "work", {
+        initialTab: "jobs",
+        snapshot: () => ({ sections: { jobs: "Jobs 1/0 · 2 failed" }, items: { jobs: [
+          { id: "a", label: "brew install", text: "failed · brew install", status: "failed", title: "brew install openjdk@25", meta: "exit 1 · 12.0s" },
+          { id: "b", label: "JAVA_HOME=…", text: `failed · ${long}`, status: "failed", title: long, meta: "exit 2 · 1:05.0" },
+          { id: "c", label: "sleep", text: "running · sleep 100", status: "running", title: "sleep 100" },
+        ] } }),
+        renderItem: (_section, item, body) => {
+          (body as { add(child: unknown): void }).add(new otui.core.TextRenderable(h.renderer, {
+            id: `test-detail-${item.id}`, content: `detail of ${item.id}`,
+          }));
+        },
+      });
+      await h.flush();
+      const frame = h.captureCharFrame();
+      // The long command stays on its own row, cut with an ellipsis; nothing wraps into the next row.
+      const rowB = frame.split("\n").find((line) => line.includes("JAVA_HOME=/opt")) ?? "";
+      expect(rowB).toContain("✗ failed");
+      expect(rowB).toContain("…");
+      expect(rowB).toContain("exit 2 · 1:05.0");
+      expect(frame).not.toContain("--no-seed");
+      expect((byId(h, "sb-card-item-jobs-b") as unknown as { height: number }).height).toBe(1);
+      expect(frame).toContain("● running");
+      expect(frame).toContain("↑/↓ select");
+
+      h.mockInput.pressArrow("down");
+      await h.flush();
+      h.mockInput.pressEnter();
+      await h.flush();
+      expect(handle?.activeTab()).toBe("detail:jobs:b");
+      expect(h.captureCharFrame()).toContain("detail of b");
+      expect(h.captureCharFrame()).toContain("← back to Jobs");
+      expect(h.captureCharFrame()).toContain("esc back");
+
+      h.mockInput.pressBackspace();
+      await h.flush();
+      expect(handle?.activeTab()).toBe("jobs");
+
+      // Coming back keeps the selection: Enter opens the same row again, and Esc returns.
+      h.mockInput.pressEnter();
+      await h.flush();
+      expect(handle?.activeTab()).toBe("detail:jobs:b");
+      h.mockInput.pressEscape();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      await h.flush();
+      expect(handle?.activeTab()).toBe("jobs");
+      expect(h.captureCharFrame()).toContain("Work");
+      handle?.close();
+    } finally { h.destroy(); }
+  });
+});
+
 otuiTest("flow 468 AC13: a card's detail modal has one tab per former section and starts on the requested tab", async () => {
   const otui = requireOtui();
   const g = await loadGeometry();

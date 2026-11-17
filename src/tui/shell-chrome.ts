@@ -645,6 +645,47 @@ export async function createShellRenderer(
   return renderer;
 }
 
+/** How many ancestors above the pressed text are searched for a click handler. */
+const CLICK_TARGET_DEPTH = 3;
+
+type MouseListenerHost = { _mouseListeners?: Record<string, unknown>; parent?: unknown };
+
+/**
+ * True when `node` (or one of its nearest ancestors, stopping at a node in
+ * `stopAt`) answers a click: it has a mouse down or up listener. `stopAt` holds
+ * the chrome's own regions, whose catch-all handlers (focus the composer on a
+ * transcript click) must not make every line in them a button.
+ */
+export function isClickTarget(node: unknown, stopAt: ReadonlySet<unknown>): boolean {
+  let current: unknown = node;
+  for (let depth = 0; depth <= CLICK_TARGET_DEPTH && current !== undefined && current !== null; depth += 1) {
+    if (stopAt.has(current)) return false;
+    const listeners = (current as MouseListenerHost)._mouseListeners;
+    if (listeners !== undefined && (listeners["down"] !== undefined || listeners["up"] !== undefined)) return true;
+    current = (current as MouseListenerHost).parent;
+  }
+  return false;
+}
+
+/**
+ * Keep the renderer from starting a text selection on a press over a click
+ * target ({@link isClickTarget}); the click itself is still dispatched. Returns
+ * the undo. A renderer without `startSelection` (tests, a newer OpenTUI) is left
+ * untouched.
+ */
+export function guardSelectionStart(renderer: unknown, stopAt: () => ReadonlySet<unknown>): () => void {
+  const host = renderer as { startSelection?: (target: unknown, x: number, y: number) => void };
+  const original = host.startSelection;
+  if (typeof original !== "function") return () => {};
+  host.startSelection = function guardedStartSelection(this: unknown, target: unknown, x: number, y: number): void {
+    if (isClickTarget(target, stopAt())) return;
+    original.call(this, target, x, y);
+  };
+  return () => {
+    host.startSelection = original;
+  };
+}
+
 /**
  * Mount the chrome on `renderer` and return the live handle.
  *
@@ -873,6 +914,12 @@ export async function createShellChrome(
     }
   };
   r.on(otui.CliRenderEvents.SELECTION, onSelection);
+  // A click on a button, a card or a list row must not start a text selection:
+  // OpenTUI starts one on every left press over selectable text, so clicking
+  // "answer" on a question card or the sidebar's mode button highlighted it as
+  // if it were being copied. Text with no click handler near it — the
+  // transcript, the sidebar's values — still selects and copies as before.
+  const restoreSelectionStart = guardSelectionStart(r, () => new Set<unknown>([scroll, sidebar, main, rootRow]));
 
   // --- header -------------------------------------------------------------
   // Identity on the left, a caller-owned meta slot on the right.
@@ -1870,6 +1917,7 @@ export async function createShellChrome(
       }
       try {
         r.off(otui.CliRenderEvents.SELECTION, onSelection);
+        restoreSelectionStart();
       } catch {
         // best-effort teardown
       }
