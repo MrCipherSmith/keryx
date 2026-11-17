@@ -6,9 +6,10 @@ name: Desktop Release
 # of the build on an arbitrary ref, useful to prove the pipeline before tagging.
 # A dry run is always ad-hoc signed: the Developer ID key and the notarization
 # credentials are used only for a `desktop-v*` tag push.
-# Owner action: move the APPLE_* secrets into a `desktop-release` environment
-# whose deployment rule allows only `desktop-v*` tags, then add
-# `environment: desktop-release` to the job.
+# The APPLE_* secrets live in the `desktop-release` environment, whose
+# deployment rule allows only `desktop-v*` tags. Only a tag push enters that
+# environment; a dry run uses none (an empty name), so the tag-only rule
+# never blocks it and it never sees the signing secrets.
 on:
   push:
     tags:
@@ -23,6 +24,7 @@ jobs:
     name: build, sign, release
     runs-on: macos-14
     timeout-minutes: 90
+    environment: ${{ (github.event_name == 'push' && github.ref_type == 'tag') && 'desktop-release' || '' }}
     steps:
       - name: Check out
         # actions/checkout v4.4.0
