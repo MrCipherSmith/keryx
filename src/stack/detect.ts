@@ -69,6 +69,7 @@ export const STACK_DETECT_TAGS: readonly { readonly tag: string; readonly family
   { tag: "mobx", family: "js" },
   { tag: "prisma", family: "js" },
   { tag: "playwright", family: "js" },
+  { tag: "storybook", family: "js" },
   { tag: "express", family: "js" },
   // python
   { tag: "python", family: "python" },
@@ -345,6 +346,13 @@ async function packageJsonSignal(cwd: string, fs: StackDetectFs): Promise<Signal
   if (nestjsMatches.length > 0) {
     tags.add("nestjs");
     matched.push(...nestjsMatches);
+  }
+  // Storybook ships as `storybook` (the CLI, 7+) and as framework- and
+  // addon-specific `@storybook/*` packages; any one of them is the tag.
+  const storybookMatches = [...names].filter((name) => name === "storybook" || name.startsWith("@storybook/")).sort();
+  if (storybookMatches.length > 0) {
+    tags.add("storybook");
+    matched.push(...storybookMatches);
   }
   for (const [tag, markers] of Object.entries(JS_TAG_MARKERS)) {
     const hit = markers.filter((marker) => names.has(marker));

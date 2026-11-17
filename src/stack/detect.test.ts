@@ -52,6 +52,19 @@ describe("W1-AC1: package.json declaring react only", () => {
     expect(result.matched).toContain("react");
     expect(result.tags.vue).toBe(false);
     expect(result.tags.python).toBe(false);
+    expect(result.tags.storybook).toBe(false);
+  });
+});
+
+describe("storybook (ADR-0001 P4: selects the storybook pack)", () => {
+  test("the storybook CLI or any @storybook/* package sets the tag; react alone does not", async () => {
+    for (const dependencies of [{ storybook: "^8.4.0" }, { "@storybook/react-vite": "^8.4.0" }, { "@storybook/test": "^8.4.0" }]) {
+      const result = await detectStack("/repo", { fs: fakeFs({ "/repo/package.json": JSON.stringify({ devDependencies: dependencies }) }) });
+      expect({ dependencies, storybook: result.tags.storybook }).toEqual({ dependencies, storybook: true });
+      expect(result.matched).toContain(Object.keys(dependencies)[0]!);
+    }
+    const reactOnly = await detectStack("/repo", { fs: fakeFs({ "/repo/package.json": JSON.stringify({ dependencies: { react: "^18.0.0" } }) }) });
+    expect(reactOnly.tags.storybook).toBe(false);
   });
 });
 

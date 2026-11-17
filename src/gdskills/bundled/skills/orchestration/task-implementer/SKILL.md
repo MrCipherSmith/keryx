@@ -211,9 +211,9 @@ Rules `resolve-context` listed are already read (2.0c); load the rest by what yo
 
 | Task Type | Additional Rules |
 |-----------|---------------|
-| `ui_component` | `code-style-patterns.mdc`, `frontend-assistant.mdc`, `storybook-guidelines.mdc` |
-| `store_logic` | `code-style-patterns.mdc`, `mobx-store-template.mdc` |
-| `service_api` | `code-style-patterns.mdc`, `nestjs-dto.mdc`, `api-contracts.mdc` |
+| `ui_component` | `stacks/react/code-style-patterns.mdc`, `frontend-assistant.mdc`, `stacks/storybook/storybook-guidelines.mdc` |
+| `store_logic` | `stacks/react/code-style-patterns.mdc`, `stacks/mobx/mobx-store-template.mdc` |
+| `service_api` | `stacks/nestjs/nestjs-dto.mdc`, `api-contracts.mdc` |
 | `fix` | Rules based on the files being fixed; always `error-handling.mdc` |
 | `mixed` | All applicable rules above |
 

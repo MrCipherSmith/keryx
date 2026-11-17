@@ -218,7 +218,7 @@ Required rules:
 - `.metaproject/rules/process/subagent-context-construction.md`
 - `.metaproject/rules/process/subagent-status-protocol.md`
 - `.metaproject/rules/core/tdd-workflow.mdc`
-- `.metaproject/rules/core/code-style-patterns.mdc`
+- `.metaproject/rules/stacks/react/code-style-patterns.mdc`
 - `.metaproject/rules/core/error-handling.mdc`
 - `.metaproject/rules/process/implementation-doc-mandate.mdc`
 - `.metaproject/rules/process/execution-metrics.md`

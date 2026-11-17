@@ -170,7 +170,7 @@ Scan local sources for relevant context. Be selective — only include what is d
    |------------|---------------|
    | React components | code-style-patterns.mdc, frontend-assistant.mdc, storybook-guidelines.mdc |
    | MobX stores | code-style-patterns.mdc, mobx-store-template.mdc |
-   | API / DTOs | nestjs-dto.mdc, code-style-patterns.mdc, api-contracts.mdc |
+   | API / DTOs | nestjs-dto.mdc, api-contracts.mdc |
    | Testing | playwright-testing.mdc, storybook-guidelines.mdc, tdd-workflow.mdc |
    | General code | code-style-patterns.mdc, frontend-assistant.mdc |
    | TDD / test-first | tdd-workflow.mdc |

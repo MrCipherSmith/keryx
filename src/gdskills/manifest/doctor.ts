@@ -105,7 +105,7 @@ export async function doctorInstall(repoRoot: string, target: string): Promise<D
 
   const entries: DoctorEntry[] = [];
   const recordedPaths = new Set<string>();
-  const isKeryxPublishedDestination = keryxPublishedIn(repoRoot);
+  const isKeryxPublishedDestination = await keryxPublishedIn(repoRoot);
 
   for (const record of state?.installedModules ?? []) {
     for (const filePath of record.writtenPaths) {

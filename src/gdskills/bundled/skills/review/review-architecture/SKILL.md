@@ -92,7 +92,7 @@ When `stack_hint` is not provided, infer from changed file paths:
 
 ### Layer Violations
 
-A **layer violation** occurs when code belonging to one architectural layer is placed in another. The layers and what each may import are `.metaproject/rules/core/clean-architecture.mdc` (backend: controller, use case, repository, domain, infrastructure, each boundary mapping its own types) and `.metaproject/rules/core/code-style-patterns.mdc` Rule 2 (frontend: component renders, store holds logic, service does I/O only; derived state is `@computed` per `.metaproject/rules/core/mobx-store-template.mdc` Rule 1). Adapt to the project's actual layering and report a placement those rules forbid.
+A **layer violation** occurs when code belonging to one architectural layer is placed in another. The layers and what each may import are `.metaproject/rules/core/clean-architecture.mdc` (backend: controller, use case, repository, domain, infrastructure, each boundary mapping its own types) and `.metaproject/rules/stacks/react/code-style-patterns.mdc` Rule 2 (frontend: component renders, store holds logic, service does I/O only; derived state is `@computed` per `.metaproject/rules/stacks/mobx/mobx-store-template.mdc` Rule 1). Adapt to the project's actual layering and report a placement those rules forbid.
 
 ### Dependency Direction
 
@@ -125,7 +125,7 @@ Dependencies must flow **inward** (from infrastructure toward domain), never out
 
 ### Dependency Inversion
 
-This lens owns DIP, layer and dependency direction, module boundaries and circular imports; their severities are `.metaproject/rules/core/clean-architecture.mdc` Review severities. SRP, OCP, LSP and ISP are `review-clean-code`'s, rated by `.metaproject/rules/core/solid-principles.mdc` Review severities. A component that renders, fetches and derives is `.metaproject/rules/core/code-style-patterns.mdc` Rule 2.
+This lens owns DIP, layer and dependency direction, module boundaries and circular imports; their severities are `.metaproject/rules/core/clean-architecture.mdc` Review severities. SRP, OCP, LSP and ISP are `review-clean-code`'s, rated by `.metaproject/rules/core/solid-principles.mdc` Review severities. A component that renders, fetches and derives is `.metaproject/rules/stacks/react/code-style-patterns.mdc` Rule 2.
 
 - DIP asks for an interface only at an I/O or substitution boundary; a single internal implementation gets none. An infrastructure class passed through several layers instead of behind an interface at that boundary is a finding.
 
@@ -140,14 +140,14 @@ This lens owns DIP, layer and dependency direction, module boundaries and circul
 
 ### React + MVVM (with MobX)
 
-Logic in a component, effects that orchestrate state, and cleanup are `.metaproject/rules/core/code-style-patterns.mdc` Rules 2 and 5 with `.metaproject/rules/core/mobx-store-template.mdc` Rule 8. This lens adds:
+Logic in a component, effects that orchestrate state, and cleanup are `.metaproject/rules/stacks/react/code-style-patterns.mdc` Rules 2 and 5 with `.metaproject/rules/stacks/mobx/mobx-store-template.mdc` Rule 8. This lens adds:
 
 - [ ] Component subscribing to raw observable fields instead of using computed/derived values
 - [ ] View rendering based on multiple raw observable fields instead of a single computed boolean
 
 ### MobX Store Layer
 
-Mutation outside an action, async resolution without `runInAction`, and inter-store callbacks left public are `.metaproject/rules/core/mobx-store-template.mdc` Rules 2 and 3 and their rows; a store importing another store's internal file is `.metaproject/rules/core/clean-architecture.mdc` (public exports only). This lens adds:
+Mutation outside an action, async resolution without `runInAction`, and inter-store callbacks left public are `.metaproject/rules/stacks/mobx/mobx-store-template.mdc` Rules 2 and 3 and their rows; a store importing another store's internal file is `.metaproject/rules/core/clean-architecture.mdc` (public exports only). This lens adds:
 
 - [ ] `@computed` with side effects (computed must be pure)
 

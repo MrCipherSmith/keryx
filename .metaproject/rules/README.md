@@ -32,9 +32,10 @@ read only when a skill or `routing.md` cites it by path.
 
 - `alwaysApply` and `globs` in each rule's frontmatter are Cursor-format metadata for Cursor's
   own auto-attach behavior; keryx itself does not read or act on either field;
-- a stack-specific rule (e.g. `nestjs-dto.mdc`, `mobx-store-template.mdc`) declares the stack(s)
-  it applies to via a `stack_requires` frontmatter key, using the same tag vocabulary as a
-  skill's `metadata.stack_requires`; it is only relevant to projects on that stack.
+- a stack-specific rule lives in its stack pack, under `stacks/<pack>/` (e.g.
+  `stacks/nestjs/nestjs-dto.mdc`, `stacks/mobx/mobx-store-template.mdc`); `keryx init` and
+  `keryx update` install a pack's rules when stack detection finds the pack's stack, together
+  with the packs it extends (`mobx` brings `react`, which brings `ts-js-node`).
 
 ## Updates
 
@@ -47,6 +48,8 @@ read only when a skill or `routing.md` cites it by path.
   filesystem problem;
 - a rule that moved from `core/` to another layer is installed at its new path, and its old
   `core/` copy is removed the same way once the new path is in place: an unmodified shipped copy
-  goes, an edited one stays and the warning names the new path to carry your edits to.
+  goes, an edited one stays and the warning names the new path to carry your edits to; a rule
+  that moved to a stack pack this project's stack does not select no longer applies here, so its
+  unmodified `core/` copy goes without a new path.
 - a project override of a moved rule follows it: `project/core/<name>.mdc` is moved to
   `project/<layer>/<name>.mdc`, the slot read now; when both exist, the old one is kept and reported.

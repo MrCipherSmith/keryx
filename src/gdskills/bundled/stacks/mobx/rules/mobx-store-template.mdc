@@ -1,9 +1,11 @@
 ---
+extends: common
 description: "MobX store standard shared by code writers and reviewers, with the severities reviewers use: decorators and makeObservable, mutations only in actions, thin public UI actions over private arrow methods, async state with try/catch/finally and a disposed guard, disposed reactions and child stores, in-place collection updates, guarded two-way sync, the lifecycle bridge, and a minimal template. Use when writing or reviewing a MobX store."
 alwaysApply: false
-globs:
-  - "**/*store*.ts"
 stack_requires: "mobx"
+paths: ["**/*store*.ts", "**/*store*.tsx"]
+metadata:
+  origin: authored
 ---
 
 # MobX Store Template

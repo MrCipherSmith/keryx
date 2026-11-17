@@ -25,6 +25,7 @@ import { BUNDLED_GDSKILLS } from "./catalog";
 import { HARNESS_SKILL_RUNTIMES, skillBuildFileName } from "./export";
 import {
   MOVED_RULES,
+  movedToPackId,
   RETIRED_RULES,
   retiredRuleSizeCapBytes,
   type MovedDestinationCause,
@@ -419,6 +420,11 @@ export async function removeUnmodifiedRetiredRules(
   // kept old copy say "the package is incomplete" instead of blaming a layer
   // directory that is fine. Unset means "shipped".
   isDestinationShipped: (movedTo: string) => boolean = () => true,
+  // Whether this project needs the moved rule at its new path at all. A rule
+  // moved to a stack pack the project's stack does not select (ADR-0001 P4) no
+  // longer applies here, so its unmodified old copy goes without waiting for a
+  // destination that is never installed. Unset means "required".
+  isDestinationRequired: (movedTo: string) => boolean = () => true,
 ): Promise<RetiredRuleOutcome[]> {
   const outcomes: RetiredRuleOutcome[] = [];
   for (const retired of entries) {
@@ -455,7 +461,7 @@ export async function removeUnmodifiedRetiredRules(
       if (retired.shippedSha256.includes(hash)) {
         // A move removes the old copy only once the new one is really there:
         // otherwise the rule would exist nowhere (ADR-0001 P2 review F-001).
-        if (retired.movedTo !== undefined) {
+        if (retired.movedTo !== undefined && isDestinationRequired(retired.movedTo)) {
           const destination = await installedLayerFileState(path.dirname(rulesTarget), retired.movedTo);
           if (destination !== "installed") {
             const cause = isDestinationShipped(retired.movedTo) ? destination : "not-shipped";
@@ -564,13 +570,23 @@ export async function migrateMovedRuleOverrides(
         outcomes.push({ ...subject, action: "kept-not-regular-file" });
         continue;
       }
-      const newDir = path.dirname(newPath);
-      const newDirStats = await lstatOrNull(newDir);
-      if (newDirStats === null) {
-        // Not recursive: `projectDir` was just confirmed a plain directory and
-        // `movedTo` is one layer deep.
-        await mkdir(newDir);
-      } else if (!newDirStats.isDirectory()) {
+      // One level at a time, never recursive: `projectDir` was just confirmed a
+      // plain directory, and each level below it (`process/`, or `stacks/` then
+      // `<pack>/` for a pack move) is created only where nothing is, and must be
+      // a plain directory where something is — never followed through a link.
+      let blocked = false;
+      let dir = projectDir;
+      for (const segment of path.posix.dirname(entry.movedTo).split("/")) {
+        dir = path.join(dir, segment);
+        const stats = await lstatOrNull(dir);
+        if (stats === null) {
+          await mkdir(dir);
+        } else if (!stats.isDirectory()) {
+          blocked = true;
+          break;
+        }
+      }
+      if (blocked) {
         outcomes.push({ ...subject, action: "kept-error", errorCode: "ENOTDIR" });
         continue;
       }
@@ -683,7 +699,7 @@ export function retiredRuleWarning(
           + `rules/core/${outcome.fileName}`;
     case "kept-destination-missing": {
       const movedTo = outcome.movedTo ?? outcome.fileName;
-      const layer = movedTo.split("/")[0];
+      const layer = path.posix.dirname(movedTo);
       switch (outcome.cause) {
         case "not-shipped":
           return `${prefix}; the old copy was kept because this keryx installation does not ship rules/${movedTo} `
@@ -732,6 +748,10 @@ export function movedRuleNotice(outcome: RetiredRuleOutcome): string | null {
   if (outcome.action !== "removed" || outcome.movedTo === undefined) {
     return null;
   }
-  return `rules/core/${outcome.fileName} moved to rules/${outcome.movedTo}; removed the unmodified old copy — `
+  const pack = movedToPackId(outcome.movedTo);
+  const where = pack === undefined
+    ? `rules/${outcome.movedTo}`
+    : `rules/${outcome.movedTo} (the ${pack} stack pack, installed where that stack is detected)`;
+  return `rules/core/${outcome.fileName} moved to ${where}; removed the unmodified old copy — `
     + `update any citation of rules/core/${outcome.fileName} in your own files (CLAUDE.md, AGENTS.md, project skills, wiki)`;
 }

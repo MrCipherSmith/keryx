@@ -88,11 +88,22 @@ const BUNDLED_RULES_DIR = ".metaproject/rules/core";
 const STACK_RULES_DIR = ".metaproject/rules/stacks";
 
 const ALWAYS_RULES = ["tdd-workflow", "error-handling", "solid-principles"];
+/**
+ * Rules a task type loads. A bare name is a core rule; `stacks/<pack>/<name>`
+ * is a stack-pack rule (ADR-0001 P4), loaded only when the project's stack
+ * installed that pack, so a backend task in a project without React no longer
+ * loads React rules.
+ */
 const TYPE_RULES: Record<string, string[]> = {
-  ui_component: ["code-style-patterns", "frontend-assistant", "storybook-guidelines"],
-  store_logic: ["code-style-patterns", "mobx-store-template"],
-  service_api: ["code-style-patterns", "nestjs-dto", "api-contracts"],
+  ui_component: ["stacks/react/code-style-patterns", "frontend-assistant", "stacks/storybook/storybook-guidelines"],
+  store_logic: ["stacks/react/code-style-patterns", "stacks/mobx/mobx-store-template"],
+  service_api: ["stacks/nestjs/nestjs-dto", "api-contracts"],
 };
+
+/** Project-relative path of a bundled rule named in `ALWAYS_RULES`/`TYPE_RULES`/`CONDITIONAL_RULES`. */
+function bundledRulePath(name: string): string {
+  return name.startsWith("stacks/") ? `.metaproject/rules/${name}.mdc` : `${BUNDLED_RULES_DIR}/${name}.mdc`;
+}
 const TEST_RULES = ["tdd-workflow"];
 
 /**
@@ -357,7 +368,7 @@ async function collectSkills(projectRoot: string, forWhat: ContextFor, files: re
 async function collectBundled(projectRoot: string, names: readonly string[]): Promise<ContextEntry[]> {
   const entries: ContextEntry[] = [];
   for (const name of names) {
-    const rel = `${BUNDLED_RULES_DIR}/${name}.mdc`;
+    const rel = bundledRulePath(name);
     const text = await readText(path.join(projectRoot, rel));
     if (text === undefined) continue;
     entries.push({ kind: "rule", source: "bundled", path: rel, sha256: sha256Hex(text), bytes: Buffer.byteLength(text), reason: "bundled-default", tier: "must_read" });
@@ -429,7 +440,7 @@ async function collectStackRules(projectRoot: string, files: readonly string[]):
 async function bundledPaths(projectRoot: string, names: readonly string[]): Promise<Map<string, string>> {
   const map = new Map<string, string>();
   for (const name of names) {
-    const rel = `${BUNDLED_RULES_DIR}/${name}.mdc`;
+    const rel = bundledRulePath(name);
     if (await pathExists(path.join(projectRoot, rel))) map.set(`${name}.mdc`, rel);
   }
   return map;
@@ -553,11 +564,13 @@ export async function resolveProjectContext(input: ResolveContextInput): Promise
 
   const shadowed = new Set(rules.flatMap((rule) => (rule.shadows !== undefined ? [rule.shadows] : [])));
   const task = truncateTaskText(input.taskText ?? "");
+  // A stack rule a task type names can also match a task file's glob; it is listed once, by the glob.
+  const seenBundled = new Set<string>();
   const bundled = [
     ...(await collectStackRules(projectRoot, files)),
     ...(await collectBundled(projectRoot, bundledNames)),
     ...(await collectConditional(projectRoot, conditionalRules, files, task.text)),
-  ].filter((entry) => !shadowed.has(entry.path));
+  ].filter((entry) => !shadowed.has(entry.path) && !seenBundled.has(entry.path) && Boolean(seenBundled.add(entry.path)));
 
   const cited = new Map<string, string>();
   for (const { candidate } of rules) {

@@ -1,10 +1,11 @@
 ---
+extends: common
 description: "NestJS DTO standard shared by code writers and reviewers, with the severities reviewers use: every input is a validated DTO class, validators match the type, nested and query values are transformed, Swagger decorators match optionality. Use when writing or reviewing NestJS controllers and DTOs."
 alwaysApply: false
-globs:
-  - "**/*dto*.ts"
-  - "**/dto/**/*.ts"
 stack_requires: "nestjs"
+paths: ["**/*dto*.ts", "**/dto/**/*.ts"]
+metadata:
+  origin: authored
 ---
 
 # NestJS DTOs

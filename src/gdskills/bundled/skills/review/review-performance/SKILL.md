@@ -111,11 +111,11 @@ The standard and its severities are `.metaproject/rules/core/database-patterns.m
 - [ ] Pure child component receiving stable props but not wrapped in `React.memo` — only flag if the parent re-renders frequently (e.g., on keypress, scroll, animation frame)
 - [ ] `useCallback` absent for a non-store callback passed to a `React.memo` child — only flag if the child is expensive; a store method or store value is never wrapped in `useCallback`/`useMemo`
 
-**MobX note:** `observer` and where memoization does and does not belong are `.metaproject/rules/core/code-style-patterns.mdc` Rules 1 and 3. Without a concrete re-render cost there is no finding.
+**MobX note:** `observer` and where memoization does and does not belong are `.metaproject/rules/stacks/react/code-style-patterns.mdc` Rules 1 and 3. Without a concrete re-render cost there is no finding.
 
 ### 3. Expensive Computations in Hot Paths
 
-- [ ] Sorting, filtering, or reducing a large array inside a render function without `useMemo`; when the array is store state the fix is `@computed` (`.metaproject/rules/core/mobx-store-template.mdc` Rule 1), not `useMemo`
+- [ ] Sorting, filtering, or reducing a large array inside a render function without `useMemo`; when the array is store state the fix is `@computed` (`.metaproject/rules/stacks/mobx/mobx-store-template.mdc` Rule 1), not `useMemo`
 - [ ] Deep clone (`JSON.parse(JSON.stringify(...))`) inside a loop or on every render
 - [ ] Regex compilation inside a loop — should be compiled once outside: `const RE = /pattern/`
 - [ ] `Object.keys().reduce()` or similar aggregation recalculated on every render instead of being derived in store or memoized
@@ -135,7 +135,7 @@ The standard and its severities are `.metaproject/rules/core/database-patterns.m
 - [ ] RxJS `subscribe()` without `unsubscribe()` stored in a disposable or returned from useEffect cleanup
 - [ ] WebSocket or SSE connection opened without close in cleanup
 
-MobX disposers are `.metaproject/rules/core/mobx-store-template.mdc` Rule 5; a `useEffect` subscription, timer or async operation with no cleanup is `.metaproject/rules/core/code-style-patterns.mdc` Rule 5. Each takes its severity from that rule's table.
+MobX disposers are `.metaproject/rules/stacks/mobx/mobx-store-template.mdc` Rule 5; a `useEffect` subscription, timer or async operation with no cleanup is `.metaproject/rules/stacks/react/code-style-patterns.mdc` Rule 5. Each takes its severity from that rule's table.
 
 **Unbounded collections:**
 - [ ] Map, Set, or array that grows on every event/request with no eviction, max size, or TTL
@@ -178,7 +178,7 @@ The standard and its severities are `.metaproject/rules/core/api-contracts.mdc` 
 
 ### 10. MobX: Derived State Computed in Renders
 
-Derived values belong in `@computed` (`.metaproject/rules/core/mobx-store-template.mdc` Rule 1 and its row) and logic does not live in a component (`.metaproject/rules/core/code-style-patterns.mdc` Rule 2). This lens adds only the cost angle: a reduce, filter or format recomputed on a high-frequency render, with its frequency named.
+Derived values belong in `@computed` (`.metaproject/rules/stacks/mobx/mobx-store-template.mdc` Rule 1 and its row) and logic does not live in a component (`.metaproject/rules/stacks/react/code-style-patterns.mdc` Rule 2). This lens adds only the cost angle: a reduce, filter or format recomputed on a high-frequency render, with its frequency named.
 
 ---
 

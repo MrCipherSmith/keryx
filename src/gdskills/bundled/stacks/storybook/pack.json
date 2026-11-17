@@ -1,0 +1,19 @@
+{
+  "id": "storybook",
+  "family": "tool",
+  "modules": ["storybook-rules"],
+  "detectionMarkers": ["storybook"],
+  "provenance": {
+    "origin": "authored",
+    "sourceRef": "ADR-0001 P4 (rules-layers): storybook-guidelines moved out of rules/core"
+  },
+  "stability": "experimental",
+  "skills": {
+    "implement": [],
+    "test": [],
+    "review": [],
+    "build-fix": [],
+    "migrate": []
+  },
+  "notes": "Rules-only pack: it carries the Storybook rule that used to sit in rules/core (gated stack_requires: react). Detected from a storybook or @storybook/* dependency, not from React, so a React project without Storybook no longer receives it. Story review stays with review-frontend and review-frontend-conventions, which read this pack's rule."
+}

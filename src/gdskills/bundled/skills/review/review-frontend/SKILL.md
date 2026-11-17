@@ -132,9 +132,9 @@ If no CLAUDE.md is found, proceed normally. CLAUDE.md is optional and non-blocki
 
 Components, stores, TypeScript and stories are checked against the rules the code was written to. Read each that the change touches; each ends with a **Review severities** table, and a finding takes its level from that table's row:
 
-- `.metaproject/rules/core/code-style-patterns.mdc`: `observer`, layers (no API/IO or business logic in components), where state lives (`useState` for UI-only state is correct), store created once, effect cleanup, keys, accessibility, TypeScript (`any`, `!`, `I` prefix, `src/` imports).
-- `.metaproject/rules/core/mobx-store-template.mdc`: `makeObservable` and decorators, mutations in actions, thin public `@action.bound` over private arrow methods (`@action.bound` on a private method is a finding), async flags and the `disposed` guard, disposers and child stores, in-place collection updates, two-way sync guards, the `onMount()`/`onUnmount()` lifecycle bridge (correct, never flagged).
-- `.metaproject/rules/core/storybook-guidelines.mdc`: which states each component's stories cover, `fn()` for actions.
+- `.metaproject/rules/stacks/react/code-style-patterns.mdc`: `observer`, layers (no API/IO or business logic in components), where state lives (`useState` for UI-only state is correct), store created once, effect cleanup, keys, accessibility, TypeScript (`any`, `!`, `I` prefix, `src/` imports).
+- `.metaproject/rules/stacks/mobx/mobx-store-template.mdc`: `makeObservable` and decorators, mutations in actions, thin public `@action.bound` over private arrow methods (`@action.bound` on a private method is a finding), async flags and the `disposed` guard, disposers and child stores, in-place collection updates, two-way sync guards, the `onMount()`/`onUnmount()` lifecycle bridge (correct, never flagged).
+- `.metaproject/rules/stacks/storybook/storybook-guidelines.mdc`: which states each component's stories cover, `fn()` for actions.
 - `.metaproject/rules/core/error-handling.mdc` for `catch` typing and swallowed errors.
 
 A pattern listed under a row's **Not a finding** is not reported. A defect no row covers is rated by the canonical rubric.

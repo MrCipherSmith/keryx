@@ -109,7 +109,7 @@ pass, then work the checklist.
 These project rules hold what to check and how to rate it. Read each one that applies to the change and rate by its **Review severities** table; this lens does not restate them.
 
 - `.metaproject/rules/core/tdd-workflow.mdc`: one toolchain, colocation, a test for new or changed logic, boundary mocking, no real network or clock, no sleeps, flakes fixed by waiting on a state, tests never deleted to go green.
-- `.metaproject/rules/core/playwright-testing.mdc`: waits, locator order, auth in a setup project, independent specs, owned data, route mocking, screenshots, smoke tags.
+- `.metaproject/rules/stacks/playwright/playwright-testing.mdc`: waits, locator order, auth in a setup project, independent specs, owned data, route mocking, screenshots, smoke tags.
 
 The checks below are the lens's own; no rule covers them.
 

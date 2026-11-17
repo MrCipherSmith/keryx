@@ -48,6 +48,10 @@ const processRule = (name: string) => path.join(root, ".metaproject", "rules", "
 
 test("F2: upgrade, keryx-shell install before keryx update, then keryx update and uninstall: the process rules stay", async () => {
   // A project installed by the previous release: the procedures sit in core/.
+  // Its stack selects every pack a P4 move landed in, so every moved rule has a destination.
+  await writeFile(path.join(root, "package.json"), JSON.stringify({
+    dependencies: { react: "^18.3.1", mobx: "^6.13.0", "@nestjs/core": "^10.4.0", "@playwright/test": "^1.48.0", storybook: "^8.4.0" },
+  }));
   const core = path.join(root, ".metaproject", "rules", "core");
   await mkdir(core, { recursive: true });
   for (const entry of MOVED_RULES) {
@@ -113,7 +117,7 @@ test("R2-LS-2: a stale bundled skill is keryx-published: never recorded, keryx u
 });
 
 test("R3-1: keryx-published follows the project: rule layers and the update profile's skills, only with gdskills on", async () => {
-  const published = keryxPublishedIn(root);
+  const published = await keryxPublishedIn(root);
   const inProfile = recommendedSkillRoots[0]!;
   const outOfProfile = getBundledSkillsForProfile("full")
     .map((skill) => `.metaproject/skills/gdskills/${skill.category}/${skill.name}/`)
@@ -123,16 +127,29 @@ test("R3-1: keryx-published follows the project: rule layers and the update prof
   expect(published(`${inProfile}SKILL.md`)).toBe(true);
   expect(published(".metaproject/skills/gdskills/shared/git-merge-base.md")).toBe(true);
   expect(published(`${outOfProfile}SKILL.md`)).toBe(false);
+  // A pack the project's stack does not select is not written by keryx update (ADR-0001 P4)...
   expect(published(".metaproject/rules/stacks/react/x.mdc")).toBe(false);
   expect(published(".metaproject/rules/project/core/x.mdc")).toBe(false);
   expect(published(".metaproject/project-skills/house/SKILL.md")).toBe(false);
 
   // Without the gdskills module keryx update writes only the conduct rule.
   await writeProjectManifest({ enabled: false });
-  const off = keryxPublishedIn(root);
+  const off = await keryxPublishedIn(root);
   expect(off(".metaproject/rules/process/agent-conduct.mdc")).toBe(true);
   expect(off(".metaproject/rules/process/git-rules.mdc")).toBe(false);
   expect(off(`${inProfile}SKILL.md`)).toBe(false);
+});
+
+test("P4: keryx-published covers the stack packs the project's stack selects, and only those", async () => {
+  await writeFile(path.join(root, "package.json"), JSON.stringify({ dependencies: { react: "^18.3.1", typescript: "^5.6.0" } }));
+  const published = await keryxPublishedIn(root);
+  expect(published(".metaproject/rules/stacks/react/code-style-patterns.mdc")).toBe(true);
+  expect(published(".metaproject/rules/stacks/ts-js-node/coding-style.mdc")).toBe(true);
+  expect(published(".metaproject/rules/stacks/mobx/mobx-store-template.mdc")).toBe(false);
+  expect(published(".metaproject/rules/stacks/python/coding-style.mdc")).toBe(false);
+  // The seam decides, not the tree: the same selection installBundledRules makes.
+  const none = await keryxPublishedIn(root, async () => []);
+  expect(none(".metaproject/rules/stacks/react/code-style-patterns.mdc")).toBe(false);
 });
 
 test("R3-1: full manifest + recommended gdskills: out-of-profile skills are recorded and uninstalled, in-profile ones kept", async () => {

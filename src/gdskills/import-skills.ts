@@ -6,6 +6,8 @@ import { ContainedWriteError, writeContained } from "../lib/contained-write";
 import { pathExists, toPosix } from "../lib/fs";
 import { BUNDLED_GDSKILLS } from "./catalog";
 import { bundledRulesSourcePath } from "./install";
+import { movedToPackId } from "./retired-rules";
+import { bundledPackRulesPath, bundledStacksSourcePath } from "./stack-rules-install";
 import {
   isKeryxRuleLayer,
   isRegularFile,
@@ -1808,10 +1810,13 @@ async function decideRule(options: ImportProjectSkillsOptions, citation: RuleCit
   // same name.
   // `ruleReferences` already spelled a case variant of a layer directory as
   // keryx spells it, so this comparison is exact.
+  // A stack pack's rule (`stacks/<pack>/<name>.mdc`) is the same case: `keryx
+  // update` writes it wherever the project's stack selects the pack.
   const layer = citation.ref.slice(0, citation.ref.indexOf("/"));
-  const shipsWithKeryx =
-    isKeryxRuleLayer(layer) &&
-    (await pathExists(path.join(bundledRulesSourcePath(layer), path.basename(citation.ref))));
+  const pack = movedToPackId(citation.ref);
+  const shipsWithKeryx = pack !== undefined
+    ? await pathExists(path.join(bundledPackRulesPath(bundledStacksSourcePath(), pack), path.basename(citation.ref)))
+    : isKeryxRuleLayer(layer) && (await pathExists(path.join(bundledRulesSourcePath(layer), path.basename(citation.ref))));
   // Something at a candidate that is not a regular file (a directory, say) is
   // neither read nor written over: the reference stays unresolved, named by
   // path, as `keryx review reviewers` reports it, and the rest of the import

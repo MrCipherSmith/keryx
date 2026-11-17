@@ -38,8 +38,9 @@ import {
   PROJECT_SKILLS_DIR,
 } from "./project-skills";
 import { migrateMovedRuleRegistry, type MovedRegistryEntry } from "./project-rules";
-import type { RetiredRuleEntry, RetiredRuleOutcome } from "./retired-rules";
+import { movedToPackId, type RetiredRuleEntry, type RetiredRuleOutcome } from "./retired-rules";
 import { isKeryxRuleLayer, KERYX_RULE_LAYERS, type KeryxRuleLayer } from "./rule-references";
+import { bundledPackRulesPath, bundledStacksSourcePath, detectStackPacks, STACK_RULES_LAYER_DIR } from "./stack-rules-install";
 
 /**
  * `mkdirContained`, but a containment refusal becomes a warning string
@@ -338,10 +339,11 @@ export async function checkInstallDestination(
 
 /**
  * Force-copy every bundled rule layer (`rules/core`, `rules/process`,
- * `rules/activity` — ADR-0001 D1) over the project's installed copy, then
- * clean up any core rule this bundle no longer ships there, whether it was
- * retired or moved to another layer (see `retired-rules.ts` for why a plain
- * `cp` can't do that itself).
+ * `rules/activity` — ADR-0001 D1) over the project's installed copy, and the
+ * rules of every stack pack the project's detected stack selects over
+ * `rules/stacks/<pack>/` (P4), then clean up any core rule this bundle no
+ * longer ships there, whether it was retired or moved to another layer or a
+ * pack (see `retired-rules.ts` for why a plain `cp` can't do that itself).
  *
  * A layer the bundle does not ship yet (no source directory) is skipped
  * without a word: `rules/activity/` is empty until P5, and adding its first
@@ -368,6 +370,10 @@ export type InstallBundledRulesSeams = {
   sourcePathFor?: (layer: KeryxRuleLayer) => string;
   /** Test seam: the retired and moved entries the core cleanup checks. */
   cleanupEntries?: readonly RetiredRuleEntry[];
+  /** Test seam: the bundled `stacks/` directory. */
+  stacksSourceRoot?: string;
+  /** Test seam: the stack packs this project selects (default: stack detection on the project root). */
+  selectStackPacks?: (projectRoot: string, stacksSourceRoot: string) => Promise<readonly string[]>;
 };
 
 export async function installBundledRules(
@@ -377,10 +383,14 @@ export async function installBundledRules(
   outcomes: RetiredRuleOutcome[];
   overrideOutcomes: ProjectOverrideOutcome[];
   registryMoves: MovedRegistryEntry[];
+  /** The stack packs whose rules this run installed under `rules/stacks/`. */
+  stackPacks: string[];
   warning: string | null;
 }> {
   const sourcePathFor = seams.sourcePathFor ?? bundledRulesSourcePath;
   const cleanupEntries = seams.cleanupEntries ?? CORE_CLEANUP_ENTRIES;
+  const stacksSourceRoot = seams.stacksSourceRoot ?? bundledStacksSourcePath();
+  const projectRoot = path.dirname(metaprojectRoot);
   const warnings: string[] = [];
   let coreTarget: string | null = null;
   for (const layer of KERYX_RULE_LAYERS) {
@@ -388,26 +398,85 @@ export async function installBundledRules(
     if (installed.warning !== null) warnings.push(installed.warning);
     if (layer === "core") coreTarget = installed.target;
   }
+  // The language and framework layers (ADR-0001 D1): every pack the project's
+  // stack selects. Since P4 they carry rows core used to ship, so they install
+  // with the layers rather than only through `keryx skills install`.
+  const selectedPacks = [...await (seams.selectStackPacks ?? detectStackPacks)(projectRoot, stacksSourceRoot)].sort();
+  const stackInstall = await installStackPackRules(metaprojectRoot, stacksSourceRoot, selectedPacks);
+  warnings.push(...stackInstall.warnings);
   // A moved rule's new path is shipped when this bundle carries the file in
-  // its layer source; otherwise a kept old copy is the package's fault, not
-  // the project's.
+  // its layer or pack source; otherwise a kept old copy is the package's
+  // fault, not the project's.
   const isDestinationShipped = (movedTo: string): boolean => {
+    const pack = movedToPackId(movedTo);
+    if (pack !== undefined) return existsSync(path.join(bundledPackRulesPath(stacksSourceRoot, pack), path.basename(movedTo)));
     const layer = movedTo.slice(0, movedTo.indexOf("/"));
     return isKeryxRuleLayer(layer) && existsSync(path.join(sourcePathFor(layer), path.basename(movedTo)));
   };
-  // Cleanup runs after every layer is in place, so a moved rule's new path is
-  // installed before its old copy is removed.
+  // A rule moved to a pack this project's stack does not select no longer
+  // applies here: its stale core copy goes without waiting for a destination
+  // that is never installed.
+  const isDestinationRequired = (movedTo: string): boolean => {
+    const pack = movedToPackId(movedTo);
+    return pack === undefined || selectedPacks.includes(pack);
+  };
+  // Cleanup runs after every layer and pack is in place, so a moved rule's
+  // new path is installed before its old copy is removed.
   const outcomes = coreTarget === null
     ? []
-    : await removeUnmodifiedRetiredRules(coreTarget, undefined, cleanupEntries, isDestinationShipped);
+    : await removeUnmodifiedRetiredRules(coreTarget, undefined, cleanupEntries, isDestinationShipped, isDestinationRequired);
   // A project's own version of a moved rule follows it to the new slot.
   const moves = cleanupEntries.filter((entry): entry is RetiredRuleEntry & { movedTo: string } => entry.movedTo !== undefined);
   const overrideOutcomes = await migrateMovedRuleOverrides(path.join(metaprojectRoot, "rules"), moves);
   // ...and so does its `skills import --rules` registry entry (review LS-2).
-  const projectRoot = path.dirname(metaprojectRoot);
   const registryMoves = await migrateMovedRuleRegistry(projectRoot, moves, async (ref) =>
     (await lstat(path.join(metaprojectRoot, "rules", "project", ref)).catch(() => null)) !== null);
-  return { outcomes, overrideOutcomes, registryMoves, warning: warnings.length === 0 ? null : warnings.join("; ") };
+  return {
+    outcomes,
+    overrideOutcomes,
+    registryMoves,
+    stackPacks: stackInstall.installed,
+    warning: warnings.length === 0 ? null : warnings.join("; "),
+  };
+}
+
+/**
+ * Copy each selected pack's bundled `rules/` over `rules/stacks/<pack>/`, with
+ * the same containment checks as a layer. A pack directory that is not a plain
+ * directory is skipped with a warning; the other packs still install. Files a
+ * pack no longer selects keep whatever is installed: an explicit
+ * `keryx skills install --with` may have put them there.
+ */
+async function installStackPackRules(
+  metaprojectRoot: string,
+  stacksSourceRoot: string,
+  packs: readonly string[],
+): Promise<{ installed: string[]; warnings: string[] }> {
+  const installed: string[] = [];
+  const warnings: string[] = [];
+  const toInstall = packs.filter((pack) => existsSync(bundledPackRulesPath(stacksSourceRoot, pack)));
+  if (toInstall.length === 0) return { installed, warnings };
+  const stacksTarget = path.join(metaprojectRoot, "rules", STACK_RULES_LAYER_DIR);
+  const root = await checkInstallDestination(stacksTarget, path.relative(metaprojectRoot, stacksTarget));
+  if (!root.usable) return { installed, warnings: [root.warning] };
+  for (const pack of toInstall) {
+    const target = path.join(stacksTarget, pack);
+    const destination = await checkInstallDestination(target, path.relative(metaprojectRoot, target));
+    if (!destination.usable) {
+      warnings.push(destination.warning);
+      continue;
+    }
+    const mkdirWarning = await mkdirContainedOrWarn(metaprojectRoot, target);
+    if (mkdirWarning) {
+      warnings.push(mkdirWarning);
+      continue;
+    }
+    // See the note in installGdskills's per-skill loop: containment is
+    // confirmed by mkdirContainedOrWarn before the recursive copy.
+    await copyDirectoryContained(bundledPackRulesPath(stacksSourceRoot, pack), target);
+    installed.push(pack);
+  }
+  return { installed, warnings };
 }
 
 /**

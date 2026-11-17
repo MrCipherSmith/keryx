@@ -69,7 +69,7 @@ export async function applyInstall(
     return { ok: false, written: [], alreadyPresent: [], skipped: [], errors: ["cannot apply a plan with errors — see plan.errors"] };
   }
   const sourceRoot = options.sourceRoot ?? destRoot;
-  const isKeryxPublishedDestination = keryxPublishedIn(destRoot);
+  const isKeryxPublishedDestination = await keryxPublishedIn(destRoot);
 
   // F2: a corrupt/schema-invalid prior install-state file must not be
   // silently treated as "nothing recorded" — that would make apply believe
