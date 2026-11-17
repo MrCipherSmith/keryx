@@ -25,25 +25,20 @@ describe("advertised commands", () => {
     );
   });
 
-  test("no TUI-only command is advertised, and each TUI-only one really is a shell command", () => {
+  test("the editor profile advertises only its four, and no terminal-only command is among them", () => {
     const names = ACP_SLASH_COMMANDS.map((command) => command.name);
+    expect(names).toEqual(["help", "model", "reasoning", "status"]);
     expect(names.filter((name) => ACP_TUI_ONLY_COMMANDS.includes(name))).toEqual([]);
-    const registry = new Set(AGENT_SLASH_COMMANDS.map((command) => command.name));
+    // What the editor profile must never grow, whatever the shell profile serves.
+    for (const name of ["governance", "triggers", "schedule", "schedules", "workspace", "review", "mcp", "game", "integrate"]) {
+      expect(acpAvailableCommands().map((command) => command.name)).not.toContain(name);
+    }
+  });
+
+  test("the not-advertised set is the terminal-only commands of specification 3.9.2, and each is a real agent-mode command", () => {
+    expect([...ACP_TUI_ONLY_COMMANDS].sort()).toEqual(["copy", "exit", "expand", "game", "integrate", "theme", "think"]);
+    const registry = new Set(AGENT_SLASH_COMMANDS.filter((command) => command.modes.includes("agent")).map((command) => command.name));
     expect(ACP_TUI_ONLY_COMMANDS.filter((name) => !registry.has(`/${name}`))).toEqual([]);
-  });
-
-  test("flow 300: /governance and /triggers are TUI-only — pinned, never advertised to an editor", () => {
-    expect(ACP_TUI_ONLY_COMMANDS).toContain("governance");
-    expect(ACP_TUI_ONLY_COMMANDS).toContain("triggers");
-    expect(acpAvailableCommands().map((command) => command.name)).not.toContain("governance");
-    expect(acpAvailableCommands().map((command) => command.name)).not.toContain("triggers");
-  });
-
-  test("flow 295: /schedule and /schedules are TUI-only — pinned, never advertised to an editor", () => {
-    expect(ACP_TUI_ONLY_COMMANDS).toContain("schedule");
-    expect(ACP_TUI_ONLY_COMMANDS).toContain("schedules");
-    expect(acpAvailableCommands().map((command) => command.name)).not.toContain("schedule");
-    expect(acpAvailableCommands().map((command) => command.name)).not.toContain("schedules");
   });
 
   test("the payload has the published shape: name without a slash, description, optional input.hint", () => {

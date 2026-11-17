@@ -126,6 +126,15 @@ import {
   type AcpProfile,
 } from "./profile";
 import { buildAcpShellSessionTools, type AcpShellRosterInput } from "./shell-roster";
+import { busyRefusalText, findShellCommand, shellAvailableCommands, viewNotServedText } from "./shell-commands";
+import {
+  createAcpSessionRewind,
+  runShellTextCommand,
+  type AcpSessionRewind,
+  type ShellCommandEffect,
+  type ShellCommandHost,
+  type ShellCommandOutcome,
+} from "./shell-command-runners";
 import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 
@@ -211,6 +220,8 @@ export interface AcpServerOptions {
   readonly searchController?: SearchProviderController;
   /** Shell profile test seam: builds a session's roster. `buildAcpShellSessionTools` otherwise. */
   readonly buildShellRoster?: (input: AcpShellRosterInput) => InteractiveTool[];
+  /** Shell profile: the user-global config directory `_keryx/command`'s settings commands read and write. The default one otherwise. Test seam. */
+  readonly shellConfigDir?: string;
 }
 
 export type { AcpTurnSettings } from "./models";
@@ -486,6 +497,11 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     return jobs;
   };
 
+  /** `/plan`: each session's read-only flag, read fresh by every gated call (`AgentIO.readOnly`). */
+  const sessionReadOnly = new Map<string, boolean>();
+  /** `/rewind`: one snapshot recorder and readline state machine per session, built on first use. */
+  const sessionRewinds = new Map<string, AcpSessionRewind>();
+
   let searchController: SearchProviderController | undefined = options.searchController;
   const searchControllerFor = (): SearchProviderController => (searchController ??= createDefaultSearchProviderController());
 
@@ -732,6 +748,8 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     sessionModels.delete(sessionId);
     switchApplied.delete(sessionId);
     pendingLateModelList.delete(sessionId);
+    sessionReadOnly.delete(sessionId);
+    sessionRewinds.delete(sessionId);
     const jobs = sessionJobs.get(sessionId);
     sessionJobs.delete(sessionId);
     const hooks = shellHooksBySession.get(sessionId);
@@ -1280,7 +1298,11 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   /** Tell the client which commands keryx handles, once the reply creating/loading the session is out. */
   function announceCommands(sessionId: string, requestId: JsonRpcId): void {
     onReplied(requestId, () => {
-      sendUpdate(sessionId, { sessionUpdate: "available_commands_update", availableCommands: acpAvailableCommands(slashCommands) });
+      sendUpdate(sessionId, {
+        sessionUpdate: "available_commands_update",
+        // The shell profile advertises the whole served table with `_meta.keryx`; the editor list is unchanged.
+        availableCommands: shellProfile ? shellAvailableCommands() : acpAvailableCommands(slashCommands),
+      });
     });
   }
 
@@ -1709,6 +1731,137 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     }
   }
 
+  /** `/rewind`'s per-session recorder and state machine, built on first use over the session's live registry entry. */
+  function rewindFor(sessionId: string): AcpSessionRewind {
+    const held = sessionRewinds.get(sessionId);
+    if (held !== undefined) return held;
+    const state = registry.get(sessionId);
+    if (state === undefined) {
+      refuse({ code: JSON_RPC_ERROR_CODES.resourceNotFound, message: `Unknown ACP session: ${sessionId}`, data: { sessionId } });
+    }
+    const created = createAcpSessionRewind({
+      root: state.resolvedRoot,
+      session: commandSession(sessionId),
+      sessionDir: () => registry.get(sessionId)?.handle.dir,
+      onError: (message) => options.logError(`acp: rewind: ${message}`),
+    });
+    sessionRewinds.set(sessionId, created);
+    return created;
+  }
+
+  /** The session as a transcript command sees it. Read through the registry: `session/load` and `persistHistory` replace entries. */
+  function commandSession(sessionId: string): ShellCommandHost["session"] {
+    const live = (): AcpSessionState => {
+      const state = registry.get(sessionId);
+      if (state === undefined) {
+        refuse({ code: JSON_RPC_ERROR_CODES.resourceNotFound, message: `Unknown ACP session: ${sessionId}`, data: { sessionId } });
+      }
+      return state;
+    };
+    return {
+      get history() {
+        return live().history;
+      },
+      get archive() {
+        return live().archive;
+      },
+      handle: () => live().handle,
+      setHandle: (handle) => registry.updateHandle(sessionId, handle),
+      canPersist: () => registry.canPersist(sessionId),
+      modelIds: () => {
+        const { providerId, modelId } = sessionModel(sessionId, KERYX_ACP_EXTENSION_METHODS.command).binding;
+        return { providerId, modelId };
+      },
+    };
+  }
+
+  /** What `_keryx/command` lends a runner: this session's state and the server's own answers (`status`, `model`, `reasoning`, `mode`). */
+  function commandHost(sessionId: string, state: AcpSessionState): ShellCommandHost {
+    const method = KERYX_ACP_EXTENSION_METHODS.command;
+    return {
+      cwd: state.resolvedRoot,
+      configDir: options.shellConfigDir,
+      session: commandSession(sessionId),
+      sessionDir: () => registry.get(sessionId)?.handle.dir,
+      permissionMode: () => modeOf(sessionId),
+      reasoningOverride: () => reasoningOverrides.get(sessionId),
+      readOnly: () => sessionReadOnly.get(sessionId) === true,
+      setReadOnly: (on) => {
+        sessionReadOnly.set(sessionId, on);
+      },
+      jobs: () => jobsFor(sessionId, state.resolvedRoot),
+      searchController: searchControllerFor,
+      rewind: () => rewindFor(sessionId).command,
+      serverCommand: async (name, args): Promise<ShellCommandOutcome> => {
+        const before = { mode: modeOf(sessionId), model: sessionModel(sessionId, method).choice.value, reasoning: reasoningOverrides.get(sessionId) };
+        // Not tied to `session/cancel`: this is not a turn, so there is nothing for a cancel to reach.
+        const reply = await runSlashCommand(sessionId, state, name, args, new AbortController().signal);
+        const effects: ShellCommandEffect[] = [];
+        if (modeOf(sessionId) !== before.mode) effects.push("mode");
+        if (sessionModel(sessionId, method).choice.value !== before.model) effects.push("model");
+        if (reasoningOverrides.get(sessionId) !== before.reasoning) effects.push("config");
+        return { text: reply.length === 0 || reply.endsWith("\n") ? reply : `${reply}\n`, ...(effects.length > 0 ? { effects } : {}) };
+      },
+    };
+  }
+
+  /**
+   * `_keryx/command` (shell profile, specification §3.9.1): runs one command of the served
+   * table. Not a turn: no prompt slot, nothing added to the model's history, and it may run
+   * while a turn runs, by `busy-dispatch.ts`'s rules — a command the shell would queue or
+   * refuse while busy is answered `{ text, _meta.keryx.refused }` with the shell's wording.
+   * The two that rewrite the transcript (`/compact`, `/rewind`) hold the session's slot while
+   * they run, so a prompt cannot interleave with the rewrite.
+   */
+  async function handleKeryxCommand(params: unknown): Promise<{ text: string; _meta: { keryx: { effects?: ShellCommandEffect[]; refused?: true } } }> {
+    const method = KERYX_ACP_EXTENSION_METHODS.command;
+    requireInitialized(method);
+    const obj = requireObjectParams(params, method);
+    const sessionId = requireStringField(obj, "sessionId", method);
+    const rawName = requireStringField(obj, "name", method);
+    const argsField = obj["args"];
+    if (argsField !== undefined && typeof argsField !== "string") {
+      refuse(invalidParams(`${method}: args must be a string`, { received: argsField }));
+    }
+    const name = rawName.replace(/^\//, "").toLowerCase();
+    const args = (argsField ?? "").trim();
+    const row = findShellCommand(name);
+    if (row === undefined) {
+      refuse(invalidParams(`${method}: keryx does not serve /${name}`, { name }));
+    }
+    if (row.surface === "client" || row.surface === "dialog") {
+      refuse(invalidParams(`${method}: /${name} is handled by the desktop client, not by keryx`, { name, surface: row.surface }));
+    }
+    const state = registry.get(sessionId);
+    if (state === undefined) {
+      refuse({ code: JSON_RPC_ERROR_CODES.resourceNotFound, message: `Unknown ACP session: ${sessionId}`, data: { sessionId } });
+    }
+    refuseIfOpening(method, sessionId);
+    const refusedResult = (reason: string) => ({ text: reason, _meta: { keryx: { refused: true as const } } });
+    if (activeTurns.has(sessionId) && row.busy === "refuse") {
+      return refusedResult(busyRefusalText(name));
+    }
+    touch(sessionId);
+    const rewritesTranscript = row.name === "compact" || row.name === "rewind";
+    // Counted as work on the session, so the idle cap does not release it mid-command.
+    return withSessionWork(sessionId, async () => {
+      const slot: AcpActiveTurn | undefined = rewritesTranscript
+        ? { controller: new AbortController(), cancelled: false, permissionRequestIds: new Set() }
+        : undefined;
+      if (slot !== undefined) activeTurns.set(sessionId, slot);
+      try {
+        const outcome = await runShellTextCommand(commandHost(sessionId, state), row, args);
+        // A view command with no text form for these arguments: T10b's views replace this answer.
+        if (outcome === undefined) return refusedResult(viewNotServedText(name));
+        if (outcome.refused === true) return refusedResult(outcome.text);
+        return { text: outcome.text, _meta: { keryx: { effects: [...(outcome.effects ?? [])] } } };
+      } finally {
+        if (slot !== undefined && activeTurns.get(sessionId) === slot) activeTurns.delete(sessionId);
+        touch(sessionId);
+      }
+    });
+  }
+
   async function handleSessionPrompt(params: unknown): Promise<AcpPromptResponse> {
     requireInitialized(ACP_AGENT_METHODS.sessionPrompt);
     const obj = requireObjectParams(params, ACP_AGENT_METHODS.sessionPrompt);
@@ -1840,6 +1993,8 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         shellProfile ? { permissionMode: () => modeOf(sessionId), permissionReasons: true } : {},
       );
       if (shellProfile) {
+        // `/plan on`: read fresh by every gated call, as the readline shell's own flag is.
+        io.readOnly = () => sessionReadOnly.get(sessionId) === true;
         // `auto` mode answers ask_user itself; without this the client would
         // see the answer land in the model's context but never be told.
         io.onQuestionSelfAnswered = (question, answerLabel) => {
@@ -1881,6 +2036,12 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       deps.onContextCompaction = () => {
         archive.next = state.history.length;
       };
+      if (shellProfile) {
+        // `/rewind`: a snapshot of the files before each mutating call, and the turn's place in the archive.
+        const rewind = rewindFor(sessionId);
+        io.beforeMutation = () => rewind.recorder.beforeMutation();
+        rewind.recorder.beginTurn({ archiveIndex: archive.messages.length, prompt: userLine });
+      }
       const result = await runAgentTurn(io, deps, state.history, userLine, { signal: turn.controller.signal });
       syncAcpArchive(archive, state.history);
       if (!registry.canPersist(sessionId)) {
@@ -2288,7 +2449,10 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         [KERYX_ACP_EXTENSION_METHODS.info]: () => handleKeryxInfo(),
         // Shell profile only: the editor profile keeps refusing it with -32601.
         ...(shellProfile
-          ? { [ACP_AGENT_METHODS.sessionSetMode]: (params: unknown, context: { id: JsonRpcId }) => handleSetMode(params, context.id) }
+          ? {
+              [ACP_AGENT_METHODS.sessionSetMode]: (params: unknown, context: { id: JsonRpcId }) => handleSetMode(params, context.id),
+              [KERYX_ACP_EXTENSION_METHODS.command]: (params: unknown) => handleKeryxCommand(params),
+            }
           : {}),
       },
       notifications: {

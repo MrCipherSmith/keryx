@@ -750,7 +750,7 @@
         },
         {
           "path": "src/tui/flow-inspector.ts",
-          "sha256": "9115380de31af9d78703a310b7e82019ef69e7cb3436f68df33e2fcd5c0c909d",
+          "sha256": "f8c391e4e27cf85bc6acf78ea2871afc52ac1449f4d92b7c49ddfa365cbd6d57",
           "anchor": "line:1"
         },
         {
@@ -895,7 +895,7 @@
         },
         {
           "path": "src/tui/flow-inspector.ts",
-          "sha256": "9115380de31af9d78703a310b7e82019ef69e7cb3436f68df33e2fcd5c0c909d",
+          "sha256": "f8c391e4e27cf85bc6acf78ea2871afc52ac1449f4d92b7c49ddfa365cbd6d57",
           "anchor": "line:1"
         },
         {
@@ -1008,7 +1008,7 @@
         },
         {
           "path": "src/tui/reviews-inspector.ts",
-          "sha256": "2f65bea2f820e715730c72cf1508edc32027738ec24dd220ebadf377fb087780",
+          "sha256": "2ea070b4a86c79a85372c79559bd41ae05c942e7a784fb810c4cc55ca7f46b1d",
           "anchor": "line:1"
         },
         {
@@ -1061,7 +1061,7 @@
         },
         {
           "path": "src/tui/reviews-inspector.ts",
-          "sha256": "2f65bea2f820e715730c72cf1508edc32027738ec24dd220ebadf377fb087780",
+          "sha256": "2ea070b4a86c79a85372c79559bd41ae05c942e7a784fb810c4cc55ca7f46b1d",
           "anchor": "line:1"
         },
         {
@@ -1113,7 +1113,7 @@
         },
         {
           "path": "src/tui/remote-control-surface.ts",
-          "sha256": "941cb4e79a26c9dfa2602e34f6fd8ca433a0d22f1067d8a6a2d30fe7707250ee",
+          "sha256": "b387727ec6b25f943412b1061ada8d5c2a2d07a312eaf968ebfb8017fddd8d48",
           "anchor": "line:1"
         },
         {
@@ -1207,7 +1207,7 @@
         },
         {
           "path": "src/tui/channels-surface.ts",
-          "sha256": "d7f4148fc3ae7b77d538764dc9ec9572f4ba0ff7d4f5a4699c7b84262182e20f",
+          "sha256": "1dc28ac9e9293a994d3209f03174dcf6bd9d5f10335ae734af8c16464db13f7b",
           "anchor": "line:1"
         },
         {
@@ -1261,7 +1261,7 @@
         },
         {
           "path": "src/tui/intake-surface.ts",
-          "sha256": "8ae18761a59e759652c024940c87df713c5dcdf36ea79d0699e629c1e6ca4264",
+          "sha256": "ec3ca5185d18e5a702c552af25782c1073adc2c3e67315b24ac4d46e68bd8356",
           "anchor": "line:1"
         },
         {
@@ -2786,7 +2786,7 @@
         },
         {
           "path": "src/tui/project-context-inspector.ts",
-          "sha256": "59939b7d809d3c657bb8ed3626ac6198e4e47608ca1e4660a57282018a80054a",
+          "sha256": "712a2912f3a0fe4e24734f6e4c2a735ee39a9443c0a17580114226a26820f26a",
           "anchor": "line:1"
         },
         {
@@ -12977,7 +12977,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "de713ef54b1839aa29fcb35704a34e59772ad59a08a89f77444dbc1892559945"
+      "receiptDigest": "08525ecd38c41dd834f72a7ab68d15023a8a4c4793bab50fb4ec521c53168c16"
     },
     {
       "variantId": "flows.detail",
@@ -12985,7 +12985,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "073201d57d5115118b61502fe9ce24c0342db32408d98d45e5263331d2f9292e"
+      "receiptDigest": "b8af94660e8bc0d59f01f0894ad00911239e0c6b4fc30bc45863c724d3686778"
     },
     {
       "variantId": "flows.ac-cached",
@@ -12993,7 +12993,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "08d2aab13b18cf37a8f4977572b22120f93ae5cb30cb7675b399c6050436c126"
+      "receiptDigest": "adb13f883016ea6d80694f523aabf3760fc3c41bf09d31c309308664dd10668a"
     },
     {
       "variantId": "flows.ac-check",
@@ -13001,7 +13001,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "a3bac8fae397bdc857ab46cb50198937070ca5250d2535288a50ba91ca2d2ee0"
+      "receiptDigest": "040864f1660229ca40e45e74f006f6bb52c9a1b14642aefab747ed48bf9eab9d"
     },
     {
       "variantId": "doctor.report",
@@ -13009,7 +13009,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "d89df68e2fc0fc80b570ec763cbff38b35b221b4280784763dac963ee4e5c15a"
+      "receiptDigest": "2ca2f2b6fef8f17949f02ef70825f8ef079c696140ac524e150d171458e8f8b4"
     },
     {
       "variantId": "setup.init",
@@ -13017,7 +13017,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "91e7dc1c1543d1fc12b6a0dbe08674e38d65d23e246e913744c08ff8a83e049f"
+      "receiptDigest": "75037a9b115a5ff84e5dcd82cd4c9a068b59adb3910928576f513c6a71a5c125"
     },
     {
       "variantId": "setup.refresh",
@@ -13025,7 +13025,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "59d138757898b1e63d14698408681454c9ea27344db066a1b83262382b808fdb"
+      "receiptDigest": "2a466cf2c765cdb23b7c51b7a786ea683beb6a684113f428ce30e493c71fcd5c"
     },
     {
       "variantId": "setup.repair",
@@ -13033,7 +13033,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "0a2d81a8f21393520cc4f54ceca22758af64328650621db653e62f0472a9b753"
+      "receiptDigest": "158d9b7564e114c79db02b5d5751b47311f512b8813af665bacb6124f6b46559"
     },
     {
       "variantId": "ac.cached",
@@ -13041,7 +13041,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "7bc3bc5b11323c9b1aaa74cd47c4f7a532ddd0a87fe1fd0d173749025b69bc2e"
+      "receiptDigest": "2700787470cde3c8adff46ac058edce836d2d090ce548f222fb5ab823c789792"
     },
     {
       "variantId": "ac.check",
@@ -13049,7 +13049,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "66fe7a974fbc51e1f6f41d0537d4ab7c07924ef82b3617841af2e0f6689098c3"
+      "receiptDigest": "5c713f4462b18feabd1df21d1bb528cf98d188c32c6939784352e97a23fb562e"
     },
     {
       "variantId": "workspace.overview",
@@ -13081,7 +13081,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "bc669e940e89e79a63745545e64403c258624ca92015ebb086045724cd4face3"
+      "receiptDigest": "55b6faf54ff3e89285f5b98a7cddf8d56c6062cd3a309694badd91b8cc6ea52a"
     },
     {
       "variantId": "review.layers",
@@ -13089,7 +13089,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "001f5506c53abf368cc780b076f939d6f84e40518f7a2e9eab3afb927ab90fc2"
+      "receiptDigest": "23719e499906c3aa3d1455149692285129e25254f90c91b742557b8228ff0b47"
     },
     {
       "variantId": "review.parity",
@@ -13097,7 +13097,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "381d208356dc28e9cf90780d3766ff6b9267dfc43e9910152cb959f256fc9313"
+      "receiptDigest": "7a2b41b4dba276b657b41d39ac59a3bbc553db00859100f833d9c8a2ed366f59"
     },
     {
       "variantId": "review.readiness",
@@ -13105,7 +13105,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "04c5563e2d87aea996077217203292fabec2ef0138cb2c96c98e7b6b8dfa6ce7"
+      "receiptDigest": "bc4df3ec228dc0fe5be9bd430f7ccc1753462271e2ca6abae0578c6ffae349e8"
     },
     {
       "variantId": "review.proposal.accept",
@@ -13113,7 +13113,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "applied",
       "matched": false,
-      "receiptDigest": "cc3608f036686ad465b57ae667715013b39fadcc014417696afed5245667966a"
+      "receiptDigest": "c7cf24c0b1333a482a645b3a72c1a80759752af820c791a0b1afb8e5a7e2c492"
     },
     {
       "variantId": "review.proposal.accept-acknowledged",
@@ -13121,7 +13121,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "applied",
       "matched": false,
-      "receiptDigest": "db6bbfc4aadf2222dde936fb70c7144e60afeaa94746ecdcd46529af1431ae11"
+      "receiptDigest": "94a2c91556798a83018dce65a0c7985515affaa0ef8ea8b415e4ef7a001060de"
     },
     {
       "variantId": "review.proposal.decline",
@@ -13129,7 +13129,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "applied",
       "matched": false,
-      "receiptDigest": "6c3b846b13bb951aad22631a9c5cecb830858364aee97ddd3256579712b6852f"
+      "receiptDigest": "8ac66833913f2d6ef24740312b7dc72604c628bfb015cb168ea9f252e866cafb"
     },
     {
       "variantId": "reviews.metrics",
@@ -13137,7 +13137,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "348ff64d4c3458ddbe2712f892c47b8c756f4138a6884ee97860bdf9f7129e52"
+      "receiptDigest": "3a86c77abb40637597a08a54aaa012a184fbba3d55a55b703a38e998025e2c2f"
     },
     {
       "variantId": "reviews.depth",
@@ -13145,7 +13145,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "1f9272abf95923ccb43af6c4f1184900bb06792f6d362ef383d101215cd68cfa"
+      "receiptDigest": "14133d3fc1946771dcecafe47eda86b5d85a439b740686ca13d8d2e73ba20378"
     },
     {
       "variantId": "reviews.refresh-layers",
@@ -13153,7 +13153,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "applied",
       "matched": false,
-      "receiptDigest": "be7ab5c4e46c92770cbff1a5b2e018ecd2a63125bb880f6794657063d6a8d1b8"
+      "receiptDigest": "f74b2b17dcf9950b3cbf1cf963c3ae46c39d2dcb72633e9d2612fe378cc0d0c3"
     },
     {
       "variantId": "reviews.prepare-missing-chunks",
@@ -13161,7 +13161,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "applied",
       "matched": false,
-      "receiptDigest": "49891b1a9cd18ec73e6257091458ecc45b7c1bca042cc1b04ab8e43fac398a43"
+      "receiptDigest": "acc7af667456620e492f5c649922b8cbaf4011c433271354b04f6d16b51213c0"
     },
     {
       "variantId": "remote-control.name",
@@ -13169,7 +13169,7 @@
       "localOutcome": "rejected/forbidden",
       "headlessOutcome": "rejected/forbidden",
       "matched": true,
-      "receiptDigest": "d33c6da1043f342ddff6e460bb400df7f0831e7bdddb51782f29c32c205d0505"
+      "receiptDigest": "fa7f610d0c8b1bc2e296399d9c6982535437bc5e0c36a0479c5c173a1f6be0ff"
     },
     {
       "variantId": "remote-control.off",
@@ -13177,7 +13177,7 @@
       "localOutcome": "rejected/forbidden",
       "headlessOutcome": "rejected/forbidden",
       "matched": true,
-      "receiptDigest": "5af73746f05fb4b8cde3622f24a8093169395dc9ec8cb6170c9d638c93ee3c98"
+      "receiptDigest": "b2a97089c9d0ec7cbef7a9c1da7fddc64513a7a0af2dc2db343db872a7c71ebf"
     },
     {
       "variantId": "remote-control.status",
@@ -13185,7 +13185,7 @@
       "localOutcome": "rejected/forbidden",
       "headlessOutcome": "rejected/forbidden",
       "matched": true,
-      "receiptDigest": "af7c793f503cd095a7921d91b2f0e9fb64a486d14ee07a352c3da4e24759aaff"
+      "receiptDigest": "a8801592f5adddbf875c75ff5415127f30bd92f6b8e672f18b3e1f80d3097556"
     },
     {
       "variantId": "remote-control.on",
@@ -13193,7 +13193,7 @@
       "localOutcome": "rejected/forbidden",
       "headlessOutcome": "rejected/forbidden",
       "matched": true,
-      "receiptDigest": "7e2ea65b8f8c7dbf9c3ac62da9fbb40fa3d4bc4980b888e81c47a4b80b6e98c5"
+      "receiptDigest": "f72956386bc2fe5a74308e062e63c1e78fefa9a0b14e6da31863311338e0b107"
     },
     {
       "variantId": "history.N-1-20",
@@ -13209,7 +13209,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "9c5787549e49e1294d282607e9b92a38830eaeaadbd323e0b35eb82d4714c667"
+      "receiptDigest": "d725c59caff18e8ec0b45f316e12db5c9658ba347ce390ade6de7d6882128204"
     },
     {
       "variantId": "intake.status",
@@ -13217,7 +13217,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "c820963cfc1945b80f3c2e64a6fbedea50422ae216c75ec4f8c430d0af101101"
+      "receiptDigest": "cf128884bdf0e65ebae47dfa659653c86b7c449ac61bac5e8dddc6d6699d4325"
     },
     {
       "variantId": "intake.list",
@@ -13225,7 +13225,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "56d2636ff3e8df356ba2795b28193211dbec6542b3d766e9035b47a5237751ce"
+      "receiptDigest": "598fea7a4aa53f35b4b6e81f7d533db5bbeac8756ecd5c51dc1ccac875998152"
     },
     {
       "variantId": "intake.pause",
@@ -13233,7 +13233,7 @@
       "localOutcome": "rejected/forbidden",
       "headlessOutcome": "rejected/forbidden",
       "matched": true,
-      "receiptDigest": "4ff112151bcdb288571f648ffffd5afa2a5acc9d118e07dc0aee5cbbaa32496b"
+      "receiptDigest": "fe45ab65f6a7dcf2d0a55bf004445a36c104affe0636ff0b83b27829370f8293"
     },
     {
       "variantId": "intake.resume",
@@ -13241,7 +13241,7 @@
       "localOutcome": "rejected/forbidden",
       "headlessOutcome": "rejected/forbidden",
       "matched": true,
-      "receiptDigest": "639351c768ab06e87684cf619844ab4044c3ddaf126c980fa15e8953fb3411b3"
+      "receiptDigest": "0f3432a2b612cc40dbcc21b5f6babebcf21f4f9b37c32ef37529c8e0afca8ea1"
     },
     {
       "variantId": "intake.poll",
@@ -13249,7 +13249,7 @@
       "localOutcome": "rejected/forbidden",
       "headlessOutcome": "rejected/forbidden",
       "matched": true,
-      "receiptDigest": "eed8ea43db0a83119a31b2d304a3c0b4179c3b2e4d14208d584877dcfd416ca3"
+      "receiptDigest": "9d62540a66f9006b3c31ea8d7a80d09a576c07c90914ff3d870cff3a9a935608"
     },
     {
       "variantId": "rendering.auto",
@@ -13889,7 +13889,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "ba49c77bcd93edfb7d8bb3e7ac7989c1446276eaaa8d45703e5dfde584299ac1"
+      "receiptDigest": "64fa9c2ec7fe66f6103c01dd85f05ad5c7fd05b879f41c767adc2bd3a08808bb"
     },
     {
       "variantId": "projectctx.refs",
@@ -13897,7 +13897,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "6211fca4258a94a51429083af06510aea63872fca7ab1ec33925a66a7c9f4b45"
+      "receiptDigest": "e872009a75e3912745832ace0a73ae8fab6462bfda91af798778e91864534094"
     },
     {
       "variantId": "projectctx.warn",
@@ -13905,7 +13905,7 @@
       "localOutcome": "queued",
       "headlessOutcome": "queued",
       "matched": true,
-      "receiptDigest": "7c7c443b2a68f91ca73f1023363a9189f16aa34b8c8f719d1dc2ce4eb21d7e9a"
+      "receiptDigest": "db3dae9ae1533ead2282000fda3b3066268adba14ac09d6be83c4257d68d1e3b"
     },
     {
       "variantId": "projectctx.block",
@@ -13913,7 +13913,7 @@
       "localOutcome": "queued",
       "headlessOutcome": "queued",
       "matched": true,
-      "receiptDigest": "73418bb9a0677c9c0ee2d80bcdfa6f496e02efd2493a5edccf3648d5f66d028c"
+      "receiptDigest": "120267c8c7d927c16aa00f2e92e1df1376a0f44d1f3fe5d6a581c51eb87be4dc"
     },
     {
       "variantId": "external.status",
@@ -14369,7 +14369,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "95877aad5ceb7fbda585c77ddef62faaaca1a0ada4fd7a59c164923751db0d1c"
+      "receiptDigest": "93e9491e584e4f862953a60f69e32ba036bd8fdee9bdd98a7b8e02234f354a43"
     },
     {
       "variantId": "bus.-name-text",
@@ -14593,7 +14593,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "fea16bdd70fc88ccbf4317030b0f1e36f81bc6fb6dbde2822a7ee3813250f764"
+      "receiptDigest": "e5009fe0931c2e11453227b3d6796e46cf60f16ca5257bacb669263665f38a63"
     },
     {
       "variantId": "projectctx.reference-details",
@@ -14601,7 +14601,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "df2c495a1245e6d4f9c58fd90e69d76bbaa4e4c5d6fac03dc20ca3c3929511f2"
+      "receiptDigest": "204b199f2d80027d5f8cf5d4c4193380931135e573723ee1e3804f7cee98e35b"
     },
     {
       "variantId": "jevprofile.entries",
@@ -14625,7 +14625,7 @@
       "localOutcome": "rejected/forbidden",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "47d76ffa252b98a24ca4abef61ec0d875db013489f877fcfe15270ae9976fe18"
+      "receiptDigest": "1074df4d446e3a7269c989b7e58356ad92b112cfcb59d9c80fa336606d09402c"
     },
     {
       "variantId": "ac.navigate",
@@ -14633,7 +14633,7 @@
       "localOutcome": "rejected/forbidden",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "122dc8b903cac4b136c7088141b7e74c7a86a40251bcd04967d01a866a91c6fa"
+      "receiptDigest": "2ea85ff2279b7ae9786c9dc1419d61b573144f0dce2579680da07307c3d8dda1"
     },
     {
       "variantId": "workspace.navigate",
@@ -14649,7 +14649,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "391f0cc032a8ea175665bb0f7f08f0495e568a1d7a0add5bc230c064508a7caa"
+      "receiptDigest": "6ebe97f5605d4dadc1e7bbbfbeef997aef12678e91d48c5eacb0e5031ddfe0bf"
     },
     {
       "variantId": "reviews.navigate",
@@ -14657,7 +14657,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "8f1e15d0613fd27c71b9806b3cb960258c04243eb0ebcd539d0127f4c1289040"
+      "receiptDigest": "7415640b41d8efab1666d646e64704a769b2f56e262902e299e3a63c66722179"
     },
     {
       "variantId": "product.navigate",
@@ -14713,7 +14713,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "0b756771ec7e7bedbd2307a3a88b5325043407edb8141490052877d72270b7cb"
+      "receiptDigest": "475090822d76fa61b1173f1665971016aeca92d2fd83cc87b0494c99fd2d0592"
     },
     {
       "variantId": "jevprofile.navigate",
@@ -14785,7 +14785,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "1a70ae8f7295672988a7a0338c4bd18de0887d85c61526b279947146c25742b1"
+      "receiptDigest": "ac2b51d9f9fe0d90c167d9ecbd2a9dffa03debd81698a5ff9739471fb8e70d56"
     },
     {
       "variantId": "intake.navigate",
@@ -14793,7 +14793,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "b7e2023a7fd4f4a632fc7d0ed8010216754ce3d2132cec00f8e5b24c88eddc43"
+      "receiptDigest": "e7e2ff386467b6842f0b9bab14e52273fd2faf9afed73da0c66ec3dd85def384"
     },
     {
       "variantId": "schedules.navigate",

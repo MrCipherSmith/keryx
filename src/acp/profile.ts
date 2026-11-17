@@ -37,6 +37,13 @@ export const KERYX_ACP_EXTENSION_METHODS = {
    * use for the idle cap. An unknown or not-held id is ignored; no reply.
    */
   sessionShown: "_keryx/session_shown",
+  /**
+   * Client → agent request, shell profile: `{ sessionId, name, args? }`. Runs one
+   * command of the served table (`shell-commands.ts`) and answers `{ text, _meta:
+   * { keryx: { effects?, refused? } } }`. Not a turn: no prompt slot, nothing added
+   * to the model's history (specification §3.9.1).
+   */
+  command: "_keryx/command",
 } as const;
 
 /** The extensions a profile speaks, as `initialize._meta.keryx.extensions` and `_keryx/info` list them. */
@@ -47,6 +54,7 @@ export function acpProfileExtensions(profile: AcpProfile): string[] {
         KERYX_ACP_EXTENSION_METHODS.askUser,
         KERYX_ACP_EXTENSION_METHODS.sessionReleased,
         KERYX_ACP_EXTENSION_METHODS.sessionShown,
+        KERYX_ACP_EXTENSION_METHODS.command,
       ]
     : [KERYX_ACP_EXTENSION_METHODS.info];
 }
