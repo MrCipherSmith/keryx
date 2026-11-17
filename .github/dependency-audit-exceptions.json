@@ -1,0 +1,10 @@
+[
+  {
+    "advisoryId": "1247710",
+    "ghsa": "GHSA-fc5q-39xc-vjpf",
+    "package": "picomatch",
+    "vulnerableVersions": "<=4.0.7",
+    "reason": "No patched picomatch release exists (4.0.7 is latest, advisory has no first_patched_version). It is reached only through dev-only lint tooling (typescript-eslint > @typescript-eslint/typescript-estree > tinyglobby > picomatch), matching repository-authored globs; the published package does not install it. Remove this entry and bump picomatch once a fixed release lands.",
+    "expires": "2026-12-18"
+  }
+]
