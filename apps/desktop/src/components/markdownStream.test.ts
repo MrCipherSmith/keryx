@@ -52,7 +52,7 @@ describe("renderStreaming", () => {
 
   test("completed code blocks are decorated while the message still streams", () => {
     const c = emptyCache();
-    const text = "Intro\n\n```sh\nls\n```\n\nMore text";
+    const text = "Intro\n\n```sh\nls\n```\n\nMore text\n\nEnd";
     let f = renderStreaming(text.slice(0, 5), c, render);
     for (let i = 6; i <= text.length; i++) f = renderStreaming(text.slice(0, i), c, render);
     expect(f.blocks.join("")).toContain('<pre data-chrome="1">');
@@ -76,10 +76,26 @@ describe("renderStreaming", () => {
     const lines = Array.from({ length: 20 }, (_, i) => `line ${i}`);
     // A long CRLF fence: committing its normalised raw would put the cache's end inside the fence.
     const crlf = "para one\r\n\r\n```\r\n" + lines.join("\r\n") + "\r\n```\r\n\r\nnext para\r\n\r\n- a\r\n- b\r\n\r\nend";
+    let committed = 0;
     for (let i = 1; i <= crlf.length; i++) {
       const prefix = crlf.slice(0, i);
-      expect(whole(renderStreaming(prefix, c, render))).toBe(oneShot(prefix));
+      const f = renderStreaming(prefix, c, render);
+      expect(whole(f)).toBe(oneShot(prefix));
+      committed = f.blocks.length;
     }
+    // The CRs no longer pin the cache at the first block.
+    expect(committed).toBeGreaterThan(0);
+  });
+
+  test("a loose list whose next number arrives before its dot is not split", () => {
+    const c = emptyCache();
+    const early = renderStreaming("1. a\n\n2", c, render);
+    expect(whole(early)).toBe(oneShot("1. a\n\n2"));
+    const full = "1. a\n\n2. b";
+    const f = renderStreaming(full, c, render);
+    expect(whole(f)).toBe(oneShot(full));
+    expect(f.blocks.length).toBe(0);
+    expect(f.epoch).toBe(early.epoch);
   });
 
   test("blocks already shown stay the same objects' content while the tail grows", () => {

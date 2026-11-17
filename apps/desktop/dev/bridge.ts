@@ -111,6 +111,7 @@ interface FlowCard {
   id: string;
   idValid: boolean;
   dir: string;
+  commandRef: string | null;
   title: string;
   status: string;
   previousStatus: string | null;
@@ -134,11 +135,13 @@ function flowsRoot(cwd: string): string {
 }
 
 /**
- * Same rule as the Rust `is_flow_dir_name`: the names keryx's `listFlowDirs` lists (`^\d{3}-`), with
- * the characters its `slugify` and date stamp produce. keryx resolves such a name by exact match; any
- * other name would fall through to its slug matching and could address a different flow.
+ * Same rule as the Rust `is_flow_dir_name` and keryx's own listing: `^\d{3}-`, one path component, no NUL,
+ * `/` or control characters. keryx resolves such a name by exact match.
  */
-const FLOW_DIR = /^\d{3}-[a-z0-9-]{0,196}$/;
+// eslint-disable-next-line no-control-regex
+const FLOW_DIR = /^\d{3}-[^/\u0000-\u001f\u007f]*$/;
+/** The names that may be pasted into a shell command unquoted. */
+const COMMAND_DIR = /^\d{3}-[A-Za-z0-9._+-]*$/;
 
 /** Flow packages only: real directories (a Dirent of a symlink is not one) with a package name. */
 function flowDirs(cwd: string): string[] {
@@ -213,6 +216,7 @@ function cardFor(cwd: string, dir: string): { card: FlowCard; state: Json | null
     id: idFromDir,
     idValid: COMMAND_ID.test(idFromDir),
     dir,
+    commandRef: COMMAND_DIR.test(dir) ? dir : null,
     title: dir.replace(/^\d+-\d{4}-\d{2}-\d{2}-/, "").replace(/-/g, " "),
     status: "unknown",
     previousStatus: null,

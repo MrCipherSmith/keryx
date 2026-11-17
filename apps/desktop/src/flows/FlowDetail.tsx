@@ -332,7 +332,8 @@ function NextTaskResult({ output }: { output: string }) {
   const parsed = parseNext(output);
   const task = parsed?.task;
   const resumed = parsed?.resume?.kind === "unresolved";
-  const unresolved = (parsed?.unresolved ?? []).filter((u) => u.task?.id);
+  // The ready task is also in keryx's `unresolved` list when it was started and never finished; its badge says so.
+  const unresolved = (parsed?.unresolved ?? []).filter((u) => u.task?.id && u.task.id !== task?.id);
   return (
     <>
       {parsed?.kind === "none" ? (
@@ -348,11 +349,11 @@ function NextTaskResult({ output }: { output: string }) {
         <div className="inline-banner tone-warn">
           <Icon name="alert" size={14} />
           <span>
-            Started and left open: {unresolved.map((u) => `${u.task?.id}${u.task?.title ? ` ${u.task.title}` : ""}`).join(", ")}
+            Also started and left open: {unresolved.map((u) => `${u.task?.id}${u.task?.title ? ` ${u.task.title}` : ""}`).join(", ")}
           </span>
         </div>
       ) : null}
-      <details open={!parsed || (parsed.kind !== "none" && !task?.id) || unresolved.length > 0}>
+      <details open={!parsed || (parsed.kind !== "none" && !task?.id)}>
         <summary className="dialog-sub">Raw output of keryx flow next</summary>
         <pre className="code-pre">{prettyJson(output)}</pre>
       </details>

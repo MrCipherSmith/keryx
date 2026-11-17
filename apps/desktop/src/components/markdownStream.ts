@@ -27,11 +27,13 @@ export interface StreamFrame {
 }
 
 /**
- * Render `text`, reusing the cached blocks while it only grows. A top-level block followed by another
- * block is complete: it is rendered once, decorated like the final rendering, and cached; only the open
+ * Render `text`, reusing the cached blocks while it only grows. A top-level block followed by two more
+ * blocks is complete: it is rendered once, decorated like the final rendering, and cached; only the open
  * tail is lexed and rendered again. A text that no longer extends the cached prefix starts over.
  */
-export function renderStreaming(text: string, c: StreamCache, render: RenderTokens): StreamFrame {
+export function renderStreaming(input: string, c: StreamCache, render: RenderTokens): StreamFrame {
+  // The lexer rewrites \r\n and \r to \n; normalise once so token offsets match the source we cache.
+  const text = input.replace(/\r\n?/g, "\n");
   if (c.end > text.length || text.slice(0, c.end) !== c.src.slice(0, c.end)) {
     c.end = 0;
     c.blocks = [];
@@ -40,13 +42,16 @@ export function renderStreaming(text: string, c: StreamCache, render: RenderToke
   c.src = text;
   const tail = text.slice(c.end);
   const tokens = marked.lexer(tail);
+  // The last two non-space tokens stay open: the next characters can still fold the last one into the
+  // one before it (a loose list gaining its next item: "1. a\n\n2" then "2. b").
   let open = tokens.length - 1;
+  while (open > 0 && tokens[open]?.type === "space") open--;
+  open--;
   while (open > 0 && tokens[open]?.type === "space") open--;
   let rest: Token[] = tokens;
   if (open > 0) {
     const done = tokens.slice(0, open);
     const raw = done.map((t) => t.raw).join("");
-    // The lexer normalises line endings; commit only when the raw text maps back onto the source.
     if (tail.startsWith(raw)) {
       c.blocks.push(render(done));
       c.end += raw.length;

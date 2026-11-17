@@ -106,7 +106,9 @@ interface View {
   mode: "final" | "stream";
   epoch: number;
   /** Streamed blocks already in the element. */
-  shown: number;
+  blocksShown: number;
+  /** The open tail's HTML as last rendered; an unchanged tail is left alone. */
+  tailHtml: string;
   /** The nodes of the open tail, the only ones replaced per frame. */
   tail: ChildNode[];
 }
@@ -119,20 +121,25 @@ function fragment(html: string): DocumentFragment {
 
 /** Append the newly completed blocks and swap only the tail; rebuild when the cache started over. */
 function showFrame(el: HTMLElement, v: View, f: StreamFrame): void {
-  if (v.mode !== "stream" || v.epoch !== f.epoch || f.blocks.length < v.shown) {
+  if (v.mode !== "stream" || v.epoch !== f.epoch || f.blocks.length < v.blocksShown) {
     el.replaceChildren();
     v.mode = "stream";
     v.epoch = f.epoch;
-    v.shown = 0;
+    v.blocksShown = 0;
     v.tail = [];
+    v.tailHtml = "";
   }
+  const grew = v.blocksShown < f.blocks.length;
+  // An unchanged open tail keeps its nodes (a selection or a clicked Copy button inside it survives).
+  if (!grew && f.tail === v.tailHtml) return;
   for (const n of v.tail) n.remove();
-  if (v.shown < f.blocks.length) {
-    el.append(fragment(f.blocks.slice(v.shown).join("")));
-    v.shown = f.blocks.length;
+  if (grew) {
+    el.append(fragment(f.blocks.slice(v.blocksShown).join("")));
+    v.blocksShown = f.blocks.length;
   }
   const tail = fragment(f.tail);
   v.tail = Array.from(tail.childNodes);
+  v.tailHtml = f.tail;
   el.append(tail);
 }
 
@@ -140,6 +147,7 @@ function showFinal(el: HTMLElement, v: View, html: string): void {
   el.innerHTML = html;
   v.mode = "final";
   v.tail = [];
+  v.tailHtml = "";
 }
 
 /** A message whose text has not changed for this long is final: render it whole, in one pass. */
@@ -148,13 +156,13 @@ const SETTLE_MS = 250;
 export const Markdown = memo(function Markdown({ text, className }: { text: string; className?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const r = useRef({
-    shown: null as string | null,
+    renderedText: null as string | null,
     latest: text,
     // Kept across a settle: the text usually keeps growing from where it was.
     cache: emptyCache(),
     raf: 0,
     settle: 0,
-    view: { mode: "final", epoch: 0, shown: 0, tail: [] } as View,
+    view: { mode: "final", epoch: 0, blocksShown: 0, tailHtml: "", tail: [] } as View,
   });
 
   // The element's children are owned here, not by React: completed blocks stay in place while the
@@ -164,17 +172,17 @@ export const Markdown = memo(function Markdown({ text, className }: { text: stri
     const el = ref.current;
     if (!el) return;
     st.latest = text;
-    if (st.shown === null) {
-      st.shown = text;
+    if (st.renderedText === null) {
+      st.renderedText = text;
       showFinal(el, st.view, renderFinal(text));
       return;
     }
-    if (text === st.shown) return;
+    if (text === st.renderedText) return;
     // At most one parse per animation frame while the text keeps changing.
     if (!st.raf) {
       st.raf = requestAnimationFrame(() => {
         st.raf = 0;
-        st.shown = st.latest;
+        st.renderedText = st.latest;
         showFrame(el, st.view, renderStreaming(st.latest, st.cache, renderTokens));
       });
     }
@@ -185,8 +193,13 @@ export const Markdown = memo(function Markdown({ text, className }: { text: stri
       st.settle = 0;
       if (st.raf) cancelAnimationFrame(st.raf);
       st.raf = 0;
-      st.shown = st.latest;
-      showFinal(el, st.view, renderFinal(st.latest));
+      st.renderedText = st.latest;
+      const final = renderFinal(st.latest);
+      // When the streamed view already reads exactly like the one-shot rendering, keep its nodes: a
+      // pause must not replace the message under the user's selection.
+      const frame = renderStreaming(st.latest, st.cache, renderTokens);
+      if (st.view.mode === "stream" && frame.blocks.join("") + frame.tail === final) showFrame(el, st.view, frame);
+      else showFinal(el, st.view, final);
     }, SETTLE_MS);
   }, [text]);
 

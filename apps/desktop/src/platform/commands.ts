@@ -122,6 +122,8 @@ export interface FlowCard {
   idValid: boolean;
   /** Package directory name under .metaproject/flows: the unique key and the action address. */
   dir: string;
+  /** `dir` when it is safe to paste into a shell command (`\d{3}-` then only `[A-Za-z0-9._+-]`), else null. */
+  commandRef: string | null;
   title: string;
   status: string;
   previousStatus: string | null;

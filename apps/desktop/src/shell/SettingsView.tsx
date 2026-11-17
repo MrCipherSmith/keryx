@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { hostKind, pickFile, settingsGet, settingsSet, type KeryxSource, type Settings } from "../platform/commands";
 import { setPrefs, usePrefs, MOD, type Prefs } from "../lib/prefs";
 import { errMessage } from "../lib/format";
@@ -40,18 +40,24 @@ export function SettingsView({ onBack, agentVersion }: { onBack?: () => void; ag
     void hostKind().then(setHost);
   }, []);
 
+  // Bumped by every edit: a save that finishes after one must not overwrite it.
+  const rev = useRef(0);
   const update = (patch: Partial<Settings>) => {
-    if (!settings) return;
+    rev.current += 1;
     setDirty(true);
-    setSettings({ ...settings, ...patch });
+    setSettings((cur) => (cur ? { ...cur, ...patch } : cur));
   };
 
   const save = async () => {
     if (!settings) return;
+    const started = rev.current;
     setSaving(true);
     try {
-      setSettings(await settingsSet(settings));
-      setDirty(false);
+      const stored = await settingsSet(settings);
+      if (rev.current === started) {
+        setSettings(stored);
+        setDirty(false);
+      }
       setError(null);
       toast({ level: "ok", title: "Settings saved", body: "The keryx choice applies to windows opened or restarted from now on." });
     } catch (e) {

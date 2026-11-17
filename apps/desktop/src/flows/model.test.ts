@@ -7,6 +7,7 @@ function card(over: Partial<FlowCard> = {}): FlowCard {
     id: "487",
     idValid: true,
     dir: "487-2026-11-10-shell-product-review-p1",
+    commandRef: "487-2026-11-10-shell-product-review-p1",
     title: "Shell review",
     status: "in-progress",
     previousStatus: null,
@@ -26,32 +27,28 @@ function card(over: Partial<FlowCard> = {}): FlowCard {
 }
 
 describe("flowRef", () => {
-  test("a keryx package directory with a command-safe id is the reference", () => {
+  test("the core's commandRef is the reference", () => {
     expect(flowRef(card())).toBe("487-2026-11-10-shell-product-review-p1");
-  });
-
-  test("the backend's idValid verdict is honoured", () => {
-    expect(flowRef(card({ id: "abc", idValid: false }))).toBeNull();
-  });
-
-  test("only package directory names: three digits, a dash, the slug charset", () => {
-    for (const dir of ["487;rm -rf ~", "-487-x", "1-x", "12-x", "abc", "487", "487-a/b", "487-a b", "487-$(id)", "../487-x", ""]) {
-      expect(flowRef(card({ dir }))).toBeNull();
+    for (const dir of ["012-Write-Docs", "012-a.b", "012-a_b", "012-a+b"]) {
+      expect(flowRef(card({ dir, commandRef: dir }))).toBe(dir);
     }
-    // Same rule as the Rust core's is_flow_dir_name: keryx slugs are [a-z0-9-] only.
-    expect(flowRef(card({ dir: "042-x_y.z" }))).toBeNull();
-    expect(flowRef(card({ dir: "042-2026-01-01-x-y" }))).toBe("042-2026-01-01-x-y");
   });
 
-  test("no bare-id fallback when the directory is unsafe", () => {
-    expect(flowRef(card({ dir: "weird;dir", id: "487", idValid: true }))).toBeNull();
+  test("no reference when the core withheld it (names unsafe for a shell)", () => {
+    for (const dir of ["012-a b", "012-a$b", "012-a;b", "012-a'b", '012-a"b']) {
+      expect(flowRef(card({ dir, commandRef: null }))).toBeNull();
+    }
+  });
+
+  test("the client does not second-guess the core: the dir and the id play no part", () => {
+    expect(flowRef(card({ id: "abc", idValid: false }))).toBe("487-2026-11-10-shell-product-review-p1");
+    expect(flowRef(card({ dir: "weird;dir", commandRef: null }))).toBeNull();
   });
 });
 
 describe("terminalCommands", () => {
   test("nothing is offered without a safe reference", () => {
-    expect(terminalCommands(card({ dir: "x;y" }))).toEqual([]);
-    expect(terminalCommands(card({ idValid: false }))).toEqual([]);
+    expect(terminalCommands(card({ dir: "012-x;y", commandRef: null }))).toEqual([]);
   });
 
   test("every command names the package directory as its flow argument", () => {
@@ -93,6 +90,6 @@ describe("workPrompt", () => {
   });
 
   test("without a safe reference it names no package", () => {
-    expect(workPrompt(card({ dir: "x;y" }))).toBe('Continue flow #487 "Shell review": take the next task.');
+    expect(workPrompt(card({ dir: "012-x;y", commandRef: null }))).toBe('Continue flow #487 "Shell review": take the next task.');
   });
 });

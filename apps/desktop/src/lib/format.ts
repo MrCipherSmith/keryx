@@ -13,7 +13,12 @@ export function relativeTime(iso: string | null | undefined, now = Date.now()): 
   if (Math.abs(minutes) < 60) return rtf.format(minutes, "minute");
   const hours = Math.round(s / 3600);
   if (Math.abs(hours) < 24) return rtf.format(hours, "hour");
-  const days = Math.round(s / 86400);
+  // Days are local calendar days, not elapsed seconds: "yesterday" must mean the previous date.
+  const day0 = new Date(now);
+  day0.setHours(0, 0, 0, 0);
+  const day1 = new Date(t);
+  day1.setHours(0, 0, 0, 0);
+  const days = Math.round((day1.getTime() - day0.getTime()) / 86_400_000) || 0;
   if (Math.abs(days) < 30) return rtf.format(days, "day");
   return new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }

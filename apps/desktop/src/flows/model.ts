@@ -53,16 +53,13 @@ export function workPrompt(card: FlowCard): string {
   return `Continue flow #${card.id} "${card.title}"${ref ? ` (package ${ref})` : ""}: take the next task.`;
 }
 
-/** A keryx flow package directory: three digits, a dash, then the slug charset (the Rust core's rule). */
-const PACKAGE_DIR = /^\d{3}-[a-z0-9-]{0,196}$/;
-
 /**
- * The only thing a terminal command may name: the package directory, and only when it is a keryx
- * package name and the backend found the flow's id command-safe (`idValid`). Ids are shared across
- * packages, so a bare id is never offered. `null`: no command is offered.
+ * The only thing a terminal command may name: the package directory, as the core vouches for it
+ * (`commandRef`: set only when the name is safe to paste into a shell). The rule lives in the core, not
+ * here. Ids are shared across packages, so a bare id is never offered. `null`: no command is offered.
  */
 export function flowRef(card: FlowCard): string | null {
-  return card.idValid && PACKAGE_DIR.test(card.dir) ? card.dir : null;
+  return card.commandRef;
 }
 
 /**
