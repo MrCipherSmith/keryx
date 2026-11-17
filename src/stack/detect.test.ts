@@ -6,6 +6,8 @@ import { STACK_DETECT_TAGS, detectStack, type StackDetectFs, type StackDirEntry 
 
 /** In-memory fs: a flat map of absolute path -> text content, plus explicit directories. */
 function fakeFs(files: Record<string, string>, dirs: Record<string, string[]> = {}): StackDetectFs {
+  // An entry is a directory when it is listed in `dirs` or holds a file.
+  const isDir = (full: string): boolean => full in dirs || Object.keys(files).some((file) => file.startsWith(`${full}/`));
   return {
     async readTextFile(path: string): Promise<string> {
       if (path in files) {
@@ -15,20 +17,19 @@ function fakeFs(files: Record<string, string>, dirs: Record<string, string[]> = 
     },
     async readDir(path: string): Promise<StackDirEntry[]> {
       if (path in dirs) {
-        return dirs[path]!.map((name) => ({ name, isDirectory: false }));
+        return dirs[path]!.map((name) => ({ name, isDirectory: isDir(`${path}/${name}`) }));
       }
       // Derive a root listing from the flat file map when no explicit dir given.
-      const prefix = `${path.replace(/\/$/, "")}/`;
+      const prefix = path === "/" ? "/" : `${path.replace(/\/$/, "")}/`;
       const names = new Set<string>();
       for (const filePath of Object.keys(files)) {
-        if (filePath.startsWith(prefix) && !filePath.slice(prefix.length).includes("/")) {
-          names.add(filePath.slice(prefix.length));
-        }
+        // Files directly here, and the first segment of deeper files (their directories).
+        if (filePath.startsWith(prefix)) names.add(filePath.slice(prefix.length).split("/")[0]!);
       }
       if (names.size === 0 && !(path in dirs)) {
         throw new Error(`ENOENT: ${path}`);
       }
-      return [...names].sort().map((name) => ({ name, isDirectory: false }));
+      return [...names].sort().map((name) => ({ name, isDirectory: isDir(`${path}/${name}`) }));
     },
   };
 }
@@ -227,10 +228,16 @@ describe("bounded extension scan", () => {
 
 describe("JS workspace-root markers (review M1: a monorepo root names only build tooling)", () => {
   for (const marker of ["pnpm-workspace.yaml", "lerna.json", "nx.json", "turbo.json", "rush.json"]) {
-    test(`${marker} marks the js family uncertain, with or without a root package.json`, async () => {
+    test(`${marker} with no package found: the root's own dependencies decide, and a root that declares nothing is uncertain`, async () => {
+      // Single-package turbo / nx standalone: the root declares the stack (review R3-2).
+      const withRoot = await detectStack("/repo", {
+        fs: fakeFs({ [`/repo/${marker}`]: "{}\n", "/repo/package.json": JSON.stringify({ dependencies: { react: "^18.3.1" }, devDependencies: { typescript: "^5.0.0" } }) }),
+      });
+      expect({ marker, uncertain: withRoot.uncertain, react: withRoot.tags.react, vue: withRoot.tags.vue, angular: withRoot.tags.angular })
+        .toEqual({ marker, uncertain: false, react: true, vue: false, angular: false });
       for (const files of [
-        { [`/repo/${marker}`]: "{}\n", "/repo/package.json": JSON.stringify({ devDependencies: { typescript: "^5.0.0" } }) },
         { [`/repo/${marker}`]: "{}\n" },
+        { [`/repo/${marker}`]: "{}\n", "/repo/package.json": JSON.stringify({ private: true, scripts: { build: "turbo build" } }) },
       ]) {
         const result = await detectStack("/repo", { fs: fakeFs(files) });
         expect(result.uncertain).toBe(true);
@@ -241,6 +248,86 @@ describe("JS workspace-root markers (review M1: a monorepo root names only build
       }
     });
   }
+
+  test("a pnpm root whose package.json declares nothing selects from the sub-packages it read (review R3-1)", async () => {
+    const result = await detectStack("/repo", {
+      fs: fakeFs({
+        "/repo/pnpm-workspace.yaml": "packages:\n  - 'apps/*'\n",
+        "/repo/package.json": JSON.stringify({ private: true, scripts: { build: "pnpm -r build" } }),
+        "/repo/apps/web/package.json": JSON.stringify({ dependencies: { react: "^18.3.1", mobx: "^6.13.0" } }),
+      }),
+    });
+    expect(result.uncertain).toBe(false);
+    expect({ react: result.tags.react, mobx: result.tags.mobx, angular: result.tags.angular, vue: result.tags.vue }).toEqual({ react: true, mobx: true, angular: false, vue: false });
+    expect(result.perSignal.some((s) => s.signal === "manifest:package.json")).toBe(false);
+  });
+
+  test("workspace reads stay in the repository: ../ globs and directories that link outside are skipped (review R3-3)", async () => {
+    const files = {
+      "/repo/pnpm-workspace.yaml": "packages:\n  - '../other-*'\n  - 'apps/*'\n",
+      "/other-ng/package.json": JSON.stringify({ dependencies: { "@angular/core": "^17" } }),
+      "/repo/apps/web/package.json": JSON.stringify({ dependencies: { react: "^18.3.1" } }),
+      "/repo/apps/linked/package.json": JSON.stringify({ dependencies: { vue: "^3" } }),
+    };
+    const base = fakeFs(files, { "/": ["other-ng", "repo"] });
+    const fs: StackDetectFs = {
+      ...base,
+      async realPath(path: string): Promise<string> {
+        return path === "/repo/apps/linked" ? "/elsewhere/linked" : path;
+      },
+    };
+    const result = await detectStack("/repo", { fs });
+    expect({ react: result.tags.react, angular: result.tags.angular, vue: result.tags.vue, uncertain: result.uncertain })
+      .toEqual({ react: true, angular: false, vue: false, uncertain: false });
+    const reason = result.perSignal.find((s) => s.signal === "manifest:js-workspace")?.reason ?? "";
+    expect(reason).toContain("../other-* (outside the repository)");
+    expect(reason).toContain("apps/linked (links outside the repository)");
+  });
+
+  test("a ! glob excludes the packages it names (review R3-3)", async () => {
+    const result = await detectStack("/repo", {
+      fs: fakeFs({
+        "/repo/pnpm-workspace.yaml": "packages:\n  - 'apps/*'\n  - '!apps/legacy'\n",
+        "/repo/apps/web/package.json": JSON.stringify({ dependencies: { react: "^18.3.1" } }),
+        "/repo/apps/legacy/package.json": JSON.stringify({ dependencies: { "@angular/core": "^12" } }),
+      }),
+    });
+    expect({ react: result.tags.react, angular: result.tags.angular }).toEqual({ react: true, angular: false });
+  });
+
+  test("packages/** reads packages below the first level, bounded (review R3-4)", async () => {
+    const result = await detectStack("/repo", {
+      fs: fakeFs({
+        "/repo/pnpm-workspace.yaml": "packages:\n  - 'packages/**'\n",
+        "/repo/packages/ui/web/package.json": JSON.stringify({ dependencies: { react: "^18.3.1" } }),
+        "/repo/packages/ui/web/node_modules/vue/package.json": JSON.stringify({ dependencies: { vue: "^3" } }),
+      }),
+    });
+    expect({ uncertain: result.uncertain, react: result.tags.react, vue: result.tags.vue }).toEqual({ uncertain: false, react: true, vue: false });
+  });
+
+  test("a pnpm flow-style packages list is read (review R3-6)", async () => {
+    const result = await detectStack("/repo", {
+      fs: fakeFs({
+        "/repo/pnpm-workspace.yaml": "packages: ['web/*', \"api\"]\n",
+        "/repo/web/app/package.json": JSON.stringify({ dependencies: { react: "^18.3.1" } }),
+        "/repo/api/package.json": JSON.stringify({ dependencies: { "@nestjs/core": "^10" } }),
+      }),
+    });
+    expect({ uncertain: result.uncertain, react: result.tags.react, nestjs: result.tags.nestjs }).toEqual({ uncertain: false, react: true, nestjs: true });
+  });
+
+  test("one broken sub-package is skipped and named, not a reason to keep every JS tag (review R3-7)", async () => {
+    const result = await detectStack("/repo", {
+      fs: fakeFs({
+        "/repo/pnpm-workspace.yaml": "packages:\n  - 'apps/*'\n",
+        "/repo/apps/web/package.json": JSON.stringify({ dependencies: { react: "^18.3.1" } }),
+        "/repo/apps/broken/package.json": "{ not json",
+      }),
+    });
+    expect({ uncertain: result.uncertain, react: result.tags.react, angular: result.tags.angular }).toEqual({ uncertain: false, react: true, angular: false });
+    expect(result.perSignal.find((s) => s.signal === "manifest:js-workspace")?.reason).toContain("skipped apps/broken/package.json (not a JSON object)");
+  });
 
   test("a turbo React+NestJS monorepo selects from its sub-packages, not every JS tag (review N-1)", async () => {
     const fs = fakeFs(
@@ -291,11 +378,11 @@ describe("JS workspace-root markers (review M1: a monorepo root names only build
     }
   });
 
-  test("a workspace glob deeper than one level falls back to every JS tag", async () => {
+  test("a workspace glob this module cannot expand falls back to every JS tag", async () => {
     const result = await detectStack("/repo", { fs: fakeFs({ "/repo/pnpm-workspace.yaml": "packages:\n  - 'apps/*/packages/*'\n" }) });
     expect(result.uncertain).toBe(true);
     for (const tag of jsTags()) expect(result.tags[tag]).toBe(true);
-    expect(result.perSignal.find((s) => s.signal === "manifest:js-workspace")?.reason).toContain("deeper than this module reads");
+    expect(result.perSignal.find((s) => s.signal === "manifest:js-workspace")?.reason).toContain("is not one this module reads");
   });
 
   test("a plain app with no workspace marker stays certain", async () => {

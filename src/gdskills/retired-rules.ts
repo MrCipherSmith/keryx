@@ -361,7 +361,8 @@ export type MovedDestinationCause = "not-shipped" | "layer-unusable" | "missing"
  * the rule went.
  */
 export type RetiredRuleOutcome = { fileName: string; movedTo?: string } & (
-  | { action: "removed" }
+  /** `unused`: a pack move removed in a project with no plausible JS stack, where the pack never installs (review R3-9). */
+  | { action: "removed"; unused?: true }
   | { action: "kept-modified" }
   /** A moved rule's old copy matched a shipped version, but its new path is not an installed regular file. */
   | { action: "kept-destination-missing"; cause: MovedDestinationCause }

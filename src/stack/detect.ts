@@ -172,6 +172,11 @@ export interface StackDirEntry {
 export interface StackDetectFs {
   readTextFile(path: string): Promise<string>;
   readDir(path: string): Promise<StackDirEntry[]>;
+  /**
+   * The path with every symlink resolved. Optional: without it, workspace
+   * reads are contained by path only, not against a symlinked directory.
+   */
+  realPath?(path: string): Promise<string>;
 }
 
 function joinPath(...parts: string[]): string {
@@ -191,9 +196,15 @@ async function defaultReadDir(path: string): Promise<StackDirEntry[]> {
   return entries.map((entry) => ({ name: entry.name, isDirectory: entry.isDirectory() }));
 }
 
+async function defaultRealPath(path: string): Promise<string> {
+  const { realpath } = await import("node:fs/promises");
+  return await realpath(path);
+}
+
 export const defaultStackDetectFs: StackDetectFs = {
   readTextFile: defaultReadTextFile,
   readDir: defaultReadDir,
+  realPath: defaultRealPath,
 };
 
 // ---------------------------------------------------------------------------
@@ -322,6 +333,10 @@ async function packageJsonSignal(cwd: string, fs: StackDetectFs): Promise<Signal
     return present(tags, matched, `detected from the workspace root package.json (${names.size} declared dependenc${names.size === 1 ? "y" : "ies"})`);
   }
   if (names.size === 0) {
+    // A workspace root (`pnpm-workspace.yaml`, `turbo.json`, …) usually
+    // declares nothing itself; the workspace signal reads its packages and is
+    // uncertain on its own when it cannot (review R3-1).
+    if (await hasWorkspaceMarker(cwd, fs)) return undefined;
     return uncertainFamily(
       "js",
       `package.json declares no dependencies in ${JS_DEPENDENCY_FIELDS.join(
@@ -589,12 +604,41 @@ const JS_WORKSPACE_MARKERS = ["pnpm-workspace.yaml", "lerna.json", "nx.json", "t
 /** Where nx and turbo keep their packages when no marker names them. */
 const DEFAULT_WORKSPACE_GLOBS = ["apps/*", "packages/*", "libs/*"];
 
-/** `packages:` entries of a `pnpm-workspace.yaml`: the block list only, which is what pnpm documents. */
+/** How deep `dir/**` is followed, and how far `keryx update` looks for a `package.json` an app in a subfolder may have. */
+export const WORKSPACE_SEARCH_DEPTH = 4;
+/** Directories a `**` expansion or a nested-manifest search may visit before giving up. */
+const WORKSPACE_SEARCH_MAX_DIRS = 2000;
+/** Never package directories: dependencies, build output, VCS and tool state. */
+const WORKSPACE_SKIP_DIRS = new Set(["node_modules", "dist", "build", "out", "coverage", "target", "vendor"]);
+
+async function hasWorkspaceMarker(cwd: string, fs: StackDetectFs): Promise<boolean> {
+  for (const name of JS_WORKSPACE_MARKERS) {
+    try {
+      await fs.readTextFile(joinPath(cwd, name));
+      return true;
+    } catch {
+      // absent or unreadable: jsWorkspaceSignal reports an unreadable marker
+    }
+  }
+  return false;
+}
+
+function unquote(item: string): string {
+  return item.trim().replace(/^["']|["']$/g, "").trim();
+}
+
+/** `packages:` entries of a `pnpm-workspace.yaml`: a block list, or a flow list `[a, 'b/*']` (review R3-6). */
 function pnpmWorkspaceGlobs(text: string): string[] {
   const globs: string[] = [];
   let inPackages = false;
   for (const line of text.split(/\r?\n/)) {
-    if (/^packages:\s*$/.test(line)) {
+    const flow = /^packages:\s*\[(.*)\]\s*(#.*)?$/.exec(line);
+    if (flow !== null) {
+      globs.push(...flow[1]!.split(",").map(unquote).filter((item) => item !== ""));
+      inPackages = false;
+      continue;
+    }
+    if (/^packages:\s*(#.*)?$/.test(line)) {
       inPackages = true;
       continue;
     }
@@ -621,7 +665,8 @@ function markerGlobs(marker: string, text: string): string[] {
   const record = jsonRecord(text);
   if (marker === "lerna.json") {
     const packages = record?.["packages"];
-    return Array.isArray(packages) ? packages.filter((item): item is string => typeof item === "string") : ["packages/*"];
+    // No `packages`: lerna's own default, `packages/*`, is in DEFAULT_WORKSPACE_GLOBS.
+    return Array.isArray(packages) ? packages.filter((item): item is string => typeof item === "string") : [];
   }
   if (marker === "rush.json") {
     const projects = record?.["projects"];
@@ -635,16 +680,57 @@ function markerGlobs(marker: string, text: string): string[] {
   return []; // nx.json, turbo.json: no package list of their own
 }
 
+/** A workspace glob that names a path outside the repository: absolute, or climbing with `..` (review R3-3). */
+function leavesRepository(glob: string): boolean {
+  return glob.startsWith("/") || /^[A-Za-z]:/.test(glob) || glob.split("/").includes("..");
+}
+
 /**
- * The package directories one workspace glob names, one level deep: `dir`,
- * `dir/*`, `dir/**` and `dir/prefix*` are understood; anything else (a
- * wildcard in an earlier segment, a bare `**`) returns `undefined`.
+ * Every directory under `dir` (itself included), at most
+ * `WORKSPACE_SEARCH_DEPTH` levels down, skipping dot, dependency and build
+ * directories. `undefined` when the walk would visit more than
+ * `WORKSPACE_SEARCH_MAX_DIRS` directories.
+ */
+async function directoriesUnder(cwd: string, fs: StackDetectFs, dir: string): Promise<string[] | undefined> {
+  const found: string[] = [];
+  const queue: Array<{ rel: string; depth: number }> = [{ rel: dir, depth: 0 }];
+  while (queue.length > 0) {
+    const { rel, depth } = queue.shift()!;
+    found.push(rel);
+    if (found.length > WORKSPACE_SEARCH_MAX_DIRS) return undefined;
+    if (depth >= WORKSPACE_SEARCH_DEPTH) continue;
+    let entries: StackDirEntry[];
+    try {
+      entries = await fs.readDir(rel === "" ? cwd : joinPath(cwd, rel));
+    } catch (error) {
+      if (isAbsentError(error) || rel !== dir) continue;
+      throw error;
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory || entry.name.startsWith(".") || WORKSPACE_SKIP_DIRS.has(entry.name)) continue;
+      queue.push({ rel: rel === "" ? entry.name : `${rel}/${entry.name}`, depth: depth + 1 });
+    }
+  }
+  return found;
+}
+
+/**
+ * The package directories one workspace glob names: `dir`, `dir/*`,
+ * `dir/prefix*`, and `dir/**` (every directory under `dir`, bounded by
+ * `WORKSPACE_SEARCH_DEPTH`; review R3-4). Anything else — a wildcard in an
+ * earlier segment, a bare `*` or `**`, a `**` tree too large to walk — returns
+ * `undefined`.
  */
 async function expandWorkspaceGlob(cwd: string, fs: StackDetectFs, glob: string): Promise<string[] | undefined> {
-  const cleaned = glob.replace(/^\.\//, "").replace(/\/+$/, "").replace(/\/\*\*$/, "/*");
+  const cleaned = glob.replace(/^\.\//, "").replace(/\/+$/, "");
+  if (cleaned.endsWith("/**")) {
+    const base = cleaned.slice(0, -3);
+    if (base.includes("*") || base === "") return undefined;
+    return await directoriesUnder(cwd, fs, base);
+  }
   const segments = cleaned.split("/");
   const last = segments.pop()!;
-  if (segments.some((segment) => segment.includes("*")) || cleaned === "*" || cleaned === "**") return undefined;
+  if (segments.some((segment) => segment.includes("*")) || cleaned === "*") return undefined;
   if (!last.includes("*")) return [cleaned];
   if (last.indexOf("*") !== last.length - 1) return undefined;
   const parent = segments.join("/");
@@ -654,11 +740,43 @@ async function expandWorkspaceGlob(cwd: string, fs: StackDetectFs, glob: string)
 }
 
 /**
+ * Whether a `package.json` exists below `cwd` (the root's own excluded),
+ * at most `WORKSPACE_SEARCH_DEPTH` levels down, skipping dot, dependency and
+ * build directories — the same bound the workspace reader walks. A tree too
+ * large to walk counts as `true`: a JS app there is still plausible. Used by
+ * `keryx update` to decide whether a missed JS detection is plausible
+ * (review R3-5).
+ */
+export async function hasNestedPackageJson(cwd: string, fs: StackDetectFs = defaultStackDetectFs): Promise<boolean> {
+  let dirs: string[] | undefined;
+  try {
+    dirs = await directoriesUnder(cwd, fs, "");
+  } catch {
+    return true;
+  }
+  if (dirs === undefined) return true;
+  for (const dir of dirs) {
+    if (dir === "") continue;
+    try {
+      await fs.readTextFile(joinPath(cwd, dir, "package.json"));
+      return true;
+    } catch {
+      // absent
+    }
+  }
+  return false;
+}
+
+/**
  * A JS workspace root — `package.json` `workspaces` or one of
- * `JS_WORKSPACE_MARKERS`: read one level of the sub-packages it names and tag
- * from their dependencies (review N-1: marking the whole family uncertain
- * installed every JS pack, Angular and Vue included, for any turbo app). Only
- * when the packages cannot be found or read is the family uncertain.
+ * `JS_WORKSPACE_MARKERS`: read the sub-packages it names and tag from their
+ * dependencies (review N-1: marking the whole family uncertain installed
+ * every JS pack, Angular and Vue included, for any turbo app). Reads stay
+ * inside the repository (R3-3); `!` globs exclude packages; a package whose
+ * `package.json` is broken is skipped and named (R3-7). With no package found
+ * the root's own dependencies decide (R3-2: a single-package turbo or nx
+ * standalone repository); only when the root declares nothing either, or a
+ * folder cannot be read, is the family uncertain.
  */
 async function jsWorkspaceSignal(cwd: string, fs: StackDetectFs): Promise<SignalOutcome | undefined> {
   const markers: string[] = [];
@@ -675,9 +793,11 @@ async function jsWorkspaceSignal(cwd: string, fs: StackDetectFs): Promise<Signal
     markers.push(name);
     globs.push(...markerGlobs(name, text));
   }
+  let rootDeclares = false;
   try {
     const record = jsonRecord(await fs.readTextFile(joinPath(cwd, "package.json")));
     const declared = record === undefined ? [] : workspacePatterns(record);
+    rootDeclares = record !== undefined && dependencyNames(record).size > 0;
     if (declared.length > 0) {
       markers.push("package.json workspaces");
       globs.push(...declared);
@@ -689,37 +809,71 @@ async function jsWorkspaceSignal(cwd: string, fs: StackDetectFs): Promise<Signal
 
   const uncertain = (why: string): SignalOutcome =>
     uncertainFamily("js", `${markers.join(", ")} marks a workspace root, but ${why}, so every JS-family tag is kept`);
-  const patterns = [...new Set((globs.length > 0 ? globs : DEFAULT_WORKSPACE_GLOBS).filter((glob) => !glob.startsWith("!")))];
-  const packageDirs = new Set<string>();
-  for (const glob of patterns) {
+  const listed = [...new Set(globs.length > 0 ? globs : DEFAULT_WORKSPACE_GLOBS)];
+  const skipped: string[] = [];
+  const expand = async (glob: string): Promise<string[] | SignalOutcome> => {
+    if (leavesRepository(glob)) {
+      skipped.push(`${glob} (outside the repository)`);
+      return [];
+    }
     let dirs: string[] | undefined;
     try {
       dirs = await expandWorkspaceGlob(cwd, fs, glob);
     } catch (error) {
-      if (isAbsentError(error)) continue;
+      if (isAbsentError(error)) return [];
       return uncertain(`the workspace folder of ${glob} could not be read (${errorCode(error) ?? "unknown error"})`);
     }
-    if (dirs === undefined) return uncertain(`the workspace glob ${glob} is deeper than this module reads`);
+    return dirs ?? uncertain(`the workspace glob ${glob} is not one this module reads, or names a tree too large to walk`);
+  };
+  const packageDirs = new Set<string>();
+  for (const glob of listed.filter((item) => !item.startsWith("!"))) {
+    const dirs = await expand(glob);
+    if (!Array.isArray(dirs)) return dirs;
     for (const dir of dirs) packageDirs.add(dir);
   }
+  for (const glob of listed.filter((item) => item.startsWith("!"))) {
+    const dirs = await expand(glob.slice(1));
+    if (!Array.isArray(dirs)) continue; // an unreadable exclusion excludes nothing
+    for (const dir of dirs) packageDirs.delete(dir);
+  }
+
+  const rootReal = fs.realPath === undefined ? undefined : await fs.realPath(cwd).catch(() => undefined);
   const names = new Set<string>();
   let read = 0;
   for (const dir of [...packageDirs].sort()) {
+    if (rootReal !== undefined) {
+      const real = await fs.realPath!(joinPath(cwd, dir)).catch(() => undefined);
+      if (real === undefined) continue;
+      if (real !== rootReal && !real.startsWith(`${rootReal}/`)) {
+        skipped.push(`${dir} (links outside the repository)`);
+        continue;
+      }
+    }
     let text: string;
     try {
       text = await fs.readTextFile(joinPath(cwd, dir, "package.json"));
     } catch (error) {
       if (isAbsentError(error)) continue;
-      return uncertain(`${dir}/package.json could not be read (${errorCode(error) ?? "unknown error"})`);
+      skipped.push(`${dir}/package.json (${errorCode(error) ?? "unreadable"})`);
+      continue;
     }
     const record = jsonRecord(text);
-    if (record === undefined) return uncertain(`${dir}/package.json did not parse as a JSON object`);
+    if (record === undefined) {
+      skipped.push(`${dir}/package.json (not a JSON object)`);
+      continue;
+    }
     read += 1;
     for (const name of dependencyNames(record)) names.add(name);
   }
-  if (read === 0) return uncertain(`no workspace package.json was found under ${patterns.join(", ")}`);
+  const skippedNote = skipped.length === 0 ? "" : `; skipped ${skipped.join(", ")}`;
+  if (read === 0) {
+    // A marker that names no packages (turbo, nx standalone) over a root that
+    // declares its own stack: the root package.json decides (review R3-2).
+    if (globs.length === 0 && rootDeclares && skipped.length === 0) return undefined;
+    return uncertain(`no workspace package.json was read under ${listed.join(", ")}${skippedNote}`);
+  }
   const { tags, matched } = jsTagsFromDependencies(names);
-  return present(tags, matched, `detected from ${read} workspace package${read === 1 ? "" : "s"} (${markers.join(", ")})`);
+  return present(tags, matched, `detected from ${read} workspace package${read === 1 ? "" : "s"} (${markers.join(", ")})${skippedNote}`);
 }
 
 async function goModSignal(cwd: string, fs: StackDetectFs): Promise<SignalOutcome | undefined> {

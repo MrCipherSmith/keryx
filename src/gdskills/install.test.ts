@@ -2192,7 +2192,13 @@ function expectPreMoveCopies(
     const keep = !installed && missPlausible;
     expect({ file: entry.fileName, stale: existsSync(path.join(rules, "core", entry.fileName)) }).toEqual({ file: entry.fileName, stale: keep });
     if (keep) kept.push(entry.fileName);
-    else expect({ file: entry.fileName, notice: result.notices.some((n) => n.startsWith(`rules/core/${entry.fileName} moved to rules/${entry.movedTo}`)) }).toEqual({ file: entry.fileName, notice: true });
+    else {
+      // Removed because the pack is installed, or (R3-9) because no JS stack is plausible and the pack never will be.
+      const expected = installed
+        ? `rules/core/${entry.fileName} moved to rules/${entry.movedTo}`
+        : `rules/core/${entry.fileName} is keryx's ${movedToPackId(entry.movedTo!)} rule, now shipped in the`;
+      expect({ file: entry.fileName, notice: result.notices.some((n) => n.startsWith(expected)) }).toEqual({ file: entry.fileName, notice: true });
+    }
   }
   expect(result.warnings.filter((warning) => warning.includes("moved to rules/stacks/"))).toEqual([]);
   const aggregated = result.warnings.filter((warning) => warning.startsWith("rules/core/ keeps "));
@@ -2331,6 +2337,40 @@ test("P4 N-1: a turbo React+NestJS monorepo installs react, mobx, nestjs and ts-
     await installGdskills(metaprojectRoot, "recommended");
     const installed = (await readdir(path.join(metaprojectRoot, "rules", "stacks"))).filter((name) => !name.startsWith(".")).sort();
     expect(installed).toEqual(["mobx", "nestjs", "react", "ts-js-node"]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("P4 R3-1: a pnpm workspace whose root package.json declares nothing installs only the packs its packages use", async () => {
+  const { root, metaprojectRoot } = await projectWithStack({
+    "package.json": JSON.stringify({ name: "monorepo", private: true, scripts: { build: "pnpm -r build" } }),
+    "pnpm-workspace.yaml": "packages:\n  - apps/*\n",
+    "apps/web/package.json": JSON.stringify({ dependencies: { react: "^18.3.1", mobx: "^6.13.0" } }),
+  });
+  try {
+    const result = await installGdskills(metaprojectRoot, "recommended");
+    const installed = (await readdir(path.join(metaprojectRoot, "rules", "stacks"))).filter((name) => !name.startsWith(".")).sort();
+    expect(installed).toEqual(["mobx", "react", "ts-js-node"]);
+    expectPreMoveCopies(path.join(metaprojectRoot, "rules"), result);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("P4 R3-5: a Go project with a React app two levels down keeps the unmodified moved copies", async () => {
+  const { root, metaprojectRoot } = await projectWithStack({
+    "go.mod": "module example.com/app\n\ngo 1.22\n",
+    "web/app/package.json": JSON.stringify({ name: "app", dependencies: { react: "^18.3.1" } }),
+  });
+  try {
+    const result = await installGdskills(metaprojectRoot, "recommended");
+    const rules = path.join(metaprojectRoot, "rules");
+    expect(existsSync(path.join(rules, "stacks", "react"))).toBe(false);
+    for (const entry of P4_MOVES) {
+      expect({ file: entry.fileName, kept: existsSync(path.join(rules, "core", entry.fileName)) }).toEqual({ file: entry.fileName, kept: true });
+    }
+    expectPreMoveCopies(rules, result);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

@@ -484,9 +484,11 @@ export async function removeUnmodifiedRetiredRules(
           }
           // Installed, or an obsolete pack move: removed like any unmodified copy.
         }
+        const unused = retired.movedTo !== undefined && movedToPackId(retired.movedTo) !== undefined
+          && await installedLayerFileState(path.dirname(rulesTarget), retired.movedTo) !== "installed";
         stage = "unlink";
         await fsOps.unlink(installedPath);
-        outcomes.push({ ...subject, action: "removed" });
+        outcomes.push(unused ? { ...subject, action: "removed", unused: true } : { ...subject, action: "removed" });
       } else {
         outcomes.push({ ...subject, action: "kept-modified" });
       }
@@ -796,6 +798,11 @@ export function movedRuleNotice(outcome: RetiredRuleOutcome): string | null {
     return null;
   }
   const pack = movedToPackId(outcome.movedTo);
+  if (outcome.unused === true && pack !== undefined) {
+    return `rules/core/${outcome.fileName} is keryx's ${pack} rule, now shipped in the ${pack} stack pack; this project has no `
+      + `${pack} or other JavaScript stack, so the pack is not installed and the unmodified old copy was removed — `
+      + `update any citation of rules/core/${outcome.fileName} in your own files (CLAUDE.md, AGENTS.md, project skills, wiki)`;
+  }
   const where = pack === undefined
     ? `rules/${outcome.movedTo}`
     : `rules/${outcome.movedTo} (the ${pack} stack pack, installed where that stack is detected)`;

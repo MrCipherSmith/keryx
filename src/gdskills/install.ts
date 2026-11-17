@@ -2,6 +2,7 @@ import { lstat, readdir, readFile, readlink } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { readJsonFileOr } from "../lib/json";
+import { hasNestedPackageJson } from "../stack/detect";
 import { readSkillsInstallState } from "./manifest/state";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -439,11 +440,12 @@ export async function installBundledRules(
     return pack === undefined || selectedPacks.includes(pack);
   };
   // Every rule P4 moved into a pack is JS-family. With no JS stack selected and
-  // no package.json one level down, a missed JS stack is not plausible, so an
-  // unmodified copy is removed rather than kept and reported forever (RT2-3).
+  // no package.json within the depth detection walks, a missed JS stack is not
+  // plausible, so an unmodified copy is removed rather than kept and reported
+  // forever (RT2-3, R3-5).
   // A broken bundle selects nothing, so it decides nothing: keep (LS-3).
   const jsMissPlausible = bundleProblems.length > 0 || selectedPacks.includes("ts-js-node")
-    || existsSync(path.join(projectRoot, "package.json")) || await hasChildPackageJson(projectRoot);
+    || existsSync(path.join(projectRoot, "package.json")) || await hasNestedPackageJson(projectRoot);
   const isObsolete = (movedTo: string): boolean => movedToPackId(movedTo) !== undefined && !jsMissPlausible;
   // Cleanup runs after every layer and pack is in place, so a moved rule's
   // new path is installed before its old copy is removed.
@@ -517,13 +519,6 @@ async function installStackPackRules(
     warnings.push(`${STACK_RULES_RECORD} could not be written (${errorCodeOf(error)}); the next \`keryx update\` cannot tell an edited stack rule from an older keryx version of it`);
   }
   return { installed, warnings };
-}
-
-/** Whether some folder directly under the project root (not hidden, not node_modules) holds a package.json. */
-async function hasChildPackageJson(projectRoot: string): Promise<boolean> {
-  const entries = await readdir(projectRoot, { withFileTypes: true }).catch(() => []);
-  return entries.some((entry) => entry.isDirectory() && !entry.name.startsWith(".") && entry.name !== "node_modules"
-    && existsSync(path.join(projectRoot, entry.name, "package.json")));
 }
 
 /**
