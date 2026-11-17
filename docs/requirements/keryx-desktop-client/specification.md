@@ -496,6 +496,23 @@ Web view:
 - `session/useAcpSession.ts` adds the panel entry to `mcpServers` of every
   `session/new` and `session/load` inside the app.
 
+As built (2026-11-18, found in the installed-app click-through):
+- Every Tauri command takes `tauri::Window`, never `WebviewWindow`: once a
+  child web view is added, Tauri no longer resolves the window as a
+  `WebviewWindow` and such commands fail silently (it broke `acp_send`).
+- Child web views are placed in the window frame, title bar included; the
+  core adds the title bar height (`NSWindow.frame − contentLayoutRect`) to the
+  bounds the page reports.
+- `browser_layout` carries a sequence number; the core drops an older call,
+  since commands run concurrently.
+- Pages hide while any overlay (dialog, palette, menu) is open, on the
+  overlay stack's change event, so an approval dialog is never under a page.
+- Agent tools wait for `document.readyState === "complete"`, not for page-load
+  callbacks.
+- MCP results reach the model as text (keryx JSON-serialises MCP content), so
+  `browser_screenshot` saves a PNG and returns its path; the model does not
+  see the image.
+
 ## 5. Packaging and distribution
 
 - `scripts/desktop/build-sidecar.sh` runs `bun install --os='*' --cpu='*'`
