@@ -588,6 +588,23 @@ async function handle(ws: ServerWebSocket<Conn>, cmd: string, args: Json): Promi
       watched.set(root, w);
       return null;
     }
+    case "git_info": {
+      // Same parse as src-tauri/src/gitinfo.rs, for the browser dev mode.
+      const r = Bun.spawnSync(["git", "status", "--porcelain=v2", "--branch"], { cwd: await projectCwd(ws.data, cwd), env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" } });
+      if (r.exitCode !== 0) return null;
+      const info = { branch: null as string | null, commit: null as string | null, upstream: null as string | null, ahead: 0, behind: 0, changed: 0 };
+      for (const line of r.stdout.toString().split("\n")) {
+        if (line.startsWith("# branch.head ")) info.branch = line.slice(14) === "(detached)" ? null : line.slice(14);
+        else if (line.startsWith("# branch.oid ")) info.commit = line.slice(13) === "(initial)" ? null : line.slice(13, 22);
+        else if (line.startsWith("# branch.upstream ")) info.upstream = line.slice(18);
+        else if (line.startsWith("# branch.ab ")) {
+          const [a, b] = line.slice(12).split(" ");
+          info.ahead = Number(a?.slice(1)) || 0;
+          info.behind = Number(b?.slice(1)) || 0;
+        } else if (line && !line.startsWith("#")) info.changed += 1;
+      }
+      return info;
+    }
     default:
       throw new Error(`Unknown command: ${cmd}`);
   }

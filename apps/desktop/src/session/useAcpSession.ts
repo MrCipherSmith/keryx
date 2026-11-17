@@ -2,9 +2,12 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "r
 import { AcpClient, RpcError } from "../acp/client";
 import { acpStart, acpTransport, acpStop, listenBridge, setWindowTitle, versionCheck } from "../platform/commands";
 import {
+  canOrganizeSessions,
   hasLiveSessions,
+  SESSION_FLAGS,
   SESSION_RELEASED,
   SESSION_SHOWN,
+  SESSION_TRASH,
   type AskUserRequest,
   type AskUserResult,
   type ConfigOption,
@@ -13,6 +16,7 @@ import {
   type NewSessionResult,
   type PermissionOutcome,
   type PermissionRequest,
+  type SessionFlags,
   type SessionInfo,
   type SessionUpdate,
 } from "../acp/types";
@@ -335,7 +339,7 @@ export function useAcpSession(cwd: string) {
 
         const found = init.agentInfo?.version ?? "unknown";
         const profile = init._meta?.keryx?.profile === "shell" ? "shell" : "editor";
-        dispatch({ t: "agent", profile, version: init.agentInfo?.version ?? null });
+        dispatch({ t: "agent", profile, version: init.agentInfo?.version ?? null, canOrganize: canOrganizeSessions(init) });
         if (profile !== "shell" || !hasLiveSessions(init)) {
           setFatal({ kind: "noShell", found, reason: profile !== "shell" ? "no-profile" : "no-live-sessions" });
           dispatch({ t: "phase", phase: "ready" });
@@ -504,6 +508,54 @@ export function useAcpSession(cwd: string) {
     [dispatch],
   );
 
+  /** Archive/unarchive or pin/unpin a stored session. Errors show as a banner. */
+  const setFlags = useCallback(
+    async (sessionId: string, change: { archived?: boolean; pinned?: boolean }) => {
+      const l = live.current;
+      const client = l.client;
+      if (!client || !l.usable) return;
+      try {
+        const flags = await client.request<SessionFlags>(SESSION_FLAGS, { sessionId, cwd, ...change });
+        if (l.client === client) dispatch({ t: "flags", sessionId, flags: flags ?? {} });
+      } catch (e) {
+        if (l.client === client) dispatch({ t: "banner", level: "error", text: `Could not update the session: ${errMessage(e)}` });
+      }
+    },
+    [cwd, dispatch],
+  );
+
+  /**
+   * Move a stored session to the system trash. keryx refuses one with a running turn or task, or one
+   * open in another keryx. The shown one is replaced by another session the window holds, or a new one.
+   */
+  const trashSession = useCallback(
+    async (sessionId: string): Promise<boolean> => {
+      const l = live.current;
+      const client = l.client;
+      if (!client || !l.usable) return false;
+      try {
+        await client.request(SESSION_TRASH, { sessionId, cwd });
+      } catch (e) {
+        if (l.client === client) dispatch({ t: "banner", level: "error", text: `Could not move the session to the Trash: ${errMessage(e)}` });
+        return false;
+      }
+      if (l.client !== client) return true;
+      l.reg.release(sessionId);
+      dialogs.dropSession(sessionId);
+      const wasShown = l.reg.shown === sessionId;
+      if (wasShown) l.reg.shown = null;
+      dispatch({ t: "removed", sessionId });
+      if (wasShown) {
+        const next = [...l.reg.held].pop();
+        if (next) await loadSession(next);
+        else await newSession();
+      }
+      void refreshSessions();
+      return true;
+    },
+    [cwd, dialogs, dispatch, loadSession, newSession, refreshSessions],
+  );
+
   /** A new keryx process; the shown session is reloaded (a new one when that fails). */
   const restart = useCallback(() => {
     void connect({ loadSessionId: live.current.reg.shown, fallbackToNew: true });
@@ -542,6 +594,8 @@ export function useAcpSession(cwd: string) {
     newSession,
     loadSession,
     reopen,
+    setFlags,
+    trashSession,
     setMode,
     setModel,
     restart,

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { isTauri } from "../platform/backend";
 import { basename } from "../lib/format";
-import { MOD } from "../lib/prefs";
+import { MOD, setPrefs, usePrefs } from "../lib/prefs";
 import { Icon, type IconName } from "../components/Icon";
 import { Menu, type MenuItem } from "../components/Menu";
 import { Kbd } from "../components/ui";
@@ -54,7 +54,25 @@ export function AppShell(p: ShellProps) {
   );
 }
 
-function TitleBar({ cwd, recents, title, status, onOpenFolder, onSwitchProject, onNewWindow, onCloseProject, onPalette }: ShellProps) {
+/** Shows or hides the session info panel (on the session view only). */
+function InfoToggle({ show }: { show: boolean }) {
+  const prefs = usePrefs();
+  if (!show) return null;
+  return (
+    <button
+      className={`icon-btn titlebar-toggle${prefs.infoPanel ? " is-on" : ""}`}
+      onClick={() => setPrefs({ infoPanel: !prefs.infoPanel })}
+      aria-pressed={prefs.infoPanel}
+      title={prefs.infoPanel ? "Hide session info" : "Show session info"}
+      aria-label="Session info"
+    >
+      <Icon name="info" size={15} />
+    </button>
+  );
+}
+
+function TitleBar(p: ShellProps) {
+  const { cwd, recents, title, status, onOpenFolder, onSwitchProject, onNewWindow, onCloseProject, onPalette } = p;
   const [menu, setMenu] = useState(false);
   const btn = useRef<HTMLButtonElement>(null);
   const others = recents.filter((r) => r !== cwd).slice(0, 8);
@@ -100,6 +118,7 @@ function TitleBar({ cwd, recents, title, status, onOpenFolder, onSwitchProject, 
           <span className="conn-dot" />
           {status.label}
         </span>
+        <InfoToggle show={p.view === "session"} />
         <button className="palette-btn" onClick={onPalette} title="Commands and sessions">
           <Icon name="search" size={13} />
           <span>Commands</span>

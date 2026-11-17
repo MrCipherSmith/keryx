@@ -3,6 +3,7 @@ import type {
   ConfigOption,
   ContentBlock,
   PlanEntry,
+  SessionFlags,
   SessionInfo,
   SessionModeState,
   SessionUpdate,
@@ -292,6 +293,8 @@ export interface WindowState {
   exit: { code: number | null; stderrTail: string } | null;
   profile: "shell" | "editor";
   agentVersion: string | null;
+  /** keryx serves `_keryx/session_flags` and `_keryx/session_trash`. */
+  canOrganize: boolean;
   /** Sessions the window holds, or held and was told it no longer holds (read-only). */
   convs: Readonly<Record<string, ConvState>>;
   /** A session/load in flight: its replay lands here, off screen, and moves to `convs` on success. */
@@ -309,6 +312,7 @@ export const initialState: WindowState = {
   exit: null,
   profile: "editor",
   agentVersion: null,
+  canOrganize: false,
   convs: {},
   loading: {},
   creating: 0,
@@ -339,8 +343,12 @@ export type Action =
   | { t: "clearBanners" }
   | { t: "dismissBanner"; id: number }
   | { t: "phase"; phase: Phase; exit?: WindowState["exit"] }
-  | { t: "agent"; profile: "shell" | "editor"; version: string | null }
-  | { t: "sessions"; sessions: SessionInfo[] };
+  | { t: "agent"; profile: "shell" | "editor"; version: string | null; canOrganize: boolean }
+  | { t: "sessions"; sessions: SessionInfo[] }
+  /** keryx stored new flags (archived, pinned) for a listed session. */
+  | { t: "flags"; sessionId: string; flags: SessionFlags }
+  /** The session went to the trash. */
+  | { t: "removed"; sessionId: string };
 
 function withConv(state: WindowState, sessionId: string, f: (c: ConvState) => ConvState): WindowState {
   const c = state.convs[sessionId];
@@ -443,9 +451,25 @@ export function reducer(state: WindowState, a: Action): WindowState {
     case "phase":
       return { ...state, phase: a.phase, exit: a.exit ?? null };
     case "agent":
-      return { ...state, profile: a.profile, agentVersion: a.version };
+      return { ...state, profile: a.profile, agentVersion: a.version, canOrganize: a.canOrganize };
     case "sessions":
       return { ...state, sessions: a.sessions };
+    case "flags":
+      return {
+        ...state,
+        sessions: state.sessions.map((s) => (s.sessionId === a.sessionId ? { ...s, _meta: { ...s._meta, keryx: a.flags } } : s)),
+      };
+    case "removed": {
+      // Moved to the trash: gone from the list and the window. The shown one leaves nothing shown.
+      const { [a.sessionId]: _gone, ...convs } = state.convs;
+      return {
+        ...state,
+        convs,
+        loading: without(state.loading, a.sessionId),
+        sessions: state.sessions.filter((s) => s.sessionId !== a.sessionId),
+        shownId: state.shownId === a.sessionId ? null : state.shownId,
+      };
+    }
   }
 }
 
@@ -467,6 +491,8 @@ export interface SessionState {
   exit: WindowState["exit"];
   profile: "shell" | "editor";
   agentVersion: string | null;
+  /** keryx serves `_keryx/session_flags` and `_keryx/session_trash`. */
+  canOrganize: boolean;
   sessions: SessionInfo[];
   banners: Banner[];
   sessionId: string | null;
@@ -501,6 +527,7 @@ export function shownView(w: WindowState): SessionState {
     exit: w.exit,
     profile: w.profile,
     agentVersion: w.agentVersion,
+    canOrganize: w.canOrganize,
     sessions: w.sessions,
     banners: w.banners,
     sessionId: c?.sessionId ?? null,

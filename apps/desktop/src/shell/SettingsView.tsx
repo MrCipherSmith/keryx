@@ -97,6 +97,72 @@ export function SettingsView({ onBack, agentVersion }: { onBack?: () => void; ag
               ]}
             />
           </div>
+          <div className="settings-row">
+            <div className="settings-row-text">
+              <div className="settings-row-title">Font</div>
+              <div className="settings-row-help">The interface and the conversation.</div>
+            </div>
+            <Segmented<Prefs["font"]>
+              label="Font"
+              value={prefs.font}
+              onChange={(font) => setPrefs({ font })}
+              options={[
+                { id: "system", label: "System" },
+                { id: "rounded", label: "Rounded" },
+                { id: "serif", label: "Serif" },
+                { id: "mono", label: "Mono" },
+              ]}
+            />
+          </div>
+          <div className="settings-row">
+            <div className="settings-row-text">
+              <div className="settings-row-title">Code font</div>
+              <div className="settings-row-help">Code blocks, commands and tool output.</div>
+            </div>
+            <Segmented<Prefs["codeFont"]>
+              label="Code font"
+              value={prefs.codeFont}
+              onChange={(codeFont) => setPrefs({ codeFont })}
+              options={[
+                { id: "sf-mono", label: "SF Mono" },
+                { id: "menlo", label: "Menlo" },
+                { id: "monaco", label: "Monaco" },
+                { id: "courier", label: "Courier" },
+              ]}
+            />
+          </div>
+          <div className="settings-row">
+            <div className="settings-row-text">
+              <div className="settings-row-title">Text size</div>
+            </div>
+            <Segmented<Prefs["textSize"]>
+              label="Text size"
+              value={prefs.textSize}
+              onChange={(textSize) => setPrefs({ textSize })}
+              options={[
+                { id: "small", label: "Small" },
+                { id: "default", label: "Default" },
+                { id: "large", label: "Large" },
+                { id: "larger", label: "Larger" },
+              ]}
+            />
+          </div>
+          <div className="settings-row">
+            <div className="settings-row-text">
+              <div className="settings-row-title">Conversation width</div>
+              <div className="settings-row-help">Full runs the conversation across the whole window.</div>
+            </div>
+            <Segmented<Prefs["chatWidth"]>
+              label="Conversation width"
+              value={prefs.chatWidth}
+              onChange={(chatWidth) => setPrefs({ chatWidth })}
+              options={[
+                { id: "narrow", label: "Narrow" },
+                { id: "wide", label: "Wide" },
+                { id: "full", label: "Full" },
+              ]}
+            />
+          </div>
         </section>
 
         <section className="settings-group" aria-labelledby="s-composer">

@@ -61,11 +61,23 @@ export interface ConfigOption {
   options: Array<ConfigSelectOption | ConfigSelectGroup>;
 }
 
+/** How the person organised a stored session (`_keryx/session_flags`); ISO times, absent when unset. */
+export interface SessionFlags {
+  archivedAt?: string;
+  pinnedAt?: string;
+}
+
 export interface SessionInfo {
   sessionId: string;
   cwd: string;
   title?: string | null;
   updatedAt?: string | null;
+  /** keryx's shell profile reports the flags here. */
+  _meta?: { keryx?: SessionFlags } | null;
+}
+
+export function sessionFlags(s: SessionInfo): SessionFlags {
+  return s._meta?.keryx ?? {};
 }
 
 export type SessionUpdate =
@@ -126,6 +138,10 @@ export interface InitializeResult {
 export const SESSION_RELEASED = "_keryx/session_released";
 /** Notification to keryx: the user switched the shown session locally (counts for its idle-cap LRU). */
 export const SESSION_SHOWN = "_keryx/session_shown";
+/** Request to keryx: archive/unarchive, pin/unpin a stored session; answers the flags as stored. */
+export const SESSION_FLAGS = "_keryx/session_flags";
+/** Request to keryx: move a stored session to the system trash (a held, idle one is released first). */
+export const SESSION_TRASH = "_keryx/session_trash";
 export interface SessionReleasedParams {
   sessionId: string;
   reason: string;
@@ -148,6 +164,12 @@ export function hasLiveSessions(init: InitializeResult): boolean {
   if (init._meta?.keryx?.liveSessions === true) return true;
   const caps = init.agentCapabilities?._meta as { keryx?: { liveSessions?: unknown } } | undefined;
   return caps?.keryx?.liveSessions === true;
+}
+
+/** Whether this keryx can archive, pin and trash sessions (`_keryx/session_flags`, `_keryx/session_trash`). */
+export function canOrganizeSessions(init: InitializeResult): boolean {
+  const ext = init._meta?.keryx?.extensions ?? [];
+  return ext.includes(SESSION_FLAGS) && ext.includes(SESSION_TRASH);
 }
 
 export interface NewSessionResult {

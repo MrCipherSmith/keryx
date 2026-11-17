@@ -5,6 +5,7 @@ import { setPrefs, usePrefs, MOD } from "../lib/prefs";
 import { Icon } from "../components/Icon";
 import { Kbd, Spinner } from "../components/ui";
 import { Composer, type ComposerHandle } from "./Composer";
+import { SessionInfoPanel } from "./SessionInfoPanel";
 import { SessionSidebar } from "./SessionSidebar";
 import { Transcript } from "./Transcript";
 import { lostText, type Usage } from "./reducer";
@@ -14,6 +15,7 @@ type Session = ReturnType<typeof useAcpSession>;
 
 interface Props {
   s: Session;
+  cwd: string;
   projectName: string;
   onGoFlows: () => void;
   onGoSettings: () => void;
@@ -26,11 +28,12 @@ const SUGGESTIONS = [
   { icon: "search" as const, text: "Find TODO and FIXME comments and group them by area." },
 ];
 
-export const SessionView = forwardRef<ComposerHandle, Props>(function SessionView({ s, projectName, onGoFlows, onGoSettings, narrow }, composerRef) {
+export const SessionView = forwardRef<ComposerHandle, Props>(function SessionView({ s, cwd, projectName, onGoFlows, onGoSettings, narrow }, composerRef) {
   const { state } = s;
   const prefs = usePrefs();
   const sidebarOpen = prefs.sessionSidebar && !narrow;
   const [narrowSidebar, setNarrowSidebar] = useState(false);
+  const infoOpen = prefs.infoPanel;
   const ready = state.phase === "ready" && state.sessionId !== null && state.held;
   const incompatible = s.fatal?.kind === "incompatible" || s.fatal?.kind === "noShell";
 
@@ -96,17 +99,20 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
       loadingIds={state.loadingIds}
       currentId={state.sessionId}
       ready={state.phase === "ready" && !incompatible}
+      canOrganize={state.canOrganize}
       onNew={() => void s.newSession()}
       onLoad={(id) => {
         setNarrowSidebar(false);
         void s.loadSession(id);
       }}
       onCollapse={() => (narrow ? setNarrowSidebar(false) : setPrefs({ sessionSidebar: false }))}
+      onSetFlags={(id, change) => void s.setFlags(id, change)}
+      onTrash={s.trashSession}
     />
   );
 
   return (
-    <div className={`session-view${sidebarOpen ? " with-sidebar" : ""}`}>
+    <div className={`session-view${sidebarOpen ? " with-sidebar" : ""}${infoOpen && !narrow ? " with-info" : ""}`}>
       {sidebarOpen ? sidebar : null}
       {narrow && narrowSidebar ? (
         <div className="sidebar-float" onMouseDown={(e) => e.target === e.currentTarget && setNarrowSidebar(false)}>
@@ -114,6 +120,7 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
         </div>
       ) : null}
       <section className="session-main" aria-label="Conversation">
+
         {!sidebarOpen ? (
           <div className="session-topbar">
             <button
@@ -210,6 +217,11 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
           <UsageFooter usage={state.usage} version={state.agentVersion} />
         </div>
       </section>
+      {infoOpen ? (
+        <div className={narrow ? "info-float" : "info-dock"}>
+          <SessionInfoPanel state={state} cwd={cwd} projectName={projectName} onClose={() => setPrefs({ infoPanel: false })} />
+        </div>
+      ) : null}
     </div>
   );
 });
