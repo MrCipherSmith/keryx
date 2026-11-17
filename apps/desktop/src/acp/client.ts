@@ -26,6 +26,7 @@ export class AcpClient {
   private nextId = 1;
   private pending = new Map<Id, Pending>();
   private closed = false;
+  private sendChain: Promise<void> = Promise.resolve();
   onNotification: NotificationHandler = () => {};
   onRequest: RequestHandler = async (method) => {
     throw new RpcError(-32601, `Method not found: ${method}`);
@@ -99,7 +100,14 @@ export class AcpClient {
     }
   }
 
+  /**
+   * Frames reach the transport one at a time, in the order they were issued: the host's send is
+   * async and may run concurrent calls in any order, so the next send starts only after the last settled.
+   */
   private write(message: unknown): Promise<void> {
-    return this.transport.send(JSON.stringify(message));
+    const line = JSON.stringify(message);
+    const sent = this.sendChain.then(() => this.transport.send(line));
+    this.sendChain = sent.catch(() => {});
+    return sent;
   }
 }

@@ -5,6 +5,7 @@ import { blockText } from "./reducer";
 import { Markdown } from "../components/Markdown";
 import { Icon, type IconName } from "../components/Icon";
 import { Spinner } from "../components/ui";
+import { argLabel, primaryInput, restInput, visibleText } from "./toolInput";
 
 type ToolItem = Extract<Item, { kind: "tool" }>;
 
@@ -42,48 +43,6 @@ function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms} ms`;
   if (ms < 60_000) return `${(ms / 1000).toFixed(ms < 10_000 ? 1 : 0)} s`;
   return `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`;
-}
-
-/** An argv rendered so word boundaries survive: bare words stay bare, anything else is JSON-quoted. */
-function quoteArgv(argv: string[]): string {
-  return argv.map((a) => (/^[\w@%+=:,./-]+$/.test(a) ? a : JSON.stringify(a))).join(" ");
-}
-
-const PRIMARY_KEYS: Array<[string, string]> = [
-  ["command", "Command"],
-  ["cmd", "Command"],
-  ["path", "Path"],
-  ["file_path", "Path"],
-  ["url", "URL"],
-  ["query", "Query"],
-  ["pattern", "Pattern"],
-];
-
-/** The one-line thing a call acts on: a command, path, URL or query. `key` is the field it came from. */
-export function primaryInput(raw: unknown): { label: string; value: string; key?: string } | null {
-  if (raw === undefined || raw === null) return null;
-  if (typeof raw === "string") return { label: "Input", value: raw };
-  if (typeof raw !== "object") return null;
-  const o = raw as Record<string, unknown>;
-  for (const [k, label] of PRIMARY_KEYS) {
-    const v = o[k];
-    if (typeof v === "string") return { label, value: v, key: k };
-    if (Array.isArray(v) && v.length > 0 && v.every((x) => typeof x === "string")) return { label, value: quoteArgv(v as string[]), key: k };
-  }
-  return null;
-}
-
-/** Every argument the headline does not show, as JSON; "" when the headline already covers the whole input. */
-export function restInput(raw: unknown): string {
-  if (raw === undefined || raw === null || typeof raw === "string") return "";
-  const primary = primaryInput(raw);
-  let rest: unknown = raw;
-  if (primary?.key && typeof raw === "object" && !Array.isArray(raw)) {
-    const { [primary.key]: _shown, ...others } = raw as Record<string, unknown>;
-    if (Object.keys(others).length === 0) return "";
-    rest = others;
-  }
-  return pretty(rest);
 }
 
 /** Common prefix/suffix trimmed, with two lines of context: a readable change without a diff library. */
@@ -151,8 +110,9 @@ const ToolRow = memo(function ToolRow({ item }: { item: ToolItem }) {
   const [open, setOpen] = useState(false);
   const raw = pretty(item.rawOutput);
   const primary = primaryInput(item.rawInput);
-  const input = restInput(item.rawInput);
-  const hasBody = item.content.length > 0 || raw !== "" || input !== "";
+  const args = useMemo(() => restInput(item.rawInput), [item.rawInput]);
+  const title = visibleText(item.title);
+  const hasBody = item.content.length > 0 || raw !== "" || args.length > 0;
   const dur = item.endedAt !== null ? item.endedAt - item.startedAt : null;
   return (
     <div className={`tool status-${item.status}${open ? " is-open" : ""}`}>
@@ -164,8 +124,8 @@ const ToolRow = memo(function ToolRow({ item }: { item: ToolItem }) {
           <Icon name={KIND_ICON[item.toolKind] ?? "wand"} size={14} />
         </span>
         <span className="tool-title truncate">
-          {item.title}
-          {primary && !item.title.includes(primary.value) ? <span className="tool-target">{primary.value}</span> : null}
+          {title}
+          {primary && !title.includes(primary.value) ? <span className="tool-target">{primary.value}</span> : null}
         </span>
         {item.autoApproved ? (
           <span className="badge badge-ok" title="Allowed by the session's permission mode without asking">
@@ -181,15 +141,15 @@ const ToolRow = memo(function ToolRow({ item }: { item: ToolItem }) {
           {primary ? (
             <div className="tool-section">
               <div className="tool-label">{primary.label}</div>
-              <pre className="out-pre mono-strong">{primary.value}</pre>
+              <pre className="out-pre mono-strong is-faithful">{primary.value}</pre>
             </div>
           ) : null}
-          {input ? (
-            <div className="tool-section">
-              <div className="tool-label">{primary ? "Other arguments" : "Input"}</div>
-              <pre className="out-pre">{input}</pre>
+          {args.map((a) => (
+            <div key={a.key} className="tool-section">
+              <div className="tool-label">{argLabel(a, primary !== null)}</div>
+              <pre className="out-pre is-faithful">{a.text}</pre>
             </div>
-          ) : null}
+          ))}
           {item.content.map((c, i) => (
             <ToolContent key={i} c={c} />
           ))}
@@ -269,6 +229,7 @@ interface Props {
 
 export function Transcript({ items, busy, replaying, empty }: Props) {
   const ref = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLDivElement>(null);
   const [stuck, setStuck] = useState(true);
   const stick = useRef(true);
   const blocks = useMemo(() => toBlocks(items), [items]);
@@ -293,6 +254,19 @@ export function Transcript({ items, busy, replaying, empty }: Props) {
     if (el && stick.current) el.scrollTop = el.scrollHeight;
   }, [items, busy]);
 
+  // A message also grows outside React's renders (streamed Markdown, the settle pass, a code block's
+  // chrome): while stuck to the bottom, follow every change of the content's size.
+  useEffect(() => {
+    const el = ref.current;
+    const inner = innerRef.current;
+    if (!el || !inner || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => {
+      if (stick.current) el.scrollTop = el.scrollHeight;
+    });
+    ro.observe(inner);
+    return () => ro.disconnect();
+  }, []);
+
   const jump = () => {
     const el = ref.current;
     if (!el) return;
@@ -303,7 +277,7 @@ export function Transcript({ items, busy, replaying, empty }: Props) {
   return (
     <div className="transcript-wrap">
       <div className="transcript" ref={ref} aria-live="off">
-        <div className="transcript-inner">
+        <div className="transcript-inner" ref={innerRef}>
           {replaying ? (
             <div className="loading-row centered">
               <Spinner /> Loading session…

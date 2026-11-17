@@ -1,6 +1,7 @@
 import DOMPurify from "dompurify";
-import { marked, type Token } from "marked";
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { marked } from "marked";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { emptyCache, renderStreaming, type RenderTokens, type StreamFrame } from "./markdownStream";
 
 marked.setOptions({ gfm: true, breaks: false });
 
@@ -43,7 +44,7 @@ export function renderInline(src: string): string {
   return DOMPurify.sanitize(html, SANITIZE) as string;
 }
 
-/** Never navigate the app's web view away; links are inert (the model's links are untrusted). */
+/** Never navigate the app's web view away; links are inert (the model's links are untrusted), and get no context menu ("Open Link"). */
 function blockLinks(e: React.MouseEvent<HTMLElement>) {
   if ((e.target as HTMLElement).closest("a")) e.preventDefault();
 }
@@ -97,72 +98,95 @@ function renderFinal(src: string): string {
   return decorateCodeBlocks(renderMarkdown(src));
 }
 
-/** Rendered HTML of the completed top-level blocks of a growing message: `src.slice(0, end)`. */
-interface StreamCache {
-  src: string;
-  end: number;
-  html: string;
+/** A run of streamed blocks, rendered exactly as the final pass renders them (chrome included). */
+const renderTokens: RenderTokens = (tokens) => decorateCodeBlocks(sanitize(marked.parser(tokens)));
+
+/** What the message element currently shows. */
+interface View {
+  mode: "final" | "stream";
+  epoch: number;
+  /** Streamed blocks already in the element. */
+  shown: number;
+  /** The nodes of the open tail, the only ones replaced per frame. */
+  tail: ChildNode[];
 }
 
-const emptyCache = (): StreamCache => ({ src: "", end: 0, html: "" });
-
-/**
- * Render a message that is still growing. Top-level blocks followed by another block are complete:
- * their HTML is cached and only the open tail is lexed and parsed again. Code blocks are not decorated
- * here; the settle-time renderFinal pass re-renders the whole message, so the final HTML is exactly
- * the one-shot rendering even when a later block (a reference definition, say) changes an earlier one.
- */
-function renderStreaming(text: string, c: StreamCache): string {
-  if (c.end > text.length || text.slice(0, c.end) !== c.src.slice(0, c.end)) {
-    c.end = 0;
-    c.html = "";
-  }
-  c.src = text;
-  const tail = text.slice(c.end);
-  const tokens = marked.lexer(tail);
-  let open = tokens.length - 1;
-  while (open > 0 && tokens[open]?.type === "space") open--;
-  let rest: Token[] = tokens;
-  if (open > 0) {
-    const done = tokens.slice(0, open);
-    const raw = done.map((t) => t.raw).join("");
-    // The lexer normalises line endings; commit only when the raw text maps back onto the source.
-    if (tail.startsWith(raw)) {
-      c.html += sanitize(marked.parser(done));
-      c.end += raw.length;
-      rest = tokens.slice(open);
-    }
-  }
-  return c.html + sanitize(marked.parser(rest));
+function fragment(html: string): DocumentFragment {
+  const t = document.createElement("template");
+  t.innerHTML = html;
+  return t.content;
 }
 
-/** A message whose text has not changed for this long is final: render it whole, with code-block chrome. */
+/** Append the newly completed blocks and swap only the tail; rebuild when the cache started over. */
+function showFrame(el: HTMLElement, v: View, f: StreamFrame): void {
+  if (v.mode !== "stream" || v.epoch !== f.epoch || f.blocks.length < v.shown) {
+    el.replaceChildren();
+    v.mode = "stream";
+    v.epoch = f.epoch;
+    v.shown = 0;
+    v.tail = [];
+  }
+  for (const n of v.tail) n.remove();
+  if (v.shown < f.blocks.length) {
+    el.append(fragment(f.blocks.slice(v.shown).join("")));
+    v.shown = f.blocks.length;
+  }
+  const tail = fragment(f.tail);
+  v.tail = Array.from(tail.childNodes);
+  el.append(tail);
+}
+
+function showFinal(el: HTMLElement, v: View, html: string): void {
+  el.innerHTML = html;
+  v.mode = "final";
+  v.tail = [];
+}
+
+/** A message whose text has not changed for this long is final: render it whole, in one pass. */
 const SETTLE_MS = 250;
 
 export const Markdown = memo(function Markdown({ text, className }: { text: string; className?: string }) {
-  const [html, setHtml] = useState(() => renderFinal(text));
-  const r = useRef({ shown: text, latest: text, cache: emptyCache(), raf: 0, settle: 0 });
+  const ref = useRef<HTMLDivElement>(null);
+  const r = useRef({
+    shown: null as string | null,
+    latest: text,
+    // Kept across a settle: the text usually keeps growing from where it was.
+    cache: emptyCache(),
+    raf: 0,
+    settle: 0,
+    view: { mode: "final", epoch: 0, shown: 0, tail: [] } as View,
+  });
 
-  useEffect(() => {
+  // The element's children are owned here, not by React: completed blocks stay in place while the
+  // message streams and only the open tail is replaced each frame.
+  useLayoutEffect(() => {
     const st = r.current;
+    const el = ref.current;
+    if (!el) return;
     st.latest = text;
+    if (st.shown === null) {
+      st.shown = text;
+      showFinal(el, st.view, renderFinal(text));
+      return;
+    }
     if (text === st.shown) return;
     // At most one parse per animation frame while the text keeps changing.
     if (!st.raf) {
       st.raf = requestAnimationFrame(() => {
         st.raf = 0;
         st.shown = st.latest;
-        setHtml(renderStreaming(st.latest, st.cache));
+        showFrame(el, st.view, renderStreaming(st.latest, st.cache, renderTokens));
       });
     }
     window.clearTimeout(st.settle);
+    // The settle pass makes the result exactly the one-shot rendering, even when a later block (a
+    // reference definition, say) changes an earlier one.
     st.settle = window.setTimeout(() => {
       st.settle = 0;
       if (st.raf) cancelAnimationFrame(st.raf);
       st.raf = 0;
       st.shown = st.latest;
-      st.cache = emptyCache();
-      setHtml(renderFinal(st.latest));
+      showFinal(el, st.view, renderFinal(st.latest));
     }, SETTLE_MS);
   }, [text]);
 
@@ -177,11 +201,11 @@ export const Markdown = memo(function Markdown({ text, className }: { text: stri
     [],
   );
 
-  return <div className={`md${className ? ` ${className}` : ""}`} onClick={onClick} onAuxClick={blockLinks} dangerouslySetInnerHTML={{ __html: html }} />;
+  return <div ref={ref} className={`md${className ? ` ${className}` : ""}`} onClick={onClick} onAuxClick={blockLinks} onContextMenu={blockLinks} />;
 });
 
 export const InlineMarkdown = memo(function InlineMarkdown({ text }: { text: string }) {
   const html = useMemo(() => renderInline(text), [text]);
-  // Same guard as Markdown: a link must never navigate the web view.
-  return <span className="md-inline" onClick={blockLinks} onAuxClick={blockLinks} dangerouslySetInnerHTML={{ __html: html }} />;
+  // Same guard as Markdown: a link must never navigate the web view, from a click or its context menu.
+  return <span className="md-inline" onClick={blockLinks} onAuxClick={blockLinks} onContextMenu={blockLinks} dangerouslySetInnerHTML={{ __html: html }} />;
 });

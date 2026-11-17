@@ -349,8 +349,12 @@ button { font: inherit; }
 .approval-title { font-weight: 600; overflow-wrap: anywhere; }
 .approval-what { display: grid; gap: 4px; margin-bottom: var(--sp-3); }
 .out-pre.is-command { font-size: 12.5px; }
-.approval-raw { margin: var(--sp-2) 0; }
-.approval-raw summary { cursor: default; color: var(--fg-muted); font-size: var(--fs-sm); margin-bottom: 4px; }
+/* What a call acts on is shown as written: no bidi reordering, left to right whatever it contains. */
+.out-pre.is-faithful { unicode-bidi: plaintext; direction: ltr; text-align: left; }
+.out-pre.is-expanded { max-height: none; }
+.review-warn { display: flex; align-items: center; gap: 6px; font-size: var(--fs-sm); color: var(--fg-muted); }
+.review-warn.is-unread { color: var(--warn); font-weight: 500; }
+.review-warn .link-btn { margin-left: auto; }
 .approval-why { display: flex; gap: 6px; align-items: flex-start; margin: var(--sp-3) 0 0 !important; font-size: var(--fs-sm); color: var(--fg-muted); }
 .approval-why .icon { margin-top: 2px; }
 .approval-queue { margin: 4px 0 0 !important; font-size: var(--fs-sm); color: var(--fg-subtle); }

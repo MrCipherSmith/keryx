@@ -174,7 +174,7 @@
 .command-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .command-list li { display: grid; grid-template-columns: 130px 1fr auto; align-items: center; gap: var(--sp-2); }
 .command-label { color: var(--fg-muted); font-size: var(--fs-sm); }
-.command-code { font: 12px/1.4 var(--mono); padding: 5px 8px; background: var(--code-bg); border-radius: var(--r-sm); overflow-x: auto; white-space: nowrap; }
+.command-code { font: 12px/1.4 var(--mono); padding: 5px 8px; background: var(--code-bg); border-radius: var(--r-sm); min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 
 @media (max-width: 1000px) {
   .search-field { width: 200px; }

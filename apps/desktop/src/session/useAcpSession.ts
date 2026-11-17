@@ -21,6 +21,7 @@ import type {
   SessionUpdate,
 } from "../acp/types";
 import { initialState, reducer, type Action, type QueuedUpdate } from "./reducer";
+import { NewSessionBuffer, SwitchToken } from "./switchToken";
 import { basename } from "../lib/format";
 
 export interface PendingPermission {
@@ -54,6 +55,18 @@ function errMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
+/** What the two halves of a session switch share. */
+interface SwitchContext {
+  client: AcpClient;
+  /** The switch still owns the token and the connection is the same. */
+  current: () => boolean;
+  load: (sessionId: string) => Promise<LoadSessionResult>;
+  /** No session could be shown: the composer disables itself. */
+  lost: () => void;
+  /** Reload the last settled session (or show none) so the view never points at a dead one. */
+  restore: (target: string | null) => Promise<void>;
+}
+
 interface Live {
   client: AcpClient | null;
   sessionId: string | null;
@@ -63,13 +76,10 @@ interface Live {
   unlisten: (() => void) | null;
   /** The replay of a session/load is running; owned by the switch token that set it. */
   replaying: boolean;
-  /**
-   * Session-switch token. Every switch (load, new, start-up) takes a fresh value synchronously,
-   * before its first await; a continuation whose token is no longer current drops its result.
-   */
-  switchSeq: number;
-  /** A switch is in flight: the composer must not send. */
-  switching: boolean;
+  /** Session switches: the token, and whether one is in flight (then the composer must not send). */
+  switches: SwitchToken;
+  /** Updates for a session the client does not know yet, held while a session/new is in flight. */
+  unborn: NewSessionBuffer<SessionUpdate>;
   /** The last session that finished loading or starting: the one to restore when a switch fails. */
   settled: string | null;
   /** The running prompt turn, tagged with its session; null when idle. */
@@ -90,8 +100,8 @@ export function useAcpSession(cwd: string) {
     noProfile: false,
     unlisten: null,
     replaying: false,
-    switchSeq: 0,
-    switching: false,
+    switches: new SwitchToken(),
+    unborn: new NewSessionBuffer<SessionUpdate>(),
     settled: null,
     turn: null,
     initResult: null,
@@ -106,17 +116,20 @@ export function useAcpSession(cwd: string) {
   // hidden window, where frames do not fire), so a long replay or a fast stream is not one render per update.
   const queue = useRef<QueuedUpdate[]>([]);
   const flushTimers = useRef({ raf: 0, timeout: 0 });
-  const flushUpdates = useCallback(() => {
+  const cancelFlush = useCallback(() => {
     const t = flushTimers.current;
     if (t.raf) cancelAnimationFrame(t.raf);
     if (t.timeout) window.clearTimeout(t.timeout);
     t.raf = 0;
     t.timeout = 0;
+  }, []);
+  const flushUpdates = useCallback(() => {
+    cancelFlush();
     const batch = queue.current;
     if (batch.length === 0) return;
     queue.current = [];
     rawDispatch({ t: "updates", updates: batch });
-  }, []);
+  }, [cancelFlush]);
   const enqueueUpdate = useCallback(
     (update: SessionUpdate) => {
       queue.current.push({ update, at: Date.now() });
@@ -138,18 +151,23 @@ export function useAcpSession(cwd: string) {
 
   /** Take a fresh switch token; synchronous, so it is set before the caller's first await. */
   const beginSwitch = useCallback((): number => {
-    const l = live.current;
-    l.switching = true;
+    const seq = live.current.switches.begin();
     dispatch({ t: "switching", on: true });
-    return ++l.switchSeq;
+    return seq;
   }, [dispatch]);
 
-  /** Abandon a switch that never reached startSession (nothing on screen changed). */
+  /**
+   * End switch `seq`: only the switch that still owns the token may end the replay and re-enable the
+   * composer. The one place the in-flight state is cleared (besides a restart).
+   */
   const endSwitch = useCallback(
     (seq: number) => {
       const l = live.current;
-      if (l.switchSeq !== seq) return;
-      l.switching = false;
+      if (!l.switches.finish(seq)) return;
+      if (l.replaying) {
+        l.replaying = false;
+        dispatch({ t: "replayDone" });
+      }
       dispatch({ t: "switching", on: false });
     },
     [dispatch],
@@ -185,110 +203,122 @@ export function useAcpSession(cwd: string) {
     }
   }, [cwd]);
 
+  /** An update for the session on screen. */
+  const acceptUpdate = useCallback(
+    (update: SessionUpdate) => {
+      enqueueUpdate(update);
+      if (update.sessionUpdate === "session_info_update") void refreshSessions();
+    },
+    [enqueueUpdate, refreshSessions],
+  );
+
+  /** session/load: on failure show why (a lease gets its own dialog) and put the previous session back. */
+  const loadExisting = useCallback(async (sw: SwitchContext, loadId: string): Promise<boolean> => {
+    const l = live.current;
+    const previous = l.settled;
+    l.sessionId = loadId;
+    l.replaying = true;
+    dispatch({ t: "session", sessionId: loadId, replaying: true });
+    try {
+      const r = await sw.load(loadId);
+      if (!sw.current()) return false;
+      l.settled = loadId;
+      dispatch({ t: "meta", modes: r?.modes, configOptions: r?.configOptions });
+      return true;
+    } catch (e) {
+      if (!sw.current()) return false;
+      l.sessionId = null;
+      if (isLeaseError(e)) setFatal({ kind: "leased", sessionId: loadId });
+      else dispatch({ t: "banner", level: "error", text: `Could not load the session: ${errMessage(e)}` });
+      if (previous && previous !== loadId) await sw.restore(previous);
+      else sw.lost();
+      return false;
+    }
+  }, [dispatch]);
+
+  /**
+   * session/new. keryx may already have released the previous session when the request fails, so a
+   * failure always reloads the previous one. Updates for the new id that arrive before the reply are
+   * held and shown once the id is known.
+   */
+  const createFresh = useCallback(async (sw: SwitchContext, seq: number): Promise<boolean> => {
+    const l = live.current;
+    const previous = l.settled;
+    // From here on the old session's updates, prompts and dialogs are refused.
+    l.sessionId = null;
+    l.unborn.open(seq);
+    try {
+      const r = await sw.client.request<NewSessionResult>("session/new", { cwd, mcpServers: [] });
+      if (!sw.current()) return false;
+      l.sessionId = r.sessionId;
+      l.settled = r.sessionId;
+      l.replaying = false;
+      dispatch({ t: "session", sessionId: r.sessionId, modes: r.modes, configOptions: r.configOptions, replaying: false });
+      for (const update of l.unborn.take(seq, r.sessionId)) acceptUpdate(update);
+      return true;
+    } catch (e) {
+      if (!sw.current()) return false;
+      const why = isLeaseError(e) ? "The session is in use by another keryx" : "Could not start a session";
+      dispatch({ t: "banner", level: "error", text: `${why}: ${errMessage(e)}` });
+      await sw.restore(previous);
+      return false;
+    } finally {
+      l.unborn.close(seq);
+    }
+  }, [cwd, dispatch, acceptUpdate]);
+
+  /**
+   * Show session `loadId`, or a new one when it is null, under switch token `seq`. Returns whether it
+   * is now on screen. Whatever happens, the composer never points at a half-loaded session: a failure
+   * puts the last settled session back (reloading it, so keryx re-activates it) or shows none.
+   */
   const startSession = useCallback(
     async (client: AcpClient, loadId: string | null, gen: number, seq: number): Promise<boolean> => {
       const l = live.current;
-      const current = () => l.gen === gen && l.switchSeq === seq;
+      const current = () => l.gen === gen && l.switches.isCurrent(seq);
       if (!current()) return false;
-      const load = (sessionId: string) =>
-        client.request<LoadSessionResult>("session/load", { sessionId, cwd, mcpServers: [] });
-      const lost = () => {
-        l.sessionId = null;
-        l.settled = null;
-        dispatch({ t: "sessionLost" });
-      };
-      /** Put the last settled session back so the composer never points at a half-loaded one. */
-      const restore = async (target: string | null) => {
-        if (!target) return lost();
-        l.sessionId = target;
-        l.replaying = true;
-        dispatch({ t: "session", sessionId: target, replaying: true });
-        try {
-          const r = await load(target);
-          if (!current()) return;
-          l.settled = target;
-          dispatch({ t: "meta", modes: r?.modes, configOptions: r?.configOptions });
-        } catch {
-          if (current()) lost();
-        }
-      };
-
-      try {
-        if (loadId) {
-          const previous = l.settled;
-          l.sessionId = loadId;
+      const sw: SwitchContext = {
+        client,
+        current,
+        load: (sessionId) => client.request<LoadSessionResult>("session/load", { sessionId, cwd, mcpServers: [] }),
+        lost: () => {
+          l.sessionId = null;
+          l.settled = null;
+          dispatch({ t: "sessionLost" });
+        },
+        restore: async (target) => {
+          if (!target) return sw.lost();
+          l.sessionId = target;
           l.replaying = true;
-          dispatch({ t: "session", sessionId: loadId, replaying: true });
+          dispatch({ t: "session", sessionId: target, replaying: true });
           try {
-            const r = await load(loadId);
-            if (!current()) return false;
-            l.settled = loadId;
+            const r = await sw.load(target);
+            if (!current()) return;
+            l.settled = target;
             dispatch({ t: "meta", modes: r?.modes, configOptions: r?.configOptions });
-            return true;
-          } catch (e) {
-            if (!current()) return false;
-            l.sessionId = null;
-            if (isLeaseError(e)) {
-              setFatal({ kind: "leased", sessionId: loadId });
-            } else {
-              dispatch({ t: "banner", level: "error", text: `Could not load the session: ${errMessage(e)}` });
-            }
-            if (previous && previous !== loadId) await restore(previous);
-            else lost();
-            return false;
+          } catch {
+            if (current()) sw.lost();
           }
-        }
-
-        // The view still shows the session being left only when no superseded load replaced it.
-        const intact = !l.replaying && l.sessionId !== null && l.sessionId === l.settled;
-        const previous = l.settled;
-        // From here on the old session's updates, prompts and dialogs are refused.
-        l.sessionId = null;
-        try {
-          const r = await client.request<NewSessionResult>("session/new", { cwd, mcpServers: [] });
-          if (!current()) return false;
-          l.sessionId = r.sessionId;
-          l.settled = r.sessionId;
-          l.replaying = false;
-          dispatch({
-            t: "session",
-            sessionId: r.sessionId,
-            modes: r.modes,
-            configOptions: r.configOptions,
-            replaying: false,
-          });
-          return true;
-        } catch (e) {
-          if (!current()) return false;
-          if (isLeaseError(e)) {
-            dispatch({ t: "banner", level: "error", text: `The session is in use by another keryx: ${errMessage(e)}` });
-          } else {
-            dispatch({ t: "banner", level: "error", text: `Could not start a session: ${errMessage(e)}` });
-          }
-          if (intact) l.sessionId = previous;
-          else await restore(previous);
-          return false;
-        }
+        },
+      };
+      try {
+        return loadId ? await loadExisting(sw, loadId) : await createFresh(sw, seq);
       } finally {
-        // Only the switch that still owns the token may end the replay and re-enable the composer.
-        if (current()) {
-          l.replaying = false;
-          l.switching = false;
-          dispatch({ t: "replayDone" });
-        }
+        endSwitch(seq);
       }
     },
-    [cwd, dispatch],
+    [cwd, dispatch, endSwitch, loadExisting, createFresh],
   );
 
   const handleUpdate = useCallback(
     (params: unknown) => {
       const p = params as { sessionId?: string; update?: SessionUpdate };
-      if (!p?.update || p.sessionId !== live.current.sessionId) return;
-      enqueueUpdate(p.update);
-      if (p.update.sessionUpdate === "session_info_update") void refreshSessions();
+      const l = live.current;
+      if (!p?.update || typeof p.sessionId !== "string") return;
+      if (p.sessionId === l.sessionId) acceptUpdate(p.update);
+      else if (l.sessionId === null) l.unborn.offer(p.sessionId, p.update);
     },
-    [refreshSessions, enqueueUpdate],
+    [acceptUpdate],
   );
 
   const connect = useCallback(
@@ -303,8 +333,8 @@ export function useAcpSession(cwd: string) {
       l.sessionId = null;
       l.settled = null;
       l.replaying = false;
-      l.switching = false;
-      l.switchSeq++;
+      l.switches.reset();
+      l.unborn.close();
       l.turn = null;
       setFatal(null);
       dispatch({ t: "switching", on: false });
@@ -403,12 +433,12 @@ export function useAcpSession(cwd: string) {
       const l = live.current;
       let seq = beginSwitch();
       const ok = await startSession(client, loadId, gen, seq);
-      if (!ok && loadId && fallbackToNew && l.gen === gen && l.switchSeq === seq) {
+      if (!ok && loadId && fallbackToNew && l.gen === gen && l.switches.isCurrent(seq)) {
         dispatch({ t: "clearBanners" });
         seq = beginSwitch();
         const fellBack = await startSession(client, null, gen, seq);
         // The reload's lease dialog is moot once the fresh session is up.
-        if (fellBack && l.gen === gen && l.switchSeq === seq) setFatal((f) => (f?.kind === "leased" ? null : f));
+        if (fellBack && l.gen === gen && l.switches.isCurrent(seq)) setFatal((f) => (f?.kind === "leased" ? null : f));
       }
       if (l.gen !== gen) return;
       dispatch({ t: "phase", phase: "ready" });
@@ -422,11 +452,7 @@ export function useAcpSession(cwd: string) {
     return () => {
       const l = live.current;
       l.gen++;
-      const t = flushTimers.current;
-      if (t.raf) cancelAnimationFrame(t.raf);
-      if (t.timeout) window.clearTimeout(t.timeout);
-      t.raf = 0;
-      t.timeout = 0;
+      cancelFlush();
       queue.current = [];
       l.unlisten?.();
       l.client?.close("window closed");
@@ -450,7 +476,7 @@ export function useAcpSession(cwd: string) {
       const l = live.current;
       const client = l.client;
       const sessionId = l.sessionId;
-      if (!client || !sessionId || l.turn || l.replaying || l.switching || !l.initialized || !text.trim()) return false;
+      if (!client || !sessionId || l.turn || l.replaying || l.switches.switching || !l.initialized || !text.trim()) return false;
       dispatch({ t: "userSent", text });
       dispatch({ t: "busy", busy: true });
       let done!: Promise<void>;
@@ -524,7 +550,7 @@ export function useAcpSession(cwd: string) {
         endSwitch(seq);
         return;
       }
-      if (l.client !== client || l.gen !== gen || l.switchSeq !== seq) return;
+      if (l.client !== client || l.gen !== gen || !l.switches.isCurrent(seq)) return;
       setFatal(null);
       dispatch({ t: "clearBanners" });
       await startSession(client, loadId, gen, seq);
@@ -549,7 +575,7 @@ export function useAcpSession(cwd: string) {
     const l = live.current;
     const client = l.client;
     const sessionId = l.sessionId;
-    if (!client || !sessionId || l.switching) return;
+    if (!client || !sessionId || l.switches.switching) return;
     // The reply applies only while the session it was sent for is still on screen.
     const stillCurrent = () => l.client === client && l.sessionId === sessionId;
     try {
@@ -564,7 +590,7 @@ export function useAcpSession(cwd: string) {
     const l = live.current;
     const client = l.client;
     const sessionId = l.sessionId;
-    if (!client || !sessionId || l.switching) return;
+    if (!client || !sessionId || l.switches.switching) return;
     const stillCurrent = () => l.client === client && l.sessionId === sessionId;
     try {
       const r = await client.request<{ configOptions?: ConfigOption[] }>("session/set_config_option", {

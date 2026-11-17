@@ -277,10 +277,17 @@ export function FlowDetailSheet({ cwd, card, version, onClose, onWorkOn, onChang
             </>
           }
         >
-          <p>
-            <code>keryx flow freeze {flowRef(c) ?? "<flow>"}</code> seals <code>acceptance-criteria.md</code> with a checksum. After this, the
-            criteria change only through <code>keryx flow ac update</code> in a terminal.
-          </p>
+          {flowRef(c) ? (
+            <p>
+              <code>keryx flow freeze {flowRef(c)}</code> seals <code>acceptance-criteria.md</code> with a checksum. After this, the criteria
+              change only through <code>keryx flow ac update</code> in a terminal.
+            </p>
+          ) : (
+            <p>
+              Freezing seals this flow's <code>acceptance-criteria.md</code> with a checksum. After this, the criteria change only through a
+              criteria update in a terminal.
+            </p>
+          )}
         </Dialog>
       ) : null}
       {form?.kind === "taskAdd" ? (
@@ -324,6 +331,8 @@ export function FlowDetailSheet({ cwd, card, version, onClose, onWorkOn, onChang
 function NextTaskResult({ output }: { output: string }) {
   const parsed = parseNext(output);
   const task = parsed?.task;
+  const resumed = parsed?.resume?.kind === "unresolved";
+  const unresolved = (parsed?.unresolved ?? []).filter((u) => u.task?.id);
   return (
     <>
       {parsed?.kind === "none" ? (
@@ -332,9 +341,18 @@ function NextTaskResult({ output }: { output: string }) {
         <p>
           Next up: <strong className="mono">{task.id}</strong> {task.title}
           {task.kind ? <span className="tag" style={{ marginLeft: 8 }}>{task.kind}</span> : null}
+          {resumed ? <span className="badge badge-warn" style={{ marginLeft: 8 }}>started before, never finished</span> : null}
         </p>
       ) : null}
-      <details open={!parsed || (parsed.kind !== "none" && !task?.id)}>
+      {unresolved.length > 0 ? (
+        <div className="inline-banner tone-warn">
+          <Icon name="alert" size={14} />
+          <span>
+            Started and left open: {unresolved.map((u) => `${u.task?.id}${u.task?.title ? ` ${u.task.title}` : ""}`).join(", ")}
+          </span>
+        </div>
+      ) : null}
+      <details open={!parsed || (parsed.kind !== "none" && !task?.id) || unresolved.length > 0}>
         <summary className="dialog-sub">Raw output of keryx flow next</summary>
         <pre className="code-pre">{prettyJson(output)}</pre>
       </details>
@@ -342,9 +360,14 @@ function NextTaskResult({ output }: { output: string }) {
   );
 }
 
+/** `keryx flow next --json`: a NextTaskDecision (src/flow/machine.ts), read loosely. */
 interface NextJson {
   kind?: string;
   task?: { id?: string; title?: string; kind?: string };
+  /** On a ready decision: whether the task was already started by someone who never came back. */
+  resume?: { kind?: string };
+  /** Every not-done task that carries an open attempt. */
+  unresolved?: Array<{ task?: { id?: string; title?: string } }>;
 }
 
 function parseNext(output: string): NextJson | null {
@@ -898,9 +921,12 @@ function CommandsDialog({ card, onClose }: { card: FlowCard; onClose: () => void
         </button>
       }
     >
-      <p className="dialog-sub">These commands have gates and confirmation tokens that belong in a terminal, so the board does not run them.</p>
+      <p className="dialog-sub">
+        These commands have gates and confirmation tokens that belong in a terminal, so the board does not run them. Replace each{" "}
+        <code>&lt;placeholder&gt;</code> before running; quote free text.
+      </p>
       {terminalCommands(card).length === 0 ? (
-        <p className="dialog-sub">This flow's directory name and id are not safe to put in a command, so no command is offered.</p>
+        <p className="dialog-sub">This flow's directory name or id is not safe to put in a command, so no command is offered.</p>
       ) : null}
       <ul className="command-list">
         {terminalCommands(card).map((c) => (

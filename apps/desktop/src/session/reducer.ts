@@ -67,7 +67,7 @@ export interface SessionState {
   sessionId: string | null;
   busy: boolean;
   replaying: boolean;
-  /** A session switch (new or load) is in flight; the composer must not send. */
+  /** A session switch (new or load) is in flight; the composer must not send. Only the `switching` action changes it. */
   switching: boolean;
   commands: AvailableCommand[];
   modes: SessionModeState | null;
@@ -157,16 +157,17 @@ function appendChunk(
   kind: "user" | "agent" | "thought",
   text: string,
   messageId: string | null | undefined,
-): void {
-  if (text === "") return;
+): boolean {
+  if (text === "") return false;
   const items = d.items;
   const last = items[items.length - 1];
   if (last && last.kind === kind && (messageId == null || last.messageId == null || last.messageId === messageId)) {
     items[items.length - 1] = { ...last, text: last.text + text, messageId: last.messageId ?? messageId };
-    return;
+    return true;
   }
   items.push({ kind, id: d.nextId, text, messageId });
   d.nextId += 1;
+  return true;
 }
 
 function isAutoApproved(meta: unknown): boolean {
@@ -174,7 +175,7 @@ function isAutoApproved(meta: unknown): boolean {
   return keryx?.autoApproved === true;
 }
 
-function findTool(items: Item[], toolCallId: string): number {
+export function findTool(items: readonly Item[], toolCallId: string): number {
   // Updates almost always touch a recent call: search from the end.
   for (let i = items.length - 1; i >= 0; i--) {
     const it = items[i];
@@ -183,7 +184,7 @@ function findTool(items: Item[], toolCallId: string): number {
   return -1;
 }
 
-function upsertTool(d: SessionState, u: ToolCallFields, isNew: boolean, at: number): void {
+function upsertTool(d: SessionState, u: ToolCallFields, isNew: boolean, at: number): true {
   const idx = findTool(d.items, u.toolCallId);
   const prev = idx >= 0 ? (d.items[idx] as Extract<Item, { kind: "tool" }>) : null;
   const next: Extract<Item, { kind: "tool" }> = {
@@ -204,10 +205,11 @@ function upsertTool(d: SessionState, u: ToolCallFields, isNew: boolean, at: numb
   if (!d.replaying && next.endedAt === null && (next.status === "completed" || next.status === "failed")) next.endedAt = at;
   if (prev) {
     d.items[idx] = next;
-    return;
+    return true;
   }
   d.items.push(next);
   d.nextId += 1;
+  return true;
 }
 
 interface ChunkUpdate {
@@ -221,46 +223,46 @@ function tokenPair(v: unknown): TokenPair | null {
   return { inputTokens: o.inputTokens, outputTokens: o.outputTokens };
 }
 
-function applyUpdate(d: SessionState, u: SessionUpdate, at: number): void {
+/** Apply one update to the draft; false when it changed nothing. */
+function applyUpdate(d: SessionState, u: SessionUpdate, at: number): boolean {
   switch (u.sessionUpdate) {
     case "user_message_chunk": {
-      if (!d.replaying) return; // live user text is added locally on send
+      if (!d.replaying) return false; // live user text is added locally on send
       const c = u as ChunkUpdate;
-      appendChunk(d, "user", blockText(c.content), c.messageId);
-      return;
+      return appendChunk(d, "user", blockText(c.content), c.messageId);
     }
     case "agent_message_chunk": {
       const c = u as ChunkUpdate;
-      appendChunk(d, "agent", blockText(c.content), c.messageId);
-      return;
+      return appendChunk(d, "agent", blockText(c.content), c.messageId);
     }
     case "agent_thought_chunk": {
       const c = u as ChunkUpdate;
-      appendChunk(d, "thought", blockText(c.content), c.messageId);
-      return;
+      return appendChunk(d, "thought", blockText(c.content), c.messageId);
     }
     case "tool_call":
-      upsertTool(d, u as ToolCallFields, true, at);
-      return;
+      return upsertTool(d, u as ToolCallFields, true, at);
     case "tool_call_update":
-      upsertTool(d, u as ToolCallFields, false, at);
-      return;
+      return upsertTool(d, u as ToolCallFields, false, at);
     case "plan":
       d.plan = (u as { entries?: PlanEntry[] }).entries ?? [];
-      return;
+      return true;
     case "available_commands_update":
       d.commands = (u as { availableCommands?: AvailableCommand[] }).availableCommands ?? [];
-      return;
-    case "current_mode_update":
-      if (d.modes) d.modes = { ...d.modes, currentModeId: (u as { currentModeId: string }).currentModeId };
-      return;
+      return true;
+    case "current_mode_update": {
+      const id = (u as { currentModeId: string }).currentModeId;
+      if (!d.modes || d.modes.currentModeId === id) return false;
+      d.modes = { ...d.modes, currentModeId: id };
+      return true;
+    }
     case "config_option_update":
       d.configOptions = (u as { configOptions?: ConfigOption[] }).configOptions ?? [];
-      return;
+      return true;
     case "session_info_update": {
       const t = (u as { title?: string | null }).title;
-      if (t !== undefined) d.title = t;
-      return;
+      if (t === undefined || t === d.title) return false;
+      d.title = t;
+      return true;
     }
     case "usage_update": {
       const x = u as { used?: number; size?: number; cost?: Usage["cost"]; _meta?: { keryx?: Record<string, unknown> } };
@@ -273,19 +275,21 @@ function applyUpdate(d: SessionState, u: SessionUpdate, at: number): void {
         turn: tokenPair(k?.turn) ?? d.usage?.turn ?? null,
         session: tokenPair(k?.session) ?? d.usage?.session ?? null,
       };
-      return;
+      return true;
     }
     default:
-      return; // an update kind this client does not know: ignore
+      return false; // an update kind this client does not know: ignore
   }
 }
 
-function applyUpdates(state: SessionState, updates: readonly QueuedUpdate[]): SessionState {
+/** A batch of updates in one render; the same state back when none of them changed anything. */
+export function applyUpdates(state: SessionState, updates: readonly QueuedUpdate[]): SessionState {
   if (updates.length === 0) return state;
   // One copy of the item list per batch, however many updates it carries.
   const d: SessionState = { ...state, items: state.items.slice() };
-  for (const q of updates) applyUpdate(d, q.update, q.at);
-  return d;
+  let changed = false;
+  for (const q of updates) if (applyUpdate(d, q.update, q.at)) changed = true;
+  return changed ? d : state;
 }
 
 export function reducer(state: SessionState, a: Action): SessionState {
@@ -333,7 +337,6 @@ export function reducer(state: SessionState, a: Action): SessionState {
         commands: [],
         busy: false,
         replaying: a.replaying,
-        switching: false,
         modes: a.modes ?? null,
         configOptions: a.configOptions ?? [],
       };
@@ -344,10 +347,10 @@ export function reducer(state: SessionState, a: Action): SessionState {
         configOptions: a.configOptions ?? state.configOptions,
       };
     case "replayDone":
-      return { ...state, replaying: false, switching: false };
+      return state.replaying ? { ...state, replaying: false } : state;
     case "sessionLost":
       // A load failed and nothing could be restored: no session, so the composer disables itself.
-      return { ...state, sessionId: null, items: [], plan: [], usage: null, title: null, commands: [], busy: false, replaying: false, switching: false, modes: null };
+      return { ...state, sessionId: null, items: [], plan: [], usage: null, title: null, commands: [], busy: false, replaying: false, modes: null };
     case "busy":
       return { ...state, busy: a.busy };
     case "config":

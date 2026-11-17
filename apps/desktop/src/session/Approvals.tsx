@@ -1,9 +1,11 @@
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { AskUserResult, PermissionOption, PermissionOutcome, ToolKind } from "../acp/types";
 import type { Fatal, PendingAsk, PendingPermission } from "./useAcpSession";
 import { Icon, type IconName } from "../components/Icon";
 import { Dialog, Kbd } from "../components/ui";
-import { DiffView, primaryInput, restInput } from "./Transcript";
+import { DiffView } from "./Transcript";
+import { argLabel, lineCount, primaryInput, restInput, visibleText } from "./toolInput";
+import { askEnter, permissionEnter } from "./enterGuard";
 import { blockText } from "./reducer";
 
 /** Enter target: the first allow_once, else the first allow option. */
@@ -14,9 +16,6 @@ export function defaultAllow(options: PermissionOption[]): PermissionOption | un
 export function defaultReject(options: PermissionOption[]): PermissionOption | undefined {
   return options.find((o) => o.kind === "reject_once") ?? options.find((o) => o.kind.startsWith("reject"));
 }
-
-/** Ignore Enter this long after the dialog appears: a keystroke aimed at the composer must not approve. */
-const ENTER_GUARD_MS = 300;
 
 const KIND_COPY: Partial<Record<ToolKind, { icon: IconName; verb: string }>> = {
   execute: { icon: "terminal", verb: "run a command" },
@@ -53,16 +52,37 @@ export function PermissionDialog({
   const once = options.filter((o) => o.kind === "allow_once" || o.kind === "reject_once");
   const always = options.filter((o) => o.kind === "allow_always" || o.kind === "reject_always");
 
+  // Boxes whose content is partly hidden; Enter does not approve until each is read to its end or expanded.
+  const [unread, setUnread] = useState<ReadonlySet<string>>(() => new Set());
+  const reportUnread = useCallback((id: string, isUnread: boolean) => {
+    setUnread((prev) => {
+      if (prev.has(id) === isUnread) return prev;
+      const next = new Set(prev);
+      if (isUnread) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }, []);
+
   // Enter/Esc act only on keys that start inside this dialog, never on text fields, and never right after it opens.
   const openedAt = useRef(performance.now());
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.nativeEvent.isComposing || e.defaultPrevented) return;
     const t = e.target as HTMLElement | null;
     if (e.key === "Enter") {
-      if (!allow || e.repeat || performance.now() - openedAt.current < ENTER_GUARD_MS) return;
-      if (t?.closest('input, textarea, select, button, a, summary, [contenteditable=""], [contenteditable="true"]')) return;
+      const verdict = permissionEnter({
+        key: e.key,
+        repeat: e.repeat,
+        isComposing: e.nativeEvent.isComposing,
+        defaultPrevented: e.defaultPrevented,
+        sinceOpenMs: performance.now() - openedAt.current,
+        onControl: !!t?.closest('input, textarea, select, button, a, summary, [contenteditable=""], [contenteditable="true"]'),
+        canAllow: !!allow,
+        unread: unread.size > 0,
+      });
+      if (verdict === "pass") return;
       e.preventDefault();
-      onAnswer(pending, { outcome: "selected", optionId: allow.optionId });
+      if (verdict === "submit" && allow) onAnswer(pending, { outcome: "selected", optionId: allow.optionId });
     } else if (e.key === "Escape") {
       e.preventDefault();
       onAnswer(pending, reject ? { outcome: "selected", optionId: reject.optionId } : { outcome: "cancelled" });
@@ -75,7 +95,7 @@ export function PermissionDialog({
   const primary = primaryInput(tc.rawInput);
   const diffs = (tc.content ?? []).filter((c) => c.type === "diff");
   const texts = (tc.content ?? []).filter((c) => c.type === "content").map((c) => (c.type === "content" ? blockText(c.content).trim() : "")).filter(Boolean);
-  const rawJson = useMemo(() => restInput(tc.rawInput), [tc.rawInput]);
+  const args = useMemo(() => restInput(tc.rawInput), [tc.rawInput]);
   const danger = kind === "delete";
 
   const answer = (o: PermissionOption) => onAnswer(pending, { outcome: "selected", optionId: o.optionId });
@@ -131,29 +151,30 @@ export function PermissionDialog({
     >
       <div className="approval-tool">
         <span className="tag">{kind}</span>
-        <span className="approval-title">{tc.title ?? tc.toolCallId}</span>
+        <span className="approval-title">{visibleText(tc.title ?? tc.toolCallId)}</span>
       </div>
       {primary ? (
         <div className="approval-what">
           <div className="tool-label">{primary.label}</div>
-          <pre className={`out-pre mono-strong${kind === "execute" ? " is-command" : ""}`}>
-            {kind === "execute" ? <span className="prompt-sign">$ </span> : null}
-            {primary.value}
-          </pre>
+          <ReviewPre
+            id="primary"
+            text={primary.value}
+            className={`out-pre mono-strong is-faithful${kind === "execute" ? " is-command" : ""}`}
+            prefix={kind === "execute" ? <span className="prompt-sign">$ </span> : null}
+            onUnread={reportUnread}
+          />
         </div>
       ) : null}
       {diffs.map((d, i) => (d.type === "diff" ? <DiffView key={i} path={d.path} oldText={d.oldText} newText={d.newText} /> : null))}
       {texts.map((t, i) => (
-        <pre key={i} className="out-pre">
-          {t}
-        </pre>
+        <ReviewPre key={i} id={`content-${i}`} text={visibleText(t)} className="out-pre is-faithful" onUnread={reportUnread} />
       ))}
-      {rawJson ? (
-        <div className="approval-what">
-          <div className="tool-label">{primary ? "Other arguments" : "Tool input"}</div>
-          <pre className="out-pre">{rawJson}</pre>
+      {args.map((a) => (
+        <div key={a.key} className="approval-what">
+          <div className="tool-label">{argLabel(a, primary !== null)}</div>
+          <ReviewPre id={`arg-${a.key}`} text={a.text} className="out-pre is-faithful" onUnread={reportUnread} />
         </div>
-      ) : null}
+      ))}
       <p className="approval-why">
         <Icon name="info" size={13} />
         <span>{whyGated(modeId)}</span>
@@ -192,15 +213,17 @@ export function AskUserDialog({ pending, onAnswer }: { pending: PendingAsk; onAn
   // One Enter handler for the whole dialog: ignored right after open, on key repeat, and on buttons (they act on their own).
   const openedAt = useRef(performance.now());
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.key !== "Enter" || e.nativeEvent.isComposing || e.defaultPrevented) return;
-    if (e.repeat || performance.now() - openedAt.current < ENTER_GUARD_MS) {
-      e.preventDefault();
-      return;
-    }
-    const t = e.target as HTMLElement | null;
-    if (t?.closest("button, a, summary")) return;
+    const verdict = askEnter({
+      key: e.key,
+      repeat: e.repeat,
+      isComposing: e.nativeEvent.isComposing,
+      defaultPrevented: e.defaultPrevented,
+      sinceOpenMs: performance.now() - openedAt.current,
+      onControl: !!(e.target as HTMLElement | null)?.closest("button, a, summary"),
+    });
+    if (verdict === "pass") return;
     e.preventDefault();
-    submit();
+    if (verdict === "submit") submit();
   };
 
   return (
@@ -209,7 +232,8 @@ export function AskUserDialog({ pending, onAnswer }: { pending: PendingAsk; onAn
       icon={meta?.irreversible ? "alert" : "chat"}
       tone={meta?.irreversible ? "warn" : "default"}
       onClose={() => onAnswer(pending, { outcome: "cancelled" })}
-      focusRoot={irreversible}
+      // Nothing starts focused on an irreversible choice; a free-text-only question still focuses its field.
+      focusRoot={irreversible && options.length > 0}
       onKeyDown={onKeyDown}
       width={540}
       footer={
@@ -272,6 +296,65 @@ export function AskUserDialog({ pending, onAnswer }: { pending: PendingAsk; onAn
         </label>
       ) : null}
     </Dialog>
+  );
+}
+
+/**
+ * An argument box in an approval. When its content does not fit, it says how long it is and reports
+ * itself unread until it has been scrolled to the end or expanded.
+ */
+function ReviewPre({
+  id,
+  text,
+  className,
+  prefix,
+  onUnread,
+}: {
+  id: string;
+  text: string;
+  className: string;
+  prefix?: ReactNode;
+  onUnread: (id: string, unread: boolean) => void;
+}) {
+  const ref = useRef<HTMLPreElement>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [overflows, setOverflows] = useState(false);
+  const [readToEnd, setReadToEnd] = useState(false);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (el) setOverflows(el.scrollHeight > el.clientHeight + 1);
+  }, [text, expanded]);
+
+  const unread = overflows && !expanded && !readToEnd;
+  useEffect(() => onUnread(id, unread), [id, unread, onUnread]);
+  useEffect(() => () => onUnread(id, false), [id, onUnread]);
+
+  const onScroll = () => {
+    const el = ref.current;
+    if (el && el.scrollTop + el.clientHeight >= el.scrollHeight - 2) setReadToEnd(true);
+  };
+  const lines = lineCount(text);
+
+  return (
+    <>
+      {overflows && !expanded ? (
+        <div className={`review-warn${unread ? " is-unread" : ""}`} role="note">
+          <Icon name="alert" size={13} />
+          <span>
+            {lines > 1 ? `${lines} lines` : "Long value"}, not all shown.{" "}
+            {unread ? "Scroll to the end or show all before approving with ↵." : "Read to the end."}
+          </span>
+          <button type="button" className="link-btn" onClick={() => setExpanded(true)}>
+            Show all
+          </button>
+        </div>
+      ) : null}
+      <pre ref={ref} className={`${className}${expanded ? " is-expanded" : ""}`} onScroll={onScroll}>
+        {prefix}
+        {text}
+      </pre>
+    </>
   );
 }
 

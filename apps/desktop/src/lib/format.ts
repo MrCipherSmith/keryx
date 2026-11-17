@@ -8,9 +8,13 @@ export function relativeTime(iso: string | null | undefined, now = Date.now()): 
   const s = Math.round((t - now) / 1000);
   const abs = Math.abs(s);
   if (abs < 45) return "just now";
-  if (abs < 3600) return rtf.format(Math.round(s / 60), "minute");
-  if (abs < 86400) return rtf.format(Math.round(s / 3600), "hour");
-  if (abs < 86400 * 30) return rtf.format(Math.round(s / 86400), "day");
+  // Pick the unit from the rounded value, so 59.5 minutes reads "1 hr." and not "60 min.".
+  const minutes = Math.round(s / 60);
+  if (Math.abs(minutes) < 60) return rtf.format(minutes, "minute");
+  const hours = Math.round(s / 3600);
+  if (Math.abs(hours) < 24) return rtf.format(hours, "hour");
+  const days = Math.round(s / 86400);
+  if (Math.abs(days) < 30) return rtf.format(days, "day");
   return new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 

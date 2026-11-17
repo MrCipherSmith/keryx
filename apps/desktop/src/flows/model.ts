@@ -47,35 +47,38 @@ export function validateArg(label: string, v: string): string | null {
   return null;
 }
 
+/** The composer text for "Work on this flow": names the package when it has a safe reference. */
 export function workPrompt(card: FlowCard): string {
-  return `Continue flow #${card.id} "${card.title}": take the next task.`;
+  const ref = flowRef(card);
+  return `Continue flow #${card.id} "${card.title}"${ref ? ` (package ${ref})` : ""}: take the next task.`;
 }
 
-/** One path component, letters/digits/`._-`, no leading `-` (mirrors the Rust `validate_flow_dir`). */
-const SAFE_DIR = /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/;
-const SAFE_ID = /^\d{1,9}$/;
+/** A keryx flow package directory: three digits, a dash, then the slug charset (the Rust core's rule). */
+const PACKAGE_DIR = /^\d{3}-[a-z0-9-]{0,196}$/;
 
 /**
- * The only thing a terminal command may name: the package directory (ids are
- * shared across packages, so it is the unambiguous reference), or the id when
- * it is plain digits. `null` when neither is safe: no command is offered.
+ * The only thing a terminal command may name: the package directory, and only when it is a keryx
+ * package name and the backend found the flow's id command-safe (`idValid`). Ids are shared across
+ * packages, so a bare id is never offered. `null`: no command is offered.
  */
 export function flowRef(card: FlowCard): string | null {
-  if (SAFE_DIR.test(card.dir)) return card.dir;
-  if (SAFE_ID.test(card.id)) return card.id;
-  return null;
+  return card.idValid && PACKAGE_DIR.test(card.dir) ? card.dir : null;
 }
 
-/** Commands the board does not run; offered as copyable terminal commands. */
+/**
+ * Commands the board does not run; offered as copyable terminal commands. What only the user can
+ * supply is an unquoted `<placeholder>`: the shell refuses the command until it is replaced.
+ */
 export function terminalCommands(card: FlowCard): Array<{ label: string; command: string }> {
   const ref = flowRef(card);
   if (ref === null) return [];
   return [
+    { label: "Mark implemented", command: `keryx flow implemented ${ref} --pr <draft-PR-url>` },
+    { label: "Confirm a criterion", command: `keryx flow ac confirm ${ref} <ACn> --note <evidence>` },
+    { label: "Confirm completion", command: `keryx flow confirm ${ref}` },
     { label: "Complete", command: `keryx flow complete ${ref}` },
-    { label: "Confirm a criterion", command: `keryx flow ac confirm ${ref} AC1` },
-    { label: "Mark implemented", command: `keryx flow implemented ${ref}` },
-    { label: "Recover", command: `keryx flow recover ${ref}` },
-    { label: "Update criteria", command: `keryx flow ac update ${ref}` },
-    { label: "Reseal criteria", command: `keryx flow ac reseal ${ref}` },
+    { label: "Recover", command: `keryx flow recover ${ref} --reason <why>` },
+    { label: "Update criteria", command: `keryx flow ac update ${ref} --reason <why>` },
+    { label: "Reseal criteria", command: `keryx flow ac reseal ${ref} --reason <why>` },
   ];
 }
