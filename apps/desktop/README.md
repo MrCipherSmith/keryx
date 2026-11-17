@@ -3,6 +3,7 @@
 A macOS Tauri v2 app (`dev.keryx.desktop`) that talks to `keryx acp --profile shell`.
 Rust core in `src-tauri/`, React 18 + Vite + TypeScript in `src/`. Contract:
 `docs/requirements/keryx-desktop-client/specification.md`.
+Installing and using the app: `docs/docs/desktop-app.md`.
 
 Toolchain: Rust (rustup), Bun. The app is not part of the root workspace
 (same as `apps/hub-web`): it has its own `package.json` and `bun.lock`.
