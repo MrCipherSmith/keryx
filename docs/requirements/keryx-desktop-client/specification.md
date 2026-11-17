@@ -291,8 +291,24 @@ redacts it. After any connect or disconnect keryx sends
 `config_option_update` to every held session so the model list reflects the
 new providers; switching the session's provider stays the client's
 `session/set_config_option model` choice — Connect alone never switches.
-`/search-provider` uses the same pattern with
-`_keryx/search_providers/{list,connect,select}` (key as a secret field).
+A provider whose `authMethods` is `["none"]` (Ollama, rapid-mlx, a base-URL
+only endpoint) is connected with `{ providerId, method: "none", baseUrl? }`.
+The `login` request is answered only when the login ends, so the client
+learns `loginId` from the first `login_challenge` (matched by `providerId`).
+
+`/search-provider` uses the same pattern:
+
+| Method | Params | Result |
+|---|---|---|
+| `_keryx/search_providers/list` | `{}` | `{ providers: [{ id, label, connected, selected?, needsKey?, refusal? }] }` |
+| `_keryx/search_providers/connect` | `{ providerId, apiKey? }` | `{ ok, error? }` |
+| `_keryx/search_providers/select` | `{ providerId }` | `{ ok, error? }` |
+
+Task wire as the client reads it (§3.9.5): `jobId` is the id; `startedAt` /
+`endedAt` are ISO-8601 strings, as `BackgroundJobInfo` keeps them; `status`
+is `running` while running; `nextCursor` is a number passed back as `since`
+(omitted on the first read = 0); `missed` is the number of dropped bytes
+(0 when none).
 
 #### 3.9.4 Subagents (D-12)
 
