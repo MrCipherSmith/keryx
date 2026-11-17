@@ -6,7 +6,7 @@ Version: 0.2.0
 | Milestone | Content | Status |
 |---|---|---|
 | M1 | `shell` profile (roster, modes, plan/usage/info updates, `_keryx/ask_user`, `_keryx/info`); Tauri client (chat, tools, approvals, modes, sessions, models, plan, usage, settings); sidecar; local `.dmg`; release workflow; Flows board ([flows-board.md](flows-board.md)); browser dev mode | implemented on the branch; owner acceptance pending (see README status) |
-| M2 | images (after flow 493), `spawn_subagent` + subagent inspector events, background task list/output/kill, rewind, compact, queue, sidebar cards, full slash-command set via `_keryx/command` | future |
+| M2 | images (after flow 493), subagent inspector events (`spawn_subagent` itself is in the shell roster since M1), background task list/output/kill, rewind, compact, queue, sidebar cards, full slash-command set via `_keryx/command` | future |
 | M3 | remote-control and Hub toggles, Developer ID signing on, Homebrew cask, auto-update | future |
 
 ## Parity matrix
@@ -23,7 +23,8 @@ Version: 0.2.0
 | Model and reasoning | M1 | config option `model`, `/reasoning` |
 | Web tools, shell tasks, workspace, Slate, MCP | M1 | shell roster |
 | Images | M2 | `promptCapabilities.image` |
-| Subagent inspector | M2 | `spawn_subagent` + `_keryx/subagent` notifications |
+| Subagent dispatch (`spawn_subagent`) | M1 | shell roster |
+| Subagent inspector | M2 | `_keryx/subagent` notifications |
 | Background tasks panel | M2 | `_keryx/tasks/*` |
 | Rewind, compact, queue | M2 | `_keryx/command` |
 | Sidebar cards, flows | M2 | `_keryx/state` (state snapshot) |

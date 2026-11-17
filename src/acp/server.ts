@@ -135,6 +135,7 @@ import {
   type AcpProfile,
 } from "./profile";
 import { buildAcpShellSessionTools, type AcpShellRosterInput } from "./shell-roster";
+import { createSpawnSubagentTool } from "../harness/tool/builtin/spawn-subagent-tool";
 import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 
@@ -222,6 +223,13 @@ export interface AcpServerOptions {
   readonly searchController?: SearchProviderController;
   /** Shell profile test seam: builds a session's roster. `buildAcpShellSessionTools` otherwise. */
   readonly buildShellRoster?: (input: AcpShellRosterInput) => InteractiveTool[];
+  /**
+   * Shell profile: builds the provider a `spawn_subagent` child runs on when
+   * its `model_tier` resolves to a model other than the session's own —
+   * `keryx shell`'s provider factory (`../commands/acp.ts`). Absent: every
+   * child runs on the session's own provider.
+   */
+  readonly makeSubagentProvider?: (providerId: string, modelId: string, baseUrl?: string) => ProviderPort;
 }
 
 export type { AcpTurnSettings } from "./models";
@@ -592,6 +600,46 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   }
   const shellRosters = new Map<string, ShellRoster>();
   const buildShellRoster = options.buildShellRoster ?? buildAcpShellSessionTools;
+  /**
+   * Shell profile: each session's own `spawn_subagent`, built once per session
+   * and root (its child-budget ledger lives in it), and the reset hook the
+   * ledger hands back, called before every turn as `keryx shell` does. Without
+   * this tool every orchestrator skill answers `STATUS: BLOCKED
+   * nested_dispatch_unavailable` in a top-level desktop session.
+   */
+  const sessionSpawnTools = new Map<string, { readonly root: string; readonly tool: InteractiveTool }>();
+  const subagentBudgetResets = new Map<string, () => void>();
+  function spawnToolFor(sessionId: string, root: string): InteractiveTool {
+    const cached = sessionSpawnTools.get(sessionId);
+    if (cached !== undefined && cached.root === root) return cached.tool;
+    // Read when a child is dispatched, not now: `/model` may switch the session between turns.
+    const parent = (): SessionModel => sessionModel(sessionId, ACP_AGENT_METHODS.sessionPrompt);
+    const hooks = shellHooksBySession.get(sessionId);
+    const tool = createSpawnSubagentTool({
+      cwd: root,
+      ...(hooks !== undefined ? { hooks: hooks.runtime } : {}),
+      onLedgerReady: (controls) => {
+        subagentBudgetResets.set(sessionId, controls.resetBudget);
+      },
+      getParentModel: () => {
+        const { choice, binding } = parent();
+        return {
+          providerId: binding.providerId,
+          modelId: binding.modelId,
+          ...(choice.baseUrl !== undefined ? { baseUrl: choice.baseUrl } : {}),
+        };
+      },
+      makeProvider: (providerId, modelId, baseUrl) => {
+        const { binding } = parent();
+        if (providerId === binding.providerId && modelId === binding.modelId) return binding.provider;
+        return options.makeSubagentProvider?.(providerId, modelId, baseUrl) ?? binding.provider;
+      },
+      // The session's provider only: a `model_tier` resolves to the session's model.
+      getDetectedProviders: () => [{ name: parent().binding.providerId, models: [] }],
+    });
+    sessionSpawnTools.set(sessionId, { root, tool });
+    return tool;
+  }
   /** The cached roster when its inputs still hold. Never starts keryx's MCP runtime. */
   function cachedShellRoster(sessionId: string, state: AcpSessionState): InteractiveTool[] | undefined {
     const cached = shellRosters.get(sessionId);
@@ -740,6 +788,8 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       if (owner === sessionId) planDirSessions.delete(dir);
     }
     shellRosters.delete(sessionId);
+    sessionSpawnTools.delete(sessionId);
+    subagentBudgetResets.delete(sessionId);
     unbindSessionMcp(sessionId);
     const model = sessionModels.get(sessionId);
     if (model !== undefined) releasedModelChoices.set(sessionId, model.choice.value);
@@ -1585,6 +1635,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       // Read through the registry, not captured: `persistHistory` replaces the handle.
       getSessionDir: () => registry.get(sessionId)?.handle.dir,
       metaprojectPort: metaprojectFor(root),
+      spawnTool: spawnToolFor(sessionId, root),
       ...(clientAnswersAskUser(state.clientCapabilities) ? { askUser: askUserFor(sessionId) } : {}),
       ...(mcp !== undefined ? { mcp } : {}),
     });
@@ -1801,6 +1852,10 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       }),
       controlNonce: controlNonceFor(sessionId),
       idSeq,
+      ...((): { resetSubagentBudget: () => void } | Record<string, never> => {
+        const reset = subagentBudgetResets.get(sessionId);
+        return reset !== undefined ? { resetSubagentBudget: reset } : {};
+      })(),
       // Flow 306 (W6, T15): this session's own `HookRuntime` (built at
       // `session/new`/`session/load`, `ensureShellHooksAndFireStart` above),
       // absent only when `KERYX_HOOKS=off` — every existing PreToolUse/

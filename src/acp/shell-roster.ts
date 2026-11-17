@@ -23,7 +23,9 @@
 //   askUser                 `_keryx/ask_user` to the client (`ask-user.ts`) — or, when the
 //                           client did not advertise it, the tool is denied
 //   mcp                     keryx's configured servers merged with the client's `mcpServers`
-//   spawnTool               M2: a placeholder, denied by name below
+//   spawnTool               the session's own `spawn_subagent` (`server.ts`, one per
+//                           session); a host that passes none gets a refusing
+//                           placeholder, denied by name below
 //   bus, schedules,         M2: omitted, so the factory never builds them
 //   operatorConfirm, reviewAgents
 //
@@ -45,23 +47,27 @@ import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import { acpAwareReadFileTool, type AcpFsReader } from "./capability-tools";
 import type { AcpClientCapabilities } from "./protocol";
 
-/** Tools the factory builds that the shell profile does not offer in M1, whatever the client advertised. */
-export const ACP_SHELL_M2_DENIED_TOOLS: readonly string[] = ["spawn_subagent"];
+/**
+ * Denied when the host gave the roster no spawn tool. Without `spawn_subagent`
+ * every orchestrator skill (flow-, job-, review-orchestrator) answers
+ * `STATUS: BLOCKED nested_dispatch_unavailable`, even in a top-level session.
+ */
+export const ACP_SHELL_NO_SPAWN_DENIED_TOOLS: readonly string[] = ["spawn_subagent"];
 
 /**
- * The factory requires a spawn tool. M1 has no spawn port over this wire, so it
- * gets this placeholder, which the denial above removes before any turn sees
- * it. Its invoke refuses too, so a future change that dropped the denial would
- * fail loudly instead of delegating.
+ * The factory requires a spawn tool. A host without a spawn port gets this
+ * placeholder, which the denial above removes before any turn sees it. Its
+ * invoke refuses too, so a change that dropped the denial would fail loudly
+ * instead of delegating.
  */
-const M2_SPAWN_PLACEHOLDER: InteractiveTool = {
+const SPAWN_PLACEHOLDER: InteractiveTool = {
   definition: {
     name: "spawn_subagent",
-    description: "Not available over keryx acp in this release.",
+    description: "Not available in this ACP host.",
     inputSchema: { type: "object", properties: {}, additionalProperties: true },
     risk: "delegate",
   },
-  invoke: async () => ({ output: "spawn_subagent is not available over keryx acp in this release", isError: true }),
+  invoke: async () => ({ output: "spawn_subagent is not available in this ACP host", isError: true }),
 };
 
 export interface AcpShellRosterInput {
@@ -77,11 +83,13 @@ export interface AcpShellRosterInput {
   readonly mcp?: McpToolBinding;
   /** The root's adapter, shared by every build for that root; `createMetaprojectAdapter(root)` when absent. */
   readonly metaprojectPort?: MetaprojectPort;
+  /** The session's `spawn_subagent`. Absent → the tool is denied. */
+  readonly spawnTool?: InteractiveTool;
 }
 
-/** The names the shell profile denies for this input — M2 tools, and `ask_user` without a client to ask. */
-export function acpShellDeniedTools(askUserOffered: boolean): string[] {
-  return [...ACP_SHELL_M2_DENIED_TOOLS, ...(askUserOffered ? [] : ["ask_user"])];
+/** The names the shell profile denies: `spawn_subagent` without a spawn tool, `ask_user` without a client to ask. */
+export function acpShellDeniedTools(askUserOffered: boolean, spawnOffered: boolean): string[] {
+  return [...(spawnOffered ? [] : ACP_SHELL_NO_SPAWN_DENIED_TOOLS), ...(askUserOffered ? [] : ["ask_user"])];
 }
 
 export function buildAcpShellSessionTools(input: AcpShellRosterInput): InteractiveTool[] {
@@ -90,12 +98,12 @@ export function buildAcpShellSessionTools(input: AcpShellRosterInput): Interacti
     cwd: root,
     metaprojectPort: input.metaprojectPort ?? createMetaprojectAdapter(root),
     searchController: input.searchController,
-    spawnTool: M2_SPAWN_PLACEHOLDER,
+    spawnTool: input.spawnTool ?? SPAWN_PLACEHOLDER,
     getSessionDir: input.getSessionDir,
     jobRegistry: input.jobRegistry,
     ...(input.askUser !== undefined ? { askUser: input.askUser } : {}),
     ...(input.mcp !== undefined ? { mcp: input.mcp } : {}),
-    denyTools: acpShellDeniedTools(input.askUser !== undefined),
+    denyTools: acpShellDeniedTools(input.askUser !== undefined, input.spawnTool !== undefined),
   });
   return tools.map((tool) =>
     tool.definition.name === "read_file"
