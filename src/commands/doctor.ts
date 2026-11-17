@@ -491,6 +491,10 @@ export async function checkCommitMsgHook(cwd: string): Promise<DoctorCheck> {
       return { id: "commit-msg-hook", status: "ok", detail: "not a git repository — no commit-msg hook to check" };
     case "disabled":
       return { id: "commit-msg-hook", status: "ok", detail: COMMIT_MSG_HOOK_DISABLED_DETAIL };
+    case "setting-invalid":
+      return { id: "commit-msg-hook", status: "warn", detail: result.reason, fix: "fix .metaproject/metaproject.json (hooks.commitMsg must be true or false)" };
+    case "unverified":
+      return { id: "commit-msg-hook", status: "warn", detail: `the keryx commit-msg check is ${result.reason}`, fix: result.fix };
     case "missing":
       return { id: "commit-msg-hook", status: "warn", detail: "the keryx commit-msg hook (refuses AI Co-Authored-By and Generated-by lines) is not installed", fix: UPDATE_FIX };
     case "inactive":

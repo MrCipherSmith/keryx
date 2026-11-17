@@ -499,7 +499,9 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
   const metaprojectRoot = path.join(projectRoot, ".metaproject");
   const manifestState = await readManifest(metaprojectRoot);
   const manifest = manifestState.manifest;
-  const recoveredManifest = !manifestState.exists || !manifestState.valid;
+  // A manifest that exists but cannot be parsed is NOT rebuilt: rewriting it from
+  // the folders on disk would drop settings only the file holds (hooks.commitMsg).
+  const recoveredManifest = !manifestState.exists;
   if (manifestState.migrated) {
     {
       const { root, rel } = containFromMetaprojectPath(path.join(metaprojectRoot, "metaproject.json"));
@@ -820,7 +822,12 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
   const commitMsgWarning = (await applyCommitMsgHookSetting(projectRoot)).warning;
   if (commitMsgWarning) hookWarnings.push(commitMsgWarning);
 
-  if (!manifestState.exists || !manifestState.valid) {
+  if (manifestState.exists && !manifestState.valid) {
+    hookWarnings.push(
+      `${path.join(metaprojectRoot, "metaproject.json")} is not valid JSON; left it as it is so settings only it holds ` +
+        "(such as hooks.commitMsg) are not lost. Fix it, or delete it to let `keryx update` rebuild it from the folders on disk.",
+    );
+  } else if (!manifestState.exists) {
     await writeRecoveredManifest(metaprojectRoot, {
       enableGdgraph,
       enableGdctx,

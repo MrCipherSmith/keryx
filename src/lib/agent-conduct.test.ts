@@ -11,7 +11,7 @@ import { renderProjectMetaprojectReferenceBlock } from "./agent-entrypoint-block
 import { buildAgentSystemInstruction } from "../commands/agent";
 import { EXTERNAL_RUNTIME_DIRECTIVE, EXTERNAL_WRITE_RUNTIME_DIRECTIVE } from "../harness/external/prompt";
 import { REVIEWER_SYSTEM_PROMPT, VERIFIER_SYSTEM_PROMPT } from "../review/bot/run";
-import { HERDR_TEMPLATE_MD } from "../commands/herdr";
+import { HERDR_TEMPLATE_MD, HERDR_TEMPLATE_PREVIOUS } from "../commands/herdr";
 import { loadSchema, validateJson } from "../gdskills/contracts";
 import { validateAgainstSchemaObject } from "../contracts/validator";
 
@@ -110,13 +110,22 @@ describe("agent conduct block (ADR-0001 D2)", () => {
     expect(validateAgainstSchemaObject(schema as Record<string, unknown>, ok).valid).toBe(true);
   });
 
-  test("the herdr template text is pinned, so a conduct wording change cannot strand installed copies", () => {
+  test("the herdr template text is pinned, and every shipped text stays recognisable", () => {
     // The herdr template embeds AGENT_CONDUCT_PROMPT_BLOCK. `keryx herdr install`
     // recognises keryx's own older copies only through HERDR_TEMPLATE_PREVIOUS
-    // (src/commands/herdr.ts). When this hash changes, append the PREVIOUS text of
-    // HERDR_TEMPLATE_MD to that list (never edit an entry), then update the hash.
-    const digest = new Bun.CryptoHasher("sha256").update(HERDR_TEMPLATE_MD).digest("hex");
-    expect(digest).toBe("d55d396f14fc3359923e20526c0a8daa43a946a72cc3fce2f7ac5599f9fd1897");
+    // (src/commands/herdr.ts). When the current hash changes: add the old hash to
+    // SHIPPED, append the old HERDR_TEMPLATE_MD text to HERDR_TEMPLATE_PREVIOUS
+    // (never edit an entry), then pin the new hash.
+    const sha = (text: string) => new Bun.CryptoHasher("sha256").update(text).digest("hex");
+    const CURRENT = "d55d396f14fc3359923e20526c0a8daa43a946a72cc3fce2f7ac5599f9fd1897";
+    const SHIPPED = [
+      "f60ed4d7b0f6caa98ad09cff62a8d0f827eecf6946930693084541bc1d7487ab",
+      "a4c25735addb292dc3de8e7c01d70fb5460283ec5540ce6947ee0c96c18b9b7c",
+    ];
+    expect(sha(HERDR_TEMPLATE_MD)).toBe(CURRENT);
+    const previous = new Set(HERDR_TEMPLATE_PREVIOUS.map(sha));
+    for (const hash of SHIPPED) expect(previous.has(hash), hash).toBe(true);
+    expect(previous.has(CURRENT)).toBe(false);
   });
 
   test("prompt builders without an exported surface append the shared block", () => {

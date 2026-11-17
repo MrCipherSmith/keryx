@@ -105,7 +105,7 @@ ${AGENT_CONDUCT_PROMPT_BLOCK}
  * install updates it without --force, remove deletes it, status calls it out of date. Append the text a
  * release replaces when HERDR_TEMPLATE_MD changes; never edit an entry.
  */
-const HERDR_TEMPLATE_PREVIOUS: readonly string[] = [
+export const HERDR_TEMPLATE_PREVIOUS: readonly string[] = [
   `---
 description: Keryx agent shell. Give it one task and the files in scope.
 command: keryx shell

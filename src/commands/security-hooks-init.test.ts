@@ -516,3 +516,21 @@ test("update removes a previously installed commit-msg check when hooks.commitMs
     expect(await readHooksSetting(root)).toEqual({ commitMsg: true });
   });
 });
+
+test("update leaves an unparsable metaproject.json and the commit-msg hook state as they are", async () => {
+  await withProject(async (root) => {
+    await initCommand(["--yes", ...SECURITY_ONLY]);
+    await setCommitMsgHook(root, false);
+    await updateCommand(["--skip-runtime", "--no-tasks"]);
+    expect(commitMsgFiles(root)).toEqual({ hook: false, script: false });
+
+    // The opt-out is still in the file, but the file no longer parses.
+    const manifestPath = path.join(root, ".metaproject", "metaproject.json");
+    const broken = `${await readFile(manifestPath, "utf8")}\n,broken`;
+    await writeFile(manifestPath, broken, "utf8");
+    await updateCommand(["--skip-runtime", "--no-tasks"]);
+    // Neither rebuilt (which would drop hooks.commitMsg) nor read as "on" (which would reinstall the hook).
+    expect(await readFile(manifestPath, "utf8")).toBe(broken);
+    expect(commitMsgFiles(root)).toEqual({ hook: false, script: false });
+  });
+});

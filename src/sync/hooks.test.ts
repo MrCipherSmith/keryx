@@ -103,6 +103,24 @@ test("install-hooks honours hooks.commitMsg: false and removes an installed chec
   });
 });
 
+test("install-hooks run from a subdirectory reads hooks.commitMsg from the project root", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-sync-hooks-subdir-"));
+  try {
+    await Bun.spawn(["git", "init", "-q", "--template="], { cwd: root, stdout: "ignore", stderr: "ignore" }).exited;
+    expect(await installSyncHooks(root)).toContain("commit-msg");
+    await mkdir(path.join(root, ".metaproject"), { recursive: true });
+    await writeFile(path.join(root, ".metaproject", "metaproject.json"), JSON.stringify({ hooks: { commitMsg: false } }), "utf8");
+    const sub = path.join(root, "packages", "app");
+    await mkdir(sub, { recursive: true });
+
+    expect(await installSyncHooks(sub)).not.toContain("commit-msg");
+    expect(await pathExists(path.join(root, ".git", "hooks", "keryx-commit-msg"))).toBe(false);
+    expect(await pathExists(path.join(root, ".git", "hooks", "commit-msg"))).toBe(false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("no-op outside a git repo", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "keryx-nogit-"));
   try {

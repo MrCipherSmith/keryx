@@ -5,12 +5,14 @@ import { describe, expect, test } from "bun:test";
 import {
   AI_EMAIL_DOMAINS,
   AI_GOOGLE_AGENT_LOCAL_PARTS,
+  AI_GITHUB_BOT_LOGINS,
+  AI_GITHUB_USER_LOGINS,
   AI_PRODUCT_NAMES,
+  analyzeCommitMsgCall,
   applyCommitMsgHookSetting,
   COMMIT_MSG_CHECK_SCRIPT,
   COMMIT_MSG_FIX_LINE,
   type CommitMessageContext,
-  commitMsgHookEnabled,
   commitMsgHookInstalled,
   findAttributionViolations,
   inspectCommitMsgHook,
@@ -18,6 +20,7 @@ import {
   installManagedHook,
   ManagedGitHookEscapeError,
   removeCommitMsgHookOrWarn,
+  readCommitMsgHookSetting,
   removeManagedHook,
 } from "./managed-git-hook";
 import { pathExists } from "./fs";
@@ -311,6 +314,17 @@ function tableSamples(): { rejected: Array<[string, string]>; accepted: Array<[s
     rejected.push([`domain ${domain}`, `feat: x\n\nCo-Authored-By: Jane Doe <jane@${domain}>\n`]);
     accepted.push([`domain x${domain}`, `feat: x\n\nCo-Authored-By: Jane Doe <jane@x${domain}>\n`]);
     accepted.push([`domain ${domain}.example.org`, `feat: x\n\nCo-Authored-By: Jane Doe <jane@${domain}.example.org>\n`]);
+  }
+  for (const login of AI_GITHUB_BOT_LOGINS) {
+    rejected.push([`AI bot ${login}`, `feat: x\n\nCo-Authored-By: ${login}[bot] <12345+${login}[bot]@users.noreply.github.com>\n`]);
+    rejected.push([`AI bot ${login}, no id`, `feat: x\n\nCo-Authored-By: Helper <${login}[bot]@users.noreply.github.com>\n`]);
+    accepted.push([`bot x${login}`, `feat: x\n\nCo-Authored-By: Helper <12345+x${login}[bot]@users.noreply.github.com>\n`]);
+  }
+  for (const login of AI_GITHUB_USER_LOGINS) {
+    rejected.push([`AI user ${login}`, `feat: x\n\nCo-Authored-By: Helper <12345+${login}@users.noreply.github.com>\n`]);
+  }
+  for (const bot of ["dependabot", "renovate", "github-actions", "pre-commit-ci", "mergify"]) {
+    accepted.push([`non-AI bot ${bot}`, `feat: x\n\nCo-Authored-By: ${bot}[bot] <49699333+${bot}[bot]@users.noreply.github.com>\n`]);
   }
   for (const local of AI_GOOGLE_AGENT_LOCAL_PARTS) {
     rejected.push([`google ${local}`, `feat: x\n\nCo-Authored-By: Jane Doe <${local}@google.com>\n`]);
@@ -638,12 +652,24 @@ describe("a foreign commit-msg hook is never edited", () => {
       expect(state.state === "inactive" && state.reason).toContain("foreign commit-msg hook");
       expect(state.state === "inactive" && state.fix).toContain(COMMIT_MSG_FIX_LINE);
 
-      await writeFile(hookPath, `${PRE_COMMIT_SHAPED_HOOK}${COMMIT_MSG_FIX_LINE}\n`, "utf8");
+      // Appended after the `if … exec … fi`: the line never runs, so it is not active.
+      const appended = `${PRE_COMMIT_SHAPED_HOOK}${COMMIT_MSG_FIX_LINE}\n`;
+      await writeFile(hookPath, appended, "utf8");
+      const unverified = await inspectCommitMsgHook(root);
+      expect(unverified.state).toBe("unverified");
+      expect(unverified.state === "unverified" && unverified.reason).toContain("unverified — check that this line runs before any exec");
+      expect(await installCommitMsgHookOrWarn(root)).toContain("cannot show that the call runs");
+      expect(await readFile(hookPath, "utf8")).toBe(appended);
+
+      // Placed right after the shebang: provably runs, so active.
+      const [shebang, ...restOfHook] = PRE_COMMIT_SHAPED_HOOK.split("\n");
+      const atTop = `${shebang}\n${COMMIT_MSG_FIX_LINE}\n${restOfHook.join("\n")}`;
+      await writeFile(hookPath, atTop, "utf8");
       expect((await inspectCommitMsgHook(root)).state).toBe("active");
       expect(await commitMsgHookInstalled(root)).toBe(true);
       // Re-running install leaves the user-wired hook alone and reports no problem.
       expect(await installCommitMsgHookOrWarn(root)).toBeNull();
-      expect(await readFile(hookPath, "utf8")).toBe(`${PRE_COMMIT_SHAPED_HOOK}${COMMIT_MSG_FIX_LINE}\n`);
+      expect(await readFile(hookPath, "utf8")).toBe(atTop);
       // Removal keeps the script while the user's hook still calls it.
       const removal = await removeCommitMsgHookOrWarn(root);
       expect(removal.removed).toBe(false);
@@ -718,6 +744,48 @@ describe("a foreign commit-msg hook is never edited", () => {
     }
   });
 
+  test("install never refreshes or replaces a commit-msg reached through a symlink", async () => {
+    const root = uniqueTestRoot(tmpdir(), "keryx-commit-msg-link-refresh");
+    try {
+      await initRepo(root);
+      const hookPath = path.join(root, ".git", "hooks", "commit-msg");
+      const target = path.join(root, "scripts", "commit-msg");
+      await mkdir(path.dirname(target), { recursive: true });
+      await symlink(path.join("..", "..", "scripts", "commit-msg"), hookPath);
+      // An old keryx block behind the link: a refresh would rewrite the target.
+      const legacy = "#!/bin/sh\n# keryx:commit-msg-attribution:begin\nold_inline_check \"$@\" || exit $?\n# keryx:commit-msg-attribution:end\n";
+      await writeFile(target, legacy, "utf8");
+      await installCommitMsgHookOrWarn(root);
+      expect(await readFile(target, "utf8")).toBe(legacy);
+      // A shebang-only target behind the link: replacing it would write through the link.
+      await writeFile(target, "#!/bin/sh\n", "utf8");
+      expect(await installCommitMsgHookOrWarn(root)).toMatch(/a symlink/);
+      expect(await readFile(target, "utf8")).toBe("#!/bin/sh\n");
+      expect((await lstat(hookPath)).isSymbolicLink()).toBe(true);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("removal strips the keryx block but keeps the script while a user line still calls it", async () => {
+    const root = uniqueTestRoot(tmpdir(), "keryx-commit-msg-still-wired");
+    try {
+      await initRepo(root);
+      expect(await installCommitMsgHookOrWarn(root)).toBeNull();
+      const hookPath = path.join(root, ".git", "hooks", "commit-msg");
+      const scriptPath = path.join(root, ".git", "hooks", COMMIT_MSG_CHECK_SCRIPT);
+      await writeFile(hookPath, `${await readFile(hookPath, "utf8")}${COMMIT_MSG_FIX_LINE}\n`, "utf8");
+      const removal = await removeCommitMsgHookOrWarn(root);
+      expect(removal.removed).toBe(true);
+      expect(removal.warning).toContain("still calls");
+      expect(await readFile(hookPath, "utf8")).not.toContain("keryx:commit-msg-attribution");
+      expect(await readFile(hookPath, "utf8")).toContain(COMMIT_MSG_FIX_LINE);
+      expect(await pathExists(scriptPath)).toBe(true);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   test("a symlinked or foreign keryx-commit-msg is not overwritten", async () => {
     const root = uniqueTestRoot(tmpdir(), "keryx-commit-msg-script-guard");
     const outside = uniqueTestRoot(tmpdir(), "keryx-commit-msg-script-guard-outside");
@@ -741,42 +809,98 @@ describe("a foreign commit-msg hook is never edited", () => {
   });
 });
 
-test("commitMsgHookEnabled: on unless metaproject.json has hooks.commitMsg === false", async () => {
-  const root = uniqueTestRoot(tmpdir(), "keryx-commit-msg-enabled");
+test("readCommitMsgHookSetting: on by default, off only for false, invalid otherwise", async () => {
+  const root = uniqueTestRoot(tmpdir(), "keryx-commit-msg-setting");
   try {
     await mkdir(path.join(root, ".metaproject"), { recursive: true });
     const manifestPath = path.join(root, ".metaproject", "metaproject.json");
-    expect(await commitMsgHookEnabled(root)).toBe(true);
-    for (const [content, enabled] of [
-      ["not json", true],
-      ["[]", true],
-      [JSON.stringify({}), true],
-      [JSON.stringify({ hooks: null }), true],
-      [JSON.stringify({ hooks: { commitMsg: true } }), true],
-      [JSON.stringify({ hooks: { commitMsg: 0 } }), true],
-      [JSON.stringify({ hooks: { commitMsg: false } }), false],
+    expect((await readCommitMsgHookSetting(root)).state).toBe("on");
+    for (const [content, state] of [
+      ["not json", "invalid"],
+      ["[]", "invalid"],
+      ["null", "invalid"],
+      [JSON.stringify({}), "on"],
+      [JSON.stringify({ hooks: {} }), "on"],
+      [JSON.stringify({ hooks: null }), "invalid"],
+      [JSON.stringify({ hooks: [] }), "invalid"],
+      [JSON.stringify({ hooks: { commitMsg: true } }), "on"],
+      [JSON.stringify({ hooks: { commitMsg: 0 } }), "invalid"],
+      [JSON.stringify({ hooks: { commitMsg: "false" } }), "invalid"],
+      [JSON.stringify({ hooks: { commitMsg: false } }), "off"],
     ] as const) {
       await writeFile(manifestPath, content, "utf8");
-      expect(await commitMsgHookEnabled(root), content).toBe(enabled);
+      expect((await readCommitMsgHookSetting(root)).state, content).toBe(state);
     }
+    // From a subdirectory, the manifest at the project root is the one read.
+    const sub = path.join(root, "packages", "app");
+    await mkdir(sub, { recursive: true });
+    await mkdir(path.join(root, ".git"), { recursive: true });
+    expect(await readCommitMsgHookSetting(sub)).toEqual({ state: "off", manifestPath });
   } finally {
     await rm(root, { recursive: true, force: true });
   }
 });
 
-test("applyCommitMsgHookSetting removes through the same guard when disabled", async () => {
+test("applyCommitMsgHookSetting: on installs, off removes through the same guard, invalid touches nothing", async () => {
   const root = uniqueTestRoot(tmpdir(), "keryx-commit-msg-apply");
   try {
     await initRepo(root);
-    expect(await applyCommitMsgHookSetting(root)).toEqual({ enabled: true, installed: true, removed: false, warning: null });
+    expect(await applyCommitMsgHookSetting(root)).toEqual({ setting: "on", installed: true, removed: false, warning: null });
     await mkdir(path.join(root, ".metaproject"), { recursive: true });
-    await writeFile(path.join(root, ".metaproject", "metaproject.json"), JSON.stringify({ hooks: { commitMsg: false } }), "utf8");
-    expect(await applyCommitMsgHookSetting(root)).toEqual({ enabled: false, installed: false, removed: true, warning: null });
+    const manifestPath = path.join(root, ".metaproject", "metaproject.json");
+
+    // Unreadable setting: the installed check stays, with a warning.
+    await writeFile(manifestPath, "{ not json", "utf8");
+    const invalidOn = await applyCommitMsgHookSetting(root);
+    expect(invalidOn).toMatchObject({ setting: "invalid", installed: false, removed: false });
+    expect(invalidOn.warning).toContain("is not valid JSON");
+    expect(await commitMsgHookInstalled(root)).toBe(true);
+    const state = await inspectCommitMsgHook(root);
+    expect(state.state).toBe("setting-invalid");
+
+    await writeFile(manifestPath, JSON.stringify({ hooks: { commitMsg: false } }), "utf8");
+    expect(await applyCommitMsgHookSetting(root)).toEqual({ setting: "off", installed: false, removed: true, warning: null });
     expect(await commitMsgHookInstalled(root)).toBe(false);
     expect(await inspectCommitMsgHook(root)).toEqual({ state: "disabled" });
+
+    // Unreadable setting while off: nothing is installed either.
+    await writeFile(manifestPath, JSON.stringify({ hooks: { commitMsg: "no" } }), "utf8");
+    expect((await applyCommitMsgHookSetting(root)).setting).toBe("invalid");
+    expect(await pathExists(path.join(root, ".git", "hooks", COMMIT_MSG_CHECK_SCRIPT))).toBe(false);
+    expect(await pathExists(path.join(root, ".git", "hooks", "commit-msg"))).toBe(false);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("analyzeCommitMsgCall: active only for a call that provably runs", () => {
+  const call = COMMIT_MSG_FIX_LINE;
+  const managed = `"$(dirname "$0")/${COMMIT_MSG_CHECK_SCRIPT}" "$1" || exit $?`;
+  const runs: Array<[string, string]> = [
+    ["fix line after the shebang", `#!/bin/sh\n${call}\nexec other "$@"\n`],
+    ["managed block line", `#!/bin/sh\n\n# keryx:commit-msg-attribution:begin\n${managed}\n# keryx:commit-msg-attribution:end\n`],
+    ["after plain commands and a closed if", `#!/bin/bash\nA=1\nif [ -n "$A" ]; then echo y; fi\n${call}\n`],
+    ["no shebang", `${call}\n`],
+    ["last line without || exit", `#!/bin/sh\necho a\n"$(git rev-parse --git-path hooks)/${COMMIT_MSG_CHECK_SCRIPT}" "$1"\n`],
+  ];
+  const notRuns: Array<[string, string]> = [
+    ["after exec", `#!/bin/sh\nexec other "$@"\n${call}\n`],
+    ["after if…exec…fi", `#!/bin/sh\nif [ -x x ]; then exec x "$@"; else exit 1; fi\n${call}\n`],
+    ["after a conditional exit", `#!/bin/sh\n[ -f x ] || exit 0\n${call}\n`],
+    ["inside an if", `#!/bin/sh\nif true; then\n  ${call}\nfi\n`],
+    ["inside a function", `#!/bin/sh\ncheck() {\n  ${call}\n}\n`],
+    ["inside a loop", `#!/bin/sh\nfor f in a; do\n${call}\ndone\n`],
+    ["inside a case", `#!/bin/sh\ncase "$1" in\n*)\n${call}\n;;\nesac\n`],
+    ["after a sourced file", `#!/bin/sh\n. ./lib.sh\n${call}\n`],
+    ["after a here-document", `#!/bin/sh\ncat <<EOF\nx\nEOF\n${call}\n`],
+    ["guarded by &&", `#!/bin/sh\ntrue && ${call}\n`],
+    ["status ignored", `#!/bin/sh\n"$(git rev-parse --git-path hooks)/${COMMIT_MSG_CHECK_SCRIPT}" "$1"\necho done\n`],
+    ["run in the background", `#!/bin/sh\n"$(git rev-parse --git-path hooks)/${COMMIT_MSG_CHECK_SCRIPT}" "$1" &\n`],
+    ["python hook", `#!/usr/bin/env python3\n${call}\n`],
+    ["mentioned only in a test", `#!/bin/sh\n[ -x "${COMMIT_MSG_CHECK_SCRIPT}" ]\n`],
+  ];
+  for (const [name, text] of runs) expect(analyzeCommitMsgCall(text).runs, name).toBe(true);
+  for (const [name, text] of notRuns) expect(analyzeCommitMsgCall(text).runs, name).toBe(false);
 });
 
 test("uninstallSyncHooks removes the commit-msg check, installSyncHooks puts it back", async () => {
