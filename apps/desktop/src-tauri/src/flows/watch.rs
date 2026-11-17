@@ -19,13 +19,13 @@ pub const POLL_INTERVAL: Duration = Duration::from_secs(2);
 type Snapshot = HashMap<String, (Option<SystemTime>, u64)>;
 
 /// What changed-detection compares: every flow package the board lists (same
-/// rule as `flow_dirs`) with its `flow.json` mtime and size (`None`/0 when the
+/// rule as `flow_dirs`, from `package`) with its `flow.json` mtime and size (`None`/0 when the
 /// file is missing).
 pub fn snapshot(root: &Path) -> Snapshot {
     let Ok(entries) = std::fs::read_dir(root) else { return Snapshot::new() };
     entries
         .filter_map(Result::ok)
-        .filter_map(|e| Some((super::package_name(&e)?, e)))
+        .filter_map(|e| Some((super::package::package_name(&e)?, e)))
         .map(|(name, e)| {
             let meta = std::fs::metadata(e.path().join("flow.json")).ok();
             (name, (meta.as_ref().and_then(|m| m.modified().ok()), meta.map_or(0, |m| m.len())))

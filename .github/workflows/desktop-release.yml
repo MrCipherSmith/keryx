@@ -4,6 +4,11 @@ name: Desktop Release
 # release (`release.yml`) owns `v*` and this workflow must never fire on it.
 # `workflow_dispatch` builds and uploads nothing to a release: it is a dry run
 # of the build on an arbitrary ref, useful to prove the pipeline before tagging.
+# A dry run is always ad-hoc signed: the Developer ID key and the notarization
+# credentials are used only for a `desktop-v*` tag push.
+# Owner action: move the APPLE_* secrets into a `desktop-release` environment
+# whose deployment rule allows only `desktop-v*` tags, then add
+# `environment: desktop-release` to the job.
 on:
   push:
     tags:
@@ -65,10 +70,13 @@ jobs:
         run: bash scripts/desktop/build-sidecar.sh --target all
 
       # Signing material is optional. GitHub does not expose `secrets` to `if:`,
-      # so the decision is made once here and read from the step output.
+      # so the decision is made once here and read from the step output. Only a
+      # tag push signs: a manual dispatch builds an arbitrary ref and must never
+      # touch the Developer ID key or submit to Apple.
       - name: Detect Developer ID signing secrets
         id: sign
         env:
+          RELEASE_TAG_PUSH: ${{ github.event_name == 'push' && github.ref_type == 'tag' }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
@@ -77,7 +85,10 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           set -euo pipefail
-          if [ -n "$APPLE_CERTIFICATE" ] && [ -n "$APPLE_CERTIFICATE_PASSWORD" ] \
+          if [ "$RELEASE_TAG_PUSH" != "true" ]; then
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "Not a desktop-v* tag push: ad-hoc signed dry run."
+          elif [ -n "$APPLE_CERTIFICATE" ] && [ -n "$APPLE_CERTIFICATE_PASSWORD" ] \
             && [ -n "$APPLE_SIGNING_IDENTITY" ] && [ -n "$APPLE_ID" ] \
             && [ -n "$APPLE_PASSWORD" ] && [ -n "$APPLE_TEAM_ID" ]; then
             echo "signed=true" >> "$GITHUB_OUTPUT"
@@ -99,9 +110,13 @@ jobs:
           CERT="$RUNNER_TEMP/certificate.p12"
           echo "$APPLE_CERTIFICATE" | base64 --decode > "$CERT"
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
-          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          # Locks again after 90 min (the job's own timeout).
+          security set-keychain-settings -lut 5400 "$KEYCHAIN"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
-          security import "$CERT" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          # -x: the private key is not extractable. -T: only codesign may use it
+          # without a prompt (not every program, as -A would allow): the build
+          # runs third-party code (npm tree, every crate's build.rs) meanwhile.
+          security import "$CERT" -P "$APPLE_CERTIFICATE_PASSWORD" -x -T /usr/bin/codesign -t cert -f pkcs12 -k "$KEYCHAIN"
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
           # Put the temporary keychain first in the search list, keep the rest.
           security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
@@ -130,6 +145,35 @@ jobs:
       - name: Remove the temporary keychain
         if: always() && steps.sign.outputs.signed == 'true'
         run: security delete-keychain "$KEYCHAIN_PATH" || true
+
+      # The sidecar is a bun-compiled executable: under the hardened runtime it
+      # needs the JIT entitlements (Entitlements.plist) or it dies at launch.
+      # Prove the bundled sidecar carries them (Developer ID build) and runs.
+      - name: Check the bundled keryx sidecar runs
+        env:
+          SIGNED: ${{ steps.sign.outputs.signed }}
+        run: |
+          set -euo pipefail
+          BUNDLE="apps/desktop/src-tauri/target/universal-apple-darwin/release/bundle"
+          APP="$(find "$BUNDLE/macos" -maxdepth 1 -name '*.app' -print -quit 2>/dev/null || true)"
+          SIDECAR="$APP/Contents/MacOS/keryx"
+          if [ -z "$APP" ] || [ ! -x "$SIDECAR" ]; then
+            echo "::error::no keryx sidecar under $BUNDLE/macos/*.app/Contents/MacOS"
+            exit 1
+          fi
+          if [ "$SIGNED" = "true" ]; then
+            ENTITLEMENTS="$(codesign -d --entitlements - --xml "$SIDECAR" 2>/dev/null || true)"
+            for key in com.apple.security.cs.allow-jit com.apple.security.cs.allow-unsigned-executable-memory; do
+              if ! printf '%s' "$ENTITLEMENTS" | grep -q "$key"; then
+                echo "::error::the signed sidecar lacks $key"
+                exit 1
+              fi
+            done
+          fi
+          if ! "$SIDECAR" --version; then
+            echo "::error::the bundled keryx sidecar does not run (--version failed)"
+            exit 1
+          fi
 
       - name: Locate the dmg
         id: dmg

@@ -5,7 +5,7 @@
 //! holds packages written by many keryx versions, and a missing optional field
 //! must never turn a flow into a broken card.
 
-use super::{Attempt, Criterion, FlowCard, JournalEntry, TaskRow};
+use super::{package, Attempt, Criterion, FlowCard, JournalEntry, TaskRow};
 use serde_json::Value;
 use std::collections::HashMap;
 
@@ -44,6 +44,7 @@ pub fn broken_card(dir_name: &str, error: String) -> FlowCard {
         id_valid: is_command_id(&id),
         id,
         dir: dir_name.to_string(),
+        command_ref: package::command_ref(dir_name),
         title: dir_name.to_string(),
         status: "unknown".to_string(),
         previous_status: None,
@@ -78,13 +79,9 @@ pub fn parse_flow_json(text: &str) -> Result<Value, String> {
     }
 }
 
-/// Parse `flow.json` text into a card. `criteria_total` is the count from
-/// `acceptance-criteria.md`, when that file was read; otherwise `acKinds` is used.
-pub fn parse_card(text: &str, dir_name: &str, criteria_total: Option<usize>) -> Result<FlowCard, String> {
-    Ok(card_from_value(&parse_flow_json(text)?, dir_name, criteria_total))
-}
-
-/// The card for an already parsed `flow.json` object.
+/// The card for an already parsed `flow.json` object. `criteria_total` is the
+/// count from `acceptance-criteria.md`, when that file was read; otherwise
+/// `acKinds` is used.
 pub fn card_from_value(v: &Value, dir_name: &str, criteria_total: Option<usize>) -> FlowCard {
     let status = field(v, "status").unwrap_or_else(|| "unknown".to_string());
     let tasks = v.get("tasks").and_then(Value::as_array);
@@ -103,6 +100,7 @@ pub fn card_from_value(v: &Value, dir_name: &str, criteria_total: Option<usize>)
         id_valid: is_command_id(&id),
         id,
         dir: dir_name.to_string(),
+        command_ref: package::command_ref(dir_name),
         title: field(v, "title").unwrap_or_else(|| dir_name.to_string()),
         blocked: status == "blocked",
         status,
@@ -278,6 +276,10 @@ pub fn merge_journal(journal: Vec<JournalEntry>, history: Vec<JournalEntry>) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn parse_card(text: &str, dir_name: &str, criteria_total: Option<usize>) -> Result<FlowCard, String> {
+        Ok(card_from_value(&parse_flow_json(text)?, dir_name, criteria_total))
+    }
 
     #[test]
     fn criteria_with_and_without_verify_tags() {

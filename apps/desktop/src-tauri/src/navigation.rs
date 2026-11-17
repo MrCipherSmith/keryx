@@ -8,12 +8,14 @@
 use tauri::webview::NewWindowResponse;
 use tauri::{AppHandle, Manager, Runtime, Url, WebviewWindowBuilder};
 
-/// True for the app's own origin (`tauri://localhost`, or
-/// `http(s)://tauri.localhost` where the platform serves it that way) and, in a
-/// debug build, the Vite dev server origin.
+/// True for the app's own origin and, in a debug build, the Vite dev server
+/// origin. The app origin is `tauri://localhost` on macOS and Linux. Only on
+/// Windows and Android does Tauri serve it as `http(s)://tauri.localhost`;
+/// elsewhere that is an ordinary network name, so it is refused there.
 pub fn navigation_allowed(url: &Url, dev_url: Option<&Url>) -> bool {
     let app_origin = match url.scheme() {
         "tauri" => url.host_str() == Some("localhost"),
+        #[cfg(any(windows, target_os = "android"))]
         "http" | "https" => url.host_str() == Some("tauri.localhost") && url.port().is_none(),
         _ => false,
     };
@@ -53,8 +55,20 @@ mod tests {
     fn the_app_origin_is_allowed() {
         assert!(navigation_allowed(&url("tauri://localhost/index.html"), None));
         assert!(navigation_allowed(&url("tauri://localhost/"), None));
+    }
+
+    #[cfg(any(windows, target_os = "android"))]
+    #[test]
+    fn the_http_app_origin_is_allowed_where_tauri_serves_it() {
         assert!(navigation_allowed(&url("http://tauri.localhost/index.html"), None));
         assert!(navigation_allowed(&url("https://tauri.localhost/"), None));
+    }
+
+    #[cfg(not(any(windows, target_os = "android")))]
+    #[test]
+    fn tauri_localhost_over_http_is_a_network_origin_and_refused() {
+        assert!(!navigation_allowed(&url("http://tauri.localhost/index.html"), None));
+        assert!(!navigation_allowed(&url("https://tauri.localhost/"), None));
     }
 
     #[test]

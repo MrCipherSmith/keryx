@@ -3,15 +3,15 @@
 //! before a process is resolved or spawned. argv is built here as separate
 //! entries, never as a shell string.
 
+use super::package::is_flow_dir_name;
+use crate::child::{self, RunError};
 use crate::locator;
 use crate::settings::Settings;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::io::Read;
 use std::path::Path;
-use std::process::{Command, Stdio};
-use std::sync::mpsc;
-use std::time::{Duration, Instant};
+use std::process::Command;
+use std::time::Duration;
 
 pub const ACTION_TIMEOUT: Duration = Duration::from_secs(60);
 pub const OUTPUT_CAP: usize = 1024 * 1024;
@@ -48,31 +48,16 @@ pub struct ActionResult {
     pub stderr: String,
 }
 
-/// Longest flow directory name accepted (keryx's own names stay far below:
-/// three digits, a date and a slug of at most 40 characters).
-const MAX_DIR_LEN: usize = 200;
-
-/// True when `name` has the shape of a keryx flow package directory: what
-/// keryx's `listFlowDirs` lists (`^\d{3}-`) followed by the characters its
-/// `slugify` and date stamp produce (`[a-z0-9-]`). keryx resolves such a name by
-/// exact match; any other name would fall through to its slug matching and
-/// could address a different flow. Also one path component that never starts
-/// with `-`, so it is safe as an argv entry.
-pub fn is_flow_dir_name(name: &str) -> bool {
-    let b = name.as_bytes();
-    b.len() >= 4
-        && b.len() <= MAX_DIR_LEN
-        && b[..3].iter().all(u8::is_ascii_digit)
-        && b[3] == b'-'
-        && b[4..].iter().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == b'-')
-}
-
-/// A flow is addressed by its directory name: ids are shared across packages.
-pub fn validate_flow_dir(dir: &str) -> Result<(), String> {
-    if is_flow_dir_name(dir) {
+/// The mutation gate for a package name. A flow is addressed by its directory
+/// name (ids are shared across packages), and a name keryx lists is one it
+/// resolves by exact match. As an argv entry the name is safe because it is
+/// one path component that starts with three digits (never `-`, so never read
+/// as an option), and argv is never handed to a shell.
+pub fn validate_flow_dir(package: &str) -> Result<(), String> {
+    if is_flow_dir_name(package) {
         Ok(())
     } else {
-        Err(format!("Invalid flow directory: {dir:?}"))
+        Err(format!("Invalid flow directory: {package:?}"))
     }
 }
 
@@ -109,10 +94,11 @@ fn one_of<'a>(what: &str, value: &'a str, allowed: &[&str]) -> Result<&'a str, S
     }
 }
 
-/// Validate and turn an action on the flow directory `dir` into the `keryx`
+/// Validate and turn an action on the flow package `package` into the `keryx`
 /// argv (without the program).
-pub fn build_argv(dir: &str, action: &FlowAction) -> Result<Vec<String>, String> {
-    validate_flow_dir(dir)?;
+pub fn build_argv(package: &str, action: &FlowAction) -> Result<Vec<String>, String> {
+    validate_flow_dir(package)?;
+    let dir = package;
     let mut argv: Vec<String> = vec!["flow".into()];
     let mut push = |items: &[&str]| argv.extend(items.iter().map(|s| s.to_string()));
     match action {
@@ -145,26 +131,6 @@ pub fn build_argv(dir: &str, action: &FlowAction) -> Result<Vec<String>, String>
     Ok(argv)
 }
 
-fn read_capped(mut r: impl Read + Send + 'static) -> mpsc::Receiver<String> {
-    let (tx, rx) = mpsc::channel();
-    std::thread::spawn(move || {
-        let mut kept = Vec::new();
-        let mut buf = [0u8; 8192];
-        loop {
-            match r.read(&mut buf) {
-                Ok(0) | Err(_) => break,
-                // Keep draining past the cap so the child never blocks on a full pipe.
-                Ok(n) => {
-                    let room = OUTPUT_CAP.saturating_sub(kept.len());
-                    kept.extend_from_slice(&buf[..n.min(room)]);
-                }
-            }
-        }
-        let _ = tx.send(String::from_utf8_lossy(&kept).into_owned());
-    });
-    rx
-}
-
 /// Run `program args...` in `cwd`: stdin null, cleared env, output capped,
 /// killed after `timeout`.
 pub fn run_command(
@@ -174,37 +140,19 @@ pub fn run_command(
     env: &HashMap<String, String>,
     timeout: Duration,
 ) -> Result<ActionResult, String> {
-    let mut child = Command::new(program)
-        .args(args)
-        .current_dir(cwd)
-        .env_clear()
-        .envs(env)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("Could not start {}: {e}", program.display()))?;
-    let out = read_capped(child.stdout.take().expect("stdout piped"));
-    let err = read_capped(child.stderr.take().expect("stderr piped"));
-    let deadline = Instant::now() + timeout;
-    let status = loop {
-        match child.try_wait() {
-            Ok(Some(s)) => break s,
-            Ok(None) if Instant::now() >= deadline => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return Err(format!("keryx did not finish within {} s and was stopped", timeout.as_secs()));
-            }
-            Ok(None) => std::thread::sleep(Duration::from_millis(20)),
-            Err(e) => return Err(format!("Could not wait for keryx: {e}")),
-        }
-    };
-    Ok(ActionResult {
-        ok: status.success(),
-        exit_code: status.code(),
-        stdout: out.recv_timeout(Duration::from_secs(2)).unwrap_or_default(),
-        stderr: err.recv_timeout(Duration::from_secs(2)).unwrap_or_default(),
-    })
+    let mut cmd = Command::new(program);
+    cmd.args(args).current_dir(cwd).env_clear().envs(env);
+    match child::run_bounded(cmd, timeout, OUTPUT_CAP) {
+        Ok(out) => Ok(ActionResult {
+            ok: out.status.success(),
+            exit_code: out.status.code(),
+            stdout: out.stdout,
+            stderr: out.stderr,
+        }),
+        Err(RunError::Spawn(e)) => Err(format!("Could not start {}: {e}", program.display())),
+        Err(RunError::Wait(e)) => Err(format!("Could not wait for keryx: {e}")),
+        Err(RunError::Timeout) => Err(format!("keryx did not finish within {} s and was stopped", timeout.as_secs())),
+    }
 }
 
 /// Resolve keryx like the ACP process does (same settings, same login-shell
@@ -274,14 +222,25 @@ mod tests {
 
     #[test]
     fn package_names_keryx_lists_are_accepted() {
-        for dir in ["001-x", "487-2026-11-10-shell-product-review-p1", "999-", "103-2026-01-04-duplicate-id"] {
+        for dir in [
+            "001-x",
+            "487-2026-11-10-shell-product-review-p1",
+            "999-",
+            "103-2026-01-04-duplicate-id",
+            // keryx lists any `^\d{3}-` directory and resolves it by exact match.
+            "012-Write-Docs",
+            "012-a.b",
+            "012-a_b",
+            "012-a b",
+            "012-x ",
+        ] {
             assert!(is_flow_dir_name(dir), "{dir}");
             assert!(build_argv(dir, &act(json!({"type":"start"}))).is_ok(), "{dir}");
         }
     }
 
     #[test]
-    fn names_keryx_would_not_resolve_exactly_are_refused() {
+    fn names_keryx_does_not_list_are_refused() {
         let start = act(json!({"type":"start"}));
         for dir in [
             // A bare id passed the old digits-and-letters rule; keryx reads it as a
@@ -294,11 +253,6 @@ mod tests {
             "12-x",
             "shell-images",
             "notes",
-            // Characters keryx's slugify never produces.
-            "012-Write-Docs",
-            "012-a.b",
-            "012-a_b",
-            "012-a b",
         ] {
             assert!(!is_flow_dir_name(dir), "{dir:?}");
             assert!(build_argv(dir, &start).is_err(), "{dir:?}");
@@ -322,8 +276,8 @@ mod tests {
     #[test]
     fn invalid_arguments_are_refused_before_any_process() {
         let start = act(json!({"type":"start"}));
-        let too_long = format!("001-{}", "a".repeat(MAX_DIR_LEN));
-        for dir in ["", "../1", "1; ls", "012-x ", "-1", "-12-x", "..", ".", "012-a/b", "012-x\n", "١٢٣-x", &too_long] {
+        let too_long = format!("001-{}", "a".repeat(crate::flows::package::MAX_DIR_LEN));
+        for dir in ["", "../1", "1; ls", "-1", "-12-x", "..", ".", "012-a/b", "012-x\n", "012-a\0b", "012-\u{7f}", "012-\tx", "١٢٣-x", &too_long] {
             assert!(build_argv(dir, &start).is_err(), "dir {dir:?}");
         }
         let bad = [

@@ -4,14 +4,14 @@
 //! path are canonicalised (symlinks resolved) and the result must stay inside
 //! the root. Anything else is a JSON-RPC error.
 
+use crate::child;
 use crate::framing;
 use serde_json::{json, Value};
 use std::fs::{File, OpenOptions};
 use std::io::Read;
 use std::path::{Component, Path, PathBuf};
-use std::process::{Command, Stdio};
-use std::sync::mpsc;
-use std::time::{Duration, Instant};
+use std::process::Command;
+use std::time::Duration;
 
 pub const INVALID_PARAMS: i64 = -32602;
 pub const INTERNAL_ERROR: i64 = -32603;
@@ -117,39 +117,16 @@ pub fn project_root(dir: &Path, path_env: Option<&str>) -> PathBuf {
 /// fails, times out, or names a folder that does not contain `dir`.
 fn git_toplevel(dir: &Path, path_env: Option<&str>, git: &str, timeout: Duration) -> Option<PathBuf> {
     let mut cmd = Command::new(git);
-    cmd.args(["rev-parse", "--show-toplevel"])
-        .current_dir(dir)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null());
+    cmd.args(["rev-parse", "--show-toplevel"]).current_dir(dir);
     if let Some(p) = path_env {
         cmd.env("PATH", p);
     }
-    let mut child = cmd.spawn().ok()?;
-    let mut stdout = child.stdout.take()?;
-    let (tx, rx) = mpsc::channel();
-    std::thread::spawn(move || {
-        let mut out = String::new();
-        let ok = stdout.read_to_string(&mut out).is_ok();
-        let _ = tx.send(ok.then_some(out));
-    });
-    let deadline = Instant::now() + timeout;
-    let status = loop {
-        match child.try_wait() {
-            Ok(Some(status)) => break status,
-            Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(10)),
-            _ => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return None;
-            }
-        }
-    };
-    let out = rx.recv_timeout(Duration::from_millis(500)).ok().flatten()?;
-    if !status.success() {
+    // A path is far below this; the cap only keeps a misbehaving git bounded.
+    let out = child::run_bounded(cmd, timeout, 64 * 1024).ok()?;
+    if !out.status.success() {
         return None;
     }
-    let top = PathBuf::from(out.trim_end_matches(['\n', '\r'])).canonicalize().ok()?;
+    let top = PathBuf::from(out.stdout.trim_end_matches(['\n', '\r'])).canonicalize().ok()?;
     dir.canonicalize().is_ok_and(|d| d.starts_with(&top)).then_some(top)
 }
 
@@ -199,8 +176,9 @@ pub fn read_text_file(root: &Path, params: &Value) -> Result<Value, RpcError> {
 }
 
 /// Open without following a final symlink and without blocking on a FIFO that
-/// replaced the file after `confine` ran.
-fn open_regular(path: &Path) -> std::io::Result<File> {
+/// replaced the file after the path was checked. Callers check the type and
+/// size on the returned handle.
+pub(crate) fn open_regular(path: &Path) -> std::io::Result<File> {
     let mut opts = OpenOptions::new();
     opts.read(true);
     #[cfg(unix)]
@@ -398,7 +376,7 @@ mod tests {
         let git = dir.path().join("hung-git");
         fs::write(&git, "#!/bin/sh\nexec /bin/sleep 30\n").unwrap();
         fs::set_permissions(&git, fs::Permissions::from_mode(0o755)).unwrap();
-        let start = Instant::now();
+        let start = std::time::Instant::now();
         let got = git_toplevel(dir.path(), None, git.to_str().unwrap(), Duration::from_millis(300));
         assert!(got.is_none());
         assert!(start.elapsed() < Duration::from_secs(3), "the hung git was not stopped: {:?}", start.elapsed());

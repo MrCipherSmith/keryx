@@ -20,6 +20,9 @@ pub const CAPTURE_TIMEOUT: Duration = Duration::from_secs(5);
 const CAPTURE_POLL: Duration = Duration::from_millis(20);
 /// After the shell exited, how long its last output may take to reach us.
 const EXIT_DRAIN: Duration = Duration::from_millis(200);
+/// After the end marker, how long the login shell gets to run its logout files
+/// (`.zlogout`, `.bash_logout`) and EXIT traps before it is killed.
+const LOGOUT_GRACE: Duration = Duration::from_secs(1);
 
 /// Parse the `env -0` output between `MARKER` and `END_MARKER` (anything
 /// before is rc-file noise). Empty when either marker is missing: a capture
@@ -89,7 +92,16 @@ pub fn capture_login_env(shell: &str, timeout: Duration) -> Option<HashMap<Strin
         }
         std::thread::sleep(CAPTURE_POLL);
     }
-    // Reap the shell; one still running (timeout, or an exit trap that hangs)
+    // A shell that printed the end marker is still a login shell running its
+    // logout files: give it a short grace (never past the deadline) to exit.
+    let grace_end = (Instant::now() + LOGOUT_GRACE).min(deadline);
+    while exited_at.is_none() && Instant::now() < grace_end {
+        if matches!(child.try_wait(), Ok(Some(_))) {
+            break;
+        }
+        std::thread::sleep(CAPTURE_POLL);
+    }
+    // Reap the shell; one still running (timeout, or a logout step that hangs)
     // is killed first.
     if !matches!(child.try_wait(), Ok(Some(_))) {
         let _ = child.kill();
@@ -181,6 +193,23 @@ mod tests {
         let got = capture_login_env(&shell, Duration::from_secs(3)).expect("the complete capture is kept");
         assert_eq!(got["PATH"], "/x/bin");
         assert!(start.elapsed() < Duration::from_secs(2), "the capture must not wait for EOF: {:?}", start.elapsed());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_shell_finishes_its_logout_work_after_the_end_marker() {
+        let dir = tempfile::tempdir().unwrap();
+        let done = dir.path().join("logged-out");
+        let shell = fake_shell(
+            dir.path(),
+            &format!(
+                "trap '/bin/sleep 0.1; : > \"{}\"' EXIT\nprintf '{MARKER}'\nprintf 'PATH=/x/bin\\0'\nprintf '{END_MARKER}'\n",
+                done.display()
+            ),
+        );
+        let got = capture_login_env(&shell, Duration::from_secs(3)).expect("the capture is complete");
+        assert_eq!(got["PATH"], "/x/bin");
+        assert!(done.exists(), "the EXIT trap must run to completion, not be killed at the marker");
     }
 
     #[cfg(unix)]

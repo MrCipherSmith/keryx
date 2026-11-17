@@ -10,7 +10,9 @@
 //!   the writer thread through a byte-bounded queue, so a keryx that stops
 //!   reading stdin can stall that thread but never a stop or a caller of
 //!   `send_line`. Only `send_response` waits, and only for queue room: a stop
-//!   closes the queue and wakes it.
+//!   closes the queue and wakes it. The queue budget bounds the bytes queued;
+//!   replies waiting for room are bounded by the caller (the bridge answers
+//!   `fs/read_text_file` from a fixed pool of workers, one reply each).
 //! - The child is reaped only under the `child` mutex, and only after its
 //!   process group was swept. Every raw signal is sent under that mutex after
 //!   checking the child is not yet reaped, so a signal never reaches a pid or
@@ -39,9 +41,11 @@ const NOT_RUNNING: &str = "keryx is not running";
 const NOT_READING: &str = "keryx is not reading its input; the message was not sent";
 const EXIT_POLL: Duration = Duration::from_millis(40);
 /// How long keryx gets after stdin closes and SIGTERM lands. Its own shutdown
-/// drains background shell tasks (2 s) and MCP servers (up to 4.5 s), so this
-/// stays above that sum; only then is the whole process group killed.
-pub const GRACEFUL_STOP: Duration = Duration::from_millis(6500);
+/// waits for aborted turns (up to 2 s, `SHUTDOWN_TURN_GRACE_MS`), drains
+/// background shell tasks (2 s) and closes MCP servers (up to 4.5 s). This
+/// stays above that 8.5 s sum with a margin; only then is the whole process
+/// group killed.
+pub const GRACEFUL_STOP: Duration = Duration::from_millis(9500);
 
 pub struct SpawnConfig {
     pub program: PathBuf,
@@ -76,6 +80,15 @@ struct QueueState {
     closed: bool,
 }
 
+/// What a push does when the queue has no room for the line.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum WhenFull {
+    /// Fail at once.
+    Fail,
+    /// Wait for room until the queue closes.
+    Wait,
+}
+
 /// The queue to the stdin writer thread, bounded by `budget` bytes.
 struct StdinQueue {
     state: Mutex<QueueState>,
@@ -88,10 +101,20 @@ impl StdinQueue {
         Self { state: Mutex::new(QueueState::default()), changed: Condvar::new(), budget }
     }
 
-    /// Queue one line. With `wait` false a full queue fails at once; with
-    /// `wait` true the caller waits for room until the queue closes. The lock is
-    /// never held across a pipe write, so neither form waits on the pipe itself.
-    fn push(&self, line: Vec<u8>, wait: bool) -> Result<(), String> {
+    /// Queue one line; a full queue fails at once.
+    fn try_push(&self, line: Vec<u8>) -> Result<(), String> {
+        self.push(line, WhenFull::Fail)
+    }
+
+    /// Queue one line; a full queue makes the caller wait for room until the
+    /// queue closes.
+    fn push_waiting(&self, line: Vec<u8>) -> Result<(), String> {
+        self.push(line, WhenFull::Wait)
+    }
+
+    /// The lock is never held across a pipe write, so neither form waits on the
+    /// pipe itself.
+    fn push(&self, line: Vec<u8>, when_full: WhenFull) -> Result<(), String> {
         let mut s = self.state.lock().unwrap();
         loop {
             if s.closed {
@@ -100,7 +123,7 @@ impl StdinQueue {
             if s.lines.is_empty() || s.bytes + line.len() <= self.budget {
                 break;
             }
-            if !wait {
+            if when_full == WhenFull::Fail {
                 return Err(NOT_READING.into());
             }
             s = self.changed.wait(s).unwrap();
@@ -302,22 +325,21 @@ impl AcpProcess {
     /// keryx is stopped, gone, or no longer reading its input. For callers that
     /// must not stall (the UI path).
     pub fn send_line(&self, message: &str) -> Result<(), String> {
-        self.enqueue(message, false)
+        if self.is_stopped() {
+            return Err(NOT_RUNNING.into());
+        }
+        self.stdin.try_push(framing::encode(message).map_err(|e| e.to_string())?)
     }
 
     /// Queue the answer to a request keryx is waiting for. Waits for queue room
     /// instead of dropping it, until keryx is stopped or gone. Call it only
-    /// from a thread that may block (never the UI or the stdout reader).
-    pub fn send_response(&self, message: &str) -> Result<(), String> {
-        self.enqueue(message, true)
-    }
-
-    fn enqueue(&self, message: &str, wait: bool) -> Result<(), String> {
+    /// from a thread that may block (never the UI or the stdout reader). Takes
+    /// the reply by value, so only its framed copy is alive while it waits.
+    pub fn send_response(&self, message: String) -> Result<(), String> {
         if self.is_stopped() {
             return Err(NOT_RUNNING.into());
         }
-        let bytes = framing::encode(message).map_err(|e| e.to_string())?;
-        self.stdin.push(bytes, wait)
+        self.stdin.push_waiting(framing::encode_owned(message).map_err(|e| e.to_string())?)
     }
 
     /// Stop the child with the default grace period. See [`kill_with_grace`].
@@ -542,12 +564,12 @@ mod tests {
     #[test]
     fn a_full_queue_refuses_send_line_but_send_response_waits_for_room() {
         let q = Arc::new(StdinQueue::new(10));
-        q.push(vec![b'a'; 8], false).unwrap();
-        assert_eq!(q.push(vec![b'b'; 5], false).unwrap_err(), NOT_READING);
+        q.try_push(vec![b'a'; 8]).unwrap();
+        assert_eq!(q.try_push(vec![b'b'; 5]).unwrap_err(), NOT_READING);
         let (tx, rx) = mpsc::channel();
         let waiter = q.clone();
         std::thread::spawn(move || {
-            let _ = tx.send(waiter.push(vec![b'c'; 5], true));
+            let _ = tx.send(waiter.push_waiting(vec![b'c'; 5]));
         });
         assert!(rx.recv_timeout(Duration::from_millis(150)).is_err(), "a response waits while the queue is full");
         assert_eq!(q.pop().unwrap().len(), 8);
@@ -558,11 +580,11 @@ mod tests {
     #[test]
     fn closing_the_queue_wakes_a_waiting_response_and_keeps_what_is_queued() {
         let q = Arc::new(StdinQueue::new(4));
-        q.push(vec![b'a'; 4], false).unwrap();
+        q.try_push(vec![b'a'; 4]).unwrap();
         let (tx, rx) = mpsc::channel();
         let waiter = q.clone();
         std::thread::spawn(move || {
-            let _ = tx.send(waiter.push(vec![b'b'; 4], true));
+            let _ = tx.send(waiter.push_waiting(vec![b'b'; 4]));
         });
         std::thread::sleep(Duration::from_millis(50));
         q.close();
@@ -575,8 +597,8 @@ mod tests {
     #[test]
     fn an_empty_queue_takes_one_line_larger_than_the_budget() {
         let q = StdinQueue::new(4);
-        q.push(vec![b'a'; 100], false).unwrap();
-        assert!(q.push(vec![b'b'; 1], false).is_err());
+        q.try_push(vec![b'a'; 100]).unwrap();
+        assert!(q.try_push(vec![b'b'; 1]).is_err());
     }
 
     /// A child that reads nothing for `delay` seconds, then copies its stdin
@@ -605,8 +627,8 @@ mod tests {
     fn fill_queue(proc: &Arc<AcpProcess>) {
         let p = proc.clone();
         within(Duration::from_secs(5), "filling the queue", move || {
-            p.send_response(&"x".repeat(2 * 1024 * 1024)).unwrap();
-            p.send_response(&"y".repeat(STDIN_QUEUE_BYTES)).unwrap();
+            p.send_response("x".repeat(2 * 1024 * 1024)).unwrap();
+            p.send_response("y".repeat(STDIN_QUEUE_BYTES)).unwrap();
         });
         assert_eq!(proc.send_line("{}").unwrap_err(), NOT_READING, "the queue must be full now");
     }
@@ -618,7 +640,7 @@ mod tests {
         fill_queue(&proc);
         let reply = r#"{"jsonrpc":"2.0","id":7,"result":{"content":"ok"}}"#;
         let sender = proc.clone();
-        within(Duration::from_secs(10), "send_response", move || sender.send_response(reply)).unwrap();
+        within(Duration::from_secs(10), "send_response", move || sender.send_response(reply.to_string())).unwrap();
         let expected_tail = format!("{reply}\n");
         let delivered = (0..200).any(|_| {
             let done = std::fs::read_to_string(&stdin_copy).is_ok_and(|s| s.ends_with(&expected_tail));
@@ -639,7 +661,7 @@ mod tests {
         let (tx, rx) = mpsc::channel();
         let sender = proc.clone();
         std::thread::spawn(move || {
-            let _ = tx.send(sender.send_response("{}"));
+            let _ = tx.send(sender.send_response("{}".to_string()));
         });
         assert!(rx.recv_timeout(Duration::from_millis(150)).is_err(), "the reply waits for room");
         let stopper = proc.clone();

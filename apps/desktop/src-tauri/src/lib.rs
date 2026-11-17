@@ -1,4 +1,5 @@
 pub mod bridge;
+pub mod child;
 pub mod framing;
 pub mod flows;
 pub mod fs;
@@ -50,9 +51,9 @@ pub fn run() {
             bridge::acp_start,
             bridge::acp_send,
             bridge::acp_stop,
-            bridge::settings_get,
-            bridge::settings_set,
-            bridge::settings_add_recent,
+            settings::settings_get,
+            settings::settings_set,
+            settings::settings_add_recent,
             bridge::version_check,
             bridge::window_open_project,
             bridge::window_initial_cwd,

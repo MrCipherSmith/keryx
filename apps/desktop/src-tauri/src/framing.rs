@@ -105,15 +105,22 @@ impl std::fmt::Display for EncodeError {
 
 /// Frame one outgoing message: trimmed, single line, newline-terminated.
 pub fn encode(message: &str) -> Result<Vec<u8>, EncodeError> {
-    let trimmed = message.trim_end_matches(['\n', '\r']);
-    if trimmed.contains('\n') || trimmed.contains('\r') {
+    encode_owned(message.to_owned())
+}
+
+/// [`encode`] for a message the caller gives up: framed in its own buffer, so
+/// no second copy of a large message is made.
+pub fn encode_owned(message: String) -> Result<Vec<u8>, EncodeError> {
+    let mut bytes = message.into_bytes();
+    while matches!(bytes.last(), Some(b'\n' | b'\r')) {
+        bytes.pop();
+    }
+    if bytes.iter().any(|&b| b == b'\n' || b == b'\r') {
         return Err(EncodeError::EmbeddedNewline);
     }
-    if trimmed.len() > MAX_LINE_BYTES {
+    if bytes.len() > MAX_LINE_BYTES {
         return Err(EncodeError::TooLong);
     }
-    let mut bytes = Vec::with_capacity(trimmed.len() + 1);
-    bytes.extend_from_slice(trimmed.as_bytes());
     bytes.push(b'\n');
     Ok(bytes)
 }

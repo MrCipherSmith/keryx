@@ -7,7 +7,7 @@ use crate::fs;
 use crate::locator::{self, KeryxSource};
 use crate::navigation;
 use crate::process::{AcpProcess, ProcessEvent, SpawnConfig};
-use crate::settings::Settings;
+use crate::settings;
 use crate::shellenv;
 use crate::version;
 use serde::Serialize;
@@ -22,12 +22,28 @@ use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindow, Webvi
 /// Overall budget for stopping every window at app quit.
 pub const QUIT_DEADLINE: Duration = Duration::from_secs(7);
 
+/// A process installed for a window, with the start that installed it.
+struct Installed {
+    start: u64,
+    proc: Arc<AcpProcess>,
+}
+
+/// Per window label, numbered in the order the commands were invoked.
+#[derive(Default, Clone, Copy)]
+struct Epochs {
+    /// The newest `acp_start` issued.
+    started: u64,
+    /// Every start up to this one was cancelled by an `acp_stop`.
+    stopped_through: u64,
+}
+
 #[derive(Default)]
 struct Sessions {
-    live: HashMap<String, Arc<AcpProcess>>,
+    live: HashMap<String, Installed>,
     /// Labels of destroyed windows. Labels are never reused, so a start that
     /// finishes for one of these must not install its process.
     closed: HashSet<String>,
+    epochs: HashMap<String, Epochs>,
 }
 
 #[derive(Default)]
@@ -36,8 +52,7 @@ pub struct AppState {
     /// Processes being stopped (window closed, replaced, or started late).
     stopping: Arc<Mutex<Vec<Arc<AcpProcess>>>>,
     /// One lock per live window label, held by `start_session` across stop,
-    /// launch and install, and by `stop_session`; removed when the window is
-    /// destroyed.
+    /// launch and install; removed when the window is destroyed.
     start_locks: Mutex<HashMap<String, Arc<Mutex<()>>>>,
     pending_cwd: Mutex<HashMap<String, String>>,
     login_env: OnceLock<HashMap<String, String>>,
@@ -65,6 +80,8 @@ fn kill_all(procs: Vec<Arc<AcpProcess>>, deadline: Duration) {
 }
 
 const WINDOW_CLOSED: &str = "This window was closed while keryx was starting";
+const START_CANCELLED: &str = "This keryx start was cancelled by a stop issued after it";
+const START_SUPERSEDED: &str = "A newer keryx start for this window replaced this one";
 
 impl AppState {
     /// The login-shell environment, captured once (blocks the first caller).
@@ -83,37 +100,98 @@ impl AppState {
         Some(self.start_locks.lock().unwrap().entry(label.to_string()).or_default().clone())
     }
 
-    /// Start a session for `label`: stop the current one, run `launch`, and
-    /// install the process it returns. Serialised per window; blocking, so
-    /// callers run it off the async runtime.
+    /// Number a new start for `label`. Called by `acp_start` before it leaves
+    /// for a blocking worker, so starts and stops are ordered as the commands
+    /// were invoked, not as the workers reach the start lock.
+    pub fn begin_start(&self, label: &str) -> u64 {
+        let mut sessions = self.sessions.lock().unwrap();
+        if sessions.closed.contains(label) {
+            return 0;
+        }
+        let e = sessions.epochs.entry(label.to_string()).or_default();
+        e.started += 1;
+        e.started
+    }
+
+    /// Cancel every start issued so far for `label` and return the newest one:
+    /// the stop applies to those starts and never to a later one. Called by
+    /// `acp_stop` before it leaves for a blocking worker.
+    pub fn begin_stop(&self, label: &str) -> u64 {
+        let mut sessions = self.sessions.lock().unwrap();
+        if sessions.closed.contains(label) {
+            return 0;
+        }
+        let e = sessions.epochs.entry(label.to_string()).or_default();
+        e.stopped_through = e.started;
+        e.started
+    }
+
+    /// Start session `start` (from `begin_start`) for `label`: stop the process
+    /// an older start installed, run `launch`, and install what it returns.
+    /// Serialised per window; blocking, so callers run it off the async
+    /// runtime. A start cancelled by a later stop, or overtaken by a newer
+    /// start, installs nothing.
     fn start_session<T>(
         &self,
         label: &str,
+        start: u64,
         launch: impl FnOnce() -> Result<(Arc<AcpProcess>, T), String>,
     ) -> Result<T, String> {
         let start_lock = self.start_lock(label).ok_or(WINDOW_CLOSED)?;
         let _starting = start_lock.lock().unwrap();
-        self.stop_window(label);
+        self.stop_older(label, start)?;
         let (proc, info) = launch()?;
-        self.install(label, proc)?;
+        self.install(label, start, proc)?;
         Ok(info)
     }
 
-    /// Register `proc` for `label` and stop whatever it replaces, so a second
-    /// start can never leave the first process running unowned. A window that
-    /// was destroyed meanwhile gets nothing installed: its process is stopped.
-    fn install(&self, label: &str, proc: Arc<AcpProcess>) -> Result<(), String> {
+    /// Why start `start` must not go on, if it must not.
+    fn refusal(sessions: &Sessions, label: &str, start: u64) -> Option<&'static str> {
+        if sessions.closed.contains(label) {
+            return Some(WINDOW_CLOSED);
+        }
+        if sessions.epochs.get(label).is_some_and(|e| start <= e.stopped_through) {
+            return Some(START_CANCELLED);
+        }
+        if sessions.live.get(label).is_some_and(|i| i.start > start) {
+            return Some(START_SUPERSEDED);
+        }
+        None
+    }
+
+    /// Before launching start `start`: refuse it if it no longer applies, else
+    /// stop the process an older start installed.
+    fn stop_older(&self, label: &str, start: u64) -> Result<(), String> {
+        let old = {
+            let mut sessions = self.sessions.lock().unwrap();
+            if let Some(why) = Self::refusal(&sessions, label, start) {
+                return Err(why.into());
+            }
+            sessions.live.remove(label)
+        };
+        if let Some(old) = old {
+            self.stop_tracked(old.proc);
+        }
+        Ok(())
+    }
+
+    /// Register `proc` as start `start` of `label` and stop whatever it
+    /// replaces, so a second start can never leave the first process running
+    /// unowned. A start that no longer applies (window destroyed, cancelled by a
+    /// later stop, overtaken by a newer start) gets nothing installed: its
+    /// process is stopped.
+    fn install(&self, label: &str, start: u64, proc: Arc<AcpProcess>) -> Result<(), String> {
         let previous = {
             let mut sessions = self.sessions.lock().unwrap();
-            if sessions.closed.contains(label) {
+            if let Some(why) = Self::refusal(&sessions, label, start) {
                 drop(sessions);
                 self.stop_tracked(proc);
-                return Err(WINDOW_CLOSED.into());
+                return Err(why.into());
             }
-            sessions.live.insert(label.to_string(), proc)
+            sessions.live.insert(label.to_string(), Installed { start, proc })
         };
         if let Some(old) = previous {
-            self.stop_tracked(old);
+            self.stop_tracked(old.proc);
         }
         Ok(())
     }
@@ -126,22 +204,19 @@ impl AppState {
         self.stopping.lock().unwrap().retain(|p| !Arc::ptr_eq(p, &proc));
     }
 
-    /// `acp_stop`: wait for a start in flight for this window, then stop what
-    /// it installed. Without the start lock a stop that lands while keryx is
-    /// still starting finds nothing to stop, and the start then installs a
-    /// process no view owns.
-    pub fn stop_session(&self, label: &str) {
-        let Some(start_lock) = self.start_lock(label) else {
-            // Destroyed: `window_destroyed` already stops what it had.
-            return;
+    /// `acp_stop`, with `through` from `begin_stop`: stop the process a start
+    /// up to `through` installed, and wait until it is gone. A start still in
+    /// flight that the stop cancelled stops its own process when it finishes
+    /// (`install` refuses it), so the stop need not wait for it; a later start's
+    /// process is never touched.
+    pub fn stop_session(&self, label: &str, through: u64) {
+        let proc = {
+            let mut sessions = self.sessions.lock().unwrap();
+            match sessions.live.get(label) {
+                Some(i) if i.start <= through => sessions.live.remove(label).map(|i| i.proc),
+                _ => None,
+            }
         };
-        let _starting = start_lock.lock().unwrap();
-        self.stop_window(label);
-    }
-
-    /// Stop the window's process and wait until it is gone.
-    pub fn stop_window(&self, label: &str) {
-        let proc = self.sessions.lock().unwrap().live.remove(label);
         if let Some(p) = proc {
             self.stop_tracked(p);
         }
@@ -155,8 +230,9 @@ impl AppState {
         let proc = {
             let mut sessions = self.sessions.lock().unwrap();
             sessions.closed.insert(label.to_string());
+            sessions.epochs.remove(label);
             self.start_locks.lock().unwrap().remove(label);
-            sessions.live.remove(label)
+            sessions.live.remove(label).map(|i| i.proc)
         };
         self.pending_cwd.lock().unwrap().remove(label);
         let Some(proc) = proc else { return };
@@ -169,12 +245,12 @@ impl AppState {
     }
 
     fn session(&self, label: &str) -> Option<Arc<AcpProcess>> {
-        self.sessions.lock().unwrap().live.get(label).cloned()
+        self.sessions.lock().unwrap().live.get(label).map(|i| i.proc.clone())
     }
 
     /// App quit: stop everything in parallel within one overall deadline.
     pub fn stop_all(&self) {
-        let mut all: Vec<_> = self.sessions.lock().unwrap().live.drain().map(|(_, p)| p).collect();
+        let mut all: Vec<_> = self.sessions.lock().unwrap().live.drain().map(|(_, i)| i.proc).collect();
         all.extend(self.stopping.lock().unwrap().iter().cloned());
         kill_all(all, QUIT_DEADLINE);
     }
@@ -197,30 +273,54 @@ struct ExitPayload {
     stderr_tail: String,
 }
 
-fn settings_path(app: &AppHandle) -> Result<PathBuf, String> {
-    app.path().app_config_dir().map(|d| d.join("settings.json")).map_err(|e| e.to_string())
+/// Workers answering `fs/read_text_file` for one keryx process.
+const FS_WORKERS: usize = 2;
+
+/// Answers `fs/read_text_file` off the stdout reader thread (a slow disk must
+/// not stall the stream of agent messages) on a fixed pool of workers. Excess
+/// requests wait in the channel as small parsed requests, so a keryx that
+/// stops reading its stdin holds at most `FS_WORKERS` built replies outside
+/// the stdin queue: the per-window bound is the queue budget plus
+/// `FS_WORKERS` x the 16 MiB frame. The workers end once the process's reader
+/// threads, which own the sender, are gone.
+struct FsPool {
+    jobs: mpsc::Sender<(Arc<AcpProcess>, fs::FsRequest)>,
 }
 
-pub fn load_settings(app: &AppHandle) -> Settings {
-    settings_path(app).map(|p| Settings::load(&p)).unwrap_or_default()
-}
-
-/// Answer an `fs/read_text_file` request off the stdout reader thread: a slow
-/// disk must not stall the stream of agent messages. keryx waits for this
-/// reply with no timeout, so it goes through `send_response`, which waits for
-/// queue room on this thread instead of dropping the reply.
-fn answer_fs_in_background(proc: &Arc<AcpProcess>, root: PathBuf, request: fs::FsRequest) {
-    let proc = proc.clone();
-    std::thread::spawn(move || {
-        let reply = fs::answer(&root, &request);
-        if proc.send_response(&reply).is_err() && !proc.is_stopped() {
-            // Only a reply that cannot be framed gets here (`fs::answer` already
-            // turns those into errors, so this is a last resort): never leave
-            // keryx waiting, send an error for this id.
-            let err = fs::RpcError { code: fs::INTERNAL_ERROR, message: "reply could not be sent".into() };
-            let _ = proc.send_response(&fs::error_response(&request.id, &err).to_string());
+impl FsPool {
+    fn new(root: PathBuf) -> Self {
+        let (jobs, queue) = mpsc::channel::<(Arc<AcpProcess>, fs::FsRequest)>();
+        let queue = Arc::new(Mutex::new(queue));
+        for _ in 0..FS_WORKERS {
+            let (queue, root) = (queue.clone(), root.clone());
+            std::thread::spawn(move || loop {
+                let next = queue.lock().unwrap().recv();
+                let Ok((proc, request)) = next else { return };
+                answer_fs(&proc, &root, &request);
+            });
         }
-    });
+        Self { jobs }
+    }
+
+    fn submit(&self, proc: &Arc<AcpProcess>, request: fs::FsRequest) {
+        let _ = self.jobs.send((proc.clone(), request));
+    }
+}
+
+/// Answer one request. keryx waits for this reply with no timeout, so it goes
+/// through `send_response`, which waits for queue room instead of dropping it.
+fn answer_fs(proc: &Arc<AcpProcess>, root: &Path, request: &fs::FsRequest) {
+    if proc.is_stopped() {
+        return;
+    }
+    let reply = fs::answer(root, request);
+    if proc.send_response(reply).is_err() && !proc.is_stopped() {
+        // Only a reply that cannot be framed gets here (`fs::answer` already
+        // turns those into errors, so this is a last resort): never leave
+        // keryx waiting, send an error for this id.
+        let err = fs::RpcError { code: fs::INTERNAL_ERROR, message: "reply could not be sent".into() };
+        let _ = proc.send_response(fs::error_response(&request.id, &err).to_string());
+    }
 }
 
 #[tauri::command]
@@ -231,11 +331,13 @@ pub async fn acp_start(
     no_profile: Option<bool>,
 ) -> Result<StartInfo, String> {
     let label = window.label().to_string();
+    // Numbered before the first await: see `begin_start`.
+    let start = app.state::<AppState>().begin_start(&label);
     // Stopping the previous process (grace), the login-env capture, git and
     // the spawn all block: keep them off the async runtime's workers.
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
-        state.start_session(&label, || launch(&app, &label, &cwd, no_profile.unwrap_or(false)))
+        state.start_session(&label, start, || launch(&app, &label, &cwd, no_profile.unwrap_or(false)))
     })
     .await
     .map_err(|e| format!("keryx start failed: {e}"))?
@@ -253,7 +355,7 @@ fn launch(app: &AppHandle, label: &str, cwd: &str, no_profile: bool) -> Result<(
     let env = app.state::<AppState>().environment().clone();
     // Reads are confined to the git toplevel, which is what keryx binds its session to.
     let fs_root = fs::project_root(&root, env.get("PATH").map(String::as_str));
-    let settings = load_settings(app);
+    let settings = settings::load_settings(app);
     let exe_dir = std::env::current_exe().ok().and_then(|p| p.parent().map(Path::to_path_buf));
     let located = locator::locate(
         settings.keryx_source,
@@ -275,6 +377,7 @@ fn launch(app: &AppHandle, label: &str, cwd: &str, no_profile: bool) -> Result<(
 
     let emit_app = app.clone();
     let emit_label = label.to_string();
+    let fs_pool = FsPool::new(fs_root);
     let proc = AcpProcess::spawn(
         SpawnConfig {
             program: located.path.clone(),
@@ -290,7 +393,7 @@ fn launch(app: &AppHandle, label: &str, cwd: &str, no_profile: bool) -> Result<(
             match event {
                 ProcessEvent::Line(line) => {
                     if let Some(request) = fs::parse_request(&line) {
-                        answer_fs_in_background(proc, fs_root.clone(), request);
+                        fs_pool.submit(proc, request);
                     } else {
                         let _ = emit_app.emit_to(emit_label.as_str(), "acp://message", line);
                     }
@@ -341,51 +444,13 @@ pub fn acp_send(window: WebviewWindow, state: State<'_, AppState>, message: Stri
 #[tauri::command]
 pub async fn acp_stop(app: AppHandle, window: WebviewWindow) -> Result<(), String> {
     let label = window.label().to_string();
-    // The stop waits for a start in flight and out the grace period: keep it
-    // off the async runtime.
-    tauri::async_runtime::spawn_blocking(move || app.state::<AppState>().stop_session(&label))
+    // Bound to the starts issued before it, before the first await: see
+    // `begin_stop`.
+    let through = app.state::<AppState>().begin_stop(&label);
+    // The stop waits out the grace period: keep it off the async runtime.
+    tauri::async_runtime::spawn_blocking(move || app.state::<AppState>().stop_session(&label, through))
         .await
         .map_err(|e| format!("keryx stop failed: {e}"))
-}
-
-/// Run blocking settings file I/O off the main thread and the async workers.
-async fn settings_io<T: Send + 'static>(
-    app: AppHandle,
-    io: impl FnOnce(&AppHandle) -> Result<T, String> + Send + 'static,
-) -> Result<T, String> {
-    tauri::async_runtime::spawn_blocking(move || io(&app))
-        .await
-        .map_err(|e| format!("settings failed: {e}"))?
-}
-
-#[tauri::command]
-pub async fn settings_get(app: AppHandle) -> Result<Settings, String> {
-    settings_io(app, |app| Ok(load_settings(app))).await
-}
-
-#[tauri::command]
-pub async fn settings_set(app: AppHandle, settings: Settings) -> Result<Settings, String> {
-    settings_io(app, move |app| {
-        let path = settings_path(app)?;
-        // Recents are owned by `settings_add_recent`; a stale form must not clobber them.
-        let mut next = settings;
-        next.recent_projects = Settings::load(&path).recent_projects;
-        next.save(&path).map_err(|e| e.to_string())?;
-        Ok(next)
-    })
-    .await
-}
-
-#[tauri::command]
-pub async fn settings_add_recent(app: AppHandle, project: String) -> Result<Settings, String> {
-    settings_io(app, move |app| {
-        let path = settings_path(app)?;
-        let mut s = Settings::load(&path);
-        s.add_recent(&project);
-        s.save(&path).map_err(|e| e.to_string())?;
-        Ok(s)
-    })
-    .await
 }
 
 #[derive(Serialize)]
@@ -449,12 +514,12 @@ mod tests {
         let state = AppState::default();
         let first = sleeper();
         let second = sleeper();
-        state.install("w", first.clone()).unwrap();
+        state.install("w", state.begin_start("w"), first.clone()).unwrap();
         assert!(alive(&first));
-        state.install("w", second.clone()).unwrap();
+        state.install("w", state.begin_start("w"), second.clone()).unwrap();
         assert!(first.is_stopped(), "the replaced process must be killed, not orphaned");
         assert!(alive(&second));
-        state.stop_window("w");
+        state.stop_session("w", state.begin_stop("w"));
         assert!(second.is_stopped());
     }
 
@@ -470,7 +535,7 @@ mod tests {
     fn a_window_destroyed_during_start_gets_its_late_process_stopped() {
         let state = AppState::default();
         let mut spawned = None;
-        let result = state.start_session("w", || {
+        let result = state.start_session("w", state.begin_start("w"), || {
             // The window closes while keryx is being located and spawned.
             state.window_destroyed("w");
             let p = sleeper();
@@ -492,54 +557,123 @@ mod tests {
         assert!(!state.start_locks.lock().unwrap().contains_key("w"));
         assert!(state.start_lock("w").is_none());
         let mut launched = false;
-        let result = state.start_session("w", || {
+        let result = state.start_session("w", state.begin_start("w"), || {
             launched = true;
             Ok((sleeper(), ()))
         });
         assert!(result.is_err());
         assert!(!launched, "nothing is spawned for a closed window");
         assert!(!state.start_locks.lock().unwrap().contains_key("w"));
+        assert!(!state.sessions.lock().unwrap().epochs.contains_key("w"));
     }
 
-    #[test]
-    fn a_stop_during_a_start_waits_for_it_and_stops_what_it_installed() {
-        let state = Arc::new(AppState::default());
-        let spawned: Arc<Mutex<Option<Arc<AcpProcess>>>> = Arc::default();
-        let (launching_tx, launching_rx) = mpsc::channel();
-        let (starter, slot) = (state.clone(), spawned.clone());
-        let start = std::thread::spawn(move || {
-            starter.start_session("w", || {
-                launching_tx.send(()).unwrap();
-                // keryx is still being located and spawned when the stop arrives.
-                std::thread::sleep(Duration::from_millis(300));
+    /// Runs a start on a thread whose launch signals `launching`, waits for
+    /// `release`, then spawns a sleeper (recorded in the returned slot).
+    #[allow(clippy::type_complexity)]
+    fn slow_start(
+        state: &Arc<AppState>,
+        start: u64,
+        launching: mpsc::Sender<()>,
+        release: mpsc::Receiver<()>,
+    ) -> (std::thread::JoinHandle<Result<(), String>>, Arc<Mutex<Option<Arc<AcpProcess>>>>) {
+        let slot: Arc<Mutex<Option<Arc<AcpProcess>>>> = Arc::default();
+        let (starter, out) = (state.clone(), slot.clone());
+        let handle = std::thread::spawn(move || {
+            starter.start_session("w", start, || {
+                launching.send(()).unwrap();
+                release.recv().unwrap();
                 let p = sleeper();
-                *slot.lock().unwrap() = Some(p.clone());
+                *out.lock().unwrap() = Some(p.clone());
                 Ok((p, ()))
             })
         });
+        (handle, slot)
+    }
+
+    #[test]
+    fn a_stop_during_a_start_cancels_it_and_its_process_is_stopped() {
+        let state = Arc::new(AppState::default());
+        let (launching_tx, launching_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let (start, spawned) = slow_start(&state, state.begin_start("w"), launching_tx, release_rx);
         launching_rx.recv().unwrap();
-        state.stop_session("w");
-        start.join().unwrap().unwrap();
-        let late = spawned.lock().unwrap().clone().expect("the start finished before the stop returned");
-        assert!(late.is_stopped(), "the stop must reach the process the start installed");
+        // keryx is still being located and spawned when the stop arrives.
+        state.stop_session("w", state.begin_stop("w"));
+        release_tx.send(()).unwrap();
+        assert_eq!(start.join().unwrap().unwrap_err(), START_CANCELLED);
+        let late = spawned.lock().unwrap().clone().expect("the start spawned a process");
+        assert!(late.is_stopped(), "the stop must reach the process the start was launching");
         assert!(state.session("w").is_none());
+    }
+
+    /// REG-R3-001: a project switch issues stop (old view) then start (new
+    /// view) while an earlier start still holds the start lock. Whichever
+    /// worker reaches the lock first, the stop must not kill the new process.
+    #[test]
+    fn a_stop_queued_behind_a_start_never_kills_a_later_start() {
+        let state = Arc::new(AppState::default());
+        // Start #1 (view A) is in flight and holds the start lock.
+        let (launching_tx, launching_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let (first, first_proc) = slow_start(&state, state.begin_start("w"), launching_tx, release_rx);
+        launching_rx.recv().unwrap();
+
+        // View A unmounts (stop), view B mounts (start #2): numbered in that order.
+        let through = state.begin_stop("w");
+        let second_start = state.begin_start("w");
+        // Start #2 wins the lock over the stop: the stop's worker runs last.
+        let (second_launching_tx, second_launching_rx) = mpsc::channel();
+        let (second_release_tx, second_release_rx) = mpsc::channel();
+        let (second, second_proc) = slow_start(&state, second_start, second_launching_tx, second_release_rx);
+        release_tx.send(()).unwrap();
+        assert_eq!(first.join().unwrap().unwrap_err(), START_CANCELLED);
+        assert!(first_proc.lock().unwrap().clone().unwrap().is_stopped(), "view A's keryx is stopped");
+        second_launching_rx.recv().unwrap();
+        second_release_tx.send(()).unwrap();
+        second.join().unwrap().unwrap();
+        state.stop_session("w", through);
+
+        let new = second_proc.lock().unwrap().clone().unwrap();
+        assert!(alive(&new), "the stop meant for view A must not kill view B's keryx");
+        assert!(state.session("w").is_some_and(|p| Arc::ptr_eq(&p, &new)));
+        state.stop_session("w", state.begin_stop("w"));
+        assert!(new.is_stopped());
+    }
+
+    #[test]
+    fn an_older_start_that_reaches_the_lock_late_does_not_replace_a_newer_one() {
+        let state = AppState::default();
+        let older = state.begin_start("w");
+        let newer = state.begin_start("w");
+        let current = sleeper();
+        state.start_session("w", newer, || Ok((current.clone(), ()))).unwrap();
+        let mut launched = false;
+        let late = state.start_session("w", older, || {
+            launched = true;
+            Ok((sleeper(), ()))
+        });
+        assert_eq!(late.unwrap_err(), START_SUPERSEDED);
+        assert!(!launched);
+        assert!(alive(&current));
+        state.stop_session("w", state.begin_stop("w"));
     }
 
     #[test]
     fn a_stop_for_a_destroyed_window_is_a_no_op() {
         let state = AppState::default();
         state.window_destroyed("w");
-        state.stop_session("w");
+        state.stop_session("w", state.begin_stop("w"));
         assert!(state.start_lock("w").is_none(), "a stop must not resurrect the start lock");
+        assert!(!state.sessions.lock().unwrap().epochs.contains_key("w"));
     }
 
     #[test]
     fn stop_all_stops_every_process_in_parallel_and_includes_background_stops() {
         let state = AppState::default();
         let (a, b, c) = (sleeper(), sleeper(), sleeper());
-        state.install("a", a.clone()).unwrap();
-        state.install("b", b.clone()).unwrap();
-        state.install("c", c.clone()).unwrap();
+        state.install("a", state.begin_start("a"), a.clone()).unwrap();
+        state.install("b", state.begin_start("b"), b.clone()).unwrap();
+        state.install("c", state.begin_start("c"), c.clone()).unwrap();
         state.window_destroyed("c");
         state.stop_all();
         assert!(a.is_stopped() && b.is_stopped() && c.is_stopped());

@@ -2,7 +2,10 @@
 
 use std::cmp::Ordering;
 
-/// The oldest keryx this client speaks to.
+/// The protocol floor: the oldest keryx whose `keryx acp` this client can
+/// talk to at all. It does not imply the `shell` profile: released keryx
+/// 0.4.32 to 0.4.35 have no shell profile, so the client checks what
+/// `initialize` reports for that, not this version.
 pub const MIN_KERYX_VERSION: &str = "0.4.32";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
