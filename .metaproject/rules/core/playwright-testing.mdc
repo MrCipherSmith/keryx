@@ -39,11 +39,11 @@ Canon applies: the Playwright documentation on locators, web-first assertions, f
 | Spec mutates or deletes seeded or shared data (Rule 4) | another spec or run reads that data | `major` | data the spec created itself |
 | Exact global count, `.first()` or `.nth(N)` on data the spec does not own (Rule 4) | the environment can hold other rows | `minor`; `major` where a parallel run is shown to change it | a list the spec created in full |
 | Real external host reachable (Rule 5) | a spec calls it, or an unhandled request passes through | `major` | an error path mocked with `page.route` |
-| CSS class or XPath locator where a role, label or test id exists (Rule 2) | always | `minor` | a third-party widget with none of them |
+| CSS class or XPath locator where a role, label or test id exists (Rule 2) | always | `minor` | a third-party widget with none of them; any `getByRole` or `getByLabel` locator, whatever its accessible name (an icon's generated name included) |
 | Deprecated string-selector API (Rule 2) | always | `minor` | — |
 | Screenshot test on a heavy or non-deterministic surface (Rule 6) | the repo has no visual-test setup, or nothing is masked or fixed | `minor` | a stable component with masked regions |
 | Screenshot threshold loosened inside a spec (Rule 6) | always | `info` | — |
 | Smoke tag on a slow or unreliable flow (Rule 7) | always | `minor` | — |
 | Real secret hard-coded in a spec (Rule 3) | the value is a real credential | rated by the real-credential row of `security-baseline.mdc` Review severities | a test-only value (`info`) |
-| Shared test account or a non-test origin inlined in a spec instead of read from env or the setup project (Rule 3) | the value is a test account or host, not a secret | `major` | a test-only value with no account behind it (`info`) |
+| Shared test account or a non-test origin inlined in a spec instead of read from env or the setup project (Rule 3) | the spec uses the inlined value as the account or host, with no env read in front of it | `major` | a placeholder or empty fallback after an env read (`process.env.E2E_USER ?? "operator@example.com"`); a reserved-domain address (`example.com`) typed into a form to drive a failure path |
 | Non-TypeScript spec or a vague test name (Rule 8) | always | `info` | — |
