@@ -12,36 +12,12 @@ import { stylePlanText } from "./execution-plan-inspector";
 import { formatProjectReferencesLines, referencesSidebarSegment } from "./project-references-view";
 import { onThemeChange } from "./theme";
 import { guardedThemeRepaint, isRenderableGone } from "./theme-repaint";
+export { PROJECT_CONTEXT_COMMAND, isProjectContextCommand, parseProjectContextCommand, NO_RESOLVE_TEXT, PROJECT_CONTEXT_CONFIG_REFUSAL } from "./project-context-command";
+export type { EnforcementMode, ProjectContextTab, ProjectContextCommand } from "./project-context-command";
+import { PROJECT_CONTEXT_COMMAND, NO_RESOLVE_TEXT, PROJECT_CONTEXT_CONFIG_REFUSAL, type EnforcementMode, type ProjectContextTab } from "./project-context-command";
 
 export { formatProjectReferencesLines, NO_REFERENCES_TEXT } from "./project-references-view";
 
-export const PROJECT_CONTEXT_COMMAND = "/projectctx";
-
-export type EnforcementMode = ProjectContextStatus["enforcement"];
-
-export type ProjectContextTab = "status" | "last" | "references";
-
-export type ProjectContextCommand =
-  | { kind: "open"; /** Absent: the Status tab. */ tab?: "references" }
-  | { kind: "set"; mode: EnforcementMode }
-  | { kind: "invalid"; message: string };
-
-export function isProjectContextCommand(line: string): boolean {
-  return (line.trim().split(/\s+/)[0] ?? "") === PROJECT_CONTEXT_COMMAND;
-}
-
-export function parseProjectContextCommand(line: string): ProjectContextCommand {
-  const [, ...rest] = line.trim().split(/\s+/);
-  if (rest.length === 0) return { kind: "open" };
-  const arg = rest[0] as string;
-  if (rest.length === 1 && (arg === "warn" || arg === "block")) return { kind: "set", mode: arg };
-  if (rest.length === 1 && arg === "refs") return { kind: "open", tab: "references" };
-  return { kind: "invalid", message: `Unknown ${PROJECT_CONTEXT_COMMAND} argument '${rest.join(" ")}'. Usage: ${PROJECT_CONTEXT_COMMAND} [warn|block|refs]` };
-}
-
-export const NO_RESOLVE_TEXT = "no resolve recorded yet";
-
-export const PROJECT_CONTEXT_CONFIG_REFUSAL = "projectctx: tasks.config.json is not valid JSON, refusing to overwrite it";
 
 export function projectContextFooter(status: ProjectContextStatus): readonly { key: string; label: string }[] {
   const toggle =

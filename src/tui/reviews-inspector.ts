@@ -4,19 +4,19 @@
 
 import { paritySummary } from "../review/parity";
 import { memoryLogNote } from "../review/readiness";
-import { formatReviewDepthLines, layersLine, loadReviewDepth, renderReviewDegradationText, renderReviewDepthText, renderReviewLayersText, renderReviewParityText, renderReviewReadinessText, type ReviewDepthRow } from "./review-panel";
+import { formatReviewDepthLines, layersLine, loadReviewDepth, type ReviewDepthRow } from "./review-panel";
 import { createReviewLayersActions, type ReviewLayersActions } from "./review-layers-actions";
-import { computeBotMetrics, formatRatio, renderBotMetrics, type BotMetrics, type ReviewRow } from "../review/bot/metrics";
+import { computeBotMetrics, type BotMetrics } from "../review/bot/metrics";
 import { clampScroll, wrapLines, windowLines, type ModalHandle, type OpenModalFn } from "./flow-inspector";
 import { modalBodyRows, openModal, resolveModalPanelSize } from "./modal-host";
 import { guardedThemeRepaint, isRenderableGone } from "./theme-repaint";
 import { onThemeChange, type TextRole } from "./theme";
 import { dimChunk, roleChunk } from "./theme-text";
+export { REVIEWS_COMMAND, REVIEWS_EMPTY, isReviewLayersCommand, isReviewParityCommand, isReviewReadinessCommand, renderReviewDegradationText, renderReviewLayersText, renderReviewParityText, renderReviewReadinessText, isReviewsCommand, formatReviewsHeaderLines, formatReviewRowLines, formatReviewsRowLines, renderReviewsText } from "./reviews-inspector-text";
+import { REVIEWS_COMMAND, formatReviewsHeaderLines, formatReviewsRowLines } from "./reviews-inspector-text";
 
 type OpenTui = typeof import("@opentui/core");
 
-export const REVIEWS_COMMAND = "/reviews";
-export const REVIEWS_EMPTY = "No managed pull request reviews yet. Run `keryx review bot run --pr <n>`.";
 
 export const REVIEWS_FOOTER = [
   { key: "↑/↓", label: "scroll" },
@@ -30,25 +30,6 @@ export const REVIEWS_ACTIONS_FOOTER = [
   { key: "esc", label: "close" },
 ] as const;
 
-/** `/review layers`: the layers of every managed review, as text. The bare `/review` stays the catch-up inspector. */
-export function isReviewLayersCommand(line: string): boolean {
-  const [token, sub] = line.trim().split(/\s+/);
-  return token === "/review" && sub === "layers";
-}
-
-/** `/review parity`: Not run candidates, held severities and open follow-ups of every managed review, as text. */
-export function isReviewParityCommand(line: string): boolean {
-  const [token, sub] = line.trim().split(/\s+/);
-  return token === "/review" && sub === "parity";
-}
-
-/** `/review readiness`: the readiness checklist of every managed review, as text. */
-export function isReviewReadinessCommand(line: string): boolean {
-  const [token, sub] = line.trim().split(/\s+/);
-  return token === "/review" && sub === "readiness";
-}
-
-export { renderReviewDegradationText, renderReviewLayersText, renderReviewParityText, renderReviewReadinessText };
 
 /** The sidebar's Readiness block: per review, the verdict and the failing item ids, wrapped to the sidebar width. */
 export function projectReviewsReadinessLines(depth: readonly ReviewDepthRow[] | undefined, width: number, limit = 3): string[] {
@@ -84,37 +65,6 @@ export function projectReviewsLayerLines(depth: readonly ReviewDepthRow[] | unde
     .map((row) => layersLine(row.layersView).split("; ").map((part) => wrapLines(part, width)).join("\n"));
 }
 
-export function isReviewsCommand(line: string): boolean {
-  return (line.trim().split(/\s+/)[0] ?? "") === REVIEWS_COMMAND;
-}
-
-export function formatReviewsHeaderLines(metrics: BotMetrics): string[] {
-  return [
-    `${metrics.reviews} review(s) on ${metrics.pulls} pull request(s); ${metrics.raised} finding(s) raised, ${metrics.open} open`,
-    `precision ${formatRatio(metrics.precision)}   resolved before merge ${formatRatio(metrics.resolvedBeforeMerge.ratio)}`,
-  ];
-}
-
-export function formatReviewRowLines(row: ReviewRow): string[] {
-  const resolved = row.resolvedBeforeMerge === null ? "n/a" : `${row.resolvedBeforeMerge} of ${row.findings}`;
-  return [
-    `${row.pull}  round ${row.round}  head ${row.head === null ? "unknown" : row.head.slice(0, 7)}`,
-    `  findings ${row.findings}: acted on ${row.actedOn}, dismissed ${row.dismissed}, answered ${row.answeredDisagree}, open ${row.unknown}`,
-    `  precision ${formatRatio(row.precision)}   resolved before merge ${resolved}`,
-  ];
-}
-
-/** One block per managed review, a blank line between blocks. */
-export function formatReviewsRowLines(metrics: BotMetrics): string[] {
-  if (metrics.rows.length === 0) return [REVIEWS_EMPTY];
-  return metrics.rows.flatMap((row, index) => (index === 0 ? formatReviewRowLines(row) : ["", ...formatReviewRowLines(row)]));
-}
-
-/** The readline shell's `/reviews`: the block `keryx review metrics` prints, then the review rows. */
-export function renderReviewsText(metrics: BotMetrics, depth?: readonly ReviewDepthRow[]): string {
-  const base = `${renderBotMetrics(metrics)}\n${formatReviewsRowLines(metrics).join("\n")}\n`;
-  return depth === undefined ? base : `${base}\n${renderReviewDepthText(depth)}`;
-}
 
 // ---------------------------------------------------------------------------
 // Modal
