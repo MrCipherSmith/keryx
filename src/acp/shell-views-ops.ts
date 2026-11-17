@@ -11,6 +11,7 @@
 // supervisor to own it) and a `/task` when this checkout has no Hub connection.
 
 import { readFile } from "node:fs/promises";
+import { loadModelProfiles, profileKey } from "../harness/routing/model-profile";
 import path from "node:path";
 import { readLatestGovernanceReport, governanceDataRoot } from "../governance/service";
 import { flowEntriesFrom } from "../tui/governance-flows";
@@ -219,6 +220,19 @@ export async function runSchedules(host: ShellCommandHost, args: string): Promis
 // /schedule: the draft card is the confirmation
 // ---------------------------------------------------------------------------
 
+/** The session model's "<in>,<out>" USD per million tokens when keryx knows the price (stored or curated profile). */
+function knownRates(host: ShellCommandHost): string | undefined {
+  try {
+    const { providerId, modelId } = host.session.modelIds();
+    const profile = loadModelProfiles(host.configDir)[profileKey(providerId, modelId)];
+    const input = profile?.priceInputPerMillion.value;
+    const output = profile?.priceOutputPerMillion.value;
+    return typeof input === "number" && typeof output === "number" ? `${input},${output}` : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * `/schedule <flags> -- <prompt>` drafts the schedule and answers a view whose one action
  * creates it, carrying the card as its `confirm`. `/schedule confirmed <same arguments>`
@@ -229,17 +243,25 @@ export async function runSchedule(host: ShellCommandHost, args: string): Promise
   const confirmed = /^confirmed(\s|$)/.test(trimmed);
   const raw = confirmed ? trimmed.replace(/^confirmed\s*/, "") : trimmed;
   if (raw.length === 0) {
+    const rates = knownRates(host);
     return viewOutcome({
       title: "Schedule",
       rows: [],
       body: SCHEDULE_SLASH_USAGE.join("\n"),
       form: {
         fields: [
-          { id: "name", label: "Name", kind: "text" },
-          { id: "every", label: "Cadence (e.g. every 4 hours, daily at 08:00)", kind: "text" },
-          { id: "rates", label: "Token rates, USD per million in,out", kind: "text" },
-          { id: "ceiling", label: "Spend ceiling per run, USD", kind: "text" },
-          { id: "prompt", label: "What the agent should do", kind: "text" },
+          { id: "name", label: "Name", kind: "text", required: true, placeholder: "e.g. nightly-review" },
+          { id: "every", label: "Cadence", kind: "text", required: true, placeholder: "every 30 minutes · daily at 08:00 · weekdays at 09:30 · cron" },
+          {
+            id: "rates",
+            label: "Token rates, USD per million tokens (in,out)",
+            kind: "text",
+            required: true,
+            ...(rates !== undefined ? { value: rates } : {}),
+            placeholder: "e.g. 1.25,10 (USD per 1M tokens in,out)",
+          },
+          { id: "ceiling", label: "Spend ceiling per run, USD", kind: "text", required: true, value: "0.50", placeholder: "0.50" },
+          { id: "prompt", label: "What the agent should do", kind: "text", required: true, placeholder: "e.g. Review yesterday's commits and report risks" },
         ],
         submit: '/schedule --name {name} --every "{every}" --rates {rates} --ceiling {ceiling} -- {prompt}',
       },
@@ -316,9 +338,9 @@ function taskView(): ShellView {
     rows: QUICK_MODES.map((mode) => viewRow(mode.id, mode.label, { detail: `review depth ${mode.reviewDepth}\n${mode.criteriaTemplate.join("\n")}` })),
     form: {
       fields: [
-        { id: "mode", label: "Mode", kind: "choice", options: QUICK_MODES.map((mode) => mode.id) },
-        { id: "description", label: "What needs doing", kind: "text" },
-        { id: "criteria", label: "Your own criteria, separated by ;", kind: "text" },
+        { id: "mode", label: "Mode", kind: "choice", required: true, options: QUICK_MODES.map((mode) => mode.id) },
+        { id: "description", label: "What needs doing", kind: "text", required: true, placeholder: "e.g. Make the build green" },
+        { id: "criteria", label: "Your own criteria, separated by ;", kind: "text", placeholder: "optional · e.g. tests pass; no new lint errors" },
       ],
       submit: "/task {mode} {description} || {criteria}",
     },

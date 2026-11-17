@@ -135,6 +135,39 @@ describe("/routing", () => {
   });
 });
 
+describe("/schedule form", () => {
+  const modelHost = (modelId: string) =>
+    fakeHost(project(), tempDir("keryx-acp-views-config-"), {
+      session: { modelIds: () => ({ providerId: "anthropic", modelId }), handle: () => ({ summary: { id: "session-1" } }) },
+    } as unknown as Partial<ShellCommandHost>);
+
+  test("all five fields are required, hinted, and the ceiling is prefilled", async () => {
+    const form = viewOf(await run(modelHost("claude-x"), "schedule")).form;
+    expect(form?.fields.map((field) => field.id)).toEqual(["name", "every", "rates", "ceiling", "prompt"]);
+    for (const field of form?.fields ?? []) {
+      expect(field.required).toBe(true);
+      expect(field.placeholder?.length ?? 0).toBeGreaterThan(0);
+    }
+    const field = (id: string) => form?.fields.find((candidate) => candidate.id === id);
+    expect(field("ceiling")?.value).toBe("0.50");
+    expect(field("every")?.placeholder).toBe("every 30 minutes · daily at 08:00 · weekdays at 09:30 · cron");
+    // An unpriced model gets a hint, not a guess.
+    expect(field("rates")?.value).toBeUndefined();
+    expect(field("rates")?.placeholder).toContain("1.25,10");
+  });
+
+  test("rates are prefilled from keryx's known pricing for the session model", async () => {
+    const form = viewOf(await run(modelHost("claude-sonnet-5-5"), "schedule")).form;
+    expect(form?.fields.find((candidate) => candidate.id === "rates")?.value).toBe("3,15");
+  });
+
+  test("the other forms mark their required fields", async () => {
+    const routing = viewOf(await run(fakeHost(project(), tempDir("keryx-acp-views-config-")), "routing")).form;
+    expect(routing?.fields.every((field) => field.required === true)).toBe(true);
+    expect(routing?.fields.find((field) => field.id === "model")?.placeholder).toBeDefined();
+  });
+});
+
 describe("/jevprofile", () => {
   test("a row per review.jev key with an opposite-value action, and a confirmed apply", async () => {
     const root = project();

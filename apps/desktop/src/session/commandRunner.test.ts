@@ -82,6 +82,34 @@ function rig(over: Partial<RunDeps> = {}, reply: (method: string, params: unknow
 
 const cards = (r: Rig) => r.win().convs.s1!.items.filter((i): i is CommandItem => i.kind === "command");
 
+describe("commands in flight", () => {
+  test("the command is tracked for its session while keryx answers, and untracked after (also on error)", async () => {
+    const events: string[] = [];
+    const track = (sid: string) => {
+      events.push(`begin:${sid}`);
+      return () => void events.push(`end:${sid}`);
+    };
+    const ok = rig({ trackCommand: track }, () => {
+      events.push("request");
+      return { text: "ok" };
+    });
+    await runCommandLine("/tasks", ok.deps);
+    expect(events).toEqual(["begin:s1", "request", "end:s1"]);
+
+    events.length = 0;
+    const bad = rig({ trackCommand: track }, () => new Error("boom"));
+    expect(await runCommandLine("/tasks", bad.deps)).toBe(false);
+    expect(events).toEqual(["begin:s1", "end:s1"]);
+  });
+
+  test("a busy-refused command is never tracked (no request)", async () => {
+    const events: string[] = [];
+    const r = rig({ busy: true, trackCommand: (s) => (events.push(s), () => {}) });
+    await runCommandLine("/rewind", r.deps);
+    expect(events).toEqual([]);
+  });
+});
+
 describe("/goal starts a turn (startTurn effect)", () => {
   const goalReply = (): CommandResult => ({ text: "Starting a turn on the goal.\n", _meta: { keryx: { effects: ["startTurn"], prompt: "make the build green" } } });
 
@@ -99,7 +127,7 @@ describe("/goal starts a turn (startTurn effect)", () => {
 
   test("a refused /goal starts nothing; a turn that cannot start says so", async () => {
     const refused = rig({}, () => ({ text: "/goal: a goal <text> is required", _meta: { keryx: { refused: true } } }) satisfies CommandResult);
-    expect(await runCommandLine("/goal", refused.deps)).toBe(false);
+    expect(await runCommandLine("/goal", refused.deps)).toBe(true);
     expect(refused.started).toHaveLength(0);
 
     const blocked = rig({ startTurn: () => false }, goalReply);
@@ -127,9 +155,9 @@ describe("text and view commands", () => {
     expect(r.sent).toHaveLength(0);
   });
 
-  test("a refused result keeps the draft (false) and is a refused card", async () => {
+  test("a result keryx refused clears the draft (true) and is a refused card", async () => {
     const r = rig({}, () => ({ text: "busy", _meta: { keryx: { refused: true } } }) satisfies CommandResult);
-    expect(await runCommandLine("/compact", r.deps)).toBe(false);
+    expect(await runCommandLine("/compact", r.deps)).toBe(true);
     expect(cards(r)[0]?.refused).toBe(true);
     expect(cards(r)[0]?.text).toBe("busy");
   });

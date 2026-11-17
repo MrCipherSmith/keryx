@@ -404,6 +404,7 @@ button { font: inherit; }
 .command-row-label { font-weight: 500; }
 .command-row-detail { font-size: var(--fs-sm); color: var(--fg-muted); overflow-wrap: anywhere; }
 .command-form { display: grid; gap: var(--sp-2); margin-top: var(--sp-2); }
+.command-form .field-hint { color: var(--text-muted, inherit); font-size: 12px; margin-left: var(--sp-2); }
 .field-check { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-sm); }
 .slash-name { font: 600 calc(12.5px * var(--text-scale)) var(--mono); color: var(--accent-text); flex: none; }
 .slash-desc { flex: 1; color: var(--fg-muted); }

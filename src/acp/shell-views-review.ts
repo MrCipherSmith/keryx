@@ -83,8 +83,8 @@ async function conformView(host: ShellCommandHost): Promise<ShellView> {
       ? {
           form: {
             fields: [
-              { id: "doc", label: "Reference document", kind: "text" as const },
-              { id: "target", label: "Target", kind: "choice" as const, options: setup.targets.map((target) => target.id) },
+              { id: "doc", label: "Reference document", kind: "text" as const, required: true, placeholder: "path to a document, e.g. docs/spec.md" },
+              { id: "target", label: "Target", kind: "choice" as const, required: true, options: setup.targets.map((target) => target.id) },
             ],
             submit: "/conform run {target} {doc}",
           },
@@ -223,7 +223,7 @@ async function decisionsView(host: ShellCommandHost): Promise<ShellView> {
     title: "Decisions",
     body: report,
     rows: [viewRow("arms", "Arm summary", { detail: "How often the recommendation was followed in each arm.", actions: [action("Show", "/decisions arms")] })],
-    form: { fields: [{ id: "reason", label: "Reason for the latest answer", kind: "text" }], submit: "/decisions reason {reason}" },
+    form: { fields: [{ id: "reason", label: "Reason for the latest answer", kind: "text", required: true, placeholder: "why you answered this way" }], submit: "/decisions reason {reason}" },
   };
 }
 

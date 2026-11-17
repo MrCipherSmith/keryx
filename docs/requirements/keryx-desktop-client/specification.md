@@ -464,8 +464,15 @@ version checks and the flows parsers and argv builder.
 - Composer palette: typing `/` opens a grouped, filterable list of every
   advertised command with its hint; Tab/Enter completes; a `text` command is
   sent with `_keryx/command` and shown as a command card (input + output) in
-  the transcript; `dialog` and `client` commands open their UI. A command
-  refused while busy shows the reason inline and keeps the draft.
+  the transcript; `dialog` and `client` commands open their UI. The draft is
+  cleared whenever keryx answered the command, whether it ran or refused it
+  (`_meta.keryx.refused`: the refusal is its own card). The draft is kept only
+  when the client itself refused the command (a `busy: refuse` command while a
+  turn runs, shown inline without a request) or the request failed (transport
+  or RPC error), so the user can fix and resend it. While a command is in
+  flight, keryx may ask for approval or an answer (`session/request_permission`,
+  `_keryx/ask_user`, for example `/delegate`); the window raises that dialog
+  for the session the command runs in, the same as during a turn.
 - Providers dialog (`/connect`, also from the model picker): Connected and
   Add tabs, Test, Disconnect, API-key field (password input), base URL,
   custom provider form, device-code panel (code, Copy, Open browser, Cancel).

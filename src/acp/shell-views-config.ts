@@ -59,8 +59,8 @@ async function routingView(host: ShellCommandHost): Promise<ShellView> {
     body: [...settings.notices.map((notice) => `routing: ${notice}`), "Pick a model per category: provider/model, or baseline to follow the session."].join("\n"),
     form: {
       fields: [
-        { id: "category", label: "Category", kind: "choice", options: [...ROUTING_CATEGORIES] },
-        { id: "model", label: "provider/model or baseline", kind: "text" },
+        { id: "category", label: "Category", kind: "choice", required: true, options: [...ROUTING_CATEGORIES] },
+        { id: "model", label: "provider/model or baseline", kind: "text", required: true, placeholder: "e.g. anthropic/claude-sonnet-5-5 or baseline" },
       ],
       submit: "/routing set {category} {model}",
     },

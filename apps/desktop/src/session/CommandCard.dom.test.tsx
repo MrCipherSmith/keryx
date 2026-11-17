@@ -140,3 +140,31 @@ test("a masked line from a secret submit is what the card shows", async () => {
   await render(item({ line: "/connect openai ••••••", text: "connected" }));
   expect(host.querySelector(".command-line")!.textContent).toBe("/connect openai ••••••");
 });
+
+test("a form with required fields keeps Submit disabled until each is filled, and sends a prefilled value", async () => {
+  const form: CommandView = {
+    title: "Schedule",
+    form: {
+      submit: "/schedule --name {name} --ceiling {ceiling}",
+      fields: [
+        { id: "name", label: "Name", kind: "text", required: true, placeholder: "e.g. nightly" },
+        { id: "ceiling", label: "Ceiling", kind: "text", required: true, value: "0.50" },
+        { id: "note", label: "Note", kind: "text" },
+      ],
+    },
+  };
+  const runs = await render(item({ line: "/schedule", view: form }));
+  const inputs = Array.from(host.querySelectorAll("input"));
+  expect(inputs[0]!.getAttribute("placeholder")).toBe("e.g. nightly");
+  expect(inputs[1]!.value).toBe("0.50");
+  const submit = button("Submit") as HTMLButtonElement;
+  expect(submit.disabled).toBe(true);
+  expect(host.querySelector(".field-hint")!.textContent).toContain("Name");
+  await setValue(inputs[0]!, "   ");
+  expect((button("Submit") as HTMLButtonElement).disabled).toBe(true);
+  await setValue(inputs[0]!, "nightly");
+  expect((button("Submit") as HTMLButtonElement).disabled).toBe(false);
+  expect(host.querySelector(".field-hint")).toBeNull();
+  await click(button("Submit"));
+  expect(runs.map((r) => r.line)).toEqual(["/schedule --name nightly --ceiling 0.50"]);
+});

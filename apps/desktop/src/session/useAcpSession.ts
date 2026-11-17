@@ -19,7 +19,6 @@ import {
   SESSION_RELEASED,
   SESSION_SHOWN,
   SESSION_TRASH,
-  type AskUserRequest,
   type CommandEffect,
   type AskUserResult,
   type ConfigOption,
@@ -27,7 +26,6 @@ import {
   type LoadSessionResult,
   type NewSessionResult,
   type PermissionOutcome,
-  type PermissionRequest,
   type SessionFlags,
   type SessionInfo,
   type SessionUpdate,
@@ -36,6 +34,7 @@ import { initialState, pendingQueueSend, reducer, sessionMarks, shownView, type 
 import { runCommandLine, type RunOptions, type UiActions } from "./commandRunner";
 import { DialogQueue, type PendingAsk, type PendingPermission } from "./dialogQueue";
 import { SessionRegistry } from "./sessionRegistry";
+import { answerAgentRequest } from "./agentRequests";
 import { basename } from "../lib/format";
 
 export type { PendingAsk, PendingPermission } from "./dialogQueue";
@@ -63,7 +62,6 @@ function errMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-const CANCELLED: PermissionOutcome = { outcome: "cancelled" };
 
 interface Turn {
   client: AcpClient;
@@ -353,19 +351,7 @@ export function useAcpSession(cwd: string) {
           if (c && typeof c.userCode === "string") for (const f of challengeListeners.current) f(c);
         }
       };
-      client.onRequest = async (method, params) => {
-        if (method === "session/request_permission") {
-          const sid = l.reg.admit(params);
-          if (!sid) return { outcome: CANCELLED };
-          return { outcome: await dialogs.permission(sid, params as PermissionRequest) };
-        }
-        if (method === "_keryx/ask_user") {
-          const sid = l.reg.admit(params);
-          if (!sid) return { outcome: "cancelled" } satisfies AskUserResult;
-          return dialogs.ask(sid, params as AskUserRequest);
-        }
-        throw new RpcError(-32601, `Method not found: ${method}`);
-      };
+      client.onRequest = (method, params) => answerAgentRequest(method, params, l.reg, dialogs);
       client.onReplyFailed = (method, error) => {
         if (l.gen === gen) dispatch({ t: "banner", level: "error", text: `Could not send keryx the answer to ${method}: ${error}` });
       };
@@ -677,6 +663,7 @@ export function useAcpSession(cwd: string) {
           interrupt: cancel,
           applyEffects,
           ui,
+          trackCommand: (target) => l.reg.beginCommand(target),
         },
         opts,
       );

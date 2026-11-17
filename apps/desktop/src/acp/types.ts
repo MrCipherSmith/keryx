@@ -88,6 +88,10 @@ export interface ViewField {
   kind: "text" | "secret" | "choice" | "toggle" | (string & {});
   options?: Array<string | { value: string; label?: string }>;
   value?: string | boolean | null;
+  /** A hint shown while a text field is empty. */
+  placeholder?: string;
+  /** Submit stays disabled until the field is non-empty. */
+  required?: boolean;
 }
 
 export interface ViewForm {
