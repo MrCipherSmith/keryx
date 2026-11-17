@@ -244,7 +244,7 @@ export function renderIndexMarkdown({
           "For Metaproject requirements packages under `docs/requirements` (README, PRD, specification, policies, schemas), use `skills/gdskills/planning/docpack-orchestrator/SKILL.md`; for current-codebase reverse-engineering documentation, use `autodoc-orchestrator` from `skills/catalog.md`.",
           "For known modules/components/stores/services/domain entities, check generated project skills under `project-skills/<module>/<entity>/` before generic guidance.",
           ORCHESTRATORS_INLINE_NOTE,
-          "When orchestrating multi-agent work, dispatch gdskills workers through the schema contracts in `core/gdskills/contracts/` (subagent-dispatch -> subagent-result) and read `rules/core/subagent-status-protocol.md`; validate a concrete message with `keryx skills contracts validate <file> --schema <name>`.",
+          "When orchestrating multi-agent work, dispatch gdskills workers through the schema contracts in `core/gdskills/contracts/` (subagent-dispatch -> subagent-result) and read `rules/process/subagent-status-protocol.md`; validate a concrete message with `keryx skills contracts validate <file> --schema <name>`.",
         ]
       : []),
     ...(enableHealth

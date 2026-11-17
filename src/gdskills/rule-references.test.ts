@@ -8,6 +8,7 @@ import {
   resolveRuleReference,
   ruleReferences,
   shadowedRuleReferences,
+  unresolvedReferences,
   unresolvedRuleReferences,
 } from "./rule-references";
 
@@ -111,6 +112,13 @@ describe("a citation of a rule keryx moved out of core/ (ADR-0001 P3)", () => {
       "core/error-handling.mdc",
       "process/git-rules.mdc",
     ]);
+  });
+
+  test("a moved .md rule cited at its old rules/core/ path is looked for at the new one", async () => {
+    const content = "Protocol: `rules/core/subagent-status-protocol.md`.";
+    expect(await unresolvedReferences(cwd, content)).toEqual([{ ref: "rules/core/subagent-status-protocol.md", reason: "missing" }]);
+    await writeRule("process/subagent-status-protocol.md");
+    expect(await unresolvedReferences(cwd, content)).toEqual([]);
   });
 
   test("resolves to the installed process/ file, and a process/ project slot shadows it", async () => {

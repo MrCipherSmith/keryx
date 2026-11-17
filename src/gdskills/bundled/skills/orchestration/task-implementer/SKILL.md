@@ -480,7 +480,7 @@ The step's own status is the orchestrator's to write (`keryx job step <JOB_NAME>
 
 **6.2 Emit compact STATUS response:**
 
-Return a compact STATUS response following `rules/core/subagent-status-protocol.md`.
+Return a compact STATUS response following `rules/process/subagent-status-protocol.md`.
 **Do NOT include the full JSON block inline** — the orchestrator reads the result file when it needs details.
 The inline response must contain only: STATUS line + Completed bullets + Files changed + Verification summary + a `## Behavior changes` list (each entry's description, `user_visible`, `needs_operator`, alternatives) whenever `behavior_changes` is non-empty — a flow dispatch writes no result file, so this list is the only copy the orchestrator reads. Any `needs_operator: true` entry makes the status at best `DONE_WITH_CONCERNS`, never `DONE`.
 
@@ -560,7 +560,7 @@ second copy of a schema is how that happens.
 
 ## Reporting Results
 
-**Rule:** `rules/core/subagent-status-protocol.md`
+**Rule:** `rules/process/subagent-status-protocol.md`
 
 Every final response to the orchestrator MUST begin with `STATUS: <STATUS>`. The full JSON result object is written to a file in Phase 6.1 — the inline response contains only the compact STATUS format. No JSON in the response body.
 
@@ -636,7 +636,7 @@ Run task-1 (which creates pipeline.ts) before re-dispatching this task, or provi
 - (nothing — blocked before implementation could start)
 ```
 
-See `rules/core/subagent-status-protocol.md` for the full format specification. Four statuses are yours as a skill worker; the fifth, `FAILED`, belongs to harness child workers and you must never emit it — report `BLOCKED` instead.
+See `rules/process/subagent-status-protocol.md` for the full format specification. Four statuses are yours as a skill worker; the fifth, `FAILED`, belongs to harness child workers and you must never emit it — report `BLOCKED` instead.
 
 ---
 

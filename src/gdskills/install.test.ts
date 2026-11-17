@@ -1615,7 +1615,8 @@ test("a moved rule's read is capped by its own largest shipped size", async () =
 function movedEntryShapeProblems(entry: MovedRuleEntry): string[] {
   const problems: string[] = [];
   if (path.posix.basename(entry.fileName) !== entry.fileName) problems.push(`fileName ${entry.fileName} is not a bare name`);
-  if (!/^(process|activity)\/[a-z0-9._-]+\.mdc$/.test(entry.movedTo)) problems.push(`movedTo ${entry.movedTo} is not <layer>/<name>.mdc`);
+  if (!/^(process|activity)\/[a-z0-9._-]+\.mdc?$/.test(entry.movedTo)) problems.push(`movedTo ${entry.movedTo} is not <layer>/<name>.md(c)`);
+  if (entry.movedTo.slice(entry.movedTo.indexOf("/") + 1) !== entry.fileName) problems.push(`movedTo ${entry.movedTo} renames ${entry.fileName}`);
   if (!(entry.largestShippedBytes > 0)) problems.push("largestShippedBytes is not positive");
   if (entry.shippedSha256.length === 0) problems.push("no shipped hashes");
   for (const hash of entry.shippedSha256) if (!/^[0-9a-f]{64}$/.test(hash)) problems.push(`bad hash ${hash}`);
@@ -1627,7 +1628,7 @@ test("moved-rule entries are well-formed: bare old name, <layer>/<name>.mdc targ
     expect(movedEntryShapeProblems(entry)).toEqual([]);
   }
   // The checker itself rejects the shapes it is for.
-  expect(movedEntryShapeProblems({ ...FIXTURE_MOVE, fileName: "../core/moved.mdc", movedTo: "core/moved.mdc" })).toHaveLength(2);
+  expect(movedEntryShapeProblems({ ...FIXTURE_MOVE, fileName: "../core/moved.mdc", movedTo: "core/moved.mdc" })).toHaveLength(3);
 });
 
 test("MOVED_RULES entries name a shipped layer path, are gone from core, and are not also retired", () => {
@@ -1854,7 +1855,7 @@ async function seedPreMoveCore(metaprojectRoot: string): Promise<void> {
  * `process/x.mdc`), so reversing exactly that rewrite reproduces it.
  */
 async function preMoveText(fileName: string): Promise<string> {
-  const moved = MOVED_RULES.map((entry) => entry.fileName.replace(/\.mdc$/, "")).join("|");
+  const moved = MOVED_RULES.map((entry) => entry.fileName.replace(/\.mdc?$/, "")).join("|");
   const text = await readFile(path.join(bundledRulesSourcePath("process"), fileName), "utf8");
   return text.replace(new RegExp(`(?<!project/)\\bprocess/(${moved})\\b`, "g"), "core/$1");
 }
@@ -1863,18 +1864,27 @@ test("P3: every moved procedure records the last version it shipped under core/"
   expect(MOVED_RULES.map((entry) => entry.fileName).sort()).toEqual([
     "commit-message-formatting.mdc",
     "documentation-management.mdc",
+    "execution-metrics.md",
     "git-concurrency.mdc",
     "git-rules.mdc",
+    "implementation-doc-mandate.mdc",
     "implementation-plans.mdc",
     "jobs-documentation.mdc",
     "model-selection.mdc",
     "opus-5-5-prompting.mdc",
     "requirements-management.mdc",
     "requirements-package-standard.mdc",
+    "rule-management-workflow.mdc",
+    "session-plan-bridge.mdc",
     "skill-authoring.mdc",
     "skill-lifecycle.mdc",
     "skills-storage-workflow.mdc",
+    "subagent-context-construction.md",
+    "subagent-status-protocol.md",
   ]);
+  // Kept in core on purpose: coding and CLI-contract guidance, not procedures.
+  expect(MOVED_RULES.map((entry) => entry.fileName)).not.toContain("shared-definitions.mdc");
+  expect(MOVED_RULES.map((entry) => entry.fileName)).not.toContain("cli-interface-design.mdc");
   for (const entry of MOVED_RULES) {
     const text = await preMoveText(entry.fileName);
     expect({ file: entry.fileName, recorded: entry.shippedSha256.includes(sha(text)) })

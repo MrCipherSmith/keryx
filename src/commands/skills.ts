@@ -743,6 +743,12 @@ async function uninstallSkillsCommand(args: string[]): Promise<void> {
       console.log(`  ${style.red(symbols.cross)} ${result.error}`);
     }
     console.log(`  ${style.green(symbols.ok)} Removed ${result.removed.length} file(s).`);
+    if (result.keptShared !== undefined) {
+      console.log("Kept (another installed module still records them):");
+      for (const kept of result.keptShared) {
+        console.log(`- ${kept.path}: ${kept.reason}`);
+      }
+    }
     if (result.diffs.length > 0) {
       console.log("Force-removed drifted files:");
       for (const diff of result.diffs) {

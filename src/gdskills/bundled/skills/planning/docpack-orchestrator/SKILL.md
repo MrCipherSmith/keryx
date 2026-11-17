@@ -32,7 +32,7 @@ current codebase and produce architecture/onboarding/developer documentation.
 
 When a USER runs this orchestrator directly (not as a dispatched subagent), at
 the start ask "Collect execution statistics for this run? (yes/no)" per
-`.metaproject/rules/core/execution-metrics.md`. If yes, append the
+`.metaproject/rules/process/execution-metrics.md`. If yes, append the
 `## Execution Metrics` section at the end and save it under the docpack output
 dir. Never ask or emit it when dispatched as a subagent. Plan bridge: publish `phase-0`…`phase-5` with `plan_set`/`plan_update`, and hold them `proposed` while Phase 0's location question is open — see the `session-plan-bridge` rule.
 

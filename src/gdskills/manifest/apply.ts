@@ -250,7 +250,37 @@ export async function applyInstall(
     }
   }
 
+  moduleRecords.push(...releasedRecords(existing?.installedModules ?? [], moduleRecords));
   await writeSkillsInstallState(destRoot, plan.target, moduleRecords, plan.profile);
 
   return { ok: skipped.length === 0, written, alreadyPresent, skipped, errors: [] };
+}
+
+/**
+ * One owner per recorded path. A path this apply recorded under a module is
+ * dropped from every OTHER module's earlier record — a module the manifest no
+ * longer has (`skill-lifecycle`, folded into `process-activity-rules` by
+ * ADR-0001 P3) would otherwise keep claiming the file, and
+ * `skills uninstall --module <old>` would delete what the new module owns. A
+ * record left with no paths is returned empty, which removes it.
+ */
+function releasedRecords(
+  previous: readonly InstalledModuleRecord[],
+  current: readonly InstalledModuleRecord[],
+): InstalledModuleRecord[] {
+  const currentIds = new Set(current.map((record) => record.moduleId));
+  const ownedNow = new Set(current.flatMap((record) => record.writtenPaths));
+  const released: InstalledModuleRecord[] = [];
+  for (const record of previous) {
+    if (currentIds.has(record.moduleId)) continue;
+    const kept = record.writtenPaths.filter((filePath) => !ownedNow.has(filePath));
+    if (kept.length === record.writtenPaths.length) continue;
+    const keptSet = new Set(kept);
+    released.push({
+      ...record,
+      writtenPaths: kept,
+      sha256: Object.fromEntries(Object.entries(record.sha256).filter(([filePath]) => keptSet.has(filePath))),
+    });
+  }
+  return released;
 }

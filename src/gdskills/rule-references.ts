@@ -211,7 +211,9 @@ export async function unresolvedReferences(projectRoot: string, content: string)
   for (const match of content.matchAll(/`(?:\.metaproject\/)?((?:skills|rules)\/[^`\s]+\.(?:md|json))`/gi)) {
     const ref = match[1];
     if (!ref || found.has(ref) || ref.split("/").includes("..")) continue;
-    if (!(await pathExists(path.join(projectRoot, ".metaproject", ref)))) {
+    // A `rules/core/<name>.md` keryx moved is looked for at its new path.
+    const lookup = ref.startsWith("rules/") ? `rules/${canonicalRuleReference(ref.slice("rules/".length))}` : ref;
+    if (!(await pathExists(path.join(projectRoot, ".metaproject", lookup)))) {
       found.set(ref, { ref, reason: "missing" });
     }
   }

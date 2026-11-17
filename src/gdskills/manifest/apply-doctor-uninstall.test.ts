@@ -11,7 +11,7 @@ import { planInstall } from "./plan";
 import { applyInstall } from "./apply";
 import { doctorInstall } from "./doctor";
 import { uninstallInstall } from "./uninstall";
-import { readSkillsInstallState, skillsInstallStatePath } from "./state";
+import { readSkillsInstallState, skillsInstallStatePath, writeSkillsInstallState } from "./state";
 
 let root: string;
 
@@ -175,6 +175,71 @@ test("R3-1: a hand-written unrecorded file outside the keryx-published roots kee
   const [skipped] = (await applyInstall(plan, root)).skipped;
   expect(skipped?.keryxPublished).toBeUndefined();
   expect(skipped?.reason).toBe("a file already exists at this destination and is not recorded in install-state");
+});
+
+/** Before/after ADR-0001 P3: one rule file, first owned by a module the manifest later drops. */
+function ownershipManifest(moduleId: string): InstallManifest {
+  return {
+    schemaVersion: "1.0.0",
+    profiles: { base: { description: "base", modules: [moduleId], components: [] } },
+    modules: {
+      [moduleId]: {
+        kind: "rule",
+        description: moduleId,
+        paths: ["rules/a.mdc"],
+        targets: ["claude", "keryx-shell"],
+        dependencies: [],
+        defaultInstall: true,
+        cost: "light",
+        stability: "stable",
+      },
+    },
+    components: {},
+  };
+}
+
+test("a re-install drops a path from the record of a module the manifest no longer has", async () => {
+  const before = await planInstall({ manifest: ownershipManifest("skill-lifecycle"), profileId: "base", target: "claude", repoRoot: root });
+  expect((await applyInstall(before, root)).ok).toBe(true);
+
+  const after = await planInstall({ manifest: ownershipManifest("process-activity-rules"), profileId: "base", target: "claude", repoRoot: root });
+  expect((await applyInstall(after, root)).ok).toBe(true);
+
+  const state = await readSkillsInstallState(root, "claude");
+  expect(state!.installedModules.map((m) => [m.moduleId, m.writtenPaths])).toEqual([
+    ["process-activity-rules", [".claude/rules/a.mdc"]],
+  ]);
+  // Nothing is left for `--module skill-lifecycle` to remove.
+  const uninstall = await uninstallInstall(root, "claude", { moduleId: "skill-lifecycle" });
+  expect(uninstall.removed).toEqual([]);
+  expect(await readFile(path.join(root, ".claude", "rules", "a.mdc"), "utf8")).toBe("rule a fixture\n");
+});
+
+test("uninstalling one module never removes a file another recorded module still owns", async () => {
+  // An install-state written before the ownership transfer: both records claim the file.
+  const plan = await planInstall({ manifest: ownershipManifest("process-activity-rules"), profileId: "base", target: "claude", repoRoot: root });
+  expect((await applyInstall(plan, root)).ok).toBe(true);
+  const [owner] = (await readSkillsInstallState(root, "claude"))!.installedModules;
+  await writeSkillsInstallState(root, "claude", [{ ...owner!, moduleId: "skill-lifecycle" }], "base");
+  expect((await readSkillsInstallState(root, "claude"))!.installedModules.map((m) => m.moduleId)).toEqual([
+    "process-activity-rules",
+    "skill-lifecycle",
+  ]);
+
+  const uninstall = await uninstallInstall(root, "claude", { moduleId: "skill-lifecycle", force: true });
+  expect(uninstall.ok).toBe(true);
+  expect(uninstall.removed).toEqual([]);
+  expect(uninstall.keptShared).toEqual([
+    { path: ".claude/rules/a.mdc", reason: "also recorded by module process-activity-rules — left in place for it" },
+  ]);
+  expect(await readFile(path.join(root, ".claude", "rules", "a.mdc"), "utf8")).toBe("rule a fixture\n");
+  // The stale record is gone; the owner's record is untouched.
+  expect((await readSkillsInstallState(root, "claude"))!.installedModules.map((m) => m.moduleId)).toEqual([
+    "process-activity-rules",
+  ]);
+
+  // Uninstalling the owner itself (or everything) still removes the file.
+  expect((await uninstallInstall(root, "claude")).removed).toEqual([".claude/rules/a.mdc"]);
 });
 
 test("a recorded file another writer already updated to the new bundled bytes is up to date, not drift", async () => {

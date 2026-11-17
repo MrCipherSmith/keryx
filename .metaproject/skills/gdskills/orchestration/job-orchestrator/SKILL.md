@@ -34,7 +34,7 @@ Dynamic orchestrator that builds execution plans based on user intent. Unlike a 
 
 **The package is the state.** `keryx job` is the only writer of `state.json`; it validates every write against the registered contract `job-orchestrator-state` and refuses one that does not conform. Never hand-write `state.json`, and never hold a step's outcome only in this session — a step recorded nowhere is a step that did not happen as far as the next session is concerned.
 
-**Execution metrics (opt-in):** when a USER runs this orchestrator directly (not as a dispatched subagent), at the start ask "Collect execution statistics for this run? (yes/no)" per `.metaproject/rules/core/execution-metrics.md`. If yes, append the `## Execution Metrics` section at the end and save it under the job dir (`jobs/<job>/metrics/`). Never ask or emit it when dispatched as a subagent.
+**Execution metrics (opt-in):** when a USER runs this orchestrator directly (not as a dispatched subagent), at the start ask "Collect execution statistics for this run? (yes/no)" per `.metaproject/rules/process/execution-metrics.md`. If yes, append the `## Execution Metrics` section at the end and save it under the job dir (`jobs/<job>/metrics/`). Never ask or emit it when dispatched as a subagent.
 
 **Key design principle** (from Anthropic's "Building Effective Agents"):
 > "The key difference from parallelization is its flexibility — subtasks aren't pre-defined, but determined by the orchestrator based on the specific input."
@@ -1805,7 +1805,7 @@ a resumed session does not depend on remembering where it was.
 
 ## Interpreting Subagent Results
 
-**Rule:** `rules/core/subagent-status-protocol.md`
+**Rule:** `rules/process/subagent-status-protocol.md`
 
 All subagents dispatched by this orchestrator MUST begin their final response with `STATUS: <STATUS>`. The orchestrator reads this line first and routes accordingly.
 
@@ -1813,7 +1813,7 @@ All subagents dispatched by this orchestrator MUST begin their final response wi
 
 **IF A SUBAGENT DOES NOT START WITH `STATUS:`, TREAT IT AS `NEEDS_CONTEXT` AND REQUEST A PROPERLY FORMATTED RESPONSE**
 
-Do not attempt to infer status from prose. Do not trust a response that "looks fine" but lacks the status line. Run one explicit retry: "Your response did not start with STATUS: <STATUS>. Please reformat using the subagent status protocol (rules/core/subagent-status-protocol.md) and resend your result."
+Do not attempt to infer status from prose. Do not trust a response that "looks fine" but lacks the status line. Run one explicit retry: "Your response did not start with STATUS: <STATUS>. Please reformat using the subagent status protocol (rules/process/subagent-status-protocol.md) and resend your result."
 
 ### How to handle each status
 
@@ -1855,7 +1855,7 @@ Do not accept this. A subagent that ignores the status protocol is unpredictable
 
 ## Constructing Subagent Context
 
-**Rule:** `rules/core/subagent-context-construction.md`
+**Rule:** `rules/process/subagent-context-construction.md`
 
 Every prompt dispatched to a subagent must be **explicitly constructed** by the orchestrator. Subagents do not inherit session context, job state, or prior agent output — they only know what the orchestrator tells them.
 

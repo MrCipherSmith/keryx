@@ -215,18 +215,18 @@ Required rules:
 
 - `.metaproject/rules/process/requirements-management.mdc`
 - `.metaproject/rules/process/implementation-plans.mdc`
-- `.metaproject/rules/core/subagent-context-construction.md`
-- `.metaproject/rules/core/subagent-status-protocol.md`
+- `.metaproject/rules/process/subagent-context-construction.md`
+- `.metaproject/rules/process/subagent-status-protocol.md`
 - `.metaproject/rules/core/tdd-workflow.mdc`
 - `.metaproject/rules/core/code-style-patterns.mdc`
 - `.metaproject/rules/core/error-handling.mdc`
-- `.metaproject/rules/core/implementation-doc-mandate.mdc`
-- `.metaproject/rules/core/execution-metrics.md`
+- `.metaproject/rules/process/implementation-doc-mandate.mdc`
+- `.metaproject/rules/process/execution-metrics.md`
 - `.metaproject/rules/process/git-concurrency.mdc` — no `git stash`, no unscoped `git add`, pin every dispatch to its worktree
 
 Execution metrics (opt-in): when a USER runs this orchestrator directly, at the
 start ask "Collect execution statistics for this run? (yes/no)" per
-`rules/core/execution-metrics.md`. If yes, append the `## Execution Metrics`
+`rules/process/execution-metrics.md`. If yes, append the `## Execution Metrics`
 section at the end and save it under the flow dir (`<flow-dir>/metrics/`). Never
 ask or emit it when dispatched as a subagent.
 
@@ -297,13 +297,13 @@ Recommended worker routing:
 ### Worker communication is schema-governed
 
 Workers do not inherit session state; every dispatch is constructed explicitly
-(`.metaproject/rules/core/subagent-context-construction.md`). Each dispatch is a
+(`.metaproject/rules/process/subagent-context-construction.md`). Each dispatch is a
 `subagent-dispatch` object
 (`.metaproject/core/gdskills/contracts/subagent-dispatch.schema.json`) and each
 worker reply is a `subagent-result` object
 (`.metaproject/core/gdskills/contracts/subagent-result.schema.json`) whose first
 line is `STATUS: <status>`
-(`.metaproject/rules/core/subagent-status-protocol.md`).
+(`.metaproject/rules/process/subagent-status-protocol.md`).
 
 `<worktree_path>` below is the absolute root of the checkout this flow's work
 happens in: the git worktree the flow runs in, or the project root when it runs

@@ -56,8 +56,8 @@ this list is what says whether the bar moved.
 |---|---|
 | `rules/core/tdd-workflow.mdc` | Clause 2 for tests specifically: the red-green-refactor sequence, and the invariant that `STATUS: DONE` requires a green suite (its Iron Law 1, and Iron Law 3 forbidding deletion of tests to get there — clause 4's test case). |
 | `.metaproject/skills/gdskills/orchestration/code-verifier/SKILL.md` | Clause 3: the gate decision, and the ruling that a check which did not run reports `status: skipped`, never `pass`. It also owns the distinction between the gate's result and the skill's own `STATUS:`. |
-| `rules/core/implementation-doc-mandate.mdc` | The shape of the evidence for clauses 1 and 2 — the Verification Gate block, the Acceptance Criteria Met list, and its Iron Law 3: the numbers must come from an independent verifier, not from self-assessment. |
-| `rules/core/subagent-status-protocol.md` | How the result is reported: `STATUS:` on line one, the five statuses, and the verification block every `DONE` response carries. |
+| `rules/process/implementation-doc-mandate.mdc` | The shape of the evidence for clauses 1 and 2 — the Verification Gate block, the Acceptance Criteria Met list, and its Iron Law 3: the numbers must come from an independent verifier, not from self-assessment. |
+| `rules/process/subagent-status-protocol.md` | How the result is reported: `STATUS:` on line one, the five statuses, and the verification block every `DONE` response carries. |
 | `rules/process/git-concurrency.mdc` | Clause 5: a task is not done until its diff is committed, whether the worker or the orchestrator commits it. |
 | `.metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md` | The worker-side reading of clause 3: skipped verification is a failed verification, and partial is not done. |
 | `rules/process/requirements-package-standard.mdc` | Clause 2 for a documentation package, where the gates are structural (required files, versions, links, honest status) rather than lint and tests. |

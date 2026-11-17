@@ -203,6 +203,41 @@ export const MOVED_RULES: MovedRuleEntry[] = [
     "b71331adbb20b999a3be89f4d30695cb075c04d03dd16be0b0a7dd2b4fdfa0f1",
     "875b4de145ee96cbe763ca1830a0792efafcf3f52ab7f7e07ecb97e864078599",
   ]),
+  // Owner decision on #1222: the remaining agent procedures follow. shared-definitions and
+  // cli-interface-design stay in core — they are coding and CLI-contract guidance, not procedures.
+  movedProcedure("rule-management-workflow.mdc", 3262, [
+    // 3 versions shipped under core/, first in v0.1.0.
+    "af4de38d75f0dd1de430b817386aeb886272224e1659c646db6d77056c4cbb96",
+    "0205a110ef7dead182eb069c2d09e6ce2088d09ae3173841470b3cd2dd808681",
+    "2acaf1396cbafd23cd7c0329dceb897a4dff19ed267f505ca11afd92920a3d85",
+  ]),
+  movedProcedure("implementation-doc-mandate.mdc", 5362, [
+    // 2 versions shipped under core/, first in v0.1.0.
+    "88c0fa01c7a8518ef75107f9ac77e08c57232e63f9847c57c2e97619243c4eef",
+    "98cbcf0242fd3ad55c6f4e4c54573eac7c9087f199f4fca9a292e7528c4bd552",
+  ]),
+  movedProcedure("session-plan-bridge.mdc", 7523, [
+    // 3 versions shipped under core/, first in v0.2.146.
+    "5607a79df57b43eb6bf41868019a0e30f672552cd5ce1d76d60e6beee1e6feb0",
+    "e01894b56513cf81946fbbbf0131ec6de4e72852a90d7e364e24fc76134fe9e3",
+    "4f4666c49abe2db815a0650f8280759afa25efe148e37ef2d680a09e669b277f",
+  ]),
+  movedProcedure("subagent-context-construction.md", 4012, [
+    // 2 versions shipped under core/, first in v0.1.0.
+    "fdd54ecd55523fb859dc0fe067e3ad4382b9f65627e6a58700f170794869e718",
+    "c66f6ada6f2c887ea84b56f161dbbc25cc9e429c230eacdadb6c4bf98212f1e9",
+  ]),
+  movedProcedure("subagent-status-protocol.md", 9351, [
+    // 3 versions shipped under core/, first in v0.1.0.
+    "089b2c60fce48b1209901de18915bf61454d32cb56e361c3ea12683a0a23e545",
+    "116ab2b7aa7c0211d7755b13d69e4a38a029281f67385780ce24779a8614ad5f",
+    "fcf6b10bde7f5d95962f2830e454bb73ab9e02d56dbffd8d1debeb09eb1e3b10",
+  ]),
+  movedProcedure("execution-metrics.md", 4971, [
+    // 2 versions shipped under core/, first in v0.1.0.
+    "18219d26b1624ca6d9573944dea8c63664d986849e5c4e0d7bf10d273b0252f1",
+    "ebd0338ec1d7d0db2b61bfd2c57156bf617563be856883a164662e40ee266052",
+  ]),
 ];
 
 function movedProcedure(fileName: string, largestShippedBytes: number, shippedSha256: string[]): MovedRuleEntry {

@@ -40,6 +40,12 @@ export interface UninstallDiffNote {
 export interface UninstallResult {
   ok: boolean;
   removed: string[];
+  /**
+   * Paths the uninstalled module recorded that another module in this
+   * install-state still records: left on disk for that module, and dropped
+   * from the uninstalled module's record.
+   */
+  keptShared?: UninstallRefusal[];
   refused: UninstallRefusal[];
   diffs: UninstallDiffNote[];
   /**
@@ -112,14 +118,32 @@ export async function uninstallInstall(
   // merges by moduleId, leaving every untouched record exactly as it was. A
   // touched record with an empty `writtenPaths` tells it to drop that record.
   const batch: InstalledModuleRecord[] = [];
+  const keptShared: UninstallRefusal[] = [];
+  const inScope = (record: InstalledModuleRecord): boolean =>
+    options.moduleId === undefined || record.moduleId === options.moduleId;
+  // Who else still owns a path once this call is done: every record outside
+  // its scope. A stale record of a module the manifest dropped can share a
+  // path with the module that now installs it.
+  const otherOwners = new Map<string, string[]>();
+  for (const record of state.installedModules) {
+    if (inScope(record)) continue;
+    for (const filePath of record.writtenPaths) {
+      otherOwners.set(filePath, [...(otherOwners.get(filePath) ?? []), record.moduleId]);
+    }
+  }
 
   for (const record of state.installedModules) {
-    if (options.moduleId !== undefined && record.moduleId !== options.moduleId) {
+    if (!inScope(record)) {
       continue;
     }
 
     const keptPaths: string[] = [];
     for (const filePath of record.writtenPaths) {
+      const owners = otherOwners.get(filePath);
+      if (owners !== undefined) {
+        keptShared.push({ path: filePath, reason: `also recorded by module ${owners.join(", ")} — left in place for it` });
+        continue;
+      }
       const abs = path.join(repoRoot, filePath);
       if (!(await pathExists(abs))) {
         // Already gone — nothing to remove, nothing to keep recorded.
@@ -168,5 +192,5 @@ export async function uninstallInstall(
 
   await writeSkillsInstallState(repoRoot, target, batch, state.profile);
 
-  return { ok: refused.length === 0, removed, refused, diffs };
+  return { ok: refused.length === 0, removed, refused, diffs, ...(keptShared.length > 0 ? { keptShared } : {}) };
 }

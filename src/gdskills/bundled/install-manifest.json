@@ -373,19 +373,13 @@
         "src/gdskills/bundled/rules/core/database-patterns.mdc",
         "src/gdskills/bundled/rules/core/definition-of-done.mdc",
         "src/gdskills/bundled/rules/core/error-handling.mdc",
-        "src/gdskills/bundled/rules/core/execution-metrics.md",
         "src/gdskills/bundled/rules/core/frontend-assistant.mdc",
-        "src/gdskills/bundled/rules/core/implementation-doc-mandate.mdc",
         "src/gdskills/bundled/rules/core/layout-rendering.mdc",
         "src/gdskills/bundled/rules/core/playwright-testing.mdc",
-        "src/gdskills/bundled/rules/core/rule-management-workflow.mdc",
         "src/gdskills/bundled/rules/core/security-baseline.mdc",
-        "src/gdskills/bundled/rules/core/session-plan-bridge.mdc",
         "src/gdskills/bundled/rules/core/shared-definitions.mdc",
         "src/gdskills/bundled/rules/core/solid-principles.mdc",
         "src/gdskills/bundled/rules/core/storybook-guidelines.mdc",
-        "src/gdskills/bundled/rules/core/subagent-context-construction.md",
-        "src/gdskills/bundled/rules/core/subagent-status-protocol.md",
         "src/gdskills/bundled/rules/core/tdd-workflow.mdc",
         "src/gdskills/bundled/rules/core/ui-anti-slop.mdc"
       ],
@@ -403,6 +397,7 @@
       "description": "Process and activity rule layers (ADR-0001 D1): the mandatory agent conduct rule and engineering procedures, plus per-activity rules. Installed by every profile.",
       "paths": [
         "src/gdskills/bundled/rules/process/*.mdc",
+        "src/gdskills/bundled/rules/process/*.md",
         "src/gdskills/bundled/rules/activity/*.mdc"
       ],
       "targets": [

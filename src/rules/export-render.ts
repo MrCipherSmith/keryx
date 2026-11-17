@@ -95,7 +95,7 @@ interface ParsedFrontMatter {
  * simple `key: value` / `key: "value"` lines are read (every `.mdc`/`.md`
  * rule file in `.metaproject/rules` uses this shape — see
  * `core/solid-principles.mdc`'s `description: "..."` and
- * `core/execution-metrics.md`'s `type:`/`id:`/`priority:`). A file with no
+ * `process/execution-metrics.md`'s `type:`/`id:`/`priority:`). A file with no
  * `---` front matter at all is returned with an empty field map and its full
  * content as `body`.
  */

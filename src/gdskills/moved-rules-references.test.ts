@@ -16,6 +16,8 @@ const SHIPPED_ROOTS = [
   "src/gdskills/bundled",
   ".metaproject/skills",
   ".metaproject/rules",
+  ".metaproject/routing.md",
+  ".metaproject/index.md",
   "docs/docs",
   "README.md",
   "AGENTS.md",
@@ -36,10 +38,10 @@ async function listFiles(target: string): Promise<string[]> {
   return out;
 }
 
-/** `core/<moved name>` — but not `project/core/<name>`, a project's own override slot that the installer migrates. */
+/** `core/<moved name>` (`.mdc` or `.md`) — but not `project/core/<name>`, a project's own override slot that the installer migrates. */
 function movedCorePath(): RegExp {
-  const names = MOVED_RULES.map((entry) => entry.fileName.replace(/\.mdc$/, "").replace(/[.-]/g, (c) => `\\${c}`));
-  return new RegExp(`(?<!project/)\\bcore/(?:${names.join("|")})\\.mdc\\b`, "g");
+  const names = MOVED_RULES.map((entry) => entry.fileName.replace(/\.mdc?$/, "").replace(/[.-]/g, (c) => `\\${c}`));
+  return new RegExp(`(?<!project/)\\bcore/(?:${names.join("|")})\\.mdc?\\b`, "g");
 }
 
 test("MOVED_RULES is not empty, so the scan below checks something", () => {
