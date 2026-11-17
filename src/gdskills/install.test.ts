@@ -6,8 +6,15 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "bun:test";
 import { CONTRACTS, contractPath } from "./contracts";
-import { checkInstallDestination, checkInstallFile, installGdskills } from "./install";
 import {
+  bundledRulesSourcePath,
+  checkInstallDestination,
+  checkInstallFile,
+  installBundledRules,
+  installGdskills,
+} from "./install";
+import {
+  movedRuleNotice,
   normalizeRetiredRuleContent,
   removeStaleRuntimeBuilds,
   removeUnmodifiedRetiredRules,
@@ -15,7 +22,8 @@ import {
   staleRuntimeBuildMessage,
   staleRuntimeBuildSeverity,
 } from "./guarded-fs-ops";
-import { RETIRED_RULE_SIZE_CAP_BYTES, RETIRED_RULES } from "./retired-rules";
+import { MOVED_RULES, type MovedRuleEntry, RETIRED_RULE_SIZE_CAP_BYTES, RETIRED_RULES } from "./retired-rules";
+import { isKeryxRuleLayer, type KeryxRuleLayer } from "./rule-references";
 
 test("installs real bundled gdskills, contracts, shared assets, and rules", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "keryx-gdskills-"));
@@ -1463,3 +1471,156 @@ async function listFiles(root: string): Promise<string[]> {
   }
   return files;
 }
+
+// ADR-0001 P2: every rule layer installs beside core, and a rule that moved
+// out of core leaves no stale copy behind unless the project edited it.
+
+test("installGdskills installs the process layer beside core, and nothing of it into core", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-rule-layers-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    await installGdskills(metaprojectRoot, "recommended");
+    const bundled = await readFile(path.join(bundledRulesSourcePath("process"), "agent-conduct.mdc"), "utf8");
+    expect(await readFile(path.join(metaprojectRoot, "rules", "process", "agent-conduct.mdc"), "utf8")).toBe(bundled);
+    expect(existsSync(path.join(metaprojectRoot, "rules", "core", "agent-conduct.mdc"))).toBe(false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+/** A bundle with one rule per layer: `core/keep.mdc`, `process/moved.mdc`, and optionally `activity/review.mdc`. */
+async function layeredBundle(root: string, withActivity: boolean): Promise<(layer: KeryxRuleLayer) => string> {
+  const bundle = path.join(root, "bundle");
+  await mkdir(path.join(bundle, "core"), { recursive: true });
+  await mkdir(path.join(bundle, "process"), { recursive: true });
+  await writeFile(path.join(bundle, "core", "keep.mdc"), "core rule\n");
+  await writeFile(path.join(bundle, "process", "moved.mdc"), "moved rule, new home\n");
+  if (withActivity) {
+    await mkdir(path.join(bundle, "activity"), { recursive: true });
+    await writeFile(path.join(bundle, "activity", "review.mdc"), "review discipline\n");
+  }
+  return (layer) => path.join(bundle, layer);
+}
+
+const MOVED_V1 = "moved rule, version 1\n";
+const MOVED_V2 = "moved rule, version 2 (last shipped under core)\n";
+const sha = (text: string): string =>
+  createHash("sha256").update(normalizeRetiredRuleContent(Buffer.from(text))).digest("hex");
+const FIXTURE_MOVE: MovedRuleEntry = {
+  fileName: "moved.mdc",
+  movedTo: "process/moved.mdc",
+  shippedSha256: [sha(MOVED_V1), sha(MOVED_V2)],
+  largestShippedBytes: Buffer.byteLength(MOVED_V2),
+  reason: "fixture: a procedure that moved to the process layer",
+};
+
+test("installBundledRules installs an activity layer when the bundle ships one, and skips it silently when not", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-rule-layers-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    const without = await installBundledRules(metaprojectRoot, {
+      sourcePathFor: await layeredBundle(path.join(root, "a"), false),
+      cleanupEntries: [],
+    });
+    expect(without).toEqual({ outcomes: [], warning: null });
+    expect(existsSync(path.join(metaprojectRoot, "rules", "activity"))).toBe(false);
+    expect(existsSync(path.join(metaprojectRoot, "rules", "core", "keep.mdc"))).toBe(true);
+    expect(existsSync(path.join(metaprojectRoot, "rules", "process", "moved.mdc"))).toBe(true);
+
+    const withActivity = await installBundledRules(metaprojectRoot, {
+      sourcePathFor: await layeredBundle(path.join(root, "b"), true),
+      cleanupEntries: [],
+    });
+    expect(withActivity.warning).toBeNull();
+    expect(await readFile(path.join(metaprojectRoot, "rules", "activity", "review.mdc"), "utf8")).toBe("review discipline\n");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a moved rule: every shipped version of the stale core copy is removed and the new path installed", async () => {
+  for (const shipped of [MOVED_V1, MOVED_V2, MOVED_V2.replace(/\n/g, "\r\n")]) {
+    const root = await mkdtemp(path.join(tmpdir(), "keryx-rule-move-"));
+    try {
+      const metaprojectRoot = path.join(root, ".metaproject");
+      const stale = path.join(metaprojectRoot, "rules", "core", "moved.mdc");
+      await mkdir(path.dirname(stale), { recursive: true });
+      await writeFile(stale, shipped);
+
+      const result = await installBundledRules(metaprojectRoot, {
+        sourcePathFor: await layeredBundle(root, false),
+        cleanupEntries: [FIXTURE_MOVE],
+      });
+
+      expect(result.warning).toBeNull();
+      expect(result.outcomes).toEqual([{ fileName: "moved.mdc", movedTo: "process/moved.mdc", action: "removed" }]);
+      expect(existsSync(stale)).toBe(false);
+      expect(await readFile(path.join(metaprojectRoot, "rules", "process", "moved.mdc"), "utf8")).toBe("moved rule, new home\n");
+      expect(result.outcomes.map(movedRuleNotice)).toEqual([
+        "rules/core/moved.mdc moved to rules/process/moved.mdc; removed the unmodified old copy",
+      ]);
+      expect(result.outcomes.map((outcome) => retiredRuleWarning(outcome, [FIXTURE_MOVE]))).toEqual([null]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }
+});
+
+test("a moved rule the project edited is kept in core, reported, and the new path is still installed", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-rule-move-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    const stale = path.join(metaprojectRoot, "rules", "core", "moved.mdc");
+    await mkdir(path.dirname(stale), { recursive: true });
+    await writeFile(stale, `${MOVED_V2}our own addition\n`);
+
+    const result = await installBundledRules(metaprojectRoot, {
+      sourcePathFor: await layeredBundle(root, false),
+      cleanupEntries: [FIXTURE_MOVE],
+    });
+
+    expect(result.outcomes).toEqual([{ fileName: "moved.mdc", movedTo: "process/moved.mdc", action: "kept-modified" }]);
+    expect(await readFile(stale, "utf8")).toBe(`${MOVED_V2}our own addition\n`);
+    expect(existsSync(path.join(metaprojectRoot, "rules", "process", "moved.mdc"))).toBe(true);
+    const [warning] = result.outcomes.map((outcome) => retiredRuleWarning(outcome, [FIXTURE_MOVE]));
+    expect(warning).toStartWith(
+      "rules/core/moved.mdc moved to rules/process/moved.mdc (fixture: a procedure that moved to the process layer)",
+    );
+    expect(warning).toContain("carry your edits into rules/project/process/moved.mdc, then delete rules/core/moved.mdc");
+    expect(result.outcomes.map(movedRuleNotice)).toEqual([null]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a moved rule's read is capped by its own largest shipped size", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-rule-move-"));
+  try {
+    const rulesCore = path.join(root, "core");
+    await mkdir(rulesCore, { recursive: true });
+    const oversized = FIXTURE_MOVE.largestShippedBytes * 4 + 1;
+    await writeFile(path.join(rulesCore, "moved.mdc"), "x".repeat(oversized));
+    expect(await removeUnmodifiedRetiredRules(rulesCore, undefined, [FIXTURE_MOVE])).toEqual([
+      { fileName: "moved.mdc", movedTo: "process/moved.mdc", action: "kept-oversized", sizeBytes: oversized },
+    ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("MOVED_RULES entries name a shipped layer path, are gone from core, and record a size and hashes", () => {
+  const coreBundle = bundledRulesSourcePath("core");
+  for (const entry of MOVED_RULES) {
+    const slash = entry.movedTo.indexOf("/");
+    const layer = entry.movedTo.slice(0, slash);
+    expect(isKeryxRuleLayer(layer) && layer !== "core").toBe(true);
+    expect(existsSync(path.join(bundledRulesSourcePath(layer as KeryxRuleLayer), entry.movedTo.slice(slash + 1)))).toBe(true);
+    expect(existsSync(path.join(coreBundle, entry.fileName))).toBe(false);
+    expect(entry.largestShippedBytes).toBeGreaterThan(0);
+    expect(entry.shippedSha256.length).toBeGreaterThan(0);
+    for (const hash of entry.shippedSha256) expect(hash).toMatch(/^[0-9a-f]{64}$/);
+  }
+  // A name is either retired or moved, never both.
+  const retiredNames = new Set(RETIRED_RULES.map((entry) => entry.fileName));
+  expect(MOVED_RULES.filter((entry) => retiredNames.has(entry.fileName))).toEqual([]);
+});

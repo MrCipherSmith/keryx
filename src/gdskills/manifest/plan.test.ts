@@ -512,6 +512,22 @@ describe("real bundled manifest (flow 309, W1 T14 — python stack pack destinat
     }
   });
 
+  test("every profile installs the process layer, and keryx-shell keeps it out of rules/core (ADR-0001 P2)", async () => {
+    for (const profileId of Object.keys(manifest.profiles)) {
+      const shellPlan = await planInstall({ manifest, profileId, target: "keryx-shell", repoRoot });
+      const shellDestinations = shellPlan.modules.flatMap((m) => m.files.map((f) => f.destination));
+      expect(shellDestinations).toContain(".metaproject/rules/process/agent-conduct.mdc");
+      expect(shellDestinations).not.toContain(".metaproject/rules/core/agent-conduct.mdc");
+      // Core rules stay where they were.
+      expect(shellDestinations).toContain(".metaproject/rules/core/skill-lifecycle.mdc");
+
+      const claudePlan = await planInstall({ manifest, profileId, target: "claude", repoRoot });
+      expect(claudePlan.modules.flatMap((m) => m.files.map((f) => f.destination))).toContain(
+        ".claude/rules/agent-conduct.mdc",
+      );
+    }
+  });
+
   test("`python` profile plan includes python-testing SKILL.md and the coding-style rule, for both targets", async () => {
     const claudePlan = await planInstall({ manifest, profileId: "python", target: "claude", repoRoot });
     expect(claudePlan.ok).toBe(true);

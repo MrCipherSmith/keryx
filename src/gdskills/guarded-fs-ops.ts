@@ -24,11 +24,16 @@ import { fileURLToPath } from "node:url";
 import { BUNDLED_GDSKILLS } from "./catalog";
 import { HARNESS_SKILL_RUNTIMES, skillBuildFileName } from "./export";
 import {
-  RETIRED_RULE_SIZE_CAP_BYTES,
+  MOVED_RULES,
   RETIRED_RULES,
+  retiredRuleSizeCapBytes,
+  type RetiredRuleEntry,
   type RetiredRuleFailureStage,
   type RetiredRuleOutcome,
 } from "./retired-rules";
+
+/** Every entry the core cleanup checks: rules dropped outright and rules moved to another layer. */
+export const CORE_CLEANUP_ENTRIES: readonly RetiredRuleEntry[] = [...RETIRED_RULES, ...MOVED_RULES];
 
 export function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && "code" in error;
@@ -386,7 +391,8 @@ function displayPath(target: string, projectRoot: string): string {
 }
 
 /**
- * For each name RETIRED_RULES tracks, decide what to do with whatever sits
+ * For each name `entries` tracks (`RETIRED_RULES` and `MOVED_RULES` by
+ * default), decide what to do with whatever sits
  * at that path in the installed project — without ever letting a hostile or
  * merely unusual entry (a directory, symlink, FIFO, socket, device, huge
  * file, or permission-denied file) abort the rest of `installGdskills`.
@@ -405,10 +411,16 @@ export async function removeUnmodifiedRetiredRules(
   // because on Linux Bun's `cp({ force: true })` unlinks every destination
   // first and aborts the bulk copy before this function runs.
   fsOps: { unlink: (target: string) => Promise<void> } = { unlink },
+  // Injectable so a move can be proven with a fixture entry while
+  // `MOVED_RULES` is still empty.
+  entries: readonly RetiredRuleEntry[] = CORE_CLEANUP_ENTRIES,
 ): Promise<RetiredRuleOutcome[]> {
   const outcomes: RetiredRuleOutcome[] = [];
-  for (const retired of RETIRED_RULES) {
+  for (const retired of entries) {
     const installedPath = path.join(rulesTarget, retired.fileName);
+    const subject = retired.movedTo === undefined
+      ? { fileName: retired.fileName }
+      : { fileName: retired.fileName, movedTo: retired.movedTo };
     // Updated right before each step so the catch block below can name
     // which one actually failed (round-2 finding L-008).
     let stage: RetiredRuleFailureStage = "lstat";
@@ -420,15 +432,15 @@ export async function removeUnmodifiedRetiredRules(
       // is judged (and, if kept, left alone) without ever touching its
       // target — reading through it is the hazard, not the link itself.
       if (!stats.isFile()) {
-        outcomes.push({ fileName: retired.fileName, action: "kept-not-regular-file" });
+        outcomes.push({ ...subject, action: "kept-not-regular-file" });
         continue;
       }
 
       // Bound the read before doing it: a regular file far larger than
       // anything keryx ever shipped under this name is not a plausible
       // untouched leftover, so there is no reason to read all of it.
-      if (stats.size > RETIRED_RULE_SIZE_CAP_BYTES) {
-        outcomes.push({ fileName: retired.fileName, action: "kept-oversized", sizeBytes: stats.size });
+      if (stats.size > retiredRuleSizeCapBytes(retired)) {
+        outcomes.push({ ...subject, action: "kept-oversized", sizeBytes: stats.size });
         continue;
       }
 
@@ -438,9 +450,9 @@ export async function removeUnmodifiedRetiredRules(
       if (retired.shippedSha256.includes(hash)) {
         stage = "unlink";
         await fsOps.unlink(installedPath);
-        outcomes.push({ fileName: retired.fileName, action: "removed" });
+        outcomes.push({ ...subject, action: "removed" });
       } else {
-        outcomes.push({ fileName: retired.fileName, action: "kept-modified" });
+        outcomes.push({ ...subject, action: "kept-modified" });
       }
     } catch (error) {
       if (isErrnoException(error) && error.code === "ENOENT") {
@@ -458,7 +470,7 @@ export async function removeUnmodifiedRetiredRules(
       // still unknown) apart from an unlink failure (the file was already
       // confirmed as an unmodified shipped copy — only its removal failed).
       outcomes.push({
-        fileName: retired.fileName,
+        ...subject,
         action: "kept-error",
         stage,
         errorCode: isErrnoException(error) && error.code ? error.code : "UNKNOWN",
@@ -496,16 +508,24 @@ export function normalizeRetiredRuleContent(content: Buffer): string {
  * and what to do about it, rather than one generic "modified" message that
  * repeats forever with no remedy (round-1 finding L-002).
  */
-export function retiredRuleWarning(outcome: RetiredRuleOutcome): string | null {
+export function retiredRuleWarning(
+  outcome: RetiredRuleOutcome,
+  entries: readonly RetiredRuleEntry[] = CORE_CLEANUP_ENTRIES,
+): string | null {
   if (outcome.action === "removed") {
     return null;
   }
-  const reason = RETIRED_RULES.find((retired) => retired.fileName === outcome.fileName)?.reason
+  const reason = entries.find((retired) => retired.fileName === outcome.fileName)?.reason
     ?? "no longer shipped by keryx";
-  const prefix = `${outcome.fileName} is no longer shipped by keryx (${reason})`;
+  const prefix = outcome.movedTo === undefined
+    ? `${outcome.fileName} is no longer shipped by keryx (${reason})`
+    : `rules/core/${outcome.fileName} moved to rules/${outcome.movedTo} (${reason}), which keryx installed`;
   switch (outcome.action) {
     case "kept-modified":
-      return `${prefix}; kept because it differs from every shipped version — delete it, or rename it if you still rely on it`;
+      return outcome.movedTo === undefined
+        ? `${prefix}; kept because it differs from every shipped version — delete it, or rename it if you still rely on it`
+        : `${prefix}; the old copy was kept because it differs from every shipped version, and nothing loads it from there — `
+          + `carry your edits into rules/project/${outcome.movedTo}, then delete rules/core/${outcome.fileName}`;
     case "kept-not-regular-file":
       return `${prefix}; kept because it is not a regular file (a symlink, directory, or similar) — keryx will not read or remove it; delete or rename it yourself if appropriate`;
     case "kept-oversized":
@@ -525,4 +545,17 @@ export function retiredRuleWarning(outcome: RetiredRuleOutcome): string | null {
       throw new Error(`unhandled retired rule outcome: ${JSON.stringify(exhaustive)}`);
     }
   }
+}
+
+/**
+ * Informational line for a moved rule whose stale `core/` copy was removed,
+ * or `null` for every other outcome. A plain retirement stays silent as it
+ * always has; a move is reported because a path the operator may know
+ * changed under them.
+ */
+export function movedRuleNotice(outcome: RetiredRuleOutcome): string | null {
+  if (outcome.action !== "removed" || outcome.movedTo === undefined) {
+    return null;
+  }
+  return `rules/core/${outcome.fileName} moved to rules/${outcome.movedTo}; removed the unmodified old copy`;
 }
