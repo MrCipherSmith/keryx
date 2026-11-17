@@ -28,7 +28,7 @@ Commands: `npm run storybook`, `npm run build-storybook`.
 
 | Signal | A finding when | Default | Not a finding |
 |---|---|---|---|
-| Missing default or empty story (Rule 2) | the component renders that state | `minor` | a component that cannot be empty |
+| Missing default or empty story (Rule 2) | the component renders that state | `minor` | a component that cannot be empty; a thin wrapper with no state, branch or layout of its own (it renders one child or one formatted value) |
 | Missing loading or error story (Rule 2) | the component has that state (a prop or branch) | `minor` | a component without that state |
 | Missing stress story (Rule 2) | a list, or user text that can be long | `minor` | fixed-length content |
 | A story calls a real API or has another side effect (Rule 3) | always | `minor`; `major` when it writes to a real backend | `fn()` |
