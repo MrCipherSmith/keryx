@@ -85,7 +85,7 @@ describe("agent conduct block (ADR-0001 D2)", () => {
   test("both validators refuse a dispatch whose constraints lack the conduct entry", async () => {
     const schema = await loadSchema("subagent-dispatch");
     const dispatch = (constraints: string[]) => ({
-      contract_version: "1.1.0",
+      contract_version: "1.0.0",
       run_id: "r1",
       dispatch_id: "d1",
       orchestrator: "flow-orchestrator",
@@ -128,9 +128,33 @@ describe("agent conduct block (ADR-0001 D2)", () => {
       "../commands/review-agents-runtime/keryx-general-worker.ts",
     ]) {
       const source = readFileSync(new URL(file, import.meta.url), "utf8");
-      // A use, not just the import line.
-      const uses = source.split("\n").filter((line) => line.includes("AGENT_CONDUCT_PROMPT_BLOCK") && !/^\s*import\b/.test(line));
+      // A use, not just the import line or a comment.
+      const uses = source.split("\n").filter((line) => line.includes("AGENT_CONDUCT_PROMPT_BLOCK") && !/^\s*(import\b|\/\/|\*|\/\*)/.test(line));
       expect(uses.length, file).toBeGreaterThan(0);
     }
   });
+});
+
+describe("orchestrator dispatch templates carry the conduct line (ADR-0001 D2)", () => {
+  const skills = "../gdskills/bundled/skills/";
+  const files: Record<string, number> = {
+    // file → minimum number of dispatch templates that must carry the line
+    "orchestration/job-orchestrator/orchestrator-prompt.md": 1,
+    "orchestration/context-collector/orchestrator-prompt.md": 2,
+    "orchestration/issue-analyzer/orchestrator-prompt.md": 1,
+    "orchestration/task-implementer/orchestrator-prompt.md": 2,
+    "orchestration/feature-analyzer/orchestrator-prompt.md": 1,
+    "orchestration/job-orchestrator/SKILL.md": 1,
+    "orchestration/flow-orchestrator/SKILL.md": 1,
+    "planning/autodoc-orchestrator/SKILL.md": 1,
+    "review/review-orchestrator/SKILL.md": 1,
+  };
+  for (const [file, minimum] of Object.entries(files)) {
+    test(file, () => {
+      const text = readFileSync(new URL(skills + file, import.meta.url), "utf8");
+      // The flow template is JSON, so its quotes are escaped.
+      const count = (text.match(/(?:Agent conduct \(mandatory\): |conduct: )<the \\?"Dispatch form\\?" line of \.metaproject\/rules\/process\/agent-conduct\.mdc, verbatim>/g) ?? []).length;
+      expect(count).toBeGreaterThanOrEqual(minimum);
+    });
+  }
 });

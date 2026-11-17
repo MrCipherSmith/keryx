@@ -94,6 +94,16 @@ keryx job step <job-name> <step-id> --status completed
 A conditional step whose trigger did not fire is closed too:
 `keryx job step <job-name> <step-id> --status skipped --reason "<why>"`.
 
+### Every dispatch carries the conduct line
+
+Every prompt this job dispatches — issue-analyzer, tests-creator, task-implementer,
+code-verifier, the review round, pr-issue-documenter, any fix task — carries this
+line, pasted verbatim (ADR-0001 D2):
+
+```
+Agent conduct (mandatory): <the "Dispatch form" line of .metaproject/rules/process/agent-conduct.mdc, verbatim>
+```
+
 ### Step: ANALYZE
 
 Read `skills/gdskills/orchestration/issue-analyzer/orchestrator-prompt.md`, fill in parameters:

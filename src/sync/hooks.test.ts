@@ -1,7 +1,8 @@
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
+import { pathExists } from "../lib/fs";
 import { installSyncHooks, SYNC_HOOKS, uninstallSyncHooks } from "./hooks";
 
 async function withGitRepo(run: (root: string) => Promise<void>): Promise<void> {
@@ -50,6 +51,55 @@ test("uninstall removes only the managed block, leaving user content", async () 
     const content = await readFile(p, "utf8");
     expect(content).toContain("echo user-hook");
     expect(content).not.toContain("keryx-sync");
+  });
+});
+
+test("uninstall reports commit-msg only when it removed something", async () => {
+  await withGitRepo(async (root) => {
+    // Nothing installed: commit-msg is not reported as removed.
+    expect(await uninstallSyncHooks(root)).toEqual([]);
+
+    await installSyncHooks(root);
+    expect(await uninstallSyncHooks(root)).toContain("commit-msg");
+    expect(await pathExists(path.join(root, ".git", "hooks", "commit-msg"))).toBe(false);
+    expect(await pathExists(path.join(root, ".git", "hooks", "keryx-commit-msg"))).toBe(false);
+    expect(await uninstallSyncHooks(root)).toEqual([]);
+  });
+});
+
+test("uninstall does not edit a symlinked commit-msg and warns instead", async () => {
+  await withGitRepo(async (root) => {
+    await installSyncHooks(root);
+    const hookPath = path.join(root, ".git", "hooks", "commit-msg");
+    const target = path.join(root, "scripts", "commit-msg");
+    await mkdir(path.dirname(target), { recursive: true });
+    await rename(hookPath, target);
+    await symlink(path.join("..", "..", "scripts", "commit-msg"), hookPath);
+    const before = await readFile(target, "utf8");
+
+    const warn = spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      expect(await uninstallSyncHooks(root)).not.toContain("commit-msg");
+      expect(warn.mock.calls.flat().join(" ")).toContain("is a symlink");
+    } finally {
+      warn.mockRestore();
+    }
+    expect(await readFile(target, "utf8")).toBe(before);
+    expect(await pathExists(path.join(root, ".git", "hooks", "keryx-commit-msg"))).toBe(true);
+  });
+});
+
+test("install-hooks honours hooks.commitMsg: false and removes an installed check", async () => {
+  await withGitRepo(async (root) => {
+    expect(await installSyncHooks(root)).toContain("commit-msg");
+    await mkdir(path.join(root, ".metaproject"), { recursive: true });
+    await writeFile(path.join(root, ".metaproject", "metaproject.json"), JSON.stringify({ hooks: { commitMsg: false } }), "utf8");
+
+    const installed = await installSyncHooks(root);
+    expect(installed).not.toContain("commit-msg");
+    expect(installed.sort()).toEqual([...SYNC_HOOKS].sort());
+    expect(await pathExists(path.join(root, ".git", "hooks", "commit-msg"))).toBe(false);
+    expect(await pathExists(path.join(root, ".git", "hooks", "keryx-commit-msg"))).toBe(false);
   });
 });
 

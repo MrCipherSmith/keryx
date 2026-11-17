@@ -324,7 +324,7 @@ Dispatch payload, bound to the flow (map `target_skill` from the routing table):
 
 ```json
 {
-  "contract_version": "1.1.0",
+  "contract_version": "1.0.0",
   "run_id": "<flow-id>",
   "dispatch_id": "<flow-id>-<Tn>",
   "orchestrator": "flow-orchestrator",

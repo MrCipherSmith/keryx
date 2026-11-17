@@ -34,7 +34,7 @@ GOOD:
 fix(review): drop stale lens rows
 ```
 
-The Keryx-managed `commit-msg` hook rejects the two forms above when they name an AI model, agent, tool or vendor (its word list is `src/lib/managed-git-hook.ts`). It does not reject bare product names elsewhere: a subject that mentions `CLAUDE.md` or names a runtime is legitimate.
+The Keryx-managed `commit-msg` hook rejects the two forms above when the trailer's identity is an AI (its name is exactly an AI product or model name, or its address is an AI vendor's or agent's) or the Generated line's object is an AI tool; the tables are in `src/lib/managed-git-hook.ts`. A human co-author passes even when the first name matches a product (`Claude Monet`, `Devin Smith`), and so does a product name elsewhere: a subject that mentions `CLAUDE.md` or names a runtime is legitimate.
 
 ### 2. No commit, push, merge or release without an explicit ask
 Writing files is the task; committing, pushing, merging and releasing are separate decisions the owner makes.
@@ -71,4 +71,5 @@ Agent conduct (mandatory): (1) No AI attribution: no `Co-Authored-By:` trailer o
 
 ## Enforcement
 - The constant in `src/lib/agent-conduct.ts` reaches every prompt path; orchestrator dispatch schemas require a conduct entry in `constraints`.
-- The managed `commit-msg` hook enforces rule 1 for commits. It does not run under a foreign `core.hooksPath` or with `--no-verify`; `keryx doctor` reports when it is inactive.
+- The managed `commit-msg` check (`.git/hooks/keryx-commit-msg`, called from `commit-msg`) enforces rule 1 for commits. Keryx never edits a foreign `commit-msg` hook; it prints the line to add instead. The check does not run under a foreign `core.hooksPath`, from a hook that does not call it, or with `--no-verify`; `keryx doctor` reports when it is inactive and how to fix it.
+- A project can turn the check off with `"hooks": { "commitMsg": false }` in `.metaproject/metaproject.json`; `init`, `update` and `sync install-hooks` then remove it, and `keryx doctor` reports it disabled by config. Rule 1 still binds every agent.

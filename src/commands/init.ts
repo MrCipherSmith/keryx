@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { optionValue } from "../lib/args";
 import { mkdirContained, removeContained, writeContained } from "../lib/contained-write";
-import { installCommitMsgHookOrWarn, installManagedHookOrWarn, removeManagedHookOrWarn } from "../lib/managed-git-hook";
+import { applyCommitMsgHookSetting, installManagedHookOrWarn, removeManagedHookOrWarn } from "../lib/managed-git-hook";
 import { moduleCommands } from "./module-commands";
 import { registerInitializedProject } from "./projects";
 import { sanitizeForDisplay } from "../lib/project-registry";
@@ -243,6 +243,8 @@ type MetaprojectManifest = {
   modules: Record<string, ModuleConfig>;
   updatedAt: string;
   agentEntrypoints: AgentEntrypointsManifest;
+  /** Project-level git hook switches; `commitMsg: false` opts out of the keryx commit-msg check. Carried over as found. */
+  hooks?: { commitMsg?: boolean } & Record<string, unknown>;
 };
 
 export async function initCommand(args: string[]): Promise<void> {
@@ -748,7 +750,8 @@ export async function initCommand(args: string[]): Promise<void> {
 
   // ADR-0001 D3: the attribution-refusing commit-msg hook is a default of every
   // Keryx project, not a module option; merge-safe like the pre-push blocks.
-  const commitMsgWarning = await installCommitMsgHookOrWarn(projectRoot);
+  // Opt-out: `"hooks": { "commitMsg": false }` in metaproject.json removes it instead.
+  const commitMsgWarning = (await applyCommitMsgHookSetting(projectRoot)).warning;
   if (commitMsgWarning) hookWarnings.push(commitMsgWarning);
 
   const manifest = buildManifest({
@@ -2007,6 +2010,8 @@ function buildManifest({
       index: ".metaproject/index.md",
       readme: ".metaproject/README.md",
     }),
+    // The user's hook switches (e.g. `hooks.commitMsg: false`) survive a re-init.
+    ...(existingManifest?.hooks && typeof existingManifest.hooks === "object" ? { hooks: existingManifest.hooks } : {}),
   };
 }
 

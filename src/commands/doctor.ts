@@ -37,7 +37,7 @@ import { readWikiFreshnessMetric } from "../health/service";
 import { resolveMainCheckoutRoot } from "../lib/git-worktrees";
 import { gitToplevel } from "../lib/clone-scope";
 import { claudeHooksExpected, inspectEntrypoints, rulesBlockFix, rulesBlockKeptReason, type EntrypointInspection } from "../rules/entrypoint-inspection";
-import { inspectCommitMsgHook } from "../lib/managed-git-hook";
+import { COMMIT_MSG_HOOK_DISABLED_DETAIL, inspectCommitMsgHook } from "../lib/managed-git-hook";
 import { CODEX_PROJECT_DOC_MAX_BYTES } from "../rules/entrypoint-writers";
 
 export type DoctorStatus = "ok" | "warn" | "fail";
@@ -468,9 +468,10 @@ function describeEntrypoints(inspection: EntrypointInspection): string {
 }
 
 /**
- * ADR-0001 D3: the managed `commit-msg` hook only protects commits when git
- * actually runs it. Warns when it is absent, or present but inactive because a
- * `core.hooksPath` points git at another hooks directory.
+ * ADR-0001 D3: the keryx commit-msg check only protects commits when git
+ * actually runs it. Warns when it is absent, or present but inactive: a
+ * foreign commit-msg hook that does not call it (the fix is the exact line to
+ * add), a `core.hooksPath` pointing git elsewhere, or git unable to confirm.
  */
 export async function checkCommitMsgHook(cwd: string): Promise<DoctorCheck> {
   const projectRoot = resolveProjectRoot(cwd);
@@ -488,6 +489,8 @@ export async function checkCommitMsgHook(cwd: string): Promise<DoctorCheck> {
   switch (result.state) {
     case "no-git":
       return { id: "commit-msg-hook", status: "ok", detail: "not a git repository — no commit-msg hook to check" };
+    case "disabled":
+      return { id: "commit-msg-hook", status: "ok", detail: COMMIT_MSG_HOOK_DISABLED_DETAIL };
     case "missing":
       return { id: "commit-msg-hook", status: "warn", detail: "the keryx commit-msg hook (refuses AI Co-Authored-By and Generated-by lines) is not installed", fix: UPDATE_FIX };
     case "inactive":

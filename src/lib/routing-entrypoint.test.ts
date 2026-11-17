@@ -178,3 +178,15 @@ test("a routing file another version wrote and cannot account for blocks with bo
     await rm(path.dirname(metaprojectRoot), { recursive: true, force: true });
   }
 });
+
+test("the conduct-rule step falls back to the shared constant when the bundled rule is absent", async () => {
+  const { agentConductRuleStep } = await import("./routing-entrypoint");
+  const { AGENT_CONDUCT_CONSTRAINTS, AGENT_CONDUCT_DISPATCH_CONSTRAINT } = await import("./agent-conduct");
+  // A compiled binary ships no bundled tree: the read must not throw, and the
+  // file every pointer names must still carry all five constraints.
+  const step = agentConductRuleStep("/tmp/meta", path.join(tmpdir(), "keryx-no-such-bundle", "agent-conduct.mdc"));
+  expect(step.path).toBe(path.join("/tmp/meta", "rules", "process", "agent-conduct.mdc"));
+  for (const constraint of AGENT_CONDUCT_CONSTRAINTS) expect(step.content).toContain(constraint);
+  expect(step.content).toContain(AGENT_CONDUCT_DISPATCH_CONSTRAINT);
+  expect(step.content.startsWith("---\n")).toBe(true);
+});

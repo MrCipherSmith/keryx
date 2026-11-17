@@ -67,3 +67,27 @@ Full rule, when the project has it: ${AGENT_CONDUCT_RULE_PROJECT_PATH}.`;
 export function containsAgentConduct(text: string): boolean {
   return AGENT_CONDUCT_CONSTRAINTS.every((constraint) => text.includes(constraint));
 }
+
+/**
+ * Rule file written when the bundled `agent-conduct.mdc` is not on disk (a
+ * standalone compiled binary ships no `src/gdskills/bundled/`). It carries the
+ * same five constraints, so the file every pointer names always exists; the
+ * rationale and examples live only in the bundled copy.
+ */
+export function renderAgentConductRuleFallback(): string {
+  return `---
+description: "Mandatory agent conduct for every agent Keryx starts. Always applies; nothing overrides it."
+alwaysApply: true
+---
+
+# Agent Conduct
+
+${renderAgentConductMarkdown({ heading: "Five constraints for every agent Keryx starts, directly or through a dispatch:", rulePath: AGENT_CONDUCT_RULE_PATH }).replace(/\n\nFull rule: .*$/s, "")}
+
+## Dispatch form
+
+\`\`\`text
+${AGENT_CONDUCT_DISPATCH_CONSTRAINT}
+\`\`\`
+`;
+}

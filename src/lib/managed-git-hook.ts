@@ -43,21 +43,13 @@
 // and is what the finding actually needs: whatever path this module resolves
 // to write into, it does not escape the git common dir through a symlink
 // planted on that path.
-import { chmod, lstat, mkdir, readFile, realpath, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "./fs";
 import { resolveGitHooksRoot } from "./git-hooks";
 
 /** The git hooks this module installs and removes managed blocks in. */
 export type ManagedGitHookName = "post-commit" | "pre-push" | "commit-msg";
-
-/** Thrown when an existing hook file cannot run an appended block (symlink, non-POSIX-shell shebang, or a trailing `exec`/`exit`). */
-export class ManagedGitHookNotRunnableError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "ManagedGitHookNotRunnableError";
-  }
-}
 
 /** Thrown when the hooks directory or the target hook file resolves outside the git common dir through a symlink. */
 export class ManagedGitHookEscapeError extends Error {
@@ -173,20 +165,12 @@ export async function installManagedHook(
   hookName: ManagedGitHookName,
   blockId: string,
   content: string,
-  options: { readonly requireRunnable?: boolean } = {},
 ): Promise<void> {
   const resolved = await resolveContainedHookPath(projectRoot, hookName);
   if (!resolved) {
     return;
   }
   const { hooksRoot, hookPath } = resolved;
-
-  if (options.requireRunnable) {
-    const blocker = await findHookBlocker(hookPath);
-    if (blocker) {
-      throw new ManagedGitHookNotRunnableError(blocker);
-    }
-  }
 
   await mkdir(hooksRoot, { recursive: true });
 
@@ -207,34 +191,6 @@ export async function installManagedHook(
 
   await writeFile(hookPath, next, "utf8");
   await chmod(hookPath, 0o755);
-}
-
-const POSIX_SHELL_SHEBANG = /^#!\s*(?:\/usr\/bin\/env\s+(?:-S\s+)?)?(?:\S*\/)?(?:sh|bash|dash|zsh)(?:\s|$)/;
-
-/**
- * Why a block appended to the existing hook at `hookPath` would never run, or
- * `null` when it would (or the file does not exist yet): the hook is a symlink,
- * its shebang is not a POSIX shell, or its last non-blank, non-comment line is
- * an `exec ...` / `exit` so control never reaches the end of the file.
- */
-export async function findHookBlocker(hookPath: string): Promise<string | null> {
-  const stat = await lstat(hookPath).catch(() => null);
-  if (!stat) return null;
-  if (stat.isSymbolicLink()) {
-    return `${hookPath} is a symlink; a block appended through it would edit the link target`;
-  }
-  const text = await readFile(hookPath, "utf8").catch(() => "");
-  const lines = text.split("\n").map((line) => line.replace(/\r$/, ""));
-  const first = lines[0] ?? "";
-  if (first.startsWith("#!") && !POSIX_SHELL_SHEBANG.test(first)) {
-    return `${hookPath} has a non-POSIX-shell shebang (${first.trim()}); the block is shell`;
-  }
-  const code = lines.map((line) => line.trim()).filter((line) => line !== "" && !line.startsWith("#"));
-  const last = code[code.length - 1];
-  if (last !== undefined && (/^exec(\s|$)/.test(last) || /^exit(\s|;|$)/.test(last))) {
-    return `${hookPath} ends with \`${last}\`; control never reaches an appended block`;
-  }
-  return null;
 }
 
 /**
@@ -283,15 +239,11 @@ export async function installManagedHookOrWarn(
   hookName: ManagedGitHookName,
   blockId: string,
   content: string,
-  options: { readonly requireRunnable?: boolean } = {},
 ): Promise<string | null> {
   try {
-    await installManagedHook(projectRoot, hookName, blockId, content, options);
+    await installManagedHook(projectRoot, hookName, blockId, content);
     return null;
   } catch (err) {
-    if (err instanceof ManagedGitHookNotRunnableError) {
-      return `Skipped the "${blockId}" ${hookName} hook: ${err.message}`;
-    }
     if (err instanceof ManagedGitHookEscapeError) {
       return `Skipped the "${blockId}" ${hookName} hook: ${err.message}`;
     }
@@ -316,45 +268,152 @@ export async function removeManagedHookOrWarn(
   }
 }
 
+
 // ---------------------------------------------------------------------------
 // commit-msg hook (ADR-0001 D3): refuses AI attribution in a commit message.
-// The shell script is rendered from the SAME patterns `findAttributionViolations`
-// uses (POSIX ERE, matched case-insensitively), and the test file runs the real
-// script against the same samples, so the two cannot drift apart.
+//
+// Layout in the git hooks directory:
+//   keryx-commit-msg  — the check itself: a standalone POSIX sh script, always
+//                       (re)written by keryx, marked with CHECK_SCRIPT_MARKER.
+//   commit-msg        — when absent, keryx creates it as `#!/bin/sh` plus a
+//                       managed block that calls keryx-commit-msg; when it
+//                       already carries that block, the block is refreshed.
+//                       Any OTHER commit-msg (a user's hook, the pre-commit
+//                       framework's, a symlink) is never edited: keryx cannot
+//                       know where control flows in someone else's script, so
+//                       it says which line to add instead (COMMIT_MSG_FIX_LINE).
+//
+// The matching lives in ONE place: the three regular expressions in
+// ATTRIBUTION_PATTERNS, built from the tables below in a dialect JavaScript
+// and POSIX awk read identically (bracket expressions and explicit [ \t] only:
+// no [[:class:]], no backslash-escaped metacharacters). The shell check embeds
+// them in an awk program; `findAttributionViolations` is its TypeScript twin,
+// running the same patterns through the same line walk, and the tests run
+// every sample through both.
 // ---------------------------------------------------------------------------
 
-/** Block id of the managed `commit-msg` block inside `.git/hooks/commit-msg`. */
+/** Block id of the managed block inside `<hooks>/commit-msg`. */
 export const COMMIT_MSG_BLOCK_ID = "commit-msg-attribution";
+/** File name of the standalone check script next to `commit-msg`. */
+export const COMMIT_MSG_CHECK_SCRIPT = "keryx-commit-msg";
+const CHECK_SCRIPT_MARKER = "# keryx:managed commit-msg-attribution-check";
+/** The line a user adds to their own commit-msg hook to run the keryx check. */
+export const COMMIT_MSG_FIX_LINE = `"$(git rev-parse --git-path hooks)/${COMMIT_MSG_CHECK_SCRIPT}" "$1" || exit 1`;
+/** git's scissors line, without the leading comment character. */
+const SCISSORS = " ------------------------ >8 ------------------------";
+/** Characters `core.commentChar=auto` may pick (git's own candidate list). */
+const AUTO_COMMENT_CHARS = "#;@!$%^&|:";
 
 /**
- * The single vendor/tool word list. A `Co-Authored-By:` trailer or a
- * "Generated by/with" line is attribution only when it names one of these as a
- * whole word (case-insensitive; a space means "one or more whitespace"). Vendor
- * noreply addresses (`noreply@anthropic.com`, `...@openai.com`,
- * `Copilot <...@users.noreply.github.com>`) match through the vendor/tool word.
- * "OpenAPI" does not match "openai", "Claudette" does not match "claude".
+ * Known AI products, models and agents, lowercase. Each entry is a regular
+ * expression fragment in the shared dialect; a space means "one or more spaces
+ * or tabs". A Co-Authored-By display name is AI attribution when it EXACTLY
+ * equals one of these (case-insensitive), optionally followed by a version
+ * (` 4.5`, ` v2`) and a parenthesised note. "Claude" is AI; "Claude Monet" is
+ * a person.
  */
-export const AI_ATTRIBUTION_WORDS: readonly string[] = [
+export const AI_PRODUCT_NAMES: readonly string[] = [
   "claude",
+  "claude code",
+  "claude( [0-9][0-9.]*)? (opus|sonnet|haiku)",
   "anthropic",
-  "gpt",
   "chatgpt",
+  "gpt-[0-9][0-9a-z.]*",
   "openai",
+  "openai codex",
   "codex",
+  "github copilot",
   "copilot",
   "gemini",
+  "gemini( [0-9][0-9.]*)? (pro|flash|ultra)",
+  "gemini code assist",
+  "google gemini",
+  "google jules",
+  "jules",
   "bard",
-  "google ai",
+  "google bard",
   "cursor",
+  "cursor agent",
   "devin",
+  "devin ai",
   "aider",
   "windsurf",
   "codeium",
   "amazon q",
+  "amazon q developer",
   "codewhisperer",
+  "amazon codewhisperer",
   "tabnine",
+  "qwen",
+  "qwen code",
+  "keryx",
   "keryx agent",
 ];
+
+/**
+ * Email domains of AI vendors and agents. A Co-Authored-By address on one of
+ * these (or on a subdomain) is AI attribution whatever the display name says.
+ */
+export const AI_EMAIL_DOMAINS: readonly string[] = [
+  "anthropic.com",
+  "openai.com",
+  "cursor.com",
+  "cursor.sh",
+  "anysphere.co",
+  "cognition.ai",
+  "codeium.com",
+  "windsurf.com",
+  "tabnine.com",
+  "aider.chat",
+];
+
+/** Local parts that make a `@google.com` address an agent (an optional `+tag` is allowed); every other google.com address is a person. */
+export const AI_GOOGLE_AGENT_LOCAL_PARTS: readonly string[] = ["gemini", "jules", "bard"];
+
+const SP = "[ \\t]";
+const EMAIL_CHAR = "[^@<> \\t]";
+const VERSION = `(${SP}+v?[0-9][0-9a-z.-]*)?`;
+const NAME = `(${AI_PRODUCT_NAMES.map((name) => name.split(" ").join(`${SP}+`)).join("|")})${VERSION}`;
+const AI_EMAIL = [
+  `${EMAIL_CHAR}+@([a-z0-9-]+[.])*(${AI_EMAIL_DOMAINS.map((domain) => domain.split(".").join("[.]")).join("|")})`,
+  `(${AI_GOOGLE_AGENT_LOCAL_PARTS.join("|")})([+]${EMAIL_CHAR}*)?@google[.]com`,
+  `${EMAIL_CHAR}*[[]bot${EMAIL_CHAR}@users[.]noreply[.]github[.]com`,
+  "copilot@github[.]com",
+  "([0-9]+[+])?copilot@users[.]noreply[.]github[.]com",
+].join("|");
+/** `Co-Authored-By:` key — case-insensitive (the line is lowercased first), optional spaces before the colon, optional leading whitespace or `#`. */
+const TRAILER = `^(${SP}|#)*co-authored-by${SP}*:${SP}*`;
+
+/**
+ * The three attribution patterns, applied to an ASCII-lowercased line:
+ *
+ * - `coAuthorName`: the trailer's display name (the text before `<`) is
+ *   exactly a product name from AI_PRODUCT_NAMES (optional quotes, version,
+ *   `(note)`).
+ * - `coAuthorEmail`: the trailer's address (inside `<>`, or the bare value) is
+ *   on an AI_EMAIL_DOMAINS domain, is a google.com agent address, is a GitHub
+ *   bot (`…[bot]@users.noreply.github.com`), or is Copilot's
+ *   (`copilot@github.com`, `[<id>+]copilot@users.noreply.github.com`).
+ * - `generated`: the line starts (after any non-alphanumerics such as an emoji
+ *   or `*`) with "Generated by", "Generated with" or "Generated-by", and the
+ *   object after it (past punctuation such as `[` or `:`, and an optional
+ *   "the ") IS a product name as a whole: after an optional version it must be
+ *   followed by the end of the line or by a character that is not a letter,
+ *   digit, space or hyphen (`.`, `,`, `]` as in `[Claude Code](…)`, ` (`,
+ *   `<`, `*`, `'`). So "Generated by Codex" and "Generated with [Claude
+ *   Code](…)" are attribution; "Generated with a cursor-based script",
+ *   "Generated by protoc", "Generated by the OpenAPI generator" and "Generated
+ *   by Gemini Ruiz's script" are not.
+ */
+export const ATTRIBUTION_PATTERNS = {
+  coAuthorName: `${TRAILER}"?${NAME}(${SP}+[(][^)]*[)])?"?${SP}*(<|$)`,
+  coAuthorEmail: `${TRAILER}(.*<${SP}*)?(${AI_EMAIL})${SP}*(>|$)`,
+  generated: `^[^a-z0-9]*generated(${SP}+|-)(by|with)[^a-z0-9]+(the${SP}+)?${NAME}${SP}*($|[^ \\t0-9a-z-])`,
+} as const;
+
+const CO_AUTHOR_NAME_RE = new RegExp(ATTRIBUTION_PATTERNS.coAuthorName);
+const CO_AUTHOR_EMAIL_RE = new RegExp(ATTRIBUTION_PATTERNS.coAuthorEmail);
+const GENERATED_RE = new RegExp(ATTRIBUTION_PATTERNS.generated);
 
 export interface AttributionViolation {
   /** 1-based line number in the message file. */
@@ -363,104 +422,406 @@ export interface AttributionViolation {
   readonly text: string;
 }
 
-const NON_WORD = "[^[:alnum:]]";
-const TOOL_ALT = AI_ATTRIBUTION_WORDS.map((word) => word.replace(/ /g, "[[:space:]]+")).join("|");
-/** POSIX ERE (used case-insensitively): `Co-Authored-By:` trailer (optional leading whitespace or `#`) whose value names an AI tool. */
-export const CO_AUTHOR_ERE = `^([[:space:]]|#)*Co-Authored-By:(.*${NON_WORD})?(${TOOL_ALT})(${NON_WORD}|$)`;
-/** POSIX ERE (used case-insensitively): "Generated by/with" or `Generated-by:` line (after optional emoji/markdown) naming an AI tool. */
-export const GENERATED_ERE = `^${NON_WORD}*Generated([[:space:]]+|-)(by|with)${NON_WORD}(.*${NON_WORD})?(${TOOL_ALT})(${NON_WORD}|$)`;
-
-function toJsRegExp(ere: string): RegExp {
-  return new RegExp(ere.split(NON_WORD).join("[^a-z0-9]").split("[[:space:]]").join("\\s"), "i");
+/** How git will clean the message up, as far as a commit-msg hook can know it. */
+export interface CommitMessageContext {
+  /** `git config commit.cleanup` (unset: `null`/omitted). A `--cleanup=` flag on the command line is invisible to a hook. */
+  readonly cleanup?: string | null;
+  /** `core.commentString` / `core.commentChar` (unset: `#`; `auto`: no line is treated as a comment). */
+  readonly commentChar?: string | null;
+  /** Whether git opened an editor for the message; git sets `GIT_EDITOR=:` for the hook when it did not (`-m`, `-F`, `--no-edit`). Default true. */
+  readonly edited?: boolean;
 }
-const COAUTHOR_RE = toJsRegExp(CO_AUTHOR_ERE);
-const GENERATED_RE = toJsRegExp(GENERATED_ERE);
 
-/** Lines of `message` that carry AI attribution. Every line is checked: comment lines and text below a scissors line included, because git's cleanup mode is not knowable from inside the hook. */
-export function findAttributionViolations(message: string): AttributionViolation[] {
+function asciiLower(value: string): string {
+  return value.replace(/[A-Z]/g, (char) => char.toLowerCase());
+}
+
+/**
+ * Which lines git will keep, decided exactly as the awk program's BEGIN block
+ * decides it:
+ * - comment lines are dropped only by `strip`, and by `default` when the
+ *   message was edited (`default` without an editor behaves as `whitespace`).
+ *   `whitespace`, `verbatim` and `scissors` keep them, so they are checked.
+ * - the scissors line ends the message when an editor was used (`git commit
+ *   -v` truncates there in every mode) or the mode is `scissors`.
+ */
+function messageRules(context: CommitMessageContext): {
+  keepComments: boolean;
+  stopAtScissors: boolean;
+  commentChar: string;
+  autoComment: boolean;
+} {
+  const mode = asciiLower(context.cleanup ?? "");
+  const edited = context.edited ?? true;
+  const commentChar = context.commentChar ? context.commentChar : "#";
+  return {
+    keepComments:
+      mode === "verbatim" || mode === "whitespace" || mode === "scissors" || ((mode === "" || mode === "default") && !edited),
+    stopAtScissors: edited || mode === "scissors",
+    commentChar,
+    autoComment: asciiLower(commentChar) === "auto",
+  };
+}
+
+function isScissorsLine(line: string, commentChar: string, autoComment: boolean): boolean {
+  if (autoComment) {
+    return line.length === SCISSORS.length + 1 && AUTO_COMMENT_CHARS.includes(line.charAt(0)) && line.slice(1) === SCISSORS;
+  }
+  return line === `${commentChar}${SCISSORS}`;
+}
+
+/** Lines of `message` that carry AI attribution: the TypeScript twin of the awk program in `keryx-commit-msg`. */
+export function findAttributionViolations(message: string, context: CommitMessageContext = {}): AttributionViolation[] {
+  const rules = messageRules(context);
   const violations: AttributionViolation[] = [];
   const lines = message.split("\n");
   for (let index = 0; index < lines.length; index += 1) {
     const line = (lines[index] ?? "").replace(/\r$/, "");
-    if (COAUTHOR_RE.test(line)) {
+    if (rules.stopAtScissors && isScissorsLine(line, rules.commentChar, rules.autoComment)) break;
+    if (!rules.keepComments && !rules.autoComment && line.startsWith(rules.commentChar)) continue;
+    const lower = asciiLower(line);
+    if (CO_AUTHOR_NAME_RE.test(lower) || CO_AUTHOR_EMAIL_RE.test(lower)) {
       violations.push({ line: index + 1, reason: "co-author-trailer", text: line });
-    } else if (GENERATED_RE.test(line)) {
+    } else if (GENERATED_RE.test(lower)) {
       violations.push({ line: index + 1, reason: "generated-by-line", text: line });
     }
   }
   return violations;
 }
 
-/** Body of the managed `commit-msg` block (POSIX sh; `$1` is the message file). */
-export function renderCommitMsgHook(): string {
-  return `keryx_commit_msg_attribution() {
-  # Refuse a commit message that carries AI attribution: a Co-Authored-By
-  # trailer naming an AI tool/vendor, or a "Generated by/with" line naming one.
-  # Product names elsewhere (CLAUDE.md, "Claude runtime adapter") are fine.
-  msg_file="$1"
-  [ -n "$msg_file" ] && [ -f "$msg_file" ] || return 0
-  hit=$(LC_ALL=C grep -n -i -E -m 1 -e '${CO_AUTHOR_ERE}' -e '${GENERATED_ERE}' "$msg_file" 2>/dev/null | cut -d: -f1)
-  if [ -n "$hit" ]; then
-    echo "keryx commit-msg: line $hit is AI attribution (a Co-Authored-By trailer or a 'Generated by/with' line naming an AI tool); remove it" >&2
-    return 1
-  fi
-  return 0
+function renderAwkProgram(): string {
+  const program = `BEGIN {
+  mode = tolower(cleanup)
+  if (cc == "") cc = "#"
+  autocc = (tolower(cc) == "auto")
+  keep_comments = (mode == "verbatim" || mode == "whitespace" || mode == "scissors" || ((mode == "" || mode == "default") && edited == "0"))
+  stop_at_cut = (edited == "1" || mode == "scissors")
+  cut = "${SCISSORS}"
+  autochars = "${AUTO_COMMENT_CHARS}"
 }
-keryx_commit_msg_attribution "$@" || exit $?`;
+function is_cut(s) {
+  if (autocc) return length(s) == length(cut) + 1 && index(autochars, substr(s, 1, 1)) > 0 && substr(s, 2) == cut
+  return s == cc cut
+}
+{
+  line = $0
+  sub(/\\r$/, "", line)
+  if (stop_at_cut && is_cut(line)) exit 0
+  if (!keep_comments && !autocc && index(line, cc) == 1) next
+  l = tolower(line)
+  if (l ~ /${ATTRIBUTION_PATTERNS.coAuthorName}/ || l ~ /${ATTRIBUTION_PATTERNS.coAuthorEmail}/) {
+    print "keryx commit-msg: line " NR " is AI attribution (a Co-Authored-By trailer naming an AI tool or agent); remove it"
+    exit 1
+  }
+  if (l ~ /${ATTRIBUTION_PATTERNS.generated}/) {
+    print "keryx commit-msg: line " NR " is AI attribution (a Generated by/with line naming an AI tool); remove it"
+    exit 1
+  }
+}`;
+  if (program.includes("'")) throw new Error("the commit-msg awk program must not contain a single quote");
+  return program;
 }
 
-export async function installCommitMsgHookOrWarn(projectRoot: string): Promise<string | null> {
-  return installManagedHookOrWarn(projectRoot, "commit-msg", COMMIT_MSG_BLOCK_ID, renderCommitMsgHook(), {
-    requireRunnable: true,
+/** The standalone `keryx-commit-msg` check (POSIX sh + awk): `$1` is the message file; exit 1 on attribution, 2 or more when the check itself cannot run. */
+export function renderCommitMsgCheckScript(): string {
+  return `#!/bin/sh
+${CHECK_SCRIPT_MARKER}
+# Written by keryx (keryx init / keryx update); edits are overwritten.
+# Refuses a commit message that carries AI attribution: a Co-Authored-By
+# trailer identifying an AI tool or agent (by vendor/bot address or exact
+# product name), or a "Generated by/with <AI product>" line.
+# Usage: ${COMMIT_MSG_CHECK_SCRIPT} <commit-message-file>
+msg_file=$1
+if [ -z "$msg_file" ] || [ ! -r "$msg_file" ]; then
+  echo "keryx commit-msg: no readable commit message file was given (got '$msg_file'); refusing the commit" >&2
+  exit 2
+fi
+keryx_config_failed() {
+  echo "keryx commit-msg: 'git config --get $1' failed (exit $2); refusing the commit" >&2
+  exit 2
+}
+cleanup=$(git config --get commit.cleanup 2>/dev/null)
+rc=$?
+[ "$rc" -le 1 ] || keryx_config_failed commit.cleanup "$rc"
+comment=$(git config --get core.commentString 2>/dev/null)
+rc=$?
+[ "$rc" -le 1 ] || keryx_config_failed core.commentString "$rc"
+if [ "$rc" -eq 1 ]; then
+  comment=$(git config --get core.commentChar 2>/dev/null)
+  rc=$?
+  [ "$rc" -le 1 ] || keryx_config_failed core.commentChar "$rc"
+fi
+# git sets GIT_EDITOR=: for the hook when it opened no editor (-m, -F, --no-edit).
+edited=1
+[ "\${GIT_EDITOR-}" = ":" ] && edited=0
+LC_ALL=C awk -v cleanup="$cleanup" -v cc="$comment" -v edited="$edited" '${renderAwkProgram()}' "$msg_file" >&2
+rc=$?
+case $rc in
+  0) exit 0 ;;
+  1) exit 1 ;;
+  *)
+    echo "keryx commit-msg: the attribution check could not run (exit $rc); refusing the commit" >&2
+    exit "$rc"
+    ;;
+esac
+`;
+}
+
+/** Body of the managed block in `<hooks>/commit-msg`: it only calls the check script next to it. */
+export function renderCommitMsgHook(): string {
+  return `# Managed by keryx: refuses AI attribution; the check is ${COMMIT_MSG_CHECK_SCRIPT} next to this hook.
+"$(dirname "$0")/${COMMIT_MSG_CHECK_SCRIPT}" "$1" || exit $?`;
+}
+
+const COMMIT_MSG_BLOCK_START = `# keryx:${COMMIT_MSG_BLOCK_ID}:begin`;
+const COMMIT_MSG_BLOCK_END = `# keryx:${COMMIT_MSG_BLOCK_ID}:end`;
+
+/** True when a non-comment line of `text` refers to the check script: the managed block's call, or a line the user added. */
+function callsCheckScript(text: string): boolean {
+  return text.split("\n").some((line) => {
+    const trimmed = line.trim();
+    return !trimmed.startsWith("#") && trimmed.includes(COMMIT_MSG_CHECK_SCRIPT);
   });
 }
 
-export async function removeCommitMsgHookOrWarn(projectRoot: string): Promise<string | null> {
-  return removeManagedHookOrWarn(projectRoot, "commit-msg", COMMIT_MSG_BLOCK_ID);
+interface CommitMsgHookFile {
+  readonly exists: boolean;
+  readonly symlink: boolean;
+  readonly hasBlock: boolean;
+  /** A non-comment line calls keryx-commit-msg. */
+  readonly wired: boolean;
+  readonly text: string;
 }
 
-/** True when `.git/hooks/commit-msg` still carries the managed block. */
+async function readCommitMsgHook(hookPath: string): Promise<CommitMsgHookFile> {
+  const hookStat = await lstat(hookPath).catch(() => null);
+  if (!hookStat) return { exists: false, symlink: false, hasBlock: false, wired: false, text: "" };
+  // Reading through a symlink is safe; only writing through one is refused.
+  const text = await readFile(hookPath, "utf8").catch(() => "");
+  return {
+    exists: true,
+    symlink: hookStat.isSymbolicLink(),
+    hasBlock: text.includes(COMMIT_MSG_BLOCK_START),
+    wired: callsCheckScript(text),
+    text,
+  };
+}
+
+function commitMsgBlockPattern(withSurroundingNewlines: boolean): RegExp {
+  const edge = withSurroundingNewlines ? "\\n*" : "";
+  return new RegExp(`${edge}${escapeRegExp(COMMIT_MSG_BLOCK_START)}[\\s\\S]*?${escapeRegExp(COMMIT_MSG_BLOCK_END)}${edge}`);
+}
+
+/** A hook whose only non-blank line is its shebang does nothing; keryx may replace it (and leaves none behind on removal). */
+function isEmptyHook(text: string): boolean {
+  const lines = text.split("\n").map((line) => line.trim()).filter((line) => line !== "");
+  return lines.length === 0 || (lines.length === 1 && (lines[0] ?? "").startsWith("#!"));
+}
+
+async function isManagedCheckScript(scriptPath: string): Promise<boolean> {
+  return (await readFile(scriptPath, "utf8").catch(() => "")).includes(CHECK_SCRIPT_MARKER);
+}
+
+/**
+ * Write `keryx-commit-msg`, and wire it into `commit-msg` when keryx owns that
+ * file (absent, or already carrying the keryx block). Returns a warning rather
+ * than throwing when it cannot: an escaping or dangling link, a symlinked or
+ * foreign `keryx-commit-msg`, or a foreign `commit-msg` (left untouched; the
+ * warning names the line to add to it). `null` means the check is wired in.
+ */
+export async function installCommitMsgHookOrWarn(projectRoot: string): Promise<string | null> {
+  const skipped = (reason: string): string => `Skipped the "${COMMIT_MSG_BLOCK_ID}" commit-msg hook: ${reason}`;
+  let resolved: Awaited<ReturnType<typeof resolveContainedHookPath>>;
+  try {
+    resolved = await resolveContainedHookPath(projectRoot, "commit-msg");
+    if (resolved) await resolveContainedHookPath(projectRoot, COMMIT_MSG_CHECK_SCRIPT);
+  } catch (err) {
+    if (err instanceof ManagedGitHookEscapeError) return skipped(err.message);
+    throw err;
+  }
+  if (!resolved) return null;
+  const { hooksRoot, hookPath } = resolved;
+  const scriptPath = path.join(hooksRoot, COMMIT_MSG_CHECK_SCRIPT);
+
+  await mkdir(hooksRoot, { recursive: true });
+  const scriptStat = await lstat(scriptPath).catch(() => null);
+  if (scriptStat?.isSymbolicLink()) return skipped(`${scriptPath} is a symlink; refusing to write through it`);
+  if (scriptStat && !(await isManagedCheckScript(scriptPath))) return skipped(`${scriptPath} exists and was not written by keryx`);
+  await writeFile(scriptPath, renderCommitMsgCheckScript(), "utf8");
+  await chmod(scriptPath, 0o755);
+
+  const hook = await readCommitMsgHook(hookPath);
+  const block = `${COMMIT_MSG_BLOCK_START}\n${renderCommitMsgHook()}\n${COMMIT_MSG_BLOCK_END}`;
+  if (!hook.exists || (!hook.symlink && isEmptyHook(hook.text))) {
+    await writeFile(hookPath, `#!/bin/sh\n\n${block}\n`, "utf8");
+    await chmod(hookPath, 0o755);
+    return null;
+  }
+  if (!hook.symlink && hook.hasBlock) {
+    // Function replacement: the block is shell full of `$`, which the string form would expand.
+    await writeFile(hookPath, hook.text.replace(commitMsgBlockPattern(false), () => block), "utf8");
+    await chmod(hookPath, 0o755);
+    return null;
+  }
+  if (hook.wired) return null;
+  const kind = hook.symlink ? "a symlink" : "not managed by keryx";
+  return (
+    `Wrote ${scriptPath} but left the existing commit-msg hook ${hookPath} untouched (${kind}). ` +
+    `To enable the AI-attribution check, add this line to that hook, before any exec or exit: ${COMMIT_MSG_FIX_LINE}`
+  );
+}
+
+/** Doctor detail (and log wording) when the project opted out of the commit-msg check. */
+export const COMMIT_MSG_HOOK_DISABLED_DETAIL = "disabled by config (hooks.commitMsg: false in .metaproject/metaproject.json)";
+
+/**
+ * Whether this project wants the keryx commit-msg check: on unless
+ * `.metaproject/metaproject.json` has a top-level `"hooks": { "commitMsg": false }`.
+ * Only the literal boolean `false` opts out; a missing or unreadable manifest,
+ * a missing key, or any other value keeps the default (on). init, update,
+ * `keryx sync install-hooks` and doctor all read the setting through here.
+ */
+export async function commitMsgHookEnabled(projectRoot: string): Promise<boolean> {
+  try {
+    const manifest = JSON.parse(await readFile(path.join(projectRoot, ".metaproject", "metaproject.json"), "utf8")) as unknown;
+    if (!manifest || typeof manifest !== "object") return true;
+    const hooks = (manifest as { hooks?: unknown }).hooks;
+    if (!hooks || typeof hooks !== "object") return true;
+    return (hooks as { commitMsg?: unknown }).commitMsg !== false;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Bring the commit-msg check in line with the project setting: install it when
+ * enabled, remove an existing keryx block and script (same symlink guard as
+ * {@link removeCommitMsgHookOrWarn}) when disabled. `installed` is true only
+ * when the check is wired in; `warning` is for the caller to print.
+ */
+export async function applyCommitMsgHookSetting(
+  projectRoot: string,
+): Promise<{ readonly enabled: boolean; readonly installed: boolean; readonly removed: boolean; readonly warning: string | null }> {
+  if (await commitMsgHookEnabled(projectRoot)) {
+    const warning = await installCommitMsgHookOrWarn(projectRoot);
+    return { enabled: true, installed: warning === null && (await resolveGitHooksRoot(projectRoot)) !== null, removed: false, warning };
+  }
+  const removal = await removeCommitMsgHookOrWarn(projectRoot);
+  return { enabled: false, installed: false, removed: removal.removed, warning: removal.warning };
+}
+
+export interface CommitMsgHookRemoval {
+  /** The keryx block and/or the check script was removed. */
+  readonly removed: boolean;
+  readonly warning: string | null;
+}
+
+/**
+ * Remove the keryx block from `commit-msg` and delete `keryx-commit-msg`.
+ * Never edits a symlinked `commit-msg`, and keeps the script while any hook
+ * line still calls it (deleting it would make that hook refuse every commit).
+ */
+export async function removeCommitMsgHookOrWarn(projectRoot: string): Promise<CommitMsgHookRemoval> {
+  let resolved: Awaited<ReturnType<typeof resolveContainedHookPath>>;
+  try {
+    resolved = await resolveContainedHookPath(projectRoot, "commit-msg");
+  } catch (err) {
+    if (err instanceof ManagedGitHookEscapeError) {
+      return { removed: false, warning: `Skipped removing the "${COMMIT_MSG_BLOCK_ID}" commit-msg hook: ${err.message}` };
+    }
+    throw err;
+  }
+  if (!resolved) return { removed: false, warning: null };
+  const { hooksRoot, hookPath } = resolved;
+  const scriptPath = path.join(hooksRoot, COMMIT_MSG_CHECK_SCRIPT);
+
+  const hook = await readCommitMsgHook(hookPath);
+  if (hook.symlink && (hook.hasBlock || hook.wired)) {
+    return {
+      removed: false,
+      warning:
+        `Did not edit ${hookPath}: it is a symlink and keryx does not edit a hook through a link. ` +
+        `Remove the keryx call from its target yourself; ${scriptPath} was kept because that hook still calls it.`,
+    };
+  }
+  let removed = false;
+  let stillWired = hook.wired;
+  if (hook.hasBlock) {
+    // Not a symlink here: a symlinked hook carrying the block returned above.
+    const next = `${hook.text.replace(commitMsgBlockPattern(true), "\n").trimEnd()}\n`;
+    // Nothing but a shebang left: the file was keryx's own, so it goes too.
+    if (isEmptyHook(next)) await rm(hookPath, { force: true });
+    else await writeFile(hookPath, next, "utf8");
+    removed = true;
+    stillWired = callsCheckScript(next);
+  }
+  if (stillWired) {
+    return {
+      removed,
+      warning: `${hookPath} still calls ${COMMIT_MSG_CHECK_SCRIPT}; kept ${scriptPath} so that hook keeps working. Remove that line, then run this again.`,
+    };
+  }
+  const scriptStat = await lstat(scriptPath).catch(() => null);
+  if (scriptStat && (scriptStat.isSymbolicLink() || (await isManagedCheckScript(scriptPath)))) {
+    // rm on a symlink removes the link itself, never its target.
+    await rm(scriptPath, { force: true });
+    removed = true;
+  }
+  return { removed, warning: null };
+}
+
+/** True when the keryx check script exists and the `commit-msg` hook in the managed hooks directory calls it. */
 export async function commitMsgHookInstalled(projectRoot: string): Promise<boolean> {
   const hooksRoot = await resolveGitHooksRoot(projectRoot);
   if (!hooksRoot) return false;
-  const hookPath = path.join(hooksRoot, "commit-msg");
-  if (!(await pathExists(hookPath))) return false;
-  return (await readFile(hookPath, "utf8")).includes(`# keryx:${COMMIT_MSG_BLOCK_ID}:begin`);
+  if (!(await isManagedCheckScript(path.join(hooksRoot, COMMIT_MSG_CHECK_SCRIPT)))) return false;
+  return (await readCommitMsgHook(path.join(hooksRoot, "commit-msg"))).wired;
 }
 
 export type CommitMsgHookState =
   | { readonly state: "no-git" }
+  | { readonly state: "disabled" }
   | { readonly state: "missing" }
   | { readonly state: "active" }
   | {
       readonly state: "inactive";
-      /** Why git will not (or cannot be shown to) run the block. */
+      /** Why git will not (or cannot be shown to) run the check. */
       readonly reason: string;
       readonly fix?: string;
       readonly effectiveHooksDir?: string;
       readonly managedHooksDir?: string;
     };
 
+function isExecutable(mode: number): boolean {
+  return (mode & 0o111) !== 0;
+}
+
 /**
- * Whether git will actually run the managed `commit-msg` block: the block must
- * be present, the hook file must be able to reach it (not a symlink, POSIX
- * shell shebang, no trailing `exec`/`exit`), and git's effective hooks
- * directory (`git rev-parse --git-path hooks`, which honours `core.hooksPath`)
- * must be the directory the block was written to. When that cannot be
- * confirmed (git missing or failing) the state is `inactive` with the reason,
- * never `active`.
+ * Whether git actually runs the keryx check: the script must exist and be
+ * executable, and the `commit-msg` hook in git's EFFECTIVE hooks directory
+ * (`git rev-parse --git-path hooks`, which honours `core.hooksPath`) must be
+ * executable and call it, through the keryx block or a line the user added.
+ * When that cannot be confirmed (git missing or failing) the state is
+ * `inactive` with the reason, never `active`.
  */
 export async function inspectCommitMsgHook(projectRoot: string): Promise<CommitMsgHookState> {
+  if (!(await commitMsgHookEnabled(projectRoot))) return { state: "disabled" };
   const hooksRoot = await resolveGitHooksRoot(projectRoot);
   if (!hooksRoot) return { state: "no-git" };
-  if (!(await commitMsgHookInstalled(projectRoot))) return { state: "missing" };
-  const blocker = await findHookBlocker(path.join(hooksRoot, "commit-msg"));
-  if (blocker) {
+  const scriptPath = path.join(hooksRoot, COMMIT_MSG_CHECK_SCRIPT);
+  const managedHookPath = path.join(hooksRoot, "commit-msg");
+  const managedHook = await readCommitMsgHook(managedHookPath);
+  const scriptStat = await stat(scriptPath).catch(() => null);
+  if (!scriptStat && !managedHook.hasBlock) return { state: "missing" };
+  if (!scriptStat) {
     return {
       state: "inactive",
-      reason: blocker,
-      fix: "make .git/hooks/commit-msg a plain POSIX shell script that reaches the end of the file, or call the keryx check from it",
+      reason: `${managedHookPath} calls ${COMMIT_MSG_CHECK_SCRIPT} but ${scriptPath} is missing, so git refuses every commit`,
+      fix: "keryx update",
     };
+  }
+  if (!isExecutable(scriptStat.mode)) {
+    return { state: "inactive", reason: `${scriptPath} is not executable`, fix: `chmod +x ${scriptPath}` };
   }
   if (!Bun.which("git", { PATH: process.env.PATH ?? "" })) {
     return { state: "inactive", reason: "the git executable was not found, so whether git runs the hook cannot be confirmed" };
@@ -473,12 +834,31 @@ export async function inspectCommitMsgHook(projectRoot: string): Promise<CommitM
   const effective = path.resolve(projectRoot, stdout.trim());
   const effectiveReal = await realpath(effective).catch(() => effective);
   const managedReal = await realpath(hooksRoot).catch(() => hooksRoot);
-  if (effectiveReal === managedReal) return { state: "active" };
+  const effectiveHookPath = path.join(effectiveReal, "commit-msg");
+  const hook = effectiveReal === managedReal ? managedHook : await readCommitMsgHook(effectiveHookPath);
+
+  if (hook.wired) {
+    const hookStat = await stat(effectiveHookPath).catch(() => null);
+    if (!hookStat || !isExecutable(hookStat.mode)) {
+      return { state: "inactive", reason: `${effectiveHookPath} is not executable, so git does not run it`, fix: `chmod +x ${effectiveHookPath}` };
+    }
+    return { state: "active" };
+  }
+  if (effectiveReal !== managedReal) {
+    return {
+      state: "inactive",
+      reason: `git runs hooks from ${effectiveReal} (core.hooksPath), not ${managedReal} where ${COMMIT_MSG_CHECK_SCRIPT} is installed, and ${effectiveHookPath} does not call it`,
+      fix: `add this line to ${effectiveHookPath}, before any exec or exit: "$(git rev-parse --git-common-dir)/hooks/${COMMIT_MSG_CHECK_SCRIPT}" "$1" || exit 1 (or unset core.hooksPath)`,
+      effectiveHooksDir: effectiveReal,
+      managedHooksDir: managedReal,
+    };
+  }
+  if (!hook.exists) {
+    return { state: "inactive", reason: `no commit-msg hook calls ${COMMIT_MSG_CHECK_SCRIPT}`, fix: "keryx update" };
+  }
   return {
     state: "inactive",
-    reason: `git runs hooks from ${effectiveReal} (core.hooksPath), not ${managedReal} where the block is installed`,
-    fix: `install the commit-msg check in ${effectiveReal}, or unset core.hooksPath`,
-    effectiveHooksDir: effectiveReal,
-    managedHooksDir: managedReal,
+    reason: `foreign commit-msg hook: ${effectiveHookPath} is not managed by keryx and does not call ${COMMIT_MSG_CHECK_SCRIPT}`,
+    fix: `add this line to ${effectiveHookPath}, before any exec or exit: ${COMMIT_MSG_FIX_LINE}`,
   };
 }

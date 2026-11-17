@@ -462,3 +462,57 @@ test("init and update install the commit-msg hook and the conduct rule, even wit
     expect(existsSync(conductRule)).toBe(true);
   });
 });
+
+// ADR-0001 D3 opt-out: `"hooks": { "commitMsg": false }` in metaproject.json.
+async function setCommitMsgHook(root: string, value: boolean | undefined): Promise<void> {
+  const manifestPath = path.join(root, ".metaproject", "metaproject.json");
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as Record<string, unknown>;
+  if (value === undefined) delete manifest.hooks;
+  else manifest.hooks = { commitMsg: value };
+  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+}
+
+async function readHooksSetting(root: string): Promise<unknown> {
+  return (JSON.parse(await readFile(path.join(root, ".metaproject", "metaproject.json"), "utf8")) as { hooks?: unknown }).hooks;
+}
+
+function commitMsgFiles(root: string): { hook: boolean; script: boolean } {
+  return {
+    hook: existsSync(path.join(root, ".git", "hooks", "commit-msg")),
+    script: existsSync(path.join(root, ".git", "hooks", "keryx-commit-msg")),
+  };
+}
+
+test("init installs the commit-msg check by default; hooks.commitMsg: false makes init remove it and keep it off", async () => {
+  await withProject(async (root) => {
+    await initCommand(["--yes", ...SECURITY_ONLY]);
+    expect(commitMsgFiles(root)).toEqual({ hook: true, script: true });
+
+    await setCommitMsgHook(root, false);
+    await initCommand(["--yes", ...SECURITY_ONLY]);
+    expect(commitMsgFiles(root)).toEqual({ hook: false, script: false });
+    // init rebuilds metaproject.json from scratch; the user's switch survives it.
+    expect(await readHooksSetting(root)).toEqual({ commitMsg: false });
+
+    await initCommand(["--yes", ...SECURITY_ONLY]);
+    expect(commitMsgFiles(root)).toEqual({ hook: false, script: false });
+  });
+});
+
+test("update removes a previously installed commit-msg check when hooks.commitMsg is false, and keeps the setting", async () => {
+  await withProject(async (root) => {
+    await initCommand(["--yes", ...SECURITY_ONLY]);
+    expect(commitMsgFiles(root)).toEqual({ hook: true, script: true });
+
+    await setCommitMsgHook(root, false);
+    await updateCommand(["--skip-runtime", "--no-tasks"]);
+    expect(commitMsgFiles(root)).toEqual({ hook: false, script: false });
+    expect(await readHooksSetting(root)).toEqual({ commitMsg: false });
+
+    // Back on (key removed, or true): update installs it again.
+    await setCommitMsgHook(root, true);
+    await updateCommand(["--skip-runtime", "--no-tasks"]);
+    expect(commitMsgFiles(root)).toEqual({ hook: true, script: true });
+    expect(await readHooksSetting(root)).toEqual({ commitMsg: true });
+  });
+});

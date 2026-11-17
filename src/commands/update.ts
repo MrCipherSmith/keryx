@@ -4,7 +4,7 @@ import { access, constants, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { mkdirContained, writeContained } from "../lib/contained-write";
-import { installCommitMsgHookOrWarn, installManagedHookOrWarn, removeManagedHookOrWarn } from "../lib/managed-git-hook";
+import { applyCommitMsgHookSetting, installManagedHookOrWarn, removeManagedHookOrWarn } from "../lib/managed-git-hook";
 import {
   claudeWorktreesDir,
   findStaleWorktrees,
@@ -192,6 +192,8 @@ type MetaprojectManifest = {
   profiles?: string[];
   updatedAt?: string;
   modules?: Record<string, ManifestModule>;
+  /** Project-level git hook switches (`commitMsg: false` opts out); preserved because update rewrites the raw JSON. */
+  hooks?: { commitMsg?: boolean };
   // Read as whatever is on disk (the legacy string array included) and only
   // ever through `resolveProjectEntrypoints` / `declaredImportSources`.
   agentEntrypoints?: unknown;
@@ -814,7 +816,8 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
 
   // ADR-0001 D3: refresh the attribution-refusing commit-msg hook (installed by
   // `keryx init`); merge-safe, never touches other blocks or user content.
-  const commitMsgWarning = await installCommitMsgHookOrWarn(projectRoot);
+  // Opt-out: `"hooks": { "commitMsg": false }` in metaproject.json removes it instead.
+  const commitMsgWarning = (await applyCommitMsgHookSetting(projectRoot)).warning;
   if (commitMsgWarning) hookWarnings.push(commitMsgWarning);
 
   if (!manifestState.exists || !manifestState.valid) {
