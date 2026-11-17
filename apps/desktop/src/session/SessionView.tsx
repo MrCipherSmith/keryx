@@ -41,7 +41,9 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
           ? "This keryx is not compatible with the app."
           : state.replaying
             ? "Loading session…"
-            : !state.sessionId
+            : state.switching
+              ? "Switching session…"
+              : !state.sessionId
               ? "No session. Start a new one to continue."
               : null;
 

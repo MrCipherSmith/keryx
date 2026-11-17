@@ -67,6 +67,8 @@ export interface SessionState {
   sessionId: string | null;
   busy: boolean;
   replaying: boolean;
+  /** A session switch (new or load) is in flight; the composer must not send. */
+  switching: boolean;
   commands: AvailableCommand[];
   modes: SessionModeState | null;
   configOptions: ConfigOption[];
@@ -87,6 +89,7 @@ export const initialState: SessionState = {
   sessionId: null,
   busy: false,
   replaying: false,
+  switching: false,
   commands: [],
   modes: null,
   configOptions: [],
@@ -99,6 +102,9 @@ export const initialState: SessionState = {
 
 export type Action =
   | { t: "update"; update: SessionUpdate; at?: number }
+  /** Session updates coalesced into one render (one per animation frame, and at replay end). */
+  | { t: "updates"; updates: QueuedUpdate[] }
+  | { t: "switching"; on: boolean }
   | { t: "userSent"; text: string }
   | { t: "notice"; level: "info" | "warn" | "error"; text: string }
   | { t: "banner"; level: Banner["level"]; text: string }
@@ -120,6 +126,11 @@ export type Action =
   | { t: "config"; configOptions: ConfigOption[] }
   | { t: "sessions"; sessions: SessionInfo[] };
 
+export interface QueuedUpdate {
+  update: SessionUpdate;
+  at: number;
+}
+
 export function blockText(block: ContentBlock): string {
   switch (block.type) {
     case "text":
@@ -137,24 +148,25 @@ export function blockText(block: ContentBlock): string {
   }
 }
 
+/**
+ * The update helpers below mutate a draft: a shallow copy of the state whose `items` array is
+ * already a private copy. Item objects themselves are never mutated (memoised rows compare them).
+ */
 function appendChunk(
-  state: SessionState,
+  d: SessionState,
   kind: "user" | "agent" | "thought",
   text: string,
   messageId: string | null | undefined,
-): SessionState {
-  if (text === "") return state;
-  const items = state.items;
+): void {
+  if (text === "") return;
+  const items = d.items;
   const last = items[items.length - 1];
   if (last && last.kind === kind && (messageId == null || last.messageId == null || last.messageId === messageId)) {
-    const merged = { ...last, text: last.text + text, messageId: last.messageId ?? messageId };
-    return { ...state, items: [...items.slice(0, -1), merged] };
+    items[items.length - 1] = { ...last, text: last.text + text, messageId: last.messageId ?? messageId };
+    return;
   }
-  return {
-    ...state,
-    nextId: state.nextId + 1,
-    items: [...items, { kind, id: state.nextId, text, messageId }],
-  };
+  items.push({ kind, id: d.nextId, text, messageId });
+  d.nextId += 1;
 }
 
 function isAutoApproved(meta: unknown): boolean {
@@ -162,12 +174,21 @@ function isAutoApproved(meta: unknown): boolean {
   return keryx?.autoApproved === true;
 }
 
-function upsertTool(state: SessionState, u: ToolCallFields, isNew: boolean, at: number): SessionState {
-  const idx = state.items.findIndex((i) => i.kind === "tool" && i.toolCallId === u.toolCallId);
-  const prev = idx >= 0 ? (state.items[idx] as Extract<Item, { kind: "tool" }>) : null;
+function findTool(items: Item[], toolCallId: string): number {
+  // Updates almost always touch a recent call: search from the end.
+  for (let i = items.length - 1; i >= 0; i--) {
+    const it = items[i];
+    if (it?.kind === "tool" && it.toolCallId === toolCallId) return i;
+  }
+  return -1;
+}
+
+function upsertTool(d: SessionState, u: ToolCallFields, isNew: boolean, at: number): void {
+  const idx = findTool(d.items, u.toolCallId);
+  const prev = idx >= 0 ? (d.items[idx] as Extract<Item, { kind: "tool" }>) : null;
   const next: Extract<Item, { kind: "tool" }> = {
     kind: "tool",
-    id: prev?.id ?? state.nextId,
+    id: prev?.id ?? d.nextId,
     toolCallId: u.toolCallId,
     title: u.title ?? prev?.title ?? u.toolCallId,
     toolKind: u.kind ?? prev?.toolKind ?? "other",
@@ -180,13 +201,13 @@ function upsertTool(state: SessionState, u: ToolCallFields, isNew: boolean, at: 
     endedAt: prev?.endedAt ?? null,
   };
   // A replayed call has no real timing; leave its duration unknown.
-  if (!state.replaying && next.endedAt === null && (next.status === "completed" || next.status === "failed")) next.endedAt = at;
+  if (!d.replaying && next.endedAt === null && (next.status === "completed" || next.status === "failed")) next.endedAt = at;
   if (prev) {
-    const items = state.items.slice();
-    items[idx] = next;
-    return { ...state, items };
+    d.items[idx] = next;
+    return;
   }
-  return { ...state, nextId: state.nextId + 1, items: [...state.items, next] };
+  d.items.push(next);
+  d.nextId += 1;
 }
 
 interface ChunkUpdate {
@@ -200,63 +221,81 @@ function tokenPair(v: unknown): TokenPair | null {
   return { inputTokens: o.inputTokens, outputTokens: o.outputTokens };
 }
 
-function applyUpdate(state: SessionState, u: SessionUpdate, at: number): SessionState {
+function applyUpdate(d: SessionState, u: SessionUpdate, at: number): void {
   switch (u.sessionUpdate) {
     case "user_message_chunk": {
-      if (!state.replaying) return state; // live user text is added locally on send
+      if (!d.replaying) return; // live user text is added locally on send
       const c = u as ChunkUpdate;
-      return appendChunk(state, "user", blockText(c.content), c.messageId);
+      appendChunk(d, "user", blockText(c.content), c.messageId);
+      return;
     }
     case "agent_message_chunk": {
       const c = u as ChunkUpdate;
-      return appendChunk(state, "agent", blockText(c.content), c.messageId);
+      appendChunk(d, "agent", blockText(c.content), c.messageId);
+      return;
     }
     case "agent_thought_chunk": {
       const c = u as ChunkUpdate;
-      return appendChunk(state, "thought", blockText(c.content), c.messageId);
+      appendChunk(d, "thought", blockText(c.content), c.messageId);
+      return;
     }
     case "tool_call":
-      return upsertTool(state, u as ToolCallFields, true, at);
+      upsertTool(d, u as ToolCallFields, true, at);
+      return;
     case "tool_call_update":
-      return upsertTool(state, u as ToolCallFields, false, at);
+      upsertTool(d, u as ToolCallFields, false, at);
+      return;
     case "plan":
-      return { ...state, plan: (u as { entries?: PlanEntry[] }).entries ?? [] };
+      d.plan = (u as { entries?: PlanEntry[] }).entries ?? [];
+      return;
     case "available_commands_update":
-      return { ...state, commands: (u as { availableCommands?: AvailableCommand[] }).availableCommands ?? [] };
-    case "current_mode_update": {
-      if (!state.modes) return state;
-      return { ...state, modes: { ...state.modes, currentModeId: (u as { currentModeId: string }).currentModeId } };
-    }
+      d.commands = (u as { availableCommands?: AvailableCommand[] }).availableCommands ?? [];
+      return;
+    case "current_mode_update":
+      if (d.modes) d.modes = { ...d.modes, currentModeId: (u as { currentModeId: string }).currentModeId };
+      return;
     case "config_option_update":
-      return { ...state, configOptions: (u as { configOptions?: ConfigOption[] }).configOptions ?? [] };
+      d.configOptions = (u as { configOptions?: ConfigOption[] }).configOptions ?? [];
+      return;
     case "session_info_update": {
       const t = (u as { title?: string | null }).title;
-      return t === undefined ? state : { ...state, title: t };
+      if (t !== undefined) d.title = t;
+      return;
     }
     case "usage_update": {
       const x = u as { used?: number; size?: number; cost?: Usage["cost"]; _meta?: { keryx?: Record<string, unknown> } };
       const k = x._meta?.keryx;
-      return {
-        ...state,
-        usage: {
-          used: typeof x.used === "number" ? x.used : 0,
-          size: typeof x.size === "number" ? x.size : 0,
-          cost: x.cost,
-          call: tokenPair(k?.call),
-          turn: tokenPair(k?.turn) ?? state.usage?.turn ?? null,
-          session: tokenPair(k?.session) ?? state.usage?.session ?? null,
-        },
+      d.usage = {
+        used: typeof x.used === "number" ? x.used : 0,
+        size: typeof x.size === "number" ? x.size : 0,
+        cost: x.cost,
+        call: tokenPair(k?.call),
+        turn: tokenPair(k?.turn) ?? d.usage?.turn ?? null,
+        session: tokenPair(k?.session) ?? d.usage?.session ?? null,
       };
+      return;
     }
     default:
-      return state; // an update kind this client does not know: ignore
+      return; // an update kind this client does not know: ignore
   }
+}
+
+function applyUpdates(state: SessionState, updates: readonly QueuedUpdate[]): SessionState {
+  if (updates.length === 0) return state;
+  // One copy of the item list per batch, however many updates it carries.
+  const d: SessionState = { ...state, items: state.items.slice() };
+  for (const q of updates) applyUpdate(d, q.update, q.at);
+  return d;
 }
 
 export function reducer(state: SessionState, a: Action): SessionState {
   switch (a.t) {
     case "update":
-      return applyUpdate(state, a.update, a.at ?? Date.now());
+      return applyUpdates(state, [{ update: a.update, at: a.at ?? Date.now() }]);
+    case "updates":
+      return applyUpdates(state, a.updates);
+    case "switching":
+      return state.switching === a.on ? state : { ...state, switching: a.on };
     case "userSent":
       return {
         ...state,
@@ -294,6 +333,7 @@ export function reducer(state: SessionState, a: Action): SessionState {
         commands: [],
         busy: false,
         replaying: a.replaying,
+        switching: false,
         modes: a.modes ?? null,
         configOptions: a.configOptions ?? [],
       };
@@ -304,10 +344,10 @@ export function reducer(state: SessionState, a: Action): SessionState {
         configOptions: a.configOptions ?? state.configOptions,
       };
     case "replayDone":
-      return { ...state, replaying: false };
+      return { ...state, replaying: false, switching: false };
     case "sessionLost":
       // A load failed and nothing could be restored: no session, so the composer disables itself.
-      return { ...state, sessionId: null, items: [], plan: [], usage: null, title: null, commands: [], busy: false, replaying: false, modes: null };
+      return { ...state, sessionId: null, items: [], plan: [], usage: null, title: null, commands: [], busy: false, replaying: false, switching: false, modes: null };
     case "busy":
       return { ...state, busy: a.busy };
     case "config":

@@ -1,6 +1,6 @@
 import DOMPurify from "dompurify";
-import { marked } from "marked";
-import { memo, useDeferredValue, useMemo } from "react";
+import { marked, type Token } from "marked";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 
 marked.setOptions({ gfm: true, breaks: false });
 
@@ -30,9 +30,12 @@ DOMPurify.addHook("uponSanitizeAttribute", (node, data) => {
   }
 });
 
-export function renderMarkdown(src: string): string {
-  const html = marked.parse(src, { async: false }) as string;
+function sanitize(html: string): string {
   return DOMPurify.sanitize(html, SANITIZE) as string;
+}
+
+export function renderMarkdown(src: string): string {
+  return sanitize(marked.parse(src, { async: false }) as string);
 }
 
 export function renderInline(src: string): string {
@@ -89,9 +92,91 @@ function decorateCodeBlocks(html: string): string {
   return root.innerHTML;
 }
 
+/** The final rendering: what every finished message shows. */
+function renderFinal(src: string): string {
+  return decorateCodeBlocks(renderMarkdown(src));
+}
+
+/** Rendered HTML of the completed top-level blocks of a growing message: `src.slice(0, end)`. */
+interface StreamCache {
+  src: string;
+  end: number;
+  html: string;
+}
+
+const emptyCache = (): StreamCache => ({ src: "", end: 0, html: "" });
+
+/**
+ * Render a message that is still growing. Top-level blocks followed by another block are complete:
+ * their HTML is cached and only the open tail is lexed and parsed again. Code blocks are not decorated
+ * here; the settle-time renderFinal pass re-renders the whole message, so the final HTML is exactly
+ * the one-shot rendering even when a later block (a reference definition, say) changes an earlier one.
+ */
+function renderStreaming(text: string, c: StreamCache): string {
+  if (c.end > text.length || text.slice(0, c.end) !== c.src.slice(0, c.end)) {
+    c.end = 0;
+    c.html = "";
+  }
+  c.src = text;
+  const tail = text.slice(c.end);
+  const tokens = marked.lexer(tail);
+  let open = tokens.length - 1;
+  while (open > 0 && tokens[open]?.type === "space") open--;
+  let rest: Token[] = tokens;
+  if (open > 0) {
+    const done = tokens.slice(0, open);
+    const raw = done.map((t) => t.raw).join("");
+    // The lexer normalises line endings; commit only when the raw text maps back onto the source.
+    if (tail.startsWith(raw)) {
+      c.html += sanitize(marked.parser(done));
+      c.end += raw.length;
+      rest = tokens.slice(open);
+    }
+  }
+  return c.html + sanitize(marked.parser(rest));
+}
+
+/** A message whose text has not changed for this long is final: render it whole, with code-block chrome. */
+const SETTLE_MS = 250;
+
 export const Markdown = memo(function Markdown({ text, className }: { text: string; className?: string }) {
-  const deferred = useDeferredValue(text);
-  const html = useMemo(() => decorateCodeBlocks(renderMarkdown(deferred)), [deferred]);
+  const [html, setHtml] = useState(() => renderFinal(text));
+  const r = useRef({ shown: text, latest: text, cache: emptyCache(), raf: 0, settle: 0 });
+
+  useEffect(() => {
+    const st = r.current;
+    st.latest = text;
+    if (text === st.shown) return;
+    // At most one parse per animation frame while the text keeps changing.
+    if (!st.raf) {
+      st.raf = requestAnimationFrame(() => {
+        st.raf = 0;
+        st.shown = st.latest;
+        setHtml(renderStreaming(st.latest, st.cache));
+      });
+    }
+    window.clearTimeout(st.settle);
+    st.settle = window.setTimeout(() => {
+      st.settle = 0;
+      if (st.raf) cancelAnimationFrame(st.raf);
+      st.raf = 0;
+      st.shown = st.latest;
+      st.cache = emptyCache();
+      setHtml(renderFinal(st.latest));
+    }, SETTLE_MS);
+  }, [text]);
+
+  useEffect(
+    () => () => {
+      const st = r.current;
+      if (st.raf) cancelAnimationFrame(st.raf);
+      window.clearTimeout(st.settle);
+      st.raf = 0;
+      st.settle = 0;
+    },
+    [],
+  );
+
   return <div className={`md${className ? ` ${className}` : ""}`} onClick={onClick} onAuxClick={blockLinks} dangerouslySetInnerHTML={{ __html: html }} />;
 });
 
