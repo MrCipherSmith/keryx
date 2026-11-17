@@ -448,6 +448,12 @@ export async function removeUnmodifiedRetiredRules(
       const content = await readFile(installedPath);
       const hash = createHash("sha256").update(normalizeRetiredRuleContent(content)).digest("hex");
       if (retired.shippedSha256.includes(hash)) {
+        // A move removes the old copy only once the new one is really there:
+        // otherwise the rule would exist nowhere (ADR-0001 P2 review F-001).
+        if (retired.movedTo !== undefined && !(await isInstalledLayerFile(path.dirname(rulesTarget), retired.movedTo))) {
+          outcomes.push({ ...subject, action: "kept-destination-missing" });
+          continue;
+        }
         stage = "unlink";
         await fsOps.unlink(installedPath);
         outcomes.push({ ...subject, action: "removed" });
@@ -478,6 +484,21 @@ export async function removeUnmodifiedRetiredRules(
     }
   }
   return outcomes;
+}
+
+/**
+ * Whether `<rulesRoot>/<layer>/<name>` is a regular file inside a layer that is
+ * a plain directory. `lstat` throughout: a symlinked layer or file is not one
+ * keryx installed, and a missing one is not there at all.
+ */
+async function isInstalledLayerFile(rulesRoot: string, layerRelative: string): Promise<boolean> {
+  const layerDir = path.join(rulesRoot, path.dirname(layerRelative));
+  try {
+    if (!(await lstat(layerDir)).isDirectory()) return false;
+    return (await lstat(path.join(rulesRoot, layerRelative))).isFile();
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -519,13 +540,19 @@ export function retiredRuleWarning(
     ?? "no longer shipped by keryx";
   const prefix = outcome.movedTo === undefined
     ? `${outcome.fileName} is no longer shipped by keryx (${reason})`
-    : `rules/core/${outcome.fileName} moved to rules/${outcome.movedTo} (${reason}), which keryx installed`;
+    : `rules/core/${outcome.fileName} moved to rules/${outcome.movedTo} (${reason})`;
   switch (outcome.action) {
     case "kept-modified":
       return outcome.movedTo === undefined
         ? `${prefix}; kept because it differs from every shipped version — delete it, or rename it if you still rely on it`
-        : `${prefix}; the old copy was kept because it differs from every shipped version, and nothing loads it from there — `
-          + `carry your edits into rules/project/${outcome.movedTo}, then delete rules/core/${outcome.fileName}`;
+        : `${prefix}; the old copy was kept because it differs from every shipped version, and keryx no longer updates `
+          + `it or points its own skills at it — carry your edits into rules/project/${outcome.movedTo}, then delete `
+          + `rules/core/${outcome.fileName}`;
+    case "kept-destination-missing": {
+      const movedTo = outcome.movedTo ?? outcome.fileName;
+      return `${prefix}; the old copy was kept because rules/${movedTo} is not installed as a regular file in a `
+        + `plain rules/${movedTo.split("/")[0]}/ directory — fix that folder and re-run, and keryx will remove the old copy`;
+    }
     case "kept-not-regular-file":
       return `${prefix}; kept because it is not a regular file (a symlink, directory, or similar) — keryx will not read or remove it; delete or rename it yourself if appropriate`;
     case "kept-oversized":

@@ -122,6 +122,23 @@ test("apply refuses to overwrite an unrecorded existing file without --force", a
   expect(await readFile(path.join(root, ".claude", "rules", "a.mdc"), "utf8")).toBe("rule a fixture\n");
 });
 
+test("apply adopts an unrecorded existing file that is byte-identical to the bundled source", async () => {
+  await mkdir(path.join(root, ".claude", "rules"), { recursive: true });
+  await writeFile(path.join(root, ".claude", "rules", "a.mdc"), "rule a fixture\n", "utf8");
+
+  const plan = await planInstall({ manifest: MANIFEST, profileId: "base", target: "claude", repoRoot: root });
+  const result = await applyInstall(plan, root);
+  expect(result.skipped).toEqual([]);
+  expect(result.ok).toBe(true);
+  expect(result.written).not.toContain(".claude/rules/a.mdc");
+
+  const state = await readSkillsInstallState(root, "claude");
+  const ruleRecord = state!.installedModules.find((m) => m.moduleId === "rule-a");
+  expect(ruleRecord?.writtenPaths).toEqual([".claude/rules/a.mdc"]);
+  const doctor = await doctorInstall(root, "claude");
+  expect(doctor.entries.find((e) => e.path === ".claude/rules/a.mdc")?.status).toBe("ok");
+});
+
 test("doctor reports drifted after an edit, missing after a delete, and orphaned for an unrecorded file", async () => {
   const plan = await planInstall({ manifest: MANIFEST, profileId: "base", target: "claude", repoRoot: root });
   await applyInstall(plan, root);

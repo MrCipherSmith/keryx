@@ -141,6 +141,16 @@ export async function applyInstall(
           }
           throw error;
         }
+        if (recordedHash === undefined && currentHash !== undefined && currentHash === file.sha256) {
+          // Byte-identical to the bundled source: another keryx writer put it
+          // there (ADR-0001 P2 — `keryx init`/`update` publish
+          // `rules/process/agent-conduct.mdc` with the routing pair, without
+          // this install-state). Nothing would change by writing it, so adopt
+          // it: record it as installed, without counting it as written.
+          writtenPaths.push(file.destination);
+          sha256[file.destination] = currentHash;
+          continue;
+        }
         if (recordedHash === undefined) {
           skipped.push({
             path: file.destination,

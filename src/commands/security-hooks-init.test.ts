@@ -7,6 +7,10 @@ import { SECURITY_CHECK_INPUT_CLAUDE, SECURITY_CHECK_OUTPUT_CLAUDE } from "../in
 import { withCwd } from "../lib/test-cwd";
 import { initCommand } from "./init";
 import { updateCommand } from "./update";
+import { applyInstall } from "../gdskills/manifest/apply";
+import { doctorInstall } from "../gdskills/manifest/doctor";
+import { defaultBundledSourceRoot, loadBundledManifest } from "../gdskills/manifest/manifest";
+import { planInstall } from "../gdskills/manifest/plan";
 
 const SECURITY_ONLY = [
   "--no-gdgraph",
@@ -460,6 +464,30 @@ test("init and update install the commit-msg hook and the conduct rule, even wit
     await updateCommand([]);
     expect(await readFile(commitMsgPath, "utf8")).toContain("# keryx:commit-msg-attribution:begin");
     expect(existsSync(conductRule)).toBe(true);
+  });
+});
+
+test("after init, the manifest form of skills install applies cleanly over the conduct rule init wrote (ADR-0001 P2)", async () => {
+  await withProject(async (root) => {
+    await initCommand(["--yes", ...SECURITY_ONLY]);
+    const sourceRoot = defaultBundledSourceRoot();
+    const plan = await planInstall({
+      manifest: loadBundledManifest(),
+      profileId: "minimal",
+      target: "keryx-shell",
+      repoRoot: sourceRoot,
+    });
+    expect(plan.ok).toBe(true);
+
+    const result = await applyInstall(plan, root, { sourceRoot });
+    expect(result.skipped).toEqual([]);
+    expect(result.ok).toBe(true);
+    // Adopted, not rewritten: init's copy was already the bundled bytes.
+    expect(result.written).not.toContain(".metaproject/rules/process/agent-conduct.mdc");
+
+    const doctor = await doctorInstall(root, "keryx-shell");
+    expect(doctor.entries.find((e) => e.path === ".metaproject/rules/process/agent-conduct.mdc")?.status).toBe("ok");
+    expect(doctor.entries.filter((e) => e.status !== "ok")).toEqual([]);
   });
 });
 

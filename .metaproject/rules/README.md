@@ -46,5 +46,5 @@ read only when a skill or `routing.md` cites it by path.
   or unreadable/unremovable), since discarding it silently could lose your changes or hide a
   filesystem problem;
 - a rule that moved from `core/` to another layer is installed at its new path, and its old
-  `core/` copy is removed the same way: an unmodified shipped copy goes, an edited one stays and
-  the warning names the new path to carry your edits to.
+  `core/` copy is removed the same way once the new path is in place: an unmodified shipped copy
+  goes, an edited one stays and the warning names the new path to carry your edits to.

@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { defaultBundledSourceRoot, loadBundledManifest, type InstallManifest } from "./manifest";
-import { planInstall } from "./plan";
+import { destinationRootsForTarget, planInstall } from "./plan";
 import type { CapabilityMatrixDocument } from "../../integrations/matrix";
 
 let root: string;
@@ -510,6 +510,16 @@ describe("real bundled manifest (flow 309, W1 T14 — python stack pack destinat
       expect(plan.errors).toEqual([]);
       expect(plan.ok).toBe(true);
     }
+  });
+
+  test("keryx-shell destination roots cover every rule layer, so doctor scans them (ADR-0001 P2)", () => {
+    expect(destinationRootsForTarget("keryx-shell")).toEqual([
+      ".metaproject/skills/gdskills",
+      ".metaproject/rules/core",
+      ".metaproject/rules/process",
+      ".metaproject/rules/activity",
+      ".metaproject/rules/stacks",
+    ]);
   });
 
   test("every profile installs the process layer, and keryx-shell keeps it out of rules/core (ADR-0001 P2)", async () => {

@@ -171,6 +171,8 @@ export type RetiredRuleFailureStage = "lstat" | "read" | "unlink";
 export type RetiredRuleOutcome = { fileName: string; movedTo?: string } & (
   | { action: "removed" }
   | { action: "kept-modified" }
+  /** A moved rule's old copy matched a shipped version, but its new path is not an installed regular file. */
+  | { action: "kept-destination-missing" }
   | { action: "kept-not-regular-file" }
   | { action: "kept-oversized"; sizeBytes: number }
   | { action: "kept-error"; stage: RetiredRuleFailureStage; errorCode: string }

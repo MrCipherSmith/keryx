@@ -89,6 +89,8 @@ export type InstallGdskillsResult = {
 
 export type InstallGdskillsOptions = {
   createDataDirs?: boolean;
+  /** Test seam: passed through to `installBundledRules`. */
+  ruleSeams?: InstallBundledRulesSeams;
 };
 
 export async function installGdskills(
@@ -182,7 +184,7 @@ export async function installGdskills(
   if (sharedWarning !== null) {
     skippedDestinationWarnings.push(sharedWarning);
   }
-  const rulesInstall = await installBundledRules(metaprojectRoot);
+  const rulesInstall = await installBundledRules(metaprojectRoot, options.ruleSeams);
   if (rulesInstall.warning !== null) {
     skippedDestinationWarnings.push(rulesInstall.warning);
   }
@@ -335,6 +337,10 @@ export async function checkInstallDestination(
  * without a word: `rules/activity/` is empty until P5, and adding its first
  * file is all P5 needs to do to install it.
  *
+ * A moved rule's old copy is removed only when its new path is a regular file
+ * in a plain layer directory; a layer that was refused or not shipped keeps
+ * the old copy, with a warning (`kept-destination-missing`).
+ *
  * Returns one `RetiredRuleOutcome` per retired- or moved-rule file name found
  * in `rules/core` (after every layer is copied — so a rule retired or moved in
  * this very release is caught on the run that retires it, not the next one,
@@ -347,14 +353,16 @@ export async function checkInstallDestination(
  * and reading or unlinking through a link the operator put there is the same
  * hazard as writing through it. The other layers still install.
  */
+export type InstallBundledRulesSeams = {
+  /** Test seam: where each layer's bundled source lives. */
+  sourcePathFor?: (layer: KeryxRuleLayer) => string;
+  /** Test seam: the retired and moved entries the core cleanup checks. */
+  cleanupEntries?: readonly RetiredRuleEntry[];
+};
+
 export async function installBundledRules(
   metaprojectRoot: string,
-  seams: {
-    /** Test seam: where each layer's bundled source lives. */
-    sourcePathFor?: (layer: KeryxRuleLayer) => string;
-    /** Test seam: the retired and moved entries the core cleanup checks. */
-    cleanupEntries?: readonly RetiredRuleEntry[];
-  } = {},
+  seams: InstallBundledRulesSeams = {},
 ): Promise<{ outcomes: RetiredRuleOutcome[]; warning: string | null }> {
   const sourcePathFor = seams.sourcePathFor ?? bundledRulesSourcePath;
   const warnings: string[] = [];
