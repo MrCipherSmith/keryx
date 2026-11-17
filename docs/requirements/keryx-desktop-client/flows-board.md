@@ -58,9 +58,10 @@ Mutations go through the same keryx binary the session uses, as
 `keryx flow <subcommand>` with the project as cwd. A flow is addressed by its
 **package directory name** (`FlowCard.dir`, e.g. `101-2026-01-01-good-flow`),
 never by the bare id: flow ids are not unique across packages and keryx refuses
-a shared bare id as ambiguous. The Rust core accepts the name only when it is one
-path component of `[A-Za-z0-9._-]` starting with a letter or digit (no `/`, no
-`..`, no leading `-`) and equals an existing directory under `.metaproject/flows`. The Rust core accepts
+a shared bare id as ambiguous. The Rust core accepts the name only when it is a
+name keryx's own flow listing recognises — three digits, a dash, then the rest of
+the package name, as one path component (no `/`, no `..`, no leading `-`) — and
+equals an existing directory under `.metaproject/flows`. The Rust core accepts
 only this allowlist and builds argv itself; no shell string is ever run.
 
 | Action | Command | Confirmation |
@@ -82,7 +83,10 @@ Not offered, with a "copy command" button instead: `complete`, `confirm`,
 confirmation tokens belong to a terminal. The copied command names the directory
 (or the id, only when it is 1 to 9 digits); a flow whose directory name and id
 both fail that check shows no copyable command (`FlowCard.idValid` marks a
-non-numeric id, which stays visible on the card).
+non-numeric id, which stays visible on the card). A required flag the board
+cannot fill in (`--reason` for `recover`, `ac update`, `ac reseal`) is copied
+as an unquoted `<placeholder>`, which the shell refuses to run until it is
+replaced.
 
 **Work on this flow**: opens a session in the same window with the composer
 pre-filled `Continue flow #<id> "<title>": take the next task.` The user

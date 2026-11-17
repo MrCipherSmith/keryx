@@ -142,17 +142,23 @@ Wire details the sections above left open, as built (`src/acp/server.ts`,
   real pipe — the same `untrusted` result flag `web_fetch`/`web_search` set.
 - MCP: keryx's configured servers (one runtime per project root per
   connection) and the client's are merged into one `search_tool`/`use_tool`
-  pair; a qualified name both provide keeps keryx's.
+  pair; a client server whose name keryx also configures is dropped as a
+  whole and reported to the session as an MCP problem.
 - Tasks: the shell-task tools (`shell_task_output`/`wait`/`kill`) are offered
   in M1 because `shell_exec` is supervised; the task *panel* is M2. Workspace,
   Slate and working-memory tools are offered through the shell factory with
   the session directory bound.
 - In auto mode an `ask_user` the model answers itself is reported to the
   client as an `agent_message_chunk` with `_meta.keryx.selfAnsweredQuestion: true`.
-- The `shell` profile treats one active session per connection: when
-  `session/new` or `session/load` switches to another session, the previous one
-  is released (lease, shell tasks, per-session state; after its running turn,
-  if any), so `keryx shell --resume` can open it. The `editor` profile keeps
+- The `shell` profile treats one active session per connection: when a
+  `session/new` or `session/load` succeeds, its session becomes the active one
+  and the previous one is released (lease, shell tasks, client MCP binding,
+  hooks with `SessionEnd`; after its running turn, if any), so `keryx shell
+  --resume` can open it. The switch is applied last, just before the reply: a
+  failed `session/new`/`session/load` leaves the previous session active, one
+  overtaken by a later switch is refused (`session-superseded`), and a client
+  MCP list both sessions send is kept running. The permission mode, usage tally
+  and model choice survive a switch away and back. The `editor` profile keeps
   every session until the connection ends.
 
 ## 4. Client side

@@ -115,6 +115,11 @@ The session list holds this project's keryx sessions, the same store
 picking an old one loads it. A session another `keryx shell` currently holds
 cannot be opened at the same time; the app says so.
 
+The app keeps one session open at a time. Switching to another session ends
+the previous session's running shell tasks (a dev server or watcher it started
+stops) and frees it for `keryx shell --resume`; a turn still running there
+finishes first. Switching back reloads it with its permission mode and model.
+
 ### Flows board
 
 ⌘2 opens the project's flows from `.metaproject/flows/`:

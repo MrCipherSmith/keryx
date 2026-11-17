@@ -422,10 +422,12 @@ is what the keryx desktop app launches, and is open to any ACP client:
   `web_fetch`/`web_search`, background shell tasks (`shell_task_*`), the
   execution-plan tools, workspace and Slate tools, and one `search_tool`/
   `use_tool` pair over keryx's own configured MCP servers merged with the
-  client's `mcpServers` (a server name both define keeps keryx's). Each session
-  has its own shell-task supervisor; every task it started is killed when the
-  connection ends. `read_file` still goes through the client's
-  `fs/read_text_file` when the client advertises it.
+  client's `mcpServers` (a client server whose name keryx also configures is
+  not used, and the session is told so). Each session has its own shell-task
+  supervisor; every task it started is killed when the client switches away
+  from the session (see **One active session** below) or when the connection
+  ends. `read_file` still goes through the client's `fs/read_text_file` when
+  the client advertises it.
 - **`ask_user`:** offered only when the client sends
   `clientCapabilities._meta.keryx.askUser: true` at `initialize`. keryx then
   asks with the agent → client request `_keryx/ask_user`
@@ -444,6 +446,18 @@ is what the keryx desktop app launches, and is open to any ACP client:
   escalated calls (destructive in `trust`, credential-touching in every mode,
   anything after untrusted content entered the turn) are still asked and never
   offered `allow_always`. The mode is not saved.
+- **One active session per connection:** a `session/new` or `session/load`
+  that succeeds makes its session the connection's active one and releases the
+  previous session — after that session's running turn, if one is running.
+  Releasing it gives back its lease (so `keryx shell --resume` can open it),
+  kills its shell tasks, stops its client MCP servers unless the new session
+  uses the same list, and ends its hooks with `SessionEnd`. Later requests for
+  it get `Unknown ACP session` until it is loaded again; a load restores its
+  permission mode and model. A `session/new` or `session/load` that fails
+  leaves the previous session active, and one that a later `session/new` or
+  `session/load` overtakes is refused with `data.condition:
+  "session-superseded"`. The `editor` profile keeps every session until the
+  connection ends.
 - **Session updates:** `plan` when the execution plan changes (and on
   `session/load`), `usage_update` after every model call (`used`/`size` per
   ACP, plus `_meta.keryx.call`/`turn`/`session` input and output token
