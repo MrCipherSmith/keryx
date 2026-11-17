@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { withFileLock } from "./fs";
@@ -20,6 +21,8 @@ import {
   type RoutingEntrypointOptions,
   type RoutingEntrypointPair,
 } from "./templates";
+import { AGENT_CONDUCT_RULE_PATH, renderAgentConductRuleFallback } from "./agent-conduct";
+import { bundledRulesSourcePath } from "../gdskills/install";
 
 const ROUTING_LOCK_FILENAME = ".routing-entrypoint.lock";
 
@@ -27,6 +30,28 @@ const ROUTING_LOCK_FILENAME = ".routing-entrypoint.lock";
 export const ROUTING_FULL_STEP_ID = "routing:full";
 export const ROUTING_INDEX_STEP_ID = "routing:index";
 export const RULES_README_STEP_ID = "rules:readme";
+export const AGENT_CONDUCT_RULE_STEP_ID = "rules:process:agent-conduct";
+
+/**
+ * The mandatory conduct rule (ADR-0001 D2). `index.md` and the CLAUDE.md /
+ * AGENTS.md block point at it unconditionally, so it is published with the
+ * index pair rather than only by the gdskills installer: a project without the
+ * gdskills module still gets the file its pointers name.
+ */
+export function agentConductRuleStep(
+  metaprojectRoot: string,
+  bundledRulePath: string = path.join(bundledRulesSourcePath("process"), path.basename(AGENT_CONDUCT_RULE_PATH)),
+): InstallStep {
+  // Guarded like the gdskills installer: a compiled binary has no bundled tree,
+  // and an unguarded read would make every init/update/rules run throw.
+  const content = existsSync(bundledRulePath) ? readFileSync(bundledRulePath, "utf8") : renderAgentConductRuleFallback();
+  return {
+    id: AGENT_CONDUCT_RULE_STEP_ID,
+    path: path.join(metaprojectRoot, AGENT_CONDUCT_RULE_PATH),
+    content,
+    mode: "managed",
+  };
+}
 
 /**
  * The managed rules README the same three intents publish. `init` writes it
@@ -68,6 +93,7 @@ export function routingEntrypointSteps(
   pair: RoutingEntrypointPair,
 ): InstallStep[] {
   return [
+    agentConductRuleStep(metaprojectRoot),
     {
       id: ROUTING_FULL_STEP_ID,
       path: path.join(metaprojectRoot, ROUTING_FILENAME),

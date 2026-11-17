@@ -145,7 +145,7 @@ Agent({
   description: "<phase>: <task>",
   prompt: |
     ## Your Role
-    You are <agent_role>. Load skill: skills/<skill-name>/SKILL.md
+    You are <agent_role>. Load skill: skills/<skill-name>/SKILL.md. Agent conduct (mandatory): <the "Dispatch form" line of .metaproject/rules/process/agent-conduct.mdc, verbatim>
 
     ## Task
     <specific task>

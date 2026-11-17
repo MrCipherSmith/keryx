@@ -9,6 +9,7 @@
 // nothing can reach measures nothing, which is the state that pinned the
 // precision figure at 100% in the first place.
 
+import { AGENT_CONDUCT_DISPATCH_CONSTRAINT } from "../lib/agent-conduct";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -1268,6 +1269,7 @@ test("`review dispatch-check` refuses a diff payload with no slice and exits 1",
       token_policy: { context_mode: "light", omissions: [] },
     },
     reviewer: "review-logic",
+    conduct: AGENT_CONDUCT_DISPATCH_CONSTRAINT,
     scope_mode: "diff",
     model: { tier: "standard", tier_reasons: ["base"], tier_resolution: "session-fallback", model_discovery: {}, inherit: true },
     budget: { max_findings: 10 },

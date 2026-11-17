@@ -1,3 +1,4 @@
+import { AGENT_CONDUCT_DISPATCH_CONSTRAINT } from "../lib/agent-conduct";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -76,6 +77,7 @@ describe("review-pr-contract dispatch", () => {
       token_policy: { context_mode: "light", omissions: [] },
     },
     reviewer: "review-pr-contract",
+    conduct: AGENT_CONDUCT_DISPATCH_CONSTRAINT,
     scope_mode: "path",
     model: { tier: "standard", tier_reasons: ["base"], provider: "openai", model: "gpt-5", tier_resolution: "session-fallback", model_discovery: {}, routed: true },
     pr_context: prContext,

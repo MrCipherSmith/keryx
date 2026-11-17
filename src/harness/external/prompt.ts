@@ -32,6 +32,8 @@
 //
 // Pure: no filesystem, no clock, no `process`. The ceiling is a parameter.
 
+import { AGENT_CONDUCT_PROMPT_BLOCK } from "../../lib/agent-conduct";
+
 /**
  * The runtime directive, verbatim from agent-protocol.md §1, under its own
  * heading. Always the first bytes of the prompt and never truncated.
@@ -49,6 +51,8 @@ export const EXTERNAL_RUNTIME_DIRECTIVE = [
     "another agent, and do not create or modify any files. Read-only investigation only. " +
     "Project tooling documented in this repository is available and you are encouraged to use " +
     "it for reading and searching.",
+  "",
+  AGENT_CONDUCT_PROMPT_BLOCK,
 ].join("\n");
 
 /**
@@ -66,6 +70,8 @@ export const EXTERNAL_WRITE_RUNTIME_DIRECTIVE = [
     "directory, using your file reading, searching and editing tools. Do not use a shell to reach " +
     "outside it. Do not touch .git, .github, .claude or .metaproject. Your changes are captured as a patch that a " +
     "human reviews before anything lands, so summarise what you changed in the final message.",
+  "",
+  AGENT_CONDUCT_PROMPT_BLOCK,
 ].join("\n");
 
 /**

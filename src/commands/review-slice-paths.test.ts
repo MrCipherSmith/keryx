@@ -1,6 +1,7 @@
 // Flow 441 AC8/AC9: the path flags of the review commands that name a file refuse a path outside the project
 // root, before anything is read or written, and the path they open is the one that was judged.
 
+import { AGENT_CONDUCT_DISPATCH_CONSTRAINT } from "../lib/agent-conduct";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -37,6 +38,7 @@ const PAYLOAD = {
     token_policy: { context_mode: "light", omissions: [] },
   },
   reviewer: "review-logic",
+  conduct: AGENT_CONDUCT_DISPATCH_CONSTRAINT,
   scope_mode: "diff",
   model: { tier: "standard", tier_reasons: ["base"], tier_resolution: "session-fallback", model_discovery: {}, inherit: true },
   budget: { max_findings: 10 },

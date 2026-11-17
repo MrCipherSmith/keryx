@@ -1,3 +1,4 @@
+import { renderAgentConductMarkdown } from "./agent-conduct";
 import { renderProjectMetaprojectReferenceBlock } from "./agent-entrypoint-blocks";
 import { ORCHESTRATORS_INLINE_NOTE } from "./orchestrators-inline";
 import { renderMetaprojectGitignoreBlock as renderGeneratedGitignoreBlock } from "./metaproject-gitignore";
@@ -438,6 +439,8 @@ ${rows || "| any repository task | `rules/` |"}
 ${binding}
 
 Treat requests as intents; the user does not need to know these command names.
+
+${renderAgentConductMarkdown()}
 `;
 }
 

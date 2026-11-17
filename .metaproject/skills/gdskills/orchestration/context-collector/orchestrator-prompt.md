@@ -60,6 +60,8 @@ a context document for the current job.
 
 Load the skill from: .metaproject/skills/gdskills/orchestration/context-collector/SKILL.md
 
+Agent conduct (mandatory): <the "Dispatch form" line of .metaproject/rules/process/agent-conduct.mdc, verbatim>
+
 DO NOT ask the user any questions. Execute all phases autonomously.
 
 ACTION: collect
@@ -86,6 +88,8 @@ You are the context-collector agent. Your task is to update the existing
 context document for this job.
 
 Load the skill from: .metaproject/skills/gdskills/orchestration/context-collector/SKILL.md
+
+Agent conduct (mandatory): <the "Dispatch form" line of .metaproject/rules/process/agent-conduct.mdc, verbatim>
 
 DO NOT ask the user any questions. Execute the update flow autonomously.
 

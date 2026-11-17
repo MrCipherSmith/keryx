@@ -14,9 +14,11 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { mkdir, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdir, realpath, symlink, writeFile } from "node:fs/promises";
+import { COMMIT_MSG_FIX_LINE, installCommitMsgHookOrWarn } from "../lib/managed-git-hook";
 import {
   buildDoctorReport,
+  checkCommitMsgHook,
   doctorCommand,
   doctorFailed,
   formatDoctorReport,
@@ -35,6 +37,7 @@ const EXPECTED_CHECK_IDS = [
   "integrations",
   "standard",
   "entrypoints",
+  "commit-msg-hook",
   "worktrees",
   "graph-freshness",
   "wiki-freshness",
@@ -335,5 +338,153 @@ describe("keryx doctor (CLI) — --json shape and exit codes", () => {
     );
     expect(out).toContain("✗ bun:");
     expect(code).toBe(1);
+  });
+});
+
+describe("checkCommitMsgHook", () => {
+  async function gitRepo(): Promise<string> {
+    const root = await mkdtemp(path.join(tmpdir(), "keryx-doctor-commit-msg-"));
+    const proc = Bun.spawn(["git", "init", "-q"], { cwd: root, stdout: "ignore", stderr: "ignore" });
+    await proc.exited;
+    return root;
+  }
+
+  test("a foreign commit-msg hook: warn, inactive, and the fix is the exact line to add", async () => {
+    const root = await gitRepo();
+    try {
+      const hookPath = path.join(root, ".git", "hooks", "commit-msg");
+      const foreign = '#!/usr/bin/env bash\nif [ -x "$INSTALL_PYTHON" ]; then exec "$INSTALL_PYTHON" -mpre_commit "$@"; else echo missing >&2; exit 1; fi\n';
+      await writeFile(hookPath, foreign, "utf8");
+      await chmod(hookPath, 0o755);
+      expect(await installCommitMsgHookOrWarn(root)).toContain(COMMIT_MSG_FIX_LINE);
+      const check = await checkCommitMsgHook(root);
+      expect(check.status).toBe("warn");
+      expect(check.detail).toContain("inactive: foreign commit-msg hook");
+      expect(check.fix).toBe(`add this line to '${await realpath(hookPath)}', before any exec or exit: ${COMMIT_MSG_FIX_LINE}`);
+      expect(COMMIT_MSG_FIX_LINE).toBe('"$(git rev-parse --git-path hooks)/keryx-commit-msg" "$1" || exit 1');
+
+      // Appended after the `if … exec … fi`: unverified, a warning.
+      await writeFile(hookPath, `${foreign}${COMMIT_MSG_FIX_LINE}\n`, "utf8");
+      const unverified = await checkCommitMsgHook(root);
+      expect(unverified.status).toBe("warn");
+      expect(unverified.detail).toContain("unverified — check that this line runs before any exec");
+      expect(unverified.fix).toContain(COMMIT_MSG_FIX_LINE);
+
+      // Right after the shebang: active.
+      const [shebang, ...rest] = foreign.split("\n");
+      await writeFile(hookPath, `${shebang}\n${COMMIT_MSG_FIX_LINE}\n${rest.join("\n")}`, "utf8");
+      const active = await checkCommitMsgHook(root);
+      expect(active.status).toBe("ok");
+      expect(active.fix).toBeUndefined();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("ok when installed and active; warn with `keryx update` as the fix when missing", async () => {
+    const root = await gitRepo();
+    try {
+      const missing = await checkCommitMsgHook(root);
+      expect(missing.status).toBe("warn");
+      expect(missing.fix).toBe("keryx update");
+      expect(await installCommitMsgHookOrWarn(root)).toBeNull();
+      expect((await checkCommitMsgHook(root)).status).toBe("ok");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("a foreign core.hooksPath: warn, with a fix naming that hook and core.hooksPath", async () => {
+    const root = await gitRepo();
+    try {
+      expect(await installCommitMsgHookOrWarn(root)).toBeNull();
+      await mkdir(path.join(root, ".githooks"), { recursive: true });
+      await Bun.spawn(["git", "config", "core.hooksPath", ".githooks"], { cwd: root }).exited;
+      const check = await checkCommitMsgHook(root);
+      expect(check.status).toBe("warn");
+      expect(check.detail).toContain("core.hooksPath");
+      expect(check.fix).toContain(path.join(".githooks", "commit-msg"));
+      expect(check.fix).toContain("unset core.hooksPath");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("hooks.commitMsg: false reports ok with the disabled detail, not a warning", async () => {
+    const root = await gitRepo();
+    try {
+      await mkdir(path.join(root, ".metaproject"), { recursive: true });
+      await writeFile(path.join(root, ".metaproject", "metaproject.json"), JSON.stringify({ hooks: { commitMsg: false } }), "utf8");
+      const check = await checkCommitMsgHook(root);
+      expect(check).toEqual({
+        id: "commit-msg-hook",
+        status: "ok",
+        detail: "disabled by config (hooks.commitMsg: false in .metaproject/metaproject.json)",
+      });
+      // A non-boolean value is not read as either: warn, setting invalid.
+      await writeFile(path.join(root, ".metaproject", "metaproject.json"), JSON.stringify({ hooks: { commitMsg: "false" } }), "utf8");
+      const invalid = await checkCommitMsgHook(root);
+      expect(invalid.status).toBe("warn");
+      expect(invalid.detail).toContain("hooks.commitMsg");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("fix commands quote paths with spaces", async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), "keryx doctor spaced "));
+    const root = path.join(parent, "my project");
+    try {
+      await mkdir(root, { recursive: true });
+      await Bun.spawn(["git", "init", "-q"], { cwd: root, stdout: "ignore", stderr: "ignore" }).exited;
+      expect(await installCommitMsgHookOrWarn(root)).toBeNull();
+      const scriptPath = path.join(root, ".git", "hooks", "keryx-commit-msg");
+      await chmod(scriptPath, 0o644);
+      const check = await checkCommitMsgHook(root);
+      expect(check.status).toBe("warn");
+      expect(check.fix).toBe(`chmod +x '${scriptPath}'`);
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
+  test("an unreadable hooks setting warns and says how to fix it", async () => {
+    const root = await gitRepo();
+    try {
+      await mkdir(path.join(root, ".metaproject"), { recursive: true });
+      await writeFile(path.join(root, ".metaproject", "metaproject.json"), "{ broken", "utf8");
+      const check = await checkCommitMsgHook(root);
+      expect(check.status).toBe("warn");
+      expect(check.detail).toContain("is not valid JSON");
+      expect(check.fix).toContain("hooks.commitMsg must be true or false");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("ok outside a git repository", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "keryx-doctor-commit-msg-nogit-"));
+    try {
+      const check = await checkCommitMsgHook(root);
+      expect(check.status).toBe("ok");
+      expect(check.detail).toContain("not a git repository");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("warn, never ok, when git cannot report its hooks directory", async () => {
+    // A .git directory that is not a repository: the hooks root resolves, `git rev-parse` fails.
+    const root = await mkdtemp(path.join(tmpdir(), "keryx-doctor-commit-msg-revparse-"));
+    try {
+      await mkdir(path.join(root, ".git", "hooks"), { recursive: true });
+      expect(await installCommitMsgHookOrWarn(root)).toBeNull();
+      const check = await checkCommitMsgHook(root);
+      expect(check.status).toBe("warn");
+      expect(check.detail).toContain("effective hooks directory");
+      expect(check.fix).toBe("keryx update");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });

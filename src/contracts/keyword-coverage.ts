@@ -49,6 +49,7 @@ export const SUPPORTED_KEYWORDS: ReadonlySet<string> = new Set([
   "items",
   "minItems",
   "maxItems",
+  "contains",
   "uniqueItems",
   // Applicators / combinators.
   "allOf",

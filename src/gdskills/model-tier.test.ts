@@ -21,6 +21,7 @@
 // Every catalogue below is a literal in THIS file. Nothing here probes a machine,
 // opens a socket, or reads a provider's environment: `rankDiscoveredModels` takes
 // the catalogue as an argument precisely so the tests can be offline and exact.
+import { AGENT_CONDUCT_DISPATCH_CONSTRAINT } from "../lib/agent-conduct";
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, test } from "bun:test";
@@ -556,7 +557,7 @@ describe("AC16: tier assignment is deterministic from signals the orchestrator h
       acceptance_criteria: ["AC16"],
       context_refs: [],
       files_to_read: [],
-      constraints: [],
+      constraints: [AGENT_CONDUCT_DISPATCH_CONSTRAINT],
       allowed_actions: ["read"],
       output_contract: { schema: "subagent-result", artifact_path: "a.json" },
       budget: {},
@@ -603,7 +604,7 @@ describe("AC16: tier assignment is deterministic from signals the orchestrator h
       acceptance_criteria: ["AC15"],
       context_refs: [],
       files_to_read: [],
-      constraints: [],
+      constraints: [AGENT_CONDUCT_DISPATCH_CONSTRAINT],
       allowed_actions: ["read"],
       output_contract: { schema: "subagent-result", artifact_path: "a.json" },
       budget: {},
@@ -625,7 +626,7 @@ describe("AC16: tier assignment is deterministic from signals the orchestrator h
       acceptance_criteria: ["AC14"],
       context_refs: [],
       files_to_read: [],
-      constraints: [],
+      constraints: [AGENT_CONDUCT_DISPATCH_CONSTRAINT],
       allowed_actions: ["read"],
       output_contract: { schema: "subagent-result", artifact_path: "a.json" },
       budget: {},
@@ -1136,7 +1137,7 @@ describe("flow 358 AC6 — agent-ranked is a recorded resolution source", () => 
       acceptance_criteria: ["AC6"],
       context_refs: [],
       files_to_read: [],
-      constraints: [],
+      constraints: [AGENT_CONDUCT_DISPATCH_CONSTRAINT],
       allowed_actions: ["read"],
       output_contract: { schema: "subagent-result", artifact_path: "a.json" },
       budget: {},

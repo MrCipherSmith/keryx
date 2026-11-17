@@ -1162,6 +1162,7 @@ skill_path: <absolute path of <path>/SKILL.md — project reviewers only; omit f
 scope_mode: diff | path
 context_doc: <path or empty>
 issue_url: <url or empty>
+conduct: <the "Dispatch form" line of .metaproject/rules/process/agent-conduct.mdc, verbatim>
 model: <the `model` block `keryx review tier` printed for this dispatch — paste verbatim>
 budget:
   max_prompt_tokens: <number or null>
@@ -1177,9 +1178,7 @@ target_path: <resolved path or file list>
 file_contents: <bounded file contents relevant to this reviewer>
 ```
 
-Each reviewer must return a `REVIEW_RESULT` object matching `.metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json`, followed by a concise markdown summary. The orchestrator must reject or normalize free-form reports before consolidation.
-
-**Important for path mode:** instruct each reviewer to check the **entire file**, not just changes. The scope report should say "Path: `<TARGET_PATH>`" instead of a branch/merge-base.
+Each reviewer must return a `REVIEW_RESULT` object matching `.metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json`, followed by a concise markdown summary. The orchestrator must reject or normalize free-form reports before consolidation. **Important for path mode:** instruct each reviewer to check the **entire file**, not just changes. The scope report should say "Path: `<TARGET_PATH>`" instead of a branch/merge-base.
 
 ## Scope Boundaries
 

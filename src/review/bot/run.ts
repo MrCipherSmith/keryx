@@ -2,6 +2,7 @@
 // managed review. One reviewer turn, one verifier turn per finding that may refute it; a
 // refuted finding is dropped and never reaches the pull request. Nothing is posted here.
 
+import { AGENT_CONDUCT_PROMPT_BLOCK } from "../../lib/agent-conduct";
 import path from "node:path";
 import { writeFileAtomic } from "../../lib/fs";
 import { createManagedReviewPackage, parseEmbeddedFindings, resolveGitHead } from "../managed";
@@ -40,6 +41,8 @@ export const REVIEWER_SYSTEM_PROMPT = [
   "Answer with a short summary, then EXACTLY ONE fenced block opened with three backticks and the words json keryx:findings, holding a JSON array of findings (an empty array when there is nothing to report).",
   `Every finding has: id ("F-001", "F-002", ...), reviewer ("${REVIEWER_NAME}"), severity (blocker|major|minor|info), problem, impact, suggested_fix, evidence, confidence (high|medium|low), file (repo-relative path), quote (one exact line copied from the NEW side of the diff that the finding is about; do not count line numbers).`,
   "A blocker or major finding also has class_scope: {\"sites\": [\"<file or symbol where the same defect class could occur>\"], \"enumeration_method\": \"<how you looked>\"}.",
+  "",
+  AGENT_CONDUCT_PROMPT_BLOCK,
 ].join("\n");
 
 export const VERIFIER_SYSTEM_PROMPT = [
@@ -48,6 +51,8 @@ export const VERIFIER_SYSTEM_PROMPT = [
   "Look for the guard, the caller, the test or the context in the diff that shows the claim is wrong. If you find it, the verdict is refuted and your evidence must point at it.",
   "If the diff supports the claim, the verdict is confirmed. If the diff is not enough to tell, the verdict is unverifiable.",
   'Answer with one JSON object only: {"verdict": "confirmed" | "refuted" | "unverifiable", "evidence": "<one or two sentences>"}.',
+  "",
+  AGENT_CONDUCT_PROMPT_BLOCK,
 ].join("\n");
 
 export type CappedDiff = { text: string; bytes: number; totalBytes: number; truncated: boolean };
