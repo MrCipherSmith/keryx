@@ -102,6 +102,7 @@ const TOOL_KIND_BY_NAME: Readonly<Record<string, AcpToolKind>> = {
   slate_trail: "read",
   recall_step: "read",
   history_search: "search",
+  spawn_subagent: "think",
   plan_get: "think",
   plan_set: "think",
   plan_update: "think",
@@ -185,12 +186,24 @@ export interface AcpAgentIoOptions {
   readonly permissionReasons?: boolean;
 }
 
+/** The `AgentIO` of one turn, plus the id the client was shown for a call (see {@link AcpAgentIo.toolCallIdFor}). */
+export type AcpAgentIo = AgentIO & {
+  /**
+   * The `toolCallId` this turn announced for a call of `name` with `input`: the open call whose argument
+   * string parses to the same value, else the oldest one open. `undefined` when none is open. The
+   * shell profile hands it to `spawn_subagent` (`InteractiveToolContext.toolCallId`) so the client can
+   * link a subagent to its `tool_call`. Two concurrent calls with identical input are
+   * indistinguishable and resolve in start order, the same limit the per-name queue has.
+   */
+  toolCallIdFor(name: string, input: Record<string, unknown>): string | undefined;
+};
+
 export function createAcpAgentIo(
   sessionId: AcpSessionId,
   send: AcpUpdateSink,
   askPermission?: AcpPermissionAsker,
   ioOptions: AcpAgentIoOptions = {},
-): AgentIO {
+): AcpAgentIo {
   /**
    * One entry per ACP tool call that has been ANNOUNCED and not yet closed.
    *
@@ -342,8 +355,16 @@ export function createAcpAgentIo(
     });
   };
 
+  const toolCallIdFor = (name: string, input: Record<string, unknown>): string | undefined => {
+    const open = pendingByName.get(name) ?? [];
+    const wanted = JSON.stringify(input);
+    const exact = open.find((entry) => JSON.stringify(tryParseJson(entry.input)) === wanted);
+    return (exact ?? open[0])?.toolCallId;
+  };
+
   const permissionMode = ioOptions.permissionMode;
   return {
+    toolCallIdFor,
     ...(askPermission !== undefined ? { requestApproval } : {}),
     ...(permissionMode !== undefined ? { permissionMode, onAutoApproved } : {}),
     write: (text) => {

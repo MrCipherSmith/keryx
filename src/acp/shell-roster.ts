@@ -23,7 +23,9 @@
 //   askUser                 `_keryx/ask_user` to the client (`ask-user.ts`) — or, when the
 //                           client did not advertise it, the tool is denied
 //   mcp                     keryx's configured servers merged with the client's `mcpServers`
-//   spawnTool               M2: a placeholder, denied by name below
+//   spawnTool               `spawn_subagent` over `buildSessionSpawnDeps` — the wiring `keryx shell`
+//                           uses — with native children only (`nativeOnly`); the session's own
+//                           fleet-event closure, hook runtime and live parent model (`spawn`)
 //   bus, schedules,         M2: omitted, so the factory never builds them
 //   operatorConfirm, reviewAgents
 //
@@ -40,29 +42,18 @@ import type { SearchProviderController } from "../harness/search";
 import type { AskUserFn } from "../harness/tool/builtin/ask-user-tool";
 import type { JobRegistry } from "../harness/tool/builtin/background-job-registry";
 import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
+import { createSpawnSubagentTool } from "../harness/tool/builtin/spawn-subagent-tool";
+import { buildSessionSpawnDeps, type SessionSpawnDepsInput } from "../commands/spawn-deps";
 import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import { acpAwareReadFileTool, type AcpFsReader } from "./capability-tools";
 import type { AcpClientCapabilities } from "./protocol";
 
-/** Tools the factory builds that the shell profile does not offer in M1, whatever the client advertised. */
-export const ACP_SHELL_M2_DENIED_TOOLS: readonly string[] = ["spawn_subagent"];
-
 /**
- * The factory requires a spawn tool. M1 has no spawn port over this wire, so it
- * gets this placeholder, which the denial above removes before any turn sees
- * it. Its invoke refuses too, so a future change that dropped the denial would
- * fail loudly instead of delegating.
+ * What `spawn_subagent` needs from the ACP host, per session. `nativeOnly` is not here: a model-chosen
+ * external runtime is M2b, so every model spawn is native (`runExternal` is never given).
  */
-const M2_SPAWN_PLACEHOLDER: InteractiveTool = {
-  definition: {
-    name: "spawn_subagent",
-    description: "Not available over keryx acp in this release.",
-    inputSchema: { type: "object", properties: {}, additionalProperties: true },
-    risk: "delegate",
-  },
-  invoke: async () => ({ output: "spawn_subagent is not available over keryx acp in this release", isError: true }),
-};
+export type AcpShellSpawnInput = Omit<SessionSpawnDepsInput, "cwd" | "nativeOnly" | "runExternal">;
 
 export interface AcpShellRosterInput {
   readonly root: string;
@@ -70,6 +61,7 @@ export interface AcpShellRosterInput {
   readonly readViaClient: AcpFsReader;
   readonly searchController: SearchProviderController;
   readonly jobRegistry: JobRegistry;
+  readonly spawn: AcpShellSpawnInput;
   readonly getSessionDir: () => string | undefined;
   /** Present only when the client advertised `_meta.keryx.askUser`; absent → `ask_user` is denied. */
   readonly askUser?: AskUserFn;
@@ -79,9 +71,9 @@ export interface AcpShellRosterInput {
   readonly metaprojectPort?: MetaprojectPort;
 }
 
-/** The names the shell profile denies for this input — M2 tools, and `ask_user` without a client to ask. */
+/** The names the shell profile denies for this input: `ask_user` without a client to ask. */
 export function acpShellDeniedTools(askUserOffered: boolean): string[] {
-  return [...ACP_SHELL_M2_DENIED_TOOLS, ...(askUserOffered ? [] : ["ask_user"])];
+  return askUserOffered ? [] : ["ask_user"];
 }
 
 export function buildAcpShellSessionTools(input: AcpShellRosterInput): InteractiveTool[] {
@@ -90,7 +82,7 @@ export function buildAcpShellSessionTools(input: AcpShellRosterInput): Interacti
     cwd: root,
     metaprojectPort: input.metaprojectPort ?? createMetaprojectAdapter(root),
     searchController: input.searchController,
-    spawnTool: M2_SPAWN_PLACEHOLDER,
+    spawnTool: createSpawnSubagentTool(buildSessionSpawnDeps({ ...input.spawn, cwd: root, nativeOnly: true })),
     getSessionDir: input.getSessionDir,
     jobRegistry: input.jobRegistry,
     ...(input.askUser !== undefined ? { askUser: input.askUser } : {}),
@@ -102,4 +94,22 @@ export function buildAcpShellSessionTools(input: AcpShellRosterInput): Interacti
       ? acpAwareReadFileTool(tool, root, input.clientCapabilities, input.readViaClient)
       : tool,
   );
+}
+
+/**
+ * `tool` with the host's id for each call passed as `InteractiveToolContext.toolCallId`. `idFor` is read
+ * at invoke time, from the turn's own `AgentIO` (`AcpAgentIo.toolCallIdFor`): the id the client was
+ * shown is minted there, not by the model.
+ */
+export function withHostToolCallId(
+  tool: InteractiveTool,
+  idFor: (name: string, input: Record<string, unknown>) => string | undefined,
+): InteractiveTool {
+  return {
+    ...tool,
+    invoke: (input, ctx) => {
+      const toolCallId = idFor(tool.definition.name, input);
+      return tool.invoke(input, toolCallId === undefined ? ctx : { ...ctx, toolCallId });
+    },
+  };
 }

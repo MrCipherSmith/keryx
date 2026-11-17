@@ -125,7 +125,9 @@ import {
   keryxAcpProfileMeta,
   type AcpProfile,
 } from "./profile";
-import { buildAcpShellSessionTools, type AcpShellRosterInput } from "./shell-roster";
+import { buildAcpShellSessionTools, withHostToolCallId, type AcpShellRosterInput } from "./shell-roster";
+import type { ShellView } from "./shell-views";
+import { withSessionProvider } from "../commands/spawn-deps";
 import { createProvidersHandlers, type AcpProvidersSeams } from "./providers";
 import { createTasksHandlers, taskEventSink } from "./shell-tasks";
 import { busyRefusalText, findShellCommand, shellAvailableCommands, viewNotServedText } from "./shell-commands";
@@ -220,6 +222,11 @@ export interface AcpServerOptions {
   readonly keryxMcp?: AcpKeryxMcpSource;
   /** Shell profile: `web_search`/`web_fetch`'s controller. `createDefaultSearchProviderController()` otherwise. */
   readonly searchController?: SearchProviderController;
+  /**
+   * Shell profile: builds the provider a `spawn_subagent` child runs on, the way `keryx shell`'s
+   * factory does (`realMakeProvider`). Absent: a child can run only on its parent's own model.
+   */
+  readonly makeProvider?: (providerId: string, modelId: string, baseUrl?: string) => ProviderPort;
   /** Shell profile test seam: builds a session's roster. `buildAcpShellSessionTools` otherwise. */
   readonly buildShellRoster?: (input: AcpShellRosterInput) => InteractiveTool[];
   /** Shell profile: the user-global config directory `_keryx/command`'s settings commands read and write. The default one otherwise. Test seam. */
@@ -1642,12 +1649,56 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     });
   }
 
+  /** Each session's `spawn_subagent` budget reset, called at the start of every turn (the shell's `deps.resetSubagentBudget`). */
+  const subagentBudgetResets = new Map<string, () => void>();
+
+  /**
+   * What `spawn_subagent` needs for one session (specification §3.9.4): its live parent model, the
+   * provider factory, the providers a child may route to (the connection's model list, grouped), its
+   * hook runtime, and ITS OWN fleet closure — `_keryx/subagent { sessionId, event }` — never a bridge
+   * shared with another session.
+   */
+  function spawnInputFor(sessionId: string, ownsBudget: boolean): AcpShellRosterInput["spawn"] {
+    const method = KERYX_ACP_EXTENSION_METHODS.subagent;
+    const parent = (): { providerId: string; modelId: string; baseUrl?: string } => {
+      const { binding, choice } = sessionModel(sessionId, method);
+      return { providerId: binding.providerId, modelId: binding.modelId, ...(choice.baseUrl !== undefined ? { baseUrl: choice.baseUrl } : {}) };
+    };
+    const hooks = shellHooksBySession.get(sessionId)?.runtime;
+    return {
+      getParentModel: parent,
+      providerFactory: (providerId, modelId, baseUrl) => {
+        if (options.makeProvider !== undefined) return options.makeProvider(providerId, modelId, baseUrl);
+        const { binding } = sessionModel(sessionId, method);
+        if (providerId === binding.providerId && modelId === binding.modelId) return binding.provider;
+        throw new Error(`keryx acp has no provider factory for ${providerId}/${modelId}; a subagent runs on its parent's model here`);
+      },
+      getDetectedProviders: () => {
+        const byProvider = new Map<string, string[]>();
+        for (const choice of listedChoices ?? []) byProvider.set(choice.providerId, [...(byProvider.get(choice.providerId) ?? []), choice.modelId]);
+        return withSessionProvider(
+          parent().providerId,
+          [...byProvider].map(([name, models]) => ({ name, models })),
+        );
+      },
+      onFleetEvent: (event) => {
+        if (!stopping) writeMessage(notificationMessage(KERYX_ACP_EXTENSION_METHODS.subagent, { sessionId, event }));
+      },
+      // Only the roster the session keeps owns the turn's budget; the throwaway `/status` builds none.
+      onLedgerReady: (controls) => {
+        if (ownsBudget) subagentBudgetResets.set(sessionId, controls.resetBudget);
+      },
+      ...(hooks !== undefined ? { hooks } : {}),
+    };
+  }
+
   /** Builds the shell-profile roster for one session with the given MCP binding. */
   function shellRosterTools(
     sessionId: string,
     state: AcpSessionState,
     readViaClient: AcpFsReader,
     mcp: McpToolBinding | undefined,
+    ownsBudget = true,
   ): InteractiveTool[] {
     const root = state.resolvedRoot;
     return buildShellRoster({
@@ -1656,6 +1707,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       readViaClient,
       searchController: searchControllerFor(),
       jobRegistry: jobsFor(sessionId, root),
+      spawn: spawnInputFor(sessionId, ownsBudget),
       // Read through the registry, not captured: `persistHistory` replaces the handle.
       getSessionDir: () => registry.get(sessionId)?.handle.dir,
       metaprojectPort: metaprojectFor(root),
@@ -1677,7 +1729,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     if (cached !== undefined) return cached.map((tool) => tool.definition.name);
     const binds = acpMcpBinds(keryxMcpWouldBind(state.resolvedRoot), sessionMcp.get(sessionId)?.mcp);
     const namesOnly: McpToolBinding | undefined = binds ? { catalog: () => mergeCatalogs([]), servers: () => [] } : undefined;
-    return shellRosterTools(sessionId, state, clientFsReader(sessionId), namesOnly).map((tool) => tool.definition.name);
+    return shellRosterTools(sessionId, state, clientFsReader(sessionId), namesOnly, false).map((tool) => tool.definition.name);
   }
 
   /** `fs/read_text_file` to the client for one session; `undefined` for any non-answer. */
@@ -1879,7 +1931,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
    * The two that rewrite the transcript (`/compact`, `/rewind`) hold the session's slot while
    * they run, so a prompt cannot interleave with the rewrite.
    */
-  async function handleKeryxCommand(params: unknown): Promise<{ text: string; _meta: { keryx: { effects?: ShellCommandEffect[]; refused?: true } } }> {
+  async function handleKeryxCommand(params: unknown): Promise<{ text: string; _meta: { keryx: { effects?: ShellCommandEffect[]; refused?: true; view?: ShellView } } }> {
     const method = KERYX_ACP_EXTENSION_METHODS.command;
     requireInitialized(method);
     const obj = requireObjectParams(params, method);
@@ -1920,7 +1972,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         // A view command with no text form for these arguments: T10b's views replace this answer.
         if (outcome === undefined) return refusedResult(viewNotServedText(name));
         if (outcome.refused === true) return refusedResult(outcome.text);
-        return { text: outcome.text, _meta: { keryx: { effects: [...(outcome.effects ?? [])] } } };
+        return { text: outcome.text, _meta: { keryx: { effects: [...(outcome.effects ?? [])], ...(outcome.view !== undefined ? { view: outcome.view } : {}) } } };
       } finally {
         if (slot !== undefined && activeTurns.get(sessionId) === slot) activeTurns.delete(sessionId);
         touch(sessionId);
@@ -2059,6 +2111,13 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         shellProfile ? { permissionMode: () => modeOf(sessionId), permissionReasons: true } : {},
       );
       if (shellProfile) {
+        // `spawn_subagent` links its subagents to THIS call: the id the client was shown is minted by
+        // the turn's IO, so the tool gets it through its context (`InteractiveToolContext.toolCallId`).
+        deps.tools = deps.tools.map((tool) =>
+          tool.definition.name === "spawn_subagent" ? withHostToolCallId(tool, io.toolCallIdFor) : tool,
+        );
+        // A turn starts with a fresh subagent budget, as the shell's turn driver does.
+        subagentBudgetResets.get(sessionId)?.();
         // `/plan on`: read fresh by every gated call, as the readline shell's own flag is.
         io.readOnly = () => sessionReadOnly.get(sessionId) === true;
         // `auto` mode answers ask_user itself; without this the client would

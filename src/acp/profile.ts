@@ -58,6 +58,8 @@ export const KERYX_ACP_EXTENSION_METHODS = {
   searchProvidersList: "_keryx/search_providers/list",
   searchProvidersConnect: "_keryx/search_providers/connect",
   searchProvidersSelect: "_keryx/search_providers/select",
+  /** Agent → client notification, shell profile (§3.9.4): `{ sessionId, event }`, `event` the shell's `SpawnSubagentFleetEvent`. */
+  subagent: "_keryx/subagent",
   /** Agent → client notification, shell profile (§3.9.5): `{ sessionId, event }` for a task's start, phase and exit (never output). */
   tasksEvent: "_keryx/tasks/event",
   /** Client → agent requests, shell profile (§3.9.5): `{ sessionId }`, `{ sessionId, taskId, since? }`, `{ sessionId, taskId }`. */
@@ -85,6 +87,7 @@ export function acpProfileExtensions(profile: AcpProfile): string[] {
         KERYX_ACP_EXTENSION_METHODS.searchProvidersList,
         KERYX_ACP_EXTENSION_METHODS.searchProvidersConnect,
         KERYX_ACP_EXTENSION_METHODS.searchProvidersSelect,
+        KERYX_ACP_EXTENSION_METHODS.subagent,
         KERYX_ACP_EXTENSION_METHODS.tasksEvent,
         KERYX_ACP_EXTENSION_METHODS.tasksList,
         KERYX_ACP_EXTENSION_METHODS.tasksOutput,

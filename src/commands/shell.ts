@@ -77,7 +77,7 @@ import {
 import { connectedMessage, createDefaultSearchProviderController, describeConnectionFailure } from "../harness/search";
 import type { SearchProviderDescriptor, SearchProviderId } from "../harness/search";
 import { createSpawnSubagentTool } from "../harness/tool/builtin/spawn-subagent-tool";
-import { createTierRankHost } from "../harness/routing/tier-rank-agent";
+import { buildSessionSpawnDeps, withSessionProvider } from "./spawn-deps";
 import { createLazyRunExternal } from "../harness/run-external-factory";
 import { createJobRegistry } from "../harness/tool/builtin/background-job-registry";
 import type { JobRegistry } from "../harness/tool/builtin/background-job-registry";
@@ -4240,92 +4240,54 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         trace.mark("metaproject-adapter");
         // MAE multi-agent: parent can spawn bounded subagents (ledger + fleet events).
         let resetSubagentBudget: (() => void) | undefined;
-        const spawnTool = createSpawnSubagentTool({
-          cwd,
-          onFleetEvent: emitSubagentFleet,
-          // Flow 306 (W6 T13): wire the TUI session's own hook runtime through
-          // so `SubagentStart`/`SubagentStop` actually fire for a real `keryx
-          // shell` TUI session, and — for the native/internal child path — so
-          // the child's own tool calls run under `hooks.forChild(...)` too.
-          // `getShellHooks()` is the same lazily-built-once runtime `deps.hooks`
-          // below is populated from; called here (not just later) is safe: it
-          // is idempotent (returns the cached `shellHooks` once built).
-          ...((): { hooks: HookRuntime } | Record<string, never> => {
-            const h = getShellHooks();
-            return h !== undefined ? { hooks: h.runtime } : {};
-          })(),
-          onLedgerReady: (controls) => {
-            resetSubagentBudget = controls.resetBudget;
-          },
-          getParentModel: () => ({
-            providerId: sel.provider,
-            modelId: sel.model,
-            ...(sel.baseUrl !== undefined ? { baseUrl: sel.baseUrl } : {}),
-          }),
-          makeProvider: (providerId, modelId, childBaseUrl) =>
-            tuiProviderFactory(providerId, modelId, childBaseUrl ?? (providerId === sel.provider ? sel.baseUrl : undefined)),
-          describeProvider: (providerId, modelId, childBaseUrl) =>
-            tuiProviderFactory(providerId, modelId, childBaseUrl ?? (providerId === sel.provider ? sel.baseUrl : undefined)).describe(),
-          // The allowlist AND the candidate set for tier resolution. `models` is
-          // carried through rather than mapped away: `buildTierMap`
-          // (src/gdskills/model-tier.ts) ranks exactly these ids to place a
-          // child's `model_tier` relative to this session's own model, so
-          // flattening a `DetectedProvider` to `{ name }` here starved discovery
-          // at the source and made every tier resolve to the session model.
-          // Keyed by name so the session's provider is always present (it is the
-          // one a child inherits) and a detected entry replaces the placeholder
-          // in place, keeping detection order.
-          getDetectedProviders: () => {
-            const byName = new Map<string, { name: string; models: readonly string[] }>();
-            byName.set(sel.provider, { name: sel.provider, models: [] });
-            for (const d of tuiDetected) {
-              byName.set(d.name, { name: d.name, models: d.models ?? [] });
-            }
-            return mergeLiveCodexModels([...byName.values()], startLiveCodexModels().models(), startLiveCodexModels().observedAt?.());
-          },
-          getRankHints: (providerId) => loadRankHints(providerId),
-          // Flow 358: when the size words and version cannot settle a `model_tier`
-          // (ranking refused, or only an older-generation larger class above the
-          // session), a one-shot call on this provider's light tier orders the
-          // discovered models. Its answer is cached on disk by catalogue hash and
-          // recorded as `agent-ranked`; any failure keeps the session model.
-          tierRank: createTierRankHost(),
-          // Finding 1 fix: thread the LIVE getter through so a dispatched
-          // subagent's Seeds/Anchors actually fold into this TUI session's
-          // slate once it opens — `createSpawnSubagentTool` calls this at fold
-          // time, not once at construction, so it correctly observes a slate
-          // that opens AFTER this tool instance is built (see that file's own
-          // `SpawnSubagentToolDeps.getSlateSession` doc comment).
-          getSlateSession,
-          // External agent runtime (flow 176). Lazy: the gate reads config and the
-          // project manifest, and this tool is built synchronously. Off by
-          // default, so the common path resolves to a `Denied` with a named
-          // reason and nothing is ever spawned.
-          // The three seams flow 176 T18 added, all of them routed through the
-          // module-level bridge in `tui/external-bridge.ts` for the same reason
-          // `emitBackgroundJob` above is: this factory is built before any
-          // renderer exists and must work identically in a readline session that
-          // never mounts one.
-          //
-          // `approve` is NOT optional-in-practice. `externalAgents.spawnDecision`
-          // defaults to "ask" and `createRunExternal` fails closed with no
-          // approver, so before this line every model-initiated external spawn was
-          // denied on a correctly-configured machine and the feature could not run
-          // at all. `approveExternalSpawn` still refuses — with a named reason —
-          // whenever no interactive host has registered itself, so a headless or
-          // non-interactive session cannot self-approve.
-          runExternal: createLazyRunExternal({
+        // The wiring itself (parent model, provider factory, routing hints, hooks, slate) is
+        // `buildSessionSpawnDeps`, shared with `keryx acp --profile shell`; what follows is what is
+        // the TUI's own: the module-global fleet bridge, the detected providers, the external runtime.
+        const spawnTool = createSpawnSubagentTool(
+          buildSessionSpawnDeps({
             cwd,
-            observer: externalRunBridgeObserver,
-            approve: approveExternalSpawn,
-            // The shell renders the live transcript and offers a per-addressee
-            // message queue, so a steerable run pays for its open stdin pipe.
-            // Without this every run launches one-shot and the operator's
-            // messages can only ever reach the child by resume — which is what
-            // §7.5's stdin route existed for.
-            steerable: true,
+            onFleetEvent: emitSubagentFleet,
+            // Flow 306 (W6 T13): the TUI session's own hook runtime, so `SubagentStart`/`SubagentStop`
+            // fire and a native child's tool calls run under `hooks.forChild(...)`. `getShellHooks()` is
+            // the same lazily-built-once runtime `deps.hooks` below is populated from.
+            ...((): { hooks: HookRuntime } | Record<string, never> => {
+              const h = getShellHooks();
+              return h !== undefined ? { hooks: h.runtime } : {};
+            })(),
+            onLedgerReady: (controls) => {
+              resetSubagentBudget = controls.resetBudget;
+            },
+            getParentModel: () => ({
+              providerId: sel.provider,
+              modelId: sel.model,
+              ...(sel.baseUrl !== undefined ? { baseUrl: sel.baseUrl } : {}),
+            }),
+            providerFactory: tuiProviderFactory,
+            // The allowlist AND the candidate set for tier resolution: `tuiDetected` with its models
+            // carried through (see `withSessionProvider`), the live Codex list merged in.
+            getDetectedProviders: () =>
+              mergeLiveCodexModels(withSessionProvider(sel.provider, tuiDetected), startLiveCodexModels().models(), startLiveCodexModels().observedAt?.()),
+            // Finding 1 fix: the LIVE getter, read at fold time, so a dispatched subagent's Seeds and
+            // Anchors fold into this TUI session's slate once it opens.
+            getSlateSession,
+            // External agent runtime (flow 176). Lazy: the gate reads config and the project manifest,
+            // and this tool is built synchronously. Off by default, so the common path resolves to a
+            // `Denied` with a named reason and nothing is ever spawned. The seams flow 176 T18 added go
+            // through `tui/external-bridge.ts` for the same reason `emitBackgroundJob` does: this factory
+            // is built before any renderer exists. `approve` is NOT optional-in-practice:
+            // `externalAgents.spawnDecision` defaults to "ask" and `createRunExternal` fails closed with
+            // no approver; `approveExternalSpawn` still refuses, with a named reason, whenever no
+            // interactive host has registered itself.
+            runExternal: createLazyRunExternal({
+              cwd,
+              observer: externalRunBridgeObserver,
+              approve: approveExternalSpawn,
+              // The shell renders the live transcript and offers a per-addressee message queue, so a
+              // steerable run pays for its open stdin pipe.
+              steerable: true,
+            }),
           }),
-        });
+        );
         // A rebuild owns its probe, so late responses cannot change another model.
         // Do not wait for a network request behind the TUI startup indicator.
         trace.mark("spawn-tool-and-hooks");

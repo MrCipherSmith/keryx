@@ -143,3 +143,13 @@ test("a private task is never pushed, listed, read or killed: it answers as an u
     await registry.sweepAll();
   }
 });
+
+test("a view command answers with its structured view in _meta.keryx.view", async () => {
+  const h = shellHarness();
+  open.push(h);
+  await h.initialize();
+  const { sessionId } = await h.newSession();
+  const reply = await call(h, M.command, { sessionId, name: "schedules" });
+  const view = (reply.result as { _meta: { keryx: { view?: { title: string } } } })._meta.keryx.view;
+  expect(typeof view?.title).toBe("string");
+});

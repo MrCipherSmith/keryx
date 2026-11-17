@@ -511,6 +511,8 @@ export async function acpCommand(args: string[]): Promise<void> {
         : { providerUnavailable: resolution.message, providerId: "", modelId: "" }),
       agentInfo: { name: "keryx", version: packageJson.version },
       profile,
+      // The shell profile's `spawn_subagent` builds a child's provider the way `keryx shell` does.
+      makeProvider: realMakeProvider(() => {}),
       ...(parsed.dataDir !== undefined ? { dataDir: parsed.dataDir } : {}),
       idSeq: () => randomUUID(),
     });
@@ -566,9 +568,10 @@ protocol frames is ever written to stdout; every diagnostic goes to stderr.
 Profiles (--profile, default editor): everything above is the editor
 profile. --profile shell is what the keryx desktop app launches: keryx
 shell's tool roster (web_fetch/web_search, keryx's own MCP servers merged
-with the client's, background shell tasks, plan tools, ask_user when the
-client advertises clientCapabilities._meta.keryx.askUser) minus
-spawn_subagent and the bus, scheduling and operator-confirm tools; permission modes ask, trust and auto
+with the client's, background shell tasks, plan tools, spawn_subagent with
+native children only, ask_user when the client advertises
+clientCapabilities._meta.keryx.askUser) minus the bus, scheduling and
+operator-confirm tools; permission modes ask, trust and auto
 (session/set_mode, /mode, starting from the project's saved default);
 and plan, usage_update and session_info_update session updates. Sessions
 stay live: opening or loading one releases none, and turns and shell tasks
