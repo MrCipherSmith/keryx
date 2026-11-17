@@ -12,6 +12,7 @@ declare module "bun:test" {
     toBeTrue(): void;
     toBeFalse(): void;
     toContain(expected: unknown): void;
+    toContainEqual(expected: unknown): void;
     toMatch(expected: RegExp | string): void;
     toHaveLength(n: number): void;
     toBeGreaterThan(n: number): void;
@@ -23,4 +24,5 @@ declare module "bun:test" {
   export function afterAll(fn: TestFn): void;
   export function beforeEach(fn: TestFn): void;
   export function expect(actual: unknown): Matchers;
+  export const mock: { module(path: string, factory: () => Record<string, unknown>): void };
 }

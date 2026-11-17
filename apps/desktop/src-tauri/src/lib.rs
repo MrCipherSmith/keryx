@@ -6,7 +6,9 @@ pub mod fs;
 pub mod gitinfo;
 pub mod locator;
 pub mod navigation;
+pub mod panels;
 pub mod process;
+pub mod pty;
 pub mod settings;
 pub mod shellenv;
 pub mod version;
@@ -19,6 +21,8 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .manage(bridge::AppState::default())
         .manage(flows::watch::FlowWatchers::default())
+        .manage(pty::PtyManager::default())
+        .manage(panels::PanelRoots::default())
         .setup(|app| {
             // The main window is declared in tauri.conf.json with `create: false`
             // and built here, so it gets the same navigation guard as every
@@ -47,6 +51,8 @@ pub fn run() {
                 // Never wait out the stop grace period on the event loop.
                 window.app_handle().state::<bridge::AppState>().window_destroyed(window.label());
                 window.app_handle().state::<flows::watch::FlowWatchers>().stop_window(window.label());
+                window.app_handle().state::<pty::PtyManager>().close_window(window.label());
+                window.app_handle().state::<panels::PanelRoots>().remove(window.label());
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -64,12 +70,19 @@ pub fn run() {
             flows::flows_action,
             flows::flows_watch,
             gitinfo::git_info,
+            panels::pty_open,
+            panels::pty_attach,
+            panels::pty_write,
+            panels::pty_resize,
+            panels::pty_close,
+            panels::pty_list,
         ])
         .build(tauri::generate_context!())
         .expect("error while building the Keryx app");
 
     app.run(|handle, event| {
         if let RunEvent::Exit = event {
+            handle.state::<pty::PtyManager>().close_all();
             handle.state::<bridge::AppState>().stop_all();
         }
     });

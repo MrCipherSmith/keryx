@@ -6,6 +6,8 @@ import "./styles.css";
 import "./styles/components.css";
 import "./styles/flows.css";
 import "./styles/activity.css";
+import "@xterm/xterm/css/xterm.css";
+import "./styles/panels.css";
 
 // No StrictMode: its dev-only double mount would start and stop keryx twice.
 createRoot(document.getElementById("root")!).render(

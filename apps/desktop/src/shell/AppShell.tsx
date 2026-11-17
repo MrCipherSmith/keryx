@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { isTauri } from "../platform/backend";
 import { basename } from "../lib/format";
-import { MOD, setPrefs, usePrefs } from "../lib/prefs";
+import { getPrefs, MOD, setPrefs, usePrefs, type SidePanelTab } from "../lib/prefs";
+import { SidePanel } from "../panels/SidePanel";
+import { overlayOpen } from "../components/ui";
 import { Icon, type IconName } from "../components/Icon";
 import { Menu, type MenuItem } from "../components/Menu";
 import { Kbd } from "../components/ui";
@@ -41,16 +43,74 @@ interface ShellProps {
   children: ReactNode;
 }
 
+export function toggleSidePanel(tab: SidePanelTab, current: SidePanelTab | null): void {
+  setPrefs({ sidePanel: current === tab ? null : tab });
+}
+
+/** `Ctrl+\`` toggles the terminal, `Cmd+Shift+B` the browser; caught before a focused terminal sees them. */
+export function sidePanelShortcut(e: Pick<KeyboardEvent, "code" | "ctrlKey" | "metaKey" | "shiftKey" | "altKey">): SidePanelTab | null {
+  if (e.altKey) return null;
+  if (e.code === "Backquote" && e.ctrlKey && !e.metaKey) return "terminal";
+  if (e.code === "KeyB" && e.metaKey && e.shiftKey && !e.ctrlKey) return "browser";
+  return null;
+}
+
+function useSidePanelShortcuts(): void {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const tab = sidePanelShortcut(e);
+      if (!tab || overlayOpen()) return;
+      e.preventDefault();
+      e.stopPropagation();
+      toggleSidePanel(tab, getPrefs().sidePanel);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, []);
+}
+
 export function AppShell(p: ShellProps) {
   const overlay = useTitlebarInset();
+  const prefs = usePrefs();
+  useSidePanelShortcuts();
+  const side = prefs.sidePanel !== null;
   return (
-    <div className={`app-shell${overlay ? " titlebar-overlay" : ""}`}>
+    <div
+      className={`app-shell${overlay ? " titlebar-overlay" : ""}${side ? " with-side" : ""}`}
+      style={side ? ({ "--side-w": `${prefs.sidePanelWidth}px` } as React.CSSProperties) : undefined}
+    >
       <TitleBar {...p} />
       <Rail view={p.view} onView={p.onView} flowsActive={p.flowsActive} />
       <main className="app-main" id="main">
         {p.children}
       </main>
+      <SidePanel cwd={p.cwd} />
     </div>
+  );
+}
+
+/** Title-bar toggles of the side panel's terminal and browser. */
+function SideToggles() {
+  const prefs = usePrefs();
+  const items: Array<{ tab: SidePanelTab; icon: IconName; label: string; keys: string }> = [
+    { tab: "terminal", icon: "terminal", label: "Terminal", keys: "Ctrl+`" },
+    { tab: "browser", icon: "globe", label: "Browser", keys: `${MOD}⇧B` },
+  ];
+  return (
+    <>
+      {items.map((i) => (
+        <button
+          key={i.tab}
+          className={`icon-btn titlebar-toggle${prefs.sidePanel === i.tab ? " is-on" : ""}`}
+          onClick={() => toggleSidePanel(i.tab, prefs.sidePanel)}
+          aria-pressed={prefs.sidePanel === i.tab}
+          title={`${prefs.sidePanel === i.tab ? "Hide" : "Show"} ${i.label.toLowerCase()} (${i.keys})`}
+          aria-label={i.label}
+        >
+          <Icon name={i.icon} size={15} />
+        </button>
+      ))}
+    </>
   );
 }
 
@@ -119,6 +179,7 @@ function TitleBar(p: ShellProps) {
           {status.label}
         </span>
         <InfoToggle show={p.view === "session"} />
+        <SideToggles />
         <button className="palette-btn" onClick={onPalette} title="Commands and sessions">
           <Icon name="search" size={13} />
           <span>Commands</span>

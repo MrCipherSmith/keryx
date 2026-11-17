@@ -48,7 +48,8 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
     if (state.sessionId) void s.refreshTasks(state.sessionId);
   }, [s, state.sessionId]);
   // The Activity panel and the info panel share the right column; an open Activity panel hides the info panel.
-  const infoOpen = prefs.infoPanel && !activity.open;
+  // The side panel (D-13) takes the info dock's place while it is open.
+  const infoOpen = prefs.infoPanel && !activity.open && !prefs.sidePanel;
   const ready = state.phase === "ready" && state.sessionId !== null && state.held;
   const incompatible = s.fatal?.kind === "incompatible" || s.fatal?.kind === "noShell";
 

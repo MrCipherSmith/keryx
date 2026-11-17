@@ -23,7 +23,15 @@ export interface Prefs {
   infoPanel: boolean;
   /** Session sidebar groups the user folded ("Pinned", "Today", a month…). */
   collapsedGroups: string[];
+  /** The right side panel's open tab, or null when it is closed (D-13). */
+  sidePanel: SidePanelTab | null;
+  /** The side panel's width in pixels. */
+  sidePanelWidth: number;
 }
+
+export type SidePanelTab = "terminal" | "browser";
+export const SIDE_PANEL_MIN = 320;
+export const SIDE_PANEL_MAX = 1200;
 
 const KEY = "keryx.prefs.v1";
 const DEFAULTS: Prefs = {
@@ -36,6 +44,8 @@ const DEFAULTS: Prefs = {
   sessionSidebar: true,
   infoPanel: false,
   collapsedGroups: [],
+  sidePanel: null,
+  sidePanelWidth: 520,
 };
 
 export const UI_FONTS: Record<UiFont, string> = {
@@ -74,6 +84,11 @@ function read(): Prefs {
       textSize: valid(merged.textSize, TEXT_SCALES, DEFAULTS.textSize),
       chatWidth: valid(merged.chatWidth, CHAT_WIDTHS, DEFAULTS.chatWidth),
       collapsedGroups: Array.isArray(merged.collapsedGroups) ? merged.collapsedGroups.filter((g) => typeof g === "string") : [],
+      sidePanel: merged.sidePanel === "terminal" || merged.sidePanel === "browser" ? merged.sidePanel : null,
+      sidePanelWidth:
+        typeof merged.sidePanelWidth === "number" && Number.isFinite(merged.sidePanelWidth)
+          ? Math.min(SIDE_PANEL_MAX, Math.max(SIDE_PANEL_MIN, merged.sidePanelWidth))
+          : DEFAULTS.sidePanelWidth,
     };
   } catch {
     return DEFAULTS;
@@ -82,6 +97,11 @@ function read(): Prefs {
 
 let current = read();
 const subs = new Set<() => void>();
+
+/** The current preferences, outside React (event handlers registered once). */
+export function getPrefs(): Prefs {
+  return current;
+}
 
 export function setPrefs(patch: Partial<Prefs>): void {
   current = { ...current, ...patch };

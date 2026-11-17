@@ -7,7 +7,8 @@ import { blockText } from "./reducer";
 import { Markdown } from "../components/Markdown";
 import { Icon, type IconName } from "../components/Icon";
 import { Spinner } from "../components/ui";
-import { argLabel, hasRestArgs, primaryInput, restArgs, visibleProse, visibleText } from "./toolInput";
+import { argLabel, hasRestArgs, primaryInput, quoteArgv, restArgs, visibleProse, visibleText } from "./toolInput";
+import { runInTerminal, runnableCommand } from "../panels/panelBus";
 
 type ToolItem = Extract<Item, { kind: "tool" }>;
 
@@ -120,6 +121,18 @@ function ToolContent({ c }: { c: ToolCallContent }) {
   return <pre className="out-pre">terminal {c.terminalId}</pre>;
 }
 
+/** The command an `execute` call ran, when it is one command shown exactly as it reads (D-13 Run button). */
+export function runnableToolCommand(item: Pick<ToolItem, "toolKind" | "rawInput">): string | null {
+  if (item.toolKind !== "execute") return null;
+  const raw = item.rawInput;
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  const v = o["command"] ?? o["cmd"];
+  const cmd = typeof v === "string" ? v : Array.isArray(v) && v.length > 0 && v.every((x) => typeof x === "string") ? quoteArgv(v as string[]) : null;
+  if (cmd === null || visibleText(cmd) !== cmd) return null;
+  return runnableCommand(cmd);
+}
+
 function StatusGlyph({ status }: { status: ToolItem["status"] }) {
   if (status === "in_progress") return <Spinner size={13} />;
   if (status === "completed") return <Icon name="check" size={13} strokeWidth={2.25} />;
@@ -136,6 +149,7 @@ const ToolRow = memo(function ToolRow({ item, subagentId, onShowSubagent }: { it
   const title = useMemo(() => visibleProse(item.title), [item.title]);
   const hasBody = item.content.length > 0 || raw !== "" || hasRestArgs(item.rawInput);
   const dur = item.endedAt !== null ? item.endedAt - item.startedAt : null;
+  const runnable = useMemo(() => runnableToolCommand(item), [item]);
   return (
     <div className={`tool status-${item.status}${open ? " is-open" : ""}`}>
       <button className="tool-row" onClick={() => setOpen((o) => !o)} aria-expanded={hasBody ? open : undefined} disabled={!hasBody}>
@@ -162,7 +176,14 @@ const ToolRow = memo(function ToolRow({ item, subagentId, onShowSubagent }: { it
         <div className="tool-body">
           {primary ? (
             <div className="tool-section">
-              <div className="tool-label">{primary.label}</div>
+              <div className="tool-label">
+                {primary.label}
+                {runnable !== null ? (
+                  <button className="tool-run" onClick={() => runInTerminal(runnable)} title="Run in the terminal panel">
+                    <Icon name="play" size={10} /> Run
+                  </button>
+                ) : null}
+              </div>
               <pre className="out-pre mono-strong">{primary.value}</pre>
             </div>
           ) : null}
