@@ -70,6 +70,12 @@ import { acpCommandHelpText } from "./commands";
 import { syncAcpArchive, type AcpArchiveCursor } from "./session";
 import { ACP_SHELL_COMMAND_TABLE, type ShellCommandRow } from "./shell-commands";
 import { join as joinPath } from "node:path";
+import type { ScheduleSlashDeps } from "../tui/schedule-command";
+import type { ShellView } from "./shell-views";
+import { busView, editGuardView, guardView, mcpView, projectContextView, runJevProfile, runRouting } from "./shell-views-config";
+import { runAc, runCi, runConform, runDecisions, runReadOnlyView, runReview } from "./shell-views-review";
+import { runAutoReview, runGovernance, runSchedule, runSchedules, runTask, runTriggers } from "./shell-views-ops";
+import { refusal, viewOutcome } from "./shell-views-outcome";
 
 /** What a command changed, so the client refreshes without parsing text (§3.9.1). */
 export type ShellCommandEffect = "mode" | "model" | "config" | "plan" | "transcript" | "tasks";
@@ -79,6 +85,8 @@ export interface ShellCommandOutcome {
   readonly effects?: readonly ShellCommandEffect[];
   /** A known command refused in the current state: the reason is `text`. */
   readonly refused?: true;
+  /** A picker, modal or form command's structured view (§3.9.1 "Views"); `text` is its plain rendering. */
+  readonly view?: ShellView;
 }
 
 /** The session a transcript command works on: the live history (mutated in place) and what persists it. */
@@ -108,6 +116,8 @@ export interface ShellCommandHost {
   /** `/help`'s `/status`-style answers the server owns: `status`, `model`, `reasoning`, `mode`. */
   serverCommand(name: string, args: string): Promise<ShellCommandOutcome>;
   rewind(): RewindReadlineCommand;
+  /** Test seam for `/schedule`: the timer host, clock and credential checks `runScheduleSlashCommand` takes. Production leaves it unset. */
+  readonly scheduleOverrides?: Omit<Partial<ScheduleSlashDeps>, "cwd" | "defaults" | "print" | "confirm"> | undefined;
 }
 
 type Runner = (host: ShellCommandHost, args: string, row: ShellCommandRow) => Promise<ShellCommandOutcome | undefined>;
@@ -448,11 +458,38 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
   },
 };
 
+/** The view commands: bare, or with the text subcommands their actions send back. */
+const VIEW_RUNNERS: Readonly<Record<string, (host: ShellCommandHost, args: string) => Promise<ShellCommandOutcome>>> = {
+  routing: runRouting,
+  ci: runCi,
+  conform: runConform,
+  task: runTask,
+  review: runReview,
+  product: (host, args) => runReadOnlyView(host, "product", args),
+  governance: runGovernance,
+  triggers: runTriggers,
+  schedule: runSchedule,
+  schedules: runSchedules,
+  autoreview: runAutoReview,
+  jevprofile: runJevProfile,
+  ac: runAc,
+  workspace: (host, args) => runReadOnlyView(host, "workspace", args),
+  decisions: runDecisions,
+  guard: async (host) => viewOutcome(guardView(host)),
+  editguard: async (host) => viewOutcome(await editGuardView(host)),
+  projectctx: async (host, args) => viewOutcome(await projectContextView(host, args.trim() === "refs" ? "references" : undefined)),
+  mcp: async (host, args) =>
+    args.trim().length === 0 ? viewOutcome(mcpView(host)) : refusal(`Unknown /mcp argument '${args.trim()}'. Usage: /mcp [trust list | trust revoke <server__tool> | all]`),
+  bus: async (_host, args) => (args.trim().length === 0 ? viewOutcome(busView()) : refusal(NO_BUS)),
+};
+
 /**
- * Runs one served text command. `undefined` = the command's text forms do not cover these
- * arguments (a view command opened bare): the caller answers it with the T10b view placeholder.
+ * Runs one served command. A text subcommand answers text; a view command answers its view.
+ * `undefined` = neither covers these arguments: the caller answers with `viewNotServedText`.
  */
 export async function runShellTextCommand(host: ShellCommandHost, row: ShellCommandRow, args: string): Promise<ShellCommandOutcome | undefined> {
   const runner = RUNNERS[row.runner];
-  return runner === undefined ? undefined : runner(host, args, row);
+  const answered = runner === undefined ? undefined : await runner(host, args, row);
+  if (answered !== undefined || row.surface !== "view") return answered;
+  return VIEW_RUNNERS[row.name]?.(host, args);
 }

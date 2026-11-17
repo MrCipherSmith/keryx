@@ -107,7 +107,7 @@ describe("the served table", () => {
     expect(busyRefusalText("doctor")).toBe("main is busy: command deferred");
   });
 
-  test("the not-yet-served view answer lives in one place", () => {
+  test("the last-resort answer for a view command no runner covers lives in one place", () => {
     expect(viewNotServedText("routing")).toBe("routing is not served yet");
   });
 
@@ -255,17 +255,17 @@ describe("_keryx/command over the wire", () => {
     }
   }, TIMEOUT_MS);
 
-  test("a view command answers 'not served yet' (T10b replaces it), bare or with arguments it has no text form for", async () => {
+  test("a view command opened bare answers its view as text (refused only where it cannot act), and its text forms still run", async () => {
     const h = shellHarness();
     try {
       await h.initialize();
       const { sessionId } = await h.newSession();
-      for (const [name, args] of [["routing", undefined], ["governance", undefined], ["bus", undefined], ["guard", undefined], ["projectctx", undefined], ["mcp", undefined], ["review", undefined]] as const) {
-        const reply = await command(h, sessionId, name, args);
-        expect(reply.text).toBe(viewNotServedText(name));
-        expect(reply.refused).toBe(true);
+      for (const name of ["routing", "governance", "bus", "guard", "projectctx", "mcp", "review", "triggers", "schedules", "editguard"]) {
+        const reply = await command(h, sessionId, name);
+        expect(reply.refused).toBe(false);
+        expect(reply.text.length).toBeGreaterThan(0);
+        expect(reply.text).not.toBe(viewNotServedText(name));
       }
-      // The text forms of a view command still run.
       expect((await command(h, sessionId, "guard", "off")).refused).toBe(false);
     } finally {
       await h.end();

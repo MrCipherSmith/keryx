@@ -69,6 +69,7 @@ export type ShellCommandRunnerId =
   | "goal"
   | "delegate"
   | "bus"
+  | "view"
   | "none";
 
 export interface ShellCommandRow {
@@ -88,10 +89,10 @@ const CLIENT_COMMANDS: readonly string[] = ["new", "clear", "resume", "sessions"
 const DIALOG_COMMANDS: readonly string[] = ["connect", "search-provider"];
 
 /**
- * Picker, modal and form commands (§3.9.1 "Views"). A LATER task (T10b) replaces
- * {@link viewNotServedText} with the structured views; until then `_keryx/command`
- * answers each one with that text, marked refused. Some of them also carry text forms
- * (`/guard on`, `/bus send ...`) that their runner answers before this applies.
+ * Picker, modal and form commands (§3.9.1 "Views"). `_keryx/command` answers each one with a
+ * structured view (`shell-views-*.ts`), and its text subcommands (`/guard on`,
+ * `/schedules pause <id>`, `/review accept ...`) with text. The runner of a command that also
+ * has older text forms (`/guard`, `/bus`, `/mcp`, `/review`) answers those first.
  */
 const VIEW_COMMANDS: readonly string[] = [
   "routing",
@@ -117,8 +118,9 @@ const VIEW_COMMANDS: readonly string[] = [
 ];
 
 /**
- * T10b REPLACES THIS: the one place a not-yet-served view command is answered.
- * `{ text, _meta: { keryx: { refused: true } } }`, the shape a refused command has.
+ * What a view command answers when no view or subcommand covers its arguments (every view
+ * runner answers its own, so this is the server's last resort): `{ text, _meta: { keryx:
+ * { refused: true } } }`, the shape a refused command has.
  */
 export function viewNotServedText(name: string): string {
   return `${name} is not served yet`;
@@ -173,6 +175,20 @@ const RUNNERS: Readonly<Record<string, ShellCommandRunnerId>> = {
   goal: "goal",
   delegate: "delegate",
   bus: "bus",
+  routing: "view",
+  ci: "view",
+  conform: "view",
+  task: "view",
+  product: "view",
+  governance: "view",
+  triggers: "view",
+  schedule: "view",
+  schedules: "view",
+  autoreview: "view",
+  jevprofile: "view",
+  ac: "view",
+  workspace: "view",
+  decisions: "view",
 };
 
 /** What each command takes, for the palette's input hint. Only commands with an argument. */
@@ -204,6 +220,18 @@ const HINTS: Readonly<Record<string, string>> = {
   opencomments: "owner/repo pr",
   mcp: "trust list | trust revoke <server__tool> | all",
   bus: "send | ask | reply | name",
+  routing: "set <category> <provider/model | baseline> | trust",
+  ci: "triage <run id> [job name]",
+  conform: "run <target id> <document>",
+  task: "<mode> <description> [|| criteria]",
+  governance: "run | check <flow id> | close <flow id>",
+  triggers: "<name> | run <name>",
+  schedule: "--name N --every C --rates IN,OUT --ceiling USD -- prompt",
+  schedules: "<name> | pause|resume|run|delete <name>",
+  autoreview: "list | arbiter [pull request]",
+  jevprofile: "set <key> on|off | apply",
+  ac: "recheck <flow id>",
+  decisions: "arms | reason <why> | change <option>",
 };
 
 /** Busy behaviour of one command, by the rule the shells follow while a turn runs. */
