@@ -1090,6 +1090,17 @@ describe("rules the imported skills cite", () => {
     expect(result.rules[0]?.reason).toContain("run `keryx skills install` to restore it");
   });
 
+  test("a pack rule keryx ships that the overlay does not provide names the command that installs its pack (review LS-6)", async () => {
+    await writeOverlaySkill("review-house", "Components: `stacks/react/code-style-patterns.mdc`.");
+
+    const result = await importProjectSkills({ projectRoot: cwd, from: source, module: "review" });
+    expect(result.rules[0]).toMatchObject({
+      ref: "stacks/react/code-style-patterns.mdc",
+      status: "unresolved",
+      reason: "ships with keryx in the react stack pack — run `keryx skills install --profile core --target keryx-shell --with framework:react` to install it",
+    });
+  });
+
   test("a rule name keryx ships that the overlay provides lands in rules/project, never rules/core", async () => {
     await writeOverlaySkill("review-house", "Errors: `core/error-handling.mdc`.");
     await mkdir(path.join(source, "rules", "core"), { recursive: true });
@@ -1413,11 +1424,11 @@ describe("rules the imported skills cite", () => {
     let projectCopy: string;
 
     beforeEach(async () => {
-      await writeOverlaySkill("review-house", "Stores: `core/mobx-store-template.mdc`.");
+      await writeOverlaySkill("review-house", "Stores: `core/database-patterns.mdc`.");
       await mkdir(path.join(source, "rules", "core"), { recursive: true });
-      await writeFile(path.join(source, "rules", "core", "mobx-store-template.mdc"), OVERLAY, "utf8");
-      coreCopy = path.join(cwd, ".metaproject", "rules", "core", "mobx-store-template.mdc");
-      projectCopy = path.join(cwd, ".metaproject", "rules", "project", "core", "mobx-store-template.mdc");
+      await writeFile(path.join(source, "rules", "core", "database-patterns.mdc"), OVERLAY, "utf8");
+      coreCopy = path.join(cwd, ".metaproject", "rules", "core", "database-patterns.mdc");
+      projectCopy = path.join(cwd, ".metaproject", "rules", "project", "core", "database-patterns.mdc");
       await mkdir(path.dirname(coreCopy), { recursive: true });
       await writeFile(coreCopy, GENERIC, "utf8");
     });
@@ -1426,10 +1437,10 @@ describe("rules the imported skills cite", () => {
       const result = await importProjectSkills({ projectRoot: cwd, from: source, module: "review" });
       expect(result.rules).toHaveLength(1);
       expect(result.rules[0]).toMatchObject({
-        ref: "core/mobx-store-template.mdc",
+        ref: "core/database-patterns.mdc",
         status: "differs",
-        existing: ".metaproject/rules/core/mobx-store-template.mdc",
-        target: ".metaproject/rules/project/core/mobx-store-template.mdc",
+        existing: ".metaproject/rules/core/database-patterns.mdc",
+        target: ".metaproject/rules/project/core/database-patterns.mdc",
         written: true,
       });
       expect(await readFile(projectCopy, "utf8")).toBe(OVERLAY);
@@ -1438,13 +1449,13 @@ describe("rules the imported skills cite", () => {
 
       const markdown = renderImportProjectSkillsMarkdown(result);
       expect(markdown).toContain(
-        `- core/mobx-store-template.mdc: differs — .metaproject/rules/core/mobx-store-template.mdc is not the overlay's version; the overlay's was written to .metaproject/rules/project/core/mobx-store-template.mdc, which is the file the reviewer reads — from ${result.rules[0]?.origin} (cited by review-house)`,
+        `- core/database-patterns.mdc: differs — .metaproject/rules/core/database-patterns.mdc is not the overlay's version; the overlay's was written to .metaproject/rules/project/core/database-patterns.mdc, which is the file the reviewer reads — from ${result.rules[0]?.origin} (cited by review-house)`,
       );
       expect(markdown).toContain(PROJECT_SLOT_PARAGRAPH);
 
       const [reviewer] = (await collectReviewers(cwd)).project;
       expect(reviewer?.shadowedRules).toEqual([
-        { ref: "core/mobx-store-template.mdc", resolved: ".metaproject/rules/project/core/mobx-store-template.mdc" },
+        { ref: "core/database-patterns.mdc", resolved: ".metaproject/rules/project/core/database-patterns.mdc" },
       ]);
       expect(reviewer?.unresolvedRules).toEqual([]);
     });
@@ -1452,7 +1463,7 @@ describe("rules the imported skills cite", () => {
     test("identical content is `present`, and nothing is written", async () => {
       await writeFile(coreCopy, OVERLAY, "utf8");
       const result = await importProjectSkills({ projectRoot: cwd, from: source, module: "review" });
-      expect(result.rules[0]).toMatchObject({ ref: "core/mobx-store-template.mdc", status: "present" });
+      expect(result.rules[0]).toMatchObject({ ref: "core/database-patterns.mdc", status: "present" });
       await expect(readFile(projectCopy, "utf8")).rejects.toThrow();
     });
 
@@ -1460,7 +1471,7 @@ describe("rules the imported skills cite", () => {
       const dry = await importProjectSkills({ projectRoot: cwd, from: source, module: "review", dryRun: true });
       expect(dry.rules[0]).toMatchObject({
         status: "differs",
-        target: ".metaproject/rules/project/core/mobx-store-template.mdc",
+        target: ".metaproject/rules/project/core/database-patterns.mdc",
         written: false,
       });
       await expect(readFile(projectCopy, "utf8")).rejects.toThrow();
@@ -1472,11 +1483,11 @@ describe("rules the imported skills cite", () => {
       const rerun = await importProjectSkills({ projectRoot: cwd, from: source, module: "review" });
       expect(rerun.rules[0]).toMatchObject({
         status: "present",
-        existing: ".metaproject/rules/project/core/mobx-store-template.mdc",
+        existing: ".metaproject/rules/project/core/database-patterns.mdc",
       });
       // Nothing was written this time, so the row says which file answers the reference.
       expect(renderImportProjectSkillsMarkdown(rerun)).toContain(
-        "- core/mobx-store-template.mdc: present — the reviewer reads .metaproject/rules/project/core/mobx-store-template.mdc — from ",
+        "- core/database-patterns.mdc: present — the reviewer reads .metaproject/rules/project/core/database-patterns.mdc — from ",
       );
     });
 
@@ -1556,8 +1567,8 @@ describe("a symlinked directory on a destination", () => {
 
   const variants: { label: string; link: string; cites: string }[] = [
     // A name keryx ships under rules/core goes to the project slot rules/project/core/<name>.
-    { label: "rules/project/core", link: ".metaproject/rules/project/core", cites: "core/mobx-store-template.mdc" },
-    { label: "rules/project", link: ".metaproject/rules/project", cites: "core/mobx-store-template.mdc" },
+    { label: "rules/project/core", link: ".metaproject/rules/project/core", cites: "core/database-patterns.mdc" },
+    { label: "rules/project", link: ".metaproject/rules/project", cites: "core/database-patterns.mdc" },
     { label: "rules/<dir>", link: ".metaproject/rules/house", cites: "house/x.mdc" },
     { label: "rules/core, a name keryx does not ship", link: ".metaproject/rules/core", cites: "core/zz-house-only.mdc" },
     { label: "rules", link: ".metaproject/rules", cites: "house/x.mdc" },

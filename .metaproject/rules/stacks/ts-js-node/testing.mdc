@@ -1,0 +1,63 @@
+---
+extends: common
+paths: ["**/*.ts", "**/*.js", "**/*.mjs", "**/*.cjs"]
+metadata:
+  origin: authored
+---
+
+# TypeScript/JavaScript (Node.js) testing
+
+Test layout, runner and determinism conventions for Node.js server/library/
+CLI code. Discover the project's actual runner before writing anything --
+`node:test`, Vitest, Jest and `bun test` all exist in active use and are
+not interchangeable in syntax or config.
+
+## Layout and runner
+
+- Discover the runner from `package.json`'s `scripts.test`, `devDependencies`,
+  and any `vitest.config.*`/`jest.config.*` before writing a test --
+  `describe`/`it`/`test` globals differ in import source (`node:test`,
+  `vitest`, or Jest's ambient globals) even though the call shape looks
+  similar.
+- Match the project's existing test location convention: co-located
+  `*.test.ts`/`*.spec.ts` next to the source file, or a parallel `test/`/
+  `__tests__/` tree -- do not introduce the other layout alongside it.
+- For `node:test`, run with `node --test` (or the project's npm script
+  wrapping it); it needs no extra dependency and ships in Node itself.
+
+## Fixtures and mocking
+
+- Mock at the process boundary (network calls, the filesystem, a DB
+  client, `Date.now`/timers) -- not an internal function one module over,
+  which only checks that two mocks agree with each other.
+- Use the runner's own timer mocking (`node:test`'s `mock.timers`,
+  Vitest's `vi.useFakeTimers()`, Jest's `jest.useFakeTimers()`) for any
+  test that depends on `setTimeout`/`setInterval`/`Date.now` -- a test
+  that waits on a real timer is slow and, under load, flaky.
+- Use `node:test`'s `mock.fn()`/`mock.method()` (or the runner's
+  equivalent) instead of hand-rolled spy objects when the runner ships
+  one already.
+
+## Determinism
+
+- Async tests must `await` every assertion-relevant promise; a test
+  function that returns before its assertions run reports green
+  regardless of what the assertions found.
+- Pass the test's own `AbortSignal` (`t.signal` in `node:test`, or the
+  runner's equivalent) into any `fetch`/cancelable call a test makes, so a
+  test that times out does not leave the request running past it.
+- Never depend on test execution order or on state a previous test left
+  behind (a shared in-memory array, a module-level counter) -- each test
+  sets up and tears down its own state.
+- A flaky test (timing-, network-, or order-dependent) gets fixed at the
+  dependency it is racing, not wrapped in a retry or a longer timeout.
+
+## Coverage expectations
+
+- Every new/changed exported function, class method, and CLI command gets
+  at least: one happy-path case, one edge case (empty/`null`/`undefined`/
+  boundary value), and one error case that asserts the thrown error type
+  or message, not just that something threw.
+- A bug fix ships with a regression test that fails on the pre-fix code
+  and passes after -- without one, the fix has no evidence it addressed
+  the reported behavior.

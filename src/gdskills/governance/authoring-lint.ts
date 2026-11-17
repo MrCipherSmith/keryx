@@ -279,6 +279,9 @@ export const STACK_EXTENSIONS: Readonly<Record<string, readonly string[]>> = {
   // per W1-stack-catalog.md's "plain YAML is shared" guidance.
   "docker-k8s-terraform": ["dockerfile", "containerfile", "yml", "yaml", "tf", "tfvars"],
   "ci-github-gitlab": ["yml", "yaml"],
+  // ADR-0001 P4: rules-only tool packs carrying rules moved out of rules/core.
+  playwright: ["ts", "js"],
+  storybook: ["ts", "tsx", "js", "jsx"],
 };
 
 export interface LintStackRuleOptions {

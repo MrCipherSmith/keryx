@@ -58,14 +58,14 @@ project-specific guide was found.
 
 ### TypeScript
 
-- Avoid broad `as` casts. Prefer type guards, discriminated unions, and precise types. `any`, `!` and the `I` prefix are `.metaproject/rules/core/code-style-patterns.mdc` Rule 8.
+- Avoid broad `as` casts. Prefer type guards, discriminated unions, and precise types. `any` and `!` are `.metaproject/rules/stacks/ts-js-node/coding-style.mdc` Review severities; the `I` prefix is `.metaproject/rules/stacks/react/code-style-patterns.mdc` Rule 8.
 - Keep tests and stories typed unless intentionally exercising invalid edge cases.
 - Follow local React type import conventions consistently.
 - Write new code in the direction of stricter compiler settings.
 
 ### React Components and State Stores
 
-Components follow `.metaproject/rules/core/code-style-patterns.mdc` (reactive wrapper, thin components, where state lives, effects and cleanup, props naming) and stores follow `.metaproject/rules/core/mobx-store-template.mdc` (naming and file casing, reactivity in the constructor, member order, `@action.bound` on public UI-called methods only, actions around async mutations). Each takes its severity from that rule's **Review severities** table, and a local guide that is stricter wins. Local `useState` for UI-only state and a memo over non-store values are correct. Beyond the rules:
+Components follow `.metaproject/rules/stacks/react/code-style-patterns.mdc` (reactive wrapper, thin components, where state lives, effects and cleanup, props naming) and stores follow `.metaproject/rules/stacks/mobx/mobx-store-template.mdc` (naming and file casing, reactivity in the constructor, member order, `@action.bound` on public UI-called methods only, actions around async mutations). Each takes its severity from that rule's **Review severities** table, and a local guide that is stricter wins. Local `useState` for UI-only state and a memo over non-store values are correct. Beyond the rules:
 
 - Derived serializable state has a single source of truth such as `currentState` when that is the
   local pattern.
@@ -82,7 +82,7 @@ Components follow `.metaproject/rules/core/code-style-patterns.mdc` (reactive wr
 
 ### Stories and Tooling
 
-- New reusable UI surfaces have stories or examples matching local standards; which states they cover is `.metaproject/rules/core/storybook-guidelines.mdc` Rule 2.
+- New reusable UI surfaces have stories or examples matching local standards; which states they cover is `.metaproject/rules/stacks/storybook/storybook-guidelines.mdc` Rule 2.
 - Wrapper components expose plain props for controls when the primary component is store-only.
 - Treat unused-code tools as signals: preserve intentional public APIs with narrow ignores rather
   than deleting documented runtime/story/test entrypoints.

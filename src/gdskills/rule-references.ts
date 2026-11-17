@@ -44,7 +44,8 @@ export type RuleCitationSpelling = { cited: string; ref: string };
 
 export function citedRuleReferences(content: string): RuleCitationSpelling[] {
   const byCited = new Map<string, RuleCitationSpelling>();
-  for (const match of content.matchAll(/`(?:\.metaproject\/)?(?:rules\/)?([a-z0-9_-]+\/[a-z0-9._-]+\.mdc)`/gi)) {
+  // `<dir>/<name>.mdc`, or a stack pack's `stacks/<pack>/<name>.mdc` (ADR-0001 P4).
+  for (const match of content.matchAll(/`(?:\.metaproject\/)?(?:rules\/)?((?:stacks\/[a-z0-9_-]+|[a-z0-9_-]+)\/[a-z0-9._-]+\.mdc)`/gi)) {
     if (!match[1]) continue;
     const cited = withKeryxDirSpelling(match[1]);
     byCited.set(cited, { cited, ref: canonicalRuleReference(cited) });

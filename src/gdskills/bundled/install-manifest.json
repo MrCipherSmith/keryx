@@ -40,7 +40,8 @@
       "components": [
         "capability:mobx",
         "framework:react",
-        "lang:ts-js-node"
+        "lang:ts-js-node",
+        "tool:storybook"
       ],
       "stackDetectionAware": true
     },
@@ -272,6 +273,28 @@
       ],
       "stackDetectionAware": true
     },
+    "playwright": {
+      "description": "Common rules plus the Playwright tool pack component, installed when `keryx stack detect` finds the playwright tag. Experimental: rules only, no pack skills.",
+      "modules": [
+        "core-common-rules",
+        "process-activity-rules"
+      ],
+      "components": [
+        "tool:playwright"
+      ],
+      "stackDetectionAware": true
+    },
+    "storybook": {
+      "description": "Common rules plus the Storybook tool pack component, installed when `keryx stack detect` finds the storybook tag. Experimental: rules only, no pack skills.",
+      "modules": [
+        "core-common-rules",
+        "process-activity-rules"
+      ],
+      "components": [
+        "tool:storybook"
+      ],
+      "stackDetectionAware": true
+    },
     "full": {
       "description": "Every registered module and component, unconditionally.",
       "modules": [
@@ -281,11 +304,9 @@
         "quality-skills",
         "review-core-skills",
         "react-review-skills",
-        "mobx-store-template-rule",
         "mobx-rules",
         "mobx-skills",
         "nestjs-review-skill",
-        "nestjs-dto-rule",
         "nestjs-rules",
         "nestjs-skills",
         "python-rules",
@@ -329,7 +350,9 @@
         "kotlin-android-rules",
         "kotlin-android-skills",
         "flutter-dart-rules",
-        "flutter-dart-skills"
+        "flutter-dart-skills",
+        "playwright-rules",
+        "storybook-rules"
       ],
       "components": [
         "lang:ts-js-node",
@@ -354,7 +377,9 @@
         "lang:csharp-dotnet",
         "framework:swift-ios",
         "framework:kotlin-android",
-        "framework:flutter-dart"
+        "framework:flutter-dart",
+        "tool:playwright",
+        "tool:storybook"
       ]
     }
   },
@@ -368,18 +393,15 @@
         "src/gdskills/bundled/rules/core/clean-architecture.mdc",
         "src/gdskills/bundled/rules/core/cli-interface-design.mdc",
         "src/gdskills/bundled/rules/core/code-review-learned-profile.mdc",
-        "src/gdskills/bundled/rules/core/code-style-patterns.mdc",
         "src/gdskills/bundled/rules/core/concurrency-patterns.mdc",
         "src/gdskills/bundled/rules/core/database-patterns.mdc",
         "src/gdskills/bundled/rules/core/definition-of-done.mdc",
         "src/gdskills/bundled/rules/core/error-handling.mdc",
         "src/gdskills/bundled/rules/core/frontend-assistant.mdc",
         "src/gdskills/bundled/rules/core/layout-rendering.mdc",
-        "src/gdskills/bundled/rules/core/playwright-testing.mdc",
         "src/gdskills/bundled/rules/core/security-baseline.mdc",
         "src/gdskills/bundled/rules/core/shared-definitions.mdc",
         "src/gdskills/bundled/rules/core/solid-principles.mdc",
-        "src/gdskills/bundled/rules/core/storybook-guidelines.mdc",
         "src/gdskills/bundled/rules/core/tdd-workflow.mdc",
         "src/gdskills/bundled/rules/core/ui-anti-slop.mdc"
       ],
@@ -491,21 +513,6 @@
       "cost": "medium",
       "stability": "stable"
     },
-    "mobx-store-template-rule": {
-      "kind": "rule",
-      "description": "MobX store authoring template/rule.",
-      "paths": [
-        "src/gdskills/bundled/rules/core/mobx-store-template.mdc"
-      ],
-      "targets": [
-        "claude",
-        "keryx-shell"
-      ],
-      "dependencies": [],
-      "defaultInstall": true,
-      "cost": "light",
-      "stability": "stable"
-    },
     "nestjs-review-skill": {
       "kind": "skill",
       "description": "Backend (NestJS/Prisma) review skill.",
@@ -521,21 +528,6 @@
       ],
       "defaultInstall": true,
       "cost": "medium",
-      "stability": "stable"
-    },
-    "nestjs-dto-rule": {
-      "kind": "rule",
-      "description": "NestJS DTO authoring/validation rule.",
-      "paths": [
-        "src/gdskills/bundled/rules/core/nestjs-dto.mdc"
-      ],
-      "targets": [
-        "claude",
-        "keryx-shell"
-      ],
-      "dependencies": [],
-      "defaultInstall": true,
-      "cost": "light",
       "stability": "stable"
     },
     "python-rules": {
@@ -600,7 +592,7 @@
     },
     "react-rules": {
       "kind": "rule",
-      "description": "React stack pack rules (coding-style, patterns, security, testing; scoped to *.tsx/*.jsx) from src/gdskills/bundled/stacks/react/rules/.",
+      "description": "React stack pack rules (coding-style, patterns, security, testing, and the React/MobX component rules (code-style-patterns) moved from rules/core in ADR-0001 P4; scoped to *.tsx/*.jsx) from src/gdskills/bundled/stacks/react/rules/.",
       "paths": [
         "src/gdskills/bundled/stacks/react/rules/*.mdc"
       ],
@@ -664,7 +656,7 @@
     },
     "nestjs-rules": {
       "kind": "rule",
-      "description": "NestJS stack pack rules (coding-style, patterns, security, testing; scoped to *.ts) from src/gdskills/bundled/stacks/nestjs/rules/. Complements, does not replace, the existing nestjs-dto-rule.",
+      "description": "NestJS stack pack rules (coding-style, patterns, security, testing, and the DTO rule moved from rules/core in ADR-0001 P4; scoped to *.ts) from src/gdskills/bundled/stacks/nestjs/rules/.",
       "paths": [
         "src/gdskills/bundled/stacks/nestjs/rules/*.mdc"
       ],
@@ -930,7 +922,7 @@
     },
     "mobx-rules": {
       "kind": "rule",
-      "description": "MobX stack pack rules (coding-style, patterns, security, testing; scoped to *.ts/*.tsx) from src/gdskills/bundled/stacks/mobx/rules/. Complements, does not replace, the existing mobx-store-template-rule.",
+      "description": "MobX stack pack rules (coding-style, patterns, security, testing, and the MobX store template moved from rules/core in ADR-0001 P4; scoped to *.ts/*.tsx) from src/gdskills/bundled/stacks/mobx/rules/.",
       "paths": [
         "src/gdskills/bundled/stacks/mobx/rules/*.mdc"
       ],
@@ -1261,6 +1253,36 @@
       "defaultInstall": true,
       "cost": "medium",
       "stability": "experimental"
+    },
+    "playwright-rules": {
+      "kind": "rule",
+      "description": "Playwright e2e stack pack rule (playwright-testing, moved from rules/core in ADR-0001 P4; scoped to specs, e2e/ and playwright.config) from src/gdskills/bundled/stacks/playwright/rules/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/playwright/rules/*.mdc"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "light",
+      "stability": "experimental"
+    },
+    "storybook-rules": {
+      "kind": "rule",
+      "description": "Storybook stack pack rule (storybook-guidelines, moved from rules/core in ADR-0001 P4; scoped to stories and .storybook/) from src/gdskills/bundled/stacks/storybook/rules/.",
+      "paths": [
+        "src/gdskills/bundled/stacks/storybook/rules/*.mdc"
+      ],
+      "targets": [
+        "claude",
+        "keryx-shell"
+      ],
+      "dependencies": [],
+      "defaultInstall": true,
+      "cost": "light",
+      "stability": "experimental"
     }
   },
   "components": {
@@ -1297,7 +1319,6 @@
     "capability:mobx": {
       "family": "capability",
       "modules": [
-        "mobx-store-template-rule",
         "mobx-rules",
         "mobx-skills"
       ],
@@ -1312,7 +1333,6 @@
       "family": "framework",
       "modules": [
         "nestjs-review-skill",
-        "nestjs-dto-rule",
         "nestjs-rules",
         "nestjs-skills"
       ],
@@ -1577,6 +1597,30 @@
       ],
       "detectionMarkers": [
         "flutter"
+      ],
+      "provenance": {
+        "origin": "authored"
+      }
+    },
+    "tool:playwright": {
+      "family": "tool",
+      "modules": [
+        "playwright-rules"
+      ],
+      "detectionMarkers": [
+        "playwright"
+      ],
+      "provenance": {
+        "origin": "authored"
+      }
+    },
+    "tool:storybook": {
+      "family": "tool",
+      "modules": [
+        "storybook-rules"
+      ],
+      "detectionMarkers": [
+        "storybook"
       ],
       "provenance": {
         "origin": "authored"

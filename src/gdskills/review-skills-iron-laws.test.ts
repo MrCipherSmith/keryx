@@ -282,8 +282,13 @@ describe("one condition, one severity, across the reviewer set (AC2)", () => {
   test("testing severities live once, in the two testing rules, and the testing lens cites both", () => {
     const rulesDir = path.join(import.meta.dir, "bundled", "rules", "core");
     const lens = read("review-testing-practices");
-    for (const rule of ["tdd-workflow.mdc", "playwright-testing.mdc"]) {
-      const text = readFileSync(path.join(rulesDir, rule), "utf8");
+    // ADR-0001 P4: playwright-testing ships in the playwright pack.
+    const rulePaths: Record<string, string> = {
+      "tdd-workflow.mdc": path.join(rulesDir, "tdd-workflow.mdc"),
+      "playwright-testing.mdc": path.join(import.meta.dir, "bundled", "stacks", "playwright", "rules", "playwright-testing.mdc"),
+    };
+    for (const [rule, rulePath] of Object.entries(rulePaths)) {
+      const text = readFileSync(rulePath, "utf8");
       expect(text).toContain("## Review severities");
       expect(lens).toContain(rule);
     }
@@ -323,7 +328,7 @@ describe("one condition, one severity, across the reviewer set (AC2)", () => {
     // maintenance cost, not a trigger and a wrong outcome, so it is `minor` unless a
     // named defect or a stated project rule makes it more.
     // review-frontend rates it by the code-style-patterns severity table (core-rules audit, group 3).
-    const codeStyle = readFileSync(path.join(import.meta.dir, "bundled", "rules", "core", "code-style-patterns.mdc"), "utf8");
+    const codeStyle = readFileSync(path.join(import.meta.dir, "bundled", "stacks", "react", "rules", "code-style-patterns.mdc"), "utf8");
     expect(codeStyle).toMatch(/^\| API\/IO or business logic in a component \(Rule 2\) \| always \| `minor`; `major` with a named defect/m);
     expect(read("review-frontend")).toContain("code-style-patterns.mdc");
     expect(read("review-frontend")).not.toMatch(/API call in a component[^\n]*\*\*(blocker|major)\*\*/);

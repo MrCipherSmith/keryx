@@ -157,6 +157,34 @@ describe("a citation of a rule keryx moved out of core/ (ADR-0001 P3)", () => {
   });
 });
 
+describe("a citation of a rule keryx moved into a stack pack (ADR-0001 P4)", () => {
+  test("a stacks/<pack>/<name>.mdc citation is a rule reference, and an old core/ citation reads as it", () => {
+    expect(ruleReferences("`stacks/react/code-style-patterns.mdc`, `.metaproject/rules/stacks/mobx/mobx-store-template.mdc`")).toEqual([
+      "stacks/mobx/mobx-store-template.mdc",
+      "stacks/react/code-style-patterns.mdc",
+    ]);
+    expect(ruleReferences("`core/nestjs-dto.mdc`, `rules/core/storybook-guidelines.mdc`, `stacks/nestjs/nestjs-dto.mdc`")).toEqual([
+      "stacks/nestjs/nestjs-dto.mdc",
+      "stacks/storybook/storybook-guidelines.mdc",
+    ]);
+  });
+
+  test("resolves to the installed pack file with a redirect from the old spelling, and is unresolved where the pack is not installed", async () => {
+    const content = "DTOs: `.metaproject/rules/core/nestjs-dto.mdc`.";
+    expect(await unresolvedRuleReferences(cwd, content)).toEqual(["stacks/nestjs/nestjs-dto.mdc"]);
+    await writeRule("stacks/nestjs/nestjs-dto.mdc");
+    expect(await unresolvedRuleReferences(cwd, content)).toEqual([]);
+    expect(await shadowedRuleReferences(cwd, content)).toEqual([
+      { ref: "core/nestjs-dto.mdc", resolved: ".metaproject/rules/stacks/nestjs/nestjs-dto.mdc" },
+    ]);
+    // The project slot of a pack rule answers first.
+    await writeRule("project/stacks/nestjs/nestjs-dto.mdc");
+    expect(await shadowedRuleReferences(cwd, "DTOs: `stacks/nestjs/nestjs-dto.mdc`.")).toEqual([
+      { ref: "stacks/nestjs/nestjs-dto.mdc", resolved: ".metaproject/rules/project/stacks/nestjs/nestjs-dto.mdc" },
+    ]);
+  });
+});
+
 describe("a cited path that exists but is not a regular file", () => {
   test("resolves no reference, and is named in the resolution", async () => {
     await mkdir(path.join(cwd, ".metaproject", "rules", "house", "x.mdc"), { recursive: true });

@@ -25,6 +25,7 @@ import { BUNDLED_GDSKILLS } from "./catalog";
 import { HARNESS_SKILL_RUNTIMES, skillBuildFileName } from "./export";
 import {
   MOVED_RULES,
+  movedToPackId,
   RETIRED_RULES,
   retiredRuleSizeCapBytes,
   type MovedDestinationCause,
@@ -32,6 +33,7 @@ import {
   type RetiredRuleFailureStage,
   type RetiredRuleOutcome,
 } from "./retired-rules";
+import { stackPackInstallCommand } from "./stack-rules-install";
 
 /** Every entry the core cleanup checks: rules dropped outright and rules moved to another layer. */
 export const CORE_CLEANUP_ENTRIES: readonly RetiredRuleEntry[] = [...RETIRED_RULES, ...MOVED_RULES];
@@ -419,6 +421,16 @@ export async function removeUnmodifiedRetiredRules(
   // kept old copy say "the package is incomplete" instead of blaming a layer
   // directory that is fine. Unset means "shipped".
   isDestinationShipped: (movedTo: string) => boolean = () => true,
+  // Whether this project's detected stack selects the moved rule's new path.
+  // Unset means "required". A rule moved to a pack the stack does not select
+  // (ADR-0001 P4) keeps its unmodified old copy until the pack is installed:
+  // detection reads the repository root and its declared workspace packages, so an app in a
+  // subfolder can miss a stack the project uses (review M1).
+  isDestinationRequired: (movedTo: string) => boolean = () => true,
+  // Whether a not-required pack move is plainly irrelevant here (no stack of
+  // that family anywhere a miss could hide): its unmodified copy is removed
+  // instead of kept and reported on every update (review RT2-3).
+  isObsolete: (movedTo: string) => boolean = () => false,
 ): Promise<RetiredRuleOutcome[]> {
   const outcomes: RetiredRuleOutcome[] = [];
   for (const retired of entries) {
@@ -455,17 +467,28 @@ export async function removeUnmodifiedRetiredRules(
       if (retired.shippedSha256.includes(hash)) {
         // A move removes the old copy only once the new one is really there:
         // otherwise the rule would exist nowhere (ADR-0001 P2 review F-001).
+        // An installed destination is enough, selected or not: a pack added
+        // with `keryx skills install --with` counts.
         if (retired.movedTo !== undefined) {
           const destination = await installedLayerFileState(path.dirname(rulesTarget), retired.movedTo);
-          if (destination !== "installed") {
+          const pack = movedToPackId(retired.movedTo);
+          const required = pack === undefined || isDestinationRequired(retired.movedTo);
+          if (destination !== "installed" && required) {
             const cause = isDestinationShipped(retired.movedTo) ? destination : "not-shipped";
             outcomes.push({ ...subject, action: "kept-destination-missing", cause });
             continue;
           }
+          if (destination !== "installed" && pack !== undefined && !isObsolete(retired.movedTo)) {
+            outcomes.push({ ...subject, action: "kept-pack-not-selected", pack });
+            continue;
+          }
+          // Installed, or an obsolete pack move: removed like any unmodified copy.
         }
+        const unused = retired.movedTo !== undefined && movedToPackId(retired.movedTo) !== undefined
+          && await installedLayerFileState(path.dirname(rulesTarget), retired.movedTo) !== "installed";
         stage = "unlink";
         await fsOps.unlink(installedPath);
-        outcomes.push({ ...subject, action: "removed" });
+        outcomes.push(unused ? { ...subject, action: "removed", unused: true } : { ...subject, action: "removed" });
       } else {
         outcomes.push({ ...subject, action: "kept-modified" });
       }
@@ -564,13 +587,23 @@ export async function migrateMovedRuleOverrides(
         outcomes.push({ ...subject, action: "kept-not-regular-file" });
         continue;
       }
-      const newDir = path.dirname(newPath);
-      const newDirStats = await lstatOrNull(newDir);
-      if (newDirStats === null) {
-        // Not recursive: `projectDir` was just confirmed a plain directory and
-        // `movedTo` is one layer deep.
-        await mkdir(newDir);
-      } else if (!newDirStats.isDirectory()) {
+      // One level at a time, never recursive: `projectDir` was just confirmed a
+      // plain directory, and each level below it (`process/`, or `stacks/` then
+      // `<pack>/` for a pack move) is created only where nothing is, and must be
+      // a plain directory where something is — never followed through a link.
+      let blocked = false;
+      let dir = projectDir;
+      for (const segment of path.posix.dirname(entry.movedTo).split("/")) {
+        dir = path.join(dir, segment);
+        const stats = await lstatOrNull(dir);
+        if (stats === null) {
+          await mkdir(dir);
+        } else if (!stats.isDirectory()) {
+          blocked = true;
+          break;
+        }
+      }
+      if (blocked) {
         outcomes.push({ ...subject, action: "kept-error", errorCode: "ENOTDIR" });
         continue;
       }
@@ -675,15 +708,29 @@ export function retiredRuleWarning(
     ? `${outcome.fileName} is no longer shipped by keryx (${reason})`
     : `rules/core/${outcome.fileName} moved to rules/${outcome.movedTo} (${reason})`;
   switch (outcome.action) {
-    case "kept-modified":
-      return outcome.movedTo === undefined
-        ? `${prefix}; kept because it differs from every shipped version — delete it, or rename it if you still rely on it`
-        : `${prefix}; the old copy was kept because it differs from every shipped version, and keryx no longer updates `
-          + `it or points its own skills at it — carry your edits into rules/project/${outcome.movedTo}, then delete `
-          + `rules/core/${outcome.fileName}`;
+    case "kept-modified": {
+      if (outcome.movedTo === undefined) {
+        return `${prefix}; kept because it differs from every shipped version — delete it, or rename it if you still rely on it`;
+      }
+      const pack = movedToPackId(outcome.movedTo);
+      // rules/project/stacks/<pack>/ replaces the pack's copy only where the
+      // pack is installed, so name how to install it (review LS-5).
+      const packNote = pack === undefined
+        ? ""
+        : ` (read in place of the ${pack} pack's copy once that pack is installed: it installs where the ${pack} `
+          + `stack is detected, or run \`${stackPackInstallCommand(pack)}\`)`;
+      return `${prefix}; the old copy was kept because it differs from every shipped version, and keryx no longer updates `
+        + `it or points its own skills at it — carry your edits into rules/project/${outcome.movedTo}${packNote}, then delete `
+        + `rules/core/${outcome.fileName}`;
+    }
+    case "kept-pack-not-selected":
+      return `${prefix}; the old copy was kept because this project's stack was not detected as ${outcome.pack} `
+        + `(detection reads the repository root and its declared workspace packages, so an app in an undeclared subfolder can be missed) — `
+        + `if the project uses ${outcome.pack}, run \`${stackPackInstallCommand(outcome.pack)}\` and keryx removes the old `
+        + `copy on the next \`keryx update\`; if it does not, delete rules/core/${outcome.fileName}`;
     case "kept-destination-missing": {
       const movedTo = outcome.movedTo ?? outcome.fileName;
-      const layer = movedTo.split("/")[0];
+      const layer = path.posix.dirname(movedTo);
       switch (outcome.cause) {
         case "not-shipped":
           return `${prefix}; the old copy was kept because this keryx installation does not ship rules/${movedTo} `
@@ -723,6 +770,24 @@ export function retiredRuleWarning(
 }
 
 /**
+ * One warning for every unmodified core copy kept because its pack is not
+ * installed (review RT2-3: one line per copy on every update was noise), or
+ * `null` when there is none.
+ */
+export function keptPackCopiesWarning(outcomes: readonly RetiredRuleOutcome[]): string | null {
+  const kept = outcomes.filter((outcome): outcome is RetiredRuleOutcome & { action: "kept-pack-not-selected"; pack: string } =>
+    outcome.action === "kept-pack-not-selected");
+  if (kept.length === 0) return null;
+  const files = kept.map((outcome) => `${outcome.fileName} (${outcome.pack})`).join(", ");
+  const packs = [...new Set(kept.map((outcome) => outcome.pack))].sort();
+  const commands = packs.map((pack) => `${pack}: \`${stackPackInstallCommand(pack)}\``).join("; ");
+  return `rules/core/ keeps ${kept.length} rule${kept.length === 1 ? "" : "s"} keryx moved into stack packs this project's stack `
+    + `was not detected as — ${files} (detection reads the repository root and its declared workspace packages, so an app in an undeclared subfolder can be missed). `
+    + `If the project uses one of these stacks, install its pack and the next \`keryx update\` removes the old copy (${commands}); `
+    + `if it does not, delete the copy`;
+}
+
+/**
  * Informational line for a moved rule whose stale `core/` copy was removed,
  * or `null` for every other outcome. A plain retirement stays silent as it
  * always has; a move is reported because a path the operator may know
@@ -732,6 +797,15 @@ export function movedRuleNotice(outcome: RetiredRuleOutcome): string | null {
   if (outcome.action !== "removed" || outcome.movedTo === undefined) {
     return null;
   }
-  return `rules/core/${outcome.fileName} moved to rules/${outcome.movedTo}; removed the unmodified old copy — `
+  const pack = movedToPackId(outcome.movedTo);
+  if (outcome.unused === true && pack !== undefined) {
+    return `rules/core/${outcome.fileName} is keryx's ${pack} rule, now shipped in the ${pack} stack pack; this project has no `
+      + `${pack} or other JavaScript stack, so the pack is not installed and the unmodified old copy was removed — `
+      + `update any citation of rules/core/${outcome.fileName} in your own files (CLAUDE.md, AGENTS.md, project skills, wiki)`;
+  }
+  const where = pack === undefined
+    ? `rules/${outcome.movedTo}`
+    : `rules/${outcome.movedTo} (the ${pack} stack pack, installed where that stack is detected)`;
+  return `rules/core/${outcome.fileName} moved to ${where}; removed the unmodified old copy — `
     + `update any citation of rules/core/${outcome.fileName} in your own files (CLAUDE.md, AGENTS.md, project skills, wiki)`;
 }

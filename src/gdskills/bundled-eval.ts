@@ -1468,9 +1468,19 @@ function stripTrailingSentencePeriod(raw: string): string {
  * segment further — has no such excuse: it is either the installed prefix or
  * it is dead the moment a user installs.
  */
+/**
+ * A stack pack's rule installs to `rules/stacks/<pack>/<name>` (ADR-0001 P4)
+ * but ships at `stacks/<pack>/rules/<name>`; every other path ships where it
+ * installs.
+ */
+function stackRuleSource(installed: string): string {
+  const match = /^rules\/stacks\/([^/]+)\/(.+)$/.exec(installed);
+  return match ? `stacks/${match[1]}/rules/${match[2]}` : installed;
+}
+
 function resolveInstalledReference(reference: string, known: ReadonlySet<string>): string | null | undefined {
   for (const [from, to] of INSTALLED_PREFIXES) {
-    if (reference.startsWith(from)) return to + reference.slice(from.length);
+    if (reference.startsWith(from)) return stackRuleSource(to + reference.slice(from.length));
   }
   if (reference.startsWith(".metaproject/")) return undefined;
 

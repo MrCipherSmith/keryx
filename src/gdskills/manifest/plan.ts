@@ -40,6 +40,7 @@ import { generateCapabilityMatrix, type CapabilityMatrixDocument, type MatrixSur
 import { getBundledSkillsForProfile, normalizeGdskillsProfile } from "../catalog";
 import { isKeryxRuleLayer, KERYX_RULE_LAYERS } from "../rule-references";
 import { readMetaprojectManifest } from "../../lib/metaproject-state";
+import { detectStackPacks } from "../stack-rules-install";
 import { resolveGlobs } from "./glob";
 import { HARNESS_IDS, type HarnessId, type InstallManifest, type ManifestModule, type ManifestProfile, type ModuleKind } from "./manifest";
 
@@ -160,11 +161,20 @@ type GdskillsManifest = { modules?: { gdskills?: { enabled?: boolean; profile?: 
  *   (`installBundledRules` copies `rules/core|process|activity` wholesale), the
  *   shared skill assets, and the skills of the project's gdskills profile — not
  *   the rest of `.metaproject/skills/gdskills/`, which `keryx update` never
- *   writes, so a manifest install records those as before (review R3-1).
+ *   writes, so a manifest install records those as before (review R3-1);
+ * - with the gdskills module enabled: the rules of every stack pack the
+ *   project's detected stack selects, under `.metaproject/rules/stacks/<pack>/`
+ *   (ADR-0001 P4) — the same selection `installBundledRules` makes. A pack the
+ *   stack does not select is written only by an explicit manifest install,
+ *   which records it as before.
  */
-export function keryxPublishedIn(projectRoot: string): KeryxPublishedCheck {
+export async function keryxPublishedIn(
+  projectRoot: string,
+  selectStackPacks: (projectRoot: string) => Promise<readonly string[]> = detectStackPacks,
+): Promise<KeryxPublishedCheck> {
   const gdskills = readMetaprojectManifest<GdskillsManifest>(projectRoot)?.modules?.gdskills;
   if (gdskills?.enabled !== true) return (destination) => destination === CONDUCT_RULE_DESTINATION;
+  const packRoots = (await selectStackPacks(projectRoot)).map((pack) => `.metaproject/rules/stacks/${pack}/`);
   const skillRoots = [
     ".metaproject/skills/gdskills/shared/",
     ...getBundledSkillsForProfile(normalizeGdskillsProfile(gdskills.profile)).map(
@@ -174,6 +184,7 @@ export function keryxPublishedIn(projectRoot: string): KeryxPublishedCheck {
   return (destination) =>
     destination === CONDUCT_RULE_DESTINATION ||
     KERYX_RULE_LAYERS.some((layer) => destination.startsWith(`.metaproject/rules/${layer}/`)) ||
+    packRoots.some((root) => destination.startsWith(root)) ||
     skillRoots.some((root) => destination.startsWith(root));
 }
 

@@ -37,7 +37,7 @@ Every finding must describe an observable, reproducible defect or a spec gap.
 ## The standard
 
 Read both rules before the diff; where this file and a rule disagree, the rule wins.
-- `.metaproject/rules/core/async-patterns.mdc` — parallel awaits, timeouts, bounded fan-out, event-loop blocking, **Review severities**.
+- `.metaproject/rules/core/async-patterns.mdc` — parallel awaits, timeouts, bounded fan-out, blocking the request-serving thread, **Review severities**; the Node.js values and rows are `.metaproject/rules/stacks/ts-js-node/patterns.mdc` when that pack is installed.
 - `.metaproject/rules/core/error-handling.mdc` — failure signalling, silent catches, unhandled rejections, **Review severities**.
 
 ## Workflow
@@ -246,14 +246,14 @@ conditions land under that rubric, not a second rubric.
 
 | Condition | Severity | Why, under the canonical rubric |
 |---|---|---|
-| Unhandled rejection; swallowed error; sequential independent awaits, no timeout, unbounded fan-out, event-loop blocking | per `error-handling.mdc` / `async-patterns.mdc` **Review severities** | One table for writers and every reviewer |
+| Unhandled rejection; swallowed error; sequential independent awaits, no timeout, unbounded fan-out, blocking the request-serving thread | per `error-handling.mdc` / `async-patterns.mdc` **Review severities** | One table for writers and every reviewer |
 | Corrupted or lost persisted/returned data | `blocker` | Data loss or corruption |
 | Unimplemented acceptance criterion | `blocker` | Named shape 4 |
 | Race condition on shared mutable state | `blocker` **if** the interleaving can corrupt or lose data; otherwise `major` | The outcome decides, not the word "race" |
 | Silent wrong result on a named input | `major` | Trigger and outcome are both named |
 | Type contract broken (declared type is not what is returned) | `major` | Callers observe the wrong value |
 | Edge case not handled, no input that reaches it named | `minor` | No trigger; the cost is to the next editor |
-| Non-null assertion (`!`) | the `!` row of `code-style-patterns.mdc` Review severities | That table owns the rating; do not restate it here |
+| Non-null assertion (`!`) | the `!` row of `.metaproject/rules/stacks/ts-js-node/coding-style.mdc` Review severities | That table owns the rating; without the pack, rate a `!` on a value the types allow to be missing `blocker` when it throws during render, `major` elsewhere, `minor` with no input shown |
 | "Could be more defensive", no observable defect | `info` | Neither trigger nor maintenance cost named |
 
 ## Iron Laws

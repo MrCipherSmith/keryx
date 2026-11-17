@@ -108,7 +108,7 @@ git diff --name-status "${BASE_SHA}" && git diff "${BASE_SHA}" && git ls-files -
 These project rules hold what to check and how to rate it. Read each one that applies to the change and rate by its **Review severities** table; this lens does not restate them.
 
 - `.metaproject/rules/core/api-contracts.mdc`: spec first, versioning, error envelope (validation failure is `400`), idempotency keys, list envelopes and pagination.
-- `.metaproject/rules/core/nestjs-dto.mdc`: DTO classes, validators, nested and query transforms, Swagger decorators.
+- `.metaproject/rules/stacks/nestjs/nestjs-dto.mdc`: DTO classes, validators, nested and query transforms, Swagger decorators.
 - `.metaproject/rules/core/database-patterns.mdc`: queries in loops, indexes, migration safety, transactions, `SELECT *`, soft deletes.
 - `.metaproject/rules/core/security-baseline.mdc`: parameterized queries (string interpolation in raw SQL).
 
