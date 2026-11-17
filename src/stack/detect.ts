@@ -311,24 +311,15 @@ async function packageJsonSignal(cwd: string, fs: StackDetectFs): Promise<Signal
   }
 
   const record = parsed as Record<string, unknown>;
-  const names = new Set<string>();
-  for (const field of JS_DEPENDENCY_FIELDS) {
-    const value = record[field];
-    if (typeof value === "object" && value !== null && !Array.isArray(value)) {
-      for (const name of Object.keys(value as Record<string, unknown>)) {
-        names.add(name);
-      }
-    }
-  }
+  const names = dependencyNames(record);
 
   const workspaceGlobs = workspacePatterns(record);
   if (workspaceGlobs.length > 0) {
-    return uncertainFamily(
-      "js",
-      `package.json declares workspaces (${workspaceGlobs.join(
-        ", ",
-      )}); the dependencies that decide the stack live in the sub-packages, which this module does not walk`,
-    );
+    // A workspace root: the sub-packages decide the stack, and the workspace
+    // signal reads them. What the root itself declares still counts.
+    if (names.size === 0) return undefined;
+    const { tags, matched } = jsTagsFromDependencies(names);
+    return present(tags, matched, `detected from the workspace root package.json (${names.size} declared dependenc${names.size === 1 ? "y" : "ies"})`);
   }
   if (names.size === 0) {
     return uncertainFamily(
@@ -339,6 +330,27 @@ async function packageJsonSignal(cwd: string, fs: StackDetectFs): Promise<Signal
     );
   }
 
+  const { tags, matched } = jsTagsFromDependencies(names);
+  return present(
+    tags,
+    matched,
+    `detected from package.json (${names.size} declared dependenc${names.size === 1 ? "y" : "ies"})`,
+  );
+}
+
+function dependencyNames(record: Record<string, unknown>): Set<string> {
+  const names = new Set<string>();
+  for (const field of JS_DEPENDENCY_FIELDS) {
+    const value = record[field];
+    if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+      for (const name of Object.keys(value as Record<string, unknown>)) names.add(name);
+    }
+  }
+  return names;
+}
+
+/** The JS-family tags a set of declared dependency names selects. */
+function jsTagsFromDependencies(names: ReadonlySet<string>): { tags: string[]; matched: string[] } {
   const matched: string[] = [];
   const tags = new Set<string>(["javascript", "node"]);
 
@@ -361,12 +373,7 @@ async function packageJsonSignal(cwd: string, fs: StackDetectFs): Promise<Signal
       matched.push(...hit);
     }
   }
-
-  return present(
-    [...tags],
-    matched,
-    `detected from package.json (${names.size} declared dependenc${names.size === 1 ? "y" : "ies"})`,
-  );
+  return { tags: [...tags], matched };
 }
 
 // ---------------------------------------------------------------------------
@@ -576,27 +583,143 @@ async function markerFileSignal(
 /**
  * Workspace-root markers of JS monorepo tools. Like `package.json`
  * `workspaces`, they say the dependencies that decide the stack live in
- * sub-packages this module does not walk, so the js family is uncertain
- * rather than read from a root that may declare only build tooling.
+ * sub-packages, not in a root that may declare only build tooling.
  */
 const JS_WORKSPACE_MARKERS = ["pnpm-workspace.yaml", "lerna.json", "nx.json", "turbo.json", "rush.json"] as const;
+/** Where nx and turbo keep their packages when no marker names them. */
+const DEFAULT_WORKSPACE_GLOBS = ["apps/*", "packages/*", "libs/*"];
 
-async function jsWorkspaceMarkerSignal(cwd: string, fs: StackDetectFs): Promise<SignalOutcome | undefined> {
-  const found: string[] = [];
+/** `packages:` entries of a `pnpm-workspace.yaml`: the block list only, which is what pnpm documents. */
+function pnpmWorkspaceGlobs(text: string): string[] {
+  const globs: string[] = [];
+  let inPackages = false;
+  for (const line of text.split(/\r?\n/)) {
+    if (/^packages:\s*$/.test(line)) {
+      inPackages = true;
+      continue;
+    }
+    if (!inPackages) continue;
+    const item = /^\s+-\s*["']?([^"'#]+?)["']?\s*(#.*)?$/.exec(line);
+    if (item !== null) globs.push(item[1]!.trim());
+    else if (/^\S/.test(line)) inPackages = false;
+  }
+  return globs;
+}
+
+function jsonRecord(text: string): Record<string, unknown> | undefined {
+  try {
+    // rush.json is JSON with comments; strip whole-line `//` comments only.
+    const parsed: unknown = JSON.parse(text.replace(/^\s*\/\/.*$/gm, ""));
+    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function markerGlobs(marker: string, text: string): string[] {
+  if (marker === "pnpm-workspace.yaml") return pnpmWorkspaceGlobs(text);
+  const record = jsonRecord(text);
+  if (marker === "lerna.json") {
+    const packages = record?.["packages"];
+    return Array.isArray(packages) ? packages.filter((item): item is string => typeof item === "string") : ["packages/*"];
+  }
+  if (marker === "rush.json") {
+    const projects = record?.["projects"];
+    return Array.isArray(projects)
+      ? projects.flatMap((project) => {
+        const folder = typeof project === "object" && project !== null ? (project as Record<string, unknown>)["projectFolder"] : undefined;
+        return typeof folder === "string" ? [folder] : [];
+      })
+      : [];
+  }
+  return []; // nx.json, turbo.json: no package list of their own
+}
+
+/**
+ * The package directories one workspace glob names, one level deep: `dir`,
+ * `dir/*`, `dir/**` and `dir/prefix*` are understood; anything else (a
+ * wildcard in an earlier segment, a bare `**`) returns `undefined`.
+ */
+async function expandWorkspaceGlob(cwd: string, fs: StackDetectFs, glob: string): Promise<string[] | undefined> {
+  const cleaned = glob.replace(/^\.\//, "").replace(/\/+$/, "").replace(/\/\*\*$/, "/*");
+  const segments = cleaned.split("/");
+  const last = segments.pop()!;
+  if (segments.some((segment) => segment.includes("*")) || cleaned === "*" || cleaned === "**") return undefined;
+  if (!last.includes("*")) return [cleaned];
+  if (last.indexOf("*") !== last.length - 1) return undefined;
+  const parent = segments.join("/");
+  const prefix = last.slice(0, -1);
+  const entries = await fs.readDir(parent === "" ? cwd : joinPath(cwd, ...segments));
+  return entries.filter((entry) => entry.name.startsWith(prefix) && !entry.name.startsWith(".")).map((entry) => (parent === "" ? entry.name : `${parent}/${entry.name}`));
+}
+
+/**
+ * A JS workspace root — `package.json` `workspaces` or one of
+ * `JS_WORKSPACE_MARKERS`: read one level of the sub-packages it names and tag
+ * from their dependencies (review N-1: marking the whole family uncertain
+ * installed every JS pack, Angular and Vue included, for any turbo app). Only
+ * when the packages cannot be found or read is the family uncertain.
+ */
+async function jsWorkspaceSignal(cwd: string, fs: StackDetectFs): Promise<SignalOutcome | undefined> {
+  const markers: string[] = [];
+  const globs: string[] = [];
   for (const name of JS_WORKSPACE_MARKERS) {
+    let text: string;
     try {
-      await fs.readTextFile(joinPath(cwd, name));
-      found.push(name);
+      text = await fs.readTextFile(joinPath(cwd, name));
     } catch (error) {
       const failure = readFailureOutcome("js", name, error);
       if (failure !== undefined) return failure;
+      continue;
     }
+    markers.push(name);
+    globs.push(...markerGlobs(name, text));
   }
-  if (found.length === 0) return undefined;
-  return uncertainFamily(
-    "js",
-    `${found.join(", ")} marks a workspace root; the dependencies that decide the stack live in the sub-packages, which this module does not walk`,
-  );
+  try {
+    const record = jsonRecord(await fs.readTextFile(joinPath(cwd, "package.json")));
+    const declared = record === undefined ? [] : workspacePatterns(record);
+    if (declared.length > 0) {
+      markers.push("package.json workspaces");
+      globs.push(...declared);
+    }
+  } catch {
+    // packageJsonSignal reports a package.json that cannot be read.
+  }
+  if (markers.length === 0) return undefined;
+
+  const uncertain = (why: string): SignalOutcome =>
+    uncertainFamily("js", `${markers.join(", ")} marks a workspace root, but ${why}, so every JS-family tag is kept`);
+  const patterns = [...new Set((globs.length > 0 ? globs : DEFAULT_WORKSPACE_GLOBS).filter((glob) => !glob.startsWith("!")))];
+  const packageDirs = new Set<string>();
+  for (const glob of patterns) {
+    let dirs: string[] | undefined;
+    try {
+      dirs = await expandWorkspaceGlob(cwd, fs, glob);
+    } catch (error) {
+      if (isAbsentError(error)) continue;
+      return uncertain(`the workspace folder of ${glob} could not be read (${errorCode(error) ?? "unknown error"})`);
+    }
+    if (dirs === undefined) return uncertain(`the workspace glob ${glob} is deeper than this module reads`);
+    for (const dir of dirs) packageDirs.add(dir);
+  }
+  const names = new Set<string>();
+  let read = 0;
+  for (const dir of [...packageDirs].sort()) {
+    let text: string;
+    try {
+      text = await fs.readTextFile(joinPath(cwd, dir, "package.json"));
+    } catch (error) {
+      if (isAbsentError(error)) continue;
+      return uncertain(`${dir}/package.json could not be read (${errorCode(error) ?? "unknown error"})`);
+    }
+    const record = jsonRecord(text);
+    if (record === undefined) return uncertain(`${dir}/package.json did not parse as a JSON object`);
+    read += 1;
+    for (const name of dependencyNames(record)) names.add(name);
+  }
+  if (read === 0) return uncertain(`no workspace package.json was found under ${patterns.join(", ")}`);
+  const { tags, matched } = jsTagsFromDependencies(names);
+  return present(tags, matched, `detected from ${read} workspace package${read === 1 ? "" : "s"} (${markers.join(", ")})`);
 }
 
 async function goModSignal(cwd: string, fs: StackDetectFs): Promise<SignalOutcome | undefined> {
@@ -927,7 +1050,7 @@ export async function detectStack(cwd: string, opts: DetectStackOptions = {}): P
 
   const raw: RawSignal[] = [
     { id: "manifest:package.json", outcome: await packageJsonSignal(root, fs) },
-    { id: "marker:js-workspace", outcome: await jsWorkspaceMarkerSignal(root, fs) },
+    { id: "manifest:js-workspace", outcome: await jsWorkspaceSignal(root, fs) },
     { id: "manifest:pyproject.toml", outcome: await pyprojectSignal(root, fs) },
     { id: "manifest:setup.cfg", outcome: await simplePythonManifestSignal(root, fs, "setup.cfg") },
     { id: "manifest:requirements.txt", outcome: await simplePythonManifestSignal(root, fs, "requirements.txt") },

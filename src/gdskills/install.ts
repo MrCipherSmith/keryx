@@ -22,8 +22,10 @@ import {
   errorCodeOf,
   isErrnoException,
   isMissingPathError,
+  keptPackCopiesWarning,
   migrateMovedRuleOverrides,
   movedRuleNotice,
+  normalizeRetiredRuleContent,
   movedRuleOverrideMessage,
   type ProjectOverrideOutcome,
   removeStaleRuntimeBuilds,
@@ -226,7 +228,11 @@ export async function installGdskills(
   // bigger fact about this install than a leftover the sweep could not clear.
   const warnings = [
     ...skippedDestinationWarnings,
-    ...retiredRuleOutcomes.map((outcome) => retiredRuleWarning(outcome)).filter((warning): warning is string => warning !== null),
+    ...retiredRuleOutcomes
+      .filter((outcome) => outcome.action !== "kept-pack-not-selected")
+      .map((outcome) => retiredRuleWarning(outcome))
+      .filter((warning): warning is string => warning !== null),
+    ...[keptPackCopiesWarning(retiredRuleOutcomes)].filter((warning): warning is string => warning !== null),
     ...staleBuildOutcomes
       .filter((outcome) => staleRuntimeBuildSeverity(outcome) === "warning")
       .map((outcome) => staleRuntimeBuildMessage(outcome, projectRoot)),
@@ -412,7 +418,8 @@ export async function installBundledRules(
   // stack selects. Since P4 they carry rows core used to ship, so they install
   // with the layers rather than only through `keryx skills install`.
   const selectedPacks = [...await (seams.selectStackPacks ?? detectStackPacks)(projectRoot, stacksSourceRoot)].sort();
-  warnings.push(...bundledStackPackProblems(stacksSourceRoot));
+  const bundleProblems = bundledStackPackProblems(stacksSourceRoot);
+  warnings.push(...bundleProblems);
   const stackInstall = await installStackPackRules(metaprojectRoot, stacksSourceRoot, selectedPacks);
   warnings.push(...stackInstall.warnings);
   // A moved rule's new path is shipped when this bundle carries the file in
@@ -431,11 +438,18 @@ export async function installBundledRules(
     const pack = movedToPackId(movedTo);
     return pack === undefined || selectedPacks.includes(pack);
   };
+  // Every rule P4 moved into a pack is JS-family. With no JS stack selected and
+  // no package.json one level down, a missed JS stack is not plausible, so an
+  // unmodified copy is removed rather than kept and reported forever (RT2-3).
+  // A broken bundle selects nothing, so it decides nothing: keep (LS-3).
+  const jsMissPlausible = bundleProblems.length > 0 || selectedPacks.includes("ts-js-node")
+    || existsSync(path.join(projectRoot, "package.json")) || await hasChildPackageJson(projectRoot);
+  const isObsolete = (movedTo: string): boolean => movedToPackId(movedTo) !== undefined && !jsMissPlausible;
   // Cleanup runs after every layer and pack is in place, so a moved rule's
   // new path is installed before its old copy is removed.
   const outcomes = coreTarget === null
     ? []
-    : await removeUnmodifiedRetiredRules(coreTarget, undefined, cleanupEntries, isDestinationShipped, isDestinationRequired);
+    : await removeUnmodifiedRetiredRules(coreTarget, undefined, cleanupEntries, isDestinationShipped, isDestinationRequired, isObsolete);
   // A project's own version of a moved rule follows it to the new slot.
   const moves = cleanupEntries.filter((entry): entry is RetiredRuleEntry & { movedTo: string } => entry.movedTo !== undefined);
   const overrideOutcomes = await migrateMovedRuleOverrides(path.join(metaprojectRoot, "rules"), moves);
@@ -505,6 +519,13 @@ async function installStackPackRules(
   return { installed, warnings };
 }
 
+/** Whether some folder directly under the project root (not hidden, not node_modules) holds a package.json. */
+async function hasChildPackageJson(projectRoot: string): Promise<boolean> {
+  const entries = await readdir(projectRoot, { withFileTypes: true }).catch(() => []);
+  return entries.some((entry) => entry.isDirectory() && !entry.name.startsWith(".") && entry.name !== "node_modules"
+    && existsSync(path.join(projectRoot, entry.name, "package.json")));
+}
+
 /**
  * A `keryx skills install --target claude` before ADR-0001 P4 copied each
  * moved rule flat into `.claude/rules/<file>`; Claude still auto-loads it, with
@@ -519,7 +540,13 @@ async function staleClaudeRuleCopies(projectRoot: string, entries: readonly Reti
     if (pack === undefined) continue;
     const rel = `.claude/rules/${entry.fileName}`;
     const stats = await lstat(path.join(projectRoot, rel)).catch(() => undefined);
-    if (stats === undefined || !stats.isFile()) continue;
+    if (stats === undefined || !stats.isFile() || stats.size > (entry.largestShippedBytes ?? Number.POSITIVE_INFINITY) * 4) continue;
+    // Only a copy of a version keryx shipped: a project's own rule that happens
+    // to share the name is not keryx's to report (N-5).
+    const content = await readFile(path.join(projectRoot, rel)).catch(() => undefined);
+    if (content === undefined) continue;
+    const hash = createHash("sha256").update(normalizeRetiredRuleContent(content)).digest("hex");
+    if (!entry.shippedSha256.includes(hash)) continue;
     warnings.push(
       `${rel} is a copy of a core rule from before keryx moved it to the ${pack} stack pack; Claude still `
         + `loads it, with rows keryx has since moved — delete it, and if the project uses ${pack} run `
@@ -589,7 +616,9 @@ async function preserveEditedStackRules(
     if (current === undefined || bundled === undefined) continue;
     const hash = sha256Bytes(current);
     if (hash === sha256Bytes(bundled) || known.get(rel)?.has(hash)) continue;
-    const backup = `${STACK_RULE_BACKUPS}/${pack}/${file}`;
+    // Never over an earlier backup: a second hand edit gets the next free name (RT2-4).
+    let backup = `${STACK_RULE_BACKUPS}/${pack}/${file}`;
+    for (let n = 1; existsSync(path.join(projectRoot, backup)); n += 1) backup = `${STACK_RULE_BACKUPS}/${pack}/${file}.${n}`;
     try {
       await writeContained(projectRoot, backup, current);
     } catch (error) {

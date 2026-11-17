@@ -427,6 +427,10 @@ export async function removeUnmodifiedRetiredRules(
   // detection reads the repository root only, so a monorepo or an app in a
   // subfolder can miss a stack the project uses (review M1).
   isDestinationRequired: (movedTo: string) => boolean = () => true,
+  // Whether a not-required pack move is plainly irrelevant here (no stack of
+  // that family anywhere a miss could hide): its unmodified copy is removed
+  // instead of kept and reported on every update (review RT2-3).
+  isObsolete: (movedTo: string) => boolean = () => false,
 ): Promise<RetiredRuleOutcome[]> {
   const outcomes: RetiredRuleOutcome[] = [];
   for (const retired of entries) {
@@ -467,16 +471,18 @@ export async function removeUnmodifiedRetiredRules(
         // with `keryx skills install --with` counts.
         if (retired.movedTo !== undefined) {
           const destination = await installedLayerFileState(path.dirname(rulesTarget), retired.movedTo);
-          if (destination !== "installed") {
-            const pack = movedToPackId(retired.movedTo);
-            if (pack !== undefined && !isDestinationRequired(retired.movedTo)) {
-              outcomes.push({ ...subject, action: "kept-pack-not-selected", pack });
-              continue;
-            }
+          const pack = movedToPackId(retired.movedTo);
+          const required = pack === undefined || isDestinationRequired(retired.movedTo);
+          if (destination !== "installed" && required) {
             const cause = isDestinationShipped(retired.movedTo) ? destination : "not-shipped";
             outcomes.push({ ...subject, action: "kept-destination-missing", cause });
             continue;
           }
+          if (destination !== "installed" && pack !== undefined && !isObsolete(retired.movedTo)) {
+            outcomes.push({ ...subject, action: "kept-pack-not-selected", pack });
+            continue;
+          }
+          // Installed, or an obsolete pack move: removed like any unmodified copy.
         }
         stage = "unlink";
         await fsOps.unlink(installedPath);
@@ -759,6 +765,24 @@ export function retiredRuleWarning(
       throw new Error(`unhandled retired rule outcome: ${JSON.stringify(exhaustive)}`);
     }
   }
+}
+
+/**
+ * One warning for every unmodified core copy kept because its pack is not
+ * installed (review RT2-3: one line per copy on every update was noise), or
+ * `null` when there is none.
+ */
+export function keptPackCopiesWarning(outcomes: readonly RetiredRuleOutcome[]): string | null {
+  const kept = outcomes.filter((outcome): outcome is RetiredRuleOutcome & { action: "kept-pack-not-selected"; pack: string } =>
+    outcome.action === "kept-pack-not-selected");
+  if (kept.length === 0) return null;
+  const files = kept.map((outcome) => `${outcome.fileName} (${outcome.pack})`).join(", ");
+  const packs = [...new Set(kept.map((outcome) => outcome.pack))].sort();
+  const commands = packs.map((pack) => `${pack}: \`${stackPackInstallCommand(pack)}\``).join("; ");
+  return `rules/core/ keeps ${kept.length} rule${kept.length === 1 ? "" : "s"} keryx moved into stack packs this project's stack `
+    + `was not detected as — ${files} (detection reads the repository root only, so an app in a subfolder can be missed). `
+    + `If the project uses one of these stacks, install its pack and the next \`keryx update\` removes the old copy (${commands}); `
+    + `if it does not, delete the copy`;
 }
 
 /**

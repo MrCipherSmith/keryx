@@ -371,10 +371,26 @@ async function collectSkills(projectRoot: string, forWhat: ContextFor, files: re
   return entries.sort((a, b) => compare(a.path, b.path));
 }
 
+/**
+ * Where a named bundled rule is installed in this project: its own path, or —
+ * for a rule ADR-0001 P4 moved into a pack that is not installed here — the
+ * unmodified core copy `keryx update` kept for it, so the rule still loads
+ * until the pack is installed (review RT2-2). `undefined` when neither exists.
+ */
+async function installedBundledRulePath(projectRoot: string, name: string): Promise<string | undefined> {
+  const rel = bundledRulePath(name);
+  if (await pathExists(path.join(projectRoot, rel))) return rel;
+  const kept = MOVED_PACK_RULE_NAMES.get(rel);
+  if (kept === undefined) return undefined;
+  const core = `${BUNDLED_RULES_DIR}/${kept}`;
+  return (await pathExists(path.join(projectRoot, core))) ? core : undefined;
+}
+
 async function collectBundled(projectRoot: string, names: readonly string[]): Promise<ContextEntry[]> {
   const entries: ContextEntry[] = [];
   for (const name of names) {
-    const rel = bundledRulePath(name);
+    const rel = await installedBundledRulePath(projectRoot, name);
+    if (rel === undefined) continue;
     const text = await readText(path.join(projectRoot, rel));
     if (text === undefined) continue;
     entries.push({ kind: "rule", source: "bundled", path: rel, sha256: sha256Hex(text), bytes: Buffer.byteLength(text), reason: "bundled-default", tier: "must_read" });
@@ -446,8 +462,13 @@ async function collectStackRules(projectRoot: string, files: readonly string[]):
 async function bundledPaths(projectRoot: string, names: readonly string[]): Promise<Map<string, string>> {
   const map = new Map<string, string>();
   for (const name of names) {
-    const rel = bundledRulePath(name);
-    if (await pathExists(path.join(projectRoot, rel))) map.set(`${name}.mdc`, rel);
+    const rel = await installedBundledRulePath(projectRoot, name);
+    if (rel === undefined) continue;
+    map.set(`${name}.mdc`, rel);
+    // A kept core copy of a moved rule: overrides keyed by the name it had in
+    // core shadow it, as they did before the move.
+    const kept = MOVED_PACK_RULE_NAMES.get(bundledRulePath(name));
+    if (kept !== undefined && rel.startsWith(`${BUNDLED_RULES_DIR}/`) && !map.has(kept)) map.set(kept, rel);
   }
   return map;
 }

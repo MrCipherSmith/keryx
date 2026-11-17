@@ -50,15 +50,22 @@ export function readBundledStackPacks(stacksRoot: string): BundledStackPack[] {
   const packs: BundledStackPack[] = [];
   for (const name of names.sort()) {
     if (!existsSync(bundledPackRulesPath(stacksRoot, name))) continue;
-    let parsed: Record<string, unknown>;
-    try {
-      parsed = JSON.parse(readFileSync(path.join(stacksRoot, name, "pack.json"), "utf8")) as Record<string, unknown>;
-    } catch {
-      continue;
-    }
+    const parsed = readPackJson(stacksRoot, name);
+    if (parsed === undefined) continue;
     packs.push({ id: name, detectionMarkers: stringList(parsed["detectionMarkers"]), extends: stringList(parsed["extends"]) });
   }
   return packs;
+}
+
+/** A pack's `pack.json` as an object, or `undefined` when it is missing, does not parse, or is not a JSON object (`null`, an array, …: review N-7). */
+function readPackJson(stacksRoot: string, name: string): Record<string, unknown> | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(path.join(stacksRoot, name, "pack.json"), "utf8"));
+  } catch {
+    return undefined;
+  }
+  return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? parsed as Record<string, unknown> : undefined;
 }
 
 /**
@@ -101,9 +108,7 @@ export function bundledStackPackProblems(stacksRoot: string): string[] {
   const problems: string[] = [];
   for (const name of names.sort()) {
     if (!existsSync(bundledPackRulesPath(stacksRoot, name))) continue;
-    try {
-      JSON.parse(readFileSync(path.join(stacksRoot, name, "pack.json"), "utf8"));
-    } catch {
+    if (readPackJson(stacksRoot, name) === undefined) {
       problems.push(`the bundled ${name} stack pack has no readable pack.json, so it cannot be selected; its rules were not installed — reinstall keryx, then run \`keryx update\``);
     }
   }

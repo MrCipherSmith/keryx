@@ -79,10 +79,15 @@ test("the bundled stacks tree reports an unreadable root or a pack.json that doe
     expect(bundledStackPackProblems(path.join(root, "missing"))[0]).toContain("could not be read (ENOENT)");
     await mkdir(path.join(root, "broken", "rules"), { recursive: true });
     await writeFile(path.join(root, "broken", "pack.json"), "{ not json");
+    // N-7: valid JSON that is not an object is no more usable than a parse error.
+    await mkdir(path.join(root, "null-pack", "rules"), { recursive: true });
+    await writeFile(path.join(root, "null-pack", "pack.json"), "null");
     await mkdir(path.join(root, "no-rules"), { recursive: true });
     expect(bundledStackPackProblems(root)).toEqual([
       "the bundled broken stack pack has no readable pack.json, so it cannot be selected; its rules were not installed — reinstall keryx, then run `keryx update`",
+      "the bundled null-pack stack pack has no readable pack.json, so it cannot be selected; its rules were not installed — reinstall keryx, then run `keryx update`",
     ]);
+    expect(readBundledStackPacks(root)).toEqual([]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

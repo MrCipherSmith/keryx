@@ -236,16 +236,72 @@ describe("JS workspace-root markers (review M1: a monorepo root names only build
         expect(result.uncertain).toBe(true);
         for (const tag of jsTags()) expect({ marker, tag, value: result.tags[tag] }).toEqual({ marker, tag, value: true });
         expect(result.tags.python).toBe(false);
-        const signal = result.perSignal.find((s) => s.signal === "marker:js-workspace");
+        const signal = result.perSignal.find((s) => s.signal === "manifest:js-workspace");
         expect(signal?.reason).toContain(marker);
       }
     });
   }
 
+  test("a turbo React+NestJS monorepo selects from its sub-packages, not every JS tag (review N-1)", async () => {
+    const fs = fakeFs(
+      {
+        "/repo/turbo.json": "{}\n",
+        "/repo/package.json": JSON.stringify({ private: true, devDependencies: { turbo: "^2.0.0", typescript: "^5.6.0" } }),
+        "/repo/apps/web/package.json": JSON.stringify({ dependencies: { react: "^18.3.1", mobx: "^6.13.0" } }),
+        "/repo/apps/api/package.json": JSON.stringify({ dependencies: { "@nestjs/core": "^10.4.0" } }),
+      },
+      { "/repo/apps": ["api", "web"] },
+    );
+    const result = await detectStack("/repo", { fs });
+    expect(result.uncertain).toBe(false);
+    for (const tag of ["react", "mobx", "nestjs", "typescript"]) expect({ tag, value: result.tags[tag] }).toEqual({ tag, value: true });
+    for (const tag of ["angular", "vue", "nextjs", "nuxt", "storybook"]) expect({ tag, value: result.tags[tag] }).toEqual({ tag, value: false });
+    expect(result.perSignal.find((s) => s.signal === "manifest:js-workspace")?.reason).toContain("2 workspace packages");
+  });
+
+  test("the packages a marker names are read: pnpm-workspace.yaml globs, lerna packages, rush projectFolder, package.json workspaces", async () => {
+    const cases: Array<{ files: Record<string, string>; dirs?: Record<string, string[]> }> = [
+      {
+        files: {
+          "/repo/pnpm-workspace.yaml": "packages:\n  - 'services/*'\n  - \"!services/legacy\"\n",
+          "/repo/services/api/package.json": JSON.stringify({ dependencies: { "@nestjs/core": "^10.4.0" } }),
+        },
+        dirs: { "/repo/services": ["api"] },
+      },
+      {
+        files: { "/repo/lerna.json": JSON.stringify({ packages: ["modules/api"] }), "/repo/modules/api/package.json": JSON.stringify({ dependencies: { "@nestjs/core": "^10" } }) },
+      },
+      {
+        files: {
+          "/repo/rush.json": '// rush config\n{ "projects": [{ "packageName": "api", "projectFolder": "server/api" }] }\n',
+          "/repo/server/api/package.json": JSON.stringify({ dependencies: { "@nestjs/core": "^10" } }),
+        },
+      },
+      {
+        files: {
+          "/repo/package.json": JSON.stringify({ private: true, workspaces: ["backend"] }),
+          "/repo/backend/package.json": JSON.stringify({ dependencies: { "@nestjs/core": "^10" } }),
+        },
+      },
+    ];
+    for (const { files, dirs } of cases) {
+      const result = await detectStack("/repo", { fs: fakeFs(files, dirs) });
+      const marker = Object.keys(files)[0];
+      expect({ marker, uncertain: result.uncertain, nestjs: result.tags.nestjs, react: result.tags.react }).toEqual({ marker, uncertain: false, nestjs: true, react: false });
+    }
+  });
+
+  test("a workspace glob deeper than one level falls back to every JS tag", async () => {
+    const result = await detectStack("/repo", { fs: fakeFs({ "/repo/pnpm-workspace.yaml": "packages:\n  - 'apps/*/packages/*'\n" }) });
+    expect(result.uncertain).toBe(true);
+    for (const tag of jsTags()) expect(result.tags[tag]).toBe(true);
+    expect(result.perSignal.find((s) => s.signal === "manifest:js-workspace")?.reason).toContain("deeper than this module reads");
+  });
+
   test("a plain app with no workspace marker stays certain", async () => {
     const result = await detectStack("/repo", { fs: fakeFs({ "/repo/package.json": JSON.stringify({ dependencies: { react: "^18.0.0" } }) }) });
     expect(result.uncertain).toBe(false);
-    expect(result.perSignal.some((s) => s.signal === "marker:js-workspace")).toBe(false);
+    expect(result.perSignal.some((s) => s.signal === "manifest:js-workspace")).toBe(false);
   });
 });
 

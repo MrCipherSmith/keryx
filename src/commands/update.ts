@@ -2018,7 +2018,7 @@ function printHelp(): void {
     "refreshes service files, core scripts, managed skills, manifests, dashboard, hooks;",
     "backfills the Task Manager (tasks) module for projects initialized before it existed;",
     "writes the managed index block to CLAUDE.local.md / AGENTS.override.md, Claude hooks to .claude/settings.local.json and ignore rules to .git/info/exclude (scope local, the default), and moves uncommitted keryx edits out of the tracked AGENTS.md, CLAUDE.md, .claude/settings.json and .gitignore;",
-    "does not write .metaproject/data artifacts.",
+    "does not write .metaproject/data artifacts, except .metaproject/data/gdskills/stack-rules-installed.json (what it wrote under rules/stacks/) and stack-rule-backups/ (a hand-edited stack rule it replaced).",
   ]) {
     console.log(`  ${style.dim(symbols.bullet)} ${style.dim(line)}`);
   }

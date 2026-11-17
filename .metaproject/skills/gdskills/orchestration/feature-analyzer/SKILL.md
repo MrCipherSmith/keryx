@@ -278,7 +278,7 @@ When focus specified: boost files matching focus keywords to P0; select ALL focu
 1. **Dependency search**: find all target files importing changed DTOs/APIs from source
 2. **Contract divergence**: compare new source contracts with current target implementation
 3. **Target deep dive**: read 2-3 key components that will need changes
-4. **Target rules compliance**: check `.metaproject/rules/core/*.mdc` in target repo
+4. **Target rules compliance**: check `.metaproject/rules/core/*.mdc` and the installed stack-pack rules (such as `.metaproject/rules/stacks/ts-js-node/coding-style.mdc`) in target repo
 
 ---
 

@@ -161,7 +161,7 @@ Scan local sources for relevant context. Be selective — only include what is d
    - Note: "Previous job <name> addressed <related topic>"
 ```
 
-### 2.3 Rules (`<PROJECT_DIR>/rules/core/` or repo rules path)
+### 2.3 Rules (`<PROJECT_DIR>/rules/core/` and the installed stack-pack rules, such as `.metaproject/rules/stacks/ts-js-node/coding-style.mdc`, or repo rules path)
 
 ```
 1. Based on focus_areas and task_description, identify applicable rules:
