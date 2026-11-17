@@ -21,7 +21,7 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
-use tauri::{AppHandle, Manager, WebviewWindow};
+use tauri::{AppHandle, Manager, Window};
 
 pub const SERVER_NAME: &str = "keryx-panels";
 pub const ENV_SOCKET: &str = "KERYX_PANEL_SOCKET";
@@ -337,18 +337,17 @@ fn browser_tool(app: &AppHandle, window: &str, name: &str, params: &Value) -> Re
             let existing = if arg_bool(params, "new_tab") { None } else { browsers.tab(window, tab_arg).ok() };
             let tab = match existing {
                 Some(tab) => {
-                    let before = tab.finished();
                     browser::navigate(app, &tab, url)?;
                     browser::reveal(app, window, tab.id);
-                    tab.wait_loaded(before, browser::LOAD_TIMEOUT);
+                    browser::wait_ready(app, &tab, browser::LOAD_TIMEOUT);
                     tab
                 }
                 None => {
-                    let ww: WebviewWindow = app.get_webview_window(window).ok_or("The window is gone")?;
+                    let ww: Window = app.get_window(window).ok_or("The window is gone")?;
                     let info = browser::open_tab(app, &ww, url)?;
                     let tab = browsers.tab(window, Some(info.id))?;
                     browser::reveal(app, window, tab.id);
-                    tab.wait_loaded(0, browser::LOAD_TIMEOUT);
+                    browser::wait_ready(app, &tab, browser::LOAD_TIMEOUT);
                     tab
                 }
             };
@@ -369,7 +368,6 @@ fn browser_tool(app: &AppHandle, window: &str, name: &str, params: &Value) -> Re
         "browser_click" | "browser_type" => {
             let tab = browsers.tab(window, tab_arg)?;
             let reference = arg_str(params, "ref").ok_or("ref is required")?;
-            let before = tab.finished();
             let js = if name == "browser_click" {
                 browser::click_js(reference)
             } else {
@@ -378,10 +376,7 @@ fn browser_tool(app: &AppHandle, window: &str, name: &str, params: &Value) -> Re
             browser::reveal(app, window, tab.id);
             browser::run_js(app, &tab, js, World::Client)?;
             // A click that started a navigation waits for it.
-            std::thread::sleep(Duration::from_millis(300));
-            if tab.navigating_since(before) {
-                tab.wait_loaded(before, browser::LOAD_TIMEOUT);
-            }
+            browser::wait_ready(app, &tab, browser::LOAD_TIMEOUT);
             Ok(format!("done; now {}", pretty(&browsers.info(window, tab.id))))
         }
         "browser_screenshot" => {
@@ -417,7 +412,7 @@ fn browser_tool(app: &AppHandle, window: &str, name: &str, params: &Value) -> Re
 /// The `mcpServers` entry for this window's sessions. Registers the window's
 /// project root for agent terminal tabs and the browser store.
 #[tauri::command]
-pub fn panel_mcp_entry(app: AppHandle, window: WebviewWindow, cwd: String) -> Result<McpEntry, String> {
+pub fn panel_mcp_entry(app: AppHandle, window: Window, cwd: String) -> Result<McpEntry, String> {
     app.state::<PanelRoots>().set(window.label(), panels::project_dir(&cwd)?);
     let socket = socket(&app)?;
     let token = app.state::<PanelMcp>().token_for(window.label());

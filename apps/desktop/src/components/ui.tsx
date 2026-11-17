@@ -60,11 +60,21 @@ export function useEscape(handler: (() => void) | null) {
     }
     const entry = { get current() { return ref.current; } };
     escapeStack.push(entry);
+    overlayListeners.forEach((l) => l());
     return () => {
       const i = escapeStack.indexOf(entry);
       if (i >= 0) escapeStack.splice(i, 1);
+      overlayListeners.forEach((l) => l());
     };
   }, []);
+}
+
+const overlayListeners = new Set<() => void>();
+
+/** Called whenever an overlay layer opens or closes (native views laid over the page hide under one). */
+export function onOverlayChange(listener: () => void): () => void {
+  overlayListeners.add(listener);
+  return () => overlayListeners.delete(listener);
 }
 
 /** True while any overlay layer is open (global shortcuts back off). */

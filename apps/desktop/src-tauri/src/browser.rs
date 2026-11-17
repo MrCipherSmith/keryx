@@ -20,11 +20,11 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 use tauri::webview::{NewWindowResponse, PageLoadEvent, WebviewBuilder};
-use tauri::{AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, Url, Webview, WebviewUrl, WebviewWindow};
+use tauri::{AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, Url, Webview, WebviewUrl, Window};
 
 pub const LOAD_TIMEOUT: Duration = Duration::from_secs(20);
 
-/// Logical pixels in the window's content area.
+/// Logical pixels in the app page's own coordinates (its content area).
 #[derive(Deserialize, Serialize, Clone, Copy, Debug, PartialEq)]
 pub struct Bounds {
     pub x: f64,
@@ -70,38 +70,14 @@ pub struct BrowserTab {
     changed: Condvar,
 }
 
-impl BrowserTab {
-    pub fn finished(&self) -> u64 {
-        self.load.lock().unwrap().finished
-    }
-
-    /// Wait for a load to finish after `after` finished loads, up to `timeout`.
-    pub fn wait_loaded(&self, after: u64, timeout: Duration) -> bool {
-        let deadline = Instant::now() + timeout;
-        let mut load = self.load.lock().unwrap();
-        while load.finished <= after || load.loading {
-            let now = Instant::now();
-            if now >= deadline {
-                return false;
-            }
-            load = self.changed.wait_timeout(load, deadline - now).unwrap().0;
-        }
-        true
-    }
-
-    /// Whether a navigation started after `after` finished loads.
-    pub fn navigating_since(&self, after: u64) -> bool {
-        let load = self.load.lock().unwrap();
-        load.loading || load.finished > after
-    }
-}
-
 #[derive(Default)]
 struct WindowTabs {
     tabs: Vec<Arc<BrowserTab>>,
     active: Option<u64>,
     bounds: Option<Bounds>,
     visible: bool,
+    /// Newest `browser_layout` call applied (calls may arrive out of order).
+    layout_seq: u64,
 }
 
 #[derive(Default)]
@@ -213,11 +189,14 @@ pub fn apply_layout(app: &AppHandle, window: &str) {
     let (tabs, active, bounds, visible) = app
         .state::<Browsers>()
         .with_window(window, |w| (w.tabs.clone(), w.active, w.bounds, w.visible));
+    // Child web views are placed in the window frame, title bar included, while the page measures
+    // from its own top: shift by the gap between the frame and the app's own web view.
+    let top = app.get_window(window).map(|w| webkit::title_bar_height(&w)).unwrap_or(0.0);
     for t in tabs {
         let Some(wv) = app.get_webview(&t.label) else { continue };
         match (visible && active == Some(t.id), bounds) {
             (true, Some(b)) if b.width >= 1.0 && b.height >= 1.0 => {
-                let _ = wv.set_position(LogicalPosition::new(b.x, b.y));
+                let _ = wv.set_position(LogicalPosition::new(b.x, b.y + top));
                 let _ = wv.set_size(LogicalSize::new(b.width, b.height));
                 let _ = wv.show();
             }
@@ -260,7 +239,7 @@ const CONSOLE_SHIM: &str = r#"(() => {
 })();"#;
 
 /// Open a tab on `url` in `window` and make it the active one.
-pub fn open_tab(app: &AppHandle, window: &WebviewWindow, url: Url) -> Result<BrowserTabInfo, String> {
+pub fn open_tab(app: &AppHandle, window: &Window, url: Url) -> Result<BrowserTabInfo, String> {
     let label = window.label().to_string();
     let root = app.state::<PanelRoots>().get(&label);
     let id = app.state::<Browsers>().next.fetch_add(1, Ordering::SeqCst) + 1;
@@ -329,11 +308,18 @@ pub fn open_tab(app: &AppHandle, window: &WebviewWindow, url: Url) -> Result<Bro
         Some(b) => (LogicalPosition::new(b.x, b.y), LogicalSize::new(b.width.max(1.0), b.height.max(1.0))),
         None => (LogicalPosition::new(0.0, 0.0), LogicalSize::new(1.0, 1.0)),
     };
-    window.as_ref().window().add_child(builder, pos, size).map_err(|e| format!("Could not open a browser tab: {e}"))?;
-    app.state::<Browsers>().with_window(&label, |w| {
+    // Registered first: the page's first load and title events may arrive before `add_child` returns.
+    let previous = app.state::<Browsers>().with_window(&label, |w| {
         w.tabs.push(tab.clone());
-        w.active = Some(id);
+        w.active.replace(id)
     });
+    if let Err(e) = window.add_child(builder, pos, size) {
+        app.state::<Browsers>().with_window(&label, |w| {
+            w.tabs.retain(|t| t.id != id);
+            w.active = previous;
+        });
+        return Err(format!("Could not open a browser tab: {e}"));
+    }
     apply_layout(app, &label);
     let info = app.state::<Browsers>().info(&label, id).expect("tab just added");
     emit(app, &label, BrowserEvent::Tab { tab: info.clone() });
@@ -504,6 +490,24 @@ pub fn run_js(app: &AppHandle, tab: &BrowserTab, body: String, world: World) -> 
     Ok(value)
 }
 
+/// Wait until the page has finished loading: `document.readyState` is
+/// `complete` after a short settle (a navigation that just started still
+/// reports the old document for a moment). Page-load callbacks are not relied
+/// on: WebKit does not report every finished navigation to them.
+pub fn wait_ready(app: &AppHandle, tab: &BrowserTab, timeout: Duration) -> bool {
+    let deadline = Instant::now() + timeout;
+    std::thread::sleep(Duration::from_millis(300));
+    while Instant::now() < deadline {
+        if let Ok(v) = run_js(app, tab, r#"return JSON.stringify({ state: document.readyState });"#.into(), World::Client) {
+            if v.get("state").and_then(|s| s.as_str()) == Some("complete") {
+                return true;
+            }
+        }
+        std::thread::sleep(Duration::from_millis(150));
+    }
+    false
+}
+
 pub fn screenshot(app: &AppHandle, tab: &BrowserTab) -> Result<Vec<u8>, String> {
     webkit::snapshot_png(&webview(app, tab)?)
 }
@@ -515,7 +519,7 @@ pub fn go(app: &AppHandle, tab: &BrowserTab, forward: bool) -> Result<(), String
 // ---- commands (async: `add_child` and WebKit calls wait on the main thread) ----
 
 #[tauri::command]
-pub async fn browser_open(app: AppHandle, window: WebviewWindow, cwd: String, url: String) -> Result<BrowserTabInfo, String> {
+pub async fn browser_open(app: AppHandle, window: Window, cwd: String, url: String) -> Result<BrowserTabInfo, String> {
     app.state::<PanelRoots>().set(window.label(), crate::panels::project_dir(&cwd)?);
     let url = normalize_url(&url)?;
     if !page_allowed(&url, crate::navigation::dev_url(&app).as_ref()) {
@@ -525,13 +529,13 @@ pub async fn browser_open(app: AppHandle, window: WebviewWindow, cwd: String, ur
 }
 
 #[tauri::command]
-pub async fn browser_navigate(app: AppHandle, window: WebviewWindow, id: u64, url: String) -> Result<(), String> {
+pub async fn browser_navigate(app: AppHandle, window: Window, id: u64, url: String) -> Result<(), String> {
     let tab = app.state::<Browsers>().tab(window.label(), Some(id))?;
     navigate(&app, &tab, normalize_url(&url)?)
 }
 
 #[tauri::command]
-pub async fn browser_go(app: AppHandle, window: WebviewWindow, id: u64, action: String) -> Result<(), String> {
+pub async fn browser_go(app: AppHandle, window: Window, id: u64, action: String) -> Result<(), String> {
     let tab = app.state::<Browsers>().tab(window.label(), Some(id))?;
     match action.as_str() {
         "back" => go(&app, &tab, false),
@@ -542,30 +546,37 @@ pub async fn browser_go(app: AppHandle, window: WebviewWindow, id: u64, action: 
 }
 
 #[tauri::command]
-pub async fn browser_close(app: AppHandle, window: WebviewWindow, id: u64) -> Result<(), String> {
+pub async fn browser_close(app: AppHandle, window: Window, id: u64) -> Result<(), String> {
     close_tab(&app, window.label(), id)
 }
 
 #[tauri::command]
-pub async fn browser_select(app: AppHandle, window: WebviewWindow, id: u64) -> Result<(), String> {
+pub async fn browser_select(app: AppHandle, window: Window, id: u64) -> Result<(), String> {
     select(&app, window.label(), id)
 }
 
 /// Where the panel body is and whether the browser is showing; `None` bounds hide every tab.
 #[tauri::command]
-pub async fn browser_layout(app: AppHandle, window: WebviewWindow, bounds: Option<Bounds>, visible: bool) -> Result<(), String> {
-    app.state::<Browsers>().with_window(window.label(), |w| {
+pub async fn browser_layout(app: AppHandle, window: Window, bounds: Option<Bounds>, visible: bool, seq: u64) -> Result<(), String> {
+    let fresh = app.state::<Browsers>().with_window(window.label(), |w| {
+        if seq < w.layout_seq {
+            return false;
+        }
+        w.layout_seq = seq;
         if bounds.is_some() {
             w.bounds = bounds;
         }
         w.visible = visible && bounds.is_some();
+        true
     });
-    apply_layout(&app, window.label());
+    if fresh {
+        apply_layout(&app, window.label());
+    }
     Ok(())
 }
 
 #[tauri::command]
-pub fn browser_list(app: AppHandle, window: WebviewWindow) -> Vec<BrowserTabInfo> {
+pub fn browser_list(app: AppHandle, window: Window) -> Vec<BrowserTabInfo> {
     app.state::<Browsers>().list(window.label())
 }
 

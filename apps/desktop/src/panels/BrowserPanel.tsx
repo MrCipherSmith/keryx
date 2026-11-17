@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Icon } from "../components/Icon";
-import { overlayOpen } from "../components/ui";
+import { onOverlayChange, overlayOpen } from "../components/ui";
 import {
   browserClose,
   browserGo,
@@ -99,20 +99,16 @@ export function BrowserPanel({ cwd, visible }: { cwd: string; visible: boolean }
     if (el) ro.observe(el);
     window.addEventListener("resize", layout);
     // Dialogs and menus come and go without resizing anything.
-    let overlay = overlayOpen();
-    const poll = window.setInterval(() => {
-      if (overlayOpen() !== overlay) {
-        overlay = overlayOpen();
-        layout();
-      }
-    }, 200);
+    const offOverlay = onOverlayChange(layout);
     return () => {
       ro.disconnect();
       window.removeEventListener("resize", layout);
-      window.clearInterval(poll);
-      void browserLayout(null, false).catch(() => {});
+      offOverlay();
     };
   }, [layout]);
+
+  // Leaving the panel hides the pages; they keep running for when it comes back.
+  useEffect(() => () => void browserLayout(null, false).catch(() => {}), []);
 
   const go = async (raw: string) => {
     setError(null);

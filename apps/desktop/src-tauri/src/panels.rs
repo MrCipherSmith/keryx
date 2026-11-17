@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::ipc::Channel;
-use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow};
+use tauri::{AppHandle, Emitter, Manager, State, Window};
 
 /// The project root each window's panel runs in, set by `panel_register`.
 #[derive(Default)]
@@ -59,7 +59,7 @@ pub fn open_tab(app: &AppHandle, window: &str, root: &Path, owner: Owner, cols: 
 #[tauri::command]
 pub async fn pty_open(
     app: AppHandle,
-    window: WebviewWindow,
+    window: Window,
     cwd: String,
     cols: u16,
     rows: u16,
@@ -73,24 +73,24 @@ pub async fn pty_open(
 }
 
 #[tauri::command]
-pub fn pty_attach(window: WebviewWindow, ptys: State<'_, PtyManager>, id: u64, on_event: Channel<PtyEvent>) -> Result<TabInfo, String> {
+pub fn pty_attach(window: Window, ptys: State<'_, PtyManager>, id: u64, on_event: Channel<PtyEvent>) -> Result<TabInfo, String> {
     let pty = ptys.get(window.label(), id)?;
     pty.attach(sink(on_event));
     Ok(pty.info())
 }
 
 #[tauri::command]
-pub fn pty_write(window: WebviewWindow, ptys: State<'_, PtyManager>, id: u64, data: String) -> Result<(), String> {
+pub fn pty_write(window: Window, ptys: State<'_, PtyManager>, id: u64, data: String) -> Result<(), String> {
     ptys.get(window.label(), id)?.write(data.as_bytes())
 }
 
 #[tauri::command]
-pub fn pty_resize(window: WebviewWindow, ptys: State<'_, PtyManager>, id: u64, cols: u16, rows: u16) -> Result<(), String> {
+pub fn pty_resize(window: Window, ptys: State<'_, PtyManager>, id: u64, cols: u16, rows: u16) -> Result<(), String> {
     ptys.get(window.label(), id)?.resize(cols, rows)
 }
 
 #[tauri::command]
-pub async fn pty_close(app: AppHandle, window: WebviewWindow, id: u64) -> Result<(), String> {
+pub async fn pty_close(app: AppHandle, window: Window, id: u64) -> Result<(), String> {
     let label = window.label().to_string();
     tauri::async_runtime::spawn_blocking(move || app.state::<PtyManager>().close(&label, id))
         .await
@@ -98,6 +98,6 @@ pub async fn pty_close(app: AppHandle, window: WebviewWindow, id: u64) -> Result
 }
 
 #[tauri::command]
-pub fn pty_list(window: WebviewWindow, ptys: State<'_, PtyManager>) -> Vec<TabInfo> {
+pub fn pty_list(window: Window, ptys: State<'_, PtyManager>) -> Vec<TabInfo> {
     ptys.list(window.label())
 }

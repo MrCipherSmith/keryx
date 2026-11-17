@@ -56,7 +56,11 @@ export const browserNavigate = (id: number, url: string) => invoke<void>("browse
 export const browserGo = (id: number, action: "back" | "forward" | "reload") => invoke<void>("browser_go", { id, action });
 export const browserClose = (id: number) => invoke<void>("browser_close", { id });
 export const browserSelect = (id: number) => invoke<void>("browser_select", { id });
-export const browserLayout = (bounds: Bounds | null, visible: boolean) => invoke<void>("browser_layout", { bounds, visible });
+// Layout calls carry a sequence number: the host runs commands concurrently and drops a call older
+// than one it already applied, so a hide issued before a show cannot land after it.
+let layoutSeq = 0;
+export const browserLayout = (bounds: Bounds | null, visible: boolean) =>
+  invoke<void>("browser_layout", { bounds, visible, seq: ++layoutSeq });
 export const onBrowserEvent = (handler: (e: BrowserEvent) => void): Promise<Unlisten> => listen<BrowserEvent>("panel://browser", handler);
 
 // ---- the panel's MCP server, for keryx sessions -----------------------------
