@@ -551,7 +551,8 @@ export function retiredRuleWarning(
     case "kept-destination-missing": {
       const movedTo = outcome.movedTo ?? outcome.fileName;
       return `${prefix}; the old copy was kept because rules/${movedTo} is not installed as a regular file in a `
-        + `plain rules/${movedTo.split("/")[0]}/ directory — fix that folder and re-run, and keryx will remove the old copy`;
+        + `plain rules/${movedTo.split("/")[0]}/ directory — if that folder is a symlink or a file, replace it with a `
+        + `real directory and re-run; keryx removes the old copy once the new path is in place`;
     }
     case "kept-not-regular-file":
       return `${prefix}; kept because it is not a regular file (a symlink, directory, or similar) — keryx will not read or remove it; delete or rename it yourself if appropriate`;

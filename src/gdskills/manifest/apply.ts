@@ -42,6 +42,14 @@ export interface ApplySkippedFile {
 export interface ApplyResult {
   ok: boolean;
   written: string[];
+  /**
+   * Planned files that already exist, unrecorded, with exactly the bundled
+   * bytes — another keryx writer put them there (`keryx init`/`update`
+   * publish the rules and skills they own). They count as satisfied, are left
+   * alone and are NOT recorded, so `skills uninstall` never removes a file
+   * this install did not write.
+   */
+  alreadyPresent: string[];
   skipped: ApplySkippedFile[];
   errors: string[];
 }
@@ -52,7 +60,7 @@ export async function applyInstall(
   options: ApplyOptions = {},
 ): Promise<ApplyResult> {
   if (!plan.ok) {
-    return { ok: false, written: [], skipped: [], errors: ["cannot apply a plan with errors — see plan.errors"] };
+    return { ok: false, written: [], alreadyPresent: [], skipped: [], errors: ["cannot apply a plan with errors — see plan.errors"] };
   }
   const sourceRoot = options.sourceRoot ?? destRoot;
 
@@ -64,6 +72,7 @@ export async function applyInstall(
     return {
       ok: false,
       written: [],
+      alreadyPresent: [],
       skipped: [],
       errors: [
         `install-state for target "${plan.target}" exists but is not valid install-state JSON (corrupt or schema-invalid) — refusing to apply until it is repaired`,
@@ -86,6 +95,7 @@ export async function applyInstall(
         return {
           ok: false,
           written: [],
+          alreadyPresent: [],
           skipped: [],
           errors: [
             `install-state for target "${plan.target}" module "${record.moduleId}" records an unsafe path ` +
@@ -104,6 +114,7 @@ export async function applyInstall(
   }
 
   const written: string[] = [];
+  const alreadyPresent: string[] = [];
   const skipped: ApplySkippedFile[] = [];
   const moduleRecords: InstalledModuleRecord[] = [];
 
@@ -142,13 +153,13 @@ export async function applyInstall(
           throw error;
         }
         if (recordedHash === undefined && currentHash !== undefined && currentHash === file.sha256) {
-          // Byte-identical to the bundled source: another keryx writer put it
-          // there (ADR-0001 P2 — `keryx init`/`update` publish
-          // `rules/process/agent-conduct.mdc` with the routing pair, without
-          // this install-state). Nothing would change by writing it, so adopt
-          // it: record it as installed, without counting it as written.
-          writtenPaths.push(file.destination);
-          sha256[file.destination] = currentHash;
+          // Byte-identical to the bundled source, and not ours: another keryx
+          // writer put it there (ADR-0001 P2 — `keryx init`/`update` publish
+          // `rules/process/agent-conduct.mdc` with the routing pair). Nothing
+          // would change by writing it, so it is satisfied. It is deliberately
+          // NOT recorded: recording it would hand it to `skills uninstall`,
+          // which would then delete a file this install never wrote.
+          alreadyPresent.push(file.destination);
           continue;
         }
         if (recordedHash === undefined) {
@@ -156,6 +167,14 @@ export async function applyInstall(
             path: file.destination,
             reason: "a file already exists at this destination and is not recorded in install-state",
           });
+          continue;
+        }
+        if (currentHash !== recordedHash && currentHash !== undefined && currentHash === file.sha256) {
+          // Recorded under an older bundled version, and the file on disk
+          // already holds the new bundled bytes (another keryx writer updated
+          // it first). Up to date, not drift: refresh the recorded hash.
+          writtenPaths.push(file.destination);
+          sha256[file.destination] = currentHash;
           continue;
         }
         if (currentHash !== recordedHash) {
@@ -196,5 +215,5 @@ export async function applyInstall(
 
   await writeSkillsInstallState(destRoot, plan.target, moduleRecords, plan.profile);
 
-  return { ok: skipped.length === 0, written, skipped, errors: [] };
+  return { ok: skipped.length === 0, written, alreadyPresent, skipped, errors: [] };
 }

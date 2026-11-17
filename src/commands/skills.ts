@@ -630,6 +630,12 @@ async function installFromManifest(opts: {
   } else {
     printInstallPlanHuman(plan);
     console.log(`  ${style.green(symbols.ok)} Wrote ${result.written.length} file(s) for target "${plan.target}".`);
+    if (result.alreadyPresent.length > 0) {
+      console.log(
+        `  ${style.green(symbols.ok)} ${result.alreadyPresent.length} file(s) already present with the bundled content ` +
+          "(written by keryx init/update) — left alone and not recorded, so uninstall will not remove them.",
+      );
+    }
     if (result.skipped.length > 0) {
       console.log("Skipped (existing file not recorded in install-state, or drifted — rerun with --force to overwrite):");
       for (const skipped of result.skipped) {

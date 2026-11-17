@@ -1738,3 +1738,88 @@ test("installGdskills reports a completed move as a notice, not a warning", asyn
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("a moved rule is not removed from core when its layer folder is real but the new file is not in it", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-rule-move-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    const stale = path.join(metaprojectRoot, "rules", "core", "moved.mdc");
+    await mkdir(path.dirname(stale), { recursive: true });
+    await writeFile(stale, MOVED_V2);
+    const otherProcess = path.join(root, "other-process");
+    await mkdir(otherProcess, { recursive: true });
+    await writeFile(path.join(otherProcess, "unrelated.mdc"), "unrelated\n");
+    const bundleFor = await layeredBundle(root, false);
+
+    const result = await installBundledRules(metaprojectRoot, {
+      sourcePathFor: (layer) => (layer === "process" ? otherProcess : bundleFor(layer)),
+      cleanupEntries: [FIXTURE_MOVE],
+    });
+
+    expect(existsSync(path.join(metaprojectRoot, "rules", "process", "unrelated.mdc"))).toBe(true);
+    expect(result.outcomes).toEqual([{ fileName: "moved.mdc", movedTo: "process/moved.mdc", action: "kept-destination-missing" }]);
+    expect(await readFile(stale, "utf8")).toBe(MOVED_V2);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a plain retired removal is not reported as a move", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-rule-move-"));
+  try {
+    const rulesCore = path.join(root, "core");
+    await mkdir(rulesCore, { recursive: true });
+    await writeFile(path.join(rulesCore, "gone.mdc"), MOVED_V1);
+    const retired = { fileName: "gone.mdc", shippedSha256: [sha(MOVED_V1)], reason: "fixture" };
+    const outcomes = await removeUnmodifiedRetiredRules(rulesCore, undefined, [retired]);
+    expect(outcomes).toEqual([{ fileName: "gone.mdc", action: "removed" }]);
+    expect(outcomes.map(movedRuleNotice)).toEqual([null]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("an edited moved copy is kept on every run, never removed by a later one", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-rule-move-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    const stale = path.join(metaprojectRoot, "rules", "core", "moved.mdc");
+    await mkdir(path.dirname(stale), { recursive: true });
+    await writeFile(stale, `${MOVED_V1}edited\n`);
+    const seams = { sourcePathFor: await layeredBundle(root, false), cleanupEntries: [FIXTURE_MOVE] };
+
+    for (let run = 0; run < 2; run += 1) {
+      const result = await installBundledRules(metaprojectRoot, seams);
+      expect(result.outcomes.map((o) => o.action)).toEqual(["kept-modified"]);
+      expect(await readFile(stale, "utf8")).toBe(`${MOVED_V1}edited\n`);
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a moved rule is not removed from core when its new path is a directory or a symlink, not a file", async () => {
+  for (const shape of ["directory", "symlink"] as const) {
+    const root = await mkdtemp(path.join(tmpdir(), "keryx-rule-move-"));
+    try {
+      const rulesCore = path.join(root, "core");
+      await mkdir(rulesCore, { recursive: true });
+      await writeFile(path.join(rulesCore, "moved.mdc"), MOVED_V2);
+      await mkdir(path.join(root, "process"), { recursive: true });
+      const newPath = path.join(root, "process", "moved.mdc");
+      if (shape === "directory") {
+        await mkdir(newPath);
+      } else {
+        await writeFile(path.join(root, "elsewhere.mdc"), "moved rule, new home\n");
+        await symlink(path.join(root, "elsewhere.mdc"), newPath);
+      }
+
+      expect(await removeUnmodifiedRetiredRules(rulesCore, undefined, [FIXTURE_MOVE])).toEqual([
+        { fileName: "moved.mdc", movedTo: "process/moved.mdc", action: "kept-destination-missing" },
+      ]);
+      expect(existsSync(path.join(rulesCore, "moved.mdc"))).toBe(true);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }
+});

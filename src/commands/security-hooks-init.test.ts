@@ -11,6 +11,7 @@ import { applyInstall } from "../gdskills/manifest/apply";
 import { doctorInstall } from "../gdskills/manifest/doctor";
 import { defaultBundledSourceRoot, loadBundledManifest } from "../gdskills/manifest/manifest";
 import { planInstall } from "../gdskills/manifest/plan";
+import { uninstallInstall } from "../gdskills/manifest/uninstall";
 
 const SECURITY_ONLY = [
   "--no-gdgraph",
@@ -467,9 +468,11 @@ test("init and update install the commit-msg hook and the conduct rule, even wit
   });
 });
 
-test("after init, the manifest form of skills install applies cleanly over the conduct rule init wrote (ADR-0001 P2)", async () => {
+test("after init, the manifest form of skills install applies cleanly, and uninstall leaves init's files (ADR-0001 P2)", async () => {
   await withProject(async (root) => {
     await initCommand(["--yes", ...SECURITY_ONLY]);
+    const conduct = ".metaproject/rules/process/agent-conduct.mdc";
+    const conductBefore = await readFile(path.join(root, conduct), "utf8");
     const sourceRoot = defaultBundledSourceRoot();
     const plan = await planInstall({
       manifest: loadBundledManifest(),
@@ -482,12 +485,15 @@ test("after init, the manifest form of skills install applies cleanly over the c
     const result = await applyInstall(plan, root, { sourceRoot });
     expect(result.skipped).toEqual([]);
     expect(result.ok).toBe(true);
-    // Adopted, not rewritten: init's copy was already the bundled bytes.
-    expect(result.written).not.toContain(".metaproject/rules/process/agent-conduct.mdc");
-
+    // init's copy is already the bundled bytes: satisfied, not rewritten, not recorded.
+    expect(result.alreadyPresent).toContain(conduct);
+    expect(result.written).not.toContain(conduct);
     const doctor = await doctorInstall(root, "keryx-shell");
-    expect(doctor.entries.find((e) => e.path === ".metaproject/rules/process/agent-conduct.mdc")?.status).toBe("ok");
-    expect(doctor.entries.filter((e) => e.status !== "ok")).toEqual([]);
+    expect(doctor.ok).toBe(true);
+
+    const uninstall = await uninstallInstall(root, "keryx-shell");
+    expect(uninstall.removed).not.toContain(conduct);
+    expect(await readFile(path.join(root, conduct), "utf8")).toBe(conductBefore);
   });
 });
 
