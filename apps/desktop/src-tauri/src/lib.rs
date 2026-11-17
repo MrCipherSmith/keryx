@@ -27,7 +27,7 @@ pub fn run() {
         .on_window_event(|window, event| {
             if let WindowEvent::Destroyed = event {
                 // Never wait out the stop grace period on the event loop.
-                window.app_handle().state::<bridge::AppState>().stop_window_in_background(window.label());
+                window.app_handle().state::<bridge::AppState>().window_destroyed(window.label());
                 window.app_handle().state::<flows::watch::FlowWatchers>().stop_window(window.label());
             }
         })

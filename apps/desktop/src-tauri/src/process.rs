@@ -2,19 +2,35 @@
 //!
 //! Independent of Tauri so the live smoke test can drive it directly. Threads:
 //! one reads stdout through the line decoder, one drains stderr into a log file
-//! (and a short in-memory tail), one polls for exit.
+//! (and a short in-memory tail), one owns stdin and writes queued lines, one
+//! polls for exit.
+//!
+//! Two invariants keep a stop safe:
+//! - No lock the stop path takes is ever held across a pipe write: lines go to
+//!   the writer thread through a bounded queue, so a keryx that stops reading
+//!   stdin can stall that thread but never a stop or a caller of `send_line`.
+//! - The child is reaped only under the `child` mutex, and only after its
+//!   process group was swept. Every raw signal is sent under that mutex after
+//!   checking the child is not yet reaped, so a signal never reaches a pid or
+//!   process group the kernel may have handed to another process.
 
 use crate::framing::{self, Frame, LineDecoder};
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::path::PathBuf;
-use std::process::{Child, ChildStdin, Command, Stdio};
+use std::process::{Child, ChildStdin, Command, ExitStatus, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{self, SyncSender, TrySendError};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 const STDERR_TAIL_BYTES: usize = 4096;
 const LOG_ROTATE_BYTES: u64 = 5 * 1024 * 1024;
+/// Lines waiting for the stdin writer. A keryx that reads its input keeps this
+/// near empty; a full queue means keryx stopped reading, and `send_line` fails
+/// instead of blocking.
+const STDIN_QUEUE_LINES: usize = 32;
+const EXIT_POLL: Duration = Duration::from_millis(40);
 /// How long keryx gets after stdin closes and SIGTERM lands. Its own shutdown
 /// drains background shell tasks (2 s) and MCP servers (up to 4.5 s), so this
 /// stays above that sum; only then is the whole process group killed.
@@ -38,10 +54,32 @@ pub enum ProcessEvent {
     Exit { code: Option<i32>, stderr_tail: String },
 }
 
+struct ChildSlot {
+    child: Child,
+    /// Set once the child was waited for; its pid may be reused from then on.
+    reaped: bool,
+    status: Option<ExitStatus>,
+}
+
 pub struct AcpProcess {
-    child: Mutex<Child>,
-    stdin: Mutex<Option<ChildStdin>>,
+    child: Mutex<ChildSlot>,
+    /// The queue to the stdin writer thread. `None` once stopped; dropping the
+    /// sender closes stdin after the queued lines are written.
+    stdin: Mutex<Option<SyncSender<Vec<u8>>>>,
     stopped: AtomicBool,
+    /// Every raw signal sent, for tests: `(target, signal)`.
+    #[cfg(test)]
+    signals: Mutex<Vec<(i32, i32)>>,
+}
+
+/// Owns the child's stdin: writes queued lines until the queue closes (stop)
+/// or a write fails (keryx gone). Blocking here blocks nobody else.
+fn run_stdin_writer(mut stdin: ChildStdin, lines: mpsc::Receiver<Vec<u8>>) {
+    for bytes in lines {
+        if stdin.write_all(&bytes).and_then(|_| stdin.flush()).is_err() {
+            return;
+        }
+    }
 }
 
 fn open_log(path: &PathBuf) -> Option<std::fs::File> {
@@ -77,14 +115,19 @@ impl AcpProcess {
             cmd.process_group(0);
         }
         let mut child = cmd.spawn()?;
-        let stdin = child.stdin.take();
+        let stdin = child.stdin.take().expect("stdin piped");
         let mut stdout = child.stdout.take().expect("stdout piped");
         let mut stderr = child.stderr.take().expect("stderr piped");
 
+        let (stdin_tx, stdin_rx) = mpsc::sync_channel(STDIN_QUEUE_LINES);
+        std::thread::spawn(move || run_stdin_writer(stdin, stdin_rx));
+
         let proc = Arc::new(AcpProcess {
-            child: Mutex::new(child),
-            stdin: Mutex::new(stdin),
+            child: Mutex::new(ChildSlot { child, reaped: false, status: None }),
+            stdin: Mutex::new(Some(stdin_tx)),
             stopped: AtomicBool::new(false),
+            #[cfg(test)]
+            signals: Mutex::new(Vec::new()),
         });
         let on_event = Arc::new(on_event);
         let tail: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(Vec::new()));
@@ -149,14 +192,12 @@ impl AcpProcess {
             let proc = proc.clone();
             let tail = tail.clone();
             std::thread::spawn(move || {
-                let status = loop {
-                    let polled = proc.child.lock().unwrap().try_wait();
-                    match polled {
-                        Ok(Some(status)) => break Some(status),
-                        Ok(None) => std::thread::sleep(Duration::from_millis(40)),
-                        Err(_) => break None,
-                    }
-                };
+                while !proc.has_exited() {
+                    std::thread::sleep(EXIT_POLL);
+                }
+                // Sweep what keryx left in its group, then reap (no-op when a
+                // concurrent stop already did both).
+                let status = proc.sweep_and_reap();
                 // Let the stdout reader drain what the child wrote before exiting.
                 let deadline = Instant::now() + Duration::from_secs(2);
                 while !stdout_done.load(Ordering::SeqCst) && Instant::now() < deadline {
@@ -167,10 +208,7 @@ impl AcpProcess {
                     return;
                 }
                 let stderr_tail = String::from_utf8_lossy(&tail.lock().unwrap()).into_owned();
-                on_event(
-                    &proc,
-                    ProcessEvent::Exit { code: status.and_then(|s| s.code()), stderr_tail },
-                );
+                on_event(&proc, ProcessEvent::Exit { code: status.and_then(|s| s.code()), stderr_tail });
             });
         }
 
@@ -181,15 +219,19 @@ impl AcpProcess {
         self.stopped.load(Ordering::SeqCst)
     }
 
-    /// Write one framed message to the child's stdin.
+    /// Queue one framed message for the child's stdin. Never blocks on the
+    /// pipe: fails when keryx is stopped, gone, or no longer reading its input.
     pub fn send_line(&self, message: &str) -> Result<(), String> {
         if self.is_stopped() {
             return Err("keryx is not running".into());
         }
         let bytes = framing::encode(message).map_err(|e| e.to_string())?;
-        let mut guard = self.stdin.lock().unwrap();
-        let stdin = guard.as_mut().ok_or("keryx is not running")?;
-        stdin.write_all(&bytes).and_then(|_| stdin.flush()).map_err(|e| format!("write to keryx failed: {e}"))
+        let guard = self.stdin.lock().unwrap();
+        let queue = guard.as_ref().ok_or("keryx is not running")?;
+        queue.try_send(bytes).map_err(|e| match e {
+            TrySendError::Full(_) => "keryx is not reading its input; the message was not sent".to_string(),
+            TrySendError::Disconnected(_) => "keryx is not running".to_string(),
+        })
     }
 
     /// Stop the child with the default grace period. See [`kill_with_grace`].
@@ -201,40 +243,83 @@ impl AcpProcess {
     /// signal that aborts an in-flight turn), wait up to `grace` for keryx to
     /// finish its own drain, then SIGKILL the whole process group. The group is
     /// also swept after a clean exit so no background task outlives the window.
+    /// A child that already exited and was reaped gets no signal at all.
     /// Suppresses the exit event.
     pub fn kill_with_grace(&self, grace: Duration) {
         self.stopped.store(true, Ordering::SeqCst);
+        // Dropping the sender never waits on the writer thread, even one stuck
+        // in a write to a keryx that stopped reading.
         drop(self.stdin.lock().unwrap().take());
-        let pid = self.child.lock().unwrap().id();
-        #[cfg(unix)]
-        signal(pid as i32, libc::SIGTERM);
+        {
+            let slot = self.child.lock().unwrap();
+            if slot.reaped {
+                return;
+            }
+            #[cfg(unix)]
+            self.signal(slot.child.id() as i32, libc::SIGTERM);
+        }
         let deadline = Instant::now() + grace;
-        loop {
-            let done = matches!(self.child.lock().unwrap().try_wait(), Ok(Some(_)));
-            if done {
-                break;
-            }
-            if Instant::now() >= deadline {
-                break;
-            }
+        while !self.has_exited() && Instant::now() < deadline {
             std::thread::sleep(Duration::from_millis(25));
         }
-        #[cfg(unix)]
-        signal(-(pid as i32), libc::SIGKILL);
-        let mut child = self.child.lock().unwrap();
-        #[cfg(not(unix))]
-        let _ = child.kill();
-        let _ = child.wait();
+        self.sweep_and_reap();
     }
-}
 
-/// `kill(2)`; a negative pid signals the process group. Errors (ESRCH) mean
-/// the target is already gone.
-#[cfg(unix)]
-fn signal(pid: i32, sig: i32) {
-    // SAFETY: plain syscall with integer arguments.
-    unsafe {
-        libc::kill(pid, sig);
+    /// Whether the child has exited, without reaping it: an exited but
+    /// unreaped child keeps its pid and process group id reserved.
+    #[cfg(unix)]
+    fn has_exited(&self) -> bool {
+        let pid = {
+            let slot = self.child.lock().unwrap();
+            if slot.reaped {
+                return true;
+            }
+            slot.child.id()
+        };
+        // SAFETY: zeroed siginfo_t is a valid out-parameter for waitid.
+        let mut info: libc::siginfo_t = unsafe { std::mem::zeroed() };
+        // SAFETY: plain syscall; WNOWAIT leaves the child waitable.
+        let rc = unsafe {
+            libc::waitid(libc::P_PID, pid as libc::id_t, &mut info, libc::WEXITED | libc::WNOHANG | libc::WNOWAIT)
+        };
+        // rc -1 (ECHILD) means it was reaped meanwhile; with WNOHANG an
+        // unchanged child leaves the zeroed siginfo untouched.
+        rc != 0 || info.si_signo == libc::SIGCHLD
+    }
+
+    #[cfg(not(unix))]
+    fn has_exited(&self) -> bool {
+        let mut slot = self.child.lock().unwrap();
+        slot.reaped || matches!(slot.child.try_wait(), Ok(Some(_)))
+    }
+
+    /// SIGKILL the process group, then reap the child, all under the child
+    /// mutex: the leader is not reaped yet, so the group id is still ours.
+    /// Idempotent; returns the exit status once reaped.
+    fn sweep_and_reap(&self) -> Option<ExitStatus> {
+        let mut slot = self.child.lock().unwrap();
+        if !slot.reaped {
+            #[cfg(unix)]
+            self.signal(-(slot.child.id() as i32), libc::SIGKILL);
+            #[cfg(not(unix))]
+            let _ = slot.child.kill();
+            slot.status = slot.child.wait().ok();
+            slot.reaped = true;
+        }
+        slot.status
+    }
+
+    /// `kill(2)`; a negative pid signals the process group. Errors (ESRCH)
+    /// mean the target is already gone. Callers hold the child mutex and have
+    /// checked the child is not reaped.
+    #[cfg(unix)]
+    fn signal(&self, target: i32, sig: i32) {
+        #[cfg(test)]
+        self.signals.lock().unwrap().push((target, sig));
+        // SAFETY: plain syscall with integer arguments.
+        unsafe {
+            libc::kill(target, sig);
+        }
     }
 }
 
@@ -315,5 +400,113 @@ mod tests {
         proc.kill_with_grace(Duration::from_secs(5));
         assert!(started.elapsed() < Duration::from_secs(4), "a cooperative child stops quickly");
         assert_gone(grandchild);
+    }
+
+    /// Runs `f` on a thread and fails (instead of hanging the suite) when it
+    /// does not return within `limit`.
+    fn within<T: Send + 'static>(limit: Duration, what: &str, f: impl FnOnce() -> T + Send + 'static) -> T {
+        let (tx, rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = tx.send(f());
+        });
+        rx.recv_timeout(limit).unwrap_or_else(|_| panic!("{what} did not return within {limit:?}"))
+    }
+
+    #[test]
+    fn a_stop_is_not_blocked_by_a_write_to_a_child_that_stopped_reading_stdin() {
+        let dir = tempfile::tempdir().unwrap();
+        // Never reads stdin and ignores TERM: only the group SIGKILL ends it.
+        let (proc, grandchild) = spawn_script(
+            dir.path(),
+            "trap '' TERM\nsleep 300 &\necho $! > \"$1\"\nwhile true; do sleep 1; done\n",
+        );
+        // Far larger than a pipe buffer, so a direct write would block.
+        let big = "x".repeat(4 * 1024 * 1024);
+        let sender = proc.clone();
+        within(Duration::from_secs(2), "send_line", move || sender.send_line(&big)).unwrap();
+        let second = "y".repeat(1024);
+        let sender = proc.clone();
+        within(Duration::from_secs(2), "a second send_line", move || sender.send_line(&second)).unwrap();
+        std::thread::sleep(Duration::from_millis(200));
+
+        let stopper = proc.clone();
+        let started = Instant::now();
+        within(Duration::from_secs(5), "kill_with_grace", move || {
+            stopper.kill_with_grace(Duration::from_millis(300))
+        });
+        assert!(started.elapsed() < Duration::from_secs(3));
+        assert_gone(grandchild);
+        assert!(proc.send_line("{}").is_err(), "a stopped process takes no more input");
+    }
+
+    #[test]
+    fn a_full_stdin_queue_fails_the_send_instead_of_blocking() {
+        let dir = tempfile::tempdir().unwrap();
+        let (proc, _) = spawn_script(dir.path(), "sleep 300 &\necho $! > \"$1\"\nwhile true; do sleep 1; done\n");
+        let big = "x".repeat(1024 * 1024);
+        let sender = proc.clone();
+        let results = within(Duration::from_secs(5), "queued sends", move || {
+            (0..STDIN_QUEUE_LINES + 4).map(|_| sender.send_line(&big)).collect::<Vec<_>>()
+        });
+        assert!(results.iter().any(|r| r.is_err()), "an unread stdin must surface as an error");
+        proc.kill_with_grace(Duration::from_millis(100));
+    }
+
+    #[test]
+    fn a_stop_after_the_child_exited_on_its_own_sends_no_signal() {
+        let dir = tempfile::tempdir().unwrap();
+        let (exit_tx, exit_rx) = mpsc::channel();
+        let exit_tx = Mutex::new(exit_tx);
+        let proc = AcpProcess::spawn(
+            SpawnConfig {
+                program: "/bin/sh".into(),
+                args: vec!["-c".into(), "exit 3".into()],
+                cwd: dir.path().to_path_buf(),
+                env: HashMap::new(),
+                log_path: None,
+            },
+            move |_, event| {
+                if let ProcessEvent::Exit { code, .. } = event {
+                    let _ = exit_tx.lock().unwrap().send(code);
+                }
+            },
+        )
+        .unwrap();
+        let code = exit_rx.recv_timeout(Duration::from_secs(5)).expect("the exit event");
+        assert_eq!(code, Some(3));
+        let swept_on_exit = proc.signals.lock().unwrap().clone();
+
+        proc.kill_with_grace(Duration::from_millis(300));
+        assert!(proc.is_stopped());
+        assert_eq!(
+            *proc.signals.lock().unwrap(),
+            swept_on_exit,
+            "a reaped child's pid may belong to another process: no signal after the reap"
+        );
+        // The group was swept once, before the reap, and never signalled by pid.
+        assert!(swept_on_exit.iter().all(|&(target, sig)| target < 0 && sig == libc::SIGKILL));
+    }
+
+    #[test]
+    fn a_child_that_exits_on_its_own_leaves_no_orphaned_grandchild() {
+        let dir = tempfile::tempdir().unwrap();
+        let script = dir.path().join("fake-keryx.sh");
+        std::fs::write(&script, "sleep 300 &\necho $! > \"$1\"\nsleep 0.5\nexit 0\n").unwrap();
+        let pidfile = dir.path().join("grandchild.pid");
+        let proc = AcpProcess::spawn(
+            SpawnConfig {
+                program: "/bin/sh".into(),
+                args: vec![script.display().to_string(), pidfile.display().to_string()],
+                cwd: dir.path().to_path_buf(),
+                env: HashMap::from([("PATH".to_string(), "/bin:/usr/bin".to_string())]),
+                log_path: None,
+            },
+            |_, _| {},
+        )
+        .unwrap();
+        let grandchild: i32 = wait_for_file(&pidfile).trim().parse().unwrap();
+        assert!(pid_alive(grandchild));
+        assert_gone(grandchild);
+        drop(proc);
     }
 }
