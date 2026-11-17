@@ -32,6 +32,8 @@
  * readdir order.
  */
 
+import { posix, win32 } from "node:path";
+
 // ---------------------------------------------------------------------------
 // Public contract
 // ---------------------------------------------------------------------------
@@ -606,8 +608,16 @@ const DEFAULT_WORKSPACE_GLOBS = ["apps/*", "packages/*", "libs/*"];
 
 /** How deep `dir/**` is followed, and how far `keryx update` looks for a `package.json` an app in a subfolder may have. */
 export const WORKSPACE_SEARCH_DEPTH = 4;
-/** Directories a `**` expansion or a nested-manifest search may visit before giving up. */
-const WORKSPACE_SEARCH_MAX_DIRS = 2000;
+/**
+ * Bounds of the `**` package walk and the nested-manifest search: package
+ * candidates a walk may collect, and directories it may open. Injectable
+ * through `DetectStackOptions.workspaceLimits` for tests.
+ */
+export interface WorkspaceSearchLimits {
+  readonly maxPackages: number;
+  readonly maxVisited: number;
+}
+export const DEFAULT_WORKSPACE_SEARCH_LIMITS: WorkspaceSearchLimits = { maxPackages: 2000, maxVisited: 20000 };
 /** Never package directories: dependencies, build output, VCS and tool state. */
 const WORKSPACE_SKIP_DIRS = new Set(["node_modules", "dist", "build", "out", "coverage", "target", "vendor"]);
 
@@ -631,10 +641,24 @@ function unquote(item: string): string {
 function pnpmWorkspaceGlobs(text: string): string[] {
   const globs: string[] = [];
   let inPackages = false;
+  let flowOpen: string | undefined; // a flow list still open across lines (review R4-4)
+  const flowItems = (body: string): string[] => body.replace(/#.*$/gm, "").split(",").map(unquote).filter((item) => item !== "");
   for (const line of text.split(/\r?\n/)) {
-    const flow = /^packages:\s*\[(.*)\]\s*(#.*)?$/.exec(line);
+    if (flowOpen !== undefined) {
+      const close = line.indexOf("]");
+      if (close === -1) {
+        flowOpen += `\n${line}`;
+        continue;
+      }
+      globs.push(...flowItems(`${flowOpen}\n${line.slice(0, close)}`));
+      flowOpen = undefined;
+      continue;
+    }
+    const flow = /^packages:\s*\[(.*)$/.exec(line);
     if (flow !== null) {
-      globs.push(...flow[1]!.split(",").map(unquote).filter((item) => item !== ""));
+      const close = flow[1]!.indexOf("]");
+      if (close === -1) flowOpen = flow[1]!;
+      else globs.push(...flowItems(flow[1]!.slice(0, close)));
       inPackages = false;
       continue;
     }
@@ -686,19 +710,38 @@ function leavesRepository(glob: string): boolean {
 }
 
 /**
- * Every directory under `dir` (itself included), at most
- * `WORKSPACE_SEARCH_DEPTH` levels down, skipping dot, dependency and build
- * directories. `undefined` when the walk would visit more than
- * `WORKSPACE_SEARCH_MAX_DIRS` directories.
+ * The package directories under `dir` (itself included): a directory holding a
+ * `package.json` is a package and is not descended into (its own `src/`,
+ * tests and fixtures are not workspace packages: review R4-1); any other is
+ * opened, at most `WORKSPACE_SEARCH_DEPTH` levels down, skipping dot,
+ * dependency and build directories. Stops at the first package when
+ * `firstOnly`. `overflow` when the walk hit a limit before finishing.
  */
-async function directoriesUnder(cwd: string, fs: StackDetectFs, dir: string): Promise<string[] | undefined> {
-  const found: string[] = [];
+async function packageDirsUnder(
+  cwd: string,
+  fs: StackDetectFs,
+  dir: string,
+  limits: WorkspaceSearchLimits,
+  firstOnly = false,
+): Promise<{ packages: string[]; overflow: boolean }> {
+  const packages: string[] = [];
   const queue: Array<{ rel: string; depth: number }> = [{ rel: dir, depth: 0 }];
+  let visited = 0;
   while (queue.length > 0) {
     const { rel, depth } = queue.shift()!;
-    found.push(rel);
-    if (found.length > WORKSPACE_SEARCH_MAX_DIRS) return undefined;
+    if (rel !== "" || dir !== "") {
+      // The walk's own root is a candidate only for a workspace glob, not the repository root.
+      const isPackage = await fs.readTextFile(joinPath(cwd, rel, "package.json")).then(() => true, () => false);
+      if (isPackage) {
+        packages.push(rel);
+        if (firstOnly) return { packages, overflow: false };
+        if (packages.length >= limits.maxPackages) return { packages, overflow: queue.length > 0 };
+        continue;
+      }
+    }
     if (depth >= WORKSPACE_SEARCH_DEPTH) continue;
+    visited += 1;
+    if (visited > limits.maxVisited) return { packages, overflow: true };
     let entries: StackDirEntry[];
     try {
       entries = await fs.readDir(rel === "" ? cwd : joinPath(cwd, rel));
@@ -711,22 +754,32 @@ async function directoriesUnder(cwd: string, fs: StackDetectFs, dir: string): Pr
       queue.push({ rel: rel === "" ? entry.name : `${rel}/${entry.name}`, depth: depth + 1 });
     }
   }
-  return found;
+  return { packages, overflow: false };
 }
 
 /**
  * The package directories one workspace glob names: `dir`, `dir/*`,
- * `dir/prefix*`, and `dir/**` (every directory under `dir`, bounded by
- * `WORKSPACE_SEARCH_DEPTH`; review R3-4). Anything else — a wildcard in an
- * earlier segment, a bare `*` or `**`, a `**` tree too large to walk — returns
- * `undefined`.
+ * `dir/prefix*`, and `dir/**` (the packages under `dir`, bounded: review
+ * R3-4, R4-1; a tree too large to walk falls back to what was found plus
+ * `dir/*`). Anything else — a wildcard in an earlier segment, a bare `*` or
+ * `**` — returns `undefined`.
  */
-async function expandWorkspaceGlob(cwd: string, fs: StackDetectFs, glob: string): Promise<string[] | undefined> {
+async function expandWorkspaceGlob(
+  cwd: string,
+  fs: StackDetectFs,
+  glob: string,
+  limits: WorkspaceSearchLimits = DEFAULT_WORKSPACE_SEARCH_LIMITS,
+): Promise<string[] | undefined> {
   const cleaned = glob.replace(/^\.\//, "").replace(/\/+$/, "");
   if (cleaned.endsWith("/**")) {
     const base = cleaned.slice(0, -3);
     if (base.includes("*") || base === "") return undefined;
-    return await directoriesUnder(cwd, fs, base);
+    const walk = await packageDirsUnder(cwd, fs, base, limits);
+    if (!walk.overflow) return walk.packages;
+    // Too large to walk: what was found, plus the first level (`base/*`) —
+    // never every JS pack for a big but ordinary monorepo (review R4-1).
+    const firstLevel = (await expandWorkspaceGlob(cwd, fs, `${base}/*`, limits)) ?? [];
+    return [...new Set([...walk.packages, ...firstLevel])];
   }
   const segments = cleaned.split("/");
   const last = segments.pop()!;
@@ -742,29 +795,32 @@ async function expandWorkspaceGlob(cwd: string, fs: StackDetectFs, glob: string)
 /**
  * Whether a `package.json` exists below `cwd` (the root's own excluded),
  * at most `WORKSPACE_SEARCH_DEPTH` levels down, skipping dot, dependency and
- * build directories — the same bound the workspace reader walks. A tree too
- * large to walk counts as `true`: a JS app there is still plausible. Used by
- * `keryx update` to decide whether a missed JS detection is plausible
+ * build directories — the same bound the workspace reader walks. `true` only
+ * when one is found: a tree too large to search counts as `false`, so a large
+ * non-JS repository is not told forever to install JS packs (review R4-3).
+ * Used by `keryx update` to decide whether a missed JS detection is plausible
  * (review R3-5).
  */
-export async function hasNestedPackageJson(cwd: string, fs: StackDetectFs = defaultStackDetectFs): Promise<boolean> {
-  let dirs: string[] | undefined;
+export async function hasNestedPackageJson(
+  cwd: string,
+  fs: StackDetectFs = defaultStackDetectFs,
+  limits: WorkspaceSearchLimits = DEFAULT_WORKSPACE_SEARCH_LIMITS,
+): Promise<boolean> {
   try {
-    dirs = await directoriesUnder(cwd, fs, "");
+    return (await packageDirsUnder(cwd, fs, "", limits, true)).packages.length > 0;
   } catch {
-    return true;
+    return false;
   }
-  if (dirs === undefined) return true;
-  for (const dir of dirs) {
-    if (dir === "") continue;
-    try {
-      await fs.readTextFile(joinPath(cwd, dir, "package.json"));
-      return true;
-    } catch {
-      // absent
-    }
-  }
-  return false;
+}
+
+/**
+ * Whether `real` lies inside `root` (or is it). Both are real paths from
+ * `StackDetectFs.realPath`, POSIX or Windows (review R4-2).
+ */
+export function isInsideRoot(root: string, real: string): boolean {
+  const flavour = /^[A-Za-z]:[\\/]|^\\\\/.test(root) || root.includes("\\") ? win32 : posix;
+  const relative = flavour.relative(root, real);
+  return relative === "" || (relative !== ".." && !relative.startsWith(`..${flavour.sep}`) && !flavour.isAbsolute(relative));
 }
 
 /**
@@ -778,7 +834,11 @@ export async function hasNestedPackageJson(cwd: string, fs: StackDetectFs = defa
  * standalone repository); only when the root declares nothing either, or a
  * folder cannot be read, is the family uncertain.
  */
-async function jsWorkspaceSignal(cwd: string, fs: StackDetectFs): Promise<SignalOutcome | undefined> {
+async function jsWorkspaceSignal(
+  cwd: string,
+  fs: StackDetectFs,
+  limits: WorkspaceSearchLimits = DEFAULT_WORKSPACE_SEARCH_LIMITS,
+): Promise<SignalOutcome | undefined> {
   const markers: string[] = [];
   const globs: string[] = [];
   for (const name of JS_WORKSPACE_MARKERS) {
@@ -818,12 +878,12 @@ async function jsWorkspaceSignal(cwd: string, fs: StackDetectFs): Promise<Signal
     }
     let dirs: string[] | undefined;
     try {
-      dirs = await expandWorkspaceGlob(cwd, fs, glob);
+      dirs = await expandWorkspaceGlob(cwd, fs, glob, limits);
     } catch (error) {
       if (isAbsentError(error)) return [];
       return uncertain(`the workspace folder of ${glob} could not be read (${errorCode(error) ?? "unknown error"})`);
     }
-    return dirs ?? uncertain(`the workspace glob ${glob} is not one this module reads, or names a tree too large to walk`);
+    return dirs ?? uncertain(`the workspace glob ${glob} is not one this module reads`);
   };
   const packageDirs = new Set<string>();
   for (const glob of listed.filter((item) => !item.startsWith("!"))) {
@@ -844,7 +904,7 @@ async function jsWorkspaceSignal(cwd: string, fs: StackDetectFs): Promise<Signal
     if (rootReal !== undefined) {
       const real = await fs.realPath!(joinPath(cwd, dir)).catch(() => undefined);
       if (real === undefined) continue;
-      if (real !== rootReal && !real.startsWith(`${rootReal}/`)) {
+      if (!isInsideRoot(rootReal, real)) {
         skipped.push(`${dir} (links outside the repository)`);
         continue;
       }
@@ -1184,6 +1244,8 @@ export interface DetectStackOptions {
   readonly fs?: StackDetectFs;
   /** Cap on files visited by the bounded extension scan. Default 5000. */
   readonly maxFiles?: number;
+  /** Bounds of the workspace package walk. Default `DEFAULT_WORKSPACE_SEARCH_LIMITS`. */
+  readonly workspaceLimits?: WorkspaceSearchLimits;
 }
 
 interface RawSignal {
@@ -1204,7 +1266,7 @@ export async function detectStack(cwd: string, opts: DetectStackOptions = {}): P
 
   const raw: RawSignal[] = [
     { id: "manifest:package.json", outcome: await packageJsonSignal(root, fs) },
-    { id: "manifest:js-workspace", outcome: await jsWorkspaceSignal(root, fs) },
+    { id: "manifest:js-workspace", outcome: await jsWorkspaceSignal(root, fs, opts.workspaceLimits) },
     { id: "manifest:pyproject.toml", outcome: await pyprojectSignal(root, fs) },
     { id: "manifest:setup.cfg", outcome: await simplePythonManifestSignal(root, fs, "setup.cfg") },
     { id: "manifest:requirements.txt", outcome: await simplePythonManifestSignal(root, fs, "requirements.txt") },

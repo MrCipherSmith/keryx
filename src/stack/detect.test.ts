@@ -2,7 +2,7 @@
 // per-signal-uncertain-contribution case, and multiple ecosystems.
 
 import { describe, expect, test } from "bun:test";
-import { STACK_DETECT_TAGS, detectStack, type StackDetectFs, type StackDirEntry } from "./detect";
+import { STACK_DETECT_TAGS, detectStack, hasNestedPackageJson, isInsideRoot, type StackDetectFs, type StackDirEntry } from "./detect";
 
 /** In-memory fs: a flat map of absolute path -> text content, plus explicit directories. */
 function fakeFs(files: Record<string, string>, dirs: Record<string, string[]> = {}): StackDetectFs {
@@ -383,6 +383,67 @@ describe("JS workspace-root markers (review M1: a monorepo root names only build
     expect(result.uncertain).toBe(true);
     for (const tag of jsTags()) expect(result.tags[tag]).toBe(true);
     expect(result.perSignal.find((s) => s.signal === "manifest:js-workspace")?.reason).toContain("is not one this module reads");
+  });
+
+  test("packages/** stops at each package: 60 packages with 36 folders each stay under the limits (review R4-1)", async () => {
+    const files: Record<string, string> = { "/repo/pnpm-workspace.yaml": "packages:\n  - 'packages/**'\n" };
+    for (let p = 0; p < 60; p += 1) {
+      const deps = p === 7 ? { react: "^18.3.1" } : { lodash: "^4" };
+      files[`/repo/packages/group${p % 6}/pkg${p}/package.json`] = JSON.stringify({ dependencies: deps });
+      for (let d = 0; d < 36; d += 1) files[`/repo/packages/group${p % 6}/pkg${p}/src/dir${d}/index.ts`] = "export {};\n";
+    }
+    const result = await detectStack("/repo", { fs: fakeFs(files), workspaceLimits: { maxPackages: 100, maxVisited: 200 } });
+    expect({ uncertain: result.uncertain, react: result.tags.react, vue: result.tags.vue }).toEqual({ uncertain: false, react: true, vue: false });
+    expect(result.perSignal.find((s) => s.signal === "manifest:js-workspace")?.reason).toContain("60 workspace packages");
+  });
+
+  test("a packages/** tree past the limits falls back to what was found plus the first level, not every JS tag (review R4-1)", async () => {
+    const files: Record<string, string> = {
+      "/repo/pnpm-workspace.yaml": "packages:\n  - 'packages/**'\n",
+      "/repo/packages/web/package.json": JSON.stringify({ dependencies: { react: "^18.3.1" } }),
+    };
+    for (let p = 0; p < 30; p += 1) files[`/repo/packages/libs/lib${p}/package.json`] = JSON.stringify({ dependencies: { lodash: "^4" } });
+    const result = await detectStack("/repo", { fs: fakeFs(files), workspaceLimits: { maxPackages: 5, maxVisited: 50 } });
+    expect({ uncertain: result.uncertain, react: result.tags.react, angular: result.tags.angular, vue: result.tags.vue })
+      .toEqual({ uncertain: false, react: true, angular: false, vue: false });
+  });
+
+  test("containment compares real paths with path.relative, Windows paths included (review R4-2)", async () => {
+    expect(isInsideRoot("C:\\repo", "C:\\repo\\apps\\web")).toBe(true);
+    expect(isInsideRoot("C:\\repo", "C:\\repo")).toBe(true);
+    expect(isInsideRoot("C:\\repo", "C:\\repo-other\\web")).toBe(false);
+    expect(isInsideRoot("C:\\repo", "D:\\repo\\web")).toBe(false);
+    expect(isInsideRoot("/repo", "/repo/apps/..web")).toBe(true);
+    expect(isInsideRoot("/repo", "/repo-other/web")).toBe(false);
+    const base = fakeFs({
+      "/repo/pnpm-workspace.yaml": "packages:\n  - 'apps/*'\n",
+      "/repo/apps/web/package.json": JSON.stringify({ dependencies: { react: "^18.3.1" } }),
+    });
+    // A win32 realPath: every package inside the repository must still be read.
+    const fs: StackDetectFs = { ...base, realPath: async (path) => `C:${path.replace(/\//g, "\\")}` };
+    const result = await detectStack("/repo", { fs });
+    expect({ uncertain: result.uncertain, react: result.tags.react }).toEqual({ uncertain: false, react: true });
+  });
+
+  test("a pnpm flow list over several lines is read (review R4-4)", async () => {
+    const result = await detectStack("/repo", {
+      fs: fakeFs({
+        "/repo/pnpm-workspace.yaml": "packages: [\n  'web/*', # apps\n  \"api\"\n]\n",
+        "/repo/web/app/package.json": JSON.stringify({ dependencies: { react: "^18.3.1" } }),
+        "/repo/api/package.json": JSON.stringify({ dependencies: { "@nestjs/core": "^10" } }),
+      }),
+    });
+    expect({ uncertain: result.uncertain, react: result.tags.react, nestjs: result.tags.nestjs }).toEqual({ uncertain: false, react: true, nestjs: true });
+  });
+
+  test("hasNestedPackageJson is true only when it finds one, never because the tree was too large (review R4-3)", async () => {
+    const big: Record<string, string> = {};
+    for (let d = 0; d < 40; d += 1) big[`/repo/src/mod${d}/main.go`] = "package main\n";
+    expect(await hasNestedPackageJson("/repo", fakeFs(big), { maxPackages: 10, maxVisited: 5 })).toBe(false);
+    expect(await hasNestedPackageJson("/repo", fakeFs(big))).toBe(false);
+    expect(await hasNestedPackageJson("/repo", fakeFs({ ...big, "/repo/web/app/package.json": "{}" }))).toBe(true);
+    // The root's own package.json does not count.
+    expect(await hasNestedPackageJson("/repo", fakeFs({ ...big, "/repo/package.json": "{}" }))).toBe(false);
   });
 
   test("a plain app with no workspace marker stays certain", async () => {
