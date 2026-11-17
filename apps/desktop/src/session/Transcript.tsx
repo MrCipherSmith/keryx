@@ -44,26 +44,46 @@ function formatDuration(ms: number): string {
   return `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`;
 }
 
-/** The one-line thing a call acts on: a command, path, URL or query. */
-export function primaryInput(raw: unknown): { label: string; value: string } | null {
+/** An argv rendered so word boundaries survive: bare words stay bare, anything else is JSON-quoted. */
+function quoteArgv(argv: string[]): string {
+  return argv.map((a) => (/^[\w@%+=:,./-]+$/.test(a) ? a : JSON.stringify(a))).join(" ");
+}
+
+const PRIMARY_KEYS: Array<[string, string]> = [
+  ["command", "Command"],
+  ["cmd", "Command"],
+  ["path", "Path"],
+  ["file_path", "Path"],
+  ["url", "URL"],
+  ["query", "Query"],
+  ["pattern", "Pattern"],
+];
+
+/** The one-line thing a call acts on: a command, path, URL or query. `key` is the field it came from. */
+export function primaryInput(raw: unknown): { label: string; value: string; key?: string } | null {
   if (raw === undefined || raw === null) return null;
   if (typeof raw === "string") return { label: "Input", value: raw };
+  if (typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
-  const pairs: Array<[string, string]> = [
-    ["command", "Command"],
-    ["cmd", "Command"],
-    ["path", "Path"],
-    ["file_path", "Path"],
-    ["url", "URL"],
-    ["query", "Query"],
-    ["pattern", "Pattern"],
-  ];
-  for (const [k, label] of pairs) {
+  for (const [k, label] of PRIMARY_KEYS) {
     const v = o[k];
-    if (typeof v === "string") return { label, value: v };
-    if (Array.isArray(v) && v.every((x) => typeof x === "string")) return { label, value: v.join(" ") };
+    if (typeof v === "string") return { label, value: v, key: k };
+    if (Array.isArray(v) && v.length > 0 && v.every((x) => typeof x === "string")) return { label, value: quoteArgv(v as string[]), key: k };
   }
   return null;
+}
+
+/** Every argument the headline does not show, as JSON; "" when the headline already covers the whole input. */
+export function restInput(raw: unknown): string {
+  if (raw === undefined || raw === null || typeof raw === "string") return "";
+  const primary = primaryInput(raw);
+  let rest: unknown = raw;
+  if (primary?.key && typeof raw === "object" && !Array.isArray(raw)) {
+    const { [primary.key]: _shown, ...others } = raw as Record<string, unknown>;
+    if (Object.keys(others).length === 0) return "";
+    rest = others;
+  }
+  return pretty(rest);
 }
 
 /** Common prefix/suffix trimmed, with two lines of context: a readable change without a diff library. */
@@ -131,7 +151,7 @@ const ToolRow = memo(function ToolRow({ item }: { item: ToolItem }) {
   const [open, setOpen] = useState(false);
   const raw = pretty(item.rawOutput);
   const primary = primaryInput(item.rawInput);
-  const input = pretty(item.rawInput);
+  const input = restInput(item.rawInput);
   const hasBody = item.content.length > 0 || raw !== "" || input !== "";
   const dur = item.endedAt !== null ? item.endedAt - item.startedAt : null;
   return (
@@ -163,9 +183,10 @@ const ToolRow = memo(function ToolRow({ item }: { item: ToolItem }) {
               <div className="tool-label">{primary.label}</div>
               <pre className="out-pre mono-strong">{primary.value}</pre>
             </div>
-          ) : input ? (
+          ) : null}
+          {input ? (
             <div className="tool-section">
-              <div className="tool-label">Input</div>
+              <div className="tool-label">{primary ? "Other arguments" : "Input"}</div>
               <pre className="out-pre">{input}</pre>
             </div>
           ) : null}
