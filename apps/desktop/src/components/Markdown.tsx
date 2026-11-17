@@ -1,7 +1,7 @@
 import DOMPurify from "dompurify";
 import { marked } from "marked";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef } from "react";
-import { revealHidden } from "../session/toolInput";
+import { codeBlockCopyText, revealCodeBlock } from "./codeBlock";
 import { emptyCache, renderStreaming, type RenderTokens, type StreamFrame } from "./markdownStream";
 
 marked.setOptions({ gfm: true, breaks: false });
@@ -57,7 +57,7 @@ function onClick(e: React.MouseEvent<HTMLDivElement>) {
   if (copy) {
     const block = copy.closest<HTMLElement>(".code-block");
     // Copy keeps the raw text; a block that shows escapes carries it aside.
-    const code = block?.dataset.raw ?? block?.querySelector("code")?.textContent ?? "";
+    const code = codeBlockCopyText(block ?? null, block?.querySelector("code") ?? null);
     void navigator.clipboard.writeText(code).then(() => {
       copy.dataset.copied = "true";
       copy.textContent = "Copied";
@@ -77,14 +77,10 @@ function decorateCodeBlocks(html: string): string {
   if (!root) return html;
   for (const pre of Array.from(root.querySelectorAll("pre"))) {
     const code = pre.querySelector("code");
-    // What the user reads must expose hidden and reordering characters; Copy still gets the raw text.
-    const rawText = (code ?? pre).textContent ?? "";
-    const shown = revealHidden(rawText);
-    if (shown.changed) (code ?? pre).textContent = shown.text;
     const lang = /language-([\w+#.-]+)/.exec(code?.className ?? "")?.[1] ?? "";
     const wrap = doc.createElement("div");
     wrap.className = "code-block";
-    if (shown.changed) wrap.dataset.raw = rawText;
+    revealCodeBlock(code ?? pre, wrap);
     const head = doc.createElement("div");
     head.className = "code-head";
     const label = doc.createElement("span");

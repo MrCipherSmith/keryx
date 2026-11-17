@@ -19,3 +19,17 @@ export function withDraft(drafts: Drafts, sessionId: string | null, text: string
   else next[key] = text;
   return next;
 }
+
+/**
+ * The drafts once a session id appears: a draft made before any session existed (a prefill from
+ * Flows or the palette) moves to the new session when that session has none of its own.
+ */
+export function adoptNoSessionDraft(drafts: Drafts, sessionId: string | null): Drafts {
+  if (sessionId === null) return drafts;
+  const pending = drafts[draftKey(null)] ?? "";
+  if (pending === "") return drafts;
+  const next = { ...drafts };
+  delete next[draftKey(null)];
+  if ((next[sessionId] ?? "") === "") next[sessionId] = pending;
+  return next;
+}

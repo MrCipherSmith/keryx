@@ -178,10 +178,20 @@ jobs:
             exit 1
           fi
           if [ "$SIGNED" = "true" ]; then
-            ENTITLEMENTS="$(codesign -d --entitlements - --xml "$SIDECAR" 2>/dev/null || true)"
-            for key in $(/usr/libexec/PlistBuddy -c 'Print' apps/desktop/src-tauri/Entitlements.plist | sed -n 's/^ *\(com\.apple[^ ]*\) = .*/\1/p'); do
-              if ! printf '%s' "$ENTITLEMENTS" | grep -q "$key"; then
-                echo "::error::the signed sidecar lacks $key"
+            PLIST=apps/desktop/src-tauri/Entitlements.plist
+            if ! KEYS="$(/usr/libexec/PlistBuddy -c 'Print' "$PLIST" | sed -n 's/^ *\(com\.apple[^ ]*\) = .*/\1/p')" || [ -z "$KEYS" ]; then
+              echo "::error::could not read the expected entitlement keys from $PLIST"
+              exit 1
+            fi
+            if ! ENTITLEMENTS="$(codesign -d --entitlements :- "$SIDECAR" 2>/dev/null)" || [ -z "$ENTITLEMENTS" ]; then
+              echo "::error::could not read the signed entitlements of the sidecar"
+              exit 1
+            fi
+            for key in $KEYS; do
+              # plutil key paths split on dots; escape them.
+              value="$(printf '%s' "$ENTITLEMENTS" | plutil -extract "${key//./\\.}" raw - 2>/dev/null || true)"
+              if [ "$value" != "true" ]; then
+                echo "::error::the signed sidecar does not carry $key = true"
                 exit 1
               fi
             done
