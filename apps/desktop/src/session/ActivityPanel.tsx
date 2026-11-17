@@ -102,6 +102,7 @@ function SubagentsTab({ subagents, selected, onSelect }: { subagents: readonly S
               {a.detail ? <span className="activity-detail truncate">{a.detail}</span> : null}
             </span>
             {a.model ? <span className="badge badge-neutral truncate activity-model">{a.model}</span> : null}
+            {a.runtime === "external" ? <span className="badge badge-neutral activity-runtime" title="A vendor CLI run by /delegate">external</span> : null}
           </button>
         </li>
       ))}

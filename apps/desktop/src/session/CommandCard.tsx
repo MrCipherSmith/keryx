@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { CommandView, ViewAction, ViewField } from "../acp/types";
-import { fillTemplate, initialValues, type FieldValues } from "../acp/commands";
+import { fillTemplate, initialValues, missingRequired, type FieldValues } from "../acp/commands";
 import { Icon } from "../components/Icon";
 import { Dialog } from "../components/ui";
 import type { CommandItem } from "./reducer";
@@ -117,7 +117,9 @@ export function CommandViewPanel({ view, itemId, onRun }: { view: CommandView; i
 function ViewFormPanel({ form, disabled, onSubmit }: { form: NonNullable<CommandView["form"]>; disabled: boolean; onSubmit: (line: string, display: string) => void }) {
   const [values, setValues] = useState<FieldValues>(() => initialValues(form.fields));
   const set = (id: string, v: string | boolean) => setValues((x) => ({ ...x, [id]: v }));
+  const missing = missingRequired(form.fields, values);
   const submit = () => {
+    if (missing.length > 0) return;
     onSubmit(fillTemplate(form.submit, form.fields, values), fillTemplate(form.submit, form.fields, values, true));
     // A secret never lingers in the form once it is sent.
     setValues((x) => {
@@ -138,9 +140,14 @@ function ViewFormPanel({ form, disabled, onSubmit }: { form: NonNullable<Command
         <FieldInput key={f.id} field={f} value={values[f.id]} onChange={(v) => set(f.id, v)} disabled={disabled} />
       ))}
       <div>
-        <button type="submit" className="btn btn-sm btn-primary" disabled={disabled}>
+        <button type="submit" className="btn btn-sm btn-primary" disabled={disabled || missing.length > 0}>
           {form.submitLabel ?? "Submit"}
         </button>
+        {missing.length > 0 ? (
+          <span className="field-hint" role="note">
+            Fill in {missing.map((f) => f.label).join(", ")} first.
+          </span>
+        ) : null}
       </div>
     </form>
   );
@@ -158,7 +165,10 @@ function FieldInput({ field, value, onChange, disabled }: { field: ViewField; va
   }
   return (
     <label className="field" htmlFor={id}>
-      <span className="field-label">{field.label}</span>
+      <span className="field-label">
+        {field.label}
+        {field.required ? <span aria-hidden="true"> *</span> : null}
+      </span>
       {field.kind === "choice" ? (
         <select id={id} value={typeof value === "string" ? value : ""} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
           {(field.options ?? []).map((o) => {
@@ -177,6 +187,8 @@ function FieldInput({ field, value, onChange, disabled }: { field: ViewField; va
           type={field.kind === "secret" ? "password" : "text"}
           autoComplete={field.kind === "secret" ? "off" : undefined}
           value={typeof value === "string" ? value : ""}
+          placeholder={field.placeholder}
+          aria-required={field.required ? true : undefined}
           disabled={disabled}
           onChange={(e) => onChange(e.target.value)}
         />

@@ -29,10 +29,14 @@ export interface RunDeps {
   dispatch(a: Action): void;
   /** Starts a prompt turn (the M1 path); false when it was not accepted. */
   sendPrompt(text: string): boolean;
+  /** Starts a turn in the session the command ran in (`startTurn`), even if another one is shown by now. */
+  startTurn(sessionId: string, text: string): boolean;
   newSession(): void;
   interrupt(): void;
   applyEffects(sessionId: string, effects: readonly CommandEffect[]): void;
   ui: UiActions;
+  /** Marks a command in flight for the session until the returned function is called, so keryx's mid-command questions are admitted. */
+  trackCommand?(sessionId: string): () => void;
 }
 
 export interface RunOptions {
@@ -47,8 +51,9 @@ function errText(e: unknown): string {
 }
 
 /**
- * Runs `line`. Resolves true when it was handled and the composer's draft may be cleared; false when
- * it was refused or failed (the draft stays so the user can fix it).
+ * Runs `line`. Resolves true when the composer's draft may be cleared: the line was handled, or keryx
+ * answered it with a refusal (the refusal is its own card). False when the client itself refused it
+ * (busy) or the request failed, so the user can fix and resend the draft.
  */
 export async function runCommandLine(line: string, deps: RunDeps, opts: RunOptions = {}): Promise<boolean> {
   const found = findCommand(deps.commands, line);
@@ -81,15 +86,24 @@ export async function runCommandLine(line: string, deps: RunDeps, opts: RunOptio
   // text and view commands go to keryx.
   if (!deps.hasCommandMethod) return sendOrQueue(line, deps);
   if (!deps.client) return false;
+  const endCommand = deps.trackCommand?.(sessionId);
   try {
     const r = await deps.client.request<CommandResult>(COMMAND_METHOD, { sessionId, name: parsed.name, args: parsed.args });
     const k = r?._meta?.keryx;
     const refused = k?.refused === true;
     card(typeof r?.text === "string" ? r.text : "", refused, k?.view ?? null);
     if (!refused && k?.effects?.length) deps.applyEffects(sessionId, k.effects);
-    return !refused;
+    // `/goal`: keryx did the shell's setup and answers the turn text; the turn is an ordinary prompt, sent once.
+    if (!refused && k?.effects?.includes("startTurn") && typeof k.prompt === "string" && k.prompt.trim()) {
+      if (!deps.startTurn(sessionId, k.prompt)) {
+        deps.dispatch({ t: "notice", sessionId, level: "warn", text: "The goal's turn was not started: the session is busy. Send the goal as a message when it is free." });
+      }
+    }
+    return true;
   } catch (e) {
     return refuse(errText(e));
+  } finally {
+    endCommand?.();
   }
 }
 

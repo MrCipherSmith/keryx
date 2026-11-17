@@ -366,9 +366,29 @@ Where the implementation differs from the text above
   `/tasks`, `/status`, `/model`, `/compact`) is refused with "main is busy:
   command deferred"; the Tasks tab (`_keryx/tasks/kill`) is the way to stop a
   task mid-turn.
-- Refused with a reason, not served: `/goal` (it starts a turn; a command is
-  not one), `/delegate` (no external-run port in `keryx acp` yet, so no
-  `runtime: "external"` subagents either), every `/bus` subcommand (the ACP
+- `/goal` (owner, 2026-11-18): the command does the shell's deterministic
+  part (slate, seed) and answers `_meta.keryx.effects: ["startTurn"]` with
+  `_meta.keryx.prompt`, the exact turn text the shell would send. The client
+  sends that text as `session/prompt` on the same session; a busy session
+  refuses `/goal` as the shell does. The command itself still never enters
+  model history; the turn it starts does.
+  As built: `prepareGoalRun` (`goal-command.ts`) is the shell's own part of
+  `runGoalCommand` before its first turn; the session keeps one slate ref,
+  and later turns run with it. `/goal --auto` is refused (its continuation
+  rounds and verifier are turns the shell drives itself), as is a goal with a
+  rejected `--workspace`.
+- `/delegate` (owner, 2026-11-18): the ACP host gets the shell's external-run
+  port (`createLazyRunExternal`). Starting a run needs approval: keryx sends
+  `session/request_permission` (kind `execute`, the vendor CLI and task in
+  `rawInput`) in place of the TUI's `approveExternalSpawn` card; a rejection
+  answers the command refused. The run's events go out as `_keryx/subagent`
+  with `runtime: "external"` and no `parentToolCallId`. A model-chosen
+  external runtime for `spawn_subagent` stays M2b. As built: the approval is
+  asked first and offers only allow once / reject once; the capability gate
+  runs after it, so a disabled agent answers refused after an approval.
+  `session/cancel`, a release of the session and the connection's end stop
+  the run (and withdraw an approval still being asked).
+- Refused with a reason, not served: every `/bus` subcommand (the ACP
   host does not join the bus), `/autoreview start|stop` (detached process
   with no supervisor), `/mcp connect|disconnect`, `/task` without a Hub
   connection, `/governance close` of a flow that needs a confirmation token.
@@ -444,8 +464,15 @@ version checks and the flows parsers and argv builder.
 - Composer palette: typing `/` opens a grouped, filterable list of every
   advertised command with its hint; Tab/Enter completes; a `text` command is
   sent with `_keryx/command` and shown as a command card (input + output) in
-  the transcript; `dialog` and `client` commands open their UI. A command
-  refused while busy shows the reason inline and keeps the draft.
+  the transcript; `dialog` and `client` commands open their UI. The draft is
+  cleared whenever keryx answered the command, whether it ran or refused it
+  (`_meta.keryx.refused`: the refusal is its own card). The draft is kept only
+  when the client itself refused the command (a `busy: refuse` command while a
+  turn runs, shown inline without a request) or the request failed (transport
+  or RPC error), so the user can fix and resend it. While a command is in
+  flight, keryx may ask for approval or an answer (`session/request_permission`,
+  `_keryx/ask_user`, for example `/delegate`); the window raises that dialog
+  for the session the command runs in, the same as during a turn.
 - Providers dialog (`/connect`, also from the model picker): Connected and
   Add tabs, Test, Disconnect, API-key field (password input), base URL,
   custom provider form, device-code panel (code, Copy, Open browser, Cancel).

@@ -10,6 +10,7 @@ const cmd = (name: string, surface: "text" | "view" | "dialog" | "client" = "tex
 });
 const COMMANDS = [
   cmd("tasks"),
+  cmd("goal", "text", "refuse"),
   cmd("schedules", "view"),
   cmd("compact"),
   cmd("rewind", "text", "refuse"),
@@ -28,6 +29,8 @@ interface Rig {
   win: () => WindowState;
   log: string[];
   sent: string[];
+  /** `startTurn` calls: [sessionId, text]. */
+  started: Array<[string, string]>;
 }
 
 function rig(over: Partial<RunDeps> = {}, reply: (method: string, params: unknown) => unknown = () => ({ text: "ok" })): Rig {
@@ -35,6 +38,7 @@ function rig(over: Partial<RunDeps> = {}, reply: (method: string, params: unknow
   const calls: Rig["calls"] = [];
   const log: string[] = [];
   const sent: string[] = [];
+  const started: Array<[string, string]> = [];
   const dispatch = (a: Action) => {
     win = reducer(win, a);
   };
@@ -57,6 +61,10 @@ function rig(over: Partial<RunDeps> = {}, reply: (method: string, params: unknow
       sent.push(t);
       return true;
     },
+    startTurn: (sid, t) => {
+      started.push([sid, t]);
+      return true;
+    },
     newSession: () => log.push("new"),
     interrupt: () => log.push("interrupt"),
     applyEffects: (_s, e) => log.push(`effects:${e.join(",")}`),
@@ -69,10 +77,72 @@ function rig(over: Partial<RunDeps> = {}, reply: (method: string, params: unknow
     },
     ...over,
   };
-  return { deps, calls, win: () => win, log, sent };
+  return { deps, calls, win: () => win, log, sent, started };
 }
 
 const cards = (r: Rig) => r.win().convs.s1!.items.filter((i): i is CommandItem => i.kind === "command");
+
+describe("commands in flight", () => {
+  test("the command is tracked for its session while keryx answers, and untracked after (also on error)", async () => {
+    const events: string[] = [];
+    const track = (sid: string) => {
+      events.push(`begin:${sid}`);
+      return () => void events.push(`end:${sid}`);
+    };
+    const ok = rig({ trackCommand: track }, () => {
+      events.push("request");
+      return { text: "ok" };
+    });
+    await runCommandLine("/tasks", ok.deps);
+    expect(events).toEqual(["begin:s1", "request", "end:s1"]);
+
+    events.length = 0;
+    const bad = rig({ trackCommand: track }, () => new Error("boom"));
+    expect(await runCommandLine("/tasks", bad.deps)).toBe(false);
+    expect(events).toEqual(["begin:s1", "end:s1"]);
+  });
+
+  test("a busy-refused command is never tracked (no request)", async () => {
+    const events: string[] = [];
+    const r = rig({ busy: true, trackCommand: (s) => (events.push(s), () => {}) });
+    await runCommandLine("/rewind", r.deps);
+    expect(events).toEqual([]);
+  });
+});
+
+describe("/goal starts a turn (startTurn effect)", () => {
+  const goalReply = (): CommandResult => ({ text: "Starting a turn on the goal.\n", _meta: { keryx: { effects: ["startTurn"], prompt: "make the build green" } } });
+
+  test("the prompt keryx answered is sent exactly once, to the session the command ran in, and is not queued or re-sent", async () => {
+    const r = rig({}, goalReply);
+    expect(await runCommandLine("/goal make the build green", r.deps)).toBe(true);
+    expect(r.calls).toEqual([{ method: "_keryx/command", params: { sessionId: "s1", name: "goal", args: "make the build green" } }]);
+    expect(r.started).toEqual([["s1", "make the build green"]]);
+    // The plain-text path is not taken: nothing else sent, nothing queued.
+    expect(r.sent).toHaveLength(0);
+    expect(r.win().convs.s1!.queue ?? []).toHaveLength(0);
+    expect(r.log).toEqual(["effects:startTurn"]);
+    expect(cards(r)).toHaveLength(1);
+  });
+
+  test("a refused /goal starts nothing; a turn that cannot start says so", async () => {
+    const refused = rig({}, () => ({ text: "/goal: a goal <text> is required", _meta: { keryx: { refused: true } } }) satisfies CommandResult);
+    expect(await runCommandLine("/goal", refused.deps)).toBe(true);
+    expect(refused.started).toHaveLength(0);
+
+    const blocked = rig({ startTurn: () => false }, goalReply);
+    expect(await runCommandLine("/goal x", blocked.deps)).toBe(true);
+    const notices = blocked.win().convs.s1!.items.filter((i) => i.kind === "notice");
+    expect(notices).toHaveLength(1);
+  });
+
+  test("while a turn runs the command is refused before keryx is asked", async () => {
+    const r = rig({ busy: true }, goalReply);
+    expect(await runCommandLine("/goal x", r.deps)).toBe(false);
+    expect(r.calls).toHaveLength(0);
+    expect(r.started).toHaveLength(0);
+  });
+});
 
 describe("text and view commands", () => {
   test("a text command sends exactly _keryx/command {sessionId, name, args} and adds a card", async () => {
@@ -85,9 +155,9 @@ describe("text and view commands", () => {
     expect(r.sent).toHaveLength(0);
   });
 
-  test("a refused result keeps the draft (false) and is a refused card", async () => {
+  test("a result keryx refused clears the draft (true) and is a refused card", async () => {
     const r = rig({}, () => ({ text: "busy", _meta: { keryx: { refused: true } } }) satisfies CommandResult);
-    expect(await runCommandLine("/compact", r.deps)).toBe(false);
+    expect(await runCommandLine("/compact", r.deps)).toBe(true);
     expect(cards(r)[0]?.refused).toBe(true);
     expect(cards(r)[0]?.text).toBe("busy");
   });

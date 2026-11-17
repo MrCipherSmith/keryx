@@ -22,6 +22,8 @@ export class SessionRegistry<Turn = unknown> {
   readonly loading = new Set<string>();
   /** The running prompt turn of each session that has one. */
   readonly turns = new Map<string, Turn>();
+  /** `_keryx/command` requests in flight per session: keryx may ask a question while one runs. */
+  readonly commands = new Map<string, number>();
   /** session/new requests in flight. */
   creating = 0;
   /** The session on screen. Survives a reset, so a restart can reload it. */
@@ -38,6 +40,7 @@ export class SessionRegistry<Turn = unknown> {
     this.held.clear();
     this.loading.clear();
     this.turns.clear();
+    this.commands.clear();
     this.creating = 0;
     this.loadIntents.clear();
     this.orphans = [];
@@ -136,20 +139,38 @@ export class SessionRegistry<Turn = unknown> {
   }
 
   /**
+   * A command is in flight for `sessionId` until the returned function is called (idempotent). The
+   * count is per session, so overlapping commands do not end each other's window.
+   */
+  beginCommand(sessionId: string): () => void {
+    this.commands.set(sessionId, (this.commands.get(sessionId) ?? 0) + 1);
+    let ended = false;
+    return () => {
+      if (ended) return;
+      ended = true;
+      const n = (this.commands.get(sessionId) ?? 0) - 1;
+      if (n > 0) this.commands.set(sessionId, n);
+      else this.commands.delete(sessionId);
+    };
+  }
+
+  /**
    * A permission or ask_user request may raise a dialog only for a session this window holds and
-   * that has a turn running. Anything else — no string sessionId, an unknown or released session, a
-   * session with no turn — is answered "cancelled" (fail closed). Returns the session, or null.
+   * that has a turn running or a command in flight (a command such as /delegate asks mid-request).
+   * Anything else — no string sessionId, an unknown or released session, a session doing neither —
+   * is answered "cancelled" (fail closed). Returns the session, or null.
    */
   admit(params: unknown): string | null {
     const sid = (params as { sessionId?: unknown } | null | undefined)?.sessionId;
     if (typeof sid !== "string") return null;
-    if (!this.held.has(sid) || !this.turns.has(sid)) return null;
+    if (!this.held.has(sid) || !(this.turns.has(sid) || this.commands.has(sid))) return null;
     return sid;
   }
 
   /** keryx released the session (idle cap). True when the window held it. */
   release(sessionId: string): boolean {
     this.turns.delete(sessionId);
+    this.commands.delete(sessionId);
     return this.held.delete(sessionId);
   }
 }

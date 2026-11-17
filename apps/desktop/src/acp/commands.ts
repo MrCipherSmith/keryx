@@ -96,6 +96,11 @@ export function fillTemplate(template: string, fields: readonly ViewField[], val
   });
 }
 
+/** The required fields that are still empty (blank text counts as empty). A toggle always has a value. */
+export function missingRequired(fields: readonly ViewField[], values: FieldValues): ViewField[] {
+  return fields.filter((f) => f.required === true && f.kind !== "toggle" && (typeof values[f.id] !== "string" || (values[f.id] as string).trim() === ""));
+}
+
 export function initialValues(fields: readonly ViewField[]): FieldValues {
   const out: FieldValues = {};
   for (const f of fields) {

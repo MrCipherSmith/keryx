@@ -28,6 +28,12 @@ export interface ShellViewField {
   readonly label: string;
   readonly kind: "text" | "secret" | "choice" | "toggle";
   readonly options?: readonly string[];
+  /** Prefilled content; the client starts the field with it. */
+  readonly value?: string | boolean;
+  /** A hint shown while the field is empty. */
+  readonly placeholder?: string;
+  /** The client keeps Submit disabled until the field is non-empty. */
+  readonly required?: boolean;
 }
 
 export interface ShellViewForm {

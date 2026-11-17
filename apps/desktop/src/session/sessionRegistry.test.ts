@@ -154,4 +154,35 @@ describe("admitting keryx's requests", () => {
     const r = holding();
     expect(r.admit({ sessionId: "a" })).toBeNull();
   });
+
+  test("a held session with a command in flight is admitted, and not once the command settled", () => {
+    const r = holding();
+    const end = r.beginCommand("a");
+    expect(r.admit({ sessionId: "a" })).toBe("a");
+    end();
+    expect(r.admit({ sessionId: "a" })).toBeNull();
+  });
+
+  test("overlapping commands keep the session admitted until the last settles; ending twice is harmless", () => {
+    const r = holding();
+    const e1 = r.beginCommand("a");
+    const e2 = r.beginCommand("a");
+    e1();
+    e1();
+    expect(r.admit({ sessionId: "a" })).toBe("a");
+    e2();
+    expect(r.admit({ sessionId: "a" })).toBeNull();
+  });
+
+  test("a command for an unheld session does not admit it; release and reset forget the command", () => {
+    const r = holding();
+    r.beginCommand("zzz");
+    expect(r.admit({ sessionId: "zzz" })).toBeNull();
+    r.beginCommand("b");
+    r.release("b");
+    expect(r.admit({ sessionId: "b" })).toBeNull();
+    r.beginCommand("a");
+    r.reset();
+    expect(r.commands.size).toBe(0);
+  });
 });
