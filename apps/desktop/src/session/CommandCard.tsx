@@ -21,7 +21,8 @@ export function CommandCard({ item, onRun }: { item: CommandItem; onRun?: RunCom
       </button>
       {open && hasBody ? (
         <div className="command-body">
-          {item.text.trim() !== "" ? (
+          {/* A view carries the same content as `text` (keryx's plain rendering for editors); show one. */}
+          {item.text.trim() !== "" && (item.view === null || item.refused) ? (
             item.refused ? (
               <div className="notice notice-warn" role="status">
                 <Icon name="alert" size={14} />

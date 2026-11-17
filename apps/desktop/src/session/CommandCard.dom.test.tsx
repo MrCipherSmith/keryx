@@ -73,6 +73,12 @@ test("a text card shows the line and output and collapses", async () => {
   expect(host.querySelector("pre")).toBeNull();
 });
 
+test("a card with a view shows the view, not keryx's plain-text rendering of it", async () => {
+  await render(item({ text: "Schedules\n\nnightly review (paused)", view: VIEW }));
+  expect(host.textContent).not.toContain("nightly review (paused)");
+  expect(host.textContent).toContain("nightly review");
+});
+
 test("a refused card is a notice", async () => {
   await render(item({ line: "/rewind", text: "Not while a turn runs", refused: true }));
   expect(host.querySelector(".notice.notice-warn")!.textContent).toContain("Not while a turn runs");
