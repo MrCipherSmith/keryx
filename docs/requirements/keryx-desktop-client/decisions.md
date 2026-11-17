@@ -1,5 +1,5 @@
 # Keryx Desktop Client — Decisions
-Version: 0.1.0
+Version: 0.1.1
 
 All decisions below were taken by the owner on 2026-11-17 in the session
 that produced this package.
@@ -64,15 +64,18 @@ Chosen: the client lives in `apps/desktop` in this repository, next to
 
 Rejected: a separate repository; sharing the `v*` tag and version with keryx.
 
-## D-08 Relation to `keryx-desktop-app` — awaiting owner confirmation
+## D-08 Relation to `keryx-desktop-app` — confirmed by the owner on 2026-11-17
 
 [keryx-desktop-app](../keryx-desktop-app/README.md) (2026-11-14) plans a
 Tauri shell over the Hub web and a local Hub for the task → stages → diff →
 accept loop. This package is the interactive-session client over ACP. They
 are two views of one desktop product, not two apps.
 
-Working assumption, taken autonomously on 2026-11-17 and to be confirmed by
-the owner: `apps/desktop` is the single Tauri application. M1 ships the
+Chosen (proposed autonomously on 2026-11-17, confirmed by the owner the same
+day): `apps/desktop` is the single Tauri application. M1 ships the
 session view. The Hub work views of `keryx-desktop-app` arrive later as
 another window of the same app, loading `apps/hub-web` against the local Hub
 that package specifies. No second Tauri project is created.
+
+Rejected: a separate Tauri project for the Hub work loop, which would
+duplicate packaging, signing, sidecar and auto-update.
