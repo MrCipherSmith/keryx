@@ -86,8 +86,8 @@ this pass the class is unreachable for the whole round.
 
 - Never edit the reviewed tree, not even to revert at once. With `run-tests`, run gates inside
   **scope A** only through `keryx review mutate --spec <mutants.json>` (a scratch copy; the main session writes the file from your `mutant_candidates` to `research-evidence/mutants.json`); without it, run none: list `mutant_candidates` and stop, which is complete.
-- Run the **nearest** suite, not the full one. This is not a `test:mutation`
-  sweep — those are slow, opt-in, and answer a different question.
+- A gate the diff neither added, changed nor sits downstream of is out of scope, even when its test file is in the diff: do not list it as a `mutant_candidate` or report it as unpinned.
+- Run the **nearest** suite, not the full one. This is not a `test:mutation` sweep — those are slow, opt-in, and answer a different question.
 - Propose, do not cap: `mutant_candidates` in your `REVIEW_RESULT` names a mutant (`id`, `file`, `anchor`, `replacement`,
   optional `kind`: `behavior` (default) or `presentation`, for copy or styling only) for **every changed branch**, code downstream of the diff included.
   Run what your budget allows, previous-round gates first, and say how many you did not reach:

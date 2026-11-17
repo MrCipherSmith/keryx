@@ -15,6 +15,7 @@ import { SIDEBAR_WIDTH } from "./sidebar-metrics";
 import { getTheme, onThemeChange } from "./theme";
 import { boldChunk, dimChunk } from "./theme-text";
 import { clearTranscriptChildren } from "./transcript-blocks";
+import { shellInnerRows } from "./shell-frame";
 
 type OpenTui = typeof import("@opentui/core");
 type Renderer = Awaited<ReturnType<OpenTui["createCliRenderer"]>>;
@@ -213,6 +214,14 @@ export function modalSpansTerminal(chrome: ModalChrome): boolean {
   const rWidth = chrome.renderer.width;
   const mainWidth = chrome.main?.width && chrome.main.width > 0 ? chrome.main.width : rWidth - sidebar.width;
   return mainWidth < MODAL_PANEL_MIN_WIDTH && rWidth >= MODAL_PANEL_MIN_WIDTH;
+}
+
+/**
+ * Rows the panel may occupy: the terminal less the shell frame's border rows
+ * (`shell-frame.ts`), so a dialog never runs past the frame's bottom edge.
+ */
+export function modalAvailableRows(chrome: ModalChrome): number {
+  return shellInnerRows(chrome.renderer.height, chrome.renderer.width);
 }
 
 export function resolveModalInnerWidth(availableWidth: number): number {
@@ -418,7 +427,7 @@ function mountTab(state: HostState, input: OpenModalInput, tabId: string): void 
   // viewport instead of the real one (the /game board/prompt budget depends
   // on ctx.height and must not be sized from that floor).
   const availWidth = resolveModalAvailableWidth(state.chrome);
-  const size = resolveModalPanelSize(availWidth, state.chrome.renderer.height, input.contentRows);
+  const size = resolveModalPanelSize(availWidth, modalAvailableRows(state.chrome), input.contentRows);
   const panelWidth = Math.min(availWidth, size.width);
   const cleanup = (target.renderTab ?? input.renderTab)(tabId, state.body, {
     // The body sits in a scroll box whose scrollbar takes a column; a line
@@ -806,7 +815,7 @@ export function openModal(
 
   const state = ensureHost(otui, chrome);
   const availWidth = resolveModalAvailableWidth(chrome);
-  const size = resolveModalPanelSize(availWidth, chrome.renderer.height, input.contentRows);
+  const size = resolveModalPanelSize(availWidth, modalAvailableRows(chrome), input.contentRows);
   state.panel.width = Math.min(availWidth, size.width);
   state.panel.height = size.height;
   // The backdrop lives in `main` (the sidebar stays visible, flow 269 AC2). When the dialog is

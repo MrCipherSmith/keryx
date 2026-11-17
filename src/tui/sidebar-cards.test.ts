@@ -76,6 +76,7 @@ interface CardsModule {
   SIDEBAR_SECTION_IDS: readonly string[];
   SIDEBAR_SECTION_CARD: Record<string, string>;
   buildSidebarCards(snapshot: Snapshot): Card[];
+  railBadge(badge: string | undefined): string | undefined;
   mountSidebarCards(
     otui: unknown,
     renderer: unknown,
@@ -203,12 +204,27 @@ test("flow 468 AC12: rail mode is one row per card: a single-cell glyph, an opti
   for (const card of c.buildSidebarCards(fullSnapshot())) {
     const rail = card.rail();
     expect(displayWidth(rail.glyph), card.id).toBe(1);
-    if (rail.badge !== undefined) expect(displayWidth(rail.badge), card.id).toBeLessThanOrEqual(2);
+    if (rail.badge !== undefined) expect(displayWidth(rail.badge), card.id).toBe(1);
     const lines = card.lines(DEFAULT_TEXT_WIDTH, "rail");
     expect(lines, card.id).toHaveLength(1);
     expect(displayWidth(lines[0] ?? ""), card.id).toBeLessThanOrEqual(3);
-    expect(lines[0]?.startsWith(rail.glyph), card.id).toBe(true);
+    // The glyph sits in the middle cell, the column the pinned header's title and buttons use.
+    expect(lines[0], card.id).toBe(` ${rail.glyph}${rail.badge ?? ""}`);
   }
+});
+
+test("rail badges take one cell: superscript digits up to 9, a superscript plus above, one-cell markers kept", async () => {
+  const c = await loadCards();
+  expect(c.railBadge(undefined)).toBeUndefined();
+  expect(c.railBadge("2")).toBe("²");
+  expect(c.railBadge("9")).toBe("⁹");
+  expect(c.railBadge("25")).toBe("⁺");
+  expect(c.railBadge("99")).toBe("⁺");
+  expect(c.railBadge("!")).toBe("!");
+  expect(c.railBadge("↑")).toBe("↑");
+  const reviews = cardOf(c.buildSidebarCards({ reviewsNotReady: 25 }), "reviews");
+  expect(reviews.badge).toBe("25");
+  expect(reviews.lines(DEFAULT_TEXT_WIDTH, "rail")).toEqual([` ${reviews.icon}⁺`]);
 });
 
 test("flow 468 AC12: card icons are single-cell and distinct, each with a distinct single-cell ASCII fallback", async () => {
@@ -485,6 +501,67 @@ otuiTest("Work item click opens a temporary tab and cleans up on return", async 
   });
 });
 
+otuiTest("Work list: one row per job with a status badge, arrows pick, Enter opens, Backspace and Esc go back", async () => {
+  const otui = requireOtui();
+  const g = await loadGeometry();
+  const c = await loadCards();
+  await withTmpDir(async (configDir) => {
+    const geo = g.createSidebarGeometry({ columns: 140, configDir, mode: "default" });
+    const h = await mountChrome(otui, geo);
+    const long = `JAVA_HOME=/opt/homebrew/opt/openjdk@25/libexec/openjdk.jdk/Contents/Home ./cli --all --no-frontend --no-backend --no-seed > /tmp/start.log 2>&1`;
+    try {
+      const handle = c.openSidebarCard(otui.core, h.chrome, "work", {
+        initialTab: "jobs",
+        snapshot: () => ({ sections: { jobs: "Jobs 1/0 · 2 failed" }, items: { jobs: [
+          { id: "a", label: "brew install", text: "failed · brew install", status: "failed", title: "brew install openjdk@25", meta: "exit 1 · 12.0s" },
+          { id: "b", label: "JAVA_HOME=…", text: `failed · ${long}`, status: "failed", title: long, meta: "exit 2 · 1:05.0" },
+          { id: "c", label: "sleep", text: "running · sleep 100", status: "running", title: "sleep 100" },
+        ] } }),
+        renderItem: (_section, item, body) => {
+          (body as { add(child: unknown): void }).add(new otui.core.TextRenderable(h.renderer, {
+            id: `test-detail-${item.id}`, content: `detail of ${item.id}`,
+          }));
+        },
+      });
+      await h.flush();
+      const frame = h.captureCharFrame();
+      // The long command stays on its own row, cut with an ellipsis; nothing wraps into the next row.
+      const rowB = frame.split("\n").find((line) => line.includes("JAVA_HOME=/opt")) ?? "";
+      expect(rowB).toContain("✗ failed");
+      expect(rowB).toContain("…");
+      expect(rowB).toContain("exit 2 · 1:05.0");
+      expect(frame).not.toContain("--no-seed");
+      expect((byId(h, "sb-card-item-jobs-b") as unknown as { height: number }).height).toBe(1);
+      expect(frame).toContain("● running");
+      expect(frame).toContain("↑/↓ select");
+
+      h.mockInput.pressArrow("down");
+      await h.flush();
+      h.mockInput.pressEnter();
+      await h.flush();
+      expect(handle?.activeTab()).toBe("detail:jobs:b");
+      expect(h.captureCharFrame()).toContain("detail of b");
+      expect(h.captureCharFrame()).toContain("← back to Jobs");
+      expect(h.captureCharFrame()).toContain("esc back");
+
+      h.mockInput.pressBackspace();
+      await h.flush();
+      expect(handle?.activeTab()).toBe("jobs");
+
+      // Coming back keeps the selection: Enter opens the same row again, and Esc returns.
+      h.mockInput.pressEnter();
+      await h.flush();
+      expect(handle?.activeTab()).toBe("detail:jobs:b");
+      h.mockInput.pressEscape();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      await h.flush();
+      expect(handle?.activeTab()).toBe("jobs");
+      expect(h.captureCharFrame()).toContain("Work");
+      handle?.close();
+    } finally { h.destroy(); }
+  });
+});
+
 otuiTest("flow 468 AC13: a card's detail modal has one tab per former section and starts on the requested tab", async () => {
   const otui = requireOtui();
   const g = await loadGeometry();
@@ -652,7 +729,7 @@ test("flow 468 AC17: a pending approval, a hold, an update and a not-ready revie
     if (signal.badge !== undefined) expect(raised.badge, signal.name).toBe(signal.badge);
     for (const mode of MODES) {
       if (mode === "rail") {
-        expect(raised.rail().badge, `${signal.name} rail`).toBe(raised.badge);
+        expect(raised.rail().badge, `${signal.name} rail`).toBe(c.railBadge(raised.badge));
       } else {
         const width = mode === "wide" ? WIDE_TEXT_WIDTH : DEFAULT_TEXT_WIDTH;
         expect(raised.lines(width, mode)[0], `${signal.name} ${mode}`).toContain(raised.badge ?? "");
@@ -689,9 +766,10 @@ otuiTest("flow 468 AC17: the badge and the raised colour are painted in all thre
           await h.flush();
           const rows = sidebarRows(h);
           const marker = mode === "rail" ? remote.rail().glyph : "Remote";
-          const row = rows.find((entry) => entry.includes(marker) && entry.includes("2")) ?? "";
+          const count = mode === "rail" ? (remote.rail().badge ?? "") : "2";
+          const row = rows.find((entry) => entry.includes(marker) && entry.includes(count)) ?? "";
           expect(row, mode).not.toBe("");
-          const painted = sidebarSpans(h).filter((span) => span.text.includes(marker) || span.text.includes("2"));
+          const painted = sidebarSpans(h).filter((span) => span.text.includes(marker) || span.text.includes(count));
           expect(
             painted.some((span) => themeColorToHex(span.fg)?.toLowerCase() === attention),
             `${mode}: the card is drawn in the attention colour`,

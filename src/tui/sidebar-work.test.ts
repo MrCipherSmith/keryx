@@ -62,3 +62,21 @@ test("embedded subagent inspector updates live and unsubscribes exactly once", (
   agents.apply({ kind: "log", id: "a", entry: { kind: "tool", text: "after-close" } });
   expect(work.content).toBe(previous);
 });
+
+test("Work job rows carry the status, the whole command, a short tab label and exit code plus run time", () => {
+  const command = `brew install openjdk@25 && JAVA_HOME="$(brew --prefix openjdk@25)/libexec" &&\n  java -version`;
+  const snapshot = workSidebarSnapshot([], [
+    { jobId: "j1", command, status: "failed", startedAt: "2026-11-17T09:00:00.000Z", endedAt: "2026-11-17T09:01:05.000Z", exitCode: 1 },
+    { jobId: "j2", command: "sleep 100", status: "running", startedAt: "2026-11-17T09:00:00.000Z" },
+  ]);
+  const [failed, running] = snapshot.items?.jobs ?? [];
+  expect(failed?.status).toBe("failed");
+  expect(failed?.title).toBe(command);
+  expect(failed?.label.length).toBeLessThanOrEqual(28);
+  expect(failed?.label.endsWith("…")).toBe(true);
+  expect(failed?.label).not.toContain("\n");
+  expect(failed?.meta).toContain("exit 1");
+  // A running job has nothing final to report yet.
+  expect(running?.meta).toBeUndefined();
+  expect(running?.label).toBe("sleep 100");
+});

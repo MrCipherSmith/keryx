@@ -14,6 +14,7 @@ import {
   presentThemePicker,
 } from "./theme-picker";
 import { THEME_IDS, applyThemeId, getThemeId } from "./theme";
+import { SHELL_FRAME_COLUMNS, SHELL_FRAME_ROWS } from "./shell-frame";
 
 test("isThemeCommand accepts only /theme", () => {
   expect(isThemeCommand("/theme")).toBe(true);
@@ -198,7 +199,8 @@ async function mountChrome(
   chrome: ShellChrome;
   destroy: () => void;
 }> {
-  const setup = await otui.testing.createTestRenderer({ width: opts.width ?? 96, height: opts.height ?? 28 });
+  // 96x28 INSIDE the shell frame (`shell-frame.ts`), the size this picker is laid out against.
+  const setup = await otui.testing.createTestRenderer({ width: opts.width ?? 96 + SHELL_FRAME_COLUMNS, height: opts.height ?? 28 + SHELL_FRAME_ROWS });
   const chrome = await createShellChrome(otui.core, setup.renderer, {
     title: "keryx · chrome",
     status: "s/m",

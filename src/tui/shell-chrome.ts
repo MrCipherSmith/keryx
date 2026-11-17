@@ -51,6 +51,7 @@ import { currentDebugRun, debugEvent } from "./debug-log";
 import { attachRendererGuards } from "./renderer-debug";
 import { isCtrlC } from "./ctrl-c-policy";
 import { SIDEBAR_WIDTH } from "./sidebar-metrics";
+import { SHELL_FRAME_GUTTER_X, SHELL_FRAME_GUTTER_Y, shellFrameFits, shellInnerColumns } from "./shell-frame";
 import { SIDEBAR_MODES, sidebarModeIcon, type SidebarGeometry, type SidebarMode } from "./sidebar-geometry";
 import { BUSY_FOOTER_MIN_HINT, formatBusyFooter, type BusyFooterInfo } from "./busy-footer";
 import { formatDuration } from "./duration-format";
@@ -644,6 +645,47 @@ export async function createShellRenderer(
   return renderer;
 }
 
+/** How many ancestors above the pressed text are searched for a click handler. */
+const CLICK_TARGET_DEPTH = 3;
+
+type MouseListenerHost = { _mouseListeners?: Record<string, unknown>; parent?: unknown };
+
+/**
+ * True when `node` (or one of its nearest ancestors, stopping at a node in
+ * `stopAt`) answers a click: it has a mouse down or up listener. `stopAt` holds
+ * the chrome's own regions, whose catch-all handlers (focus the composer on a
+ * transcript click) must not make every line in them a button.
+ */
+export function isClickTarget(node: unknown, stopAt: ReadonlySet<unknown>): boolean {
+  let current: unknown = node;
+  for (let depth = 0; depth <= CLICK_TARGET_DEPTH && current !== undefined && current !== null; depth += 1) {
+    if (stopAt.has(current)) return false;
+    const listeners = (current as MouseListenerHost)._mouseListeners;
+    if (listeners !== undefined && (listeners["down"] !== undefined || listeners["up"] !== undefined)) return true;
+    current = (current as MouseListenerHost).parent;
+  }
+  return false;
+}
+
+/**
+ * Keep the renderer from starting a text selection on a press over a click
+ * target ({@link isClickTarget}); the click itself is still dispatched. Returns
+ * the undo. A renderer without `startSelection` (tests, a newer OpenTUI) is left
+ * untouched.
+ */
+export function guardSelectionStart(renderer: unknown, stopAt: () => ReadonlySet<unknown>): () => void {
+  const host = renderer as { startSelection?: (target: unknown, x: number, y: number) => void };
+  const original = host.startSelection;
+  if (typeof original !== "function") return () => {};
+  host.startSelection = function guardedStartSelection(this: unknown, target: unknown, x: number, y: number): void {
+    if (isClickTarget(target, stopAt())) return;
+    original.call(this, target, x, y);
+  };
+  return () => {
+    host.startSelection = original;
+  };
+}
+
 /**
  * Mount the chrome on `renderer` and return the live handle.
  *
@@ -666,8 +708,32 @@ export async function createShellChrome(
 
   // --- layout skeleton ----------------------------------------------------
   // Keryx workspace: a calm transcript canvas with a persistent telemetry rail.
+  // A thin rounded frame with a one-column gutter outside it (`shell-frame.ts`):
+  // without it the transcript and the sidebar run into the terminal's edges and
+  // read as clipped, most of all inside a multiplexer pane.
+  // On a small terminal (`shellFrameFits`) the frame is dropped so the shell keeps
+  // every cell; `fitFrame` re-decides on each resize.
+  const frame = new otui.BoxRenderable(r, {
+    id: "shell-frame",
+    flexGrow: 1,
+    flexDirection: "row",
+    borderStyle: "rounded",
+    borderColor: getTheme().border,
+  });
+  r.root.add(frame);
+  const innerColumns = (): number => shellInnerColumns(r.width, r.height);
+  const fitFrame = (): void => {
+    const on = typeof r.width === "number" && typeof r.height === "number" && shellFrameFits(r.width, r.height);
+    frame.border = on;
+    frame.marginLeft = on ? SHELL_FRAME_GUTTER_X : 0;
+    frame.marginRight = on ? SHELL_FRAME_GUTTER_X : 0;
+    frame.marginTop = on ? SHELL_FRAME_GUTTER_Y : 0;
+    frame.marginBottom = on ? SHELL_FRAME_GUTTER_Y : 0;
+  };
+  fitFrame();
+  r.on(otui.CliRenderEvents.RESIZE, fitFrame);
   const rootRow = new otui.BoxRenderable(r, { id: "root-row", flexGrow: 1, flexDirection: "row" });
-  r.root.add(rootRow);
+  frame.add(rootRow);
   const main = new otui.BoxRenderable(r, {
     id: "main",
     flexGrow: 1,
@@ -680,7 +746,7 @@ export async function createShellChrome(
   rootRow.add(main);
   const geometry = opts.sidebar?.geometry;
   // The renderer's width is the truth: a store built before the terminal reported its size catches up here.
-  if (geometry !== undefined && typeof r.width === "number" && r.width > 0) geometry.resize(r.width);
+  if (geometry !== undefined && typeof r.width === "number" && r.width > 0) geometry.resize(innerColumns());
   const sidebarWidth = (): number => geometry?.state().width ?? SIDEBAR_WIDTH;
   const sidebar = new otui.BoxRenderable(r, {
     id: "sidebar",
@@ -747,7 +813,7 @@ export async function createShellChrome(
     const rail = state.mode === "rail";
     sbHeader.flexDirection = rail ? "column" : "row";
     sbTitle.content = rail
-      ? otui.t`${boldChunk(otui, "◆")}`
+      ? otui.t` ${boldChunk(otui, asciiIcons ? "k" : "◆")}`
       : otui.t`${boldChunk(otui, "keryx")} ${dimChunk(otui, sbVersion.length > 0 ? `v${sbVersion}` : "")}`;
     sbModes.flexDirection = rail ? "column" : "row";
     for (const mode of SIDEBAR_MODES) {
@@ -848,6 +914,12 @@ export async function createShellChrome(
     }
   };
   r.on(otui.CliRenderEvents.SELECTION, onSelection);
+  // A click on a button, a card or a list row must not start a text selection:
+  // OpenTUI starts one on every left press over selectable text, so clicking
+  // "answer" on a question card or the sidebar's mode button highlighted it as
+  // if it were being copied. Text with no click handler near it — the
+  // transcript, the sidebar's values — still selects and copies as before.
+  const restoreSelectionStart = guardSelectionStart(r, () => new Set<unknown>([scroll, sidebar, main, rootRow]));
 
   // --- header -------------------------------------------------------------
   // Identity on the left, a caller-owned meta slot on the right.
@@ -1309,7 +1381,7 @@ export async function createShellChrome(
     // The footer's laid-out width lags a resize by a frame, so also bound it by the
     // terminal width less the sidebar and the workspace gutters, and take the smaller.
     const laidOut = typeof footer.width === "number" && footer.width > 0 ? footer.width : Number.POSITIVE_INFINITY;
-    const termWidth = typeof r.width === "number" && r.width > 0 ? r.width : Number.POSITIVE_INFINITY;
+    const termWidth = typeof r.width === "number" && r.width > 0 ? innerColumns() : Number.POSITIVE_INFINITY;
     const rowWidth = Math.min(laidOut, termWidth - sidebarWidth() - 2 * WORKSPACE_GUTTER_X);
     if (!Number.isFinite(rowWidth)) return Number.POSITIVE_INFINITY;
     const room = rowWidth - 2 - rightText.length;
@@ -1641,7 +1713,7 @@ export async function createShellChrome(
   let unsubscribeGeometry: (() => void) | undefined;
   let offSidebarKeys: (() => void) | undefined;
   const onGeometryResize = (): void => {
-    if (geometry !== undefined && typeof r.width === "number" && r.width > 0) geometry.resize(r.width);
+    if (geometry !== undefined && typeof r.width === "number" && r.width > 0) geometry.resize(innerColumns());
   };
   if (geometry !== undefined) {
     unsubscribeGeometry = geometry.subscribe((state) => {
@@ -1676,6 +1748,7 @@ export async function createShellChrome(
     // The renderer's own clear colour: the same call `createShellRenderer`
     // makes at boot, so a switch and a fresh start cannot disagree.
     paintRendererBackground(r, theme);
+    frame.borderColor = theme.border;
     sidebar.borderColor = theme.border;
     sidebar.backgroundColor = theme.panel;
     // The composer's text was painted from the theme at mount; move it too.
@@ -1836,6 +1909,7 @@ export async function createShellChrome(
       try {
         textarea.off(otui.LayoutEvents.RESIZED, onComposerResized);
         footer.off(otui.LayoutEvents.RESIZED, onFooterResized);
+        r.off(otui.CliRenderEvents.RESIZE, fitFrame);
         r.off(otui.CliRenderEvents.RESIZE, onFooterResized);
         r.off(otui.CliRenderEvents.RESIZE, onGeometryResize);
       } catch {
@@ -1843,6 +1917,7 @@ export async function createShellChrome(
       }
       try {
         r.off(otui.CliRenderEvents.SELECTION, onSelection);
+        restoreSelectionStart();
       } catch {
         // best-effort teardown
       }

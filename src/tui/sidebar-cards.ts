@@ -32,6 +32,8 @@ export type SidebarCardSeverity = "normal" | "attention" | "error";
 
 /** Columns a rail row has: border + one padding cell + three text cells (`SIDEBAR_RAIL_WIDTH` = 5). */
 const RAIL_CELLS = 3;
+/** Superscript digits: a rail badge sits beside its glyph like a notification dot, not as a second word. */
+const SUPERSCRIPT_DIGITS = ["⁰", "¹", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸", "⁹"] as const;
 /**
  * A card is its title row plus at most three value rows: seven cards of four lines and the gaps
  * between them still fit a 40-row terminal, and the first three stay on screen at 24.
@@ -43,8 +45,16 @@ const NOTHING_TO_SHOW = "Nothing to show yet.";
 /** What the card builders read. Every field is optional: an empty snapshot is a quiet sidebar. */
 export interface SidebarItem {
   id: string;
+  /** Short name for the detail tab opened from this row. */
   label: string;
+  /** The whole row as plain text (status · command), for search and fallbacks. */
   text: string;
+  /** Lifecycle word drawn as a coloured badge at the start of the row. */
+  status?: string | undefined;
+  /** The full command or task; the row shows it on one line, cut to fit. */
+  title?: string | undefined;
+  /** Short right-hand detail: exit code, duration. */
+  meta?: string | undefined;
 }
 
 export interface SidebarSnapshot {
@@ -80,8 +90,9 @@ export interface SidebarCardModel {
   severity: SidebarCardSeverity;
   badge?: string;
   tabs: SidebarCardTab[];
-  /** default|wide: 3 to 5 lines, each at most `textWidth` cells. rail: one line of at most 3 cells. */
+  /** default|wide: 3 to 5 lines, each at most `textWidth` cells. rail: one line of at most 3 cells, the glyph centred. */
   lines(textWidth: number, mode: SidebarMode): string[];
+  /** What the rail shows: the glyph (ASCII when asked) and the one-cell badge marker ({@link railBadge}). */
   rail(): { glyph: string; badge?: string };
 }
 
@@ -155,7 +166,7 @@ const CARD_DEFS: readonly CardDef[] = [
   {
     id: "work",
     title: "Work",
-    icon: "▸",
+    icon: "►",
     asciiIcon: "T",
     sections: [
       { id: "status", label: "Status" },
@@ -374,6 +385,22 @@ function signalFor(def: CardDef, snapshot: SidebarSnapshot): { severity: Sidebar
   }
 }
 
+/**
+ * The one cell a rail badge gets. The rail is three cells with the glyph centred in the
+ * middle one (the column the pinned header's title and mode buttons use), so a badge
+ * has exactly the last cell: a count of 1-9 is its superscript digit, a larger count is
+ * a superscript plus (the exact number is on the card and in its detail), and a
+ * one-cell marker (`!`, `↑`) is kept as is.
+ */
+export function railBadge(badge: string | undefined): string | undefined {
+  if (badge === undefined || badge === "") return undefined;
+  if (/^[0-9]+$/.test(badge)) {
+    const count = Number(badge);
+    return count <= 9 ? SUPERSCRIPT_DIGITS[count] : "⁺";
+  }
+  return displayWidth(badge) === 1 ? badge : "⁺";
+}
+
 function headerLine(icon: string, title: string, badge: string | undefined, width: number): string {
   const left = `${icon} ${title}`;
   if (badge === undefined) return fitCells(left, width);
@@ -416,13 +443,16 @@ function buildCard(def: CardDef, order: number, snapshot: SidebarSnapshot, ascii
     tabs,
     lines: (textWidth, mode) => {
       if (mode === "rail") {
-        return [fitCells(`${icon}${badge ?? ""}`, RAIL_CELLS)];
+        return [fitCells(` ${icon}${railBadge(badge) ?? ""}`, RAIL_CELLS)];
       }
       const lines = [headerLine(icon, def.title, badge, textWidth), ...valueRows(def, snapshot, textWidth)];
       while (lines.length < MIN_CARD_LINES) lines.push("");
       return lines;
     },
-    rail: () => ({ glyph: def.icon, ...(badge !== undefined ? { badge } : {}) }),
+    rail: () => {
+      const marker = railBadge(badge);
+      return { glyph: icon, ...(marker !== undefined ? { badge: marker } : {}) };
+    },
   };
 }
 
@@ -529,7 +559,9 @@ export function mountSidebarCards(otui: OpenTui, renderer: Renderer, parent: Par
     for (const card of cards) {
       const slot = slots.get(card.id);
       if (slot === undefined) continue;
-      slot.box.marginTop = mode === "rail" || card.order === 1 ? 0 : 1;
+      // Rail: one blank row above every glyph, the first included, so the column keeps the
+      // same rhythm as the pinned header's buttons above it instead of a packed block.
+      slot.box.marginTop = mode === "rail" ? 1 : card.order === 1 ? 0 : 1;
       const lines = card.lines(width, mode);
       const head =
         card.severity === "error" ? roleColor("error", theme) : card.severity === "attention" ? roleColor("attention", theme) : roleColor("text", theme);
@@ -589,6 +621,62 @@ export const SIDEBAR_CARD_FOOTER = [
   { key: "esc", label: "close" },
 ] as const;
 
+/** A tab with nothing behind Enter: no "open the full view" promise. */
+const SIDEBAR_CARD_FOOTER_PLAIN = [
+  { key: "←/→", label: "tab" },
+  { key: "esc", label: "close" },
+] as const;
+
+/** A list of jobs or subagents: the arrows pick a row, Enter opens it. */
+export const SIDEBAR_CARD_LIST_FOOTER = [
+  { key: "↑/↓", label: "select" },
+  { key: "enter", label: "open" },
+  { key: "←/→", label: "tab" },
+  { key: "esc", label: "close" },
+] as const;
+
+/** An opened row: Esc (or Backspace) goes back to the list it came from. */
+export const SIDEBAR_CARD_DETAIL_FOOTER = [
+  { key: "esc", label: "back" },
+  { key: "←/→", label: "tab" },
+] as const;
+
+/** Columns the status badge takes at the start of a list row ("● running  "). */
+const ITEM_STATUS_COLUMNS = 12;
+
+/** Badge glyph and colour role per lifecycle word. */
+function itemStatusStyle(status: string | undefined): { glyph: string; role: "accent" | "ok" | "error" | "attention" | "muted" } {
+  switch (status) {
+    case "running":
+      return { glyph: "●", role: "accent" };
+    case "completed":
+    case "done":
+      return { glyph: "✓", role: "ok" };
+    case "failed":
+      return { glyph: "✗", role: "error" };
+    case "killed":
+      return { glyph: "⊘", role: "error" };
+    case "blocked":
+    case "queued":
+      return { glyph: "◌", role: "attention" };
+    default:
+      return { glyph: "·", role: "muted" };
+  }
+}
+
+/** `text` on one line, cut to `width` display columns with a trailing "…". */
+function fitLine(text: string, width: number): string {
+  const line = text.replace(/\s+/g, " ").trim();
+  if (width <= 0) return "";
+  if (displayWidth(line) <= width) return line;
+  let out = "";
+  for (const ch of line) {
+    if (displayWidth(out + ch) > width - 1) break;
+    out += ch;
+  }
+  return `${out}…`;
+}
+
 /**
  * Open the detail modal of one card: a tab per former section, each showing the
  * section's whole value; Enter on a tab that has an inspector runs its command.
@@ -605,11 +693,30 @@ export function openSidebarCard(
   const first = find();
   if (first === undefined) return undefined;
   const tabOf = (tabId: string): SidebarCardTab | undefined => find()?.tabs.find((tab) => tab.id === tabId);
+  /** Selected row per list tab; kept across tab switches so coming back lands on the same row. */
+  const listStates = new Map<string, { selected: number }>();
+  const listState = (tabId: string): { selected: number } => {
+    let state = listStates.get(tabId);
+    if (state === undefined) {
+      state = { selected: 0 };
+      listStates.set(tabId, state);
+    }
+    return state;
+  };
+  /** The mounted list tab's keyboard controls (one at a time: the active tab). */
+  const listControls = new Map<string, { move(delta: number): void; open(): void }>();
+  const isDetail = (tabId: string): boolean => tabId.startsWith("detail:");
+  const parentOf = (tabId: string): string => tabId.split(":")[1] ?? "";
   const handle: ReturnType<typeof openModal> = openModal(otui, chrome, {
     title: first.title,
     tabs: first.tabs.map((tab) => ({ id: tab.id, label: tab.label })),
     ...(options.initialTab !== undefined ? { initialTab: options.initialTab } : {}),
     footer: SIDEBAR_CARD_FOOTER,
+    footerFor: (tabId) => {
+      if (isDetail(tabId)) return SIDEBAR_CARD_DETAIL_FOOTER;
+      if (options.snapshot().items?.[tabId] !== undefined) return SIDEBAR_CARD_LIST_FOOTER;
+      return tabOf(tabId)?.command !== undefined ? SIDEBAR_CARD_FOOTER : SIDEBAR_CARD_FOOTER_PLAIN;
+    },
     renderTab: (tabId, body, ctx) => {
       const work = cardId === "work";
       const flags = { subagents: tabId === "subagents", jobs: tabId === "jobs", plan: tabId === "plan" };
@@ -624,27 +731,83 @@ export function openSidebarCard(
           callDiagnostics.observe("work.layout", { ...flags, width: rows.width, height: rows.height, visible: rows.visible });
         };
         (body as Parent).add(rows);
+        const items = (): readonly SidebarItem[] => options.snapshot().items?.[tabId] ?? [];
+        const openItem = (item: SidebarItem): void => {
+          if (options.renderItem === undefined) return;
+          handle?.addTab({
+            id: `detail:${tabId}:${item.id}`, label: item.label, temporary: true,
+            renderTab: (_id, target, context) => {
+              // A visible way back, so the list is one click away even where Esc is eaten.
+              (target as Parent).add(new otui.TextRenderable(chrome.renderer, {
+                id: `sb-card-detail-back-${tabId}`,
+                content: `← back to ${tab.label}`,
+                fg: roleColor("muted"),
+                onMouseDown: () => handle?.setTab(tabId),
+              }));
+              if (item.title !== undefined) {
+                (target as Parent).add(new otui.TextRenderable(chrome.renderer, {
+                  id: `sb-card-detail-title-${tabId}`,
+                  content: item.title,
+                  fg: roleColor("text"),
+                  marginBottom: 1,
+                }));
+              }
+              return options.renderItem?.(tabId, item, target, context);
+            },
+          }, tabId);
+        };
         const paintContent = (): void => {
           for (const child of [...rows.getChildren()]) {
             rows.remove(child);
             child.destroy();
           }
           const snapshot = options.snapshot();
+          const list = snapshot.items?.[tabId] ?? [];
+          const state = listState(tabId);
+          state.selected = list.length === 0 ? 0 : Math.min(Math.max(0, state.selected), list.length - 1);
           rows.add(new otui.TextRenderable(chrome.renderer, {
             id: `sb-card-items-${tabId}-header`,
-            content: snapshot.sections?.[tabId] ?? "Nothing to show yet.", fg: roleColor("text"),
+            content: snapshot.sections?.[tabId] ?? "Nothing to show yet.", fg: roleColor("muted"),
+            marginBottom: list.length > 0 ? 1 : 0,
           }));
-          for (const item of snapshot.items?.[tabId] ?? []) {
-            rows.add(new otui.TextRenderable(chrome.renderer, {
-              id: `sb-card-item-${tabId}-${item.id}`, content: item.text, fg: roleColor("text"),
+          const width = Math.max(20, (rows.width > 0 ? rows.width : ctx.width) - 1);
+          // One right-hand column for every row, as wide as the widest detail, so the
+          // details line up and every title gets the same room.
+          const metaWidth = Math.max(0, ...list.map((entry) => displayWidth(entry.meta ?? "")));
+          for (const [index, item] of list.entries()) {
+            const style = itemStatusStyle(item.status);
+            const selected = index === state.selected;
+            const meta = metaWidth > 0 ? (item.meta ?? "").padStart(metaWidth) : "";
+            const titleWidth = width - ITEM_STATUS_COLUMNS - (metaWidth > 0 ? metaWidth + 2 : 0);
+            const row = new otui.BoxRenderable(chrome.renderer, {
+              id: `sb-card-item-${tabId}-${item.id}`,
+              flexDirection: "row",
+              flexShrink: 0,
+              ...(selected ? { backgroundColor: getTheme().highlight } : {}),
               onMouseDown: () => {
-                if (options.renderItem === undefined) return;
-                handle?.addTab({
-                  id: `detail:${tabId}:${item.id}`, label: item.label, temporary: true,
-                  renderTab: (_id, target, context) => options.renderItem?.(tabId, item, target, context),
-                }, tabId);
+                state.selected = index;
+                openItem(item);
               },
+            });
+            const status = `${style.glyph} ${item.status ?? ""}`;
+            row.add(new otui.TextRenderable(chrome.renderer, {
+              id: `sb-card-item-${tabId}-${item.id}-status`,
+              content: status.padEnd(ITEM_STATUS_COLUMNS).slice(0, ITEM_STATUS_COLUMNS),
+              fg: roleColor(style.role), flexShrink: 0,
             }));
+            row.add(new otui.TextRenderable(chrome.renderer, {
+              id: `sb-card-item-${tabId}-${item.id}-title`,
+              content: fitLine(item.title ?? item.text, titleWidth).padEnd(Math.max(0, titleWidth)),
+              fg: roleColor(selected ? "text" : item.status === "running" ? "text" : "muted"),
+              flexGrow: 1, flexShrink: 1, minWidth: 0, wrapMode: "none",
+            }));
+            if (meta.length > 0) {
+              row.add(new otui.TextRenderable(chrome.renderer, {
+                id: `sb-card-item-${tabId}-${item.id}-meta`,
+                content: `  ${meta}`, fg: roleColor("muted"), flexShrink: 0,
+              }));
+            }
+            rows.add(row);
           }
           chrome.renderer.requestRender();
           if (work) {
@@ -659,8 +822,22 @@ export function openSidebarCard(
           }
         };
         paint();
+        listControls.set(tabId, {
+          move: (delta) => {
+            const count = items().length;
+            if (count === 0) return;
+            const state = listState(tabId);
+            state.selected = (state.selected + delta + count) % count;
+            paint();
+          },
+          open: () => {
+            const item = items()[listState(tabId).selected];
+            if (item !== undefined) openItem(item);
+          },
+        });
         const unsubscribe = options.subscribe?.(paint);
         return () => {
+          listControls.delete(tabId);
           rows.onSizeChange = undefined;
           unsubscribe?.();
           if (work) callDiagnostics.observe("work.close", flags);
@@ -680,6 +857,17 @@ export function openSidebarCard(
       }
     },
     claimKey: (key) => {
+      const active = handle?.activeTab() ?? "";
+      if (isDetail(active) && key.name === "backspace") {
+        handle?.setTab(parentOf(active));
+        return true;
+      }
+      const list = listControls.get(active);
+      if (list !== undefined) {
+        if (key.name === "up" || key.name === "k") { list.move(-1); return true; }
+        if (key.name === "down" || key.name === "j") { list.move(1); return true; }
+        if (key.name === "return" || key.name === "enter") { list.open(); return true; }
+      }
       if (key.name !== "return" && key.name !== "enter") return false;
       const command = tabOf(handle?.activeTab() ?? "")?.command;
       if (command === undefined) return false;

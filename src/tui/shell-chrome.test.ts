@@ -96,9 +96,19 @@ async function pressEscapeAndSettle(h: {
   await h.flush();
 }
 
-/** The rendered lines, trailing blank rows dropped. */
+/**
+ * The rendered lines INSIDE the shell frame (`shell-frame.ts`), trailing blank
+ * rows dropped: the frame's top and bottom border rows are removed and each row
+ * loses the gutter and the border on both sides, so a row reads exactly as it
+ * did before the frame existed (the footer is the last line, the composer's
+ * rounded box starts with " ╭" / " ╰").
+ */
 function nonEmptyLines(frame: string): string[] {
-  const lines = frame.split("\n").map((line) => line.trimEnd());
+  const lines = frame
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .filter((line) => !/^ *[╭╰]─*[╮╯]$/.test(line))
+    .map((line) => line.replace(/^ │/, "").replace(/│$/, "").trimEnd());
   while (lines.length > 0 && lines[lines.length - 1] === "") {
     lines.pop();
   }
@@ -182,6 +192,65 @@ async function mountChrome(
     },
   };
 }
+
+otuiTest("the shell sits inside a rounded frame with a gutter, and drops it on a small terminal", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui, { width: 100, height: 30 });
+  try {
+    const rows = h.captureCharFrame().split("\n");
+    // A one-column gutter, then the rounded corners, on the first and last rows.
+    expect(rows[0]?.startsWith(" ╭")).toBe(true);
+    expect(rows[0]?.trimEnd().endsWith("╮")).toBe(true);
+    expect(rows[29]?.startsWith(" ╰")).toBe(true);
+    // Every row between them is bordered on the left.
+    expect(rows.slice(1, 29).every((row) => row.startsWith(" │"))).toBe(true);
+
+    h.resize(70, 20);
+    await h.flush();
+    // No frame rows: the header is the first row and the footer the last, as before the frame.
+    const narrow = h.captureCharFrame().split("\n").filter((row) => row.trim() !== "");
+    expect(narrow[0]).toContain(TITLE);
+    expect(narrow.at(-1)).toContain(FOOTER_HINT);
+  } finally {
+    h.destroy();
+  }
+});
+
+otuiTest("a press on a clickable text or row starts no selection; plain transcript text still selects", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui, { width: 100, height: 30 });
+  try {
+    let clicks = 0;
+    const button = new otui.core.TextRenderable(h.renderer, {
+      id: "probe-button", content: "[ Answer ]", onMouseDown: () => { clicks += 1; },
+    });
+    const row = new otui.core.BoxRenderable(h.renderer, { id: "probe-row", flexDirection: "row", onMouseDown: () => { clicks += 1; } });
+    row.add(new otui.core.TextRenderable(h.renderer, { id: "probe-row-text", content: "failed  brew install" }));
+    h.chrome.transcript.add(button);
+    h.chrome.transcript.add(row);
+    h.chrome.transcript.add(new otui.core.TextRenderable(h.renderer, { id: "probe-plain", content: "plain transcript line to copy" }));
+    await h.flush();
+
+    const at = (id: string): { x: number; y: number } => h.renderer.root.findDescendantById(id) as unknown as { x: number; y: number };
+    const selected = (): string => h.renderer.getSelection()?.getSelectedText() ?? "";
+
+    // A press-and-drag across a button or a row clicks it and selects nothing.
+    await h.mockMouse.drag(at("probe-button").x, at("probe-button").y, at("probe-button").x + 6, at("probe-button").y);
+    await h.flush();
+    expect(selected()).toBe("");
+    await h.mockMouse.drag(at("probe-row-text").x, at("probe-row-text").y, at("probe-row-text").x + 6, at("probe-row-text").y);
+    await h.flush();
+    expect(selected()).toBe("");
+    expect(clicks).toBe(2);
+
+    // Ordinary text keeps copy-on-select.
+    await h.mockMouse.drag(at("probe-plain").x, at("probe-plain").y, at("probe-plain").x + 5, at("probe-plain").y);
+    await h.flush();
+    expect(selected()).toContain("plain");
+  } finally {
+    h.destroy();
+  }
+});
 
 otuiTest("flow 413: trimming preserves a retained viewport anchor", async () => {
   const otui = requireOtui();
@@ -294,7 +363,7 @@ otuiTest("AC1: mounting the chrome renders header, transcript, composer and foot
   expect(rowOf("transcript line one")).toBeGreaterThan(rowOf(TITLE));
   expect(rowOf(PLACEHOLDER)).toBeGreaterThan(rowOf("transcript line one"));
   expect(lines[lines.length - 1]).toContain(FOOTER_HINT);
-  expect(lineWith(frame, "transcript line one").startsWith("  ")).toBe(true); // workspace + transcript inset
+  expect(lines.find((line) => line.includes("transcript line one"))?.startsWith("  ")).toBe(true); // workspace + transcript inset
   expect(lines[lines.length - 2]?.startsWith(" ╰")).toBe(true); // inset bordered composer, bottom row
   expect(lines[lines.length - 4]?.startsWith(" ╭")).toBe(true); // …and top row
 
