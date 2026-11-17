@@ -55,18 +55,23 @@ status, disposition, dependencies, attempts), Journal (timeline merged from
 ## 5. Actions
 
 Mutations go through the same keryx binary the session uses, as
-`keryx flow <subcommand>` with the project as cwd. The Rust core accepts
+`keryx flow <subcommand>` with the project as cwd. A flow is addressed by its
+**package directory name** (`FlowCard.dir`, e.g. `101-2026-01-01-good-flow`),
+never by the bare id: flow ids are not unique across packages and keryx refuses
+a shared bare id as ambiguous. The Rust core accepts the name only when it is one
+path component of `[A-Za-z0-9._-]` starting with a letter or digit (no `/`, no
+`..`, no leading `-`) and equals an existing directory under `.metaproject/flows`. The Rust core accepts
 only this allowlist and builds argv itself; no shell string is ever run.
 
 | Action | Command | Confirmation |
 |---|---|---|
-| Start | `flow start <id>` | none |
-| Block / Unblock | `flow block <id> --reason <r>` / `flow unblock <id>` | reason prompt |
-| Add task | `flow task add <id> --title <t> --kind <k>` | form |
-| Task attempt | `flow task attempt <id> <Tn> --outcome <started\|failed\|blocked> --detail <d>` | form |
-| Task done | `flow task done <id> <Tn>` | none |
-| Freeze criteria | `flow freeze <id>` | confirm dialog |
-| Next task | `flow next <id> --json` (read-only) | none |
+| Start | `flow start <dir>` | none |
+| Block / Unblock | `flow block <dir> --reason <r>` / `flow unblock <dir>` | reason prompt |
+| Add task | `flow task add <dir> --title <t> --kind <k>` | form |
+| Task attempt | `flow task attempt <dir> <Tn> --outcome <started\|failed\|blocked> --detail <d>` | form |
+| Task done | `flow task done <dir> <Tn>` | none |
+| Freeze criteria | `flow freeze <dir>` | confirm dialog |
+| Next task | `flow next <dir> --json` (read-only) | none |
 
 Free-text arguments (reason, title, detail) must be non-empty, must not start
 with `-` (the CLI would read them as a flag), contain no NUL and stay within
@@ -74,7 +79,10 @@ with `-` (the CLI would read them as a flag), contain no NUL and stay within
 
 Not offered, with a "copy command" button instead: `complete`, `confirm`,
 `recover`, `implemented`, `ac update`, `ac reseal`. Their gates and
-confirmation tokens belong to a terminal.
+confirmation tokens belong to a terminal. The copied command names the directory
+(or the id, only when it is 1 to 9 digits); a flow whose directory name and id
+both fail that check shows no copyable command (`FlowCard.idValid` marks a
+non-numeric id, which stays visible on the card).
 
 **Work on this flow**: opens a session in the same window with the composer
 pre-filled `Continue flow #<id> "<title>": take the next task.` The user
@@ -84,9 +92,9 @@ sends it; nothing is sent automatically.
 
 | Command | Result |
 |---|---|
-| `flows_list(cwd)` | `FlowCard[]` |
-| `flows_get(cwd, id)` | `FlowDetail` (card + parsed criteria, tasks, journal, markdown docs) |
-| `flows_action(cwd, id, action)` | `{ ok, stdout, stderr, exitCode }` |
+| `flows_list(cwd)` | `FlowCard[]` (`dir` = directory name, the unique key for React keys, selection and open state) |
+| `flows_get(cwd, dir)` | `FlowDetail` (card + parsed criteria, tasks, journal, markdown docs) |
+| `flows_action(cwd, dir, action)` | `{ ok, stdout, stderr, exitCode }` |
 | event `flows://changed` | `{ cwd }` |
 
 ## 7. Acceptance criteria

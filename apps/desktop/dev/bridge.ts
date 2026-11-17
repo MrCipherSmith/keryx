@@ -6,7 +6,7 @@
 //
 //   acp_start(cwd, noProfile) / acp_send(message) / acp_stop()
 //   settings_get / settings_set / settings_add_recent / version_check(found)
-//   flows_list(cwd) / flows_get(cwd, id) / flows_action(cwd, id, action) / flows_watch(cwd)
+//   flows_list(cwd) / flows_get(cwd, dir) / flows_action(cwd, dir, action) / flows_watch(cwd)
 //
 // and receives the same events: acp://message, acp://exit, acp://error,
 // flows://changed. One WebSocket connection is one "window" with its own
@@ -109,6 +109,7 @@ function rpcError(code: number, message: string): Error & { code: number } {
 
 interface FlowCard {
   id: string;
+  idValid: boolean;
   dir: string;
   title: string;
   status: string;
@@ -193,6 +194,7 @@ function cardFor(cwd: string, dir: string): { card: FlowCard; state: Json | null
   const criteria = parseCriteria(readOptional(join(base, "acceptance-criteria.md")));
   const empty: FlowCard = {
     id: idFromDir,
+    idValid: /^\d{1,9}$/.test(idFromDir),
     dir,
     title: dir.replace(/^\d+-\d{4}-\d{2}-\d{2}-/, "").replace(/-/g, " "),
     status: "unknown",
@@ -226,6 +228,7 @@ function cardFor(cwd: string, dir: string): { card: FlowCard; state: Json | null
     card: {
       ...empty,
       id: str(state.id) ?? idFromDir,
+      idValid: /^\d{1,9}$/.test(str(state.id) ?? idFromDir),
       title: str(state.title) ?? empty.title,
       status,
       previousStatus: str(state.previousStatus),
@@ -250,14 +253,18 @@ function flowsList(cwd: string): FlowCard[] {
   return flowDirs(cwd).map((d) => cardFor(cwd, d).card);
 }
 
-function findDir(cwd: string, id: string): string {
-  const dir = flowDirs(cwd).find((d) => d.startsWith(`${id}-`));
-  if (!dir) throw new Error(`No flow #${id} in this project`);
+/** Same rule as the Rust `validate_flow_dir`: one path component, no leading "-". */
+const SAFE_DIR = /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/;
+
+/** A flow is addressed by its directory name (ids are shared across packages): exact match only. */
+function findDir(cwd: string, dir: string): string {
+  if (!SAFE_DIR.test(dir)) throw new Error(`Invalid flow directory: ${JSON.stringify(dir)}`);
+  if (!flowDirs(cwd).includes(dir)) throw new Error(`Flow ${dir} was not found in this project`);
   return dir;
 }
 
-function flowsGet(cwd: string, id: string): Json {
-  const dir = findDir(cwd, id);
+function flowsGet(cwd: string, dirName: string): Json {
+  const dir = findDir(cwd, dirName);
   const base = join(flowsRoot(cwd), dir);
   const { card, state, criteria } = cardFor(cwd, dir);
   const s = state ?? {};
@@ -316,7 +323,8 @@ const OUTCOMES = new Set(["started", "failed", "blocked"]);
 
 /** The allowlist: argv is built here, never from a client string. */
 function flowArgv(id: string, action: Json): string[] {
-  if (!/^\d+$/.test(id)) throw new Error(`Not a flow id: ${id}`);
+  // `id` is the validated flow directory name; keryx accepts the exact name.
+  if (!SAFE_DIR.test(id)) throw new Error(`Invalid flow directory: ${id}`);
   const text = (k: string) => {
     const v = action[k];
     if (typeof v !== "string" || v.trim() === "") throw new Error(`\`${k}\` is required`);
@@ -357,8 +365,8 @@ function flowArgv(id: string, action: Json): string[] {
   }
 }
 
-async function flowsAction(cwd: string, id: string, action: Json) {
-  const argv = flowArgv(id, action);
+async function flowsAction(cwd: string, dirName: string, action: Json) {
+  const argv = flowArgv(findDir(cwd, dirName), action);
   const proc = Bun.spawn([...KERYX_CMD, ...argv], { cwd, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
   const [stdout, stderr, exitCode] = await Promise.all([
     new Response(proc.stdout).text(),
@@ -553,9 +561,9 @@ async function handle(ws: ServerWebSocket<Conn>, cmd: string, args: Json): Promi
     case "flows_list":
       return flowsList(await projectCwd(ws.data, cwd));
     case "flows_get":
-      return flowsGet(await projectCwd(ws.data, cwd), String(args.id));
+      return flowsGet(await projectCwd(ws.data, cwd), String(args.dir));
     case "flows_action":
-      return flowsAction(await projectCwd(ws.data, cwd), String(args.id), (args.action ?? {}) as Json);
+      return flowsAction(await projectCwd(ws.data, cwd), String(args.dir), (args.action ?? {}) as Json);
     case "flows_watch": {
       const root = await projectCwd(ws.data, cwd);
       const w = watched.get(root) ?? { sig: flowsSignature(root), sockets: new Set() };

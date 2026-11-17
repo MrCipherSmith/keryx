@@ -118,6 +118,9 @@ export async function hostKind(): Promise<"tauri" | "browser-dev" | "none"> {
 
 export interface FlowCard {
   id: string;
+  /** Whether `id` is 1-9 digits and may appear in a command; false keeps the card visible only. */
+  idValid: boolean;
+  /** Package directory name under .metaproject/flows: the unique key and the action address. */
   dir: string;
   title: string;
   status: string;
@@ -193,9 +196,9 @@ export interface ActionResult {
 }
 
 export const flowsList = (cwd: string) => invoke<FlowCard[]>("flows_list", { cwd });
-export const flowsGet = (cwd: string, id: string) => invoke<FlowDetail>("flows_get", { cwd, id });
-export const flowsAction = (cwd: string, id: string, action: FlowAction) =>
-  invoke<ActionResult>("flows_action", { cwd, id, action });
+export const flowsGet = (cwd: string, dir: string) => invoke<FlowDetail>("flows_get", { cwd, dir });
+export const flowsAction = (cwd: string, dir: string, action: FlowAction) =>
+  invoke<ActionResult>("flows_action", { cwd, dir, action });
 export const flowsWatch = (cwd: string) => invoke<void>("flows_watch", { cwd });
 export const onFlowsChanged = (handler: (p: { cwd: string }) => void) =>
   listen<{ cwd: string }>("flows://changed", handler, "app");

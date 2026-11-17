@@ -48,11 +48,17 @@ pub struct ActionResult {
     pub stderr: String,
 }
 
-pub fn validate_flow_id(id: &str) -> Result<(), String> {
-    if !id.is_empty() && id.len() <= 9 && id.bytes().all(|b| b.is_ascii_digit()) {
+/// A flow is addressed by its directory name: ids are shared across packages.
+/// One path component of `[A-Za-z0-9._-]`, starting with a letter or digit (so
+/// no `..`, no separator, no leading `-` that keryx would read as an option).
+pub fn validate_flow_dir(dir: &str) -> Result<(), String> {
+    let ok = dir.len() <= 200
+        && dir.bytes().next().is_some_and(|b| b.is_ascii_alphanumeric())
+        && dir.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'));
+    if ok {
         Ok(())
     } else {
-        Err(format!("Invalid flow id: {id:?}"))
+        Err(format!("Invalid flow directory: {dir:?}"))
     }
 }
 
@@ -91,7 +97,8 @@ fn one_of<'a>(what: &str, value: &'a str, allowed: &[&str]) -> Result<&'a str, S
 
 /// Validate and turn an action into the `keryx` argv (without the program).
 pub fn build_argv(id: &str, action: &FlowAction) -> Result<Vec<String>, String> {
-    validate_flow_id(id)?;
+    // `id` here is the flow directory name (see `validate_flow_dir`).
+    validate_flow_dir(id)?;
     let mut argv: Vec<String> = vec!["flow".into()];
     let mut push = |items: &[&str]| argv.extend(items.iter().map(|s| s.to_string()));
     match action {
@@ -265,7 +272,7 @@ mod tests {
     #[test]
     fn invalid_arguments_are_refused_before_any_process() {
         let start = act(json!({"type":"start"}));
-        for id in ["", "../1", "1; ls", "T1", "12 ", "-1", "1234567890", "١٢"] {
+        for id in ["", "../1", "1; ls", "12 ", "-1", "-12-x", "..", ".", "a/b", "12\n", "١٢-x", &"1".repeat(201)] {
             assert!(build_argv(id, &start).is_err(), "id {id:?}");
         }
         let bad = [

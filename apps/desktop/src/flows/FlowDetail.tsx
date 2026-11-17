@@ -15,7 +15,7 @@ import { InlineMarkdown, Markdown } from "../components/Markdown";
 import { Dialog, EmptyState, Sheet, Spinner } from "../components/ui";
 import { useToast } from "../components/Toasts";
 import { StatusPill } from "./FlowsBoard";
-import { terminalCommands, validateArg } from "./model";
+import { flowRef, terminalCommands, validateArg } from "./model";
 
 type Tab = "overview" | "criteria" | "tasks" | "journal" | "gates";
 
@@ -46,12 +46,12 @@ export function FlowDetailSheet({ cwd, card, version, onClose, onWorkOn, onChang
 
   const load = useCallback(async () => {
     try {
-      setDetail(await flowsGet(cwd, card.id));
+      setDetail(await flowsGet(cwd, card.dir));
       setError(null);
     } catch (e) {
       setError(errMessage(e));
     }
-  }, [cwd, card.id]);
+  }, [cwd, card.dir]);
 
   useEffect(() => {
     void load();
@@ -61,7 +61,7 @@ export function FlowDetailSheet({ cwd, card, version, onClose, onWorkOn, onChang
     async (action: FlowAction, label: string): Promise<boolean> => {
       setBusy(action.type);
       try {
-        const r = await flowsAction(cwd, card.id, action);
+        const r = await flowsAction(cwd, card.dir, action);
         if (r.ok) {
           if (action.type === "next") {
             setForm({ kind: "next", output: r.stdout.trim() || "(no output)" });
@@ -86,7 +86,7 @@ export function FlowDetailSheet({ cwd, card, version, onClose, onWorkOn, onChang
         setBusy(null);
       }
     },
-    [cwd, card.id, toast, onChanged, load],
+    [cwd, card.dir, toast, onChanged, load],
   );
 
   const c = detail?.card ?? card;
@@ -278,7 +278,7 @@ export function FlowDetailSheet({ cwd, card, version, onClose, onWorkOn, onChang
           }
         >
           <p>
-            <code>keryx flow freeze {c.id}</code> seals <code>acceptance-criteria.md</code> with a checksum. After this, the
+            <code>keryx flow freeze {flowRef(c) ?? "<flow>"}</code> seals <code>acceptance-criteria.md</code> with a checksum. After this, the
             criteria change only through <code>keryx flow ac update</code> in a terminal.
           </p>
         </Dialog>
@@ -544,7 +544,7 @@ function Tasks({
                   <button className="btn btn-sm btn-ghost" onClick={() => onAttempt(t)} disabled={busy !== null}>
                     Attempt…
                   </button>
-                  <button className="btn btn-sm" onClick={() => onDone(t)} disabled={busy !== null} title={`keryx flow task done ${d.card.id} ${t.id}`}>
+                  <button className="btn btn-sm" onClick={() => onDone(t)} disabled={busy !== null} title={flowRef(d.card) ? `keryx flow task done ${flowRef(d.card)} ${t.id}` : "Mark this task done"}>
                     {busy === "taskDone" ? <Spinner /> : <Icon name="check" size={13} />} Done
                   </button>
                 </div>
@@ -899,6 +899,9 @@ function CommandsDialog({ card, onClose }: { card: FlowCard; onClose: () => void
       }
     >
       <p className="dialog-sub">These commands have gates and confirmation tokens that belong in a terminal, so the board does not run them.</p>
+      {terminalCommands(card).length === 0 ? (
+        <p className="dialog-sub">This flow's directory name and id are not safe to put in a command, so no command is offered.</p>
+      ) : null}
       <ul className="command-list">
         {terminalCommands(card).map((c) => (
           <li key={c.command}>

@@ -51,14 +51,31 @@ export function workPrompt(card: FlowCard): string {
   return `Continue flow #${card.id} "${card.title}": take the next task.`;
 }
 
+/** One path component, letters/digits/`._-`, no leading `-` (mirrors the Rust `validate_flow_dir`). */
+const SAFE_DIR = /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/;
+const SAFE_ID = /^\d{1,9}$/;
+
+/**
+ * The only thing a terminal command may name: the package directory (ids are
+ * shared across packages, so it is the unambiguous reference), or the id when
+ * it is plain digits. `null` when neither is safe: no command is offered.
+ */
+export function flowRef(card: FlowCard): string | null {
+  if (SAFE_DIR.test(card.dir)) return card.dir;
+  if (SAFE_ID.test(card.id)) return card.id;
+  return null;
+}
+
 /** Commands the board does not run; offered as copyable terminal commands. */
 export function terminalCommands(card: FlowCard): Array<{ label: string; command: string }> {
+  const ref = flowRef(card);
+  if (ref === null) return [];
   return [
-    { label: "Complete", command: `keryx flow complete ${card.id}` },
-    { label: "Confirm a criterion", command: `keryx flow ac confirm ${card.id} AC1` },
-    { label: "Mark implemented", command: `keryx flow implemented ${card.id}` },
-    { label: "Recover", command: `keryx flow recover ${card.id}` },
-    { label: "Update criteria", command: `keryx flow ac update ${card.id}` },
-    { label: "Reseal criteria", command: `keryx flow ac reseal ${card.id}` },
+    { label: "Complete", command: `keryx flow complete ${ref}` },
+    { label: "Confirm a criterion", command: `keryx flow ac confirm ${ref} AC1` },
+    { label: "Mark implemented", command: `keryx flow implemented ${ref}` },
+    { label: "Recover", command: `keryx flow recover ${ref}` },
+    { label: "Update criteria", command: `keryx flow ac update ${ref}` },
+    { label: "Reseal criteria", command: `keryx flow ac reseal ${ref}` },
   ];
 }

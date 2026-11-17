@@ -31,11 +31,19 @@ pub fn dir_id(dir_name: &str) -> String {
     }
 }
 
+/// True when `id` is safe to put in a command: 1 to 9 ASCII digits. A flow whose
+/// `flow.json` carries any other id stays visible but gets `id_valid: false`.
+pub fn is_command_id(id: &str) -> bool {
+    !id.is_empty() && id.len() <= 9 && id.bytes().all(|b| b.is_ascii_digit())
+}
+
 /// A card for a directory whose `flow.json` is unreadable: never dropped.
-pub fn broken_card(dir_name: &str, rel_dir: &str, error: String) -> FlowCard {
+pub fn broken_card(dir_name: &str, error: String) -> FlowCard {
+    let id = dir_id(dir_name);
     FlowCard {
-        id: dir_id(dir_name),
-        dir: rel_dir.to_string(),
+        id_valid: is_command_id(&id),
+        id,
+        dir: dir_name.to_string(),
         title: dir_name.to_string(),
         status: "unknown".to_string(),
         previous_status: None,
@@ -61,7 +69,7 @@ fn has_exceptions(list: Option<&Value>) -> bool {
 
 /// Parse `flow.json` text into a card. `criteria_total` is the count from
 /// `acceptance-criteria.md`, when that file was read; otherwise `acKinds` is used.
-pub fn parse_card(text: &str, dir_name: &str, rel_dir: &str, criteria_total: Option<usize>) -> Result<FlowCard, String> {
+pub fn parse_card(text: &str, dir_name: &str, criteria_total: Option<usize>) -> Result<FlowCard, String> {
     let v: Value = serde_json::from_str(text).map_err(|e| format!("flow.json: {e}"))?;
     if !v.is_object() {
         return Err("flow.json: not a JSON object".to_string());
@@ -78,9 +86,11 @@ pub fn parse_card(text: &str, dir_name: &str, rel_dir: &str, criteria_total: Opt
         Value::Object(_) => field(o, "value"),
         other => str_of(other),
     });
+    let id = field(&v, "id").unwrap_or_else(|| dir_id(dir_name));
     Ok(FlowCard {
-        id: field(&v, "id").unwrap_or_else(|| dir_id(dir_name)),
-        dir: rel_dir.to_string(),
+        id_valid: is_command_id(&id),
+        id,
+        dir: dir_name.to_string(),
         title: field(&v, "title").unwrap_or_else(|| dir_name.to_string()),
         blocked: status == "blocked",
         status,
@@ -300,16 +310,27 @@ mod tests {
 
     #[test]
     fn numeric_id_and_missing_fields_are_tolerated() {
-        let c = parse_card(r#"{"id": 7, "status": "ready"}"#, "007-x", "d", None).unwrap();
+        let c = parse_card(r#"{"id": 7, "status": "ready"}"#, "007-x", None).unwrap();
         assert_eq!(c.id, "7");
         assert_eq!(c.title, "007-x");
         assert!(!c.blocked);
     }
 
     #[test]
+    fn a_non_numeric_id_stays_visible_but_is_marked_unfit_for_commands() {
+        let c = parse_card(r#"{"id": "1; rm -rf /", "status": "ready"}"#, "001-x", None).unwrap();
+        assert_eq!(c.id, "1; rm -rf /");
+        assert!(!c.id_valid);
+        assert_eq!(c.dir, "001-x");
+        assert!(parse_card(r#"{"id": "42"}"#, "042-x", None).unwrap().id_valid);
+        assert!(!parse_card(r#"{"id": "1234567890"}"#, "1-x", None).unwrap().id_valid);
+        assert!(!broken_card("abc", "x".into()).id_valid);
+    }
+
+    #[test]
     fn malformed_json_is_an_error_not_a_panic() {
-        assert!(parse_card("{ \"id\": ", "1-x", "d", None).is_err());
-        assert!(parse_card("[]", "1-x", "d", None).is_err());
+        assert!(parse_card("{ \"id\": ", "1-x", None).is_err());
+        assert!(parse_card("[]", "1-x", None).is_err());
         assert_eq!(dir_id("492-2026-11-14-slug"), "492");
     }
 }

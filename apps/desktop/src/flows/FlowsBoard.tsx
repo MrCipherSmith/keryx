@@ -29,7 +29,7 @@ export function FlowsBoard({ cwd, flows, onWorkOn }: Props) {
       return "board";
     }
   });
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openDir, setOpenDir] = useState<string | null>(null);
   const search = useRef<HTMLInputElement>(null);
   const q = useDeferredValue(query);
 
@@ -76,7 +76,7 @@ export function FlowsBoard({ cwd, flows, onWorkOn }: Props) {
   }, [visible]);
 
   const broken = useMemo(() => visible.filter((c) => c.error), [visible]);
-  const openCard = openId ? flows.cards.find((c) => c.id === openId) ?? null : null;
+  const openCard = openDir ? flows.cards.find((c) => c.dir === openDir) ?? null : null;
   const activeCount = visible.filter((c) => laneOf(c) !== "done").length;
 
   return (
@@ -173,18 +173,18 @@ export function FlowsBoard({ cwd, flows, onWorkOn }: Props) {
           </button>
         </EmptyState>
       ) : view === "board" ? (
-        <Board lanes={lanes} onOpen={setOpenId} openId={openId} loading={flows.loading && flows.cards.length === 0} />
+        <Board lanes={lanes} onOpen={setOpenDir} openDir={openDir} loading={flows.loading && flows.cards.length === 0} />
       ) : (
-        <ListView cards={visible} onOpen={setOpenId} openId={openId} />
+        <ListView cards={visible} onOpen={setOpenDir} openDir={openDir} />
       )}
 
       {openCard ? (
         <FlowDetailSheet
-          key={openCard.id}
+          key={openCard.dir}
           cwd={cwd}
           card={openCard}
           version={flows.version}
-          onClose={() => setOpenId(null)}
+          onClose={() => setOpenDir(null)}
           onWorkOn={() => onWorkOn(openCard)}
           onChanged={() => void flows.refresh()}
         />
@@ -196,12 +196,12 @@ export function FlowsBoard({ cwd, flows, onWorkOn }: Props) {
 function Board({
   lanes,
   onOpen,
-  openId,
+  openDir,
   loading,
 }: {
   lanes: Map<LaneId, FlowCard[]>;
-  onOpen: (id: string) => void;
-  openId: string | null;
+  onOpen: (dir: string) => void;
+  openDir: string | null;
   loading: boolean;
 }) {
   const other = lanes.get("other") ?? [];
@@ -209,7 +209,7 @@ function Board({
   return (
     <div className="board" role="list" aria-label="Flow lanes">
       {all.map((l) => (
-        <Lane key={l.id} id={l.id} label={l.label} cards={lanes.get(l.id) ?? []} onOpen={onOpen} openId={openId} loading={loading} />
+        <Lane key={l.id} id={l.id} label={l.label} cards={lanes.get(l.id) ?? []} onOpen={onOpen} openDir={openDir} loading={loading} />
       ))}
     </div>
   );
@@ -220,14 +220,14 @@ function Lane({
   label,
   cards,
   onOpen,
-  openId,
+  openDir,
   loading,
 }: {
   id: LaneId;
   label: string;
   cards: FlowCard[];
-  onOpen: (id: string) => void;
-  openId: string | null;
+  onOpen: (dir: string) => void;
+  openDir: string | null;
   loading: boolean;
 }) {
   const isDone = id === "done";
@@ -269,7 +269,7 @@ function Lane({
         ) : cards.length === 0 ? (
           <div className="lane-empty">Nothing here</div>
         ) : (
-          shown.map((c) => <FlowCardView key={c.id} card={c} onOpen={onOpen} selected={c.id === openId} />)
+          shown.map((c) => <FlowCardView key={c.dir} card={c} onOpen={onOpen} selected={c.dir === openDir} />)
         )}
         {cards.length > limit ? (
           <button className="lane-more" onClick={() => setLimit((n) => n + (isDone ? DONE_CAP : LANE_CAP))}>
@@ -287,7 +287,7 @@ const FlowCardView = memo(function FlowCardView({
   selected,
 }: {
   card: FlowCard;
-  onOpen: (id: string) => void;
+  onOpen: (dir: string) => void;
   selected: boolean;
 }) {
   const pct = card.tasksTotal > 0 ? Math.round((card.tasksDone / card.tasksTotal) * 100) : 0;
@@ -295,7 +295,7 @@ const FlowCardView = memo(function FlowCardView({
   return (
     <button
       className={`flow-card${card.blocked ? " is-blocked" : ""}${card.error ? " is-broken" : ""}${selected ? " is-selected" : ""}`}
-      onClick={() => onOpen(card.id)}
+      onClick={() => onOpen(card.dir)}
       title={card.title}
     >
       <div className="flow-card-top">
@@ -344,7 +344,7 @@ const FlowCardView = memo(function FlowCardView({
   );
 });
 
-function ListView({ cards, onOpen, openId }: { cards: FlowCard[]; onOpen: (id: string) => void; openId: string | null }) {
+function ListView({ cards, onOpen, openDir }: { cards: FlowCard[]; onOpen: (dir: string) => void; openDir: string | null }) {
   const [limit, setLimit] = useState(LIST_CAP);
   return (
     <div className="flow-list-wrap">
@@ -364,13 +364,13 @@ function ListView({ cards, onOpen, openId }: { cards: FlowCard[]; onOpen: (id: s
         <tbody>
           {cards.slice(0, limit).map((c) => (
             <tr
-              key={c.id}
-              className={c.id === openId ? "is-selected" : undefined}
-              onClick={() => onOpen(c.id)}
+              key={c.dir}
+              className={c.dir === openDir ? "is-selected" : undefined}
+              onClick={() => onOpen(c.dir)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
-                  onOpen(c.id);
+                  onOpen(c.dir);
                 }
               }}
               tabIndex={0}

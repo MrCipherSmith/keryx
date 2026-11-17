@@ -22,6 +22,11 @@ const FLOWS_SUBDIR: &str = ".metaproject/flows";
 #[serde(rename_all = "camelCase")]
 pub struct FlowCard {
     pub id: String,
+    /// False when `id` is not 1 to 9 digits: the card stays visible, but the UI
+    /// must not build a command from the id.
+    pub id_valid: bool,
+    /// The package directory name under `.metaproject/flows`: the unique key of a
+    /// flow (ids are shared across packages) and what every action addresses.
     pub dir: String,
     pub title: String,
     pub status: String,
@@ -147,15 +152,14 @@ fn flow_dirs(root: &Path) -> Vec<(String, PathBuf)> {
 }
 
 fn card_for(name: &str, dir: &Path) -> (FlowCard, Option<String>) {
-    let rel = format!("{FLOWS_SUBDIR}/{name}");
     let Some(text) = read_inside(dir, "flow.json") else {
-        return (parse::broken_card(name, &rel, "flow.json is missing, unreadable or too large".to_string()), None);
+        return (parse::broken_card(name, "flow.json is missing, unreadable or too large".to_string()), None);
     };
     let criteria_total = read_inside(dir, "acceptance-criteria.md")
         .map(|md| parse::parse_criteria(&md, &Default::default(), &Default::default()).len());
-    match parse::parse_card(&text, name, &rel, criteria_total) {
+    match parse::parse_card(&text, name, criteria_total) {
         Ok(card) => (card, Some(text)),
-        Err(e) => (parse::broken_card(name, &rel, e), None),
+        Err(e) => (parse::broken_card(name, e), None),
     }
 }
 
@@ -164,14 +168,15 @@ pub fn list_flows(cwd: &Path) -> Result<Vec<FlowCard>, String> {
     Ok(flow_dirs(&root).iter().map(|(name, dir)| card_for(name, dir).0).collect())
 }
 
-pub fn get_flow(cwd: &Path, id: &str) -> Result<FlowDetail, String> {
-    actions::validate_flow_id(id)?;
+/// Read one flow by its directory name (exact match, never by id).
+pub fn get_flow(cwd: &Path, dir_name: &str) -> Result<FlowDetail, String> {
+    actions::validate_flow_dir(dir_name)?;
     let root = flows_root(cwd)?.ok_or_else(|| format!("This project has no {FLOWS_SUBDIR} folder"))?;
     for (name, dir) in flow_dirs(&root) {
-        let (card, text) = card_for(&name, &dir);
-        if card.id != id {
+        if name != dir_name {
             continue;
         }
+        let (card, text) = card_for(&name, &dir);
         let body = match &text {
             Some(t) => Some(parse::parse_body(t)?),
             None => None,
@@ -199,7 +204,18 @@ pub fn get_flow(cwd: &Path, id: &str) -> Result<FlowDetail, String> {
             completion_attempts,
         });
     }
-    Err(format!("Flow {id} was not found"))
+    Err(format!("Flow {dir_name} was not found"))
+}
+
+/// Refuse unless `dir_name` is one existing flow directory under `cwd`.
+pub fn require_flow_dir(cwd: &Path, dir_name: &str) -> Result<(), String> {
+    actions::validate_flow_dir(dir_name)?;
+    let root = flows_root(cwd)?.ok_or_else(|| format!("This project has no {FLOWS_SUBDIR} folder"))?;
+    if flow_dirs(&root).iter().any(|(name, _)| name == dir_name) {
+        Ok(())
+    } else {
+        Err(format!("Flow {dir_name} was not found"))
+    }
 }
 
 #[tauri::command]
@@ -210,8 +226,8 @@ pub async fn flows_list(cwd: String) -> Result<Vec<FlowCard>, String> {
 }
 
 #[tauri::command]
-pub async fn flows_get(cwd: String, id: String) -> Result<FlowDetail, String> {
-    tauri::async_runtime::spawn_blocking(move || get_flow(Path::new(&cwd), &id))
+pub async fn flows_get(cwd: String, dir: String) -> Result<FlowDetail, String> {
+    tauri::async_runtime::spawn_blocking(move || get_flow(Path::new(&cwd), &dir))
         .await
         .map_err(|e| e.to_string())?
 }
@@ -221,11 +237,20 @@ pub async fn flows_action(
     app: AppHandle,
     state: State<'_, AppState>,
     cwd: String,
-    id: String,
+    dir: String,
     action: actions::FlowAction,
 ) -> Result<actions::ActionResult, String> {
     // Validate before anything is resolved or spawned.
-    let argv = actions::build_argv(&id, &action)?;
+    let argv = actions::build_argv(&dir, &action)?;
+    // The directory must be exactly one existing package: a name that does not
+    // resolve here would otherwise be handed to keryx as a fuzzy reference.
+    {
+        let cwd = cwd.clone();
+        let dir = dir.clone();
+        tauri::async_runtime::spawn_blocking(move || require_flow_dir(Path::new(&cwd), &dir))
+            .await
+            .map_err(|e| e.to_string())??;
+    }
     let env = state.environment().clone();
     let settings = bridge::load_settings(&app);
     tauri::async_runtime::spawn_blocking(move || actions::run_action(&cwd, argv, env, &settings))
@@ -255,7 +280,7 @@ mod tests {
     fn lists_fixture_flows_including_the_broken_one() {
         let cards = list_flows(&fixture()).unwrap();
         // id-map.json and README.md are files and never appear.
-        assert_eq!(cards.iter().map(|c| c.id.as_str()).collect::<Vec<_>>(), ["101", "102", "103"]);
+        assert_eq!(cards.iter().map(|c| c.id.as_str()).collect::<Vec<_>>(), ["101", "102", "103", "103"]);
         let good = &cards[0];
         assert_eq!(good.title, "A good flow");
         assert!(good.blocked);
@@ -265,7 +290,8 @@ mod tests {
         assert_eq!((good.tasks_done, good.tasks_total), (2, 3));
         assert_eq!((good.ac_confirmed, good.ac_total), (1, 4));
         assert!(good.completion_exceptions);
-        assert_eq!(good.dir, ".metaproject/flows/101-2026-01-01-good-flow");
+        assert_eq!(good.dir, "101-2026-01-01-good-flow");
+        assert!(good.id_valid);
         assert!(good.error.is_none());
 
         // FB1: a broken flow.json stays on the board as an error card.
@@ -275,11 +301,14 @@ mod tests {
 
         assert_eq!(cards[2].id, "103");
         assert_eq!(cards[2].status, "done");
+        // two packages share id 103: only the directory tells them apart
+        assert_eq!(cards[3].id, "103");
+        assert_ne!(cards[2].dir, cards[3].dir);
     }
 
     #[test]
     fn detail_merges_criteria_tasks_journal_and_docs() {
-        let d = get_flow(&fixture(), "101").unwrap();
+        let d = get_flow(&fixture(), "101-2026-01-01-good-flow").unwrap();
         assert_eq!(d.criteria.len(), 4);
         assert_eq!(d.criteria[0].kind.as_deref(), Some("exec"));
         assert_eq!(d.criteria[0].confirmed.as_ref().unwrap().note.as_deref(), Some("checked by hand"));
@@ -301,16 +330,32 @@ mod tests {
 
     #[test]
     fn detail_of_a_broken_flow_is_the_error_card() {
-        let d = get_flow(&fixture(), "102").unwrap();
+        let d = get_flow(&fixture(), "102-2026-01-02-broken-flow").unwrap();
         assert!(d.card.error.is_some());
         assert!(d.tasks.is_empty() && d.journal.is_empty());
     }
 
     #[test]
-    fn ids_that_escape_or_do_not_exist_are_refused() {
+    fn dirs_that_escape_or_do_not_exist_are_refused() {
         assert!(get_flow(&fixture(), "../..").is_err());
         assert!(get_flow(&fixture(), "101/../x").is_err());
-        assert!(get_flow(&fixture(), "999").unwrap_err().contains("not found"));
+        assert!(get_flow(&fixture(), "-101").is_err());
+        assert!(get_flow(&fixture(), "999-nope").unwrap_err().contains("not found"));
+        // a bare id is not a directory name
+        assert!(get_flow(&fixture(), "101").unwrap_err().contains("not found"));
+        assert!(require_flow_dir(&fixture(), "101-2026-01-01-good-flow").is_ok());
+        assert!(require_flow_dir(&fixture(), "101").is_err());
+        assert!(require_flow_dir(&fixture(), "../flows").is_err());
+    }
+
+    #[test]
+    fn two_packages_sharing_an_id_are_addressed_by_directory() {
+        let a = get_flow(&fixture(), "103-2026-01-03-numeric-id").unwrap();
+        let b = get_flow(&fixture(), "103-2026-01-04-duplicate-id").unwrap();
+        assert_eq!(a.card.id, "103");
+        assert_eq!(b.card.id, "103");
+        assert_eq!(a.card.title, "Numeric id");
+        assert_eq!(b.card.title, "Duplicate id");
     }
 
     #[test]
@@ -333,8 +378,8 @@ mod tests {
         let cards = list_flows(&project).unwrap();
         assert_eq!(cards.len(), 1);
         assert_eq!(cards[0].id, "1");
-        assert!(get_flow(&project, "999").is_err());
-        assert!(get_flow(&project, "1").unwrap().docs.description.is_none());
+        assert!(get_flow(&project, "002-escape").is_err());
+        assert!(get_flow(&project, "001-2026-01-01-ok").unwrap().docs.description.is_none());
 
         // the flows folder itself symlinked out of the project is refused
         let project2 = tmp.path().join("proj2");
@@ -355,7 +400,7 @@ mod tests {
         let cards = list_flows(&fixture()).unwrap();
         let v = serde_json::to_value(&cards[0]).unwrap();
         for key in [
-            "id", "dir", "title", "status", "previousStatus", "blocked", "owner", "prUrl", "baseBranch",
+            "id", "idValid", "dir", "title", "status", "previousStatus", "blocked", "owner", "prUrl", "baseBranch",
             "tasksDone", "tasksTotal", "acTotal", "acConfirmed", "updatedAt", "completionExceptions", "error",
         ] {
             assert!(v.get(key).is_some(), "missing {key}");
