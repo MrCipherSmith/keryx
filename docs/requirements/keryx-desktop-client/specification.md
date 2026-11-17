@@ -111,7 +111,9 @@ the model as a declined question.
 ### 3.7 Slash commands
 
 M1 keeps `/help`, `/model`, `/reasoning`, `/status` and adds `/mode
-<ask|trust|auto>` (same effect as `session/set_mode`). The full shell set is M2.
+<ask|trust|auto>` (same effect as `session/set_mode`). The full shell set is
+M2a (§3.9), served through `_keryx/command`; prompt-text slash handling keeps
+the M1 set.
 
 ### 3.8 Amendments from the M1 implementation
 
@@ -353,6 +355,40 @@ The session's job registry is created with `onEvent`, which sends
 
 Private tasks are never listed. A released session's tasks are gone (they are
 killed on release, §3.8).
+
+#### 3.9.5a As built (2026-11-17)
+
+Where the implementation differs from the text above
+(`src/acp/shell-commands.ts`, `shell-command-runners.ts`, `shell-views*.ts`,
+`providers.ts`, `shell-tasks.ts`, `src/commands/spawn-deps.ts`):
+
+- Busy: while a turn runs every command the shell would queue (including
+  `/tasks`, `/status`, `/model`, `/compact`) is refused with "main is busy:
+  command deferred"; the Tasks tab (`_keryx/tasks/kill`) is the way to stop a
+  task mid-turn.
+- Refused with a reason, not served: `/goal` (it starts a turn; a command is
+  not one), `/delegate` (no external-run port in `keryx acp` yet, so no
+  `runtime: "external"` subagents either), every `/bus` subcommand (the ACP
+  host does not join the bus), `/autoreview start|stop` (detached process
+  with no supervisor), `/mcp connect|disconnect`, `/task` without a Hub
+  connection, `/governance close` of a flow that needs a confirmation token.
+- Setting toggles (`/guard`, `/editguard`, `/route`, `/external`,
+  `/projectctx`) persist config for `keryx shell` sessions; the ACP turn has
+  no guard or classifier to change.
+- View commands answer `text` (a plain rendering starting with the title) and
+  `_meta.keryx.view`. Shared text subcommands live in
+  `src/commands/shell-subcommands.ts`; the TUI and readline REPL do not call
+  them yet.
+- Providers: the catalogue `refusal` is sent only for providers with no
+  connection method; `needsBaseUrl` is true only for `none` providers, hosted
+  ones accept an optional `baseUrl`. `connect` may answer `models` (count);
+  `search_providers/connect` accepts optional `fields`. Unknown session is
+  `-32002` (the server's existing "Unknown ACP session"), unknown or private
+  task `-32602`.
+- Subagents: the tool card's ACP id is minted by the IO (`toolCallIdFor`) and
+  is what `parentToolCallId` carries; `spawn_subagent` cards have kind
+  `think`. Children's provider choice comes from the session's listed model
+  choices; before that list loads a child runs on the parent's model.
 
 #### 3.9.6 Advertising
 
