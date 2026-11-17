@@ -8,6 +8,7 @@ import path from "node:path";
 import type { PermissionMode } from "../commands/permission-mode";
 import { loadAcpFixtureProvider, type AcpFixtureEvent } from "./fixture-provider";
 import { ACP_AGENT_METHODS, ACP_CLIENT_METHODS, ACP_PROTOCOL_VERSION } from "./protocol";
+import type { AcpServerOptions } from "./server";
 import { harness, type Frame } from "./server-harness.test-helpers";
 
 export type Round = readonly AcpFixtureEvent[];
@@ -34,6 +35,8 @@ export interface ShellHarnessOptions {
   readonly profile?: "editor" | "shell";
   readonly storedMode?: PermissionMode;
   readonly clientCapabilities?: Record<string, unknown>;
+  /** Extra `runAcpServer` options (seams), applied over the defaults above. */
+  readonly serverOptions?: Partial<AcpServerOptions>;
 }
 
 export type ShellHarness = ReturnType<typeof harness> & {
@@ -52,6 +55,7 @@ export function shellHarness(options: ShellHarnessOptions = {}): ShellHarness {
     profile: options.profile ?? "shell",
     permissionModeDefault: () => options.storedMode,
     keryxMcp: () => undefined,
+    ...options.serverOptions,
   });
   const initialize = async (): Promise<Frame> => {
     const id = h.request(ACP_AGENT_METHODS.initialize, {

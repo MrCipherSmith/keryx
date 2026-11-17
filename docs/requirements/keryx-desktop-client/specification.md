@@ -149,6 +149,11 @@ Wire details the sections above left open, as built (`src/acp/server.ts`,
   the session directory bound.
 - In auto mode an `ask_user` the model answers itself is reported to the
   client as an `agent_message_chunk` with `_meta.keryx.selfAnsweredQuestion: true`.
+- The `shell` profile treats one active session per connection: when
+  `session/new` or `session/load` switches to another session, the previous one
+  is released (lease, shell tasks, per-session state; after its running turn,
+  if any), so `keryx shell --resume` can open it. The `editor` profile keeps
+  every session until the connection ends.
 
 ## 4. Client side
 

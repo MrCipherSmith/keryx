@@ -2,11 +2,16 @@
 // (Keryx Desktop Client M1, specification §3.3).
 //
 // Built by `buildInteractiveAgentTools` — the factory `keryx shell` uses — with
-// session-scoped inputs, never a fork of it:
+// session-scoped inputs, never a fork of it. Like `keryx shell`, a session
+// builds it once and reuses it across turns: `server.ts` caches it per session
+// and rebuilds only when an input below changes (the session's root, or its
+// client MCP servers after a `session/load`).
 //
-//   cwd / metaprojectPort   the session's resolved root, `createMetaprojectAdapter(root)`
+//   cwd / metaprojectPort   the session's resolved root, one `createMetaprojectAdapter(root)`
+//                           per root per connection (`server.ts`)
 //   searchController        `createDefaultSearchProviderController()`, as `keryx shell` builds it
-//   jobRegistry             one per ACP session (`server.ts`), swept when the connection ends
+//   jobRegistry             one per ACP session (`server.ts`), swept when the client switches
+//                           to another session or the connection ends
 //   getSessionDir           the session's own directory in the keryx session store
 //   askUser                 `_keryx/ask_user` to the client (`ask-user.ts`) — or, when the
 //                           client did not advertise it, the tool is denied
@@ -63,7 +68,7 @@ export interface AcpShellRosterInput {
   readonly askUser?: AskUserFn;
   /** keryx's configured servers merged with the client's, or none at all. */
   readonly mcp?: McpToolBinding;
-  /** Test seam; `createMetaprojectAdapter(root)` otherwise. */
+  /** The root's adapter, shared by every build for that root; `createMetaprojectAdapter(root)` when absent. */
   readonly metaprojectPort?: MetaprojectPort;
 }
 
