@@ -1120,6 +1120,21 @@ describe("rules the imported skills cite", () => {
     expect(markdown).not.toContain("`keryx install`");
   });
 
+  test("a rule keryx ships in the process layer that the overlay provides lands in rules/project, never rules/process", async () => {
+    // ADR-0001 P2: `process/` is installed and overwritten like `core/`.
+    await writeOverlaySkill("review-house", "Conduct: `process/agent-conduct.mdc`.");
+    await mkdir(path.join(source, "rules", "process"), { recursive: true });
+    await writeFile(path.join(source, "rules", "process", "agent-conduct.mdc"), "# overlay conduct\n", "utf8");
+    const slot = ".metaproject/rules/project/process/agent-conduct.mdc";
+
+    const result = await importProjectSkills({ projectRoot: cwd, from: source, module: "review" });
+    expect(result.rules).toEqual([
+      expect.objectContaining({ ref: "process/agent-conduct.mdc", status: "imported-project", target: slot }),
+    ]);
+    expect(await readFile(path.join(cwd, slot), "utf8")).toBe("# overlay conduct\n");
+    await expect(readFile(path.join(cwd, ".metaproject", "rules", "process", "agent-conduct.mdc"), "utf8")).rejects.toThrow();
+  });
+
   test("a shipped rule cited with its directory in another case still lands in rules/project, never rules/core", async () => {
     // `Core/` is `core/` on a case-insensitive filesystem — the directory
     // `keryx init`, `update` and `skills install` overwrite.

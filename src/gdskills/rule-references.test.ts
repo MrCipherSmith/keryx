@@ -88,6 +88,15 @@ describe("a reference whose directory differs only in case from the one keryx in
     // A directory keryx does not install keeps its spelling.
     expect(ruleReferences("`House/Naming.mdc`")).toEqual(["House/Naming.mdc"]);
   });
+
+  test("applies to every layer keryx installs, not only core (ADR-0001 P2)", () => {
+    expect(ruleReferences("`Process/agent-conduct.mdc`, `ACTIVITY/review.mdc`")).toEqual([
+      "activity/review.mdc",
+      "process/agent-conduct.mdc",
+    ]);
+    // The stack-pack root is not a layer keryx spells.
+    expect(ruleReferences("`Stacks/x.mdc`")).toEqual(["Stacks/x.mdc"]);
+  });
 });
 
 describe("a cited path that exists but is not a regular file", () => {

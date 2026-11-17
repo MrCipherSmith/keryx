@@ -18,6 +18,7 @@ import {
   errorCodeOf,
   isErrnoException,
   isMissingPathError,
+  movedRuleNotice,
   removeStaleRuntimeBuilds,
   removeUnmodifiedRetiredRules,
   retiredRuleWarning,
@@ -32,7 +33,8 @@ import {
   PROJECT_SKILLS_CATALOG_START,
   PROJECT_SKILLS_DIR,
 } from "./project-skills";
-import type { RetiredRuleOutcome } from "./retired-rules";
+import type { RetiredRuleEntry, RetiredRuleOutcome } from "./retired-rules";
+import { KERYX_RULE_LAYERS, type KeryxRuleLayer } from "./rule-references";
 
 /**
  * `mkdirContained`, but a containment refusal becomes a warning string
@@ -87,6 +89,8 @@ export type InstallGdskillsResult = {
 
 export type InstallGdskillsOptions = {
   createDataDirs?: boolean;
+  /** Test seam: passed through to `installBundledRules`. */
+  ruleSeams?: InstallBundledRulesSeams;
 };
 
 export async function installGdskills(
@@ -180,7 +184,7 @@ export async function installGdskills(
   if (sharedWarning !== null) {
     skippedDestinationWarnings.push(sharedWarning);
   }
-  const rulesInstall = await installBundledRules(metaprojectRoot);
+  const rulesInstall = await installBundledRules(metaprojectRoot, options.ruleSeams);
   if (rulesInstall.warning !== null) {
     skippedDestinationWarnings.push(rulesInstall.warning);
   }
@@ -206,14 +210,17 @@ export async function installGdskills(
   // bigger fact about this install than a leftover the sweep could not clear.
   const warnings = [
     ...skippedDestinationWarnings,
-    ...retiredRuleOutcomes.map(retiredRuleWarning).filter((warning): warning is string => warning !== null),
+    ...retiredRuleOutcomes.map((outcome) => retiredRuleWarning(outcome)).filter((warning): warning is string => warning !== null),
     ...staleBuildOutcomes
       .filter((outcome) => staleRuntimeBuildSeverity(outcome) === "warning")
       .map((outcome) => staleRuntimeBuildMessage(outcome, projectRoot)),
   ];
-  const notices = staleBuildOutcomes
-    .filter((outcome) => staleRuntimeBuildSeverity(outcome) === "notice")
-    .map((outcome) => staleRuntimeBuildMessage(outcome, projectRoot));
+  const notices = [
+    ...retiredRuleOutcomes.map(movedRuleNotice).filter((notice): notice is string => notice !== null),
+    ...staleBuildOutcomes
+      .filter((outcome) => staleRuntimeBuildSeverity(outcome) === "notice")
+      .map((outcome) => staleRuntimeBuildMessage(outcome, projectRoot)),
+  ];
 
   return {
     profile,
@@ -320,46 +327,77 @@ export async function checkInstallDestination(
 }
 
 /**
- * Force-copy the bundled rules over the project's installed copy, then clean
- * up any rule this bundle no longer ships (see `retired-rules.ts` for why a
- * plain `cp` can't do that itself).
+ * Force-copy every bundled rule layer (`rules/core`, `rules/process`,
+ * `rules/activity` — ADR-0001 D1) over the project's installed copy, then
+ * clean up any core rule this bundle no longer ships there, whether it was
+ * retired or moved to another layer (see `retired-rules.ts` for why a plain
+ * `cp` can't do that itself).
  *
- * Returns one `RetiredRuleOutcome` per retired-rule file name found in the
- * target directory (after the copy — so a rule retired in this very release
- * is caught on the run that retires it, not the next one). A retired name
- * absent from the target directory produces no outcome; that is the steady
- * state once every installation has caught up.
+ * A layer the bundle does not ship yet (no source directory) is skipped
+ * without a word: `rules/activity/` is empty until P5, and adding its first
+ * file is all P5 needs to do to install it.
  *
- * If a layer directory (`rules/core`, `rules/process`) is not a plain directory (`checkInstallDestination`),
- * neither the copy nor the retired-rule cleanup runs: cleanup walks the same
- * directory, and reading or unlinking through a link the operator put there is
- * the same hazard as writing through it.
+ * A moved rule's old copy is removed only when its new path is a regular file
+ * in a plain layer directory; a layer that was refused or not shipped keeps
+ * the old copy, with a warning (`kept-destination-missing`).
+ *
+ * Returns one `RetiredRuleOutcome` per retired- or moved-rule file name found
+ * in `rules/core` (after every layer is copied — so a rule retired or moved in
+ * this very release is caught on the run that retires it, not the next one,
+ * and a moved rule's new path is already in place when its old copy goes). A
+ * name absent from the target directory produces no outcome; that is the
+ * steady state once every installation has caught up.
+ *
+ * If a layer directory is not a plain directory (`checkInstallDestination`),
+ * that layer is neither copied nor cleaned: cleanup walks the same directory,
+ * and reading or unlinking through a link the operator put there is the same
+ * hazard as writing through it. The other layers still install.
  */
-async function installBundledRules(
+export type InstallBundledRulesSeams = {
+  /** Test seam: where each layer's bundled source lives. */
+  sourcePathFor?: (layer: KeryxRuleLayer) => string;
+  /** Test seam: the retired and moved entries the core cleanup checks. */
+  cleanupEntries?: readonly RetiredRuleEntry[];
+};
+
+export async function installBundledRules(
   metaprojectRoot: string,
+  seams: InstallBundledRulesSeams = {},
 ): Promise<{ outcomes: RetiredRuleOutcome[]; warning: string | null }> {
-  const core = await installBundledRuleLayer(metaprojectRoot, "core");
-  // ADR-0001 P1: the process layer (`rules/process/`, the mandatory agent
-  // conduct rule) installs beside core. Retired-rule cleanup stays core-only
-  // until P2 teaches it to record moves between layers.
-  const processLayer = await installBundledRuleLayer(metaprojectRoot, "process");
-  const warnings = [core.warning, processLayer.warning].filter((warning): warning is string => warning !== null);
-  return { outcomes: core.outcomes, warning: warnings.length === 0 ? null : warnings.join("; ") };
+  const sourcePathFor = seams.sourcePathFor ?? bundledRulesSourcePath;
+  const warnings: string[] = [];
+  let coreTarget: string | null = null;
+  for (const layer of KERYX_RULE_LAYERS) {
+    const installed = await installBundledRuleLayer(metaprojectRoot, layer, sourcePathFor(layer));
+    if (installed.warning !== null) warnings.push(installed.warning);
+    if (layer === "core") coreTarget = installed.target;
+  }
+  // Cleanup runs after every layer is in place, so a moved rule's new path is
+  // installed before its old copy is removed.
+  const outcomes = coreTarget === null
+    ? []
+    : await removeUnmodifiedRetiredRules(coreTarget, undefined, seams.cleanupEntries);
+  return { outcomes, warning: warnings.length === 0 ? null : warnings.join("; ") };
 }
 
+/**
+ * Copy one layer. `target` is the installed directory when it is safe to clean
+ * (it exists as a plain directory keryx just wrote), `null` when the layer was
+ * skipped or refused.
+ */
 async function installBundledRuleLayer(
   metaprojectRoot: string,
-  layer: BundledRuleLayer,
-): Promise<{ outcomes: RetiredRuleOutcome[]; warning: string | null }> {
-  const rulesSource = bundledRulesSourcePath(layer);
+  layer: KeryxRuleLayer,
+  rulesSource: string,
+): Promise<{ target: string | null; warning: string | null }> {
   const rulesTarget = path.join(metaprojectRoot, "rules", layer);
   if (!existsSync(rulesSource)) {
-    return { outcomes: [], warning: null };
+    return { target: null, warning: null };
   }
   const relRulesTarget = path.relative(metaprojectRoot, rulesTarget);
   const destination = await checkInstallDestination(rulesTarget, relRulesTarget);
   if (!destination.usable) {
-    return { outcomes: [], warning: destination.warning };
+    return { target: null, warning: destination.warning };
   }
   // See the identical note in installGdskills's per-skill loop:
   // mkdirContainedOrWarn confirms containment before the raw recursive `cp`,
@@ -367,13 +405,10 @@ async function installBundledRuleLayer(
   // escaping symlink.
   const mkdirWarning = await mkdirContainedOrWarn(metaprojectRoot, rulesTarget);
   if (mkdirWarning) {
-    return { outcomes: [], warning: mkdirWarning };
+    return { target: null, warning: mkdirWarning };
   }
   await copyDirectoryContained(rulesSource, rulesTarget);
-  if (layer !== "core") {
-    return { outcomes: [], warning: null };
-  }
-  return { outcomes: await removeUnmodifiedRetiredRules(rulesTarget), warning: null };
+  return { target: rulesTarget, warning: null };
 }
 
 async function preserveProjectSkillsSection(catalogPath: string, nextCatalog: string): Promise<string> {
@@ -538,8 +573,8 @@ function bundledSharedSourcePath(): string {
   return directPath;
 }
 
-/** Rule layers this release installs (ADR-0001 D1; `activity` arrives in P2). */
-export type BundledRuleLayer = "core" | "process";
+/** Rule layers this release installs (ADR-0001 D1). */
+export type BundledRuleLayer = KeryxRuleLayer;
 
 export function bundledRulesSourcePath(layer: BundledRuleLayer = "core"): string {
   const directPath = fileURLToPath(new URL(`./bundled/rules/${layer}`, import.meta.url));

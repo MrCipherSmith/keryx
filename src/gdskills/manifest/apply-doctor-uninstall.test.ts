@@ -122,6 +122,49 @@ test("apply refuses to overwrite an unrecorded existing file without --force", a
   expect(await readFile(path.join(root, ".claude", "rules", "a.mdc"), "utf8")).toBe("rule a fixture\n");
 });
 
+test("apply leaves an unrecorded byte-identical file alone, unrecorded, and uninstall never removes it", async () => {
+  await mkdir(path.join(root, ".claude", "rules"), { recursive: true });
+  await writeFile(path.join(root, ".claude", "rules", "a.mdc"), "rule a fixture\n", "utf8");
+
+  const plan = await planInstall({ manifest: MANIFEST, profileId: "base", target: "claude", repoRoot: root });
+  const result = await applyInstall(plan, root);
+  expect(result.skipped).toEqual([]);
+  expect(result.ok).toBe(true);
+  expect(result.alreadyPresent).toEqual([".claude/rules/a.mdc"]);
+  expect(result.written).not.toContain(".claude/rules/a.mdc");
+
+  // Satisfied, but not ours: no record of it, so uninstall leaves it.
+  const state = await readSkillsInstallState(root, "claude");
+  expect(state!.installedModules.flatMap((m) => m.writtenPaths)).not.toContain(".claude/rules/a.mdc");
+  const uninstall = await uninstallInstall(root, "claude");
+  expect(uninstall.removed).not.toContain(".claude/rules/a.mdc");
+  expect(await readFile(path.join(root, ".claude", "rules", "a.mdc"), "utf8")).toBe("rule a fixture\n");
+});
+
+test("a recorded file another writer already updated to the new bundled bytes is up to date, not drift", async () => {
+  const plan = await planInstall({ manifest: MANIFEST, profileId: "base", target: "claude", repoRoot: root });
+  expect((await applyInstall(plan, root)).ok).toBe(true);
+
+  // A release changes the bundled rule, and `keryx update` rewrites the copy first.
+  await writeFile(path.join(root, "rules", "a.mdc"), "rule a, next release\n", "utf8");
+  await writeFile(path.join(root, ".claude", "rules", "a.mdc"), "rule a, next release\n", "utf8");
+
+  const next = await planInstall({ manifest: MANIFEST, profileId: "base", target: "claude", repoRoot: root });
+  const result = await applyInstall(next, root);
+  expect(result.skipped).toEqual([]);
+  expect(result.ok).toBe(true);
+
+  const doctor = await doctorInstall(root, "claude");
+  expect(doctor.ok).toBe(true);
+  expect(doctor.entries.find((e) => e.path === ".claude/rules/a.mdc")?.status).toBe("ok");
+
+  // A hand edit is still drift.
+  await writeFile(path.join(root, ".claude", "rules", "a.mdc"), "hand edit\n", "utf8");
+  const edited = await applyInstall(next, root);
+  expect(edited.ok).toBe(false);
+  expect(edited.skipped.map((s) => s.path)).toEqual([".claude/rules/a.mdc"]);
+});
+
 test("doctor reports drifted after an edit, missing after a delete, and orphaned for an unrecorded file", async () => {
   const plan = await planInstall({ manifest: MANIFEST, profileId: "base", target: "claude", repoRoot: root });
   await applyInstall(plan, root);

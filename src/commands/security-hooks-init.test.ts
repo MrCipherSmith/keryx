@@ -7,6 +7,11 @@ import { SECURITY_CHECK_INPUT_CLAUDE, SECURITY_CHECK_OUTPUT_CLAUDE } from "../in
 import { withCwd } from "../lib/test-cwd";
 import { initCommand } from "./init";
 import { updateCommand } from "./update";
+import { applyInstall } from "../gdskills/manifest/apply";
+import { doctorInstall } from "../gdskills/manifest/doctor";
+import { defaultBundledSourceRoot, loadBundledManifest } from "../gdskills/manifest/manifest";
+import { planInstall } from "../gdskills/manifest/plan";
+import { uninstallInstall } from "../gdskills/manifest/uninstall";
 
 const SECURITY_ONLY = [
   "--no-gdgraph",
@@ -460,6 +465,35 @@ test("init and update install the commit-msg hook and the conduct rule, even wit
     await updateCommand([]);
     expect(await readFile(commitMsgPath, "utf8")).toContain("# keryx:commit-msg-attribution:begin");
     expect(existsSync(conductRule)).toBe(true);
+  });
+});
+
+test("after init, the manifest form of skills install applies cleanly, and uninstall leaves init's files (ADR-0001 P2)", async () => {
+  await withProject(async (root) => {
+    await initCommand(["--yes", ...SECURITY_ONLY]);
+    const conduct = ".metaproject/rules/process/agent-conduct.mdc";
+    const conductBefore = await readFile(path.join(root, conduct), "utf8");
+    const sourceRoot = defaultBundledSourceRoot();
+    const plan = await planInstall({
+      manifest: loadBundledManifest(),
+      profileId: "minimal",
+      target: "keryx-shell",
+      repoRoot: sourceRoot,
+    });
+    expect(plan.ok).toBe(true);
+
+    const result = await applyInstall(plan, root, { sourceRoot });
+    expect(result.skipped).toEqual([]);
+    expect(result.ok).toBe(true);
+    // init's copy is already the bundled bytes: satisfied, not rewritten, not recorded.
+    expect(result.alreadyPresent).toContain(conduct);
+    expect(result.written).not.toContain(conduct);
+    const doctor = await doctorInstall(root, "keryx-shell");
+    expect(doctor.ok).toBe(true);
+
+    const uninstall = await uninstallInstall(root, "keryx-shell");
+    expect(uninstall.removed).not.toContain(conduct);
+    expect(await readFile(path.join(root, conduct), "utf8")).toBe(conductBefore);
   });
 });
 

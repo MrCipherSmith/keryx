@@ -37,6 +37,7 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import { sha256OfFile } from "../../integrations/install-state";
 import { generateCapabilityMatrix, type CapabilityMatrixDocument, type MatrixSurfaceState } from "../../integrations/matrix";
+import { isKeryxRuleLayer, KERYX_RULE_LAYERS } from "../rule-references";
 import { resolveGlobs } from "./glob";
 import { HARNESS_IDS, type HarnessId, type InstallManifest, type ManifestModule, type ManifestProfile, type ModuleKind } from "./manifest";
 
@@ -128,7 +129,11 @@ export const SUPPORTED_TARGETS: readonly HarnessId[] = ["claude", "keryx-shell"]
 export function destinationRootsForTarget(target: string): string[] {
   if (target === "claude") return [".claude/skills", ".claude/rules"];
   if (target === "keryx-shell") {
-    return [".metaproject/skills/gdskills", ".metaproject/rules/core", ".metaproject/rules/stacks"];
+    return [
+      ".metaproject/skills/gdskills",
+      ...KERYX_RULE_LAYERS.map((layer) => `.metaproject/rules/${layer}`),
+      ".metaproject/rules/stacks",
+    ];
   }
   return [];
 }
@@ -206,6 +211,12 @@ function parseSkillSource(source: string): SkillDestination | undefined {
   return undefined;
 }
 
+/** The keryx rule layer (`core`, `process`, `activity`) a bundled rule source sits in, or `undefined`. */
+function parseLayerRuleSource(source: string): string | undefined {
+  const match = /^src\/gdskills\/bundled\/rules\/([^/]+)\/[^/]+$/.exec(source);
+  return match && isKeryxRuleLayer(match[1]!) ? match[1] : undefined;
+}
+
 /** Extract `{pack, file}` from a stack-pack rule source path, or `undefined` if unrecognised. */
 function parseStackRuleSource(source: string): { pack: string; file: string } | undefined {
   const match = /^src\/gdskills\/bundled\/stacks\/([^/]+)\/rules\/([^/]+)$/.exec(source);
@@ -217,7 +228,11 @@ function parseStackRuleSource(source: string): { pack: string; file: string } | 
  * §"Install: profiles → modules → components"):
  *   claude      skill -> .claude/skills/<name>/<rest>       rule -> .claude/rules/<basename>
  *   keryx-shell skill -> .metaproject/skills/gdskills/<category>/<name>/<rest>
- *               rule -> .metaproject/rules/core/<basename>
+ *               rule -> .metaproject/rules/<layer>/<basename>
+ * where <layer> is the bundled layer the rule ships in (`core`, `process`,
+ * `activity` — ADR-0001 D1); a rule from outside the layer tree lands in
+ * `core`. The claude target stays flat, so the planner's collision check is
+ * what keeps two layers from shipping one basename.
  * A stack-pack rule (source under `stacks/<pack>/rules/`) is namespaced by
  * pack id instead of landing at the bare `core` rule destination, so two
  * packs shipping a same-named file (e.g. both ship `coding-style.mdc`) never
@@ -237,7 +252,7 @@ function destinationFor(target: HarnessId, kind: ModuleKind, source: string): st
     }
     const basename = path.posix.basename(source);
     if (target === "claude") return `.claude/rules/${basename}`;
-    if (target === "keryx-shell") return `.metaproject/rules/core/${basename}`;
+    if (target === "keryx-shell") return `.metaproject/rules/${parseLayerRuleSource(source) ?? "core"}/${basename}`;
     return { error: `target "${target}" has no rule destination in the v1 destination table` };
   }
   if (kind === "skill") {

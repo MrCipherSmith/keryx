@@ -37,7 +37,24 @@ export type RetiredRuleEntry = {
   shippedSha256: string[];
   /** Why this rule was retired. */
   reason: string;
+  /**
+   * Set when the rule was not dropped but moved to another layer (ADR-0001
+   * D1): the layer-relative path it ships at now, e.g. `process/git-rules.mdc`.
+   * The bundle installs the new path on the same run; the entry only decides
+   * what happens to the stale `core/<fileName>` copy.
+   */
+  movedTo?: string;
+  /**
+   * Byte size of the largest version in `shippedSha256`. Bounds the read the
+   * same way `RETIRED_RULE_SIZE_CAP_BYTES` does for `RETIRED_RULES`; required
+   * on a move because a moved rule can be far larger than any rule retired so
+   * far. Omitted entries fall back to the registry-wide cap.
+   */
+  largestShippedBytes?: number;
 };
+
+/** A rule that moved out of `rules/core/` into another layer. */
+export type MovedRuleEntry = RetiredRuleEntry & { movedTo: string; largestShippedBytes: number };
 
 /**
  * Retired in commit 72a850b0 ("fix(skills): retire two dead review rules and
@@ -92,6 +109,24 @@ export const RETIRED_RULES: RetiredRuleEntry[] = [
 ];
 
 /**
+ * Rules moved out of `rules/core/` into another layer (ADR-0001 migration,
+ * P3/P4). On `keryx init`, `keryx update` and `keryx skills install` an
+ * installed `core/<fileName>` whose hash matches one of `shippedSha256` is
+ * removed — the bundle has just installed `movedTo` — and a copy that matches
+ * none is kept and reported: the project edited it, and those edits now sit at
+ * a path nothing loads.
+ *
+ * Record every content version the file ever shipped under `core/`, including
+ * the last one before the move, and the largest version's byte size. A move
+ * that also edits the file in the same release needs nothing extra: the new
+ * content ships only at `movedTo`, never under `core/`.
+ *
+ * Empty until P3 moves the first rule; `install.test.ts` proves the mechanism
+ * with a fixture entry.
+ */
+export const MOVED_RULES: MovedRuleEntry[] = [];
+
+/**
  * Byte size of the largest content version `RETIRED_RULES` has ever shipped,
  * across the registered rules: `review-agent-profile.mdc`'s only version (1494
  * bytes, commit fd43d35a), `review-strict-profile.mdc`'s two versions (1994
@@ -113,6 +148,11 @@ const LARGEST_SHIPPED_RETIRED_RULE_BYTES = 6031;
  */
 export const RETIRED_RULE_SIZE_CAP_BYTES = LARGEST_SHIPPED_RETIRED_RULE_BYTES * 4;
 
+/** The read cap for one entry: 4x its own largest version when recorded, the registry-wide cap otherwise. */
+export function retiredRuleSizeCapBytes(entry: RetiredRuleEntry): number {
+  return entry.largestShippedBytes === undefined ? RETIRED_RULE_SIZE_CAP_BYTES : entry.largestShippedBytes * 4;
+}
+
 /**
  * Which step of `removeUnmodifiedRetiredRules` (install.ts) was in flight
  * when a `kept-error` outcome's error was thrown: `lstat`/`read` failures
@@ -123,10 +163,17 @@ export const RETIRED_RULE_SIZE_CAP_BYTES = LARGEST_SHIPPED_RETIRED_RULE_BYTES * 
  */
 export type RetiredRuleFailureStage = "lstat" | "read" | "unlink";
 
-/** One installed retired-rule file the installer found and what it did with it. */
-export type RetiredRuleOutcome =
-  | { fileName: string; action: "removed" }
-  | { fileName: string; action: "kept-modified" }
-  | { fileName: string; action: "kept-not-regular-file" }
-  | { fileName: string; action: "kept-oversized"; sizeBytes: number }
-  | { fileName: string; action: "kept-error"; stage: RetiredRuleFailureStage; errorCode: string };
+/**
+ * One installed retired-rule file the installer found and what it did with it.
+ * `movedTo` is copied from a `MOVED_RULES` entry, so the report can say where
+ * the rule went.
+ */
+export type RetiredRuleOutcome = { fileName: string; movedTo?: string } & (
+  | { action: "removed" }
+  | { action: "kept-modified" }
+  /** A moved rule's old copy matched a shipped version, but its new path is not an installed regular file. */
+  | { action: "kept-destination-missing" }
+  | { action: "kept-not-regular-file" }
+  | { action: "kept-oversized"; sizeBytes: number }
+  | { action: "kept-error"; stage: RetiredRuleFailureStage; errorCode: string }
+);

@@ -34,15 +34,25 @@ export function ruleReferences(content: string): string[] {
 }
 
 /**
- * The directory under `.metaproject/rules/` whose files `keryx init`,
- * `keryx update` and `keryx skills install` force-copy from the bundled rules.
+ * The rule layers keryx ships (ADR-0001 D1): the directories under
+ * `.metaproject/rules/` whose files `keryx init`, `keryx update` and
+ * `keryx skills install` force-copy from the bundled rules. The language and
+ * framework layers are the stack packs, installed under `rules/stacks/<pack>/`,
+ * and are not listed here.
  */
-export const KERYX_RULES_DIR = "core";
+export const KERYX_RULE_LAYERS = ["core", "process", "activity"] as const;
+
+export type KeryxRuleLayer = (typeof KERYX_RULE_LAYERS)[number];
+
+export function isKeryxRuleLayer(dir: string): dir is KeryxRuleLayer {
+  return (KERYX_RULE_LAYERS as readonly string[]).includes(dir);
+}
 
 function withKeryxDirSpelling(ref: string): string {
   const slash = ref.indexOf("/");
   const dir = ref.slice(0, slash);
-  return dir !== KERYX_RULES_DIR && dir.toLowerCase() === KERYX_RULES_DIR ? `${KERYX_RULES_DIR}${ref.slice(slash)}` : ref;
+  const layer = KERYX_RULE_LAYERS.find((candidate) => candidate !== dir && candidate === dir.toLowerCase());
+  return layer === undefined ? ref : `${layer}${ref.slice(slash)}`;
 }
 
 /**
@@ -60,9 +70,9 @@ export async function isRegularFile(absolute: string): Promise<boolean> {
 /**
  * The directory under `.metaproject/rules/` that holds a project's own version
  * of a rule. `keryx init`, `keryx update` and `keryx skills install` force-copy
- * the bundled rules over `rules/core/` and touch nothing else under `rules/`,
- * so an overlay's rule that shares a name with one keryx ships survives only
- * outside `core/`.
+ * the bundled rules over the layer directories (`KERYX_RULE_LAYERS`) and
+ * `rules/stacks/`, and touch nothing else under `rules/`, so an overlay's rule
+ * that shares a name with one keryx ships survives only outside them.
  */
 export const PROJECT_RULES_DIR = "project";
 

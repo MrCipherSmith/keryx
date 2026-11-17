@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { defaultBundledSourceRoot, loadBundledManifest, type InstallManifest } from "./manifest";
-import { planInstall } from "./plan";
+import { destinationRootsForTarget, planInstall } from "./plan";
 import type { CapabilityMatrixDocument } from "../../integrations/matrix";
 
 let root: string;
@@ -509,6 +509,32 @@ describe("real bundled manifest (flow 309, W1 T14 — python stack pack destinat
       const plan = await planInstall({ manifest, profileId: "full", target, repoRoot });
       expect(plan.errors).toEqual([]);
       expect(plan.ok).toBe(true);
+    }
+  });
+
+  test("keryx-shell destination roots cover every rule layer, so doctor scans them (ADR-0001 P2)", () => {
+    expect(destinationRootsForTarget("keryx-shell")).toEqual([
+      ".metaproject/skills/gdskills",
+      ".metaproject/rules/core",
+      ".metaproject/rules/process",
+      ".metaproject/rules/activity",
+      ".metaproject/rules/stacks",
+    ]);
+  });
+
+  test("every profile installs the process layer, and keryx-shell keeps it out of rules/core (ADR-0001 P2)", async () => {
+    for (const profileId of Object.keys(manifest.profiles)) {
+      const shellPlan = await planInstall({ manifest, profileId, target: "keryx-shell", repoRoot });
+      const shellDestinations = shellPlan.modules.flatMap((m) => m.files.map((f) => f.destination));
+      expect(shellDestinations).toContain(".metaproject/rules/process/agent-conduct.mdc");
+      expect(shellDestinations).not.toContain(".metaproject/rules/core/agent-conduct.mdc");
+      // Core rules stay where they were.
+      expect(shellDestinations).toContain(".metaproject/rules/core/skill-lifecycle.mdc");
+
+      const claudePlan = await planInstall({ manifest, profileId, target: "claude", repoRoot });
+      expect(claudePlan.modules.flatMap((m) => m.files.map((f) => f.destination))).toContain(
+        ".claude/rules/agent-conduct.mdc",
+      );
     }
   });
 
