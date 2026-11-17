@@ -46,3 +46,23 @@ test("continuous diagnostics report failure once without breaking calls", () => 
     expect(diag.snapshot("test").metrics.callsSettled).toBe(1);
   } finally { stop(); rmSync(dir, { recursive: true, force: true }); }
 });
+
+test("continuous diagnostics journal the turn path with correlation ids", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "diag-continuous-"));
+  let now = 1_000_000;
+  const diag = createCallDiagnostics({ now: () => now });
+  const stop = diag.start({ sessionId: "turns", configDir: dir, continuous: true, intervalMs: 3_600_000 });
+  try {
+    const turn = diag.turnBegin("turn-1");
+    diag.turnPhase(turn, "batch.spawn.wait", { batchId: "r3" });
+    diag.turnPhase(turn, "call.accepted", { batchId: "r3", callId: "c1" });
+    now += 30_000;
+    diag.tick();
+    diag.turnEnd(turn, "completed");
+    const rows = readFileSync(diag.journalPath() as string, "utf8").trim().split("\n").map((line) => JSON.parse(line));
+    expect(rows.map((row) => row.kind)).toEqual(["session.start", "turn.begin", "turn.phase", "turn.phase", "snapshot", "turn.end"]);
+    expect(rows[3]).toMatchObject({ turnId: "turn-1", phase: "call.accepted", batchId: "r3", callId: "c1" });
+    expect(rows[4].turns[0]).toMatchObject({ id: "turn-1", phase: "call.accepted", phaseAgeMs: 30_000 });
+    expect(rows[5]).toMatchObject({ turnId: "turn-1", outcome: "completed", lastPhase: "call.accepted" });
+  } finally { stop(); rmSync(dir, { recursive: true, force: true }); }
+});

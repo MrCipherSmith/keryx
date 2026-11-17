@@ -48,7 +48,7 @@ export {
 import { redactSensitiveText } from "../security/redact";
 import { randomBytes } from "node:crypto";
 import { basename } from "node:path";
-import { callDiagnostics } from "../lib/call-diagnostics";
+import { callDiagnostics, type TurnPhaseIds } from "../lib/call-diagnostics";
 import { runWithCallWatchdog, type CallStage } from "./call-watchdog";
 import { aliasHookToolName, derivePolicyProfileId, type ShellHookContext } from "./agent-hooks";
 import { tightenOutcome } from "../harness/hooks/compose";
@@ -2403,12 +2403,20 @@ export async function runAgentTurn(
     io.onAutomaticReview?.(true);
     io.onSystem?.(`\n${describeAutomaticReviewTurn()}\n`);
   }
+  // Always-on turn trace (journaled with the diagnostics): a parent turn that parks with no tool
+  // call in flight — every result settled, nothing written back, no next model request — is
+  // otherwise invisible to the per-call registry.
+  const turnKey = callDiagnostics.turnBegin(`turn-${randomBytes(6).toString("hex")}`);
+  let turnOutcome: "completed" | "error" = "error";
   try {
-    const coreResult = await runAgentTurnCore(io, turnDeps, history, userLine, turnOptions, caughtToolErrors);
+    const coreResult = await runAgentTurnCore(io, turnDeps, history, userLine, turnOptions, caughtToolErrors, turnKey);
     const result = caughtToolErrors.length > 0 ? { ...coreResult, caughtToolErrors } : coreResult;
+    callDiagnostics.turnPhase(turnKey, "stop-hook");
     await fireStopHookBestEffort(io, deps, result);
+    turnOutcome = "completed";
     return result;
   } finally {
+    callDiagnostics.turnEnd(turnKey, turnOutcome);
     // `closeSlateOnFlowDone` never throws — it swallows every failure
     // itself (see its own doc comment) — but the `finally` block does not
     // rely on that alone: it deliberately holds nothing here that could
@@ -3075,7 +3083,15 @@ async function runAgentTurnCore(
   // settles, so this function's own many internal `return`s never need
   // touching (same posture its own doc comment already states for SLATE-5).
   caughtToolErrors: CaughtToolError[] = [],
+  // The `callDiagnostics` turn this core reports its phases to (see `runAgentTurn`).
+  turnKey?: string,
 ): Promise<RunAgentTurnResult> {
+  const turnPhase = (phase: string, ids?: TurnPhaseIds): void => {
+    if (turnKey !== undefined) callDiagnostics.turnPhase(turnKey, phase, ids);
+  };
+  // Said once per turn: the session's directory is gone (lease lost, ref detached), so tool
+  // outputs and Trail entries are not written for this turn.
+  let detachedOutputNoted = false;
   // Session-store append time (T7, AC15): each message pushed below is
   // stamped with the time it entered `history` HERE, not with whatever
   // checkpoint later flushes it to disk — `session/store.ts`'s `writeJsonl`
@@ -3522,6 +3538,7 @@ async function runAgentTurnCore(
           : `round budget exhausted (${stop?.used ?? 0}/${stop?.limit ?? 0} rounds)`;
     system(`\n[budget] Stopping tools: ${why}. One final round to submit a result…\n`);
     roundState.round += 1;
+    turnPhase("model.request", { batchId: `r${roundState.round}` });
     const outcome = await finishWithSubmitResult(
       io,
       deps,
@@ -3821,6 +3838,7 @@ async function runAgentTurnCore(
           ...(signal === undefined ? {} : { signal }),
           ...(deps.modelParams?.timeoutMs !== undefined ? { timeoutMs: deps.modelParams.timeoutMs } : {}),
         };
+        turnPhase("model.request", { batchId: `r${roundState.round}` });
         tracePhase("model request start");
         for await (const event of deps.provider.stream(request, streamOptions)) {
           if (isAborted()) {
@@ -4428,8 +4446,13 @@ async function runAgentTurnCore(
     // condition holds; the candidates fall through to the per-call loop below,
     // which already gates them correctly one at a time.
     const untrustedGateBlocksSpawns = untrustedContentSeen || batchContainsUntrustedWeb;
+    const batchId = `r${roundState.round}`;
+    turnPhase("batch.start", { batchId });
+    const runsSpawnBatch =
+      spawnConcurrencyCandidates.length >= 2 && !untrustedGateBlocksSpawns && maxToolCalls === undefined;
+    if (runsSpawnBatch) turnPhase("batch.spawn.wait", { batchId });
     const concurrentSpawnResults: Map<string, InteractiveToolResult> | undefined =
-      spawnConcurrencyCandidates.length >= 2 && !untrustedGateBlocksSpawns && maxToolCalls === undefined
+      runsSpawnBatch
         ? await runConcurrentSpawnBatch(
             spawnConcurrencyCandidates,
             toolByName,
@@ -4441,6 +4464,7 @@ async function runAgentTurnCore(
             caughtToolErrors,
           )
         : undefined;
+    if (runsSpawnBatch) turnPhase("batch.spawn.settled", { batchId });
 
     const answeredToolIds = new Set<string>();
     // SLATE-2a per-tool-call Anchors auto-inject: deferred until AFTER this
@@ -4473,6 +4497,7 @@ async function runAgentTurnCore(
 
     for (const call of calls) {
       if (isAborted()) {
+        turnPhase("batch.aborted", { batchId, callId: call.id });
         system(TURN_INTERRUPTED_LINE);
         // Parallel spawn results already settled must still answer their
         // `tool_calls` — dropping them leaves an orphaned assistant batch and
@@ -4612,6 +4637,7 @@ async function runAgentTurnCore(
         result = selfAnswered.result;
         io.onQuestionSelfAnswered?.(selfAnswered.question, selfAnswered.label);
       } else {
+        turnPhase("call.exec", { batchId, callId: call.id });
         try {
           result = await executeCall(
             call,
@@ -4660,6 +4686,7 @@ async function runAgentTurnCore(
       if (precomputedResult === undefined && storedAnswer === undefined && selfAnswered === undefined) {
         await rememberAskUserAnswer(call, result, options, now(), reviewRun);
       }
+      turnPhase("call.result", { batchId, callId: call.id });
       io.onToolResult?.(call.name, result);
       tracePhase(`tool ${call.name} result shown`);
       // Scrub secrets/PII from tool output BEFORE it enters provider-bound history
@@ -4674,6 +4701,13 @@ async function runAgentTurnCore(
       // (`spillPath`) as data; prune never parses it back out of the output text.
       // Flow 393 AC11: a tool that shortened its own output (`shell_exec`) hands over the whole
       // text; it is saved here and the model sees the tool's bounded view with the path in it.
+      turnPhase("call.persist", { batchId, callId: call.id });
+      if (options.slateSession !== undefined && liveSessionDir(options) === undefined && !detachedOutputNoted) {
+        // The ref was detached (the session lease was lost): spill and Trail writes are skipped
+        // below. Journal it once instead of letting the outputs vanish without a trace.
+        detachedOutputNoted = true;
+        callDiagnostics.event("session.detached.output_skipped", `batch=${batchId} call=${call.id}`);
+      }
       const spilled =
         result.spill !== undefined
           ? await spillToolSuppliedOutput(result.spill, liveSessionDir(options), call.id)
@@ -4733,6 +4767,7 @@ async function runAgentTurnCore(
         ts: now(),
       });
       io.onHistoryChange?.("tool");
+      turnPhase("call.accepted", { batchId, callId: call.id });
       answeredToolIds.add(call.id);
       if (untrusted) {
         untrustedContentSeen = true;
@@ -4792,6 +4827,7 @@ async function runAgentTurnCore(
         errorStreakByHash.delete(reservation.hash);
       }
     }
+    turnPhase("batch.end", { batchId });
 
     // Both pushed here, AFTER every call in this batch has its `tool` result
     // in `history` — never mid-loop (see the two comments above the loop).
@@ -4884,6 +4920,7 @@ async function runAgentTurnCore(
       }
       if (roundState.round < roundState.maxRounds) {
         roundState.round += 1;
+        turnPhase("model.request", { batchId: `r${roundState.round}` });
         const wrapUp = await finishWithBudgetSummary(
         io,
         deps,

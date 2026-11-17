@@ -2,6 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { callDiagnostics } from "../lib/call-diagnostics";
 import {
   buildAgentSystemInstruction,
   buildControlMarkerInstruction,
@@ -4552,6 +4553,106 @@ test("T9 regression (code-verifier fix): a WaveExecutionError from a LATER wave 
   expect(toolMessages[1]).toBe("spawned:s2");
   expect(toolMessages[2]).toBe("spawned:s3");
   expect(toolMessages[3]).toContain("concurrent wave error");
+});
+
+/** Phase labels the always-on turn trace recorded for the most recent turn that reached `marker`. */
+function lastTurnPhases(marker: string): string[] {
+  const recent = callDiagnostics.snapshot("test").recent;
+  const hit = [...recent].reverse().find((l) => l.includes(` ${marker}`) && / turn turn-/.test(l));
+  const turnId = hit?.match(/ turn (turn-[0-9a-f]+(?:~\d+)?) /)?.[1];
+  if (turnId === undefined) return [];
+  return recent
+    .filter((l) => l.includes(` turn ${turnId} `))
+    .map((l) => l.slice(l.indexOf(` turn ${turnId} `) + ` turn ${turnId} `.length));
+}
+
+test("five parallel spawns: every result reaches history, the parent asks the model again, and the turn trace closes", async () => {
+  const ids = ["p1", "p2", "p3", "p4", "p5"];
+  const spawnTool = delegateSpawnTool(async (input) => {
+    // Settle out of order, like real children finishing seconds apart.
+    await new Promise((resolve) => setTimeout(resolve, 5 * (6 - Number(String(input.task).slice(1)))));
+    return { output: `report:${String(input.task)}`, isError: false };
+  });
+  const { provider, requests } = scriptedProvider([
+    [
+      ...ids.flatMap((id) => [
+        { kind: "tool_call_start" as const, toolCallId: id, toolName: "spawn_subagent" },
+        { kind: "tool_call_end" as const, toolCallId: id, input: JSON.stringify({ task: id }) },
+      ]),
+      { kind: "model_end" },
+    ],
+    [{ kind: "text_delta", text: "merged five reports" }, { kind: "model_end" }],
+  ]);
+  const { io } = collectingIoForSpawnTests();
+  let historyChanges = 0;
+  const history: NormalizedMessage[] = [];
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [spawnTool],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const openBefore = callDiagnostics.openTurns().length;
+  await runAgentTurn({ ...io, onHistoryChange: () => (historyChanges += 1) }, deps, history, "spawn five reviewers");
+
+  // One assistant turn carrying all five calls, answered by five CONTIGUOUS tool messages.
+  const assistantIndex = history.findIndex((m) => m.role === "assistant" && (m.toolCalls?.length ?? 0) === 5);
+  expect(assistantIndex).toBeGreaterThanOrEqual(0);
+  const answers = history.slice(assistantIndex + 1, assistantIndex + 6);
+  expect(answers.map((m) => [m.role, m.toolCallId, m.content])).toEqual(
+    ids.map((id) => ["tool", id, `report:${id}`]),
+  );
+  // Each accepted result is announced, so a host persists it at once (archive.jsonl).
+  expect(historyChanges).toBeGreaterThanOrEqual(5);
+  // The parent continued: a second model request was sent, carrying all five answers.
+  expect(requests).toHaveLength(2);
+  expect(requests[1]?.messages.filter((m) => m.role === "tool")).toHaveLength(5);
+  expect(history.at(-1)).toMatchObject({ role: "assistant", content: "merged five reports" });
+
+  // The turn trace walked the whole path and was closed.
+  const phases = lastTurnPhases("batch.spawn.wait");
+  expect(phases).toContain("batch.spawn.wait batch=r1");
+  expect(phases).toContain("batch.spawn.settled batch=r1");
+  for (const id of ids) expect(phases).toContain(`call.accepted batch=r1 call=${id}`);
+  const end = phases.indexOf("batch.end batch=r1");
+  expect(end).toBeGreaterThan(phases.indexOf("call.accepted batch=r1 call=p5"));
+  expect(phases.slice(end)).toContain("model.request batch=r2");
+  expect(callDiagnostics.openTurns()).toHaveLength(openBefore);
+});
+
+test("a detached session ref (lease lost) still answers every call and journals the skipped output once", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "agent-detached-"));
+  const ref: SlateSessionRef = { dir, cwd: dir, opened: true };
+  detachSlateSession(ref);
+  const spawnTool = delegateSpawnTool(async (input) => ({ output: `report:${String(input.task)}`, isError: false }));
+  const { provider, requests } = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "d1", toolName: "spawn_subagent" },
+      { kind: "tool_call_end", toolCallId: "d1", input: JSON.stringify({ task: "d1" }) },
+      { kind: "tool_call_start", toolCallId: "d2", toolName: "spawn_subagent" },
+      { kind: "tool_call_end", toolCallId: "d2", input: JSON.stringify({ task: "d2" }) },
+      { kind: "model_end" },
+    ],
+    [{ kind: "text_delta", text: "done" }, { kind: "model_end" }],
+  ]);
+  const { io } = collectingIoForSpawnTests();
+  const history: NormalizedMessage[] = [];
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [spawnTool],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const before = callDiagnostics.snapshot("test").metrics.events["session.detached.output_skipped"] ?? 0;
+  await runAgentTurn(io, deps, history, "spawn two", { slateSession: ref });
+  const after = callDiagnostics.snapshot("test").metrics.events["session.detached.output_skipped"] ?? 0;
+  expect(after - before).toBe(1);
+  expect(history.filter((m) => m.role === "tool").map((m) => m.content)).toEqual(["report:d1", "report:d2"]);
+  expect(requests).toHaveLength(2);
 });
 
 test("AC6 (flow 352 audit): the CONCURRENT spawn batch forwards the turn's real abort signal to every child", async () => {

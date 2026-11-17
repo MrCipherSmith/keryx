@@ -441,6 +441,10 @@ export function describeLeaseLoss(handle: Pick<SessionLeaseHandle, "sessionId" |
 export const LOST_LEASE_COMPACT_REFUSAL =
   "Not compacted: another shell took this session over, and this shell no longer saves it. Use /new.\n";
 
+/** An operator line sent after the lease was lost: it runs, but this shell saves none of it. */
+export const LOST_LEASE_INPUT_NOTICE =
+  "◇ Not saved: another shell took this session over, so this shell no longer saves it. Use /new to keep working in a saved session.\n";
+
 /**
  * The persist guard every interactive surface puts in front of its saves
  * (review F1). `track` follows the lease the surface currently holds;

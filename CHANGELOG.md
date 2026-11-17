@@ -5,6 +5,11 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **A parent turn that stops after its tool calls finish is now visible.** The diagnostics journal records each agent turn's path (`turn.begin`, `turn.phase` with turn, batch and call ids, `turn.end`), and the stall watcher dumps a turn that sits in a bookkeeping step, or keeps waiting on tool calls after none is in flight, as `turn.stall`. Before, a turn whose subagents had all settled but whose results never reached history left a clean journal with no call in flight.
+- **A Shell that stops saving says so.** Losing the session lease, the first refused save after it, and tool outputs skipped for a detached session are journaled; an operator line sent after the lease was lost gets a "Not saved" notice instead of silently not being kept.
+
 ## [0.4.35] - 2026-11-17
 
 ### Changed

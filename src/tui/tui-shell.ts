@@ -430,7 +430,8 @@ import {
   type SessionHandle,
 } from "../session";
 import { REWIND_LEASE_REFUSAL } from "../rewind/history";
-import { LOST_LEASE_COMPACT_REFUSAL, openLeasedSession, SessionLeasedError, switchPreservedSession, whilePersisting } from "../session/lease";
+import { callDiagnostics } from "../lib/call-diagnostics";
+import { LOST_LEASE_COMPACT_REFUSAL, LOST_LEASE_INPUT_NOTICE, openLeasedSession, SessionLeasedError, switchPreservedSession, whilePersisting } from "../session/lease";
 import { SessionSwitchOwner, assertSessionSwitchActive } from "./session-switch";
 import { describeSkippedSession } from "../session/lease-choice";
 import {
@@ -8012,6 +8013,7 @@ export async function launchTuiAgentShell(opts: {
       }
     })();
 
+    let saveRefusalJournaled = false;
     const paintSessionHeader = (): void => {
       const label = `${currentSel.provider}/${currentSel.model}`;
       const sid = shortSessionId(liveSession.summary.id);
@@ -8028,6 +8030,7 @@ export async function launchTuiAgentShell(opts: {
     // nothing more is written here, the slate ref is dropped (so tools record
     // no slate touches into the session), and the operator is told once.
     sessionLease.onLost((message) => {
+      callDiagnostics.event("session.lease_lost", `turn_active=${foregroundOperation.isActive}`);
       foregroundOperation.cancel("session lease lost");
       // Flow 271 R3-1: detach the ref itself, not only this variable. A turn or
       // a `/goal --auto` loop that is already running holds the same object,
@@ -8043,8 +8046,15 @@ export async function launchTuiAgentShell(opts: {
     });
     const saveSession = (paint = true): void => {
       if (!sessionLease.canPersist()) {
+        // Journaled once per loss: a shell that silently stops saving looks, afterwards, exactly
+        // like a turn that never produced its results.
+        if (!saveRefusalJournaled) {
+          saveRefusalJournaled = true;
+          callDiagnostics.event("session.save_refused");
+        }
         return;
       }
+      saveRefusalJournaled = false;
       liveSession = persistHistory(liveSession, history, {
         archive,
         provider: currentSel.provider,
@@ -9772,6 +9782,11 @@ export async function launchTuiAgentShell(opts: {
           io.onSystem?.(`${sessionTransferNotice}\n`);
         }
         return;
+      }
+      // An operator line in a shell that lost the session lease still runs, but nothing of it is
+      // saved. Say so at the moment it is sent, not only once when the lease was lost.
+      if (origin === "operator" && source === undefined && !sessionLease.canPersist()) {
+        io.onSystem?.(LOST_LEASE_INPUT_NOTICE);
       }
       // AC14 (flow 268): a new turn supersedes the previous next-step suggestion.
       suggestionGate.cancel("new turn started");

@@ -205,3 +205,63 @@ describe("file sink", () => {
     expect(diag.dump("manual")).toBeUndefined();
   });
 });
+
+describe("turn tracking", () => {
+  test("journals turn begin, phases with batch/call ids, and end", () => {
+    const { diag } = setup();
+    const key = diag.turnBegin("t1");
+    diag.turnPhase(key, "batch.start", { batchId: "r1" });
+    diag.turnPhase(key, "call.persist", { batchId: "r1", callId: "c1" });
+    expect(diag.openTurns().map((t) => `${t.id}:${t.phase}:${t.batchId}:${t.callId}`)).toEqual(["t1:call.persist:r1:c1"]);
+    const snap = diag.snapshot("t");
+    expect(snap.turns).toEqual([
+      expect.objectContaining({ id: "t1", phase: "call.persist", batchId: "r1", callId: "c1", phaseChanges: 2 }),
+    ]);
+    expect(snap.recent.some((l) => l.endsWith("turn t1 call.persist batch=r1 call=c1"))).toBe(true);
+    diag.turnEnd(key, "completed");
+    expect(diag.openTurns()).toEqual([]);
+    // Unknown keys are ignored, never thrown.
+    diag.turnPhase("nope", "x");
+    diag.turnEnd("nope", "error");
+  });
+
+  test("a turn parked in a bookkeeping phase with nothing in flight is dumped as a turn stall", () => {
+    const { diag, clock, lines } = setup();
+    const key = diag.turnBegin("t1");
+    diag.turnPhase(key, "call.persist", { batchId: "r1", callId: "c1" });
+    clock.advance(9 * MIN);
+    diag.tick();
+    expect(lines).toHaveLength(0);
+    clock.advance(MIN);
+    diag.tick();
+    expect(lines).toHaveLength(1);
+    const dumped = JSON.parse(lines[0] ?? "{}") as { reason: string; turns: { id: string; phase: string }[]; recent: string[] };
+    expect(dumped.reason).toBe("turn-stall");
+    expect(dumped.turns[0]).toMatchObject({ id: "t1", phase: "call.persist" });
+    expect(dumped.recent.some((l) => l.includes("diag stall suspected: turn#t1@call.persist"))).toBe(true);
+  });
+
+  test("waiting on tool calls is a stall only once no call is in flight", () => {
+    const { diag, clock, lines } = setup();
+    const key = diag.turnBegin("t1");
+    diag.turnPhase(key, "batch.spawn.wait", { batchId: "r1" });
+    // A plain (unwatched) call in flight: its own registry owns the wait.
+    diag.begin("c1", "spawn_subagent", { watched: false });
+    clock.advance(11 * MIN);
+    diag.tick();
+    expect(lines).toHaveLength(0);
+    diag.end("c1", "ok");
+    diag.tick();
+    expect(lines).toHaveLength(1);
+    expect((JSON.parse(lines[0] ?? "{}") as { reason: string }).reason).toBe("turn-stall");
+  });
+
+  test("a long model request is not a turn stall", () => {
+    const { diag, clock, lines } = setup();
+    const key = diag.turnBegin("t1");
+    diag.turnPhase(key, "model.request", { batchId: "r2" });
+    clock.advance(30 * MIN);
+    diag.tick();
+    expect(lines).toHaveLength(0);
+  });
+});
