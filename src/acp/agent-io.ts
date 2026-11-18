@@ -330,7 +330,7 @@ export function createAcpAgentIo(
       closePseudoToolCall(tool, toolCallId, false);
       return false;
     }
-    const approved = approvalFromPermissionResponse(response, options, meta?.fingerprint);
+    const approved = approvalFromPermissionResponse(response, options, meta?.fingerprint, meta?.mcpTrustAvailable === true);
     // `ApprovalResponse` is `boolean | {approved, fingerprint?}` (the
     // "allow_always" shape carries a fingerprint for the allowlist match
     // elsewhere) — `closePseudoToolCall` only needs the plain outcome.

@@ -65,6 +65,13 @@ const OPTION_ALLOW_ALWAYS: AcpPermissionOption = Object.freeze({
   kind: "allow_always" as AcpPermissionOptionKind,
 });
 
+/** Trust grant for an MCP tool, for the rest of the session (the shell's `trustMcpTool`). */
+const OPTION_ALLOW_SESSION: AcpPermissionOption = Object.freeze({
+  optionId: ACP_PERMISSION_OPTION_IDS.allowAlways,
+  name: "Allow for this session",
+  kind: "allow_always" as AcpPermissionOptionKind,
+});
+
 const OPTION_REJECT_ONCE: AcpPermissionOption = Object.freeze({
   optionId: ACP_PERMISSION_OPTION_IDS.rejectOnce,
   name: "Reject",
@@ -153,6 +160,13 @@ export function acpPermissionReasons(meta?: ApprovalMeta): AcpPermissionReasons 
  * no way to say yes, and a request with no options is unrenderable.
  */
 export function permissionOptionsFor(meta?: ApprovalMeta): readonly AcpPermissionOption[] {
+  // An MCP call keryx may trust for the session (`mcpTrustAvailable`: trust
+  // mode, no untrusted content, not annotated destructive) offers that grant.
+  // keryx keeps it (`trustedMcpTools`), bound to the tool's definition; the
+  // client remembers nothing.
+  if (meta?.mcpTrustAvailable === true) {
+    return [OPTION_ALLOW_ONCE, OPTION_ALLOW_SESSION, OPTION_REJECT_ONCE, OPTION_REJECT_ALWAYS];
+  }
   return permissionIsEscalated(meta)
     ? [OPTION_ALLOW_ONCE, OPTION_REJECT_ONCE, OPTION_REJECT_ALWAYS]
     : [OPTION_ALLOW_ONCE, OPTION_ALLOW_ALWAYS, OPTION_REJECT_ONCE, OPTION_REJECT_ALWAYS];
@@ -188,6 +202,8 @@ export function approvalFromPermissionResponse(
   response: AcpRequestPermissionResponse,
   options: readonly AcpPermissionOption[],
   fingerprint?: string,
+  /** The call offered the MCP session grant: `allow_always` then means `trustMcpTool`. */
+  mcpTrustOffered = false,
 ): ApprovalResponse {
   // Typed as `unknown` first on purpose: this value came off a wire, and the
   // declared type is what keryx HOPES arrived, not what it can rely on. A
@@ -206,6 +222,7 @@ export function approvalFromPermissionResponse(
     case "allow_once":
       return true;
     case "allow_always":
+      if (mcpTrustOffered && fingerprint !== undefined) return { approved: true, fingerprint, trustMcpTool: true };
       return fingerprint === undefined ? true : { approved: true, fingerprint };
     default:
       // Both rejections, and an `optionId` keryx never offered: a client that

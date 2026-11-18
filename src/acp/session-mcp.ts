@@ -63,6 +63,22 @@ export interface ParsedAcpMcpServers {
   readonly refused: readonly AcpMcpServerProblem[];
   /** Every `env` and `headers` value in the list — what `scrub` removes from any text leaving keryx. */
   readonly secrets: readonly string[];
+  /**
+   * Servers the client runs as part of itself and marked `_meta.keryx.firstParty`
+   * (the desktop app's side panel, D-13), each with the raw tool names that still
+   * keep the untrusted-content floor (`_meta.keryx.floorTools`). Every other tool
+   * of such a server is exempt from that floor.
+   */
+  readonly firstParty?: ReadonlyMap<string, ReadonlySet<string>>;
+}
+
+/** `_meta.keryx.firstParty` / `floorTools` of one entry; `undefined` for an ordinary server. */
+function readFirstParty(entry: Record<string, unknown>): ReadonlySet<string> | undefined {
+  const meta = entry["_meta"];
+  const keryx = isRecord(meta) ? meta["keryx"] : undefined;
+  if (!isRecord(keryx) || keryx["firstParty"] !== true) return undefined;
+  const floor = keryx["floorTools"];
+  return new Set(Array.isArray(floor) ? floor.filter((t): t is string => typeof t === "string") : []);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -132,6 +148,7 @@ export function parseAcpMcpServers(method: string, raw: unknown): ParsedAcpMcpSe
   const stdio: ResolvedMcpServer[] = [];
   const refused: AcpMcpServerProblem[] = [];
   const secrets: string[] = [];
+  const firstParty = new Map<string, ReadonlySet<string>>();
   const seen = new Set<string>();
   raw.forEach((entry, index) => {
     if (!isRecord(entry) || typeof entry["name"] !== "string" || entry["name"].length === 0) {
@@ -177,6 +194,8 @@ export function parseAcpMcpServers(method: string, raw: unknown): ParsedAcpMcpSe
       refused.push({ name, reason: "not started: env must be a list of {name, value} strings" });
       return;
     }
+    const floorTools = readFirstParty(entry);
+    if (floorTools !== undefined) firstParty.set(name, floorTools);
     stdio.push({
       name,
       // No ACP source exists in `McpServerSource`; "user" is the standing these
@@ -198,7 +217,33 @@ export function parseAcpMcpServers(method: string, raw: unknown): ParsedAcpMcpSe
       },
     });
   });
-  return { stdio, refused, secrets };
+  return { stdio, refused, secrets, ...(firstParty.size > 0 ? { firstParty } : {}) };
+}
+
+/**
+ * Whether `fqn` (`server__tool`) is a tool of a first-party server that is
+ * exempt from the untrusted-content floor.
+ */
+export function firstPartyFloorExempt(
+  firstParty: ReadonlyMap<string, ReadonlySet<string>> | undefined,
+  fqn: string,
+): boolean {
+  if (firstParty === undefined) return false;
+  for (const [server, floorTools] of firstParty) {
+    const prefix = `${server}__`;
+    if (fqn.startsWith(prefix)) return !floorTools.has(fqn.slice(prefix.length));
+  }
+  return false;
+}
+
+/** The first-party server `fqn` belongs to, if any. */
+export function firstPartyServerOf(
+  firstParty: ReadonlyMap<string, ReadonlySet<string>> | undefined,
+  fqn: string,
+): string | undefined {
+  if (firstParty === undefined) return undefined;
+  for (const server of firstParty.keys()) if (fqn.startsWith(`${server}__`)) return server;
+  return undefined;
 }
 
 /**
@@ -253,6 +298,7 @@ export function acpMcpSetKey(parsed: ParsedAcpMcpServers): string {
       env: Object.entries(server.env ?? {}).sort(([a], [b]) => a.localeCompare(b)),
     })),
     refused: parsed.refused,
+    firstParty: [...(parsed.firstParty ?? new Map()).entries()].map(([server, floor]) => [server, [...floor].sort()]),
   };
   return createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
 }
@@ -273,6 +319,8 @@ export interface AcpSessionMcp {
   readonly redact: (text: string) => string;
   /** Refusals known before any dial (http/sse, malformed entries). Scrubbed. */
   readonly refused: readonly AcpMcpServerProblem[];
+  /** First-party servers of this set (see {@link ParsedAcpMcpServers.firstParty}). */
+  readonly firstParty?: ReadonlyMap<string, ReadonlySet<string>>;
   /** Servers that were dialled and did not start. Complete once `ready` has settled. Scrubbed. */
   failed(): readonly AcpMcpServerProblem[];
   /**
@@ -379,6 +427,7 @@ export function startAcpSessionMcp(parsed: ParsedAcpMcpServers, options: StartAc
     servers: () => states,
     redact: (text) => scrub(text, parsed.secrets),
     refused,
+    ...(parsed.firstParty !== undefined ? { firstParty: parsed.firstParty } : {}),
     failed: () =>
       states
         .filter((state) => state.status === "failed")

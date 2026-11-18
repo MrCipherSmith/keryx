@@ -21,6 +21,9 @@ use std::time::{Duration, Instant};
 
 /// Bytes of output kept per tab for replay and for the agent.
 pub const RING_BYTES: usize = 1024 * 1024;
+/// Set in agent tabs only: no pager, so `git log` and friends print and return.
+pub const AGENT_ENV: &[(&str, &str)] = &[("PAGER", "cat"), ("GIT_PAGER", "cat"), ("MANPAGER", "cat"), ("SYSTEMD_PAGER", ""), ("LESS", "-FRX")];
+
 /// Between SIGHUP and SIGKILL when a tab closes.
 pub const HANGUP_GRACE: Duration = Duration::from_millis(500);
 
@@ -404,6 +407,12 @@ impl PtyManager {
         cmd.env("TERM", "xterm-256color");
         cmd.env("COLORTERM", "truecolor");
         cmd.env("TERM_PROGRAM", "Keryx");
+        if spec.owner == Owner::Agent {
+            // The agent reads output, it cannot page through it: a pager would hold the tab.
+            for (k, v) in AGENT_ENV {
+                cmd.env(k, v);
+            }
+        }
         cmd.env_remove("TERM_PROGRAM_VERSION");
         cmd.cwd(spec.cwd);
         let mut child = pair.slave.spawn_command(cmd).map_err(|e| format!("Could not start {shell}: {e}"))?;
@@ -761,6 +770,26 @@ mod tests {
             on_exit: None,
         });
         assert!(missing.is_err());
+        mgr.close_all();
+    }
+
+    #[test]
+    fn agent_tabs_have_no_pager_and_user_tabs_keep_theirs() {
+        let dir = tempfile::tempdir().unwrap();
+        let mgr = PtyManager::default();
+        let mut env = env();
+        env.insert("PAGER".into(), "less".into());
+        let open = |owner| {
+            mgr.open(OpenSpec { window: "w", owner, cwd: dir.path(), env: &env, cols: 80, rows: 24, program: Some(("/bin/sh", &[])), title: None, on_exit: None })
+                .unwrap()
+        };
+        let agent = open(Owner::Agent);
+        let user = open(Owner::User);
+        let (ra, ru) = (collect(&agent), collect(&user));
+        agent.write(b"echo \"P=$PAGER G=$GIT_PAGER\"\n").unwrap();
+        user.write(b"echo \"P=$PAGER\"\n").unwrap();
+        assert!(read_until(&ra, "P=cat G=cat").contains("P=cat"));
+        assert!(read_until(&ru, "P=less").contains("P=less"));
         mgr.close_all();
     }
 
