@@ -1,7 +1,7 @@
 // Requests to the side panel from elsewhere in the window: the Run buttons (D-13).
 
 import { setPrefs } from "../lib/prefs";
-import type { PtyTab } from "../platform/panels";
+import { ptyClose, type PtyTab } from "../platform/panels";
 
 type RunListener = (command: string) => void;
 
@@ -49,6 +49,23 @@ export function onShowTab(l: TabListener): () => void {
   };
 }
 
+let closeListener: ((id: number) => void) | null = null;
+/** Close terminal tab `tab` and kill its process (a model-started `/delegate` run that returned its answer). */
+export function closeTerminalTab(tab: PtyTab): void {
+  pendingTabs = pendingTabs.filter((t) => t.id !== tab.id);
+  if (closeListener) closeListener(tab.id);
+  else {
+    void ptyClose(tab.id).catch(() => {});
+    notifyTabClosed(tab.id);
+  }
+}
+/** The terminal panel closes tabs on request, the way its own close button does. */
+export function onCloseTabRequest(l: (id: number) => void): () => void {
+  closeListener = l;
+  return () => {
+    if (closeListener === l) closeListener = null;
+  };
+}
 const closedListeners = new Set<(id: number) => void>();
 
 /** The user closed terminal tab `id` in the panel. */

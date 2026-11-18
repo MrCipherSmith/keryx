@@ -7,7 +7,7 @@ Version: 0.3.0
 |---|---|---|
 | M1 | `shell` profile (roster, modes, plan/usage/info updates, `_keryx/ask_user`, `_keryx/info`); Tauri client (chat, tools, approvals, modes, sessions, models, plan, usage, settings); sidecar; local `.dmg`; release workflow; Flows board ([flows-board.md](flows-board.md)); browser dev mode | implemented on the branch; owner acceptance pending (see README status) |
 | M2a | every shell slash command via `_keryx/command` (text answers and generic views for picker/modal commands; `/queue` client-side, `/delegate`), command palette, `/connect` Providers dialog over `_keryx/providers/*` (api key, device code, custom), `spawn_subagent` + `_keryx/subagent` + Subagents tab, `_keryx/tasks/*` + Tasks tab (specification §3.9, §4.2.1, AC13–AC19) | implemented on `feat/desktop-client-m2` 2026-11-17 (as-built deviations: specification §3.9.5a); owner acceptance pending |
-| M2b | images (after flow 493), model-chosen external subagent runtimes, per-subagent cancel, sidebar cards via `_keryx/state` | future |
+| M2b | images (after flow 493), model-chosen external subagent runtimes (done 2026-11-18, trust/auto only, D-14), per-subagent cancel, sidebar cards via `_keryx/state` | future |
 | M3 | remote-control and Hub toggles, Developer ID signing on, Homebrew cask, auto-update | future |
 
 ## Parity matrix

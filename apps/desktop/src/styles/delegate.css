@@ -1,0 +1,8 @@
+/* An external run's answer in the parent's transcript (/delegate, D-14): header, a clipped Markdown preview, actions. */
+.delegate-result { margin: var(--sp-2) 0; border: 1px solid var(--border); border-left: 3px solid var(--warn); border-radius: var(--r-md); background: var(--bg-surface); }
+.delegate-result-head { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); font-size: var(--fs-sm); color: var(--fg-muted); }
+.delegate-result-head strong { color: var(--fg); font-weight: 600; }
+.delegate-result-note { margin-left: auto; opacity: 0.8; }
+.delegate-result-body { padding: 0 var(--sp-3) var(--sp-2); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.delegate-result-body.is-clipped { max-height: 17em; overflow: hidden; -webkit-mask-image: linear-gradient(to bottom, #000 70%, transparent); mask-image: linear-gradient(to bottom, #000 70%, transparent); }
+.delegate-result-actions { display: flex; gap: var(--sp-1); padding: 0 var(--sp-2) var(--sp-2); }

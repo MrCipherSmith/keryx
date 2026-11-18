@@ -83,11 +83,19 @@ export const KERYX_ACP_EXTENSION_METHODS = {
   /**
    * Agent → client notification, shell profile (§3.9.5a, D-14): `{ sessionId, runId, agentId, turn, text }`.
    * A `/delegate` run in the client's terminal finished a turn; `text` is its answer (capped, untrusted).
-   * keryx has put the same text in the parent session's history as a labelled note, without a turn.
+   * keryx has put the same text in the parent session's history as a labelled note, without a turn (a
+   * model-started run, `autoClose: true`, returns it as the `spawn_subagent` result instead, and the client closes the tab).
    */
   delegateResult: "_keryx/delegate_result",
   /** Client → agent notification, shell profile: `{ sessionId, runId }`. The run's terminal process ended; keryx stops watching its hook file. */
   delegateExited: "_keryx/delegate_exited",
+  /**
+   * Agent → client notification, shell profile (§3.9.5a, D-14): `{ sessionId, runId, agentId, title, argv, cwd, autoClose: true }`.
+   * The MODEL started an external run (`spawn_subagent` with an external runtime, allowed only in trust or auto
+   * mode): the client opens it in a terminal tab like a `/delegate` run, and closes the tab when the run's
+   * first turn is returned (`_keryx/delegate_result` with `autoClose`) or the process exits.
+   */
+  delegateTerminal: "_keryx/delegate_terminal",
 } as const;
 
 /** The extensions a profile speaks, as `initialize._meta.keryx.extensions` and `_keryx/info` list them. */
@@ -118,6 +126,7 @@ export function acpProfileExtensions(profile: AcpProfile): string[] {
         KERYX_ACP_EXTENSION_METHODS.sessionTrash,
         KERYX_ACP_EXTENSION_METHODS.delegateResult,
         KERYX_ACP_EXTENSION_METHODS.delegateExited,
+        KERYX_ACP_EXTENSION_METHODS.delegateTerminal,
       ]
     : [KERYX_ACP_EXTENSION_METHODS.info];
 }

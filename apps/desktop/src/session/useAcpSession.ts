@@ -14,13 +14,15 @@ import {
 import { acpStart, acpTransport, acpStop, listenBridge, setWindowTitle, versionCheck } from "../platform/commands";
 import { isTauri } from "../platform/backend";
 import { onPtyExit, panelMcpServers, ptyOpenRun } from "../platform/panels";
-import { onTabClosed, showTerminalTab } from "../panels/panelBus";
+import { closeTerminalTab, onTabClosed, showTerminalTab } from "../panels/panelBus";
+import { notifyDelegateChange, setDelegateApi } from "./delegateBus";
 import { createDelegateTerminals, type DelegateLaunch } from "./delegateTerminals";
 import {
   canOrganizeSessions,
   hasLiveSessions,
   DELEGATE_EXITED,
   DELEGATE_RESULT,
+  DELEGATE_TERMINAL,
   type DelegateResultParams,
   SESSION_FLAGS,
   SESSION_RELEASED,
@@ -154,11 +156,17 @@ export function useAcpSession(cwd: string) {
       createDelegateTerminals({
         openRun: (launch) => ptyOpenRun(launch.cwd, launch.argv, launch.title, 80, 24),
         showTab: showTerminalTab,
+        closeTab: closeTerminalTab,
+        onChange: notifyDelegateChange,
         dispatch,
         notifyExit: (sessionId, runId) => live.current.client?.notify(DELEGATE_EXITED, { sessionId, runId }),
       }),
     [dispatch],
   );
+  useEffect(() => {
+    setDelegateApi(delegates);
+    return () => setDelegateApi(null);
+  }, [delegates]);
   useEffect(() => {
     let live = true;
     let off: (() => void) | null = null;
@@ -381,10 +389,24 @@ export function useAcpSession(cwd: string) {
         else if (method === SUBAGENT_NOTIFICATION) {
           const p = params as { sessionId?: unknown; event?: unknown } | null;
           if (typeof p?.sessionId === "string" && p.event) dispatch({ t: "subagent", sessionId: p.sessionId, event: p.event });
+        } else if (method === DELEGATE_TERMINAL) {
+          // The model started an external run (trust/auto mode): the same terminal tab as `/delegate`, closed when it returns.
+          const p = params as Partial<DelegateLaunch> & { sessionId?: unknown } | null;
+          if (typeof p?.sessionId === "string" && typeof p.runId === "string" && Array.isArray(p.argv) && typeof p.cwd === "string") {
+            openTerminal(p.sessionId, {
+              runId: p.runId,
+              agentId: typeof p.agentId === "string" ? p.agentId : "agent",
+              title: typeof p.title === "string" ? p.title : p.runId,
+              argv: p.argv.filter((a): a is string => typeof a === "string"),
+              cwd: p.cwd,
+              autoClose: true,
+            });
+          }
         } else if (method === DELEGATE_RESULT) {
           const p = params as Partial<DelegateResultParams> | null;
           if (typeof p?.sessionId === "string" && typeof p.runId === "string" && typeof p.text === "string") {
             dispatch({ t: "delegateResult", sessionId: p.sessionId, runId: p.runId, agentId: typeof p.agentId === "string" ? p.agentId : "agent", turn: typeof p.turn === "number" ? p.turn : 1, text: p.text });
+            if (p.autoClose === true) delegates.finish(p.runId);
           }
         } else if (method === TASKS_EVENT) {
           const sid = (params as { sessionId?: unknown } | null)?.sessionId;

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "../components/Icon";
 import { useToast } from "../components/Toasts";
 import { onAgentTerminal, ptyClose, ptyList, ptyOpen, ptyWrite, type PtyTab } from "../platform/panels";
-import { notifyTabClosed, onRunRequest, onShowTab } from "./panelBus";
+import { notifyTabClosed, onCloseTabRequest, onRunRequest, onShowTab } from "./panelBus";
 import { TermView } from "./TermView";
 
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -96,6 +96,7 @@ export function TerminalPanel({ cwd }: { cwd: string }) {
     [],
   );
 
+  const closeRef = useRef<(id: number) => void>(() => {});
   const close = (id: number) => {
     notifyTabClosed(id);
     void ptyClose(id).catch(() => {});
@@ -106,6 +107,9 @@ export function TerminalPanel({ cwd }: { cwd: string }) {
     });
   };
 
+  closeRef.current = close;
+  // A model-started `/delegate` run that returned its answer: its tab closes like the user's close button.
+  useEffect(() => onCloseTabRequest((id) => closeRef.current(id)), []);
   const markExited = (id: number, code: number | null) =>
     setTabs((t) => t.map((x) => (x.id === id ? { ...x, running: false, exitCode: code } : x)));
 

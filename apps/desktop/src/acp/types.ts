@@ -231,12 +231,16 @@ export const SESSION_SHOWN = "_keryx/session_shown";
 export const DELEGATE_RESULT = "_keryx/delegate_result";
 /** Notification to keryx: a `/delegate` run's terminal process ended (it stops watching the run's hook file). */
 export const DELEGATE_EXITED = "_keryx/delegate_exited";
+/** Notification from keryx: the MODEL started an external run (trust/auto mode); open it in a terminal tab. */
+export const DELEGATE_TERMINAL = "_keryx/delegate_terminal";
 export interface DelegateResultParams {
   sessionId: string;
   runId: string;
   agentId: string;
   turn: number;
   text: string;
+  /** A model-started run: keryx returned the text as the tool result; the tab closes. */
+  autoClose?: boolean;
 }
 /** Request to keryx: archive/unarchive, pin/unpin a stored session; answers the flags as stored. */
 export const SESSION_FLAGS = "_keryx/session_flags";

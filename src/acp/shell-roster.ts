@@ -24,7 +24,7 @@
 //                           client did not advertise it, the tool is denied
 //   mcp                     keryx's configured servers merged with the client's `mcpServers`
 //   spawnTool               `spawn_subagent` over `buildSessionSpawnDeps` — the wiring `keryx shell`
-//                           uses — with native children only (`nativeOnly`); the session's own
+//                           uses — with native children only (`nativeOnly`) unless the client runs terminals (`runExternal`); the session's own
 //                           fleet-event closure, hook runtime and live parent model (`spawn`)
 //   bus, schedules,         M2: omitted, so the factory never builds them
 //   operatorConfirm, reviewAgents
@@ -42,7 +42,7 @@ import type { SearchProviderController } from "../harness/search";
 import type { AskUserFn } from "../harness/tool/builtin/ask-user-tool";
 import type { JobRegistry } from "../harness/tool/builtin/background-job-registry";
 import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
-import { createSpawnSubagentTool } from "../harness/tool/builtin/spawn-subagent-tool";
+import { createSpawnSubagentTool, type SpawnSubagentToolDeps } from "../harness/tool/builtin/spawn-subagent-tool";
 import { buildSessionSpawnDeps, type SessionSpawnDepsInput } from "../commands/spawn-deps";
 import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
@@ -50,8 +50,8 @@ import { acpAwareReadFileTool, type AcpFsReader } from "./capability-tools";
 import type { AcpClientCapabilities } from "./protocol";
 
 /**
- * What `spawn_subagent` needs from the ACP host, per session. `nativeOnly` is not here: a model-chosen
- * external runtime is M2b, so every model spawn is native (`runExternal` is never given).
+ * What `spawn_subagent` needs from the ACP host, per session. `nativeOnly` and `runExternal` are not here: a
+ * model-chosen external runtime is `AcpShellRosterInput.runExternal` (the desktop's terminal run, D-14).
  */
 export type AcpShellSpawnInput = Omit<SessionSpawnDepsInput, "cwd" | "nativeOnly" | "runExternal">;
 
@@ -71,6 +71,11 @@ export interface AcpShellRosterInput {
   readonly metaprojectPort?: MetaprojectPort;
   /** The session's `spawn_subagent`. Absent → the tool is denied. */
   readonly spawnTool?: InteractiveTool;
+  /**
+   * The model-started external run (trust/auto only, in the client's terminal). Absent → `spawn_subagent`
+   * offers native children only and refuses `runtime.kind: "external"` by name.
+   */
+  readonly runExternal?: SpawnSubagentToolDeps["runExternal"];
 }
 
 /** The names the shell profile denies for this input: `ask_user` without a client to ask. */
@@ -84,7 +89,7 @@ export function buildAcpShellSessionTools(input: AcpShellRosterInput): Interacti
     cwd: root,
     metaprojectPort: input.metaprojectPort ?? createMetaprojectAdapter(root),
     searchController: input.searchController,
-    spawnTool: createSpawnSubagentTool(buildSessionSpawnDeps({ ...input.spawn, cwd: root, nativeOnly: true })),
+    spawnTool: createSpawnSubagentTool(buildSessionSpawnDeps({ ...input.spawn, cwd: root, ...(input.runExternal !== undefined ? { runExternal: input.runExternal } : { nativeOnly: true }) })),
     getSessionDir: input.getSessionDir,
     jobRegistry: input.jobRegistry,
     ...(input.askUser !== undefined ? { askUser: input.askUser } : {}),

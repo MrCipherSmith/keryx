@@ -140,3 +140,70 @@ describe("the exit is reported to keryx (it stops watching the turn-done file)",
     expect(r.exits).toEqual(["s1/ext:1"]);
   });
 });
+
+describe("auto-close: only a model-started run's tab closes", () => {
+  const modelLaunch: DelegateLaunch = { ...launch, runId: "ext:m", autoClose: true };
+  function closingRig() {
+    const closed: number[] = [];
+    let changes = 0;
+    let win = reducer({ ...initialState, phase: "ready" }, { t: "created", sessionId: "s1", show: true });
+    let next = 1;
+    const d = createDelegateTerminals({
+      openRun: async () => tab(next++),
+      showTab: () => {},
+      closeTab: (t) => void closed.push(t.id),
+      onChange: () => void (changes += 1),
+      dispatch: (a: Action) => {
+        win = reducer(win, a);
+      },
+    });
+    return { d, closed, agents: () => win.convs.s1!.subagents, changes: () => changes };
+  }
+  test("finish on a model-started run marks it done 'returned' and closes the tab; the exit that follows is not a failure", async () => {
+    const r = closingRig();
+    await r.d.start("s1", modelLaunch);
+    expect(r.d.isOpen("ext:m")).toBe(true);
+    r.d.finish("ext:m");
+    expect(r.closed).toEqual([1]);
+    expect(r.agents()[0]).toMatchObject({ status: "done", detail: "returned" });
+    expect(r.d.isOpen("ext:m")).toBe(false);
+    r.d.exited(1, null);
+    r.d.closed(1);
+    expect(r.agents()[0]).toMatchObject({ status: "done", detail: "returned" });
+    expect(r.closed).toEqual([1]);
+  });
+  test("a human-started run stays open: finish is ignored", async () => {
+    const r = closingRig();
+    await r.d.start("s1", launch);
+    r.d.finish("ext:1");
+    expect(r.closed).toEqual([]);
+    expect(r.d.isOpen("ext:1")).toBe(true);
+    expect(r.agents()[0]!.status).toBe("running");
+  });
+  test("a finish that arrives before the tab exists closes it as soon as it does", async () => {
+    let d!: ReturnType<typeof createDelegateTerminals>;
+    const closed: number[] = [];
+    d = createDelegateTerminals({
+      openRun: async () => {
+        d.finish("ext:m");
+        return tab(7);
+      },
+      showTab: () => {},
+      closeTab: (t) => void closed.push(t.id),
+      dispatch: () => {},
+    });
+    await d.start("s1", modelLaunch);
+    expect(closed).toEqual([7]);
+  });
+  test("no turn hook (agy): the process exit ends a model-started run and closes its tab; a human run's tab stays", async () => {
+    const r = closingRig();
+    await r.d.start("s1", modelLaunch);
+    r.d.exited(1, 0);
+    expect(r.agents()[0]).toMatchObject({ status: "done", detail: "exit 0" });
+    expect(r.closed).toEqual([1]);
+    const human = closingRig();
+    await human.d.start("s1", launch);
+    human.d.exited(1, 0);
+    expect(human.closed).toEqual([]);
+  });
+});

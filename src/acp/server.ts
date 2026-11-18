@@ -1744,6 +1744,8 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       searchController: searchControllerFor(),
       jobRegistry: jobsFor(sessionId, root),
       spawn: spawnInputFor(sessionId, ownsBudget),
+      // A model-chosen external run needs the client's terminal (the desktop); without one it stays native-only.
+      ...(clientRunsTerminal(state.clientCapabilities) ? { runExternal: (request) => externalRunsFor(sessionId, state).startForModel(request) } : {}),
       // Read through the registry, not captured: `persistHistory` replaces the handle.
       getSessionDir: () => registry.get(sessionId)?.handle.dir,
       metaprojectPort: metaprojectFor(root),
@@ -1912,6 +1914,8 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   function handOffDelegateResult(sessionId: string, result: DelegateTurnResult): void {
     if (stopping) return;
     writeMessage(notificationMessage(KERYX_ACP_EXTENSION_METHODS.delegateResult, { sessionId, ...result, text: capResultText(result.text) }));
+    // A model-started run returns its text as the `spawn_subagent` result: no history note on top of it.
+    if (result.autoClose === true) return;
     const note = delegateResultNote({ ...result, nonce: randomBytes(6).toString("hex") });
     if (activeTurns.has(sessionId)) {
       pendingDelegateNotes.set(sessionId, [...(pendingDelegateNotes.get(sessionId) ?? []), note]);
@@ -1952,6 +1956,10 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       terminalCapable: clientRunsTerminal(state.clientCapabilities),
       sessionDir: () => registry.get(sessionId)?.handle.dir,
       onTurnResult: (result) => handOffDelegateResult(sessionId, result),
+      permissionMode: () => modeOf(sessionId),
+      openTerminal: (launch) => {
+        if (!stopping) writeMessage(notificationMessage(KERYX_ACP_EXTENSION_METHODS.delegateTerminal, { sessionId, ...launch }));
+      },
       onHookError: (message) => options.logError(`acp: ${message}`),
       gateEnv: options.externalGateEnv,
       makeRunExternal: options.makeRunExternal,

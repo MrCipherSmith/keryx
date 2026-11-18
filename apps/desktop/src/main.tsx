@@ -6,6 +6,7 @@ import "./styles.css";
 import "./styles/components.css";
 import "./styles/flows.css";
 import "./styles/activity.css";
+import "./styles/delegate.css";
 import "@xterm/xterm/css/xterm.css";
 import "./styles/panels.css";
 

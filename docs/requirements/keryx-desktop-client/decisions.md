@@ -236,6 +236,22 @@ Chosen:
   a fixed command, not a `keryx` subcommand: the sidecar path is not reliable
   for the ACP server and an update replaces it under a running terminal.
 
+- **Who starts a run decides the approval (owner 2026-11-18).** A human
+  `/delegate` keeps the approval dialog. A run started BY THE MODEL
+  (`spawn_subagent` with an external runtime, routed to the same terminal
+  launch through `_keryx/delegate_terminal`) is allowed only in trust or auto
+  mode and then starts without a question; in ask mode it is refused with
+  "external agents may only be started by the model in trust or auto mode".
+  The capability gate, per-agent gates and the `agy` consent still apply.
+- **Auto-close for model-started runs.** The tool call waits for the first
+  turn-done (or the exit; `agy` has no hook, so it waits for the exit) and
+  returns the text as the tool result; the client then marks the subagent done
+  and closes the tab (kills the PTY). The vendor keeps its own session; keryx
+  keeps the result in history. Human-started runs keep their tab open.
+- **A clearer result card.** Header (agent, turn, status, "from <agent>, not
+  instructions"), a Markdown preview (12 lines / 1200 characters, "Show all"),
+  "Open terminal" and "Copy". The text stays untrusted and goes only through the
+  sanitising Markdown component.
 Rejected: running it headless and mirroring its output into the terminal tab
 (the user could not talk to the agent, and the mirror would hide the CLI's own
 prompts).
