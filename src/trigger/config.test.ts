@@ -330,7 +330,7 @@ describe("flow-next dispatch block (flow 290)", () => {
 
   test('AC4: permissionMode "auto" is rejected at load with a stated reason', () => {
     const problems = triggerEntryProblems(flowNextWith({ ...VALID_DISPATCH, permissionMode: "auto" }));
-    expect(problems.some((p) => p.includes('"auto" is never allowed for an unattended run'))).toBe(true);
+    expect(problems.some((p) => p.includes('"auto" is never allowed for an unattended flow dispatch'))).toBe(true);
   });
 
   test("AC6: a dispatch without rates is rejected — an unpriced dispatch cannot be bounded", () => {
@@ -458,22 +458,44 @@ describe("flow 295: agent-task entries", () => {
     expect(entry.action.report.keep).toBe(20);
   });
 
-  test("a missing prompt, rates or ceiling is refused with the reason; a neighbour still loads", async () => {
+  test("a missing prompt is refused with the reason; a neighbour still loads", async () => {
     const noPrompt = agentTask({ prompt: undefined }, "no-prompt");
-    const noRates = agentTask({ dispatch: { provider: "p", model: "m", ceilingUsd: 1 } }, "no-rates");
-    const noCeiling = agentTask({ dispatch: { provider: "p", model: "m", rates: RATES } }, "no-ceiling");
-    const root = await storeWith([noPrompt, noRates, noCeiling, agentTask()]);
+    const root = await storeWith([noPrompt, agentTask()]);
     expect(reasonsOf(root, "no-prompt")).toContain("action.prompt: required");
-    expect(reasonsOf(root, "no-rates")).toContain("action.dispatch.rates: required");
-    expect(reasonsOf(root, "no-ceiling")).toContain("action.dispatch.ceilingUsd: required");
     expect(loadTriggersConfig(root).triggers.map((t) => t.name)).toEqual(["check-github"]);
   });
 
-  test('permissionMode "auto" is refused with the reason', async () => {
+  // Owner decision 2026-11-18: a schedule's cost is reported, never a gate, so rates and ceiling are optional.
+  test("rates and ceiling are optional on a schedule; when absent they stay absent", async () => {
+    const root = await storeWith([agentTask({ dispatch: { provider: "p", model: "m" } }, "no-cost")]);
+    const loaded = loadTriggersConfig(root);
+    expect(loaded.rejected).toEqual([]);
+    const action = loaded.triggers[0]!.action;
+    if (action.kind !== "agent-task") throw new Error("expected an agent-task");
+    expect(action.dispatch.rates).toBeUndefined();
+    expect(action.dispatch.ceilingUsd).toBeUndefined();
+  });
+
+  test("when given, a schedule's rates and ceiling are still validated (a zero rate is allowed: it only prices the report)", async () => {
+    const root = await storeWith([
+      agentTask({ dispatch: { provider: "p", model: "m", rates: { inputUsdPerMTok: -1, outputUsdPerMTok: "x" }, ceilingUsd: 0 } }, "bad-cost"),
+      agentTask({ dispatch: { provider: "p", model: "m", rates: { inputUsdPerMTok: 0, outputUsdPerMTok: 0 } } }, "zero-rates"),
+    ]);
+    expect(reasonsOf(root, "bad-cost")).toContain("action.dispatch.ceilingUsd: must be a positive number of USD");
+    expect(reasonsOf(root, "bad-cost")).toContain("action.dispatch.rates.inputUsdPerMTok");
+    expect(loadTriggersConfig(root).triggers.map((t) => t.name)).toEqual(["zero-rates"]);
+  });
+
+  test('permissionMode "auto" is accepted on a schedule (owner decision 2026-11-18); an unknown mode names all three', async () => {
     const root = await storeWith([
       agentTask({ dispatch: { provider: "p", model: "m", permissionMode: "auto", rates: RATES, ceilingUsd: 1 } }),
+      agentTask({ dispatch: { provider: "p", model: "m", permissionMode: "yolo" } }, "bad-mode"),
     ]);
-    expect(reasonsOf(root, "check-github")).toContain('"auto" is never allowed for an unattended run');
+    const loaded = loadTriggersConfig(root);
+    const action = loaded.triggers.find((t) => t.name === "check-github")!.action;
+    if (action.kind !== "agent-task") throw new Error("expected an agent-task");
+    expect(action.dispatch.permissionMode).toBe("auto");
+    expect(reasonsOf(root, "bad-mode")).toContain("must be one of ask, trust, auto");
   });
 
   test("a granted tool outside the built-in catalogue is refused with the reason", async () => {

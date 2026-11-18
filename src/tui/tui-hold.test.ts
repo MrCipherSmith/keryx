@@ -184,7 +184,12 @@ describe("held turns: release drains the queue (specification §5.2 step 5, AC4)
       expect(at).toBeGreaterThan(0);
       expect(source.slice(at, at + 400)).toContain("detachSlashWork(");
     }
-    expect(source.match(/detachSlashWork\(/g)?.length).toBe(detaching.length);
+    // The shared text subcommands (`/schedules pause <name>`, `/routing set ...`) hold the queue the same
+    // way, from one site: `runSharedSubcommandLine`.
+    const shared = source.indexOf("const runSharedSubcommandLine = (line: string): boolean => {");
+    expect(shared).toBeGreaterThan(0);
+    expect(source.slice(shared, shared + 700)).toContain("detachSlashWork(pending);");
+    expect(source.match(/detachSlashWork\(/g)?.length).toBe(detaching.length + 1);
     // the counter and the end-of-work drain live in the factory (behaviour: main-queue-drain.test.ts)
     expect(source).toContain("const detachSlashWork = (work: Promise<unknown>): void => drainSites.detach(work);");
     expect(source).not.toContain("detachedSlashWork");

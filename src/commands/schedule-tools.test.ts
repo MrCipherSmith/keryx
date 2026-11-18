@@ -117,7 +117,6 @@ async function turn(mode: "ask" | "trust" | "auto", answer: boolean, env: NodeJS
     accountOf: async () => "MrCipherSmith",
     // Flow 302: no model is ever called in this suite, so the two new draft-time checks
     // are stubbed to stay out of its way; they get their own dedicated tests.
-    providerReportsUsage: () => true,
     checkCredential: async () => ({ ok: true }),
   });
   const asked: { tool: string; meta: ApprovalMeta | undefined }[] = [];
@@ -220,22 +219,35 @@ describe("AC7: schedule_create always asks and shows the card", () => {
 // three cases exercise the tool path the same way the CLI-path tests in `schedule.test.ts`
 // exercise `keryx schedule add`.
 
-describe("flow 302: schedule_create refuses an unpriceable provider or a missing credential before drafting", () => {
+describe("flow 302: schedule_create refuses a missing credential before drafting (an unpriced provider is allowed)", () => {
   const input = { name: "check-github", cadence: "every 4 hours", prompt: "check github", rates: { inputUsdPerMTok: 3, outputUsdPerMTok: 15 }, ceilingUsd: 0.5 };
 
-  test("a provider not known to report token usage is refused, and nothing is written or installed", async () => {
+  // Owner decision 2026-11-18: cost is reported, never a gate, so an unpriced provider is NOT refused.
+  test("a provider that reports no token usage is NOT refused: it drafts", async () => {
     const [create] = scheduleTools({
       projectRoot: root,
       defaults: () => ({ provider: "some-unpriced-gateway", model: "m" }),
       host: host(),
       env: {},
-      providerReportsUsage: () => false,
       checkCredential: async () => ({ ok: true }),
     });
     const result = await create!.confirmation!(input);
-    expect(result).toMatchObject({ error: expect.stringContaining("not known to report token usage") });
-    expect(existsSync(scheduleStorePath(root))).toBe(false);
-    expect(await readdir(unitDir)).toEqual([]);
+    if ("error" in result) throw new Error(result.error);
+    expect(result.card.join("\n")).not.toContain("not known to report token usage");
+  });
+
+  test("permissionMode auto is accepted; rates and ceilingUsd are optional", async () => {
+    const [create] = scheduleTools({
+      projectRoot: root,
+      defaults: () => ({ provider: "anthropic", model: "m" }),
+      host: host(),
+      env: {},
+      checkCredential: async () => ({ ok: true }),
+    });
+    const result = await create!.confirmation!({ name: "check-github", cadence: "every 4 hours", prompt: "check github", permissionMode: "auto" });
+    if ("error" in result) throw new Error(result.error);
+    expect(result.card.join("\n")).toContain("permission mode auto");
+    expect(result.card.join("\n")).toContain('no rates, so the cost reads "cost unknown"');
   });
 
   test("a provider with no usable credential is refused, and nothing is written or installed", async () => {
@@ -244,7 +256,6 @@ describe("flow 302: schedule_create refuses an unpriceable provider or a missing
       defaults: () => ({ provider: "anthropic", model: "m" }),
       host: host(),
       env: {},
-      providerReportsUsage: () => true,
       checkCredential: async () => ({ ok: false, reason: 'provider "anthropic" has no usable credential in this environment' }),
     });
     const result = await create!.confirmation!(input);
@@ -259,7 +270,6 @@ describe("flow 302: schedule_create refuses an unpriceable provider or a missing
       defaults: () => ({ provider: "anthropic", model: "m" }),
       host: host(),
       env: {},
-      providerReportsUsage: () => true,
       checkCredential: async () => ({ ok: true }),
     });
     const result = await create!.confirmation!(input);

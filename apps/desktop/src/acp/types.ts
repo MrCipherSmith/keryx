@@ -120,10 +120,17 @@ export interface CommandView {
   form?: ViewForm | null;
 }
 
+/** "Ask now, then run": the client asks `confirm` at once (one dialog, `label` on its button), then runs `command`. */
+export interface ConfirmAction {
+  label: string;
+  confirm: string;
+  command: string;
+}
+
 /** Result of `_keryx/command`. */
 export interface CommandResult {
   text?: string;
-  _meta?: { keryx?: { effects?: CommandEffect[]; refused?: boolean; view?: CommandView | null; prompt?: string; terminal?: { runId: string; agentId: string; title: string; argv: string[]; cwd: string } } } & Meta;
+  _meta?: { keryx?: { effects?: CommandEffect[]; refused?: boolean; view?: CommandView | null; prompt?: string; terminal?: { runId: string; agentId: string; title: string; argv: string[]; cwd: string }; confirmAction?: ConfirmAction } } & Meta;
 }
 
 export interface SessionMode { id: string; name: string; description?: string | null }

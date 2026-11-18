@@ -2502,8 +2502,8 @@ nobody present, and records what happened.
 
 | Field | Required | Meaning |
 |---|---|---|
-| `provider`, `model` | yes | The model the agent runs on. Only providers known to report token usage on every response are accepted: `anthropic`, `openai`, `gemini`, and an OpenAI-compatible provider whose registry entry sets `streamUsage` (today: `grok` and `deepseek`). Anything else is refused (`provider-usage-unknown`). A provider with no usable credential is refused before anything is written. |
-| `permissionMode` | no (`ask`) | `ask` — every non-read call is denied (read-only by construction). `trust` — non-destructive `shell_exec`/`apply_patch` run, **inside the hardened sandbox, which is then mandatory**. `auto` is **rejected at load**. |
+| `provider`, `model` | yes | The model the agent runs on. **A `flow-next` dispatch only** (a schedule is not restricted, see the `schedule` section): only providers known to report token usage on every response are accepted: `anthropic`, `openai`, `gemini`, and an OpenAI-compatible provider whose registry entry sets `streamUsage` (today: `grok` and `deepseek`). Anything else is refused (`provider-usage-unknown`). A provider with no usable credential is refused before anything is written. |
+| `permissionMode` | no (`ask`) | `ask` — every non-read call is denied (read-only by construction; unattended, nobody answers a prompt). `trust` — non-destructive `shell_exec`/`apply_patch` run, **inside the hardened sandbox, which is then mandatory**. `auto` is **rejected at load for a `flow-next` dispatch**; a schedule (`agent-task`) may use it (see `keryx schedule`). |
 | `rates` | yes | `{ inputUsdPerMTok, outputUsdPerMTok }` — USD per million tokens, both **greater than zero**. Without rates, or with a zero rate, a run is free to the ceiling; the entry is rejected at load. |
 | `ceilingUsd` | yes | This trigger's own spend ceiling, on top of the project-wide one. Rejected at load when absent. |
 | `maxSeconds` | no (1800) | Wall-clock limit for one agent run. |
@@ -2768,14 +2768,14 @@ keryx still runs no daemon of its own. The OS scheduler calls `keryx trigger run
 
 ```
 keryx schedule add --name <name> --every "<cadence>" --prompt "<task>" \
-    --provider <p> --model <m> --rates <in>,<out> --ceiling <usd> \
-    [--max-seconds 600] [--mode ask|trust] [--network off|full|allowlist] \
+    --provider <p> --model <m> [--mode ask|trust|auto] [--rates <in>,<out>] [--ceiling <usd>] \
+    [--max-seconds 600] [--network off|full|allowlist] \
     [--domain example.com]... [--tool <id>]... [--repo owner/name]... [--backend systemd|launchd|cron] [--yes]
 keryx schedule add --digest --name <name> --every "<cadence>" \
-    --provider <p> --model <m> --rates <in>,<out> --ceiling <usd> \
+    --provider <p> --model <m> [--rates <in>,<out>] [--ceiling <usd>] \
     [--repo owner/name]... [--topic <name>] [--memory-mb 512] [--max-seconds 600] [--yes]
 keryx schedule add --review-pr <pull request URL> --name <name> --every "<cadence>" \
-    --provider <p> --model <m> --rates <in>,<out> --ceiling <usd> \
+    --provider <p> --model <m> [--rates <in>,<out>] [--ceiling <usd>] \
     [--budget-minutes N] [--budget-tokens N] [--stall-minutes 10] [--max-seconds N] [--yes]
 keryx schedule list
 keryx schedule show <name>
@@ -2831,16 +2831,33 @@ previous run alive refuses. The run's `report.md` is copied to
 `.metaproject/data/trigger/reports/<name>/<runId>.md`. See
 [Review a pull request with nobody at the keyboard](guides/autonomous-review.md).
 
-**Drafting checks the provider before the card is even shown.** `add`, `/schedule`
+**Permission mode.** `--mode ask|trust|auto` (default `ask`) is the mode the unattended
+run uses, and you choose it. Nobody is there to answer a prompt, so `ask` means every
+command that would need approval is **denied** (read-only calls and granted tools still
+run). `trust` runs non-destructive commands in the sandbox. `auto` runs every command in
+the sandbox except those that touch credentials or hit another hard floor (a publish
+lease, untrusted content, the unattended text floor). `trust` and `auto` refuse to start
+without the hardened sandbox. The mode is on the card, in `list`/`show`, in `/schedules`,
+and in every run's report. The desktop `/schedule` form asks for it as a required choice
+(default `trust`).
+
+**Cost is reported, never a gate.** *(Owner decision 2026-11-18.)* No spend reservation,
+ceiling, budget or usage rule refuses a schedule's draft or its tick, or stops a running
+tick. `--rates <in>,<out>` (USD per million tokens) is optional and only prices the
+report; `--ceiling <usd>` is optional and informational — a run over it completes and its
+report says "over the ceiling" with the cost. The run's message and report always carry the
+cost ("$0.0222"), or "cost unknown" when the provider reports no token usage or no rates
+were given. Hard safety limits that are not about money (`--max-seconds`, the tool
+allowlist, the network mode) are unchanged. This applies to `agent-task` schedules; a
+dispatching `flow-next` trigger keeps its ceiling and reservation.
+
+**Drafting checks the credential before the card is even shown.** `add`, `/schedule`
 and the agent's `schedule_create` tool all draft through the same code, which
-refuses — before anything is written or installed — a provider that is not known
-to report token usage on every response (`anthropic`, `openai`, `gemini`, or a
-registry provider whose entry sets `streamUsage`, for example `grok` or
-`deepseek`; see [Dispatching flow-next](#dispatching-flow-next)), and a provider
-with no usable credential in this environment. Both use the same resolution the
-scheduled run itself would use, so a confirmed card cannot install a timer whose
-every fire is bound to refuse with `dispatch-refused (provider-usage-unknown)` or
-for want of a credential.
+refuses — before anything is written or installed — a provider with no usable
+credential in this environment. It uses the same resolution the scheduled run itself
+would use, so a confirmed card cannot install a timer whose every fire is bound to
+refuse for want of a credential. A provider that reports no token usage is **not**
+refused: its runs report "cost unknown".
 
 **Cadence.** A five-field cron expression, or one of `every N hours` (a divisor of
 24), `every N minutes` (5, 10, 15, 20 or 30), `hourly`, `daily at HH:MM`,
@@ -2854,8 +2871,8 @@ systemd and launchd only on both.
 
 - the cadence and the next three run times;
 - the prompt;
-- the provider and model, with the permission mode;
-- the schedule's ceiling, its max seconds, and your rates;
+- the provider and model, with the permission mode and what it means unattended;
+- the cost line (reported, never a limit; the optional ceiling and rates) and the max seconds;
 - the network mode;
 - every granted tool, with the absolute binary it runs, the repositories it may
   touch, and the account it acts as;

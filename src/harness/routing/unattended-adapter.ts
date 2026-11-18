@@ -47,6 +47,11 @@ export interface UnattendedRoutingRuntime {
     readonly timeoutMs?: number;
   };
   readonly systemInstruction: string;
+  /**
+   * A schedule's cost is reported, never a gate (owner decision 2026-11-18): routing's own cost cap and
+   * its `unknownCost: "deny"` policy do not apply to the run.
+   */
+  readonly costNeverGates?: boolean;
 }
 
 /** Result shared by flow-next and agent-task unattended command adapters. */
@@ -125,9 +130,10 @@ async function currentUnattendedSnapshot(
       observedLatencyMs: () => null,
     },
   });
-  const estimatedCostUsd = (
-    request.requirements.inputTokensRequired * dispatch.rates.inputUsdPerMTok
-    + request.requirements.outputTokensReserved * dispatch.rates.outputUsdPerMTok
+  const rates = dispatch.rates;
+  const estimatedCostUsd = rates === undefined ? null : (
+    request.requirements.inputTokensRequired * rates.inputUsdPerMTok
+    + request.requirements.outputTokensReserved * rates.outputUsdPerMTok
   ) / 1_000_000;
   const models = snapshot.models.map((facts) => sameModelRef(facts.target, baseline) ? { ...facts, estimatedCostUsd } : facts);
   return createRoutingSnapshot({
@@ -149,14 +155,17 @@ export async function resolveUnattendedRouting(
   providerFor: (target: ModelRef) => ProviderPort | undefined,
   prompt: string,
   toolDefs: readonly NormalizedToolDefinition[],
-  maxEstimatedCostUsd: number,
+  maxEstimatedCostUsd: number | undefined,
   runtime: UnattendedRoutingRuntime,
   deps: UnattendedRoutingDeps = {},
 ): Promise<UnattendedRoutingResolution> {
   const { maxOutputTokens, modelParams, systemInstruction } = runtime;
-  const config = deps.loadRouting === undefined
+  const loaded = deps.loadRouting === undefined
     ? loadRouting(projectRoot, deps.routingConfigDir)
     : deps.loadRouting(projectRoot);
+  const config = runtime.costNeverGates === true
+    ? { ...loaded, execution: { ...loaded.execution, maxEstimatedCostUsd: null, unknownCost: "allow" as const } }
+    : loaded;
 
   const baseline = { providerId: dispatch.provider, modelId: dispatch.model };
   const requestFor = (inputTokensRequired: number, outputTokensReserved: number): RoutingRequest => ({
@@ -164,7 +173,7 @@ export async function resolveUnattendedRouting(
     category: "unattended",
     origin: "unattended",
     baseline,
-    requirements: { capabilities: ["tools"], inputTokensRequired, outputTokensReserved, maxEstimatedCostUsd },
+    requirements: { capabilities: ["tools"], inputTokensRequired, outputTokensReserved, ...(maxEstimatedCostUsd === undefined ? {} : { maxEstimatedCostUsd }) },
     userOverride: { mode: "model", target: baseline },
   });
   const snapshotFor = async (request: RoutingRequest): Promise<RoutingSnapshot> => {
@@ -234,7 +243,7 @@ export function routedUnattendedProvider(
   projectRoot: string,
   configDir: string | undefined,
   dispatch: TriggerDispatch,
-  reservedUsd: number,
+  reservedUsd: number | undefined,
   baseline: ProviderPort,
   providerFor: (target: ModelRef) => ProviderPort | undefined,
   routing: UnattendedRoutingResolution,
@@ -243,7 +252,7 @@ export function routedUnattendedProvider(
   const execution = routing.execution;
   if (execution === undefined) return baseline;
   const budget = new RoutingBudgetLedger({
-    taskUsd: reservedUsd,
+    ...(reservedUsd === undefined ? {} : { taskUsd: reservedUsd }),
     ...(execution.config.execution.maxEstimatedCostUsd === undefined ? {} : { configUsd: execution.config.execution.maxEstimatedCostUsd }),
     unknownCost: execution.config.execution.unknownCost,
   });
@@ -269,9 +278,10 @@ export function routedUnattendedProvider(
         : { ok: true };
     },
     actualCostUsd: ({ usage, estimatedCostUsd }) => {
-      if (usage?.inputTokens === undefined || usage.outputTokens === undefined) {
-        if (estimatedCostUsd === null) throw new Error("unattended routing cost is unknown");
-        return estimatedCostUsd;
+      // Cost is reported, never a gate (owner decision 2026-11-18): an unknown cost is 0 here, not an error.
+      // The run's own meter reports "cost unknown" in the tick's report.
+      if (usage?.inputTokens === undefined || usage.outputTokens === undefined || dispatch.rates === undefined) {
+        return estimatedCostUsd ?? 0;
       }
       return spendFromTokens({
         inputTokens: usage.inputTokens,

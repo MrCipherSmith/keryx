@@ -78,7 +78,6 @@ function deps(extra: Partial<ScheduleCommandDeps> = {}): ScheduleCommandDeps {
     // Flow 302: this suite drafts against the "fake" provider on purpose (no model is
     // ever called), so the two new draft-time checks are stubbed to stay out of its way;
     // they get their own dedicated tests.
-    providerReportsUsage: () => true,
     checkCredential: async () => ({ ok: true }),
     ...extra,
   };
@@ -130,8 +129,9 @@ describe("keryx schedule add", () => {
     expect(text).toContain("cadence: 0 */4 * * * (every 4 hours)");
     expect(text).toContain("next runs: ");
     expect(text).toContain("prompt: Check open PRs and summarise what needs my attention.");
-    expect(text).toContain("runner: fake/m, mode ask");
-    expect(text).toContain("budget: ceiling $0.5");
+    expect(text).toContain("runner: fake/m, permission mode ask");
+    expect(text).toContain("cost: reported in every run's report, never a limit");
+    expect(text).toContain("over its $0.5 ceiling");
     expect(text).toContain("network: off");
     expect(text).toContain(`  - gh.pr.list: ${path.join(keyHome, "bin", "gh")}`);
     expect(text).toContain("  account: gh: MrCipherSmith");
@@ -160,7 +160,7 @@ describe("keryx schedule add", () => {
   test("missing required flags are reported together and nothing is written", async () => {
     await scheduleCommand(["add", "--name", "x"], deps());
     expect(process.exitCode).toBe(1);
-    expect(out.join("\n")).toContain("missing --prompt, --provider, --model, --rates, --ceiling, --every (or --cron)");
+    expect(out.join("\n")).toContain("missing --prompt, --provider, --model, --every (or --cron)");
     expect(existsSync(scheduleStorePath(root))).toBe(false);
   });
 
@@ -171,12 +171,14 @@ describe("keryx schedule add", () => {
   // same `draftSchedule` the tool path (`schedule-tools.test.ts`) does; these are the
   // CLI-path half of that pair.
 
-  test("flow 302: a provider not known to report token usage is refused, and nothing is written or installed", async () => {
-    await scheduleCommand(ADD, deps({ confirm: async () => true, providerReportsUsage: () => false }));
-    expect(process.exitCode).toBe(1);
-    expect(out.join("\n")).toContain("not known to report token usage");
-    expect(existsSync(scheduleStorePath(root))).toBe(false);
-    expect(await readdir(unitDir)).toEqual([]);
+  // Owner decision 2026-11-18 (replaces the flow 302 usage-reporting refusal): cost is reported, never a gate,
+  // so a provider that reports no token usage is NOT refused. Its runs say "cost unknown".
+  test("a provider that reports no token usage is NOT refused: it drafts, stores and installs", async () => {
+    await scheduleCommand(ADD.map((a) => (a === "fake" ? "some-unpriced-gateway" : a)), deps({ confirm: async () => true }));
+    expect(process.exitCode).not.toBe(1);
+    expect(out.join("\n")).not.toContain("not known to report token usage");
+    expect(existsSync(scheduleStorePath(root))).toBe(true);
+    expect((await readdir(unitDir)).length).toBe(2);
   });
 
   test("flow 302: a provider with no usable credential is refused, and nothing is written or installed", async () => {
@@ -204,15 +206,56 @@ describe("keryx schedule add", () => {
     delete process.env["ANTHROPIC_API_KEY"];
     try {
       const args = ADD.map((a) => (a === "fake" ? "anthropic" : a));
-      // Neither check is stubbed here — this exercises the real `providerReportsUsage`/
-      // `providerHasUsableCredential` wiring from `./trigger-dispatch`, not a test double.
-      await scheduleCommand(args, deps({ confirm: async () => true, providerReportsUsage: undefined, checkCredential: undefined }));
+      // The credential check is not stubbed here — this exercises the real `providerHasUsableCredential` wiring from `./trigger-dispatch`, not a test double.
+      await scheduleCommand(args, deps({ confirm: async () => true, checkCredential: undefined }));
     } finally {
       if (savedKey !== undefined) process.env["ANTHROPIC_API_KEY"] = savedKey;
     }
     expect(process.exitCode).toBe(1);
     expect(out.join("\n")).toContain("no usable credential");
     expect(existsSync(scheduleStorePath(root))).toBe(false);
+  });
+});
+
+describe("permission mode and optional cost (owner decision 2026-11-18)", () => {
+  const withoutFlag = (args: readonly string[], name: string): string[] => {
+    const i = args.indexOf(name);
+    return [...args.slice(0, i), ...args.slice(i + 2)];
+  };
+
+  test("--mode auto is accepted and stored; the card says what each mode does", async () => {
+    await scheduleCommand([...ADD, "--mode", "auto"], deps({ confirm: async () => true }));
+    expect(out.join("\n")).toContain("permission mode auto");
+    const entry = loadTriggersConfig(root).triggers.find((t) => t.name === "check-github");
+    expect(entry?.action.kind === "agent-task" ? entry.action.dispatch.permissionMode : undefined).toBe("auto");
+  });
+
+  test("--mode trust is stored; an unknown mode is refused naming all three", async () => {
+    await scheduleCommand([...ADD, "--mode", "trust"], deps({ confirm: async () => true }));
+    const entry = loadTriggersConfig(root).triggers.find((t) => t.name === "check-github");
+    expect(entry?.action.kind === "agent-task" ? entry.action.dispatch.permissionMode : undefined).toBe("trust");
+    out = [];
+    await scheduleCommand([...ADD.map((a) => (a === "check-github" ? "other" : a)), "--mode", "yolo"], deps({ confirm: async () => true }));
+    expect(process.exitCode).toBe(1);
+    expect(out.join("\n")).toContain('--mode must be "ask", "trust" or "auto"');
+  });
+
+  test("the help text says an unattended ask denies, and that cost is reported, never a limit", async () => {
+    await scheduleCommand(["--help"], deps());
+    const text = out.join("\n");
+    expect(text).toContain("[--mode ask|trust|auto]");
+    expect(text).toContain('"ask" means every command that would need approval is DENIED');
+    expect(text).toContain("Cost is REPORTED, never a limit");
+  });
+
+  test("--rates and --ceiling are optional: no rates, no ceiling still drafts, stores and installs", async () => {
+    await scheduleCommand(withoutFlag(withoutFlag(ADD, "--rates"), "--ceiling"), deps({ confirm: async () => true }));
+    expect(process.exitCode).not.toBe(1);
+    const entry = loadTriggersConfig(root).triggers.find((t) => t.name === "check-github");
+    const dispatch = entry?.action.kind === "agent-task" ? entry.action.dispatch : undefined;
+    expect(dispatch?.rates).toBeUndefined();
+    expect(dispatch?.ceilingUsd).toBeUndefined();
+    expect(out.join("\n")).toContain('no rates, so the cost reads "cost unknown"');
   });
 });
 
@@ -238,15 +281,16 @@ describe("list / pause / resume / run / remove", () => {
     await scheduleCommand(["resume", "check-github"], deps());
     expect(loadTriggersConfig(root).triggers.find((t) => t.name === "check-github")?.enabled).toBe(true);
 
-    // run: one pass now. The "fake" provider is refused before any model call.
+    // run: one pass now. The "fake" provider runs the (offline) agent: no usage-based refusal exists any more.
     await scheduleCommand(["run", "check-github"], deps());
     read = await readTriggerRuns(root);
     if (read.state !== "present") throw new Error("no ledger");
-    expect(read.records.at(-1)?.agentTask?.refusal).toBe("provider-usage-unknown");
+    expect(read.records.at(-1)?.agentTask?.refusal).not.toBe("provider-usage-unknown");
+    expect(read.records.at(-1)?.outcome).not.toBe("budget-refused");
 
     out = [];
     await scheduleCommand(["list"], deps());
-    expect(out.join("\n")).toContain("last: dispatch-refused (provider-usage-unknown)");
+    expect(out.join("\n")).not.toContain("provider-usage-unknown");
 
     // remove: declined changes nothing; confirmed uninstalls and deletes.
     await scheduleCommand(["remove", "check-github"], deps({ confirm: async () => false }));

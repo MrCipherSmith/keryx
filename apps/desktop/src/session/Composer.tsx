@@ -31,7 +31,7 @@ interface Props {
   onStop: () => void;
   onMode: (id: string) => void;
   onModel: (configId: string, value: string) => void;
-  /** Open the Providers dialog from the model picker. */
+  /** Open the Providers dialog (the provider picker's last item, the same as /connect). */
   onProviders?: () => void;
 }
 
@@ -51,6 +51,17 @@ function modelName(option: ConfigOption): string {
   return option.currentValue;
 }
 
+/** The provider a model option belongs to: keryx writes `<provider>/<model>` and describes it with the provider id. */
+function providerOf(o: ConfigSelectOption): string {
+  if (o.description && o.value.startsWith(`${o.description}/`)) return o.description;
+  const i = o.value.indexOf("/");
+  return i > 0 ? o.value.slice(0, i) : "";
+}
+
+function modelChoices(option: ConfigOption | undefined): ConfigSelectOption[] {
+  return (option?.options ?? []).flatMap((o) => (isGroup(o) ? o.options : [o]));
+}
+
 export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   { sessionId, busy, disabledReason, commands, modes, model, sendKey, onSend, onStop, onMode, onModel, onProviders },
   ref,
@@ -64,10 +75,13 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   textRef.current = text;
   const [sel, setSel] = useState(0);
   const [dismissed, setDismissed] = useState(false);
-  const [menu, setMenu] = useState<"mode" | "model" | null>(null);
+  const [menu, setMenu] = useState<"mode" | "provider" | "model" | null>(null);
   const area = useRef<HTMLTextAreaElement>(null);
   const modeBtn = useRef<HTMLButtonElement>(null);
   const modelBtn = useRef<HTMLButtonElement>(null);
+  const providerBtn = useRef<HTMLButtonElement>(null);
+  // The model each provider last ran in this window; picking that provider again returns to it.
+  const lastModel = useRef(new Map<string, string>());
   const disabled = disabledReason !== null;
 
   useImperativeHandle(ref, () => ({
@@ -162,6 +176,29 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     }
   };
 
+  const choices = useMemo(() => modelChoices(model), [model]);
+  const providers = useMemo(() => [...new Set(choices.map(providerOf).filter(Boolean))], [choices]);
+  const currentChoice = choices.find((c) => c.value === model?.currentValue);
+  const currentProvider = currentChoice ? providerOf(currentChoice) : "";
+  if (currentProvider && currentChoice) lastModel.current.set(currentProvider, currentChoice.value);
+  const pickProvider = (p: string) => {
+    if (!model || p === currentProvider) return;
+    const own = choices.filter((c) => providerOf(c) === p);
+    const remembered = own.find((c) => c.value === lastModel.current.get(p));
+    const target = remembered ?? own[0];
+    if (target) onModel(model.id, target.value);
+  };
+  const providerItems: MenuItem[] = [
+    { kind: "header", id: "h", label: "Provider" },
+    ...providers.map<MenuItem>((p) => ({ id: p, label: p, checked: p === currentProvider, onSelect: () => pickProvider(p) })),
+  ];
+  if (onProviders) {
+    providerItems.push(
+      { kind: "separator", id: "providers-sep" },
+      { id: "providers", label: "Add or manage providers…", icon: "plus", onSelect: onProviders },
+    );
+  }
+
   const currentMode = modes?.availableModes.find((m) => m.id === modes.currentModeId);
   const modeItems: MenuItem[] = [
     { kind: "header", id: "h", label: "Permission mode for this session" },
@@ -174,35 +211,16 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     })),
   ];
   const modelItems: MenuItem[] = model
-    ? model.options.flatMap<MenuItem>((o) =>
-        isGroup(o)
-          ? [
-              { kind: "header", id: `g-${o.group}`, label: o.name },
-              ...o.options.map<MenuItem>((x) => ({
-                id: `${o.group}-${x.value}`,
-                label: x.name,
-                description: x.description ?? undefined,
-                checked: x.value === model.currentValue,
-                onSelect: () => onModel(model.id, x.value),
-              })),
-            ]
-          : [
-              {
-                id: o.value,
-                label: o.name,
-                description: o.description ?? undefined,
-                checked: o.value === model.currentValue,
-                onSelect: () => onModel(model.id, o.value),
-              },
-            ],
-      )
+    ? choices
+        .filter((x) => !currentProvider || providerOf(x) === currentProvider)
+        .map<MenuItem>((x) => ({
+          id: x.value,
+          label: x.name,
+          description: x.description ?? undefined,
+          checked: x.value === model.currentValue,
+          onSelect: () => onModel(model.id, x.value),
+        }))
     : [];
-  if (onProviders) {
-    modelItems.push(
-      { kind: "separator", id: "providers-sep" },
-      { id: "providers", label: "Connect a provider…", icon: "plus", onSelect: onProviders },
-    );
-  }
 
   const sendHint = sendKey === "enter" ? "Return to send · Shift+Return for a new line" : `${MOD}Return to send`;
 
@@ -271,6 +289,22 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
         ) : null}
         {model ? (
           <button
+            ref={providerBtn}
+            className="chip-btn"
+            onClick={() => setMenu(menu === "provider" ? null : "provider")}
+            aria-haspopup="menu"
+            aria-expanded={menu === "provider"}
+            aria-label="Provider"
+            disabled={disabled}
+            title="Provider for this session"
+          >
+            <Icon name="globe" size={13} />
+            <span className="truncate chip-model">{currentProvider || "provider"}</span>
+            <Icon name="chevronDown" size={11} />
+          </button>
+        ) : null}
+        {model ? (
+          <button
             ref={modelBtn}
             className="chip-btn"
             onClick={() => setMenu(menu === "model" ? null : "model")}
@@ -307,6 +341,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
           footer="Applies to this session only. The project default does not change."
         />
       ) : null}
+      {menu === "provider" ? <Menu anchor={providerBtn.current} items={providerItems} onClose={() => setMenu(null)} placement="above" label="Provider" width={260} /> : null}
       {menu === "model" ? <Menu anchor={modelBtn.current} items={modelItems} onClose={() => setMenu(null)} placement="above" label="Model" width={300} /> : null}
     </div>
   );

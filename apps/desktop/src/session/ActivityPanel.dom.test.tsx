@@ -70,7 +70,7 @@ const outputCalls = () => calls.filter((c) => c.method === "_keryx/tasks/output"
 interface PanelOver {
   tasks?: TaskInfo[];
   subagents?: Subagent[];
-  tab?: "subagents" | "tasks";
+  tab?: "subagents" | "tasks" | "schedules";
   onRefreshTasks?: () => void;
   extensions?: string[];
 }
@@ -298,4 +298,110 @@ test("a result card in the parent transcript is collapsed, says who returned, an
   expect(card.querySelector("summary")!.textContent).toContain("turn 2");
   expect(card.querySelector(".delegate-card-body")!.textContent).toBe("Done.\n<b>not markup</b>");
   expect(card.querySelector("b")).toBeNull();
+});
+
+// ---- schedules ---------------------------------------------------------------------------------
+
+const SCHEDULES_VIEW = {
+  title: "Schedules",
+  rows: [
+    {
+      id: "nightly",
+      label: "nightly",
+      status: "active",
+      detail: "local schedule · every night at 02:00\nnext in 3h · last ok 1d ago",
+      actions: [
+        { label: "Pause", command: "/schedules pause nightly" },
+        { label: "Run now", command: "/schedules run nightly", confirm: "Run nightly now?" },
+        { label: "Delete", command: "/schedules delete nightly", confirm: "Delete schedule nightly?" },
+      ],
+    },
+    { id: "old", label: "old", status: "paused", detail: "local schedule · hourly\nnext paused · last failed", actions: [{ label: "Resume", command: "/schedules resume old" }] },
+  ],
+};
+const FORM_VIEW = {
+  title: "Schedule",
+  body: "usage",
+  form: { submit: "/schedule --name {name}", submitLabel: "Create", fields: [{ id: "name", label: "Name", kind: "text", required: true }] },
+};
+const COMMAND_EXT = [...EXT, "_keryx/command"];
+const commandLines = () => calls.filter((c) => c.method === "_keryx/command").map((c) => `${c.params.name} ${c.params.args}`.trim());
+const setValue = (el: HTMLInputElement, value: string) =>
+  act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(el, value);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+const keryx = (text: string, k: Record<string, unknown> = {}) => ({ text, _meta: { keryx: k } });
+const schedulesHandler = () => {
+  handler = (method, params) => {
+    if (method !== "_keryx/command") return {};
+    if (params.name === "schedules" && params.args === "") return keryx("", { view: SCHEDULES_VIEW });
+    if (params.name === "schedule" && params.args === "") return keryx("", { view: FORM_VIEW });
+    if (params.name === "schedule" && !String(params.args).startsWith("confirmed")) {
+      return keryx("draft", { confirmAction: { label: "Confirm", confirm: "cadence: hourly", command: `/schedule confirmed ${params.args}` } });
+    }
+    return keryx("done");
+  };
+};
+
+test("the Schedules tab is hidden unless _keryx/command is advertised", async () => {
+  await renderPanel({ tab: "schedules" });
+  expect(Array.from(document.querySelectorAll('[role="tab"]')).map((t) => t.textContent)).not.toContain("Schedules");
+  await renderPanel({ tab: "schedules", extensions: COMMAND_EXT });
+  expect(Array.from(document.querySelectorAll('[role="tab"]')).map((t) => t.textContent)).toContain("Schedules");
+});
+
+test("the Schedules tab lists the /schedules view rows with cadence, next run, last outcome and paused state", async () => {
+  schedulesHandler();
+  await renderPanel({ tab: "schedules", extensions: COMMAND_EXT });
+  await wait(0);
+  expect(commandLines()).toEqual(["schedules"]);
+  const rows = Array.from(document.querySelectorAll("[data-schedule]"));
+  expect(rows.map((r) => r.getAttribute("data-schedule"))).toEqual(["nightly", "old"]);
+  expect(rows[0]!.textContent).toContain("every night at 02:00");
+  expect(rows[0]!.textContent).toContain("next in 3h");
+  expect(rows[0]!.textContent).toContain("last ok 1d ago");
+  expect(rows[1]!.querySelector(".badge-warn")!.textContent).toBe("paused");
+});
+
+test("a plain action sends its command and re-lists; run and delete confirm first and Cancel sends nothing", async () => {
+  schedulesHandler();
+  await renderPanel({ tab: "schedules", extensions: COMMAND_EXT });
+  await wait(0);
+  await click(button("Resume"));
+  await wait(0);
+  expect(commandLines()).toEqual(["schedules", "schedules resume old", "schedules"]);
+
+  calls = [];
+  await click(button("Delete"));
+  expect(document.querySelector('[role="dialog"]')!.textContent).toContain("Delete schedule nightly?");
+  await click(button("Cancel"));
+  expect(commandLines()).toEqual([]);
+  await click(button("Run now"));
+  expect(document.querySelector('[role="dialog"]')!.textContent).toContain("Run nightly now?");
+  await click(Array.from(document.querySelectorAll('[role="dialog"] button')).find((b) => b.textContent === "Run now")!);
+  await wait(0);
+  expect(commandLines()).toEqual(["schedules run nightly", "schedules"]);
+});
+
+test("Add schedule shows the /schedule form; Create asks once with the draft card and Confirm sends the confirmed line", async () => {
+  schedulesHandler();
+  await renderPanel({ tab: "schedules", extensions: COMMAND_EXT });
+  await wait(0);
+  await click(button("Add schedule"));
+  await wait(0);
+  expect(document.querySelector("[data-schedules-form]")).not.toBeNull();
+  const create = document.querySelector('button[type="submit"]') as HTMLButtonElement;
+  expect(create.textContent).toBe("Create");
+  await setValue(document.querySelector("[data-schedules-form] input") as HTMLInputElement, "check");
+  calls = [];
+  await click(document.querySelector('button[type="submit"]')!);
+  await wait(0);
+  expect(commandLines()).toEqual(["schedule --name check"]);
+  expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1);
+  expect(document.querySelector('[role="dialog"]')!.textContent).toContain("cadence: hourly");
+  await click(button("Confirm"));
+  await wait(0);
+  expect(commandLines()).toEqual(["schedule --name check", "schedule confirmed --name check", "schedules"]);
+  expect(document.querySelector("[data-schedules-form]")).toBeNull();
 });

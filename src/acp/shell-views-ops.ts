@@ -90,7 +90,11 @@ export async function runGovernance(host: ShellCommandHost, args: string): Promi
 function triggerRunConfirm(item: TriggerEntryView): string {
   const { action: act } = item.entry;
   const dispatch = act.kind === "flow-next" ? act.dispatch : act.kind === "agent-task" ? act.dispatch : undefined;
-  const posture = dispatch === undefined ? "" : ` It dispatches ${dispatch.provider}/${dispatch.model} with a $${dispatch.ceilingUsd} ceiling.`;
+  const mode = act.kind === "agent-task" ? ` in permission mode ${act.dispatch.permissionMode}` : "";
+  const posture =
+    dispatch === undefined
+      ? ""
+      : ` It dispatches ${dispatch.provider}/${dispatch.model}${mode}${dispatch.ceilingUsd === undefined ? "" : ` (ceiling $${dispatch.ceilingUsd})`}.`;
   return `Run ${item.entry.name} now (keryx trigger run ${item.entry.name})?${posture}`;
 }
 
@@ -158,8 +162,8 @@ const isLocalSchedule = (item: TriggerEntryView): boolean => item.entry.source =
 export function scheduleActions(item: TriggerEntryView): ShellViewAction[] {
   const name = item.entry.name;
   const { action: act } = item.entry;
-  const ceiling = act.kind === "agent-task" ? ` Each run may spend up to $${act.dispatch.ceilingUsd}.` : "";
-  const run = action("Run now", `/schedules run ${name}`, `Run ${name} now (keryx trigger run --schedule ${name})?${ceiling}`);
+  const posture = act.kind === "agent-task" ? ` Permission mode ${act.dispatch.permissionMode}; its cost is reported, not limited.` : "";
+  const run = action("Run now", `/schedules run ${name}`, `Run ${name} now (keryx trigger run --schedule ${name})?${posture}`);
   if (!item.entry.enabled && !isLocalSchedule(item)) return [];
   if (!isLocalSchedule(item)) return [run];
   return [
@@ -167,6 +171,12 @@ export function scheduleActions(item: TriggerEntryView): ShellViewAction[] {
     ...(item.entry.enabled ? [run] : []),
     action("Delete", `/schedules delete ${name}`, `Delete schedule ${name}? This uninstalls its timer and removes the entry.`),
   ];
+}
+
+/** ` · mode trust` for a local agent-task schedule: the permission mode its unattended runs use. */
+function scheduleModeSuffix(item: TriggerEntryView): string {
+  const act = item.entry.action;
+  return act.kind === "agent-task" ? ` · mode ${act.dispatch.permissionMode}` : "";
 }
 
 async function schedulesView(host: ShellCommandHost): Promise<ShellView> {
@@ -177,7 +187,7 @@ async function schedulesView(host: ShellCommandHost): Promise<ShellView> {
     const next = item.entry.enabled && cron.length > 0 ? formatNextRun(cron, now) : "paused";
     return viewRow(item.entry.name, item.entry.name, {
       status: item.entry.enabled ? "active" : "paused",
-      detail: `${isLocalSchedule(item) ? "local schedule" : "declared in triggers.json (read-only)"} · ${describeFire(item.entry.fire)}\nnext ${next} · last ${formatLastOutcome(latestOutcome(item), now)}`,
+      detail: `${isLocalSchedule(item) ? "local schedule" : "declared in triggers.json (read-only)"} · ${describeFire(item.entry.fire)}${scheduleModeSuffix(item)}\nnext ${next} · last ${formatLastOutcome(latestOutcome(item), now)}`,
       actions: scheduleActions(item),
     });
   });
@@ -254,11 +264,10 @@ export async function runSchedule(host: ShellCommandHost, args: string): Promise
     return refusal(`/schedule: ${errorText(error)}`);
   }
   if (card === undefined) return refusal(`${lines.join("\n")}\n`);
-  return viewOutcome({
-    title: "Schedule: review before creating",
-    body: card.join("\n"),
-    rows: [viewRow("create", "Create this schedule", { actions: [action("Create", `/schedule confirmed ${shellLine.line}`, card.join("\n"))] })],
-  });
+  const command = `/schedule confirmed ${shellLine.line}`;
+  const confirm = card.join("\n");
+  // The card is the question: a client that cannot ask reads the text and runs `command` itself.
+  return { text: `${confirm}\n\nNothing is created yet. To create it, run:\n${command}\n`, confirmAction: { label: "Confirm", confirm, command } };
 }
 
 // ---------------------------------------------------------------------------

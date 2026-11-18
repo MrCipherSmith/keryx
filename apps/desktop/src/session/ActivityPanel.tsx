@@ -4,8 +4,10 @@ import { Icon } from "../components/Icon";
 import { Markdown } from "../components/Markdown";
 import { Dialog, Spinner } from "../components/ui";
 import { runningSubagents, statusLabel, type Subagent } from "./activity";
+import { SchedulesTab } from "./SchedulesTab";
+import { COMMAND_METHOD } from "../acp/commands";
 
-export type ActivityTab = "subagents" | "tasks";
+export type ActivityTab = "subagents" | "tasks" | "schedules";
 
 export interface ActivityApi {
   request<T>(method: string, params?: unknown): Promise<T>;
@@ -34,6 +36,7 @@ export function ActivityPanel({ sessionId, subagents, tasks, api, tab, onTab, su
   const runningTasks = tasks.filter(isRunning).length;
   const runningAgents = runningSubagents(subagents);
   const hasTasks = supportsTasks(api.extensions);
+  const hasSchedules = api.extensions.includes(COMMAND_METHOD);
   return (
     <aside className="activity-panel" aria-label="Activity">
       <div className="activity-head">
@@ -48,6 +51,11 @@ export function ActivityPanel({ sessionId, subagents, tasks, api, tab, onTab, su
               {runningTasks > 0 ? <span className="tab-count" title="Running">{runningTasks}</span> : null}
             </button>
           ) : null}
+          {hasSchedules ? (
+            <button className="tab" role="tab" aria-selected={tab === "schedules"} onClick={() => onTab("schedules")}>
+              Schedules
+            </button>
+          ) : null}
         </div>
         <button className="icon-btn icon-btn-sm" onClick={onClose} aria-label="Hide activity" title="Hide activity">
           <Icon name="x" size={13} />
@@ -56,6 +64,8 @@ export function ActivityPanel({ sessionId, subagents, tasks, api, tab, onTab, su
       <div className="activity-body">
         {tab === "tasks" && hasTasks ? (
           <TasksTab key={sessionId} sessionId={sessionId} tasks={tasks} api={api} onRefresh={onRefreshTasks} pollMs={pollMs} />
+        ) : tab === "schedules" && hasSchedules ? (
+          <SchedulesTab key={sessionId} sessionId={sessionId} api={api} />
         ) : (
           <SubagentsTab key={sessionId} subagents={subagents} selected={subagentId} onSelect={onSubagent} />
         )}

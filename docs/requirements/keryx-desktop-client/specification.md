@@ -253,11 +253,32 @@ number, `min`, `time`, `pattern`) and shows the message under the field; this is
 convenience only, keryx still validates the command and a refusal still shows
 inline. `/schedule` is the model: its cadence is a `Repeat` choice (minutes /
 hours / daily / weekdays / cron) with dependent fields whose values come from
-the shell's own cadence rule, its provider choice lists only connected
-providers the schedule's usage-reporting rule accepts, and its rates are two
-number fields. The form submits form-only flags (`--repeat --minutes --hours
---at --cron --rate-in --rate-out`) that `keryx acp` converts to the shell's
-`--every "<cadence>"` and `--rates in,out` before the shell's parser runs.
+the shell's own cadence rule, its provider choice lists every connected
+provider (a provider that reports no token usage is allowed: its runs report
+"cost unknown"), its **Permission mode** is a required `choice` (ask / trust /
+auto, default trust) whose option labels carry a one-line hint each (an
+unattended `ask` denies every command that needs approval, because nobody
+answers), and its rates and ceiling are optional number fields (rates stay
+prefilled from the model's known price; both only feed the run's report).
+*Owner decision 2026-11-18: a schedule's cost is reported, never a gate. No
+reservation, ceiling or usage rule refuses a draft, refuses a tick or aborts a
+running tick; a ceiling is informational ("over the ceiling" in the report).*
+The form submits form-only flags (`--repeat --minutes --hours --at --cron
+--rate-in --rate-out`) that `keryx acp` converts to the shell's `--every
+"<cadence>"` and `--rates in,out` before the shell's parser runs; an empty
+optional field is dropped, never sent.
+
+*Submit label and draft confirmation.* A form may carry `submitLabel` (the
+submit button's text; the client says "Submit" when absent; `/schedule` says
+"Create"). A result may carry `_meta.keryx.confirmAction = { label, confirm,
+command }`: a draft the user must confirm, meaning "ask now, then run
+`command`". The client opens one confirmation dialog at once, showing `confirm`
+with `label` on its button, instead of rendering a Create button; Confirm sends
+`command` (the exact `/schedule confirmed ...` line, in place of the form's
+card), Cancel sends nothing and leaves the form as it was. The result's `text`
+carries the same card plus the line to run, so an editor or a client without
+the dialog reads a complete answer. `/schedule <flags>` drafts this way and
+writes nothing; the two user steps are Create (the form) and Confirm.
 
 `/queue` and `/delegate`: while a turn runs the desktop holds the composer's
 queued prompts itself (one queue per session, sent in order when the turn
@@ -551,16 +572,38 @@ version checks and the flows parsers and argv builder.
   flight, keryx may ask for approval or an answer (`session/request_permission`,
   `_keryx/ask_user`, for example `/delegate`); the window raises that dialog
   for the session the command runs in, the same as during a turn.
-- Providers dialog (`/connect`, also from the model picker): Connected and
+- Provider selector (composer, before the model chip): lists the providers of
+  the session's model option (`<provider>/<model>` values), so it always matches
+  what the session can switch to. Choosing one narrows the model menu to that
+  provider and switches the session to the model that provider last ran in this
+  window, else its first model (`session/set_config_option`); a
+  `config_option_update` after connect or disconnect refreshes it. The last item
+  is "Add or manage providers…", which opens the Providers dialog (`/connect`);
+  a single provider is still listed so that item stays reachable.
+- Providers dialog (`/connect`, also from the provider selector): Connected and
   Add tabs, Test, Disconnect, API-key field (password input), base URL,
   custom provider form, device-code panel (code, Copy, Open browser, Cancel).
-- Activity panel (right side, collapsible) with two tabs:
+- Command card tones: a successful command reads as neutral (an ok-toned
+  command icon, normal border), a command keryx refused as a warning (warn
+  border, `refused` badge, warn notice), and a failed request as an error
+  (danger border, `error` badge, error notice). Success never uses the warn or
+  danger tokens.
+- Activity panel (right side, collapsible) with three tabs:
   - Subagents: one row per subagent (label, status, detail, model), linked
     from the `spawn_subagent` tool card; selecting one shows its task and
     transcript (text, reasoning, tool, result entries).
   - Tasks: one row per task (command, status, phase, elapsed, exit code);
     selecting one shows its output (polled with `_keryx/tasks/output` while
     shown and running); Kill with a confirmation.
+  - Schedules (shown only when `_keryx/command` is advertised): the project's
+    schedules from the `/schedules` view, one row per schedule with name,
+    cadence, next run, last outcome (the row's detail) and an active/paused
+    badge. Row actions are the view's own: Pause or Resume, Run now and Delete,
+    the last two behind their `confirm` dialog; the list is read again after any
+    action and whenever the tab opens. "Add schedule" opens the `/schedule` view's
+    form in the tab (submit button "Create"); submitting asks once with the draft
+    card (`confirmAction`, button "Confirm"), and a yes sends the confirmed line
+    and returns to the list.
   - Badges for running subagents and tasks per session in the sidebar.
   - Sidebar tree (owner decision 2026-11-18): every subagent of a held session,
     native or external (`/delegate`), is a child row one level under its

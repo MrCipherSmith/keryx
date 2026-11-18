@@ -16,7 +16,7 @@ import { createInterface } from "node:readline/promises";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { runTriggerOnce } from "./trigger";
-import { providerHasUsableCredential, providerReportsUsage as dispatchProviderReportsUsage } from "./trigger-dispatch";
+import { providerHasUsableCredential } from "./trigger-dispatch";
 import { readTriggerRuns } from "../trigger/record";
 import type { ScheduleBackend, ScheduleHost } from "../trigger/install";
 import {
@@ -46,8 +46,6 @@ export interface ScheduleCommandDeps {
   readonly confirm?: (question: string) => Promise<boolean>;
   readonly resolveProgram?: DraftContext["resolveProgram"];
   readonly accountOf?: DraftContext["accountOf"];
-  /** Default: `providerReportsUsage` (`./trigger-dispatch`) — the same the dispatcher checks at run time. */
-  readonly providerReportsUsage?: DraftContext["providerReportsUsage"];
   /** Default: `providerHasUsableCredential` (`./trigger-dispatch`) — the same construction the dispatcher uses at run time. */
   readonly checkCredential?: DraftContext["checkCredential"];
   readonly cwd?: string;
@@ -111,14 +109,14 @@ const USAGE = `keryx schedule — scheduled agent tasks that run in the backgrou
 
 Usage:
   keryx schedule add --name <name> --every "<cadence>" --prompt "<task>" \\
-      --provider <p> --model <m> --rates <in>,<out> --ceiling <usd> \\
-      [--max-seconds 600] [--mode ask|trust] [--network off|full|allowlist] \\
+      --provider <p> --model <m> [--mode ask|trust|auto] [--rates <in>,<out>] [--ceiling <usd>] \\
+      [--max-seconds 600] [--network off|full|allowlist] \\
       [--domain example.com]... [--port 443]... [--tool <id>]... [--repo owner/name]... [--backend systemd|launchd|cron] [--yes]
   keryx schedule add --digest --name <name> --every "<cadence>" \\
-      --provider <p> --model <m> --rates <in>,<out> --ceiling <usd> \\
+      --provider <p> --model <m> [--rates <in>,<out>] [--ceiling <usd>] \\
       [--repo owner/name]... [--topic <name>] [--memory-mb 512] [--max-seconds 600] [--yes]
   keryx schedule add --review-pr <pull request URL> --name <name> --every "<cadence>" \\
-      --provider <p> --model <m> --rates <in>,<out> --ceiling <usd> \\
+      --provider <p> --model <m> [--rates <in>,<out>] [--ceiling <usd>] \\
       [--budget-minutes N] [--budget-tokens N] [--stall-minutes N] [--max-seconds N] [--yes]
   keryx schedule list
   keryx schedule show <name>
@@ -128,9 +126,17 @@ Usage:
   keryx schedule remove <name> [--yes]
 
 "add" prints a confirmation card: the cadence and next runs, the prompt, the runner and its
-budget, the network mode, every granted tool with the binary and account it acts as, and
+permission mode, the network mode, every granted tool with the binary and account it acts as, and
 exactly what will be installed. Nothing is written until you confirm: y at the prompt, or
 --yes. Without a TTY and without --yes it refuses.
+
+Permission mode (--mode, default ask): what the unattended run may do. Nobody is there to answer a
+prompt, so "ask" means every command that would need approval is DENIED (read-only calls and granted
+tools still run); "trust" runs non-destructive commands in the sandbox; "auto" runs every command in
+the sandbox except those that touch credentials or hit another hard floor.
+Cost is REPORTED, never a limit. --rates (USD per million tokens in,out) only prices each run's report; without
+it, or when the provider reports no token usage, the report says "cost unknown". --ceiling is
+informational: a run over it is reported "over the ceiling" and is never stopped or refused.
 
 Cadence: a 5-field cron expression, "every N hours", "every N minutes", "hourly",
 "daily at HH:MM", "weekdays at HH:MM", "every monday at HH:MM".
@@ -149,8 +155,8 @@ MrCipherSmith/keryx) through read-only gh tools, plus the flow board's product i
 sends what changed, what is stuck and what needs your decision to Telegram: into this
 project's remote session topic, or the "Digest" topic (--topic renames it) when there is
 none. It needs no --prompt. \`keryx serve\` runs it; there is no OS timer, so keep serve
-running. The first run is a baseline and reports no changes. --ceiling, --max-seconds and
---memory-mb are its per-run limits (the ceiling only covers the optional model summary).
+running. The first run is a baseline and reports no changes. --max-seconds and --memory-mb are
+its per-run limits; --ceiling is informational (it only relates to the optional model summary).
 
 "add --review-pr" schedules an autonomous review of one pull request: each fire runs
 \`keryx review run --autonomous\` (profile review-autonomous) with nobody at the keyboard. A
@@ -236,14 +242,15 @@ export function requestFromArgs(args: readonly string[]): ScheduleRequest {
   const reviewRef = flag(args, "--review-pr");
   if (args.includes("--review-pr") && reviewRef === undefined) throw new Error("--review-pr needs a pull request URL");
   if (isDigest && reviewRef !== undefined) throw new Error("--digest and --review-pr cannot be combined");
-  const missing = ["--name", ...(isDigest || reviewRef !== undefined ? [] : ["--prompt"]), "--provider", "--model", "--rates", "--ceiling"].filter((f) => flag(args, f) === undefined);
+  const missing = ["--name", ...(isDigest || reviewRef !== undefined ? [] : ["--prompt"]), "--provider", "--model"].filter((f) => flag(args, f) === undefined);
   const cadence = flag(args, "--every") ?? flag(args, "--cron");
   if (cadence === undefined) missing.push("--every (or --cron)");
   if (missing.length > 0) throw new Error(`missing ${missing.join(", ")} — see \`keryx schedule --help\``);
-  const [inRate, outRate] = flag(args, "--rates")!.split(",").map(Number);
-  if (!(Number.isFinite(inRate) && Number.isFinite(outRate))) throw new Error('--rates must be "<in>,<out>" USD per million tokens');
+  const ratesRaw = flag(args, "--rates");
+  const [inRate, outRate] = ratesRaw === undefined ? [undefined, undefined] : ratesRaw.split(",").map(Number);
+  if (ratesRaw !== undefined && !(Number.isFinite(inRate) && Number.isFinite(outRate))) throw new Error('--rates must be "<in>,<out>" USD per million tokens');
   const mode = flag(args, "--mode");
-  if (mode !== undefined && mode !== "ask" && mode !== "trust") throw new Error('--mode must be "ask" or "trust" ("auto" is never allowed unattended)');
+  if (mode !== undefined && mode !== "ask" && mode !== "trust" && mode !== "auto") throw new Error('--mode must be "ask", "trust" or "auto"');
   const network = flag(args, "--network");
   if (network !== undefined && network !== "off" && network !== "full" && network !== "allowlist") {
     throw new Error('--network must be "off", "full" or "allowlist"');
@@ -256,6 +263,7 @@ export function requestFromArgs(args: readonly string[]): ScheduleRequest {
   if (ports.some((p) => !Number.isInteger(p) || p < 1 || p > 65535)) {
     throw new Error("--port must be an integer 1-65535 (repeatable, or comma-separated)");
   }
+  const ceilingUsd = numberFlag(args, "--ceiling");
   const maxSeconds = numberFlag(args, "--max-seconds");
   const memoryMb = numberFlag(args, "--memory-mb");
   const topic = flag(args, "--topic");
@@ -283,8 +291,8 @@ export function requestFromArgs(args: readonly string[]): ScheduleRequest {
     ...(isDigest ? { digest: { ...(topic !== undefined ? { topic } : {}), ...(memoryMb !== undefined ? { memoryLimitMb: memoryMb } : {}) } } : {}),
     provider: flag(args, "--provider")!,
     model: flag(args, "--model")!,
-    rates: { inputUsdPerMTok: inRate!, outputUsdPerMTok: outRate! },
-    ceilingUsd: numberFlag(args, "--ceiling")!,
+    ...(inRate !== undefined && outRate !== undefined ? { rates: { inputUsdPerMTok: inRate, outputUsdPerMTok: outRate } } : {}),
+    ...(ceilingUsd !== undefined ? { ceilingUsd } : {}),
     ...(maxSeconds !== undefined ? { maxSeconds } : {}),
     ...(mode !== undefined ? { permissionMode: mode } : {}),
     ...(network !== undefined ? { network } : {}),
@@ -301,7 +309,6 @@ async function addSubcommand(cwd: string, args: string[], deps: ScheduleCommandD
   const drafted = await draftSchedule(request, {
     projectRoot: cwd,
     host,
-    providerReportsUsage: deps.providerReportsUsage ?? dispatchProviderReportsUsage,
     checkCredential: deps.checkCredential ?? defaultCheckCredential,
     ...(deps.now !== undefined ? { now: deps.now } : {}),
     ...(deps.resolveProgram !== undefined ? { resolveProgram: deps.resolveProgram } : {}),
@@ -366,7 +373,7 @@ async function showSubcommand(cwd: string, name: string | undefined, host: Sched
   const status = await digestStatus(cwd, row);
   if (status !== undefined) for (const line of digestStatusLines(status)) console.log(`    ${line}`);
   else console.log(`    prompt: ${a.prompt}`);
-  console.log(`    runner: ${a.dispatch.provider}/${a.dispatch.model}, mode ${a.dispatch.permissionMode}, ceiling $${a.dispatch.ceilingUsd}, max ${a.dispatch.maxSeconds}s`);
+  console.log(`    runner: ${a.dispatch.provider}/${a.dispatch.model}, permission mode ${a.dispatch.permissionMode}, ${a.dispatch.ceilingUsd === undefined ? "no ceiling" : `ceiling $${a.dispatch.ceilingUsd} (informational)`}, max ${a.dispatch.maxSeconds}s`);
   console.log(
     `    network: ${a.grants.network}${a.grants.network === "allowlist" ? ` [${a.grants.domains.join(", ")}] port ${a.grants.ports !== undefined && a.grants.ports.length > 0 ? a.grants.ports.join("/") : "443/80 default"}` : ""}; ` +
       `granted tools: ${a.grants.tools.join(", ") || "none"}; repos: ${a.grants.repos.join(", ") || "none"}`,

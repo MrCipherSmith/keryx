@@ -12,11 +12,11 @@ export function CommandCard({ item, onRun }: { item: CommandItem; onRun?: RunCom
   const [open, setOpen] = useState(true);
   const hasBody = item.text.trim() !== "" || item.view !== null;
   return (
-    <div className={`command-card${item.refused ? " is-refused" : ""}${open ? " is-open" : ""}`}>
+    <div className={`command-card ${item.error ? "is-error" : item.refused ? "is-refused" : "is-ok"}${open ? " is-open" : ""}`}>
       <button className="command-head" onClick={() => setOpen((o) => !o)} aria-expanded={hasBody ? open : undefined} disabled={!hasBody}>
         <Icon name="command" size={13} />
         <span className="command-line mono truncate">{item.line}</span>
-        {item.refused ? <span className="badge badge-warn">refused</span> : null}
+        {item.error ? <span className="badge badge-danger">error</span> : item.refused ? <span className="badge badge-warn">refused</span> : null}
         {hasBody ? <Icon name={open ? "chevronDown" : "chevronRight"} size={13} /> : null}
       </button>
       {open && hasBody ? (
@@ -24,7 +24,7 @@ export function CommandCard({ item, onRun }: { item: CommandItem; onRun?: RunCom
           {/* A view carries the same content as `text` (keryx's plain rendering for editors); show one. */}
           {item.text.trim() !== "" && (item.view === null || item.refused) ? (
             item.refused ? (
-              <div className="notice notice-warn" role="status">
+              <div className={`notice ${item.error ? "notice-error" : "notice-warn"}`} role={item.error ? "alert" : "status"}>
                 <Icon name="alert" size={14} />
                 <span>{item.text}</span>
               </div>
@@ -114,7 +114,7 @@ export function CommandViewPanel({ view, itemId, onRun }: { view: CommandView; i
   );
 }
 
-function ViewFormPanel({ form, disabled, onSubmit }: { form: NonNullable<CommandView["form"]>; disabled: boolean; onSubmit: (line: string, display: string) => void }) {
+export function ViewFormPanel({ form, disabled, onSubmit }: { form: NonNullable<CommandView["form"]>; disabled: boolean; onSubmit: (line: string, display: string) => void }) {
   const [values, setValues] = useState<FieldValues>(() => initialValues(form.fields));
   const set = (id: string, v: string | boolean) => setValues((x) => ({ ...x, [id]: v }));
   const missing = missingRequired(form.fields, values);

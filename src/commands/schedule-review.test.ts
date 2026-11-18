@@ -326,8 +326,7 @@ describe("L4: installer details", () => {
 // --- flow 302: draftSchedule's own (core-zone) provider/credential checks -----------------
 // The CLI path (`schedule.test.ts`) and the tool path (`schedule-tools.test.ts`) cover the
 // production wiring; these exercise `draftSchedule` itself — no adapter in between — so its
-// DEFAULT `providerReportsUsage` (the three native adapters this core zone can name without
-// an adapter import) and its opt-in `checkCredential` are pinned directly.
+// opt-in `checkCredential` is pinned directly.
 
 describe("flow 302: draftSchedule's own provider/credential checks", () => {
   // A fake, non-real scheduler backend: `planInstall` runs only once the two new checks
@@ -335,25 +334,12 @@ describe("flow 302: draftSchedule's own provider/credential checks", () => {
   // crontab under `bun test` with no fake host injected (see `src/trigger/install.ts`).
   const fakeHost: ScheduleHost = { backend: "cron", run: async () => ({ code: 0, stdout: "", stderr: "" }) };
 
-  test("with no ctx override, the default providerReportsUsage accepts only anthropic/openai/gemini", async () => {
-    for (const provider of ["anthropic", "openai", "gemini"]) {
+  // Owner decision 2026-11-18: cost is reported, never a gate. No provider is refused for not reporting usage.
+  test("draftSchedule accepts any provider name: a usage-unknown one is not refused", async () => {
+    for (const provider of ["anthropic", "openai", "gemini", "grok", "ollama"]) {
       const drafted = await draftSchedule({ ...request(), provider }, { projectRoot: root, host: fakeHost, resolveProgram: () => fakeGh(), accountOf: async () => "me" });
       expect(drafted.ok).toBe(true);
     }
-    const drafted = await draftSchedule(
-      { ...request(), provider: "grok" },
-      { projectRoot: root, host: fakeHost, resolveProgram: () => fakeGh(), accountOf: async () => "me" },
-    );
-    expect(drafted.ok).toBe(false);
-    if (!drafted.ok) expect(drafted.problems.join(" ")).toContain("not known to report token usage");
-  });
-
-  test("an injected providerReportsUsage can widen the default (e.g. a registry provider with streamUsage)", async () => {
-    const drafted = await draftSchedule(
-      { ...request(), provider: "grok" },
-      { projectRoot: root, host: fakeHost, resolveProgram: () => fakeGh(), accountOf: async () => "me", providerReportsUsage: (p) => p === "grok" },
-    );
-    expect(drafted.ok).toBe(true);
   });
 
   test("with no ctx.checkCredential injected, no credential check runs", async () => {

@@ -391,7 +391,10 @@ button { font: inherit; }
 .queue-chip-n { font: 600 11px var(--mono); color: var(--fg-subtle); }
 .queue-chip-text { max-width: 280px; }
 .command-card { margin: var(--sp-2) 0; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--bg-surface); }
-.command-card.is-refused { border-color: transparent; background: transparent; }
+.command-card.is-ok { border-color: var(--border); }
+.command-card.is-ok .command-head > .icon:first-child { color: var(--ok); }
+.command-card.is-refused { border-color: color-mix(in srgb, var(--warn) 30%, transparent); background: transparent; }
+.command-card.is-error { border-color: color-mix(in srgb, var(--danger) 30%, transparent); background: transparent; }
 .command-head { display: flex; align-items: center; gap: var(--sp-2); width: 100%; padding: 6px var(--sp-3); font-size: var(--fs-sm); color: var(--fg-muted); text-align: left; }
 .command-head:disabled { cursor: default; }
 .command-line { flex: 1; min-width: 0; color: var(--fg); }

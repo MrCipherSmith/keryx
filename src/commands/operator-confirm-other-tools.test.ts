@@ -676,7 +676,6 @@ describe("schedule tools", () => {
         host: host(),
         now: () => NOW,
         accountOf: async () => "someone",
-        providerReportsUsage: () => true,
         checkCredential: async () => ({ ok: true }),
       },
     );

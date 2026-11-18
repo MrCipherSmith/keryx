@@ -13,6 +13,7 @@ const COMMANDS = [
   cmd("goal", "text", "refuse"),
   cmd("delegate"),
   cmd("schedules", "view"),
+  cmd("schedule", "view"),
   cmd("compact"),
   cmd("rewind", "text", "refuse"),
   cmd("new", "client", "refuse"),
@@ -166,7 +167,39 @@ describe("text and view commands", () => {
   test("an rpc error is shown as a refused card and keeps the draft", async () => {
     const r = rig({}, () => new Error("unknown command: tasks"));
     expect(await runCommandLine("/tasks", r.deps)).toBe(false);
-    expect(cards(r)[0]).toEqual({ kind: "command", id: 1, line: "/tasks", text: "unknown command: tasks", refused: true, view: null });
+    expect(cards(r)[0]).toEqual({ kind: "command", id: 1, line: "/tasks", text: "unknown command: tasks", refused: true, error: true, view: null });
+  });
+
+  test("a draft with confirmAction opens one confirmation and shows no card; Confirm runs the command in place of the form's card", async () => {
+    const asked: Array<{ label: string; confirm: string }> = [];
+    const confirmAction = { label: "Confirm", confirm: "cadence: every 4 hours", command: "/schedule confirmed --name a -- x" };
+    const r = rig({}, (_m, params) => ((params as { args: string }).args.startsWith("confirmed") ? { text: "stored" } : { text: "draft text", _meta: { keryx: { confirmAction } } }));
+    r.deps.ui.confirm = async (q) => (asked.push(q), true);
+    expect(await runCommandLine("/schedule --name a -- x", r.deps, { replaceId: 5 })).toBe(true);
+    expect(asked).toEqual([{ label: "Confirm", confirm: "cadence: every 4 hours" }]);
+    expect(r.calls.map((c) => (c.params as { args: string }).args)).toEqual(["--name a -- x", "confirmed --name a -- x"]);
+    expect(cards(r).map((c) => c.text)).toEqual(["stored"]);
+  });
+
+  test("Cancel on a confirmAction sends nothing and adds no card", async () => {
+    const confirmAction = { label: "Confirm", confirm: "card", command: "/schedule confirmed --name a -- x" };
+    const r = rig({}, () => ({ text: "draft text", _meta: { keryx: { confirmAction } } }));
+    r.deps.ui.confirm = async () => false;
+    expect(await runCommandLine("/schedule --name a -- x", r.deps)).toBe(false);
+    expect(r.calls).toHaveLength(1);
+    expect(cards(r)).toHaveLength(0);
+  });
+
+  test("without a confirm dialog (or with a command the app does not know) the text answer is the card", async () => {
+    const confirmAction = { label: "Confirm", confirm: "card", command: "/schedule confirmed --name a -- x" };
+    const r = rig({}, () => ({ text: "draft text", _meta: { keryx: { confirmAction } } }));
+    expect(await runCommandLine("/schedule --name a -- x", r.deps)).toBe(true);
+    expect(cards(r)[0]?.text).toBe("draft text");
+    const odd = rig({}, () => ({ text: "draft text", _meta: { keryx: { confirmAction: { ...confirmAction, command: "do something" } } } }));
+    odd.deps.ui.confirm = async () => true;
+    await runCommandLine("/schedule --name a -- x", odd.deps);
+    expect(odd.calls).toHaveLength(1);
+    expect(cards(odd)[0]?.text).toBe("draft text");
   });
 
   test("a view result is kept on the card and effects are applied", async () => {

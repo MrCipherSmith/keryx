@@ -245,7 +245,9 @@ async function runNowQuestion(cwd: string, name: string, schedule: boolean): Pro
     const found = (await loadTriggerLedgerView(cwd)).entries.find((item) => item.entry.name === name);
     const act = found?.entry.action;
     const dispatch = act === undefined ? undefined : act.kind === "flow-next" || act.kind === "agent-task" ? act.dispatch : undefined;
-    return dispatch === undefined ? base : `${base} It dispatches ${dispatch.provider}/${dispatch.model} with a $${dispatch.ceilingUsd} ceiling.`;
+    if (dispatch === undefined) return base;
+    const mode = act?.kind === "agent-task" ? ` in permission mode ${dispatch.permissionMode}` : "";
+    return `${base} It dispatches ${dispatch.provider}/${dispatch.model}${mode}${dispatch.ceilingUsd === undefined ? "" : ` (ceiling $${dispatch.ceilingUsd})`}.`;
   } catch {
     return base;
   }

@@ -3,7 +3,7 @@ import type { PlanEntry } from "../acp/types";
 import { formatTokens } from "../lib/format";
 import { setPrefs, usePrefs, MOD } from "../lib/prefs";
 import { Icon } from "../components/Icon";
-import { Kbd, Spinner } from "../components/ui";
+import { Dialog, Kbd, Spinner } from "../components/ui";
 import { Composer, type ComposerHandle } from "./Composer";
 import { ActivityPanel, type ActivityTab } from "./ActivityPanel";
 import { runningSubagents } from "./activity";
@@ -98,7 +98,25 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
     requestAnimationFrame(() => document.querySelector<HTMLElement>(".session-sidebar .session-item.is-current, .session-sidebar .session-item")?.focus());
   }, [narrow, prefs.sessionSidebar]);
 
+  // One confirmation at a time: a command answered with a draft to confirm (`confirmAction`).
+  const [ask, setAsk] = useState<{ label: string; confirm: string; resolve: (yes: boolean) => void } | null>(null);
+  const askRef = useRef(ask);
+  askRef.current = ask;
+  const confirm = useCallback(
+    (q: { label: string; confirm: string }) =>
+      new Promise<boolean>((resolve) => {
+        askRef.current?.resolve(false);
+        setAsk({ ...q, resolve });
+      }),
+    [],
+  );
+  const answer = (yes: boolean) => {
+    askRef.current?.resolve(yes);
+    setAsk(null);
+  };
+
   const ui: UiActions = {
+    confirm,
     focusSessions,
     fillComposer: fill,
     openProviders: onProviders,
@@ -301,6 +319,26 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
           <UsageFooter usage={state.usage} version={state.agentVersion} />
         </div>
       </section>
+      {ask ? (
+        <Dialog
+          title="Confirm"
+          icon="alert"
+          tone="warn"
+          onClose={() => answer(false)}
+          footer={
+            <>
+              <button className="btn" onClick={() => answer(false)}>
+                Cancel
+              </button>
+              <button className="btn btn-primary" data-autofocus onClick={() => answer(true)}>
+                {ask.label}
+              </button>
+            </>
+          }
+        >
+          <pre className="out-pre command-out">{ask.confirm}</pre>
+        </Dialog>
+      ) : null}
       {activity.open && state.sessionId ? (
         <ActivityPanel
           sessionId={state.sessionId}

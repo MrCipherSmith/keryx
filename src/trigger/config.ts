@@ -260,9 +260,17 @@ export interface TriggerDispatch {
   readonly model: string;
   /** `ask` (default): every non-read call is denied. `trust`: non-destructive calls run; the unattended floor still applies. */
   readonly permissionMode: UnattendedPermissionMode;
-  readonly rates: { readonly inputUsdPerMTok: number; readonly outputUsdPerMTok: number };
-  /** This trigger's own spend ceiling in USD, on top of the project-wide one. */
-  readonly ceilingUsd: number;
+  /**
+   * Required on a `flow-next` dispatch. On an `agent-task` (a schedule) it is optional and only
+   * used to REPORT a run's cost: owner decision 2026-11-18, cost is reported, never a gate.
+   */
+  readonly rates?: { readonly inputUsdPerMTok: number; readonly outputUsdPerMTok: number };
+  /**
+   * This trigger's own spend ceiling in USD, on top of the project-wide one. Required on a
+   * `flow-next` dispatch. On an `agent-task` it is optional and informational: a run over it is
+   * reported "over the ceiling" and never stopped or refused.
+   */
+  readonly ceilingUsd?: number;
   /** Wall-clock limit for one agent run. */
   readonly maxSeconds: number;
   /** A task whose attempt count has reached this is not dispatched again. */
@@ -273,8 +281,14 @@ export interface TriggerDispatch {
   readonly network: boolean;
 }
 
-export const UNATTENDED_PERMISSION_MODES = ["ask", "trust"] as const;
+/**
+ * The modes an unattended run may use. A `flow-next` dispatch (committed `triggers.json`) is limited to
+ * `FLOW_DISPATCH_PERMISSION_MODES`; a schedule (`agent-task`) may also choose `auto` (owner decision
+ * 2026-11-18). In an unattended run `ask` means DENY: nobody is there to answer.
+ */
+export const UNATTENDED_PERMISSION_MODES = ["ask", "trust", "auto"] as const;
 export type UnattendedPermissionMode = (typeof UNATTENDED_PERMISSION_MODES)[number];
+export const FLOW_DISPATCH_PERMISSION_MODES = ["ask", "trust"] as const;
 
 export const DEFAULT_DISPATCH_MAX_SECONDS = 1800;
 export const DEFAULT_DISPATCH_MAX_ATTEMPTS = 3;
@@ -450,12 +464,9 @@ function agentTaskProblems(raw: Record<string, unknown>): string[] {
     problems.push("action.prompt: at most 4000 characters");
   }
   if (raw.dispatch === undefined) {
-    problems.push(
-      "action.dispatch: required — {provider, model, rates, ceilingUsd}. An agent task always calls a model, so it " +
-        "always needs a priced runner and a ceiling.",
-    );
+    problems.push("action.dispatch: required — {provider, model}. An agent task always calls a model, so it needs a runner.");
   } else {
-    problems.push(...dispatchProblems(raw.dispatch));
+    problems.push(...dispatchProblems(raw.dispatch, true));
     const d = raw.dispatch as Record<string, unknown> | null;
     if (d !== null && typeof d === "object" && !Array.isArray(d)) {
       if (d.network !== undefined) {
@@ -576,7 +587,7 @@ function isNonNegativeFinite(value: unknown): value is number {
 }
 
 /** Flow 290: every problem with an `action.dispatch` block; empty means valid. */
-function dispatchProblems(value: unknown): string[] {
+function dispatchProblems(value: unknown, agentTask = false): string[] {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     return ["action.dispatch: must be an object"];
   }
@@ -588,42 +599,48 @@ function dispatchProblems(value: unknown): string[] {
   if (typeof raw.model !== "string" || raw.model.trim().length === 0) {
     problems.push("action.dispatch.model: required, non-empty string");
   }
+  const allowedModes: readonly string[] = agentTask ? UNATTENDED_PERMISSION_MODES : FLOW_DISPATCH_PERMISSION_MODES;
   if (raw.permissionMode !== undefined) {
-    if (raw.permissionMode === "auto") {
+    if (raw.permissionMode === "auto" && !agentTask) {
       problems.push(
-        'action.dispatch.permissionMode: "auto" is never allowed for an unattended run — nobody is there to see what it ' +
+        'action.dispatch.permissionMode: "auto" is never allowed for an unattended flow dispatch — nobody is there to see what it ' +
           'approves. Use "ask" (read-only in effect) or "trust" (non-destructive calls run; the unattended floor still applies).',
       );
-    } else if (
-      typeof raw.permissionMode !== "string" ||
-      !(UNATTENDED_PERMISSION_MODES as readonly string[]).includes(raw.permissionMode)
-    ) {
-      problems.push(`action.dispatch.permissionMode: must be one of ${UNATTENDED_PERMISSION_MODES.join(", ")}`);
+    } else if (typeof raw.permissionMode !== "string" || !allowedModes.includes(raw.permissionMode)) {
+      problems.push(`action.dispatch.permissionMode: must be one of ${allowedModes.join(", ")}`);
     }
   }
+  // A schedule's rates and ceiling are optional: cost is reported, never a gate (owner decision 2026-11-18).
   const rates = raw.rates;
   if (rates === undefined) {
-    problems.push(
-      "action.dispatch.rates: required — {inputUsdPerMTok, outputUsdPerMTok}. Without rates a run's cost cannot be " +
-        "priced, so no spend ceiling could ever stop it; an unpriced dispatch is refused.",
-    );
+    if (!agentTask) {
+      problems.push(
+        "action.dispatch.rates: required — {inputUsdPerMTok, outputUsdPerMTok}. Without rates a run's cost cannot be " +
+          "priced, so no spend ceiling could ever stop it; an unpriced dispatch is refused.",
+      );
+    }
   } else if (rates === null || typeof rates !== "object" || Array.isArray(rates)) {
     problems.push("action.dispatch.rates: must be an object {inputUsdPerMTok, outputUsdPerMTok}");
   } else {
     const r = rates as Record<string, unknown>;
     // Flow 290 T13 (AC14): a zero rate prices every run at $0, so neither
     // ceiling could ever stop it — the same hole as having no rates at all.
-    if (!(isNonNegativeFinite(r.inputUsdPerMTok) && r.inputUsdPerMTok > 0)) {
-      problems.push("action.dispatch.rates.inputUsdPerMTok: required, a positive number (USD per million input tokens) — a zero rate would make every run free to the ceiling");
+    // A schedule only reports cost, so a zero rate is harmless there.
+    const rateOk = (v: unknown): boolean => (agentTask ? isNonNegativeFinite(v) : isNonNegativeFinite(v) && v > 0);
+    const rateNote = agentTask ? "a non-negative number" : "a positive number — a zero rate would make every run free to the ceiling";
+    if (!rateOk(r.inputUsdPerMTok)) {
+      problems.push(`action.dispatch.rates.inputUsdPerMTok: required, ${rateNote} (USD per million input tokens)`);
     }
-    if (!(isNonNegativeFinite(r.outputUsdPerMTok) && r.outputUsdPerMTok > 0)) {
-      problems.push("action.dispatch.rates.outputUsdPerMTok: required, a positive number (USD per million output tokens) — a zero rate would make every run free to the ceiling");
+    if (!rateOk(r.outputUsdPerMTok)) {
+      problems.push(`action.dispatch.rates.outputUsdPerMTok: required, ${rateNote} (USD per million output tokens)`);
     }
   }
   if (raw.ceilingUsd === undefined) {
-    problems.push(
-      "action.dispatch.ceilingUsd: required — this trigger's own spend ceiling in USD. A dispatch without one is refused.",
-    );
+    if (!agentTask) {
+      problems.push(
+        "action.dispatch.ceilingUsd: required — this trigger's own spend ceiling in USD. A dispatch without one is refused.",
+      );
+    }
   } else if (!(isNonNegativeFinite(raw.ceilingUsd) && raw.ceilingUsd > 0)) {
     problems.push("action.dispatch.ceilingUsd: must be a positive number of USD");
   }
@@ -671,13 +688,13 @@ export function isLoopbackUrl(value: string): boolean {
 function normalizeAction(action: TriggerAction): TriggerAction {
   if (action.kind === "agent-task") return normalizeAgentTask(action);
   if (action.kind !== "flow-next" || action.dispatch === undefined) return action;
-  const raw = action.dispatch as Partial<TriggerDispatch> & Pick<TriggerDispatch, "provider" | "model" | "rates" | "ceilingUsd">;
+  const raw = action.dispatch as Partial<TriggerDispatch> & Pick<TriggerDispatch, "provider" | "model">;
   const dispatch: TriggerDispatch = {
     provider: raw.provider,
     model: raw.model,
     permissionMode: raw.permissionMode ?? "ask",
-    rates: { inputUsdPerMTok: raw.rates.inputUsdPerMTok, outputUsdPerMTok: raw.rates.outputUsdPerMTok },
-    ceilingUsd: raw.ceilingUsd,
+    ...(raw.rates !== undefined ? { rates: { inputUsdPerMTok: raw.rates.inputUsdPerMTok, outputUsdPerMTok: raw.rates.outputUsdPerMTok } } : {}),
+    ...(raw.ceilingUsd !== undefined ? { ceilingUsd: raw.ceilingUsd } : {}),
     maxSeconds: raw.maxSeconds ?? DEFAULT_DISPATCH_MAX_SECONDS,
     maxAttempts: raw.maxAttempts ?? DEFAULT_DISPATCH_MAX_ATTEMPTS,
     network: raw.network ?? false,
@@ -687,7 +704,7 @@ function normalizeAction(action: TriggerAction): TriggerAction {
 }
 
 function normalizeAgentTask(action: AgentTaskAction): AgentTaskAction {
-  const raw = action.dispatch as Partial<TriggerDispatch> & Pick<TriggerDispatch, "provider" | "model" | "rates" | "ceilingUsd">;
+  const raw = action.dispatch as Partial<TriggerDispatch> & Pick<TriggerDispatch, "provider" | "model">;
   const grants = (action.grants ?? {}) as Partial<AgentTaskGrants>;
   return {
     kind: "agent-task",
@@ -696,8 +713,8 @@ function normalizeAgentTask(action: AgentTaskAction): AgentTaskAction {
       provider: raw.provider,
       model: raw.model,
       permissionMode: raw.permissionMode ?? "ask",
-      rates: { inputUsdPerMTok: raw.rates.inputUsdPerMTok, outputUsdPerMTok: raw.rates.outputUsdPerMTok },
-      ceilingUsd: raw.ceilingUsd,
+      ...(raw.rates !== undefined ? { rates: { inputUsdPerMTok: raw.rates.inputUsdPerMTok, outputUsdPerMTok: raw.rates.outputUsdPerMTok } } : {}),
+      ...(raw.ceilingUsd !== undefined ? { ceilingUsd: raw.ceilingUsd } : {}),
       maxSeconds: raw.maxSeconds ?? DEFAULT_AGENT_TASK_MAX_SECONDS,
       maxAttempts: 1,
       network: (grants.network ?? "off") === "full",

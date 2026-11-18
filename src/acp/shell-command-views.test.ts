@@ -7,6 +7,7 @@
 // each action back through `_keryx/command`, so a view's action is proved to be a command
 // the server really runs.
 
+import { loadTriggersConfig } from "../trigger/config";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { readdir } from "node:fs/promises";
@@ -159,13 +160,29 @@ describe("/schedule form", () => {
     expect(form?.submit).toContain("--repeat {repeat} --minutes {minutes} --hours {hours} --at {at}");
   });
 
-  test("rates are two number fields and the ceiling a positive number prefilled 0.50", async () => {
+  test("rates and the ceiling are optional number fields; the ceiling is not prefilled (owner decision 2026-11-18)", async () => {
     const form = viewOf(await run(modelHost("claude-x"), "schedule")).form;
-    for (const id of ["rateIn", "rateOut", "ceiling"]) expect(fieldOf(form, id)).toMatchObject({ kind: "number", required: true });
-    expect(fieldOf(form, "ceiling")).toMatchObject({ value: "0.50", min: 0.01 });
+    for (const id of ["rateIn", "rateOut", "ceiling"]) {
+      expect(fieldOf(form, id)).toMatchObject({ kind: "number" });
+      expect(fieldOf(form, id)?.required).not.toBe(true);
+    }
+    expect(fieldOf(form, "ceiling")).toMatchObject({ min: 0.01 });
+    expect(fieldOf(form, "ceiling")?.value).toBeUndefined();
     // An unpriced model gets an empty field, not a guess.
     expect(fieldOf(form, "rateIn")?.value).toBeUndefined();
     expect(fieldOf(form, "rateOut")?.value).toBeUndefined();
+  });
+
+  test("Permission mode is a required choice: ask / trust / auto, default trust, one hint per option", async () => {
+    const form = viewOf(await run(modelHost("claude-x"), "schedule")).form;
+    const mode = fieldOf(form, "mode");
+    expect(mode).toMatchObject({ label: "Permission mode", kind: "choice", required: true, value: "trust" });
+    expect(valuesOf(mode?.options)).toEqual(["ask", "trust", "auto"]);
+    const options = mode?.options as Array<{ value: string; label: string }>;
+    expect(options[0]!.label).toContain("denied");
+    expect(options[1]!.label).toContain("non-destructive");
+    expect(options[2]!.label).toContain("credential");
+    expect(form?.submit).toContain("--mode {mode}");
   });
 
   test("rates are prefilled from keryx's known pricing for the session model", async () => {
@@ -174,42 +191,32 @@ describe("/schedule form", () => {
     expect(fieldOf(form, "rateOut")?.value).toBe("15");
   });
 
-  test("only connected providers that report token usage are offered; the session's is the default", async () => {
+  test("every connected provider is offered, usage-reporting or not; the session's is the default", async () => {
     const choice = (providerId: string, modelId: string) => ({ value: `${providerId}/${modelId}`, name: modelId, providerId, modelId });
     const host = fakeHost(project(), tempDir("keryx-acp-views-config-"), {
       session: { modelIds: () => ({ providerId: "openai", modelId: "gpt-b" }), handle: () => ({ summary: { id: "session-1" } }) },
       modelChoices: async () => [choice("anthropic", "claude-a"), choice("openai-codex", "codex-x"), choice("openai", "gpt-a"), choice("openai", "gpt-b"), choice("mystery", "m1")],
     } as unknown as Partial<ShellCommandHost>);
     const form = viewOf(await run(host, "schedule")).form;
-    expect(valuesOf(fieldOf(form, "provider")?.options)).toEqual(["openai", "anthropic"]);
+    expect(valuesOf(fieldOf(form, "provider")?.options)).toEqual(["openai", "anthropic", "openai-codex", "mystery"]);
     expect(fieldOf(form, "provider")?.value).toBe("openai");
     expect(valuesOf(fieldOf(form, "model:openai")?.options)).toEqual(["gpt-b", "gpt-a"]);
     expect(fieldOf(form, "model:openai")).toMatchObject({ value: "gpt-b", showWhen: { field: "provider", equals: ["openai"] } });
     expect(valuesOf(fieldOf(form, "model:anthropic")?.options)).toEqual(["claude-a"]);
-    expect(fieldOf(form, "model:openai-codex")).toBeUndefined();
-    expect(form?.submit).toContain("--model {model:openai} --model {model:anthropic}");
+    expect(valuesOf(fieldOf(form, "model:openai-codex")?.options)).toEqual(["codex-x"]);
+    expect(form?.submit).toContain("--model {model:openai} --model {model:anthropic} --model {model:openai-codex} --model {model:mystery}");
   });
 
-  test("when the session's provider is refused the first allowed provider is the default", async () => {
+  test("a session provider that reports no token usage is still offered, and the form is enabled", async () => {
     const host = fakeHost(project(), tempDir("keryx-acp-views-config-"), {
       session: { modelIds: () => ({ providerId: "openai-codex", modelId: "codex-x" }), handle: () => ({ summary: { id: "session-1" } }) },
       modelChoices: async () => [{ value: "gemini/g1", name: "g1", providerId: "gemini", modelId: "g1" }],
     } as unknown as Partial<ShellCommandHost>);
-    const form = viewOf(await run(host, "schedule")).form;
-    expect(valuesOf(fieldOf(form, "provider")?.options)).toEqual(["gemini"]);
-    expect(fieldOf(form, "provider")?.value).toBe("gemini");
-  });
-
-  test("with no allowed provider the form is disabled and the body says why and which providers work", async () => {
-    const host = fakeHost(project(), tempDir("keryx-acp-views-config-"), {
-      session: { modelIds: () => ({ providerId: "openai-codex", modelId: "codex-x" }), handle: () => ({ summary: { id: "session-1" } }) },
-      modelChoices: async () => [{ value: "openai-codex/codex-x", name: "codex-x", providerId: "openai-codex", modelId: "codex-x" }],
-    } as unknown as Partial<ShellCommandHost>);
     const view = viewOf(await run(host, "schedule"));
-    expect(view.body).toContain('"openai-codex" is not known to report token usage');
-    expect(view.body).toContain("Use anthropic, openai, gemini");
-    expect(view.form?.disabled).toBeDefined();
-    expect(view.form?.fields).toEqual([]);
+    expect(valuesOf(fieldOf(view.form, "provider")?.options)).toEqual(["openai-codex", "gemini"]);
+    expect(fieldOf(view.form, "provider")?.value).toBe("openai-codex");
+    expect(view.form?.disabled).toBeUndefined();
+    expect(view.body).not.toContain("not known to report token usage");
   });
 
   test("the other forms mark their required fields", async () => {
@@ -339,12 +346,13 @@ describe("/schedules", () => {
           enabled,
           source: "store",
           fire: { kind: "schedule", cron: "0 * * * *" },
-          action: { kind: "agent-task", dispatch: { ceilingUsd: 2 } },
+          action: { kind: "agent-task", dispatch: { permissionMode: "trust", ceilingUsd: 2 } },
         },
       }) as never;
     const active = scheduleActions(local(true));
     expect(active.map((item) => item.command)).toEqual(["/schedules pause check", "/schedules run check", "/schedules delete check"]);
-    expect(active[1]?.confirm).toContain("$2");
+    expect(active[1]?.confirm).toContain("Permission mode trust");
+    expect(active[1]?.confirm).toContain("cost is reported, not limited");
     expect(active[2]?.confirm).toContain("Delete schedule check");
     const paused = scheduleActions(local(false));
     expect(paused.map((item) => item.command)).toEqual(["/schedules resume check", "/schedules delete check"]);
@@ -397,25 +405,29 @@ describe("/schedule", () => {
         now: () => new Date(2026, 8, 23, 5, 7, 0),
         resolveProgram: () => program,
         accountOf: async () => "someone",
-        providerReportsUsage: () => true,
         checkCredential: async () => ({ ok: true }),
       } as never,
     });
   }
 
-  test("bare opens the creation form; a draft writes nothing and answers a view whose Create action carries the card as its confirm", async () => {
+  test("bare opens the creation form; a draft writes nothing and answers a confirmAction carrying the card and the exact confirmed command", async () => {
     const root = project();
     const unitDir = tempDir("keryx-acp-schedule-units-");
     const host = scheduleHost(root, unitDir);
     const form = viewOf(await run(host, "schedule"));
     expect(form.form?.submit).toContain("/schedule --name {name}");
-    expect(form.form?.fields.map((field) => field.id)).toEqual(["name", "repeat", "minutes", "hours", "at", "cron", "provider", "model:anthropic", "rateIn", "rateOut", "ceiling", "prompt"]);
+    expect(form.form?.fields.map((field) => field.id)).toEqual(["name", "repeat", "minutes", "hours", "at", "cron", "provider", "model:anthropic", "mode", "rateIn", "rateOut", "ceiling", "prompt"]);
 
-    const draft = viewOf(await run(host, "schedule", LINE));
-    const create = draft.rows[0]?.actions[0];
-    expect(create?.command).toBe(`/schedule confirmed ${LINE}`);
-    expect(create?.confirm).toContain("cadence: 0 */4 * * * (every 4 hours)");
-    expect(draft.body).toBe(create?.confirm);
+    expect(form.form?.submitLabel).toBe("Create");
+
+    const draft = await run(host, "schedule", LINE);
+    expect(draft.view).toBeUndefined();
+    expect(draft.confirmAction?.label).toBe("Confirm");
+    expect(draft.confirmAction?.command).toBe(`/schedule confirmed ${LINE}`);
+    expect(draft.confirmAction?.confirm).toContain("cadence: 0 */4 * * * (every 4 hours)");
+    // An editor that cannot ask reads the text: the card and the line to run.
+    expect(draft.text).toContain(draft.confirmAction!.confirm);
+    expect(draft.text).toContain(`/schedule confirmed ${LINE}`);
     expect(await readdir(unitDir)).toEqual([]);
     expect(existsSync(path.join(root, ".metaproject", "data", "schedules"))).toBe(false);
   });
@@ -441,15 +453,53 @@ describe("/schedule", () => {
     expect(toShellScheduleLine(typed)).toEqual({ line: typed });
   });
 
-  test("a draft from the form's line succeeds for an allowed provider and carries the shell's own line in Create", async () => {
+  test("a draft from the form's line succeeds for an allowed provider and carries the shell's own line in confirmAction", async () => {
     const root = project();
     const host = scheduleHost(root, tempDir("keryx-acp-schedule-units-"));
     const line = '--name check --repeat hours --hours 4 --provider anthropic --model claude-x --rate-in 3 --rate-out 15 --ceiling 0.5 --max-seconds 300 -- Summarise my open pull requests';
-    const draft = viewOf(await run(host, "schedule", line));
-    const create = draft.rows[0]?.actions[0];
+    const draft = (await run(host, "schedule", line)).confirmAction;
+    const create = draft;
     expect(create?.confirm).toContain("cadence: 0 */4 * * * (every 4 hours)");
     expect(create?.command).toBe(`/schedule confirmed --name check --provider anthropic --model claude-x --ceiling 0.5 --max-seconds 300 --every "every 4 hours" --rates 3,15 -- Summarise my open pull requests`);
     expect((await run(host, "schedule", create!.command.replace("/schedule ", ""))).text).toContain('"check" stored and installed');
+  });
+
+  test("a form line with its optional rates and ceiling left empty drafts, and the mode choice reaches the stored schedule (owner decision 2026-11-18)", async () => {
+    const root = project();
+    const host = scheduleHost(root, tempDir("keryx-acp-schedule-units-"));
+    // What the client sends when Input $/1M, Output $/1M and the ceiling are empty: the flags with no value.
+    const line = "--name check --repeat hours --hours 4 --at  --cron  --provider anthropic --model claude-x --mode auto --rate-in  --rate-out  --ceiling  -- Summarise my open pull requests";
+    const converted = toShellScheduleLine(line);
+    if ("error" in converted) throw new Error(converted.error);
+    expect(converted.line).not.toContain("--rates");
+    expect(converted.line).not.toContain("--ceiling");
+    expect(converted.line).toContain("--mode auto");
+    const draft = (await run(host, "schedule", line)).confirmAction;
+    expect(draft?.confirm).toContain("permission mode auto");
+    expect(draft?.confirm).toContain('no rates, so the cost reads "cost unknown"');
+    expect((await run(host, "schedule", draft!.command.replace("/schedule ", ""))).text).toContain('"check" stored and installed');
+    const stored = loadTriggersConfig(root).triggers.find((t) => t.name === "check");
+    const dispatch = stored?.action.kind === "agent-task" ? stored.action.dispatch : undefined;
+    expect(dispatch?.permissionMode).toBe("auto");
+    expect(dispatch?.rates).toBeUndefined();
+    expect(dispatch?.ceilingUsd).toBeUndefined();
+  });
+
+  test("/schedules shows the permission mode in the row and the detail (owner decision 2026-11-18)", async () => {
+    const root = project();
+    const host = scheduleHost(root, tempDir("keryx-acp-schedule-units-"));
+    const created = await run(host, "schedule", `confirmed ${LINE.replace(" -- ", " --mode auto -- ")}`);
+    expect(created.refused).toBeUndefined();
+    const row = viewOf(await run(host, "schedules")).rows.find((candidate) => candidate.id === "check");
+    expect(row?.detail).toContain("mode auto");
+    const detail = viewOf(await run(host, "schedules", "check"));
+    expect(detail.body).toMatch(/mode\s+auto \(/);
+  });
+
+  test("giving only one of the two rates is refused; both empty is fine", () => {
+    const one = toShellScheduleLine("--name a --repeat hours --hours 4 --rate-in 3 --rate-out -- x");
+    expect("error" in one && one.error).toContain("both Input $/1M and Output $/1M");
+    expect("error" in toShellScheduleLine("--name a --repeat hours --hours 4 --rate-in --rate-out -- x")).toBe(false);
   });
 
   test("a form line missing its cadence part is refused with the field's name", async () => {

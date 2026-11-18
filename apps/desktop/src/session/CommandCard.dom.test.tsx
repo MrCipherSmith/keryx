@@ -79,6 +79,28 @@ test("a card with a view shows the view, not keryx's plain-text rendering of it"
   expect(host.textContent).toContain("nightly review");
 });
 
+test("card tones: success reads as ok, refused as a warning, a failed request as an error", async () => {
+  await render(item({ line: "/schedule", text: "stored" }));
+  expect(host.querySelector(".command-card")!.className).toContain("is-ok");
+  expect(host.querySelector(".badge-warn, .badge-danger, .notice")).toBeNull();
+  await render(item({ line: "/rewind", text: "Not now", refused: true }));
+  expect(host.querySelector(".command-card")!.className).toContain("is-refused");
+  expect(host.querySelector(".badge-warn")!.textContent).toBe("refused");
+  expect(host.querySelector(".notice-error")).toBeNull();
+  await render(item({ line: "/tasks", text: "socket closed", refused: true, error: true }));
+  expect(host.querySelector(".command-card")!.className).toContain("is-error");
+  expect(host.querySelector(".badge-danger")!.textContent).toBe("error");
+  expect(host.querySelector(".notice.notice-error")!.textContent).toContain("socket closed");
+});
+
+test("a form's submit button says Submit unless the view names it", async () => {
+  const form = (submitLabel?: string): CommandView => ({ title: "F", form: { submit: "/x", fields: [], ...(submitLabel ? { submitLabel } : {}) } });
+  await render(item({ view: form() }));
+  expect(host.querySelector('button[type="submit"]')!.textContent).toBe("Submit");
+  await render(item({ view: form("Create") }));
+  expect(host.querySelector('button[type="submit"]')!.textContent).toBe("Create");
+});
+
 test("a refused card is a notice", async () => {
   await render(item({ line: "/rewind", text: "Not while a turn runs", refused: true }));
   expect(host.querySelector(".notice.notice-warn")!.textContent).toContain("Not while a turn runs");
