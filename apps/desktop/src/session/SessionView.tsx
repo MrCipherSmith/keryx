@@ -1,4 +1,5 @@
 import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { BrandMark } from "../components/BrandMark";
 import { createPortal } from "react-dom";
 import type { PlanEntry } from "../acp/types";
 import { formatTokens } from "../lib/format";
@@ -151,9 +152,7 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
 
   const empty = (
     <div className="session-empty">
-      <div className="session-empty-mark" aria-hidden>
-        k
-      </div>
+      <BrandMark className="session-empty-mark" />
       <h1>What should we work on in {projectName}?</h1>
       <p>keryx reads the project, runs tools with your approval, and keeps sessions you can come back to.</p>
       <div className="suggestions">

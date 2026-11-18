@@ -1,4 +1,5 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
+import { BrandMark } from "../components/BrandMark";
 import type { ToolCallContent, ToolKind } from "../acp/types";
 import type { CommandItem, DelegateResultItem, Item } from "./reducer";
 import type { Subagent } from "./activity";
@@ -439,7 +440,7 @@ export function Transcript({ items, busy, replaying, empty, onRunCommand, subage
 function AgentLabel() {
   return (
     <div className="agent-label" aria-hidden>
-      <span className="agent-mark">k</span>
+      <BrandMark className="agent-mark" />
       keryx
     </div>
   );

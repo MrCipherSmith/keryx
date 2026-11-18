@@ -228,10 +228,8 @@ button { font: inherit; }
 .transcript-inner > * { min-width: 0; }
 .turn-start { margin-top: var(--sp-2); }
 .agent-label { display: flex; align-items: center; gap: 6px; font-size: var(--fs-sm); font-weight: 600; color: var(--fg-muted); }
-.agent-mark, .session-empty-mark, .brand-mark {
-  display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 5px;
-  font: 700 calc(12px * var(--text-scale))/1 var(--font); color: var(--accent-fg); background: var(--accent);
-}
+/* The Keryx mark (the app icon; its rounded corners are already transparent). */
+.agent-mark, .session-empty-mark, .brand-mark { display: block; flex: none; width: 18px; height: 18px; object-fit: contain; user-select: none; }
 .turn-agent > .md { font-size: calc(13.5px * var(--text-scale)); line-height: 1.6; overflow-wrap: anywhere; }
 .md.is-streaming > :is(p, h1, h2, h3, h4):last-child::after,
 .md.is-streaming > :is(ul, ol):last-child > li:last-child::after {
@@ -313,7 +311,7 @@ button { font: inherit; }
 
 /* empty session */
 .session-empty { display: grid; justify-items: center; text-align: center; padding: 10vh 0 var(--sp-5); gap: var(--sp-3); }
-.session-empty-mark { width: 40px; height: 40px; border-radius: 11px; font-size: calc(22px * var(--text-scale)); }
+.session-empty-mark { width: 56px; height: 56px; margin-inline: auto; }
 .session-empty h1 { font-size: var(--fs-xl); font-weight: 650; letter-spacing: -0.015em; max-width: 30ch; }
 .session-empty p { margin: 0; max-width: 52ch; color: var(--fg-muted); }
 .suggestions { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); width: 100%; max-width: 560px; margin-top: var(--sp-3); }
@@ -497,7 +495,7 @@ button { font: inherit; }
 .welcome { display: grid; place-items: center; padding: var(--sp-6) var(--sp-5); }
 .welcome-col { width: 520px; max-width: 100%; display: grid; gap: var(--sp-5); position: relative; z-index: 2; }
 .welcome-brand { display: flex; align-items: center; gap: var(--sp-3); }
-.brand-mark { width: 44px; height: 44px; border-radius: 12px; font-size: calc(24px * var(--text-scale)); }
+.brand-mark { width: 52px; height: 52px; }
 .welcome-brand h1 { font-size: calc(24px * var(--text-scale)); font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
 .welcome-brand p { margin: 4px 0 0; color: var(--fg-muted); }
 .welcome-open {
