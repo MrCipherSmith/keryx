@@ -27,6 +27,8 @@ export interface Prefs {
   sidePanel: SidePanelTab | null;
   /** The side panel's width in pixels. */
   sidePanelWidth: number;
+  /** The Activity panel's width in pixels. */
+  activityWidth: number;
   /** Per session: the user's choice to show (true) or fold (false) its subagents in the sidebar; absent = automatic. */
   subagentTree: Record<string, boolean>;
 }
@@ -34,6 +36,9 @@ export interface Prefs {
 export type SidePanelTab = "terminal" | "browser";
 export const SIDE_PANEL_MIN = 320;
 export const SIDE_PANEL_MAX = 1200;
+export const ACTIVITY_MIN = 320;
+/** The widest the Activity panel may be, as a share of the window. */
+export const ACTIVITY_MAX_SHARE = 0.7;
 
 const KEY = "keryx.prefs.v1";
 const DEFAULTS: Prefs = {
@@ -48,6 +53,7 @@ const DEFAULTS: Prefs = {
   collapsedGroups: [],
   sidePanel: null,
   sidePanelWidth: 520,
+  activityWidth: 420,
   subagentTree: {},
 };
 
@@ -92,6 +98,10 @@ function read(): Prefs {
         typeof merged.sidePanelWidth === "number" && Number.isFinite(merged.sidePanelWidth)
           ? Math.min(SIDE_PANEL_MAX, Math.max(SIDE_PANEL_MIN, merged.sidePanelWidth))
           : DEFAULTS.sidePanelWidth,
+      activityWidth:
+        typeof merged.activityWidth === "number" && Number.isFinite(merged.activityWidth)
+          ? Math.min(4000, Math.max(ACTIVITY_MIN, Math.round(merged.activityWidth)))
+          : DEFAULTS.activityWidth,
       subagentTree:
         merged.subagentTree && typeof merged.subagentTree === "object" && !Array.isArray(merged.subagentTree)
           ? Object.fromEntries(Object.entries(merged.subagentTree).filter(([, v]) => typeof v === "boolean"))

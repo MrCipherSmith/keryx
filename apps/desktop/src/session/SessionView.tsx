@@ -198,7 +198,10 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
   );
 
   return (
-    <div className={`session-view${sidebarOpen ? " with-sidebar" : ""}${activity.open ? " with-activity" : ""}${infoOpen && !narrow ? " with-info" : ""}${narrow ? " is-narrow" : ""}`}>
+    <div
+      className={`session-view${sidebarOpen ? " with-sidebar" : ""}${activity.open ? " with-activity" : ""}${infoOpen && !narrow ? " with-info" : ""}${narrow ? " is-narrow" : ""}`}
+      style={activity.open ? ({ "--activity-w": `${prefs.activityWidth}px` } as React.CSSProperties) : undefined}
+    >
       {sidebarOpen ? sidebar : null}
       {narrow && narrowSidebar ? (
         <div className="sidebar-float" onMouseDown={(e) => e.target === e.currentTarget && setNarrowSidebar(false)}>

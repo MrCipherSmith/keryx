@@ -227,7 +227,7 @@ const HINTS: Readonly<Record<string, string>> = {
   governance: "run | check <flow id> | close <flow id>",
   triggers: "<name> | run <name>",
   schedule: "--name N --every C --rates IN,OUT --ceiling USD -- prompt",
-  schedules: "<name> | pause|resume|run|delete <name>",
+  schedules: "<name> | pause|resume|run|delete <name> | runs [<name>] | run-log <name> <run id>",
   autoreview: "list | arbiter [pull request]",
   jevprofile: "set <key> on|off | apply",
   ac: "recheck <flow id>",

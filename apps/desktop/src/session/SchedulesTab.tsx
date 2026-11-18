@@ -25,7 +25,7 @@ const msg = (e: unknown): string => (e instanceof Error ? e.message : String(e))
  * carry; "Add schedule" renders the `/schedule` view's form. Every call is `_keryx/command`, so the
  * desktop, the shell and the TUI share one set of rules.
  */
-export function SchedulesTab({ sessionId, api }: { sessionId: string; api: Api }) {
+export function SchedulesTab({ sessionId, api, onShowRuns }: { sessionId: string; api: Api; onShowRuns?: (name: string | null) => void }) {
   const [view, setView] = useState<CommandView | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -167,6 +167,11 @@ export function SchedulesTab({ sessionId, api }: { sessionId: string; api: Api }
             </div>
             {r.detail ? <div className="schedule-detail">{r.detail}</div> : null}
             <div className="schedule-actions">
+              {onShowRuns ? (
+                <button className="btn btn-sm" onClick={() => onShowRuns(r.id)} data-schedule-runs={r.id}>
+                  Runs
+                </button>
+              ) : null}
               {(r.actions ?? []).map((a) => (
                 <button key={a.label + a.command} className="btn btn-sm" disabled={busy} onClick={() => act(a)}>
                   {a.label}

@@ -29,6 +29,8 @@ import {
   scheduleDelete,
   schedulePause,
   scheduleResume,
+  scheduleRunLog,
+  scheduleRuns,
   taskSubmit,
   triggerRunNow,
   type ActionResult,
@@ -45,6 +47,8 @@ export interface SharedSubcommandActions {
   readonly schedulePause: typeof schedulePause;
   readonly scheduleResume: typeof scheduleResume;
   readonly scheduleDelete: typeof scheduleDelete;
+  readonly scheduleRuns: typeof scheduleRuns;
+  readonly scheduleRunLog: typeof scheduleRunLog;
   readonly governanceRun: typeof governanceRun;
   readonly governanceCheck: typeof governanceCheck;
   readonly governanceClose: typeof governanceClose;
@@ -64,6 +68,8 @@ export const DEFAULT_SHARED_SUBCOMMAND_ACTIONS: SharedSubcommandActions = {
   schedulePause,
   scheduleResume,
   scheduleDelete,
+  scheduleRuns,
+  scheduleRunLog,
   governanceRun,
   governanceCheck,
   governanceClose,
@@ -100,7 +106,7 @@ const VERBS: Readonly<Record<string, readonly string[]>> = {
   "/jevprofile": ["set", "apply"],
   "/review": ["accept", "accept-ack", "decline"],
   "/triggers": ["run"],
-  "/schedules": ["pause", "resume", "delete", "run"],
+  "/schedules": ["pause", "resume", "delete", "run", "runs", "run-log"],
   "/governance": ["run", "check", "close"],
   "/ac": ["recheck"],
   "/ci": ["triage"],
@@ -116,7 +122,7 @@ const CONFORM_CONFIRM = "Conformance sends the reference clauses and the diff's 
  */
 export const SHARED_SUBCOMMAND_HELP = [
   "Also typed as one line (asks [y/N] first when it deletes, spends or decides):",
-  "  /schedules pause|resume|run|delete <name> · /triggers run <name> · /governance run | check <flow> | close <flow>",
+  "  /schedules pause|resume|run|delete <name> · /schedules runs [<name>] · /schedules run-log <name> <id> · /triggers run <name> · /governance run | check <flow> | close <flow>",
   "  /routing set <category> <provider/model | baseline> · /routing trust · /jevprofile set <key> on|off · /jevprofile apply",
   "  /review accept|accept-ack|decline <workspace id> <proposal id> · /ac recheck <flow> · /ci triage <run> [job]",
   "  /conform run <target> <document> · /task <mode> <description> [|| criterion; criterion]",
@@ -199,6 +205,10 @@ export function matchSharedSubcommand(line: string, context: SharedSubcommandCon
       return make(() => actions.triggerRunNow(cwd, args), () => runNowQuestion(cwd, args, false));
     case "/schedules run":
       return make(() => actions.triggerRunNow(cwd, args, { schedule: true }), () => runNowQuestion(cwd, args, true));
+    case "/schedules runs":
+      return make(() => actions.scheduleRuns(cwd, args));
+    case "/schedules run-log":
+      return make(() => actions.scheduleRunLog(cwd, args));
     case "/schedules pause":
       return make(() => actions.schedulePause(cwd, args));
     case "/schedules resume":

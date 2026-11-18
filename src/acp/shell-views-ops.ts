@@ -28,6 +28,8 @@ import {
   governanceCheck,
   governanceClose,
   governanceRun,
+  listScheduleRuns,
+  readScheduleRun,
   scheduleDelete,
   schedulePause,
   scheduleResume,
@@ -214,6 +216,38 @@ async function scheduleDetailView(host: ShellCommandHost, name: string): Promise
   };
 }
 
+/** `/schedules runs [<name>]`: one row per recent run; its action opens the run's report and log. */
+async function scheduleRunsView(cwd: string, name: string): Promise<ShellView | string> {
+  const read = await listScheduleRuns(cwd, name);
+  if (!read.ok) return read.reason;
+  const rows = read.runs.map((run) =>
+    viewRow(`${run.schedule}/${run.runId}`, name.length > 0 ? run.atLabel : `${run.atLabel} · ${run.schedule}`, {
+      status: run.outcome,
+      detail: [run.mode !== undefined ? `mode ${run.mode}` : "", run.cost, run.detail].filter((part) => part.length > 0).join(" · "),
+      actions: [action("Open", `/schedules run-log ${run.schedule} ${run.runId}`)],
+    }),
+  );
+  return {
+    title: name.length > 0 ? `Runs of ${name}` : "Runs of every schedule",
+    rows,
+    body: rows.length === 0 ? (name.length > 0 ? `${name} has not run yet.` : "No schedule has run yet.") : "Newest first. Open a run for its report and log.",
+  };
+}
+
+/** `/schedules run-log <name> <run id>`: rows `report` and `log` carry the text in `detail`; `status` says `truncated` or why it is missing. */
+async function scheduleRunLogView(cwd: string, name: string, runId: string): Promise<ShellView | string> {
+  const read = await readScheduleRun(cwd, name, runId);
+  if (!read.ok) return read.reason;
+  const { summary, report, log, logFile } = read.detail;
+  const row = (id: string, label: string, section: typeof report) =>
+    viewRow(id, label, { status: section.missing !== undefined ? "missing" : section.truncated ? "truncated" : "complete", detail: section.missing ?? section.text, actions: [] });
+  return {
+    title: `Run ${summary.atLabel} of ${name}`,
+    rows: [row("report", "Report", report), row("log", logFile !== undefined ? `Run log (${logFile})` : "Run log", log)],
+    body: [summary.outcome, summary.mode !== undefined ? `mode ${summary.mode}` : "", summary.cost, summary.detail].filter((part) => part.length > 0).join(" · "),
+  };
+}
+
 export async function runSchedules(host: ShellCommandHost, args: string): Promise<ShellCommandOutcome> {
   const [sub, ...rest] = parts(args);
   const name = rest.join(" ");
@@ -222,8 +256,12 @@ export async function runSchedules(host: ShellCommandHost, args: string): Promis
   if (sub === "resume") return actionOutcome(await scheduleResume(host.cwd, name), []);
   if (sub === "delete") return actionOutcome(await scheduleDelete(host.cwd, name), []);
   if (sub === "run") return actionOutcome(await triggerRunNow(host.cwd, name, { schedule: true }), []);
+  if (sub === "runs" || sub === "run-log") {
+    const shown = sub === "runs" ? await scheduleRunsView(host.cwd, name) : rest.length === 2 ? await scheduleRunLogView(host.cwd, rest[0] as string, rest[1] as string) : "Usage: /schedules run-log <name> <run id>";
+    return typeof shown === "string" ? refusal(shown) : viewOutcome(shown);
+  }
   const detail = await scheduleDetailView(host, sub);
-  return detail === undefined ? refusal(`No schedule named '${sub}'. Usage: /schedules [<name> | pause|resume|run|delete <name>]`) : viewOutcome(detail);
+  return detail === undefined ? refusal(`No schedule named '${sub}'. Usage: /schedules [<name> | pause|resume|run|delete <name> | runs [<name>] | run-log <name> <run id>]`) : viewOutcome(detail);
 }
 
 // ---------------------------------------------------------------------------

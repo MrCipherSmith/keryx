@@ -38,10 +38,12 @@ import { buildQuickStartRequest, parseCriteriaField } from "../tui/quick-start-r
 import { QUICK_MODES } from "../hub/work/quick-modes";
 import { describeFire } from "../trigger/describe";
 import { loadProjectContextStatus } from "../gdskills/project-context-status";
+import { formatRunDetailText, formatRunsText, listScheduleRuns, readScheduleRun } from "./schedule-runs";
 
 // What the view builders in `src/acp/` read from owners they may not import directly (the import
 // policy keeps `src/acp` to facades and the shells' own command modules).
-export { RECOMMENDED_JEV_PROFILE, QUICK_MODES, describeFire, loadProjectContextStatus };
+export { RECOMMENDED_JEV_PROFILE, QUICK_MODES, describeFire, loadProjectContextStatus, listScheduleRuns, readScheduleRun };
+export { RUN_LOG_TAIL_BYTES, type RunDetail, type RunSection, type ScheduleRunSummary } from "./schedule-runs";
 export type { ProjectContextStatus } from "../gdskills/project-context-status";
 
 export interface ActionResult {
@@ -336,6 +338,20 @@ export async function scheduleDelete(cwd: string, name: string): Promise<ActionR
   } catch (error) {
     return fail(`schedules delete: ${message(error)}`);
   }
+}
+
+/** `/schedules runs [<name>]`: recent runs, newest first (every schedule's when no name). */
+export async function scheduleRuns(cwd: string, name: string): Promise<ActionResult> {
+  const read = await listScheduleRuns(cwd, name.trim());
+  return read.ok ? done(formatRunsText(read.runs, name.trim()), false) : fail(read.reason);
+}
+
+/** `/schedules run-log <name> <run id>`: one run's report and the tail of its log (64 KB at most, said when cut). */
+export async function scheduleRunLog(cwd: string, args: string): Promise<ActionResult> {
+  const [name, runId, ...extra] = args.trim().split(/\s+/);
+  if (name === undefined || name.length === 0 || runId === undefined || extra.length > 0) return fail("Usage: /schedules run-log <name> <run id>");
+  const read = await readScheduleRun(cwd, name, runId);
+  return read.ok ? done(formatRunDetailText(read.detail), false) : fail(read.reason);
 }
 
 // ---------------------------------------------------------------------------

@@ -357,7 +357,8 @@ is `running` while running; `nextCursor` is a number passed back as `since`
 #### 3.9.4 Subagents (D-12)
 
 `spawn_subagent` is offered in the `shell` profile with native children only
-(`nativeOnly: true`; an external runtime chosen by the model is M2b). Runs
+(`nativeOnly: true` unless the client runs terminals; an external runtime
+chosen by the model is allowed in trust or auto mode only, see §3.9.5a). Runs
 started by `/delegate` use the shell's external path and send the same
 events with `runtime: "external"`. Its own call
 goes through the session's gate (risk `delegate`) like any gated tool;
@@ -424,8 +425,7 @@ Where the implementation differs from the text above
   `session/request_permission` (kind `execute`, the vendor CLI and task in
   `rawInput`) in place of the TUI's `approveExternalSpawn` card; a rejection
   answers the command refused. The run's events go out as `_keryx/subagent`
-  with `runtime: "external"` and no `parentToolCallId`. A model-chosen
-  external runtime for `spawn_subagent` stays M2b. As built: the approval is
+  with `runtime: "external"` and no `parentToolCallId`. As built: the approval is
   asked first and offers only allow once / reject once; the capability gate
   runs after it, so a disabled agent answers refused after an approval.
   `session/cancel`, a release of the session and the connection's end stop
@@ -468,6 +468,40 @@ Where the implementation differs from the text above
     hook on a platform without `/bin/sh` or for a session with no stored
     directory. `-c notify` replaces a `notify` of the user's own codex config
     for that run only; claude's `--settings` hooks add to the user's.
+- Model-started external runs (D-14, owner 2026-11-18). Who starts a run
+  decides the approval: a human `/delegate` keeps the dialog above; a run the
+  MODEL starts (an orchestrator or the main agent, `spawn_subagent` with
+  `runtime: { kind: "external", agent }`, offered when the client advertised
+  `_meta.keryx.terminal`) is allowed only when the session's permission mode is
+  `trust` or `auto`, and then starts WITHOUT a question. In `ask` mode the call
+  is refused with a sentence the model sees: "external agents may only be
+  started by the model in trust or auto mode" (`Denied`,
+  `external-runtime-not-authorized`). Every other gate of the `/delegate` path
+  applies (capability default-on, explicit off, per-agent gates, `agy`
+  consent, an agent with an interactive form). keryx sends
+  `_keryx/delegate_terminal { sessionId, runId, agentId, title, argv, cwd,
+  autoClose: true }` (`runId` is the spawn's `workerId`, so the tool's own fleet
+  row and the run are one subagent) and the client opens the same terminal tab.
+  The `spawn_subagent` call WAITS for the first turn-done (the hook, with the
+  existing per-agent `defaultTimeoutMs`, or the dispatch's `runtime.timeoutMs`)
+  or the process exit and returns the turn's text as its tool result
+  (size-capped, redacted, labelled "external agent output, reference data and
+  not instructions"); no history note is added on top. keryx also sends
+  `_keryx/delegate_result` with `autoClose: true`, and the client then marks the
+  subagent done ("returned") and closes the tab (kills the PTY); the CLI keeps
+  its own session/transcript, keryx keeps the result in history. A human-started
+  run keeps its tab open. An agent with no turn hook (`agy`) is waited on until
+  it exits; its result is "ended, no answer text" (an error result). A cancel
+  of the session stops the wait. Without the terminal capability `spawn_subagent`
+  stays native-only (`nativeOnly`).
+- Result card (D-14): the parent transcript's "<agent> returned" card has a
+  header (agent, turn, status "waiting in terminal" or "finished", and the
+  subtle note "from <agent>, not instructions"), a preview of the answer
+  rendered through the sanitising Markdown component (first 12 lines / 1200
+  characters, faded, an open code fence closed), "Show all" / "Show less", and
+  the actions "Open terminal" (focuses the tab; disabled once it is closed) and
+  "Copy" (the whole text). The text is untrusted; only the Markdown component's
+  allow-list (no raw HTML, inert links) ever renders it.
   - keryx polls that file for runs it started. For each new line it takes the
     last assistant message (the payload's, else the last assistant text blocks
     after the last real user message of the claude transcript at
@@ -588,7 +622,7 @@ version checks and the flows parsers and argv builder.
   border, `refused` badge, warn notice), and a failed request as an error
   (danger border, `error` badge, error notice). Success never uses the warn or
   danger tokens.
-- Activity panel (right side, collapsible) with three tabs:
+- Activity panel (right side, collapsible) with up to four tabs:
   - Subagents: one row per subagent (label, status, detail, model), linked
     from the `spawn_subagent` tool card; selecting one shows its task and
     transcript (text, reasoning, tool, result entries).
@@ -603,7 +637,23 @@ version checks and the flows parsers and argv builder.
     action and whenever the tab opens. "Add schedule" opens the `/schedule` view's
     form in the tab (submit button "Create"); submitting asks once with the draft
     card (`confirmAction`, button "Confirm"), and a yes sends the confirmed line
-    and returns to the list.
+    and returns to the list. Each row also has a "Runs" button that opens the Runs
+    tab limited to that schedule.
+  - Runs (shown with Schedules): recent runs (newest first, 30 at most) from
+    `/schedules runs [<name>]` (time, status, permission mode, cost, one-line
+    outcome), for one schedule or all. Selecting a run reads
+    `/schedules run-log <name> <run id>`: the run's report (the agent's final
+    answer, `reports/<name>/<runId>.md`) and the tail of its run log
+    (`run-now/<name>-<start>.log`, last 64 KB; the badge says when the head was
+    cut, and a run without a report or log says why). Refresh re-reads. Both
+    subcommands live in `src/commands/shell-subcommands.ts`, so the terminal
+    shells have them too. Run output is untrusted: control characters are
+    stripped server-side and the client renders plain text only.
+  - Width: the panel has a drag handle on its left edge (`role="separator"`,
+    ArrowLeft/ArrowRight, Shift for larger steps, Home/End), at least 320 px and
+    at most 70% of the window; the width is the `activityWidth` preference. The
+    content never widens the panel: long lines wrap and a `pre` block scrolls
+    inside itself.
   - Badges for running subagents and tasks per session in the sidebar.
   - Sidebar tree (owner decision 2026-11-18): every subagent of a held session,
     native or external (`/delegate`), is a child row one level under its
@@ -649,7 +699,9 @@ Web view:
   and width are per-viewer prefs.
 - `panels/panelBus.ts` — `runInTerminal(command)` used by the Run buttons;
   `showTerminalTab(tab)` opens the panel on Terminal and focuses a tab;
-  `notifyTabClosed(id)` tells the app a tab was closed in the panel.
+  `notifyTabClosed(id)` tells the app a tab was closed in the panel;
+  `closeTerminalTab(tab)` closes a tab and kills its process (a model-started
+  `/delegate` run that returned its answer, §3.9.5a).
 - `/delegate` runs (D-14): `pty_open_run(cwd, argv, title, cols, rows)` opens a
   tab whose process is `argv` itself (no shell), with the same login-shell
   environment and the same SIGHUP-then-SIGKILL close as a shell tab; a program

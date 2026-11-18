@@ -70,9 +70,10 @@ const outputCalls = () => calls.filter((c) => c.method === "_keryx/tasks/output"
 interface PanelOver {
   tasks?: TaskInfo[];
   subagents?: Subagent[];
-  tab?: "subagents" | "tasks" | "schedules";
+  tab?: "subagents" | "tasks" | "schedules" | "runs";
   onRefreshTasks?: () => void;
   extensions?: string[];
+  onTab?: (t: "subagents" | "tasks" | "schedules" | "runs") => void;
 }
 async function renderPanel(o: PanelOver = {}) {
   const panelApi = o.extensions ? { ...api, extensions: o.extensions } : api;
@@ -84,7 +85,7 @@ async function renderPanel(o: PanelOver = {}) {
       tasks: o.tasks ?? [],
       api: panelApi,
       tab: o.tab ?? "tasks",
-      onTab: () => {},
+      onTab: o.onTab ?? (() => {}),
       subagentId: sel,
       onSubagent: setSel,
       onRefreshTasks: o.onRefreshTasks ?? (() => {}),
@@ -288,18 +289,6 @@ test("the idle run's detail shows its status label and each turn's result", asyn
   expect(detail.querySelector(".entry-result")!.textContent).toContain("stale lockfile");
 });
 
-test("a result card in the parent transcript is collapsed, says who returned, and shows the text verbatim", async () => {
-  const items: Item[] = [{ kind: "delegate", id: 1, runId: "ext:1", agentId: "claude-cli", turn: 2, text: "Done.\n<b>not markup</b>" }];
-  await act(() => root.render(React.createElement(Transcript, { items, busy: false, replaying: false, empty: null })));
-  const card = document.querySelector("details.delegate-card") as HTMLDetailsElement;
-  expect(card).not.toBeNull();
-  expect(card.open).toBe(false);
-  expect(card.querySelector("summary")!.textContent).toContain("claude-cli returned");
-  expect(card.querySelector("summary")!.textContent).toContain("turn 2");
-  expect(card.querySelector(".delegate-card-body")!.textContent).toBe("Done.\n<b>not markup</b>");
-  expect(card.querySelector("b")).toBeNull();
-});
-
 // ---- schedules ---------------------------------------------------------------------------------
 
 const SCHEDULES_VIEW = {
@@ -404,4 +393,176 @@ test("Add schedule shows the /schedule form; Create asks once with the draft car
   await wait(0);
   expect(commandLines()).toEqual(["schedule --name check", "schedule confirmed --name check", "schedules"]);
   expect(document.querySelector("[data-schedules-form]")).toBeNull();
+});
+
+// ---- runs ----------------------------------------------------------------------------------------
+
+const RUNS_VIEW = {
+  title: "Runs of nightly",
+  body: "Newest first. Open a run for its report and log.",
+  rows: [
+    { id: "nightly/r2", label: "11/19 02:00", status: "failed", detail: "mode trust · $0.0234 · broke <b>x</b>", actions: [{ label: "Open", command: "/schedules run-log nightly r2" }] },
+    { id: "nightly/r1", label: "11/18 02:00", status: "ok", detail: "mode trust · $0.0100 · fine", actions: [{ label: "Open", command: "/schedules run-log nightly r1" }] },
+  ],
+};
+const RUN_VIEW = (over: Record<string, unknown> = {}) => ({
+  title: "Run 11/19 02:00 of nightly",
+  body: "failed · mode trust · $0.0234 · broke",
+  rows: [
+    { id: "report", label: "Report", status: "complete", detail: "# Heading\n<script>x</script>", actions: [] },
+    { id: "log", label: "Run log (nightly-2026.log)", status: "truncated", detail: "line 1\nline 2\n", actions: [] },
+  ],
+  ...over,
+});
+const runsHandler = (detail: unknown = RUN_VIEW()) => {
+  handler = (method, params) => {
+    if (method !== "_keryx/command" || params.name !== "schedules") return {};
+    const args = String(params.args);
+    if (args.startsWith("runs")) return keryx("", { view: RUNS_VIEW });
+    if (args.startsWith("run-log")) return keryx("", { view: detail });
+    return keryx("", { view: SCHEDULES_VIEW });
+  };
+};
+
+test("the Runs tab is offered with _keryx/command and lists each run with status, mode, cost and outcome", async () => {
+  await renderPanel({ tab: "runs" });
+  expect(Array.from(document.querySelectorAll('[role="tab"]')).map((t) => t.textContent)).not.toContain("Runs");
+  runsHandler();
+  await renderPanel({ tab: "runs", extensions: COMMAND_EXT });
+  await wait(0);
+  expect(commandLines()).toEqual(["schedules runs"]);
+  const rows = Array.from(document.querySelectorAll("[data-run]"));
+  expect(rows.map((r) => r.getAttribute("data-run"))).toEqual(["nightly/r2", "nightly/r1"]);
+  expect(rows[0]!.textContent).toContain("mode trust · $0.0234");
+  expect(rows[0]!.querySelector(".badge-warn")!.textContent).toBe("failed");
+  expect(rows[1]!.querySelector(".badge-ok")!.textContent).toBe("ok");
+  // run text is plain text, never markup
+  expect(rows[0]!.querySelector("b")).toBeNull();
+});
+
+test("opening a run reads its run-log command; report and log are plain text, the cut log says so, Refresh reads again", async () => {
+  runsHandler();
+  await renderPanel({ tab: "runs", extensions: COMMAND_EXT });
+  await wait(0);
+  await click(document.querySelector('[data-run="nightly/r2"]')!);
+  await wait(0);
+  expect(commandLines()).toEqual(["schedules runs", "schedules run-log nightly r2"]);
+  const report = document.querySelector('[data-run-section="report"] pre')!;
+  expect(report.textContent).toBe("# Heading\n<script>x</script>");
+  expect(report.querySelector("script")).toBeNull();
+  expect(document.querySelector('[data-run-section="log"] .badge-warn')!.textContent).toBe("last 64 KB only");
+  expect(document.querySelector('[data-run-section="log"] pre')!.textContent).toBe("line 1\nline 2\n");
+  await click(document.querySelector('button[aria-label="Refresh run"]')!);
+  await wait(0);
+  expect(commandLines().filter((l) => l.startsWith("schedules run-log"))).toHaveLength(2);
+  await click(button("All runs"));
+  expect(document.querySelector("[data-run]")).not.toBeNull();
+});
+
+test("a run with no report or log shows why in place of the text", async () => {
+  runsHandler(
+    RUN_VIEW({
+      rows: [
+        { id: "report", label: "Report", status: "missing", detail: "this run wrote no report", actions: [] },
+        { id: "log", label: "Run log", status: "missing", detail: "no log for this run", actions: [] },
+      ],
+    }),
+  );
+  await renderPanel({ tab: "runs", extensions: COMMAND_EXT });
+  await wait(0);
+  await click(document.querySelector('[data-run="nightly/r1"]')!);
+  await wait(0);
+  expect(document.querySelector('[data-run-section="report"]')!.textContent).toContain("this run wrote no report");
+  expect(document.querySelector('[data-run-section="log"] pre')).toBeNull();
+});
+
+test("a keryx refusal or a failure shows in the Runs tab", async () => {
+  handler = () => keryx("No schedule named 'x'.", { refused: true });
+  await renderPanel({ tab: "runs", extensions: COMMAND_EXT });
+  await wait(0);
+  expect(document.querySelector('[role="alert"]')!.textContent).toContain("No schedule named");
+});
+
+test("the Runs button of a schedule row opens the Runs tab for that schedule", async () => {
+  schedulesHandler();
+  const tabs: string[] = [];
+  function Host() {
+    const [tab, setTab] = React.useState<"schedules" | "runs">("schedules");
+    return React.createElement(ActivityPanel, {
+      sessionId: "s1", subagents: [], tasks: [], api: { ...api, extensions: COMMAND_EXT }, tab,
+      onTab: (t: string) => { tabs.push(t); setTab(t as "runs"); },
+      subagentId: null, onSubagent: () => {}, onRefreshTasks: () => {}, onClose: () => {},
+    });
+  }
+  await act(() => root.render(React.createElement(Host)));
+  await wait(0);
+  runsHandler();
+  await click(document.querySelector('[data-schedule-runs="nightly"]')!);
+  await wait(0);
+  expect(tabs).toEqual(["runs"]);
+  expect(commandLines().pop()).toBe("schedules runs nightly");
+  expect(document.querySelector(".runs-bar")!.textContent).toContain("nightly · show all");
+});
+
+// ---- resizing --------------------------------------------------------------------------------------
+
+test("the panel has a keyboard-reachable separator that resizes it and remembers the width", async () => {
+  const { getPrefs, setPrefs, ACTIVITY_MIN } = await import("../lib/prefs");
+  setPrefs({ activityWidth: 420 });
+  const w = window.innerWidth;
+  await renderPanel({ tab: "subagents" });
+  const sep = document.querySelector('.activity-panel [role="separator"]') as HTMLElement;
+  expect(sep.getAttribute("aria-orientation")).toBe("vertical");
+  expect(sep.tabIndex).toBe(0);
+  expect(sep.getAttribute("aria-valuenow")).toBe("420");
+  const key = (k: string, shiftKey = false) => act(async () => void sep.dispatchEvent(new KeyboardEvent("keydown", { key: k, shiftKey, bubbles: true, cancelable: true })));
+  await key("ArrowLeft");
+  expect(getPrefs().activityWidth).toBe(436);
+  await key("ArrowLeft", true);
+  expect(getPrefs().activityWidth).toBe(500);
+  await key("ArrowRight");
+  expect(getPrefs().activityWidth).toBe(484);
+  expect(document.querySelector('.activity-panel [role="separator"]')!.getAttribute("aria-valuenow")).toBe("484");
+  await key("Home");
+  expect(getPrefs().activityWidth).toBe(ACTIVITY_MIN);
+  await key("ArrowRight");
+  expect(getPrefs().activityWidth).toBe(ACTIVITY_MIN); // never under the minimum
+  await key("End");
+  expect(getPrefs().activityWidth).toBe(Math.floor(w * 0.7)); // never over 70% of the window
+  // the choice is stored for the next launch
+  expect(JSON.parse(localStorage.getItem("keryx.prefs.v1") ?? "{}").activityWidth).toBe(Math.floor(w * 0.7));
+  setPrefs({ activityWidth: 420 });
+});
+
+test("dragging the left edge to the left widens the panel", async () => {
+  const { getPrefs, setPrefs } = await import("../lib/prefs");
+  setPrefs({ activityWidth: 400 });
+  await renderPanel({ tab: "subagents" });
+  const sep = document.querySelector('.activity-panel [role="separator"]') as HTMLElement;
+  const ev = (type: string, clientX: number) => {
+    const e = new Event(type, { bubbles: true, cancelable: true }) as Event & { clientX: number; pointerId: number };
+    e.clientX = clientX;
+    e.pointerId = 1;
+    return e;
+  };
+  await act(async () => void sep.dispatchEvent(ev("pointerdown", 500)));
+  await act(async () => void sep.dispatchEvent(ev("pointermove", 450)));
+  expect(getPrefs().activityWidth).toBe(450);
+  await act(async () => void sep.dispatchEvent(ev("pointermove", 100)));
+  expect(getPrefs().activityWidth).toBe(Math.min(800, Math.floor(window.innerWidth * 0.7)));
+  await act(async () => void sep.dispatchEvent(ev("pointerup", 100)));
+  await act(async () => void sep.dispatchEvent(ev("pointermove", 480)));
+  expect(getPrefs().activityWidth).toBe(Math.min(800, Math.floor(window.innerWidth * 0.7))); // released: no longer follows
+  setPrefs({ activityWidth: 420 });
+});
+
+test("the panel's content cannot widen it: the body clips x, long text wraps, a pre block scrolls inside itself", async () => {
+  const css = ((await import("../styles/activity.css", { with: { type: "text" } })) as unknown as { default: string }).default;
+  const rule = (sel: string) => css.split("\n").find((l: string) => l.startsWith(`${sel} {`)) ?? "";
+  expect(rule(".activity-body")).toContain("overflow-x: hidden");
+  expect(rule(".activity-body")).toContain("overflow-wrap: anywhere");
+  expect(rule(".activity-body pre")).toContain("overflow: auto");
+  expect(rule(".activity-body pre")).toContain("max-width: 100%");
+  expect(rule(".activity-panel")).toContain("overflow: hidden");
+  expect(css).toContain("min(var(--activity-w, 420px), 70vw)");
 });

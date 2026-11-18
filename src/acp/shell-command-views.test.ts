@@ -370,6 +370,46 @@ describe("/schedules", () => {
   });
 });
 
+describe("/schedules runs and run-log", () => {
+  test("runs is a view whose rows open run-log; run-log carries the report and the log as rows", async () => {
+    const root = project();
+    writeTriggers(root, [{ name: "nightly", on: { kind: "schedule", cron: "0 2 * * *" }, action: { kind: "rebuild" } }]);
+    const { appendTriggerRunRecord } = await import("../trigger/record");
+    await appendTriggerRunRecord(root, {
+      at: "2026-11-18T02:00:05.000Z",
+      trigger: "nightly",
+      firedBy: { kind: "schedule", cron: "0 2 * * *" },
+      action: { kind: "rebuild" },
+      outcome: "ok",
+      detail: "rebuilt",
+      cost: { recorded: false, reason: "no model" },
+    } as never);
+    const logDir = path.join(root, ".metaproject", "data", "trigger", "run-now");
+    mkdirSync(logDir, { recursive: true });
+    writeFileSync(path.join(logDir, "nightly-2026-11-18T02-00-00-000Z.log"), "building\n");
+    const host = fakeHost(root, tempDir("keryx-acp-views-config-"));
+    const list = viewOf(await run(host, "schedules", "runs nightly"));
+    expect(list.title).toBe("Runs of nightly");
+    expect(list.rows.map((row) => row.status)).toEqual(["ok"]);
+    const open = list.rows[0]?.actions[0]?.command ?? "";
+    expect(open).toBe("/schedules run-log nightly 2026-11-18T02:00:05.000Z");
+    const detail = viewOf(await run(host, "schedules", open.replace("/schedules ", "")));
+    expect(detail.rows.map((row) => row.id)).toEqual(["report", "log"]);
+    expect(detail.rows[1]?.detail).toBe("building\n");
+    expect(detail.rows[0]?.status).toBe("missing");
+  });
+
+  test("a missing name, an unknown schedule and an unknown run are refused", async () => {
+    const root = project();
+    writeTriggers(root, [{ name: "nightly", on: { kind: "schedule", cron: "0 2 * * *" }, action: { kind: "rebuild" } }]);
+    const host = fakeHost(root, tempDir("keryx-acp-views-config-"));
+    for (const args of ["runs nosuch", "run-log", "run-log nightly", "run-log nightly nope", "run-log nosuch x"]) {
+      expect((await run(host, "schedules", args)).refused).toBe(true);
+    }
+    expect(viewOf(await run(host, "schedules", "runs")).rows).toEqual([]);
+  });
+});
+
 describe("/schedule", () => {
   let keyHome = "";
   const saved = { HOME: process.env["HOME"], XDG_DATA_HOME: process.env["XDG_DATA_HOME"] };

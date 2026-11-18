@@ -5,9 +5,12 @@ import { Markdown } from "../components/Markdown";
 import { Dialog, Spinner } from "../components/ui";
 import { runningSubagents, statusLabel, type Subagent } from "./activity";
 import { SchedulesTab } from "./SchedulesTab";
+import { RunsTab } from "./RunsTab";
+import { ResizeHandle } from "../components/ResizeHandle";
+import { ACTIVITY_MAX_SHARE, ACTIVITY_MIN, setPrefs, usePrefs } from "../lib/prefs";
 import { COMMAND_METHOD } from "../acp/commands";
 
-export type ActivityTab = "subagents" | "tasks" | "schedules";
+export type ActivityTab = "subagents" | "tasks" | "schedules" | "runs";
 
 export interface ActivityApi {
   request<T>(method: string, params?: unknown): Promise<T>;
@@ -37,8 +40,18 @@ export function ActivityPanel({ sessionId, subagents, tasks, api, tab, onTab, su
   const runningAgents = runningSubagents(subagents);
   const hasTasks = supportsTasks(api.extensions);
   const hasSchedules = api.extensions.includes(COMMAND_METHOD);
+  const prefs = usePrefs();
+  /** The schedule the Runs tab is limited to (null: every schedule). */
+  const [runsFor, setRunsFor] = useState<string | null>(null);
   return (
     <aside className="activity-panel" aria-label="Activity">
+      <ResizeHandle
+        width={prefs.activityWidth}
+        min={ACTIVITY_MIN}
+        max={() => Math.floor(window.innerWidth * ACTIVITY_MAX_SHARE)}
+        onChange={(w) => setPrefs({ activityWidth: w })}
+        label="Resize activity panel"
+      />
       <div className="activity-head">
         <div className="tabs activity-tabs" role="tablist">
           <button className="tab" role="tab" aria-selected={tab === "subagents"} onClick={() => onTab("subagents")}>
@@ -56,6 +69,11 @@ export function ActivityPanel({ sessionId, subagents, tasks, api, tab, onTab, su
               Schedules
             </button>
           ) : null}
+          {hasSchedules ? (
+            <button className="tab" role="tab" aria-selected={tab === "runs"} onClick={() => onTab("runs")}>
+              Runs
+            </button>
+          ) : null}
         </div>
         <button className="icon-btn icon-btn-sm" onClick={onClose} aria-label="Hide activity" title="Hide activity">
           <Icon name="x" size={13} />
@@ -65,7 +83,17 @@ export function ActivityPanel({ sessionId, subagents, tasks, api, tab, onTab, su
         {tab === "tasks" && hasTasks ? (
           <TasksTab key={sessionId} sessionId={sessionId} tasks={tasks} api={api} onRefresh={onRefreshTasks} pollMs={pollMs} />
         ) : tab === "schedules" && hasSchedules ? (
-          <SchedulesTab key={sessionId} sessionId={sessionId} api={api} />
+          <SchedulesTab
+            key={sessionId}
+            sessionId={sessionId}
+            api={api}
+            onShowRuns={(name) => {
+              setRunsFor(name);
+              onTab("runs");
+            }}
+          />
+        ) : tab === "runs" && hasSchedules ? (
+          <RunsTab key={`${sessionId}:${runsFor ?? ""}`} sessionId={sessionId} api={api} schedule={runsFor} onSchedule={setRunsFor} />
         ) : (
           <SubagentsTab key={sessionId} subagents={subagents} selected={subagentId} onSelect={onSubagent} />
         )}
