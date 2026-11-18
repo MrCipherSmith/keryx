@@ -477,7 +477,8 @@ is what the keryx desktop app launches, and is open to any ACP client:
   pinned?, flow?}` archives/unarchives, pins/unpins or links to a flow package
   (`flow: null` unlinks) a stored session (kept in its `flags.json`) and
   answers `{archivedAt?, pinnedAt?, flow?}`; `session/list` reports set flags
-  as `_meta.keryx`. The request `_keryx/session_trash {sessionId,
+  as `_meta.keryx`, together with `messageCount` (the messages the session
+  holds; 0 for a session nobody has written in). The request `_keryx/session_trash {sessionId,
   cwd?}` moves a stored session to the system trash (macOS `~/.Trash`, the
   freedesktop trash on Linux) and answers `{trashedTo}`: a held idle session
   is released first; one with a running turn or task, or held by another

@@ -242,7 +242,26 @@ export interface GitInfo {
   ahead: number;
   behind: number;
   changed: number;
+  /** The folder's name when it is a linked git worktree, `null` in the main checkout. */
+  worktree: string | null;
 }
 
 /** `null` outside a git checkout, or when git is missing or slow. */
 export const gitInfo = (cwd: string) => invoke<GitInfo | null>("git_info", { cwd });
+
+/** The open GitHub PR of the project's branch, summarized from the `gh` CLI. */
+export interface PrInfo {
+  number: number;
+  url: string;
+  isDraft: boolean;
+  /** `APPROVED`, `CHANGES_REQUESTED`, `REVIEW_REQUIRED` or empty. */
+  reviewDecision: string;
+  ci: "passed" | "failed" | "pending" | "none";
+  checksPassed: number;
+  checksFailed: number;
+  checksPending: number;
+  unresolvedThreads: number;
+}
+
+/** `null` when there is no open PR, or `gh` is missing, signed out, offline or slow. */
+export const prInfo = (cwd: string) => invoke<PrInfo | null>("pr_info", { cwd });

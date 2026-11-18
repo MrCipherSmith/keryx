@@ -11,6 +11,7 @@ import { ActivityPanel, type ActivityTab } from "./ActivityPanel";
 import { runningSubagents } from "./activity";
 import { isRunning } from "../acp/providers";
 import { setActivityRunning, useSlot } from "../panels/sideSlots";
+import { GitStatus } from "./GitStatus";
 import { SessionInfoPanel } from "./SessionInfoPanel";
 import { SessionSidebar } from "./SessionSidebar";
 import { Transcript } from "./Transcript";
@@ -357,7 +358,7 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
             onModel={(c, v) => void s.setModel(c, v)}
             onProviders={() => onProviders("connect", "")}
           />
-          <UsageFooter usage={state.usage} version={state.agentVersion} />
+          <UsageFooter usage={state.usage} version={state.agentVersion} cwd={cwd} busy={state.busy} />
         </div>
       </section>
       {ask ? (
@@ -481,13 +482,19 @@ function pairText(p: { inputTokens: number; outputTokens: number }): string {
   return `${formatTokens(p.inputTokens)} in · ${formatTokens(p.outputTokens)} out`;
 }
 
-function UsageFooter({ usage, version }: { usage: Usage | null; version: string | null }) {
+function UsageFooter({ usage, version, cwd, busy }: { usage: Usage | null; version: string | null; cwd: string; busy: boolean }) {
   const parts = useMemo(() => {
     if (!usage) return null;
     const ctx = usage.size > 0 ? Math.min(100, Math.round((usage.used / usage.size) * 100)) : null;
     return { ctx };
   }, [usage]);
-  if (!usage || !parts) return <div className="usage-footer">{version ? <span>keryx {version}</span> : null}</div>;
+  if (!usage || !parts) return (
+      <div className="usage-footer">
+        <GitStatus cwd={cwd} busy={busy} />
+        <span className="grow" />
+        {version ? <span>keryx {version}</span> : null}
+      </div>
+    );
   const turnTitle = usage.turn ? `This turn: ${pairText(usage.turn)}` : undefined;
   return (
     <div className="usage-footer">
@@ -505,6 +512,7 @@ function UsageFooter({ usage, version }: { usage: Usage | null; version: string 
           {usage.cost.amount.toFixed(4)} {usage.cost.currency}
         </span>
       ) : null}
+      <GitStatus cwd={cwd} busy={busy} />
       <span className="grow" />
       {version ? <span>keryx {version}</span> : null}
     </div>

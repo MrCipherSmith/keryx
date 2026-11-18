@@ -51,8 +51,10 @@ describe("shell profile: organise sessions", () => {
 
         await call(h, FLAGS, { sessionId: id, cwd: h.projectDir, archived: false, pinned: false });
         const again = await call(h, "session/list", { cwd: h.projectDir });
-        const cleared = (again.result?.["sessions"] as Array<Record<string, unknown>>).find((s) => s["sessionId"] === id);
-        expect(cleared?.["_meta"]).toBeUndefined();
+        const cleared = (again.result?.["sessions"] as Array<Record<string, any>>).find((s) => s["sessionId"] === id);
+        // Only the message count is left once the flags are cleared.
+        expect(Object.keys(cleared?.["_meta"]?.keryx ?? {})).toEqual(["messageCount"]);
+        expect(typeof cleared?.["_meta"]?.keryx?.messageCount).toBe("number");
 
         const linked = await call(h, FLAGS, { sessionId: id, cwd: h.projectDir, flow: "495-2026-11-17-cards" });
         expect(linked.result?.["flow"]).toBe("495-2026-11-17-cards");

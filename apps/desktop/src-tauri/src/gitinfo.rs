@@ -26,6 +26,20 @@ pub struct GitInfo {
     pub behind: u32,
     /// Files with staged or unstaged changes, untracked ones included.
     pub changed: u32,
+    /// The folder's name when it is a linked git worktree (not the main checkout).
+    pub worktree: Option<String>,
+}
+
+/// Parses `git rev-parse --git-dir --git-common-dir --show-toplevel`: a linked worktree
+/// is a checkout whose git dir differs from the common one; its name is the folder's.
+pub fn parse_worktree(text: &str) -> Option<String> {
+    let mut lines = text.lines();
+    let (git_dir, common, top) = (lines.next()?, lines.next()?, lines.next()?);
+    let canon = |p: &str| std::fs::canonicalize(Path::new(top).join(p)).unwrap_or_else(|_| Path::new(top).join(p));
+    if canon(git_dir) == canon(common) {
+        return None;
+    }
+    Path::new(top).file_name().map(|n| n.to_string_lossy().into_owned())
 }
 
 /// Parses `git status --porcelain=v2 --branch` output.
@@ -64,7 +78,21 @@ fn read(dir: &Path, path_env: Option<&str>) -> Option<GitInfo> {
         cmd.env("PATH", p);
     }
     let out = child::run_bounded(cmd, GIT_TIMEOUT, OUTPUT_CAP).ok()?;
-    out.status.success().then(|| parse_status(&out.stdout))
+    if !out.status.success() {
+        return None;
+    }
+    let mut info = parse_status(&out.stdout);
+    let mut rev = Command::new("git");
+    rev.args(["rev-parse", "--git-dir", "--git-common-dir", "--show-toplevel"]).current_dir(dir);
+    if let Some(p) = path_env {
+        rev.env("PATH", p);
+    }
+    if let Ok(o) = child::run_bounded(rev, GIT_TIMEOUT, 16 * 1024) {
+        if o.status.success() {
+            info.worktree = parse_worktree(&o.stdout);
+        }
+    }
+    Some(info)
 }
 
 /// The git state of `cwd`, or `null` outside a repository (or when git is slow or missing).
@@ -92,6 +120,7 @@ mod tests {
                 ahead: 2,
                 behind: 1,
                 changed: 2,
+                worktree: None,
             }
         );
     }
@@ -103,6 +132,15 @@ mod tests {
         assert_eq!(detached.commit.as_deref(), Some("abcdef012"));
         let fresh = parse_status("# branch.oid (initial)\n# branch.head main\n");
         assert_eq!((fresh.branch.as_deref(), fresh.commit), (Some("main"), None));
+    }
+
+    #[test]
+    fn a_linked_worktree_is_told_from_the_main_checkout() {
+        let main = "/nonexistent/repo/.git\n/nonexistent/repo/.git\n/nonexistent/repo\n";
+        assert_eq!(parse_worktree(main), None);
+        let linked = "/nonexistent/repo/.git/worktrees/feat\n/nonexistent/repo/.git\n/nonexistent/wt/feat\n";
+        assert_eq!(parse_worktree(linked).as_deref(), Some("feat"));
+        assert_eq!(parse_worktree(""), None);
     }
 
     #[test]

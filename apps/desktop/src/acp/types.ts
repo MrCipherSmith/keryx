@@ -161,12 +161,18 @@ export interface SessionInfo {
   cwd: string;
   title?: string | null;
   updatedAt?: string | null;
-  /** keryx's shell profile reports the flags here. */
-  _meta?: { keryx?: SessionFlags } | null;
+  /** keryx's shell profile reports the flags here, and (0.4.38+) how many messages the session holds. */
+  _meta?: { keryx?: SessionFlags & { messageCount?: number } } | null;
 }
 
 export function sessionFlags(s: SessionInfo): SessionFlags {
   return s._meta?.keryx ?? {};
+}
+
+/** Messages the stored session holds; null when this keryx does not report it. */
+export function messageCount(s: SessionInfo): number | null {
+  const n = s._meta?.keryx?.messageCount;
+  return typeof n === "number" ? n : null;
 }
 
 export type SessionUpdate =
