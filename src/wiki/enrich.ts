@@ -2,8 +2,9 @@
 //
 // Targets draft wiki pages by default (or all statuses with `--force`), rewrites
 // prose through provider turns, validates each result, optionally marks
-// Status: accepted, and can run a bounded parallel worker pool (same shape a
-// future subagent swarm would use — one worker per page, concurrency-capped).
+// Status: accepted, and can run a bounded parallel worker pool: one worker per
+// page, or with `--group related` / `--pages` one worker per group of related
+// pages whose prompts name each other (`enrich-groups.ts`).
 //
 // FAIL-CLOSED without credentials. Provider/model default from shell auth.json
 // (not a hard-coded anthropic-only path). Progress via onPage + stderr.
@@ -25,6 +26,7 @@ import { classifyPage, computeGraphFanIn, computePageGraphSignals } from "./clas
 import { collectPages, computeModuleKeyFiles, keyFilesForPage } from "./collect";
 import { loadWikiConfig, type WikiConfig } from "./config";
 import { enrichPageDeep } from "./deep-enrich";
+import { DEFAULT_GROUP_SIZE, groupRelatedPages, type GroupSizeRange } from "./enrich-groups";
 import { openWikiWriteContext, type WikiWriteContext, writeWikiPage } from "./history";
 import { checkPageInvariants, describeViolations, preserveEnrichInvariants, unwrapFencedReply } from "./page-invariants";
 import type { ResumeState } from "./resume-state";
@@ -48,8 +50,13 @@ export const DEFAULT_MAX_OUTPUT_TOKENS = 8192;
 /** Default parallel workers. 1 = sequential; raise for a page swarm. */
 export const DEFAULT_CONCURRENCY = 1;
 
-/** Hard ceiling so a typo cannot open hundreds of provider streams. */
-export const MAX_CONCURRENCY = 8;
+/**
+ * Hard ceiling so a typo cannot open hundreds of provider streams. A request
+ * above it is clamped and the run says so (`concurrencyClamped`, stderr): it
+ * used to be clamped to 8 silently, and an agent then promised a user 10.
+ * 16 leaves room for the common "10 at a time" while still bounding a typo.
+ */
+export const MAX_CONCURRENCY = 16;
 
 /** Fallback only when neither CLI flags nor auth.json provide a provider. */
 const FALLBACK_PROVIDER = "anthropic";
@@ -79,10 +86,25 @@ export interface WikiEnrichInput {
   /** Max pages this run (after filters / resume). CLI: `--limit`. */
   limit?: number;
   /**
-   * Parallel page workers (1..{@link MAX_CONCURRENCY}). Lays the groundwork for
-   * a multi-agent enrich swarm (one logical worker per page).
+   * Parallel workers (1..{@link MAX_CONCURRENCY}): pages at a time, or groups
+   * at a time when {@link group} is set. Clamped with a notice above the cap.
    */
   concurrency?: number;
+  /**
+   * Enrich exactly these pages (slugs or wiki-relative paths, any status).
+   * CLI: `--pages <file|list>`. Without {@link group} they form ONE group:
+   * one worker takes them in turn and each prompt names the others — the unit
+   * an agent hands to one worker. A name that matches no page fails loudly.
+   */
+  pages?: string[];
+  /**
+   * `"related"`: partition the selected pages into groups of related pages
+   * (wiki links, backlinks, shared code paths — `enrich-groups.ts`) and give
+   * each worker one whole group. CLI: `--group related`.
+   */
+  group?: "related";
+  /** Group size range for {@link group}. Default {@link DEFAULT_GROUP_SIZE} (10-20). */
+  groupSize?: GroupSizeRange;
   /** Skip paths already recorded as completed in the resume state file. */
   resume?: boolean;
   /** Run `gdgraph build` before enriching. */
@@ -159,7 +181,17 @@ export interface WikiEnrichResult {
   provider: string;
   model: string;
   credentialAvailable: boolean;
+  /** Workers actually used (after clamping to {@link MAX_CONCURRENCY}). */
   concurrency: number;
+  /** Set when the requested concurrency was outside 1..{@link MAX_CONCURRENCY}. */
+  concurrencyClamped?: { requested: number; applied: number; max: number };
+  /**
+   * The groups this run used, in run order (wiki-relative paths), when it ran
+   * grouped (`group: "related"` or `pages`). Absent on a page-at-a-time run.
+   */
+  groups?: string[][];
+  /** Human-readable notices also printed to stderr (clamping, grouping caveats). */
+  notices?: string[];
   /** History run the written pages are recorded under; undo with `wiki restore --run`. */
   historyRunId?: string;
   pages: WikiEnrichPageResult[];
@@ -298,19 +330,99 @@ async function loadSystemPrompt(cwd: string): Promise<string> {
  */
 export async function selectPages(input: WikiEnrichInput): Promise<WikiPage[]> {
   const pages = await collectPages(input.cwd);
+  if (input.pages !== undefined) {
+    const chosen = new Set<WikiPage>();
+    for (const name of input.pages) for (const page of matchPages(pages, name)) chosen.add(page);
+    return pages.filter((page) => chosen.has(page));
+  }
   if (input.page) {
-    const needle = input.page.replace(/\.md$/, "");
-    return pages.filter(
-      (page) =>
-        page.relativePath === input.page ||
-        page.relativePath.replace(/\.md$/, "") === needle ||
-        page.relativePath.replace(/\.md$/, "").endsWith(`/${needle}`),
-    );
+    return matchPages(pages, input.page);
   }
   if (input.force) {
     return pages;
   }
   return pages.filter((page) => (page.status ?? "draft") === "draft");
+}
+
+/** Pages a slug or wiki-relative path names (`x`, `x.md`, `dir/x`, or a trailing `/x`). */
+export function matchPages(pages: readonly WikiPage[], name: string): WikiPage[] {
+  const needle = name.replace(/\.md$/, "");
+  return pages.filter(
+    (page) =>
+      page.relativePath === name ||
+      page.relativePath.replace(/\.md$/, "") === needle ||
+      page.relativePath.replace(/\.md$/, "").endsWith(`/${needle}`),
+  );
+}
+
+/** Clamp a requested worker count to 1..{@link MAX_CONCURRENCY}, saying when it did. */
+export function clampConcurrency(requested: number | undefined): {
+  applied: number;
+  clamped?: { requested: number; applied: number; max: number };
+  notice?: string;
+} {
+  const wanted = requested ?? DEFAULT_CONCURRENCY;
+  const applied = Number.isFinite(wanted)
+    ? Math.max(1, Math.min(MAX_CONCURRENCY, Math.floor(wanted)))
+    : DEFAULT_CONCURRENCY;
+  if (applied === wanted) {
+    return { applied };
+  }
+  return {
+    applied,
+    clamped: { requested: wanted, applied, max: MAX_CONCURRENCY },
+    notice:
+      wanted > MAX_CONCURRENCY
+        ? `--concurrency ${wanted} is above the cap of ${MAX_CONCURRENCY}; running ${applied} workers`
+        : `--concurrency ${wanted} is not a positive whole number; running ${applied} worker(s)`,
+  };
+}
+
+/**
+ * Partition already-selected pages into related groups (reads each page once).
+ * `pages` given as an explicit list with no `group` is one group as given.
+ */
+export async function groupPagesForEnrich(
+  pages: readonly WikiPage[],
+  options: { group?: "related"; groupSize?: GroupSizeRange; explicitList?: boolean },
+): Promise<WikiPage[][]> {
+  if (options.group !== "related") {
+    return options.explicitList ? [[...pages]] : pages.map((page) => [page]);
+  }
+  const contents = await Promise.all(
+    pages.map(async (page) => ({
+      relativePath: page.relativePath,
+      content: await readFile(page.absolutePath, "utf8").catch(() => ""),
+    })),
+  );
+  const byPath = new Map(pages.map((page) => [page.relativePath, page]));
+  return groupRelatedPages(contents, options.groupSize ?? DEFAULT_GROUP_SIZE).map((group) =>
+    group.map((relativePath) => byPath.get(relativePath)!),
+  );
+}
+
+/**
+ * The groups a grouped run would use, without contacting a provider
+ * (`wiki enrich --list --group related`). Same selection as {@link wikiEnrich}:
+ * drafts unless `force`, minus `resume`-completed pages, capped by `limit`.
+ * An agent that drives its own waves hands each group to one worker with `--pages`.
+ */
+export async function planEnrichGroups(
+  input: Pick<WikiEnrichInput, "cwd" | "force" | "resume" | "limit" | "pages" | "page" | "groupSize">,
+): Promise<string[][]> {
+  let pages = await selectPages(input);
+  if (input.resume === true) {
+    const done = new Set(loadResumeState(input.cwd).completed);
+    pages = pages.filter((p) => !done.has(p.relativePath));
+  }
+  if (typeof input.limit === "number" && input.limit > 0) {
+    pages = pages.slice(0, input.limit);
+  }
+  const groups = await groupPagesForEnrich(pages, {
+    group: "related",
+    ...(input.groupSize !== undefined ? { groupSize: input.groupSize } : {}),
+  });
+  return groups.map((group) => group.map((page) => page.relativePath));
 }
 
 /** Split the wiki into draft / accepted / other for planning UIs and `--list`. */
@@ -725,10 +837,8 @@ export async function wikiEnrich(input: WikiEnrichInput): Promise<WikiEnrichResu
   const { provider, model } = resolveEnrichProviderModel(input);
   const env = envWithSavedApiKeys(input.env ?? process.env);
   const credentialAvailable = hasCredential(provider, env);
-  const concurrency = Math.max(
-    1,
-    Math.min(MAX_CONCURRENCY, input.concurrency ?? DEFAULT_CONCURRENCY),
-  );
+  const clamp = clampConcurrency(input.concurrency);
+  const concurrency = clamp.applied;
   const maxOutputTokens = input.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS;
   const validate = input.validate !== false;
   // Flow 194 / issue #391 (SAC CLI bypass): `wiki enrich` used to accept a
@@ -750,6 +860,7 @@ export async function wikiEnrich(input: WikiEnrichInput): Promise<WikiEnrichResu
     model,
     credentialAvailable,
     concurrency,
+    ...(clamp.clamped !== undefined ? { concurrencyClamped: clamp.clamped } : {}),
     pages: [],
     enriched: 0,
     dryRun: 0,
@@ -757,6 +868,14 @@ export async function wikiEnrich(input: WikiEnrichInput): Promise<WikiEnrichResu
     cancelled: 0,
     failed: 0,
   };
+  // A notice is both in the result (`--json`, the shell) and on stderr.
+  const note = (message: string): void => {
+    (result.notices ??= []).push(message);
+    console.error(`[enrich] ${message}`);
+  };
+  if (clamp.notice !== undefined) {
+    note(clamp.notice);
+  }
 
   if (input.refreshGraph) {
     try {
@@ -770,6 +889,22 @@ export async function wikiEnrich(input: WikiEnrichInput): Promise<WikiEnrichResu
   }
 
   let pages = await selectPages(input);
+
+  // An explicit `pages` list that names a page the wiki does not have fails
+  // loudly per name instead of quietly enriching fewer pages than asked.
+  const missing: WikiEnrichPageResult[] = [];
+  if (input.pages !== undefined) {
+    const all = await collectPages(input.cwd);
+    for (const name of input.pages) {
+      if (matchPages(all, name).length === 0) {
+        missing.push({ path: name, action: "failed", reason: "no wiki page matches this name" });
+      }
+    }
+    for (const entry of missing) {
+      result.pages.push(entry);
+      result.failed += 1;
+    }
+  }
 
   const resumeStateEarly = input.resume === true ? loadResumeState(input.cwd) : null;
   if (resumeStateEarly !== null) {
@@ -800,6 +935,31 @@ export async function wikiEnrich(input: WikiEnrichInput): Promise<WikiEnrichResu
     return result;
   }
 
+  // Grouped run: one worker per group, pages renumbered in run order.
+  const grouped = input.group === "related" || input.pages !== undefined;
+  const groups = grouped
+    ? await groupPagesForEnrich(pages, {
+        ...(input.group !== undefined ? { group: input.group } : {}),
+        ...(input.groupSize !== undefined ? { groupSize: input.groupSize } : {}),
+        explicitList: input.pages !== undefined,
+      })
+    : pages.map((page) => [page]);
+  if (grouped) {
+    pages = groups.flat();
+    result.groups = groups.map((group) => group.map((page) => page.relativePath));
+    const sizes = groups.map((group) => group.length);
+    note(
+      `${groups.length} group(s) of ${Math.min(...sizes)}-${Math.max(...sizes)} page(s); ` +
+        `${Math.min(concurrency, groups.length)} group(s) at a time, one worker per group`,
+    );
+    if (wikiConfig.rlm.enabled) {
+      note(
+        "rlm mode (wiki.config.json): pages run in group order, but the rlm pipeline batches them itself " +
+          "and group mates are not added to prompts",
+      );
+    }
+  }
+
   const systemPrompt = await loadSystemPrompt(input.cwd);
   const total = pages.length;
   const onPage = input.onPage ?? defaultEnrichProgress;
@@ -819,7 +979,11 @@ export async function wikiEnrich(input: WikiEnrichInput): Promise<WikiEnrichResu
   // `wikiEnrich`), reached exclusively through the `else`.
   let pageResults: WikiEnrichPageResult[];
   if (!wikiConfig.rlm.enabled) {
-    pageResults = await mapPool(pages, concurrency, async (page, i) => {
+    const enrichPage = async (
+      page: WikiPage,
+      i: number,
+      mates: readonly WikiPage[],
+    ): Promise<WikiEnrichPageResult> => {
       const index = i + 1;
       const status = page.status ?? "draft";
       if (input.signal?.aborted) {
@@ -845,7 +1009,7 @@ export async function wikiEnrich(input: WikiEnrichInput): Promise<WikiEnrichResu
         provider,
         model,
         system: systemPrompt,
-        user: buildUserPrompt(page, original, input.prompt),
+        user: buildUserPrompt(page, original, input.prompt, mates),
         maxOutputTokens,
         requestId: `wiki-enrich:${page.relativePath}`,
         env,
@@ -974,7 +1138,24 @@ export async function wikiEnrich(input: WikiEnrichInput): Promise<WikiEnrichResu
         reason: cause instanceof Error ? cause.message : String(cause),
       };
     }
+    };
+    // One worker per group: a group's pages run in turn in that worker, each
+    // prompt naming the group's other pages. Ungrouped, every group is one page
+    // and this is the old page-at-a-time pool.
+    const starts: number[] = [];
+    let at = 0;
+    for (const group of groups) {
+      starts.push(at);
+      at += group.length;
+    }
+    const groupResults = await mapPool(groups, concurrency, async (group, g) => {
+      const out: WikiEnrichPageResult[] = [];
+      for (const [k, page] of group.entries()) {
+        out.push(await enrichPage(page, starts[g]! + k, grouped ? group.filter((mate) => mate !== page) : []));
+      }
+      return out;
     });
+    pageResults = groupResults.flat();
   } else {
     pageResults = await runRlmPipeline({
       cwd: input.cwd,
@@ -1068,7 +1249,12 @@ export async function wikiEnrich(input: WikiEnrichInput): Promise<WikiEnrichResu
 }
 
 /** Assemble the per-page user prompt. */
-function buildUserPrompt(page: WikiPage, original: string, extra?: string): string {
+function buildUserPrompt(
+  page: WikiPage,
+  original: string,
+  extra?: string,
+  mates: readonly WikiPage[] = [],
+): string {
   const parts = [
     `Wiki page type: ${page.pageType}`,
     `Title: ${page.title}`,
@@ -1080,10 +1266,35 @@ function buildUserPrompt(page: WikiPage, original: string, extra?: string): stri
     original.trimEnd(),
     "```",
   ];
+  if (mates.length > 0) {
+    parts.push("", buildGroupContext(page, mates));
+  }
   if (extra && extra.trim().length > 0) {
     parts.push("", `Additional instruction: ${extra.trim()}`);
   }
   return parts.join("\n");
+}
+
+/** Longest summary quoted per group mate, so a 20-page group stays a short block. */
+const GROUP_MATE_SUMMARY_MAX = 240;
+
+/**
+ * The related pages enriched alongside this one (`--group related` / `--pages`).
+ * Each mate's link is relative to this page, so a link the model adds resolves.
+ */
+export function buildGroupContext(page: WikiPage, mates: readonly WikiPage[]): string {
+  const fromDir = path.posix.dirname(page.relativePath);
+  const lines = [
+    "Related pages enriched in the same group (keep terminology consistent with them; you may link",
+    "to one with exactly the relative link shown, and only where the page's own content calls for it):",
+  ];
+  for (const mate of mates) {
+    const link = path.posix.relative(fromDir, mate.relativePath);
+    const summary = mate.summary.trim();
+    const short = summary.length > GROUP_MATE_SUMMARY_MAX ? `${summary.slice(0, GROUP_MATE_SUMMARY_MAX)}…` : summary;
+    lines.push(`- [${mate.title}](${link})${short.length > 0 ? ` — ${short}` : ""}`);
+  }
+  return lines.join("\n");
 }
 
 // ============================================================================
