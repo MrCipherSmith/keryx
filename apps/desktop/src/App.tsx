@@ -29,6 +29,7 @@ import type { ComposerHandle } from "./session/Composer";
 import { ProvidersDialog, useProvidersDialog, type ProvidersApi } from "./session/ProvidersDialog";
 import { SessionView } from "./session/SessionView";
 import { useAcpSession } from "./session/useAcpSession";
+import { projectActivity, railProjects, removeRailProject, syncRailProjects } from "./shell/projectRail";
 
 export function App() {
   const [cwd, setCwd] = useState<string | null | undefined>(undefined);
@@ -144,11 +145,17 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
   const narrow = useNarrow(1000);
   const { state } = s;
 
+  const [projects, setProjects] = useState<string[]>(() => railProjects(cwd, []));
   useEffect(() => {
     void settingsGet()
-      .then((st) => setRecents(st.recentProjects))
-      .catch(() => {});
-  }, []);
+      .then((st) => {
+        setRecents(st.recentProjects);
+        setProjects(syncRailProjects(cwd, st.recentProjects));
+      })
+      .catch(() => setProjects(syncRailProjects(cwd, [])));
+  }, [cwd]);
+  const removeProject = useCallback((p: string) => setProjects(removeRailProject(p)), []);
+  const activity = useMemo(() => projectActivity(s.marks), [s.marks]);
 
   const go = useCallback((v: View) => {
     setView(v);
@@ -318,6 +325,9 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       title={title}
       status={status}
       flowsActive={flowsActive}
+      projects={projects}
+      activity={activity}
+      onRemoveProject={removeProject}
       onOpenFolder={() => void openFolder()}
       onSwitchProject={onOpenProject}
       onNewWindow={(p) => void windowOpenProject(p)}

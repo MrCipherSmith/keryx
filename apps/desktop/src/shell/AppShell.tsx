@@ -7,6 +7,7 @@ import { overlayOpen } from "../components/ui";
 import { Icon, type IconName } from "../components/Icon";
 import { Menu, type MenuItem } from "../components/Menu";
 import { Kbd } from "../components/ui";
+import { projectHue, projectInitials, type ProjectActivity } from "./projectRail";
 
 export type View = "session" | "flows" | "settings";
 
@@ -35,6 +36,11 @@ interface ShellProps {
   title: ReactNode;
   status: { tone: "ok" | "busy" | "warn" | "danger" | "idle"; label: string; detail?: string };
   flowsActive: number;
+  /** The projects on the rail, in the user's order; `cwd` is one of them. */
+  projects: string[];
+  /** This window's project's live state (other projects run no keryx here). */
+  activity: ProjectActivity;
+  onRemoveProject: (cwd: string) => void;
   onOpenFolder: () => void;
   onSwitchProject: (cwd: string) => void;
   onNewWindow: (cwd: string) => void;
@@ -104,7 +110,7 @@ export function AppShell(p: ShellProps) {
       style={side ? ({ "--side-w": `${prefs.sidePanelWidth}px` } as React.CSSProperties) : undefined}
     >
       <TitleBar {...p} />
-      <Rail view={p.view} onView={p.onView} flowsActive={p.flowsActive} />
+      <Rail {...p} />
       <main className="app-main" id="main">
         {p.children}
       </main>
@@ -215,19 +221,86 @@ function TitleBar(p: ShellProps) {
   );
 }
 
-const RAIL: Array<{ id: View; label: string; icon: IconName; key: string }> = [
-  { id: "session", label: "Session", icon: "chat", key: "1" },
-  { id: "flows", label: "Flows", icon: "board", key: "2" },
-];
+const ACTIVITY_LABEL: Record<ProjectActivity, string> = {
+  action: "needs your answer",
+  busy: "working",
+  idle: "",
+};
 
-function Rail({ view, onView, flowsActive }: { view: View; onView: (v: View) => void; flowsActive: number }) {
+/** One project on the rail: its initials, a status dot, the full path on hover. */
+function ProjectButton({
+  path,
+  current,
+  active,
+  activity,
+  onOpen,
+  onMenu,
+}: {
+  path: string;
+  current: boolean;
+  active: boolean;
+  activity: ProjectActivity;
+  onOpen: () => void;
+  onMenu: (anchor: HTMLElement) => void;
+}) {
+  const name = basename(path);
+  const state = ACTIVITY_LABEL[activity];
+  const tip = `${name}${current ? " (open)" : ""}${state ? ` · ${state}` : ""}\n${path}`;
   return (
-    <nav className="rail" aria-label="Views">
-      {RAIL.map((r) => (
-        <RailButton key={r.id} active={view === r.id} onClick={() => onView(r.id)} icon={r.icon} label={r.label} shortcut={`${MOD}${r.key}`}>
-          {r.id === "flows" && flowsActive > 0 ? <span className="sr-only">, {flowsActive} active flows</span> : null}
-        </RailButton>
-      ))}
+    <button
+      className={`rail-project${active ? " is-active" : ""}${current ? " is-current" : ""}`}
+      style={{ "--project-hue": projectHue(path) } as React.CSSProperties}
+      onClick={onOpen}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onMenu(e.currentTarget);
+      }}
+      aria-current={current ? "page" : undefined}
+      aria-label={`${name}${state ? `, ${state}` : ""}`}
+      title={tip}
+    >
+      <span className="rail-project-mark">{projectInitials(name)}</span>
+      {activity !== "idle" ? <span className={`rail-dot rail-dot-${activity}`} aria-hidden /> : null}
+    </button>
+  );
+}
+
+function Rail(p: ShellProps) {
+  const { view, onView, flowsActive, cwd, projects, activity, onSwitchProject, onOpenFolder, onNewWindow, onRemoveProject } = p;
+  const [menu, setMenu] = useState<{ path: string; anchor: HTMLElement } | null>(null);
+  const items: MenuItem[] = menu
+    ? [
+        { kind: "header", id: "h", label: <span className="truncate" title={menu.path}>{menu.path}</span> },
+        ...(menu.path !== cwd ? [{ id: "open", label: "Open here", icon: "folder" as IconName, onSelect: () => onSwitchProject(menu.path) }] : []),
+        { id: "win", label: "Open in a new window", icon: "external", onSelect: () => onNewWindow(menu.path) },
+        ...(menu.path !== cwd ? [{ id: "rm", label: "Remove from the bar", icon: "x" as IconName, onSelect: () => onRemoveProject(menu.path) }] : []),
+      ]
+    : [];
+  return (
+    <nav className="rail" aria-label="Projects and views">
+      <div className="rail-projects" role="list" aria-label="Projects">
+        {projects.map((path) => (
+          <div role="listitem" key={path}>
+            <ProjectButton
+              path={path}
+              current={path === cwd}
+              active={path === cwd && view === "session"}
+              // Only this window's project runs a keryx: other projects show no live state.
+              activity={path === cwd ? activity : "idle"}
+              onOpen={() => (path === cwd ? onView("session") : onSwitchProject(path))}
+              onMenu={(anchor) => setMenu({ path, anchor })}
+            />
+          </div>
+        ))}
+        <button className="rail-project rail-add" onClick={onOpenFolder} title={`Add a project (${MOD}O)`} aria-label="Add a project">
+          <Icon name="plus" size={16} />
+        </button>
+      </div>
+      {menu ? <Menu anchor={menu.anchor} items={items} onClose={() => setMenu(null)} label="Project" width={300} /> : null}
+      <div className="rail-sep" />
+      <RailButton active={view === "flows"} onClick={() => onView("flows")} icon="board" label="Flows" shortcut={`${MOD}2`}>
+        {flowsActive > 0 ? <span className="sr-only">, {flowsActive} active flows</span> : null}
+      </RailButton>
       <div className="grow" />
       <RailButton active={view === "settings"} onClick={() => onView("settings")} icon="settings" label="Settings" shortcut={`${MOD},`} />
     </nav>

@@ -81,6 +81,33 @@ button { font: inherit; }
   position: absolute; top: 2px; right: 4px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: var(--r-pill);
   font: 700 calc(9.5px * var(--text-scale))/16px var(--font); text-align: center; color: var(--accent-fg); background: var(--accent);
 }
+/* Projects on the rail: initials on a per-project tint, a dot for live work or a waiting answer. */
+.rail-projects { display: flex; flex-direction: column; align-items: center; gap: 6px; min-height: 0; overflow-y: auto; padding: 2px 0; }
+.rail-project {
+  position: relative; display: grid; place-items: center; width: 38px; height: 38px; padding: 0;
+  color: hsl(var(--project-hue, 150) 35% 30%); background: hsl(var(--project-hue, 150) 40% 90%);
+  border: 1px solid transparent; border-radius: var(--r-lg); cursor: default;
+  font: 700 calc(12px * var(--text-scale))/1 var(--font); letter-spacing: 0.02em;
+  transition: border-color var(--dur-fast) ease, transform var(--dur-fast) ease, opacity var(--dur-fast) ease;
+}
+:root[data-theme="dark"] .rail-project { color: hsl(var(--project-hue, 150) 45% 82%); background: hsl(var(--project-hue, 150) 22% 22%); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .rail-project { color: hsl(var(--project-hue, 150) 45% 82%); background: hsl(var(--project-hue, 150) 22% 22%); }
+}
+.rail-project:not(.is-current) { opacity: 0.72; }
+.rail-project:hover { opacity: 1; border-color: var(--border-strong); }
+.rail-project.is-current { border-color: var(--accent); }
+.rail-project.is-active { box-shadow: 0 0 0 2px var(--accent-soft); }
+.rail-project:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.rail-project.rail-add { color: var(--fg-muted); background: none; border: 1px dashed var(--border-strong); opacity: 1; }
+.rail-project.rail-add:hover { color: var(--fg); background: var(--bg-hover); }
+.rail-dot {
+  position: absolute; top: -3px; right: -3px; width: 10px; height: 10px; border-radius: var(--r-pill);
+  border: 2px solid var(--bg-canvas);
+}
+.rail-dot-busy { background: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
+.rail-dot-action { background: var(--warn); }
+.rail-sep { width: 28px; height: 1px; margin: 4px 0; background: var(--border); flex: none; }
 .app-main { min-width: 0; min-height: 0; background: var(--bg-surface); position: relative; }
 .view { height: 100%; min-height: 0; }
 
