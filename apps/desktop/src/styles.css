@@ -549,6 +549,8 @@ button { font: inherit; }
 
 /* ---------------- project commands (wiki enrich dialog) ---------------- */
 .choice.is-disabled { opacity: 0.55; cursor: not-allowed; }
-.enrich-numbers { align-items: flex-start; margin-bottom: var(--sp-3); }
+.enrich-group { display: grid; gap: 6px; margin: 0 0 var(--sp-3); border: 0; padding: 0; min-width: 0; }
+.enrich-group .choice-list { grid-template-columns: 1fr 1fr; }
+.enrich-numbers, .enrich-row { align-items: flex-start; margin-bottom: var(--sp-3); }
 .enrich-range { display: flex; align-items: center; gap: var(--sp-2); }
 .enrich-numbers input[type="number"] { width: 72px; }

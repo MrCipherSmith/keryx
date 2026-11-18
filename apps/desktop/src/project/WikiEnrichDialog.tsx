@@ -108,7 +108,7 @@ export function WikiEnrichDialog({ listProviders, onRun, onClose, initial = DEFA
         </>
       }
     >
-      <fieldset className="field">
+      <fieldset className="enrich-group">
         <legend className="field-label">Run as</legend>
         <div className="choice-list" role="radiogroup" aria-label="Run as">
           <Choice name="mode" value="waves" current={s.mode} onChange={(mode) => set({ mode })} label="Waves of related groups" help="Pages that link to each other or cite the same code go to one worker together (--group related)." />
@@ -133,7 +133,7 @@ export function WikiEnrichDialog({ listProviders, onRun, onClose, initial = DEFA
         </div>
       ) : null}
 
-      <div className="field-row">
+      <div className="field-row enrich-row">
         <label className="field grow">
           <span className="field-label">Provider</span>
           <select value={s.provider} onChange={(e) => set({ provider: e.target.value })}>
@@ -152,7 +152,7 @@ export function WikiEnrichDialog({ listProviders, onRun, onClose, initial = DEFA
         </label>
       </div>
 
-      <fieldset className="field">
+      <fieldset className="enrich-group">
         <legend className="field-label">Pages</legend>
         <div className="choice-list" role="radiogroup" aria-label="Pages">
           <Choice name="scope" value="drafts" current={s.scope} onChange={(scope) => set({ scope })} label="Drafts only" help="Pages still Status: draft." />
@@ -160,7 +160,7 @@ export function WikiEnrichDialog({ listProviders, onRun, onClose, initial = DEFA
         </div>
       </fieldset>
 
-      <fieldset className="field">
+      <fieldset className="enrich-group">
         <legend className="field-label">Workers</legend>
         <div className="choice-list" role="radiogroup" aria-label="Workers">
           <Choice name="workers" value="internal" current={s.workers} onChange={(workers) => set({ workers })} label="Internal" help="keryx's own in-process workers, one model call per page." />
