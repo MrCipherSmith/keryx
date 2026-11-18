@@ -4,7 +4,7 @@
 // prose through provider turns, validates each result, optionally marks
 // Status: accepted, and can run a bounded parallel worker pool: one worker per
 // page, or with `--group related` / `--pages` one worker per group of related
-// pages whose prompts name each other (`enrich-groups.ts`).
+// pages whose prompts name each other (`page-groups.ts`).
 //
 // FAIL-CLOSED without credentials. Provider/model default from shell auth.json
 // (not a hard-coded anthropic-only path). Progress via onPage + stderr.
@@ -26,7 +26,7 @@ import { classifyPage, computeGraphFanIn, computePageGraphSignals } from "./clas
 import { collectPages, computeModuleKeyFiles, keyFilesForPage } from "./collect";
 import { loadWikiConfig, type WikiConfig } from "./config";
 import { enrichPageDeep } from "./deep-enrich";
-import { DEFAULT_GROUP_SIZE, groupRelatedPages, type GroupSizeRange } from "./enrich-groups";
+import { DEFAULT_GROUP_SIZE, groupRelatedPages, type GroupSizeRange } from "./page-groups";
 import { openWikiWriteContext, type WikiWriteContext, writeWikiPage } from "./history";
 import { checkPageInvariants, describeViolations, preserveEnrichInvariants, unwrapFencedReply } from "./page-invariants";
 import type { ResumeState } from "./resume-state";
@@ -99,7 +99,7 @@ export interface WikiEnrichInput {
   pages?: string[];
   /**
    * `"related"`: partition the selected pages into groups of related pages
-   * (wiki links, backlinks, shared code paths — `enrich-groups.ts`) and give
+   * (wiki links, backlinks, shared code paths — `page-groups.ts`) and give
    * each worker one whole group. CLI: `--group related`.
    */
   group?: "related";

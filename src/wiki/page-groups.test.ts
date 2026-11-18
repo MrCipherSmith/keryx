@@ -8,7 +8,7 @@ import {
   parseGroupSize,
   parsePagesArgument,
   type GroupablePage,
-} from "./enrich-groups";
+} from "./page-groups";
 import { clampConcurrency, MAX_CONCURRENCY, planEnrichGroups, wikiEnrich, type ProviderFactory } from "./enrich";
 import type { NormalizedEvent, ProviderPort, StreamOptions } from "../harness/provider/types";
 
@@ -193,7 +193,7 @@ function page(title: string, body: string): string {
 }
 
 async function seedWiki(): Promise<string> {
-  const root = await mkdtemp(path.join(tmpdir(), "gd-wiki-enrich-groups-"));
+  const root = await mkdtemp(path.join(tmpdir(), "gd-wiki-page-groups-"));
   const dir = path.join(root, ".metaproject", "wiki", "decisions");
   await mkdir(dir, { recursive: true });
   await writeFile(path.join(dir, "alpha.md"), page("Alpha", "Uses [Beta](beta.md). `src/a/x.ts`"), "utf8");

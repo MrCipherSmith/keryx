@@ -78,7 +78,7 @@ export {
 } from "./history";
 
 // `wiki enrich --group related` / `--pages` argument parsing, for the CLI.
-export { DEFAULT_GROUP_SIZE, type GroupSizeRange, parseGroupSize, parsePagesArgument } from "./enrich-groups";
+export { DEFAULT_GROUP_SIZE, type GroupSizeRange, parseGroupSize, parsePagesArgument } from "./page-groups";
 
 const EXTERNAL_LINK = /^(https?:|mailto:|tel:)/i;
 // The wiki scaffold is graph-driven: by default it covers EVERY module the graph
