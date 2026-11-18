@@ -22,7 +22,7 @@
 
 import { closeSync, existsSync, mkdirSync, openSync, readSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { redactSensitiveText } from "../security/redact";
+import { redactSensitiveText } from "../security/service";
 import type { ExternalAgentEntry } from "../harness/external/types";
 
 /** What a hand-back to the parent session may carry, in bytes. */

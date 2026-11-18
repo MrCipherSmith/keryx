@@ -18,7 +18,7 @@
 // before the shell's own parser sees the line, so the shell's CLI flags are unchanged.
 
 import { loadModelProfiles, profileKey } from "../harness/routing/model-profile";
-import { parseCadence } from "../trigger/cron";
+import { parseCadence } from "../commands/schedule-cadence";
 import { tokenizeArgs, SCHEDULE_SLASH_USAGE } from "../tui/schedule-command";
 import type { AcpModelChoice } from "./models";
 import type { ShellCommandHost } from "./shell-command-runners";

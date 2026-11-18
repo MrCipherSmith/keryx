@@ -18,7 +18,7 @@ import { parseDelegateCommand } from "../commands/agent-commands";
 import type { ExternalRunHandle } from "../harness/external/supervise";
 import type { ExternalEvent } from "../harness/external/types";
 import { canonicalExternalAgentId, getExternalAgent, interactiveArgvFor } from "../harness/external/registry";
-import { agentConfig, checkExternalAgentVendorGates, resolveExternalAgentsCapability } from "../capability/external-agents";
+import { agentConfig, checkExternalAgentVendorGates, resolveExternalAgentsCapability } from "../commands/external-agent-gates";
 import {
   createLazyRunExternal,
   type CreateRunExternalOptions,
@@ -27,7 +27,7 @@ import {
 } from "../harness/run-external-factory";
 import type { SpawnSubagentFleetEvent, StructuredSubagentResult } from "../harness/tool/builtin/spawn-subagent-tool";
 import type { PermissionMode } from "../commands/permission-mode";
-import { redactSensitiveText } from "../security/redact";
+import { redactSensitiveText } from "../security/service";
 import { delegateReport, OPERATOR_SANDBOX, type DelegateOutcome } from "../tui/external-operator";
 import { approvalFromPermissionResponse, ACP_PERMISSION_OPTION_IDS } from "./permission";
 import {
