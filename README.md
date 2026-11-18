@@ -141,6 +141,19 @@ first session:
   `keryx sessions list` shows them from outside it, and `keryx shell -r <id>`
   resumes one.
 
+### The macOS app (preview)
+
+The same session in a native window, with a Flows board:
+
+```bash
+npm i -g @mrciphersmith/keryx@latest
+keryx app install --relaunch
+```
+
+`keryx app update` installs newer app releases. See
+[Keryx for macOS](docs/docs/desktop-app.md) for requirements, updates and
+removal.
+
 ### Where to go next
 
 Full documentation site: **<https://mrciphersmith.github.io/keryx/>**, starting
