@@ -27,6 +27,8 @@ export interface Prefs {
   sidePanel: SidePanelTab | null;
   /** The side panel's width in pixels. */
   sidePanelWidth: number;
+  /** Per session: the user's choice to show (true) or fold (false) its subagents in the sidebar; absent = automatic. */
+  subagentTree: Record<string, boolean>;
 }
 
 export type SidePanelTab = "terminal" | "browser";
@@ -46,6 +48,7 @@ const DEFAULTS: Prefs = {
   collapsedGroups: [],
   sidePanel: null,
   sidePanelWidth: 520,
+  subagentTree: {},
 };
 
 export const UI_FONTS: Record<UiFont, string> = {
@@ -89,6 +92,10 @@ function read(): Prefs {
         typeof merged.sidePanelWidth === "number" && Number.isFinite(merged.sidePanelWidth)
           ? Math.min(SIDE_PANEL_MAX, Math.max(SIDE_PANEL_MIN, merged.sidePanelWidth))
           : DEFAULTS.sidePanelWidth,
+      subagentTree:
+        merged.subagentTree && typeof merged.subagentTree === "object" && !Array.isArray(merged.subagentTree)
+          ? Object.fromEntries(Object.entries(merged.subagentTree).filter(([, v]) => typeof v === "boolean"))
+          : {},
     };
   } catch {
     return DEFAULTS;

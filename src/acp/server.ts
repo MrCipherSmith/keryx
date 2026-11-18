@@ -1980,6 +1980,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         if (held !== undefined) held.goalPrompt = prompt;
       },
       externalRuns: () => externalRunsFor(sessionId, state),
+      modelChoices: () => modelChoices(sessionId, method),
       serverCommand: async (name, args): Promise<ShellCommandOutcome> => {
         const before = { mode: modeOf(sessionId), model: sessionModel(sessionId, method).choice.value, reasoning: reasoningOverrides.get(sessionId) };
         // Not tied to `session/cancel`: this is not a turn, so there is nothing for a cancel to reach.

@@ -23,23 +23,44 @@ export interface ShellViewRow {
   readonly actions: readonly ShellViewAction[];
 }
 
+/** One option of a `choice` field: the text sent, and the text shown when it differs. */
+export interface ShellViewOption {
+  readonly value: string;
+  readonly label?: string;
+}
+
 export interface ShellViewField {
   readonly id: string;
   readonly label: string;
-  readonly kind: "text" | "secret" | "choice" | "toggle";
-  readonly options?: readonly string[];
+  readonly kind: "text" | "secret" | "choice" | "toggle" | "number" | "time";
+  readonly options?: readonly (string | ShellViewOption)[];
   /** Prefilled content; the client starts the field with it. */
   readonly value?: string | boolean;
   /** A hint shown while the field is empty. */
   readonly placeholder?: string;
   /** The client keeps Submit disabled until the field is non-empty. */
   readonly required?: boolean;
+  /** The field exists only while another field holds one of these values; a hidden field is not required, not validated and not sent. */
+  readonly showWhen?: { readonly field: string; readonly equals: readonly string[] };
+  /** `number`: the smallest accepted value (inclusive). */
+  readonly min?: number;
+  /** `number`: the step the input offers. */
+  readonly step?: number;
+  /** `text`: a regular expression the whole value must match (`time` is always HH:MM). */
+  readonly pattern?: string;
+  /** What the client says under the field when its value does not pass `min` or `pattern`. */
+  readonly error?: string;
 }
 
 export interface ShellViewForm {
   readonly fields: readonly ShellViewField[];
-  /** A command line with `{fieldId}` placeholders the client fills in. */
+  /**
+   * A command line with `{fieldId}` placeholders the client fills in. A placeholder of a hidden
+   * field is dropped together with the `--flag` before it.
+   */
   readonly submit: string;
+  /** Present when the form cannot be submitted right now: the reason, shown in place of an enabled Submit. */
+  readonly disabled?: string;
 }
 
 export interface ShellView {

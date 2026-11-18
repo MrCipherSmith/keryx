@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import type { Root } from "react-dom/client";
 import type { SessionInfo } from "../acp/types";
+import type { Subagent } from "./activity";
+import type { SessionMark } from "./reducer";
 import { registerDom, unregisterDom } from "../test/dom";
 
 let root: Root;
@@ -38,17 +40,18 @@ interface Calls {
   trash: string[];
 }
 
-async function render(calls: Calls, trashResult = true) {
+async function render(calls: Calls, trashResult = true, extra: { marks?: Record<string, SessionMark>; onShowSubagent?: (sid: string, id: string) => void } = {}) {
   await act(() =>
     root.render(
       createElement(SessionSidebar, {
         sessions: SESSIONS,
-        marks: {},
+        marks: extra.marks ?? {},
         loadingIds: [],
         currentId: "a",
         ready: true,
         canOrganize: true,
         onNew: () => {},
+        onShowSubagent: extra.onShowSubagent ?? (() => {}),
         onLoad: () => {},
         onCollapse: () => {},
         onSetFlags: (id, change) => calls.flags.push([id, change as Record<string, boolean>]),
@@ -117,4 +120,63 @@ test("a group folds and unfolds; its rows hide while folded", async () => {
   expect(titles()).toEqual(["Alpha"]);
   await act(async () => pinned().click());
   expect(titles()).toEqual(["Beta", "Alpha"]);
+});
+
+const sub = (id: string, over: Partial<Subagent> = {}): Subagent => ({ id, label: id, status: "done", entries: [], ...over });
+const mark = (subagents: Subagent[], held = true): SessionMark => ({ busy: false, waiting: false, held, lostReason: null, title: null, running: 0, subagents });
+const children = (): string[] => Array.from(host.querySelectorAll(".session-child-label")).map((e) => e.textContent ?? "");
+const twist = (): HTMLButtonElement => host.querySelector(".session-twist") as HTMLButtonElement;
+
+test("subagents render as children under their session; none for a released or childless one", async () => {
+  localStorage.removeItem("keryx.prefs.v1");
+  const { setPrefs } = await import("../lib/prefs");
+  await act(async () => setPrefs({ subagentTree: {} }));
+  await render({ flags: [], trash: [] }, true, {
+    marks: {
+      a: mark([sub("s1", { label: "Researcher", status: "running", model: "m-1" }), sub("s2", { label: "Codex", runtime: "external", status: "failed" })]),
+      b: mark([sub("gone")], false),
+    },
+  });
+  // running one: open by default; the node is a child of Alpha's list item
+  expect(children()).toEqual(["Researcher", "Codex"]);
+  const node = host.querySelector(".session-children")!.closest("li.session-node")!;
+  expect(node.querySelector(".session-item-title")?.textContent).toBe("Alpha");
+  expect(host.querySelectorAll(".session-twist").length).toBe(1);
+  expect(host.querySelector(".session-child-model")?.textContent).toBe("m-1");
+  expect(host.querySelectorAll(".session-children .badge")).toHaveLength(1);
+  expect(host.querySelector(".session-children .badge")?.textContent).toBe("external");
+  expect(Array.from(host.querySelectorAll(".session-child-dot")).map((e) => e.getAttribute("aria-label"))).toEqual(["running", "failed"]);
+  expect(host.textContent).not.toContain("gone");
+});
+
+test("the fold toggles, is remembered per session and defaults to folded when nothing runs", async () => {
+  const { setPrefs } = await import("../lib/prefs");
+  await act(async () => setPrefs({ subagentTree: {} }));
+  const marks = { a: mark([sub("s1", { label: "Done one" })]) };
+  await render({ flags: [], trash: [] }, true, { marks });
+  expect(children()).toEqual([]);
+  expect(twist().getAttribute("aria-expanded")).toBe("false");
+  await act(async () => twist().click());
+  expect(twist().getAttribute("aria-expanded")).toBe("true");
+  expect(children()).toEqual(["Done one"]);
+  expect(JSON.parse(localStorage.getItem("keryx.prefs.v1")!).subagentTree).toEqual({ a: true });
+  // a remount keeps the choice
+  await act(async () => root.render(createElement("div")));
+  await render({ flags: [], trash: [] }, true, { marks });
+  expect(children()).toEqual(["Done one"]);
+  await act(async () => twist().click());
+  expect(children()).toEqual([]);
+  expect(JSON.parse(localStorage.getItem("keryx.prefs.v1")!).subagentTree).toEqual({ a: false });
+});
+
+test("clicking a child asks to show that subagent of that session", async () => {
+  const { setPrefs } = await import("../lib/prefs");
+  await act(async () => setPrefs({ subagentTree: {} }));
+  const shown: Array<[string, string]> = [];
+  await render({ flags: [], trash: [] }, true, {
+    marks: { b: mark([sub("x9", { label: "Runner", status: "running" })]) },
+    onShowSubagent: (sid, id) => shown.push([sid, id]),
+  });
+  await act(async () => (host.querySelector(".session-child") as HTMLButtonElement).click());
+  expect(shown).toEqual([["b", "x9"]]);
 });

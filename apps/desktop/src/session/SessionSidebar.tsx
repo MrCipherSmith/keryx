@@ -5,7 +5,10 @@ import { MOD, setPrefs, usePrefs } from "../lib/prefs";
 import { Icon } from "../components/Icon";
 import { Menu, type MenuItem } from "../components/Menu";
 import { Dialog, Spinner } from "../components/ui";
+import { runningSubagents, type Subagent } from "./activity";
 import { lostText, type SessionMark } from "./reducer";
+
+const NO_KIDS: readonly Subagent[] = [];
 import { countViews, groupSessions, type SidebarView } from "./sessionGroups";
 
 interface Props {
@@ -20,6 +23,8 @@ interface Props {
   canOrganize: boolean;
   onNew: () => void;
   onLoad: (id: string) => void;
+  /** Show a session (if not shown) and open the Activity panel on one of its subagents. */
+  onShowSubagent: (sessionId: string, subagentId: string) => void;
   onCollapse: () => void;
   onSetFlags: (
     id: string,
@@ -88,6 +93,7 @@ export const SessionSidebar = memo(function SessionSidebar({
   canOrganize,
   onNew,
   onLoad,
+  onShowSubagent,
   onCollapse,
   onSetFlags,
   onTrash,
@@ -116,6 +122,12 @@ export const SessionSidebar = memo(function SessionSidebar({
     },
     [collapsed],
   );
+
+  // A session's subagents show while any runs, unless the user chose either way for that session.
+  const subagentsOpen = (sid: string, kids: readonly Subagent[]): boolean =>
+    prefs.subagentTree?.[sid] ?? runningSubagents(kids) > 0;
+  const toggleSubagents = (sid: string, open: boolean) =>
+    setPrefs({ subagentTree: { ...prefs.subagentTree, [sid]: !open } });
 
   const counts = useMemo(() => countViews(sessions), [sessions]);
   const groups = useMemo(() => {
@@ -281,11 +293,28 @@ export const SessionSidebar = memo(function SessionSidebar({
                     const current = s.sessionId === currentId;
                     const mark = marks[s.sessionId];
                     const menuOpen = menu?.id === s.sessionId;
+                    const kids = mark?.held === false ? NO_KIDS : (mark?.subagents ?? NO_KIDS);
+                    const open = subagentsOpen(s.sessionId, kids);
                     return (
-                      <li
-                        key={s.sessionId}
-                        className={`session-row${menuOpen ? " is-menu" : ""}`}
+                      <li key={s.sessionId} className="session-node">
+                      <div
+                        className={`session-row${menuOpen ? " is-menu" : ""}${kids.length > 0 ? " has-children" : ""}`}
                       >
+                        {kids.length > 0 ? (
+                          <button
+                            className="session-twist"
+                            aria-expanded={open}
+                            aria-controls={`subagents-${s.sessionId}`}
+                            aria-label={`${open ? "Hide" : "Show"} subagents of ${titleOf(s, mark)}`}
+                            title={`${kids.length} subagent${kids.length === 1 ? "" : "s"}`}
+                            onClick={() => toggleSubagents(s.sessionId, open)}
+                          >
+                            <Icon
+                              name={open ? "chevronDown" : "chevronRight"}
+                              size={11}
+                            />
+                          </button>
+                        ) : null}
                         <button
                           className={`session-item${current ? " is-current" : ""}${mark && !mark.held ? " is-released" : ""}`}
                           aria-current={current ? "true" : undefined}
@@ -325,6 +354,43 @@ export const SessionSidebar = memo(function SessionSidebar({
                             <Icon name="more" size={14} />
                           </button>
                         ) : null}
+                      </div>
+                      {kids.length > 0 && open ? (
+                        <ul
+                          className="session-children"
+                          id={`subagents-${s.sessionId}`}
+                          role="group"
+                          aria-label={`Subagents of ${titleOf(s, mark)}`}
+                        >
+                          {kids.map((a) => (
+                            <li key={a.id}>
+                              <button
+                                className="session-child"
+                                title={a.task ?? a.detail ?? a.label}
+                                onClick={() => onShowSubagent(s.sessionId, a.id)}
+                              >
+                                <span
+                                  className={`session-child-dot status-${a.status}`}
+                                  role="img"
+                                  aria-label={a.status}
+                                  title={a.status}
+                                />
+                                <span className="session-child-label truncate">
+                                  {a.label}
+                                </span>
+                                {a.runtime === "external" ? (
+                                  <span className="badge badge-neutral">external</span>
+                                ) : null}
+                                {a.model ? (
+                                  <span className="session-child-model truncate">
+                                    {a.model}
+                                  </span>
+                                ) : null}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
                       </li>
                     );
                   })}

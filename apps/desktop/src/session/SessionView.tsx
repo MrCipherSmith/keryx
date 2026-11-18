@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useMemo, useState } from "react";
+import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PlanEntry } from "../acp/types";
 import { formatTokens } from "../lib/format";
 import { setPrefs, usePrefs, MOD } from "../lib/prefs";
@@ -40,7 +40,15 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
   const sidebarOpen = prefs.sessionSidebar && !narrow;
   const [narrowSidebar, setNarrowSidebar] = useState(false);
   const [activity, setActivity] = useState<{ open: boolean; tab: ActivityTab; subagentId: string | null }>({ open: false, tab: "subagents", subagentId: null });
-  useEffect(() => setActivity((a) => (a.subagentId === null ? a : { ...a, subagentId: null })), [state.sessionId]);
+  // A sidebar click on another session's subagent loads that session first; the panel opens on it once it is shown.
+  const pendingSubagent = useRef<{ sessionId: string; id: string } | null>(null);
+  useEffect(() => {
+    const p = pendingSubagent.current;
+    if (p && p.sessionId === state.sessionId) {
+      pendingSubagent.current = null;
+      setActivity({ open: true, tab: "subagents", subagentId: p.id });
+    } else setActivity((a) => (a.subagentId === null ? a : { ...a, subagentId: null }));
+  }, [state.sessionId]);
   const activityApi = useMemo(() => ({ request: s.rpc, extensions: s.extensions }), [s.rpc, s.extensions]);
   const activityRunning = runningSubagents(state.subagents) + state.tasks.filter(isRunning).length;
   const showSubagent = useCallback((id: string) => setActivity({ open: true, tab: "subagents", subagentId: id }), []);
@@ -147,6 +155,14 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
       onLoad={(id) => {
         setNarrowSidebar(false);
         void s.loadSession(id);
+      }}
+      onShowSubagent={(sessionId, id) => {
+        setNarrowSidebar(false);
+        if (sessionId === state.sessionId) showSubagent(id);
+        else {
+          pendingSubagent.current = { sessionId, id };
+          void s.loadSession(sessionId);
+        }
       }}
       onCollapse={() => (narrow ? setNarrowSidebar(false) : setPrefs({ sessionSidebar: false }))}
       onSetFlags={(id, change) => void s.setFlags(id, change)}

@@ -575,6 +575,8 @@ export interface SessionMark {
   title: string | null;
   /** Running subagents plus running tasks. */
   running: number;
+  /** The session's subagents (native and external); empty unless the session is held. */
+  subagents: readonly Subagent[];
 }
 
 /** The shown session flattened with the window's own fields: what SessionView and App render. */
@@ -654,6 +656,6 @@ export function activityCount(c: Pick<ConvState, "subagents" | "tasks">): number
 /** Marks for every session the window has, for the sidebar. */
 export function sessionMarks(w: WindowState, waiting: ReadonlySet<string>): Record<string, SessionMark> {
   const out: Record<string, SessionMark> = {};
-  for (const [sid, c] of Object.entries(w.convs)) out[sid] = { busy: c.busy, waiting: waiting.has(sid), held: c.held, lostReason: c.lostReason, title: c.title, running: activityCount(c) };
+  for (const [sid, c] of Object.entries(w.convs)) out[sid] = { busy: c.busy, waiting: waiting.has(sid), held: c.held, lostReason: c.lostReason, title: c.title, running: activityCount(c), subagents: c.held ? c.subagents : NO_SUBAGENTS };
   return out;
 }

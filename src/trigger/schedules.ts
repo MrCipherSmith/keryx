@@ -142,6 +142,15 @@ function defaultProviderReportsUsage(provider: string): boolean {
   return NATIVE_USAGE_PROVIDERS.has(provider);
 }
 
+/** The sentence a draft refuses a provider with when its token usage cannot be counted; the desktop form shows the same one up front. */
+export function providerUsageRefusal(provider: string): string {
+  return (
+    `"${provider}" is not known to report token usage on every response, so this schedule's cost ` +
+    "could not be counted against its ceiling — refusing to draft. Use anthropic, openai, gemini, or a registry " +
+    "provider whose entry sets streamUsage (for example grok, deepseek)."
+  );
+}
+
 export interface ScheduleDraft {
   /** The exact entry that will be stored if confirmed. */
   readonly entry: Record<string, unknown>;
@@ -212,11 +221,7 @@ export async function draftSchedule(request: ScheduleRequest, ctx: DraftContext)
   // that has no usable credential, must never reach a stored entry or an installed timer.
   const reportsUsage = ctx.providerReportsUsage ?? defaultProviderReportsUsage;
   if (!reportsUsage(request.provider)) {
-    problems.push(
-      `provider: "${request.provider}" is not known to report token usage on every response, so this schedule's cost ` +
-        "could not be counted against its ceiling — refusing to draft. Use anthropic, openai, gemini, or a registry " +
-        "provider whose entry sets streamUsage (for example grok, deepseek).",
-    );
+    problems.push(`provider: ${providerUsageRefusal(request.provider)}`);
   }
   if (ctx.checkCredential !== undefined) {
     const credential = await ctx.checkCredential(request.provider, request.model);

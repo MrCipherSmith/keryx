@@ -10,6 +10,7 @@
 // mode, shell tasks, lease) arrives through {@link ShellCommandHost}, so this file never
 // reaches into `server.ts` state and the table stays testable without a connection.
 
+import type { AcpModelChoice } from "./models";
 import { parseDemoteCommand } from "../commands/agent-commands";
 import { buildDoctorReport, formatDoctorReport } from "../commands/doctor";
 import { approvalsSlashText } from "../commands/approvals";
@@ -121,6 +122,8 @@ export interface ShellCommandHost {
   /** `/help`'s `/status`-style answers the server owns: `status`, `model`, `reasoning`, `mode`. */
   serverCommand(name: string, args: string): Promise<ShellCommandOutcome>;
   rewind(): RewindReadlineCommand;
+  /** The models the session may switch to (the picker's own list of connected providers); the `/schedule` form offers only the ones its usage rule accepts. */
+  modelChoices?(): Promise<readonly AcpModelChoice[]>;
   /** `/goal`: the session's slate, kept for its life (a `SlateSessionRef` is per session, as in the shells). */
   slate(): SlateSessionRef | undefined;
   /** `/goal`: the turn text the client is about to send. */
