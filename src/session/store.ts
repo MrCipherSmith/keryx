@@ -394,6 +394,60 @@ export function titleFromPrompt(content: string): string {
   return one.length > 60 ? `${one.slice(0, 57)}…` : one;
 }
 
+/**
+ * A user-role message the harness put into the history (a delegate result, a shell-task notice,
+ * an anchors block): it is not something the operator typed, so it never names the session.
+ */
+export function isInjectedUserMessage(m: NormalizedMessage): boolean {
+  if (m.role !== "user") return false;
+  if (m.injected === true || m.provenance === "harness" || m.provenance === "tool" || m.provenance === "model") return true;
+  return m.content.startsWith(DELEGATE_NOTE_PREFIX);
+}
+
+/** The banner line of a `/delegate` result note (`delegateResultNote`). */
+const DELEGATE_NOTE_PREFIX = "[delegate ";
+
+/** The first message an operator wrote: the one a session's title is derived from. */
+function firstOperatorMessage(messages: readonly NormalizedMessage[]): NormalizedMessage | undefined {
+  return messages.find((m) => m.role === "user" && !isInjectedUserMessage(m) && !m.content.startsWith("[Compacted"));
+}
+
+/** True when a stored title was derived from an injected note (the pre-fix behaviour). */
+function titleFromInjectedNote(title: string, messages: readonly NormalizedMessage[]): boolean {
+  if (title.startsWith(DELEGATE_NOTE_PREFIX)) return true;
+  return messages.some((m) => isInjectedUserMessage(m) && titleFromPrompt(m.content) === title);
+}
+
+/**
+ * Recomputes the title of a session whose title was taken from an injected harness note, from its
+ * first real user message, and stores it. The same handle back when nothing needed repair.
+ */
+export function repairInjectedTitle(handle: SessionHandle, messages: readonly NormalizedMessage[]): SessionHandle {
+  const title = handle.summary.title;
+  if (title === "New session" || title === "Untitled session" || !titleFromInjectedNote(title, messages)) return handle;
+  const first = firstOperatorMessage(messages);
+  const next = first !== undefined ? titleFromPrompt(first.content) : "Untitled session";
+  if (next === title) return handle;
+  const summary: SessionSummary = { ...handle.summary, title: next };
+  try {
+    writeSessionSummary(handle.dir, summary);
+  } catch {
+    // a read-only store keeps the old title on disk; the repaired one still shows this run
+  }
+  return { summary, dir: handle.dir };
+}
+
+/** A stored session's title as the list should show it: repaired when it came from an injected note. */
+export function listedTitle(cwd: string, summary: SessionSummary, dataDir?: string): string {
+  if (!summary.title.startsWith(DELEGATE_NOTE_PREFIX)) return summary.title;
+  try {
+    const dir = sessionDirPath(resolveProjectRoot(cwd), summary.id, dataDir);
+    return repairInjectedTitle({ summary, dir }, loadContext(cwd, summary.id, dataDir)).summary.title;
+  } catch {
+    return summary.title;
+  }
+}
+
 /** Short id for UI: last 8 hex chars of uuid. */
 export function shortSessionId(id: string): string {
   const clean = id.replace(/-/g, "");
@@ -805,10 +859,8 @@ export function persistHistory(
 
   const currentSummary = readSummaryFile(path.join(handle.dir, "summary.json")) ?? handle.summary;
   let title = meta?.title ?? currentSummary.title;
-  if (title === "New session" || title === "Untitled session") {
-    const firstUser =
-      safeArchive.find((m) => m.role === "user" && !m.content.startsWith("[Compacted")) ??
-      safeContext.find((m) => m.role === "user");
+  if (title === "New session" || title === "Untitled session" || titleFromInjectedNote(title, safeArchive)) {
+    const firstUser = firstOperatorMessage(safeArchive) ?? firstOperatorMessage(safeContext);
     if (firstUser !== undefined) {
       title = titleFromPrompt(firstUser.content);
     }

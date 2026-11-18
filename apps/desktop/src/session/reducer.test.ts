@@ -221,3 +221,36 @@ describe("window: sidebar marks", () => {
     expect(marks.s2).toEqual({ busy: true, waiting: true, held: true, lostReason: null, title: null, running: 0, subagents: [] });
   });
 });
+
+describe("replay: delegate notes kept in the history (spec 3.9.5a)", () => {
+  const note = (runId: string, turn: number, text: string) =>
+    u({ sessionUpdate: "user_message_chunk", content: { type: "text", text }, _meta: { keryx: { delegateResult: { runId, agentId: "claude-cli", turn, text } } } });
+  const loaded = () =>
+    run(
+      twoHeld,
+      { t: "loadStart", sessionId: "s3" },
+      { t: "updates", updates: [routed("s3", chunk("go", "user_message_chunk")), routed("s3", note("ext:1", 1, "first")), routed("s3", note("ext:1", 2, "| a |\n|---|\n| 1 |"))] },
+      { t: "loadDone", sessionId: "s3", show: false },
+    );
+
+  test("each note is a delegate card, not a user bubble", () => {
+    const items = loaded().convs.s3!.items;
+    expect(items.map((i) => i.kind)).toEqual(["user", "delegate", "delegate"]);
+    expect(items[2]).toMatchObject({ kind: "delegate", runId: "ext:1", agentId: "claude-cli", turn: 2, text: "| a |\n|---|\n| 1 |" });
+  });
+
+  test("the run is restored as ONE finished external subagent holding the last turn, so the pill counts it", () => {
+    const s = loaded();
+    const agents = s.convs.s3!.subagents;
+    expect(agents).toHaveLength(1);
+    expect(agents[0]).toMatchObject({ id: "ext:1", status: "done", detail: "from history", runtime: "external", agentId: "claude-cli" });
+    expect(agents[0]!.entries).toEqual([{ kind: "result", text: "| a |\n|---|\n| 1 |" }]);
+    expect(sessionMarks(s, new Set()).s3?.subagents).toHaveLength(1);
+    expect(sessionMarks(s, new Set()).s3?.running).toBe(0);
+  });
+
+  test("a live (not replayed) chunk with the meta changes nothing", () => {
+    const s = applyUpdates(conv, [{ update: note("ext:1", 1, "x"), at: 1 }]);
+    expect(s).toBe(conv);
+  });
+});

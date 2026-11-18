@@ -381,8 +381,9 @@ whole assistant text so far: the client replaces the subagent's last `text`
 entry when the previous entry is also `text`, else appends. Client limits
 mirror `src/tui/subagent-session.ts` (200 entries, 2,000 characters each).
 Cancelling the turn (`session/cancel`) cancels its subagents; there is no
-per-subagent cancel in M2a. Subagents are not persisted: after `session/load`
-the panel is empty.
+per-subagent cancel in M2a. Native subagents are not persisted: after
+`session/load` they are gone. A `/delegate` terminal run is rebuilt from the
+notes it left in the history (§3.9.5a, "Delegate results in the history").
 
 #### 3.9.5 Background tasks — `_keryx/tasks/*`
 
@@ -430,6 +431,20 @@ Where the implementation differs from the text above
   runs after it, so a disabled agent answers refused after an approval.
   `session/cancel`, a release of the session and the connection's end stop
   the run (and withdraw an approval still being asked).
+- Delegate results in the history (owner bug 2026-11-18): a terminal run's turn
+  note stays in the parent's history as an injected, harness-provenance,
+  enveloped user message (model-facing, unchanged, still untrusted). Three
+  consequences. (1) Title: injected messages never name a session; the title is
+  taken from the first real user message, and a stored title that starts with
+  "[delegate " (or equals an injected note's text) is recomputed and persisted on
+  `session/load` and shown repaired in `session/list`. (2) Replay: `session/load`
+  sends such a note as `user_message_chunk` whose text is the result alone (no
+  envelope tags) with `_meta.keryx.delegateResult { runId, agentId, turn, text }`;
+  the client renders it as the "returned" card, not a user bubble. (3) Restored
+  runs: from those chunks the client rebuilds one subagent per run id (the last
+  turn's text), status "done", detail "from history", runtime "external", no
+  "Open terminal" (its tab is gone), so the sidebar "N agents" pill and Activity
+  show it after a reload. Native subagents stay non-persisted.
 - `/delegate` in the desktop (D-14, owner 2026-11-18): the client advertises
   `initialize.clientCapabilities._meta.keryx.terminal: true` (the app only, not
   the browser dev bridge). With it, the approval is the same
@@ -595,6 +610,11 @@ version checks and the flows parsers and argv builder.
 
 ### 4.2.1 Web view additions (M2a)
 
+- Replayed `/delegate` notes (§3.9.5a): `reducer.ts` turns a replayed user chunk
+  with `_meta.keryx.delegateResult` into a `delegate` item (`DelegateResultCard`)
+  and one finished external subagent per run ("from history", no Open terminal),
+  so the sidebar pill and Activity list survive a reload; envelope tags never
+  reach the UI.
 - Composer palette: typing `/` opens a grouped, filterable list of every
   advertised command with its hint; Tab/Enter completes; a `text` command is
   sent with `_keryx/command` and shown as a command card (input + output) in

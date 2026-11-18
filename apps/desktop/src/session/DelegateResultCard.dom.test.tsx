@@ -129,3 +129,25 @@ test("a table or code block in the card scrolls sideways inside itself; cells ar
   expect(del).toMatch(/\.delegate-result-body \.md table[^{]*\{[^}]*overflow-x:\s*auto/);
   expect(rule(del, ".delegate-result-body.is-clipped")).toContain("mask-image");
 });
+
+test("a replayed note renders as the card: its text, no envelope tags, no raw note header", async () => {
+  const { applyUpdates, newConv } = await import("./reducer");
+  const replayed = applyUpdates(newConv("s1", { replaying: true }), [
+    {
+      at: 1,
+      update: {
+        sessionUpdate: "user_message_chunk",
+        content: { type: "text", text: "| a | b |\n|---|---|\n| 1 | 2 |" },
+        _meta: { keryx: { delegateResult: { runId: "ext:1", agentId: "claude-cli", turn: 1, text: "| a | b |\n|---|---|\n| 1 | 2 |" } } },
+      },
+    },
+  ]);
+  await render(replayed.items);
+  const card = q(".delegate-result");
+  expect(card).not.toBeNull();
+  expect(q("[data-delegate-body]")).not.toBeNull();
+  expect(card.textContent).toContain("claude-cli");
+  expect(document.body.textContent).not.toContain("delegate-result-");
+  expect(document.body.textContent).not.toContain("UNTRUSTED");
+  expect(document.querySelector(".msg-user, .user-bubble")).toBeNull();
+});

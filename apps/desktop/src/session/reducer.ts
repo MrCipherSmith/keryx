@@ -14,7 +14,7 @@ import type {
   ToolKind,
 } from "../acp/types";
 import type { TaskInfo } from "../acp/providers";
-import { applySubagentEvent, runningSubagents, type Subagent } from "./activity";
+import { applySubagentEvent, MAX_SUBAGENT_RESULT_CHARS, runningSubagents, type Subagent } from "./activity";
 
 export type Item =
   | { kind: "user"; id: number; text: string; messageId?: string | null }
@@ -252,6 +252,35 @@ function upsertTool(d: ConvState, u: ToolCallFields, isNew: boolean, at: number)
   return true;
 }
 
+/** `_meta.keryx.delegateResult` of a replayed user chunk: a `/delegate` run's turn answer kept in the history. */
+function delegateNoteOf(meta: unknown): { runId: string; agentId: string; turn: number; text: string } | null {
+  const n = (meta as { keryx?: { delegateResult?: Record<string, unknown> } } | null | undefined)?.keryx?.delegateResult;
+  if (!n || typeof n.runId !== "string" || typeof n.text !== "string") return null;
+  return { runId: n.runId, agentId: typeof n.agentId === "string" ? n.agentId : "agent", turn: typeof n.turn === "number" ? n.turn : 1, text: n.text };
+}
+
+/**
+ * A replayed delegate note: the "returned" card, and the run as a finished subagent, so the sidebar's
+ * "N agents" and Activity still show it after a reload. Subagents are not persisted by keryx; the run is
+ * rebuilt from its notes (the last turn wins). No terminal exists any more, so the entry has no tab.
+ */
+function replayDelegateNote(d: ConvState, n: { runId: string; agentId: string; turn: number; text: string }): boolean {
+  d.items.push({ kind: "delegate", id: d.nextId, runId: n.runId, agentId: n.agentId, turn: n.turn, text: n.text });
+  d.nextId += 1;
+  const restored: Subagent = {
+    id: n.runId,
+    label: n.agentId,
+    status: "done",
+    detail: "from history",
+    runtime: "external",
+    agentId: n.agentId,
+    entries: [{ kind: "result", text: n.text.slice(0, MAX_SUBAGENT_RESULT_CHARS) }],
+  };
+  const at = d.subagents.findIndex((a) => a.id === n.runId);
+  d.subagents = at < 0 ? [...d.subagents, restored] : d.subagents.map((a, i) => (i === at ? { ...a, ...restored } : a));
+  return true;
+}
+
 interface ChunkUpdate {
   content: ContentBlock;
   messageId?: string | null;
@@ -272,6 +301,8 @@ function applyUpdate(d: ConvState, u: SessionUpdate, at: number): boolean {
     case "user_message_chunk": {
       if (!d.replaying) return false; // live user text is added locally on send
       const c = u as ChunkUpdate;
+      const note = delegateNoteOf((u as { _meta?: unknown })._meta);
+      if (note) return replayDelegateNote(d, note);
       return appendChunk(d, "user", blockText(c.content), c.messageId);
     }
     case "agent_message_chunk": {

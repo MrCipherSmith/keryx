@@ -26,7 +26,7 @@ import {
 import { buildShellHookRuntime, type ShellHookContext } from "../commands/agent-hooks";
 import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
 import type { NormalizedMessage, ProviderPort } from "../harness/provider/types";
-import { listSessions, persistHistory, resolveProjectRoot } from "../session";
+import { isInjectedUserMessage, listedTitle, listSessions, persistHistory, resolveProjectRoot } from "../session";
 import { describeLeaseHolder, describeLeaseLoss, SessionLeasedError } from "../session/lease";
 import {
   readSessionFlags,
@@ -143,7 +143,7 @@ import { withSessionProvider } from "../commands/spawn-deps";
 import { createProvidersHandlers, type AcpProvidersSeams } from "./providers";
 import { createTasksHandlers, taskEventSink } from "./shell-tasks";
 import { clientRunsTerminal, createSessionExternalRuns, type DelegateTerminalLaunch, type DelegateTurnResult, type SessionExternalRuns } from "./shell-delegate";
-import { capResultText, delegateResultNote } from "./delegate-turn-hook";
+import { capResultText, delegateResultNote, parseDelegateNote } from "./delegate-turn-hook";
 import type { RunExternalFn, CreateRunExternalOptions } from "../harness/run-external-factory";
 import type { SlateSessionRef } from "../session/slate-lifecycle";
 import { busyRefusalText, findShellCommand, shellAvailableCommands, viewNotServedText } from "./shell-commands";
@@ -2513,7 +2513,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       // even take per-session — honest, and consistent with what
       // `session/load`'s own cwd check compares against.
       cwd: summary.projectPath,
-      title: summary.title,
+      title: listedTitle(cwd, summary, options.dataDir),
       updatedAt: summary.updatedAt,
       // Shell profile: how the person organised it (archived, pinned). The editor profile's wire stays as it was.
       ...(shellProfile ? flagsMeta(readSessionFlags(sessionDir(summary.projectPath, summary.id, options.dataDir))) : {}),
@@ -2600,7 +2600,8 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
    *
    * The role mapping F-9 asks every implementation to decide explicitly:
    *
-   *   `user`      -> `user_message_chunk` (skipped when the content is empty —
+   *   `user`      -> `user_message_chunk` (a delegate note: its text + `_meta.keryx.delegateResult`;
+   *                  skipped when the content is empty —
    *                  mirrors `AgentIO.write`/`onSystem`'s own "nothing to
    *                  say" no-op below).
    *   `assistant` -> `agent_message_chunk` for the text (if any), followed by
@@ -2633,9 +2634,20 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         continue;
       }
       if (message.role === "user") {
-        if (message.content.length > 0) {
-          sendUpdate(sessionId, { sessionUpdate: "user_message_chunk", content: textBlock(message.content) });
+        if (message.content.length === 0) continue;
+        // A delegate note replays as what it is: the result text with the run it came from in `_meta`,
+        // never the envelope (the model-facing history keeps it). A client that does not know the
+        // meta shows the plain text.
+        const note = isInjectedUserMessage(message) ? parseDelegateNote(message.content) : undefined;
+        if (note !== undefined) {
+          sendUpdate(sessionId, {
+            sessionUpdate: "user_message_chunk",
+            content: textBlock(note.text),
+            _meta: { keryx: { delegateResult: note } },
+          });
+          continue;
         }
+        sendUpdate(sessionId, { sessionUpdate: "user_message_chunk", content: textBlock(message.content) });
         continue;
       }
       if (message.role === "assistant") {

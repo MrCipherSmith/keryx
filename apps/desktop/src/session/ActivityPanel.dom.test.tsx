@@ -542,3 +542,12 @@ test("the panel's content cannot widen it: the body clips x, long text wraps, a 
   expect(rule(".activity-panel")).toContain("overflow: hidden");
   expect(css).not.toContain("--activity-w"); // no column of its own any more
 });
+
+test("a run restored from history shows in Subagents as done, from history, without Open terminal", async () => {
+  const restored: Subagent = { id: "ext:1", label: "claude-cli", status: "done", detail: "from history", runtime: "external", agentId: "claude-cli", entries: [{ kind: "result", text: "the answer" }] };
+  await act(() => root.render(React.createElement(ActivityPanel, { sessionId: "s1", subagents: [restored], tasks: [], api, tab: "subagents", onTab: () => {}, subagentId: "ext:1", onSubagent: () => {}, onRefreshTasks: () => {}, pollMs: 0 })));
+  expect(document.querySelector("[data-subagent-detail='ext:1']")).not.toBeNull();
+  expect(document.body.textContent).toContain("from history");
+  expect(document.body.textContent).toContain("the answer");
+  expect(document.querySelector("[data-open-terminal]")).toBeNull();
+});

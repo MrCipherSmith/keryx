@@ -303,3 +303,27 @@ export function delegateResultNote(input: { agentId: string; runId: string; turn
     `</${tag}>`,
   ].join("\n");
 }
+
+/** A delegate note read back from a stored history message. */
+export interface ParsedDelegateNote {
+  readonly agentId: string;
+  readonly runId: string;
+  readonly turn: number;
+  readonly text: string;
+}
+
+const NOTE_HEAD = /^\[delegate ([^,\]\n]+), run ([^,\]\n]+), turn (\d+) result\]\n[^\n]*\n<(delegate-result-[0-9a-f]+)>\n/;
+
+/**
+ * Reads a note `delegateResultNote` wrote: the run, the turn and the text between the envelope tags.
+ * `undefined` for any other message. The envelope never leaves this function: a client is given the
+ * text, not the tags. Pure.
+ */
+export function parseDelegateNote(content: string): ParsedDelegateNote | undefined {
+  const head = NOTE_HEAD.exec(content);
+  if (head === null) return undefined;
+  const closing = `\n</${head[4]}>`;
+  if (!content.endsWith(closing)) return undefined;
+  const text = content.slice(head[0].length, content.length - closing.length);
+  return { agentId: head[1]!, runId: head[2]!, turn: Number(head[3]), text };
+}
