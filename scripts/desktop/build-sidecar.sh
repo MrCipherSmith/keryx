@@ -2,6 +2,7 @@
 # Compile the keryx CLI into the Tauri sidecar binaries the desktop app bundles.
 #
 # Usage: scripts/desktop/build-sidecar.sh [--target arm64|x64|all]
+#   all also writes keryx-universal-apple-darwin (lipo of both) for the universal app.
 #   Default target is the host architecture.
 #
 # SOURCE OF TRUTH: the compile command below mirrors the "Build and smoke-test
@@ -23,7 +24,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --target) TARGET="${2:-}"; shift 2 ;;
     --target=*) TARGET="${1#--target=}"; shift ;;
-    -h | --help) sed -n '2,9p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    -h | --help) sed -n '2,10p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -70,3 +71,14 @@ for arch in "${TARGETS[@]}"; do
     echo "$arch: cross-compiled, not executed on this host ($(file "$out" | cut -d: -f2-))"
   fi
 done
+
+# `tauri build --target universal-apple-darwin` does not merge sidecars itself:
+# it copies an externalBin named for the universal triple and fails without
+# one ("resource path binaries/keryx-universal-apple-darwin doesn't exist").
+if [ "$TARGET" = "all" ]; then
+  universal="$OUT_DIR/keryx-universal-apple-darwin"
+  lipo -create -output "$universal" \
+    "$OUT_DIR/keryx-aarch64-apple-darwin" "$OUT_DIR/keryx-x86_64-apple-darwin"
+  chmod +x "$universal"
+  echo "universal: $universal ($(lipo -archs "$universal")), version $("$universal" --version)"
+fi
