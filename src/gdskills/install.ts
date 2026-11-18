@@ -362,9 +362,9 @@ export async function checkInstallDestination(
  * longer ships there, whether it was retired or moved to another layer or a
  * pack (see `retired-rules.ts` for why a plain `cp` can't do that itself).
  *
- * A layer the bundle does not ship yet (no source directory) is skipped
- * without a word: `rules/activity/` is empty until P5, and adding its first
- * file is all P5 needs to do to install it.
+ * A layer the bundle does not ship (no source directory) is skipped without
+ * a word, so a new layer installs as soon as its first file ships (P5 added
+ * `rules/activity/` that way).
  *
  * A moved rule's old copy is removed only when its new path is a regular file
  * in a plain layer directory; a layer that was refused or not shipped keeps

@@ -217,7 +217,7 @@ Required rules:
 - `.metaproject/rules/process/implementation-plans.mdc`
 - `.metaproject/rules/process/subagent-context-construction.md`
 - `.metaproject/rules/process/subagent-status-protocol.md`
-- `.metaproject/rules/core/tdd-workflow.mdc`
+- `.metaproject/rules/core/tdd-workflow.mdc`, and per role `.metaproject/rules/activity/implement.mdc`, `test.mdc` or `review.mdc`
 - `.metaproject/rules/stacks/react/code-style-patterns.mdc`
 - `.metaproject/rules/core/error-handling.mdc`
 - `.metaproject/rules/process/implementation-doc-mandate.mdc`

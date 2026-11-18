@@ -380,7 +380,28 @@ jobs:
           }
 
           // Only now is a count meaningful.
-          const findings = adapter.parse(raw, ctx);
+          const all = adapter.parse(raw, ctx);
+
+          // Time-boxed exceptions, only for advisories with NO patched release.
+          // Each entry matches one advisory id on one package; any other
+          // advisory still fails, and an expired entry fails the job outright.
+          type AuditException = { advisoryId: string; ghsa: string; package: string; expires: string };
+          const exceptions = (await Bun.file(".github/dependency-audit-exceptions.json").json()) as AuditException[];
+          const today = new Date().toISOString().slice(0, 10);
+          // makeFinding folds the rule key into the finding id:
+          // `health-dependencyAudit-advisory-<advisoryId>-<file>-<n>`.
+          const matches = (entry: AuditException, f: (typeof all)[number]) =>
+            f.id.startsWith(`health-dependencyAudit-advisory-${entry.advisoryId}-`) && f.symbol === entry.package;
+          for (const entry of exceptions) {
+            if (entry.expires < today) {
+              console.error(`::error::audit exception ${entry.ghsa} (${entry.package}) expired on ${entry.expires}; re-check for a patched release`);
+              process.exit(1);
+            }
+            console.log(all.some((f) => matches(entry, f))
+              ? `::warning::excepted until ${entry.expires}: ${entry.ghsa} (${entry.package})`
+              : `::warning::audit exception ${entry.ghsa} (${entry.package}) no longer matches any advisory; remove it`);
+          }
+          const findings = all.filter((f) => !exceptions.some((entry) => matches(entry, f)));
           for (const finding of findings) console.log(`::error::${finding.message}`);
           if (findings.length > 0) {
             console.error(`::error::${findings.length} dependency advisory/advisories`);

@@ -106,9 +106,21 @@ const TYPE_RULES: Record<string, string[]> = {
   service_api: ["stacks/nestjs/nestjs-dto", "api-contracts"],
 };
 
-/** Project-relative path of a bundled rule named in `ALWAYS_RULES`/`TYPE_RULES`/`CONDITIONAL_RULES`. */
+/**
+ * The activity rule of each role (ADR-0001 D5): how to apply the layers in
+ * that role. It sets scope and method and rates nothing. It leads the bundled
+ * rules — after the project's own entries, its references and contracts, and
+ * ahead of the stack packs and the core rules.
+ */
+const ACTIVITY_RULES: Record<ContextFor, string> = {
+  implement: "activity/implement",
+  test: "activity/test",
+  review: "activity/review",
+};
+
+/** Project-relative path of a bundled rule named in `ALWAYS_RULES`/`TYPE_RULES`/`CONDITIONAL_RULES`/`ACTIVITY_RULES`. */
 function bundledRulePath(name: string): string {
-  return name.startsWith("stacks/") ? `.metaproject/rules/${name}.mdc` : `${BUNDLED_RULES_DIR}/${name}.mdc`;
+  return name.startsWith("stacks/") || name.startsWith("activity/") ? `.metaproject/rules/${name}.mdc` : `${BUNDLED_RULES_DIR}/${name}.mdc`;
 }
 const TEST_RULES = ["tdd-workflow"];
 
@@ -151,9 +163,10 @@ export const CONDITIONAL_RULES: readonly ConditionalRule[] = [
 const compare = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
 function bundledRuleNames(forWhat: ContextFor, taskType: string | undefined): string[] {
-  if (forWhat === "review") return [];
-  if (forWhat === "test") return TEST_RULES;
-  const names = [...ALWAYS_RULES];
+  const activity = ACTIVITY_RULES[forWhat];
+  if (forWhat === "review") return [activity];
+  if (forWhat === "test") return [activity, ...TEST_RULES];
+  const names = [activity, ...ALWAYS_RULES];
   const byType = taskType === "mixed" ? ["ui_component", "store_logic", "service_api"].flatMap((type) => TYPE_RULES[type] ?? []) : (TYPE_RULES[taskType ?? ""] ?? []);
   for (const name of byType) if (!names.includes(name)) names.push(name);
   return names;
@@ -622,9 +635,13 @@ export async function resolveProjectContext(input: ResolveContextInput): Promise
   const task = truncateTaskText(input.taskText ?? "");
   // A stack rule a task type names can also match a task file's glob; it is listed once, by the glob.
   const seenBundled = new Set<string>();
+  // The role's activity rule (ADR-0001 D5) leads the bundled rules, ahead of
+  // the stack packs: it says how the rules after it are applied.
+  const [activityRule, ...otherBundledNames] = bundledNames;
   const bundled = [
+    ...(await collectBundled(projectRoot, activityRule === undefined ? [] : [activityRule])),
     ...stackRules,
-    ...(await collectBundled(projectRoot, bundledNames)),
+    ...(await collectBundled(projectRoot, otherBundledNames)),
     ...(await collectConditional(projectRoot, conditionalRules, files, task.text)),
   ].filter((entry) => !shadowed.has(entry.path) && !seenBundled.has(entry.path) && Boolean(seenBundled.add(entry.path)));
 

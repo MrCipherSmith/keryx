@@ -203,7 +203,7 @@ This step is read-only and inline; do not spawn a subagent for it.
 Rules `resolve-context` listed are already read (2.0c); load the rest by what you're implementing.
 
 **Always load (all task types):**
-- `tdd-workflow.mdc` — red-green-refactor, STATUS: DONE requires passing tests
+- `activity/implement.mdc` — order of work (red-green-refactor), change scope, back-compat; `tdd-workflow.mdc` — STATUS: DONE requires passing tests
 - `error-handling.mdc` — failure signalled explicitly (throw by default, a discriminated result where callers branch), context and `cause` kept, no silent failures
 - `solid-principles.mdc` — SRP, OCP, DIP and the function-design thresholds the code-quality reviewer applies (load for any task that creates or grows classes, services or functions)
 
@@ -223,7 +223,7 @@ Rules `resolve-context` listed are already read (2.0c); load the rest by what yo
 - `async`/`await` or queue code → `async-patterns.mdc`
 - New architectural layers or modules → `clean-architecture.mdc`
 
-Resolve every rule above project first, bundled second: read `.metaproject/rules/project/<rule>.mdc` when it exists, otherwise `.metaproject/rules/core/<rule>.mdc`. A project rule with the same name replaces the bundled one (never read both as if they agreed). `.metaproject/rules/core/` is the tree `keryx init` installs and `keryx update` overwrites, so a project's own rules live only in `rules/project/`.
+Resolve every rule above project first, bundled second: read `.metaproject/rules/project/<rule>.mdc` when it exists, otherwise the bundled copy: `.metaproject/rules/<rule>.mdc` for a name that carries its layer (`activity/…`, `stacks/react/…`), `.metaproject/rules/core/<rule>.mdc` for a bare one. A project rule with the same name replaces the bundled one (never read both as if they agreed). `.metaproject/rules/core/` is the tree `keryx init` installs and `keryx update` overwrites, so a project's own rules live only in `rules/project/`.
 
 ### Phase 3: PLAN
 
@@ -286,8 +286,7 @@ Execute the change plan. Write production-quality code.
 - Naming: PascalCase for components/types, camelCase for functions/variables, kebab-case for files
 - Follow existing module patterns discovered in Phase 2
 
-**4.3 Test standards:**
-- Use the runner, selectors and structure Phase 2.2 found in this project's own tests — not a remembered stack. Arrange/Act/Assert; mock external dependencies, not internal module logic.
+**4.3 Test standards:** `activity/test.mdc`, with the runner, selectors and structure Phase 2.2 found in this project's own tests — not a remembered stack.
 
 **4.4 Story standards:**
 - Use the story patterns Phase 2.2 found (`Meta` + `StoryObj`, `args`-based variants, `fn()` callbacks); cover default state, edge cases and error states.
@@ -531,7 +530,7 @@ second copy of a schema is how that happens.
 ## Rules of Engagement
 
 1. **DO NOT** ask the user any questions. All input comes from the task Scenario and workspace context.
-2. **DO NOT** modify files outside the task's target scope unless absolutely necessary (e.g., shared type file).
+2. **DO** stay inside the change scope of `activity/implement.mdc`.
 3. **DO** follow the project's existing code patterns discovered in Phase 2.
 4. **DO** write TypeScript-strict code — no `any`, no untyped functions.
 5. **DO** use project path aliases (`@components`, `@utils`, etc.) for imports.

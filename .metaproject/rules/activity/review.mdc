@@ -1,0 +1,47 @@
+---
+description: "Review discipline every reviewer applies, whatever the lens or stack: scope by mode (diff mode: the change; path mode: the whole file), the four shared laws (a finding names its failure path, never the theoretical, one finding per class, a deliberate choice is read first), `info` is not a defect, one finding per defect across lenses, and where severity comes from. Use when reviewing a change under any review lens."
+alwaysApply: false
+---
+
+# Activity: review
+
+How a reviewer applies the core, language and framework rules to a change. This
+rule sets scope and method only. It rates nothing: a condition's severity comes
+from the rule row that rates it, and the levels from the canonical rubric below.
+
+## Scope: diff mode and path mode
+
+**Diff mode** (`scope_mode: diff`, the default). Review scope: **changes introduced in the current branch since merge-base only**. Pre-existing problems in unchanged lines are out of scope unless the diff makes them worse. A lens may set its own line inside that one: `review-architecture` (directly touched by the diff), `review-clean-code` (debt the change did not create).
+
+**Path mode** (`scope_mode: path`). Reviewers check the entire file content, not just added lines. All findings apply to the current state of the code, not only to changes.
+
+## Shared laws (every reviewer)
+
+1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot name the input, call, or condition that reaches the code, you have an observation, not a finding. Report it as `info` and say what would settle it.
+2. **Never flag the theoretical.** The path you describe must exist in the code under review. Do not report a safe API because it could be misused, or a pattern because it is often wrong elsewhere.
+3. **One finding per class, not one per occurrence.** When the same shape appears at several sites, report it once and list every site. Ten findings that are one finding hide the other nine problems.
+4. **A deliberate choice is not a defect until its reason is read and shown wrong.** An explicit override, suppression or exemption, a comment or commit giving a reason, or a sibling doing the same is a decision: read its reason (the comment, `git log -L` or `git blame`, the sibling) before you report it, and report it only when you can show that reason wrong. A project rule is checked against accepted platform practice and its known exceptions before a deviation from it is reported.
+
+`review-security-code` carries a fifth — a finding that claims attacker impact states its vector; one without a vector
+is rated by trigger and outcome — which does not generalise and stays there.
+
+## `info` is not a defect
+
+`info` is defined in `review-orchestrator/SKILL.md` → **Severity (canonical)**: it
+asks the author for no change. Law 1 says when a claim drops to it.
+
+## One finding per defect, across lenses
+
+A defect is reported once, by the lens that owns it. A lens's **Scope Boundaries**
+table names the concerns it leaves to another lens: a concern listed there is not
+that lens's finding. Duplicate findings are merged by `dedupe_key` or by
+`(file, quote, problem)`.
+
+## Severity
+
+Severity levels are defined once, in `review-orchestrator/SKILL.md` →
+**Severity (canonical)**. A reviewer does not restate them: `blocker` is the
+four merge-blocking shapes named there and nothing else, and the `major`/`minor`
+boundary is the trigger-and-outcome test. A reviewer may state which of *its*
+conditions land where; it may not redefine the levels. Where a rule carries a
+**Review severities** table, that table rates the condition, not the lens.
