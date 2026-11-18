@@ -514,7 +514,15 @@ version checks and the flows parsers and argv builder.
   flight, keryx may ask for approval or an answer (`session/request_permission`,
   `_keryx/ask_user`, for example `/delegate`); the window raises that dialog
   for the session the command runs in, the same as during a turn.
-- Providers dialog (`/connect`, also from the model picker): Connected and
+- Provider selector (composer, before the model chip): lists the providers of
+  the session's model option (`<provider>/<model>` values), so it always matches
+  what the session can switch to. Choosing one narrows the model menu to that
+  provider and switches the session to the model that provider last ran in this
+  window, else its first model (`session/set_config_option`); a
+  `config_option_update` after connect or disconnect refreshes it. The last item
+  is "Add or manage providers…", which opens the Providers dialog (`/connect`);
+  a single provider is still listed so that item stays reachable.
+- Providers dialog (`/connect`, also from the provider selector): Connected and
   Add tabs, Test, Disconnect, API-key field (password input), base URL,
   custom provider form, device-code panel (code, Copy, Open browser, Cancel).
 - Command card tones: a successful command reads as neutral (an ok-toned
