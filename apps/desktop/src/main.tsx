@@ -2,6 +2,7 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { ToastProvider } from "./components/Toasts";
 import "./styles/tokens.css";
+import "./styles/themes.css";
 import "./styles.css";
 import "./styles/components.css";
 import "./styles/flows.css";
