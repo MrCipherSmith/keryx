@@ -598,7 +598,13 @@ async function handle(ws: ServerWebSocket<Conn>, cmd: string, args: Json): Promi
       // Same parse as src-tauri/src/gitinfo.rs, for the browser dev mode.
       const r = Bun.spawnSync(["git", "status", "--porcelain=v2", "--branch"], { cwd: await projectCwd(ws.data, cwd), env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" } });
       if (r.exitCode !== 0) return null;
-      const info = { branch: null as string | null, commit: null as string | null, upstream: null as string | null, ahead: 0, behind: 0, changed: 0 };
+      const info = { branch: null as string | null, commit: null as string | null, upstream: null as string | null, ahead: 0, behind: 0, changed: 0, worktree: null as string | null };
+      // A linked worktree has its own git dir under the common one: name it after its folder.
+      const dirs = Bun.spawnSync(["git", "rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir", "--show-toplevel"], { cwd: await projectCwd(ws.data, cwd) });
+      if (dirs.exitCode === 0) {
+        const [gitDir, commonDir, top] = dirs.stdout.toString().trim().split("\n");
+        if (gitDir && commonDir && top && gitDir !== commonDir) info.worktree = top.split("/").pop() ?? null;
+      }
       for (const line of r.stdout.toString().split("\n")) {
         if (line.startsWith("# branch.head ")) info.branch = line.slice(14) === "(detached)" ? null : line.slice(14);
         else if (line.startsWith("# branch.oid ")) info.commit = line.slice(13) === "(initial)" ? null : line.slice(13, 22);
