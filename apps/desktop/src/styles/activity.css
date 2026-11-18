@@ -1,6 +1,31 @@
 /* Providers dialog, Activity panel (subagents and tasks), transcript link to a subagent. */
 
 .session-topbar { display: flex; align-items: center; gap: var(--sp-2); }
+
+/* Subagents as a collapsible level under their session in the sidebar. */
+.session-node { list-style: none; }
+.session-row.has-children { display: flex; align-items: stretch; }
+.session-row.has-children .session-item { flex: 1; min-width: 0; }
+.session-twist {
+  flex: none; display: inline-flex; align-items: center; justify-content: center; width: 18px; border: 0; background: none;
+  color: var(--fg-subtle); border-radius: var(--r-md); cursor: default;
+}
+.session-twist:hover { color: var(--fg); background: var(--bg-hover); }
+.session-twist:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.session-children { list-style: none; margin: 0 0 2px; padding: 0 0 0 20px; }
+.session-child {
+  display: flex; align-items: center; gap: var(--sp-2); width: 100%; padding: 4px var(--sp-2); border: 0; border-radius: var(--r-md);
+  background: none; color: var(--fg-muted); font: inherit; font-size: var(--fs-sm); text-align: left; cursor: default;
+}
+.session-child:hover { background: var(--bg-hover); color: var(--fg); }
+.session-child:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.session-child-label { flex: 1; min-width: 0; }
+.session-child-model { flex: none; max-width: 80px; font-size: var(--fs-xs); color: var(--fg-subtle); }
+.session-child-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--fg-subtle); }
+.session-child-dot.status-running { background: var(--accent); animation: pulse 1.4s ease-in-out infinite; }
+.session-child-dot.status-done, .session-child-dot.status-completed { background: var(--ok); }
+.session-child-dot.status-failed, .session-child-dot.status-killed { background: var(--danger); }
+@media (prefers-reduced-motion: reduce) { .session-child-dot.status-running { animation: none; } }
 .session-view.with-activity { grid-template-columns: minmax(0, 1fr) 340px; }
 .session-view.with-sidebar.with-activity { grid-template-columns: 248px minmax(0, 1fr) 340px; }
 .session-view.with-activity.is-narrow { grid-template-columns: minmax(0, 1fr); }

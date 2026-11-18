@@ -484,6 +484,13 @@ version checks and the flows parsers and argv builder.
     selecting one shows its output (polled with `_keryx/tasks/output` while
     shown and running); Kill with a confirmation.
   - Badges for running subagents and tasks per session in the sidebar.
+  - Sidebar tree (owner decision 2026-11-18): every subagent of a held session,
+    native or external (`/delegate`), is a child row one level under its
+    session (label, status dot, `external` badge, model). The session row has a
+    chevron (`aria-expanded`); the fold is remembered per session and defaults
+    to open while any subagent runs, else folded. Selecting a child shows its
+    session and opens the Activity panel on that subagent. Released sessions
+    show no children.
 
 ### 4.3 Client capabilities sent at `initialize`
 

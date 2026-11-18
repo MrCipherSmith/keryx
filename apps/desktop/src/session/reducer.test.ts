@@ -217,7 +217,7 @@ describe("window: sidebar marks", () => {
   test("busy, waiting and released are marked per session", () => {
     const s = run(twoHeld, { t: "busy", sessionId: "s2", busy: true }, { t: "released", sessionId: "s1" });
     const marks = sessionMarks(s, new Set(["s2"]));
-    expect(marks.s1).toEqual({ busy: false, waiting: false, held: false, lostReason: "idle-cap", title: null, running: 0 });
-    expect(marks.s2).toEqual({ busy: true, waiting: true, held: true, lostReason: null, title: null, running: 0 });
+    expect(marks.s1).toEqual({ busy: false, waiting: false, held: false, lostReason: "idle-cap", title: null, running: 0, subagents: [] });
+    expect(marks.s2).toEqual({ busy: true, waiting: true, held: true, lostReason: null, title: null, running: 0, subagents: [] });
   });
 });

@@ -23,6 +23,8 @@ export interface Prefs {
   infoPanel: boolean;
   /** Session sidebar groups the user folded ("Pinned", "Today", a month…). */
   collapsedGroups: string[];
+  /** Per session: the user's choice to show (true) or fold (false) its subagents in the sidebar; absent = automatic. */
+  subagentTree: Record<string, boolean>;
 }
 
 const KEY = "keryx.prefs.v1";
@@ -36,6 +38,7 @@ const DEFAULTS: Prefs = {
   sessionSidebar: true,
   infoPanel: false,
   collapsedGroups: [],
+  subagentTree: {},
 };
 
 export const UI_FONTS: Record<UiFont, string> = {
@@ -74,6 +77,10 @@ function read(): Prefs {
       textSize: valid(merged.textSize, TEXT_SCALES, DEFAULTS.textSize),
       chatWidth: valid(merged.chatWidth, CHAT_WIDTHS, DEFAULTS.chatWidth),
       collapsedGroups: Array.isArray(merged.collapsedGroups) ? merged.collapsedGroups.filter((g) => typeof g === "string") : [],
+      subagentTree:
+        merged.subagentTree && typeof merged.subagentTree === "object" && !Array.isArray(merged.subagentTree)
+          ? Object.fromEntries(Object.entries(merged.subagentTree).filter(([, v]) => typeof v === "boolean"))
+          : {},
     };
   } catch {
     return DEFAULTS;
