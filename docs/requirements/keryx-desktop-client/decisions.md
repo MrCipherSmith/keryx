@@ -223,6 +223,18 @@ Chosen:
 - **A subagent.** The run appears as a subagent (`runtime: "external"`) in the
   Activity panel and under its session in the sidebar; clicking it focuses its
   terminal tab. Its end is the process's exit code, or the tab being closed.
+- **Turn-done signal and hand-back (owner feedback 2026-11-18).** A real run
+  showed the CLI answering in the terminal while the run stayed "running" and
+  the answer never reached the parent. keryx now injects the CLI's own
+  end-of-turn hook at launch (claude `Stop` through `--settings`, codex
+  `notify` through `-c`; agy has none, `turnHook: none`, exit-only). The hook
+  appends its payload to `<session dir>/delegate/<runId>.jsonl`, which keryx
+  watches. A turn sets the new status `idle` ("waiting for you": CLI open, turn
+  done) with a result log entry, and the answer joins the parent's history as a
+  labelled, untrusted, size-capped note WITHOUT starting a turn; the desktop
+  shows a "returned" card. The exit still decides done/failed. `/bin/sh` plus
+  a fixed command, not a `keryx` subcommand: the sidecar path is not reliable
+  for the ACP server and an update replaces it under a running terminal.
 
 Rejected: running it headless and mirroring its output into the terminal tab
 (the user could not talk to the agent, and the mirror would hide the CLI's own

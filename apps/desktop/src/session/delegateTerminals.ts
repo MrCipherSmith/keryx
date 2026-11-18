@@ -21,6 +21,8 @@ export interface DelegateDeps {
   /** Open the side panel on Terminal and focus `tab`. */
   showTab(tab: PtyTab): void;
   dispatch(a: Action): void;
+  /** The run's process ended (or its tab closed): keryx stops watching the run's turn-done file. */
+  notifyExit?(sessionId: string, runId: string): void;
 }
 
 interface Run {
@@ -73,6 +75,7 @@ export function createDelegateTerminals(deps: DelegateDeps): DelegateTerminals {
     if (run.status !== "running") return;
     if (code === 0) upsert(run, "done", "exit 0");
     else upsert(run, "failed", code === null ? "ended by a signal" : `exit ${code}`);
+    deps.notifyExit?.(run.sessionId, run.launch.runId);
   };
 
   return {
@@ -86,6 +89,7 @@ export function createDelegateTerminals(deps: DelegateDeps): DelegateTerminals {
       } catch (e) {
         run.open = false;
         upsert(run, "failed", `could not start: ${e instanceof Error ? e.message : String(e)}`);
+      deps.notifyExit?.(sessionId, launch.runId);
         throw e;
       }
       run.tab = tab;
@@ -110,7 +114,10 @@ export function createDelegateTerminals(deps: DelegateDeps): DelegateTerminals {
       const run = id === undefined ? undefined : runs.get(id);
       if (!run) return;
       run.open = false;
-      if (run.status === "running") upsert(run, "failed", "closed");
+      if (run.status === "running") {
+        upsert(run, "failed", "closed");
+        deps.notifyExit?.(run.sessionId, run.launch.runId);
+      }
     },
     focus(runId) {
       const run = runs.get(runId);

@@ -28,6 +28,14 @@ import {
 import type { SpawnSubagentFleetEvent } from "../harness/tool/builtin/spawn-subagent-tool";
 import { delegateReport, OPERATOR_SANDBOX, type DelegateOutcome } from "../tui/external-operator";
 import { approvalFromPermissionResponse, ACP_PERMISSION_OPTION_IDS } from "./permission";
+import {
+  delegateRunFile,
+  prepareDelegateRunFile,
+  turnHookArgs,
+  watchDelegateRun,
+  type DelegateRunWatcher,
+  type DelegateTurn,
+} from "./delegate-turn-hook";
 import type { AcpPermissionOption, AcpRequestPermissionRequest, AcpRequestPermissionResponse } from "./protocol";
 
 /**
@@ -57,10 +65,31 @@ export interface DelegateAnswer {
   readonly refused?: true;
 }
 
+/**
+ * What `emitFleet` carries: the shell's fleet events, plus the `idle` upsert only a terminal run sends
+ * ("a turn is done, the CLI is still open and waits for you"). Kept out of `SpawnSubagentFleetEvent`
+ * because the TUI's fleet has no such state.
+ */
+export type DelegateFleetEvent =
+  | SpawnSubagentFleetEvent
+  | (Omit<Extract<SpawnSubagentFleetEvent, { kind: "upsert" }>, "status"> & { status: "idle" });
+
+/** One finished turn of a terminal run, handed to whoever carries it to the parent session. */
+export interface DelegateTurnResult {
+  readonly runId: string;
+  readonly agentId: string;
+  readonly turn: number;
+  readonly text: string;
+}
+
 export interface SessionExternalRuns {
   delegate(args: string): Promise<DelegateAnswer>;
-  /** Stops every run of the session, and withdraws an approval still being asked. Idempotent. */
+  /** Stops every headless run of the session, and withdraws an approval still being asked. Idempotent. */
   stop(reason: string): void;
+  /** The client's terminal process for `runId` ended: read the hook file one last time, stop watching, delete it. */
+  exited(runId: string): void;
+  /** Ends every watcher (the session was released, the connection closed). `stop` does not: a cancel leaves terminals alone. */
+  dispose(): void;
 }
 
 export interface SessionExternalRunsInput {
@@ -78,9 +107,18 @@ export interface SessionExternalRunsInput {
   readonly sessionId: string;
   /** The client runs terminals (the desktop): `/delegate` opens one interactive run instead of a headless one. */
   readonly terminalCapable?: boolean | undefined;
+  /** The session's own directory (the hook file lives under it); `undefined` = nothing persisted, so no turn hook. */
+  readonly sessionDir?: (() => string | undefined) | undefined;
+  /** A terminal run finished a turn: keryx has already sent the idle status and the result log entry. */
+  readonly onTurnResult?: ((result: DelegateTurnResult) => void) | undefined;
+  /** Hook-file poll period in ms (0 = the test drives the watcher). */
+  readonly hookPollMs?: number | undefined;
+  /** Test seam: reads a claude transcript for a Stop payload that carries no message. */
+  readonly readTranscript?: ((path: string) => string | undefined) | undefined;
+  readonly onHookError?: ((message: string) => void) | undefined;
   /** Environment the capability gate reads (transport, CI markers); `process.env` otherwise. Test seam. */
   readonly gateEnv?: Readonly<Record<string, string | undefined>> | undefined;
-  readonly emitFleet: (event: SpawnSubagentFleetEvent) => void;
+  readonly emitFleet: (event: DelegateFleetEvent) => void;
   /** Test seam: the run port. `createLazyRunExternal` otherwise. */
   readonly makeRunExternal?: ((options: CreateRunExternalOptions) => RunExternalFn) | undefined;
   readonly idSeq?: () => string;
@@ -120,6 +158,7 @@ function logEntryFor(event: ExternalEvent): { kind: "text" | "reasoning" | "tool
 
 export function createSessionExternalRuns(input: SessionExternalRunsInput): SessionExternalRuns {
   const handles = new Set<ExternalRunHandle>();
+  const watchers = new Map<string, DelegateRunWatcher>();
   const requestIds = new Set<string>();
   let stopped: string | undefined;
 
@@ -128,6 +167,17 @@ export function createSessionExternalRuns(input: SessionExternalRunsInput): Sess
     for (const id of requestIds) input.withdraw(id, reason);
     requestIds.clear();
     for (const handle of handles) handle.kill();
+  };
+
+  const exited = (runId: string): void => {
+    const watcher = watchers.get(runId);
+    if (watcher === undefined) return;
+    watchers.delete(runId);
+    watcher.close();
+  };
+
+  const dispose = (): void => {
+    for (const runId of [...watchers.keys()]) exited(runId);
   };
 
   /** The approval: `true` only for an explicit allow. */
@@ -167,7 +217,11 @@ export function createSessionExternalRuns(input: SessionExternalRunsInput): Sess
     stopped = undefined;
 
     const runId = `ext:${(input.idSeq ?? (() => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`))()}`;
-    const interactiveArgv = input.terminalCapable === true ? interactiveArgvFor(entry, parsed.task) : undefined;
+    // The vendor's own end-of-turn hook, when it has one and the session has a directory to keep the file in.
+    const dir = input.terminalCapable === true ? input.sessionDir?.() : undefined;
+    const hookFile = dir === undefined || entry.turnHook === undefined || entry.turnHook === "none" ? undefined : delegateRunFile(dir, runId);
+    const hookArgs = hookFile === undefined ? undefined : turnHookArgs(entry.turnHook, hookFile);
+    const interactiveArgv = input.terminalCapable === true ? interactiveArgvFor(entry, parsed.task, hookArgs) : undefined;
     if (input.terminalCapable === true) {
       if (interactiveArgv === undefined) return { text: `◇ ${entry.id} has no interactive form to run in the terminal\n`, refused: true };
       // Default-on in the desktop (D-14): an `externalAgents.enabled` never written counts as on.
@@ -203,6 +257,39 @@ export function createSessionExternalRuns(input: SessionExternalRunsInput): Sess
     if (interactiveArgv !== undefined) {
       const firstWords = parsed.task.split(/\s+/).slice(0, 5).join(" ");
       const title = `${entry.label.trim() || entry.id} · ${firstWords.length > 32 ? `${firstWords.slice(0, 31)}…` : firstWords}`;
+      if (hookFile !== undefined && hookArgs !== undefined) {
+        try {
+          prepareDelegateRunFile(hookFile);
+          watchers.set(
+            runId,
+            watchDelegateRun({
+              file: hookFile,
+              kind: entry.turnHook,
+              ...(input.hookPollMs !== undefined ? { intervalMs: input.hookPollMs } : {}),
+              ...(input.readTranscript !== undefined ? { readTranscript: input.readTranscript } : {}),
+              ...(input.onHookError !== undefined ? { onError: input.onHookError } : {}),
+              onTurn: (turn: DelegateTurn) => {
+                // "Turn done, the CLI is still open and waits for you": not a finish, the exit decides that.
+                input.emitFleet({
+                  kind: "upsert",
+                  id: runId,
+                  label: title,
+                  status: "idle",
+                  detail: `turn ${turn.turn} done`,
+                  task: parsed.task,
+                  runtime: "external",
+                  agentId: entry.id,
+                });
+                input.emitFleet({ kind: "log", id: runId, entry: { kind: "result", text: turn.text } });
+                input.onTurnResult?.({ runId, agentId: entry.id, turn: turn.turn, text: turn.text });
+              },
+            }),
+          );
+        } catch (cause) {
+          // No hook file means exit-only status, not a refused run: the terminal itself still opens.
+          input.onHookError?.(`delegate hook unavailable: ${cause instanceof Error ? cause.message : String(cause)}`);
+        }
+      }
       return {
         text: `◇ ${entry.id} opened in the terminal: ${title}\n`,
         terminal: { runId, agentId: entry.id, title, argv: interactiveArgv, cwd: input.cwd },
@@ -277,5 +364,5 @@ export function createSessionExternalRuns(input: SessionExternalRunsInput): Sess
     return { text: report.text, ...(refused ? { refused: true as const } : {}) };
   };
 
-  return { delegate, stop };
+  return { delegate, stop, exited, dispose };
 }

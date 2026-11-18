@@ -3,7 +3,7 @@ import { TASKS_KILL, TASKS_OUTPUT, isRunning, supportsTasks, type TaskInfo, type
 import { Icon } from "../components/Icon";
 import { Markdown } from "../components/Markdown";
 import { Dialog, Spinner } from "../components/ui";
-import { runningSubagents, type Subagent } from "./activity";
+import { runningSubagents, statusLabel, type Subagent } from "./activity";
 
 export type ActivityTab = "subagents" | "tasks";
 
@@ -68,6 +68,7 @@ export function ActivityPanel({ sessionId, subagents, tasks, api, tab, onTab, su
 
 function StatusDot({ status }: { status: string }) {
   if (status === "running") return <Spinner size={12} />;
+  if (status === "idle") return <Icon name="circle" size={12} />;
   if (status === "done" || status === "completed") return <Icon name="circleCheck" size={13} />;
   if (status === "failed" || status === "killed") return <Icon name="circleX" size={13} />;
   return <Icon name="circle" size={12} />;
@@ -91,7 +92,7 @@ function SubagentsTab({ subagents, selected, onSelect }: { subagents: readonly S
       {subagents.map((a) => (
         <li key={a.id}>
           <button className="activity-row" onClick={() => onSelect(a.id)} data-subagent={a.id}>
-            <span className={`activity-status status-${a.status}`} title={a.status}>
+            <span className={`activity-status status-${a.status}`} title={statusLabel(a.status)}>
               <StatusDot status={a.status} />
             </span>
             <span className="activity-main">
@@ -119,7 +120,7 @@ function SubagentDetail({ agent }: { agent: Subagent }) {
           <StatusDot status={agent.status} />
         </span>
         <strong className="truncate">{agent.label}</strong>
-        <span className="badge badge-neutral">{agent.status}</span>
+        <span className="badge badge-neutral">{statusLabel(agent.status)}</span>
       </div>
       {agent.model || agent.runtime ? (
         <div className="field-hint">

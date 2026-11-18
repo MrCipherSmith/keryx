@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { toTask, toTasks } from "../acp/providers";
-import { applySubagentEvent, MAX_SUBAGENT_ENTRIES, MAX_SUBAGENT_ENTRY_CHARS, runningSubagents, subagentForToolCall, type Subagent } from "./activity";
+import { applySubagentEvent, MAX_SUBAGENT_ENTRIES, MAX_SUBAGENT_ENTRY_CHARS, runningSubagents, statusLabel, subagentForToolCall, type Subagent } from "./activity";
 import { activityCount, initialState, reducer, sessionMarks, shownView, type Action, type WindowState } from "./reducer";
 
 const log = (id: string, kind: string, text: string) => ({ kind: "log", id, entry: { kind, text } });
@@ -29,7 +29,7 @@ describe("applySubagentEvent", () => {
     for (let i = 0; i < MAX_SUBAGENT_ENTRIES + 5; i++) l = applySubagentEvent(l, log("a", "tool", `t${i}`));
     expect(l[0]!.entries).toHaveLength(MAX_SUBAGENT_ENTRIES);
     expect(l[0]!.entries[0]!.text).toBe("t5");
-    l = applySubagentEvent(l, log("a", "result", "x".repeat(5000)));
+    l = applySubagentEvent(l, log("a", "tool", "x".repeat(5000)));
     const last = l[0]!.entries[l[0]!.entries.length - 1]!;
     expect(last.text.length).toBe(MAX_SUBAGENT_ENTRY_CHARS);
     expect(last.text.endsWith("…")).toBe(true);
@@ -109,4 +109,36 @@ describe("toTask", () => {
     });
     expect(toTask({ command: "no id" })).toBeNull();
   });
+});
+
+describe("idle: a terminal run's turn is done, the CLI waits", () => {
+  const run = { kind: "upsert", id: "ext:1", label: "Claude", status: "running", runtime: "external", agentId: "claude-cli" };
+  test("idle is its own status and does not count as running", () => {
+    const list = applySubagentEvent(applySubagentEvent([], run), { kind: "upsert", id: "ext:1", status: "idle", detail: "turn 1 done" });
+    expect(list[0]).toMatchObject({ status: "idle", detail: "turn 1 done" });
+    expect(runningSubagents(list)).toBe(0);
+    expect(statusLabel("idle")).toBe("waiting for you");
+  });
+  test("a late idle never undoes the exit the client already recorded", () => {
+    for (const ended of ["done", "failed"]) {
+      const list = applySubagentEvent(applySubagentEvent([], { ...run, status: ended }), { kind: "upsert", id: "ext:1", status: "idle" });
+      expect(list[0]!.status).toBe(ended);
+    }
+  });
+  test("each turn's result is kept as a result entry, longer than an ordinary log line", () => {
+    const text = "r".repeat(8000);
+    const list = applySubagentEvent(applySubagentEvent([], run), { kind: "log", id: "ext:1", entry: { kind: "result", text } });
+    expect(list[0]!.entries[0]!.text.length).toBe(8000);
+  });
+});
+
+test("the session's running badge counts only running runs, not idle ones; a delegate result adds a card item", () => {
+  let win: WindowState = reducer({ ...initialState, phase: "ready" }, { t: "created", sessionId: "s1", show: true });
+  const up = (id: string, status: string): Action => ({ t: "subagent", sessionId: "s1", event: { kind: "upsert", id, label: id, status, runtime: "external" } });
+  win = reducer(reducer(reducer(win, up("a", "running")), up("b", "idle")), up("c", "running"));
+  expect(sessionMarks(win, new Set())["s1"]!.running).toBe(2);
+  win = reducer(win, up("c", "idle"));
+  expect(sessionMarks(win, new Set())["s1"]!.running).toBe(1);
+  win = reducer(win, { t: "delegateResult", sessionId: "s1", runId: "a", agentId: "claude-cli", turn: 1, text: "hi" });
+  expect(win.convs.s1!.items.at(-1)).toMatchObject({ kind: "delegate", runId: "a", agentId: "claude-cli", turn: 1, text: "hi" });
 });

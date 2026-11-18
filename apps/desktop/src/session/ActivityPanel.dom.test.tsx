@@ -258,3 +258,44 @@ test("the Show subagent link on a spawn_subagent tool card opens the subagent wh
   await click(document.querySelector(".tool-link")!);
   expect(document.querySelector("[data-subagent-detail]")!.getAttribute("data-subagent-detail")).toBe("a1");
 });
+
+const extAgent = (over: Partial<Subagent> = {}): Subagent => ({
+  id: "ext:1",
+  label: "Claude · fix the build",
+  status: "idle",
+  detail: "turn 1 done",
+  runtime: "external",
+  agentId: "claude-cli",
+  entries: [{ kind: "result", text: "The build was failing on a stale lockfile." }],
+  ...over,
+});
+
+test("an idle external run reads \"waiting for you\" in its own colour class, and only running runs count on the tab", async () => {
+  await renderPanel({ tab: "subagents", subagents: [extAgent(), extAgent({ id: "ext:2", status: "running", entries: [] })] });
+  const rows = Array.from(document.querySelectorAll("[data-subagent]"));
+  expect(rows[0]!.querySelector(".activity-status")!.className).toContain("status-idle");
+  expect(rows[0]!.querySelector(".activity-status")!.getAttribute("title")).toBe("waiting for you");
+  expect(rows[1]!.querySelector(".activity-status")!.className).toContain("status-running");
+  // two external runs, one idle: the tab counts the running one only
+  expect(document.querySelector('[role="tab"][aria-selected="true"] .tab-count')!.textContent).toBe("1");
+});
+
+test("the idle run's detail shows its status label and each turn's result", async () => {
+  await renderPanel({ tab: "subagents", subagents: [extAgent()] });
+  await click(document.querySelector("[data-subagent]")!);
+  const detail = document.querySelector("[data-subagent-detail]")!;
+  expect(detail.querySelector(".badge")!.textContent).toBe("waiting for you");
+  expect(detail.querySelector(".entry-result")!.textContent).toContain("stale lockfile");
+});
+
+test("a result card in the parent transcript is collapsed, says who returned, and shows the text verbatim", async () => {
+  const items: Item[] = [{ kind: "delegate", id: 1, runId: "ext:1", agentId: "claude-cli", turn: 2, text: "Done.\n<b>not markup</b>" }];
+  await act(() => root.render(React.createElement(Transcript, { items, busy: false, replaying: false, empty: null })));
+  const card = document.querySelector("details.delegate-card") as HTMLDetailsElement;
+  expect(card).not.toBeNull();
+  expect(card.open).toBe(false);
+  expect(card.querySelector("summary")!.textContent).toContain("claude-cli returned");
+  expect(card.querySelector("summary")!.textContent).toContain("turn 2");
+  expect(card.querySelector(".delegate-card-body")!.textContent).toBe("Done.\n<b>not markup</b>");
+  expect(card.querySelector("b")).toBeNull();
+});

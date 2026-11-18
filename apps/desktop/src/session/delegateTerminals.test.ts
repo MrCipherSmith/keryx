@@ -7,6 +7,7 @@ const launch: DelegateLaunch = { runId: "ext:1", agentId: "claude-cli", title: "
 const tab = (id: number): PtyTab => ({ id, title: launch.title, owner: "user", cwd: "/proj", running: true, exitCode: null });
 
 function rig(opts: { failOpen?: string } = {}) {
+  const exits: string[] = [];
   let win = reducer({ ...initialState, phase: "ready" }, { t: "created", sessionId: "s1", show: true });
   const opened: DelegateLaunch[] = [];
   const shown: PtyTab[] = [];
@@ -21,9 +22,10 @@ function rig(opts: { failOpen?: string } = {}) {
     dispatch: (a: Action) => {
       win = reducer(win, a);
     },
+    notifyExit: (sessionId, runId) => void exits.push(`${sessionId}/${runId}`),
   });
   const agents = () => win.convs.s1!.subagents;
-  return { d, opened, shown, agents };
+  return { d, opened, shown, agents, exits };
 }
 
 describe("/delegate in the terminal: the run as a subagent", () => {
@@ -114,5 +116,27 @@ describe("/delegate in the terminal: the run as a subagent", () => {
     expect(raised).toBe("no such program");
     expect(r.agents()[0]!.status).toBe("failed");
     expect(r.agents()[0]!.detail).toContain("no such program");
+  });
+});
+
+describe("the exit is reported to keryx (it stops watching the turn-done file)", () => {
+  test("a process exit, once; a close of a still-running run; nothing for a tab that already ended", async () => {
+    const r = rig();
+    await r.d.start("s1", launch);
+    r.d.exited(1, 0);
+    r.d.closed(1);
+    expect(r.exits).toEqual(["s1/ext:1"]);
+    expect(r.agents()[0]!.status).toBe("done");
+
+    const second = rig();
+    await second.d.start("s1", { ...launch, runId: "ext:2" });
+    second.d.closed(1);
+    expect(second.exits).toEqual(["s1/ext:2"]);
+    expect(second.agents()[0]).toMatchObject({ status: "failed", detail: "closed" });
+  });
+  test("a run that could not start is reported too", async () => {
+    const r = rig({ failOpen: "no such program" });
+    await r.d.start("s1", launch).catch(() => {});
+    expect(r.exits).toEqual(["s1/ext:1"]);
   });
 });

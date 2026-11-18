@@ -220,6 +220,17 @@ export interface InitializeResult {
 export const SESSION_RELEASED = "_keryx/session_released";
 /** Notification to keryx: the user switched the shown session locally (counts for its idle-cap LRU). */
 export const SESSION_SHOWN = "_keryx/session_shown";
+/** Notification from keryx: a `/delegate` terminal run finished a turn; `text` is its (capped, untrusted) answer. */
+export const DELEGATE_RESULT = "_keryx/delegate_result";
+/** Notification to keryx: a `/delegate` run's terminal process ended (it stops watching the run's hook file). */
+export const DELEGATE_EXITED = "_keryx/delegate_exited";
+export interface DelegateResultParams {
+  sessionId: string;
+  runId: string;
+  agentId: string;
+  turn: number;
+  text: string;
+}
 /** Request to keryx: archive/unarchive, pin/unpin a stored session; answers the flags as stored. */
 export const SESSION_FLAGS = "_keryx/session_flags";
 /** Request to keryx: move a stored session to the system trash (a held, idle one is released first). */

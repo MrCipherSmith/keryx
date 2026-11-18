@@ -36,6 +36,9 @@ export const EXTERNAL_AGENTS: readonly ExternalAgentEntry[] = [
     knownGoodRange: { min: "0.147.0" },
     // `codex [OPTIONS] [PROMPT]` starts the TUI on a prompt; `--` keeps a task that begins with a dash a prompt.
     interactiveArgs: ["--"],
+    // codex 0.147 `-c notify=[...]` (ConfigToml.notify): the program gets one JSON argv
+    // `{type:"agent-turn-complete","thread-id","turn-id",cwd,"input-messages","last-assistant-message"}`.
+    turnHook: "codex-notify",
     sandboxModes: ["read-only", "worktree-write"],
     // No documented mid-run input channel; operator messages go through resume.
     streamingInput: false,
@@ -58,6 +61,9 @@ export const EXTERNAL_AGENTS: readonly ExternalAgentEntry[] = [
     knownGoodRange: { min: "2.1.220" },
     // `claude [prompt]` starts an interactive session on a prompt; `--` ends the options.
     interactiveArgs: ["--"],
+    // claude 2.1.281 `--settings <json>` with a `Stop` hook: JSON on stdin with `session_id`,
+    // `transcript_path`, `hook_event_name`, `stop_hook_active` and (optional) `last_assistant_message`.
+    turnHook: "claude-stop",
     sandboxModes: ["read-only", "worktree-write"],
     streamingInput: true,
     resumable: true,
@@ -82,6 +88,8 @@ export const EXTERNAL_AGENTS: readonly ExternalAgentEntry[] = [
     knownGoodRange: { min: "1.2.12" },
     // `agy -i <prompt>` (`--prompt-interactive`): run an initial prompt interactively and continue the session.
     interactiveArgs: ["-i"],
+    // agy 1.4.2 `--help` lists no hook, notify or settings flag: nothing to inject, exit-only status.
+    turnHook: "none",
     sandboxModes: ["read-only", "worktree-write"],
     // `agy --help` documents `--input-format stream-json` for print mode, the
     // same shape claude's steerable run uses. Declared true because the CLI
@@ -165,13 +173,14 @@ export function canonicalExternalAgentId(input: string): string {
 }
 
 /**
- * The argv that runs `entry`'s vendor CLI interactively on `task`: `[binary, ...interactiveArgs, task]`.
+ * The argv that runs `entry`'s vendor CLI interactively on `task`: `[binary, ...hookArgs, ...interactiveArgs, task]`.
  * The task is one element (never shell-interpolated). Undefined when the agent has no interactive
  * form, which `/delegate` in a terminal answers as a refusal. Pure.
  */
-export function interactiveArgvFor(entry: ExternalAgentEntry, task: string): string[] | undefined {
+export function interactiveArgvFor(entry: ExternalAgentEntry, task: string, hookArgs: readonly string[] = []): string[] | undefined {
   if (entry.interactiveArgs === undefined) return undefined;
-  return [entry.binary, ...entry.interactiveArgs, task];
+  // The hook flags are options, so they go before `interactiveArgs` (which may end the options with `--`).
+  return [entry.binary, ...hookArgs, ...entry.interactiveArgs, task];
 }
 
 /** Every registered agent id, in registry order. */

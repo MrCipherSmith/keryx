@@ -11,7 +11,7 @@
 // module-level globals — two connections in the same test process (or two
 // launches of the CLI) never see each other's state.
 
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import {
   agentContextWindow,
   buildAgentSystemInstruction,
@@ -139,7 +139,8 @@ import type { ShellView } from "./shell-views";
 import { withSessionProvider } from "../commands/spawn-deps";
 import { createProvidersHandlers, type AcpProvidersSeams } from "./providers";
 import { createTasksHandlers, taskEventSink } from "./shell-tasks";
-import { clientRunsTerminal, createSessionExternalRuns, type DelegateTerminalLaunch, type SessionExternalRuns } from "./shell-delegate";
+import { clientRunsTerminal, createSessionExternalRuns, type DelegateTerminalLaunch, type DelegateTurnResult, type SessionExternalRuns } from "./shell-delegate";
+import { capResultText, delegateResultNote } from "./delegate-turn-hook";
 import type { RunExternalFn, CreateRunExternalOptions } from "../harness/run-external-factory";
 import type { SlateSessionRef } from "../session/slate-lifecycle";
 import { busyRefusalText, findShellCommand, shellAvailableCommands, viewNotServedText } from "./shell-commands";
@@ -552,6 +553,8 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   const sessionRewinds = new Map<string, AcpSessionRewind>();
   /** `/delegate`: each session's external runs (§3.9.4), built on first use; stopped by a cancel or a release. */
   const sessionExternalRuns = new Map<string, SessionExternalRuns>();
+  /** Delegate-result notes that arrived while the session's turn was running; they join the history when it ends. */
+  const pendingDelegateNotes = new Map<string, string[]>();
   /**
    * `/goal`: each session's slate ref, as the shells keep one per session (`opened: false` until the
    * goal opens it) and the goal turn text a turn must carry to skip the close-phrase check once.
@@ -807,7 +810,9 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     sessionReadOnly.delete(sessionId);
     sessionRewinds.delete(sessionId);
     sessionExternalRuns.get(sessionId)?.stop("the session was released");
+    sessionExternalRuns.get(sessionId)?.dispose();
     sessionExternalRuns.delete(sessionId);
+    pendingDelegateNotes.delete(sessionId);
     sessionSlates.delete(sessionId);
     const jobs = sessionJobs.get(sessionId);
     sessionJobs.delete(sessionId);
@@ -1898,6 +1903,44 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     return created;
   }
 
+  /**
+   * A terminal `/delegate` run finished a turn (D-14, §3.9.5a): tell the client (`_keryx/delegate_result`,
+   * the "returned" card) and put the answer in the parent's history as a labelled, untrusted user-role
+   * note. No turn starts: the operator decides what the parent does with it. A note that arrives while
+   * the session's turn runs waits for the turn to end, so it never lands between a tool call and its result.
+   */
+  function handOffDelegateResult(sessionId: string, result: DelegateTurnResult): void {
+    if (stopping) return;
+    writeMessage(notificationMessage(KERYX_ACP_EXTENSION_METHODS.delegateResult, { sessionId, ...result, text: capResultText(result.text) }));
+    const note = delegateResultNote({ ...result, nonce: randomBytes(6).toString("hex") });
+    if (activeTurns.has(sessionId)) {
+      pendingDelegateNotes.set(sessionId, [...(pendingDelegateNotes.get(sessionId) ?? []), note]);
+      return;
+    }
+    appendDelegateNotes(sessionId, [note]);
+  }
+
+  function appendDelegateNotes(sessionId: string, notes: readonly string[]): void {
+    const state = registry.get(sessionId);
+    if (state === undefined || notes.length === 0) return;
+    for (const note of notes) state.history.push({ role: "user", content: note, provenance: "harness", injected: true });
+    syncAcpArchive(state.archive, state.history);
+    if (!registry.canPersist(sessionId)) return;
+    try {
+      const { providerId, modelId } = sessionModel(sessionId, KERYX_ACP_EXTENSION_METHODS.delegateResult).binding;
+      registry.updateHandle(sessionId, persistHistory(state.handle, state.history, { provider: providerId, model: modelId, archive: state.archive.messages }));
+    } catch (cause) {
+      options.logError(`acp: delegate result not persisted: ${cause instanceof Error ? cause.message : String(cause)}`);
+    }
+  }
+
+  /** `_keryx/delegate_exited` (shell profile): the run's terminal process ended; its hook file is read once more and removed. */
+  function handleDelegateExited(params: unknown): void {
+    if (typeof params !== "object" || params === null) return;
+    const { sessionId, runId } = params as Record<string, unknown>;
+    if (typeof sessionId === "string" && typeof runId === "string") sessionExternalRuns.get(sessionId)?.exited(runId);
+  }
+
   /** `/delegate`'s runs for one session: the approval is a `session/request_permission`, the events `_keryx/subagent`. */
   function externalRunsFor(sessionId: string, state: AcpSessionState): SessionExternalRuns {
     const held = sessionExternalRuns.get(sessionId);
@@ -1907,6 +1950,9 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       configDir: options.shellConfigDir,
       sessionId,
       terminalCapable: clientRunsTerminal(state.clientCapabilities),
+      sessionDir: () => registry.get(sessionId)?.handle.dir,
+      onTurnResult: (result) => handOffDelegateResult(sessionId, result),
+      onHookError: (message) => options.logError(`acp: ${message}`),
       gateEnv: options.externalGateEnv,
       makeRunExternal: options.makeRunExternal,
       emitFleet: (event) => {
@@ -2298,6 +2344,11 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       // the busy guard above ever regressed, hand a later turn's slot away.
       if (activeTurns.get(sessionId) === turn) {
         activeTurns.delete(sessionId);
+        const notes = pendingDelegateNotes.get(sessionId);
+        if (notes !== undefined) {
+          pendingDelegateNotes.delete(sessionId);
+          appendDelegateNotes(sessionId, notes);
+        }
       }
       touch(sessionId);
     }
@@ -2769,7 +2820,10 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         [ACP_AGENT_METHODS.sessionCancel]: (params) => handleSessionCancel(params),
         // Shell profile only: the editor profile leaves it unhandled (logged, ignored).
         ...(shellProfile
-          ? { [KERYX_ACP_EXTENSION_METHODS.sessionShown]: (params: unknown) => handleSessionShown(params) }
+          ? {
+              [KERYX_ACP_EXTENSION_METHODS.sessionShown]: (params: unknown) => handleSessionShown(params),
+              [KERYX_ACP_EXTENSION_METHODS.delegateExited]: (params: unknown) => handleDelegateExited(params),
+            }
           : {}),
       },
     },
@@ -2893,7 +2947,10 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         turn.cancelled = true;
         turn.controller.abort();
       }
-      for (const runs of sessionExternalRuns.values()) runs.stop("keryx acp is shutting down");
+      for (const runs of sessionExternalRuns.values()) {
+        runs.stop("keryx acp is shutting down");
+        runs.dispose();
+      }
       await within(Promise.allSettled([...inflight]), SHUTDOWN_TURN_GRACE_MS);
     } else {
       // Shell profile: nobody is left to watch a turn, and a trust or auto
@@ -2904,7 +2961,10 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
           turn.cancelled = true;
           turn.controller.abort();
         }
-        for (const runs of sessionExternalRuns.values()) runs.stop("the client closed the connection");
+        for (const runs of sessionExternalRuns.values()) {
+        runs.stop("the client closed the connection");
+        runs.dispose();
+      }
       }
       // A turn started before the close still has a response to write, and the
       // stream it writes to is still open. Draining is what makes the denial

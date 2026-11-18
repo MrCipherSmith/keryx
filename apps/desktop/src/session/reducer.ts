@@ -36,7 +36,21 @@ export type Item =
       endedAt: number | null;
     }
   | { kind: "notice"; id: number; level: "info" | "warn" | "error"; text: string }
+  | DelegateResultItem
   | CommandItem;
+
+/**
+ * A `/delegate` terminal run finished a turn: its answer as keryx put it in the parent's history, shown
+ * as a collapsed card. Untrusted text (rendered verbatim, never as markup). Client-only, like a command card.
+ */
+export interface DelegateResultItem {
+  kind: "delegate";
+  id: number;
+  runId: string;
+  agentId: string;
+  turn: number;
+  text: string;
+}
 
 /**
  * The card a slash command leaves in the transcript. Client-only: it is never sent to the model and a
@@ -375,6 +389,8 @@ export type Action =
   | { t: "notice"; sessionId: string; level: "info" | "warn" | "error"; text: string }
   | { t: "busy"; sessionId: string; busy: boolean }
   /** A command card; with `replaceId` it takes the place of that card (a view acting on itself). */
+  /** `_keryx/delegate_result`: a terminal run's turn answer, shown in the session it was delegated from. */
+  | { t: "delegateResult"; sessionId: string; runId: string; agentId: string; turn: number; text: string }
   | { t: "command"; sessionId: string; card: Omit<CommandItem, "kind" | "id">; replaceId?: number }
   | { t: "queueAdd"; sessionId: string; text: string }
   | { t: "queueRemove"; sessionId: string; index: number }
@@ -461,6 +477,12 @@ export function reducer(state: WindowState, a: Action): WindowState {
         }
         return { ...c, nextId: c.nextId + 1, items: [...c.items, { ...a.card, kind: "command", id: c.nextId }] };
       });
+    case "delegateResult":
+      return withConv(state, a.sessionId, (c) => ({
+        ...c,
+        nextId: c.nextId + 1,
+        items: [...c.items, { kind: "delegate", id: c.nextId, runId: a.runId, agentId: a.agentId, turn: a.turn, text: a.text }],
+      }));
     case "queueAdd":
       return withConv(state, a.sessionId, (c) =>
         a.text.trim() ? { ...c, nextId: c.nextId + 1, queue: [...c.queue, { id: c.nextId, text: a.text }] } : c,

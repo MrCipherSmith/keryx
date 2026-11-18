@@ -67,6 +67,13 @@ export interface ExternalAgentEntry {
    */
   readonly interactiveArgs?: readonly string[];
   /**
+   * The vendor CLI's own end-of-turn hook keryx injects when it opens the interactive run (D-14):
+   * `claude-stop` = `--settings` with a `Stop` hook (JSON on stdin), `codex-notify` = `-c notify=[...]`
+   * (JSON as the last argv). `none` = the CLI has no such hook (verified against `--help`), so the
+   * run's status changes only when its process exits. Absent is read as `none`.
+   */
+  readonly turnHook?: "claude-stop" | "codex-notify" | "none";
+  /**
    * Per-agent override of the stderr-read budget (flow 298 T14), for an agent
    * whose CLI is known to be unusually chatty on stderr by design — `codex
    * exec` narrates itself there and prints the contents of files it reads

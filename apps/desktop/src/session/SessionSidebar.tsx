@@ -5,7 +5,7 @@ import { MOD, setPrefs, usePrefs } from "../lib/prefs";
 import { Icon } from "../components/Icon";
 import { Menu, type MenuItem } from "../components/Menu";
 import { Dialog, Spinner } from "../components/ui";
-import { runningSubagents, type Subagent } from "./activity";
+import { runningSubagents, statusLabel, type Subagent } from "./activity";
 import { lostText, type SessionMark } from "./reducer";
 
 const NO_KIDS: readonly Subagent[] = [];
@@ -372,8 +372,8 @@ export const SessionSidebar = memo(function SessionSidebar({
                                 <span
                                   className={`session-child-dot status-${a.status}`}
                                   role="img"
-                                  aria-label={a.status}
-                                  title={a.status}
+                                  aria-label={statusLabel(a.status)}
+                                  title={statusLabel(a.status)}
                                 />
                                 <span className="session-child-label truncate">
                                   {a.label}

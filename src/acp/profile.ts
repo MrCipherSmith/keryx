@@ -80,6 +80,14 @@ export const KERYX_ACP_EXTENSION_METHODS = {
    * another keryx process, is refused.
    */
   sessionTrash: "_keryx/session_trash",
+  /**
+   * Agent → client notification, shell profile (§3.9.5a, D-14): `{ sessionId, runId, agentId, turn, text }`.
+   * A `/delegate` run in the client's terminal finished a turn; `text` is its answer (capped, untrusted).
+   * keryx has put the same text in the parent session's history as a labelled note, without a turn.
+   */
+  delegateResult: "_keryx/delegate_result",
+  /** Client → agent notification, shell profile: `{ sessionId, runId }`. The run's terminal process ended; keryx stops watching its hook file. */
+  delegateExited: "_keryx/delegate_exited",
 } as const;
 
 /** The extensions a profile speaks, as `initialize._meta.keryx.extensions` and `_keryx/info` list them. */
@@ -108,6 +116,8 @@ export function acpProfileExtensions(profile: AcpProfile): string[] {
         KERYX_ACP_EXTENSION_METHODS.tasksKill,
         KERYX_ACP_EXTENSION_METHODS.sessionFlags,
         KERYX_ACP_EXTENSION_METHODS.sessionTrash,
+        KERYX_ACP_EXTENSION_METHODS.delegateResult,
+        KERYX_ACP_EXTENSION_METHODS.delegateExited,
       ]
     : [KERYX_ACP_EXTENSION_METHODS.info];
 }

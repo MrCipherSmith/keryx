@@ -1,8 +1,9 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
 import type { ToolCallContent, ToolKind } from "../acp/types";
-import type { CommandItem, Item } from "./reducer";
+import type { CommandItem, DelegateResultItem, Item } from "./reducer";
 import type { Subagent } from "./activity";
 import { CommandCard } from "./CommandCard";
+import { DelegateResultCard } from "./DelegateResultCard";
 import { blockText } from "./reducer";
 import { Markdown } from "../components/Markdown";
 import { Icon, type IconName } from "../components/Icon";
@@ -242,7 +243,8 @@ type Block =
   | { type: "thought"; item: Extract<Item, { kind: "thought" }>; first: boolean }
   | { type: "tools"; items: ToolItem[]; first: boolean }
   | { type: "notice"; item: Extract<Item, { kind: "notice" }> }
-  | { type: "command"; item: CommandItem };
+  | { type: "command"; item: CommandItem }
+  | { type: "delegate"; item: DelegateResultItem };
 
 function toBlocks(items: Item[]): Block[] {
   const out: Block[] = [];
@@ -259,6 +261,10 @@ function toBlocks(items: Item[]): Block[] {
     }
     if (it.kind === "command") {
       out.push({ type: "command", item: it });
+      continue;
+    }
+    if (it.kind === "delegate") {
+      out.push({ type: "delegate", item: it });
       continue;
     }
     const first = !agentTurnOpen;
@@ -396,6 +402,8 @@ export function Transcript({ items, busy, replaying, empty, onRunCommand, subage
                     </div>
                   </div>
                 );
+              case "delegate":
+                return <DelegateResultCard key={b.item.id} item={b.item} />;
               case "command":
                 return <CommandCard key={b.item.id} item={b.item} onRun={onRunCommand} />;
               case "notice":

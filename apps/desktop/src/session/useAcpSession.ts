@@ -19,6 +19,9 @@ import { createDelegateTerminals, type DelegateLaunch } from "./delegateTerminal
 import {
   canOrganizeSessions,
   hasLiveSessions,
+  DELEGATE_EXITED,
+  DELEGATE_RESULT,
+  type DelegateResultParams,
   SESSION_FLAGS,
   SESSION_RELEASED,
   SESSION_SHOWN,
@@ -152,6 +155,7 @@ export function useAcpSession(cwd: string) {
         openRun: (launch) => ptyOpenRun(launch.cwd, launch.argv, launch.title, 80, 24),
         showTab: showTerminalTab,
         dispatch,
+        notifyExit: (sessionId, runId) => live.current.client?.notify(DELEGATE_EXITED, { sessionId, runId }),
       }),
     [dispatch],
   );
@@ -377,6 +381,11 @@ export function useAcpSession(cwd: string) {
         else if (method === SUBAGENT_NOTIFICATION) {
           const p = params as { sessionId?: unknown; event?: unknown } | null;
           if (typeof p?.sessionId === "string" && p.event) dispatch({ t: "subagent", sessionId: p.sessionId, event: p.event });
+        } else if (method === DELEGATE_RESULT) {
+          const p = params as Partial<DelegateResultParams> | null;
+          if (typeof p?.sessionId === "string" && typeof p.runId === "string" && typeof p.text === "string") {
+            dispatch({ t: "delegateResult", sessionId: p.sessionId, runId: p.runId, agentId: typeof p.agentId === "string" ? p.agentId : "agent", turn: typeof p.turn === "number" ? p.turn : 1, text: p.text });
+          }
         } else if (method === TASKS_EVENT) {
           const sid = (params as { sessionId?: unknown } | null)?.sessionId;
           if (typeof sid === "string") void refreshTasks(sid);
