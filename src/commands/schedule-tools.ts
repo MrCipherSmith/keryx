@@ -28,7 +28,7 @@ import {
   type ScheduleDraft,
   type ScheduleRequest,
 } from "../trigger/schedules";
-import { providerHasUsableCredential, providerReportsUsage as dispatchProviderReportsUsage } from "./trigger-dispatch";
+import { providerHasUsableCredential } from "./trigger-dispatch";
 
 /** Flow 302: the real checks, reused so a draft agrees with what `keryx trigger run` would do. Production's default; tests inject a fake to stay hermetic. */
 async function defaultCheckCredential(provider: string, model: string): ReturnType<NonNullable<DraftContext["checkCredential"]>> {
@@ -43,8 +43,6 @@ export interface ScheduleToolBinding {
   readonly now?: () => Date;
   readonly resolveProgram?: DraftContext["resolveProgram"];
   readonly accountOf?: DraftContext["accountOf"];
-  /** Default: `providerReportsUsage` (`./trigger-dispatch`) — the same the dispatcher checks at run time. */
-  readonly providerReportsUsage?: DraftContext["providerReportsUsage"];
   /** Default: `providerHasUsableCredential` (`./trigger-dispatch`) — the same construction the dispatcher uses at run time. */
   readonly checkCredential?: DraftContext["checkCredential"];
   /** M3a: the process environment (default `process.env`). */
@@ -86,8 +84,6 @@ export function requestFromToolInput(input: Record<string, unknown>, binding: Sc
   if (prompt === undefined) missing.push("prompt");
   if (provider === undefined) missing.push("provider");
   if (model === undefined) missing.push("model");
-  if (inRate === undefined || outRate === undefined) missing.push("rates {inputUsdPerMTok, outputUsdPerMTok}");
-  if (ceiling === undefined) missing.push("ceilingUsd");
   if (missing.length > 0) return { error: `missing ${missing.join(", ")} — ask the operator for what you do not know` };
   const mode = input["permissionMode"];
   const network = input["network"];
@@ -100,10 +96,10 @@ export function requestFromToolInput(input: Record<string, unknown>, binding: Sc
     prompt: prompt!,
     provider: provider!,
     model: model!,
-    rates: { inputUsdPerMTok: inRate!, outputUsdPerMTok: outRate! },
-    ceilingUsd: ceiling!,
+    ...(inRate !== undefined && outRate !== undefined ? { rates: { inputUsdPerMTok: inRate, outputUsdPerMTok: outRate } } : {}),
+    ...(ceiling !== undefined ? { ceilingUsd: ceiling } : {}),
     ...(maxSeconds !== undefined ? { maxSeconds } : {}),
-    ...(mode === "ask" || mode === "trust" ? { permissionMode: mode } : {}),
+    ...(mode === "ask" || mode === "trust" || mode === "auto" ? { permissionMode: mode } : {}),
     ...(network === "off" || network === "full" || network === "allowlist" ? { network } : {}),
     ...(domains.length > 0 ? { domains } : {}),
     ...(ports.length > 0 ? { ports } : {}),
@@ -129,8 +125,8 @@ export function scheduleTools(binding: ScheduleToolBinding): InteractiveTool[] {
         "the operator reads later (the shell's Schedules section, /schedules). The operator ALWAYS sees a confirmation card " +
         "(cadence and next runs, prompt, runner, budget, network, granted tools with the account they act as, what gets " +
         "installed) and must say yes — you cannot confirm it. Granted tools run the operator's own credentials OUTSIDE the " +
-        "sandbox and return only redacted output; grant only what the task needs. Ask the operator for rates and a ceiling " +
-        "if you do not know them.",
+        "sandbox and return only redacted output; grant only what the task needs. Ask the operator which permission mode the " +
+        "unattended run uses (ask, trust or auto). Rates and a ceiling are optional: cost is reported, never a limit.",
       inputSchema: {
         type: "object",
         properties: {
@@ -143,10 +139,17 @@ export function scheduleTools(binding: ScheduleToolBinding): InteractiveTool[] {
             type: "object",
             properties: { inputUsdPerMTok: { type: "number" }, outputUsdPerMTok: { type: "number" } },
             required: ["inputUsdPerMTok", "outputUsdPerMTok"],
+            description: "optional: only prices the report; without it the cost reads \"cost unknown\"",
           },
-          ceilingUsd: { type: "number", description: "this schedule's own spend ceiling in USD" },
+          ceilingUsd: { type: "number", description: "optional, informational: a run over it is reported \"over the ceiling\" and never stopped" },
           maxSeconds: { type: "number", description: "per-run wall-clock limit (default 600)" },
-          permissionMode: { type: "string", enum: ["ask", "trust"], description: "ask (default, read-only) or trust" },
+          permissionMode: {
+            type: "string",
+            enum: ["ask", "trust", "auto"],
+            description:
+              "ask (default): every command that needs approval is DENIED, since nobody answers an unattended run; " +
+              "trust: non-destructive commands run in the sandbox; auto: every command runs in the sandbox except credential-touching ones",
+          },
           network: {
             type: "string",
             enum: ["off", "full", "allowlist"],
@@ -169,7 +172,7 @@ export function scheduleTools(binding: ScheduleToolBinding): InteractiveTool[] {
           tools: { type: "array", items: { type: "string", enum: GRANTED_TOOL_CATALOGUE.map((s) => s.id) } },
           repos: { type: "array", items: { type: "string" }, description: "owner/name repositories the granted tools may touch" },
         },
-        required: ["name", "cadence", "prompt", "rates", "ceilingUsd"],
+        required: ["name", "cadence", "prompt"],
         additionalProperties: false,
       },
       risk: "write",
@@ -181,7 +184,6 @@ export function scheduleTools(binding: ScheduleToolBinding): InteractiveTool[] {
       if ("error" in request) return request;
       const drafted = await draftSchedule(request, {
         projectRoot: binding.projectRoot,
-        providerReportsUsage: binding.providerReportsUsage ?? dispatchProviderReportsUsage,
         checkCredential: binding.checkCredential ?? defaultCheckCredential,
         ...(binding.host !== undefined ? { host: binding.host } : {}),
         ...(binding.now !== undefined ? { now: binding.now } : {}),

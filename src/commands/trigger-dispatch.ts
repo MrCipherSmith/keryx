@@ -248,7 +248,24 @@ function routingDecisionFailure(decision: Exclude<RoutingDecision, { readonly st
   return `routing refused the explicit unattended provider/model pin: ${reason} (decision ${decision.decisionId})`;
 }
 
-/** Default provider construction: fails closed on a missing credential and on unknown usage reporting. */
+/**
+ * Provider construction for a SCHEDULE (`agent-task`, the digest summary): fails closed on a missing
+ * credential only. A provider that does not report token usage is allowed — the run's cost is then
+ * reported as "cost unknown" (owner decision 2026-11-18: cost is reported, never a gate).
+ */
+export function makeScheduleProvider(dispatch: TriggerDispatch): ProviderPort | { error: string; code?: DispatchRefusalCode } {
+  const env = envWithSavedApiKeys(process.env);
+  const provider = makeProvider(dispatch.provider, dispatch.model, {
+    fetch: globalThis.fetch,
+    env,
+    ...(dispatch.baseUrl !== undefined ? { baseUrl: dispatch.baseUrl } : {}),
+  });
+  const reason = credentialProblem(dispatch.provider, provider);
+  if (reason !== undefined) return { error: reason };
+  return provider;
+}
+
+/** Default provider construction for a `flow-next` dispatch: fails closed on a missing credential and on unknown usage reporting. */
 export function defaultMakeProvider(dispatch: TriggerDispatch): ProviderPort | { error: string; code?: DispatchRefusalCode } {
   if (!providerReportsUsage(dispatch.provider)) {
     return {
@@ -472,9 +489,15 @@ export async function recoverStaleWorktree(
 
 /**
  * Flow 295 (C4): the spend meter both unattended dispatches (`flow-next` and
- * `agent-task`) price their tokens with. It stops the run (`abort`) once the
- * priced cost reaches the reservation. A response without usage is charged the
- * whole reservation, because it cannot be priced (AC14 of flow 290).
+ * `agent-task`) price their tokens with.
+ *
+ * With a `reservedUsd` (a `flow-next` dispatch) it GATES: it stops the run (`abort`) once the priced
+ * cost reaches the reservation, and a response without usage is charged the whole reservation,
+ * because it cannot be priced (AC14 of flow 290).
+ *
+ * With `reservedUsd` undefined (a schedule, owner decision 2026-11-18) it only MEASURES: it never
+ * aborts, and a response without usage, or a run with no rates, reports "cost unknown" instead of
+ * a number.
  */
 export interface SpendMeter {
   readonly tokens: { input: number; output: number };
@@ -485,35 +508,48 @@ export interface SpendMeter {
   readonly state: { spendStopped: boolean; usageMissing: boolean };
 }
 
-export function createSpendMeter(dispatch: TriggerDispatch, reservedUsd: number, abort: () => void): SpendMeter {
+export function createSpendMeter(dispatch: Pick<TriggerDispatch, "rates">, reservedUsd: number | undefined, abort: () => void): SpendMeter {
   const tokens = { input: 0, output: 0 };
   const state = { spendStopped: false, usageMissing: false };
+  const rates = dispatch.rates;
   const priced = (): number =>
-    state.usageMissing
+    state.usageMissing && reservedUsd !== undefined
       ? reservedUsd
-      : spendFromTokens({
-          inputTokens: tokens.input,
-          outputTokens: tokens.output,
-          inputRatePerMillion: dispatch.rates.inputUsdPerMTok,
-          outputRatePerMillion: dispatch.rates.outputUsdPerMTok,
-        });
+      : rates === undefined
+        ? 0
+        : spendFromTokens({
+            inputTokens: tokens.input,
+            outputTokens: tokens.output,
+            inputRatePerMillion: rates.inputUsdPerMTok,
+            outputRatePerMillion: rates.outputUsdPerMTok,
+          });
+  const cost = (): TriggerRunCost => {
+    if (reservedUsd === undefined && (state.usageMissing || rates === undefined)) {
+      return {
+        recorded: false,
+        reason: state.usageMissing ? "cost unknown: the provider does not report token usage" : "cost unknown: no rates were given for this schedule",
+        tokens: { input: tokens.input, output: tokens.output },
+      };
+    }
+    return { recorded: true, usd: priced(), tokens: { input: tokens.input, output: tokens.output } };
+  };
   return {
     tokens,
     state,
     priced,
-    cost: () => ({ recorded: true, usd: priced(), tokens: { input: tokens.input, output: tokens.output } }),
+    cost,
     onUsage: (usage) => {
       const t = usageTokens(usage);
       tokens.input += t.input;
       tokens.output += t.output;
-      if (!state.spendStopped && priced() >= reservedUsd) {
+      if (reservedUsd !== undefined && !state.spendStopped && priced() >= reservedUsd) {
         state.spendStopped = true;
         abort();
       }
     },
     markUsageMissing: () => {
       state.usageMissing = true;
-      abort();
+      if (reservedUsd !== undefined) abort();
     },
   };
 }
@@ -722,7 +758,7 @@ async function dispatchLocked(
   const providerFor = cachedRoutingProviders(dispatch, baselineProvider, deps.makeProvider ?? defaultMakeProvider);
   const flowDir = (await service.list({ cwd: projectRoot })).find((candidate) => candidate.id === state.id)?.dir;
   const taskPrompt = buildTaskPrompt(state.id, state.title, flowDir, task);
-  const currentBudget = await evaluateTriggerBudget(projectRoot, "flow-next", {}, { name: triggerName, ceilingUsd: dispatch.ceilingUsd });
+  const currentBudget = await evaluateTriggerBudget(projectRoot, "flow-next", {}, dispatch.ceilingUsd === undefined ? undefined : { name: triggerName, ceilingUsd: dispatch.ceilingUsd });
   if (!currentBudget.allowed) {
     return {
       outcome: "budget-refused",
@@ -769,7 +805,7 @@ async function dispatchLocked(
     trigger: triggerName,
     firedBy: entry.fire,
     action: entry.action,
-    perTrigger: { name: triggerName, ceilingUsd: dispatch.ceilingUsd },
+    perTrigger: dispatch.ceilingUsd === undefined ? undefined : { name: triggerName, ceilingUsd: dispatch.ceilingUsd },
     now,
     // Flow 297 (AC2): the reservation itself is attributable to the flow it
     // is working, not only the closing record that resolves it.

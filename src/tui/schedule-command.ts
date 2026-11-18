@@ -14,7 +14,7 @@
 // without a terminal. `tui-shell.ts` passes its transcript and card dialog.
 
 import { requestFromArgs } from "../commands/schedule";
-import { providerHasUsableCredential, providerReportsUsage as dispatchProviderReportsUsage } from "../commands/trigger-dispatch";
+import { providerHasUsableCredential } from "../commands/trigger-dispatch";
 import type { ScheduleHost } from "../trigger/install";
 import { confirmSchedule, draftSchedule, nestedAgentScheduleRefusal, type DraftContext } from "../trigger/schedules";
 
@@ -24,10 +24,10 @@ async function defaultCheckCredential(provider: string, model: string): ReturnTy
 }
 
 export const SCHEDULE_SLASH_USAGE = [
-  "usage: /schedule --name <name> --every \"<cadence>\" --rates <in>,<out> --ceiling <usd> [--tool <id>]... [--repo owner/name]...",
-  "       [--mode ask|trust] [--network off|full] [--max-seconds N] [--provider P --model M] -- <what the agent should do>",
+  "usage: /schedule --name <name> --every \"<cadence>\" [--mode ask|trust|auto] [--rates <in>,<out>] [--ceiling <usd>] [--tool <id>]... [--repo owner/name]...",
+  "       [--network off|full] [--max-seconds N] [--provider P --model M] -- <what the agent should do>",
   'cadence: cron, "every N hours", "every N minutes", "daily at HH:MM", "weekdays at HH:MM"; tools: gh.pr.list, gh.pr.view, gh.pr.checks, gh.issue.list, gh.issue.view, gh.run.list, gh.pr.review-requested, gh.run.failed',
-  "digest: /schedule --digest --name <name> --every \"daily at 08:00\" --rates <in>,<out> --ceiling <usd> [--repo owner/name]... [--topic <name>]  (read-only GitHub + board digest, run by `keryx serve`)",
+  "digest: /schedule --digest --name <name> --every \"daily at 08:00\" [--rates <in>,<out>] [--ceiling <usd>] [--repo owner/name]... [--topic <name>]  (read-only GitHub + board digest, run by `keryx serve`)",
   "or just ask the agent: \"schedule a task every 4 hours to check my open PRs\" — it proposes one, you confirm the same card.",
 ];
 
@@ -70,8 +70,6 @@ export interface ScheduleSlashDeps {
   readonly now?: () => Date;
   readonly resolveProgram?: DraftContext["resolveProgram"];
   readonly accountOf?: DraftContext["accountOf"];
-  /** Default: `providerReportsUsage` (`../commands/trigger-dispatch`) — the same the dispatcher checks at run time. */
-  readonly providerReportsUsage?: DraftContext["providerReportsUsage"];
   /** Default: `providerHasUsableCredential` (`../commands/trigger-dispatch`) — the same construction the dispatcher uses at run time. */
   readonly checkCredential?: DraftContext["checkCredential"];
   /** M3a: the process environment (default `process.env`). */
@@ -109,7 +107,6 @@ export async function runScheduleSlashCommand(raw: string, deps: ScheduleSlashDe
   }
   const drafted = await draftSchedule(request, {
     projectRoot: deps.cwd,
-    providerReportsUsage: deps.providerReportsUsage ?? dispatchProviderReportsUsage,
     checkCredential: deps.checkCredential ?? defaultCheckCredential,
     ...(deps.host !== undefined ? { host: deps.host } : {}),
     ...(deps.now !== undefined ? { now: deps.now } : {}),

@@ -65,7 +65,11 @@ export function nestedAgentScheduleRefusal(env: Readonly<Record<string, string |
   );
 }
 
-/** What a caller asks for. Everything money-shaped is required; the rest has safe defaults. */
+/**
+ * What a caller asks for. Rates and ceiling are optional (owner decision 2026-11-18: cost is reported,
+ * never a gate): rates only price the report, and a ceiling is informational ("over the ceiling" in
+ * the report, never a stop). The rest has safe defaults.
+ */
 export interface ScheduleRequest {
   readonly name: string;
   /** A cron expression or a phrase `parseCadence` understands ("every 4 hours"). */
@@ -73,10 +77,15 @@ export interface ScheduleRequest {
   readonly prompt: string;
   readonly provider: string;
   readonly model: string;
-  readonly rates: { readonly inputUsdPerMTok: number; readonly outputUsdPerMTok: number };
-  readonly ceilingUsd: number;
+  readonly rates?: { readonly inputUsdPerMTok: number; readonly outputUsdPerMTok: number };
+  readonly ceilingUsd?: number;
   readonly maxSeconds?: number;
-  readonly permissionMode?: "ask" | "trust";
+  /**
+   * `ask` (default): every command that needs approval is DENIED, since nobody answers an unattended run.
+   * `trust`: non-destructive commands run in the sandbox. `auto`: every command runs in the sandbox except
+   * those that touch credentials or hit another hard floor.
+   */
+  readonly permissionMode?: "ask" | "trust" | "auto";
   readonly network?: "off" | "full" | "allowlist";
   /** Required, non-empty when `network === "allowlist"` (flow 301). */
   readonly domains?: readonly string[];
@@ -107,24 +116,10 @@ export interface DraftContext {
   /** The account a granted program acts as. Default: `gh api user --jq .login`, run from the project root. */
   readonly accountOf?: (program: string, bin: string) => Promise<string | undefined>;
   /**
-   * Whether `provider` is known to report token usage on every response, and so can be
-   * priced (flow 302: the "Known" gap in 0.2.158's CHANGELOG — a drafted schedule could
-   * store and install a timer whose every fire refused with `dispatch-refused
-   * (provider-usage-unknown)`). Mirrors `providerReportsUsage`
-   * (`src/commands/trigger-dispatch.ts`), which the dispatcher itself checks at run
-   * time; every operator surface (`keryx schedule add`, `/schedule`, `schedule_create`)
-   * injects THAT function, so a draft's refusal agrees with what a real dispatch would
-   * do, including the OpenAI-compatible registry's `streamUsage` entries (grok,
-   * deepseek, …) this core zone cannot name on its own (RULE 1: a core owner never
-   * imports an adapter). Default: the three adapters this zone CAN name without
-   * importing anything — `anthropic`, `openai`, `gemini`.
-   */
-  readonly providerReportsUsage?: (provider: string) => boolean;
-  /**
    * Resolve whether `provider`/`model` has a usable credential in this environment —
    * the SAME resolution `defaultMakeProvider` performs at run time
-   * (`providerHasUsableCredential`, `src/commands/trigger-dispatch.ts`), injected for
-   * the same reason `providerReportsUsage` is: core may not import the client-zone
+   * (`providerHasUsableCredential`, `src/commands/trigger-dispatch.ts`), injected
+   * because core may not import the client-zone
    * provider construction that resolution needs. Every operator surface injects it, so
    * a draft never stores an entry whose every fire will refuse at run time for want of
    * a credential. Absent here, no credential check runs — a direct/library caller of
@@ -134,21 +129,6 @@ export interface DraftContext {
     provider: string,
     model: string,
   ) => Promise<{ readonly ok: true } | { readonly ok: false; readonly reason: string }>;
-}
-
-/** `DraftContext.providerReportsUsage`'s default: the three native adapters this core zone can name without an adapter import. */
-const NATIVE_USAGE_PROVIDERS = new Set(["anthropic", "openai", "gemini"]);
-function defaultProviderReportsUsage(provider: string): boolean {
-  return NATIVE_USAGE_PROVIDERS.has(provider);
-}
-
-/** The sentence a draft refuses a provider with when its token usage cannot be counted; the desktop form shows the same one up front. */
-export function providerUsageRefusal(provider: string): string {
-  return (
-    `"${provider}" is not known to report token usage on every response, so this schedule's cost ` +
-    "could not be counted against its ceiling — refusing to draft. Use anthropic, openai, gemini, or a registry " +
-    "provider whose entry sets streamUsage (for example grok, deepseek)."
-  );
 }
 
 export interface ScheduleDraft {
@@ -200,8 +180,15 @@ function defaultAccountOf(): (program: string, bin: string) => Promise<string | 
   };
 }
 
+/** The card's one-line gloss of each permission mode. In an unattended run `ask` means deny: nobody answers. */
+const SCHEDULE_MODE_CARD_NOTE: Readonly<Record<"ask" | "trust" | "auto", string>> = {
+  ask: " (read-only: every command that would need approval is DENIED, because nobody answers an unattended run)",
+  trust: " (the agent can run non-destructive shell commands in the sandbox)",
+  auto: " (the agent can run any shell command in the sandbox, except those that touch credentials or hit another hard floor)",
+};
+
 /** A review runs in the review-autonomous profile (trust, inside the OS sandbox); other schedules default to read-only. */
-function scheduleMode(request: ScheduleRequest): "ask" | "trust" {
+function scheduleMode(request: ScheduleRequest): "ask" | "trust" | "auto" {
   return request.permissionMode ?? (request.review !== undefined ? "trust" : "ask");
 }
 
@@ -217,12 +204,9 @@ export async function draftSchedule(request: ScheduleRequest, ctx: DraftContext)
   const bins: Record<string, string> = {};
   const binDigests: Record<string, BinaryPin> = {};
   const problems: string[] = [];
-  // Flow 302: refuse before anything else runs — a provider that cannot be priced, or
-  // that has no usable credential, must never reach a stored entry or an installed timer.
-  const reportsUsage = ctx.providerReportsUsage ?? defaultProviderReportsUsage;
-  if (!reportsUsage(request.provider)) {
-    problems.push(`provider: ${providerUsageRefusal(request.provider)}`);
-  }
+  // Flow 302: refuse before anything else runs — a provider with no usable credential must never reach
+  // a stored entry or an installed timer. (A provider that reports no token usage is NOT refused: its
+  // runs report "cost unknown". Owner decision 2026-11-18: cost is reported, never a gate.)
   if (ctx.checkCredential !== undefined) {
     const credential = await ctx.checkCredential(request.provider, request.model);
     if (!credential.ok) problems.push(`provider: ${credential.reason}`);
@@ -278,8 +262,8 @@ export async function draftSchedule(request: ScheduleRequest, ctx: DraftContext)
       provider: request.provider,
       model: request.model,
       permissionMode: scheduleMode(request),
-      rates: { inputUsdPerMTok: request.rates.inputUsdPerMTok, outputUsdPerMTok: request.rates.outputUsdPerMTok },
-      ceilingUsd: request.ceilingUsd,
+      ...(request.rates !== undefined ? { rates: { inputUsdPerMTok: request.rates.inputUsdPerMTok, outputUsdPerMTok: request.rates.outputUsdPerMTok } } : {}),
+      ...(request.ceilingUsd !== undefined ? { ceilingUsd: request.ceilingUsd } : {}),
       ...(request.maxSeconds !== undefined ? { maxSeconds: request.maxSeconds } : {}),
     },
     grants: {
@@ -378,8 +362,10 @@ function renderCard(input: {
       : request.review !== undefined
         ? `review: autonomous review (profile review-autonomous) of ${request.review.ref}, nobody at the keyboard — questions are answered by the safe default and journaled; stops at ${request.review.budgetMinutes ?? "no"} min / ${request.review.budgetTokens ?? "no"} tokens and after ${request.review.stallMinutes ?? REVIEW_STALL_MINUTES_DEFAULT} min without progress; reviews the source only (no browser checks); trusts the OS sandbox`
         : `prompt: ${request.prompt}`,
-    `runner: ${request.provider}/${request.model}, mode ${scheduleMode(request)}${scheduleMode(request) === "trust" ? " (the agent can run shell commands in the sandbox)" : " (read-only: every command is denied)"}`,
-    `budget: ceiling $${request.ceilingUsd} for this schedule (the project-wide ceiling also applies), max ${request.maxSeconds ?? 600}s per run, rates $${request.rates.inputUsdPerMTok}/$${request.rates.outputUsdPerMTok} per M tokens in/out`,
+    `runner: ${request.provider}/${request.model}, permission mode ${scheduleMode(request)}${SCHEDULE_MODE_CARD_NOTE[scheduleMode(request)]}`,
+    `cost: reported in every run's report, never a limit${request.ceilingUsd !== undefined ? ` — a run over its $${request.ceilingUsd} ceiling is reported "over the ceiling" and not stopped` : ""}; ${
+      request.rates !== undefined ? `rates $${request.rates.inputUsdPerMTok}/$${request.rates.outputUsdPerMTok} per M tokens in/out` : "no rates, so the cost reads \"cost unknown\""
+    }; max ${request.maxSeconds ?? 600}s per run`,
     `network: ${
       network === "full"
         ? FULL_NETWORK_CARD_WARNING

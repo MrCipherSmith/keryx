@@ -31,6 +31,22 @@ export function describeFire(fire: TriggerFire): string {
   return fire.kind === "event" ? `event:${fire.event}` : `schedule:"${fire.cron}"`;
 }
 
+/** What a schedule's permission mode means for an unattended run: `ask` is DENY, because nobody answers. */
+export function scheduleModeNote(mode: "ask" | "trust" | "auto"): string {
+  if (mode === "ask") return "every command that needs approval is denied, since nobody answers an unattended run; read-only calls and granted tools still run";
+  if (mode === "trust") return "non-destructive commands run in the sandbox; destructive ones are denied";
+  return "every command runs in the sandbox except those that touch credentials or hit another hard floor";
+}
+
+/**
+ * The ceiling phrase of a dispatch. A schedule's ceiling is informational and optional (owner decision
+ * 2026-11-18: cost is reported, never a gate); a flow dispatch's is a limit.
+ */
+export function describeCeiling(ceilingUsd: number | undefined, informational: boolean): string {
+  if (ceilingUsd === undefined) return "no ceiling";
+  return informational ? `ceiling $${ceilingUsd} (informational: reported, never a stop)` : `ceiling $${ceilingUsd}`;
+}
+
 /** One-line action descriptor, NETWORK ON warning included when it applies. */
 export function describeAction(action: TriggerAction): string {
   if (action.kind === "open-flow") return `open-flow(${action.template}${action.skipIfOpen ? ", skipIfOpen" : ""})`;
@@ -39,7 +55,7 @@ export function describeAction(action: TriggerAction): string {
     const d = action.dispatch;
     return (
       `flow-next(${action.flow}, dispatch: ${d.provider}/${d.model}, mode ${d.permissionMode}, ` +
-      `ceiling $${d.ceilingUsd}, max ${d.maxSeconds}s, ${d.maxAttempts} attempts` +
+      `${describeCeiling(d.ceilingUsd, false)}, max ${d.maxSeconds}s, ${d.maxAttempts} attempts` +
       (d.network ? `, NETWORK ON — ${NETWORK_ON_WARNING}` : ", network off") +
       ")"
     );
@@ -48,7 +64,7 @@ export function describeAction(action: TriggerAction): string {
     // Flow 295: a scheduled agent task (the confirmed, signed local schedule).
     const d = action.dispatch;
     return (
-      `${action.digest !== undefined ? "digest" : "agent-task"}(${d.provider}/${d.model}, mode ${d.permissionMode}, ceiling $${d.ceilingUsd}, max ${d.maxSeconds}s, ` +
+      `${action.digest !== undefined ? "digest" : "agent-task"}(${d.provider}/${d.model}, mode ${d.permissionMode}, ${describeCeiling(d.ceilingUsd, true)}, max ${d.maxSeconds}s, ` +
       `granted: ${action.grants.tools.length > 0 ? action.grants.tools.join(",") : "none"}` +
       (action.grants.network === "full" ? `, NETWORK ON — ${NETWORK_ON_WARNING}` : ", network off") +
       ")"

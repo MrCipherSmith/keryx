@@ -3,20 +3,18 @@
 // The digest is complete without it: `renderDigestText` is deterministic and always
 // sent. A summary only goes ABOVE that text, labelled as written by the model. The call has no tools and
 // no files. What it reads (PR and issue titles) is third-party text, so the system
-// instruction says to treat it as data. It runs under the flow 295 spend rules: the
-// worst-case cost is RESERVED under the project-wide lock before the call, priced from the
-// reported tokens, and the call is aborted the moment the priced cost reaches the
-// reservation. A refused reservation, a provider that cannot be built and a failed
-// call all return `ok: false` with a reason; the caller falls back to the plain text
-// and writes the failure into the report.
+// instruction says to treat it as data. Its cost is priced from the reported tokens and
+// REPORTED, never a gate (owner decision 2026-11-18): there is no spend reservation and no
+// spend stop, and a provider that reports no usage gives "cost unknown". A provider that
+// cannot be built and a failed call return `ok: false` with a reason; the caller falls
+// back to the plain text and writes the failure into the report.
 
 import { randomUUID } from "node:crypto";
 import type { NormalizedRequest, ProviderPort } from "../harness/provider/types";
-import { createSpendMeter, defaultMakeProvider, guardUsage } from "../commands/trigger-dispatch";
+import { createSpendMeter, makeScheduleProvider, guardUsage } from "../commands/trigger-dispatch";
 import { scrubThenCap } from "../commands/trigger-agent-task";
 import type { AgentTaskAction, TriggerDispatch, TriggerEntry } from "../trigger/config";
 import type { DispatchRefusalCode, TriggerRunCost } from "../trigger/record";
-import { reserveTriggerSpend } from "../trigger/run";
 
 export interface SummaryInput {
   readonly projectRoot: string;
@@ -48,32 +46,17 @@ const SYSTEM =
 const MAX_OUTPUT_TOKENS = 400;
 
 export const defaultSummarize: DigestSummarizer = async (input) => {
-  const { action, entry } = input;
+  const { action } = input;
   const dispatch = action.dispatch;
-  const built = (input.makeProvider ?? defaultMakeProvider)(dispatch);
+  const built = (input.makeProvider ?? makeScheduleProvider)(dispatch);
   if ("error" in built) return { ok: false, reason: `model not available: ${built.error}`, cost: { recorded: false, reason: "no model was called" } };
-
-  const reservation = await reserveTriggerSpend(input.projectRoot, {
-    runId: input.runId,
-    trigger: entry.name,
-    firedBy: entry.fire,
-    action: entry.action,
-    perTrigger: { name: entry.name, ceilingUsd: dispatch.ceilingUsd },
-    now: input.now,
-    actionKind: "agent-task",
-  });
-  if (!reservation.reserved) {
-    return { ok: false, reason: `model summary skipped: ${reservation.reason}`, cost: { recorded: false, reason: "refused on the spend ceiling before any model call" }, budgetRefused: true };
-  }
 
   const local = new AbortController();
   const stop = (): void => local.abort();
   if (input.signal.aborted) local.abort();
   else input.signal.addEventListener("abort", stop, { once: true });
-  const meter = createSpendMeter(dispatch, reservation.usd, () => {
-    input.onSpendStop();
-    local.abort();
-  });
+  // Owner decision 2026-11-18: the summary's cost is reported, never a gate. No reservation, no spend stop.
+  const meter = createSpendMeter(dispatch, undefined, () => {});
   const provider = guardUsage(built, () => meter.markUsageMissing());
   const requestId = `digest-${randomUUID().slice(0, 8)}`;
   const request: NormalizedRequest = {
@@ -102,8 +85,6 @@ export const defaultSummarize: DigestSummarizer = async (input) => {
   }
 
   const cost = meter.cost();
-  if (meter.state.usageMissing) return { ok: false, reason: "model summary dropped: the provider sent no token usage — charged the whole reservation", cost };
-  if (meter.state.spendStopped) return { ok: false, reason: "model summary stopped: spend cap reached", cost };
   if (input.signal.aborted) return { ok: false, reason: "model summary stopped: the run hit a limit", cost };
   if (error !== undefined) return { ok: false, reason: `model summary failed: ${error.replace(/\s+/g, " ").slice(0, 300)}`, cost };
   const clean = scrubThenCap(text.trim(), input.env, [], 2000).trim();

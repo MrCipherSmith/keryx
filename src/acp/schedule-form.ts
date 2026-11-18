@@ -7,18 +7,18 @@
 //
 //   - cadence: the allowed minute and hour steps are read FROM `parseCadence` (every N that it
 //     accepts), never listed here;
-//   - provider: only the connected providers the schedule's usage-reporting rule accepts
-//     (`providerReportsUsage`, the function the draft and the dispatcher both use);
-//   - rates: two numbers, composed to `in,out`.
+//   - provider: every connected provider. A provider that reports no token usage is allowed: its
+//     runs report "cost unknown" (owner decision 2026-11-18: cost is reported, never a gate);
+//   - permission mode: ask / trust / auto, with a one-line hint per option (an unattended "ask" denies);
+//   - rates: two optional numbers, composed to `in,out`; they only price the report. The ceiling is
+//     optional and informational.
 //
 // The form-friendly flags (`--repeat --minutes --hours --at --cron --rate-in --rate-out`) exist only
 // on this surface; `toShellScheduleLine` turns them into the shell's `--every` and `--rates`
 // before the shell's own parser sees the line, so the shell's CLI flags are unchanged.
 
-import { providerReportsUsage } from "../commands/trigger-dispatch";
 import { loadModelProfiles, profileKey } from "../harness/routing/model-profile";
 import { parseCadence } from "../trigger/cron";
-import { providerUsageRefusal } from "../trigger/schedules";
 import { tokenizeArgs, SCHEDULE_SLASH_USAGE } from "../tui/schedule-command";
 import type { AcpModelChoice } from "./models";
 import type { ShellCommandHost } from "./shell-command-runners";
@@ -43,6 +43,13 @@ const REPEAT_OPTIONS = [
 ] as const;
 
 const TIME_NOTE = "HH:MM, 00:00-23:59";
+
+/** The permission modes a schedule may use, each with the one-line hint the form shows beside it. */
+export const SCHEDULE_MODE_OPTIONS = [
+  { value: "ask", label: "ask - read-only: commands that need approval are denied (nobody answers an unattended run)" },
+  { value: "trust", label: "trust - runs non-destructive commands in the sandbox; destructive ones are denied" },
+  { value: "auto", label: "auto - runs every command in the sandbox except credential-touching ones" },
+] as const;
 
 /** The session model's "<in>,<out>" USD per million tokens when keryx knows the price (stored or curated profile). */
 export function knownRatePair(host: ShellCommandHost, providerId: string, modelId: string): { input: number; output: number } | undefined {
@@ -88,17 +95,9 @@ const numberOf = (value: number): string => String(value);
 /** The form `/schedule` opens with: every selectable value is one the shell accepts. */
 export async function scheduleFormView(host: ShellCommandHost): Promise<ShellView> {
   const session = host.session.modelIds();
-  const reportsUsage = host.scheduleOverrides?.providerReportsUsage ?? providerReportsUsage;
-  const allowed = (await connectedProviders(host, session)).filter((entry) => reportsUsage(entry.provider));
+  // Every connected provider is selectable: cost is reported, never a gate.
+  const allowed = await connectedProviders(host, session);
   const usage = SCHEDULE_SLASH_USAGE.join("\n");
-  if (allowed.length === 0) {
-    return {
-      title: "Schedule",
-      rows: [],
-      body: `No connected provider can run a schedule. ${providerUsageRefusal(session.providerId)}\n\n${usage}`,
-      form: { fields: [], submit: "/schedule", disabled: "Connect a provider that reports token usage (anthropic, openai, gemini, grok, deepseek) to create a schedule." },
-    };
-  }
   const chosen = allowed.find((entry) => entry.provider === session.providerId) ?? allowed[0]!;
   const defaultModel = chosen.provider === session.providerId && chosen.models.includes(session.modelId) ? session.modelId : (chosen.models[0] ?? session.modelId);
   const rates = knownRatePair(host, chosen.provider, defaultModel);
@@ -156,29 +155,28 @@ export async function scheduleFormView(host: ShellCommandHost): Promise<ShellVie
     },
     { id: "provider", label: "Provider", kind: "choice", required: true, options: allowed.map((entry) => entry.provider), value: chosen.provider },
     ...modelFields,
+    { id: "mode", label: "Permission mode", kind: "choice", required: true, options: [...SCHEDULE_MODE_OPTIONS], value: "trust" },
     {
       id: "rateIn",
-      label: "Input $/1M",
+      label: "Input $/1M (optional)",
       kind: "number",
-      required: true,
       min: 0,
       step: 0.01,
       ...(rates !== undefined ? { value: numberOf(rates.input) } : {}),
-      placeholder: "USD per million input tokens",
+      placeholder: "USD per million input tokens; prices the report only",
       error: "Enter the price as a number, 0 or more",
     },
     {
       id: "rateOut",
-      label: "Output $/1M",
+      label: "Output $/1M (optional)",
       kind: "number",
-      required: true,
       min: 0,
       step: 0.01,
       ...(rates !== undefined ? { value: numberOf(rates.output) } : {}),
-      placeholder: "USD per million output tokens",
+      placeholder: "USD per million output tokens; prices the report only",
       error: "Enter the price as a number, 0 or more",
     },
-    { id: "ceiling", label: "Spend ceiling per run, USD", kind: "number", required: true, min: 0.01, step: 0.01, value: "0.50", error: "Enter an amount above 0" },
+    { id: "ceiling", label: "Ceiling per run, USD (optional, informational)", kind: "number", min: 0.01, step: 0.01, placeholder: "a run over it is reported, never stopped", error: "Enter an amount above 0" },
     { id: "prompt", label: "What the agent should do", kind: "text", required: true, placeholder: "e.g. Review yesterday's commits and report risks" },
   ];
   const modelFlags = allowed.map((entry) => `--model {model:${entry.provider}}`).join(" ");
@@ -189,7 +187,7 @@ export async function scheduleFormView(host: ShellCommandHost): Promise<ShellVie
     form: {
       fields,
       submitLabel: "Create",
-      submit: `/schedule --name {name} --repeat {repeat} --minutes {minutes} --hours {hours} --at {at} --cron "{cron}" --provider {provider} ${modelFlags} --rate-in {rateIn} --rate-out {rateOut} --ceiling {ceiling} -- {prompt}`,
+      submit: `/schedule --name {name} --repeat {repeat} --minutes {minutes} --hours {hours} --at {at} --cron "{cron}" --provider {provider} ${modelFlags} --mode {mode} --rate-in {rateIn} --rate-out {rateOut} --ceiling {ceiling} -- {prompt}`,
     },
   };
 }
@@ -255,9 +253,15 @@ export function toShellScheduleLine(raw: string): { readonly line: string } | { 
   const kept: string[] = [];
   for (let i = 0; i < tokens.length; i += 1) {
     const token = tokens[i]!;
+    // An optional field left empty leaves its flag with no value (the next token is another flag, or nothing):
+    // the flag is dropped and the next flag is not swallowed as its value.
+    const next = tokens[i + 1];
+    const hasValue = next !== undefined && !next.startsWith("--");
     if (FORM_FLAGS.has(token)) {
-      flags.set(token, tokens[i + 1] ?? "");
-      i += 1;
+      flags.set(token, hasValue ? next : "");
+      if (hasValue) i += 1;
+    } else if (token === "--ceiling" && !hasValue) {
+      // `--ceiling` is optional: left empty, it is not sent.
     } else kept.push(token);
   }
   if (flags.has("--repeat")) {
@@ -268,8 +272,8 @@ export function toShellScheduleLine(raw: string): { readonly line: string } | { 
   if (flags.has("--rate-in") || flags.has("--rate-out")) {
     const input = flags.get("--rate-in")?.trim() ?? "";
     const output = flags.get("--rate-out")?.trim() ?? "";
-    if (input === "" || output === "") return { error: "Input $/1M and Output $/1M are both required" };
-    kept.push("--rates", `${input},${output}`);
+    if ((input === "") !== (output === "")) return { error: "Give both Input $/1M and Output $/1M, or leave both empty (the cost then reads \"cost unknown\")" };
+    if (input !== "") kept.push("--rates", `${input},${output}`);
   }
   return { line: `${kept.map(quoted).join(" ")}${tail.length > 0 ? ` ${tail}` : ""}` };
 }

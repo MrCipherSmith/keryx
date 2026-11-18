@@ -310,7 +310,7 @@ export async function reserveTriggerSpend(
     readonly trigger: string;
     readonly firedBy: TriggerFire;
     readonly action: TriggerAction;
-    readonly perTrigger: PerTriggerCeiling;
+    readonly perTrigger: PerTriggerCeiling | undefined;
     readonly options?: SpendCapOptions;
     readonly now?: () => Date;
     /** Flow 295: the action being reserved for, named in a refusal. Default `flow-next`. */

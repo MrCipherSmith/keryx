@@ -630,7 +630,7 @@ function scheduleLines(row: ScheduleSummary): string[] {
     `schedule: ${cardSafe(row.name)} [${row.enabled ? "enabled" : "paused"}] - ${kind}`,
     `cadence: cron "${cardSafe(row.cron)}"; next run: ${row.nextRun?.toISOString() ?? "none (paused)"}`,
     `action: ${a.digest !== undefined ? "GitHub and board digest" : cardSafe(a.prompt)}`,
-    `runner: ${cardSafe(a.dispatch.provider)}/${cardSafe(a.dispatch.model)}, mode ${a.dispatch.permissionMode}, ceiling $${a.dispatch.ceilingUsd}, max ${a.dispatch.maxSeconds}s`,
+    `runner: ${cardSafe(a.dispatch.provider)}/${cardSafe(a.dispatch.model)}, permission mode ${a.dispatch.permissionMode}, ${a.dispatch.ceilingUsd === undefined ? "no ceiling" : `informational ceiling $${a.dispatch.ceilingUsd}`}, max ${a.dispatch.maxSeconds}s`,
     `network: ${a.grants.network}; granted tools: ${a.grants.tools.map(cardSafe).join(", ") || "none"}`,
     `last run: ${last}`,
   ];

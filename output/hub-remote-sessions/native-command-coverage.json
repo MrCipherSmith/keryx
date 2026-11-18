@@ -1629,7 +1629,7 @@
         },
         {
           "path": "src/tui/triggers-inspector.ts",
-          "sha256": "90e760a9aaf672d0e3c64dd3730478edf034f123861d6490ffa4e63847aed857",
+          "sha256": "5ccbb774238a5ad1822449724d0a0f57809c3d7dbb1aa537475cc2f46eedebde",
           "anchor": "line:1"
         },
         {
@@ -1741,7 +1741,7 @@
         },
         {
           "path": "src/tui/schedule-command.ts",
-          "sha256": "2a2b452369ce16235d51ec557dc482e2fa99445f71a15811f82304d3968d4e5d",
+          "sha256": "9f2ef323a9634177f7a0a4fb51bbb95d9b73ced62998f50366c11afd7f17e6eb",
           "anchor": "line:1"
         },
         {
@@ -1795,7 +1795,7 @@
         },
         {
           "path": "src/tui/schedules-inspector.ts",
-          "sha256": "788510a64215e33e1e2694b3ebda3c977970d7fe564eb6ff68331013976be569",
+          "sha256": "b4e86878ba456845dcf12055a2774e0953c8c2f3e6bd44098efc5f30639e5a25",
           "anchor": "line:1"
         },
         {
@@ -13217,7 +13217,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "27a3770beaecf125433fe95e849ea841769f1b66aa25dd08ed8b46112ed020a1"
+      "receiptDigest": "0e185a0e78802593d3b3b8e5ecd13f8d1b6d79ea8b3bfc1150f897dda010d0d4"
     },
     {
       "variantId": "intake.list",
@@ -13225,7 +13225,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "76aee56d0272302b83c44b9f2249e6dffa355e4c42124e81d33ab6f5502e52bd"
+      "receiptDigest": "f7b7ef14cf2fdda242da09b23664cc261c12cbc85e2d19904f28be406e3b13ad"
     },
     {
       "variantId": "intake.pause",
@@ -13417,7 +13417,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "c4ce26f98e215c0d43785a3b3c7d717d101b962f80f6a483745cc2df871d88a3"
+      "receiptDigest": "bfcb3ae5627ff32c758d4da36c12b08957123cfa04cb1c1d1ca671a36f60becd"
     },
     {
       "variantId": "triggers.detail",
@@ -13425,7 +13425,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "24795e0d592d5f5ea74570623420b7426079fd14e5a586c4a71de0c7f014a046"
+      "receiptDigest": "ada6f4c7364b6a8eff07e3359583e67e52a9a4cdc3b2ca7330221967e6bc8f09"
     },
     {
       "variantId": "triggers.run",
@@ -13433,7 +13433,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "3a6a10b6e3d9369ff869877419f7240306b66bf7472c6fa5c7ecc0206d8193a1"
+      "receiptDigest": "a1b0cca7f5f6fbb355e0f5b7356bbf5221ba06300669c33027ea89f527d5d594"
     },
     {
       "variantId": "triggers.confirm-run",
@@ -13441,7 +13441,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "0d6822960ff80b8ae396ae11474306e02148ef7204ff5f725639688eb131a51e"
+      "receiptDigest": "aa41d73c519a371a8d779e5a8124dcecd32489586a62cb11df4e44677a9fee5f"
     },
     {
       "variantId": "routing.inspection",
@@ -13473,7 +13473,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "rejected/forbidden",
       "matched": false,
-      "receiptDigest": "d8b3ab197704b576b4d27997c9e962a5088644d5f434bb351b9271a5a737c1d9"
+      "receiptDigest": "8d7a22a0242c45db69f4b9b7f1fa5802ba0d9bdaf6494ab5e734bad969420b63"
     },
     {
       "variantId": "schedules.list",
@@ -13481,7 +13481,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "965f83c3d9ae7ae6ead58c41ed4b70293fb5fbb3eba49862ae8e14f958176c61"
+      "receiptDigest": "043edfbc2f472aaddf4a1d1d17b206a2370d76f5931e36844a08e2ec8ab3dd1b"
     },
     {
       "variantId": "schedules.pause",
@@ -13489,7 +13489,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "rejected/forbidden",
       "matched": false,
-      "receiptDigest": "2d7bbb8f16365f52df11ae071f04660c1ba12dea1e7e90e84ca2c19a10a48d34"
+      "receiptDigest": "9b6122a225d012f2bafedf05b015d66eccf383a8225a342ebce4e37a99f53024"
     },
     {
       "variantId": "schedules.resume",
@@ -13497,7 +13497,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "rejected/forbidden",
       "matched": false,
-      "receiptDigest": "813aab1ad9c41436a1423ca674323b3f236c47648c9a44d31ec1009f29330fd8"
+      "receiptDigest": "57eb740900628aaab97e97eb713a7807329843dc32afc2aced9a590f10dbda48"
     },
     {
       "variantId": "schedules.run",
@@ -13505,7 +13505,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "rejected/forbidden",
       "matched": false,
-      "receiptDigest": "8550ea4287acbfd260b0fe8ba28cce28bc131f21ef03a13341e0916056d44f3d"
+      "receiptDigest": "36511fffe6e3d245824e30f6369cad4f0b836224284831adbe216f9d11c35cdb"
     },
     {
       "variantId": "schedules.delete",
@@ -13513,7 +13513,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "rejected/forbidden",
       "matched": false,
-      "receiptDigest": "525b8f43c5a1f97052522b1a788caeadef30a2e2034ca028e42ade2dc15f27c0"
+      "receiptDigest": "79982f28830db615922c23087eeb68991329ed9e46333ff4ca5d24ec7fa189b8"
     },
     {
       "variantId": "autoreview.list",
@@ -14681,7 +14681,7 @@
       "localOutcome": "rejected/forbidden",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "6f9b6015a89f587f9b1ce5a86660ddb1ec66ce63359ef5d1fe49bec68cc529cf"
+      "receiptDigest": "e817b4b47a315a8b2af529f1cb79093060e951e0e43b8dcb55a8108b691ccb7c"
     },
     {
       "variantId": "routing.navigate",
@@ -14801,7 +14801,7 @@
       "localOutcome": "rejected/invalid-arguments",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "10cc84e946fbc0a96372144acf48d1c48bcfcceaac17050aca2ecbd6e03fc7e6"
+      "receiptDigest": "c6dcce4de055ddc6261ad019acaa0d92c19adbba4deeaf8e5e12d319ab5dffbb"
     },
     {
       "variantId": "autoreview.navigate",

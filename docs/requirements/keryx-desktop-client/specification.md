@@ -253,11 +253,20 @@ number, `min`, `time`, `pattern`) and shows the message under the field; this is
 convenience only, keryx still validates the command and a refusal still shows
 inline. `/schedule` is the model: its cadence is a `Repeat` choice (minutes /
 hours / daily / weekdays / cron) with dependent fields whose values come from
-the shell's own cadence rule, its provider choice lists only connected
-providers the schedule's usage-reporting rule accepts, and its rates are two
-number fields. The form submits form-only flags (`--repeat --minutes --hours
---at --cron --rate-in --rate-out`) that `keryx acp` converts to the shell's
-`--every "<cadence>"` and `--rates in,out` before the shell's parser runs.
+the shell's own cadence rule, its provider choice lists every connected
+provider (a provider that reports no token usage is allowed: its runs report
+"cost unknown"), its **Permission mode** is a required `choice` (ask / trust /
+auto, default trust) whose option labels carry a one-line hint each (an
+unattended `ask` denies every command that needs approval, because nobody
+answers), and its rates and ceiling are optional number fields (rates stay
+prefilled from the model's known price; both only feed the run's report).
+*Owner decision 2026-11-18: a schedule's cost is reported, never a gate. No
+reservation, ceiling or usage rule refuses a draft, refuses a tick or aborts a
+running tick; a ceiling is informational ("over the ceiling" in the report).*
+The form submits form-only flags (`--repeat --minutes --hours --at --cron
+--rate-in --rate-out`) that `keryx acp` converts to the shell's `--every
+"<cadence>"` and `--rates in,out` before the shell's parser runs; an empty
+optional field is dropped, never sent.
 
 *Submit label and draft confirmation.* A form may carry `submitLabel` (the
 submit button's text; the client says "Submit" when absent; `/schedule` says

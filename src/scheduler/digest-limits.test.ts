@@ -266,20 +266,18 @@ describe("AC7: the dollar limit", () => {
     await runDigest(env, name, { runGh: changed.run, now: clock.now, sink, makeProvider: () => provider });
   }
 
-  test("a summary that costs more than the ceiling is stopped, the run is failed, and the topic gets the status line", async () => {
-    // 1,000,000 input tokens at $3 per million is $3, against a ceiling of $0.20
+  // Owner decision 2026-11-18: cost is reported, never a gate. A summary over the ceiling is NOT stopped.
+  test("a summary that costs more than the ceiling is not stopped: it is used, and its cost is reported", async () => {
+    // 1,000,000 input tokens at $3 per million is $3, against an informational ceiling of $0.20
     const provider = scripted([{ kind: "text_delta", text: "partial" }, { kind: "usage_update", usage: { inputTokens: 1_000_000, outputTokens: 0 } }]);
     await secondRunWithModel(provider, 0.2);
 
     expect(provider.calls()).toBe(1);
     const record = await lastRecord();
-    expect(record.outcome).toBe("failed");
-    expect(record.detail).toContain("spend cap reached");
-    expect(await reportText()).toContain("spend cap reached");
-    const last = sink.sent.at(-1)?.text ?? "";
-    expect(last.split("\n")[0]).toMatch(/^Digest morning stopped — spend cap reached/);
-    expect(last).not.toContain("partial");
-    expect(record.cost.recorded).toBe(true);
+    expect(record.outcome).toBe("ok");
+    expect(record.detail).not.toContain("spend cap reached");
+    expect(record.cost.recorded && record.cost.usd).toBeCloseTo(3, 6);
+    expect(sink.sent.at(-1)?.text.startsWith("Summary (written by the model)\npartial")).toBe(true);
   });
 
   test("a summary within the ceiling is used, priced from its tokens, and above the plain text", async () => {
@@ -293,15 +291,14 @@ describe("AC7: the dollar limit", () => {
     expect(sink.sent.at(-1)?.text.startsWith("Summary (written by the model)\nOne PR moved.")).toBe(true);
   });
 
-  test("a model that reports no usage is charged the whole reservation and its summary is never used", async () => {
+  test("a model that reports no usage is not stopped: the digest still goes out and its cost reads unknown", async () => {
     const provider = scripted([{ kind: "text_delta", text: "free lunch" }, { kind: "model_end" }]);
     await secondRunWithModel(provider, 0.2);
     const record = await lastRecord();
-    // an unmetered model is treated as spending everything it was allowed: the run is stopped like an overspend
-    expect(record.outcome).toBe("failed");
-    expect(record.detail).toMatch(/spend cap reached|sent no token usage/);
-    expect(record.cost.recorded && record.cost.usd).toBeGreaterThan(0);
-    expect(sink.sent.at(-1)?.text ?? "").not.toContain("free lunch");
+    expect(record.outcome).toBe("ok");
+    expect(record.detail).not.toMatch(/spend cap reached|sent no token usage/);
+    expect(record.cost.recorded).toBe(false);
+    expect(sink.sent.at(-1)?.text ?? "").toContain("free lunch");
   });
 
   test("a baseline or a quiet run makes no model call at all, so it costs nothing", async () => {

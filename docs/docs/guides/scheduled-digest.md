@@ -15,7 +15,7 @@ up.
 
 ```
 keryx schedule add --digest --name morning --every "daily at 08:00" \
-    --provider anthropic --model claude-sonnet-5-5 --rates 3,15 --ceiling 0.2 \
+    --provider anthropic --model claude-sonnet-5-5 [--rates 3,15] [--ceiling 0.2] \
     [--repo owner/name]... [--topic Digest] [--memory-mb 512] [--max-seconds 600] [--yes]
 ```
 
@@ -28,7 +28,7 @@ needed.
 | Schedule | `--every` (a cron expression, `daily at HH:MM`, `weekdays at HH:MM`, `every N hours`, …) | none, required |
 | Repositories | `--repo owner/name`, repeatable | `MrCipherSmith/keryx` |
 | Topic | `--topic <name>` | `Digest` |
-| Dollar limit | `--ceiling <usd>` | none, required |
+| Cost ceiling (informational) | `--ceiling <usd>` | none, optional: cost is reported, never a limit |
 | Time limit | `--max-seconds` | 600 |
 | Memory limit | `--memory-mb` | 512 |
 
@@ -123,12 +123,13 @@ A digest cannot change anything on GitHub.
 
 ## Limits
 
-A run that goes over a limit is stopped and reported, in the report and in the topic.
+A run that goes over its time or memory limit is stopped and reported, in the report and in the topic. Money is not a limit.
 
-- **Dollars.** `--ceiling` is reserved before the model turn, under the project-wide spend
-  lock, and the turn is stopped when the reservation is reached. A provider that sends no token
-  usage is charged the whole reservation and its summary is dropped. The `gh` calls cost
-  nothing, so a digest with no changes, or with no model, costs nothing.
+- **Dollars.** There is none: cost is reported, never a gate (owner decision 2026-11-18). The
+  optional model summary is priced from `--rates` and its cost is shown in the report ("cost
+  unknown" when the provider sends no token usage); `--ceiling` is informational and never stops
+  or refuses a run. The `gh` calls cost nothing, so a digest with no changes, or with no model,
+  costs nothing.
 - **Time.** `--max-seconds` is the wall-clock timeout for the whole run, including `gh`.
   Each `gh` call also has a 30-second timeout and a 64 KB output cap.
 - **Memory.** `--memory-mb` is how much the resident memory of the process running the digest

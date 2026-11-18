@@ -15,7 +15,7 @@ export interface DigestStatus {
   readonly repos: readonly string[];
   readonly topic: string;
   readonly memoryLimitMb: number;
-  readonly ceilingUsd: number;
+  readonly ceilingUsd: number | undefined;
   readonly maxSeconds: number;
   readonly enabled: boolean;
   readonly nextRun: Date | undefined;
@@ -80,7 +80,7 @@ function describeDelivery(last: LastDelivery | undefined, pending: number): stri
 export function digestStatusLines(status: DigestStatus): string[] {
   return [
     `digest: GitHub (read-only) and the product board for ${status.repos.join(", ") || "no repository"}; topic "${status.topic}"; ` +
-      `limits $${status.ceilingUsd}, ${status.maxSeconds}s, ${status.memoryLimitMb} MiB`,
+      `limits ${status.ceilingUsd === undefined ? "no ceiling" : `ceiling $${status.ceilingUsd} (informational)`}, ${status.maxSeconds}s, ${status.memoryLimitMb} MiB`,
     `next run: ${status.enabled ? (status.nextRun?.toISOString() ?? "—") : "paused"}`,
     `last run: ${status.lastRun === undefined ? "never ran" : `${status.lastRun.outcome} at ${status.lastRun.at} — ${status.lastRun.detail}`}`,
     `last delivery: ${describeDelivery(status.lastDelivery, status.pending)}`,

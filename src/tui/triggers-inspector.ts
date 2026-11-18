@@ -113,7 +113,7 @@ export function formatTriggerDetailLines(
       "Unattended dispatch",
       `  provider/model   ${d.provider}/${d.model}`,
       `  permission mode  ${d.permissionMode}`,
-      `  ceiling          $${d.ceilingUsd}`,
+      `  ceiling          ${d.ceilingUsd === undefined ? "none" : `$${d.ceilingUsd}`}`,
       `  max seconds      ${d.maxSeconds}`,
       `  max attempts     ${d.maxAttempts}`,
       `  roster           ${UNATTENDED_ROSTER_DESCRIPTION}`,
@@ -172,7 +172,7 @@ export function armPrompt(item: TriggerModalItem): string {
   const name = itemName(item);
   const base = `run ${name} now (keryx trigger run ${name})?`;
   const d = item.kind === "entry" ? entryDispatch(item.view.entry) : undefined;
-  const posture = d === undefined ? "" : ` dispatches ${d.provider}/${d.model}, ceiling $${d.ceilingUsd}${d.network ? ", NETWORK ON" : ", network off"} ·`;
+  const posture = d === undefined ? "" : ` dispatches ${d.provider}/${d.model}, ${d.ceilingUsd === undefined ? "no ceiling" : `ceiling $${d.ceilingUsd}`}${d.network ? ", NETWORK ON" : ", network off"} ·`;
   return `${base}${posture} y to confirm · any other key cancels`;
 }
 

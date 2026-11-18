@@ -32,9 +32,14 @@ operator reads in the shell's Schedules section.
   "sometimes". Ask.
 - **Prompt**: the task in the operator's words, written for an agent that runs
   alone and whose final message is the report.
-- **Budget**: `rates` (USD per million input/output tokens for the model) and
-  `ceilingUsd`. keryx has no price table. If you do not know the rates, ASK.
-  Never guess them.
+- **Permission mode**: ASK the operator which one the unattended run uses:
+  `ask` (every command that needs approval is DENIED, since nobody answers),
+  `trust` (non-destructive commands run in the sandbox) or `auto` (every command
+  runs in the sandbox except credential-touching ones).
+- **Cost** (optional): `rates` (USD per million input/output tokens) only prices
+  the run's report, and `ceilingUsd` is informational. Cost is reported, never a
+  limit. keryx has no price table: if you do not know the rates, leave them out
+  (the report then says "cost unknown"). Never guess them.
 
 ### Step 2: Grant only what the task needs
 - `tools`: pick from the fixed catalogue: `gh.pr.list`, `gh.pr.view`,
