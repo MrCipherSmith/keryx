@@ -15,7 +15,7 @@
 
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync, mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { isAbsolute, join, resolve, sep } from "node:path";
+import { basename, isAbsolute, join, resolve, sep } from "node:path";
 import type { ServerWebSocket, Subprocess } from "bun";
 
 const PORT = 1421;
@@ -611,9 +611,75 @@ async function handle(ws: ServerWebSocket<Conn>, cmd: string, args: Json): Promi
       }
       return info;
     }
+    case "pr_info": {
+      // Same summary as src-tauri/src/pullrequest.rs, for the browser dev mode.
+      return prInfo(await projectCwd(ws.data, cwd));
+    }
     default:
       throw new Error(`Unknown command: ${cmd}`);
   }
+}
+
+const GH_ENV = { ...process.env, GH_PROMPT_DISABLED: "1", GH_NO_UPDATE_NOTIFIER: "1", NO_COLOR: "1" };
+const THREADS_QUERY =
+  "query($o:String!,$n:String!,$num:Int!){repository(owner:$o,name:$n){pullRequest(number:$num){reviewThreads(first:100){nodes{isResolved}}}}}";
+
+function gh(args: string[], dir: string, timeout: number): string | null {
+  try {
+    const r = Bun.spawnSync(["gh", ...args], { cwd: dir, env: GH_ENV, timeout, stdin: "ignore" });
+    return r.exitCode === 0 ? r.stdout.toString() : null;
+  } catch {
+    return null; // no gh on PATH
+  }
+}
+
+// biome-ignore lint/suspicious/noExplicitAny: gh's JSON is read field by field below
+type Gh = Record<string, any>;
+
+function prInfo(dir: string): Json | null {
+  const text = gh(["pr", "view", "--json", "number,url,state,isDraft,reviewDecision,statusCheckRollup"], dir, 8000);
+  if (!text) return null;
+  let v: Gh;
+  try {
+    v = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (v.state !== "OPEN") return null;
+  let passed = 0;
+  let failed = 0;
+  let pending = 0;
+  for (const c of (v.statusCheckRollup ?? []) as Gh[]) {
+    if (c.status !== undefined) {
+      if (c.status !== "COMPLETED") pending++;
+      else if (["SUCCESS", "NEUTRAL", "SKIPPED"].includes(c.conclusion)) passed++;
+      else failed++;
+    } else if (c.state === "SUCCESS") passed++;
+    else if (c.state === "PENDING" || c.state === "EXPECTED") pending++;
+    else failed++;
+  }
+  let unresolvedThreads = 0;
+  const m = /^https?:\/\/[^/]+\/([^/]+)\/([^/]+)\//.exec(v.url);
+  if (m) {
+    const t = gh(["api", "graphql", "-f", `query=${THREADS_QUERY}`, "-f", `o=${m[1]}`, "-f", `n=${m[2]}`, "-F", `num=${v.number}`], dir, 8000);
+    try {
+      const nodes = (JSON.parse(t ?? "{}").data?.repository?.pullRequest?.reviewThreads?.nodes ?? []) as Gh[];
+      unresolvedThreads = nodes.filter((n) => n.isResolved === false).length;
+    } catch {
+      /* no thread count */
+    }
+  }
+  return {
+    number: v.number,
+    url: v.url,
+    isDraft: !!v.isDraft,
+    reviewDecision: v.reviewDecision ?? "",
+    ci: failed ? "failed" : pending ? "pending" : passed ? "passed" : "none",
+    checksPassed: passed,
+    checksFailed: failed,
+    checksPending: pending,
+    unresolvedThreads,
+  };
 }
 
 Bun.serve<Conn>({

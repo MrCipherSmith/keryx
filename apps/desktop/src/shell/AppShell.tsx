@@ -8,6 +8,7 @@ import { Icon, type IconName } from "../components/Icon";
 import { Menu, type MenuItem } from "../components/Menu";
 import { Kbd } from "../components/ui";
 import { projectHue, projectInitials, type ProjectActivity } from "./projectRail";
+import type { LiveProject } from "../platform/projects";
 
 export type View = "session" | "flows" | "settings";
 
@@ -38,8 +39,10 @@ interface ShellProps {
   flowsActive: number;
   /** The projects on the rail, in the user's order; `cwd` is one of them. */
   projects: string[];
-  /** This window's project's live state (other projects run no keryx here). */
+  /** This window's project's live state. */
   activity: ProjectActivity;
+  /** Every project running in a window of the app, this one and those in the background. */
+  live: LiveProject[];
   onRemoveProject: (cwd: string) => void;
   onOpenFolder: () => void;
   onSwitchProject: (cwd: string) => void;
@@ -233,6 +236,7 @@ function ProjectButton({
   current,
   active,
   activity,
+  running,
   onOpen,
   onMenu,
 }: {
@@ -240,15 +244,18 @@ function ProjectButton({
   current: boolean;
   active: boolean;
   activity: ProjectActivity;
+  /** Kept running in the background. */
+  running: boolean;
   onOpen: () => void;
   onMenu: (anchor: HTMLElement) => void;
 }) {
   const name = basename(path);
   const state = ACTIVITY_LABEL[activity];
-  const tip = `${name}${current ? " (open)" : ""}${state ? ` · ${state}` : ""}\n${path}`;
+  const where = current ? " (open)" : running ? " (running in the background)" : "";
+  const tip = `${name}${where}${state ? ` · ${state}` : ""}\n${path}`;
   return (
     <button
-      className={`rail-project${active ? " is-active" : ""}${current ? " is-current" : ""}`}
+      className={`rail-project${active ? " is-active" : ""}${current ? " is-current" : ""}${running ? " is-running" : ""}`}
       style={{ "--project-hue": projectHue(path) } as React.CSSProperties}
       onClick={onOpen}
       onContextMenu={(e) => {
@@ -266,7 +273,7 @@ function ProjectButton({
 }
 
 function Rail(p: ShellProps) {
-  const { view, onView, flowsActive, cwd, projects, activity, onSwitchProject, onOpenFolder, onNewWindow, onRemoveProject } = p;
+  const { view, onView, flowsActive, cwd, projects, activity, live, onSwitchProject, onOpenFolder, onNewWindow, onRemoveProject } = p;
   const [menu, setMenu] = useState<{ path: string; anchor: HTMLElement } | null>(null);
   const items: MenuItem[] = menu
     ? [
@@ -285,8 +292,8 @@ function Rail(p: ShellProps) {
               path={path}
               current={path === cwd}
               active={path === cwd && view === "session"}
-              // Only this window's project runs a keryx: other projects show no live state.
-              activity={path === cwd ? activity : "idle"}
+              activity={path === cwd ? activity : (live.find((l) => l.cwd === path)?.activity ?? "idle")}
+              running={path !== cwd && live.some((l) => l.cwd === path)}
               onOpen={() => (path === cwd ? onView("session") : onSwitchProject(path))}
               onMenu={(anchor) => setMenu({ path, anchor })}
             />

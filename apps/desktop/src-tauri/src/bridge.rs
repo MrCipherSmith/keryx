@@ -476,15 +476,21 @@ pub fn version_check(found: String) -> VersionCheck {
 /// Open a project in a new window (one keryx process per window).
 #[tauri::command]
 pub async fn window_open_project(app: AppHandle, state: State<'_, AppState>, cwd: String) -> Result<(), String> {
+    create_project_window(&app, &state, cwd, true).map(|_| ())
+}
+
+/// A new project window that opens `cwd`; hidden when `visible` is false (the caller places and
+/// shows it).
+pub fn create_project_window(app: &AppHandle, state: &AppState, cwd: String, visible: bool) -> Result<tauri::WebviewWindow, String> {
     let n = state.window_counter.fetch_add(1, Ordering::SeqCst) + 1;
     let label = format!("project-{n}");
     state.pending_cwd.lock().unwrap().insert(label.clone(), cwd);
-    let builder = WebviewWindowBuilder::new(&app, &label, WebviewUrl::App("index.html".into()))
+    let builder = WebviewWindowBuilder::new(app, &label, WebviewUrl::App("index.html".into()))
         .title("Keryx")
         .inner_size(1180.0, 780.0)
-        .min_inner_size(720.0, 480.0);
-    navigation::guard(builder, navigation::dev_url(&app)).build().map_err(|e| e.to_string())?;
-    Ok(())
+        .min_inner_size(720.0, 480.0)
+        .visible(visible);
+    navigation::guard(builder, navigation::dev_url(app)).build().map_err(|e| e.to_string())
 }
 
 /// The folder a freshly created project window should open (taken once).

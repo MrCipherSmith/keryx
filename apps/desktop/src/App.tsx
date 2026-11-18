@@ -29,6 +29,7 @@ import type { ComposerHandle } from "./session/Composer";
 import { ProvidersDialog, useProvidersDialog, type ProvidersApi } from "./session/ProvidersDialog";
 import { SessionView } from "./session/SessionView";
 import { useAcpSession } from "./session/useAcpSession";
+import { onProjectsState, projectRegister, projectsState, projectSwitch, reportProjectActivity, type LiveProject } from "./platform/projects";
 import { projectActivity, railProjects, removeRailProject, syncRailProjects } from "./shell/projectRail";
 
 export function App() {
@@ -48,6 +49,7 @@ export function App() {
   useEffect(() => {
     if (cwd === null) void setWindowTitle("Keryx");
     if (cwd) void settingsAddRecent(cwd).catch(() => {});
+    if (cwd !== undefined) void projectRegister(cwd).catch(() => {});
     if (!isTauri() && cwd !== undefined) {
       const url = cwd ? `?cwd=${encodeURIComponent(cwd)}` : window.location.pathname;
       window.history.replaceState(null, "", url);
@@ -157,6 +159,40 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
   const removeProject = useCallback((p: string) => setProjects(removeRailProject(p)), []);
   const activity = useMemo(() => projectActivity(s.marks), [s.marks]);
 
+  /** Every project running in a window of this app (this one and those in the background). */
+  const [live, setLive] = useState<LiveProject[]>([]);
+  useEffect(() => {
+    void reportProjectActivity(activity).catch(() => {});
+  }, [activity]);
+  useEffect(() => {
+    let off: (() => void) | null = null;
+    let alive = true;
+    const take = (list: LiveProject[]) => {
+      setLive(list);
+      // Another window may have put a project on the rail.
+      setProjects(syncRailProjects(cwd, []));
+    };
+    void projectsState().then(take).catch(() => {});
+    void onProjectsState(take).then((u) => (alive ? (off = u) : u()));
+    return () => {
+      alive = false;
+      off?.();
+    };
+  }, [cwd]);
+
+  /** Switch to another project; the one we leave keeps running in its own (hidden) window. */
+  const switchProject = useCallback(
+    (p: string) => {
+      if (p === cwd) return;
+      void projectSwitch(p)
+        .then((done) => {
+          if (!done) onOpenProject(p);
+        })
+        .catch((e: unknown) => s.notify("error", `Could not open ${basename(p)}: ${e instanceof Error ? e.message : String(e)}`));
+    },
+    [cwd, onOpenProject, s],
+  );
+
   const go = useCallback((v: View) => {
     setView(v);
     if (v === "session") requestAnimationFrame(() => composer.current?.focus());
@@ -164,8 +200,8 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
 
   const openFolder = useCallback(async () => {
     const picked = await pickFolder();
-    if (picked) onOpenProject(picked);
-  }, [onOpenProject]);
+    if (picked) switchProject(picked);
+  }, [switchProject]);
 
   /** Prefill the composer; never sends. */
   const fillComposer = useCallback((text: string) => {
@@ -293,7 +329,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
     items.push({ id: "p-open", group: "Projects", label: "Open Folder…", icon: "folderOpen", hint: `${MOD}O`, run: () => void openFolder() });
     for (const r of recents) {
       if (r === cwd) continue;
-      items.push({ id: `p-${r}`, group: "Projects", label: basename(r), detail: r, icon: "folder", run: () => onOpenProject(r) });
+      items.push({ id: `p-${r}`, group: "Projects", label: basename(r), detail: r, icon: "folder", run: () => switchProject(r) });
     }
     items.push(
       { id: "t-system", group: "Appearance", label: "Theme: System", icon: "sun", run: () => setPrefs({ theme: "system" }) },
@@ -301,7 +337,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       { id: "t-dark", group: "Appearance", label: "Theme: Dark", icon: "moon", run: () => setPrefs({ theme: "dark" }) },
     );
     return items;
-  }, [go, s, state.busy, state.phase, state.modes, state.commands, state.sessions, state.sessionId, recents, cwd, openFolder, onOpenProject, fillComposer]);
+  }, [go, s, state.busy, state.phase, state.modes, state.commands, state.sessions, state.sessionId, recents, cwd, openFolder, switchProject, fillComposer]);
 
   // The title bar names the project and the view; the page below keeps only its own toolbar.
   const title =
@@ -327,9 +363,10 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       flowsActive={flowsActive}
       projects={projects}
       activity={activity}
+      live={live}
       onRemoveProject={removeProject}
       onOpenFolder={() => void openFolder()}
-      onSwitchProject={onOpenProject}
+      onSwitchProject={switchProject}
       onNewWindow={(p) => void windowOpenProject(p)}
       onCloseProject={onCloseProject}
       onPalette={() => setPalette("")}
