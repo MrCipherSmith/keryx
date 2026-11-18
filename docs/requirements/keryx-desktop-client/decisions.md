@@ -98,3 +98,65 @@ with a Reopen banner.
 
 Rejected: one active session per connection (switching killed background work
 and surprised users).
+
+## D-10 keryx from npm by default; the CLI installs and updates the app — decided 2026-11-17
+
+Owner decision of 2026-11-17; the specification below was confirmed by the
+owner on 2026-11-18 (auto source with the one-time migration, `.app.tar.gz` +
+`SHA256SUMS`, the check through `keryx app status`, work based on main). It amends D-04 (the default keryx source) and the update
+channel of D-06 for as long as there is no Developer ID (D-05): a browser
+download of an ad-hoc signed app is quarantined and refused by Gatekeeper,
+while a file the keryx CLI fetches is never quarantined.
+
+Chosen:
+
+- **Default source `auto`**: `keryx` on the login-shell `PATH` first (the
+  npm-installed CLI, so `npm i -g keryx` updates the agent without a new
+  app), the bundled sidecar as the fallback. `bundled`, `path` and `custom`
+  stay selectable. A settings file written before D-10 (no
+  `settingsVersion`) holding `keryxSource: "bundled"` is read as `auto`
+  once, because the old app stored its default on every save.
+- **`keryx app install|update|build|status`** in the CLI:
+  - `install` / `update` read the `desktop-v*` releases of
+    `MrCipherSmith/keryx` on GitHub, take the newest non-draft one
+    (pre-releases only with `--pre`), download
+    `Keryx_<version>_<arch>.app.tar.gz` for the host arch (`aarch64` /
+    `x64`, else `universal`), verify its SHA-256 against the release's
+    `SHA256SUMS` asset, unpack it into a staging folder next to the target
+    and swap it into `/Applications/Keryx.app` (`--dir` overrides) by
+    rename: old app → backup, staged → target, backup removed; a failed swap
+    restores the backup. It refuses while the app runs, unless
+    `--wait-pid <pid>` (the app's own hand-off) is given; `--relaunch` opens
+    the new app afterwards. `update` does nothing when the installed
+    `CFBundleShortVersionString` is already the newest.
+  - `build` runs `scripts/desktop/build.sh` from the keryx repository
+    checkout of the cwd and refuses outside one; it is for development, as
+    `bun run desktop:build` is.
+  - `status` (`--json`) reports the installed app version and path, the
+    newest release, whether an update exists, the running keryx version and
+    whether this keryx needs a newer app.
+- **Release assets**: `desktop-release.yml` also uploads
+  `Keryx_<version>_universal.app.tar.gz` (the signed `.app`, packed with
+  `tar` so the bundle's symlinks and modes survive) and `SHA256SUMS` over it
+  and the `.dmg`. The `.dmg` stays the browser download.
+- **Compatibility both ways**: the app keeps refusing a keryx below its
+  floor (D-04). keryx adds `minDesktopVersion` to `initialize._meta.keryx`
+  and to `app status`; an app below it shows the banner as required. A keryx
+too old for the app keeps the existing incompatible-keryx dialog, which now
+names `npm i -g @mrciphersmith/keryx`.
+- **Update banner**: at startup, and at most every 6 hours while open, the
+  app runs `<resolved keryx> app status --json`, so the release lookup
+  lives in one place, the CLI. A newer release, or a keryx that needs a
+  newer app, shows a banner with **Update and relaunch**: the app starts
+  `keryx app update --wait-pid <its pid> --relaunch` detached and quits. A
+  keryx without `app status` (older than this change) shows no banner.
+
+Integrity, not authenticity: the checksum comes from the same release over
+TLS, so it catches a broken download, not a compromised release. Developer
+ID signing with the signed updater of D-06 replaces this channel once D-05
+is switched on.
+
+Rejected: `tauri-plugin-updater` now (it needs a signed manifest and still
+meets Gatekeeper on an ad-hoc app); mounting the `.dmg` with `hdiutil` in
+the CLI (a macOS-only path the Linux CI cannot test); the app querying
+GitHub itself (a second copy of the release logic, in Rust).

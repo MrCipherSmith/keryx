@@ -7,7 +7,8 @@ Version: 0.2.0
 |---|---|---|
 | M1 | `shell` profile (roster, modes, plan/usage/info updates, `_keryx/ask_user`, `_keryx/info`); Tauri client (chat, tools, approvals, modes, sessions, models, plan, usage, settings); sidecar; local `.dmg`; release workflow; Flows board ([flows-board.md](flows-board.md)); browser dev mode | implemented on the branch; owner acceptance pending (see README status) |
 | M2 | images (after flow 493), subagent inspector events (`spawn_subagent` itself is in the shell roster since M1), background task list/output/kill, rewind, compact, queue, sidebar cards, full slash-command set via `_keryx/command` | future |
-| M3 | remote-control and Hub toggles, Developer ID signing on, Homebrew cask, auto-update | future |
+| D-10 | keryx from npm by default (`auto` source), `keryx app install/update/build/status`, release tarball + `SHA256SUMS`, `minDesktopVersion`, update banner | implemented on `feat/desktop-app-updates`; banner-driven update awaits the first `desktop-v*` release |
+| M3 | remote-control and Hub toggles, Developer ID signing on, Homebrew cask, signed auto-update (replaces the D-10 channel) | future |
 
 ## Parity matrix
 
@@ -44,3 +45,14 @@ Version: 0.2.0
 | T7 web view | client | `apps/desktop/src/` |
 | T8 sidecar build, `desktop:build`, release workflow | packaging | `scripts/desktop/`, `package.json`, `.github/workflows/desktop-release.yml` |
 | T9 end-to-end check against the built app | all | — |
+
+## D-10 tasks
+
+| Task | Lane | Files |
+|---|---|---|
+| U1 `keryx app` command and tests | keryx | `src/commands/app.ts`, `src/commands/app.test.ts`, `src/cli-registry.ts`, `src/lib/group-subcommands.ts`, `src/standard/help-groups.ts` |
+| U2 `minDesktopVersion` in the shell profile | keryx | `src/acp/profile.ts` |
+| U3 release archive and `SHA256SUMS` | packaging | `.github/workflows/desktop-release.yml` |
+| U4 `auto` source, settings migration, update commands | client | `apps/desktop/src-tauri/src/{locator,settings,appupdate,lib}.rs` |
+| U5 update banner, Automatic source in Settings | client | `apps/desktop/src/shell/UpdateBanner.tsx`, `apps/desktop/src/shell/SettingsView.tsx`, `apps/desktop/src/App.tsx` |
+| U6 docs | docs | `docs/docs/desktop-app.md`, `docs/docs/cli-reference.md` |
