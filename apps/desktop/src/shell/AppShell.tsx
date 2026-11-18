@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { isTauri } from "../platform/backend";
+import { isTauri, listen } from "../platform/backend";
 import { basename } from "../lib/format";
 import { getPrefs, MOD, setPrefs, usePrefs, type SidePanelTab } from "../lib/prefs";
 import { SidePanel } from "../panels/SidePanel";
@@ -43,8 +43,21 @@ interface ShellProps {
   children: ReactNode;
 }
 
+let lastToggle = 0;
+
 export function toggleSidePanel(tab: SidePanelTab, current: SidePanelTab | null): void {
+  lastToggle = Date.now();
   setPrefs({ sidePanel: current === tab ? null : tab });
+}
+
+/**
+ * A panel shortcut from the native menu (`menu://panel`). The menu also sees keys the page already
+ * handled; a toggle the page made a moment ago is that same key press and is not repeated.
+ */
+export function onMenuPanel(id: string, openPalette: () => void): void {
+  if (overlayOpen() && id !== "palette") return;
+  if (id === "palette") openPalette();
+  else if ((id === "terminal" || id === "browser") && Date.now() - lastToggle > 250) toggleSidePanel(id, getPrefs().sidePanel);
 }
 
 /** `Ctrl+\`` toggles the terminal, `Cmd+Shift+B` the browser; caught before a focused terminal sees them. */
@@ -55,7 +68,18 @@ export function sidePanelShortcut(e: Pick<KeyboardEvent, "code" | "ctrlKey" | "m
   return null;
 }
 
-function useSidePanelShortcuts(): void {
+function useSidePanelShortcuts(openPalette: () => void): void {
+  const palette = useRef(openPalette);
+  palette.current = openPalette;
+  useEffect(() => {
+    let off: (() => void) | null = null;
+    let live = true;
+    void listen<string>("menu://panel", (id) => onMenuPanel(id, () => palette.current())).then((u) => (live ? (off = u) : u()));
+    return () => {
+      live = false;
+      off?.();
+    };
+  }, []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const tab = sidePanelShortcut(e);
@@ -72,7 +96,7 @@ function useSidePanelShortcuts(): void {
 export function AppShell(p: ShellProps) {
   const overlay = useTitlebarInset();
   const prefs = usePrefs();
-  useSidePanelShortcuts();
+  useSidePanelShortcuts(p.onPalette);
   const side = prefs.sidePanel !== null;
   return (
     <div

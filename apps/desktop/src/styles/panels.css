@@ -49,3 +49,4 @@
 .browser-address:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
 .browser-error { display: flex; align-items: center; gap: 6px; padding: 6px var(--sp-2); font-size: var(--fs-sm); color: var(--danger); border-bottom: 1px solid var(--border); flex: none; }
 .browser-body { position: relative; flex: 1; min-height: 0; display: flex; background: var(--bg-surface); }
+.code-head .code-run { margin-left: auto; margin-right: 6px; }

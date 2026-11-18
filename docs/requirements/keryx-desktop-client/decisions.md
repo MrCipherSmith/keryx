@@ -186,9 +186,17 @@ Chosen:
   `browser_snapshot`, `browser_click`, `browser_type`, `browser_screenshot`,
   `browser_console`. Names and arguments are backend-neutral, so a CDP
   backend can replace WKWebView later without changing them.
-- **Approvals are keryx's ordinary ones** (owner): MCP calls go through
-  `use_tool`, which is destructive, so each call follows the session's mode
-  (ask / trust / auto) like any other tool; no per-site rules.
+- **Approvals** (owner, revised 2026-11-18 after the first click-through):
+  the panel server is marked first-party (`_meta.keryx.firstParty`), and its
+  tools follow the session's mode even after untrusted content (page text, a
+  `search_tool` result) entered the turn. `auto` and unattended
+  orchestrator/agent turns run them without asking; `trust` asks once
+  ("Allow for this session"), and that grant covers every panel tool; `ask`
+  asks every call. The exception is `terminal_run`
+  (`_meta.keryx.floorTools`): after untrusted content it still asks in every
+  mode, and an unattended turn may not run it. A command typed into a shell
+  must not follow from page text. Over ACP keryx now keeps MCP session grants
+  (`trustedMcpTools`) itself, as the shell does. There are no per-site rules.
 - **Terminal access** (owner): the agent reads the output of any tab of the
   window and runs commands only in tabs it opened itself (`terminal_run`
   without a tab opens an agent tab).

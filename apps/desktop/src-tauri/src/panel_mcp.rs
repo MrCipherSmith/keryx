@@ -50,7 +50,15 @@ pub struct McpEntry {
     pub command: String,
     pub args: Vec<String>,
     pub env: Vec<NameValue>,
+    /// `{keryx: {firstParty: true, floorTools}}`: the panel is part of the app, so keryx exempts
+    /// its tools from the untrusted-content floor, except `floorTools` (owner decision, D-13).
+    #[serde(rename = "_meta")]
+    pub meta: Value,
 }
+
+/// Panel tools that keep keryx's untrusted-content floor: a command typed into a
+/// shell must not follow from page text without the operator.
+pub const FLOOR_TOOLS: &[&str] = &["terminal_run"];
 
 fn random_token() -> String {
     let mut bytes = [0u8; 24];
@@ -425,6 +433,7 @@ pub fn panel_mcp_entry(app: AppHandle, window: Window, cwd: String) -> Result<Mc
             NameValue { name: ENV_SOCKET.into(), value: socket.display().to_string() },
             NameValue { name: ENV_TOKEN.into(), value: token },
         ],
+        meta: json!({ "keryx": { "firstParty": true, "floorTools": FLOOR_TOOLS } }),
     })
 }
 

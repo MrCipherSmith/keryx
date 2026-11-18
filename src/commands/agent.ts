@@ -303,6 +303,21 @@ export interface ApprovalMeta {
  * fingerprint check, and never for a call under the untrusted-content floor;
  * hosts must offer it only for catalog-resolved MCP tools.
  */
+/** A `use_tool` call whose MCP tool the host declared exempt from the untrusted-content floor. */
+export function isFloorExemptMcpCall(
+  call: { name: string; input: string },
+  exempt: ((fqn: string) => boolean) | undefined,
+): boolean {
+  if (exempt === undefined || call.name !== "use_tool") return false;
+  try {
+    const parsed: unknown = JSON.parse(call.input);
+    const fqn = typeof parsed === "object" && parsed !== null ? (parsed as { tool_name?: unknown }).tool_name : undefined;
+    return typeof fqn === "string" && exempt(fqn);
+  } catch {
+    return false;
+  }
+}
+
 export type ApprovalResponse =
   | boolean
   | {
@@ -497,6 +512,15 @@ export interface AgentIO {
    * dropped.
    */
   mcpToolDestructive?: (fqn: string) => boolean;
+  /**
+   * Whether an MCP FQN belongs to a server the HOST runs as part of itself and
+   * declared exempt from the untrusted-content floor (the desktop app's side
+   * panel: its browser acts only inside its own sandboxed page, D-13). Such a
+   * call is gated by the permission mode alone — `auto` runs it, `trust` asks
+   * until a grant — even after external content entered the turn, and an
+   * unattended turn may make it. Absent: no FQN is exempt.
+   */
+  mcpFloorExempt?: (fqn: string) => boolean;
   /**
    * The session's current read-only ("plan") posture (see
    * `permission-mode.ts`'s `ApprovalGateInput.readOnly` docstring for the
@@ -4537,7 +4561,7 @@ async function runAgentTurnCore(
       // `spawn_subagent` pre-pass above keeps the shape test: it decides before any
       // result exists, and a spawned child cannot be un-spawned by a later refusal.
       const isPureReadTool = risk === "read" && !DURABLE_READ_TOOL_NAMES.has(call.name);
-      const untrustedOrigin = !isPureReadTool && untrustedContentSeen;
+      const untrustedOrigin = !isPureReadTool && untrustedContentSeen && !isFloorExemptMcpCall(call, io.mcpFloorExempt);
       // No human can answer in unattended mode; neither auto nor a risk gate
       // may lift this floor. Interactive calls combine both asks in executeCall.
       if (untrustedOrigin && deps.unattended === true) {

@@ -92,3 +92,15 @@ test("shortcuts: Ctrl+` is the terminal, Cmd+Shift+B the browser; toggling close
   shell.toggleSidePanel("browser", "browser");
   expect(prefs.getPrefs().sidePanel).toBeNull();
 });
+
+test("menu shortcuts: palette opens; a menu toggle right after the page's own toggle is the same key press", async () => {
+  let palettes = 0;
+  shell.onMenuPanel("palette", () => palettes++);
+  expect(palettes).toBe(1);
+  shell.toggleSidePanel("terminal", null);
+  shell.onMenuPanel("terminal", () => {});
+  expect(prefs.getPrefs().sidePanel).toBe("terminal");
+  await new Promise((r) => setTimeout(r, 300));
+  shell.onMenuPanel("browser", () => {});
+  expect(prefs.getPrefs().sidePanel).toBe("browser");
+});

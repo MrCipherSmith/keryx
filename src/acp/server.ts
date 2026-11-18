@@ -104,8 +104,11 @@ import {
 } from "./protocol";
 import { renderAcpPromptContent } from "./prompt-content";
 import { AcpSessionRegistry, AcpSessionTranscriptUnreadableError, syncAcpArchive, type AcpSessionState } from "./session";
+import { SessionMcpGrants } from "./mcp-grants";
+import { catalogDestructiveResolver, catalogFingerprintResolver } from "../mcp-servers/approval-render";
 import {
   acpMcpSetKey,
+  firstPartyFloorExempt,
   parseAcpMcpServers,
   startAcpSessionMcp,
   type AcpMcpServerProblem,
@@ -796,6 +799,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       if (owner === sessionId) planDirSessions.delete(dir);
     }
     shellRosters.delete(sessionId);
+    mcpGrants.delete(sessionId);
     unbindSessionMcp(sessionId);
     const model = sessionModels.get(sessionId);
     if (model !== undefined) releasedModelChoices.set(sessionId, model.choice.value);
@@ -1678,6 +1682,9 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     });
   }
 
+  /** Each session's MCP trust grants (`trustedMcpTools`), never persisted; dropped with the session. */
+  const mcpGrants = new Map<string, SessionMcpGrants>();
+
   /** Each session's `spawn_subagent` budget reset, called at the start of every turn (the shell's `deps.resetSubagentBudget`). */
   const subagentBudgetResets = new Map<string, () => void>();
 
@@ -2193,6 +2200,23 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         subagentBudgetResets.get(sessionId)?.();
         // `/plan on`: read fresh by every gated call, as the readline shell's own flag is.
         io.readOnly = () => sessionReadOnly.get(sessionId) === true;
+        // The client's MCP servers: trust grants for the session, and the first-party ones
+        // (the desktop side panel, D-13) exempt from the untrusted-content floor per tool.
+        const clientMcpSet = sessionMcp.get(sessionId)?.mcp;
+        if (clientMcpSet !== undefined) {
+          let grants = mcpGrants.get(sessionId);
+          if (grants === undefined) {
+            grants = new SessionMcpGrants(
+              () => sessionMcp.get(sessionId)?.mcp.firstParty,
+              () => sessionMcp.get(sessionId)?.mcp.catalog() ?? { entries: [] },
+            );
+            mcpGrants.set(sessionId, grants);
+          }
+          io.trustedMcpTools = grants;
+          io.mcpToolFingerprint = (fqn) => catalogFingerprintResolver(clientMcpSet.catalog())(fqn);
+          io.mcpToolDestructive = (fqn) => catalogDestructiveResolver(clientMcpSet.catalog())(fqn);
+          io.mcpFloorExempt = (fqn) => firstPartyFloorExempt(clientMcpSet.firstParty, fqn);
+        }
         // `auto` mode answers ask_user itself; without this the client would
         // see the answer land in the model's context but never be told.
         io.onQuestionSelfAnswered = (question, answerLabel) => {

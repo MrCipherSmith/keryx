@@ -1596,3 +1596,110 @@ test("flow 486 review: one command launching a granted and a new agent asks only
   await run("hc run claude; hc run codex");
   expect(asked).toEqual(["claude", "codex"]);
 });
+
+// ---- D-13: first-party MCP tools (the desktop side panel) ----
+
+function panelCatalog() {
+  return {
+    entries: [
+      { fqn: "keryx-panels__browser_snapshot", server: "keryx-panels", description: "Read the page", inputSchema: { type: "object" } },
+      { fqn: "keryx-panels__browser_click", server: "keryx-panels", description: "Click", inputSchema: { type: "object" } },
+      { fqn: "keryx-panels__terminal_run", server: "keryx-panels", description: "Run", inputSchema: { type: "object" } },
+      { fqn: "other__thing", server: "other", description: "Other", inputSchema: { type: "object" } },
+    ],
+  };
+}
+
+function panelCall(id: string, fqn: string): Partial<NormalizedEvent>[] {
+  return [
+    { kind: "tool_call_start", toolCallId: id, toolName: "use_tool" },
+    { kind: "tool_call_end", toolCallId: id, input: JSON.stringify({ tool_name: fqn, tool_input: {} }) },
+    { kind: "model_end" },
+  ];
+}
+
+const PANEL_DONE: Partial<NormalizedEvent>[] = [{ kind: "text_delta", text: "done" }, { kind: "model_end" }];
+
+async function runPanel(mode: PermissionMode, fqns: string[], grants: Map<string, string> = new Map(), unattended = false) {
+  const asked: { fqn: string; meta: ApprovalMeta | undefined }[] = [];
+  const ran: string[] = [];
+  const tool: InteractiveTool = {
+    definition: { name: "use_tool", description: "MCP", risk: "destructive", inputSchema: MCP_TOOL_SCHEMA },
+    // Every result is untrusted: page text, as the panel's browser returns it.
+    invoke: async (input) => {
+      ran.push(String(input.tool_name));
+      return { output: "page text", isError: false, untrusted: true };
+    },
+  };
+  const io: AgentIO = {
+    write: () => {},
+    permissionMode: () => mode,
+    trustedMcpTools: grants,
+    mcpToolFingerprint: catalogFingerprintResolver(panelCatalog()),
+    mcpFloorExempt: (fqn) => fqn.startsWith("keryx-panels__") && fqn !== "keryx-panels__terminal_run",
+    requestApproval: async (_tool, raw, meta) => {
+      asked.push({ fqn: JSON.parse(raw).tool_name, meta });
+      return { approved: true, fingerprint: meta!.fingerprint, ...(meta?.mcpTrustAvailable ? { trustMcpTool: true } : {}) };
+    },
+  };
+  const script = [...fqns.map((f, i) => panelCall(`c${i}`, f)), PANEL_DONE];
+  await runAgentTurn(
+    io,
+    { provider: scriptedProvider(script), providerId: "s", modelId: "m", tools: [tool], systemInstruction: "sys", idSeq, ...(unattended ? { unattended: true } : {}) },
+    [],
+    "run",
+  );
+  return { asked, ran };
+}
+
+test("auto mode: first-party panel tools run without asking after untrusted page text; terminal_run keeps the floor", async () => {
+  const { asked, ran } = await runPanel("auto", ["keryx-panels__browser_snapshot", "keryx-panels__browser_click", "keryx-panels__terminal_run"]);
+  expect(ran).toEqual(["keryx-panels__browser_snapshot", "keryx-panels__browser_click", "keryx-panels__terminal_run"]);
+  expect(asked.map((a) => a.fqn)).toEqual(["keryx-panels__terminal_run"]);
+  expect(asked[0]!.meta?.untrustedOrigin).toBe(true);
+});
+
+test("trust mode: one grant for a panel tool covers the panel server, even after untrusted page text", async () => {
+  const { SessionMcpGrants } = await import("../acp/mcp-grants");
+  const grants = new SessionMcpGrants(() => new Map([["keryx-panels", new Set(["terminal_run"])]]), panelCatalog);
+  const { asked, ran } = await runPanel("trust", ["keryx-panels__browser_snapshot", "keryx-panels__browser_click", "keryx-panels__browser_snapshot"], grants);
+  expect(ran).toHaveLength(3);
+  expect(asked.map((a) => a.fqn)).toEqual(["keryx-panels__browser_snapshot"]);
+  expect(asked[0]!.meta?.mcpTrustAvailable).toBe(true);
+  expect([...grants.keys()].sort()).toEqual(["keryx-panels__browser_click", "keryx-panels__browser_snapshot", "keryx-panels__terminal_run"]);
+  expect(grants.has("other__thing")).toBe(false);
+});
+
+test("trust mode: a granted terminal_run still asks after untrusted page text", async () => {
+  const { SessionMcpGrants } = await import("../acp/mcp-grants");
+  const grants = new SessionMcpGrants(() => new Map([["keryx-panels", new Set(["terminal_run"])]]), panelCatalog);
+  await runPanel("trust", ["keryx-panels__browser_snapshot"], grants);
+  const { asked } = await runPanel("trust", ["keryx-panels__browser_snapshot", "keryx-panels__terminal_run"], grants);
+  expect(asked.map((a) => a.fqn)).toEqual(["keryx-panels__terminal_run"]);
+  expect(asked[0]!.meta?.untrustedOrigin).toBe(true);
+});
+
+test("unattended: exempt panel tools run after untrusted text; terminal_run is blocked", async () => {
+  const { asked, ran } = await runPanel("auto", ["keryx-panels__browser_snapshot", "keryx-panels__browser_click", "keryx-panels__terminal_run"], new Map(), true);
+  expect(ran).toEqual(["keryx-panels__browser_snapshot", "keryx-panels__browser_click"]);
+  expect(asked).toHaveLength(0);
+});
+
+test("without a host exemption every MCP call after untrusted text still asks", async () => {
+  const asked: string[] = [];
+  const tool: InteractiveTool = {
+    definition: { name: "use_tool", description: "MCP", risk: "destructive", inputSchema: MCP_TOOL_SCHEMA },
+    invoke: async () => ({ output: "page", isError: false, untrusted: true }),
+  };
+  const io: AgentIO = {
+    write: () => {},
+    permissionMode: () => "auto",
+    requestApproval: async (_t, raw, meta) => {
+      asked.push(JSON.parse(raw).tool_name);
+      return { approved: true, fingerprint: meta!.fingerprint };
+    },
+  };
+  const script = [panelCall("a", "keryx-panels__browser_snapshot"), panelCall("b", "keryx-panels__browser_click"), PANEL_DONE];
+  await runAgentTurn(io, { provider: scriptedProvider(script), providerId: "s", modelId: "m", tools: [tool], systemInstruction: "sys", idSeq }, [], "run");
+  expect(asked).toEqual(["keryx-panels__browser_click"]);
+});
