@@ -11,6 +11,8 @@ pub mod navigation;
 pub mod panel_mcp;
 pub mod panels;
 pub mod process;
+pub mod projects;
+pub mod pullrequest;
 pub mod pty;
 pub mod settings;
 pub mod shellenv;
@@ -34,6 +36,7 @@ pub fn run() {
         .manage(panels::PanelRoots::default())
         .manage(browser::Browsers::default())
         .manage(panel_mcp::PanelMcp::default())
+        .manage(projects::ProjectWindows::default())
         .setup(|app| {
             // The main window is declared in tauri.conf.json with `create: false`
             // and built here, so it gets the same navigation guard as every
@@ -84,7 +87,14 @@ pub fn run() {
             }
         })
         .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { .. } = event {
+                // A background project takes the closing window's place on screen.
+                projects::on_close_requested(window.app_handle(), window);
+            }
             if let WindowEvent::Destroyed = event {
+                let projects = window.app_handle().state::<projects::ProjectWindows>();
+                projects.forget(window.label());
+                projects.broadcast(window.app_handle());
                 // Never wait out the stop grace period on the event loop.
                 window.app_handle().state::<bridge::AppState>().window_destroyed(window.label());
                 window.app_handle().state::<flows::watch::FlowWatchers>().stop_window(window.label());
@@ -104,11 +114,16 @@ pub fn run() {
             bridge::version_check,
             bridge::window_open_project,
             bridge::window_initial_cwd,
+            projects::project_register,
+            projects::project_activity,
+            projects::project_switch,
+            projects::projects_state,
             flows::flows_list,
             flows::flows_get,
             flows::flows_action,
             flows::flows_watch,
             gitinfo::git_info,
+            pullrequest::pr_info,
             panels::pty_open,
             panels::pty_open_run,
             panels::pty_attach,

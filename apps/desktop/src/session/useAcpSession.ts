@@ -45,6 +45,8 @@ import { DialogQueue, type PendingAsk, type PendingPermission } from "./dialogQu
 import { SessionRegistry } from "./sessionRegistry";
 import { answerAgentRequest } from "./agentRequests";
 import { basename } from "../lib/format";
+import { retentionDays } from "../lib/retention";
+import { idleSessions, pickStartSession } from "./startup";
 
 export type { PendingAsk, PendingPermission } from "./dialogQueue";
 
@@ -210,10 +212,11 @@ export function useAcpSession(cwd: string) {
     [cwd, dispatch],
   );
 
-  const refreshSessions = useCallback(async () => {
+  /** The stored sessions of this project, newest first; null when the list could not be read. */
+  const refreshSessions = useCallback(async (): Promise<SessionInfo[] | null> => {
     const l = live.current;
     const client = l.client;
-    if (!client || !l.initialized) return;
+    if (!client || !l.initialized) return null;
     try {
       const all: SessionInfo[] = [];
       let cursor: string | null | undefined;
@@ -228,10 +231,36 @@ export function useAcpSession(cwd: string) {
       }
       all.sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
       if (l.client === client) dispatch({ t: "sessions", sessions: all });
+      return all;
     } catch {
       /* listing is optional; an agent without session/list just shows none */
+      return null;
     }
   }, [cwd, dispatch]);
+
+  /**
+   * Archive the sessions nobody touched for the retention window (Settings → Sessions). The shown
+   * session and any with a running turn are kept; pinned ones are never archived. Best effort.
+   */
+  const archiveIdle = useCallback(
+    async (sessions: readonly SessionInfo[]) => {
+      const l = live.current;
+      const client = l.client;
+      if (!client || !l.usable || !l.extensions.includes(SESSION_FLAGS)) return;
+      const keep = new Set<string>([...(l.reg.shown ? [l.reg.shown] : []), ...l.reg.turns.keys()]);
+      const ids = idleSessions(sessions, Date.now(), retentionDays(), keep);
+      for (const sessionId of ids) {
+        try {
+          const flags = await client.request<SessionFlags>(SESSION_FLAGS, { sessionId, cwd, archived: true });
+          if (l.client !== client) return;
+          dispatch({ t: "flags", sessionId, flags: flags ?? {} });
+        } catch {
+          /* in use elsewhere or gone: tried again next time */
+        }
+      }
+    },
+    [cwd, dispatch],
+  );
 
   /** Re-list a session's background tasks (keryx sends no output chunks, only start/phase/exit events). */
   const refreshTasks = useCallback(
@@ -347,8 +376,14 @@ export function useAcpSession(cwd: string) {
   );
 
   const finishStart = useCallback(
-    async (client: AcpClient, gen: number, loadId: string | null, fallbackToNew: boolean) => {
+    async (client: AcpClient, gen: number, requested: string | null, fallbackToNew: boolean) => {
       const l = live.current;
+      // Opening a project: the newest empty session, else the newest in use; a new one only when
+      // there is none (or it fails to load).
+      const listed = requested ? null : await refreshSessions();
+      if (l.gen !== gen) return;
+      const loadId = requested ?? (listed ? pickStartSession(listed) : null);
+      fallbackToNew = fallbackToNew || requested === null;
       let ok = loadId ? await openLoad(client, gen, loadId) : false;
       if (l.gen !== gen) return;
       if (!ok && (!loadId || fallbackToNew)) {
@@ -359,9 +394,11 @@ export function useAcpSession(cwd: string) {
       }
       if (l.gen !== gen) return;
       dispatch({ t: "phase", phase: "ready" });
-      void refreshSessions();
+      void refreshSessions().then((all) => {
+        if (all && l.gen === gen) void archiveIdle(all);
+      });
     },
-    [openLoad, openNew, refreshSessions, dispatch],
+    [openLoad, openNew, refreshSessions, archiveIdle, dispatch],
   );
 
   type ConnectOptions = { loadSessionId: string | null; fallbackToNew: boolean; preferBundled?: boolean };
@@ -530,6 +567,14 @@ export function useAcpSession(cwd: string) {
     // connect once per window/cwd
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cwd]);
+
+  /** A window left open keeps archiving sessions that go idle, once an hour. */
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (winRef.current.phase === "ready") void archiveIdle(winRef.current.sessions);
+    }, 60 * 60 * 1000);
+    return () => window.clearInterval(timer);
+  }, [archiveIdle]);
 
   const state = useMemo(() => shownView(win), [win]);
   const shownDialogs = useMemo(

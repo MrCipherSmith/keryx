@@ -2538,14 +2538,15 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       cwd: summary.projectPath,
       title: listedTitle(cwd, summary, options.dataDir),
       updatedAt: summary.updatedAt,
-      // Shell profile: how the person organised it (archived, pinned). The editor profile's wire stays as it was.
-      ...(shellProfile ? flagsMeta(readSessionFlags(sessionDir(summary.projectPath, summary.id, options.dataDir))) : {}),
+      // Shell profile: how the person organised it (archived, pinned, flow) and how many messages it
+      // holds, so a client can tell an empty session from a used one. The editor profile's wire stays as it was.
+      ...(shellProfile ? listMeta(readSessionFlags(sessionDir(summary.projectPath, summary.id, options.dataDir)), summary.messageCount) : {}),
     }));
     return { sessions };
   }
 
-  function flagsMeta(flags: SessionFlags): { _meta?: { keryx: SessionFlags } } {
-    return flags.archivedAt !== undefined || flags.pinnedAt !== undefined || flags.flow !== undefined ? { _meta: { keryx: flags } } : {};
+  function listMeta(flags: SessionFlags, messageCount: number): { _meta: { keryx: SessionFlags & { messageCount: number } } } {
+    return { _meta: { keryx: { ...flags, messageCount } } };
   }
 
   /** The `sessionId` and optional `cwd` of an organise request; `cwd` defaults like `session/list`'s. */

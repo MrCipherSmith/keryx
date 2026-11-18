@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { hostKind, pickFile, settingsGet, settingsSet, type KeryxSource, type Settings } from "../platform/commands";
-import { setPrefs, usePrefs, MOD, type Prefs } from "../lib/prefs";
+import { setPrefs, usePrefs, MOD, PALETTES, type PaletteId, type Prefs } from "../lib/prefs";
 import { errMessage } from "../lib/format";
+import { RETENTION_CHOICES, retentionDays, setRetentionDays } from "../lib/retention";
 import { Icon } from "../components/Icon";
 import { Spinner } from "../components/ui";
 import { useToast } from "../components/Toasts";
@@ -25,6 +26,26 @@ function Segmented<T extends string>({ value, options, onChange, label }: { valu
   );
 }
 
+function PaletteSwatch({ id, label, checked, canvas, surface, accent }: { id: PaletteId; label: string; checked: boolean; canvas?: string; surface?: string; accent?: string }) {
+  return (
+    <button className="palette-swatch" role="radio" aria-checked={checked} aria-label={label} title={label} onClick={() => setPrefs({ palette: id })}>
+      <span
+        className="palette-chip"
+        style={canvas ? { background: canvas, borderColor: accent } : undefined}
+        data-default={canvas ? undefined : "true"}
+      >
+        {canvas ? (
+          <>
+            <span className="palette-chip-surface" style={{ background: surface }} />
+            <span className="palette-chip-accent" style={{ background: accent }} />
+          </>
+        ) : null}
+      </span>
+      <span className="palette-label">{label}</span>
+    </button>
+  );
+}
+
 export function SettingsView({ onBack, agentVersion }: { onBack?: () => void; agentVersion?: string | null }) {
   const prefs = usePrefs();
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -32,6 +53,7 @@ export function SettingsView({ onBack, agentVersion }: { onBack?: () => void; ag
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [host, setHost] = useState("");
+  const [retention, setRetention] = useState(retentionDays);
   const toast = useToast();
 
   useEffect(() => {
@@ -97,6 +119,25 @@ export function SettingsView({ onBack, agentVersion }: { onBack?: () => void; ag
                 { id: "dark", label: "Dark" },
               ]}
             />
+          </div>
+          <div className="settings-row palette-row">
+            <div className="settings-row-text">
+              <div className="settings-row-title">Color theme</div>
+              <div className="settings-row-help">Dark and Black themes are always dark. Default follows the choice above.</div>
+            </div>
+            <div className="palette-picker" role="radiogroup" aria-label="Color theme">
+              <PaletteSwatch id="default" label="Default" checked={prefs.palette === "default"} />
+              {(["dark", "black"] as const).map((group) => (
+                <div className="palette-group" key={group}>
+                  <div className="palette-group-title">{group === "dark" ? "Dark" : "Black"}</div>
+                  <div className="palette-swatches">
+                    {PALETTES.filter((p) => p.group === group).map((p) => (
+                      <PaletteSwatch key={p.id} id={p.id} label={p.label} checked={prefs.palette === p.id} canvas={p.canvas} surface={p.surface} accent={p.accent} />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
           <div className="settings-row">
             <div className="settings-row-text">
@@ -183,6 +224,27 @@ export function SettingsView({ onBack, agentVersion }: { onBack?: () => void; ag
                 { id: "enter", label: "Return" },
                 { id: "mod-enter", label: `${MOD}Return` },
               ]}
+            />
+          </div>
+        </section>
+
+        <section className="settings-group" aria-labelledby="s-sessions">
+          <h2 id="s-sessions">Sessions</h2>
+          <div className="settings-row">
+            <div className="settings-row-text">
+              <div className="settings-row-title">Archive idle sessions after</div>
+              <div className="settings-row-help">
+                A session with no messages for this long moves to Archived. Pinned sessions and ones still running stay.
+              </div>
+            </div>
+            <Segmented<string>
+              label="Archive idle sessions after"
+              value={String(retention)}
+              onChange={(v) => {
+                setRetentionDays(Number(v));
+                setRetention(Number(v));
+              }}
+              options={RETENTION_CHOICES.map((d) => ({ id: String(d), label: d === 0 ? "Never" : `${d} d` }))}
             />
           </div>
         </section>
