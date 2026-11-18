@@ -126,6 +126,11 @@ const EXEMPTIONS: ReadonlyArray<Exemption> = [
       "creates a directory TREE below the shared root and forces 0700 down each level; calls ensureKeryxConfigDir for the root. Files are written temp+rename",
   },
   {
+    file: "session/organize.ts",
+    reason:
+      "flags.json goes through writeOwnerOnlyFileAtomic; the raw mkdirSync/writeFileSync are trashSession's, which create the user's SYSTEM trash folders (~/.Trash, $XDG_DATA_HOME/Trash) and a freedesktop .trashinfo there — never the shared config dir",
+  },
+  {
     file: "sac/catch-up.ts",
     reason:
       "dismissUnboundCandidate writes an unbound-dismissed receipt into the SESSION's slate-archive/ (project-scoped, never the shared config dir) and removes the candidate artifact; the config-path resolver it names (readConfigFile) is only for READING candidate JSON, never for writing",

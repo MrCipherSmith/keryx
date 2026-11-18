@@ -51,7 +51,7 @@ const NUL = "\u0000";
  * both plain text — `bun.lock` is a tracked file this guard is meant to cover.
  */
 const BINARY = new Set([
-  ".png", ".jpg", ".jpeg", ".gif", ".ico", ".webp", ".svgz", ".pdf", ".zip",
+  ".png", ".jpg", ".jpeg", ".gif", ".ico", ".icns", ".webp", ".svgz", ".pdf", ".zip",
   ".gz", ".tgz", ".br", ".wasm", ".woff", ".woff2", ".ttf", ".otf", ".eot",
   ".node", ".dylib", ".so", ".dll", ".exe", ".bin", ".mp4", ".mp3", ".wav",
   ".webm", ".ogg", ".class", ".jar", ".pyc", ".db", ".sqlite", ".p12", ".der",

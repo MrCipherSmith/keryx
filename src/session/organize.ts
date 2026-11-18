@@ -9,7 +9,7 @@
 import { cpSync, existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
-import { readConfigFile } from "../lib/config-dir";
+import { readConfigFile, writeOwnerOnlyFileAtomic } from "../lib/config-dir";
 import { sessionLeaseState } from "./lease";
 import { sessionDir } from "./paths";
 import { findSession, shortSessionId } from "./store";
@@ -56,10 +56,7 @@ export function readSessionFlags(dir: string): SessionFlags {
 }
 
 function writeFlags(dir: string, flags: SessionFlags): void {
-  const file = path.join(dir, FLAGS_FILE);
-  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
-  writeFileSync(tmp, `${JSON.stringify(flags, null, 2)}\n`, { mode: 0o600 });
-  renameSync(tmp, file);
+  writeOwnerOnlyFileAtomic(path.join(dir, FLAGS_FILE), `${JSON.stringify(flags, null, 2)}\n`);
 }
 
 /** The project root and directory of a stored session, by its exact id. */
