@@ -24,7 +24,8 @@ Version: 0.3.0
 | Model and reasoning | M1 | config option `model`, `/reasoning` |
 | Web tools, shell tasks, workspace, Slate, MCP | M1 | shell roster |
 | Images | M2 | `promptCapabilities.image` |
-| Subagent inspector | M2 | `spawn_subagent` + `_keryx/subagent` notifications |
+| Subagent dispatch (`spawn_subagent`) | M1 | shell roster |
+| Subagent inspector | M2 | `_keryx/subagent` notifications |
 | Background tasks panel | M2 | `_keryx/tasks/*` |
 | Rewind, compact, queue | M2 | `_keryx/command` |
 | Sidebar cards, flows | M2 | `_keryx/state` (state snapshot) |
