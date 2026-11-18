@@ -69,6 +69,8 @@ export interface AcpShellRosterInput {
   readonly mcp?: McpToolBinding;
   /** The root's adapter, shared by every build for that root; `createMetaprojectAdapter(root)` when absent. */
   readonly metaprojectPort?: MetaprojectPort;
+  /** The session's `spawn_subagent`. Absent → the tool is denied. */
+  readonly spawnTool?: InteractiveTool;
 }
 
 /** The names the shell profile denies for this input: `ask_user` without a client to ask. */

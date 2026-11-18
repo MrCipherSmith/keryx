@@ -1,7 +1,8 @@
 // `keryx acp --profile shell` (Keryx Desktop Client M1, specification §3 —
 // AC1, AC4, AC5, AC6, AC7; AC3 is `shell-profile-modes.test.ts`).
 //
-// AC1  the roster is `buildInteractiveAgentTools`' output minus the M2 denials
+// AC1  the roster is `buildInteractiveAgentTools`' output, with spawn_subagent
+//      only when the host gave it one (a desktop session always has one)
 // AC4  plan, usage_update, session_info_update and current_mode_update are sent
 // AC5  `_keryx/ask_user` round trip; every non-answer is a declined question;
 //      the tool is not offered to a client that did not advertise it
@@ -109,7 +110,7 @@ describe("AC1 — the shell profile's roster is keryx shell's factory, spawn_sub
     expect(unmapped).toEqual([]);
   });
 
-  test("over the wire, /status lists the same roster the session's turns run with", async () => {
+  test("over the wire, /status lists the same roster the session's turns run with — spawn_subagent included", async () => {
     const h = shellHarness({ clientCapabilities: { _meta: { keryx: { askUser: true } } } });
     try {
       await h.initialize();
@@ -118,8 +119,39 @@ describe("AC1 — the shell profile's roster is keryx shell's factory, spawn_sub
       await h.waitFor((f) => f.id === id);
       const status = updates(h.frames, "agent_message_chunk").map((u) => u.content?.text ?? "").join("");
       expect(status).toContain("Permission mode: ask");
-      for (const name of ["web_fetch", "ask_user", "plan_set", "shell_task_output"]) expect(status).toContain(name);
-      expect(status).toContain("spawn_subagent");
+      // Regression (flow 495 report): without spawn_subagent, every orchestrator skill a
+      // top-level desktop session loads answers `STATUS: BLOCKED nested_dispatch_unavailable`.
+      for (const name of ["web_fetch", "ask_user", "plan_set", "shell_task_output", "spawn_subagent"]) expect(status).toContain(name);
+    } finally {
+      await h.end();
+    }
+  }, TIMEOUT_MS);
+});
+
+describe("spawn_subagent in a top-level desktop session (flow 495 report)", () => {
+  test("a turn dispatches a child on the session's provider and gets its result back", async () => {
+    const h = shellHarness({
+      clientCapabilities: { _meta: { keryx: { askUser: true } } },
+      rounds: [
+        toolRound("s1", "spawn_subagent", { task: "Say which file holds the answer.", mode: "read_only", label: "probe" }),
+        textRound("child: the answer is in README.md"),
+        textRound("parent done"),
+      ],
+      // A provider keryx knows: routing refuses a child on an unknown one ("test").
+      serverOptions: { providerId: "ollama", modelId: "fake" },
+    });
+    try {
+      await h.initialize();
+      const { sessionId } = await h.newSession();
+      const { reply } = await driveTurn(h, sessionId, "delegate it");
+      expect(reply.result?.["stopReason"]).toBe("end_turn");
+      const spawn = callsOf(h.frames, "spawn_subagent");
+      expect(spawn.announced.length).toBe(1);
+      const closing = spawn.updates.find((u) => u.status === "completed" || u.status === "failed");
+      const output = JSON.stringify(closing?.rawOutput ?? closing ?? "");
+      expect(output).not.toContain("not available");
+      expect(closing?.status).toBe("completed");
+      expect(output).toContain("README.md");
     } finally {
       await h.end();
     }
