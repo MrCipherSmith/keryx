@@ -5,6 +5,24 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.38] - 2026-11-19
+
+### Added
+
+- **`keryx wiki enrich` enriches related pages together.** `--group related [--group-size MIN-MAX]` (default 10-20) clusters the selected pages by wiki links, backlinks and shared code paths into deterministic groups (every page in exactly one); one worker takes a group, and each page's prompt names its group mates. `--concurrency` is the number of groups at a time. `--list --group related` prints the groups and runs nothing; `--pages <list|file>` enriches exactly those pages as one group. A `--concurrency` above the cap (now 16) is clamped with a notice on stderr and in `--json` instead of silently. `--page <p>` now names the page.
+- **`session/list` reports each session's message count** to the shell profile (`_meta.keryx.messageCount`), so a client can tell an empty session from a used one.
+- **Keryx Desktop 0.2.1 runs on this keryx** (the app needs keryx 0.4.38 or newer):
+  - The left rail shows your projects (initials, a tooltip, a dot while a turn runs or an answer waits) instead of a Session button. Switching projects keeps the one you leave running in the background, in its own window with its own keryx; at most 6 stay in the background, oldest idle first.
+  - Opening a project reopens its newest empty session, else its newest one, instead of starting a new session every time. Sessions untouched for 4 days are archived (Settings → Sessions; pinned ones stay).
+  - Under the composer: the branch, the linked worktree, the open PR as a link, a CI dot, a changes-requested mark and the count of unresolved review threads (via `gh`).
+  - Five dark and five black color themes (Settings → Appearance → Color theme).
+  - A background task's output fills the panel and opens in a read-only terminal tab that follows it live.
+  - A Run menu in the title bar for `keryx init`, `keryx update` and the wiki commands, with a dialog for `wiki enrich` (related groups, group size, groups at a time, provider and model).
+
+### Fixed
+
+- The desktop release workflow builds the universal keryx sidecar the universal app bundles (`build-sidecar.sh --target all`).
+
 ## [0.4.37] - 2026-11-18
 
 ### Added
