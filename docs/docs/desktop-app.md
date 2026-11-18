@@ -6,21 +6,43 @@ draws the conversation, tool calls, approvals, the plan and token usage. The
 agent, its policy, sandbox and session store stay inside keryx: the app is a
 client.
 
-Status: **preview (M1).** Ad-hoc signed, not notarized. Updates come
+Status: **preview.** Ad-hoc signed, not notarized. Updates come
 through the keryx CLI (`keryx app update`, or the app's update banner), not a
-built-in updater. Images, subagents, background tasks, rewind/compact and the
-full slash-command set are not in the app yet; use `keryx shell` for those.
+built-in updater. The app runs the shell's slash commands, subagents and
+background tasks; anything it does not draw yet still works in `keryx shell`.
 The design and its acceptance criteria are in
 `docs/requirements/keryx-desktop-client/`.
 
 ## Install
 
+Requirements: macOS 12 or newer (the release is a universal build for Apple
+silicon and Intel) and Node.js with npm for the keryx CLI. Keep keryx and the
+app on matching releases: Keryx 0.2.0 needs keryx 0.4.37 or newer, and
+`keryx app status` says whether the installed pair fits.
+
 ### With the keryx CLI (recommended)
 
 ```bash
-npm i -g @mrciphersmith/keryx
-keryx app install
+npm i -g @mrciphersmith/keryx@latest
+keryx app install --relaunch
 ```
+
+1. The first command installs or updates the keryx CLI the app runs.
+2. The second downloads the newest app release, installs
+   `/Applications/Keryx.app` and opens it (drop `--relaunch` to open it
+   yourself).
+3. In the app, open a project folder; sign in to a model provider with
+   `/connect` if you have not run `keryx auth login` before.
+
+To update later: `npm i -g @mrciphersmith/keryx@latest` for the agent, then
+`keryx app update` (or **Update and relaunch** in the app's banner) for the
+app. Releases are listed at
+<https://github.com/MrCipherSmith/keryx/releases> under `desktop-v*` tags.
+
+To remove the app: quit it, delete `/Applications/Keryx.app`, and optionally
+the `dev.keryx.desktop` folders in `~/Library/Application Support`,
+`~/Library/Caches`, `~/Library/WebKit` and `~/Library/Logs` (window settings
+and the web view's storage). Sessions belong to keryx, not the app, and stay.
 
 `keryx app install` downloads the newest `desktop-v*` release from GitHub,
 checks its SHA-256 against the release's `SHA256SUMS`, and installs
