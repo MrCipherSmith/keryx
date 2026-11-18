@@ -106,3 +106,26 @@ test("the dock and box carry no growing or fixed-height rule; the textarea is ca
   expect(ta).toContain("resize: none");
   expect(ta).not.toMatch(/flex:|[\s;{]height:/);
 });
+
+test("the chip row never overflows: chips shrink and truncate, the hint drops first, the row wraps, send stays right", async () => {
+  const css = ((await import("../styles.css", { with: { type: "text" } })) as unknown as { default: string }).default;
+  const rule = (sel: string) => css.slice(css.indexOf(`${sel} {`), css.indexOf("}", css.indexOf(`${sel} {`)));
+  expect(rule(".composer")).toContain("container-type: inline-size");
+  expect(rule(".composer-bar")).toContain("flex-wrap: wrap");
+  expect(rule(".composer-bar")).toContain("min-width: 0");
+  expect(rule(".chip-btn")).toMatch(/min-width:\s*0/);
+  expect(rule(".chip-btn")).toMatch(/flex:\s*0 1 auto/);
+  expect(rule(".chip-model")).toMatch(/min-width:\s*0/);
+  expect(rule(".send-btn")).toContain("margin-left: auto");
+  expect(rule(".send-btn")).toContain("flex: none");
+  expect(css).toMatch(/@container composer \(max-width: \d+px\) \{ \.composer-hint \{ display: none; \} \}/);
+  // the shared .truncate class gives the ellipsis
+  const comp = ((await import("../styles/components.css", { with: { type: "text" } })) as unknown as { default: string }).default;
+  expect(comp).toMatch(/\.truncate \{[^}]*text-overflow: ellipsis/);
+});
+
+test("a long provider or model label carries its full text in the title and truncates", async () => {
+  await act(() => root.render(createElement(Composer, props("H", createRef()))));
+  const labels = Array.from(host.querySelectorAll<HTMLElement>(".chip-btn .truncate"));
+  for (const l of labels) expect(l.getAttribute("title")).toBe(l.textContent);
+});

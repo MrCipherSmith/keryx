@@ -341,7 +341,7 @@ button { font: inherit; }
 .plan-completed .icon { color: var(--ok); }
 
 .composer {
-  position: relative; display: flex; flex-direction: column;
+  position: relative; display: flex; flex-direction: column; min-width: 0; container-type: inline-size; container-name: composer;
   background: var(--bg-surface); border: 1px solid var(--border-strong); border-radius: var(--r-xl);
   box-shadow: 0 1px 3px rgba(16, 32, 24, 0.06);
   transition: border-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease;
@@ -354,20 +354,24 @@ button { font: inherit; }
 }
 .composer textarea::placeholder { color: var(--fg-subtle); }
 .composer textarea:disabled { cursor: not-allowed; }
-.composer-bar { display: flex; align-items: center; gap: 6px; padding: 4px 6px 6px 8px; }
+.composer-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px; min-width: 0; padding: 4px 6px 6px 8px; }
+.composer-bar > .grow { flex: 1 1 0; min-width: 0; }
 .chip-btn {
-  display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 8px; max-width: 220px;
+  display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 8px; max-width: 220px; min-width: 0; flex: 0 1 auto; overflow: hidden;
   font-size: var(--fs-sm); font-weight: 500; color: var(--fg-muted); background: var(--bg-sunken);
   border: 1px solid transparent; border-radius: var(--r-pill); cursor: default;
 }
+.chip-btn > .icon { flex: none; }
 .chip-btn:hover:not(:disabled), .chip-btn[aria-expanded="true"] { color: var(--fg); border-color: var(--border-strong); }
 .chip-btn:disabled { opacity: 0.5; }
 .chip-btn.mode-trust { color: var(--warn); background: var(--warn-soft); }
 .chip-btn.mode-auto { color: var(--danger); background: var(--danger-soft); }
-.chip-model { max-width: 150px; }
-.composer-hint { font-size: var(--fs-xs); color: var(--fg-subtle); white-space: nowrap; }
+.chip-model { max-width: 150px; min-width: 0; }
+.composer-hint { flex: 0 1 auto; min-width: 0; font-size: var(--fs-xs); color: var(--fg-subtle); white-space: nowrap; }
+/* The hint gives way first when the column is narrow (a side panel open); the chips then truncate, then the row wraps. */
+@container composer (max-width: 640px) { .composer-hint { display: none; } }
 .send-btn {
-  display: grid; place-items: center; width: 30px; height: 30px; flex: none; border-radius: 50%;
+  display: grid; place-items: center; width: 30px; height: 30px; flex: none; margin-left: auto; border-radius: 50%;
   color: var(--accent-fg); background: var(--accent); border: 0; cursor: default; transition: background-color var(--dur-fast) ease, opacity var(--dur-fast) ease;
 }
 .send-btn:hover:not(:disabled) { background: var(--accent-hover); }
@@ -461,12 +465,14 @@ button { font: inherit; }
 .md pre code { background: none; padding: 0; border: 0; font-size: calc(12px * var(--text-scale)); }
 .md a { color: var(--accent-text); text-decoration: underline; text-underline-offset: 2px; cursor: default; }
 .md blockquote { border-left: 3px solid var(--border-strong); padding-left: var(--sp-3); color: var(--fg-muted); }
-.md table { border-collapse: collapse; display: block; overflow-x: auto; max-width: 100%; }
-.md th, .md td { border: 1px solid var(--border); padding: 4px 10px; text-align: left; }
-.md th { background: var(--bg-sunken); font-weight: 600; }
+.md table { border-collapse: collapse; display: block; overflow-x: auto; max-width: 100%; overflow-wrap: normal; word-break: normal; }
+.md th, .md td { border: 1px solid var(--border); padding: 4px 10px; text-align: left; min-width: 6em; overflow-wrap: normal; word-break: normal; }
+.md th { background: var(--bg-sunken); font-weight: 600; white-space: nowrap; }
+/* Wide content scrolls inside its own box; an inherited overflow-wrap: anywhere must not shrink cells to single letters. */
+.md pre, .md .code-block pre { overflow-x: auto; max-width: 100%; overflow-wrap: normal; word-break: normal; white-space: pre; }
 .md hr { border: 0; border-top: 1px solid var(--border); margin: 1.2em 0; }
 .md > pre, .md li > pre { padding: var(--sp-3); background: var(--code-bg); border: 1px solid var(--border); border-radius: var(--r-md); overflow-x: auto; }
-.code-block { border: 1px solid var(--border); border-radius: var(--r-md); overflow: hidden; background: var(--code-bg); }
+.code-block { max-width: 100%; border: 1px solid var(--border); border-radius: var(--r-md); overflow: hidden; background: var(--code-bg); }
 .code-head { display: flex; align-items: center; justify-content: space-between; height: 28px; padding: 0 6px 0 var(--sp-3); border-bottom: 1px solid var(--border); background: var(--bg-sunken); }
 .code-lang { font: 500 var(--fs-xs) var(--mono); color: var(--fg-muted); }
 .code-copy {

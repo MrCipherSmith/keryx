@@ -112,3 +112,20 @@ test("Open terminal focuses the run's tab while it is open and is disabled once 
   expect(q<HTMLButtonElement>("[data-delegate-open]").disabled).toBe(true);
   expect(q("[data-delegate-status]").textContent).toBe("finished");
 });
+
+test("a table or code block in the card scrolls sideways inside itself; cells are not squeezed to single letters", async () => {
+  const read = async (path: string) => ((await import(path, { with: { type: "text" } })) as unknown as { default: string }).default;
+  const css = await read("../styles.css");
+  const del = await read("../styles/delegate.css");
+  const rule = (src: string, sel: string) => src.slice(src.indexOf(`${sel} {`), src.indexOf("}", src.indexOf(`${sel} {`)));
+  expect(rule(css, ".md table")).toMatch(/overflow-x:\s*auto/);
+  expect(rule(css, ".md table")).toContain("max-width: 100%");
+  expect(rule(css, ".md th, .md td")).toMatch(/word-break:\s*normal/);
+  expect(rule(css, ".md th, .md td")).toMatch(/min-width:\s*\d/);
+  expect(rule(css, ".md th")).toContain("white-space: nowrap");
+  expect(rule(css, ".md pre, .md .code-block pre")).toMatch(/overflow-x:\s*auto/);
+  expect(rule(del, ".delegate-result-body")).not.toContain("anywhere");
+  expect(rule(del, ".delegate-result-body")).toContain("min-width: 0");
+  expect(del).toMatch(/\.delegate-result-body \.md table[^{]*\{[^}]*overflow-x:\s*auto/);
+  expect(rule(del, ".delegate-result-body.is-clipped")).toContain("mask-image");
+});

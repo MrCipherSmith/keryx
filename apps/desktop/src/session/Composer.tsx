@@ -305,7 +305,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
             title={`${currentMode?.description ?? "Permission mode"} — applies to this session only; it is not saved as the project default.`}
           >
             <Icon name={MODE_ICON[modes.currentModeId] ?? "shield"} size={13} />
-            {currentMode?.name ?? modes.currentModeId}
+            <span className="truncate" title={currentMode?.name ?? modes.currentModeId}>{currentMode?.name ?? modes.currentModeId}</span>
             <Icon name="chevronDown" size={11} />
           </button>
         ) : null}
@@ -321,7 +321,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
             title="Provider for this session"
           >
             <Icon name="globe" size={13} />
-            <span className="truncate chip-model">{currentProvider || "provider"}</span>
+            <span className="truncate chip-model" title={currentProvider || "provider"}>{currentProvider || "provider"}</span>
             <Icon name="chevronDown" size={11} />
           </button>
         ) : null}
@@ -336,12 +336,12 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
             title="Model for this session"
           >
             <Icon name="sparkle" size={13} />
-            <span className="truncate chip-model">{modelName(model)}</span>
+            <span className="truncate chip-model" title={modelName(model)}>{modelName(model)}</span>
             <Icon name="chevronDown" size={11} />
           </button>
         ) : null}
         <div className="grow" />
-        <span className="composer-hint truncate">{disabled ? (text ? disabledReason : "") : busy ? "esc to stop" : sendHint}</span>
+        <span className="composer-hint truncate" title={disabled ? undefined : sendHint}>{disabled ? (text ? disabledReason : "") : busy ? "esc to stop" : sendHint}</span>
         {busy ? (
           <button className="send-btn is-stop" onClick={onStop} title="Stop the current turn (Esc)" aria-label="Stop">
             <Icon name="stop" size={12} strokeWidth={0} className="filled" />

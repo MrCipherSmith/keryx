@@ -300,21 +300,6 @@ export const SessionSidebar = memo(function SessionSidebar({
                       <div
                         className={`session-row${menuOpen ? " is-menu" : ""}${kids.length > 0 ? " has-children" : ""}`}
                       >
-                        {kids.length > 0 ? (
-                          <button
-                            className="session-twist"
-                            aria-expanded={open}
-                            aria-controls={`subagents-${s.sessionId}`}
-                            aria-label={`${open ? "Hide" : "Show"} subagents of ${titleOf(s, mark)}`}
-                            title={`${kids.length} subagent${kids.length === 1 ? "" : "s"}`}
-                            onClick={() => toggleSubagents(s.sessionId, open)}
-                          >
-                            <Icon
-                              name={open ? "chevronDown" : "chevronRight"}
-                              size={11}
-                            />
-                          </button>
-                        ) : null}
                         <button
                           className={`session-item${current ? " is-current" : ""}${mark && !mark.held ? " is-released" : ""}`}
                           aria-current={current ? "true" : undefined}
@@ -332,6 +317,19 @@ export const SessionSidebar = memo(function SessionSidebar({
                             {relativeTime(s.updatedAt)}
                           </span>
                         </button>
+                        {kids.length > 0 ? (
+                          <button
+                            className="session-agents"
+                            aria-expanded={open}
+                            aria-controls={`subagents-${s.sessionId}`}
+                            aria-label={`${open ? "Hide" : "Show"} ${kids.length} subagent${kids.length === 1 ? "" : "s"} of ${titleOf(s, mark)}`}
+                            title={`${open ? "Hide" : "Show"} subagents`}
+                            onClick={() => toggleSubagents(s.sessionId, open)}
+                          >
+                            {runningSubagents(kids) > 0 ? <span className="session-agents-dot" aria-hidden="true" /> : null}
+                            {kids.length} {kids.length === 1 ? "agent" : "agents"}
+                          </button>
+                        ) : null}
                         {canOrganize ? (
                           <button
                             className="icon-btn session-more"

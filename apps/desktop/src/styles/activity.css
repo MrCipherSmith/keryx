@@ -2,20 +2,25 @@
 
 .session-topbar { display: flex; align-items: center; gap: var(--sp-2); }
 
-/* Subagents as a collapsible level under their session in the sidebar. */
+/* Subagents under their session in the sidebar: a pill on the right of the row toggles them; no chevron on sessions (those are the day groups'). */
 .session-node { list-style: none; }
 .session-row.has-children { display: flex; align-items: stretch; }
 .session-row.has-children .session-item { flex: 1; min-width: 0; }
-.session-twist {
-  flex: none; display: inline-flex; align-items: center; justify-content: center; width: 18px; border: 0; background: none;
-  color: var(--fg-subtle); border-radius: var(--r-md); cursor: default;
+.session-row.has-children .session-more { position: static; transform: none; flex: none; align-self: center; width: 0; min-width: 0; margin: 0; padding: 0; overflow: hidden; border: 0; }
+.session-row.has-children:hover .session-more, .session-row.has-children.is-menu .session-more, .session-row.has-children .session-more:focus-visible { width: 24px; }
+.session-agents {
+  flex: none; align-self: center; display: inline-flex; align-items: center; gap: 5px; height: 20px; margin-left: 2px; padding: 0 8px;
+  border: 1px solid var(--border); border-radius: var(--r-pill); background: none; color: var(--fg-muted);
+  font: inherit; font-size: var(--fs-xs); font-variant-numeric: tabular-nums; white-space: nowrap; cursor: default;
 }
-.session-twist:hover { color: var(--fg); background: var(--bg-hover); }
-.session-twist:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
-.session-children { list-style: none; margin: 0 0 2px; padding: 0 0 0 20px; }
+.session-agents:hover { color: var(--fg); background: var(--bg-hover); }
+.session-agents[aria-expanded="true"] { color: var(--accent-text); border-color: color-mix(in srgb, var(--accent) 35%, transparent); background: var(--accent-soft); }
+.session-agents:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.session-agents-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: pulse 1.4s ease-in-out infinite; }
+.session-children { list-style: none; margin: 0 0 4px 14px; padding: 0 0 0 8px; border-left: 1px solid var(--border); }
 .session-child {
-  display: flex; align-items: center; gap: var(--sp-2); width: 100%; padding: 4px var(--sp-2); border: 0; border-radius: var(--r-md);
-  background: none; color: var(--fg-muted); font: inherit; font-size: var(--fs-sm); text-align: left; cursor: default;
+  display: flex; align-items: center; gap: var(--sp-2); width: 100%; padding: 3px var(--sp-2); border: 0; border-radius: var(--r-md);
+  background: none; color: var(--fg-muted); font: inherit; font-size: var(--fs-xs); text-align: left; cursor: default;
 }
 .session-child:hover { background: var(--bg-hover); color: var(--fg); }
 .session-child:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
@@ -26,7 +31,7 @@
 .session-child-dot.status-done, .session-child-dot.status-completed { background: var(--ok); }
 .session-child-dot.status-idle { background: var(--warn); }
 .session-child-dot.status-failed, .session-child-dot.status-killed { background: var(--danger); }
-@media (prefers-reduced-motion: reduce) { .session-child-dot.status-running { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .session-child-dot.status-running, .session-agents-dot { animation: none; } }
 
 .session-item-badge {
   flex: none; align-self: center; font-size: var(--fs-xs); line-height: 1; padding: 2px 5px; border-radius: var(--r-pill);
