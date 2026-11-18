@@ -10,7 +10,7 @@ use tauri::{AppHandle, Manager};
 
 pub const MAX_RECENT: usize = 10;
 
-/// The settings layout version. 1 = decision D-10 (`auto` keryx source).
+/// The settings layout version. 1 = decision D-15 (`auto` keryx source).
 pub const SETTINGS_VERSION: u32 = 1;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Default)]
@@ -19,7 +19,7 @@ pub struct Settings {
     pub keryx_source: KeryxSource,
     pub custom_path: Option<String>,
     pub recent_projects: Vec<String>,
-    /// Absent (0) in files written before D-10.
+    /// Absent (0) in files written before D-15.
     pub settings_version: u32,
 }
 
@@ -34,7 +34,7 @@ impl Settings {
             .migrated()
     }
 
-    /// Bring an older file up to `SETTINGS_VERSION`. Before D-10 the app wrote
+    /// Bring an older file up to `SETTINGS_VERSION`. Before D-15 the app wrote
     /// its default source (`bundled`) on every save, so a stored `bundled`
     /// there is no choice and becomes `auto`. A later explicit `bundled` stays.
     pub fn migrated(mut self) -> Settings {
@@ -176,11 +176,11 @@ mod tests {
         assert_eq!(s.keryx_source, KeryxSource::Auto);
         assert_eq!(s.settings_version, SETTINGS_VERSION);
         assert_eq!(s.recent_projects, ["/p"]);
-        // An explicit choice made after D-10 is kept.
+        // An explicit choice made after D-15 is kept.
         let chosen = set_settings(&path, Settings { keryx_source: KeryxSource::Bundled, ..Settings::default() }).unwrap();
         assert_eq!(chosen.keryx_source, KeryxSource::Bundled);
         assert_eq!(Settings::load(&path).keryx_source, KeryxSource::Bundled);
-        // Other pre-D-10 choices are kept as they were.
+        // Other pre-D-15 choices are kept as they were.
         std::fs::write(&path, "{\"keryxSource\":\"custom\",\"customPath\":\"/k\"}").unwrap();
         assert_eq!(Settings::load(&path).keryx_source, KeryxSource::Custom);
     }

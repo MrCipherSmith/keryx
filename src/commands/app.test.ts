@@ -1,4 +1,4 @@
-// `keryx app install|update|build|status` (decision D-10) against a local fake
+// `keryx app install|update|build|status` (decision D-15) against a local fake
 // GitHub releases server. Never contacts GitHub, never touches /Applications.
 
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";

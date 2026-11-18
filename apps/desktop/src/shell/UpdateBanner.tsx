@@ -1,4 +1,4 @@
-// The update banner (decision D-10). The Rust core asks the resolved keryx
+// The update banner (decision D-15). The Rust core asks the resolved keryx
 // (`keryx app status --json`) at startup and every 6 hours; a newer
 // `desktop-v*` release, or a keryx that needs a newer app, shows this card.
 // "Update and relaunch" hands over to `keryx app update --wait-pid --relaunch`

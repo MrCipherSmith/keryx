@@ -253,7 +253,7 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     // Flow 486: `keryx report`, a brand-new verb, so a USAGE_BODY block.
     '  keryx report --to @name [--from <name>] "<text>"\n',
     "                                               One-way, unverified report to a live keryx shell over the bus\n",
-    // D-10 (desktop client): `keryx app`, a brand-new verb, so a USAGE_BODY block and a Commands: summary row.
+    // D-15 (desktop client): `keryx app`, a brand-new verb, so a USAGE_BODY block and a Commands: summary row.
     "  keryx app status [--json] | install | update [--pre] [--dir <folder>] [--wait-pid <pid>] [--relaunch] | build\n",
     "                                               Install, update or build the Keryx desktop app (macOS) from GitHub Releases\n",
     "  app       Install, update, build or check the Keryx desktop app (macOS)\n",

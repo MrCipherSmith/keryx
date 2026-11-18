@@ -37,7 +37,7 @@ export const settingsSet = (settings: Settings) => invoke<Settings>("settings_se
 export const settingsAddRecent = (project: string) => invoke<Settings>("settings_add_recent", { project });
 export const versionCheck = (found: string) => invoke<VersionCheck>("version_check", { found });
 
-/** The update banner's input (decision D-10); `null` when there is nothing to check. */
+/** The update banner's input (decision D-15); `null` when there is nothing to check. */
 export interface UpdateCheck {
   current: string;
   latest: string | null;

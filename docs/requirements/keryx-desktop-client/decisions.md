@@ -99,7 +99,11 @@ with a Reopen banner.
 Rejected: one active session per connection (switching killed background work
 and surprised users).
 
-## D-10 keryx from npm by default; the CLI installs and updates the app — decided 2026-11-17
+## D-15 keryx from npm by default; the CLI installs and updates the app — decided 2026-11-17
+
+Numbered D-15 because D-10 to D-14 were taken by the M2 work (PR #1230),
+which was still open when this decision was written. Acceptance criteria
+AC25-AC28 follow that PR's AC13-AC24 for the same reason.
 
 Owner decision of 2026-11-17; the specification below was confirmed by the
 owner on 2026-11-18 (auto source with the one-time migration, `.app.tar.gz` +
@@ -113,7 +117,7 @@ Chosen:
 - **Default source `auto`**: `keryx` on the login-shell `PATH` first (the
   npm-installed CLI, so `npm i -g keryx` updates the agent without a new
   app), the bundled sidecar as the fallback. `bundled`, `path` and `custom`
-  stay selectable. A settings file written before D-10 (no
+  stay selectable. A settings file written before D-15 (no
   `settingsVersion`) holding `keryxSource: "bundled"` is read as `auto`
   once, because the old app stored its default on every save.
 - **`keryx app install|update|build|status`** in the CLI:

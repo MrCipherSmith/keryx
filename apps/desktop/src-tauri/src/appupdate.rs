@@ -1,4 +1,4 @@
-//! The update banner's backend (decision D-10).
+//! The update banner's backend (decision D-15).
 //!
 //! The release lookup lives in one place, the keryx CLI: `app_update_check`
 //! runs `<resolved keryx> app status --json` and compares the newest
@@ -7,7 +7,7 @@
 //! --wait-pid <this pid> --relaunch` detached, then quits the app so the CLI
 //! can swap the bundle and open the new one.
 //!
-//! A keryx without `app status` (older than D-10) makes the check return
+//! A keryx without `app status` (older than D-15) makes the check return
 //! `None`, and the app shows no banner. So does a dev build that does not run
 //! from a `Keryx.app` bundle: there is nothing for the CLI to replace.
 

@@ -1,6 +1,6 @@
 //! Resolve which keryx binary to run.
 //!
-//! * `auto` (the default, decision D-10): `keryx` on `PATH` — the npm install,
+//! * `auto` (the default, decision D-15): `keryx` on `PATH` — the npm install,
 //!   so `npm i -g` updates the agent without a new app — and the bundled
 //!   sidecar when there is none.
 //! * `bundled`: the sidecar Tauri places next to the main executable

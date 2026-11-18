@@ -17,7 +17,7 @@ export const DEFAULT_ACP_PROFILE: AcpProfile = "editor";
 
 /**
  * The oldest Keryx desktop app (`apps/desktop`, `desktop-v*` releases) this
- * keryx works with (decision D-10). Raise it when a `shell`-profile change
+ * keryx works with (decision D-15). Raise it when a `shell`-profile change
  * needs a newer client; an older app then shows its update banner as
  * required. Reported in `initialize._meta.keryx` and by `keryx app status`.
  */

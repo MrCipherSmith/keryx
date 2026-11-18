@@ -1,5 +1,5 @@
 // `keryx app install|update|build|status` — the desktop app's install and
-// update channel while it has no Developer ID (decision D-10 in
+// update channel while it has no Developer ID (decision D-15 in
 // docs/requirements/keryx-desktop-client/decisions.md).
 //
 // install/update: the newest `desktop-v*` GitHub release → the

@@ -216,7 +216,7 @@ jobs:
           ls -l "$DMG"
           echo "path=$DMG" >> "$GITHUB_OUTPUT"
 
-      # `keryx app install|update` (decision D-10) downloads the app as a
+      # `keryx app install|update` (decision D-15) downloads the app as a
       # tarball, not the dmg: `tar` keeps the bundle's symlinks, modes and
       # signature, and needs no hdiutil. SHA256SUMS covers both assets.
       - name: Pack the app archive and SHA256SUMS
