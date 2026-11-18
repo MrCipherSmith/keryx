@@ -8,6 +8,8 @@ import { SchedulesTab } from "./SchedulesTab";
 import { RunsTab } from "./RunsTab";
 import { focusDelegateRun, isDelegateRunOpen, onDelegateChange } from "./delegateBus";
 import { COMMAND_METHOD } from "../acp/commands";
+import { openStreamTab } from "../panels/streamTabs";
+import { taskOutputSource } from "./taskStream";
 
 export type ActivityTab = "subagents" | "tasks" | "schedules" | "runs";
 
@@ -259,11 +261,28 @@ function TasksTab({ sessionId, tasks, api, onRefresh, pollMs }: { sessionId: str
           <Icon name="chevronRight" size={12} className="flip" /> All tasks
         </button>
         <TaskHeader task={current} now={now} />
-        {isRunning(current) ? (
-          <button className="btn btn-sm" onClick={() => setKill(current)}>
-            Kill
+        <div className="task-actions">
+          <button
+            className="btn btn-sm"
+            data-open-task-terminal={current.id}
+            onClick={() =>
+              openStreamTab({
+                key: `task:${sessionId}:${current.id}`,
+                title: current.command.length > 28 ? `${current.command.slice(0, 27)}…` : current.command,
+                detail: current.command,
+                source: taskOutputSource(api.request, sessionId, current.id, pollMs),
+              })
+            }
+            title="Follow this task's output in a terminal tab of the side panel"
+          >
+            <Icon name="terminal" size={13} /> Open in terminal
           </button>
-        ) : null}
+          {isRunning(current) ? (
+            <button className="btn btn-sm" onClick={() => setKill(current)}>
+              Kill
+            </button>
+          ) : null}
+        </div>
         {error ? <div className="field-error" role="alert">{error}</div> : null}
         <TaskOutput key={current.id} sessionId={sessionId} task={current} api={api} pollMs={pollMs} onChanged={onRefresh} />
         {kill ? <KillDialog task={kill} onCancel={() => setKill(null)} onKill={() => void doKill(kill)} /> : null}

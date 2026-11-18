@@ -71,8 +71,10 @@
 .entry-reasoning-body { white-space: pre-wrap; color: var(--fg-muted); padding: var(--sp-1) 0 0 var(--sp-3); }
 .entry-system { color: var(--fg-subtle); font-style: italic; }
 .entry-tool .out-pre, .entry-result .out-pre { font-family: var(--mono); max-height: 180px; overflow: auto; }
-.task-output { display: grid; gap: var(--sp-1); }
-.task-out { max-height: 360px; overflow: auto; font-family: var(--mono); margin: 0; }
+/* A task's output takes the rest of the panel's height and scrolls inside it. */
+.task-output { flex: 1 1 auto; min-height: 160px; overflow: auto; display: flex; flex-direction: column; gap: var(--sp-1); }
+.task-out { flex: none; max-height: none; overflow: visible; font-family: var(--mono); margin: 0; }
+.task-actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
 .task-gap { text-align: center; font-size: var(--fs-xs); color: var(--fg-subtle); border-top: 1px dashed var(--border-strong); padding-top: 2px; }
 
 .tool-link {
