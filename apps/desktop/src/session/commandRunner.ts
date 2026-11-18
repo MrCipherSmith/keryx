@@ -2,7 +2,7 @@
 // keryx as `_keryx/command`, and what lands in the transcript. No React; the hook supplies the deps.
 
 import { COMMAND_METHOD, commandMeta, commandSurface, findCommand } from "../acp/commands";
-import type { AvailableCommand, CommandEffect, CommandResult, CommandView, ConfigOption, SessionModeState } from "../acp/types";
+import type { AvailableCommand, CommandEffect, CommandResult, CommandView, ConfigOption, ConfirmAction, SessionModeState } from "../acp/types";
 import type { Action, QueuedPrompt } from "./reducer";
 
 /** What only the window can do: the app's own UI. */
@@ -15,6 +15,8 @@ export interface UiActions {
   openProviders(name: string, args: string): void;
   /** Move text into the composer (never sends). */
   fillComposer(text: string): void;
+  /** One confirmation dialog (`label` on its button); resolves true on a yes. Absent: the answer's text is shown instead. */
+  confirm?(ask: { label: string; confirm: string }): Promise<boolean>;
 }
 
 export interface RunDeps {
@@ -63,8 +65,8 @@ export async function runCommandLine(line: string, deps: RunDeps, opts: RunOptio
   const sessionId = deps.sessionId;
   if (!sessionId) return false;
   const shown = opts.display ?? line;
-  const card = (text: string, refused = false, view: CommandView | null = null) =>
-    deps.dispatch({ t: "command", sessionId, card: { line: shown, text, refused, view }, replaceId: opts.replaceId });
+  const card = (text: string, refused = false, view: CommandView | null = null, error = false) =>
+    deps.dispatch({ t: "command", sessionId, card: { line: shown, text, refused, view, ...(error ? { error: true } : {}) }, replaceId: opts.replaceId });
   const refuse = (text: string): false => {
     card(text, true);
     return false;
@@ -87,11 +89,15 @@ export async function runCommandLine(line: string, deps: RunDeps, opts: RunOptio
   if (!deps.hasCommandMethod) return sendOrQueue(line, deps);
   if (!deps.client) return false;
   const endCommand = deps.trackCommand?.(sessionId);
+  let ask: ConfirmAction | null = null;
   try {
     const r = await deps.client.request<CommandResult>(COMMAND_METHOD, { sessionId, name: parsed.name, args: parsed.args });
     const k = r?._meta?.keryx;
     const refused = k?.refused === true;
-    card(typeof r?.text === "string" ? r.text : "", refused, k?.view ?? null);
+    const pending = !refused ? k?.confirmAction : undefined;
+    // A draft to confirm: ask at once and leave the transcript (and the form that sent it) as it was.
+    if (pending && deps.ui.confirm && validConfirm(pending) && findCommand(deps.commands, pending.command)) ask = pending;
+    else card(typeof r?.text === "string" ? r.text : "", refused, k?.view ?? null);
     if (!refused && k?.effects?.length) deps.applyEffects(sessionId, k.effects);
     // `/goal`: keryx did the shell's setup and answers the turn text; the turn is an ordinary prompt, sent once.
     if (!refused && k?.effects?.includes("startTurn") && typeof k.prompt === "string" && k.prompt.trim()) {
@@ -99,13 +105,19 @@ export async function runCommandLine(line: string, deps: RunDeps, opts: RunOptio
         deps.dispatch({ t: "notice", sessionId, level: "warn", text: "The goal's turn was not started: the session is busy. Send the goal as a message when it is free." });
       }
     }
-    return true;
+    if (ask === null) return true;
   } catch (e) {
-    return refuse(errText(e));
+    card(errText(e), true, null, true);
+    return false;
   } finally {
     endCommand?.();
   }
+  // The question is asked after the request is over: nothing is in flight while the dialog is open.
+  if (!(await deps.ui.confirm!({ label: ask.label, confirm: ask.confirm }))) return false;
+  return runCommandLine(ask.command, deps, { replaceId: opts.replaceId });
 }
+
+const validConfirm = (a: ConfirmAction): boolean => typeof a.label === "string" && typeof a.confirm === "string" && typeof a.command === "string" && a.command.startsWith("/");
 
 /** M1 behaviour, and the path for plain text: a turn when idle, the queue while one runs. */
 function sendOrQueue(text: string, deps: RunDeps): boolean {

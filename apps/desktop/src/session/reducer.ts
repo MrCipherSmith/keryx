@@ -50,6 +50,8 @@ export interface CommandItem {
   text: string;
   /** keryx (or the app, while a turn runs) refused the command: shown as a notice. */
   refused: boolean;
+  /** The request itself failed (not a keryx refusal): shown as an error. */
+  error?: boolean;
   view: CommandView | null;
 }
 

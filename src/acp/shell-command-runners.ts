@@ -72,7 +72,7 @@ import { syncAcpArchive, type AcpArchiveCursor } from "./session";
 import { ACP_SHELL_COMMAND_TABLE, type ShellCommandRow } from "./shell-commands";
 import { join as joinPath } from "node:path";
 import type { ScheduleSlashDeps } from "../tui/schedule-command";
-import type { ShellView } from "./shell-views";
+import type { ShellConfirmAction, ShellView } from "./shell-views";
 import { runAcpGoal } from "./shell-goal";
 import type { SessionExternalRuns } from "./shell-delegate";
 import type { SlateSessionRef } from "../session/slate-lifecycle";
@@ -91,6 +91,8 @@ export interface ShellCommandOutcome {
   readonly refused?: true;
   /** A picker, modal or form command's structured view (§3.9.1 "Views"); `text` is its plain rendering. */
   readonly view?: ShellView;
+  /** A draft the client confirms at once, then runs `command` (the answer's `_meta.keryx.confirmAction`). */
+  readonly confirmAction?: ShellConfirmAction;
   /** With the `startTurn` effect: the exact turn text the client sends as `session/prompt` (`/goal`). */
   readonly prompt?: string;
 }

@@ -254,11 +254,10 @@ export async function runSchedule(host: ShellCommandHost, args: string): Promise
     return refusal(`/schedule: ${errorText(error)}`);
   }
   if (card === undefined) return refusal(`${lines.join("\n")}\n`);
-  return viewOutcome({
-    title: "Schedule: review before creating",
-    body: card.join("\n"),
-    rows: [viewRow("create", "Create this schedule", { actions: [action("Create", `/schedule confirmed ${shellLine.line}`, card.join("\n"))] })],
-  });
+  const command = `/schedule confirmed ${shellLine.line}`;
+  const confirm = card.join("\n");
+  // The card is the question: a client that cannot ask reads the text and runs `command` itself.
+  return { text: `${confirm}\n\nNothing is created yet. To create it, run:\n${command}\n`, confirmAction: { label: "Confirm", confirm, command } };
 }
 
 // ---------------------------------------------------------------------------

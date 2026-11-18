@@ -59,8 +59,21 @@ export interface ShellViewForm {
    * field is dropped together with the `--flag` before it.
    */
   readonly submit: string;
+  /** The submit button's label; the client says "Submit" when absent. */
+  readonly submitLabel?: string;
   /** Present when the form cannot be submitted right now: the reason, shown in place of an enabled Submit. */
   readonly disabled?: string;
+}
+
+/**
+ * "Ask now, then run": a command's answer that is a draft the user must confirm. The client asks
+ * `confirm` right away (one dialog, `label` on its button) and, on a yes, runs `command`. A client
+ * that cannot ask reads the answer's `text`, which names `command`.
+ */
+export interface ShellConfirmAction {
+  readonly label: string;
+  readonly confirm: string;
+  readonly command: string;
 }
 
 export interface ShellView {

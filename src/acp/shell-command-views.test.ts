@@ -403,7 +403,7 @@ describe("/schedule", () => {
     });
   }
 
-  test("bare opens the creation form; a draft writes nothing and answers a view whose Create action carries the card as its confirm", async () => {
+  test("bare opens the creation form; a draft writes nothing and answers a confirmAction carrying the card and the exact confirmed command", async () => {
     const root = project();
     const unitDir = tempDir("keryx-acp-schedule-units-");
     const host = scheduleHost(root, unitDir);
@@ -411,11 +411,16 @@ describe("/schedule", () => {
     expect(form.form?.submit).toContain("/schedule --name {name}");
     expect(form.form?.fields.map((field) => field.id)).toEqual(["name", "repeat", "minutes", "hours", "at", "cron", "provider", "model:anthropic", "rateIn", "rateOut", "ceiling", "prompt"]);
 
-    const draft = viewOf(await run(host, "schedule", LINE));
-    const create = draft.rows[0]?.actions[0];
-    expect(create?.command).toBe(`/schedule confirmed ${LINE}`);
-    expect(create?.confirm).toContain("cadence: 0 */4 * * * (every 4 hours)");
-    expect(draft.body).toBe(create?.confirm);
+    expect(form.form?.submitLabel).toBe("Create");
+
+    const draft = await run(host, "schedule", LINE);
+    expect(draft.view).toBeUndefined();
+    expect(draft.confirmAction?.label).toBe("Confirm");
+    expect(draft.confirmAction?.command).toBe(`/schedule confirmed ${LINE}`);
+    expect(draft.confirmAction?.confirm).toContain("cadence: 0 */4 * * * (every 4 hours)");
+    // An editor that cannot ask reads the text: the card and the line to run.
+    expect(draft.text).toContain(draft.confirmAction!.confirm);
+    expect(draft.text).toContain(`/schedule confirmed ${LINE}`);
     expect(await readdir(unitDir)).toEqual([]);
     expect(existsSync(path.join(root, ".metaproject", "data", "schedules"))).toBe(false);
   });
@@ -441,12 +446,12 @@ describe("/schedule", () => {
     expect(toShellScheduleLine(typed)).toEqual({ line: typed });
   });
 
-  test("a draft from the form's line succeeds for an allowed provider and carries the shell's own line in Create", async () => {
+  test("a draft from the form's line succeeds for an allowed provider and carries the shell's own line in confirmAction", async () => {
     const root = project();
     const host = scheduleHost(root, tempDir("keryx-acp-schedule-units-"));
     const line = '--name check --repeat hours --hours 4 --provider anthropic --model claude-x --rate-in 3 --rate-out 15 --ceiling 0.5 --max-seconds 300 -- Summarise my open pull requests';
-    const draft = viewOf(await run(host, "schedule", line));
-    const create = draft.rows[0]?.actions[0];
+    const draft = (await run(host, "schedule", line)).confirmAction;
+    const create = draft;
     expect(create?.confirm).toContain("cadence: 0 */4 * * * (every 4 hours)");
     expect(create?.command).toBe(`/schedule confirmed --name check --provider anthropic --model claude-x --ceiling 0.5 --max-seconds 300 --every "every 4 hours" --rates 3,15 -- Summarise my open pull requests`);
     expect((await run(host, "schedule", create!.command.replace("/schedule ", ""))).text).toContain('"check" stored and installed');

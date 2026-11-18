@@ -135,7 +135,7 @@ import {
   type AcpProfile,
 } from "./profile";
 import { buildAcpShellSessionTools, withHostToolCallId, type AcpShellRosterInput } from "./shell-roster";
-import type { ShellView } from "./shell-views";
+import type { ShellConfirmAction, ShellView } from "./shell-views";
 import { withSessionProvider } from "../commands/spawn-deps";
 import { createProvidersHandlers, type AcpProvidersSeams } from "./providers";
 import { createTasksHandlers, taskEventSink } from "./shell-tasks";
@@ -2002,7 +2002,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
    * The two that rewrite the transcript (`/compact`, `/rewind`) hold the session's slot while
    * they run, so a prompt cannot interleave with the rewrite.
    */
-  async function handleKeryxCommand(params: unknown): Promise<{ text: string; _meta: { keryx: { effects?: ShellCommandEffect[]; refused?: true; view?: ShellView; prompt?: string } } }> {
+  async function handleKeryxCommand(params: unknown): Promise<{ text: string; _meta: { keryx: { effects?: ShellCommandEffect[]; refused?: true; view?: ShellView; prompt?: string; confirmAction?: ShellConfirmAction } } }> {
     const method = KERYX_ACP_EXTENSION_METHODS.command;
     requireInitialized(method);
     const obj = requireObjectParams(params, method);
@@ -2045,7 +2045,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         if (outcome.refused === true) return refusedResult(outcome.text);
         return {
           text: outcome.text,
-          _meta: { keryx: { effects: [...(outcome.effects ?? [])], ...(outcome.view !== undefined ? { view: outcome.view } : {}), ...(outcome.prompt !== undefined ? { prompt: outcome.prompt } : {}) } },
+          _meta: { keryx: { effects: [...(outcome.effects ?? [])], ...(outcome.view !== undefined ? { view: outcome.view } : {}), ...(outcome.prompt !== undefined ? { prompt: outcome.prompt } : {}), ...(outcome.confirmAction !== undefined ? { confirmAction: outcome.confirmAction } : {}) } },
         };
       } finally {
         if (slot !== undefined && activeTurns.get(sessionId) === slot) activeTurns.delete(sessionId);

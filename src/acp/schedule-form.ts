@@ -188,6 +188,7 @@ export async function scheduleFormView(host: ShellCommandHost): Promise<ShellVie
     body: usage,
     form: {
       fields,
+      submitLabel: "Create",
       submit: `/schedule --name {name} --repeat {repeat} --minutes {minutes} --hours {hours} --at {at} --cron "{cron}" --provider {provider} ${modelFlags} --rate-in {rateIn} --rate-out {rateOut} --ceiling {ceiling} -- {prompt}`,
     },
   };

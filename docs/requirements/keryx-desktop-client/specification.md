@@ -259,6 +259,18 @@ number fields. The form submits form-only flags (`--repeat --minutes --hours
 --at --cron --rate-in --rate-out`) that `keryx acp` converts to the shell's
 `--every "<cadence>"` and `--rates in,out` before the shell's parser runs.
 
+*Submit label and draft confirmation.* A form may carry `submitLabel` (the
+submit button's text; the client says "Submit" when absent; `/schedule` says
+"Create"). A result may carry `_meta.keryx.confirmAction = { label, confirm,
+command }`: a draft the user must confirm, meaning "ask now, then run
+`command`". The client opens one confirmation dialog at once, showing `confirm`
+with `label` on its button, instead of rendering a Create button; Confirm sends
+`command` (the exact `/schedule confirmed ...` line, in place of the form's
+card), Cancel sends nothing and leaves the form as it was. The result's `text`
+carries the same card plus the line to run, so an editor or a client without
+the dialog reads a complete answer. `/schedule <flags>` drafts this way and
+writes nothing; the two user steps are Create (the form) and Confirm.
+
 `/queue` and `/delegate`: while a turn runs the desktop holds the composer's
 queued prompts itself (one queue per session, sent in order when the turn
 ends); `/queue` is a `client` command over that queue (list, remove, edit,
@@ -496,13 +508,27 @@ version checks and the flows parsers and argv builder.
 - Providers dialog (`/connect`, also from the model picker): Connected and
   Add tabs, Test, Disconnect, API-key field (password input), base URL,
   custom provider form, device-code panel (code, Copy, Open browser, Cancel).
-- Activity panel (right side, collapsible) with two tabs:
+- Command card tones: a successful command reads as neutral (an ok-toned
+  command icon, normal border), a command keryx refused as a warning (warn
+  border, `refused` badge, warn notice), and a failed request as an error
+  (danger border, `error` badge, error notice). Success never uses the warn or
+  danger tokens.
+- Activity panel (right side, collapsible) with three tabs:
   - Subagents: one row per subagent (label, status, detail, model), linked
     from the `spawn_subagent` tool card; selecting one shows its task and
     transcript (text, reasoning, tool, result entries).
   - Tasks: one row per task (command, status, phase, elapsed, exit code);
     selecting one shows its output (polled with `_keryx/tasks/output` while
     shown and running); Kill with a confirmation.
+  - Schedules (shown only when `_keryx/command` is advertised): the project's
+    schedules from the `/schedules` view, one row per schedule with name,
+    cadence, next run, last outcome (the row's detail) and an active/paused
+    badge. Row actions are the view's own: Pause or Resume, Run now and Delete,
+    the last two behind their `confirm` dialog; the list is read again after any
+    action and whenever the tab opens. "Add schedule" opens the `/schedule` view's
+    form in the tab (submit button "Create"); submitting asks once with the draft
+    card (`confirmAction`, button "Confirm"), and a yes sends the confirmed line
+    and returns to the list.
   - Badges for running subagents and tasks per session in the sidebar.
   - Sidebar tree (owner decision 2026-11-18): every subagent of a held session,
     native or external (`/delegate`), is a child row one level under its

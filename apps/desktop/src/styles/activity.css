@@ -95,3 +95,12 @@
 .providers-device-actions { display: flex; gap: var(--sp-2); }
 .device-code { font: 700 28px/1.2 var(--mono); letter-spacing: 0.12em; text-align: center; padding: var(--sp-3); user-select: all; }
 .device-code-url { text-align: center; font-size: var(--fs-sm); color: var(--fg-muted); }
+
+.schedules-tab { display: grid; gap: var(--sp-2); }
+.schedules-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+.schedule-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-2); }
+.schedule-row { display: grid; gap: 4px; padding: var(--sp-2); background: var(--bg-sunken); border-radius: var(--r-md); }
+.schedule-main { display: flex; align-items: center; gap: var(--sp-2); }
+.schedule-name { flex: 1; min-width: 0; font-weight: 500; }
+.schedule-detail { font-size: var(--fs-sm); color: var(--fg-muted); white-space: pre-line; overflow-wrap: anywhere; }
+.schedule-actions { display: flex; flex-wrap: wrap; gap: 4px; }
