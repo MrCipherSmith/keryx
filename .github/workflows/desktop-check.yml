@@ -1,0 +1,72 @@
+name: Desktop Check
+
+# Tests and lints the macOS desktop client (apps/desktop) on every change to
+# it: the Rust core (cargo test, clippy with warnings as errors) and the web
+# view's unit tests. Builds nothing for release; desktop-release.yml does that.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/desktop/**"
+      - ".github/workflows/desktop-check.yml"
+  pull_request:
+    paths:
+      - "apps/desktop/**"
+      - ".github/workflows/desktop-check.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  desktop-check:
+    name: desktop check
+    runs-on: macos-14
+    timeout-minutes: 45
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          bun install --frozen-lockfile
+          cd apps/desktop
+          bun install --frozen-lockfile
+
+      # tauri.conf.json declares the keryx sidecar (bundle.externalBin), and
+      # tauri-build refuses to compile without a file of that name. The tests
+      # never run it, so a stub stands in for the real sidecar here; the
+      # release workflow builds the real one.
+      - name: Stub the keryx sidecar and the web view bundle folder
+        working-directory: apps/desktop
+        run: |
+          set -euo pipefail
+          TRIPLE="$(rustc -vV | sed -n 's/^host: //p')"
+          printf '#!/bin/sh\necho "stub keryx sidecar" >&2\nexit 1\n' > "src-tauri/binaries/keryx-${TRIPLE}"
+          chmod +x "src-tauri/binaries/keryx-${TRIPLE}"
+          mkdir -p dist
+
+      - name: cargo test
+        working-directory: apps/desktop/src-tauri
+        run: cargo test --locked
+
+      - name: cargo clippy
+        working-directory: apps/desktop/src-tauri
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+      # From the app's own folder: the root bunfig.toml keeps apps/desktop out of root runs.
+      - name: Web view unit tests
+        working-directory: apps/desktop
+        run: bun test src

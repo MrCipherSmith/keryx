@@ -1,0 +1,255 @@
+name: Desktop Release
+
+# Keryx Desktop (Tauri) release. Triggered by `desktop-v*` tags only — the CLI
+# release (`release.yml`) owns `v*` and this workflow must never fire on it.
+# `workflow_dispatch` builds and uploads nothing to a release: it is a dry run
+# of the build on an arbitrary ref, useful to prove the pipeline before tagging.
+# A dry run is always ad-hoc signed: the Developer ID key and the notarization
+# credentials are used only for a `desktop-v*` tag push.
+# The APPLE_* secrets live in the `desktop-release` environment, whose
+# deployment rule allows only `desktop-v*` tags. Only a tag push enters that
+# environment; a dry run uses none (an empty name), so the tag-only rule
+# never blocks it and it never sees the signing secrets.
+on:
+  push:
+    tags:
+      - "desktop-v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write # create the GitHub Release
+
+jobs:
+  desktop:
+    name: build, sign, release
+    runs-on: macos-14
+    timeout-minutes: 90
+    environment: ${{ (github.event_name == 'push' && github.ref_type == 'tag') && 'desktop-release' || '' }}
+    steps:
+      - name: Check out
+        # actions/checkout v4.4.0
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          # Keep the write-scoped token out of .git/config: only the release
+          # step needs it, and it gets it through GH_TOKEN.
+          persist-credentials: false
+
+      - name: Set up Bun
+        # oven-sh/setup-bun v2.2.0
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: "1.3.14"
+
+      - name: Set up Rust (both macOS targets)
+        # dtolnay/rust-toolchain `stable` branch at this commit
+        uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca
+        with:
+          toolchain: stable
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      # The one place that decides "this is a release": only a push of a
+      # `desktop-v*` tag. Signing, notes and publishing all read this output.
+      - name: Decide whether this run is a release
+        id: release
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # The tag and tauri.conf.json are two statements of one fact; when they
+      # disagree the .dmg carries a version nobody intended. Hard stop before
+      # anything is built. Skipped on a manual dry run, which has no tag.
+      - name: Refuse a tag that disagrees with tauri.conf.json
+        if: steps.release.outputs.release == 'true'
+        run: |
+          set -euo pipefail
+          TAG_VERSION="${GITHUB_REF_NAME#desktop-v}"
+          CONF_VERSION="$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').version")"
+          echo "tag:  $TAG_VERSION"
+          echo "conf: $CONF_VERSION"
+          if [ "$TAG_VERSION" != "$CONF_VERSION" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match tauri.conf.json version ${CONF_VERSION}."
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          bun install
+          cd apps/desktop
+          bun install --frozen-lockfile || bun install
+
+      # Both architectures: the universal bundle lipo-merges the two builds and
+      # Tauri expects keryx-aarch64-apple-darwin and keryx-x86_64-apple-darwin.
+      - name: Build both keryx sidecars
+        run: bash scripts/desktop/build-sidecar.sh --target all
+
+      # Signing material is optional. GitHub does not expose `secrets` to `if:`,
+      # so the decision is made once here and read from the step output. Only a
+      # tag push signs: a manual dispatch builds an arbitrary ref and must never
+      # touch the Developer ID key or submit to Apple.
+      - name: Detect Developer ID signing secrets
+        id: sign
+        env:
+          RELEASE_TAG_PUSH: ${{ steps.release.outputs.release }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          if [ "$RELEASE_TAG_PUSH" != "true" ]; then
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "Not a desktop-v* tag push: ad-hoc signed dry run."
+          elif [ -n "$APPLE_CERTIFICATE" ] && [ -n "$APPLE_CERTIFICATE_PASSWORD" ] \
+            && [ -n "$APPLE_SIGNING_IDENTITY" ] && [ -n "$APPLE_ID" ] \
+            && [ -n "$APPLE_PASSWORD" ] && [ -n "$APPLE_TEAM_ID" ]; then
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+            echo "Developer ID signing and notarization: enabled"
+          else
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::APPLE_* secrets are incomplete; the app will be ad-hoc signed and not notarized."
+          fi
+
+      - name: Import the Developer ID certificate into a temporary keychain
+        if: steps.sign.outputs.signed == 'true'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN="$RUNNER_TEMP/keryx-desktop.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          CERT="$RUNNER_TEMP/certificate.p12"
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$CERT"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          # Locks again after 90 min (the job's own timeout).
+          security set-keychain-settings -lut 5400 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          # -x: the private key is not extractable. -T: only codesign may use it
+          # without a prompt (not every program, as -A would allow): the build
+          # runs third-party code (npm tree, every crate's build.rs) meanwhile.
+          security import "$CERT" -P "$APPLE_CERTIFICATE_PASSWORD" -x -T /usr/bin/codesign -t cert -f pkcs12 -k "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          # Put the temporary keychain first in the search list, keep the rest.
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          rm -f "$CERT"
+          echo "KEYCHAIN_PATH=$KEYCHAIN" >> "$GITHUB_ENV"
+
+      # With APPLE_ID / APPLE_PASSWORD / APPLE_TEAM_ID in the environment Tauri
+      # notarizes after signing. Without a Developer ID, identity `-` is ad-hoc.
+      - name: Build the universal app and dmg (Developer ID, notarized)
+        if: steps.sign.outputs.signed == 'true'
+        working-directory: apps/desktop
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: bun run tauri build --bundles app,dmg --target universal-apple-darwin
+
+      - name: Build the universal app and dmg (ad-hoc signed)
+        if: steps.sign.outputs.signed != 'true'
+        working-directory: apps/desktop
+        env:
+          APPLE_SIGNING_IDENTITY: "-"
+        run: bun run tauri build --bundles app,dmg --target universal-apple-darwin
+
+      - name: Remove the temporary keychain
+        if: always() && steps.sign.outputs.signed == 'true'
+        run: security delete-keychain "$KEYCHAIN_PATH" || true
+
+      # The sidecar is a bun-compiled executable: under the hardened runtime it
+      # needs the JIT entitlements (Entitlements.plist) or it dies at launch.
+      # Prove the bundled sidecar carries them (Developer ID build) and runs.
+      - name: Check the bundled keryx sidecar runs
+        env:
+          SIGNED: ${{ steps.sign.outputs.signed }}
+        run: |
+          set -euo pipefail
+          BUNDLE="apps/desktop/src-tauri/target/universal-apple-darwin/release/bundle"
+          APP="$(find "$BUNDLE/macos" -maxdepth 1 -name '*.app' -print -quit 2>/dev/null || true)"
+          SIDECAR="$APP/Contents/MacOS/keryx"
+          if [ -z "$APP" ] || [ ! -x "$SIDECAR" ]; then
+            echo "::error::no keryx sidecar under $BUNDLE/macos/*.app/Contents/MacOS"
+            exit 1
+          fi
+          if [ "$SIGNED" = "true" ]; then
+            PLIST=apps/desktop/src-tauri/Entitlements.plist
+            if ! KEYS="$(/usr/libexec/PlistBuddy -c 'Print' "$PLIST" | sed -n 's/^ *\(com\.apple[^ ]*\) = .*/\1/p')" || [ -z "$KEYS" ]; then
+              echo "::error::could not read the expected entitlement keys from $PLIST"
+              exit 1
+            fi
+            if ! ENTITLEMENTS="$(codesign -d --entitlements - --xml "$SIDECAR" 2>/dev/null)" || [ -z "$ENTITLEMENTS" ]; then
+              echo "::error::could not read the signed entitlements of the sidecar"
+              exit 1
+            fi
+            for key in $KEYS; do
+              # plutil key paths split on dots; escape them.
+              value="$(printf '%s' "$ENTITLEMENTS" | plutil -extract "${key//./\\.}" raw - 2>/dev/null || true)"
+              if [ "$value" != "true" ]; then
+                echo "::error::the signed sidecar does not carry $key = true"
+                exit 1
+              fi
+            done
+          fi
+          if ! "$SIDECAR" --version; then
+            echo "::error::the bundled keryx sidecar does not run (--version failed)"
+            exit 1
+          fi
+
+      - name: Locate the dmg
+        id: dmg
+        run: |
+          set -euo pipefail
+          BUNDLE="apps/desktop/src-tauri/target/universal-apple-darwin/release/bundle"
+          DMG="$(find "$BUNDLE/dmg" -maxdepth 1 -name '*.dmg' -print -quit)"
+          if [ -z "$DMG" ]; then
+            echo "::error::no .dmg was produced under $BUNDLE/dmg"
+            exit 1
+          fi
+          ls -l "$DMG"
+          echo "path=$DMG" >> "$GITHUB_OUTPUT"
+
+      - name: Write the release notes
+        if: steps.release.outputs.release == 'true'
+        env:
+          SIGNED: ${{ steps.sign.outputs.signed }}
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#desktop-v}"
+          {
+            echo "Keryx Desktop ${VERSION} for macOS (universal: Apple Silicon and Intel)."
+            echo
+            if [ "$SIGNED" = "true" ]; then
+              echo "Signed with a Developer ID certificate and notarized by Apple."
+            else
+              echo "**This build is ad-hoc signed and not notarized.** macOS Gatekeeper will"
+              echo "refuse to open it directly. After copying Keryx.app to Applications, run"
+              echo "\`xattr -dr com.apple.quarantine /Applications/Keryx.app\` once, or"
+              echo "right-click the app and choose Open."
+            fi
+          } > "$RUNNER_TEMP/notes.md"
+          cat "$RUNNER_TEMP/notes.md"
+
+      - name: Create the GitHub Release
+        if: steps.release.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DMG: ${{ steps.dmg.outputs.path }}
+        run: |
+          set -euo pipefail
+          PRERELEASE=""
+          case "$GITHUB_REF_NAME" in
+            *-*-*) PRERELEASE="--prerelease" ;;
+          esac
+          gh release create "$GITHUB_REF_NAME" \
+            --title "Keryx Desktop ${GITHUB_REF_NAME#desktop-v}" \
+            --notes-file "$RUNNER_TEMP/notes.md" \
+            $PRERELEASE \
+            "$DMG"

@@ -1,0 +1,32 @@
+{
+  "name": "@keryx/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:browser": "bun run dev/browser.ts",
+    "dev:bridge": "bun run dev/bridge.ts",
+    "build": "tsc --noEmit && vite build",
+    "test": "bun test src",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-dialog": "^2",
+    "dompurify": "^3.4.18",
+    "marked": "^18.2.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@happy-dom/global-registrator": "^21.0.4",
+    "@tauri-apps/cli": "^2",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "@vitejs/plugin-react": "^4",
+    "happy-dom": "^21.0.4",
+    "typescript": "^5.9",
+    "vite": "^6"
+  }
+}

@@ -1,5 +1,5 @@
 # Requirements Roadmap
-Version: 0.29.32
+Version: 0.29.33
 
 ## Status
 
@@ -12,6 +12,8 @@ carrying the measurement that found it and the reason it was not done then.
 
 <!-- retired-spellings-ok: section — a dated record of what each release stated at the time; renaming commands inside it would make the record claim a spelling that did not exist on that date -->
 > **Changelog**
+>
+> - **0.29.33**: [Keryx Desktop Client](keryx-desktop-client/README.md) — **M1 implemented on `feat/desktop-client`, owner acceptance pending**. macOS Tauri v2 client over `keryx acp --profile shell` (shell roster, ask/trust/auto modes, plan/usage updates, `_keryx/*` extensions), bundled keryx sidecar, local `.dmg`; shell parity in three milestones. Shares one Tauri app with Keryx Desktop App (D-08, awaiting owner confirmation).
 >
 > - **0.29.32**: [Keryx Desktop App](keryx-desktop-app/README.md) — **draft, nothing implemented; no Flow, no frozen criteria**. A thin desktop shell over the Hub web and a local Hub child process: solo login without token or SSO, quick task start, stage timeline with agent logs, working-copy diff with reviewer findings and visual QA, each with a TUI counterpart. Decisions taken 2026-11-14: Tauri shell, GitHub releases, separate app plus `keryx hub solo`, web first, template clarifying form. Acceptance criteria wait for operator review before freeze.
 >

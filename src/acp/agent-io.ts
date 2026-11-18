@@ -4,8 +4,9 @@
 
 import { randomUUID } from "node:crypto";
 import type { AgentIO, ApprovalMeta, ApprovalResponse } from "../commands/agent";
+import type { PermissionMode } from "../commands/permission-mode";
 import type { InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
-import { approvalFromPermissionResponse, permissionOptionsFor } from "./permission";
+import { acpPermissionReasons, approvalFromPermissionResponse, permissionOptionsFor } from "./permission";
 import {
   textBlock,
   type AcpPermissionOption,
@@ -82,6 +83,28 @@ const TOOL_KIND_BY_NAME: Readonly<Record<string, AcpToolKind>> = {
   // The client's own MCP servers (flow 287).
   search_tool: "search",
   use_tool: "execute",
+  // `keryx acp --profile shell` (Keryx Desktop Client M1): the rest of keryx shell's roster.
+  shell_task_output: "read",
+  shell_task_wait: "read",
+  shell_task_kill: "execute",
+  shell_job_output: "read",
+  shell_job_kill: "execute",
+  workspace_overview: "read",
+  workspace_read: "read",
+  workspace_list: "read",
+  workspace_show: "read",
+  workspace_create: "edit",
+  workspace_propose: "edit",
+  ask_user: "think",
+  slate_read: "read",
+  slate_write_seed: "edit",
+  slate_note: "edit",
+  slate_trail: "read",
+  recall_step: "read",
+  history_search: "search",
+  plan_get: "think",
+  plan_set: "think",
+  plan_update: "think",
 };
 
 /**
@@ -145,10 +168,28 @@ export function tryParseJson(text: string): unknown {
  * not executed"). There is no path through this bridge from silence to a
  * running tool.
  */
+export interface AcpAgentIoOptions {
+  /**
+   * The shell profile's live permission mode (`trust`/`auto` skip the ask for
+   * what `resolveApprovalDecision` allows). Absent: `ask`, the editor profile.
+   * When present, a call the mode approved is reported on its own id as a
+   * `tool_call_update` carrying `_meta.keryx.autoApproved: true`.
+   */
+  readonly permissionMode?: () => PermissionMode;
+  /**
+   * Shell profile: each `session/request_permission` says why keryx asks, as
+   * `toolCall._meta.keryx.reasons` (`acpPermissionReasons`; PR #1213 review
+   * security-code-w7 SEC-W7R3-001). Absent: the editor profile's request is
+   * unchanged.
+   */
+  readonly permissionReasons?: boolean;
+}
+
 export function createAcpAgentIo(
   sessionId: AcpSessionId,
   send: AcpUpdateSink,
   askPermission?: AcpPermissionAsker,
+  ioOptions: AcpAgentIoOptions = {},
 ): AgentIO {
   /**
    * One entry per ACP tool call that has been ANNOUNCED and not yet closed.
@@ -267,6 +308,7 @@ export function createAcpAgentIo(
         // carried is superseded here and again by the result update.
         status: "pending",
         rawInput: tryParseJson(input),
+        ...(ioOptions.permissionReasons === true ? { _meta: { keryx: { reasons: acpPermissionReasons(meta) } } } : {}),
       },
       options,
     });
@@ -283,8 +325,27 @@ export function createAcpAgentIo(
     return approved;
   };
 
+  /**
+   * A permission mode let this call run unasked. The call was already announced
+   * (`onToolCall` precedes the gate in `runAgentTurn`'s batch loop), so the mark
+   * goes on THAT id; a call with no announced entry is announced here first, so
+   * the client never sees a mark for an id it was not shown.
+   */
+  const onAutoApproved = (tool: string, input: string): void => {
+    const pending = pendingByName.get(tool)?.find((entry) => entry.input === input);
+    const toolCallId = pending?.toolCallId ?? openToolCall(tool, input, false);
+    emit({
+      sessionUpdate: "tool_call_update",
+      toolCallId,
+      status: "in_progress",
+      _meta: { keryx: { autoApproved: true } },
+    });
+  };
+
+  const permissionMode = ioOptions.permissionMode;
   return {
     ...(askPermission !== undefined ? { requestApproval } : {}),
+    ...(permissionMode !== undefined ? { permissionMode, onAutoApproved } : {}),
     write: (text) => {
       if (text.length === 0) {
         return;

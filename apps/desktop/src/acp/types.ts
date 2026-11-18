@@ -1,0 +1,186 @@
+// The slice of ACP v1 the desktop client uses. Mirrors src/acp/protocol.ts in
+// the keryx repo (the wire is the contract, so these are copies, not imports).
+// Everything keryx may omit is optional: the client degrades instead of failing.
+
+export type Meta = Record<string, unknown>;
+
+export type ContentBlock =
+  | { type: "text"; text: string }
+  | { type: "image"; data: string; mimeType: string }
+  | { type: "resource_link"; name: string; uri: string }
+  | { type: "resource"; resource: { uri: string; text?: string } }
+  | { type: string; [k: string]: unknown };
+
+export type ToolCallStatus = "pending" | "in_progress" | "completed" | "failed";
+export type ToolKind =
+  | "read" | "edit" | "delete" | "move" | "search" | "execute"
+  | "think" | "fetch" | "switch_mode" | "other";
+
+export type ToolCallContent =
+  | { type: "content"; content: ContentBlock }
+  | { type: "diff"; path: string; newText: string; oldText?: string | null }
+  | { type: "terminal"; terminalId: string };
+
+export interface ToolCallFields {
+  toolCallId: string;
+  title?: string | null;
+  kind?: ToolKind | null;
+  status?: ToolCallStatus | null;
+  content?: ToolCallContent[] | null;
+  rawInput?: unknown;
+  rawOutput?: unknown;
+  _meta?: Meta;
+}
+
+export interface PlanEntry {
+  content: string;
+  priority: "high" | "medium" | "low";
+  status: "pending" | "in_progress" | "completed";
+  /** keryx's own item id and status (proposed/blocked map to pending, skipped to completed). */
+  _meta?: { keryx?: { id?: string; status?: string } } & Meta;
+}
+
+export interface AvailableCommand {
+  name: string;
+  description: string;
+  input?: { hint: string } | null;
+}
+
+export interface SessionMode { id: string; name: string; description?: string | null }
+export interface SessionModeState { currentModeId: string; availableModes: SessionMode[] }
+
+export interface ConfigSelectOption { value: string; name: string; description?: string | null }
+export interface ConfigSelectGroup { group: string; name: string; options: ConfigSelectOption[] }
+export interface ConfigOption {
+  id: string;
+  name: string;
+  description?: string | null;
+  category?: string | null;
+  type: "select" | string;
+  currentValue: string;
+  options: Array<ConfigSelectOption | ConfigSelectGroup>;
+}
+
+/** How the person organised a stored session (`_keryx/session_flags`); ISO times, absent when unset. */
+export interface SessionFlags {
+  archivedAt?: string;
+  pinnedAt?: string;
+  /** The flow package directory this session works on. */
+  flow?: string;
+}
+
+export interface SessionInfo {
+  sessionId: string;
+  cwd: string;
+  title?: string | null;
+  updatedAt?: string | null;
+  /** keryx's shell profile reports the flags here. */
+  _meta?: { keryx?: SessionFlags } | null;
+}
+
+export function sessionFlags(s: SessionInfo): SessionFlags {
+  return s._meta?.keryx ?? {};
+}
+
+export type SessionUpdate =
+  | { sessionUpdate: "user_message_chunk" | "agent_message_chunk" | "agent_thought_chunk"; content: ContentBlock; messageId?: string | null }
+  | ({ sessionUpdate: "tool_call" } & ToolCallFields)
+  | ({ sessionUpdate: "tool_call_update" } & ToolCallFields)
+  | { sessionUpdate: "plan"; entries: PlanEntry[] }
+  | { sessionUpdate: "available_commands_update"; availableCommands: AvailableCommand[] }
+  | { sessionUpdate: "current_mode_update"; currentModeId: string }
+  | { sessionUpdate: "config_option_update"; configOptions: ConfigOption[] }
+  | { sessionUpdate: "session_info_update"; title?: string | null; updatedAt?: string | null }
+  | { sessionUpdate: "usage_update"; used: number; size: number; cost?: { amount: number; currency: string } | null }
+  | { sessionUpdate: string; [k: string]: unknown };
+
+export interface PermissionOption {
+  optionId: string;
+  name: string;
+  kind: "allow_once" | "allow_always" | "reject_once" | "reject_always";
+}
+
+export interface PermissionRequest {
+  sessionId: string;
+  toolCall: ToolCallFields;
+  options: PermissionOption[];
+}
+
+export type PermissionOutcome =
+  | { outcome: "cancelled" }
+  | { outcome: "selected"; optionId: string };
+
+export interface AskUserRequest {
+  sessionId: string;
+  question: string;
+  options?: Array<{ label: string; description?: string }>;
+  multiSelect?: boolean;
+  _meta?: {
+    keryx?: {
+      recommended?: string;
+      allowFreeform?: boolean;
+      irreversible?: boolean;
+      untrustedContent?: boolean;
+    };
+  } & Meta;
+}
+
+export type AskUserResult =
+  | { outcome: "answered"; answers: string[] }
+  | { outcome: "cancelled" };
+
+export interface InitializeResult {
+  protocolVersion: number;
+  agentInfo?: { name?: string; version?: string } | null;
+  agentCapabilities?: Record<string, unknown>;
+  _meta?: { keryx?: { profile?: string; profiles?: string[]; extensions?: string[]; liveSessions?: boolean } } & Meta;
+}
+
+/** ext notification: keryx stopped holding a session for this connection (idle cap); a return to it needs session/load. */
+export const SESSION_RELEASED = "_keryx/session_released";
+/** Notification to keryx: the user switched the shown session locally (counts for its idle-cap LRU). */
+export const SESSION_SHOWN = "_keryx/session_shown";
+/** Request to keryx: archive/unarchive, pin/unpin a stored session; answers the flags as stored. */
+export const SESSION_FLAGS = "_keryx/session_flags";
+/** Request to keryx: move a stored session to the system trash (a held, idle one is released first). */
+export const SESSION_TRASH = "_keryx/session_trash";
+export interface SessionReleasedParams {
+  sessionId: string;
+  reason: string;
+}
+
+/** Why keryx asks before a call: `toolCall._meta.keryx.reasons`, only the fields that are set. */
+export interface PermissionReasons {
+  untrustedOrigin?: boolean;
+  credentials?: boolean;
+  destructive?: boolean;
+  publishLease?: boolean;
+  publishLeaseDetail?: string;
+  hcLaunch?: boolean;
+  hookAsk?: boolean;
+  alwaysAsk?: boolean;
+}
+
+/** Whether this keryx keeps every session of a connection alive (`liveSessions`), wherever it advertises it. */
+export function hasLiveSessions(init: InitializeResult): boolean {
+  if (init._meta?.keryx?.liveSessions === true) return true;
+  const caps = init.agentCapabilities?._meta as { keryx?: { liveSessions?: unknown } } | undefined;
+  return caps?.keryx?.liveSessions === true;
+}
+
+/** Whether this keryx can archive, pin and trash sessions (`_keryx/session_flags`, `_keryx/session_trash`). */
+export function canOrganizeSessions(init: InitializeResult): boolean {
+  const ext = init._meta?.keryx?.extensions ?? [];
+  return ext.includes(SESSION_FLAGS) && ext.includes(SESSION_TRASH);
+}
+
+export interface NewSessionResult {
+  sessionId: string;
+  modes?: SessionModeState | null;
+  configOptions?: ConfigOption[] | null;
+}
+
+export interface LoadSessionResult {
+  modes?: SessionModeState | null;
+  configOptions?: ConfigOption[] | null;
+}

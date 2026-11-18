@@ -1,0 +1,9 @@
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/gen/
+# Sidecar binaries are produced by scripts/desktop/build-sidecar.sh, never committed.
+src-tauri/binaries/*
+!src-tauri/binaries/.gitkeep
+!src-tauri/binaries/README.md
+.DS_Store

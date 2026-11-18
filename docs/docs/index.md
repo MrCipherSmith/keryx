@@ -14,6 +14,7 @@ the one that describes shipped behaviour.
 - [agent-installation-playbook.md](./agent-installation-playbook.md) — Agent-executable Gherkin setup, repair, validation, and handoff scenarios.
 - [architecture.md](./architecture.md) — System overview, layered architecture, invariants, cross-module data flows, integrations.
 - [harness.md](./harness.md) — The agent runtime: doors, providers, sessions and forking, policy, containment, evidence and the completion gate, record/replay.
+- [desktop-app.md](./desktop-app.md) — Keryx for macOS (preview): install the `.dmg` or build it, choose which keryx it runs, sessions, approvals, permission modes, the Flows board, shortcuts and troubleshooting.
 - [shell-preservation.md](./shell-preservation.md) — What `keryx shell` preserves on a handled exit: checkpoint, immutable snapshot, and how local preservation differs from workspace delivery.
 - [shell-recovery.md](./shell-recovery.md) — How the interactive shell waits and retries a temporary model-provider failure within the original turn.
 - [integrations.md](./integrations.md) — The harness adapter registry: `keryx integrations install|doctor|uninstall|matrix`, install-state and drift, the generated capability matrix, and per-harness notes (Gemini CLI, Kiro, GitHub Copilot agent, Zed).

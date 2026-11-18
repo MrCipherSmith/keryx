@@ -112,6 +112,7 @@ nav:
       - Write a rubric (judge) eval scenario: guides/write-a-rubric-scenario.md
   - Architecture: architecture.md
   - The agent harness: harness.md
+  - Keryx for macOS (desktop app): desktop-app.md
   - Shell exit preservation: shell-preservation.md
   - Interactive shell recovery: shell-recovery.md
   - Integrations: integrations.md

@@ -77,6 +77,11 @@ export function harness(overrides: Partial<AcpServerOptions>) {
     lines.push(`${JSON.stringify({ jsonrpc: "2.0", method, params })}\n`);
     wake?.();
   };
+  /** Answers an agent → client request (`session/request_permission`, `_keryx/ask_user`). */
+  const respond = (id: string | number | null | undefined, body: { result: unknown } | { error: { code: number; message: string } }): void => {
+    lines.push(`${JSON.stringify({ jsonrpc: "2.0", id, ...body })}\n`);
+    wake?.();
+  };
   const waitFor = (match: (f: Frame) => boolean): Promise<Frame> => {
     const already = frames.find(match);
     if (already !== undefined) return Promise.resolve(already);
@@ -87,6 +92,6 @@ export function harness(overrides: Partial<AcpServerOptions>) {
     wake?.();
     await done;
   };
-  return { request, notify, waitFor, frames, stderr, end, done, projectDir: root };
+  return { request, notify, respond, waitFor, frames, stderr, end, done, projectDir: root };
 }
 

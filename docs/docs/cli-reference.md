@@ -410,8 +410,92 @@ its stdin/stdout — newline-delimited JSON-RPC 2.0 in both directions, no
 interactively; the client owns the process's lifetime and the conversation.
 
 ```
-keryx acp [--provider <p> --model <m>] [--base-url <url>] [--data-dir <dir>]
+keryx acp [--profile editor|shell] [--provider <p> --model <m>] [--base-url <url>] [--data-dir <dir>]
 ```
+
+**Profiles.** `--profile` picks what the connection offers. `editor` (the
+default) is everything the rest of this section describes, unchanged. `shell`
+is what the keryx desktop app launches, and is open to any ACP client:
+
+- **Tools:** the roster `keryx shell` builds, from the same factory, minus
+  the bus, scheduling and operator-confirm tools — so `spawn_subagent` (one
+  per session, children on the session's model, every dispatch gated like
+  `keryx shell`'s, so orchestrator skills such as flow-orchestrator run),
+  `web_fetch`/`web_search`, background shell tasks (`shell_task_*`), the
+  execution-plan tools, workspace and Slate tools, and one `search_tool`/
+  `use_tool` pair over keryx's own configured MCP servers merged with the
+  client's `mcpServers` (a client server whose name keryx also configures is
+  not used, and the session is told so). Each session has its own shell-task
+  supervisor; a task keeps running while the client works in other sessions
+  and is killed only when the session is released (see **Live sessions**
+  below) or the connection ends. `read_file` still goes through the client's `fs/read_text_file` when
+  the client advertises it.
+- **`ask_user`:** offered only when the client sends
+  `clientCapabilities._meta.keryx.askUser: true` at `initialize`. keryx then
+  asks with the agent → client request `_keryx/ask_user`
+  (`{sessionId, question, options: [{label, description}], multiSelect: false}`,
+  extras such as the recommended label in `_meta.keryx`); the client answers
+  `{outcome: "answered", answers: ["<label or free text>"]}` or
+  `{outcome: "cancelled"}`. A cancel, an error or a cancelled turn reaches the
+  model as a declined question.
+- **Permission modes:** `session/new` and `session/load` return
+  `modes: {currentModeId, availableModes}` with `ask`, `trust` and `auto` —
+  the shell's own modes and gate. A session starts in the project's saved
+  default mode, else `ask`; `session/set_mode {sessionId, modeId}` or
+  `/mode <ask|trust|auto>` switches it from the next tool call and sends
+  `current_mode_update`. A call a mode let run unasked gets a
+  `tool_call_update` with `_meta.keryx.autoApproved: true` on its own id;
+  escalated calls (destructive in `trust`, credential-touching in every mode,
+  anything after untrusted content entered the turn) are still asked and never
+  offered `allow_always`. The mode is not saved. Each
+  `session/request_permission` says why keryx asks in
+  `toolCall._meta.keryx.reasons`: `untrustedOrigin`, `credentials`,
+  `destructive`, `publishLease` (with `publishLeaseDetail` naming the holder
+  when known), `hcLaunch`, `hookAsk` and `alwaysAsk`, each present only when it
+  holds — an empty object is a routine ask.
+- **Live sessions:** every session a `session/new` or `session/load` opens is
+  held by the connection beside the others, and opening one releases none. Each
+  keeps its own turn, mode, model, usage, client MCP servers, plan and shell
+  tasks; a turn in a session the client is not showing keeps running, and its
+  `session/update`s, permission requests and `_keryx/ask_user` questions carry
+  its `sessionId`. A `session/load` of a session the connection holds rebuilds
+  nothing: it replays the transcript and answers with the session's current
+  mode and model (its `mcpServers` are not started), and is refused while the
+  session's turn runs. At most 8 sessions are held: past that, the least
+  recently used session with no running turn, no running shell task and no
+  request in flight is released — its lease goes back (so `keryx shell
+  --resume` can open it), its client MCP servers stop unless another session
+  uses the same list, and its hooks end with `SessionEnd` — and keryx sends the
+  notification `_keryx/session_released {sessionId, reason: "idle-cap"}`.
+  Later requests for it get `Unknown ACP session` until it is loaded again; a
+  load restores its permission mode, model and usage totals. A client that
+  switches the shown session locally sends the notification
+  `_keryx/session_shown {sessionId}` (no reply; an id the connection does not
+  hold is ignored), so the switch counts as use for the least-recently-used
+  choice. The request `_keryx/session_flags {sessionId, cwd?, archived?,
+  pinned?, flow?}` archives/unarchives, pins/unpins or links to a flow package
+  (`flow: null` unlinks) a stored session (kept in its `flags.json`) and
+  answers `{archivedAt?, pinnedAt?, flow?}`; `session/list` reports set flags
+  as `_meta.keryx`. The request `_keryx/session_trash {sessionId,
+  cwd?}` moves a stored session to the system trash (macOS `~/.Trash`, the
+  freedesktop trash on Linux) and answers `{trashedTo}`: a held idle session
+  is released first; one with a running turn or task, or held by another
+  keryx process, is refused. When every held
+  session is busy none is released. A `session/new` or `session/load` that
+  fails gives back only the session it was opening. The `editor` profile keeps
+  every session until the connection ends.
+- **Session updates:** `plan` when the execution plan changes (and on
+  `session/load`), `usage_update` after every model call (`used`/`size` per
+  ACP, plus `_meta.keryx.call`/`turn`/`session` input and output token
+  totals), and `session_info_update` with the session title.
+- **Discovery:** `initialize` carries `_meta.keryx = {profile, profiles,
+  extensions, liveSessions: true}` in this profile; `_keryx/info` answers
+  `{version, profile, profiles, extensions}` in either profile (plus
+  `liveSessions: true` in this one), and
+  `agentInfo.version` is the keryx version.
+
+Any other value of `--profile` is a usage error: keryx exits with status 2
+before reading stdin.
 
 **Provider and model.** With no flags, `keryx acp` uses the provider and model
 `keryx shell` would start with in the same place — it calls the shell's own

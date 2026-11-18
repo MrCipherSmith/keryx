@@ -7,5 +7,13 @@
 # clears the process-wide operator-refusal memory, which production clears on /clear, /new
 # and a mode change. src/lib/test-preload.test.ts pins both entries.
 
+#
+# apps/desktop is its own package (React, happy-dom, dompurify live in its node_modules,
+# which the root install does not create). Its tests run from that folder
+# (`cd apps/desktop && bun test src`, the desktop-check workflow); a root `bun test`, or a
+# root filter such as `src/session/` that also matches apps/desktop/src/session/, must not
+# discover them.
+
 [test]
 preload = ["./src/lib/test-preload.ts", "./src/lib/test-preload-hooks.ts"]
+pathIgnorePatterns = ["apps/desktop/**"]
