@@ -29,6 +29,11 @@ import type { ComposerHandle } from "./session/Composer";
 import { ProvidersDialog, useProvidersDialog, type ProvidersApi } from "./session/ProvidersDialog";
 import { SessionView } from "./session/SessionView";
 import { useAcpSession } from "./session/useAcpSession";
+import { ProjectMenu } from "./project/ProjectMenu";
+import { PROJECT_COMMANDS } from "./project/projectCommands";
+import { useProjectRunner } from "./project/useProjectRunner";
+import { providersLister, WikiEnrichDialog } from "./project/WikiEnrichDialog";
+import { supportsProviders } from "./acp/providers";
 import { onProjectsState, projectRegister, projectsState, projectSwitch, reportProjectActivity, type LiveProject } from "./platform/projects";
 import { projectActivity, railProjects, removeRailProject, syncRailProjects } from "./shell/projectRail";
 
@@ -140,6 +145,9 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
   const providersApi = useMemo<ProvidersApi>(() => ({ request: s.rpc, extensions: s.extensions, onChallenge: s.onLoginChallenge }), [s.rpc, s.extensions, s.onLoginChallenge]);
   const [view, setView] = useState<View>("session");
   const [palette, setPalette] = useState<string | null>(null);
+  const [enrich, setEnrich] = useState(false);
+  const runProject = useProjectRunner(cwd, s.keryxPath);
+  const listProviders = useMemo(() => (supportsProviders(s.extensions) ? providersLister(s.rpc) : null), [s.extensions, s.rpc]);
   const [recents, setRecents] = useState<string[]>([]);
   const composer = useRef<ComposerHandle>(null);
   const paletteOpen = useRef(false);
@@ -326,6 +334,10 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
         },
       });
     }
+    for (const c of PROJECT_COMMANDS) {
+      items.push({ id: `k-${c.id}`, group: "Run", label: `keryx ${c.args.join(" ")}`, detail: c.description, icon: "play", run: () => void runProject(c.args, `keryx ${c.args.join(" ")}`) });
+    }
+    items.push({ id: "k-wiki-enrich", group: "Run", label: "keryx wiki enrich…", detail: "Fill draft pages with a model: one job or waves", icon: "wand", run: () => setEnrich(true) });
     items.push({ id: "p-open", group: "Projects", label: "Open Folder…", icon: "folderOpen", hint: `${MOD}O`, run: () => void openFolder() });
     for (const r of recents) {
       if (r === cwd) continue;
@@ -337,7 +349,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       { id: "t-dark", group: "Appearance", label: "Theme: Dark", icon: "moon", run: () => setPrefs({ theme: "dark" }) },
     );
     return items;
-  }, [go, s, state.busy, state.phase, state.modes, state.commands, state.sessions, state.sessionId, recents, cwd, openFolder, switchProject, fillComposer]);
+  }, [go, s, state.busy, state.phase, state.modes, state.commands, state.sessions, state.sessionId, recents, cwd, openFolder, switchProject, fillComposer, runProject]);
 
   // The title bar names the project and the view; the page below keeps only its own toolbar.
   const title =
@@ -370,6 +382,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       onNewWindow={(p) => void windowOpenProject(p)}
       onCloseProject={onCloseProject}
       onPalette={() => setPalette("")}
+      actions={<ProjectMenu run={runProject} onEnrich={() => setEnrich(true)} />}
     >
       {/* The session view stays mounted so the transcript and draft survive view switches. */}
       <div className="view" hidden={view !== "session"}>
@@ -387,6 +400,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       ) : null}
 
       {providers.request ? <ProvidersDialog request={providers.request} api={providersApi} onClose={providers.close} /> : null}
+      {enrich ? <WikiEnrichDialog listProviders={listProviders} onRun={(args, title) => void runProject(args, title)} onClose={() => setEnrich(false)} /> : null}
       {palette !== null ? <CommandPalette items={paletteItems} initialQuery={palette} onClose={() => setPalette(null)} /> : null}
 
       {s.fatal && !(s.fatalHidden && (s.fatal.kind === "incompatible" || s.fatal.kind === "noShell")) ? (

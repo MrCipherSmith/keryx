@@ -112,6 +112,8 @@ export function useAcpSession(cwd: string) {
   /** The incompatible-keryx dialog was put away; `fatal` itself stays, so the window keeps saying so. */
   const [fatalHidden, setFatalHidden] = useState(false);
   const [extensions, setExtensions] = useState<readonly string[]>([]);
+  /** The keryx this window runs (`acp_start`), for project commands run in a terminal tab. */
+  const [keryxPath, setKeryxPath] = useState<string | null>(null);
   const challengeListeners = useRef(new Set<(c: LoginChallenge) => void>());
   const live = useRef<Live>({ client: null, gen: 0, initialized: false, usable: false, commandMethod: false, extensions: [], unlisten: null, reg: new SessionRegistry<Turn>() });
 
@@ -503,6 +505,7 @@ export function useAcpSession(cwd: string) {
         const start = await acpStart(cwd, false, opts.preferBundled === true);
         if (l.gen !== gen) return;
         canFallBack = start.canFallBack === true;
+        setKeryxPath(start.keryxPath);
         if (start.note) dispatch({ t: "banner", level: "info", text: start.note });
 
         const init = await client.request<InitializeResult>("initialize", {
@@ -894,6 +897,7 @@ export function useAcpSession(cwd: string) {
     focusDelegateTerminal: (runId: string): boolean => delegates.focus(runId),
     rpc,
     extensions,
+    keryxPath,
     onLoginChallenge,
     refreshTasks,
     /** A notice in the shown session's transcript. */
