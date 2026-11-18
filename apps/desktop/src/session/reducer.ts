@@ -602,7 +602,12 @@ export function reducer(state: WindowState, a: Action): WindowState {
     case "flags":
       return {
         ...state,
-        sessions: state.sessions.map((s) => (s.sessionId === a.sessionId ? { ...s, _meta: { ...s._meta, keryx: a.flags } } : s)),
+        // New flags replace the old ones; the message count keryx listed stays.
+        sessions: state.sessions.map((s) => {
+          if (s.sessionId !== a.sessionId) return s;
+          const count = s._meta?.keryx?.messageCount;
+          return { ...s, _meta: { ...s._meta, keryx: count === undefined ? a.flags : { ...a.flags, messageCount: count } } };
+        }),
       };
     case "removed": {
       // Moved to the trash: gone from the list and the window. The shown one leaves nothing shown.
