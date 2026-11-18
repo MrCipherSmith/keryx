@@ -418,7 +418,9 @@ default) is everything the rest of this section describes, unchanged. `shell`
 is what the keryx desktop app launches, and is open to any ACP client:
 
 - **Tools:** the roster `keryx shell` builds, from the same factory, minus
-  `spawn_subagent` and the bus, scheduling and operator-confirm tools — so
+  the bus, scheduling and operator-confirm tools — so `spawn_subagent` (one
+  per session, children on the session's model, every dispatch gated like
+  `keryx shell`'s, so orchestrator skills such as flow-orchestrator run),
   `web_fetch`/`web_search`, background shell tasks (`shell_task_*`), the
   execution-plan tools, workspace and Slate tools, and one `search_tool`/
   `use_tool` pair over keryx's own configured MCP servers merged with the

@@ -507,6 +507,8 @@ export async function acpCommand(args: string[]): Promise<void> {
             modelId: resolution.modelId,
             turnSettings: resolution.turnSettings,
             ...(resolution.models !== undefined ? { models: resolution.models } : {}),
+            // A child on another model than the session's is built the way `keryx shell` builds it.
+            ...(resolution.source !== "fixture" ? { makeSubagentProvider: realMakeProvider(() => {}) } : {}),
           }
         : { providerUnavailable: resolution.message, providerId: "", modelId: "" }),
       agentInfo: { name: "keryx", version: packageJson.version },
