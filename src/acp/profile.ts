@@ -15,6 +15,14 @@ export const ACP_PROFILES: readonly AcpProfile[] = ["editor", "shell"];
 
 export const DEFAULT_ACP_PROFILE: AcpProfile = "editor";
 
+/**
+ * The oldest Keryx desktop app (`apps/desktop`, `desktop-v*` releases) this
+ * keryx works with (decision D-15). Raise it when a `shell`-profile change
+ * needs a newer client; an older app then shows its update banner as
+ * required. Reported in `initialize._meta.keryx` and by `keryx app status`.
+ */
+export const MIN_DESKTOP_VERSION = "0.1.0";
+
 export function isAcpProfile(value: string): value is AcpProfile {
   return (ACP_PROFILES as readonly string[]).includes(value);
 }
@@ -78,6 +86,7 @@ export interface KeryxAcpProfileMeta {
   readonly profiles: readonly AcpProfile[];
   readonly extensions: readonly string[];
   readonly liveSessions?: true;
+  readonly minDesktopVersion?: string;
 }
 
 export interface KeryxAcpInfo extends KeryxAcpProfileMeta {
@@ -89,7 +98,7 @@ export function keryxAcpProfileMeta(profile: AcpProfile): KeryxAcpProfileMeta {
     profile,
     profiles: [...ACP_PROFILES],
     extensions: acpProfileExtensions(profile),
-    ...(profile === "shell" ? { liveSessions: true as const } : {}),
+    ...(profile === "shell" ? { liveSessions: true as const, minDesktopVersion: MIN_DESKTOP_VERSION } : {}),
   };
 }
 

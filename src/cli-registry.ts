@@ -59,6 +59,7 @@ import { harnessCommand } from "./commands/harness";
 import { shellCommand } from "./commands/shell";
 import { sessionsCommand } from "./commands/sessions";
 import { acpCommand } from "./commands/acp";
+import { appCommand } from "./commands/app";
 import { busCommand } from "./commands/bus";
 import { reportCommand } from "./commands/report";
 import { modulesCommand } from "./commands/modules";
@@ -182,6 +183,7 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   sessions: sessionsCommand,
   session: sessionsCommand,
   acp: acpCommand,
+  app: appCommand,
   bus: busCommand,
   report: reportCommand,
   version: versionCommand,
@@ -272,6 +274,8 @@ export const USAGE_BODY = `Usage:
                                                List / branch / export sessions for the current project
   keryx acp [--provider <p>] [--model <m>] [--base-url <url>] [--data-dir <dir>]
                                                Agent Client Protocol agent server over stdio
+  keryx app status [--json] | install | update [--pre] [--dir <folder>] [--wait-pid <pid>] [--relaunch] | build
+                                               Install, update or build the Keryx desktop app (macOS) from GitHub Releases
   keryx bus list [--json] | log [--since <seq>] [--limit N] [--json] | send <@name|@all> [--kind <k>] [--reply-to <id>] <text> | prune
                                                Agent bus: peers, events and messages shared across this clone's worktrees
   keryx report --to @name [--from <name>] "<text>"
@@ -477,6 +481,7 @@ Commands:
             Sessions: -c continue last in this project, -r [id] resume (per-project).
   sessions  List or export per-project shell sessions
   acp       Speak ACP v1 (newline-delimited JSON-RPC) over stdio, for an ACP client (e.g. an editor)
+  app       Install, update, build or check the Keryx desktop app (macOS)
   bus       Agent bus: list peers and leases, read the log, send a message, prune
   version   Check whether a newer npm release is available
   harness   Run a single provider turn (harness run) and print structured events
@@ -577,6 +582,7 @@ const DEEP_HELP_GROUPS: ReadonlySet<string> = new Set(["agents", "shell"]);
  * per-subcommand allowlist.
  */
 const HELP_SAFE_VERBS: ReadonlySet<string> = new Set([
+  "app",
   "skills",
   "memory",
   "security",

@@ -7,7 +7,8 @@ import { Spinner } from "../components/ui";
 import { useToast } from "../components/Toasts";
 
 const SOURCES: Array<{ id: KeryxSource; label: string; help: string }> = [
-  { id: "bundled", label: "Bundled keryx", help: "The keryx inside this app. Always compatible (recommended)." },
+  { id: "auto", label: "Automatic", help: "keryx on your PATH (an npm install, updated with npm i -g), else the keryx inside this app (recommended)." },
+  { id: "bundled", label: "Bundled keryx", help: "The keryx inside this app. Always compatible, updated only with the app." },
   { id: "path", label: "keryx on PATH", help: "The keryx your login shell finds, such as a Homebrew or npm install." },
   { id: "custom", label: "Custom executable", help: "A binary or wrapper script you choose, such as a development build." },
 ];

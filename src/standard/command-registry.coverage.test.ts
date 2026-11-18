@@ -102,6 +102,11 @@ const EXCLUSIONS: ReadonlyArray<{ verb: string; reason: string }> = [
       "binds stdio as a JSON-RPC channel and runs until signalled, like serve-mcp and shell; it owns stdout as the protocol wire, so it has no machine-consumable result a descriptor could describe",
   },
   {
+    verb: "app",
+    reason:
+      "installs or replaces a macOS application bundle from a network download, or runs a local build; an operator action on the machine, not a project operation an agent should be offered",
+  },
+  {
     verb: "__sandbox-net-forward",
     reason:
       "internal helper keryx starts inside an unattended sandbox to bridge a local port to the allowlist proxy's socket; it runs until the sandboxed command ends and is never an operation for an agent to call",

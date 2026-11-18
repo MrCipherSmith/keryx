@@ -26,6 +26,7 @@ import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import { buildFqn } from "../mcp-servers/catalog";
 import { ACP_TOOL_KIND_OTHER_EXCEPTIONS, toolKindFor } from "./agent-io";
 import { ACP_PERMISSION_OPTION_IDS } from "./permission";
+import { MIN_DESKTOP_VERSION } from "./profile";
 import { AcpProcessClient, type WireMessage } from "./process-client.test-helpers";
 import { ACP_PROTOCOL_VERSION } from "./protocol";
 import { ACP_SHELL_NO_SPAWN_DENIED_TOOLS, buildAcpShellSessionTools } from "./shell-roster";
@@ -444,6 +445,7 @@ describe("AC6 — initialize reports the real version and the profiles; _keryx/i
           "_keryx/session_trash",
         ],
         liveSessions: true,
+        minDesktopVersion: MIN_DESKTOP_VERSION,
       });
       const infoId = c.request("_keryx/info", {});
       const info = await c.waitFor((m) => m.id === infoId, "the _keryx/info reply");

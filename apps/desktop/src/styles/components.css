@@ -210,3 +210,8 @@ input, select, textarea { font: inherit; color: var(--fg); }
   font: 11px/1.45 var(--mono); background: var(--code-bg); border-radius: var(--r-sm);
 }
 .toast-actions { display: flex; margin: -4px -4px 0 0; }
+
+/* ---- update banner (bottom-left, so it never covers the toasts) ---- */
+.update-banner { position: fixed; left: var(--sp-4); bottom: var(--sp-4); z-index: 60; width: min(380px, calc(100vw - 32px)); }
+.update-banner-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-2); }
+.update-banner-error { color: var(--danger); }
