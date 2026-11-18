@@ -587,6 +587,7 @@ version checks and the flows parsers and argv builder.
 - Composer: multi-line, Enter sends, Shift+Enter newline, `/` command
   completion from `available_commands_update`, Cancel during a turn.
 - Side panel: sessions (list, load, new), mode selector, model selector
+  - A model chosen there (`session/set_config_option` `model`, `/model`, or the composer provider selector) is remembered: it is saved as `keryx shell`'s saved provider/model (`auth.json`), so a NEW session starts on it, in the desktop and the terminal alike. Order: `--provider/--model` flags at launch, then the remembered choice if still available, then the launch default. A loaded session keeps its own model; only an explicit switch writes it.
   (`session/set_config_option` `model`), plan, usage.
 - Dialogs: permission (options from the request; `allow_always` only when
   offered), `ask_user`, incompatible-keryx error, session-leased error with

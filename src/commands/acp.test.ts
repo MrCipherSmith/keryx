@@ -11,10 +11,12 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { FakeProvider } from "../harness/provider/fake-provider";
+import { acpModelChoice } from "../acp/models";
 import { OllamaProvider } from "../harness/provider/ollama/ollama-provider";
 import type { ProviderPort } from "../harness/provider/types";
 import {
   parseAcpArgs,
+  rememberAcpModel,
   resolveAcpProvider,
   shellGrantRefresh,
   shellModelSource,
@@ -391,5 +393,19 @@ describe("flow 288 T14 — model choices use the endpoints keryx shell would", (
     } finally {
       globalThis.fetch = realFetch;
     }
+  });
+});
+
+describe("a model chosen over ACP is keryx shell's saved selection", () => {
+  test("rememberAcpModel writes the shell's provider/model keys and clears a stale base URL", () => {
+    const dir = configDir({ provider: "old", model: "old-1", baseUrl: "http://stale", apiKeys: { K: "v" } });
+    rememberAcpModel(acpModelChoice("ollama", "llama"), dir);
+    const saved = JSON.parse(readFileSync(path.join(dir, "auth.json"), "utf8")) as Record<string, unknown>;
+    expect(saved["provider"]).toBe("ollama");
+    expect(saved["model"]).toBe("llama");
+    expect(saved["baseUrl"]).toBeUndefined();
+    expect(saved["apiKeys"]).toEqual({ K: "v" });
+    rememberAcpModel(acpModelChoice("custom", "m", "http://gw"), dir);
+    expect(JSON.parse(readFileSync(path.join(dir, "auth.json"), "utf8"))["baseUrl"]).toBe("http://gw");
   });
 });

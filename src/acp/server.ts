@@ -193,6 +193,13 @@ export interface AcpServerOptions {
    */
   readonly models?: AcpModelSource;
   /**
+   * Called after an EXPLICIT model switch (`session/set_config_option` or
+   * `/model`) took effect: never per turn, never on a load's restore. The CLI
+   * saves it as `keryx shell`'s saved provider/model, so the terminal and the
+   * desktop agree on the default. Best-effort: a throw is logged, not raised.
+   */
+  readonly rememberModel?: (choice: AcpModelChoice) => void;
+  /**
    * The longest a `session/new`/`session/load` waits for the model list
    * (flow 288, T14). `DEFAULT_MODEL_LIST_TIMEOUT_MS` otherwise.
    */
@@ -1132,6 +1139,12 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   /** `/reasoning <level>` for one session — the shell's session override, never saved. */
   const reasoningOverrides = new Map<string, ReasoningEffortLevel>();
   const launchChoice = acpModelChoice(options.providerId, options.modelId);
+  /**
+   * The model an operator last switched to explicitly on this connection. A NEW
+   * session starts on it (when it is still a choice and can be bound), else on
+   * the launch model, which is itself the saved selection unless flags said otherwise.
+   */
+  let rememberedValue: string | undefined;
 
   function launchModel(method: string): SessionModel {
     return {
@@ -1319,8 +1332,8 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   /**
    * Switch `sessionId` to the model `requested` names, from its next turn on.
    * Refused — with the reason, and the session left on its current model —
-   * when `requested` is not a choice or its provider cannot be built. Never
-   * writes `keryx shell`'s saved selection: the choice lives in this map.
+   * when `requested` is not a choice or its provider cannot be built. An
+   * explicit switch is also handed to `options.rememberModel` (the saved default for new sessions).
    * `"cancelled"` when `signal` (a `/model` command's turn slot) was aborted
    * while the provider was being built: nothing is applied.
    */
@@ -1362,7 +1375,28 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         data: { sessionId, condition: "session-released" },
       });
     }
+    rememberedValue = choice.value;
+    try {
+      options.rememberModel?.(choice);
+    } catch (error) {
+      options.logError(`acp: could not save ${choice.value} as the default model (${error instanceof Error ? error.message : String(error)})`);
+    }
     return sessionModels.get(sessionId) ?? next;
+  }
+
+  /** A NEW session starts on the remembered model when it is still available; otherwise it keeps the launch model. */
+  async function startOnRememberedModel(sessionId: string, method: string): Promise<void> {
+    const value = rememberedValue;
+    if (value === undefined || value === launchChoice.value || sessionModels.has(sessionId)) return;
+    const ticket = beginSwitch(sessionId);
+    const choice = findAcpModelChoice(await modelChoices(sessionId, method), value, false);
+    if (choice === undefined) return;
+    const built = await bindChoice(choice, method);
+    if (typeof built === "string") {
+      options.logError(`acp: remembered model ${value} cannot run (${built}); the session starts on ${launchChoice.value}`);
+      return;
+    }
+    applySwitch(sessionId, ticket, { choice, binding: built });
   }
 
   /**
@@ -1637,6 +1671,8 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         bindSessionMcp(sessionId, requestId, parsed, state.resolvedRoot);
         announceCommands(sessionId, requestId);
         const mode = shellProfile ? bindShellSession(state, requestId) : undefined;
+        await startOnRememberedModel(sessionId, method);
+        refuseIfStopping(method);
         // The model list, which the connection started resolving at launch (flow 288, AC5).
         const configOptions = await configOptionsFor(sessionId, method);
         refuseIfStopping(method);

@@ -16,7 +16,7 @@ import { loadAcpFixture } from "../acp/fixture-provider";
 import { acpModelChoice, type AcpModelChoice, type AcpModelSource, type AcpTurnSettings } from "../acp/models";
 import { FakeProvider } from "../harness/provider/fake-provider";
 import type { ProviderPort } from "../harness/provider/types";
-import { envWithSavedApiKeys, loadShellConfig, shellConfigPath } from "../lib/shell-config";
+import { envWithSavedApiKeys, loadShellConfig, shellConfigPath, updateShellConfig } from "../lib/shell-config";
 import { resolveAgentMaxOutputTokens, resolveReasoningEffort } from "./agent";
 import { resolveModelsForPicker, resolveProviderModelParamsByName } from "./providers";
 import { detectProviders, type DetectedProvider } from "./select";
@@ -440,6 +440,20 @@ export function shellGrantRefresh(
   };
 }
 
+/**
+ * Save an explicitly chosen model as `keryx shell`'s saved provider/model (the
+ * keys its `/model` writes), so the terminal and the desktop start new sessions
+ * on the same one. A choice without a base URL clears a stale saved one.
+ */
+export function rememberAcpModel(choice: AcpModelChoice, configDir?: string): void {
+  updateShellConfig(({ baseUrl: _dropped, ...rest }) => ({
+    ...rest,
+    provider: choice.providerId,
+    model: choice.modelId,
+    ...(choice.baseUrl !== undefined ? { baseUrl: choice.baseUrl } : {}),
+  }), configDir);
+}
+
 export async function acpCommand(args: string[]): Promise<void> {
   if (args[0] === "help" || args.includes("--help") || args.includes("-h")) {
     printHelp();
@@ -507,6 +521,8 @@ export async function acpCommand(args: string[]): Promise<void> {
             modelId: resolution.modelId,
             turnSettings: resolution.turnSettings,
             ...(resolution.models !== undefined ? { models: resolution.models } : {}),
+      // An explicit model switch is keryx shell's saved selection too (the keys its /model saves).
+      rememberModel: (choice) => rememberAcpModel(choice),
           }
         : { providerUnavailable: resolution.message, providerId: "", modelId: "" }),
       agentInfo: { name: "keryx", version: packageJson.version },

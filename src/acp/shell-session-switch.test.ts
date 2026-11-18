@@ -657,8 +657,9 @@ describe(`shell profile — the idle cap of ${MAX_HELD_SESSIONS} held sessions (
       expect(loaded.error).toBeUndefined();
       expect((loaded.result?.["modes"] as { currentModeId: string }).currentModeId).toBe("ask");
       expect((loaded.result?.["configOptions"] as { currentValue: string }[])[0]?.currentValue).toBe(m2.value);
-      // The provider binding was dropped with the release and is built again.
-      expect(binds).toBe(2);
+      // The provider binding was dropped with the release and is built again; every
+      // session opened meanwhile started on the remembered model, which binds it too.
+      expect(binds).toBe(2 + MAX_HELD_SESSIONS);
 
       // A switch after the reload applies over the restore (the sequence did not restart).
       expect(await setModel(a, LAUNCH)).toBe(LAUNCH);
