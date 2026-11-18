@@ -714,7 +714,7 @@ async function runEnrich(args: string[]): Promise<void> {
     optionValue(args, "--page") ??
     args.find((arg, i) => !arg.startsWith("--") && !(i > 0 && valueFlags.has(args[i - 1] as string)));
 
-  const { DEFAULT_GROUP_SIZE, parseGroupSize, parsePagesArgument } = await import("../wiki/enrich-groups");
+  const { DEFAULT_GROUP_SIZE, parseGroupSize, parsePagesArgument } = await import("../wiki/service");
   if (groupRaw !== undefined && groupRaw !== "related") {
     console.error(`--group accepts only "related", got "${groupRaw}"`);
     process.exitCode = 1;
