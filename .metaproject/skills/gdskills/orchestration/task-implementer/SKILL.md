@@ -223,7 +223,7 @@ Rules `resolve-context` listed are already read (2.0c); load the rest by what yo
 - `async`/`await` or queue code → `async-patterns.mdc`
 - New architectural layers or modules → `clean-architecture.mdc`
 
-Resolve every rule above project first, bundled second: read `.metaproject/rules/project/<rule>.mdc` when it exists, otherwise the bundled copy: `.metaproject/rules/<rule>.mdc` for a name that carries its layer (`activity/implement.mdc`, `stacks/react/…`), `.metaproject/rules/core/<rule>.mdc` for a bare one. A project rule with the same name replaces the bundled one (never read both as if they agreed). `.metaproject/rules/core/` is the tree `keryx init` installs and `keryx update` overwrites, so a project's own rules live only in `rules/project/`.
+Resolve every rule above project first, bundled second: read `.metaproject/rules/project/<rule>.mdc` when it exists, otherwise the bundled copy: `.metaproject/rules/<rule>.mdc` for a name that carries its layer (`activity/…`, `stacks/react/…`), `.metaproject/rules/core/<rule>.mdc` for a bare one. A project rule with the same name replaces the bundled one (never read both as if they agreed). `.metaproject/rules/core/` is the tree `keryx init` installs and `keryx update` overwrites, so a project's own rules live only in `rules/project/`.
 
 ### Phase 3: PLAN
 

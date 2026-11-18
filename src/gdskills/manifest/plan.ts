@@ -44,9 +44,9 @@ import { readMetaprojectManifest } from "../../lib/metaproject-state";
 import { detectStackPacks } from "../stack-rules-install";
 import { resolveGlobs } from "./glob";
 import { CLAUDE_ACTIVITY_RULE_PREFIX, installedSha256 } from "./content";
+import { HARNESS_IDS, type HarnessId, type InstallManifest, type ManifestModule, type ManifestProfile, type ModuleKind } from "./manifest";
 
 export { CLAUDE_ACTIVITY_RULE_PREFIX };
-import { HARNESS_IDS, type HarnessId, type InstallManifest, type ManifestModule, type ManifestProfile, type ModuleKind } from "./manifest";
 
 export interface StackDetectionInput {
   tags: Record<string, boolean>;
@@ -124,7 +124,6 @@ const DEFAULT_TARGET: HarnessId = "claude";
  * per-module loop runs at all.
  */
 export const SUPPORTED_TARGETS: readonly HarnessId[] = ["claude", "keryx-shell"];
-
 
 /**
  * F17: the exact set of directories `destinationFor` (below) can ever write

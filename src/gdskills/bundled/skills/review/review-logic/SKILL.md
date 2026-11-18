@@ -72,7 +72,7 @@ Logic Review Progress:
 
 See shared script: `.metaproject/skills/gdskills/shared/git-merge-base.md`
 
-Review scope: **changes introduced in the current branch since merge-base only**.
+In diff mode, review scope: **changes introduced in the current branch since merge-base only**.
 Do not review unrelated files.
 
 **Supplied text first.** When the payload carries `slices`, `context_files`, `diff` or `file_contents`, review exactly that text and never rebuild the diff. A choice's history (law 4) is read with `git log`, `git blame` and `git show` only where the host gives a read-only child git; on keryx shell a read-only child has no shell and no git tool, so read the `git log -L`/`git blame` excerpts the payload supplies, or say the history was not read. Only with none supplied, collect it:

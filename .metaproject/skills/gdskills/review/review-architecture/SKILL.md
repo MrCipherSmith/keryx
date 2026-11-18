@@ -235,7 +235,7 @@ Read the review activity rule before the code: `.metaproject/rules/project/activ
 
 ### Architecture laws
 
-- Only flag actual violations found **in the diff**, not pre-existing issues untouched by the change.
+- In diff mode, only flag actual violations found **in the diff**, not pre-existing issues untouched by the change.
 - Every finding MUST cite a specific `file:line` from the diff.
 - Architecture opinions without a clear, named violation (layer, dependency, pattern misuse) are `info` only — never `blocker` or `major`.
 - Do not flag correct framework usage as a violation just because an alternative exists.
@@ -305,7 +305,7 @@ When dispatched by `review-orchestrator` or `job-orchestrator`, the prompt MAY c
 
 | Rationalization | Why it is wrong |
 |----------------|-----------------|
-| "I see a potential layer violation in a file not in the diff" | Scope is diff-only; pre-existing issues are out of scope unless the diff touches them |
+| "I see a potential layer violation in a file not in the diff" | In diff mode, scope is diff-only; pre-existing issues are out of scope unless the diff touches them |
 | "This architecture opinion makes things cleaner, so it's a major" | Opinions without a named violation are `info` only |
 | "I'll flag every cross-import as a boundary violation" | Not all cross-imports violate boundaries; check whether the dependency direction is correct |
 | "The team probably didn't intend this pattern" | Unless the context doc or a clear rule says otherwise, assume intentional; use `info` if unsure |

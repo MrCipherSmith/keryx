@@ -69,6 +69,23 @@ for (const target of ["claude", "keryx-shell"] as const) {
     }
     // review-orchestrator and the core lenses of the `core` profile.
     expect(lenses).toBeGreaterThan(5);
+
+    if (target === "claude") {
+      // N1: every activity citation in every installed claude file — skills and rules, any spelling — resolves.
+      const installed = plan.modules.flatMap((m) => m.files).map((f) => f.destination);
+      const dangling: string[] = [];
+      let rewritten = 0;
+      for (const file of installed) {
+        const text = await readFile(path.join(root, file), "utf8");
+        for (const m of text.matchAll(/(?<![\w./-])(?:\.metaproject\/)?(?:rules\/)?activity\/[a-z0-9._-]+\.mdc/g)) dangling.push(`${file}: ${m[0]}`);
+        for (const m of text.matchAll(/\.claude\/rules\/keryx-activity-[a-z0-9._-]+\.mdc/g)) {
+          rewritten += 1;
+          if (!existsSync(path.join(root, m[0]))) dangling.push(`${file}: ${m[0]}`);
+        }
+      }
+      expect(dangling).toEqual([]);
+      expect(rewritten).toBeGreaterThan(lenses);
+    }
   });
 }
 
@@ -90,13 +107,26 @@ test("M3: every lens names the project's own review rule first, at the slot rule
   expect(lenses).toBe(25);
 });
 
-test("M2: the claude rewrite touches only a claude skill's keryx activity-rule path, never the project's own slot", () => {
-  const text = "`.metaproject/rules/project/activity/review.mdc` else `.metaproject/rules/activity/review.mdc`; see `.metaproject/rules/core/x.mdc`";
-  const claude = installedContent("claude", ".claude/skills/review-logic/SKILL.md", Buffer.from(text)).toString("utf8");
-  expect(claude).toBe(
-    "`.metaproject/rules/project/activity/review.mdc` else `.claude/rules/keryx-activity-review.mdc`; see `.metaproject/rules/core/x.mdc`",
-  );
-  // A rule file, and every keryx-shell destination, is copied as it ships.
-  expect(installedContent("claude", ".claude/rules/x.mdc", Buffer.from(text)).toString("utf8")).toBe(text);
+test("M2/N1: the claude rewrite covers every spelling of an activity-rule path in skills and rules, never the project's own slot", () => {
+  const text =
+    "`.metaproject/rules/project/activity/review.mdc` else `.metaproject/rules/activity/review.mdc`; `rules/activity/implement.mdc`, `activity/test.mdc`; see `.metaproject/rules/core/x.mdc`";
+  const expected =
+    "`.metaproject/rules/project/activity/review.mdc` else `.claude/rules/keryx-activity-review.mdc`; `.claude/rules/keryx-activity-implement.mdc`, `.claude/rules/keryx-activity-test.mdc`; see `.metaproject/rules/core/x.mdc`";
+  expect(installedContent("claude", ".claude/skills/review-logic/SKILL.md", Buffer.from(text)).toString("utf8")).toBe(expected);
+  // A rule file on the claude target is rewritten too (N1); every keryx-shell destination is copied as it ships.
+  expect(installedContent("claude", ".claude/rules/tdd-workflow.mdc", Buffer.from(text)).toString("utf8")).toBe(expected);
   expect(installedContent("keryx-shell", ".metaproject/skills/gdskills/review/review-logic/SKILL.md", Buffer.from(text)).toString("utf8")).toBe(text);
+});
+
+test("N3: review.mdc scopes by mode, and its path-mode rule is the orchestrator's — the whole file, as it stands", async () => {
+  const read = (rel: string): Promise<string> => readFile(path.join(sourceRoot, "src", "gdskills", "bundled", rel), "utf8");
+  const rule = await read("rules/activity/review.mdc");
+  const orchestrator = await read("skills/review/review-orchestrator/SKILL.md");
+  const paragraph = (text: string, start: string): string => text.split("\n\n").find((p) => p.startsWith(start)) ?? "";
+  const diffMode = paragraph(rule, "**Diff mode** (`scope_mode: diff`");
+  const pathMode = paragraph(rule, "**Path mode** (`scope_mode: path`)");
+  expect(diffMode).toContain("changes introduced in the current branch since merge-base only");
+  for (const clause of ["entire file content", "not just added lines", "current state of the code, not only to changes"]) {
+    expect({ clause, rule: pathMode.includes(clause), orchestrator: orchestrator.includes(clause) }).toEqual({ clause, rule: true, orchestrator: true });
+  }
 });

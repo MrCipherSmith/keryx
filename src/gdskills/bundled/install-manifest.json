@@ -441,7 +441,9 @@
         "claude",
         "keryx-shell"
       ],
-      "dependencies": [],
+      "dependencies": [
+        "process-activity-rules"
+      ],
       "defaultInstall": true,
       "cost": "heavy",
       "stability": "stable"
@@ -456,7 +458,9 @@
         "claude",
         "keryx-shell"
       ],
-      "dependencies": [],
+      "dependencies": [
+        "process-activity-rules"
+      ],
       "defaultInstall": true,
       "cost": "heavy",
       "stability": "stable"

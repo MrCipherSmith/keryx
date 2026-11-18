@@ -54,7 +54,7 @@ module boundaries and circular imports; `review-style` owns names and readabilit
 
 ## Scope
 
-Only code introduced or modified in this change.
+In diff mode, only code introduced or modified in this change.
 
 **Supplied text first.** When the payload carries `slices`, `context_files`, `diff` or `file_contents`, review exactly that text and never rebuild the diff. A choice's history (law 4) is read with `git log`, `git blame` and `git show` only where the host gives a read-only child git; on keryx shell a read-only child has no shell and no git tool, so read the `git log -L`/`git blame` excerpts the payload supplies, or say the history was not read. Only with none supplied, collect it:
 ```bash
@@ -66,7 +66,7 @@ git diff --name-status "${BASE_SHA}" && git diff "${BASE_SHA}" && git ls-files -
 
 ### Shared laws (every reviewer)
 
-Read the review activity rule before the code: `.metaproject/rules/project/activity/review.mdc` when the project keeps its own, else `.metaproject/rules/activity/review.mdc`. It holds what every reviewer applies and this file does not restate: scope (diff mode: the change; path mode: the whole file), the four shared laws, `info`, one finding per defect across lenses, and where severity comes from. **Debt the change did not create** is not a finding (`solid-principles.mdc`): check the before-state first. It is a finding when the change crosses a threshold, or adds a self-contained block that meets it alone; cite that block.
+Read the review activity rule before the code: `.metaproject/rules/project/activity/review.mdc` when the project keeps its own, else `.metaproject/rules/activity/review.mdc`. It holds what every reviewer applies and this file does not restate: scope (diff mode: the change; path mode: the whole file), the four shared laws, `info`, one finding per defect across lenses, and where severity comes from. In diff mode, **debt the change did not create** is not a finding (`solid-principles.mdc`): check the before-state first. It is a finding when the change crosses a threshold, or adds a self-contained block that meets it alone; cite that block.
 
 ### Clean Code laws
 
