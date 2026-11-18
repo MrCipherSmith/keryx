@@ -190,6 +190,21 @@ test("each role loads its activity rule first: implement, test and review (ADR-0
   expect(paths(overridden.entries)).toEqual([P("activity/review.mdc")]);
 });
 
+test("the activity rule leads the bundled rules, ahead of a stack pack's (P5 review R4)", async () => {
+  const root = await project();
+  await core(root, { "tdd-workflow.mdc": "a\n", "error-handling.mdc": "b\n", "solid-principles.mdc": "c\n" });
+  await put(root, ".metaproject/rules/activity/implement.mdc", "implement\n");
+  await put(root, S("mobx/mobx-store-template.mdc"), '---\npaths: ["**/*store*.ts"]\n---\nstores\n');
+  const resolved = await resolveProjectContext({ projectRoot: root, files: ["src/store.ts"], taskType: "store_logic", for: "implement" });
+  expect(paths(resolved.entries)).toEqual([
+    ".metaproject/rules/activity/implement.mdc",
+    S("mobx/mobx-store-template.mdc"),
+    C("tdd-workflow.mdc"),
+    C("error-handling.mdc"),
+    C("solid-principles.mdc"),
+  ]);
+});
+
 test("a task type's stack rule is absent where its pack is not installed, and listed once where a task file's glob also selects it", async () => {
   const root = await project();
   await core(root, { "tdd-workflow.mdc": "a\n", "error-handling.mdc": "b\n", "solid-principles.mdc": "c\n" });

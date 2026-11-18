@@ -144,7 +144,7 @@ finding ids prefixed `PC-`, then a short summary; `NEEDS_CONTEXT` rather than a 
 
 ### Shared laws (every reviewer)
 
-Read `.metaproject/rules/activity/review.mdc` before the diff. It holds what every reviewer applies and this file does not restate: scope (the change, not pre-existing debt), the four shared laws, `info`, one finding per defect across lenses, and where severity comes from.
+Read the review activity rule before the code: `.metaproject/rules/project/activity/review.mdc` when the project keeps its own, else `.metaproject/rules/activity/review.mdc`. It holds what every reviewer applies and this file does not restate: scope (diff mode: the change; path mode: the whole file), the four shared laws, `info`, one finding per defect across lenses, and where severity comes from.
 
 ---
 

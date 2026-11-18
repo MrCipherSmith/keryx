@@ -489,7 +489,9 @@
         "claude",
         "keryx-shell"
       ],
-      "dependencies": [],
+      "dependencies": [
+        "process-activity-rules"
+      ],
       "defaultInstall": true,
       "cost": "heavy",
       "stability": "stable"
@@ -507,7 +509,8 @@
         "keryx-shell"
       ],
       "dependencies": [
-        "core-common-rules"
+        "core-common-rules",
+        "process-activity-rules"
       ],
       "defaultInstall": true,
       "cost": "medium",
@@ -524,7 +527,8 @@
         "keryx-shell"
       ],
       "dependencies": [
-        "core-common-rules"
+        "core-common-rules",
+        "process-activity-rules"
       ],
       "defaultInstall": true,
       "cost": "medium",

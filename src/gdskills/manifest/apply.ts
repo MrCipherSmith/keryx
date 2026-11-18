@@ -6,6 +6,7 @@
 // enforce.
 
 import { readFile } from "node:fs/promises";
+import { installedContent } from "./content";
 import path from "node:path";
 import { pathExists } from "../../lib/fs";
 import { writeContained } from "../../lib/contained-write";
@@ -227,7 +228,7 @@ export async function applyInstall(
         }
       }
 
-      const sourceBytes = await readFile(path.join(sourceRoot, file.source));
+      const sourceBytes = installedContent(plan.target, file.destination, await readFile(path.join(sourceRoot, file.source)));
       await writeContained(destRoot, file.destination, sourceBytes);
       written.push(file.destination);
       writtenPaths.push(file.destination);

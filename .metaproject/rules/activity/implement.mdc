@@ -43,13 +43,13 @@ themselves are designed is `rules/activity/test.mdc`.
 ## Back-compat
 
 A change to something other code relies on — an exported signature, a CLI flag,
-a file or wire format, a stored field — either keeps the old callers working or
-names, in the report, every caller it breaks.
+a file or wire format, a stored field — keeps the old callers working. Where a
+rule allows a break (a new major version, a deprecation window), follow that
+rule, and name in the report every caller the change breaks.
 
 ## Done
 
 A change is done when it clears the bar in `rules/core/definition-of-done.mdc`.
-The rules it must satisfy are the ones the resolver listed for the task: the
-core rules (`rules/core/`), the detected stack packs' rules
-(`rules/stacks/<pack>/`) and this rule. A deviation from one of them is stated
-in the report, not left for review to find.
+The rules it must satisfy are the ones the resolver listed for the task, this
+one included. A deviation from one of them is stated in the report, not left for
+review to find; stating it does not make it acceptable.

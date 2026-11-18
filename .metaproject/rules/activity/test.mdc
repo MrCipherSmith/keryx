@@ -40,5 +40,7 @@ fixed by waiting on the state it races.
 ## A failing test
 
 A test that asserts nothing covers nothing while reporting coverage — strictly
-worse than no test. Never loosen an assertion to get green; when the test is
-right and the code is wrong, report the failure.
+worse than no test. Never loosen an assertion to get green. When the test is
+right and the code is wrong, an implementer fixes the code (GREEN in
+`rules/activity/implement.mdc`); a test writer who may not edit the source
+reports the failure.

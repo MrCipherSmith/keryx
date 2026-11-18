@@ -34,6 +34,7 @@
 //   should ever ship `defaultInstall: false`.
 
 import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { sha256OfFile } from "../../integrations/install-state";
 import { generateCapabilityMatrix, type CapabilityMatrixDocument, type MatrixSurfaceState } from "../../integrations/matrix";
@@ -42,6 +43,9 @@ import { isKeryxRuleLayer, KERYX_RULE_LAYERS } from "../rule-references";
 import { readMetaprojectManifest } from "../../lib/metaproject-state";
 import { detectStackPacks } from "../stack-rules-install";
 import { resolveGlobs } from "./glob";
+import { CLAUDE_ACTIVITY_RULE_PREFIX, installedSha256 } from "./content";
+
+export { CLAUDE_ACTIVITY_RULE_PREFIX };
 import { HARNESS_IDS, type HarnessId, type InstallManifest, type ManifestModule, type ManifestProfile, type ModuleKind } from "./manifest";
 
 export interface StackDetectionInput {
@@ -120,6 +124,7 @@ const DEFAULT_TARGET: HarnessId = "claude";
  * per-module loop runs at all.
  */
 export const SUPPORTED_TARGETS: readonly HarnessId[] = ["claude", "keryx-shell"];
+
 
 /**
  * F17: the exact set of directories `destinationFor` (below) can ever write
@@ -282,7 +287,11 @@ function parseStackRuleSource(source: string): { pack: string; file: string } | 
  * where <layer> is the bundled layer the rule ships in (`core`, `process`,
  * `activity` — ADR-0001 D1); a rule from outside the layer tree lands in
  * `core`. The claude target stays flat, so the planner's collision check is
- * what keeps two layers from shipping one basename.
+ * what keeps two layers from shipping one basename. An activity rule's name
+ * (`review.mdc`, `test.mdc`) is a role, not a topic, so on the claude target
+ * it carries {@link CLAUDE_ACTIVITY_RULE_PREFIX}: `.claude/rules/keryx-activity-review.mdc`
+ * cannot collide with a file of the user's own. A claude skill citing it is
+ * rewritten to that path as it is installed (`content.ts`).
  * A stack-pack rule (source under `stacks/<pack>/rules/`) is namespaced by
  * pack id instead of landing at the bare `core` rule destination, so two
  * packs shipping a same-named file (e.g. both ship `coding-style.mdc`) never
@@ -301,7 +310,11 @@ function destinationFor(target: HarnessId, kind: ModuleKind, source: string): st
       return { error: `target "${target}" has no rule destination in the v1 destination table` };
     }
     const basename = path.posix.basename(source);
-    if (target === "claude") return `.claude/rules/${basename}`;
+    if (target === "claude") {
+      return parseLayerRuleSource(source) === "activity"
+        ? `.claude/rules/${CLAUDE_ACTIVITY_RULE_PREFIX}${basename}`
+        : `.claude/rules/${basename}`;
+    }
     if (target === "keryx-shell") return `.metaproject/rules/${parseLayerRuleSource(source) ?? "core"}/${basename}`;
     return { error: `target "${target}" has no rule destination in the v1 destination table` };
   }
@@ -636,7 +649,10 @@ export async function planInstall(input: PlanInstallInput): Promise<InstallPlan>
         destinationError = `module "${moduleId}": ${destination.error}`;
         break;
       }
-      const sha256 = (await sha256OfFile(repoRoot, source)) ?? "";
+      const sourceSha256 = await sha256OfFile(repoRoot, source);
+      // What the destination holds once written: a claude skill's activity-rule citation is rewritten (content.ts).
+      const sha256 =
+        sourceSha256 === undefined ? "" : installedSha256(target, destination, await readFile(path.join(repoRoot, source)));
       files.push({ source, destination, sha256 });
     }
     if (destinationError !== undefined) {

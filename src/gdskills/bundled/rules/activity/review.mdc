@@ -1,5 +1,5 @@
 ---
-description: "Review discipline every reviewer applies, whatever the lens or stack: review the change and not pre-existing debt, the four shared laws (a finding names its failure path, never the theoretical, one finding per class, a deliberate choice is read first), `info` is not a defect, one finding per defect across lenses, and where severity comes from. Use when reviewing a change under any review lens."
+description: "Review discipline every reviewer applies, whatever the lens or stack: scope by mode (diff mode: the change; path mode: the whole file), the four shared laws (a finding names its failure path, never the theoretical, one finding per class, a deliberate choice is read first), `info` is not a defect, one finding per defect across lenses, and where severity comes from. Use when reviewing a change under any review lens."
 alwaysApply: false
 ---
 
@@ -9,11 +9,11 @@ How a reviewer applies the core, language and framework rules to a change. This
 rule sets scope and method only. It rates nothing: a condition's severity comes
 from the rule row that rates it, and the levels from the canonical rubric below.
 
-## Scope: the change, not pre-existing debt
+## Scope: diff mode and path mode
 
-Review scope: **changes introduced in the current branch since merge-base only**. Pre-existing problems in unchanged lines are out of scope unless the diff makes them worse.
+**Diff mode** (`scope_mode: diff`, the default). Review scope: **changes introduced in the current branch since merge-base only**. Pre-existing problems in unchanged lines are out of scope unless the diff makes them worse. A lens may set its own line inside that one: `review-architecture` (directly touched by the diff), `review-clean-code` (debt the change did not create).
 
-**Debt the change did not create** is not a finding: check the before-state first. It is a finding when the change crosses a threshold, or adds a self-contained block that meets it alone; cite that block.
+**Path mode** (`scope_mode: path`). Reviewers check the entire file content, not just added lines. All findings apply to the current state of the code, not only to changes.
 
 ## Shared laws (every reviewer)
 
@@ -27,8 +27,8 @@ is rated by trigger and outcome — which does not generalise and stays there.
 
 ## `info` is not a defect
 
-**`info`** — it names neither. An observation, a preference, or a risk with no
-demonstrated path. It asks the author for no change.
+`info` is defined in `review-orchestrator/SKILL.md` → **Severity (canonical)**: it
+asks the author for no change. Law 1 says when a claim drops to it.
 
 ## One finding per defect, across lenses
 

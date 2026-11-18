@@ -107,8 +107,10 @@ const TYPE_RULES: Record<string, string[]> = {
 };
 
 /**
- * The activity rule each role loads first (ADR-0001 D5): how to apply the
- * layers in that role. It sets scope and method and rates nothing.
+ * The activity rule of each role (ADR-0001 D5): how to apply the layers in
+ * that role. It sets scope and method and rates nothing. It leads the bundled
+ * rules — after the project's own entries, its references and contracts, and
+ * ahead of the stack packs and the core rules.
  */
 const ACTIVITY_RULES: Record<ContextFor, string> = {
   implement: "activity/implement",
@@ -633,9 +635,13 @@ export async function resolveProjectContext(input: ResolveContextInput): Promise
   const task = truncateTaskText(input.taskText ?? "");
   // A stack rule a task type names can also match a task file's glob; it is listed once, by the glob.
   const seenBundled = new Set<string>();
+  // The role's activity rule (ADR-0001 D5) leads the bundled rules, ahead of
+  // the stack packs: it says how the rules after it are applied.
+  const [activityRule, ...otherBundledNames] = bundledNames;
   const bundled = [
+    ...(await collectBundled(projectRoot, activityRule === undefined ? [] : [activityRule])),
     ...stackRules,
-    ...(await collectBundled(projectRoot, bundledNames)),
+    ...(await collectBundled(projectRoot, otherBundledNames)),
     ...(await collectConditional(projectRoot, conditionalRules, files, task.text)),
   ].filter((entry) => !shadowed.has(entry.path) && !seenBundled.has(entry.path) && Boolean(seenBundled.add(entry.path)));
 

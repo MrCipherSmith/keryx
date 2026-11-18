@@ -66,7 +66,7 @@ git diff --name-status "${BASE_SHA}" && git diff "${BASE_SHA}" && git ls-files -
 
 ### Shared laws (every reviewer)
 
-Read `.metaproject/rules/activity/review.mdc` before the diff. It holds what every reviewer applies and this file does not restate: scope (the change, not pre-existing debt), the four shared laws, `info`, one finding per defect across lenses, and where severity comes from.
+Read the review activity rule before the code: `.metaproject/rules/project/activity/review.mdc` when the project keeps its own, else `.metaproject/rules/activity/review.mdc`. It holds what every reviewer applies and this file does not restate: scope (diff mode: the change; path mode: the whole file), the four shared laws, `info`, one finding per defect across lenses, and where severity comes from. **Debt the change did not create** is not a finding (`solid-principles.mdc`): check the before-state first. It is a finding when the change crosses a threshold, or adds a self-contained block that meets it alone; cite that block.
 
 ### Clean Code laws
 
