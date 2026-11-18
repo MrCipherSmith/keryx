@@ -18,6 +18,10 @@
 .side-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .side-pane { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .side-pane[hidden] { display: none; }
+/* Activity and Info are portaled in by the session view; with no session shown the slot says so. */
+.side-slot:empty { align-items: center; justify-content: center; padding: var(--sp-4); color: var(--fg-muted); font-size: var(--fs-sm); text-align: center; }
+.side-slot:empty::before { content: "Open a session to see this."; }
+.side-slot > .info-panel { width: auto; flex: 1; border-left: 0; }
 
 .panel-tabs { display: flex; align-items: center; gap: 2px; padding: 4px var(--sp-2); border-bottom: 1px solid var(--border); overflow-x: auto; flex: none; }
 .panel-tab { display: inline-flex; align-items: center; gap: 2px; max-width: 180px; padding-right: 2px; border-radius: var(--r-md); color: var(--fg-muted); }

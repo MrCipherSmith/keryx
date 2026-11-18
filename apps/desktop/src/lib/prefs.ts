@@ -19,26 +19,20 @@ export interface Prefs {
   chatWidth: ChatWidth;
   sendKey: "enter" | "mod-enter";
   sessionSidebar: boolean;
-  /** The session info panel on the right. */
-  infoPanel: boolean;
   /** Session sidebar groups the user folded ("Pinned", "Today", a month…). */
   collapsedGroups: string[];
-  /** The right side panel's open tab, or null when it is closed (D-13). */
+  /** The right side panel's open tab, or null when it is closed (D-13; Activity and Info share it). */
   sidePanel: SidePanelTab | null;
   /** The side panel's width in pixels. */
   sidePanelWidth: number;
-  /** The Activity panel's width in pixels. */
-  activityWidth: number;
   /** Per session: the user's choice to show (true) or fold (false) its subagents in the sidebar; absent = automatic. */
   subagentTree: Record<string, boolean>;
 }
 
-export type SidePanelTab = "terminal" | "browser";
+export type SidePanelTab = "terminal" | "browser" | "activity" | "info";
+const SIDE_TABS: readonly string[] = ["terminal", "browser", "activity", "info"];
 export const SIDE_PANEL_MIN = 320;
 export const SIDE_PANEL_MAX = 1200;
-export const ACTIVITY_MIN = 320;
-/** The widest the Activity panel may be, as a share of the window. */
-export const ACTIVITY_MAX_SHARE = 0.7;
 
 const KEY = "keryx.prefs.v1";
 const DEFAULTS: Prefs = {
@@ -49,11 +43,9 @@ const DEFAULTS: Prefs = {
   chatWidth: "wide",
   sendKey: "enter",
   sessionSidebar: true,
-  infoPanel: false,
   collapsedGroups: [],
   sidePanel: null,
   sidePanelWidth: 520,
-  activityWidth: 420,
   subagentTree: {},
 };
 
@@ -80,11 +72,12 @@ function valid<T extends string>(value: unknown, table: Record<T, unknown>, fall
   return typeof value === "string" && value in table ? (value as T) : fallback;
 }
 
-function read(): Prefs {
+/** The preferences a stored JSON text holds, with every missing or unknown value at its default. */
+export function parsePrefs(raw: string | null): Prefs {
   try {
-    const raw = localStorage.getItem(KEY);
     const stored = raw ? (JSON.parse(raw) as Partial<Prefs>) : {};
-    const merged = { ...DEFAULTS, ...stored };
+    const { infoPanel, activityWidth: _w, ...known } = stored as Partial<Prefs> & { infoPanel?: unknown; activityWidth?: unknown };
+    const merged = { ...DEFAULTS, ...known };
     // A value an older or newer build wrote that this one does not know falls back to the default.
     return {
       ...merged,
@@ -93,20 +86,30 @@ function read(): Prefs {
       textSize: valid(merged.textSize, TEXT_SCALES, DEFAULTS.textSize),
       chatWidth: valid(merged.chatWidth, CHAT_WIDTHS, DEFAULTS.chatWidth),
       collapsedGroups: Array.isArray(merged.collapsedGroups) ? merged.collapsedGroups.filter((g) => typeof g === "string") : [],
-      sidePanel: merged.sidePanel === "terminal" || merged.sidePanel === "browser" ? merged.sidePanel : null,
+      // Older builds kept the info panel in its own column (`infoPanel`): it is now the side panel's Info tab.
+      sidePanel:
+        typeof merged.sidePanel === "string" && SIDE_TABS.includes(merged.sidePanel)
+          ? merged.sidePanel
+          : infoPanel === true
+            ? "info"
+            : null,
       sidePanelWidth:
         typeof merged.sidePanelWidth === "number" && Number.isFinite(merged.sidePanelWidth)
           ? Math.min(SIDE_PANEL_MAX, Math.max(SIDE_PANEL_MIN, merged.sidePanelWidth))
           : DEFAULTS.sidePanelWidth,
-      activityWidth:
-        typeof merged.activityWidth === "number" && Number.isFinite(merged.activityWidth)
-          ? Math.min(4000, Math.max(ACTIVITY_MIN, Math.round(merged.activityWidth)))
-          : DEFAULTS.activityWidth,
       subagentTree:
         merged.subagentTree && typeof merged.subagentTree === "object" && !Array.isArray(merged.subagentTree)
           ? Object.fromEntries(Object.entries(merged.subagentTree).filter(([, v]) => typeof v === "boolean"))
           : {},
     };
+  } catch {
+    return DEFAULTS;
+  }
+}
+
+function read(): Prefs {
+  try {
+    return parsePrefs(localStorage.getItem(KEY));
   } catch {
     return DEFAULTS;
   }

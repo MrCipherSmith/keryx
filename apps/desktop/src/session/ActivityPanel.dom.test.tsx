@@ -89,7 +89,6 @@ async function renderPanel(o: PanelOver = {}) {
       subagentId: sel,
       onSubagent: setSel,
       onRefreshTasks: o.onRefreshTasks ?? (() => {}),
-      onClose: () => {},
       pollMs: 10,
     });
   }
@@ -248,8 +247,7 @@ test("the Show subagent link on a spawn_subagent tool card opens the subagent wh
         subagentId: sel,
         onSubagent: setSel,
         onRefreshTasks: () => {},
-        onClose: () => {},
-      }),
+        }),
     );
   }
   await act(() => root.render(React.createElement(Harness)));
@@ -491,7 +489,7 @@ test("the Runs button of a schedule row opens the Runs tab for that schedule", a
     return React.createElement(ActivityPanel, {
       sessionId: "s1", subagents: [], tasks: [], api: { ...api, extensions: COMMAND_EXT }, tab,
       onTab: (t: string) => { tabs.push(t); setTab(t as "runs"); },
-      subagentId: null, onSubagent: () => {}, onRefreshTasks: () => {}, onClose: () => {},
+      subagentId: null, onSubagent: () => {}, onRefreshTasks: () => {},
     });
   }
   await act(() => root.render(React.createElement(Host)));
@@ -504,56 +502,34 @@ test("the Runs button of a schedule row opens the Runs tab for that schedule", a
   expect(document.querySelector(".runs-bar")!.textContent).toContain("nightly · show all");
 });
 
-// ---- resizing --------------------------------------------------------------------------------------
+// ---- placement -------------------------------------------------------------------------------------
 
-test("the panel has a keyboard-reachable separator that resizes it and remembers the width", async () => {
-  const { getPrefs, setPrefs, ACTIVITY_MIN } = await import("../lib/prefs");
-  setPrefs({ activityWidth: 420 });
-  const w = window.innerWidth;
+test("the panel has no resize handle or close button of its own: the side panel owns both", async () => {
   await renderPanel({ tab: "subagents" });
-  const sep = document.querySelector('.activity-panel [role="separator"]') as HTMLElement;
-  expect(sep.getAttribute("aria-orientation")).toBe("vertical");
-  expect(sep.tabIndex).toBe(0);
-  expect(sep.getAttribute("aria-valuenow")).toBe("420");
-  const key = (k: string, shiftKey = false) => act(async () => void sep.dispatchEvent(new KeyboardEvent("keydown", { key: k, shiftKey, bubbles: true, cancelable: true })));
-  await key("ArrowLeft");
-  expect(getPrefs().activityWidth).toBe(436);
-  await key("ArrowLeft", true);
-  expect(getPrefs().activityWidth).toBe(500);
-  await key("ArrowRight");
-  expect(getPrefs().activityWidth).toBe(484);
-  expect(document.querySelector('.activity-panel [role="separator"]')!.getAttribute("aria-valuenow")).toBe("484");
-  await key("Home");
-  expect(getPrefs().activityWidth).toBe(ACTIVITY_MIN);
-  await key("ArrowRight");
-  expect(getPrefs().activityWidth).toBe(ACTIVITY_MIN); // never under the minimum
-  await key("End");
-  expect(getPrefs().activityWidth).toBe(Math.floor(w * 0.7)); // never over 70% of the window
-  // the choice is stored for the next launch
-  expect(JSON.parse(localStorage.getItem("keryx.prefs.v1") ?? "{}").activityWidth).toBe(Math.floor(w * 0.7));
-  setPrefs({ activityWidth: 420 });
+  expect(document.querySelector('.activity-panel [role="separator"]')).toBeNull();
+  expect(document.querySelector('[aria-label="Hide activity"]')).toBeNull();
+  expect(document.querySelector(".activity-panel")!.getAttribute("aria-label")).toBe("Activity");
 });
 
-test("dragging the left edge to the left widens the panel", async () => {
-  const { getPrefs, setPrefs } = await import("../lib/prefs");
-  setPrefs({ activityWidth: 400 });
-  await renderPanel({ tab: "subagents" });
-  const sep = document.querySelector('.activity-panel [role="separator"]') as HTMLElement;
-  const ev = (type: string, clientX: number) => {
-    const e = new Event(type, { bubbles: true, cancelable: true }) as Event & { clientX: number; pointerId: number };
-    e.clientX = clientX;
-    e.pointerId = 1;
-    return e;
+test("an external run's detail offers Open terminal while its tab is open", async () => {
+  const bus = await import("./delegateBus");
+  const opened: string[] = [];
+  bus.setDelegateApi({ focus: (id) => (opened.push(id), true), isOpen: (id) => id === "r1" });
+  const ext = { id: "r1", label: "Claude", status: "running", runtime: "external", entries: [], detail: null } as unknown as Subagent;
+  const Host = () => {
+    const [sel, setSel] = React.useState<string | null>("r1");
+    return React.createElement(ActivityPanel, {
+      sessionId: "s1", subagents: [ext], tasks: [], api, tab: "subagents", onTab: () => {},
+      subagentId: sel, onSubagent: setSel, onRefreshTasks: () => {},
+    });
   };
-  await act(async () => void sep.dispatchEvent(ev("pointerdown", 500)));
-  await act(async () => void sep.dispatchEvent(ev("pointermove", 450)));
-  expect(getPrefs().activityWidth).toBe(450);
-  await act(async () => void sep.dispatchEvent(ev("pointermove", 100)));
-  expect(getPrefs().activityWidth).toBe(Math.min(800, Math.floor(window.innerWidth * 0.7)));
-  await act(async () => void sep.dispatchEvent(ev("pointerup", 100)));
-  await act(async () => void sep.dispatchEvent(ev("pointermove", 480)));
-  expect(getPrefs().activityWidth).toBe(Math.min(800, Math.floor(window.innerWidth * 0.7))); // released: no longer follows
-  setPrefs({ activityWidth: 420 });
+  await act(() => root.render(React.createElement(Host)));
+  await click(document.querySelector('[data-open-terminal="r1"]')!);
+  expect(opened).toEqual(["r1"]);
+  bus.setDelegateApi({ focus: () => false, isOpen: () => false });
+  await wait(0);
+  expect(document.querySelector("[data-open-terminal]")).toBeNull();
+  bus.setDelegateApi(null);
 });
 
 test("the panel's content cannot widen it: the body clips x, long text wraps, a pre block scrolls inside itself", async () => {
@@ -564,5 +540,5 @@ test("the panel's content cannot widen it: the body clips x, long text wraps, a 
   expect(rule(".activity-body pre")).toContain("overflow: auto");
   expect(rule(".activity-body pre")).toContain("max-width: 100%");
   expect(rule(".activity-panel")).toContain("overflow: hidden");
-  expect(css).toContain("min(var(--activity-w, 420px), 70vw)");
+  expect(css).not.toContain("--activity-w"); // no column of its own any more
 });

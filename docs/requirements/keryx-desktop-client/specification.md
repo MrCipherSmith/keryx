@@ -623,7 +623,12 @@ version checks and the flows parsers and argv builder.
   border, `refused` badge, warn notice), and a failed request as an error
   (danger border, `error` badge, error notice). Success never uses the warn or
   danger tokens.
-- Activity panel (right side, collapsible) with up to four tabs:
+- Activity: a tab of the shared right side panel (§4.4: Terminal, Browser,
+  Activity, Info; one width, one close button) with up to four sub-tabs. The
+  session info (git, model, usage) is the panel's Info tab. The top-bar Activity
+  button, a tool card's "Show subagent" and a sidebar subagent row open the panel
+  on Activity; a `/delegate` run's detail has "Open terminal", which opens it on
+  Terminal:
   - Subagents: one row per subagent (label, status, detail, model), linked
     from the `spawn_subagent` tool card; selecting one shows its task and
     transcript (text, reasoning, tool, result entries).
@@ -650,18 +655,17 @@ version checks and the flows parsers and argv builder.
     subcommands live in `src/commands/shell-subcommands.ts`, so the terminal
     shells have them too. Run output is untrusted: control characters are
     stripped server-side and the client renders plain text only.
-  - Width: the panel has a drag handle on its left edge (`role="separator"`,
-    ArrowLeft/ArrowRight, Shift for larger steps, Home/End), at least 320 px and
-    at most 70% of the window; the width is the `activityWidth` preference. The
-    content never widens the panel: long lines wrap and a `pre` block scrolls
-    inside itself.
+  - Width: the side panel's (§4.4); the content never widens it: long lines
+    wrap and a `pre` block scrolls inside itself. The former `activityWidth` and
+    `infoPanel` preferences are dropped (an old `infoPanel: true` opens the Info
+    tab).
   - Badges for running subagents and tasks per session in the sidebar.
   - Sidebar tree (owner decision 2026-11-18): every subagent of a held session,
     native or external (`/delegate`), is a child row one level under its
     session (label, status dot, `external` badge, model). The session row has a
     chevron (`aria-expanded`); the fold is remembered per session and defaults
     to open while any subagent runs, else folded. Selecting a child shows its
-    session and opens the Activity panel on that subagent. Released sessions
+    session and opens the side panel's Activity tab on that subagent. Released sessions
     show no children.
 
 ### 4.3 Client capabilities sent at `initialize`
@@ -696,7 +700,9 @@ Rust core:
   sends `KERYX_PANEL_TOKEN`, then copies stdin → socket and socket → stdout.
 
 Web view:
-- `panels/SidePanel.tsx` with the Terminal and Browser tabs; open state, tab
+- `panels/SidePanel.tsx` with the Terminal, Browser, Activity and Info tabs (the
+  last two are the session view's, portaled into the panel through
+  `panels/sideSlots.ts`; the Activity tab shows the running count); open state, tab
   and width are per-viewer prefs.
 - `panels/panelBus.ts` — `runInTerminal(command)` used by the Run buttons;
   `showTerminalTab(tab)` opens the panel on Terminal and focuses a tab;

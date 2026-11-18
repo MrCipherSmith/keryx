@@ -35,6 +35,18 @@ interface Props {
   onProviders?: () => void;
 }
 
+export const COMPOSER_MAX_PX = 260;
+
+/** An empty box stays at its CSS minimum: the wrapped placeholder must never size it. */
+export function fitComposerHeight(el: HTMLTextAreaElement): void {
+  el.style.height = "auto";
+  if (el.value === "") {
+    el.style.height = "";
+    return;
+  }
+  el.style.height = `${Math.min(el.scrollHeight, COMPOSER_MAX_PX)}px`;
+}
+
 const MODE_ICON: Record<string, IconName> = { ask: "shield", trust: "shieldCheck", auto: "sparkle" };
 
 function isGroup(o: ConfigSelectOption | ConfigSelectGroup): o is ConfigSelectGroup {
@@ -109,11 +121,21 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   useEffect(() => {
     document.getElementById(`slash-opt-${sel}`)?.scrollIntoView?.({ block: "nearest" });
   }, [sel, matches]);
-  useEffect(() => {
+  // Grow with the text up to COMPOSER_MAX_PX. Re-fit when the column's width changes too: a narrow moment (a side
+  // panel opening, a drag) wraps the text, and a height measured then must not outlive it.
+  useLayoutEffect(() => {
     const el = area.current;
     if (!el) return;
-    el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, 260)}px`;
+    fitComposerHeight(el);
+    if (typeof ResizeObserver === "undefined") return;
+    let width = el.clientWidth;
+    const ro = new ResizeObserver(() => {
+      if (el.clientWidth === width) return;
+      width = el.clientWidth;
+      fitComposerHeight(el);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
   }, [text]);
   useEffect(() => {
     if (!disabled) area.current?.focus();

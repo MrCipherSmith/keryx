@@ -3,13 +3,17 @@ import { onAgentTerminal, onBrowserEvent } from "../platform/panels";
 import { Icon } from "../components/Icon";
 import { setPrefs, SIDE_PANEL_MAX, SIDE_PANEL_MIN, usePrefs, type SidePanelTab } from "../lib/prefs";
 import { Spinner } from "../components/ui";
+import type { IconName } from "../components/Icon";
+import { slotRef, useActivityRunning } from "./sideSlots";
 
 const TerminalPanel = lazy(() => import("./TerminalPanel").then((m) => ({ default: m.TerminalPanel })));
 const BrowserPanel = lazy(() => import("./BrowserPanel").then((m) => ({ default: m.BrowserPanel })));
 
-const TABS: Array<{ id: SidePanelTab; label: string; icon: "terminal" | "globe" }> = [
+export const SIDE_TABS: Array<{ id: SidePanelTab; label: string; icon: IconName }> = [
   { id: "terminal", label: "Terminal", icon: "terminal" },
   { id: "browser", label: "Browser", icon: "globe" },
+  { id: "activity", label: "Activity", icon: "checklist" },
+  { id: "info", label: "Info", icon: "info" },
 ];
 
 /** The agent used a panel tool: show that tab of the panel, even when the panel is closed. */
@@ -29,10 +33,11 @@ function useAgentReveal(): void {
   }, []);
 }
 
-/** The right side panel of a project window (D-13): terminal and browser tabs. */
+/** The right side panel of a project window (D-13): Terminal, Browser, Activity and Info tabs. */
 export function SidePanel({ cwd }: { cwd: string }) {
   const prefs = usePrefs();
   useAgentReveal();
+  const running = useActivityRunning();
   const tab = prefs.sidePanel;
   const panel = useRef<HTMLElement>(null);
   // A tab is mounted once first shown (a terminal is not started for a panel opened on the browser).
@@ -63,7 +68,7 @@ export function SidePanel({ cwd }: { cwd: string }) {
       <div className="side-resize" onPointerDown={startResize} role="separator" aria-orientation="vertical" aria-label="Resize side panel" />
       <div className="side-head">
         <div className="side-switch" role="tablist" aria-label="Side panel">
-          {TABS.map((t) => (
+          {SIDE_TABS.map((t) => (
             <button
               key={t.id}
               role="tab"
@@ -73,6 +78,7 @@ export function SidePanel({ cwd }: { cwd: string }) {
             >
               <Icon name={t.icon} size={13} />
               {t.label}
+              {t.id === "activity" && running > 0 ? <span className="tab-count" title="Running">{running}</span> : null}
             </button>
           ))}
         </div>
@@ -95,6 +101,8 @@ export function SidePanel({ cwd }: { cwd: string }) {
             </div>
           ) : null}
         </Suspense>
+        {/* Activity and Info are the session view's: it portals them into these slots (see sideSlots.ts). */}
+        {tab === "activity" || tab === "info" ? <div key={tab} className="side-pane side-slot" data-slot={tab} ref={slotRef(tab)} /> : null}
       </div>
     </aside>
   );

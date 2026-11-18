@@ -128,13 +128,9 @@ button { font: inherit; }
 /* ---------------- session ---------------- */
 .session-view { height: 100%; display: grid; grid-template-columns: minmax(0, 1fr); min-height: 0; position: relative; }
 .session-view.with-sidebar { grid-template-columns: 248px minmax(0, 1fr); }
-.session-view.with-info { grid-template-columns: minmax(0, 1fr) 280px; }
-.session-view.with-sidebar.with-info { grid-template-columns: 248px minmax(0, 1fr) 280px; }
 .session-main { position: relative; }
 .titlebar-toggle { color: var(--fg-subtle); }
 .titlebar-toggle.is-on { color: var(--accent-text); background: var(--bg-selected); }
-.info-dock { min-height: 0; display: flex; }
-.info-float { position: absolute; top: 0; right: 0; bottom: 0; z-index: 20; display: flex; box-shadow: var(--shadow-pop); }
 .info-panel { display: flex; flex-direction: column; width: 280px; min-height: 0; background: var(--bg-canvas); border-left: 1px solid var(--border); }
 .info-body { overflow-y: auto; padding: 0 var(--sp-3) var(--sp-4); display: grid; gap: var(--sp-3); align-content: start; }
 .info-section { display: grid; gap: 6px; padding-bottom: var(--sp-3); border-bottom: 1px solid var(--border); }

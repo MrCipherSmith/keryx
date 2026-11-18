@@ -138,16 +138,17 @@ function SideToggles() {
   );
 }
 
-/** Shows or hides the session info panel (on the session view only). */
+/** Shows or hides the session info (the side panel's Info tab; on the session view only). */
 function InfoToggle({ show }: { show: boolean }) {
   const prefs = usePrefs();
   if (!show) return null;
+  const on = prefs.sidePanel === "info";
   return (
     <button
-      className={`icon-btn titlebar-toggle${prefs.infoPanel ? " is-on" : ""}`}
-      onClick={() => setPrefs({ infoPanel: !prefs.infoPanel })}
-      aria-pressed={prefs.infoPanel}
-      title={prefs.infoPanel ? "Hide session info" : "Show session info"}
+      className={`icon-btn titlebar-toggle${on ? " is-on" : ""}`}
+      onClick={() => toggleSidePanel("info", prefs.sidePanel)}
+      aria-pressed={on}
+      title={on ? "Hide session info" : "Show session info"}
       aria-label="Session info"
     >
       <Icon name="info" size={15} />

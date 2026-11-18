@@ -1,4 +1,5 @@
 import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { PlanEntry } from "../acp/types";
 import { formatTokens } from "../lib/format";
 import { setPrefs, usePrefs, MOD } from "../lib/prefs";
@@ -8,6 +9,7 @@ import { Composer, type ComposerHandle } from "./Composer";
 import { ActivityPanel, type ActivityTab } from "./ActivityPanel";
 import { runningSubagents } from "./activity";
 import { isRunning } from "../acp/providers";
+import { setActivityRunning, useSlot } from "../panels/sideSlots";
 import { SessionInfoPanel } from "./SessionInfoPanel";
 import { SessionSidebar } from "./SessionSidebar";
 import { Transcript } from "./Transcript";
@@ -39,33 +41,39 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
   const prefs = usePrefs();
   const sidebarOpen = prefs.sessionSidebar && !narrow;
   const [narrowSidebar, setNarrowSidebar] = useState(false);
-  const [activity, setActivity] = useState<{ open: boolean; tab: ActivityTab; subagentId: string | null }>({ open: false, tab: "subagents", subagentId: null });
+  // Activity lives in the window's side panel (a tab beside Terminal and Browser); what it shows is kept here.
+  const [activity, setActivity] = useState<{ tab: ActivityTab; subagentId: string | null }>({ tab: "subagents", subagentId: null });
+  const activityOpen = prefs.sidePanel === "activity";
+  const openActivity = useCallback(() => setPrefs({ sidePanel: "activity" }), []);
+  const activitySlot = useSlot("activity");
+  const infoSlot = useSlot("info");
   // A sidebar click on another session's subagent loads that session first; the panel opens on it once it is shown.
   const pendingSubagent = useRef<{ sessionId: string; id: string } | null>(null);
   useEffect(() => {
     const p = pendingSubagent.current;
     if (p && p.sessionId === state.sessionId) {
       pendingSubagent.current = null;
-      setActivity({ open: true, tab: "subagents", subagentId: p.id });
+      setActivity({ tab: "subagents", subagentId: p.id });
+      openActivity();
     } else setActivity((a) => (a.subagentId === null ? a : { ...a, subagentId: null }));
   }, [state.sessionId]);
   const activityApi = useMemo(() => ({ request: s.rpc, extensions: s.extensions }), [s.rpc, s.extensions]);
   const activityRunning = runningSubagents(state.subagents) + state.tasks.filter(isRunning).length;
-  // A `/delegate` run in the terminal: its entry also brings up its terminal tab (when the tab is still open).
-  const focusRun = s.focusDelegateTerminal;
+  useEffect(() => {
+    setActivityRunning(activityRunning);
+    return () => setActivityRunning(0);
+  }, [activityRunning]);
+  // A subagent's entry opens the side panel on Activity; a `/delegate` run's detail has an "Open terminal" button.
   const showSubagent = useCallback(
     (id: string) => {
-      setActivity({ open: true, tab: "subagents", subagentId: id });
-      focusRun(id);
+      setActivity({ tab: "subagents", subagentId: id });
+      openActivity();
     },
-    [focusRun],
+    [openActivity],
   );
   const refreshTasks = useCallback(() => {
     if (state.sessionId) void s.refreshTasks(state.sessionId);
   }, [s, state.sessionId]);
-  // The Activity panel and the info panel share the right column; an open Activity panel hides the info panel.
-  // The side panel (D-13) takes the info dock's place while it is open.
-  const infoOpen = prefs.infoPanel && !activity.open && !prefs.sidePanel;
   const ready = state.phase === "ready" && state.sessionId !== null && state.held;
   const incompatible = s.fatal?.kind === "incompatible" || s.fatal?.kind === "noShell";
 
@@ -187,7 +195,6 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
         if (sessionId === state.sessionId) showSubagent(id);
         else {
           pendingSubagent.current = { sessionId, id };
-          focusRun(id);
           void s.loadSession(sessionId);
         }
       }}
@@ -199,9 +206,7 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
 
   return (
     <div
-      className={`session-view${sidebarOpen ? " with-sidebar" : ""}${activity.open ? " with-activity" : ""}${infoOpen && !narrow ? " with-info" : ""}${narrow ? " is-narrow" : ""}`}
-      style={activity.open ? ({ "--activity-w": `${prefs.activityWidth}px` } as React.CSSProperties) : undefined}
-    >
+      className={`session-view${sidebarOpen ? " with-sidebar" : ""}${narrow ? " is-narrow" : ""}`}>
       {sidebarOpen ? sidebar : null}
       {narrow && narrowSidebar ? (
         <div className="sidebar-float" onMouseDown={(e) => e.target === e.currentTarget && setNarrowSidebar(false)}>
@@ -224,8 +229,8 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
           {state.sessionId ? (
             <button
               className="btn btn-sm btn-ghost activity-toggle"
-              onClick={() => setActivity((a) => ({ ...a, open: !a.open }))}
-              aria-pressed={activity.open}
+              onClick={() => setPrefs({ sidePanel: activityOpen ? null : "activity" })}
+              aria-pressed={activityOpen}
               title="Subagents and background tasks"
             >
               <Icon name="checklist" size={14} /> Activity
@@ -342,27 +347,23 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
           <pre className="out-pre command-out">{ask.confirm}</pre>
         </Dialog>
       ) : null}
-      {activity.open && state.sessionId ? (
-        <ActivityPanel
-          sessionId={state.sessionId}
-          subagents={state.subagents}
-          tasks={state.tasks}
-          api={activityApi}
-          tab={activity.tab}
-          onTab={(tab) => setActivity((a) => ({ ...a, tab }))}
-          subagentId={activity.subagentId}
-          onSubagent={(subagentId) => {
-            setActivity((a) => ({ ...a, subagentId }));
-            if (subagentId) focusRun(subagentId);
-          }}
-          onRefreshTasks={refreshTasks}
-          onClose={() => setActivity((a) => ({ ...a, open: false }))}
-        />
-      ) : infoOpen ? (
-        <div className={narrow ? "info-float" : "info-dock"}>
-          <SessionInfoPanel state={state} cwd={cwd} projectName={projectName} onClose={() => setPrefs({ infoPanel: false })} />
-        </div>
-      ) : null}
+      {activityOpen && activitySlot && state.sessionId
+        ? createPortal(
+            <ActivityPanel
+              sessionId={state.sessionId}
+              subagents={state.subagents}
+              tasks={state.tasks}
+              api={activityApi}
+              tab={activity.tab}
+              onTab={(tab) => setActivity((a) => ({ ...a, tab }))}
+              subagentId={activity.subagentId}
+              onSubagent={(subagentId) => setActivity((a) => ({ ...a, subagentId }))}
+              onRefreshTasks={refreshTasks}
+            />,
+            activitySlot,
+          )
+        : null}
+      {prefs.sidePanel === "info" && infoSlot ? createPortal(<SessionInfoPanel state={state} cwd={cwd} projectName={projectName} />, infoSlot) : null}
     </div>
   );
 });

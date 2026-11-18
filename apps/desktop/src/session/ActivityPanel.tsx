@@ -6,8 +6,7 @@ import { Dialog, Spinner } from "../components/ui";
 import { runningSubagents, statusLabel, type Subagent } from "./activity";
 import { SchedulesTab } from "./SchedulesTab";
 import { RunsTab } from "./RunsTab";
-import { ResizeHandle } from "../components/ResizeHandle";
-import { ACTIVITY_MAX_SHARE, ACTIVITY_MIN, setPrefs, usePrefs } from "../lib/prefs";
+import { focusDelegateRun, isDelegateRunOpen, onDelegateChange } from "./delegateBus";
 import { COMMAND_METHOD } from "../acp/commands";
 
 export type ActivityTab = "subagents" | "tasks" | "schedules" | "runs";
@@ -29,29 +28,20 @@ interface Props {
   onSubagent: (id: string | null) => void;
   /** Re-list the session's tasks. */
   onRefreshTasks: () => void;
-  onClose: () => void;
   /** Output poll interval while a shown task runs. */
   pollMs?: number;
 }
 
-/** The right-hand panel: the session's subagents and background tasks. */
-export function ActivityPanel({ sessionId, subagents, tasks, api, tab, onTab, subagentId, onSubagent, onRefreshTasks, onClose, pollMs = 1000 }: Props) {
+/** The Activity tab of the side panel: the session's subagents, background tasks, schedules and their runs. */
+export function ActivityPanel({ sessionId, subagents, tasks, api, tab, onTab, subagentId, onSubagent, onRefreshTasks, pollMs = 1000 }: Props) {
   const runningTasks = tasks.filter(isRunning).length;
   const runningAgents = runningSubagents(subagents);
   const hasTasks = supportsTasks(api.extensions);
   const hasSchedules = api.extensions.includes(COMMAND_METHOD);
-  const prefs = usePrefs();
   /** The schedule the Runs tab is limited to (null: every schedule). */
   const [runsFor, setRunsFor] = useState<string | null>(null);
   return (
     <aside className="activity-panel" aria-label="Activity">
-      <ResizeHandle
-        width={prefs.activityWidth}
-        min={ACTIVITY_MIN}
-        max={() => Math.floor(window.innerWidth * ACTIVITY_MAX_SHARE)}
-        onChange={(w) => setPrefs({ activityWidth: w })}
-        label="Resize activity panel"
-      />
       <div className="activity-head">
         <div className="tabs activity-tabs" role="tablist">
           <button className="tab" role="tab" aria-selected={tab === "subagents"} onClick={() => onTab("subagents")}>
@@ -75,9 +65,6 @@ export function ActivityPanel({ sessionId, subagents, tasks, api, tab, onTab, su
             </button>
           ) : null}
         </div>
-        <button className="icon-btn icon-btn-sm" onClick={onClose} aria-label="Hide activity" title="Hide activity">
-          <Icon name="x" size={13} />
-        </button>
       </div>
       <div className="activity-body">
         {tab === "tasks" && hasTasks ? (
@@ -165,6 +152,7 @@ function SubagentDetail({ agent }: { agent: Subagent }) {
           {[agent.model, agent.runtime].filter(Boolean).join(" · ")}
         </div>
       ) : null}
+      {agent.runtime === "external" ? <OpenTerminal runId={agent.id} /> : null}
       {agent.runtime === "external" && agent.detail ? <div className="field-hint">{agent.detail === "closed" ? "Terminal closed." : agent.detail}</div> : null}
       {task ? (
         <div className="subagent-task">
@@ -180,6 +168,18 @@ function SubagentDetail({ agent }: { agent: Subagent }) {
           ))}
       </div>
     </div>
+  );
+}
+
+/** A `/delegate` run's terminal tab, while it is still open: brings it forward in the side panel. */
+function OpenTerminal({ runId }: { runId: string }) {
+  const [, tick] = useState(0);
+  useEffect(() => onDelegateChange(() => tick((n) => n + 1)), []);
+  if (!isDelegateRunOpen(runId)) return null;
+  return (
+    <button className="btn btn-sm" data-open-terminal={runId} onClick={() => void focusDelegateRun(runId)}>
+      <Icon name="terminal" size={13} /> Open terminal
+    </button>
   );
 }
 
