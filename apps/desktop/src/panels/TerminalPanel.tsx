@@ -4,6 +4,8 @@ import { useToast } from "../components/Toasts";
 import { onAgentTerminal, ptyClose, ptyList, ptyOpen, ptyWrite, type PtyTab } from "../platform/panels";
 import { notifyTabClosed, onCloseTabRequest, onRunRequest, onShowTab } from "./panelBus";
 import { TermView } from "./TermView";
+import { StreamView } from "./StreamView";
+import { onStreamTab, type StreamTab } from "./streamTabs";
 
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -14,16 +16,21 @@ export function TerminalPanel({ cwd }: { cwd: string }) {
   const [active, setActive] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  // Read-only tabs fed by the app (a background task's output); one of them is shown when `activeStream` is set.
+  const [streams, setStreams] = useState<Array<StreamTab & { ended: boolean }>>([]);
+  const [activeStream, setActiveStream] = useState<string | null>(null);
   const state = useRef({ tabs, active });
   state.current = { tabs, active };
   const opening = useRef<Promise<PtyTab> | null>(null);
 
-  const open = useCallback((): Promise<PtyTab> => {
+  /** A new shell tab; `show` false keeps a shown stream tab in front (the panel's own first tab). */
+  const open = useCallback((show = true): Promise<PtyTab> => {
     if (opening.current) return opening.current;
     const p = ptyOpen(cwd, 80, 24)
       .then((tab) => {
         setTabs((t) => [...t.filter((x) => x.id !== tab.id), tab]);
         setActive(tab.id);
+        if (show) setActiveStream(null);
         setError(null);
         return tab;
       })
@@ -44,7 +51,7 @@ export function TerminalPanel({ cwd }: { cwd: string }) {
         if (list.length > 0) {
           setTabs(list);
           setActive((a) => a ?? list[list.length - 1]!.id);
-        } else void open().catch((e) => live && setError(errText(e)));
+        } else void open(false).catch((e) => live && setError(errText(e)));
       })
       .catch((e) => {
         if (!live) return;
@@ -62,6 +69,7 @@ export function TerminalPanel({ cwd }: { cwd: string }) {
     void onAgentTerminal((tab) => {
       setTabs((t) => (t.some((x) => x.id === tab.id) ? t : [...t, tab]));
       setActive(tab.id);
+      setActiveStream(null);
     }).then((u) => (live ? (off = u) : u()));
     return () => {
       live = false;
@@ -79,6 +87,7 @@ export function TerminalPanel({ cwd }: { cwd: string }) {
         void tab
           .then((t) => {
             setActive(t.id);
+            setActiveStream(null);
             return ptyWrite(t.id, `${command}\r`);
           })
           .catch((e) => toast({ level: "error", title: "Could not run the command", body: errText(e) }));
@@ -92,6 +101,7 @@ export function TerminalPanel({ cwd }: { cwd: string }) {
       onShowTab((tab) => {
         setTabs((t) => (t.some((x) => x.id === tab.id) ? t : [...t, tab]));
         setActive(tab.id);
+        setActiveStream(null);
       }),
     [],
   );
@@ -113,12 +123,42 @@ export function TerminalPanel({ cwd }: { cwd: string }) {
   const markExited = (id: number, code: number | null) =>
     setTabs((t) => t.map((x) => (x.id === id ? { ...x, running: false, exitCode: code } : x)));
 
+  useEffect(
+    () =>
+      onStreamTab((tab) => {
+        setStreams((s) => (s.some((x) => x.key === tab.key) ? s : [...s, { ...tab, ended: false }]));
+        setActiveStream(tab.key);
+      }),
+    [],
+  );
+  const showPty = (id: number) => {
+    setActiveStream(null);
+    setActive(id);
+  };
+  const closeStream = (key: string) =>
+    setStreams((s) => {
+      const rest = s.filter((x) => x.key !== key);
+      if (activeStream === key) setActiveStream(rest.length ? rest[rest.length - 1]!.key : null);
+      return rest;
+    });
+
   return (
     <div className="term-panel">
       <div className="panel-tabs" role="tablist" aria-label="Terminal tabs">
+        {streams.map((s) => (
+          <div key={s.key} className={`panel-tab${s.key === activeStream ? " is-active" : ""}${s.ended ? " is-exited" : ""}`}>
+            <button role="tab" aria-selected={s.key === activeStream} className="panel-tab-btn" onClick={() => setActiveStream(s.key)} title={s.detail ?? s.title}>
+              <Icon name="list" size={12} />
+              <span className="truncate">{s.title}</span>
+            </button>
+            <button className="icon-btn icon-btn-sm" onClick={() => closeStream(s.key)} aria-label={`Close ${s.title}`} title="Close tab (the task keeps running)">
+              <Icon name="x" size={11} />
+            </button>
+          </div>
+        ))}
         {tabs.map((t) => (
-          <div key={t.id} className={`panel-tab${t.id === active ? " is-active" : ""}${t.running ? "" : " is-exited"}`}>
-            <button role="tab" aria-selected={t.id === active} className="panel-tab-btn" onClick={() => setActive(t.id)} title={t.cwd}>
+          <div key={t.id} className={`panel-tab${t.id === active && activeStream === null ? " is-active" : ""}${t.running ? "" : " is-exited"}`}>
+            <button role="tab" aria-selected={t.id === active && activeStream === null} className="panel-tab-btn" onClick={() => showPty(t.id)} title={t.cwd}>
               <Icon name={t.owner === "agent" ? "sparkle" : "terminal"} size={12} />
               <span className="truncate">{t.title}</span>
             </button>
@@ -133,14 +173,22 @@ export function TerminalPanel({ cwd }: { cwd: string }) {
       </div>
       <div className="term-body">
         {tabs.map((t) => (
-          <TermView key={t.id} id={t.id} active={t.id === active} onExit={(code) => markExited(t.id, code)} onError={setError} />
+          <TermView key={t.id} id={t.id} active={t.id === active && activeStream === null} onExit={(code) => markExited(t.id, code)} onError={setError} />
         ))}
-        {error ? (
+        {streams.map((s) => (
+          <StreamView
+            key={s.key}
+            source={s.source}
+            active={s.key === activeStream}
+            onEnd={() => setStreams((all) => all.map((x) => (x.key === s.key ? { ...x, ended: true } : x)))}
+          />
+        ))}
+        {activeStream !== null ? null : error ? (
           <div className="panel-empty" role="alert">
             <Icon name="alert" size={16} />
             <span>{error}</span>
           </div>
-        ) : loaded && tabs.length === 0 ? (
+        ) : loaded && tabs.length === 0 && streams.length === 0 ? (
           <div className="panel-empty">
             <button className="btn btn-sm" onClick={() => void open().catch((e) => setError(errText(e)))}>
               <Icon name="plus" size={13} /> New terminal
