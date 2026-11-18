@@ -1,0 +1,19 @@
+{
+  "id": "playwright",
+  "family": "tool",
+  "modules": ["playwright-rules"],
+  "detectionMarkers": ["playwright"],
+  "provenance": {
+    "origin": "authored",
+    "sourceRef": "ADR-0001 P4 (rules-layers): playwright-testing moved out of rules/core"
+  },
+  "stability": "experimental",
+  "skills": {
+    "implement": [],
+    "test": [],
+    "review": [],
+    "build-fix": [],
+    "migrate": []
+  },
+  "notes": "Rules-only pack: it carries the Playwright e2e rule that used to sit in rules/core (gated stack_requires: playwright). Review of specs stays with review-testing-practices, which reads this pack's rule."
+}

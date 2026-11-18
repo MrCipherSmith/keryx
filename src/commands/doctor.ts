@@ -37,6 +37,7 @@ import { readWikiFreshnessMetric } from "../health/service";
 import { resolveMainCheckoutRoot } from "../lib/git-worktrees";
 import { gitToplevel } from "../lib/clone-scope";
 import { claudeHooksExpected, inspectEntrypoints, rulesBlockFix, rulesBlockKeptReason, type EntrypointInspection } from "../rules/entrypoint-inspection";
+import { COMMIT_MSG_HOOK_DISABLED_DETAIL, inspectCommitMsgHook } from "../lib/managed-git-hook";
 import { CODEX_PROJECT_DOC_MAX_BYTES } from "../rules/entrypoint-writers";
 
 export type DoctorStatus = "ok" | "warn" | "fail";
@@ -466,6 +467,48 @@ function describeEntrypoints(inspection: EntrypointInspection): string {
   return parts.length > 0 ? parts.join("; ") : "no managed entrypoint content to check";
 }
 
+/**
+ * ADR-0001 D3: the keryx commit-msg check only protects commits when git
+ * actually runs it. Warns when it is absent, or present but inactive: a
+ * foreign commit-msg hook that does not call it (the fix is the exact line to
+ * add), a `core.hooksPath` pointing git elsewhere, or git unable to confirm.
+ */
+export async function checkCommitMsgHook(cwd: string): Promise<DoctorCheck> {
+  const projectRoot = resolveProjectRoot(cwd);
+  let result: Awaited<ReturnType<typeof inspectCommitMsgHook>>;
+  try {
+    result = await inspectCommitMsgHook(projectRoot);
+  } catch (error) {
+    return {
+      id: "commit-msg-hook",
+      status: "warn",
+      detail: `could not inspect the commit-msg hook: ${error instanceof Error ? error.message : String(error)}`,
+      fix: UPDATE_FIX,
+    };
+  }
+  switch (result.state) {
+    case "no-git":
+      return { id: "commit-msg-hook", status: "ok", detail: "not a git repository — no commit-msg hook to check" };
+    case "disabled":
+      return { id: "commit-msg-hook", status: "ok", detail: COMMIT_MSG_HOOK_DISABLED_DETAIL };
+    case "setting-invalid":
+      return { id: "commit-msg-hook", status: "warn", detail: result.reason, fix: "fix .metaproject/metaproject.json (hooks.commitMsg must be true or false)" };
+    case "unverified":
+      return { id: "commit-msg-hook", status: "warn", detail: `the keryx commit-msg check is ${result.reason}`, fix: result.fix };
+    case "missing":
+      return { id: "commit-msg-hook", status: "warn", detail: "the keryx commit-msg hook (refuses AI Co-Authored-By and Generated-by lines) is not installed", fix: UPDATE_FIX };
+    case "inactive":
+      return {
+        id: "commit-msg-hook",
+        status: "warn",
+        detail: `the keryx commit-msg hook is inactive: ${result.reason}`,
+        fix: result.fix ?? UPDATE_FIX,
+      };
+    case "active":
+      return { id: "commit-msg-hook", status: "ok", detail: "commit-msg hook installed and active" };
+  }
+}
+
 async function checkGraphFreshness(cwd: string): Promise<DoctorCheck> {
   const result = await checkGraphStaleness(cwd);
   if (result.status === "fresh") {
@@ -638,6 +681,7 @@ export async function buildDoctorReport(
     checkIntegrations(cwd),
     checkStandard(cwd),
     checkEntrypoints(cwd),
+    checkCommitMsgHook(cwd),
     checkWorktrees(cwd),
     checkGraphFreshness(cwd),
     checkWikiFreshness(cwd),

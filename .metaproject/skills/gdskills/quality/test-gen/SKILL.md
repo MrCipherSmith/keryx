@@ -41,13 +41,7 @@ Auto-generate tests for specified files or modules.
 
 ### Step 3: Plan Test Cases
 
-**Functions:** happy path, edge cases (empty/null/zero/negative), error cases, boundary values
-
-**Components:** renders, props, interactions, conditional rendering, states
-
-**Endpoints:** success (200), validation (400), not found (404), auth (401/403)
-
-**Classes:** constructor, methods, state transitions, errors
+Per `.metaproject/rules/activity/test.mdc`: what each test pins, and the cases at the boundaries for functions, components, endpoints and classes.
 
 ### Step 4: Generate
 1. Create test file at correct path (matching convention)
@@ -74,10 +68,8 @@ Fix failing tests (max 3 iterations) — fix the test, not the source.
 
 ## Rules
 
-- ALWAYS match existing test patterns in the project
+- Test design (patterns, doubles, determinism): `.metaproject/rules/activity/test.mdc`
 - NEVER modify source code — only test files
-- Mock external dependencies, not internal modules
-- Meaningful test descriptions
 - If no test framework detected, suggest installing one
 
 ## Red Flags

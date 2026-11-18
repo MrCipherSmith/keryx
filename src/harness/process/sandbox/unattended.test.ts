@@ -39,10 +39,10 @@ describe("AC13: an unattended run never runs uncontained — every opt-out and e
     expect(plan.ok).toBe(false);
   });
 
-  test("a non-Linux host refuses (the hardened profile is bwrap-only in this version)", () => {
-    const plan = planUnattendedSandbox(input({ platform: "darwin" }));
+  test("a host that is neither Linux nor macOS refuses", () => {
+    const plan = planUnattendedSandbox(input({ platform: "win32" }));
     expect(plan.ok).toBe(false);
-    if (!plan.ok) expect(plan.reason).toContain("Linux (bubblewrap) only");
+    if (!plan.ok) expect(plan.reason).toContain("Linux (bubblewrap) and macOS (Seatbelt) only");
   });
 
   test("no launcher on PATH refuses", () => {
@@ -165,7 +165,7 @@ describe("AC13: the plan is built from allow lists", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Live containment — real bwrap, real probes.
+// Live containment — real bwrap, real probes. (macOS: unattended-darwin.test.ts.)
 // ---------------------------------------------------------------------------
 
 const live = planUnattendedSandbox({
@@ -176,7 +176,7 @@ const live = planUnattendedSandbox({
   env: process.env,
   home: homedir(),
 });
-const liveAvailable = live.ok;
+const liveAvailable = live.ok && live.kind === "bubblewrap";
 
 describe.skipIf(!liveAvailable)("AC13 (live): what a command inside the unattended sandbox can reach", () => {
   let base = "";

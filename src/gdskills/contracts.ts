@@ -141,6 +141,13 @@ export type JsonSchema = {
    * (`schemasDeclareOnlyImplementedKeywords`) is the structural answer.
    */
   maxItems?: number;
+  /**
+   * At least one array item must match this subschema. Added for the
+   * mandatory agent-conduct entry in `subagent-dispatch.constraints`
+   * (ADR-0001 D2) — the fourth keyword a schema relied on before this
+   * validator read it; `contract-keywords.test.ts` caught it before release.
+   */
+  contains?: JsonSchema;
   /** Strict lower bound on a number. See the `exclusiveMinimum` branch below. */
   exclusiveMinimum?: number;
   /**
@@ -544,6 +551,24 @@ async function validateValue(
       path: valuePath,
       message: `Expected array length >= ${schema.minItems}`,
     });
+  }
+
+  if (Array.isArray(value) && schema.contains !== undefined) {
+    let matched = false;
+    for (const [index, item] of value.entries()) {
+      const probe: ValidationError[] = [];
+      await validateValue(item, schema.contains, `${valuePath}[${index}]`, probe, rootSchema, schemaCache);
+      if (probe.length === 0) {
+        matched = true;
+        break;
+      }
+    }
+    if (!matched) {
+      errors.push({
+        path: valuePath,
+        message: "Expected at least one array item to match the `contains` subschema",
+      });
+    }
   }
 
   if (Array.isArray(value) && schema.maxItems !== undefined && value.length > schema.maxItems) {

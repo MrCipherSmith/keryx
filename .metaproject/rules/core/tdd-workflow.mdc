@@ -1,27 +1,11 @@
 ---
-description: "Testing standard shared by code writers and reviewers: red-green order, no done without green, tests colocated, new logic gets a test, mock at the boundary, no real network or clock, flaky tests fixed by waiting on a state, and the severities reviewers use. Use when implementing features, fixing bugs, writing or reviewing unit and integration tests."
+description: "Testing standard shared by code writers and reviewers: no done without green, tests colocated, new logic gets a test, mock at the boundary, no real network or clock, flaky tests fixed by waiting on a state, and the severities reviewers use. Use when implementing features, fixing bugs, writing or reviewing unit and integration tests."
 alwaysApply: false
 ---
 
 # TDD Workflow
 
-Canon applies: the test framework's documentation. This rule holds this project's decisions and the order an implementer works in.
-
-## Process (implementer)
-
-1. **RED.** Write the failing test first, from the task's `acceptance_criteria` (each criterion maps to at least one test; use `test_case_specs` or run `tests-creator` when none exist). Run it and confirm it fails for the right reason: a test that passes before the implementation is broken.
-2. **GREEN.** Write the minimal code that passes it. Run the tests after each logical chunk.
-3. **REFACTOR.** Clean up with the suite green; re-run it after every step.
-4. **Report.** The full suite (`bun test`, `npm test`, `pytest` or the project's equivalent) passes with 0 failures before `STATUS: DONE`.
-
-Output contract on completion:
-
-```
-tests_written: <N>
-tests_passing: <N>
-tests_failing: 0
-coverage_notes: "<which acceptance criteria are covered>"
-```
+Canon applies: the test framework's documentation. This rule holds this project's decisions. The order an implementer works in (red, green, refactor, report) is `rules/activity/implement.mdc`; test design is `rules/activity/test.mdc`.
 
 **Iron laws.** Never claim `STATUS: DONE` with a failing test. Never write implementation before a failing test exists for that behaviour. Never delete or skip a test to make the suite green; fix the code.
 

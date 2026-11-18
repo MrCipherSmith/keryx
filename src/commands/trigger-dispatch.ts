@@ -737,7 +737,7 @@ async function dispatchLocked(
     );
   }
   const sandboxNote = sandbox.ok
-    ? `hardened bwrap sandbox, network ${dispatch.network ? `ON — ${NETWORK_ON_WARNING}` : "off"}`
+    ? `hardened ${sandbox.label} sandbox, network ${dispatch.network ? `ON — ${NETWORK_ON_WARNING}` : "off"}`
     : `none (${sandbox.reason}) — "ask" mode, every shell_exec refused`;
 
   // --- 4. provider (AC14) ------------------------------------------------------

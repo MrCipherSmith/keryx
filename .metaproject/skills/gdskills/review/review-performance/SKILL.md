@@ -111,11 +111,11 @@ The standard and its severities are `.metaproject/rules/core/database-patterns.m
 - [ ] Pure child component receiving stable props but not wrapped in `React.memo` — only flag if the parent re-renders frequently (e.g., on keypress, scroll, animation frame)
 - [ ] `useCallback` absent for a non-store callback passed to a `React.memo` child — only flag if the child is expensive; a store method or store value is never wrapped in `useCallback`/`useMemo`
 
-**MobX note:** `observer` and where memoization does and does not belong are `.metaproject/rules/core/code-style-patterns.mdc` Rules 1 and 3. Without a concrete re-render cost there is no finding.
+**MobX note:** `observer` and where memoization does and does not belong are `.metaproject/rules/stacks/react/code-style-patterns.mdc` Rules 1 and 3. Without a concrete re-render cost there is no finding.
 
 ### 3. Expensive Computations in Hot Paths
 
-- [ ] Sorting, filtering, or reducing a large array inside a render function without `useMemo`; when the array is store state the fix is `@computed` (`.metaproject/rules/core/mobx-store-template.mdc` Rule 1), not `useMemo`
+- [ ] Sorting, filtering, or reducing a large array inside a render function without `useMemo`; when the array is store state the fix is `@computed` (`.metaproject/rules/stacks/mobx/mobx-store-template.mdc` Rule 1), not `useMemo`
 - [ ] Deep clone (`JSON.parse(JSON.stringify(...))`) inside a loop or on every render
 - [ ] Regex compilation inside a loop — should be compiled once outside: `const RE = /pattern/`
 - [ ] `Object.keys().reduce()` or similar aggregation recalculated on every render instead of being derived in store or memoized
@@ -135,7 +135,7 @@ The standard and its severities are `.metaproject/rules/core/database-patterns.m
 - [ ] RxJS `subscribe()` without `unsubscribe()` stored in a disposable or returned from useEffect cleanup
 - [ ] WebSocket or SSE connection opened without close in cleanup
 
-MobX disposers are `.metaproject/rules/core/mobx-store-template.mdc` Rule 5; a `useEffect` subscription, timer or async operation with no cleanup is `.metaproject/rules/core/code-style-patterns.mdc` Rule 5. Each takes its severity from that rule's table.
+MobX disposers are `.metaproject/rules/stacks/mobx/mobx-store-template.mdc` Rule 5; a `useEffect` subscription, timer or async operation with no cleanup is `.metaproject/rules/stacks/react/code-style-patterns.mdc` Rule 5. Each takes its severity from that rule's table.
 
 **Unbounded collections:**
 - [ ] Map, Set, or array that grows on every event/request with no eviction, max size, or TTL
@@ -178,7 +178,7 @@ The standard and its severities are `.metaproject/rules/core/api-contracts.mdc` 
 
 ### 10. MobX: Derived State Computed in Renders
 
-Derived values belong in `@computed` (`.metaproject/rules/core/mobx-store-template.mdc` Rule 1 and its row) and logic does not live in a component (`.metaproject/rules/core/code-style-patterns.mdc` Rule 2). This lens adds only the cost angle: a reduce, filter or format recomputed on a high-frequency render, with its frequency named.
+Derived values belong in `@computed` (`.metaproject/rules/stacks/mobx/mobx-store-template.mdc` Rule 1 and its row) and logic does not live in a component (`.metaproject/rules/stacks/react/code-style-patterns.mdc` Rule 2). This lens adds only the cost angle: a reduce, filter or format recomputed on a high-frequency render, with its frequency named.
 
 ---
 
@@ -186,15 +186,7 @@ Derived values belong in `@computed` (`.metaproject/rules/core/mobx-store-templa
 
 ### Shared laws (every reviewer)
 
-1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot name the input, call, or condition that reaches the code, you have an observation, not a finding. Report it as `info` and say what would settle it.
-2. **Never flag the theoretical.** The path you describe must exist in the code under review. Do not report a safe API because it could be misused, or a pattern because it is often wrong elsewhere.
-3. **One finding per class, not one per occurrence.** When the same shape appears at several sites, report it once and list every site. Ten findings that are one finding hide the other nine problems.
-4. **A deliberate choice is not a defect until its reason is read and shown wrong.** An explicit override, suppression or exemption, a comment or commit giving a reason, or a sibling doing the same is a decision: read its reason (the comment, `git log -L` or `git blame`, the sibling) before you report it, and report it only when you can show that reason wrong. A project rule is checked against accepted platform practice and its known exceptions before a deviation from it is reported.
-
-Severity levels are defined once, in `review-orchestrator/SKILL.md` →
-**Severity (canonical)**. This reviewer does not restate them: `blocker` is the
-four merge-blocking shapes named there and nothing else, and the `major`/`minor`
-boundary is the trigger-and-outcome test.
+Read the review activity rule before the code: `.metaproject/rules/project/activity/review.mdc` when the project keeps its own, else `.metaproject/rules/activity/review.mdc`. It holds what every reviewer applies and this file does not restate: scope (diff mode: the change; path mode: the whole file), the four shared laws, `info`, one finding per defect across lenses, and where severity comes from.
 
 ### Performance laws
 

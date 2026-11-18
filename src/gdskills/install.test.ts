@@ -6,8 +6,17 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "bun:test";
 import { CONTRACTS, contractPath } from "./contracts";
-import { checkInstallDestination, checkInstallFile, installGdskills } from "./install";
 import {
+  bundledRulesSourcePath,
+  checkInstallDestination,
+  checkInstallFile,
+  installBundledRules,
+  installGdskills,
+} from "./install";
+import {
+  migrateMovedRuleOverrides,
+  movedRuleNotice,
+  movedRuleOverrideMessage,
   normalizeRetiredRuleContent,
   removeStaleRuntimeBuilds,
   removeUnmodifiedRetiredRules,
@@ -15,7 +24,10 @@ import {
   staleRuntimeBuildMessage,
   staleRuntimeBuildSeverity,
 } from "./guarded-fs-ops";
-import { RETIRED_RULE_SIZE_CAP_BYTES, RETIRED_RULES } from "./retired-rules";
+import { MOVED_RULES, type MovedRuleEntry, movedToPackId, RETIRED_RULE_SIZE_CAP_BYTES, RETIRED_RULES } from "./retired-rules";
+import { isKeryxRuleLayer, type KeryxRuleLayer } from "./rule-references";
+import { bundledPackRulesPath, bundledStacksSourcePath, stackPackInstallCommand } from "./stack-rules-install";
+import { resolveProjectContext } from "./context-resolver";
 
 test("installs real bundled gdskills, contracts, shared assets, and rules", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "keryx-gdskills-"));
@@ -64,9 +76,10 @@ test("installs real bundled gdskills, contracts, shared assets, and rules", asyn
       "utf8",
     )).toContain("merge-base");
     expect(await readFile(
-      path.join(metaprojectRoot, "rules", "core", "git-rules.mdc"),
+      path.join(metaprojectRoot, "rules", "process", "git-rules.mdc"),
       "utf8",
     )).toContain("Git");
+    expect(existsSync(path.join(metaprojectRoot, "rules", "core", "git-rules.mdc"))).toBe(false);
     await access(path.join(metaprojectRoot, "jobs"));
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -1186,7 +1199,7 @@ test("a symlinked skill directory is skipped with a warning and the rest of the 
     for (const contract of CONTRACTS) {
       await access(path.join(metaprojectRoot, "core", "gdskills", "contracts", contract.fileName));
     }
-    expect(await readFile(path.join(metaprojectRoot, "rules", "core", "git-rules.mdc"), "utf8")).toContain("Git");
+    expect(await readFile(path.join(metaprojectRoot, "rules", "process", "git-rules.mdc"), "utf8")).toContain("Git");
     expect(await readFile(
       path.join(metaprojectRoot, "skills", "gdskills", "orchestration", "flow-orchestrator", "SKILL.md"),
       "utf8",
@@ -1463,3 +1476,1152 @@ async function listFiles(root: string): Promise<string[]> {
   }
   return files;
 }
+
+// ADR-0001 P2: every rule layer installs beside core, and a rule that moved
+// out of core leaves no stale copy behind unless the project edited it.
+
+test("installGdskills installs the process layer beside core, and nothing of it into core", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-rule-layers-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    await installGdskills(metaprojectRoot, "recommended");
+    const bundled = await readFile(path.join(bundledRulesSourcePath("process"), "agent-conduct.mdc"), "utf8");
+    expect(await readFile(path.join(metaprojectRoot, "rules", "process", "agent-conduct.mdc"), "utf8")).toBe(bundled);
+    expect(existsSync(path.join(metaprojectRoot, "rules", "core", "agent-conduct.mdc"))).toBe(false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+/** A bundle with one rule per layer: `core/keep.mdc`, `process/moved.mdc`, and optionally `activity/review.mdc`. */
+async function layeredBundle(root: string, withActivity: boolean): Promise<(layer: KeryxRuleLayer) => string> {
+  const bundle = path.join(root, "bundle");
+  await mkdir(path.join(bundle, "core"), { recursive: true });
+  await mkdir(path.join(bundle, "process"), { recursive: true });
+  await writeFile(path.join(bundle, "core", "keep.mdc"), "core rule\n");
+  await writeFile(path.join(bundle, "process", "moved.mdc"), "moved rule, new home\n");
+  if (withActivity) {
+    await mkdir(path.join(bundle, "activity"), { recursive: true });
+    await writeFile(path.join(bundle, "activity", "review.mdc"), "review discipline\n");
+  }
+  return (layer) => path.join(bundle, layer);
+}
+
+const MOVED_V1 = "moved rule, version 1\n";
+const MOVED_V2 = "moved rule, version 2 (last shipped under core)\n";
+const sha = (text: string): string =>
+  createHash("sha256").update(normalizeRetiredRuleContent(Buffer.from(text))).digest("hex");
+const FIXTURE_MOVE: MovedRuleEntry = {
+  fileName: "moved.mdc",
+  movedTo: "process/moved.mdc",
+  shippedSha256: [sha(MOVED_V1), sha(MOVED_V2)],
+  largestShippedBytes: Buffer.byteLength(MOVED_V2),
+  reason: "fixture: a procedure that moved to the process layer",
+};
+
+test("installBundledRules installs an activity layer when the bundle ships one, and skips it silently when not", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-rule-layers-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    const without = await installBundledRules(metaprojectRoot, {
+      sourcePathFor: await layeredBundle(path.join(root, "a"), false),
+      cleanupEntries: [],
+    });
+    expect(without).toEqual({ outcomes: [], overrideOutcomes: [], registryMoves: [], stackPacks: [], warning: null });
+    expect(existsSync(path.join(metaprojectRoot, "rules", "activity"))).toBe(false);
+    expect(existsSync(path.join(metaprojectRoot, "rules", "core", "keep.mdc"))).toBe(true);
+    expect(existsSync(path.join(metaprojectRoot, "rules", "process", "moved.mdc"))).toBe(true);
+
+    const withActivity = await installBundledRules(metaprojectRoot, {
+      sourcePathFor: await layeredBundle(path.join(root, "b"), true),
+      cleanupEntries: [],
+    });
+    expect(withActivity.warning).toBeNull();
+    expect(await readFile(path.join(metaprojectRoot, "rules", "activity", "review.mdc"), "utf8")).toBe("review discipline\n");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a moved rule: every shipped version of the stale core copy is removed and the new path installed", async () => {
+  for (const shipped of [MOVED_V1, MOVED_V2, MOVED_V2.replace(/\n/g, "\r\n")]) {
+    const root = await mkdtemp(path.join(tmpdir(), "keryx-rule-move-"));
+    try {
+      const metaprojectRoot = path.join(root, ".metaproject");
+      const stale = path.join(metaprojectRoot, "rules", "core", "moved.mdc");
+      await mkdir(path.dirname(stale), { recursive: true });
+      await writeFile(stale, shipped);
+
+      const result = await installBundledRules(metaprojectRoot, {
+        sourcePathFor: await layeredBundle(root, false),
+        cleanupEntries: [FIXTURE_MOVE],
+      });
+
+      expect(result.warning).toBeNull();
+      expect(result.outcomes).toEqual([{ fileName: "moved.mdc", movedTo: "process/moved.mdc", action: "removed" }]);
+      expect(existsSync(stale)).toBe(false);
+      expect(await readFile(path.join(metaprojectRoot, "rules", "process", "moved.mdc"), "utf8")).toBe("moved rule, new home\n");
+      expect(result.outcomes.map(movedRuleNotice)).toEqual([
+        "rules/core/moved.mdc moved to rules/process/moved.mdc; removed the unmodified old copy — "
+          + "update any citation of rules/core/moved.mdc in your own files (CLAUDE.md, AGENTS.md, project skills, wiki)",
+      ]);
+      expect(result.outcomes.map((outcome) => retiredRuleWarning(outcome, [FIXTURE_MOVE]))).toEqual([null]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }
+});
+
+test("a moved rule the project edited is kept in core, reported, and the new path is still installed", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-rule-move-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    const stale = path.join(metaprojectRoot, "rules", "core", "moved.mdc");
+    await mkdir(path.dirname(stale), { recursive: true });
+    await writeFile(stale, `${MOVED_V2}our own addition\n`);
+
+    const result = await installBundledRules(metaprojectRoot, {
+      sourcePathFor: await layeredBundle(root, false),
+      cleanupEntries: [FIXTURE_MOVE],
+    });
+
+    expect(result.outcomes).toEqual([{ fileName: "moved.mdc", movedTo: "process/moved.mdc", action: "kept-modified" }]);
+    expect(await readFile(stale, "utf8")).toBe(`${MOVED_V2}our own addition\n`);
+    expect(existsSync(path.join(metaprojectRoot, "rules", "process", "moved.mdc"))).toBe(true);
+    const [warning] = result.outcomes.map((outcome) => retiredRuleWarning(outcome, [FIXTURE_MOVE]));
+    expect(warning).toStartWith(
+      "rules/core/moved.mdc moved to rules/process/moved.mdc (fixture: a procedure that moved to the process layer)",
+    );
+    expect(warning).toContain("carry your edits into rules/project/process/moved.mdc, then delete rules/core/moved.mdc");
+    expect(result.outcomes.map(movedRuleNotice)).toEqual([null]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a moved rule's read is capped by its own largest shipped size", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-rule-move-"));
+  try {
+    const rulesCore = path.join(root, "core");
+    await mkdir(rulesCore, { recursive: true });
+    const oversized = FIXTURE_MOVE.largestShippedBytes * 4 + 1;
+    await writeFile(path.join(rulesCore, "moved.mdc"), "x".repeat(oversized));
+    expect(await removeUnmodifiedRetiredRules(rulesCore, undefined, [FIXTURE_MOVE])).toEqual([
+      { fileName: "moved.mdc", movedTo: "process/moved.mdc", action: "kept-oversized", sizeBytes: oversized },
+    ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+/** Shape problems of a moved-rule entry, so the check runs on the fixture too while `MOVED_RULES` is empty. */
+function movedEntryShapeProblems(entry: MovedRuleEntry): string[] {
+  const problems: string[] = [];
+  if (path.posix.basename(entry.fileName) !== entry.fileName) problems.push(`fileName ${entry.fileName} is not a bare name`);
+  if (!/^((process|activity)|stacks\/[a-z0-9-]+)\/[a-z0-9._-]+\.mdc?$/.test(entry.movedTo)) {
+    problems.push(`movedTo ${entry.movedTo} is not <layer>/<name>.md(c) or stacks/<pack>/<name>.md(c)`);
+  }
+  if (path.posix.basename(entry.movedTo) !== entry.fileName) problems.push(`movedTo ${entry.movedTo} renames ${entry.fileName}`);
+  if (!(entry.largestShippedBytes > 0)) problems.push("largestShippedBytes is not positive");
+  if (entry.shippedSha256.length === 0) problems.push("no shipped hashes");
+  for (const hash of entry.shippedSha256) if (!/^[0-9a-f]{64}$/.test(hash)) problems.push(`bad hash ${hash}`);
+  return problems;
+}
+
+test("moved-rule entries are well-formed: bare old name, <layer>/<name>.mdc or stacks/<pack>/<name>.mdc target, size and hashes", () => {
+  for (const entry of [FIXTURE_MOVE, ...MOVED_RULES]) {
+    expect(movedEntryShapeProblems(entry)).toEqual([]);
+  }
+  // The checker itself rejects the shapes it is for.
+  expect(movedEntryShapeProblems({ ...FIXTURE_MOVE, fileName: "../core/moved.mdc", movedTo: "core/moved.mdc" })).toHaveLength(3);
+  expect(movedEntryShapeProblems({ ...FIXTURE_MOVE, movedTo: "stacks/react/moved.mdc" })).toEqual([]);
+  expect(movedEntryShapeProblems({ ...FIXTURE_MOVE, movedTo: "stacks/react/rules/moved.mdc" })).toHaveLength(1);
+});
+
+test("MOVED_RULES entries name a shipped layer or pack path, are gone from core, and are not also retired", () => {
+  const coreBundle = bundledRulesSourcePath("core");
+  for (const entry of MOVED_RULES) {
+    expect(existsSync(path.join(coreBundle, entry.fileName))).toBe(false);
+    const pack = movedToPackId(entry.movedTo);
+    if (pack !== undefined) {
+      expect({ entry: entry.movedTo, shipped: existsSync(path.join(bundledPackRulesPath(bundledStacksSourcePath(), pack), entry.fileName)) })
+        .toEqual({ entry: entry.movedTo, shipped: true });
+      continue;
+    }
+    const slash = entry.movedTo.indexOf("/");
+    const layer = entry.movedTo.slice(0, slash);
+    expect(isKeryxRuleLayer(layer) && layer !== "core").toBe(true);
+    expect(existsSync(path.join(bundledRulesSourcePath(layer as KeryxRuleLayer), entry.movedTo.slice(slash + 1)))).toBe(true);
+    expect(existsSync(path.join(coreBundle, entry.fileName))).toBe(false);
+  }
+  const retiredNames = new Set(RETIRED_RULES.map((entry) => entry.fileName));
+  expect(MOVED_RULES.filter((entry) => retiredNames.has(entry.fileName))).toEqual([]);
+});
+
+test("a moved rule is not removed from core when its layer is a symlink keryx refuses to write through", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-rule-move-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    const stale = path.join(metaprojectRoot, "rules", "core", "moved.mdc");
+    await mkdir(path.dirname(stale), { recursive: true });
+    await writeFile(stale, MOVED_V2);
+    // rules/process points elsewhere, and even holds a file of the right name.
+    const elsewhere = path.join(root, "elsewhere");
+    await mkdir(elsewhere, { recursive: true });
+    await writeFile(path.join(elsewhere, "moved.mdc"), "someone else's file\n");
+    await symlink(elsewhere, path.join(metaprojectRoot, "rules", "process"));
+
+    const result = await installBundledRules(metaprojectRoot, {
+      sourcePathFor: await layeredBundle(root, false),
+      cleanupEntries: [FIXTURE_MOVE],
+    });
+
+    expect(result.warning).toContain("rules/process was not updated because it is a symlink");
+    expect(result.outcomes).toEqual([{ fileName: "moved.mdc", movedTo: "process/moved.mdc", action: "kept-destination-missing", cause: "layer-unusable" }]);
+    expect(await readFile(stale, "utf8")).toBe(MOVED_V2);
+    expect(await readFile(path.join(elsewhere, "moved.mdc"), "utf8")).toBe("someone else's file\n");
+    expect(result.outcomes.map(movedRuleNotice)).toEqual([null]);
+    const [warning] = result.outcomes.map((outcome) => retiredRuleWarning(outcome, [FIXTURE_MOVE]));
+    expect(warning).toContain("the old copy was kept because rules/process/ is not a plain directory");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a moved rule is not removed from core when the bundle does not ship its new layer", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-rule-move-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    const stale = path.join(metaprojectRoot, "rules", "core", "moved.mdc");
+    await mkdir(path.dirname(stale), { recursive: true });
+    await writeFile(stale, MOVED_V1);
+    const bundleFor = await layeredBundle(root, false);
+
+    const result = await installBundledRules(metaprojectRoot, {
+      sourcePathFor: (layer) => (layer === "process" ? path.join(root, "no-such-layer") : bundleFor(layer)),
+      cleanupEntries: [FIXTURE_MOVE],
+    });
+
+    expect(result.outcomes).toEqual([{ fileName: "moved.mdc", movedTo: "process/moved.mdc", action: "kept-destination-missing", cause: "not-shipped" }]);
+    expect(existsSync(stale)).toBe(true);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a move is idempotent: the second run finds nothing to do and keeps the new path", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-rule-move-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    const stale = path.join(metaprojectRoot, "rules", "core", "moved.mdc");
+    await mkdir(path.dirname(stale), { recursive: true });
+    await writeFile(stale, MOVED_V1);
+    const seams = { sourcePathFor: await layeredBundle(root, false), cleanupEntries: [FIXTURE_MOVE] };
+
+    expect((await installBundledRules(metaprojectRoot, seams)).outcomes.map((o) => o.action)).toEqual(["removed"]);
+    expect(await installBundledRules(metaprojectRoot, seams)).toEqual({ outcomes: [], overrideOutcomes: [], registryMoves: [], stackPacks: [], warning: null });
+    expect(existsSync(stale)).toBe(false);
+    expect(await readFile(path.join(metaprojectRoot, "rules", "process", "moved.mdc"), "utf8")).toBe("moved rule, new home\n");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("installGdskills reports a completed move as a notice, not a warning", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-rule-move-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    // A fixture move onto the real bundled conduct rule, whose new path the
+    // real bundle installs.
+    const oldText = "conduct, as it once shipped under core\n";
+    const entry: MovedRuleEntry = {
+      fileName: "agent-conduct.mdc",
+      movedTo: "process/agent-conduct.mdc",
+      shippedSha256: [sha(oldText)],
+      largestShippedBytes: Buffer.byteLength(oldText),
+      reason: "fixture",
+    };
+    const stale = path.join(metaprojectRoot, "rules", "core", "agent-conduct.mdc");
+    await mkdir(path.dirname(stale), { recursive: true });
+    await writeFile(stale, oldText);
+
+    const result = await installGdskills(metaprojectRoot, "recommended", { ruleSeams: { cleanupEntries: [entry] } });
+
+    expect(existsSync(stale)).toBe(false);
+    expect(result.notices).toContain(
+      "rules/core/agent-conduct.mdc moved to rules/process/agent-conduct.mdc; removed the unmodified old copy — "
+        + "update any citation of rules/core/agent-conduct.mdc in your own files (CLAUDE.md, AGENTS.md, project skills, wiki)",
+    );
+    expect(result.warnings.filter((warning) => warning.includes("agent-conduct"))).toEqual([]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a moved rule is not removed from core when its layer folder is real but the new file is not in it", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-rule-move-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    const stale = path.join(metaprojectRoot, "rules", "core", "moved.mdc");
+    await mkdir(path.dirname(stale), { recursive: true });
+    await writeFile(stale, MOVED_V2);
+    const otherProcess = path.join(root, "other-process");
+    await mkdir(otherProcess, { recursive: true });
+    await writeFile(path.join(otherProcess, "unrelated.mdc"), "unrelated\n");
+    const bundleFor = await layeredBundle(root, false);
+
+    const result = await installBundledRules(metaprojectRoot, {
+      sourcePathFor: (layer) => (layer === "process" ? otherProcess : bundleFor(layer)),
+      cleanupEntries: [FIXTURE_MOVE],
+    });
+
+    expect(existsSync(path.join(metaprojectRoot, "rules", "process", "unrelated.mdc"))).toBe(true);
+    expect(result.outcomes).toEqual([{ fileName: "moved.mdc", movedTo: "process/moved.mdc", action: "kept-destination-missing", cause: "not-shipped" }]);
+    expect(await readFile(stale, "utf8")).toBe(MOVED_V2);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a plain retired removal is not reported as a move", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-rule-move-"));
+  try {
+    const rulesCore = path.join(root, "core");
+    await mkdir(rulesCore, { recursive: true });
+    await writeFile(path.join(rulesCore, "gone.mdc"), MOVED_V1);
+    const retired = { fileName: "gone.mdc", shippedSha256: [sha(MOVED_V1)], reason: "fixture" };
+    const outcomes = await removeUnmodifiedRetiredRules(rulesCore, undefined, [retired]);
+    expect(outcomes).toEqual([{ fileName: "gone.mdc", action: "removed" }]);
+    expect(outcomes.map(movedRuleNotice)).toEqual([null]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("an edited moved copy is kept on every run, never removed by a later one", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-rule-move-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    const stale = path.join(metaprojectRoot, "rules", "core", "moved.mdc");
+    await mkdir(path.dirname(stale), { recursive: true });
+    await writeFile(stale, `${MOVED_V1}edited\n`);
+    const seams = { sourcePathFor: await layeredBundle(root, false), cleanupEntries: [FIXTURE_MOVE] };
+
+    for (let run = 0; run < 2; run += 1) {
+      const result = await installBundledRules(metaprojectRoot, seams);
+      expect(result.outcomes.map((o) => o.action)).toEqual(["kept-modified"]);
+      expect(await readFile(stale, "utf8")).toBe(`${MOVED_V1}edited\n`);
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a moved rule is not removed from core when its new path is a directory or a symlink, not a file", async () => {
+  for (const shape of ["directory", "symlink"] as const) {
+    const root = await mkdtemp(path.join(tmpdir(), "keryx-rule-move-"));
+    try {
+      const rulesCore = path.join(root, "core");
+      await mkdir(rulesCore, { recursive: true });
+      await writeFile(path.join(rulesCore, "moved.mdc"), MOVED_V2);
+      await mkdir(path.join(root, "process"), { recursive: true });
+      const newPath = path.join(root, "process", "moved.mdc");
+      if (shape === "directory") {
+        await mkdir(newPath);
+      } else {
+        await writeFile(path.join(root, "elsewhere.mdc"), "moved rule, new home\n");
+        await symlink(path.join(root, "elsewhere.mdc"), newPath);
+      }
+
+      expect(await removeUnmodifiedRetiredRules(rulesCore, undefined, [FIXTURE_MOVE])).toEqual([
+        { fileName: "moved.mdc", movedTo: "process/moved.mdc", action: "kept-destination-missing", cause: "missing" },
+      ]);
+      expect(existsSync(path.join(rulesCore, "moved.mdc"))).toBe(true);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }
+});
+
+test("kept-destination-missing names the real cause: an incomplete package, an unusable layer, or a missing file", () => {
+  const warn = (cause: "not-shipped" | "layer-unusable" | "missing"): string =>
+    retiredRuleWarning({ fileName: "moved.mdc", movedTo: "process/moved.mdc", action: "kept-destination-missing", cause }, [FIXTURE_MOVE]) ?? "";
+  expect(warn("not-shipped")).toContain("this keryx installation does not ship rules/process/moved.mdc");
+  expect(warn("not-shipped")).toContain("reinstall keryx");
+  expect(warn("not-shipped")).not.toContain("symlink");
+  expect(warn("layer-unusable")).toContain("rules/process/ is not a plain directory");
+  expect(warn("missing")).toContain("rules/process/moved.mdc was not installed — re-run `keryx update`");
+});
+
+// ADR-0001 P3: the real moves, end to end through installGdskills.
+
+/** What a project installed from the last release that shipped these rules under core/ holds: the same bytes, at core/. */
+async function seedPreMoveCore(metaprojectRoot: string, entries: readonly MovedRuleEntry[] = P3_MOVES): Promise<void> {
+  const core = path.join(metaprojectRoot, "rules", "core");
+  await mkdir(core, { recursive: true });
+  for (const entry of entries) {
+    await writeFile(path.join(core, entry.fileName), await preMoveText(entry.fileName));
+  }
+}
+
+/**
+ * The last text a moved rule shipped under core/: the blob at 9f45c6eb0 (the
+ * commit before ADR-0001 P3 moved anything) for a procedure, at 3f0d5f538 (the
+ * commit before P4) for a rule that moved to a stack pack — pinned as a fixture
+ * so a later edit of the moved file cannot change what these tests call
+ * "shipped" (review F4).
+ */
+async function preMoveText(fileName: string): Promise<string> {
+  const dot = fileName.lastIndexOf(".");
+  const atCommit = P4_MOVES.some((entry) => entry.fileName === fileName) ? "3f0d5f53" : "9f45c6eb";
+  const fixture = `${fileName.slice(0, dot)}.${atCommit}${fileName.slice(dot)}`;
+  return readFile(path.join(path.dirname(fileURLToPath(import.meta.url)), "__fixtures__", "moved-rules", fixture), "utf8");
+}
+
+const P3_MOVES = MOVED_RULES.filter((entry) => entry.movedTo.startsWith("process/"));
+const P4_MOVES = MOVED_RULES.filter((entry) => movedToPackId(entry.movedTo) !== undefined);
+
+test("P3: every moved procedure records the last version it shipped under core/", async () => {
+  expect(P3_MOVES.length + P4_MOVES.length).toBe(MOVED_RULES.length);
+  expect(P3_MOVES.map((entry) => entry.fileName).sort()).toEqual([
+    "commit-message-formatting.mdc",
+    "documentation-management.mdc",
+    "execution-metrics.md",
+    "git-concurrency.mdc",
+    "git-rules.mdc",
+    "implementation-doc-mandate.mdc",
+    "implementation-plans.mdc",
+    "jobs-documentation.mdc",
+    "model-selection.mdc",
+    "opus-5-5-prompting.mdc",
+    "requirements-management.mdc",
+    "requirements-package-standard.mdc",
+    "rule-management-workflow.mdc",
+    "session-plan-bridge.mdc",
+    "skill-authoring.mdc",
+    "skill-lifecycle.mdc",
+    "skills-storage-workflow.mdc",
+    "subagent-context-construction.md",
+    "subagent-status-protocol.md",
+  ]);
+  // Kept in core on purpose: coding and CLI-contract guidance, not procedures.
+  expect(MOVED_RULES.map((entry) => entry.fileName)).not.toContain("shared-definitions.mdc");
+  expect(MOVED_RULES.map((entry) => entry.fileName)).not.toContain("cli-interface-design.mdc");
+  for (const entry of P3_MOVES) {
+    const text = await preMoveText(entry.fileName);
+    expect({ file: entry.fileName, recorded: entry.shippedSha256.includes(sha(text)) })
+      .toEqual({ file: entry.fileName, recorded: true });
+    expect(Buffer.byteLength(text)).toBeLessThanOrEqual(entry.largestShippedBytes);
+  }
+});
+
+test("P3: updating a project installed before the move removes every unmodified core copy and installs process/", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-p3-move-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    await seedPreMoveCore(metaprojectRoot);
+    const edited = path.join(metaprojectRoot, "rules", "core", "git-rules.mdc");
+    await writeFile(edited, `${await readFile(edited, "utf8")}\nOur own git addition.\n`);
+
+    const result = await installGdskills(metaprojectRoot, "recommended");
+
+    for (const entry of P3_MOVES) {
+      expect(existsSync(path.join(metaprojectRoot, "rules", entry.movedTo))).toBe(true);
+      if (entry.fileName === "git-rules.mdc") continue;
+      expect({ file: entry.fileName, stale: existsSync(path.join(metaprojectRoot, "rules", "core", entry.fileName)) })
+        .toEqual({ file: entry.fileName, stale: false });
+      expect(result.notices).toContain(
+        `rules/core/${entry.fileName} moved to rules/${entry.movedTo}; removed the unmodified old copy — `
+          + `update any citation of rules/core/${entry.fileName} in your own files (CLAUDE.md, AGENTS.md, project skills, wiki)`,
+      );
+    }
+    // The edited copy stays, and the warning says where the edits belong now.
+    expect(await readFile(edited, "utf8")).toContain("Our own git addition.");
+    const gitWarnings = result.warnings.filter((warning) => warning.startsWith("rules/core/git-rules.mdc moved"));
+    expect(gitWarnings).toHaveLength(1);
+    expect(gitWarnings[0]).toContain("carry your edits into rules/project/process/git-rules.mdc");
+
+    // A second update finds only the edited copy.
+    const again = await installGdskills(metaprojectRoot, "recommended");
+    expect(again.notices.filter((notice) => notice.includes("moved to rules/process/"))).toEqual([]);
+    expect(again.warnings.filter((warning) => warning.includes("moved to rules/process/"))).toEqual(gitWarnings);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("P3: a project's own override of a moved rule follows it from rules/project/core/ to rules/project/process/", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-p3-override-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    const projectCore = path.join(metaprojectRoot, "rules", "project", "core");
+    await mkdir(projectCore, { recursive: true });
+    await writeFile(path.join(projectCore, "git-rules.mdc"), "# our git rules\n");
+    // A project override of a rule that did not move stays where it is.
+    await writeFile(path.join(projectCore, "error-handling.mdc"), "# our errors\n");
+
+    const result = await installGdskills(metaprojectRoot, "recommended");
+
+    expect(existsSync(path.join(projectCore, "git-rules.mdc"))).toBe(false);
+    expect(await readFile(path.join(metaprojectRoot, "rules", "project", "process", "git-rules.mdc"), "utf8")).toBe("# our git rules\n");
+    expect(await readFile(path.join(projectCore, "error-handling.mdc"), "utf8")).toBe("# our errors\n");
+    expect(result.notices).toContain(
+      "rules/project/core/git-rules.mdc is this project's version of a rule keryx moved to rules/process/git-rules.mdc; "
+        + "moved it to rules/project/process/git-rules.mdc, where it is read now",
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("P3: an override is never overwritten or dropped — both slots taken, a symlink, or a non-directory layer is kept and reported", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-p3-override-"));
+  try {
+    const rulesRoot = path.join(root, "rules");
+    const projectCore = path.join(rulesRoot, "project", "core");
+    await mkdir(projectCore, { recursive: true });
+    await mkdir(path.join(rulesRoot, "project", "process"), { recursive: true });
+    await writeFile(path.join(projectCore, "moved.mdc"), "# old slot\n");
+    await writeFile(path.join(rulesRoot, "project", "process", "moved.mdc"), "# new slot\n");
+    await writeFile(path.join(root, "target.mdc"), "# linked\n");
+    await symlink(path.join(root, "target.mdc"), path.join(projectCore, "linked.mdc"));
+    const linked: MovedRuleEntry = { ...FIXTURE_MOVE, fileName: "linked.mdc", movedTo: "process/linked.mdc" };
+    const activity: MovedRuleEntry = { ...FIXTURE_MOVE, fileName: "act.mdc", movedTo: "activity/act.mdc" };
+    await writeFile(path.join(projectCore, "act.mdc"), "# activity override\n");
+    await writeFile(path.join(rulesRoot, "project", "activity"), "not a directory\n");
+
+    const outcomes = await migrateMovedRuleOverrides(rulesRoot, [FIXTURE_MOVE, linked, activity]);
+
+    expect(outcomes).toEqual([
+      { fileName: "moved.mdc", movedTo: "process/moved.mdc", action: "kept-both" },
+      { fileName: "linked.mdc", movedTo: "process/linked.mdc", action: "kept-not-regular-file" },
+      { fileName: "act.mdc", movedTo: "activity/act.mdc", action: "kept-error", errorCode: "ENOTDIR" },
+    ]);
+    expect(await readFile(path.join(projectCore, "moved.mdc"), "utf8")).toBe("# old slot\n");
+    expect(await readFile(path.join(rulesRoot, "project", "process", "moved.mdc"), "utf8")).toBe("# new slot\n");
+    expect((await lstat(path.join(projectCore, "linked.mdc"))).isSymbolicLink()).toBe(true);
+    expect(outcomes.map((outcome) => movedRuleOverrideMessage(outcome).kind)).toEqual(["warning", "warning", "warning"]);
+    expect(movedRuleOverrideMessage(outcomes[0]!).text).toContain("merge it into rules/project/process/moved.mdc, then delete it");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("P3: a symlinked rules/project/core is not read through", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-p3-override-"));
+  try {
+    const rulesRoot = path.join(root, "rules");
+    await mkdir(path.join(rulesRoot, "project"), { recursive: true });
+    const elsewhere = path.join(root, "elsewhere");
+    await mkdir(elsewhere, { recursive: true });
+    await writeFile(path.join(elsewhere, "moved.mdc"), "# elsewhere\n");
+    await symlink(elsewhere, path.join(rulesRoot, "project", "core"));
+
+    expect(await migrateMovedRuleOverrides(rulesRoot, [FIXTURE_MOVE])).toEqual([]);
+    expect(await readFile(path.join(elsewhere, "moved.mdc"), "utf8")).toBe("# elsewhere\n");
+    expect(existsSync(path.join(rulesRoot, "project", "process"))).toBe(false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("LS-2: an imported project rule follows its move in the skills import --rules registry, and skills update --rules writes the new slot", async () => {
+  const { readProjectRuleRegistry, sha256Hex, updateProjectRuleRegistry } = await import("./project-rules");
+  const { updateProjectRules } = await import("./update-rules");
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-p3-registry-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    const origin = path.join(root, "house-rules", "git-rules.mdc");
+    await mkdir(path.dirname(origin), { recursive: true });
+    await writeFile(origin, "# house git v1\n");
+    const oldSlot = ".metaproject/rules/project/core/git-rules.mdc";
+    await mkdir(path.dirname(path.join(root, oldSlot)), { recursive: true });
+    await writeFile(path.join(root, oldSlot), "# house git v1\n");
+    const hash = sha256Hex("# house git v1\n");
+    await updateProjectRuleRegistry(root, {
+      upsert: [{
+        kind: "rule", ref: "core/git-rules.mdc", path: oldSlot, mode: "copy", origin: "house-rules/git-rules.mdc",
+        sha256: hash, originSha256: hash, description: "house git", globs: [], alwaysApply: false, updatedAt: new Date(0).toISOString(),
+      }],
+    });
+
+    const result = await installGdskills(metaprojectRoot, "recommended");
+
+    const [entry] = await readProjectRuleRegistry(root);
+    expect(entry).toMatchObject({ ref: "process/git-rules.mdc", path: ".metaproject/rules/project/process/git-rules.mdc" });
+    expect(result.notices).toContain(
+      "the imported rule core/git-rules.mdc follows its move: `skills update --rules` now writes rules/project/process/git-rules.mdc",
+    );
+    // A second update has nothing left to warn about.
+    const again = await installGdskills(metaprojectRoot, "recommended");
+    expect(again.warnings.filter((warning) => warning.includes("project/core/git-rules.mdc"))).toEqual([]);
+
+    await writeFile(origin, "# house git v2\n");
+    await updateProjectRules({ projectRoot: root });
+    expect(await readFile(path.join(root, ".metaproject", "rules", "project", "process", "git-rules.mdc"), "utf8")).toBe("# house git v2\n");
+    expect(existsSync(path.join(root, oldSlot))).toBe(false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("LS-4: a symlinked .metaproject/rules is not written through by the override migration", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-p3-override-"));
+  try {
+    const outside = path.join(root, "outside-rules");
+    await mkdir(path.join(outside, "project", "core"), { recursive: true });
+    await writeFile(path.join(outside, "project", "core", "moved.mdc"), "# outside\n");
+    const metaprojectRoot = path.join(root, ".metaproject");
+    await mkdir(metaprojectRoot, { recursive: true });
+    await symlink(outside, path.join(metaprojectRoot, "rules"));
+
+    expect(await migrateMovedRuleOverrides(path.join(metaprojectRoot, "rules"), [FIXTURE_MOVE])).toEqual([]);
+    expect(await readFile(path.join(outside, "project", "core", "moved.mdc"), "utf8")).toBe("# outside\n");
+    expect(existsSync(path.join(outside, "project", "process"))).toBe(false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+// ADR-0001 P4: stack content moved out of core into the stack packs. Detection is
+// load-bearing now: a project whose stack selects a pack still receives the moved
+// rows, from `keryx init`/`update` alone; a project whose stack detection misses
+// keeps its old core copies, reported with the command that installs the pack.
+
+type StackCase = { label: string; manifest: Record<string, string>; gets: string[]; lacks: string[]; rows: Record<string, RegExp[]> };
+
+const pkg = (dependencies: Record<string, string>): Record<string, string> => ({
+  "package.json": JSON.stringify({ name: "fixture", dependencies }),
+});
+const ALL_P4_DESTINATIONS = [
+  "stacks/mobx/mobx-store-template.mdc",
+  "stacks/nestjs/nestjs-dto.mdc",
+  "stacks/playwright/playwright-testing.mdc",
+  "stacks/storybook/storybook-guidelines.mdc",
+  "stacks/react/code-style-patterns.mdc",
+  "stacks/ts-js-node/coding-style.mdc",
+  "stacks/ts-js-node/patterns.mdc",
+];
+const TS_ROWS = {
+  "stacks/ts-js-node/coding-style.mdc": [/^\| `!` on a value the types allow to be missing/m, /^\| `any` in new code/m],
+  "stacks/ts-js-node/patterns.mdc": [/`Promise\.allSettled`/, /`AbortSignal\.timeout\(ms\)`/, /^\| Timeout built from `AbortController` \+ `setTimeout`/m],
+};
+const STACK_CASES: StackCase[] = [
+  {
+    label: "React + MobX",
+    manifest: pkg({ react: "^18.3.1", "react-dom": "^18.3.1", mobx: "^6.13.0", "mobx-react-lite": "^4.0.7", typescript: "^5.6.0" }),
+    gets: ["stacks/mobx/mobx-store-template.mdc", "stacks/react/code-style-patterns.mdc", "stacks/ts-js-node/coding-style.mdc", "stacks/ts-js-node/patterns.mdc"],
+    lacks: ["stacks/nestjs/nestjs-dto.mdc", "stacks/playwright/playwright-testing.mdc", "stacks/storybook/storybook-guidelines.mdc"],
+    rows: {
+      "stacks/react/code-style-patterns.mdc": [/^\| Component reads observables without `observer` \(Rule 1\)/m, /^\| Missing `key` \(Rule 6\)/m],
+      "stacks/mobx/mobx-store-template.mdc": [/^\| Component calls `store\.loadX\(\)`/m],
+      ...TS_ROWS,
+    },
+  },
+  {
+    label: "NestJS",
+    manifest: pkg({ "@nestjs/core": "^10.4.0", "@nestjs/common": "^10.4.0", typescript: "^5.6.0" }),
+    gets: ["stacks/nestjs/nestjs-dto.mdc", "stacks/ts-js-node/coding-style.mdc"],
+    lacks: ["stacks/react/code-style-patterns.mdc", "stacks/mobx/mobx-store-template.mdc", "stacks/storybook/storybook-guidelines.mdc"],
+    rows: { "stacks/nestjs/nestjs-dto.mdc": [/^\| Controller input with no DTO class \(Rule 1\)/m] },
+  },
+  {
+    label: "Playwright",
+    manifest: pkg({ "@playwright/test": "^1.48.0" }),
+    gets: ["stacks/playwright/playwright-testing.mdc"],
+    lacks: ["stacks/react/code-style-patterns.mdc", "stacks/storybook/storybook-guidelines.mdc"],
+    rows: { "stacks/playwright/playwright-testing.mdc": [/^\| `waitForTimeout` or a fixed delay as the wait \(Rule 1\)/m] },
+  },
+  {
+    label: "Storybook",
+    manifest: pkg({ react: "^18.3.1", "react-dom": "^18.3.1", storybook: "^8.4.0", "@storybook/react": "^8.4.0" }),
+    gets: ["stacks/storybook/storybook-guidelines.mdc", "stacks/react/code-style-patterns.mdc"],
+    lacks: ["stacks/mobx/mobx-store-template.mdc", "stacks/playwright/playwright-testing.mdc"],
+    rows: { "stacks/storybook/storybook-guidelines.mdc": [/^\| Missing loading or error story \(Rule 2\)/m] },
+  },
+  {
+    label: "Node/TypeScript",
+    manifest: pkg({ typescript: "^5.6.0" }),
+    gets: ["stacks/ts-js-node/coding-style.mdc", "stacks/ts-js-node/patterns.mdc"],
+    lacks: ALL_P4_DESTINATIONS.filter((destination) => !destination.startsWith("stacks/ts-js-node/")),
+    rows: TS_ROWS,
+  },
+];
+
+async function projectWithStack(files: Record<string, string>): Promise<{ root: string; metaprojectRoot: string }> {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-p4-stack-"));
+  for (const [name, text] of Object.entries(files)) {
+    await mkdir(path.dirname(path.join(root, name)), { recursive: true });
+    await writeFile(path.join(root, name), text);
+  }
+  const metaprojectRoot = path.join(root, ".metaproject");
+  await seedPreMoveCore(metaprojectRoot, P4_MOVES);
+  return { root, metaprojectRoot };
+}
+
+test("P4: every rule moved to a pack records the last version it shipped under core/", async () => {
+  expect(P4_MOVES.map((entry) => entry.movedTo).sort()).toEqual([
+    "stacks/mobx/mobx-store-template.mdc",
+    "stacks/nestjs/nestjs-dto.mdc",
+    "stacks/playwright/playwright-testing.mdc",
+    "stacks/react/code-style-patterns.mdc",
+    "stacks/storybook/storybook-guidelines.mdc",
+  ]);
+  for (const entry of P4_MOVES) {
+    const text = await preMoveText(entry.fileName);
+    expect({ file: entry.fileName, recorded: entry.shippedSha256.includes(sha(text)) }).toEqual({ file: entry.fileName, recorded: true });
+    expect(Buffer.byteLength(text)).toBeLessThanOrEqual(entry.largestShippedBytes);
+  }
+});
+
+/**
+ * An unmodified pre-move core copy is removed once its pack is installed. While
+ * the pack is not, the copy stays when a missed detection is plausible (a JS
+ * project, or a package.json one level down: review M1) and one aggregated
+ * warning lists every kept copy with the command that installs its pack
+ * (RT2-3); with no JS miss plausible it is removed like any unmodified copy.
+ */
+function expectPreMoveCopies(
+  rules: string,
+  result: { warnings: readonly string[]; notices: readonly string[] },
+  missPlausible = true,
+): void {
+  const kept: string[] = [];
+  for (const entry of P4_MOVES) {
+    const installed = existsSync(path.join(rules, entry.movedTo!));
+    const keep = !installed && missPlausible;
+    expect({ file: entry.fileName, stale: existsSync(path.join(rules, "core", entry.fileName)) }).toEqual({ file: entry.fileName, stale: keep });
+    if (keep) kept.push(entry.fileName);
+    else {
+      // Removed because the pack is installed, or (R3-9) because no JS stack is plausible and the pack never will be.
+      const expected = installed
+        ? `rules/core/${entry.fileName} moved to rules/${entry.movedTo}`
+        : `rules/core/${entry.fileName} is keryx's ${movedToPackId(entry.movedTo!)} rule, now shipped in the`;
+      expect({ file: entry.fileName, notice: result.notices.some((n) => n.startsWith(expected)) }).toEqual({ file: entry.fileName, notice: true });
+    }
+  }
+  expect(result.warnings.filter((warning) => warning.includes("moved to rules/stacks/"))).toEqual([]);
+  const aggregated = result.warnings.filter((warning) => warning.startsWith("rules/core/ keeps "));
+  if (kept.length === 0) {
+    expect(aggregated).toEqual([]);
+    return;
+  }
+  expect(aggregated).toHaveLength(1);
+  for (const entry of P4_MOVES.filter((move) => kept.includes(move.fileName))) {
+    const pack = movedToPackId(entry.movedTo!)!;
+    expect(aggregated[0]).toContain(`${entry.fileName} (${pack})`);
+    expect(aggregated[0]).toContain(`\`${stackPackInstallCommand(pack)}\``);
+  }
+}
+
+for (const stackCase of STACK_CASES) {
+  test(`P4 detection: a ${stackCase.label} project still receives its moved rows, and only its packs`, async () => {
+    const { root, metaprojectRoot } = await projectWithStack(stackCase.manifest);
+    try {
+      const result = await installGdskills(metaprojectRoot, "recommended");
+      const rules = path.join(metaprojectRoot, "rules");
+      for (const destination of stackCase.gets) {
+        expect({ destination, installed: existsSync(path.join(rules, destination)) }).toEqual({ destination, installed: true });
+      }
+      for (const destination of stackCase.lacks) {
+        expect({ destination, installed: existsSync(path.join(rules, destination)) }).toEqual({ destination, installed: false });
+      }
+      for (const [destination, patterns] of Object.entries(stackCase.rows)) {
+        const text = await readFile(path.join(rules, destination), "utf8");
+        for (const pattern of patterns) expect({ destination, row: pattern.source, present: pattern.test(text) }).toEqual({ destination, row: pattern.source, present: true });
+      }
+      expectPreMoveCopies(rules, result);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+}
+
+test("P4 detection: a Python project gets none of the moved stack rows, and core keeps only the neutral principle", async () => {
+  const { root, metaprojectRoot } = await projectWithStack({
+    "pyproject.toml": '[project]\nname = "fixture"\ndependencies = ["fastapi>=0.110"]\n',
+  });
+  try {
+    const result = await installGdskills(metaprojectRoot, "recommended");
+    const rules = path.join(metaprojectRoot, "rules");
+    for (const destination of ALL_P4_DESTINATIONS) {
+      expect({ destination, installed: existsSync(path.join(rules, destination)) }).toEqual({ destination, installed: false });
+    }
+    expect(existsSync(path.join(rules, "stacks", "python"))).toBe(true);
+    // No JS pack and no package.json anywhere one level down: a missed JS
+    // detection is not plausible, so every unmodified pre-move copy is removed (RT2-3).
+    expectPreMoveCopies(rules, result, false);
+    // D4: a core row applies without knowing the language.
+    for (const name of ["async-patterns.mdc", "concurrency-patterns.mdc"]) {
+      const core = await readFile(path.join(rules, "core", name), "utf8");
+      for (const nodeValue of ["Promise.all", "AbortSignal", "AbortController", "event loop", "`wx`"]) {
+        expect({ name, nodeValue, present: core.includes(nodeValue) }).toEqual({ name, nodeValue, present: false });
+      }
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("P4: an edited pre-move copy in a project whose stack selects the pack is kept and pointed at the pack path", async () => {
+  const { root, metaprojectRoot } = await projectWithStack(pkg({ "@nestjs/core": "^10.4.0" }));
+  try {
+    const edited = path.join(metaprojectRoot, "rules", "core", "nestjs-dto.mdc");
+    await writeFile(edited, `${await readFile(edited, "utf8")}\nOur own DTO addition.\n`);
+    const result = await installGdskills(metaprojectRoot, "recommended");
+    expect(await readFile(edited, "utf8")).toContain("Our own DTO addition.");
+    const warnings = result.warnings.filter((warning) => warning.startsWith("rules/core/nestjs-dto.mdc moved"));
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("carry your edits into rules/project/stacks/nestjs/nestjs-dto.mdc");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("P4: a project's own override of a rule moved to a pack follows it to rules/project/stacks/<pack>/", async () => {
+  const { root, metaprojectRoot } = await projectWithStack(pkg({ typescript: "^5.6.0" }));
+  try {
+    const projectCore = path.join(metaprojectRoot, "rules", "project", "core");
+    await mkdir(projectCore, { recursive: true });
+    await writeFile(path.join(projectCore, "nestjs-dto.mdc"), "# our DTO rules\n");
+    const result = await installGdskills(metaprojectRoot, "recommended");
+    expect(existsSync(path.join(projectCore, "nestjs-dto.mdc"))).toBe(false);
+    expect(await readFile(path.join(metaprojectRoot, "rules", "project", "stacks", "nestjs", "nestjs-dto.mdc"), "utf8")).toBe("# our DTO rules\n");
+    expect(result.notices).toContain(
+      "rules/project/core/nestjs-dto.mdc is this project's version of a rule keryx moved to rules/stacks/nestjs/nestjs-dto.mdc; "
+        + "moved it to rules/project/stacks/nestjs/nestjs-dto.mdc, where it is read now",
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+// Review round 1 (M1): detection reads the repository root only. A miss must not
+// delete a moved rule the project used.
+
+const MARKER_TEXT: Record<string, string> = {
+  "pnpm-workspace.yaml": "packages:\n  - apps/*\n",
+  "lerna.json": JSON.stringify({ packages: ["apps/*"] }),
+  "nx.json": "{}\n",
+  "turbo.json": "{}\n",
+  "rush.json": JSON.stringify({ projects: [{ packageName: "web", projectFolder: "apps/web" }] }),
+};
+
+for (const [marker, text] of Object.entries(MARKER_TEXT)) {
+  test(`P4 M1/N-1: a ${marker} workspace root with root devDependencies only selects the packs its sub-packages use`, async () => {
+    const { root, metaprojectRoot } = await projectWithStack({
+      "package.json": JSON.stringify({ name: "monorepo", private: true, devDependencies: { typescript: "^5.6.0", turbo: "^2.0.0" } }),
+      [marker]: text,
+      "apps/web/package.json": JSON.stringify({ name: "web", dependencies: { react: "^18.3.1", mobx: "^6.13.0" } }),
+    });
+    try {
+      const result = await installGdskills(metaprojectRoot, "recommended");
+      const stacks = path.join(metaprojectRoot, "rules", "stacks");
+      const installed = (await readdir(stacks)).filter((name) => !name.startsWith("."));
+      expect({ marker, installed: installed.sort() }).toEqual({ marker, installed: ["mobx", "react", "ts-js-node"] });
+      expectPreMoveCopies(path.join(metaprojectRoot, "rules"), result);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+}
+
+test("P4 N-1: a turbo React+NestJS monorepo installs react, mobx, nestjs and ts-js-node — no Angular, Vue or Next.js rules", async () => {
+  const { root, metaprojectRoot } = await projectWithStack({
+    "package.json": JSON.stringify({ name: "monorepo", private: true, devDependencies: { turbo: "^2.0.0" } }),
+    "turbo.json": "{}\n",
+    "apps/web/package.json": JSON.stringify({ dependencies: { react: "^18.3.1", mobx: "^6.13.0" } }),
+    "apps/api/package.json": JSON.stringify({ dependencies: { "@nestjs/core": "^10.4.0" } }),
+  });
+  try {
+    await installGdskills(metaprojectRoot, "recommended");
+    const installed = (await readdir(path.join(metaprojectRoot, "rules", "stacks"))).filter((name) => !name.startsWith(".")).sort();
+    expect(installed).toEqual(["mobx", "nestjs", "react", "ts-js-node"]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("P4 R3-1: a pnpm workspace whose root package.json declares nothing installs only the packs its packages use", async () => {
+  const { root, metaprojectRoot } = await projectWithStack({
+    "package.json": JSON.stringify({ name: "monorepo", private: true, scripts: { build: "pnpm -r build" } }),
+    "pnpm-workspace.yaml": "packages:\n  - apps/*\n",
+    "apps/web/package.json": JSON.stringify({ dependencies: { react: "^18.3.1", mobx: "^6.13.0" } }),
+  });
+  try {
+    const result = await installGdskills(metaprojectRoot, "recommended");
+    const installed = (await readdir(path.join(metaprojectRoot, "rules", "stacks"))).filter((name) => !name.startsWith(".")).sort();
+    expect(installed).toEqual(["mobx", "react", "ts-js-node"]);
+    expectPreMoveCopies(path.join(metaprojectRoot, "rules"), result);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("P4 R3-5: a Go project with a React app two levels down keeps the unmodified moved copies", async () => {
+  const { root, metaprojectRoot } = await projectWithStack({
+    "go.mod": "module example.com/app\n\ngo 1.22\n",
+    "web/app/package.json": JSON.stringify({ name: "app", dependencies: { react: "^18.3.1" } }),
+  });
+  try {
+    const result = await installGdskills(metaprojectRoot, "recommended");
+    const rules = path.join(metaprojectRoot, "rules");
+    expect(existsSync(path.join(rules, "stacks", "react"))).toBe(false);
+    for (const entry of P4_MOVES) {
+      expect({ file: entry.fileName, kept: existsSync(path.join(rules, "core", entry.fileName)) }).toEqual({ file: entry.fileName, kept: true });
+    }
+    expectPreMoveCopies(rules, result);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("P4 M1: a project with no root package.json (frontend/ + backend/) keeps every unmodified moved copy and is told how to install each pack", async () => {
+  const { root, metaprojectRoot } = await projectWithStack({
+    "frontend/package.json": JSON.stringify({ name: "frontend", dependencies: { react: "^18.3.1", mobx: "^6.13.0" } }),
+    "backend/package.json": JSON.stringify({ name: "backend", dependencies: { "@nestjs/core": "^10.4.0" } }),
+  });
+  try {
+    const result = await installGdskills(metaprojectRoot, "recommended");
+    const rules = path.join(metaprojectRoot, "rules");
+    expect(existsSync(path.join(rules, "stacks", "react"))).toBe(false);
+    for (const entry of P4_MOVES) {
+      expect(await readFile(path.join(rules, "core", entry.fileName), "utf8")).toBe(await preMoveText(entry.fileName));
+    }
+    expectPreMoveCopies(rules, result);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("P4 M1: once the pack is installed by hand (as --with does), the next update removes the kept core copy", async () => {
+  // A NestJS app in a subfolder: root detection misses it, so the copies are kept first.
+  const { root, metaprojectRoot } = await projectWithStack({
+    "backend/package.json": JSON.stringify({ name: "backend", dependencies: { "@nestjs/core": "^10.4.0" } }),
+  });
+  try {
+    await installGdskills(metaprojectRoot, "recommended");
+    const rules = path.join(metaprojectRoot, "rules");
+    expect(existsSync(path.join(rules, "core", "nestjs-dto.mdc"))).toBe(true);
+    // What `keryx skills install --target keryx-shell --with framework:nestjs` writes.
+    await mkdir(path.join(rules, "stacks", "nestjs"), { recursive: true });
+    await writeFile(
+      path.join(rules, "stacks", "nestjs", "nestjs-dto.mdc"),
+      await readFile(path.join(bundledPackRulesPath(bundledStacksSourcePath(), "nestjs"), "nestjs-dto.mdc")),
+    );
+    const again = await installGdskills(metaprojectRoot, "recommended");
+    expect(existsSync(path.join(rules, "core", "nestjs-dto.mdc"))).toBe(false);
+    expect(again.notices.some((notice) => notice.startsWith("rules/core/nestjs-dto.mdc moved to rules/stacks/nestjs/nestjs-dto.mdc"))).toBe(true);
+    // The other packs are still not installed: their copies stay.
+    expect(existsSync(path.join(rules, "core", "code-style-patterns.mdc"))).toBe(true);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("P4 T-1: an edited core copy of a rule moved to a pack the stack does not select is kept, and the remedy names a slot that loads", async () => {
+  const { root, metaprojectRoot } = await projectWithStack({ "pyproject.toml": '[project]\nname = "fixture"\n' });
+  try {
+    const edited = path.join(metaprojectRoot, "rules", "core", "code-style-patterns.mdc");
+    await writeFile(edited, `${await readFile(edited, "utf8")}\nOur own component rule.\n`);
+    const result = await installGdskills(metaprojectRoot, "recommended");
+    expect(await readFile(edited, "utf8")).toContain("Our own component rule.");
+    const warning = result.warnings.find((text) => text.startsWith("rules/core/code-style-patterns.mdc moved"));
+    expect(warning).toContain("differs from every shipped version");
+    expect(warning).toContain("carry your edits into rules/project/stacks/react/code-style-patterns.mdc");
+    expect(warning).toContain(`\`${stackPackInstallCommand("react")}\``);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("P4 T-4: a MobX-only manifest installs mobx and, through extends, react and ts-js-node", async () => {
+  const { root, metaprojectRoot } = await projectWithStack(pkg({ mobx: "^6.13.0" }));
+  try {
+    const result = await installGdskills(metaprojectRoot, "recommended");
+    const stacks = path.join(metaprojectRoot, "rules", "stacks");
+    for (const pack of ["mobx", "react", "ts-js-node"]) {
+      expect({ pack, installed: existsSync(path.join(stacks, pack)) }).toEqual({ pack, installed: true });
+    }
+    expect(existsSync(path.join(stacks, "nestjs"))).toBe(false);
+    expect(existsSync(path.join(metaprojectRoot, "rules", "core", "code-style-patterns.mdc"))).toBe(false);
+    expect(existsSync(path.join(metaprojectRoot, "rules", "core", "mobx-store-template.mdc"))).toBe(false);
+    expectPreMoveCopies(path.join(metaprojectRoot, "rules"), result);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("P4 T-5: keryx update saves a hand-edited stack rule before replacing it and says where; an unedited older version is replaced silently", async () => {
+  const { root, metaprojectRoot } = await projectWithStack(pkg({ typescript: "^5.6.0" }));
+  try {
+    await installGdskills(metaprojectRoot, "recommended");
+    const installed = path.join(metaprojectRoot, "rules", "stacks", "ts-js-node", "coding-style.mdc");
+    const patterns = path.join(metaprojectRoot, "rules", "stacks", "ts-js-node", "patterns.mdc");
+    const bundled = await readFile(path.join(bundledPackRulesPath(bundledStacksSourcePath(), "ts-js-node"), "coding-style.mdc"), "utf8");
+    await writeFile(installed, `${bundled}\nOur own team rule.\n`);
+    // An older keryx version of patterns.mdc that keryx recorded writing: not an edit.
+    const older = "# an older keryx version\n";
+    const recordPath = path.join(root, ".metaproject", "data", "gdskills", "stack-rules-installed.json");
+    const record = JSON.parse(await readFile(recordPath, "utf8")) as Record<string, string>;
+    record[".metaproject/rules/stacks/ts-js-node/patterns.mdc"] = createHash("sha256").update(older).digest("hex");
+    await writeFile(recordPath, JSON.stringify(record));
+    await writeFile(patterns, older);
+
+    const result = await installGdskills(metaprojectRoot, "recommended");
+    expect(await readFile(installed, "utf8")).toBe(bundled);
+    const backup = path.join(root, ".metaproject", "data", "gdskills", "stack-rule-backups", "ts-js-node", "coding-style.mdc");
+    expect(await readFile(backup, "utf8")).toContain("Our own team rule.");
+    const stackWarnings = result.warnings.filter((warning) => warning.startsWith("rules/stacks/"));
+    expect(stackWarnings).toEqual([
+      "rules/stacks/ts-js-node/coding-style.mdc differed from every version keryx installed there and was replaced by keryx's copy; "
+        + "your version is saved at .metaproject/data/gdskills/stack-rule-backups/ts-js-node/coding-style.mdc — carry your edits into "
+        + "rules/project/stacks/ts-js-node/coding-style.mdc, which keryx reads in place of the pack's copy",
+    ]);
+    expect(existsSync(path.join(root, ".metaproject", "data", "gdskills", "stack-rule-backups", "ts-js-node", "patterns.mdc"))).toBe(false);
+    // A third run is quiet: everything matches what keryx recorded.
+    const third = await installGdskills(metaprojectRoot, "recommended");
+    expect(third.warnings.filter((warning) => warning.startsWith("rules/stacks/"))).toEqual([]);
+
+    // A second hand edit never overwrites the first backup (RT2-4).
+    await writeFile(installed, `${bundled}\nA later team rule.\n`);
+    const fourth = await installGdskills(metaprojectRoot, "recommended");
+    expect(await readFile(backup, "utf8")).toContain("Our own team rule.");
+    expect(await readFile(`${backup}.1`, "utf8")).toContain("A later team rule.");
+    expect(fourth.warnings.filter((warning) => warning.startsWith("rules/stacks/"))[0]).toContain(
+      "saved at .metaproject/data/gdskills/stack-rule-backups/ts-js-node/coding-style.mdc.1",
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("P4 LS-3: an unreadable bundled stacks/ tree is reported, and no unmodified moved copy is removed", async () => {
+  const { root, metaprojectRoot } = await projectWithStack(pkg({ react: "^18.3.1", typescript: "^5.6.0" }));
+  try {
+    const result = await installBundledRules(metaprojectRoot, { stacksSourceRoot: path.join(root, "no-such-stacks") });
+    expect(result.warning).toContain("the bundled stack packs at");
+    expect(result.warning).toContain("could not be read (ENOENT)");
+    for (const entry of P4_MOVES) {
+      expect({ file: entry.fileName, kept: existsSync(path.join(metaprojectRoot, "rules", "core", entry.fileName)) }).toEqual({ file: entry.fileName, kept: true });
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("P4 LS-7: a pre-P4 flat .claude/rules copy of a moved rule is reported, not deleted", async () => {
+  const { root, metaprojectRoot } = await projectWithStack({
+    ...pkg({ react: "^18.3.1", typescript: "^5.6.0" }),
+    ".claude/rules/code-style-patterns.mdc": await preMoveText("code-style-patterns.mdc"),
+  });
+  try {
+    const result = await installGdskills(metaprojectRoot, "recommended");
+    expect(existsSync(path.join(root, ".claude", "rules", "code-style-patterns.mdc"))).toBe(true);
+    expect(result.warnings).toContain(
+      ".claude/rules/code-style-patterns.mdc is a copy of a core rule from before keryx moved it to the react stack pack; Claude still "
+        + "loads it, with rows keryx has since moved — delete it, and if the project uses react run "
+        + "`keryx skills install --profile core --target claude --with framework:react` to get .claude/rules/react-code-style-patterns.mdc",
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("P4 N-5: a project's own .claude/rules file that shares a moved rule's name is not reported", async () => {
+  const { root, metaprojectRoot } = await projectWithStack({
+    ...pkg({ react: "^18.3.1", typescript: "^5.6.0" }),
+    ".claude/rules/code-style-patterns.mdc": "# our own component style\n",
+  });
+  try {
+    const result = await installGdskills(metaprojectRoot, "recommended");
+    expect(result.warnings.filter((warning) => warning.startsWith(".claude/rules/"))).toEqual([]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("P4 RT2-2: in a project whose pack was not detected, a ui_component task still loads the kept core copy, and a flat override replaces it", async () => {
+  const { root, metaprojectRoot } = await projectWithStack({
+    "frontend/package.json": JSON.stringify({ name: "frontend", dependencies: { react: "^18.3.1", mobx: "^6.13.0" } }),
+    "frontend/src/Button.tsx": "export const Button = () => null;\n",
+  });
+  try {
+    await installGdskills(metaprojectRoot, "recommended");
+    const kept = ".metaproject/rules/core/code-style-patterns.mdc";
+    const input = { projectRoot: root, for: "implement" as const, files: ["frontend/src/Button.tsx"], taskType: "ui_component" };
+    const before = await resolveProjectContext(input);
+    expect(before.entries.find((entry) => entry.path === kept)).toMatchObject({ reason: "bundled-default", tier: "must_read" });
+    // A store task loads the kept MobX template too.
+    const store = await resolveProjectContext({ ...input, taskType: "store_logic" });
+    expect(store.entries.some((entry) => entry.path === ".metaproject/rules/core/mobx-store-template.mdc")).toBe(true);
+
+    await mkdir(path.join(metaprojectRoot, "rules", "project"), { recursive: true });
+    await writeFile(path.join(metaprojectRoot, "rules", "project", "code-style-patterns.mdc"), "# our component rules\n");
+    const after = await resolveProjectContext(input);
+    expect(after.entries.find((entry) => entry.path === ".metaproject/rules/project/code-style-patterns.mdc")?.shadows).toBe(kept);
+    expect(after.entries.some((entry) => entry.path === kept)).toBe(false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+// Review round 1 (M2, M3): the resolver on a real install, real pack frontmatter.
+
+test("P4 M3: a .tsx task reaches the ts-js-node `!`/`any` rows, by glob and by the ui_component task type", async () => {
+  const { root, metaprojectRoot } = await projectWithStack(pkg({ react: "^18.3.1", mobx: "^6.13.0", typescript: "^5.6.0" }));
+  try {
+    await installGdskills(metaprojectRoot, "recommended");
+    await mkdir(path.join(root, "src"), { recursive: true });
+    await writeFile(path.join(root, "src", "Button.tsx"), "export const Button = () => null;\n");
+    for (const input of [{ files: ["src/Button.tsx"] }, { files: [], taskType: "ui_component" }]) {
+      const resolved = await resolveProjectContext({ projectRoot: root, for: "implement", ...input });
+      const coding = resolved.entries.find((entry) => entry.path === ".metaproject/rules/stacks/ts-js-node/coding-style.mdc");
+      expect({ input, tier: coding?.tier }).toEqual({ input, tier: "must_read" });
+      expect(await readFile(path.join(root, coding!.path), "utf8")).toMatch(/^\| `!` on a value the types allow to be missing/m);
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+for (const slot of ["code-style-patterns.mdc", "core/code-style-patterns.mdc", "stacks/react/code-style-patterns.mdc"]) {
+  test(`P4 M2: a project override at rules/project/${slot} replaces the react pack's copy, as a flat override replaced the core copy before the move`, async () => {
+    const { root, metaprojectRoot } = await projectWithStack(pkg({ react: "^18.3.1", typescript: "^5.6.0" }));
+    try {
+      await installGdskills(metaprojectRoot, "recommended");
+      const override = path.join(metaprojectRoot, "rules", "project", slot);
+      await mkdir(path.dirname(override), { recursive: true });
+      await writeFile(override, "# our component rules\n");
+      const packCopy = ".metaproject/rules/stacks/react/code-style-patterns.mdc";
+      for (const input of [{ files: [], taskType: "ui_component" }, { files: ["src/Card.tsx"] }]) {
+        const resolved = await resolveProjectContext({ projectRoot: root, for: "implement", ...input });
+        const ours = resolved.entries.find((entry) => entry.path === `.metaproject/rules/project/${slot}`);
+        expect({ input, shadows: ours?.shadows }).toEqual({ input, shadows: packCopy });
+        expect({ input, packListed: resolved.entries.some((entry) => entry.path === packCopy) }).toEqual({ input, packListed: false });
+      }
+      // A task that selects no react rule does not pull the override in either.
+      const backend = await resolveProjectContext({ projectRoot: root, for: "implement", files: ["src/server.ts"] });
+      expect(backend.entries.some((entry) => entry.path === `.metaproject/rules/project/${slot}`)).toBe(false);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+}
+
+test("P4: an override whose pack slot is blocked by a file is kept and reported, not dropped", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-p4-override-"));
+  try {
+    const rulesRoot = path.join(root, "rules");
+    await mkdir(path.join(rulesRoot, "project", "core"), { recursive: true });
+    await writeFile(path.join(rulesRoot, "project", "core", "nestjs-dto.mdc"), "# ours\n");
+    await writeFile(path.join(rulesRoot, "project", "stacks"), "not a directory\n");
+    const entry = MOVED_RULES.find((candidate) => candidate.fileName === "nestjs-dto.mdc")!;
+    expect(await migrateMovedRuleOverrides(rulesRoot, [entry])).toEqual([
+      { fileName: "nestjs-dto.mdc", movedTo: "stacks/nestjs/nestjs-dto.mdc", action: "kept-error", errorCode: "ENOTDIR" },
+    ]);
+    expect(await readFile(path.join(rulesRoot, "project", "core", "nestjs-dto.mdc"), "utf8")).toBe("# ours\n");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

@@ -76,7 +76,7 @@ describe("network: allowlist — real bwrap integration (flow 301 AC6)", () => {
     sockPath = "";
   });
 
-  test.skipIf(!realSandbox.ok)(
+  test.skipIf(!(realSandbox.ok && realSandbox.kind === "bubblewrap"))(
     "curl reaches an allowed name through the proxy, and is refused for a name not on the list",
     async () => {
       upstream = http.createServer((_req, res) => res.end("ALLOWED-UPSTREAM-OK"));
@@ -113,7 +113,7 @@ describe("network: allowlist — real bwrap integration (flow 301 AC6)", () => {
     30_000,
   );
 
-  test.skipIf(!realSandbox.ok)(
+  test.skipIf(!(realSandbox.ok && realSandbox.kind === "bubblewrap"))(
     "with production hardening on, an allowed NAME that resolves to loopback is refused end to end (not just at the proxy unit)",
     async () => {
       upstream = http.createServer((_req, res) => res.end("SHOULD-NEVER-BE-SEEN"));
@@ -137,7 +137,7 @@ describe("network: allowlist — real bwrap integration (flow 301 AC6)", () => {
     30_000,
   );
 
-  test.skipIf(!realSandbox.ok)(
+  test.skipIf(!(realSandbox.ok && realSandbox.kind === "bubblewrap"))(
     "the host's REAL loopback stays unreachable from inside the sandbox, bypassing the proxy entirely",
     async () => {
       const hostListener = http.createServer((_req, res) => res.end("HOST-LOOPBACK-LEAK"));
@@ -165,7 +165,7 @@ describe("network: allowlist — real bwrap integration (flow 301 AC6)", () => {
     30_000,
   );
 
-  test.skipIf(!realSandbox.ok)(
+  test.skipIf(!(realSandbox.ok && realSandbox.kind === "bubblewrap"))(
     "flow 301 F5: a forwarder that never becomes ready gives up within the bound, with a clear message and a distinct exit code — not a hang",
     async () => {
       let workdir = "";

@@ -1,6 +1,6 @@
 ---
 Title: OS Sandbox
-Version: 1.3.0
+Version: 1.4.0
 Type: architecture
 Status: accepted
 Summary: ""
@@ -8,7 +8,7 @@ Summary: ""
 ```markdown
 ---
 Title: OS Sandbox
-Version: 1.3.0
+Version: 1.4.0
 Type: architecture
 Status: accepted
 Summary: Kernel-enforced containment layer that constrains what a process can do after the policy engine approves it. Uses macOS Seatbelt or Linux bubblewrap to restrict filesystem access, network reach, and credential exposure. Containment is mandatory for autonomous runs and opt-in for interactive agent sessions. When containment cannot be applied, execution is refused rather than silently degraded.
@@ -102,6 +102,8 @@ Go's `crypto/tls` ignores these environment variables. Go tools (`gh`, `terrafor
 | Filesystem containment, secret masking | yes | yes | no launcher |
 | Network off | yes | yes | no launcher |
 | Domain allowlist, credential masking, TLS termination | yes | **fails closed** | no launcher |
+| Hardened unattended profile (schedules, `trigger run`) | yes (Seatbelt) | yes (bubblewrap) | refuses |
+| Unattended `network: allowlist` | **refuses** | yes | refuses |
 
 ### Linux Network Restriction
 
@@ -324,6 +326,38 @@ the entry itself, never a parent — unless it resolves to a hidden dir, the run
 dir or a parent of one, or holds a unix socket. The unattended profile has the same
 `/run` hide and does not bind PATH entries back yet.
 
+## Unattended Runs (Schedules and Triggers)
+
+A scheduled `agent-task`, a `keryx trigger run` flow dispatch and its health gate run
+every `shell_exec` under a hardened profile built by `planUnattendedSandbox`
+(`unattended.ts`). It is stricter than the interactive one because nobody approves a
+command. Boundaries are allow lists, not deny lists. The plan names its mechanism
+(`kind`, `label`), and the run record and report carry it (`sandbox: hardened macOS
+Seatbelt sandbox, network off`).
+
+| Boundary | Linux (bubblewrap) | macOS (Seatbelt, `unattended-seatbelt.ts`) |
+|---|---|---|
+| Writes | worktree + scratch HOME bound read-write, git control paths read-only | everything denied except worktree + scratch HOME; same git rules |
+| Reads hidden | `$HOME`, `/run`, `$XDG_RUNTIME_DIR`, keryx config dir, scratch parent | `$HOME`, keryx config dir, scratch parent, `/private/tmp`, `/private/var/tmp`, `/private/var/folders` |
+| Let back read-only | toolchain roots on PATH, repo git dir, keryx package, `node_modules` | same; ancestors keep `stat` only |
+| Secrets | deny list re-applied inside let-back roots | same |
+| `/tmp` | private tmpfs | none — `TMPDIR` is `<scratch HOME>/tmp`; a bare `mktemp` fails (macOS ignores `TMPDIR`) |
+| Network off | `--unshare-net` | `(deny network*)`, AF_UNIX included |
+| Network full | host netns, `/run` still hidden | IP allowed; AF_UNIX denied except the DNS resolver socket |
+| Network allowlist | proxy socket + in-sandbox forwarder | refused (no private netns for the forwarder) |
+| Host IPC | `/run` hidden (D-Bus, ssh-agent, Docker…) | keychain, pasteboard, LaunchServices denied by mach name; `open`, `osascript`, `launchctl`, `security`, `crontab`, `at`, `pbcopy`/`pbpaste` not executable |
+| Processes | PID + IPC namespaces | no signal outside the run's tree; setuid `ps` cannot run |
+| Environment | allowlist, HOME/XDG on scratch | same |
+
+The planner refuses (and `trust` refuses the run) when the launcher is missing, when
+a probe shows it cannot work here (Linux: user namespaces off; macOS: `sandbox-exec`
+cannot apply a profile, e.g. keryx already inside a sandbox), on any other platform,
+and on the operator opt-outs. Verified on macOS by `unattended-darwin.test.ts` (real
+`sandbox-exec`: date runs, a write outside the project and a hook write are refused,
+`$HOME` and `/private/tmp` unreadable), by `schedule-security.test.ts` (a full
+agent-task run cannot read a sibling run's scratch), and by a real
+`keryx schedule run` on 2026-11-18.
+
 ## Fail-Closed Behavior
 
 A missing launcher or an unsupported posture produces a `blocked` outcome with a stated reason. There is no code path that runs a command uncontained after containment was requested.
@@ -352,6 +386,8 @@ This discipline caught a real defect: bubblewrap masked secret paths uncondition
 | `src/harness/process/sandbox/profile.ts` | `SandboxProfile`, policy projection |
 | `src/harness/process/sandbox/seatbelt.ts` | macOS launcher |
 | `src/harness/process/sandbox/bwrap.ts` | Linux launcher |
+| `src/harness/process/sandbox/unattended.ts` | Unattended plan (both platforms), bubblewrap profile |
+| `src/harness/process/sandbox/unattended-seatbelt.ts` | Unattended macOS (Seatbelt) profile |
 | `src/harness/process/sandbox/wrap.ts` | Platform dispatch, unsupported-posture refusal |
 | `src/harness/process/sandbox/adapter.ts` | Fail-closed `ProcessAdapter` decorator |
 | `src/harness/process/sandbox/proxy.ts` | Allowlist proxy |
@@ -390,6 +426,7 @@ Full documentation lives in `docs/requirements/keryx-os-sandbox/`:
 
 | Version | Changes |
 |---|---|
+| 1.4.0 | Unattended runs: the hardened profile now exists on macOS (Seatbelt) as well as Linux; side-by-side boundary table, the macOS differences (no private `/tmp`, no `allowlist` network), refusal cases. |
 | 1.3.0 | Repository control paths, review round 3: anchors are real directories only (a symlinked `.git` no longer gets a read-write bwrap bind of its target); submodule gitdirs under `.git/modules/**` (nested too) and each `<sub>/.git` gitlink are protected; `modules/` and `worktrees/` are sealed against new entries on macOS, not coverable on Linux; the worktree/submodule management cost table. |
 | 1.2.0 | Added repository control paths: what is protected (existing or not), anchors, the Seatbelt vs bubblewrap mechanics and why a missing `commondir` stays open on Linux, the read-only `.git/config` cost and its workarounds, vectors that protecting `.git` cannot close, and the NixOS PATH bind-back under the `/run` hide. |
 | 1.1.0 | Added the approval-gate / allowlist permission model and its limits: the page described containment but not the layer that is load-bearing when containment is off (the default) or unavailable. |

@@ -11,12 +11,19 @@ import { planInstall } from "./plan";
 import { applyInstall } from "./apply";
 import { doctorInstall } from "./doctor";
 import { uninstallInstall } from "./uninstall";
-import { readSkillsInstallState, skillsInstallStatePath } from "./state";
+import { readSkillsInstallState, skillsInstallStatePath, writeSkillsInstallState } from "./state";
 
 let root: string;
 
 beforeEach(async () => {
   root = await mkdtemp(path.join(tmpdir(), "keryx-install-apply-"));
+  // As after `keryx init`: gdskills on, so the rule layers are keryx's (R3-1).
+  await mkdir(path.join(root, ".metaproject"), { recursive: true });
+  await writeFile(
+    path.join(root, ".metaproject", "metaproject.json"),
+    JSON.stringify({ modules: { gdskills: { enabled: true, profile: "recommended" } } }),
+    "utf8",
+  );
   await mkdir(path.join(root, "rules"), { recursive: true });
   await writeFile(path.join(root, "rules", "a.mdc"), "rule a fixture\n", "utf8");
   await mkdir(path.join(root, "src", "gdskills", "bundled", "skills", "review", "fake-skill"), { recursive: true });
@@ -120,6 +127,150 @@ test("apply refuses to overwrite an unrecorded existing file without --force", a
   const forced = await applyInstall(plan, root, { force: true });
   expect(forced.ok).toBe(true);
   expect(await readFile(path.join(root, ".claude", "rules", "a.mdc"), "utf8")).toBe("rule a fixture\n");
+});
+
+test("apply leaves an unrecorded byte-identical file alone, unrecorded, and uninstall never removes it", async () => {
+  await mkdir(path.join(root, ".claude", "rules"), { recursive: true });
+  await writeFile(path.join(root, ".claude", "rules", "a.mdc"), "rule a fixture\n", "utf8");
+
+  const plan = await planInstall({ manifest: MANIFEST, profileId: "base", target: "claude", repoRoot: root });
+  const result = await applyInstall(plan, root);
+  expect(result.skipped).toEqual([]);
+  expect(result.ok).toBe(true);
+  expect(result.alreadyPresent).toEqual([".claude/rules/a.mdc"]);
+  expect(result.written).not.toContain(".claude/rules/a.mdc");
+
+  // Satisfied, but not ours: no record of it, so uninstall leaves it.
+  const state = await readSkillsInstallState(root, "claude");
+  expect(state!.installedModules.flatMap((m) => m.writtenPaths)).not.toContain(".claude/rules/a.mdc");
+  const uninstall = await uninstallInstall(root, "claude");
+  expect(uninstall.removed).not.toContain(".claude/rules/a.mdc");
+  expect(await readFile(path.join(root, ".claude", "rules", "a.mdc"), "utf8")).toBe("rule a fixture\n");
+});
+
+test("R3-1: an older keryx-published rule is skipped with `keryx update` advice, and --force writes it without recording it", async () => {
+  // After a keryx upgrade and before `keryx update`: keryx init wrote the
+  // rule, from the previous bundle, and install-state never recorded it.
+  const published = path.join(root, ".metaproject", "rules", "core", "a.mdc");
+  await mkdir(path.dirname(published), { recursive: true });
+  await writeFile(published, "rule a, as the previous keryx shipped it\n", "utf8");
+
+  const plan = await planInstall({ manifest: MANIFEST, profileId: "base", target: "keryx-shell", repoRoot: root });
+  const result = await applyInstall(plan, root);
+  expect(result.ok).toBe(false);
+  const [skipped] = result.skipped;
+  expect(skipped).toMatchObject({ path: ".metaproject/rules/core/a.mdc", keryxPublished: true });
+  expect(skipped?.reason).toContain("run `keryx update`, then re-run this install");
+  expect(await readFile(published, "utf8")).toBe("rule a, as the previous keryx shipped it\n");
+
+  const forced = await applyInstall(plan, root, { force: true });
+  expect(forced.ok).toBe(true);
+  expect(forced.written).toContain(".metaproject/rules/core/a.mdc");
+  expect(await readFile(published, "utf8")).toBe("rule a fixture\n");
+  // Still not recorded, so uninstall leaves the file keryx init/update owns.
+  const state = await readSkillsInstallState(root, "keryx-shell");
+  expect((state?.installedModules ?? []).flatMap((m) => m.writtenPaths)).not.toContain(".metaproject/rules/core/a.mdc");
+  const uninstall = await uninstallInstall(root, "keryx-shell");
+  expect(uninstall.removed).not.toContain(".metaproject/rules/core/a.mdc");
+  expect(await readFile(published, "utf8")).toBe("rule a fixture\n");
+});
+
+test("R3-1: a hand-written unrecorded file outside the keryx-published roots keeps the --force advice", async () => {
+  await mkdir(path.join(root, ".claude", "rules"), { recursive: true });
+  await writeFile(path.join(root, ".claude", "rules", "a.mdc"), "hand-written\n", "utf8");
+  const plan = await planInstall({ manifest: MANIFEST, profileId: "base", target: "claude", repoRoot: root });
+  const [skipped] = (await applyInstall(plan, root)).skipped;
+  expect(skipped?.keryxPublished).toBeUndefined();
+  expect(skipped?.reason).toBe("a file already exists at this destination and is not recorded in install-state");
+});
+
+/** Before/after ADR-0001 P3: one rule file, first owned by a module the manifest later drops. */
+function ownershipManifest(moduleId: string): InstallManifest {
+  return {
+    schemaVersion: "1.0.0",
+    profiles: { base: { description: "base", modules: [moduleId], components: [] } },
+    modules: {
+      [moduleId]: {
+        kind: "rule",
+        description: moduleId,
+        paths: ["rules/a.mdc"],
+        targets: ["claude", "keryx-shell"],
+        dependencies: [],
+        defaultInstall: true,
+        cost: "light",
+        stability: "stable",
+      },
+    },
+    components: {},
+  };
+}
+
+test("a re-install drops a path from the record of a module the manifest no longer has", async () => {
+  const before = await planInstall({ manifest: ownershipManifest("skill-lifecycle"), profileId: "base", target: "claude", repoRoot: root });
+  expect((await applyInstall(before, root)).ok).toBe(true);
+
+  const after = await planInstall({ manifest: ownershipManifest("process-activity-rules"), profileId: "base", target: "claude", repoRoot: root });
+  expect((await applyInstall(after, root)).ok).toBe(true);
+
+  const state = await readSkillsInstallState(root, "claude");
+  expect(state!.installedModules.map((m) => [m.moduleId, m.writtenPaths])).toEqual([
+    ["process-activity-rules", [".claude/rules/a.mdc"]],
+  ]);
+  // Nothing is left for `--module skill-lifecycle` to remove.
+  const uninstall = await uninstallInstall(root, "claude", { moduleId: "skill-lifecycle" });
+  expect(uninstall.removed).toEqual([]);
+  expect(await readFile(path.join(root, ".claude", "rules", "a.mdc"), "utf8")).toBe("rule a fixture\n");
+});
+
+test("uninstalling one module never removes a file another recorded module still owns", async () => {
+  // An install-state written before the ownership transfer: both records claim the file.
+  const plan = await planInstall({ manifest: ownershipManifest("process-activity-rules"), profileId: "base", target: "claude", repoRoot: root });
+  expect((await applyInstall(plan, root)).ok).toBe(true);
+  const [owner] = (await readSkillsInstallState(root, "claude"))!.installedModules;
+  await writeSkillsInstallState(root, "claude", [{ ...owner!, moduleId: "skill-lifecycle" }], "base");
+  expect((await readSkillsInstallState(root, "claude"))!.installedModules.map((m) => m.moduleId)).toEqual([
+    "process-activity-rules",
+    "skill-lifecycle",
+  ]);
+
+  const uninstall = await uninstallInstall(root, "claude", { moduleId: "skill-lifecycle", force: true });
+  expect(uninstall.ok).toBe(true);
+  expect(uninstall.removed).toEqual([]);
+  expect(uninstall.keptShared).toEqual([
+    { path: ".claude/rules/a.mdc", reason: "also recorded by module process-activity-rules — left in place for it" },
+  ]);
+  expect(await readFile(path.join(root, ".claude", "rules", "a.mdc"), "utf8")).toBe("rule a fixture\n");
+  // The stale record is gone; the owner's record is untouched.
+  expect((await readSkillsInstallState(root, "claude"))!.installedModules.map((m) => m.moduleId)).toEqual([
+    "process-activity-rules",
+  ]);
+
+  // Uninstalling the owner itself (or everything) still removes the file.
+  expect((await uninstallInstall(root, "claude")).removed).toEqual([".claude/rules/a.mdc"]);
+});
+
+test("a recorded file another writer already updated to the new bundled bytes is up to date, not drift", async () => {
+  const plan = await planInstall({ manifest: MANIFEST, profileId: "base", target: "claude", repoRoot: root });
+  expect((await applyInstall(plan, root)).ok).toBe(true);
+
+  // A release changes the bundled rule, and `keryx update` rewrites the copy first.
+  await writeFile(path.join(root, "rules", "a.mdc"), "rule a, next release\n", "utf8");
+  await writeFile(path.join(root, ".claude", "rules", "a.mdc"), "rule a, next release\n", "utf8");
+
+  const next = await planInstall({ manifest: MANIFEST, profileId: "base", target: "claude", repoRoot: root });
+  const result = await applyInstall(next, root);
+  expect(result.skipped).toEqual([]);
+  expect(result.ok).toBe(true);
+
+  const doctor = await doctorInstall(root, "claude");
+  expect(doctor.ok).toBe(true);
+  expect(doctor.entries.find((e) => e.path === ".claude/rules/a.mdc")?.status).toBe("ok");
+
+  // A hand edit is still drift.
+  await writeFile(path.join(root, ".claude", "rules", "a.mdc"), "hand edit\n", "utf8");
+  const edited = await applyInstall(next, root);
+  expect(edited.ok).toBe(false);
+  expect(edited.skipped.map((s) => s.path)).toEqual([".claude/rules/a.mdc"]);
 });
 
 test("doctor reports drifted after an edit, missing after a delete, and orphaned for an unrecorded file", async () => {
@@ -494,4 +645,94 @@ test("F17: doctor's orphan scan roots include the stack-pack-namespaced rules ro
   const doctor = await doctorInstall(root, "keryx-shell");
   const byPath = new Map(doctor.entries.map((e) => [e.path, e.status]));
   expect(byPath.get(".metaproject/rules/stacks/fixture-lang/extra.mdc")).toBe("orphaned");
+});
+
+/** A plan for the fixture manifest with `rules/a.mdc` installed at a stack-pack path, which is not keryx-published. */
+async function keryxShellRecord(moduleId: string, writtenPaths: string[]): Promise<void> {
+  const sha256 = Object.fromEntries(writtenPaths.map((p) => [p, "0".repeat(64)]));
+  const state = await readSkillsInstallState(root, "keryx-shell");
+  await writeSkillsInstallState(root, "keryx-shell", [
+    ...(state?.installedModules ?? []),
+    { moduleId, writtenPaths, sha256, managedSentinel: true, installedAt: new Date(0).toISOString() },
+  ], "base");
+}
+
+test("R2-LS-3: a module whose recorded file is skipped this time keeps its record with the old hash", async () => {
+  const plan = await planInstall({ manifest: MANIFEST, profileId: "base", target: "claude", repoRoot: root });
+  expect((await applyInstall(plan, root)).ok).toBe(true);
+  const before = (await readSkillsInstallState(root, "claude"))!.installedModules.find((m) => m.moduleId === "rule-a")!;
+  // The recorded file became a directory: apply skips it.
+  await rm(path.join(root, ".claude", "rules", "a.mdc"));
+  await mkdir(path.join(root, ".claude", "rules", "a.mdc"));
+
+  const result = await applyInstall(plan, root);
+  expect(result.skipped.map((s) => s.path)).toEqual([".claude/rules/a.mdc"]);
+  const after = (await readSkillsInstallState(root, "claude"))!.installedModules.find((m) => m.moduleId === "rule-a");
+  expect(after?.writtenPaths).toEqual([".claude/rules/a.mdc"]);
+  expect(after?.sha256).toEqual(before.sha256);
+});
+
+test("R2-4: a recorded, unedited rule-layer file with an older bundled version is refreshed, not skipped", async () => {
+  const plan = await planInstall({ manifest: MANIFEST, profileId: "base", target: "keryx-shell", repoRoot: root });
+  const published = ".metaproject/rules/core/a.mdc";
+  await mkdir(path.join(root, ".metaproject", "rules", "core"), { recursive: true });
+  await writeFile(path.join(root, published), "rule a, previous version\n", "utf8");
+  // What an install before review F2 recorded: the file with its then-current hash.
+  const { createHash } = await import("node:crypto");
+  const oldHash = createHash("sha256").update("rule a, previous version\n").digest("hex");
+  await writeSkillsInstallState(root, "keryx-shell", [
+    { moduleId: "rule-a", writtenPaths: [published], sha256: { [published]: oldHash }, managedSentinel: true, installedAt: new Date(0).toISOString() },
+  ], "base");
+
+  const result = await applyInstall(plan, root);
+  expect(result.ok).toBe(true);
+  expect(result.written).toContain(published);
+  expect(await readFile(path.join(root, published), "utf8")).toBe("rule a fixture\n");
+  // ...and, being keryx-published, it is no longer recorded.
+  const recorded = ((await readSkillsInstallState(root, "keryx-shell"))?.installedModules ?? []).flatMap((m) => m.writtenPaths);
+  expect(recorded).not.toContain(published);
+});
+
+test("R3-2: a recorded rule-layer file the user edited since is not refreshed; it is skipped with the keryx update advice", async () => {
+  const plan = await planInstall({ manifest: MANIFEST, profileId: "base", target: "keryx-shell", repoRoot: root });
+  const published = ".metaproject/rules/core/a.mdc";
+  await mkdir(path.join(root, ".metaproject", "rules", "core"), { recursive: true });
+  const { createHash } = await import("node:crypto");
+  const recordedHash = createHash("sha256").update("rule a, previous version\n").digest("hex");
+  await writeSkillsInstallState(root, "keryx-shell", [
+    { moduleId: "rule-a", writtenPaths: [published], sha256: { [published]: recordedHash }, managedSentinel: true, installedAt: new Date(0).toISOString() },
+  ], "base");
+  // Edited after that install recorded it: neither the recorded nor the bundled bytes.
+  await writeFile(path.join(root, published), "rule a, previous version\nour own line\n", "utf8");
+
+  const result = await applyInstall(plan, root);
+  expect(result.ok).toBe(false);
+  expect(result.written).not.toContain(published);
+  expect(result.skipped).toEqual([expect.objectContaining({ path: published, keryxPublished: true })]);
+  expect(await readFile(path.join(root, published), "utf8")).toBe("rule a, previous version\nour own line\n");
+});
+
+test("R2-5: an earlier record of an unplanned module loses its keryx-published paths and keeps the rest", async () => {
+  const plan = await planInstall({ manifest: MANIFEST, profileId: "base", target: "keryx-shell", repoRoot: root });
+  await keryxShellRecord("stack-x", [".metaproject/rules/core/old.mdc", ".metaproject/rules/stacks/x/house.mdc"]);
+
+  await applyInstall(plan, root);
+
+  const stack = (await readSkillsInstallState(root, "keryx-shell"))!.installedModules.find((m) => m.moduleId === "stack-x");
+  expect(stack?.writtenPaths).toEqual([".metaproject/rules/stacks/x/house.mdc"]);
+});
+
+test("R2-3: the record of a module this manifest does not define is kept (a newer keryx may have written it)", async () => {
+  const plan = await planInstall({ manifest: MANIFEST, profileId: "base", target: "keryx-shell", repoRoot: root });
+  await keryxShellRecord("from-a-newer-keryx", [".metaproject/rules/stacks/new/rule.mdc"]);
+  await applyInstall(plan, root);
+  const ids = (await readSkillsInstallState(root, "keryx-shell"))!.installedModules.map((m) => m.moduleId);
+  expect(ids).toContain("from-a-newer-keryx");
+});
+
+test("R2-2: doctor does not report a recorded rule-layer file missing after keryx update moved it", async () => {
+  await keryxShellRecord("core-common-rules", [".metaproject/rules/core/git-rules.mdc"]);
+  const doctor = await doctorInstall(root, "keryx-shell");
+  expect(doctor.entries.filter((e) => e.path === ".metaproject/rules/core/git-rules.mdc")).toEqual([]);
+  expect(doctor.ok).toBe(true);
 });

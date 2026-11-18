@@ -19,7 +19,7 @@
 // WHAT IT DOES NOT DO
 //
 // It never writes a literal model id into a rule or a skill — that is
-// `src/gdskills/bundled/rules/core/model-selection.mdc`'s own guarded
+// `src/gdskills/bundled/rules/process/model-selection.mdc`'s own guarded
 // territory (`concreteModelDeclarations` in `model-tier.ts`), untouched here.
 // A concrete id appears in the RENDERED block only when the PROJECT's own
 // `routing.config.json` resolves one for a category this policy addresses,

@@ -46,7 +46,7 @@ describe("F5b: an aborted unattended shell_exec is really killed, not orphaned (
     scratchHome = "";
   });
 
-  test.skipIf(!realSandbox.ok)(
+  test.skipIf(!(realSandbox.ok && realSandbox.kind === "bubblewrap"))(
     "aborting ~200ms into a sandboxed `sleep 60` kills it (and any grandchild) within the grace period — none survive, checked by pid/cmdline",
     async () => {
       workdir = await mkdtemp(path.join(tmpdir(), "keryx-abort-kill-work-"));

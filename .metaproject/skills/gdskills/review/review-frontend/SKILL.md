@@ -55,15 +55,7 @@ This skill consolidates what two earlier profiles (a style one and a MobX store 
 
 ### Shared laws (every reviewer)
 
-1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot name the input, call, or condition that reaches the code, you have an observation, not a finding. Report it as `info` and say what would settle it.
-2. **Never flag the theoretical.** The path you describe must exist in the code under review. Do not report a safe API because it could be misused, or a pattern because it is often wrong elsewhere.
-3. **One finding per class, not one per occurrence.** When the same shape appears at several sites, report it once and list every site. Ten findings that are one finding hide the other nine problems.
-4. **A deliberate choice is not a defect until its reason is read and shown wrong.** An explicit override, suppression or exemption, a comment or commit giving a reason, or a sibling doing the same is a decision: read its reason (the comment, `git log -L` or `git blame`, the sibling) before you report it, and report it only when you can show that reason wrong. A project rule is checked against accepted platform practice and its known exceptions before a deviation from it is reported.
-
-Severity levels are defined once, in `review-orchestrator/SKILL.md` →
-**Severity (canonical)**. This reviewer does not restate them: `blocker` is the
-four merge-blocking shapes named there and nothing else, and the `major`/`minor`
-boundary is the trigger-and-outcome test.
+Read the review activity rule before the code: `.metaproject/rules/project/activity/review.mdc` when the project keeps its own, else `.metaproject/rules/activity/review.mdc`. It holds what every reviewer applies and this file does not restate: scope (diff mode: the change; path mode: the whole file), the four shared laws, `info`, one finding per defect across lenses, and where severity comes from.
 
 ### Frontend / MobX laws
 
@@ -132,9 +124,9 @@ If no CLAUDE.md is found, proceed normally. CLAUDE.md is optional and non-blocki
 
 Components, stores, TypeScript and stories are checked against the rules the code was written to. Read each that the change touches; each ends with a **Review severities** table, and a finding takes its level from that table's row:
 
-- `.metaproject/rules/core/code-style-patterns.mdc`: `observer`, layers (no API/IO or business logic in components), where state lives (`useState` for UI-only state is correct), store created once, effect cleanup, keys, accessibility, TypeScript (`any`, `!`, `I` prefix, `src/` imports).
-- `.metaproject/rules/core/mobx-store-template.mdc`: `makeObservable` and decorators, mutations in actions, thin public `@action.bound` over private arrow methods (`@action.bound` on a private method is a finding), async flags and the `disposed` guard, disposers and child stores, in-place collection updates, two-way sync guards, the `onMount()`/`onUnmount()` lifecycle bridge (correct, never flagged).
-- `.metaproject/rules/core/storybook-guidelines.mdc`: which states each component's stories cover, `fn()` for actions.
+- `.metaproject/rules/stacks/react/code-style-patterns.mdc`: `observer`, layers (no API/IO or business logic in components), where state lives (`useState` for UI-only state is correct), store created once, effect cleanup, keys, accessibility, TypeScript (`I` prefix, Rule 8); `any`, `!` and `src/` imports are in `.metaproject/rules/stacks/ts-js-node/coding-style.mdc` Review severities.
+- `.metaproject/rules/stacks/mobx/mobx-store-template.mdc`: `makeObservable` and decorators, mutations in actions, thin public `@action.bound` over private arrow methods (`@action.bound` on a private method is a finding), async flags and the `disposed` guard, disposers and child stores, in-place collection updates, two-way sync guards, the `onMount()`/`onUnmount()` lifecycle bridge (correct, never flagged).
+- `.metaproject/rules/stacks/storybook/storybook-guidelines.mdc`: which states each component's stories cover, `fn()` for actions.
 - `.metaproject/rules/core/error-handling.mdc` for `catch` typing and swallowed errors.
 
 A pattern listed under a row's **Not a finding** is not reported. A defect no row covers is rated by the canonical rubric.

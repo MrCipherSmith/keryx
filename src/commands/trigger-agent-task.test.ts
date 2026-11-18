@@ -139,7 +139,7 @@ function currentRoutingSnapshot(input: {
 }
 
 /** A sandbox whose "wrap" runs nothing — for tests whose subject is the floor, not containment. */
-const INERT_SANDBOX: UnattendedSandboxPlan = { ok: true, launcher: "none", args: [], env: { PATH: "/usr/bin:/bin" }, wrap: () => ["/bin/true"] };
+const INERT_SANDBOX: UnattendedSandboxPlan = { ok: true, kind: "bubblewrap", label: "bubblewrap", launcher: "none", args: [], env: { PATH: "/usr/bin:/bin" }, wrap: () => ["/bin/true"] };
 
 let root = "";
 let aside = "";

@@ -85,6 +85,8 @@ DO NOT ask the user any questions. Execute the full workflow end-to-end.
 
 Load the skill: task-implementer (from skills/gdskills/orchestration/task-implementer/SKILL.md)
 
+Agent conduct (mandatory): <the "Dispatch form" line of .metaproject/rules/process/agent-conduct.mdc, verbatim>
+
 ═══════════════════════════════════════════════
   TASK
 ═══════════════════════════════════════════════
@@ -163,6 +165,8 @@ You are running the task-implementer skill in FIX MODE (AUTONOMOUS).
 DO NOT ask the user any questions. Execute the full workflow end-to-end.
 
 Load the skill: task-implementer (from skills/gdskills/orchestration/task-implementer/SKILL.md)
+
+Agent conduct (mandatory): <the "Dispatch form" line of .metaproject/rules/process/agent-conduct.mdc, verbatim>
 
 ═══════════════════════════════════════════════
   FIX TASK

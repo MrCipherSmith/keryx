@@ -246,7 +246,7 @@ above:
 Canonical source: `.metaproject/rules/` (managed by keryx; edit the rules
 there, not this block). Read the rule that matches your task before acting:
 
-- `.metaproject/rules/core/git-concurrency.mdc` — No git stash in a shared
+- `.metaproject/rules/process/git-concurrency.mdc` — No git stash in a shared
   tree; explicit pathspecs instead of `git add -A`; commit at task
   boundaries.
 <!-- /keryx:rules -->

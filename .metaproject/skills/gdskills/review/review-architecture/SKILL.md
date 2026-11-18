@@ -63,9 +63,6 @@ Architecture Review Progress:
 
 See shared script: `.metaproject/skills/gdskills/shared/git-merge-base.md`
 
-Review scope: **changes introduced in the current branch since merge-base only**.
-Do not review pre-existing architectural problems unless they are directly touched by the diff.
-
 **Supplied text first.** When the payload carries `slices`, `context_files`, `diff` or `file_contents`, review exactly that text and never rebuild the diff. A choice's history (law 4) is read with `git log`, `git blame` and `git show` only where the host gives a read-only child git; on keryx shell a read-only child has no shell and no git tool, so read the `git log -L`/`git blame` excerpts the payload supplies, or say the history was not read. Only with none supplied, collect it:
 ```bash
 git diff --name-status "${BASE_SHA}" && git diff "${BASE_SHA}" && git ls-files --others --exclude-standard
@@ -92,7 +89,7 @@ When `stack_hint` is not provided, infer from changed file paths:
 
 ### Layer Violations
 
-A **layer violation** occurs when code belonging to one architectural layer is placed in another. The layers and what each may import are `.metaproject/rules/core/clean-architecture.mdc` (backend: controller, use case, repository, domain, infrastructure, each boundary mapping its own types) and `.metaproject/rules/core/code-style-patterns.mdc` Rule 2 (frontend: component renders, store holds logic, service does I/O only; derived state is `@computed` per `.metaproject/rules/core/mobx-store-template.mdc` Rule 1). Adapt to the project's actual layering and report a placement those rules forbid.
+A **layer violation** occurs when code belonging to one architectural layer is placed in another. The layers and what each may import are `.metaproject/rules/core/clean-architecture.mdc` (backend: controller, use case, repository, domain, infrastructure, each boundary mapping its own types) and `.metaproject/rules/stacks/react/code-style-patterns.mdc` Rule 2 (frontend: component renders, store holds logic, service does I/O only; derived state is `@computed` per `.metaproject/rules/stacks/mobx/mobx-store-template.mdc` Rule 1). Adapt to the project's actual layering and report a placement those rules forbid.
 
 ### Dependency Direction
 
@@ -125,7 +122,7 @@ Dependencies must flow **inward** (from infrastructure toward domain), never out
 
 ### Dependency Inversion
 
-This lens owns DIP, layer and dependency direction, module boundaries and circular imports; their severities are `.metaproject/rules/core/clean-architecture.mdc` Review severities. SRP, OCP, LSP and ISP are `review-clean-code`'s, rated by `.metaproject/rules/core/solid-principles.mdc` Review severities. A component that renders, fetches and derives is `.metaproject/rules/core/code-style-patterns.mdc` Rule 2.
+This lens owns DIP, layer and dependency direction, module boundaries and circular imports; their severities are `.metaproject/rules/core/clean-architecture.mdc` Review severities. SRP, OCP, LSP and ISP are `review-clean-code`'s, rated by `.metaproject/rules/core/solid-principles.mdc` Review severities. A component that renders, fetches and derives is `.metaproject/rules/stacks/react/code-style-patterns.mdc` Rule 2.
 
 - DIP asks for an interface only at an I/O or substitution boundary; a single internal implementation gets none. An infrastructure class passed through several layers instead of behind an interface at that boundary is a finding.
 
@@ -140,14 +137,14 @@ This lens owns DIP, layer and dependency direction, module boundaries and circul
 
 ### React + MVVM (with MobX)
 
-Logic in a component, effects that orchestrate state, and cleanup are `.metaproject/rules/core/code-style-patterns.mdc` Rules 2 and 5 with `.metaproject/rules/core/mobx-store-template.mdc` Rule 8. This lens adds:
+Logic in a component, effects that orchestrate state, and cleanup are `.metaproject/rules/stacks/react/code-style-patterns.mdc` Rules 2 and 5 with `.metaproject/rules/stacks/mobx/mobx-store-template.mdc` Rule 8. This lens adds:
 
 - [ ] Component subscribing to raw observable fields instead of using computed/derived values
 - [ ] View rendering based on multiple raw observable fields instead of a single computed boolean
 
 ### MobX Store Layer
 
-Mutation outside an action, async resolution without `runInAction`, and inter-store callbacks left public are `.metaproject/rules/core/mobx-store-template.mdc` Rules 2 and 3 and their rows; a store importing another store's internal file is `.metaproject/rules/core/clean-architecture.mdc` (public exports only). This lens adds:
+Mutation outside an action, async resolution without `runInAction`, and inter-store callbacks left public are `.metaproject/rules/stacks/mobx/mobx-store-template.mdc` Rules 2 and 3 and their rows; a store importing another store's internal file is `.metaproject/rules/core/clean-architecture.mdc` (public exports only). This lens adds:
 
 - [ ] `@computed` with side effects (computed must be pure)
 
@@ -234,19 +231,11 @@ conditions land under that rubric, not a second rubric.
 
 ### Shared laws (every reviewer)
 
-1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot name the input, call, or condition that reaches the code, you have an observation, not a finding. Report it as `info` and say what would settle it.
-2. **Never flag the theoretical.** The path you describe must exist in the code under review. Do not report a safe API because it could be misused, or a pattern because it is often wrong elsewhere.
-3. **One finding per class, not one per occurrence.** When the same shape appears at several sites, report it once and list every site. Ten findings that are one finding hide the other nine problems.
-4. **A deliberate choice is not a defect until its reason is read and shown wrong.** An explicit override, suppression or exemption, a comment or commit giving a reason, or a sibling doing the same is a decision: read its reason (the comment, `git log -L` or `git blame`, the sibling) before you report it, and report it only when you can show that reason wrong. A project rule is checked against accepted platform practice and its known exceptions before a deviation from it is reported.
-
-Severity levels are defined once, in `review-orchestrator/SKILL.md` →
-**Severity (canonical)**. This reviewer does not restate them: `blocker` is the
-four merge-blocking shapes named there and nothing else, and the `major`/`minor`
-boundary is the trigger-and-outcome test.
+Read the review activity rule before the code: `.metaproject/rules/project/activity/review.mdc` when the project keeps its own, else `.metaproject/rules/activity/review.mdc`. It holds what every reviewer applies and this file does not restate: scope (diff mode: the change; path mode: the whole file), the four shared laws, `info`, one finding per defect across lenses, and where severity comes from. In diff mode, do not review pre-existing architectural problems unless they are directly touched by the diff.
 
 ### Architecture laws
 
-- Only flag actual violations found **in the diff**, not pre-existing issues untouched by the change.
+- In diff mode, only flag actual violations found **in the diff**, not pre-existing issues untouched by the change.
 - Every finding MUST cite a specific `file:line` from the diff.
 - Architecture opinions without a clear, named violation (layer, dependency, pattern misuse) are `info` only — never `blocker` or `major`.
 - Do not flag correct framework usage as a violation just because an alternative exists.
@@ -316,7 +305,7 @@ When dispatched by `review-orchestrator` or `job-orchestrator`, the prompt MAY c
 
 | Rationalization | Why it is wrong |
 |----------------|-----------------|
-| "I see a potential layer violation in a file not in the diff" | Scope is diff-only; pre-existing issues are out of scope unless the diff touches them |
+| "I see a potential layer violation in a file not in the diff" | In diff mode, scope is diff-only; pre-existing issues are out of scope unless the diff touches them |
 | "This architecture opinion makes things cleaner, so it's a major" | Opinions without a named violation are `info` only |
 | "I'll flag every cross-import as a boundary violation" | Not all cross-imports violate boundaries; check whether the dependency direction is correct |
 | "The team probably didn't intend this pattern" | Unless the context doc or a clear rule says otherwise, assume intentional; use `info` if unsure |

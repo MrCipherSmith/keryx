@@ -50,7 +50,7 @@ const DESTRUCTIVE = [
   },
   {
     // Unlike the patterns above, every form is unsafe here, not only the
-    // unscoped one — see `rules/core/git-concurrency.mdc`. The stash stack is
+    // unscoped one — see `rules/process/git-concurrency.mdc`. The stash stack is
     // a SINGLE list shared by the main checkout and every worktree cut from
     // it, so even `git stash push -- <one file>` resets that file now and
     // queues the diff on a stack another lane's `git stash pop` can take.

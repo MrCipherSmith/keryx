@@ -1,3 +1,4 @@
+import { AGENT_CONDUCT_RULE_PROJECT_PATH, renderAgentConductMarkdown } from "./agent-conduct";
 import { ORCHESTRATORS_INLINE_NOTE } from "./orchestrators-inline";
 import { DEFAULT_MODEL_CHOICE_BLOCK_INPUT, renderModelChoicePolicy, type ModelChoiceBlockInput } from "./model-choice";
 
@@ -73,6 +74,7 @@ export function renderProjectMetaprojectReferenceBlock({
     "For lessons learned, decisions, constraints, repeated mistakes, and historical project context, use the Metaproject memory skill before broad documentation search.",
     ...(enableTasks ? [flowPolicy] : []),
     ...(modelChoice.enabled ? [renderModelChoicePolicy(modelChoice.assignments)] : []),
+    renderAgentConductMarkdown({ rulePath: AGENT_CONDUCT_RULE_PROJECT_PATH }),
   ];
 
   return `<!-- keryx:index -->

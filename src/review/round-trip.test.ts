@@ -11,6 +11,7 @@
 // writes, build the dispatch for the next round out of it, and validate that
 // dispatch against the contract the orchestrator dispatches under.
 
+import { AGENT_CONDUCT_DISPATCH_CONSTRAINT } from "../lib/agent-conduct";
 import { describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
@@ -146,6 +147,7 @@ function round2Input(priorFindings: readonly StructuredReviewFinding[]): Record<
       token_policy: { context_mode: "light", omissions: [] },
     },
     reviewer: "review-security-code",
+    conduct: AGENT_CONDUCT_DISPATCH_CONSTRAINT,
     scope_mode: "diff",
     model: {
       tier: "standard",

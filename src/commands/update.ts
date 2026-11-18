@@ -4,7 +4,7 @@ import { access, constants, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { mkdirContained, writeContained } from "../lib/contained-write";
-import { installManagedHookOrWarn, removeManagedHookOrWarn } from "../lib/managed-git-hook";
+import { applyCommitMsgHookSetting, installManagedHookOrWarn, removeManagedHookOrWarn } from "../lib/managed-git-hook";
 import {
   claudeWorktreesDir,
   findStaleWorktrees,
@@ -192,6 +192,8 @@ type MetaprojectManifest = {
   profiles?: string[];
   updatedAt?: string;
   modules?: Record<string, ManifestModule>;
+  /** Project-level git hook switches (`commitMsg: false` opts out); preserved because update rewrites the raw JSON. */
+  hooks?: { commitMsg?: boolean };
   // Read as whatever is on disk (the legacy string array included) and only
   // ever through `resolveProjectEntrypoints` / `declaredImportSources`.
   agentEntrypoints?: unknown;
@@ -497,7 +499,9 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
   const metaprojectRoot = path.join(projectRoot, ".metaproject");
   const manifestState = await readManifest(metaprojectRoot);
   const manifest = manifestState.manifest;
-  const recoveredManifest = !manifestState.exists || !manifestState.valid;
+  // A manifest that exists but cannot be parsed is NOT rebuilt: rewriting it from
+  // the folders on disk would drop settings only the file holds (hooks.commitMsg).
+  const recoveredManifest = !manifestState.exists;
   if (manifestState.migrated) {
     {
       const { root, rel } = containFromMetaprojectPath(path.join(metaprojectRoot, "metaproject.json"));
@@ -812,7 +816,18 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
     if (warning) hookWarnings.push(warning);
   }
 
-  if (!manifestState.exists || !manifestState.valid) {
+  // ADR-0001 D3: refresh the attribution-refusing commit-msg hook (installed by
+  // `keryx init`); merge-safe, never touches other blocks or user content.
+  // Opt-out: `"hooks": { "commitMsg": false }` in metaproject.json removes it instead.
+  const commitMsgWarning = (await applyCommitMsgHookSetting(projectRoot)).warning;
+  if (commitMsgWarning) hookWarnings.push(commitMsgWarning);
+
+  if (manifestState.exists && !manifestState.valid) {
+    hookWarnings.push(
+      `${path.join(metaprojectRoot, "metaproject.json")} is not valid JSON; left it as it is so settings only it holds ` +
+        "(such as hooks.commitMsg) are not lost. Fix it, or delete it to let `keryx update` rebuild it from the folders on disk.",
+    );
+  } else if (!manifestState.exists) {
     await writeRecoveredManifest(metaprojectRoot, {
       enableGdgraph,
       enableGdctx,
@@ -2003,7 +2018,7 @@ function printHelp(): void {
     "refreshes service files, core scripts, managed skills, manifests, dashboard, hooks;",
     "backfills the Task Manager (tasks) module for projects initialized before it existed;",
     "writes the managed index block to CLAUDE.local.md / AGENTS.override.md, Claude hooks to .claude/settings.local.json and ignore rules to .git/info/exclude (scope local, the default), and moves uncommitted keryx edits out of the tracked AGENTS.md, CLAUDE.md, .claude/settings.json and .gitignore;",
-    "does not write .metaproject/data artifacts.",
+    "does not write .metaproject/data artifacts, except .metaproject/data/gdskills/stack-rules-installed.json (what it wrote under rules/stacks/) and stack-rule-backups/ (a hand-edited stack rule it replaced).",
   ]) {
     console.log(`  ${style.dim(symbols.bullet)} ${style.dim(line)}`);
   }

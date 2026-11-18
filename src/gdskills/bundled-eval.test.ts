@@ -1834,7 +1834,7 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
     expect(message).not.toMatch(/raise the ceiling only/i);
 
     const rule = readFileSync(
-      path.join(defaultBundledRoot(), "rules", "core", "skills-storage-workflow.mdc"),
+      path.join(defaultBundledRoot(), "rules", "process", "skills-storage-workflow.mdc"),
       "utf8",
     );
     expect(rule).toContain("A ceiling **moves down**, never up");
@@ -1904,10 +1904,10 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
     // rather than restated: `review/review-clean-code` is the entry a review
     // actually raised (545 -> 1200) while every test stayed green, so that
     // exact edit is the one this proves is now caught.
-    expect(SKILL_LENGTH_CEILINGS.get("review/review-clean-code")).toBe(204);
+    expect(SKILL_LENGTH_CEILINGS.get("review/review-clean-code")).toBe(192);
     const raised = ceilingMismatches(new Map(SKILL_LENGTH_CEILINGS).set("review/review-clean-code", 1200));
     expect(raised).toHaveLength(1);
-    expect(raised[0]).toContain("review/review-clean-code: ships 204 lines, ceiling records 1200");
+    expect(raised[0]).toContain("review/review-clean-code: ships 192 lines, ceiling records 1200");
     expect(raised[0]).toContain("the ratchet forbids");
 
     // …and a skill that grows past a ceiling nobody touched is the other

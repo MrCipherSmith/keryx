@@ -1,3 +1,4 @@
+import { AGENT_CONDUCT_PROMPT_BLOCK } from "../../lib/agent-conduct";
 import { randomUUID } from "node:crypto";
 import { runAgentTurn, type AgentIO } from "../agent";
 import type { InteractiveTool } from "../../harness/tool/builtin/interactive-tools";
@@ -123,6 +124,8 @@ function systemInstruction(request: ReviewAgentAdapterRequest): string {
     `Dispatch: ${request.dispatchId}`,
     `Scope IDs: ${JSON.stringify(request.scopeIds)}`,
     `Maximum child launches: ${request.limits.maxChildLaunches}`,
+    "",
+    AGENT_CONDUCT_PROMPT_BLOCK,
   ].join("\n");
 }
 

@@ -1083,24 +1083,35 @@ describe("rules the imported skills cite", () => {
   });
 
   test("a rule name keryx ships that the overlay does not provide stays unresolved", async () => {
-    await writeOverlaySkill("review-house", "Git: `core/git-rules.mdc`.");
+    await writeOverlaySkill("review-house", "Errors: `core/error-handling.mdc`.");
 
     const result = await importProjectSkills({ projectRoot: cwd, from: source, module: "review" });
-    expect(result.rules[0]).toMatchObject({ ref: "core/git-rules.mdc", status: "unresolved" });
+    expect(result.rules[0]).toMatchObject({ ref: "core/error-handling.mdc", status: "unresolved" });
     expect(result.rules[0]?.reason).toContain("run `keryx skills install` to restore it");
   });
 
+  test("a pack rule keryx ships that the overlay does not provide names the command that installs its pack (review LS-6)", async () => {
+    await writeOverlaySkill("review-house", "Components: `stacks/react/code-style-patterns.mdc`.");
+
+    const result = await importProjectSkills({ projectRoot: cwd, from: source, module: "review" });
+    expect(result.rules[0]).toMatchObject({
+      ref: "stacks/react/code-style-patterns.mdc",
+      status: "unresolved",
+      reason: "ships with keryx in the react stack pack — run `keryx skills install --profile core --target keryx-shell --with framework:react` to install it",
+    });
+  });
+
   test("a rule name keryx ships that the overlay provides lands in rules/project, never rules/core", async () => {
-    await writeOverlaySkill("review-house", "Git: `core/git-rules.mdc`.");
+    await writeOverlaySkill("review-house", "Errors: `core/error-handling.mdc`.");
     await mkdir(path.join(source, "rules", "core"), { recursive: true });
-    await writeFile(path.join(source, "rules", "core", "git-rules.mdc"), "# overlay git rules\n", "utf8");
-    const projectCopy = path.join(cwd, ".metaproject", "rules", "project", "core", "git-rules.mdc");
+    await writeFile(path.join(source, "rules", "core", "error-handling.mdc"), "# overlay error handling\n", "utf8");
+    const projectCopy = path.join(cwd, ".metaproject", "rules", "project", "core", "error-handling.mdc");
 
     const dry = await importProjectSkills({ projectRoot: cwd, from: source, module: "review", dryRun: true });
     expect(dry.rules[0]).toMatchObject({
-      ref: "core/git-rules.mdc",
+      ref: "core/error-handling.mdc",
       status: "would-import-project",
-      target: ".metaproject/rules/project/core/git-rules.mdc",
+      target: ".metaproject/rules/project/core/error-handling.mdc",
     });
     await expect(readFile(projectCopy, "utf8")).rejects.toThrow();
 
@@ -1108,38 +1119,70 @@ describe("rules the imported skills cite", () => {
     // `keryx init` / `update` / `skills install` rewrite rules/core/<bundled
     // name> on every run; an overlay copy there would be silently replaced by a
     // different file.
-    expect(result.rules[0]).toMatchObject({ ref: "core/git-rules.mdc", status: "imported-project" });
-    expect(await readFile(projectCopy, "utf8")).toBe("# overlay git rules\n");
-    await expect(readFile(path.join(cwd, ".metaproject", "rules", "core", "git-rules.mdc"), "utf8")).rejects.toThrow();
+    expect(result.rules[0]).toMatchObject({ ref: "core/error-handling.mdc", status: "imported-project" });
+    expect(await readFile(projectCopy, "utf8")).toBe("# overlay error handling\n");
+    await expect(readFile(path.join(cwd, ".metaproject", "rules", "core", "error-handling.mdc"), "utf8")).rejects.toThrow();
     const markdown = renderImportProjectSkillsMarkdown(result);
     expect(markdown).toContain(
-      `- core/git-rules.mdc: imported-project — keryx ships a rule under this name; the overlay's was written to .metaproject/rules/project/core/git-rules.mdc, which is the file the reviewer reads — from ${result.rules[0]?.origin} (cited by review-house)`,
+      `- core/error-handling.mdc: imported-project — keryx ships a rule under this name; the overlay's was written to .metaproject/rules/project/core/error-handling.mdc, which is the file the reviewer reads — from ${result.rules[0]?.origin} (cited by review-house)`,
     );
     expect(markdown).toContain(PROJECT_SLOT_PARAGRAPH);
     // Every command the paragraph names exists.
     expect(markdown).not.toContain("`keryx install`");
   });
 
+  test("a rule keryx ships in the process layer that the overlay provides lands in rules/project, never rules/process", async () => {
+    // ADR-0001 P2: `process/` is installed and overwritten like `core/`.
+    await writeOverlaySkill("review-house", "Conduct: `process/agent-conduct.mdc`.");
+    await mkdir(path.join(source, "rules", "process"), { recursive: true });
+    await writeFile(path.join(source, "rules", "process", "agent-conduct.mdc"), "# overlay conduct\n", "utf8");
+    const slot = ".metaproject/rules/project/process/agent-conduct.mdc";
+
+    const result = await importProjectSkills({ projectRoot: cwd, from: source, module: "review" });
+    expect(result.rules).toEqual([
+      expect.objectContaining({ ref: "process/agent-conduct.mdc", status: "imported-project", target: slot }),
+    ]);
+    expect(await readFile(path.join(cwd, slot), "utf8")).toBe("# overlay conduct\n");
+    await expect(readFile(path.join(cwd, ".metaproject", "rules", "process", "agent-conduct.mdc"), "utf8")).rejects.toThrow();
+  });
+
+  test("an overlay written before ADR-0001 P3 that cites and carries core/git-rules.mdc lands in the moved rule's project slot", async () => {
+    await writeOverlaySkill("review-house", "Git: `core/git-rules.mdc`.");
+    await mkdir(path.join(source, "rules", "core"), { recursive: true });
+    await writeFile(path.join(source, "rules", "core", "git-rules.mdc"), "# overlay git rules\n", "utf8");
+    const slot = ".metaproject/rules/project/process/git-rules.mdc";
+
+    const result = await importProjectSkills({ projectRoot: cwd, from: source, module: "review" });
+
+    expect(result.rules).toEqual([
+      expect.objectContaining({ ref: "process/git-rules.mdc", status: "imported-project", target: slot }),
+    ]);
+    expect(await readFile(path.join(cwd, slot), "utf8")).toBe("# overlay git rules\n");
+    // Neither keryx-owned layer gets the overlay's copy.
+    await expect(readFile(path.join(cwd, ".metaproject", "rules", "core", "git-rules.mdc"), "utf8")).rejects.toThrow();
+    await expect(readFile(path.join(cwd, ".metaproject", "rules", "process", "git-rules.mdc"), "utf8")).rejects.toThrow();
+  });
+
   test("a shipped rule cited with its directory in another case still lands in rules/project, never rules/core", async () => {
     // `Core/` is `core/` on a case-insensitive filesystem — the directory
     // `keryx init`, `update` and `skills install` overwrite.
-    await writeOverlaySkill("review-house", "Git: `Core/git-rules.mdc`.");
+    await writeOverlaySkill("review-house", "Errors: `Core/error-handling.mdc`.");
     await mkdir(path.join(source, "rules", "core"), { recursive: true });
-    await writeFile(path.join(source, "rules", "core", "git-rules.mdc"), "# overlay git rules\n", "utf8");
-    const slot = ".metaproject/rules/project/core/git-rules.mdc";
+    await writeFile(path.join(source, "rules", "core", "error-handling.mdc"), "# overlay error handling\n", "utf8");
+    const slot = ".metaproject/rules/project/core/error-handling.mdc";
 
     const dry = await importProjectSkills({ projectRoot: cwd, from: source, module: "review", dryRun: true });
-    expect(dry.rules).toEqual([expect.objectContaining({ ref: "core/git-rules.mdc", status: "would-import-project", target: slot })]);
+    expect(dry.rules).toEqual([expect.objectContaining({ ref: "core/error-handling.mdc", status: "would-import-project", target: slot })]);
 
     const real = await importProjectSkills({ projectRoot: cwd, from: source, module: "review" });
-    expect(real.rules).toEqual([expect.objectContaining({ ref: "core/git-rules.mdc", status: "imported-project", target: slot })]);
-    expect(await readFile(path.join(cwd, slot), "utf8")).toBe("# overlay git rules\n");
+    expect(real.rules).toEqual([expect.objectContaining({ ref: "core/error-handling.mdc", status: "imported-project", target: slot })]);
+    expect(await readFile(path.join(cwd, slot), "utf8")).toBe("# overlay error handling\n");
     // Nothing under rules/ but the project slot, in any spelling of core/.
     expect(await readdir(path.join(cwd, ".metaproject", "rules"))).toEqual(["project"]);
     expect(await readdir(path.join(cwd, ".metaproject", "rules", "project"))).toEqual(["core"]);
 
     const [reviewer] = (await collectReviewers(cwd)).project;
-    expect(reviewer?.shadowedRules).toEqual([{ ref: "core/git-rules.mdc", resolved: slot }]);
+    expect(reviewer?.shadowedRules).toEqual([{ ref: "core/error-handling.mdc", resolved: slot }]);
     expect(reviewer?.unresolvedRules).toEqual([]);
   });
 
@@ -1204,19 +1247,19 @@ describe("rules the imported skills cite", () => {
   });
 
   test("two cited rules that share a filename each get their own file, and a dry run names the same destinations", async () => {
-    // The project slot was keyed on the basename: `core/git-rules.mdc` took
-    // `rules/project/git-rules.mdc`, `house/git-rules.mdc` was then reported as
+    // The project slot was keyed on the basename: `core/error-handling.mdc` took
+    // `rules/project/error-handling.mdc`, `house/error-handling.mdc` was then reported as
     // differing from that just-written file and installed nowhere — after a dry
-    // run had promised it `rules/house/git-rules.mdc`.
-    await writeOverlaySkill("review-house", "Git: `core/git-rules.mdc`. House git: `house/git-rules.mdc`.");
+    // run had promised it `rules/house/error-handling.mdc`.
+    await writeOverlaySkill("review-house", "Errors: `core/error-handling.mdc`. House git: `house/error-handling.mdc`.");
     await mkdir(path.join(source, "rules", "core"), { recursive: true });
     await mkdir(path.join(source, "rules", "house"), { recursive: true });
-    await writeFile(path.join(source, "rules", "core", "git-rules.mdc"), "# overlay core git\n", "utf8");
-    await writeFile(path.join(source, "rules", "house", "git-rules.mdc"), "# overlay house git\n", "utf8");
+    await writeFile(path.join(source, "rules", "core", "error-handling.mdc"), "# overlay core git\n", "utf8");
+    await writeFile(path.join(source, "rules", "house", "error-handling.mdc"), "# overlay house git\n", "utf8");
 
     const destinations = {
-      "core/git-rules.mdc": ".metaproject/rules/project/core/git-rules.mdc",
-      "house/git-rules.mdc": ".metaproject/rules/house/git-rules.mdc",
+      "core/error-handling.mdc": ".metaproject/rules/project/core/error-handling.mdc",
+      "house/error-handling.mdc": ".metaproject/rules/house/error-handling.mdc",
     };
     const targets = (result: Awaited<ReturnType<typeof importProjectSkills>>): Record<string, string | undefined> =>
       Object.fromEntries(result.rules.map((rule) => [rule.ref, rule.target]));
@@ -1228,19 +1271,19 @@ describe("rules the imported skills cite", () => {
     const real = await importProjectSkills({ projectRoot: cwd, from: source, module: "review" });
     expect(targets(real)).toEqual(destinations);
     expect(real.rules.map((rule) => rule.status)).toEqual(["imported-project", "imported"]);
-    expect(await readFile(path.join(cwd, destinations["core/git-rules.mdc"]), "utf8")).toBe("# overlay core git\n");
-    expect(await readFile(path.join(cwd, destinations["house/git-rules.mdc"]), "utf8")).toBe("# overlay house git\n");
+    expect(await readFile(path.join(cwd, destinations["core/error-handling.mdc"]), "utf8")).toBe("# overlay core git\n");
+    expect(await readFile(path.join(cwd, destinations["house/error-handling.mdc"]), "utf8")).toBe("# overlay house git\n");
 
     const [reviewer] = (await collectReviewers(cwd)).project;
     expect(reviewer?.shadowedRules).toEqual([
-      { ref: "core/git-rules.mdc", resolved: ".metaproject/rules/project/core/git-rules.mdc" },
+      { ref: "core/error-handling.mdc", resolved: ".metaproject/rules/project/core/error-handling.mdc" },
     ]);
     expect(reviewer?.unresolvedRules).toEqual([]);
 
     const rerun = await importProjectSkills({ projectRoot: cwd, from: source, module: "review" });
     expect(rerun.rules.map((rule) => [rule.status, rule.existing])).toEqual([
-      ["present", destinations["core/git-rules.mdc"]],
-      ["present", destinations["house/git-rules.mdc"]],
+      ["present", destinations["core/error-handling.mdc"]],
+      ["present", destinations["house/error-handling.mdc"]],
     ]);
   });
 
@@ -1381,11 +1424,11 @@ describe("rules the imported skills cite", () => {
     let projectCopy: string;
 
     beforeEach(async () => {
-      await writeOverlaySkill("review-house", "Stores: `core/mobx-store-template.mdc`.");
+      await writeOverlaySkill("review-house", "Stores: `core/database-patterns.mdc`.");
       await mkdir(path.join(source, "rules", "core"), { recursive: true });
-      await writeFile(path.join(source, "rules", "core", "mobx-store-template.mdc"), OVERLAY, "utf8");
-      coreCopy = path.join(cwd, ".metaproject", "rules", "core", "mobx-store-template.mdc");
-      projectCopy = path.join(cwd, ".metaproject", "rules", "project", "core", "mobx-store-template.mdc");
+      await writeFile(path.join(source, "rules", "core", "database-patterns.mdc"), OVERLAY, "utf8");
+      coreCopy = path.join(cwd, ".metaproject", "rules", "core", "database-patterns.mdc");
+      projectCopy = path.join(cwd, ".metaproject", "rules", "project", "core", "database-patterns.mdc");
       await mkdir(path.dirname(coreCopy), { recursive: true });
       await writeFile(coreCopy, GENERIC, "utf8");
     });
@@ -1394,10 +1437,10 @@ describe("rules the imported skills cite", () => {
       const result = await importProjectSkills({ projectRoot: cwd, from: source, module: "review" });
       expect(result.rules).toHaveLength(1);
       expect(result.rules[0]).toMatchObject({
-        ref: "core/mobx-store-template.mdc",
+        ref: "core/database-patterns.mdc",
         status: "differs",
-        existing: ".metaproject/rules/core/mobx-store-template.mdc",
-        target: ".metaproject/rules/project/core/mobx-store-template.mdc",
+        existing: ".metaproject/rules/core/database-patterns.mdc",
+        target: ".metaproject/rules/project/core/database-patterns.mdc",
         written: true,
       });
       expect(await readFile(projectCopy, "utf8")).toBe(OVERLAY);
@@ -1406,13 +1449,13 @@ describe("rules the imported skills cite", () => {
 
       const markdown = renderImportProjectSkillsMarkdown(result);
       expect(markdown).toContain(
-        `- core/mobx-store-template.mdc: differs — .metaproject/rules/core/mobx-store-template.mdc is not the overlay's version; the overlay's was written to .metaproject/rules/project/core/mobx-store-template.mdc, which is the file the reviewer reads — from ${result.rules[0]?.origin} (cited by review-house)`,
+        `- core/database-patterns.mdc: differs — .metaproject/rules/core/database-patterns.mdc is not the overlay's version; the overlay's was written to .metaproject/rules/project/core/database-patterns.mdc, which is the file the reviewer reads — from ${result.rules[0]?.origin} (cited by review-house)`,
       );
       expect(markdown).toContain(PROJECT_SLOT_PARAGRAPH);
 
       const [reviewer] = (await collectReviewers(cwd)).project;
       expect(reviewer?.shadowedRules).toEqual([
-        { ref: "core/mobx-store-template.mdc", resolved: ".metaproject/rules/project/core/mobx-store-template.mdc" },
+        { ref: "core/database-patterns.mdc", resolved: ".metaproject/rules/project/core/database-patterns.mdc" },
       ]);
       expect(reviewer?.unresolvedRules).toEqual([]);
     });
@@ -1420,7 +1463,7 @@ describe("rules the imported skills cite", () => {
     test("identical content is `present`, and nothing is written", async () => {
       await writeFile(coreCopy, OVERLAY, "utf8");
       const result = await importProjectSkills({ projectRoot: cwd, from: source, module: "review" });
-      expect(result.rules[0]).toMatchObject({ ref: "core/mobx-store-template.mdc", status: "present" });
+      expect(result.rules[0]).toMatchObject({ ref: "core/database-patterns.mdc", status: "present" });
       await expect(readFile(projectCopy, "utf8")).rejects.toThrow();
     });
 
@@ -1428,7 +1471,7 @@ describe("rules the imported skills cite", () => {
       const dry = await importProjectSkills({ projectRoot: cwd, from: source, module: "review", dryRun: true });
       expect(dry.rules[0]).toMatchObject({
         status: "differs",
-        target: ".metaproject/rules/project/core/mobx-store-template.mdc",
+        target: ".metaproject/rules/project/core/database-patterns.mdc",
         written: false,
       });
       await expect(readFile(projectCopy, "utf8")).rejects.toThrow();
@@ -1440,11 +1483,11 @@ describe("rules the imported skills cite", () => {
       const rerun = await importProjectSkills({ projectRoot: cwd, from: source, module: "review" });
       expect(rerun.rules[0]).toMatchObject({
         status: "present",
-        existing: ".metaproject/rules/project/core/mobx-store-template.mdc",
+        existing: ".metaproject/rules/project/core/database-patterns.mdc",
       });
       // Nothing was written this time, so the row says which file answers the reference.
       expect(renderImportProjectSkillsMarkdown(rerun)).toContain(
-        "- core/mobx-store-template.mdc: present — the reviewer reads .metaproject/rules/project/core/mobx-store-template.mdc — from ",
+        "- core/database-patterns.mdc: present — the reviewer reads .metaproject/rules/project/core/database-patterns.mdc — from ",
       );
     });
 
@@ -1524,8 +1567,8 @@ describe("a symlinked directory on a destination", () => {
 
   const variants: { label: string; link: string; cites: string }[] = [
     // A name keryx ships under rules/core goes to the project slot rules/project/core/<name>.
-    { label: "rules/project/core", link: ".metaproject/rules/project/core", cites: "core/mobx-store-template.mdc" },
-    { label: "rules/project", link: ".metaproject/rules/project", cites: "core/mobx-store-template.mdc" },
+    { label: "rules/project/core", link: ".metaproject/rules/project/core", cites: "core/database-patterns.mdc" },
+    { label: "rules/project", link: ".metaproject/rules/project", cites: "core/database-patterns.mdc" },
     { label: "rules/<dir>", link: ".metaproject/rules/house", cites: "house/x.mdc" },
     { label: "rules/core, a name keryx does not ship", link: ".metaproject/rules/core", cites: "core/zz-house-only.mdc" },
     { label: "rules", link: ".metaproject/rules", cites: "house/x.mdc" },

@@ -34,11 +34,19 @@
 //   should ever ship `defaultInstall: false`.
 
 import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { sha256OfFile } from "../../integrations/install-state";
 import { generateCapabilityMatrix, type CapabilityMatrixDocument, type MatrixSurfaceState } from "../../integrations/matrix";
+import { getBundledSkillsForProfile, normalizeGdskillsProfile } from "../catalog";
+import { isKeryxRuleLayer, KERYX_RULE_LAYERS } from "../rule-references";
+import { readMetaprojectManifest } from "../../lib/metaproject-state";
+import { detectStackPacks } from "../stack-rules-install";
 import { resolveGlobs } from "./glob";
+import { CLAUDE_ACTIVITY_RULE_PREFIX, installedSha256 } from "./content";
 import { HARNESS_IDS, type HarnessId, type InstallManifest, type ManifestModule, type ManifestProfile, type ModuleKind } from "./manifest";
+
+export { CLAUDE_ACTIVITY_RULE_PREFIX };
 
 export interface StackDetectionInput {
   tags: Record<string, boolean>;
@@ -128,9 +136,60 @@ export const SUPPORTED_TARGETS: readonly HarnessId[] = ["claude", "keryx-shell"]
 export function destinationRootsForTarget(target: string): string[] {
   if (target === "claude") return [".claude/skills", ".claude/rules"];
   if (target === "keryx-shell") {
-    return [".metaproject/skills/gdskills", ".metaproject/rules/core", ".metaproject/rules/stacks"];
+    return [
+      ".metaproject/skills/gdskills",
+      ...KERYX_RULE_LAYERS.map((layer) => `.metaproject/rules/${layer}`),
+      ".metaproject/rules/stacks",
+    ];
   }
   return [];
+}
+
+/** Whether `keryx init`/`update` publish a destination in one project; see {@link keryxPublishedIn}. */
+export type KeryxPublishedCheck = (destination: string) => boolean;
+
+/** Always written by `keryx init`/`update`, with or without the gdskills module (ADR-0001 P1). */
+const CONDUCT_RULE_DESTINATION = ".metaproject/rules/process/agent-conduct.mdc";
+
+type GdskillsManifest = { modules?: { gdskills?: { enabled?: boolean; profile?: string } } };
+
+/**
+ * Destinations `keryx init` and `keryx update` publish themselves in this
+ * project, read from its `.metaproject/metaproject.json` the way `keryx update`
+ * reads it. Install-state never records them — `skills uninstall` would
+ * otherwise delete files those commands own — and a stale copy of one is fixed
+ * by `keryx update`.
+ *
+ * - the conduct rule, always;
+ * - with the gdskills module enabled: every file of a bundled rule layer
+ *   (`installBundledRules` copies `rules/core|process|activity` wholesale), the
+ *   shared skill assets, and the skills of the project's gdskills profile — not
+ *   the rest of `.metaproject/skills/gdskills/`, which `keryx update` never
+ *   writes, so a manifest install records those as before (review R3-1);
+ * - with the gdskills module enabled: the rules of every stack pack the
+ *   project's detected stack selects, under `.metaproject/rules/stacks/<pack>/`
+ *   (ADR-0001 P4) — the same selection `installBundledRules` makes. A pack the
+ *   stack does not select is written only by an explicit manifest install,
+ *   which records it as before.
+ */
+export async function keryxPublishedIn(
+  projectRoot: string,
+  selectStackPacks: (projectRoot: string) => Promise<readonly string[]> = detectStackPacks,
+): Promise<KeryxPublishedCheck> {
+  const gdskills = readMetaprojectManifest<GdskillsManifest>(projectRoot)?.modules?.gdskills;
+  if (gdskills?.enabled !== true) return (destination) => destination === CONDUCT_RULE_DESTINATION;
+  const packRoots = (await selectStackPacks(projectRoot)).map((pack) => `.metaproject/rules/stacks/${pack}/`);
+  const skillRoots = [
+    ".metaproject/skills/gdskills/shared/",
+    ...getBundledSkillsForProfile(normalizeGdskillsProfile(gdskills.profile)).map(
+      (skill) => `.metaproject/skills/gdskills/${skill.category}/${skill.name}/`,
+    ),
+  ];
+  return (destination) =>
+    destination === CONDUCT_RULE_DESTINATION ||
+    KERYX_RULE_LAYERS.some((layer) => destination.startsWith(`.metaproject/rules/${layer}/`)) ||
+    packRoots.some((root) => destination.startsWith(root)) ||
+    skillRoots.some((root) => destination.startsWith(root));
 }
 
 /** Deterministic sha256 of a stack-detection document, `detectedAt` excluded (Lane A's fingerprint convention). */
@@ -206,6 +265,12 @@ function parseSkillSource(source: string): SkillDestination | undefined {
   return undefined;
 }
 
+/** The keryx rule layer (`core`, `process`, `activity`) a bundled rule source sits in, or `undefined`. */
+function parseLayerRuleSource(source: string): string | undefined {
+  const match = /^src\/gdskills\/bundled\/rules\/([^/]+)\/[^/]+$/.exec(source);
+  return match && isKeryxRuleLayer(match[1]!) ? match[1] : undefined;
+}
+
 /** Extract `{pack, file}` from a stack-pack rule source path, or `undefined` if unrecognised. */
 function parseStackRuleSource(source: string): { pack: string; file: string } | undefined {
   const match = /^src\/gdskills\/bundled\/stacks\/([^/]+)\/rules\/([^/]+)$/.exec(source);
@@ -217,7 +282,15 @@ function parseStackRuleSource(source: string): { pack: string; file: string } | 
  * §"Install: profiles → modules → components"):
  *   claude      skill -> .claude/skills/<name>/<rest>       rule -> .claude/rules/<basename>
  *   keryx-shell skill -> .metaproject/skills/gdskills/<category>/<name>/<rest>
- *               rule -> .metaproject/rules/core/<basename>
+ *               rule -> .metaproject/rules/<layer>/<basename>
+ * where <layer> is the bundled layer the rule ships in (`core`, `process`,
+ * `activity` — ADR-0001 D1); a rule from outside the layer tree lands in
+ * `core`. The claude target stays flat, so the planner's collision check is
+ * what keeps two layers from shipping one basename. An activity rule's name
+ * (`review.mdc`, `test.mdc`) is a role, not a topic, so on the claude target
+ * it carries {@link CLAUDE_ACTIVITY_RULE_PREFIX}: `.claude/rules/keryx-activity-review.mdc`
+ * cannot collide with a file of the user's own. A claude skill citing it is
+ * rewritten to that path as it is installed (`content.ts`).
  * A stack-pack rule (source under `stacks/<pack>/rules/`) is namespaced by
  * pack id instead of landing at the bare `core` rule destination, so two
  * packs shipping a same-named file (e.g. both ship `coding-style.mdc`) never
@@ -236,8 +309,12 @@ function destinationFor(target: HarnessId, kind: ModuleKind, source: string): st
       return { error: `target "${target}" has no rule destination in the v1 destination table` };
     }
     const basename = path.posix.basename(source);
-    if (target === "claude") return `.claude/rules/${basename}`;
-    if (target === "keryx-shell") return `.metaproject/rules/core/${basename}`;
+    if (target === "claude") {
+      return parseLayerRuleSource(source) === "activity"
+        ? `.claude/rules/${CLAUDE_ACTIVITY_RULE_PREFIX}${basename}`
+        : `.claude/rules/${basename}`;
+    }
+    if (target === "keryx-shell") return `.metaproject/rules/${parseLayerRuleSource(source) ?? "core"}/${basename}`;
     return { error: `target "${target}" has no rule destination in the v1 destination table` };
   }
   if (kind === "skill") {
@@ -571,7 +648,10 @@ export async function planInstall(input: PlanInstallInput): Promise<InstallPlan>
         destinationError = `module "${moduleId}": ${destination.error}`;
         break;
       }
-      const sha256 = (await sha256OfFile(repoRoot, source)) ?? "";
+      const sourceSha256 = await sha256OfFile(repoRoot, source);
+      // What the destination holds once written: a claude skill's activity-rule citation is rewritten (content.ts).
+      const sha256 =
+        sourceSha256 === undefined ? "" : installedSha256(target, destination, await readFile(path.join(repoRoot, source)));
       files.push({ source, destination, sha256 });
     }
     if (destinationError !== undefined) {

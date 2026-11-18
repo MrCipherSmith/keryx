@@ -74,9 +74,10 @@ describe("review lens contract (flow 490)", () => {
     // The primary level after the dash; a conditional "**major** only with …" in parentheses is allowed.
     expect(read("review-backend")).not.toMatch(/NOT NULL[^\n(]*— \*\*blocker\*\*/);
     // review-frontend rates these by the rules' severity tables (core-rules audit, group 3).
-    const rule = (name: string): string => readFileSync(path.join(import.meta.dir, "bundled", "rules", "core", `${name}.mdc`), "utf8");
-    expect(rule("code-style-patterns")).toMatch(/^\| `any` in new code \(Rule 8\) \| always \| `minor`;/m);
-    expect(rule("mobx-store-template")).toMatch(/^\| Component calls `store\.loadX\(\)`[^\n]*\| always \| `minor`;/m);
+    // ADR-0001 P4: these rows live in the stack packs now.
+    const rule = (pack: string, name: string): string => readFileSync(path.join(import.meta.dir, "bundled", "stacks", pack, "rules", `${name}.mdc`), "utf8");
+    expect(rule("ts-js-node", "coding-style")).toMatch(/^\| `any` in new code \(Typing and module shape\) \| always \| `minor`;/m);
+    expect(rule("mobx", "mobx-store-template")).toMatch(/^\| Component calls `store\.loadX\(\)`[^\n]*\| always \| `minor`;/m);
     // Every site, not only the first: no store-load line rates `major` as its primary level.
     expect(read("review-frontend")).not.toMatch(/store\.(loadX|loadData)\(\)[^\n]*— \*\*major\*\*/);
     // Backend security-shaped rows defer to the attack-vector rule: no unconditional primary blocker, in bold or backticks.

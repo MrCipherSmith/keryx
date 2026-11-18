@@ -2,6 +2,7 @@ import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
 import { resolveGitHooksRoot } from "../lib/git-hooks";
+import { applyCommitMsgHookSetting, removeCommitMsgHookOrWarn } from "../lib/managed-git-hook";
 
 // Install merge/checkout git hooks that run `keryx sync` — so a `git pull`
 // (post-merge) or branch switch / `fetch`+checkout (post-checkout) reports what
@@ -82,6 +83,11 @@ export async function installSyncHooks(projectRoot: string): Promise<string[]> {
   for (const hook of SYNC_HOOKS) {
     if (await writeManagedHook(projectRoot, hook)) installed.push(hook);
   }
+  // ADR-0001 D3: the counterpart of the commit-msg removal in uninstallSyncHooks.
+  // Honours `hooks.commitMsg: false` (then an existing keryx check is removed).
+  const commitMsg = await applyCommitMsgHookSetting(projectRoot);
+  if (commitMsg.installed) installed.push("commit-msg");
+  if (commitMsg.warning) console.warn(commitMsg.warning);
   return installed;
 }
 
@@ -90,5 +96,11 @@ export async function uninstallSyncHooks(projectRoot: string): Promise<string[]>
   for (const hook of SYNC_HOOKS) {
     if (await stripManagedHook(projectRoot, hook)) removed.push(hook);
   }
+  // ADR-0001 D3: the managed commit-msg check goes with the other keryx git
+  // hooks. Reported only when something was actually removed; a symlinked or
+  // still-calling commit-msg is left alone with a warning.
+  const commitMsg = await removeCommitMsgHookOrWarn(projectRoot);
+  if (commitMsg.removed) removed.push("commit-msg");
+  if (commitMsg.warning) console.warn(commitMsg.warning);
   return removed;
 }

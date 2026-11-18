@@ -481,19 +481,20 @@ function extractRuleTopLevelStackRequires(mdcContent: string): string | undefine
 // (e.g. "moxb" instead of "mobx", or an unrecognised STACK_TAGS token) means
 // `parseStackRequires` silently drops it — the resulting array would come
 // back shorter than expected, which is exactly what these assertions pin.
+// ADR-0001 P4: the stack-specific ones ship in their pack, `<pack>/rules/<name>`.
 const EXPECTED_STACK_RULE_TAGS: Record<string, StackTag[]> = {
-  "mobx-store-template.mdc": ["mobx"],
-  "code-style-patterns.mdc": ["react", "mobx"],
+  "../../stacks/mobx/rules/mobx-store-template.mdc": ["mobx"],
+  "../../stacks/react/rules/code-style-patterns.mdc": ["react", "mobx"],
   "frontend-assistant.mdc": ["react", "mobx"],
-  "nestjs-dto.mdc": ["nestjs"],
-  "storybook-guidelines.mdc": ["react"],
-  "playwright-testing.mdc": ["playwright"],
+  "../../stacks/nestjs/rules/nestjs-dto.mdc": ["nestjs"],
+  "../../stacks/storybook/rules/storybook-guidelines.mdc": ["react"],
+  "../../stacks/playwright/rules/playwright-testing.mdc": ["playwright"],
   "database-patterns.mdc": ["sql"],
   "api-contracts.mdc": ["http-server"],
 };
 
 for (const [fileName, expectedTags] of Object.entries(EXPECTED_STACK_RULE_TAGS)) {
-  test(`bundled core rule ${fileName} declares stack_requires that parses to ${JSON.stringify(expectedTags)}`, async () => {
+  test(`bundled rule ${fileName} declares stack_requires that parses to ${JSON.stringify(expectedTags)}`, async () => {
     const content = await Bun.file(new URL(fileName, BUNDLED_CORE_RULES_DIR)).text();
     const rawField = extractRuleTopLevelStackRequires(content);
     expect(rawField).toBeDefined();

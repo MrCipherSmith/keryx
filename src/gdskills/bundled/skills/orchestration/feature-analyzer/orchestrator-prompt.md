@@ -98,6 +98,8 @@ DO NOT stop for confirmation. Execute the full workflow end-to-end.
 
 Load the skill: feature-analyzer (from .metaproject/skills/gdskills/orchestration/feature-analyzer/SKILL.md)
 
+Agent conduct (mandatory): <the "Dispatch form" line of .metaproject/rules/process/agent-conduct.mdc, verbatim>
+
 ═══════════════════════════════════════════════
   PRE-RESOLVED CONTEXT (Guard Clause SATISFIED)
 ═══════════════════════════════════════════════
