@@ -263,7 +263,7 @@ test("flow 295 AC14: a scheduled agent-task run's cost is included in project tr
             estimatedCostUsd: 0.01, observedLatencyMs: 1,
           }],
         }),
-        planSandbox: () => ({ ok: true, launcher: "none", args: [], env: {}, wrap: () => ["/bin/true"] }),
+        planSandbox: () => ({ ok: true, kind: "bubblewrap", label: "bubblewrap", launcher: "none", args: [], env: {}, wrap: () => ["/bin/true"] }),
       },
     });
   } finally {

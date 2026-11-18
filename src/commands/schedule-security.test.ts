@@ -71,7 +71,7 @@ function scripted(rounds: Round[]): ProviderPort & { calls: () => number; reques
 function toolCall(tool: string, input: Record<string, unknown>, id: string): Round {
   return [USAGE, { kind: "tool_call_start", toolCallId: id, toolName: tool }, { kind: "tool_call_end", toolCallId: id, input: JSON.stringify(input) }, { kind: "model_end" }];
 }
-const INERT_SANDBOX: UnattendedSandboxPlan = { ok: true, launcher: "none", args: [], env: { PATH: "/usr/bin:/bin" }, wrap: () => ["/bin/true"] };
+const INERT_SANDBOX: UnattendedSandboxPlan = { ok: true, kind: "bubblewrap", label: "bubblewrap", launcher: "none", args: [], env: { PATH: "/usr/bin:/bin" }, wrap: () => ["/bin/true"] };
 const RATES = { inputUsdPerMTok: 3, outputUsdPerMTok: 15 };
 
 let root = "";
@@ -591,7 +591,8 @@ describe("one run cannot read another run's scratch", () => {
         const provider = scripted([toolCall("shell_exec", { command: `cat ${sibling}/secret.txt; ls ${parent}` }, "c1")]);
         await runTriggerOnce(root, "nightly", { agentTask: { makeProvider: () => provider } });
         const wire = JSON.stringify(provider.requests);
-        expect(wire).toContain("No such file");
+        // bwrap hides the parent behind an empty tmpfs ("No such file"); Seatbelt denies the read ("Operation not permitted").
+        expect(wire).toMatch(/No such file|Operation not permitted/);
         expect(wire).not.toContain("SIBLING-SECRET-42");
       } finally {
         await rm(varTmp, { recursive: true, force: true });

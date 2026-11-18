@@ -525,7 +525,7 @@ async function runLocked(
       );
     }
     const sandboxNote = sandbox.ok
-      ? `hardened sandbox, network ${
+      ? `hardened ${sandbox.label} sandbox, network ${
           action.grants.network === "full"
             ? `ON — ${NETWORK_ON_WARNING}`
             : action.grants.network === "allowlist"

@@ -141,6 +141,8 @@ function currentRoutingSnapshot(input: {
 /** A "sandbox" that wraps nothing — for tests whose subject is not containment. */
 const UNWRAPPED_SANDBOX: UnattendedSandboxPlan = {
   ok: true,
+  kind: "bubblewrap",
+  label: "bubblewrap",
   launcher: "none",
   args: [],
   env: Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => e[1] !== undefined)),
@@ -699,6 +701,8 @@ describe("AC13: trust never runs uncontained; ask is read-only", () => {
   test("the default health gate runs `keryx health run` and `health gate` INSIDE the sandbox, with its env", async () => {
     const plan: UnattendedSandboxPlan = {
       ok: true,
+      kind: "bubblewrap",
+      label: "bubblewrap",
       launcher: "bwrap",
       args: ["--marker"],
       env: { PATH: "/usr/bin", HOME: "/scratch" },
@@ -767,7 +771,7 @@ describe.skipIf(!liveSandbox.ok)("AC10/AC13 (live bwrap): a dispatched agent's c
       else process.env["GITHUB_TOKEN"] = savedToken;
     }
     const record = await lastRecord();
-    expect(record.detail).toContain("hardened bwrap sandbox, network off");
+    expect(record.detail).toContain("hardened bubblewrap sandbox, network off");
     expect(record.outcome).toBe("ok");
     expect(git(root, ["show", `trigger/${flowId}-T1:lock-proof.txt`])).toBe("acquired no-token");
     expect(git(root, ["ls-tree", "-r", "--name-only", `trigger/${flowId}-T1`])).not.toContain(".locks");
