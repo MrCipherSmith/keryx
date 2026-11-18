@@ -240,3 +240,22 @@ test("claude Stop payload without a message reads the transcript's last answer; 
   const fromCodex = await h.waitFor((f) => f.method === M.delegateResult && (f.params as { agentId: string }).agentId === "codex-cli");
   expect(fromCodex.params).toMatchObject({ runId: codex.runId, turn: 1, text: "Two todos." });
 }, TIMEOUT_MS);
+
+test("an unnamed session takes its title from the approved /delegate task; a rejected run names nothing", async () => {
+  const h = desktop(freshConfigDir());
+  await h.initialize();
+  const { sessionId } = await h.newSession();
+  const titles = (): string[] =>
+    h.frames
+      .filter((f) => (f.params as { update?: { sessionUpdate?: string } } | undefined)?.update?.sessionUpdate === "session_info_update")
+      .map((f) => (f.params as { update: { title: string } }).update.title);
+  const before = titles().length;
+  await delegate(h, sessionId, "claude audit the login flow", "reject_once");
+  expect(titles().length).toBe(before);
+  await delegate(h, sessionId, "claude fix the flaky login test", "allow_once");
+  await h.waitFor(() => titles().length > before);
+  expect(titles().at(-1)).toBe("Claude: fix the flaky login test");
+  // Already named: a second run keeps the first title.
+  await delegate(h, sessionId, "codex something else", "allow_once");
+  expect(titles().filter((t) => t.startsWith("Codex"))).toEqual([]);
+}, TIMEOUT_MS);

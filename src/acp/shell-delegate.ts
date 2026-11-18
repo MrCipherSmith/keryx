@@ -137,6 +137,8 @@ export interface SessionExternalRunsInput {
   readonly sessionDir?: (() => string | undefined) | undefined;
   /** A terminal run finished a turn: keryx has already sent the idle status and the result log entry. */
   readonly onTurnResult?: ((result: DelegateTurnResult) => void) | undefined;
+  /** An operator's `/delegate` was approved and is starting (an untitled session takes its name from it). */
+  readonly onRunStarted?: ((run: { agentId: string; label: string; task: string }) => void) | undefined;
   /** The session's permission mode, read at call time; absent counts as `ask`. */
   readonly permissionMode?: (() => PermissionMode) | undefined;
   /** Tells the client to open a model-started run in its terminal (`_keryx/delegate_terminal`). */
@@ -314,6 +316,7 @@ export function createSessionExternalRuns(input: SessionExternalRunsInput): Sess
       };
     }
     if (stopped !== undefined) return { text: `◇ /delegate stopped: ${stopped}\n`, refused: true };
+    input.onRunStarted?.({ agentId: entry.id, label: entry.label.trim() || entry.id, task: parsed.task });
 
     if (interactiveArgv !== undefined) {
       const firstWords = parsed.task.split(/\s+/).slice(0, 5).join(" ");

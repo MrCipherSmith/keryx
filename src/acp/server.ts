@@ -26,7 +26,7 @@ import {
 import { buildShellHookRuntime, type ShellHookContext } from "../commands/agent-hooks";
 import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
 import type { NormalizedMessage, ProviderPort } from "../harness/provider/types";
-import { isInjectedUserMessage, listedTitle, listSessions, persistHistory, resolveProjectRoot } from "../session";
+import { isInjectedUserMessage, listedTitle, listSessions, persistHistory, renameSession, resolveProjectRoot, titleFromPrompt } from "../session";
 import { describeLeaseHolder, describeLeaseLoss, SessionLeasedError } from "../session/lease";
 import {
   readSessionFlags,
@@ -37,6 +37,9 @@ import {
   type TrashOptions,
 } from "../session/organize";
 import { sessionDir } from "../session/paths";
+
+/** Titles a session carries before anything has named it. */
+const UNNAMED_SESSION_TITLES = new Set(["New session", "Untitled session", "Untitled", ""]);
 import { selfAnsweredLine } from "../lib/terminal-safe";
 import { createAcpAgentIo, toolKindFor, tryParseJson, type AcpPermissionAsker } from "./agent-io";
 import type { AcpFsReader } from "./capability-tools";
@@ -1967,6 +1970,25 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     appendDelegateNotes(sessionId, [note]);
   }
 
+  /**
+   * A session nobody has named yet (no operator message: it was opened only to run `/delegate`)
+   * takes its title from the delegated task, "Claude Code: fix the login test", so the sidebar
+   * does not show "Untitled session". A titled session keeps its title.
+   */
+  function nameSessionFromDelegate(sessionId: string, run: { label: string; task: string }): void {
+    const state = registry.get(sessionId);
+    if (state === undefined || !UNNAMED_SESSION_TITLES.has(state.handle.summary.title)) return;
+    if (!registry.canPersist(sessionId)) return;
+    try {
+      registry.updateHandle(sessionId, renameSession(state.handle, titleFromPrompt(`${run.label}: ${run.task}`)));
+    } catch (cause) {
+      options.logError(`acp: session title not saved: ${cause instanceof Error ? cause.message : String(cause)}`);
+      return;
+    }
+    const named = registry.get(sessionId)?.handle.summary;
+    if (named !== undefined && !stopping) sendUpdate(sessionId, { sessionUpdate: "session_info_update", title: named.title, updatedAt: named.updatedAt });
+  }
+
   function appendDelegateNotes(sessionId: string, notes: readonly string[]): void {
     const state = registry.get(sessionId);
     if (state === undefined || notes.length === 0) return;
@@ -1999,6 +2021,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       terminalCapable: clientRunsTerminal(state.clientCapabilities),
       sessionDir: () => registry.get(sessionId)?.handle.dir,
       onTurnResult: (result) => handOffDelegateResult(sessionId, result),
+      onRunStarted: (run) => nameSessionFromDelegate(sessionId, run),
       permissionMode: () => modeOf(sessionId),
       openTerminal: (launch) => {
         if (!stopping) writeMessage(notificationMessage(KERYX_ACP_EXTENSION_METHODS.delegateTerminal, { sessionId, ...launch }));

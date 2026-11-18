@@ -437,7 +437,10 @@ Where the implementation differs from the text above
   consequences. (1) Title: injected messages never name a session; the title is
   taken from the first real user message, and a stored title that starts with
   "[delegate " (or equals an injected note's text) is recomputed and persisted on
-  `session/load` and shown repaired in `session/list`. (2) Replay: `session/load`
+  `session/load` and shown repaired in `session/list`. A session still unnamed
+  ("New session"/"Untitled session") when an operator's `/delegate` is approved
+  takes the title "<agent label>: <task>" and keeps it (owner 2026-11-18).
+  (2) Replay: `session/load`
   sends such a note as `user_message_chunk` whose text is the result alone (no
   envelope tags) with `_meta.keryx.delegateResult { runId, agentId, turn, text }`;
   the client renders it as the "returned" card, not a user bubble. (3) Restored
