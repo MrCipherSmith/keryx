@@ -19,6 +19,8 @@ export interface Prefs {
   chatWidth: ChatWidth;
   sendKey: "enter" | "mod-enter";
   sessionSidebar: boolean;
+  /** The session sidebar's chosen width in pixels; shown at most a fifth of the window. */
+  sessionSidebarWidth: number;
   /** Session sidebar groups the user folded ("Pinned", "Today", a month…). */
   collapsedGroups: string[];
   /** The right side panel's open tab, or null when it is closed (D-13; Activity and Info share it). */
@@ -33,6 +35,8 @@ export type SidePanelTab = "terminal" | "browser" | "activity" | "info";
 const SIDE_TABS: readonly string[] = ["terminal", "browser", "activity", "info"];
 export const SIDE_PANEL_MIN = 320;
 export const SIDE_PANEL_MAX = 1200;
+export const SESSION_SIDEBAR_MIN = 200;
+export const SESSION_SIDEBAR_MAX = 560;
 
 const KEY = "keryx.prefs.v1";
 const DEFAULTS: Prefs = {
@@ -43,6 +47,7 @@ const DEFAULTS: Prefs = {
   chatWidth: "wide",
   sendKey: "enter",
   sessionSidebar: true,
+  sessionSidebarWidth: 248,
   collapsedGroups: [],
   sidePanel: null,
   sidePanelWidth: 520,
@@ -97,6 +102,10 @@ export function parsePrefs(raw: string | null): Prefs {
         typeof merged.sidePanelWidth === "number" && Number.isFinite(merged.sidePanelWidth)
           ? Math.min(SIDE_PANEL_MAX, Math.max(SIDE_PANEL_MIN, merged.sidePanelWidth))
           : DEFAULTS.sidePanelWidth,
+      sessionSidebarWidth:
+        typeof merged.sessionSidebarWidth === "number" && Number.isFinite(merged.sessionSidebarWidth)
+          ? Math.min(SESSION_SIDEBAR_MAX, Math.max(SESSION_SIDEBAR_MIN, merged.sessionSidebarWidth))
+          : DEFAULTS.sessionSidebarWidth,
       subagentTree:
         merged.subagentTree && typeof merged.subagentTree === "object" && !Array.isArray(merged.subagentTree)
           ? Object.fromEntries(Object.entries(merged.subagentTree).filter(([, v]) => typeof v === "boolean"))

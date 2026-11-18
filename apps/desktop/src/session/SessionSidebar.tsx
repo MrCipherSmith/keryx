@@ -26,6 +26,8 @@ interface Props {
   /** Show a session (if not shown) and open the Activity panel on one of its subagents. */
   onShowSubagent: (sessionId: string, subagentId: string) => void;
   onCollapse: () => void;
+  /** Starts dragging the docked sidebar's right edge; absent where it floats. */
+  onResizeStart?: (e: React.PointerEvent) => void;
   onSetFlags: (
     id: string,
     change: { archived?: boolean; pinned?: boolean },
@@ -95,6 +97,7 @@ export const SessionSidebar = memo(function SessionSidebar({
   onLoad,
   onShowSubagent,
   onCollapse,
+  onResizeStart,
   onSetFlags,
   onTrash,
 }: Props) {
@@ -192,6 +195,9 @@ export const SessionSidebar = memo(function SessionSidebar({
 
   return (
     <aside className="session-sidebar" aria-label="Sessions">
+      {onResizeStart ? (
+        <div className="sidebar-resize" onPointerDown={onResizeStart} role="separator" aria-orientation="vertical" aria-label="Resize sessions sidebar" />
+      ) : null}
       <div className="sidebar-head">
         <h2>Sessions</h2>
         <div className="grow" />

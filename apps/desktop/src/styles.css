@@ -127,7 +127,13 @@ button { font: inherit; }
 
 /* ---------------- session ---------------- */
 .session-view { height: 100%; display: grid; grid-template-columns: minmax(0, 1fr); min-height: 0; position: relative; }
-.session-view.with-sidebar { grid-template-columns: 248px minmax(0, 1fr); }
+.session-view.with-sidebar { grid-template-columns: clamp(200px, var(--sidebar-w, 248px), 20vw) minmax(0, 1fr); }
+/* The docked sidebar's right edge drags its width (at most a fifth of the window). */
+.session-sidebar { position: relative; }
+.sidebar-resize { position: absolute; right: -3px; top: 0; bottom: 0; width: 6px; cursor: col-resize; z-index: 5; }
+.sidebar-resize:hover, .sidebar-resize:active { background: var(--accent-soft); }
+/* Not docked: the window's left edge reveals the sidebar over the conversation while the pointer is on it. */
+.sidebar-hover-zone { position: absolute; left: 0; top: 0; bottom: 0; width: 10px; z-index: 19; }
 .session-main { position: relative; }
 .titlebar-toggle { color: var(--fg-subtle); }
 .titlebar-toggle.is-on { color: var(--accent-text); background: var(--bg-selected); }
@@ -191,7 +197,9 @@ button { font: inherit; }
 .session-item.is-released .session-item-title { color: var(--fg-muted); }
 .sidebar-empty { padding: var(--sp-3) var(--sp-2); color: var(--fg-muted); font-size: var(--fs-sm); line-height: 1.45; }
 .sidebar-float { position: absolute; inset: 0; z-index: 20; background: var(--bg-overlay); animation: fade-in var(--dur) ease-out; }
-.sidebar-float .session-sidebar { width: 280px; height: 100%; box-shadow: var(--shadow-pop); animation: slide-left var(--dur) var(--ease-out); }
+.sidebar-float.is-hover { background: transparent; pointer-events: none; }
+.sidebar-float-panel { height: 100%; width: max-content; pointer-events: auto; }
+.sidebar-float .session-sidebar { width: clamp(240px, var(--sidebar-w, 248px), 360px); height: 100%; box-shadow: var(--shadow-pop); animation: slide-left var(--dur) var(--ease-out); }
 @keyframes slide-left { from { transform: translateX(-16px); opacity: 0; } }
 
 .session-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; position: relative; }

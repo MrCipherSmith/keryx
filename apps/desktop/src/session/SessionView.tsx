@@ -2,7 +2,7 @@ import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from "r
 import { createPortal } from "react-dom";
 import type { PlanEntry } from "../acp/types";
 import { formatTokens } from "../lib/format";
-import { setPrefs, usePrefs, MOD } from "../lib/prefs";
+import { setPrefs, usePrefs, MOD, SESSION_SIDEBAR_MIN } from "../lib/prefs";
 import { Icon } from "../components/Icon";
 import { Dialog, Kbd, Spinner } from "../components/ui";
 import { Composer, type ComposerHandle } from "./Composer";
@@ -40,7 +40,12 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
   const { state } = s;
   const prefs = usePrefs();
   const sidebarOpen = prefs.sessionSidebar && !narrow;
-  const [narrowSidebar, setNarrowSidebar] = useState(false);
+  // The sidebar floats over the conversation when it is not docked: opened by the Sessions button
+  // ("pinned", stays until dismissed) or by the pointer reaching the window's left edge ("hover",
+  // closes when the pointer leaves it), as the Claude app does.
+  const [floating, setFloating] = useState<"pinned" | "hover" | null>(null);
+  const narrowSidebar = floating !== null;
+  const setNarrowSidebar = useCallback((open: boolean) => setFloating(open ? "pinned" : null), []);
   // Activity lives in the window's side panel (a tab beside Terminal and Browser); what it shows is kept here.
   const [activity, setActivity] = useState<{ tab: ActivityTab; subagentId: string | null }>({ tab: "subagents", subagentId: null });
   const activityOpen = prefs.sidePanel === "activity";
@@ -177,6 +182,25 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
     </div>
   );
 
+  /** Drag the docked sidebar's edge: its width follows the pointer, between 200 px and a fifth of the window. */
+  const startSidebarResize = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
+    const target = e.currentTarget as HTMLElement;
+    const startX = e.clientX;
+    const startW = (target.parentElement?.offsetWidth ?? prefs.sessionSidebarWidth);
+    target.setPointerCapture(e.pointerId);
+    const move = (ev: PointerEvent) => {
+      const max = Math.max(SESSION_SIDEBAR_MIN, Math.floor(window.innerWidth / 5));
+      setPrefs({ sessionSidebarWidth: Math.round(Math.min(max, Math.max(SESSION_SIDEBAR_MIN, startW + ev.clientX - startX))) });
+    };
+    const up = () => {
+      target.removeEventListener("pointermove", move);
+      target.removeEventListener("pointerup", up);
+    };
+    target.addEventListener("pointermove", move);
+    target.addEventListener("pointerup", up);
+  }, [prefs.sessionSidebarWidth]);
+
   const sidebar = (
     <SessionSidebar
       sessions={state.sessions}
@@ -198,7 +222,8 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
           void s.loadSession(sessionId);
         }
       }}
-      onCollapse={() => (narrow ? setNarrowSidebar(false) : setPrefs({ sessionSidebar: false }))}
+      onCollapse={() => (sidebarOpen ? setPrefs({ sessionSidebar: false }) : setNarrowSidebar(false))}
+      {...(sidebarOpen ? { onResizeStart: startSidebarResize } : {})}
       onSetFlags={(id, change) => void s.setFlags(id, change)}
       onTrash={s.trashSession}
     />
@@ -206,11 +231,20 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
 
   return (
     <div
-      className={`session-view${sidebarOpen ? " with-sidebar" : ""}${narrow ? " is-narrow" : ""}`}>
+      className={`session-view${sidebarOpen ? " with-sidebar" : ""}${narrow ? " is-narrow" : ""}`}
+      style={{ "--sidebar-w": `${prefs.sessionSidebarWidth}px` } as React.CSSProperties}>
       {sidebarOpen ? sidebar : null}
-      {narrow && narrowSidebar ? (
-        <div className="sidebar-float" onMouseDown={(e) => e.target === e.currentTarget && setNarrowSidebar(false)}>
-          {sidebar}
+      {!sidebarOpen && floating === null ? (
+        <div className="sidebar-hover-zone" aria-hidden="true" onMouseEnter={() => setFloating("hover")} />
+      ) : null}
+      {!sidebarOpen && narrowSidebar ? (
+        <div
+          className={`sidebar-float${floating === "hover" ? " is-hover" : ""}`}
+          onMouseDown={(e) => e.target === e.currentTarget && setNarrowSidebar(false)}
+        >
+          <div className="sidebar-float-panel" onMouseLeave={() => floating === "hover" && setFloating(null)}>
+            {sidebar}
+          </div>
         </div>
       ) : null}
       <section className="session-main" aria-label="Conversation">
@@ -218,7 +252,7 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
           {!sidebarOpen ? (
             <button
               className="btn btn-sm btn-ghost"
-              onClick={() => (narrow ? setNarrowSidebar(true) : setPrefs({ sessionSidebar: true }))}
+              onClick={() => (narrow ? setNarrowSidebar(true) : (setFloating(null), setPrefs({ sessionSidebar: true })))}
               title="Show sessions"
             >
               <Icon name="list" size={14} /> Sessions
