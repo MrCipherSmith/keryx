@@ -74,6 +74,33 @@ fn expand_home(p: &str) -> PathBuf {
     PathBuf::from(p)
 }
 
+/// The keryx bundled with the app, when the file is there.
+pub fn bundled(exe_dir: Option<&Path>) -> Option<PathBuf> {
+    exe_dir.map(|d| d.join(SIDECAR_NAME)).filter(|p| is_executable_file(p))
+}
+
+/// The keryx to run for `source`. `prefer_bundled` (Automatic only) skips `PATH`: the app found
+/// the keryx there too old to serve it and starts again on the bundled one.
+pub fn locate_for_app(
+    source: KeryxSource,
+    custom_path: Option<&str>,
+    exe_dir: Option<&Path>,
+    path_var: Option<&OsStr>,
+    prefer_bundled: bool,
+) -> Result<Located, String> {
+    if prefer_bundled && source == KeryxSource::Auto {
+        if let Some(path) = bundled(exe_dir) {
+            return Ok(Located { path, source: KeryxSource::Bundled, note: None });
+        }
+    }
+    locate(source, custom_path, exe_dir, path_var)
+}
+
+/// Automatic picked `PATH` and a bundled keryx exists: the app may fall back to it.
+pub fn can_fall_back(source: KeryxSource, located: &Located, exe_dir: Option<&Path>) -> bool {
+    source == KeryxSource::Auto && located.source == KeryxSource::Path && bundled(exe_dir).is_some()
+}
+
 pub fn locate(
     source: KeryxSource,
     custom_path: Option<&str>,
@@ -169,6 +196,22 @@ mod tests {
         assert_eq!(got.source, KeryxSource::Bundled);
         assert!(got.note.is_some());
         assert!(locate(KeryxSource::Auto, None, Some(bin.path()), Some(&path_var)).is_err());
+    }
+
+    #[test]
+    fn prefer_bundled_skips_path_only_for_auto() {
+        let bin = tempfile::tempdir().unwrap();
+        make_exec(bin.path(), "keryx");
+        let exe = tempfile::tempdir().unwrap();
+        let sidecar = make_exec(exe.path(), "keryx");
+        let path_var = std::env::join_paths([bin.path()]).unwrap();
+        let auto = locate(KeryxSource::Auto, None, Some(exe.path()), Some(&path_var)).unwrap();
+        assert!(can_fall_back(KeryxSource::Auto, &auto, Some(exe.path())));
+        let got = locate_for_app(KeryxSource::Auto, None, Some(exe.path()), Some(&path_var), true).unwrap();
+        assert_eq!((got.path, got.source), (sidecar, KeryxSource::Bundled));
+        let path_only = locate_for_app(KeryxSource::Path, None, Some(exe.path()), Some(&path_var), true).unwrap();
+        assert_eq!(path_only.source, KeryxSource::Path);
+        assert!(!can_fall_back(KeryxSource::Path, &path_only, Some(exe.path())));
     }
 
     #[test]

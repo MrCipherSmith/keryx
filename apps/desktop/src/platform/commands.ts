@@ -17,6 +17,8 @@ export interface StartInfo {
   note: string | null;
   logPath: string;
   minKeryxVersion: string;
+  /** Automatic ran the keryx on PATH and a bundled one exists: the app may start again on it. */
+  canFallBack: boolean;
 }
 
 export interface ExitInfo {
@@ -30,7 +32,8 @@ export interface VersionCheck {
   required: string;
 }
 
-export const acpStart = (cwd: string, noProfile: boolean) => invoke<StartInfo>("acp_start", { cwd, noProfile });
+export const acpStart = (cwd: string, noProfile: boolean, preferBundled = false) =>
+  invoke<StartInfo>("acp_start", { cwd, noProfile, preferBundled });
 export const acpStop = () => invoke<void>("acp_stop");
 export const settingsGet = () => invoke<Settings>("settings_get");
 export const settingsSet = (settings: Settings) => invoke<Settings>("settings_set", { settings });

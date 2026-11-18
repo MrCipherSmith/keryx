@@ -517,6 +517,7 @@ function acpStart(ws: ServerWebSocket<Conn>, cwd: string, noProfile: boolean) {
     note: "Browser dev mode: keryx runs under dev/bridge.ts, not the Tauri core.",
     logPath: "(bridge stderr)",
     minKeryxVersion: MIN_KERYX_VERSION,
+    canFallBack: false,
   };
 }
 

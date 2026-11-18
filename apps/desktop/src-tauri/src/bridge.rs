@@ -265,6 +265,8 @@ pub struct StartInfo {
     note: Option<String>,
     log_path: String,
     min_keryx_version: &'static str,
+    /// Automatic ran the keryx on PATH and a bundled one exists: the app may start again on it.
+    can_fall_back: bool,
 }
 
 #[derive(Serialize, Clone)]
@@ -330,6 +332,7 @@ pub async fn acp_start(
     window: Window,
     cwd: String,
     no_profile: Option<bool>,
+    prefer_bundled: Option<bool>,
 ) -> Result<StartInfo, String> {
     let label = window.label().to_string();
     // Numbered before the first await: see `begin_start`.
@@ -338,14 +341,14 @@ pub async fn acp_start(
     // the spawn all block: keep them off the async runtime's workers.
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
-        state.start_session(&label, start, || launch(&app, &label, &cwd, no_profile.unwrap_or(false)))
+        state.start_session(&label, start, || launch(&app, &label, &cwd, no_profile.unwrap_or(false), prefer_bundled.unwrap_or(false)))
     })
     .await
     .map_err(|e| format!("keryx start failed: {e}"))?
 }
 
 /// Locate and spawn keryx for one window; the caller installs the process.
-fn launch(app: &AppHandle, label: &str, cwd: &str, no_profile: bool) -> Result<(Arc<AcpProcess>, StartInfo), String> {
+fn launch(app: &AppHandle, label: &str, cwd: &str, no_profile: bool, prefer_bundled: bool) -> Result<(Arc<AcpProcess>, StartInfo), String> {
     let root = Path::new(cwd)
         .canonicalize()
         .map_err(|e| format!("The project folder is not available ({cwd}): {e}"))?;
@@ -358,12 +361,14 @@ fn launch(app: &AppHandle, label: &str, cwd: &str, no_profile: bool) -> Result<(
     let fs_root = fs::project_root(&root, env.get("PATH").map(String::as_str));
     let settings = settings::load_settings(app);
     let exe_dir = std::env::current_exe().ok().and_then(|p| p.parent().map(Path::to_path_buf));
-    let located = locator::locate(
+    let located = locator::locate_for_app(
         settings.keryx_source,
         settings.custom_path.as_deref(),
         exe_dir.as_deref(),
         env.get("PATH").map(std::ffi::OsString::from).as_deref(),
+        prefer_bundled,
     )?;
+    let can_fall_back = locator::can_fall_back(settings.keryx_source, &located, exe_dir.as_deref());
 
     let mut args = vec!["acp".to_string()];
     if !no_profile {
@@ -424,6 +429,7 @@ fn launch(app: &AppHandle, label: &str, cwd: &str, no_profile: bool) -> Result<(
         note: located.note,
         log_path: log_path.display().to_string(),
         min_keryx_version: version::MIN_KERYX_VERSION,
+        can_fall_back,
     };
     Ok((proc, info))
 }

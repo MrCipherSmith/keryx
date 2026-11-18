@@ -362,8 +362,11 @@ export function useAcpSession(cwd: string) {
     [openLoad, openNew, refreshSessions, dispatch],
   );
 
+  type ConnectOptions = { loadSessionId: string | null; fallbackToNew: boolean; preferBundled?: boolean };
+  /** `connect` itself, for the one restart on the bundled keryx it starts from inside. */
+  const connectRef = useRef<((opts: ConnectOptions) => Promise<void>) | null>(null);
   const connect = useCallback(
-    async (opts: { loadSessionId: string | null; fallbackToNew: boolean }) => {
+    async (opts: ConnectOptions) => {
       const l = live.current;
       const gen = ++l.gen;
       l.unlisten?.();
@@ -383,6 +386,22 @@ export function useAcpSession(cwd: string) {
 
       const client = new AcpClient(acpTransport);
       l.client = client;
+      let canFallBack = false;
+      /**
+       * Automatic ran a keryx on PATH that cannot serve the app (too old, or no shell profile): start
+       * once more on the bundled keryx instead of stopping on the incompatible-keryx dialog.
+       */
+      const fallBackToBundled = (found: string): boolean => {
+        if (!canFallBack || opts.preferBundled === true) return false;
+        void connectRef.current?.({ ...opts, preferBundled: true }).then(() => {
+          dispatch({
+            t: "banner",
+            level: "info",
+            text: `The keryx on your PATH (${found}) is too old for this app, so the keryx bundled with the app runs instead. \`npm i -g @mrciphersmith/keryx\` updates the PATH one once a newer release is out.`,
+          });
+        });
+        return true;
+      };
       client.onNotification = (method, params) => {
         if (method === "session/update") handleUpdate(params);
         else if (method === SESSION_RELEASED) handleReleased(params);
@@ -439,12 +458,14 @@ export function useAcpSession(cwd: string) {
             const usageError =
               info.code === 2 || /usage|unknown (value|option|profile)|unrecognized|invalid (value|profile)|--profile/i.test(info.stderrTail);
             // A keryx that rejects --profile shell is too old for the app.
+            if (!initialized && usageError && fallBackToBundled("unknown")) return;
             if (!initialized && usageError) setFatal({ kind: "noShell", found: "unknown", reason: "no-profile" });
             dispatch({ t: "phase", phase: "exited", exit: info });
           },
         });
-        const start = await acpStart(cwd, false);
+        const start = await acpStart(cwd, false, opts.preferBundled === true);
         if (l.gen !== gen) return;
+        canFallBack = start.canFallBack === true;
         if (start.note) dispatch({ t: "banner", level: "info", text: start.note });
 
         const init = await client.request<InitializeResult>("initialize", {
@@ -467,6 +488,7 @@ export function useAcpSession(cwd: string) {
         const profile = init._meta?.keryx?.profile === "shell" ? "shell" : "editor";
         dispatch({ t: "agent", profile, version: init.agentInfo?.version ?? null, canOrganize: canOrganizeSessions(init) });
         if (profile !== "shell" || !hasLiveSessions(init)) {
+          if (fallBackToBundled(found)) return;
           setFatal({ kind: "noShell", found, reason: profile !== "shell" ? "no-profile" : "no-live-sessions" });
           dispatch({ t: "phase", phase: "ready" });
           return;
@@ -474,6 +496,7 @@ export function useAcpSession(cwd: string) {
         const check = await versionCheck(found);
         if (l.gen !== gen) return;
         if (!check.ok) {
+          if (fallBackToBundled(check.found)) return;
           setFatal({ kind: "incompatible", found: check.found, required: check.required });
           return;
         }
@@ -487,6 +510,7 @@ export function useAcpSession(cwd: string) {
     },
     [cwd, dialogs, dispatch, handleUpdate, handleReleased, finishStart, refreshTasks],
   );
+  connectRef.current = connect;
 
   useEffect(() => {
     void connect({ loadSessionId: null, fallbackToNew: false });

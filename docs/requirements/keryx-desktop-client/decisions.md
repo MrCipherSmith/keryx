@@ -285,6 +285,11 @@ Chosen:
   stay selectable. A settings file written before D-15 (no
   `settingsVersion`) holding `keryxSource: "bundled"` is read as `auto`
   once, because the old app stored its default on every save.
+  A keryx on `PATH` that cannot serve the app (no shell profile, or below
+  the floor) does not stop Automatic: the app starts once more on the bundled
+  keryx and says so in an info banner (owner 2026-11-18, after npm 0.4.36
+  predated the shell profile). `keryx on PATH` chosen explicitly still shows
+  the incompatible-keryx dialog.
 - **`keryx app install|update|build|status`** in the CLI:
   - `install` / `update` read the `desktop-v*` releases of
     `MrCipherSmith/keryx` on GitHub, take the newest non-draft one
