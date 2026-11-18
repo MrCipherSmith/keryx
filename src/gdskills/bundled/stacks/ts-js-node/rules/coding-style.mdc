@@ -1,6 +1,6 @@
 ---
 extends: common
-paths: ["**/*.ts", "**/*.js", "**/*.mjs", "**/*.cjs"]
+paths: ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", "**/*.mjs", "**/*.cjs"]
 metadata:
   origin: authored
 ---
@@ -20,6 +20,10 @@ comes from the common rules this file `extends`.
 - Prefer `unknown` over `any` for a value whose shape is not yet known;
   narrow it with a type guard before use. An untyped external payload
   (parsed JSON, a fetch body) is `unknown`, not `any`.
+- No `any` (use `unknown` and a guard, or the named type). A `!` assertion
+  carries a comment that proves it; otherwise use `?.`/`??` and handle the
+  missing case. Imports use relative paths or the configured aliases, never
+  `from "src/..."`.
 - Match `moduleResolution` to what the project already declares
   (`nodenext` or `bundler`) -- do not mix `require()` and `import` in code
   the project already runs as ESM (`"type": "module"` in `package.json`).
@@ -71,3 +75,15 @@ comes from the common rules this file `extends`.
 - Explicit `.js` extensions on relative ESM imports when
   `moduleResolution: nodenext` requires them (Node's own ESM resolver does
   not add extensions); match whatever the surrounding files already do.
+
+---
+
+## Review severities (shared with reviewers)
+
+Reviewers rate these patterns by this table; `review-logic` cites the `!` row. Change a row here, never in a reviewer.
+
+| Signal | A finding when | Default | Not a finding |
+|---|---|---|---|
+| `!` on a value the types allow to be missing (Typing and module shape) | a named input reaches it | `blocker` when it throws during render; `major` elsewhere; `minor` with no input shown | a `!` with a comment that proves it |
+| `any` in new code (Typing and module shape) | always | `minor`; `major` with a named input and the wrong value it lets through | — |
+| `from "src/..."` import (Typing and module shape) | introduced by the change | `minor` | — |

@@ -20,7 +20,7 @@ import path from "node:path";
 const REPO_ROOT = process.cwd();
 const ROOTS = ["src/gdskills/bundled", ".metaproject"] as const;
 
-const rulePath = (root: string): string => path.join(REPO_ROOT, root, "rules", "core", "session-plan-bridge.mdc");
+const rulePath = (root: string): string => path.join(REPO_ROOT, root, "rules", "process", "session-plan-bridge.mdc");
 const skillPath = (root: string, skill: string): string =>
   root.startsWith("src")
     ? path.join(REPO_ROOT, root, "skills", skill, "SKILL.md")

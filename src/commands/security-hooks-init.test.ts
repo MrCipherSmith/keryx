@@ -7,6 +7,11 @@ import { SECURITY_CHECK_INPUT_CLAUDE, SECURITY_CHECK_OUTPUT_CLAUDE } from "../in
 import { withCwd } from "../lib/test-cwd";
 import { initCommand } from "./init";
 import { updateCommand } from "./update";
+import { applyInstall } from "../gdskills/manifest/apply";
+import { doctorInstall } from "../gdskills/manifest/doctor";
+import { defaultBundledSourceRoot, loadBundledManifest } from "../gdskills/manifest/manifest";
+import { planInstall } from "../gdskills/manifest/plan";
+import { uninstallInstall } from "../gdskills/manifest/uninstall";
 
 const SECURITY_ONLY = [
   "--no-gdgraph",
@@ -444,3 +449,122 @@ test("flow 361: init --preview writes neither Claude settings file", async () =>
     await rm(root, { recursive: true, force: true });
   }
 }, 120_000);
+
+test("init and update install the commit-msg hook and the conduct rule, even without the gdskills module", async () => {
+  await withProject(async (root) => {
+    const commitMsgPath = path.join(root, ".git", "hooks", "commit-msg");
+    const conductRule = path.join(root, ".metaproject", "rules", "process", "agent-conduct.mdc");
+
+    await initCommand(["--yes", ...SECURITY_ONLY]);
+    expect(await readFile(commitMsgPath, "utf8")).toContain("# keryx:commit-msg-attribution:begin");
+    // index.md and the CLAUDE.md/AGENTS.md block point at the rule unconditionally (ADR-0001 D2).
+    expect(existsSync(conductRule)).toBe(true);
+
+    await rm(commitMsgPath);
+    await rm(conductRule);
+    await updateCommand([]);
+    expect(await readFile(commitMsgPath, "utf8")).toContain("# keryx:commit-msg-attribution:begin");
+    expect(existsSync(conductRule)).toBe(true);
+  });
+});
+
+test("after init, the manifest form of skills install applies cleanly, and uninstall leaves init's files (ADR-0001 P2)", async () => {
+  await withProject(async (root) => {
+    await initCommand(["--yes", ...SECURITY_ONLY]);
+    const conduct = ".metaproject/rules/process/agent-conduct.mdc";
+    const conductBefore = await readFile(path.join(root, conduct), "utf8");
+    const sourceRoot = defaultBundledSourceRoot();
+    const plan = await planInstall({
+      manifest: loadBundledManifest(),
+      profileId: "minimal",
+      target: "keryx-shell",
+      repoRoot: sourceRoot,
+    });
+    expect(plan.ok).toBe(true);
+
+    const result = await applyInstall(plan, root, { sourceRoot });
+    expect(result.skipped).toEqual([]);
+    expect(result.ok).toBe(true);
+    // init's copy is already the bundled bytes: satisfied, not rewritten, not recorded.
+    expect(result.alreadyPresent).toContain(conduct);
+    expect(result.written).not.toContain(conduct);
+    const doctor = await doctorInstall(root, "keryx-shell");
+    expect(doctor.ok).toBe(true);
+
+    const uninstall = await uninstallInstall(root, "keryx-shell");
+    expect(uninstall.removed).not.toContain(conduct);
+    expect(await readFile(path.join(root, conduct), "utf8")).toBe(conductBefore);
+  });
+});
+
+// ADR-0001 D3 opt-out: `"hooks": { "commitMsg": false }` in metaproject.json.
+async function setCommitMsgHook(root: string, value: boolean | undefined): Promise<void> {
+  const manifestPath = path.join(root, ".metaproject", "metaproject.json");
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as Record<string, unknown>;
+  if (value === undefined) delete manifest.hooks;
+  else manifest.hooks = { commitMsg: value };
+  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+}
+
+async function readHooksSetting(root: string): Promise<unknown> {
+  return (JSON.parse(await readFile(path.join(root, ".metaproject", "metaproject.json"), "utf8")) as { hooks?: unknown }).hooks;
+}
+
+function commitMsgFiles(root: string): { hook: boolean; script: boolean } {
+  return {
+    hook: existsSync(path.join(root, ".git", "hooks", "commit-msg")),
+    script: existsSync(path.join(root, ".git", "hooks", "keryx-commit-msg")),
+  };
+}
+
+test("init installs the commit-msg check by default; hooks.commitMsg: false makes init remove it and keep it off", async () => {
+  await withProject(async (root) => {
+    await initCommand(["--yes", ...SECURITY_ONLY]);
+    expect(commitMsgFiles(root)).toEqual({ hook: true, script: true });
+
+    await setCommitMsgHook(root, false);
+    await initCommand(["--yes", ...SECURITY_ONLY]);
+    expect(commitMsgFiles(root)).toEqual({ hook: false, script: false });
+    // init rebuilds metaproject.json from scratch; the user's switch survives it.
+    expect(await readHooksSetting(root)).toEqual({ commitMsg: false });
+
+    await initCommand(["--yes", ...SECURITY_ONLY]);
+    expect(commitMsgFiles(root)).toEqual({ hook: false, script: false });
+  });
+});
+
+test("update removes a previously installed commit-msg check when hooks.commitMsg is false, and keeps the setting", async () => {
+  await withProject(async (root) => {
+    await initCommand(["--yes", ...SECURITY_ONLY]);
+    expect(commitMsgFiles(root)).toEqual({ hook: true, script: true });
+
+    await setCommitMsgHook(root, false);
+    await updateCommand(["--skip-runtime", "--no-tasks"]);
+    expect(commitMsgFiles(root)).toEqual({ hook: false, script: false });
+    expect(await readHooksSetting(root)).toEqual({ commitMsg: false });
+
+    // Back on (key removed, or true): update installs it again.
+    await setCommitMsgHook(root, true);
+    await updateCommand(["--skip-runtime", "--no-tasks"]);
+    expect(commitMsgFiles(root)).toEqual({ hook: true, script: true });
+    expect(await readHooksSetting(root)).toEqual({ commitMsg: true });
+  });
+});
+
+test("update leaves an unparsable metaproject.json and the commit-msg hook state as they are", async () => {
+  await withProject(async (root) => {
+    await initCommand(["--yes", ...SECURITY_ONLY]);
+    await setCommitMsgHook(root, false);
+    await updateCommand(["--skip-runtime", "--no-tasks"]);
+    expect(commitMsgFiles(root)).toEqual({ hook: false, script: false });
+
+    // The opt-out is still in the file, but the file no longer parses.
+    const manifestPath = path.join(root, ".metaproject", "metaproject.json");
+    const broken = `${await readFile(manifestPath, "utf8")}\n,broken`;
+    await writeFile(manifestPath, broken, "utf8");
+    await updateCommand(["--skip-runtime", "--no-tasks"]);
+    // Neither rebuilt (which would drop hooks.commitMsg) nor read as "on" (which would reinstall the hook).
+    expect(await readFile(manifestPath, "utf8")).toBe(broken);
+    expect(commitMsgFiles(root)).toEqual({ hook: false, script: false });
+  });
+});

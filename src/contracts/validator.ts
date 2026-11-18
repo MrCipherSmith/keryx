@@ -194,6 +194,17 @@ function validateNode(
     if (minItems !== undefined && value.length < minItems) {
       errors.push({ path: valuePath, message: `Expected array length >= ${minItems}` });
     }
+    if (isPlainObject(schema.contains)) {
+      const containsSchema = schema.contains as JsonSchema;
+      const matched = value.some((item, index) => {
+        const probe: typeof errors = [];
+        validateNode(item, containsSchema, docRoot, `${valuePath}[${index}]`, ctx, probe);
+        return probe.length === 0;
+      });
+      if (!matched) {
+        errors.push({ path: valuePath, message: "Expected at least one array item to match the `contains` subschema" });
+      }
+    }
     const maxItems = asNumber(schema.maxItems);
     if (maxItems !== undefined && value.length > maxItems) {
       errors.push({ path: valuePath, message: `Expected array length <= ${maxItems}` });

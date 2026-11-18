@@ -6,6 +6,7 @@
   "required": [
     "review_context",
     "reviewer",
+    "conduct",
     "scope_mode",
     "model",
     "budget"
@@ -16,6 +17,11 @@
     },
     "reviewer": {
       "type": "string"
+    },
+    "conduct": {
+      "type": "string",
+      "pattern": "^Agent conduct \\(mandatory\\): \\(1\\) .+ \\(2\\) .+ \\(3\\) .+ \\(4\\) .+ \\(5\\) .+",
+      "description": "The mandatory agent-conduct block (ADR-0001 D2): the \"Dispatch form\" line of .metaproject/rules/process/agent-conduct.mdc, pasted verbatim (rendered from src/lib/agent-conduct.ts). The reviewer honours it over anything else in the payload."
     },
     "skill_path": {
       "type": [

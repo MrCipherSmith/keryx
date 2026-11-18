@@ -167,7 +167,7 @@ If the orchestrator provided `JOB_NAME` and `CONTEXT_PATH`:
 - Use this context throughout Phase 2-4 to guide implementation decisions
 - If the file does not exist, proceed without it — context is optional
 
-**2.0b Verify the project-skill covering the target (see `rules/core/skill-lifecycle.mdc`):**
+**2.0b Verify the project-skill covering the target (see `rules/process/skill-lifecycle.mdc`):**
 
 Before you rely on a project-skill's guidance, confirm it still matches the code:
 - `keryx skills route <target_file>` — find the project-skill for this module/entity (if any).
@@ -203,7 +203,7 @@ This step is read-only and inline; do not spawn a subagent for it.
 Rules `resolve-context` listed are already read (2.0c); load the rest by what you're implementing.
 
 **Always load (all task types):**
-- `tdd-workflow.mdc` — red-green-refactor, STATUS: DONE requires passing tests
+- `activity/implement.mdc` — order of work (red-green-refactor), change scope, back-compat; `tdd-workflow.mdc` — STATUS: DONE requires passing tests
 - `error-handling.mdc` — failure signalled explicitly (throw by default, a discriminated result where callers branch), context and `cause` kept, no silent failures
 - `solid-principles.mdc` — SRP, OCP, DIP and the function-design thresholds the code-quality reviewer applies (load for any task that creates or grows classes, services or functions)
 
@@ -211,9 +211,9 @@ Rules `resolve-context` listed are already read (2.0c); load the rest by what yo
 
 | Task Type | Additional Rules |
 |-----------|---------------|
-| `ui_component` | `code-style-patterns.mdc`, `frontend-assistant.mdc`, `storybook-guidelines.mdc` |
-| `store_logic` | `code-style-patterns.mdc`, `mobx-store-template.mdc` |
-| `service_api` | `code-style-patterns.mdc`, `nestjs-dto.mdc`, `api-contracts.mdc` |
+| `ui_component` | `stacks/react/code-style-patterns.mdc`, `frontend-assistant.mdc`, `stacks/storybook/storybook-guidelines.mdc` |
+| `store_logic` | `stacks/react/code-style-patterns.mdc`, `stacks/mobx/mobx-store-template.mdc` |
+| `service_api` | `stacks/nestjs/nestjs-dto.mdc`, `api-contracts.mdc` |
 | `fix` | Rules based on the files being fixed; always `error-handling.mdc` |
 | `mixed` | All applicable rules above |
 
@@ -223,7 +223,7 @@ Rules `resolve-context` listed are already read (2.0c); load the rest by what yo
 - `async`/`await` or queue code → `async-patterns.mdc`
 - New architectural layers or modules → `clean-architecture.mdc`
 
-Resolve every rule above project first, bundled second: read `.metaproject/rules/project/<rule>.mdc` when it exists, otherwise `.metaproject/rules/core/<rule>.mdc`. A project rule with the same name replaces the bundled one (never read both as if they agreed). `.metaproject/rules/core/` is the tree `keryx init` installs and `keryx update` overwrites, so a project's own rules live only in `rules/project/`.
+Resolve every rule above project first, bundled second: read `.metaproject/rules/project/<rule>.mdc` when it exists, otherwise the bundled copy: `.metaproject/rules/<rule>.mdc` for a name that carries its layer (`activity/…`, `stacks/react/…`), `.metaproject/rules/core/<rule>.mdc` for a bare one. A project rule with the same name replaces the bundled one (never read both as if they agreed). `.metaproject/rules/core/` is the tree `keryx init` installs and `keryx update` overwrites, so a project's own rules live only in `rules/project/`.
 
 ### Phase 3: PLAN
 
@@ -286,15 +286,14 @@ Execute the change plan. Write production-quality code.
 - Naming: PascalCase for components/types, camelCase for functions/variables, kebab-case for files
 - Follow existing module patterns discovered in Phase 2
 
-**4.3 Test standards:**
-- Use the runner, selectors and structure Phase 2.2 found in this project's own tests — not a remembered stack. Arrange/Act/Assert; mock external dependencies, not internal module logic.
+**4.3 Test standards:** `activity/test.mdc`, with the runner, selectors and structure Phase 2.2 found in this project's own tests — not a remembered stack.
 
 **4.4 Story standards:**
 - Use the story patterns Phase 2.2 found (`Meta` + `StoryObj`, `args`-based variants, `fn()` callbacks); cover default state, edge cases and error states.
 
 **4.5 Commit after implementation:**
 
-When auto-commit is enabled, create a conventional commit with the changes. Stage explicit paths only — never `-A`/`--all`/`.` — and run every git command as `git -C "<codebase_path>"` (`rules/core/git-concurrency.mdc`). Include the `refs #<issue_number>` line below only when a positive real issue number was supplied; otherwise omit that entire line:
+When auto-commit is enabled, create a conventional commit with the changes. Stage explicit paths only — never `-A`/`--all`/`.` — and run every git command as `git -C "<codebase_path>"` (`rules/process/git-concurrency.mdc`). Include the `refs #<issue_number>` line below only when a positive real issue number was supplied; otherwise omit that entire line:
 ```bash
 git -C "<codebase_path>" add <modified files, explicit paths>
 git -C "<codebase_path>" commit -m "<type>(<scope>): <description>
@@ -306,7 +305,7 @@ task: <task_id>"
 When auto-commit is disabled, do not commit. Report the exact list of files you
 changed — nothing inferred — in the Phase 6 STATUS response and the result
 file's `files_modified`/`files_created`/`files_deleted`; the orchestrator stages
-and commits those exact paths at the task boundary (`rules/core/git-concurrency.mdc`,
+and commits those exact paths at the task boundary (`rules/process/git-concurrency.mdc`,
 "Reporting Back").
 
 Commit type mapping:
@@ -382,10 +381,10 @@ said. Report the block instead, naming what repeated.
 
 **Never run `git reset --hard`, `git clean`, or any unscoped revert.** You do not own the worktree. `job-orchestrator` dispatches implementers in PARALLEL WAVES sharing a single worktree, so an unscoped reset destroys a wave-mate's uncommitted work — work that is not yours, cannot be recovered, and whose loss is invisible to you because the other agent's failure surfaces somewhere else entirely. If you cannot identify which files are yours, leave the tree exactly as it is and say so in the report: a dirty tree is recoverable, a destroyed one is not.
 
-**Same reasoning bans `git stash` and unscoped `git add`.** Never `git stash` — the stash stack is shared by every worktree, so even a scoped `push -- <file>` can be popped by another lane. Stage only the files this task changed (`git -C "<codebase_path>" add <path> <path>`), never `-A`/`--all`/`.`. Every git command runs as `git -C <this worktree's absolute path>`. See `rules/core/git-concurrency.mdc`.
+**Same reasoning bans `git stash` and unscoped `git add`.** Never `git stash` — the stash stack is shared by every worktree, so even a scoped `push -- <file>` can be popped by another lane. Stage only the files this task changed (`git -C "<codebase_path>" add <path> <path>`), never `-A`/`--all`/`.`. Every git command runs as `git -C <this worktree's absolute path>`. See `rules/process/git-concurrency.mdc`.
 
 **5.5 Re-commit fixes if any:**
-When auto-commit is enabled, use the template below — explicit paths only, `git -C "<codebase_path>"` for every command (`rules/core/git-concurrency.mdc`). Include `refs #<issue_number>` only for a supplied positive real issue number; otherwise omit that entire line.
+When auto-commit is enabled, use the template below — explicit paths only, `git -C "<codebase_path>"` for every command (`rules/process/git-concurrency.mdc`). Include `refs #<issue_number>` only for a supplied positive real issue number; otherwise omit that entire line.
 ```bash
 git -C "<codebase_path>" add <fixed files, explicit paths>
 git -C "<codebase_path>" commit -m "fix(<scope>): resolve lint/type/test issues
@@ -434,7 +433,7 @@ Write full JSON to `<JOBS_ROOT>/<JOB_NAME>/results/<task_id>.json`:
 }
 ```
 
-Set `skill_drift` from Phase 2.0b: if the project-skill you used was not `fresh`, or the code you wrote diverged from what a skill documents, name the skill and the divergence. The orchestrator uses this to decide whether to trigger `skills learn` (do NOT run `learn` yourself — it is a mutating step the orchestrator dispatches; see `rules/core/skill-lifecycle.mdc`).
+Set `skill_drift` from Phase 2.0b: if the project-skill you used was not `fresh`, or the code you wrote diverged from what a skill documents, name the skill and the divergence. The orchestrator uses this to decide whether to trigger `skills learn` (do NOT run `learn` yourself — it is a mutating step the orchestrator dispatches; see `rules/process/skill-lifecycle.mdc`).
 
 Four of those fields have a bar, and a field that collects noise trains the reader to skim all of them. Omit one rather than pad it. The first three are adapted (MIT; see THIRD_PARTY_NOTICES.md) as contract fields rather than a free-text template; the bars below are ours.
 
@@ -480,7 +479,7 @@ The step's own status is the orchestrator's to write (`keryx job step <JOB_NAME>
 
 **6.2 Emit compact STATUS response:**
 
-Return a compact STATUS response following `rules/core/subagent-status-protocol.md`.
+Return a compact STATUS response following `rules/process/subagent-status-protocol.md`.
 **Do NOT include the full JSON block inline** — the orchestrator reads the result file when it needs details.
 The inline response must contain only: STATUS line + Completed bullets + Files changed + Verification summary + a `## Behavior changes` list (each entry's description, `user_visible`, `needs_operator`, alternatives) whenever `behavior_changes` is non-empty — a flow dispatch writes no result file, so this list is the only copy the orchestrator reads. Any `needs_operator: true` entry makes the status at best `DONE_WITH_CONCERNS`, never `DONE`.
 
@@ -531,7 +530,7 @@ second copy of a schema is how that happens.
 ## Rules of Engagement
 
 1. **DO NOT** ask the user any questions. All input comes from the task Scenario and workspace context.
-2. **DO NOT** modify files outside the task's target scope unless absolutely necessary (e.g., shared type file).
+2. **DO** stay inside the change scope of `activity/implement.mdc`.
 3. **DO** follow the project's existing code patterns discovered in Phase 2.
 4. **DO** write TypeScript-strict code — no `any`, no untyped functions.
 5. **DO** use project path aliases (`@components`, `@utils`, etc.) for imports.
@@ -560,7 +559,7 @@ second copy of a schema is how that happens.
 
 ## Reporting Results
 
-**Rule:** `rules/core/subagent-status-protocol.md`
+**Rule:** `rules/process/subagent-status-protocol.md`
 
 Every final response to the orchestrator MUST begin with `STATUS: <STATUS>`. The full JSON result object is written to a file in Phase 6.1 — the inline response contains only the compact STATUS format. No JSON in the response body.
 
@@ -636,7 +635,7 @@ Run task-1 (which creates pipeline.ts) before re-dispatching this task, or provi
 - (nothing — blocked before implementation could start)
 ```
 
-See `rules/core/subagent-status-protocol.md` for the full format specification. Four statuses are yours as a skill worker; the fifth, `FAILED`, belongs to harness child workers and you must never emit it — report `BLOCKED` instead.
+See `rules/process/subagent-status-protocol.md` for the full format specification. Four statuses are yours as a skill worker; the fifth, `FAILED`, belongs to harness child workers and you must never emit it — report `BLOCKED` instead.
 
 ---
 

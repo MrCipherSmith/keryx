@@ -102,7 +102,7 @@ const BUNDLED_TREE = ["src", "gdskills", "bundled"] as const;
 
 /**
  * The keryx package root — the directory `module.paths` entries (e.g.
- * `src/gdskills/bundled/rules/core/git-rules.mdc`) resolve against. This is
+ * `src/gdskills/bundled/rules/process/git-rules.mdc`) resolve against. This is
  * NEVER the target project (`process.cwd()` for `keryx skills install`);
  * bundled source content ships inside the keryx package itself (`package.json`
  * `files`: `src/gdskills/bundled`).

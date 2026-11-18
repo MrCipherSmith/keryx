@@ -8,6 +8,7 @@ import {
   resolveRuleReference,
   ruleReferences,
   shadowedRuleReferences,
+  unresolvedReferences,
   unresolvedRuleReferences,
 } from "./rule-references";
 
@@ -87,6 +88,100 @@ describe("a reference whose directory differs only in case from the one keryx in
     expect(ruleReferences("`core/x.mdc` and `Core/x.mdc`")).toEqual(["core/x.mdc"]);
     // A directory keryx does not install keeps its spelling.
     expect(ruleReferences("`House/Naming.mdc`")).toEqual(["House/Naming.mdc"]);
+  });
+
+  test("applies to every layer keryx installs, not only core (ADR-0001 P2)", () => {
+    expect(ruleReferences("`Process/agent-conduct.mdc`, `ACTIVITY/review.mdc`")).toEqual([
+      "activity/review.mdc",
+      "process/agent-conduct.mdc",
+    ]);
+    // The stack-pack root is not a layer keryx spells.
+    expect(ruleReferences("`Stacks/x.mdc`")).toEqual(["Stacks/x.mdc"]);
+  });
+});
+
+describe("a citation of a rule keryx moved out of core/ (ADR-0001 P3)", () => {
+  test("is read as the moved path, in any spelling, so a skill written before the move still finds the rule", () => {
+    expect(ruleReferences("`core/git-rules.mdc`, `rules/Core/model-selection.mdc`, `.metaproject/rules/core/skill-lifecycle.mdc`")).toEqual([
+      "process/git-rules.mdc",
+      "process/model-selection.mdc",
+      "process/skill-lifecycle.mdc",
+    ]);
+    // A rule that stayed in core keeps its path; the old and new spelling are one reference.
+    expect(ruleReferences("`core/error-handling.mdc`, `core/git-rules.mdc`, `process/git-rules.mdc`")).toEqual([
+      "core/error-handling.mdc",
+      "process/git-rules.mdc",
+    ]);
+  });
+
+  test("a moved .md rule cited at its old rules/core/ path is found at the new one and redirected (R2-1)", async () => {
+    const content = "Protocol: `.metaproject/rules/core/subagent-status-protocol.md`.";
+    expect(await unresolvedReferences(cwd, content)).toEqual([{ ref: "rules/core/subagent-status-protocol.md", reason: "missing" }]);
+    expect(await shadowedRuleReferences(cwd, content)).toEqual([]);
+    await writeRule("process/subagent-status-protocol.md");
+    expect(await unresolvedReferences(cwd, content)).toEqual([]);
+    // Not silent: the reviewer is told which file to open.
+    expect(await shadowedRuleReferences(cwd, content)).toEqual([
+      { ref: "core/subagent-status-protocol.md", resolved: ".metaproject/rules/process/subagent-status-protocol.md" },
+    ]);
+    // A .md rule that did not move is not a redirect.
+    expect(await shadowedRuleReferences(cwd, "Notes: `rules/core/notes.md`.")).toEqual([]);
+  });
+
+  test("a project keryx has not updated yet still resolves the core/ copy, with no redirect (R2-LS-4)", async () => {
+    await writeRule("core/git-rules.mdc");
+    await writeRule("core/execution-metrics.md");
+    const content = "Git: `core/git-rules.mdc`. Metrics: `rules/core/execution-metrics.md`.";
+    expect(await unresolvedRuleReferences(cwd, content)).toEqual([]);
+    expect(await unresolvedReferences(cwd, content)).toEqual([]);
+    expect(await shadowedRuleReferences(cwd, content)).toEqual([]);
+    // Neither copy anywhere: reported missing under the moved ref.
+    expect(await unresolvedRuleReferences(cwd, "Docs: `core/documentation-management.mdc`.")).toEqual(["process/documentation-management.mdc"]);
+  });
+
+  test("resolves to the installed process/ file and reports a redirect from the cited spelling (LS-1)", async () => {
+    await writeRule("process/git-rules.mdc");
+    const content = "Git: `.metaproject/rules/core/git-rules.mdc`. Errors: `core/error-handling.mdc`.";
+    expect(await unresolvedRuleReferences(cwd, content)).toEqual(["core/error-handling.mdc"]);
+    // The reviewer is told the file to read in place of the deleted core/ path.
+    expect(await shadowedRuleReferences(cwd, content)).toEqual([
+      { ref: "core/git-rules.mdc", resolved: ".metaproject/rules/process/git-rules.mdc" },
+    ]);
+    // A citation of the new path needs no redirect.
+    expect(await shadowedRuleReferences(cwd, "Git: `process/git-rules.mdc`.")).toEqual([]);
+    // A process/ project slot answers the old spelling too.
+    await writeRule("project/process/git-rules.mdc");
+    expect(await shadowedRuleReferences(cwd, content)).toEqual([
+      { ref: "core/git-rules.mdc", resolved: ".metaproject/rules/project/process/git-rules.mdc" },
+    ]);
+  });
+});
+
+describe("a citation of a rule keryx moved into a stack pack (ADR-0001 P4)", () => {
+  test("a stacks/<pack>/<name>.mdc citation is a rule reference, and an old core/ citation reads as it", () => {
+    expect(ruleReferences("`stacks/react/code-style-patterns.mdc`, `.metaproject/rules/stacks/mobx/mobx-store-template.mdc`")).toEqual([
+      "stacks/mobx/mobx-store-template.mdc",
+      "stacks/react/code-style-patterns.mdc",
+    ]);
+    expect(ruleReferences("`core/nestjs-dto.mdc`, `rules/core/storybook-guidelines.mdc`, `stacks/nestjs/nestjs-dto.mdc`")).toEqual([
+      "stacks/nestjs/nestjs-dto.mdc",
+      "stacks/storybook/storybook-guidelines.mdc",
+    ]);
+  });
+
+  test("resolves to the installed pack file with a redirect from the old spelling, and is unresolved where the pack is not installed", async () => {
+    const content = "DTOs: `.metaproject/rules/core/nestjs-dto.mdc`.";
+    expect(await unresolvedRuleReferences(cwd, content)).toEqual(["stacks/nestjs/nestjs-dto.mdc"]);
+    await writeRule("stacks/nestjs/nestjs-dto.mdc");
+    expect(await unresolvedRuleReferences(cwd, content)).toEqual([]);
+    expect(await shadowedRuleReferences(cwd, content)).toEqual([
+      { ref: "core/nestjs-dto.mdc", resolved: ".metaproject/rules/stacks/nestjs/nestjs-dto.mdc" },
+    ]);
+    // The project slot of a pack rule answers first.
+    await writeRule("project/stacks/nestjs/nestjs-dto.mdc");
+    expect(await shadowedRuleReferences(cwd, "DTOs: `stacks/nestjs/nestjs-dto.mdc`.")).toEqual([
+      { ref: "stacks/nestjs/nestjs-dto.mdc", resolved: ".metaproject/rules/project/stacks/nestjs/nestjs-dto.mdc" },
+    ]);
   });
 });
 

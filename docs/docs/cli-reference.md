@@ -2525,7 +2525,8 @@ nobody present, and records what happened.
    `blocked`, `open-attempt`, `attempt-cap`), exit `0`.
 3. Containment: `trust` refuses (`sandbox-unavailable`, exit `0`, reason
    recorded) unless the hardened sandbox below can be built — no launcher, a
-   launcher that cannot create namespaces, a non-Linux host,
+   launcher that cannot create namespaces (Linux) or apply a profile (macOS, e.g.
+   keryx itself already inside a sandbox), a host that is neither Linux nor macOS,
    `KERYX_DANGEROUSLY_DISABLE_SANDBOX=1` or `KERYX_SANDBOX_SHELL=off` all refuse.
    `ask` may run without one: every command and patch is an approval request,
    every approval request is denied, and its shell runner refuses every command
@@ -2557,7 +2558,7 @@ nobody present, and records what happened.
    denials or by `ask_user`). The worktree is removed; the branch stays for you
    to review and merge.
 
-**The unattended sandbox (Linux, bubblewrap).** Every `shell_exec` of a
+**The unattended sandbox (Linux, bubblewrap; macOS, Seatbelt — see below).** Every `shell_exec` of a
 dispatched run, and its health gate, run inside a profile built from allow
 lists: `/` read-only; your home directory and **all of `/run`** (and
 `/var/run` where it is not a symlink to it) hidden behind an empty tmpfs.
@@ -2577,6 +2578,28 @@ and `TMPDIR` pointed at the scratch home: no exported token, no
 `SSH_AUTH_SOCK`. The known-secret deny list (`~/.ssh`, `~/.config/gh`, …) is
 still applied inside anything bound back. macOS `sandbox-exec` is not
 implemented for this profile, so `trust` refuses on macOS.
+
+**The unattended sandbox on macOS (Seatbelt).** On macOS the same allow-list
+shape is a `sandbox-exec` profile (`src/harness/process/sandbox/unattended-seatbelt.ts`).
+Writes are denied everywhere except the worktree and the scratch `HOME`, and the
+git control paths inside them stay read-only, as on Linux. Your home directory,
+keryx's own config directory, the shared scratch parent (other runs), `/private/tmp`,
+`/private/var/tmp` and `/private/var/folders` (every user's temp and cache dirs)
+are hidden wholesale. Only the toolchain roots on `PATH`, the keryx package, the
+repository's read-only roots, the worktree and the scratch home are let back in,
+and the known-secret paths are denied again inside them. Network `off` denies every
+socket, AF_UNIX included. `full` allows TCP/UDP but no host UNIX socket except the
+system DNS resolver, so ssh-agent and Docker stay unreachable. The keychain
+(`securityd`), the pasteboard and LaunchServices are denied, and so are `open`,
+`osascript`, `launchctl`, `security`, `crontab`, `at` and `pbcopy`/`pbpaste`. No
+signal reaches a process outside the run's own tree. The environment is the same
+allowlist; `TMPDIR` is `$HOME/tmp` inside the scratch home. Differences from Linux:
+there is no private `/tmp`, so a command that writes to `/tmp` by name, or a bare
+`mktemp` (macOS `mktemp` ignores `TMPDIR`), is refused: use `mktemp "$TMPDIR/x.XXXXXX"`.
+There is no PID namespace, so `ps` cannot be run. `network: allowlist` refuses
+(there is no private network namespace for the in-sandbox forwarder). If
+`sandbox-exec` cannot apply a profile (for example keryx itself runs inside
+another sandbox), the plan refuses and `trust` refuses the run.
 
 **Unattended posture — fail closed.** The agent runs with `unattended: true`.
 Its permission mode is the entry's — never the project's stored default
@@ -2701,7 +2724,7 @@ regenerate-and-reinstall of the line.
 - **The unattended text floor is defence in depth.** It is over-broad by
   design and still incomplete by construction (a shell can spell a command
   many ways). The boundary is the hardened sandbox, which `trust` requires —
-  Linux with a working bubblewrap only in this version.
+  bubblewrap on Linux, Seatbelt (`sandbox-exec`) on macOS.
 - **Review the trigger branch before you install or build it.** The agent can
   commit anything a task could — including a `package.json` script or a build
   step that runs when you later install or build that branch on your machine.
@@ -3080,8 +3103,10 @@ reservation.
 - **Linger.** Without linger (`loginctl show-user $USER -p Linger`), a systemd
   `--user` timer does not run while you are logged out. keryx reads and shows
   the linger state and never runs `loginctl enable-linger` for you.
-- **The hardened sandbox is Linux-only.** On macOS, `trust` refuses, so a
-  schedule there is `ask` with granted tools only.
+- **The hardened sandbox on macOS is Seatbelt.** `trust` runs shell commands
+  there under the macOS unattended profile (see "The unattended sandbox on macOS"
+  above); `network: allowlist` stays Linux-only and refuses on macOS. A schedule's
+  report names the sandbox (`sandbox: hardened macOS Seatbelt sandbox, network off`).
 - **Pinned paths.** The installed timer bakes in the absolute interpreter and
   script that created it, and the absolute path of each granted program. After a
   version-manager switch, remove the schedule and add it again.

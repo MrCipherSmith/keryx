@@ -1,18 +1,18 @@
 ---
-description: "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no event-loop blocking. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
+description: "Async patterns standard shared by code writers and reviewers, with the severities reviewers use: independent awaits run in parallel, a timeout on every external call, bounded fan-out, no blocking of the thread that serves requests. Use when writing or reviewing async/await code, parallel operations, or queue consumers."
 alwaysApply: false
 ---
 
 # Async Patterns
 
-Canon applies: `Promise.all` / `allSettled` semantics (MDN), the Node.js "Don't Block the Event Loop" guide, `@typescript-eslint/no-floating-promises`. This rule holds only this project's decisions.
+Canon applies: the concurrency documentation of the project's language and runtime. The concrete values for a stack are in its language pack (Node.js: `stacks/ts-js-node/patterns.mdc`). This rule holds only this project's decisions.
 
 ## Rules
 
-1. **Independent awaits run in parallel.** If B does not depend on A, use `Promise.all`; use `Promise.allSettled` when some results are optional, and handle each rejection.
-2. **Every external call has a timeout**, set with `AbortSignal.timeout(ms)`. Defaults: internal service 3s, external API 10s, long-running work 60s with progress events; database queries at the connection-pool level.
-3. **Bound fan-out.** Mapping a large collection to promises uses a concurrency limit; default 10.
-4. **Do not block the event loop.** `JSON.parse` / `JSON.stringify` of a payload over 1MB, sync file reads in hot paths and CPU-heavy loops go to a stream, `fs.promises` or a worker thread.
+1. **Independent awaits run in parallel.** If B does not depend on A, start both and wait for both; when some results are optional, wait so that an optional result's failure cannot discard a required one, and handle each failure.
+2. **Every external call has a timeout**, set through the client's or the runtime's cancellation mechanism. Defaults: internal service 3s, external API 10s, long-running work 60s with progress events; database queries at the connection-pool level.
+3. **Bound fan-out.** Mapping a large collection to concurrent tasks uses a concurrency limit; default 10.
+4. **Do not block the thread that serves requests.** Parsing or serialising a payload over 1MB, synchronous file reads in hot paths and CPU-heavy loops go to a stream, an asynchronous API or a worker.
 5. **Rejections** are handled per `error-handling.mdc` Rule 4.
 
 ---
@@ -24,9 +24,10 @@ Canon applies: `Promise.all` / `allSettled` semantics (MDN), the Node.js "Don't 
 | Signal | A finding when | Default | Not a finding |
 |---|---|---|---|
 | Sequential independent awaits (Rule 1) | always | `minor`; `major` on a hot path or when the calls are many | an ordering the code depends on |
-| `Promise.all` where an optional result's failure discards a required one (Rule 1) | a named optional call can reject | `major` | all results required |
+| A combined wait where an optional result's failure discards a required one (Rule 1) | a named optional call can reject | `major` | all results required |
 | External call with no timeout (Rule 2) | the call can hang a request or worker | `major` | a timeout set at the client or pool |
-| Timeout built from `AbortController` + `setTimeout` (Rule 2) | always | `minor` | — |
 | Unbounded fan-out over a caller-sized collection (Rule 3) | the size is not fixed small | `major` on a hot path, else `minor` | a collection of known small size |
-| Event-loop blocking on a request path (Rule 4) | a named input size or path reaches it | `major` | startup or one-off scripts |
+| Blocking the request-serving thread on a request path (Rule 4) | a named input size or path reaches it | `major` | startup or one-off scripts |
 | Unhandled rejection (Rule 5) | per `error-handling.mdc` **Review severities** | as there | as there |
+
+A stack's own forms of these signals, and any signal only one stack has, are in its language pack (Node.js: `stacks/ts-js-node/patterns.mdc` Review severities).

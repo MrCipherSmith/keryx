@@ -15,9 +15,10 @@ TypeScript (strict), React, MobX, Ant Design for components, Tailwind CSS for la
 
 ## Where the standard is
 
-- Components, layers, state placement, accessibility and TypeScript: `code-style-patterns.mdc`.
-- Stores: `mobx-store-template.mdc`.
-- Stories: `storybook-guidelines.mdc`.
+- Components, layers, state placement and accessibility: `stacks/react/code-style-patterns.mdc`.
+- TypeScript (`any`, `!`, import paths): `stacks/ts-js-node/coding-style.mdc`.
+- Stores: `stacks/mobx/mobx-store-template.mdc`.
+- Stories: `stacks/storybook/storybook-guidelines.mdc`.
 
 Each holds the severities reviewers use, so code written to these rules is what the reviewer checks.
 

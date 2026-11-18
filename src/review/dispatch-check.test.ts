@@ -1,3 +1,4 @@
+import { AGENT_CONDUCT_DISPATCH_CONSTRAINT } from "../lib/agent-conduct";
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -23,6 +24,7 @@ function payload(model: Record<string, unknown>): Record<string, unknown> {
       token_policy: { context_mode: "light", omissions: [] },
     },
     reviewer: "review-logic",
+    conduct: AGENT_CONDUCT_DISPATCH_CONSTRAINT,
     scope_mode: "path",
     model,
     budget: { max_findings: 10 },

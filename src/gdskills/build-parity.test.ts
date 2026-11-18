@@ -153,7 +153,7 @@ const CENSUS_FLOOR = 0;
  * in flow 488) declared
  * `metadata.compatible_harnesses: "cursor,codex,zed,opencode"` in their
  * non-Claude builds. That field's entire purpose is to name harnesses
- * (`rules/core/skills-storage-workflow.mdc` defines it as the machine-readable
+ * (`rules/process/skills-storage-workflow.mdc` defines it as the machine-readable
  * CSV of supported harnesses), and its value cannot be shared with the Claude
  * build without that build claiming compatibility with four harnesses and not
  * with the one reading it. It is the only field in this tree whose correct
@@ -179,7 +179,7 @@ export const HARNESS_FAMILY_DECLARATION: ParityAllowance = {
   anchor: 'compatible_harnesses: "cursor,codex,zed,opencode"',
   builds: HARNESS_BUILD_NAMES,
   reason:
-    "`metadata.compatible_harnesses` is the machine-readable CSV of supported harnesses (rules/core/skills-storage-workflow.mdc). These builds serve the four non-Claude harnesses and say so; SKILL.md is the Claude build and cannot carry a list that excludes Claude. The value differs per build BECAUSE the field names harnesses — it is the only such field in the tree.",
+    "`metadata.compatible_harnesses` is the machine-readable CSV of supported harnesses (rules/process/skills-storage-workflow.mdc). These builds serve the four non-Claude harnesses and say so; SKILL.md is the Claude build and cannot carry a list that excludes Claude. The value differs per build BECAUSE the field names harnesses — it is the only such field in the tree.",
 };
 
 const BUILD_PARITY_ALLOWANCES: Record<string, readonly ParityAllowance[]> = {

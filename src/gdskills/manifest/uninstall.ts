@@ -9,7 +9,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../../lib/fs";
 import { removeContained } from "../../lib/contained-write";
-import { destinationRootsForTarget } from "./plan";
+import { destinationRootsForTarget, keryxPublishedIn } from "./plan";
 import {
   NotARegularFileError,
   readSkillsInstallState,
@@ -40,6 +40,12 @@ export interface UninstallDiffNote {
 export interface UninstallResult {
   ok: boolean;
   removed: string[];
+  /**
+   * Paths the uninstalled module recorded that another owner still holds —
+   * another module in this install-state, or `keryx init`/`update` for a
+   * rule-layer file: left on disk, and dropped from the uninstalled record.
+   */
+  keptShared?: UninstallRefusal[];
   refused: UninstallRefusal[];
   diffs: UninstallDiffNote[];
   /**
@@ -112,14 +118,39 @@ export async function uninstallInstall(
   // merges by moduleId, leaving every untouched record exactly as it was. A
   // touched record with an empty `writtenPaths` tells it to drop that record.
   const batch: InstalledModuleRecord[] = [];
+  const keptShared: UninstallRefusal[] = [];
+  const isKeryxPublishedDestination = await keryxPublishedIn(repoRoot);
+  const inScope = (record: InstalledModuleRecord): boolean =>
+    options.moduleId === undefined || record.moduleId === options.moduleId;
+  // Who else still owns a path once this call is done: every record outside
+  // its scope. A stale record of a module the manifest dropped can share a
+  // path with the module that now installs it.
+  const otherOwners = new Map<string, string[]>();
+  for (const record of state.installedModules) {
+    if (inScope(record)) continue;
+    for (const filePath of record.writtenPaths) {
+      otherOwners.set(filePath, [...(otherOwners.get(filePath) ?? []), record.moduleId]);
+    }
+  }
 
   for (const record of state.installedModules) {
-    if (options.moduleId !== undefined && record.moduleId !== options.moduleId) {
+    if (!inScope(record)) {
       continue;
     }
 
     const keptPaths: string[] = [];
     for (const filePath of record.writtenPaths) {
+      const owners = otherOwners.get(filePath);
+      if (owners !== undefined) {
+        keptShared.push({ path: filePath, reason: `also recorded by module ${owners.join(", ")} — left in place for it` });
+        continue;
+      }
+      // An install-state written before review F2 may record a rule-layer
+      // file; `keryx init`/`update` own it, so it stays.
+      if (isKeryxPublishedDestination(filePath)) {
+        keptShared.push({ path: filePath, reason: "published by keryx init/update — left in place for them" });
+        continue;
+      }
       const abs = path.join(repoRoot, filePath);
       if (!(await pathExists(abs))) {
         // Already gone — nothing to remove, nothing to keep recorded.
@@ -168,5 +199,5 @@ export async function uninstallInstall(
 
   await writeSkillsInstallState(repoRoot, target, batch, state.profile);
 
-  return { ok: refused.length === 0, removed, refused, diffs };
+  return { ok: refused.length === 0, removed, refused, diffs, ...(keptShared.length > 0 ? { keptShared } : {}) };
 }

@@ -1,10 +1,11 @@
 ---
+extends: common
 description: "Storybook standard shared by code writers and reviewers, with the severities reviewers use: typed stories, which states every component's stories cover (default and empty always, loading and error when the component has them, stress cases for lists and long text), fn() for actions, no side effects in render. Use when writing or reviewing *.stories.tsx."
 alwaysApply: false
-globs:
-  - ".storybook/**"
-  - "**/*.stories.tsx"
 stack_requires: "react"
+paths: ["**/*.stories.tsx", "**/*.stories.ts", ".storybook/**/*.ts", ".storybook/**/*.tsx"]
+metadata:
+  origin: authored
 ---
 
 # Storybook Guidelines

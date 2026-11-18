@@ -149,7 +149,7 @@ Then
 ## 6. Output Location & Format
 
 **Direct Mode:**
-- You MUST follow `rules/core/requirements-package-standard.mdc` (via `rules/core/documentation-management.mdc` for the `requirements` category).
+- You MUST follow `rules/process/requirements-package-standard.mdc` (via `rules/process/documentation-management.mdc` for the `requirements` category).
 - Before saving, ASK the user to confirm the feature name (`<name>`) or to suggest a custom path.
 - The default target path is: `<current_project_root>/docs/requirements/<name>/prd.md` — no date-stamped folder.
 - If the requirements package (`README.md`, `prd.md`, `specification.md`) does not exist yet, create it; otherwise update `prd.md` in place and bump its `Version` field rather than creating a parallel copy.

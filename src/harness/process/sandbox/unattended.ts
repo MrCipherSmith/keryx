@@ -28,19 +28,22 @@
 //   sockets     `--unshare-net` isolates abstract sockets only, never AF_UNIX
 //               path sockets — those are unreachable because /run is hidden.
 //
-// Linux (bubblewrap) only in this version. macOS `sandbox-exec` would need the
-// same allow-list shape expressed in SBPL, and nothing here can test it, so a
-// `trust` dispatch on macOS refuses rather than running on an unproven
-// profile. `planUnattendedSandbox` is the one place that decides; its refusal
-// reasons are what the run record carries.
+// macOS gets the same allow-list shape in Seatbelt (SBPL) — see
+// unattended-seatbelt.ts for what differs (no private /tmp, no `allowlist`
+// network). Any other platform, or a host where the launcher cannot apply a
+// profile, refuses: a `trust` dispatch never runs uncontained.
+// `planUnattendedSandbox` is the one place that decides; its refusal reasons are
+// what the run record carries.
 
 import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { gitProtectBwrapArgs } from "./bwrap";
 import { detectSandboxLauncher, type DetectOptions } from "./detect";
 import { resolveGitProtection, type GitProtectFs } from "./git-protect";
 import { defaultReadDenyList } from "./profile";
+import { buildUnattendedSeatbeltProfile, DARWIN_HIDDEN_SYSTEM_DIRS } from "./unattended-seatbelt";
 
 /** Environment variables an unattended command inherits, by name. Nothing else passes. */
 export const UNATTENDED_ENV_ALLOWLIST: readonly string[] = [
@@ -112,6 +115,8 @@ export interface UnattendedDetectOptions extends DetectOptions {
   readText?: (p: string) => string | undefined;
   /** Entry names of the directory `p` (`.git/worktrees`, `.git/modules`), empty when unreadable. Default: real `readdirSync`. */
   listDir?: (p: string) => string[];
+  /** macOS only: the user's own temp dir (`DARWIN_USER_TEMP_DIR`). Default: `os.tmpdir()`. */
+  userTempDir?: string;
 }
 
 export interface UnattendedSandboxInput {
@@ -148,8 +153,12 @@ export interface UnattendedSandboxInput {
 export type UnattendedSandboxPlan =
   | {
       readonly ok: true;
+      /** Which OS mechanism contains the run. */
+      readonly kind: "bubblewrap" | "seatbelt";
+      /** Human name for run records and reports ("bubblewrap", "macOS Seatbelt"). */
+      readonly label: string;
       readonly launcher: string;
-      /** bwrap arguments up to (not including) `--`. */
+      /** Launcher arguments before the command: bwrap's up to (not including) `--`; sandbox-exec's `-p <profile>`. */
       readonly args: readonly string[];
       readonly env: Record<string, string>;
       /** Wrap an argv so it runs inside the sandbox. */
@@ -250,10 +259,11 @@ export function planUnattendedSandbox(input: UnattendedSandboxInput): Unattended
   if (shellMode === "off" || shellMode === "0" || shellMode === "false") {
     return { ok: false, reason: `KERYX_SANDBOX_SHELL=${input.env["KERYX_SANDBOX_SHELL"]} disables the shell sandbox — an unattended run never runs without containment` };
   }
+  if (platform === "darwin") return planDarwin(input, platform);
   if (platform !== "linux") {
     return {
       ok: false,
-      reason: `the hardened unattended sandbox is implemented for Linux (bubblewrap) only; this is "${platform}"`,
+      reason: `the hardened unattended sandbox is implemented for Linux (bubblewrap) and macOS (Seatbelt) only; this is "${platform}"`,
     };
   }
   const launcher = detectSandboxLauncher({ platform, env: input.env, ...input.detect });
@@ -356,20 +366,7 @@ export function planUnattendedSandbox(input: UnattendedSandboxInput): Unattended
   if (allowlist !== undefined) args.push("--bind", allowlist.proxySocketPath, allowlist.proxySocketPath);
   args.push("--unshare-pid", "--unshare-ipc", "--die-with-parent", "--new-session", "--chdir", hostReal(input.worktree));
 
-  const env: Record<string, string> = {};
-  for (const name of UNATTENDED_ENV_ALLOWLIST) {
-    const value = input.env[name];
-    if (value !== undefined) env[name] = value;
-  }
-  const scratch = hostReal(input.scratchHome);
-  env["HOME"] = scratch;
-  env["XDG_CONFIG_HOME"] = path.join(scratch, ".config");
-  env["XDG_CACHE_HOME"] = path.join(scratch, ".cache");
-  env["XDG_DATA_HOME"] = path.join(scratch, ".local", "share");
-  env["BUN_INSTALL_CACHE_DIR"] = path.join(scratch, ".bun-cache");
-  env["TMPDIR"] = "/tmp";
-  // The same marker every `shell_exec` child carries (agent bus D-13).
-  env["KERYX_TOOL_CALL"] = "1";
+  const env = unattendedEnv(input.env, hostReal(input.scratchHome), "/tmp");
   if (allowlist !== undefined) {
     // The forwarder listens on the sandbox's OWN private loopback — every shell_exec
     // command gets a fresh netns, so a fixed port never collides across runs.
@@ -384,6 +381,8 @@ export function planUnattendedSandbox(input: UnattendedSandboxInput): Unattended
   const launcherPath = launcher.path;
   return {
     ok: true,
+    kind: "bubblewrap",
+    label: "bubblewrap",
     launcher: launcherPath,
     args,
     env,
@@ -436,5 +435,133 @@ export function planUnattendedSandbox(input: UnattendedSandboxInput): Unattended
       ].join("\n");
       return [launcherPath, ...args, "--", "/bin/sh", "-c", script, "sh", ...argv];
     },
+  };
+}
+
+/**
+ * The environment an unattended command gets: the allowlisted names from the
+ * operator's environment, HOME and the XDG dirs on the scratch home, TMPDIR.
+ */
+function unattendedEnv(operatorEnv: Record<string, string | undefined>, scratch: string, tmpDir: string): Record<string, string> {
+  const env: Record<string, string> = {};
+  for (const name of UNATTENDED_ENV_ALLOWLIST) {
+    const value = operatorEnv[name];
+    if (value !== undefined) env[name] = value;
+  }
+  env["HOME"] = scratch;
+  env["XDG_CONFIG_HOME"] = path.join(scratch, ".config");
+  env["XDG_CACHE_HOME"] = path.join(scratch, ".cache");
+  env["XDG_DATA_HOME"] = path.join(scratch, ".local", "share");
+  env["BUN_INSTALL_CACHE_DIR"] = path.join(scratch, ".bun-cache");
+  env["TMPDIR"] = tmpDir;
+  // The same marker every `shell_exec` child carries (agent bus D-13).
+  env["KERYX_TOOL_CALL"] = "1";
+  return env;
+}
+
+/** Can sandbox-exec apply a profile here? It cannot inside another Seatbelt sandbox. */
+function defaultSeatbeltProbe(launcher: string): boolean {
+  try {
+    execFileSync(launcher, ["-p", "(version 1)(allow default)(deny network*)", "/usr/bin/true"], { stdio: "ignore", timeout: 10_000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Every proper ancestor of `p`, root excluded. */
+function ancestors(p: string): string[] {
+  const out: string[] = [];
+  for (let dir = path.dirname(p); dir !== path.dirname(dir); dir = path.dirname(dir)) out.push(dir);
+  return out;
+}
+
+/** The macOS (Seatbelt) branch of `planUnattendedSandbox` — see unattended-seatbelt.ts. */
+function planDarwin(input: UnattendedSandboxInput, platform: string): UnattendedSandboxPlan {
+  if (typeof input.network === "object") {
+    return {
+      ok: false,
+      reason:
+        'network "allowlist" is implemented for the Linux (bubblewrap) unattended sandbox only: on macOS, Seatbelt has no private network namespace for the in-sandbox proxy forwarder. Use network "off" or "full"',
+    };
+  }
+  const launcher = detectSandboxLauncher({ platform, env: input.env, ...input.detect });
+  if (!launcher.available || launcher.path === undefined) {
+    return { ok: false, reason: `no sandbox launcher: ${launcher.reason ?? "sandbox-exec not found"}` };
+  }
+  if (!(input.probe ?? defaultSeatbeltProbe)(launcher.path)) {
+    return {
+      ok: false,
+      reason: `${launcher.path} is present but cannot apply a profile here (is keryx itself already running inside a sandbox?)`,
+    };
+  }
+
+  const hostIsDir = input.detect?.isDir ?? isDir;
+  const hostReal = input.detect?.realpath ?? real;
+  const hostExists = input.detect?.existsSync ?? exists;
+  const home = path.resolve(input.home);
+  const worktree = hostReal(input.worktree);
+  const scratch = hostReal(input.scratchHome);
+
+  const hidden = new Set<string>();
+  for (const dir of DARWIN_HIDDEN_SYSTEM_DIRS) hidden.add(dir);
+  if (hostIsDir(home)) hidden.add(hostReal(home));
+  const runtimeDir = input.env["XDG_RUNTIME_DIR"];
+  if (runtimeDir !== undefined && runtimeDir.length > 0 && hostIsDir(runtimeDir)) hidden.add(hostReal(runtimeDir));
+  const dataHome = input.env["XDG_DATA_HOME"];
+  const configDir =
+    input.configDir ??
+    path.join(dataHome !== undefined && dataHome.length > 0 ? dataHome : path.join(home, ".local", "share"), "keryx");
+  for (const extra of [configDir, ...(input.hide ?? [])]) {
+    if (hostIsDir(extra)) hidden.add(hostReal(extra));
+  }
+
+  const readBack = new Set<string>();
+  for (const root of toolchainRoots(input.env["PATH"], home, hostExists)) readBack.add(hostReal(root));
+  for (const extra of input.readOnly) if (hostExists(extra)) readBack.add(hostReal(extra));
+
+  const secrets = new Set<string>();
+  for (const secret of defaultReadDenyList(home)) secrets.add(secret);
+  for (const secret of defaultReadDenyList(hostReal(home))) secrets.add(secret);
+  if (hostIsDir(configDir)) secrets.add(hostReal(configDir));
+
+  const userTempRaw = input.detect?.userTempDir ?? tmpdir();
+  const userTemp = hostIsDir(userTempRaw) ? hostReal(userTempRaw) : undefined;
+
+  const metadata = new Set<string>();
+  for (const p of [...readBack, worktree, scratch, ...(userTemp !== undefined ? [userTemp] : [])]) {
+    for (const dir of ancestors(p)) metadata.add(dir);
+  }
+
+  const hostGit: GitProtectFs = {
+    kind: (p) => (hostIsDir(p) ? "dir" : hostExists(p) ? "file" : "missing"),
+    real: hostReal,
+    readText: input.detect?.readText ?? readText,
+    list: input.detect?.listDir ?? listDir,
+  };
+  const profile = buildUnattendedSeatbeltProfile({
+    writable: [worktree, scratch],
+    hidden: [...hidden],
+    readBack: [...readBack],
+    secrets: [...secrets],
+    metadataAncestors: [...metadata],
+    ...(userTemp !== undefined ? { userTempDir: userTemp } : {}),
+    network: input.network === true ? "full" : "off",
+    git: resolveGitProtection([worktree, scratch], hostGit),
+  });
+
+  // The host /tmp stays hidden, so TMPDIR is a directory inside the scratch home,
+  // created by the wrapper right before the command runs.
+  const env = unattendedEnv(input.env, scratch, path.join(scratch, "tmp"));
+  const launcherPath = launcher.path;
+  const args = ["-p", profile];
+  return {
+    ok: true,
+    kind: "seatbelt",
+    label: "macOS Seatbelt",
+    launcher: launcherPath,
+    args,
+    env,
+    wrap: (argv) => [launcherPath, ...args, "/bin/sh", "-c", 'mkdir -p "$TMPDIR" && exec "$@"', "sh", ...argv],
   };
 }

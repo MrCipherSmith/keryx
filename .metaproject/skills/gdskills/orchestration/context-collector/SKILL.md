@@ -161,18 +161,18 @@ Scan local sources for relevant context. Be selective — only include what is d
    - Note: "Previous job <name> addressed <related topic>"
 ```
 
-### 2.3 Rules (`<PROJECT_DIR>/rules/core/` or repo rules path)
+### 2.3 Rules (`<PROJECT_DIR>/rules/core/` and the installed stack-pack rules, such as `.metaproject/rules/stacks/ts-js-node/coding-style.mdc`, or repo rules path)
 
 ```
 1. Based on focus_areas and task_description, identify applicable rules:
    
    | Focus Area | Relevant Rules |
    |------------|---------------|
-   | React components | code-style-patterns.mdc, frontend-assistant.mdc, storybook-guidelines.mdc |
-   | MobX stores | code-style-patterns.mdc, mobx-store-template.mdc |
-   | API / DTOs | nestjs-dto.mdc, code-style-patterns.mdc, api-contracts.mdc |
-   | Testing | playwright-testing.mdc, storybook-guidelines.mdc, tdd-workflow.mdc |
-   | General code | code-style-patterns.mdc, frontend-assistant.mdc |
+   | React components | stacks/react/code-style-patterns.mdc, frontend-assistant.mdc, stacks/storybook/storybook-guidelines.mdc |
+   | MobX stores | stacks/react/code-style-patterns.mdc, stacks/mobx/mobx-store-template.mdc |
+   | API / DTOs | stacks/nestjs/nestjs-dto.mdc, api-contracts.mdc |
+   | Testing | stacks/playwright/playwright-testing.mdc, stacks/storybook/storybook-guidelines.mdc, tdd-workflow.mdc |
+   | General code | stacks/react/code-style-patterns.mdc, frontend-assistant.mdc |
    | TDD / test-first | tdd-workflow.mdc |
    | Architecture / layers | clean-architecture.mdc, solid-principles.mdc |
    | Error handling | error-handling.mdc |

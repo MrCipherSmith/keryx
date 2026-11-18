@@ -10,8 +10,10 @@
 // counted as coverage while it is being routed around.
 //
 // So this test hardcodes none of the law text. It derives the shared laws from
-// the canonical block in `review-orchestrator/SKILL.md` and asserts every
-// reviewer carries them, whitespace-normalised. Consequences:
+// the canonical block, which since ADR-0001 P5 is `rules/activity/review.mdc`,
+// and asserts every reviewer points at that rule and none restates a law
+// (whitespace-normalised). Before P5 every reviewer carried a verbatim copy;
+// the reasoning below is why one wording was required then. Consequences:
 //
 //   - Rewording the laws is free — reword the canonical block, propagate, done.
 //     The test has no opinion about the words.
@@ -36,6 +38,10 @@ import path from "node:path";
 const REVIEW_ROOT = path.join(import.meta.dir, "bundled", "skills", "review");
 const CANONICAL = "review-orchestrator";
 const SHARED_HEADING = "### Shared laws (every reviewer)";
+// ADR-0001 P5: the laws live once, in the review activity rule; every reviewer points at it.
+const ACTIVITY_RULE = path.join(import.meta.dir, "bundled", "rules", "activity", "review.mdc");
+const ACTIVITY_HEADING = "## Shared laws (every reviewer)";
+const ACTIVITY_CITATION = "`.metaproject/rules/activity/review.mdc`";
 
 /**
  * Reviewers that must NOT carry the laws, each with the reason. Same set and
@@ -70,12 +76,12 @@ function normalise(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
-/** The shared laws, taken from the canonical block. No literal lives in this file. */
+/** The shared laws, taken from the canonical block in the review activity rule. No literal lives in this file. */
 function canonicalLaws(): string[] {
-  const text = read(CANONICAL);
-  const start = text.indexOf(SHARED_HEADING);
+  const text = readFileSync(ACTIVITY_RULE, "utf8");
+  const start = text.indexOf(ACTIVITY_HEADING);
   if (start === -1) return [];
-  const section = text.slice(start + SHARED_HEADING.length);
+  const section = text.slice(start + ACTIVITY_HEADING.length);
   // The contiguous ordered list that opens the section, up to the first blank line.
   const list = section.match(/^\d+\. [\s\S]*?(?=\n\n)/m);
   if (list === null) return [];
@@ -174,7 +180,7 @@ describe("the four shared laws are derived from the canonical block", () => {
   });
 });
 
-describe("every reviewer carries the shared laws", () => {
+describe("every reviewer points at the shared laws instead of restating them", () => {
   const all = reviewerSkills();
   const laws = canonicalLaws();
 
@@ -187,23 +193,30 @@ describe("every reviewer carries the shared laws", () => {
     for (const name of Object.keys(EXEMPT)) expect(all).toContain(name);
   });
 
-  test("no reviewer is missing a law", () => {
+  test("every reviewer cites the review activity rule under the shared-laws heading", () => {
+    // ADR-0001 P5: one copy of the laws, in the rule. A reviewer that does not
+    // point at it has no laws at all.
     const missing: string[] = [];
     for (const name of all) {
       if (EXEMPT[name] !== undefined) continue;
-      const text = normalise(read(name));
-      for (const [index, law] of laws.entries()) {
-        if (!text.includes(law)) missing.push(`${name}: law ${index + 1}`);
-      }
+      const text = read(name);
+      const at = text.indexOf(SHARED_HEADING);
+      if (at === -1 || !text.slice(at, at + 400).includes(ACTIVITY_CITATION)) missing.push(name);
     }
     expect(missing).toEqual([]);
   });
 
-  test("each reviewer states the laws under a heading, not buried in prose", () => {
-    const unheaded = all
-      .filter((name) => EXEMPT[name] === undefined)
-      .filter((name) => !read(name).includes(SHARED_HEADING));
-    expect(unheaded).toEqual([]);
+  test("no reviewer restates a law (the orchestrator included)", () => {
+    // A second copy is the drift this rule replaced: rewording the rule would
+    // leave the copy behind.
+    const restated: string[] = [];
+    for (const name of all) {
+      const text = normalise(read(name));
+      for (const [index, law] of laws.entries()) {
+        if (text.includes(law)) restated.push(`${name}: law ${index + 1}`);
+      }
+    }
+    expect(restated).toEqual([]);
   });
 
   test("the security-specific law stays in review-security-code and only there", () => {
@@ -282,8 +295,13 @@ describe("one condition, one severity, across the reviewer set (AC2)", () => {
   test("testing severities live once, in the two testing rules, and the testing lens cites both", () => {
     const rulesDir = path.join(import.meta.dir, "bundled", "rules", "core");
     const lens = read("review-testing-practices");
-    for (const rule of ["tdd-workflow.mdc", "playwright-testing.mdc"]) {
-      const text = readFileSync(path.join(rulesDir, rule), "utf8");
+    // ADR-0001 P4: playwright-testing ships in the playwright pack.
+    const rulePaths: Record<string, string> = {
+      "tdd-workflow.mdc": path.join(rulesDir, "tdd-workflow.mdc"),
+      "playwright-testing.mdc": path.join(import.meta.dir, "bundled", "stacks", "playwright", "rules", "playwright-testing.mdc"),
+    };
+    for (const [rule, rulePath] of Object.entries(rulePaths)) {
+      const text = readFileSync(rulePath, "utf8");
       expect(text).toContain("## Review severities");
       expect(lens).toContain(rule);
     }
@@ -323,7 +341,7 @@ describe("one condition, one severity, across the reviewer set (AC2)", () => {
     // maintenance cost, not a trigger and a wrong outcome, so it is `minor` unless a
     // named defect or a stated project rule makes it more.
     // review-frontend rates it by the code-style-patterns severity table (core-rules audit, group 3).
-    const codeStyle = readFileSync(path.join(import.meta.dir, "bundled", "rules", "core", "code-style-patterns.mdc"), "utf8");
+    const codeStyle = readFileSync(path.join(import.meta.dir, "bundled", "stacks", "react", "rules", "code-style-patterns.mdc"), "utf8");
     expect(codeStyle).toMatch(/^\| API\/IO or business logic in a component \(Rule 2\) \| always \| `minor`; `major` with a named defect/m);
     expect(read("review-frontend")).toContain("code-style-patterns.mdc");
     expect(read("review-frontend")).not.toMatch(/API call in a component[^\n]*\*\*(blocker|major)\*\*/);

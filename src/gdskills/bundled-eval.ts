@@ -1365,7 +1365,7 @@ export const REJECTED_CHANGES_LEDGER = {
   path: "docs/skills/rejected-skill-changes.md",
   header: "| date | skill | change tried | why rejected | evidence (before → after) | link |",
   /** The rule that requires it, bundled-tree-relative. */
-  rule: "rules/core/skills-storage-workflow.mdc",
+  rule: "rules/process/skills-storage-workflow.mdc",
 } as const;
 
 /**
@@ -1468,9 +1468,19 @@ function stripTrailingSentencePeriod(raw: string): string {
  * segment further — has no such excuse: it is either the installed prefix or
  * it is dead the moment a user installs.
  */
+/**
+ * A stack pack's rule installs to `rules/stacks/<pack>/<name>` (ADR-0001 P4)
+ * but ships at `stacks/<pack>/rules/<name>`; every other path ships where it
+ * installs.
+ */
+function stackRuleSource(installed: string): string {
+  const match = /^rules\/stacks\/([^/]+)\/(.+)$/.exec(installed);
+  return match ? `stacks/${match[1]}/rules/${match[2]}` : installed;
+}
+
 function resolveInstalledReference(reference: string, known: ReadonlySet<string>): string | null | undefined {
   for (const [from, to] of INSTALLED_PREFIXES) {
-    if (reference.startsWith(from)) return to + reference.slice(from.length);
+    if (reference.startsWith(from)) return stackRuleSource(to + reference.slice(from.length));
   }
   if (reference.startsWith(".metaproject/")) return undefined;
 
@@ -1680,21 +1690,22 @@ export function bundledSkillCompanionDocuments(root: string): string[] {
 }
 
 /**
- * Every rule file under `<root>/rules/core` — the tree `installBundledRules`
- * (`src/gdskills/install.ts`) copies verbatim to `.metaproject/rules/core/`.
- * Flat by construction: `bundledRulesSourcePath` names one directory and
- * `cp(..., { recursive: true })` mirrors whatever is in it, so a walk one
- * level deep is enough today and still correct if a subdirectory is added
- * later. `[]` for a root with no `rules/core`, same convention as
- * `bundledSkillFiles`, so an absent tree reads as "swept zero", not "passed".
+ * Every rule file under `<root>/rules/core` and `<root>/rules/process` — the
+ * trees `installBundledRules` (`src/gdskills/install.ts`) copies verbatim to
+ * `.metaproject/rules/<layer>/`. Flat by construction: `bundledRulesSourcePath`
+ * names one directory per layer and `cp(..., { recursive: true })` mirrors
+ * whatever is in it, so a walk one level deep is enough today. `[]` for a root
+ * with no rule layers, same convention as `bundledSkillFiles`, so an absent
+ * tree reads as "swept zero", not "passed".
  */
 export function bundledRuleFiles(root: string): string[] {
-  const rulesRoot = path.join(root, "rules", "core");
-  if (!existsSync(rulesRoot)) return [];
-  return readdirSync(rulesRoot, { withFileTypes: true })
-    .filter((entry) => entry.isFile())
-    .map((entry) => path.join(rulesRoot, entry.name))
-    .sort();
+  return ["core", "process"].flatMap((layer) => {
+    const rulesRoot = path.join(root, "rules", layer);
+    if (!existsSync(rulesRoot)) return [];
+    return readdirSync(rulesRoot, { withFileTypes: true })
+      .filter((entry) => entry.isFile())
+      .map((entry) => path.join(rulesRoot, entry.name));
+  }).sort();
 }
 
 /**
@@ -1990,7 +2001,7 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
         add(
           "anatomy:length",
           null,
-          `${lines} lines exceeds ${recorded}. Split the skill, or move reference material into a sibling document, and lower the ceiling to the new count in the same change. A ceiling only ever moves DOWN: raising it is the one edit rules/core/skills-storage-workflow.mdc ("Length Ceilings") forbids, because it converts a measured limit into a record of whatever the file grew to.`,
+          `${lines} lines exceeds ${recorded}. Split the skill, or move reference material into a sibling document, and lower the ceiling to the new count in the same change. A ceiling only ever moves DOWN: raising it is the one edit rules/process/skills-storage-workflow.mdc ("Length Ceilings") forbids, because it converts a measured limit into a record of whatever the file grew to.`,
         );
       }
     }

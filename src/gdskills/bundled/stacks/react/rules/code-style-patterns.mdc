@@ -1,12 +1,16 @@
 ---
-description: "React and TypeScript standard for the frontend, shared by code writers and reviewers, with the severities reviewers use: observer on every component that reads observables, layers (service IO, store logic, component render), where state lives, stores created once, effects that clean up, stable keys, accessibility basics, and TypeScript safety. Use when writing or reviewing React/TypeScript components."
+extends: common
+description: "React standard for the frontend, shared by code writers and reviewers, with the severities reviewers use: observer on every component that reads observables, layers (service IO, store logic, component render), where state lives, stores created once, effects that clean up, stable keys, accessibility basics, and props typing. Use when writing or reviewing React components. TypeScript safety (`any`, `!`, import paths) is the ts-js-node pack's coding-style.mdc."
 alwaysApply: false
 stack_requires: "react,mobx"
+paths: ["**/*.tsx", "**/*.jsx"]
+metadata:
+  origin: authored
 ---
 
 # Code Style and Architecture Patterns
 
-Canon applies: the React documentation (rules of hooks, effects, keys), WAI-ARIA basics and the TypeScript handbook. Store internals are `mobx-store-template.mdc`; backend layering is `clean-architecture.mdc`. This rule holds only this project's frontend decisions.
+Canon applies: the React documentation (rules of hooks, effects, keys), WAI-ARIA basics and the TypeScript handbook. Store internals are `stacks/mobx/mobx-store-template.mdc`; backend layering is `core/clean-architecture.mdc`. This rule holds only this project's frontend decisions.
 
 ## Rules
 
@@ -14,10 +18,10 @@ Canon applies: the React documentation (rules of hooks, effects, keys), WAI-ARIA
 2. **Layers.** A service does IO only; a store holds state, logic and state transitions; a component renders and forwards events to store actions. No API/IO call and no business logic (validation, transformation, branching on domain state) in a component, its handlers or its effects.
 3. **Where state lives.** UI-only state that one component uses (an open flag, a hover, an input draft) is `useState`. State with logic, or read by another component or a store, lives in a store; it is never copied into `useState`. `useMemo`/`useCallback` do not wrap store values or store methods.
 4. **A store is created once per mount**: `useState(() => new PageStore(api))[0]` or `useLocalObservable`, never `new Store()` in the component body.
-5. **An effect that subscribes, listens or starts a timer returns its cleanup.** Data loading is not started from an effect (see `mobx-store-template.mdc` Rule 8).
+5. **An effect that subscribes, listens or starts a timer returns its cleanup.** Data loading is not started from an effect (see `stacks/mobx/mobx-store-template.mdc` Rule 8).
 6. **List keys** are on the element `.map()` returns and are stable ids; an index key only for a static list that never reorders or filters.
 7. **Accessibility.** `<img>` has `alt` (`""` when decorative); an icon-only button or link has `aria-label`; a form input has a label; a clickable element is a `<button>` or `<a>`, not a `<div onClick>`.
-8. **TypeScript.** No `any` (use `unknown` and a guard, or the named type). A `!` assertion carries a comment that proves it; otherwise use `?.`/`??` and handle the missing case. Props types are `XProps`, no `I` prefix. Imports use relative paths or the configured aliases, never `from "src/..."`.
+8. **Props types** are `XProps`, no `I` prefix. The TypeScript rules every `.ts`/`.tsx` file follows (no `any`, a `!` that carries its proof, import paths) are `stacks/ts-js-node/coding-style.mdc` Review severities.
 
 ---
 
@@ -36,8 +40,6 @@ Canon applies: the React documentation (rules of hooks, effects, keys), WAI-ARIA
 | Subscription, listener or timer without cleanup (Rule 5) | always | `major` | — |
 | Missing `key` (Rule 6) | always | `major` | — |
 | Index key on a list that reorders, filters or paginates (Rule 6) | always | `minor` | a static list |
-| `<img>` without `alt`; interactive element without an accessible name (Rule 7) | always | rated by the missing-accessible-name row of `ui-anti-slop.mdc` Review severities | — |
-| Clickable non-semantic element without keyboard support (Rule 7) | always | rated by the keyboard-reachability row of `ui-anti-slop.mdc` Review severities | — |
-| `!` on a value the types allow to be missing (Rule 8) | a named input reaches it | `blocker` when it throws during render; `major` elsewhere; `minor` with no input shown | a `!` with a comment that proves it |
-| `any` in new code (Rule 8) | always | `minor`; `major` with a named input and the wrong value it lets through | — |
-| `I`-prefixed props type, `from "src/..."` import (Rule 8) | introduced by the change | `minor` | — |
+| `<img>` without `alt`; interactive element without an accessible name (Rule 7) | always | rated by the missing-accessible-name row of `core/ui-anti-slop.mdc` Review severities | — |
+| Clickable non-semantic element without keyboard support (Rule 7) | always | rated by the keyboard-reachability row of `core/ui-anti-slop.mdc` Review severities | — |
+| `I`-prefixed props type (Rule 8) | introduced by the change | `minor` | — |

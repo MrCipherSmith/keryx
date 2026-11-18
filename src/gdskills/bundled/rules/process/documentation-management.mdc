@@ -1,0 +1,101 @@
+---
+description: "Manage project documentation in <PROJECT_DIR>/docs (default) or $GDMETAPRO_DOCS_ROOT. Language variants are opt-in, not mandatory."
+alwaysApply: false
+---
+
+# Documentation Management Rules
+
+## Purpose
+Define how the agent creates and updates documentation under `<DOCS_ROOT>` (`<PROJECT_DIR>/docs` by default, or `$GDMETAPRO_DOCS_ROOT`).
+
+## When To Apply
+Apply when the user asks to create or update documentation, plans, requirements, communication notes, reports, or review artifacts.
+
+## Requirements Packages
+Anything under `docs/requirements/<name>/` (README, PRD, specification, and
+their optional companions, including `implementation-plan.md`) follows
+`requirements-package-standard.mdc`. Do not restate or diverge from that
+layout here: no date-stamped subfolders, no mandatory `ru`/`en`/`ai` variants —
+the `Version: x.y.z` field on each document is the versioning mechanism.
+
+## Mandatory Behavior
+1. Ask for target location and folder name before writing any doc.
+2. Do not date-stamp folders. Write into `<category>/<name>/` and update
+   documents in place, bumping their `Version` field where the category's
+   standard defines one (requirements packages always do).
+3. Default to `en` output. Add other language variants only when the user
+   explicitly asks for them, and keep any variants you do create synchronized.
+4. Update `<DOCS_ROOT>/README.md` after doc changes.
+5. Ask whether to apply changes (branch/commit/PR) after edits.
+
+## Required Locations
+- Root: `<DOCS_ROOT>` (default: `<PROJECT_DIR>/docs`)
+- Standard pattern: `<DOCS_ROOT>/<category>/<name>/`
+- Requirements packages: `<DOCS_ROOT>/requirements/<name>/` per
+  `requirements-package-standard.mdc` (no date folder).
+
+## DOCS_ROOT Resolution
+
+The docs root is resolved in this priority order:
+
+1. **`DOCS_ROOT` passed explicitly** by the orchestrator in the sub-agent dispatch prompt
+2. **`GDMETAPRO_DOCS_ROOT` environment variable** (if set in the shell)
+3. **`<PROJECT_DIR>/docs/`** — default, relative to the project being worked on
+
+```bash
+DOCS_ROOT="${GDMETAPRO_DOCS_ROOT:-$PROJECT_DIR/docs}"
+```
+
+`PROJECT_DIR` is always known by Phase 0.2 of the orchestrator. Sub-agents (context-collector, feature-analyzer, etc.) **never resolve DOCS_ROOT themselves** — they receive it explicitly from the orchestrator.
+
+## Category Definitions
+
+| Category | Path pattern | Description |
+|----------|-------------|-------------|
+| `requirements` | `docs/requirements/<name>/` | See `requirements-package-standard.mdc`. |
+| `plans` | `docs/plans/<name>/` | Standalone implementation plans not tied to a requirements package. A plan that belongs to one lives inside that package as `implementation-plan.md` instead — see `requirements-package-standard.mdc` and `implementation-plans.mdc`. |
+| `report` | `docs/report/<name>/` | Standalone review/audit reports |
+| `review-testing` | `docs/review-testing/<name>/` | QA and testing artifacts |
+| `communication` | `docs/communication/<name>/` | Communication and context docs |
+| `analysis` | `docs/analysis/<name>/` | Feature/branch analysis (see below) |
+
+## Analysis Category Structure
+
+The `analysis` category is used by the `feature-analyzer` skill and any branch/feature analysis tasks.
+
+```
+docs/analysis/<feature-name>/
+  report.md
+  implementation-plan.md
+```
+
+- `report.md` — detailed analysis of changes, ticket, cross-repo findings
+- `implementation-plan.md` — actionable implementation plan derived from the analysis
+- Add `ru`/`en`/`ai` variants only if the user explicitly asks for them; the
+  default is the single `en` files shown above.
+
+## Naming Rules
+- Ask user for `<name>` first.
+- Use semantic, kebab-case folder names.
+- Keep filenames deterministic: `<name>.md` unless user asks another convention.
+
+## Output Contract
+- Every generated document MUST be Markdown (`.md`).
+- Structure must be explicit with headings and actionable sections.
+- Code examples must be fenced code blocks.
+
+## Relationship to `jobs/`
+
+`docs/` and `jobs/` are **separate systems**:
+- `docs/` — general project documentation (requirements, plans, reports, analysis). Managed by this rule.
+- `jobs/` — orchestrator pipeline artifacts. Each job folder documents one orchestrated task end-to-end.
+
+Standalone skill invocations continue to use `docs/analysis/`. Only orchestrator-driven work produces output in `jobs/`.
+See `process/jobs-documentation.mdc` for the `jobs/` system.
+
+## Prohibited
+- Date-stamped folders anywhere under `<DOCS_ROOT>`.
+- Language variants the user did not ask for.
+- Partial updates to language variants that do exist.
+- Writing docs outside the requested category path without confirmation.
+- Mixing `report`/`implementation-plan` content in the same file.

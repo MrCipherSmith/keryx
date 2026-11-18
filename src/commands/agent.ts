@@ -1,3 +1,4 @@
+import { AGENT_CONDUCT_PROMPT_BLOCK, containsAgentConduct } from "../lib/agent-conduct";
 import { isTransportFailure } from "../harness/provider/provider-port";
 import { rememberArbiterSession } from "../review/arbiter-session";
 import { decideReviewGate, findReviewGateState, sessionReviewNames, sessionStartedAt } from "../review/completion-gate";
@@ -2113,10 +2114,14 @@ export function buildAgentSystemInstruction(orient?: string, ctx: AgentInstructi
     (ctx.herdrCore !== undefined && ctx.herdrCore.length > 0 ? `\n\n${ctx.herdrCore}` : "");
 
   const trimmed = orient?.trim() ?? "";
+  // ADR-0001 D2: every session carries the conduct block. A generated
+  // index.md already embeds it verbatim in the orientation, so it is not sent
+  // twice; an older index.md without it still gets it from here.
+  const conducted = containsAgentConduct(trimmed) ? base : `${base}\n\n${AGENT_CONDUCT_PROMPT_BLOCK}`;
   if (trimmed.length === 0) {
-    return base;
+    return conducted;
   }
-  return `${base}\n\nProject orientation (trusted context):\n${trimmed}`;
+  return `${conducted}\n\nProject orientation (trusted context):\n${trimmed}`;
 }
 
 interface PendingCall {

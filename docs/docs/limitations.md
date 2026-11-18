@@ -141,8 +141,10 @@ for what has been verified on a real host.
     is resolved fresh each run, not pinned across runs.
   - HTTP/2 and WebSockets over the blind relay are not specially handled; most CLI
     tools (curl, git, npm, pip) negotiate HTTP/1.1 and work as expected.
-- **Platform:** the hardened unattended sandbox is Linux-only, so a macOS schedule
-  runs in `ask` mode with granted tools only.
+- **Platform:** the hardened unattended sandbox is bubblewrap on Linux and Seatbelt
+  on macOS. On macOS there is no private `/tmp` (use `$TMPDIR`; a bare `mktemp`
+  fails), no PID namespace, and no `allowlist` network. Any other platform refuses
+  `trust`.
 - **The signing key and an interactive agent:** each confirmed schedule is signed
   with an HMAC keyed by a per-machine secret. The secret lives outside the project,
   in keryx's user-global directory (`schedule-hmac.key`, 0600). A committed or forged

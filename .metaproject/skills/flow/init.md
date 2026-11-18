@@ -8,13 +8,16 @@ be filled inline.
 ## Worker communication (schema-governed)
 
 Workers inherit no session state - construct each dispatch explicitly
-(`.metaproject/rules/core/subagent-context-construction.md`). Every dispatch is
+(`.metaproject/rules/process/subagent-context-construction.md`). Every dispatch is
 a `subagent-dispatch` object
 (`.metaproject/core/gdskills/contracts/subagent-dispatch.schema.json`) and every
 worker reply is a `subagent-result`
 (`.metaproject/core/gdskills/contracts/subagent-result.schema.json`) whose first
-line is `STATUS:` (`.metaproject/rules/core/subagent-status-protocol.md`). Set
+line is `STATUS:` (`.metaproject/rules/process/subagent-status-protocol.md`). Set
 `run_id` to the flow id and `dispatch_id` to `<flow-id>-<step>`.
+Every dispatch's `constraints` carries the mandatory agent-conduct entry: the
+"Dispatch form" line of `.metaproject/rules/process/agent-conduct.mdc`, verbatim
+(the schema refuses a dispatch without it).
 
 ## Workflow
 

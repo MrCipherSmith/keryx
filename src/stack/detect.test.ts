@@ -2,10 +2,12 @@
 // per-signal-uncertain-contribution case, and multiple ecosystems.
 
 import { describe, expect, test } from "bun:test";
-import { STACK_DETECT_TAGS, detectStack, type StackDetectFs, type StackDirEntry } from "./detect";
+import { STACK_DETECT_TAGS, detectStack, hasNestedPackageJson, isInsideRoot, type StackDetectFs, type StackDirEntry } from "./detect";
 
 /** In-memory fs: a flat map of absolute path -> text content, plus explicit directories. */
 function fakeFs(files: Record<string, string>, dirs: Record<string, string[]> = {}): StackDetectFs {
+  // An entry is a directory when it is listed in `dirs` or holds a file.
+  const isDir = (full: string): boolean => full in dirs || Object.keys(files).some((file) => file.startsWith(`${full}/`));
   return {
     async readTextFile(path: string): Promise<string> {
       if (path in files) {
@@ -15,20 +17,19 @@ function fakeFs(files: Record<string, string>, dirs: Record<string, string[]> = 
     },
     async readDir(path: string): Promise<StackDirEntry[]> {
       if (path in dirs) {
-        return dirs[path]!.map((name) => ({ name, isDirectory: false }));
+        return dirs[path]!.map((name) => ({ name, isDirectory: isDir(`${path}/${name}`) }));
       }
       // Derive a root listing from the flat file map when no explicit dir given.
-      const prefix = `${path.replace(/\/$/, "")}/`;
+      const prefix = path === "/" ? "/" : `${path.replace(/\/$/, "")}/`;
       const names = new Set<string>();
       for (const filePath of Object.keys(files)) {
-        if (filePath.startsWith(prefix) && !filePath.slice(prefix.length).includes("/")) {
-          names.add(filePath.slice(prefix.length));
-        }
+        // Files directly here, and the first segment of deeper files (their directories).
+        if (filePath.startsWith(prefix)) names.add(filePath.slice(prefix.length).split("/")[0]!);
       }
       if (names.size === 0 && !(path in dirs)) {
         throw new Error(`ENOENT: ${path}`);
       }
-      return [...names].sort().map((name) => ({ name, isDirectory: false }));
+      return [...names].sort().map((name) => ({ name, isDirectory: isDir(`${path}/${name}`) }));
     },
   };
 }
@@ -52,6 +53,19 @@ describe("W1-AC1: package.json declaring react only", () => {
     expect(result.matched).toContain("react");
     expect(result.tags.vue).toBe(false);
     expect(result.tags.python).toBe(false);
+    expect(result.tags.storybook).toBe(false);
+  });
+});
+
+describe("storybook (ADR-0001 P4: selects the storybook pack)", () => {
+  test("the storybook CLI or any @storybook/* package sets the tag; react alone does not", async () => {
+    for (const dependencies of [{ storybook: "^8.4.0" }, { "@storybook/react-vite": "^8.4.0" }, { "@storybook/test": "^8.4.0" }]) {
+      const result = await detectStack("/repo", { fs: fakeFs({ "/repo/package.json": JSON.stringify({ devDependencies: dependencies }) }) });
+      expect({ dependencies, storybook: result.tags.storybook }).toEqual({ dependencies, storybook: true });
+      expect(result.matched).toContain(Object.keys(dependencies)[0]!);
+    }
+    const reactOnly = await detectStack("/repo", { fs: fakeFs({ "/repo/package.json": JSON.stringify({ dependencies: { react: "^18.0.0" } }) }) });
+    expect(reactOnly.tags.storybook).toBe(false);
   });
 });
 
@@ -191,17 +205,251 @@ describe("no signal for a family", () => {
 });
 
 describe("bounded extension scan", () => {
-  test("hitting the file cap marks c-cpp uncertain", async () => {
+  test("hitting the file cap with no C/C++ file seen selects nothing (review R-4: every large repo got c-cpp), and says so", async () => {
     const files: Record<string, string> = {};
     for (let i = 0; i < 10; i += 1) {
       files[`/repo/file${i}.txt`] = "x";
     }
     const fs = fakeFs(files);
     const result = await detectStack("/repo", { fs, maxFiles: 3 });
-    expect(result.tags["c-cpp"]).toBe(true);
-    expect(result.uncertain).toBe(true);
+    expect(result.tags["c-cpp"]).toBe(false);
+    expect(result.uncertain).toBe(false);
     const scanSignal = result.perSignal.find((s) => s.signal === "scan:extensions");
-    expect(scanSignal?.uncertain).toBe(true);
+    expect(scanSignal?.uncertain).toBe(false);
+    expect(scanSignal?.reason).toContain("hit its file cap (3) with no C/C++ source");
+  });
+
+  test("hitting the file cap after a C/C++ file was seen still sets c-cpp", async () => {
+    const fs = fakeFs({ "/repo/a.c": "int main(void) { return 0; }\n", "/repo/b.txt": "x", "/repo/c.txt": "x", "/repo/d.txt": "x" });
+    const result = await detectStack("/repo", { fs, maxFiles: 2 });
+    expect(result.tags["c-cpp"]).toBe(true);
+  });
+});
+
+describe("JS workspace-root markers (review M1: a monorepo root names only build tooling)", () => {
+  for (const marker of ["pnpm-workspace.yaml", "lerna.json", "nx.json", "turbo.json", "rush.json"]) {
+    test(`${marker} with no package found: the root's own dependencies decide, and a root that declares nothing is uncertain`, async () => {
+      // Single-package turbo / nx standalone: the root declares the stack (review R3-2).
+      const withRoot = await detectStack("/repo", {
+        fs: fakeFs({ [`/repo/${marker}`]: "{}\n", "/repo/package.json": JSON.stringify({ dependencies: { react: "^18.3.1" }, devDependencies: { typescript: "^5.0.0" } }) }),
+      });
+      expect({ marker, uncertain: withRoot.uncertain, react: withRoot.tags.react, vue: withRoot.tags.vue, angular: withRoot.tags.angular })
+        .toEqual({ marker, uncertain: false, react: true, vue: false, angular: false });
+      for (const files of [
+        { [`/repo/${marker}`]: "{}\n" },
+        { [`/repo/${marker}`]: "{}\n", "/repo/package.json": JSON.stringify({ private: true, scripts: { build: "turbo build" } }) },
+      ]) {
+        const result = await detectStack("/repo", { fs: fakeFs(files) });
+        expect(result.uncertain).toBe(true);
+        for (const tag of jsTags()) expect({ marker, tag, value: result.tags[tag] }).toEqual({ marker, tag, value: true });
+        expect(result.tags.python).toBe(false);
+        const signal = result.perSignal.find((s) => s.signal === "manifest:js-workspace");
+        expect(signal?.reason).toContain(marker);
+      }
+    });
+  }
+
+  test("a pnpm root whose package.json declares nothing selects from the sub-packages it read (review R3-1)", async () => {
+    const result = await detectStack("/repo", {
+      fs: fakeFs({
+        "/repo/pnpm-workspace.yaml": "packages:\n  - 'apps/*'\n",
+        "/repo/package.json": JSON.stringify({ private: true, scripts: { build: "pnpm -r build" } }),
+        "/repo/apps/web/package.json": JSON.stringify({ dependencies: { react: "^18.3.1", mobx: "^6.13.0" } }),
+      }),
+    });
+    expect(result.uncertain).toBe(false);
+    expect({ react: result.tags.react, mobx: result.tags.mobx, angular: result.tags.angular, vue: result.tags.vue }).toEqual({ react: true, mobx: true, angular: false, vue: false });
+    expect(result.perSignal.some((s) => s.signal === "manifest:package.json")).toBe(false);
+  });
+
+  test("workspace reads stay in the repository: ../ globs and directories that link outside are skipped (review R3-3)", async () => {
+    const files = {
+      "/repo/pnpm-workspace.yaml": "packages:\n  - '../other-*'\n  - 'apps/*'\n",
+      "/other-ng/package.json": JSON.stringify({ dependencies: { "@angular/core": "^17" } }),
+      "/repo/apps/web/package.json": JSON.stringify({ dependencies: { react: "^18.3.1" } }),
+      "/repo/apps/linked/package.json": JSON.stringify({ dependencies: { vue: "^3" } }),
+    };
+    const base = fakeFs(files, { "/": ["other-ng", "repo"] });
+    const fs: StackDetectFs = {
+      ...base,
+      async realPath(path: string): Promise<string> {
+        return path === "/repo/apps/linked" ? "/elsewhere/linked" : path;
+      },
+    };
+    const result = await detectStack("/repo", { fs });
+    expect({ react: result.tags.react, angular: result.tags.angular, vue: result.tags.vue, uncertain: result.uncertain })
+      .toEqual({ react: true, angular: false, vue: false, uncertain: false });
+    const reason = result.perSignal.find((s) => s.signal === "manifest:js-workspace")?.reason ?? "";
+    expect(reason).toContain("../other-* (outside the repository)");
+    expect(reason).toContain("apps/linked (links outside the repository)");
+  });
+
+  test("a ! glob excludes the packages it names (review R3-3)", async () => {
+    const result = await detectStack("/repo", {
+      fs: fakeFs({
+        "/repo/pnpm-workspace.yaml": "packages:\n  - 'apps/*'\n  - '!apps/legacy'\n",
+        "/repo/apps/web/package.json": JSON.stringify({ dependencies: { react: "^18.3.1" } }),
+        "/repo/apps/legacy/package.json": JSON.stringify({ dependencies: { "@angular/core": "^12" } }),
+      }),
+    });
+    expect({ react: result.tags.react, angular: result.tags.angular }).toEqual({ react: true, angular: false });
+  });
+
+  test("packages/** reads packages below the first level, bounded (review R3-4)", async () => {
+    const result = await detectStack("/repo", {
+      fs: fakeFs({
+        "/repo/pnpm-workspace.yaml": "packages:\n  - 'packages/**'\n",
+        "/repo/packages/ui/web/package.json": JSON.stringify({ dependencies: { react: "^18.3.1" } }),
+        "/repo/packages/ui/web/node_modules/vue/package.json": JSON.stringify({ dependencies: { vue: "^3" } }),
+      }),
+    });
+    expect({ uncertain: result.uncertain, react: result.tags.react, vue: result.tags.vue }).toEqual({ uncertain: false, react: true, vue: false });
+  });
+
+  test("a pnpm flow-style packages list is read (review R3-6)", async () => {
+    const result = await detectStack("/repo", {
+      fs: fakeFs({
+        "/repo/pnpm-workspace.yaml": "packages: ['web/*', \"api\"]\n",
+        "/repo/web/app/package.json": JSON.stringify({ dependencies: { react: "^18.3.1" } }),
+        "/repo/api/package.json": JSON.stringify({ dependencies: { "@nestjs/core": "^10" } }),
+      }),
+    });
+    expect({ uncertain: result.uncertain, react: result.tags.react, nestjs: result.tags.nestjs }).toEqual({ uncertain: false, react: true, nestjs: true });
+  });
+
+  test("one broken sub-package is skipped and named, not a reason to keep every JS tag (review R3-7)", async () => {
+    const result = await detectStack("/repo", {
+      fs: fakeFs({
+        "/repo/pnpm-workspace.yaml": "packages:\n  - 'apps/*'\n",
+        "/repo/apps/web/package.json": JSON.stringify({ dependencies: { react: "^18.3.1" } }),
+        "/repo/apps/broken/package.json": "{ not json",
+      }),
+    });
+    expect({ uncertain: result.uncertain, react: result.tags.react, angular: result.tags.angular }).toEqual({ uncertain: false, react: true, angular: false });
+    expect(result.perSignal.find((s) => s.signal === "manifest:js-workspace")?.reason).toContain("skipped apps/broken/package.json (not a JSON object)");
+  });
+
+  test("a turbo React+NestJS monorepo selects from its sub-packages, not every JS tag (review N-1)", async () => {
+    const fs = fakeFs(
+      {
+        "/repo/turbo.json": "{}\n",
+        "/repo/package.json": JSON.stringify({ private: true, devDependencies: { turbo: "^2.0.0", typescript: "^5.6.0" } }),
+        "/repo/apps/web/package.json": JSON.stringify({ dependencies: { react: "^18.3.1", mobx: "^6.13.0" } }),
+        "/repo/apps/api/package.json": JSON.stringify({ dependencies: { "@nestjs/core": "^10.4.0" } }),
+      },
+      { "/repo/apps": ["api", "web"] },
+    );
+    const result = await detectStack("/repo", { fs });
+    expect(result.uncertain).toBe(false);
+    for (const tag of ["react", "mobx", "nestjs", "typescript"]) expect({ tag, value: result.tags[tag] }).toEqual({ tag, value: true });
+    for (const tag of ["angular", "vue", "nextjs", "nuxt", "storybook"]) expect({ tag, value: result.tags[tag] }).toEqual({ tag, value: false });
+    expect(result.perSignal.find((s) => s.signal === "manifest:js-workspace")?.reason).toContain("2 workspace packages");
+  });
+
+  test("the packages a marker names are read: pnpm-workspace.yaml globs, lerna packages, rush projectFolder, package.json workspaces", async () => {
+    const cases: Array<{ files: Record<string, string>; dirs?: Record<string, string[]> }> = [
+      {
+        files: {
+          "/repo/pnpm-workspace.yaml": "packages:\n  - 'services/*'\n  - \"!services/legacy\"\n",
+          "/repo/services/api/package.json": JSON.stringify({ dependencies: { "@nestjs/core": "^10.4.0" } }),
+        },
+        dirs: { "/repo/services": ["api"] },
+      },
+      {
+        files: { "/repo/lerna.json": JSON.stringify({ packages: ["modules/api"] }), "/repo/modules/api/package.json": JSON.stringify({ dependencies: { "@nestjs/core": "^10" } }) },
+      },
+      {
+        files: {
+          "/repo/rush.json": '// rush config\n{ "projects": [{ "packageName": "api", "projectFolder": "server/api" }] }\n',
+          "/repo/server/api/package.json": JSON.stringify({ dependencies: { "@nestjs/core": "^10" } }),
+        },
+      },
+      {
+        files: {
+          "/repo/package.json": JSON.stringify({ private: true, workspaces: ["backend"] }),
+          "/repo/backend/package.json": JSON.stringify({ dependencies: { "@nestjs/core": "^10" } }),
+        },
+      },
+    ];
+    for (const { files, dirs } of cases) {
+      const result = await detectStack("/repo", { fs: fakeFs(files, dirs) });
+      const marker = Object.keys(files)[0];
+      expect({ marker, uncertain: result.uncertain, nestjs: result.tags.nestjs, react: result.tags.react }).toEqual({ marker, uncertain: false, nestjs: true, react: false });
+    }
+  });
+
+  test("a workspace glob this module cannot expand falls back to every JS tag", async () => {
+    const result = await detectStack("/repo", { fs: fakeFs({ "/repo/pnpm-workspace.yaml": "packages:\n  - 'apps/*/packages/*'\n" }) });
+    expect(result.uncertain).toBe(true);
+    for (const tag of jsTags()) expect(result.tags[tag]).toBe(true);
+    expect(result.perSignal.find((s) => s.signal === "manifest:js-workspace")?.reason).toContain("is not one this module reads");
+  });
+
+  test("packages/** stops at each package: 60 packages with 36 folders each stay under the limits (review R4-1)", async () => {
+    const files: Record<string, string> = { "/repo/pnpm-workspace.yaml": "packages:\n  - 'packages/**'\n" };
+    for (let p = 0; p < 60; p += 1) {
+      const deps = p === 7 ? { react: "^18.3.1" } : { lodash: "^4" };
+      files[`/repo/packages/group${p % 6}/pkg${p}/package.json`] = JSON.stringify({ dependencies: deps });
+      for (let d = 0; d < 36; d += 1) files[`/repo/packages/group${p % 6}/pkg${p}/src/dir${d}/index.ts`] = "export {};\n";
+    }
+    const result = await detectStack("/repo", { fs: fakeFs(files), workspaceLimits: { maxPackages: 100, maxVisited: 200 } });
+    expect({ uncertain: result.uncertain, react: result.tags.react, vue: result.tags.vue }).toEqual({ uncertain: false, react: true, vue: false });
+    expect(result.perSignal.find((s) => s.signal === "manifest:js-workspace")?.reason).toContain("60 workspace packages");
+  });
+
+  test("a packages/** tree past the limits falls back to what was found plus the first level, not every JS tag (review R4-1)", async () => {
+    const files: Record<string, string> = {
+      "/repo/pnpm-workspace.yaml": "packages:\n  - 'packages/**'\n",
+      "/repo/packages/web/package.json": JSON.stringify({ dependencies: { react: "^18.3.1" } }),
+    };
+    for (let p = 0; p < 30; p += 1) files[`/repo/packages/libs/lib${p}/package.json`] = JSON.stringify({ dependencies: { lodash: "^4" } });
+    const result = await detectStack("/repo", { fs: fakeFs(files), workspaceLimits: { maxPackages: 5, maxVisited: 50 } });
+    expect({ uncertain: result.uncertain, react: result.tags.react, angular: result.tags.angular, vue: result.tags.vue })
+      .toEqual({ uncertain: false, react: true, angular: false, vue: false });
+  });
+
+  test("containment compares real paths with path.relative, Windows paths included (review R4-2)", async () => {
+    expect(isInsideRoot("C:\\repo", "C:\\repo\\apps\\web")).toBe(true);
+    expect(isInsideRoot("C:\\repo", "C:\\repo")).toBe(true);
+    expect(isInsideRoot("C:\\repo", "C:\\repo-other\\web")).toBe(false);
+    expect(isInsideRoot("C:\\repo", "D:\\repo\\web")).toBe(false);
+    expect(isInsideRoot("/repo", "/repo/apps/..web")).toBe(true);
+    expect(isInsideRoot("/repo", "/repo-other/web")).toBe(false);
+    const base = fakeFs({
+      "/repo/pnpm-workspace.yaml": "packages:\n  - 'apps/*'\n",
+      "/repo/apps/web/package.json": JSON.stringify({ dependencies: { react: "^18.3.1" } }),
+    });
+    // A win32 realPath: every package inside the repository must still be read.
+    const fs: StackDetectFs = { ...base, realPath: async (path) => `C:${path.replace(/\//g, "\\")}` };
+    const result = await detectStack("/repo", { fs });
+    expect({ uncertain: result.uncertain, react: result.tags.react }).toEqual({ uncertain: false, react: true });
+  });
+
+  test("a pnpm flow list over several lines is read (review R4-4)", async () => {
+    const result = await detectStack("/repo", {
+      fs: fakeFs({
+        "/repo/pnpm-workspace.yaml": "packages: [\n  'web/*', # apps\n  \"api\"\n]\n",
+        "/repo/web/app/package.json": JSON.stringify({ dependencies: { react: "^18.3.1" } }),
+        "/repo/api/package.json": JSON.stringify({ dependencies: { "@nestjs/core": "^10" } }),
+      }),
+    });
+    expect({ uncertain: result.uncertain, react: result.tags.react, nestjs: result.tags.nestjs }).toEqual({ uncertain: false, react: true, nestjs: true });
+  });
+
+  test("hasNestedPackageJson is true only when it finds one, never because the tree was too large (review R4-3)", async () => {
+    const big: Record<string, string> = {};
+    for (let d = 0; d < 40; d += 1) big[`/repo/src/mod${d}/main.go`] = "package main\n";
+    expect(await hasNestedPackageJson("/repo", fakeFs(big), { maxPackages: 10, maxVisited: 5 })).toBe(false);
+    expect(await hasNestedPackageJson("/repo", fakeFs(big))).toBe(false);
+    expect(await hasNestedPackageJson("/repo", fakeFs({ ...big, "/repo/web/app/package.json": "{}" }))).toBe(true);
+    // The root's own package.json does not count.
+    expect(await hasNestedPackageJson("/repo", fakeFs({ ...big, "/repo/package.json": "{}" }))).toBe(false);
+  });
+
+  test("a plain app with no workspace marker stays certain", async () => {
+    const result = await detectStack("/repo", { fs: fakeFs({ "/repo/package.json": JSON.stringify({ dependencies: { react: "^18.0.0" } }) }) });
+    expect(result.uncertain).toBe(false);
+    expect(result.perSignal.some((s) => s.signal === "manifest:js-workspace")).toBe(false);
   });
 });
 
