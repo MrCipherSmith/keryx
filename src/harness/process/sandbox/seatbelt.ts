@@ -22,7 +22,7 @@ import type { SandboxProfile } from "./profile";
 export const SANDBOX_EXEC_PATH = "/usr/bin/sandbox-exec";
 
 /** Character-literal escape for an SBPL string token. */
-function sbplString(value: string): string {
+export function sbplString(value: string): string {
   // SBPL string literals are double-quoted; backslash and quote must be escaped.
   return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }
@@ -59,6 +59,60 @@ const LAUNCH_SERVICES_PREFIXES = ["com.apple.coreservices", "com.apple.lsd"];
 const LAUNCHER_BINARIES = ["/usr/bin/open", "/usr/bin/osascript"];
 
 /**
+ * The git control-path rules (see git-protect.ts), appended AFTER the writable-root
+ * allows so they win. Empty when there is nothing to protect.
+ */
+export function seatbeltGitProtectionRules(git: GitProtection): string[] {
+  // Last match wins: re-deny what the host would later execute (a git hook,
+  // `core.fsmonitor` in config, a `commondir` pointing at a foreign config). A
+  // subpath deny holds for a path that does not exist yet, so a missing hooks dir
+  // or commondir cannot be created. A symlinked entry is denied under both names:
+  // the link cannot be replaced, the target cannot be written. The git dirs (and
+  // their parents inside the root) are denied by name too, so they cannot be
+  // renamed away and replaced by ones carrying a hook.
+  const lines: string[] = [];
+  const links = git.links ?? [];
+  const sealed = git.sealed ?? [];
+  if (git.controls.length === 0 && git.anchors.length === 0 && links.length === 0 && sealed.length === 0) return lines;
+  lines.push("", ";; --- git control paths stay read-only inside the writable roots ---");
+  const denied = new Set<string>();
+  for (const control of git.controls) {
+    for (const p of [control.path, control.real]) {
+      if (denied.has(p)) continue;
+      denied.add(p);
+      lines.push(`(deny file-write* (subpath ${sbplString(p)}))`);
+    }
+  }
+  // A symlink to a git dir (`.git -> elsewhere`) is pinned by its name, like an
+  // anchor: replacing the link with a fresh git dir is the same swap.
+  for (const pinned of [...git.anchors, ...links]) {
+    lines.push(`(deny file-write* (literal ${sbplString(pinned)}))`);
+  }
+  // No new submodule gitdir or linked worktree during the run: a direct entry of
+  // `modules/` or `worktrees/` cannot be created, renamed or removed. A regex
+  // matches names that do not exist yet; writes deeper inside an existing one
+  // (its objects, refs, index) are not matched.
+  for (const dir of sealed) {
+    lines.push(`(deny file-write* (regex ${sbplString(`^${regexLiteral(dir)}/[^/]+$`)}))`);
+  }
+  return lines;
+}
+
+/** Deny the LaunchServices IPC and launcher binaries that start a program outside the profile. */
+export function seatbeltLaunchHandoffRules(extraBinaries: readonly string[] = []): string[] {
+  return [
+    ";; --- no program handoff to launchd (open, osascript): it would run outside this profile ---",
+    `(deny mach-lookup ${LAUNCH_SERVICES_PREFIXES.map((p) => `(global-name-prefix ${sbplString(p)})`).join(" ")})`,
+    `(deny process-exec ${[...LAUNCHER_BINARIES, ...extraBinaries].map((b) => `(literal ${sbplString(b)})`).join(" ")})`,
+  ];
+}
+
+/** stdio / tty device writes every shell tool needs even under a write-deny. */
+export function seatbeltDeviceWriteRule(): string {
+  return `(allow file-write-data ${DEVICE_WRITE_LITERALS.map((d) => `(literal ${sbplString(d)})`).join(" ")})`;
+}
+
+/**
  * Build the Seatbelt (.sb) profile text for `profile`. Allow-default, then:
  *   - deny all writes, re-allow writable roots + stdio devices;
  *   - re-deny the git control paths inside those roots, existing or not, pin
@@ -85,49 +139,10 @@ export function buildSeatbeltProfile(
   }
 
   // stdio/tty devices must stay writable regardless of mode.
-  lines.push(
-    `(allow file-write-data ${DEVICE_WRITE_LITERALS.map((d) => `(literal ${sbplString(d)})`).join(" ")})`,
-  );
+  lines.push(seatbeltDeviceWriteRule());
 
-  // Last match wins: re-deny what the host would later execute (a git hook,
-  // `core.fsmonitor` in config, a `commondir` pointing at a foreign config). A
-  // subpath deny holds for a path that does not exist yet, so a missing hooks dir
-  // or commondir cannot be created. A symlinked entry is denied under both names:
-  // the link cannot be replaced, the target cannot be written. The git dirs (and
-  // their parents inside the root) are denied by name too, so they cannot be
-  // renamed away and replaced by ones carrying a hook.
-  const links = git.links ?? [];
-  const sealed = git.sealed ?? [];
-  if (git.controls.length > 0 || git.anchors.length > 0 || links.length > 0 || sealed.length > 0) {
-    lines.push("", ";; --- git control paths stay read-only inside the writable roots ---");
-    const denied = new Set<string>();
-    for (const control of git.controls) {
-      for (const p of [control.path, control.real]) {
-        if (denied.has(p)) continue;
-        denied.add(p);
-        lines.push(`(deny file-write* (subpath ${sbplString(p)}))`);
-      }
-    }
-    // A symlink to a git dir (`.git -> elsewhere`) is pinned by its name, like an
-    // anchor: replacing the link with a fresh git dir is the same swap.
-    for (const pinned of [...git.anchors, ...links]) {
-      lines.push(`(deny file-write* (literal ${sbplString(pinned)}))`);
-    }
-    // No new submodule gitdir or linked worktree during the run: a direct entry of
-    // `modules/` or `worktrees/` cannot be created, renamed or removed. A regex
-    // matches names that do not exist yet; writes deeper inside an existing one
-    // (its objects, refs, index) are not matched.
-    for (const dir of sealed) {
-      lines.push(`(deny file-write* (regex ${sbplString(`^${regexLiteral(dir)}/[^/]+$`)}))`);
-    }
-  }
-
-  lines.push(
-    "",
-    ";; --- no program handoff to launchd (open, osascript): it would run outside this profile ---",
-    `(deny mach-lookup ${LAUNCH_SERVICES_PREFIXES.map((p) => `(global-name-prefix ${sbplString(p)})`).join(" ")})`,
-    `(deny process-exec ${LAUNCHER_BINARIES.map((b) => `(literal ${sbplString(b)})`).join(" ")})`,
-  );
+  lines.push(...seatbeltGitProtectionRules(git));
+  lines.push("", ...seatbeltLaunchHandoffRules());
 
   if (profile.readDenyList.length > 0) {
     lines.push("", ";; --- secret read-deny ---");
