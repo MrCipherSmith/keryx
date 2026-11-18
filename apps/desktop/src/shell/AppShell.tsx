@@ -40,6 +40,8 @@ interface ShellProps {
   onNewWindow: (cwd: string) => void;
   onCloseProject: () => void;
   onPalette: () => void;
+  /** Title-bar controls before the palette button (the Project menu). */
+  actions?: ReactNode;
   children: ReactNode;
 }
 
@@ -205,6 +207,7 @@ function TitleBar(p: ShellProps) {
         </span>
         <InfoToggle show={p.view === "session"} />
         <SideToggles />
+        {p.actions}
         <button className="palette-btn" onClick={onPalette} title="Commands and sessions">
           <Icon name="search" size={13} />
           <span>Commands</span>
