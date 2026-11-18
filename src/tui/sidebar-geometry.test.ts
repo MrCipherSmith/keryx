@@ -33,6 +33,7 @@ import { commandsForMode } from "../commands/agent-commands";
 import { displayWidth } from "../lib/live-render";
 import { createShellChrome, SIDEBAR_TEXT_WIDTH, type ShellChrome, type ShellChromeOptions } from "./shell-chrome";
 import { SIDEBAR_WIDTH } from "./sidebar-metrics";
+import { shellInnerColumns } from "./shell-frame";
 
 type Mode = "default" | "wide" | "rail";
 interface GeometryState {
@@ -615,8 +616,10 @@ otuiTest("flow 468 AC16: resizing the terminal re-clamps the sidebar; wide falls
       expect(sidebar.width).toBe(68);
       h.resize(120, 30);
       await h.flush();
-      expect(geo.state().width).toBe(60);
-      expect(sidebar.width).toBe(60);
+      // Half of what is left once the shell frame has taken its columns.
+      const half = Math.floor(shellInnerColumns(120, 30) / 2);
+      expect(geo.state().width).toBe(half);
+      expect(sidebar.width).toBe(half);
       h.resize(90, 30);
       await h.flush();
       expect(geo.state()).toEqual({ mode: "default", preferred: "wide", width: SIDEBAR_WIDTH });

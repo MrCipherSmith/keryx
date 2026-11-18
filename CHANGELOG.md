@@ -26,6 +26,18 @@ All notable changes to `keryx` are documented here. The format follows
 
 - Run `keryx update` once to regenerate `index.md`, the `CLAUDE.md` / `AGENTS.md` block, the installed rules and the `commit-msg` hook. A project whose `core.hooksPath` points at a hook manager should call the Keryx hook from its `commit-msg` step; `keryx doctor` says when this applies.
 
+## [0.4.35] - 2026-11-17
+
+### Changed
+
+- **`keryx shell` sits inside a rounded frame.** The full-screen shell no longer runs into the terminal's edges: a thin rounded border with a one-column gutter outside it frames the transcript and the sidebar, which reads better inside a multiplexer pane (herdr, tmux, zellij). The frame is drawn only when at least 80x24 is left inside it (a terminal of 84x26 or larger), so dialogs and the footer keep the size they are fitted to; a smaller terminal looks as before. [#1218](https://github.com/MrCipherSmith/keryx/pull/1218)
+- **The Work card lists jobs and subagents one per row.** Each row is a coloured status badge, the command cut to one line, and the exit code with the run time in an aligned column, instead of wrapped `status · command` text. ↑/↓ pick a row and Enter opens it; the opened job's tab gets a short label, shows the full command and a "← back" link, and Esc or Backspace return to the list. Footers now name the keys of the tab you are on and no longer promise "open the full view" on tabs that have none. [#1218](https://github.com/MrCipherSmith/keryx/pull/1218)
+
+### Fixed
+
+- **Clicking a button no longer selects its text.** A press on a card, a list row or a button (the sidebar mode buttons, a question's answer) started a text selection and the copy toast; it now only clicks. Text with nothing to click, such as the transcript, still selects and copies. [#1218](https://github.com/MrCipherSmith/keryx/pull/1218)
+- **Dialogs stay inside the shell frame.** A dialog sized itself to the whole terminal height and ran two rows past the frame's bottom edge. [#1218](https://github.com/MrCipherSmith/keryx/pull/1218)
+
 ## [0.4.34] - 2026-11-17
 
 ### Changed
@@ -9037,4 +9049,4 @@ runtime dependencies, no sockets).
 [0.2.35]: https://github.com/MrCipherSmith/keryx/compare/v0.2.34...v0.2.35
 [0.2.36]: https://github.com/MrCipherSmith/keryx/compare/v0.2.35...v0.2.36
 [0.2.37]: https://github.com/MrCipherSmith/keryx/compare/v0.2.36...v0.2.37
-[Unreleased]: https://github.com/MrCipherSmith/keryx/compare/v0.4.32...HEAD
+[Unreleased]: https://github.com/MrCipherSmith/keryx/compare/v0.4.35...HEAD
