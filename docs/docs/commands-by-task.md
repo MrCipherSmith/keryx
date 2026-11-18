@@ -164,6 +164,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | CLI command | Summary |
 |---|---|
 | `keryx acp` | Speak ACP v1 (newline-delimited JSON-RPC) over stdio, for an ACP client (e.g. an editor). |
+| `keryx app` | Install, update, build or check the Keryx desktop app (macOS), the ACP client over keryx acp --profile shell. |
 | `keryx agents` | Manage optional global agent bootstrap instructions. |
 | `keryx mcp` | Retired spelling of serve-mcp / integrate; still works, names its replacement. |
 | `keryx integrate` | Wire this project into an editor or agent as an MCP server. |

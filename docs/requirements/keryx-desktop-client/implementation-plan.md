@@ -8,7 +8,8 @@ Version: 0.3.0
 | M1 | `shell` profile (roster, modes, plan/usage/info updates, `_keryx/ask_user`, `_keryx/info`); Tauri client (chat, tools, approvals, modes, sessions, models, plan, usage, settings); sidecar; local `.dmg`; release workflow; Flows board ([flows-board.md](flows-board.md)); browser dev mode | implemented on the branch; owner acceptance pending (see README status) |
 | M2a | every shell slash command via `_keryx/command` (text answers and generic views for picker/modal commands; `/queue` client-side, `/delegate`), command palette, `/connect` Providers dialog over `_keryx/providers/*` (api key, device code, custom), `spawn_subagent` + `_keryx/subagent` + Subagents tab, `_keryx/tasks/*` + Tasks tab (specification §3.9, §4.2.1, AC13–AC19) | implemented on `feat/desktop-client-m2` 2026-11-17 (as-built deviations: specification §3.9.5a); owner acceptance pending |
 | M2b | images (after flow 493), model-chosen external subagent runtimes (done 2026-11-18, trust/auto only, D-14), per-subagent cancel, sidebar cards via `_keryx/state` | future |
-| M3 | remote-control and Hub toggles, Developer ID signing on, Homebrew cask, auto-update | future |
+| D-15 | keryx from npm by default (`auto` source), `keryx app install/update/build/status`, release tarball + `SHA256SUMS`, `minDesktopVersion`, update banner | implemented on `feat/desktop-app-updates`; banner-driven update awaits the first `desktop-v*` release |
+| M3 | remote-control and Hub toggles, Developer ID signing on, Homebrew cask, signed auto-update (replaces the D-15 channel) | future |
 
 ## Parity matrix
 
@@ -70,3 +71,13 @@ Version: 0.3.0
 | T23 browser child webviews: tabs, URL bar, back/forward/reload, per-project store, navigation policy, bounds follow the panel | client | new `src-tauri/src/browser.rs`, `src/panels/BrowserPanel.tsx`, `Cargo.toml` (`unstable`) |
 | T24 panel MCP: socket server + `--panel-mcp` relay, terminal and browser tools, `mcpServers` entry in `session/new`/`session/load` | client | new `src-tauri/src/panel_mcp.rs`, `main.rs`, `src/session/useAcpSession.ts` |
 | T25 tests (cargo, happy-dom), dmg, click-through in the installed app | all | — |
+## D-15 tasks
+
+| Task | Lane | Files |
+|---|---|---|
+| U1 `keryx app` command and tests | keryx | `src/commands/app.ts`, `src/commands/app.test.ts`, `src/cli-registry.ts`, `src/lib/group-subcommands.ts`, `src/standard/help-groups.ts` |
+| U2 `minDesktopVersion` in the shell profile | keryx | `src/acp/profile.ts` |
+| U3 release archive and `SHA256SUMS` | packaging | `.github/workflows/desktop-release.yml` |
+| U4 `auto` source, settings migration, update commands | client | `apps/desktop/src-tauri/src/{locator,settings,appupdate,lib}.rs` |
+| U5 update banner, Automatic source in Settings | client | `apps/desktop/src/shell/UpdateBanner.tsx`, `apps/desktop/src/shell/SettingsView.tsx`, `apps/desktop/src/App.tsx` |
+| U6 docs | docs | `docs/docs/desktop-app.md`, `docs/docs/cli-reference.md` |

@@ -86,8 +86,10 @@ test("replay: a delegate note is sent as text + _meta.keryx.delegateResult; no e
   expect(chunks.map((f) => f.params?.update?.content?.text)).toEqual(["go", TEXT, "second"]);
   expect(JSON.stringify(chunks)).not.toContain("delegate-result-");
   expect(JSON.stringify(chunks)).not.toContain("UNTRUSTED");
-  expect(chunks[1]?.params?.update?._meta?.keryx?.delegateResult).toEqual({ agentId: "claude-cli", runId: "ext:1", turn: 1, text: TEXT });
-  expect(chunks[2]?.params?.update?._meta?.keryx?.delegateResult?.turn).toBe(2);
+  const delegateMeta = (frame: unknown) =>
+    (frame as { params?: { update?: { _meta?: { keryx?: { delegateResult?: Record<string, unknown> } } } } } | undefined)?.params?.update?._meta?.keryx?.delegateResult;
+  expect(delegateMeta(chunks[1])).toEqual({ agentId: "claude-cli", runId: "ext:1", turn: 1, text: TEXT });
+  expect(delegateMeta(chunks[2])?.turn).toBe(2);
   const kept = loadContext(h.projectDir, s.summary.id, dataDirOf(h));
   expect(kept[2]?.content).toContain(`<delegate-result-${NONCE}>`);
   expect(kept[2]?.injected).toBe(true);

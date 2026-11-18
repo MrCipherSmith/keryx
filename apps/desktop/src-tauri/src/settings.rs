@@ -10,12 +10,17 @@ use tauri::{AppHandle, Manager};
 
 pub const MAX_RECENT: usize = 10;
 
+/// The settings layout version. 1 = decision D-15 (`auto` keryx source).
+pub const SETTINGS_VERSION: u32 = 1;
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
     pub keryx_source: KeryxSource,
     pub custom_path: Option<String>,
     pub recent_projects: Vec<String>,
+    /// Absent (0) in files written before D-15.
+    pub settings_version: u32,
 }
 
 impl Settings {
@@ -24,8 +29,20 @@ impl Settings {
     pub fn load(path: &Path) -> Settings {
         std::fs::read_to_string(path)
             .ok()
-            .and_then(|text| serde_json::from_str(&text).ok())
+            .and_then(|text| serde_json::from_str::<Settings>(&text).ok())
             .unwrap_or_default()
+            .migrated()
+    }
+
+    /// Bring an older file up to `SETTINGS_VERSION`. Before D-15 the app wrote
+    /// its default source (`bundled`) on every save, so a stored `bundled`
+    /// there is no choice and becomes `auto`. A later explicit `bundled` stays.
+    pub fn migrated(mut self) -> Settings {
+        if self.settings_version < 1 && self.keryx_source == KeryxSource::Bundled {
+            self.keryx_source = KeryxSource::Auto;
+        }
+        self.settings_version = SETTINGS_VERSION;
+        self
     }
 
     /// Write atomically (temp file + rename). The temp name is unique to this
@@ -78,7 +95,9 @@ fn update(path: &Path, change: impl FnOnce(&mut Settings)) -> std::io::Result<Se
 /// Replace the user-editable fields; recents are owned by `add_recent`, so a
 /// stale form must not clobber them.
 fn set_settings(path: &Path, next: Settings) -> std::io::Result<Settings> {
-    update(path, move |s| *s = Settings { recent_projects: std::mem::take(&mut s.recent_projects), ..next })
+    update(path, move |s| {
+        *s = Settings { recent_projects: std::mem::take(&mut s.recent_projects), settings_version: SETTINGS_VERSION, ..next }
+    })
 }
 
 /// Run blocking settings file I/O off the main thread and the async workers.
@@ -114,10 +133,12 @@ mod tests {
     #[test]
     fn missing_or_corrupt_file_gives_defaults() {
         let dir = tempfile::tempdir().unwrap();
-        assert_eq!(Settings::load(&dir.path().join("none.json")), Settings::default());
+        let defaults = Settings::default().migrated();
+        assert_eq!(defaults.keryx_source, KeryxSource::Auto);
+        assert_eq!(Settings::load(&dir.path().join("none.json")), defaults);
         let bad = dir.path().join("bad.json");
         std::fs::write(&bad, "{not json").unwrap();
-        assert_eq!(Settings::load(&bad), Settings::default());
+        assert_eq!(Settings::load(&bad), defaults);
     }
 
     #[test]
@@ -128,6 +149,7 @@ mod tests {
             keryx_source: KeryxSource::Custom,
             custom_path: Some("/x/keryx".into()),
             recent_projects: vec!["/p".into()],
+            settings_version: SETTINGS_VERSION,
         };
         s.save(&path).unwrap();
         let raw = std::fs::read_to_string(&path).unwrap();
@@ -143,6 +165,24 @@ mod tests {
         let s = Settings::load(&path);
         assert_eq!(s.keryx_source, KeryxSource::Path);
         assert!(s.recent_projects.is_empty());
+    }
+
+    #[test]
+    fn a_pre_d10_bundled_default_becomes_auto_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("s.json");
+        std::fs::write(&path, "{\"keryxSource\":\"bundled\",\"recentProjects\":[\"/p\"]}").unwrap();
+        let s = Settings::load(&path);
+        assert_eq!(s.keryx_source, KeryxSource::Auto);
+        assert_eq!(s.settings_version, SETTINGS_VERSION);
+        assert_eq!(s.recent_projects, ["/p"]);
+        // An explicit choice made after D-15 is kept.
+        let chosen = set_settings(&path, Settings { keryx_source: KeryxSource::Bundled, ..Settings::default() }).unwrap();
+        assert_eq!(chosen.keryx_source, KeryxSource::Bundled);
+        assert_eq!(Settings::load(&path).keryx_source, KeryxSource::Bundled);
+        // Other pre-D-15 choices are kept as they were.
+        std::fs::write(&path, "{\"keryxSource\":\"custom\",\"customPath\":\"/k\"}").unwrap();
+        assert_eq!(Settings::load(&path).keryx_source, KeryxSource::Custom);
     }
 
     #[test]

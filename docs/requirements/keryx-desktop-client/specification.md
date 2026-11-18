@@ -570,7 +570,8 @@ feature the connected keryx does not advertise.
 
 | Module | Responsibility |
 |---|---|
-| `locator.rs` | resolve the keryx binary: bundled sidecar (`<dir of current_exe>/keryx`, i.e. `Keryx.app/Contents/MacOS/keryx`), `keryx` on the login-shell `PATH`, or an explicit path, per settings |
+| `locator.rs` | resolve the keryx binary per settings: `auto` (default, D-15: `keryx` on the login-shell `PATH`, else the bundled sidecar), the bundled sidecar (`<dir of current_exe>/keryx`, i.e. `Keryx.app/Contents/MacOS/keryx`), `PATH` only, or an explicit path |
+| `appupdate.rs` | update banner backend (D-15): `app_update_check` runs `<keryx> app status --json --dir <install dir>` and compares the newest release and `minDesktopVersion` with the app's version; `app_update_run` starts `keryx app update --dir … --wait-pid <pid> --relaunch` detached (own process group, output to `app-update.log`) and quits |
 | `shellenv.rs` | capture the login-shell environment once (`$SHELL -ilc 'env -0'`, 5 s timeout) so GUI-launched keryx sees `PATH` and provider keys from shell rc files |
 | `process.rs` | spawn `keryx acp --profile shell` in its own process group with the project folder as cwd; stop = close stdin, SIGTERM, wait 9.5 s, SIGKILL the group |
 | `framing.rs` | newline-delimited JSON framing; oversized-line guard (16 MiB) |
@@ -587,7 +588,8 @@ version checks and the flows parsers and argv builder.
 
 | Item | Location |
 |---|---|
-| Settings | `settings.json` in the Tauri app config dir (`~/Library/Application Support/dev.keryx.desktop/`): `keryxSource` (`bundled`, `path`, `custom`), `customPath`, `recentProjects`, `theme` |
+| Settings | `settings.json` in the Tauri app config dir (`~/Library/Application Support/dev.keryx.desktop/`): `keryxSource` (`auto`, `bundled`, `path`, `custom`), `customPath`, `recentProjects`, `settingsVersion` (1 since D-15; a file without it holding `bundled` is read as `auto`) |
+| Update log | `app-update.log` in the app log dir: the output of the last `keryx app update` the banner started |
 | keryx stderr log | the Tauri app log dir (`~/Library/Logs/dev.keryx.desktop/`), one file per window process |
 | Sessions, flows | keryx's own stores; the app keeps no copy |
 
@@ -782,8 +784,20 @@ As built (2026-11-18, found in the installed-app click-through):
   The `.app` is ad-hoc signed.
 - `.github/workflows/desktop-release.yml` on `desktop-v*`: macOS runner,
   both sidecar targets, `tauri build --target universal-apple-darwin`,
-  Developer ID signing and notarization when `APPLE_*` secrets exist, `.dmg`
-  attached to the release. Homebrew cask and updater manifest are M3.
+  Developer ID signing and notarization when `APPLE_*` secrets exist; the
+  release carries the `.dmg`, `Keryx_<version>_universal.app.tar.gz` (checked
+  to unpack to that version with a valid signature) and `SHA256SUMS`.
+  Homebrew cask and the signed updater manifest are M3.
+- `keryx app install|update|build|status` (`src/commands/app.ts`, D-15): the
+  install and update channel without a Developer ID. It reads the
+  `desktop-v*` releases, picks the archive for the host arch (else
+  `universal`), verifies `SHA256SUMS`, unpacks next to the target, checks the
+  bundle version, and swaps it in by rename with the old app restored on
+  failure; refuses while the app runs unless `--wait-pid`; `--relaunch` opens
+  the app afterwards, also after a failure. `build` runs
+  `scripts/desktop/build.sh` inside a keryx checkout only. keryx reports
+  `minDesktopVersion` (`src/acp/profile.ts`) in `initialize._meta.keryx` of
+  the shell profile and in `app status`.
 
 ## 6. Integration points
 
@@ -833,3 +847,7 @@ As built (2026-11-18, found in the installed-app click-through):
 | AC22 | browser tab loads a localhost page; non-http(s) navigation and new windows refused; a page cannot invoke app commands | exec `cargo test browser` + judged in the installed app |
 | AC23 | panel MCP: token required; `tools/list`; `terminal_run` refuses a user tab; `terminal_read` returns output; browser tools round-trip | exec `cargo test panel_mcp` + judged |
 | AC24 | `.dmg` builds; terminal, Run button and browser clicked through in the installed app | judged |
+| AC25 | `keryx app install/update/status/build` against a fake release server: newest `desktop-v*` only, checksum enforced, swap with restore, running-app refusal and `--wait-pid`, build guard | exec `bun test src/commands/app.test.ts` |
+| AC26 | `auto` source and settings migration; update-check parsing, decision, install-dir and argv | exec `cd apps/desktop/src-tauri && cargo test` |
+| AC27 | banner shows a newer release (skippable) and a required update (not skippable) | exec `cd apps/desktop && bun test src/shell/UpdateBanner.test.ts` |
+| AC28 | the banner's update replaces the installed app and relaunches it | judged (needs a published `desktop-v*` release) |

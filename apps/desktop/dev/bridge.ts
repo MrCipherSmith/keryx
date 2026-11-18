@@ -6,6 +6,7 @@
 //
 //   acp_start(cwd, noProfile) / acp_send(message) / acp_stop()
 //   settings_get / settings_set / settings_add_recent / version_check(found)
+//   app_update_check (always null: dev mode runs no Keryx.app) / app_update_run (refused)
 //   flows_list(cwd) / flows_get(cwd, dir) / flows_action(cwd, dir, action) / flows_watch(cwd)
 //
 // and receives the same events: acp://message, acp://exit, acp://error,
@@ -38,14 +39,14 @@ function readMinVersion(): string {
 // ---- settings --------------------------------------------------------------
 
 interface Settings {
-  keryxSource: "bundled" | "path" | "custom";
+  keryxSource: "auto" | "bundled" | "path" | "custom";
   customPath: string | null;
   recentProjects: string[];
 }
 
 function loadSettings(): Settings {
   const fallback: Settings = {
-    keryxSource: "bundled",
+    keryxSource: "auto",
     customPath: null,
     recentProjects: [process.env.KERYX_DEV_PROJECT ?? REPO_ROOT],
   };
@@ -575,6 +576,10 @@ async function handle(ws: ServerWebSocket<Conn>, cmd: string, args: Json): Promi
       const found = String(args.found);
       return { ok: semverAtLeast(found, MIN_KERYX_VERSION), found, required: MIN_KERYX_VERSION };
     }
+    case "app_update_check":
+      return null;
+    case "app_update_run":
+      throw new Error("Browser dev mode runs no Keryx.app; use `keryx app update` in a terminal.");
     case "flows_list":
       return flowsList(await projectCwd(ws.data, cwd));
     case "flows_get":

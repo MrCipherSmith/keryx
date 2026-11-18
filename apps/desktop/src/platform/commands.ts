@@ -3,7 +3,7 @@
 import type { Transport } from "../acp/client";
 import { backend, invoke, isTauri, listen, type Unlisten } from "./backend";
 
-export type KeryxSource = "bundled" | "path" | "custom";
+export type KeryxSource = "auto" | "bundled" | "path" | "custom";
 
 export interface Settings {
   keryxSource: KeryxSource;
@@ -36,6 +36,21 @@ export const settingsGet = () => invoke<Settings>("settings_get");
 export const settingsSet = (settings: Settings) => invoke<Settings>("settings_set", { settings });
 export const settingsAddRecent = (project: string) => invoke<Settings>("settings_add_recent", { project });
 export const versionCheck = (found: string) => invoke<VersionCheck>("version_check", { found });
+
+/** The update banner's input (decision D-15); `null` when there is nothing to check. */
+export interface UpdateCheck {
+  current: string;
+  latest: string | null;
+  releaseUrl: string | null;
+  available: boolean;
+  required: boolean;
+  keryxVersion: string;
+  minDesktopVersion: string;
+}
+
+export const appUpdateCheck = () => invoke<UpdateCheck | null>("app_update_check");
+/** Starts `keryx app update --wait-pid <app> --relaunch` and quits the app. */
+export const appUpdateRun = () => invoke<void>("app_update_run");
 
 export const acpTransport: Transport = {
   send: (message) => invoke<void>("acp_send", { message }),

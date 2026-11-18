@@ -102,6 +102,7 @@ rules sync regenerates it. That index text is prompt guidance, not enforcement.
 | `security` | Policy-based scanning, redaction, guardrails, and audit reports for agent input/output and artifacts. |
 | `mcp` | Expose Metaproject services over the Model Context Protocol (opt-in, off by default). SAC tools are stdio-only. |
 | `acp` | Serve the harness to an editor over the Agent Client Protocol (newline-delimited JSON-RPC on stdio). |
+| `app` | Install, update, build or check the Keryx desktop app for macOS (`status`, `install`, `update`, `build`). |
 | `workspace` | Shared Agent Context: create/list/show workspaces, FWK overview/read, propose/review, collaboration overview, policy-readiness. Not listed by `keryx commands`. |
 
 ### Optional dependencies and graceful degradation
@@ -829,6 +830,50 @@ to run".
 - **No cross-project `session/list`.** Only the ACP process's own project
   (or a `cwd` you pass) is listed; there is no "every session on this
   machine" view.
+
+## app
+
+`keryx app` installs and updates the [Keryx desktop app](./desktop-app.md)
+(macOS) from the repository's `desktop-v*` GitHub Releases, or builds it from a
+checkout. A file the CLI downloads is not quarantined, so the ad-hoc signed app
+opens without the `xattr` step a browser download needs.
+
+```
+keryx app status [--json] [--pre] [--dir <folder>]
+keryx app install [--pre] [--dir <folder>] [--force] [--wait-pid <pid>] [--relaunch]
+keryx app update  [--pre] [--dir <folder>] [--wait-pid <pid>] [--relaunch]
+keryx app build
+```
+
+| Subcommand | What it does |
+|---|---|
+| `status` | The installed `Keryx.app` version, the newest release, whether an update exists, this keryx's version and the oldest app it works with (`minDesktopVersion`). `--json` prints one object: `appPath`, `installedVersion`, `latest`, `updateAvailable`, `keryxVersion`, `minDesktopVersion`, `appTooOld`, `error`. An unreachable GitHub is reported in `error`, not as a failure. |
+| `install` | Download the newest release and install it as `<folder>/Keryx.app`. Does nothing when that version is already installed, unless `--force`. |
+| `update` | The same, only when the release is newer than the installed app. |
+| `build` | Run `scripts/desktop/build.sh` from the keryx repository checkout that holds the current folder; refuses anywhere else. For development, like `bun run desktop:build`. |
+
+| Flag | Meaning |
+|---|---|
+| `--pre` | Consider pre-releases too. |
+| `--dir <folder>` | Install folder instead of `/Applications`. |
+| `--force` | `install` reinstalls the same version. |
+| `--wait-pid <pid>` | Wait (up to 60 s) for that process, the running app, to exit before replacing it. Without it, a running app is refused. |
+| `--relaunch` | Open the app afterwards — after a failed update too, so the old app comes back. |
+
+How an install works: the release's `Keryx_<version>_<arch>.app.tar.gz` for
+this Mac (`aarch64` or `x64`, else `universal`) is downloaded, its SHA-256 is
+checked against the release's `SHA256SUMS` (a release without it is refused),
+it is unpacked next to the target and must hold `Keryx.app` of exactly that
+version, and it is swapped in by rename: the old app moves aside, the new one
+moves in, the old one is deleted; if the move fails the old app is put back.
+The checksum proves the download is intact, not who built it: it comes from the
+same release. `KERYX_APP_RELEASES_API` points the release lookup at another
+repository API base (tests use a local fake).
+
+The desktop app runs `keryx app status --json` at startup for its update
+banner, and `keryx app update --wait-pid <its pid> --relaunch` when you press
+**Update and relaunch**. `app` is not in `keryx commands`: it changes the
+machine, not the project.
 
 ## bus
 

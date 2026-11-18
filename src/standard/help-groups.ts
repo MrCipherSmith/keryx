@@ -646,6 +646,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
   {
     kind: "cli",
+    name: "app",
+    group: "External agents, ACP and MCP",
+    summary: "Install, update, build or check the Keryx desktop app (macOS), the ACP client over keryx acp --profile shell.",
+  },
+  {
+    kind: "cli",
     name: "agents",
     group: "External agents, ACP and MCP",
     summary: "Manage optional global agent bootstrap instructions.",

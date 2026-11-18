@@ -1,3 +1,4 @@
+pub mod appupdate;
 pub mod bridge;
 pub mod browser;
 pub mod child;
@@ -123,6 +124,8 @@ pub fn run() {
             browser::browser_layout,
             browser::browser_list,
             panel_mcp::panel_mcp_entry,
+            appupdate::app_update_check,
+            appupdate::app_update_run,
         ])
         .build(tauri::generate_context!())
         .expect("error while building the Keryx app");

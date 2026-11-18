@@ -1,5 +1,8 @@
 //! Resolve which keryx binary to run.
 //!
+//! * `auto` (the default, decision D-15): `keryx` on `PATH` — the npm install,
+//!   so `npm i -g` updates the agent without a new app — and the bundled
+//!   sidecar when there is none.
 //! * `bundled`: the sidecar Tauri places next to the main executable
 //!   (`Keryx.app/Contents/MacOS/keryx`; `target/<profile>/keryx` in dev).
 //!   Tauri strips the `-<target-triple>` suffix when it copies an
@@ -21,6 +24,7 @@ pub const SIDECAR_NAME: &str = "keryx";
 #[serde(rename_all = "lowercase")]
 pub enum KeryxSource {
     #[default]
+    Auto,
     Bundled,
     Path,
     Custom,
@@ -77,6 +81,19 @@ pub fn locate(
     path_var: Option<&OsStr>,
 ) -> Result<Located, String> {
     match source {
+        KeryxSource::Auto => {
+            if let Some(path) = which(SIDECAR_NAME, path_var) {
+                return Ok(Located { path, source: KeryxSource::Path, note: None });
+            }
+            match exe_dir.map(|d| d.join(SIDECAR_NAME)).filter(|p| is_executable_file(p)) {
+                Some(path) => Ok(Located {
+                    path,
+                    source: KeryxSource::Bundled,
+                    note: Some("No keryx on PATH; using the keryx bundled with the app. `npm i -g @mrciphersmith/keryx` installs one that updates on its own.".to_string()),
+                }),
+                None => Err("No `keryx` is on PATH and the bundled keryx was not found next to the app.".to_string()),
+            }
+        }
         KeryxSource::Custom => {
             let raw = custom_path
                 .map(str::trim)
@@ -125,6 +142,38 @@ mod tests {
             fs::set_permissions(&p, fs::Permissions::from_mode(0o755)).unwrap();
         }
         p
+    }
+
+    #[test]
+    fn auto_is_the_default_and_prefers_path() {
+        assert_eq!(KeryxSource::default(), KeryxSource::Auto);
+        let exe = tempfile::tempdir().unwrap();
+        let bin = tempfile::tempdir().unwrap();
+        make_exec(exe.path(), "keryx");
+        let on_path = make_exec(bin.path(), "keryx");
+        let path_var = std::env::join_paths([bin.path()]).unwrap();
+        let got = locate(KeryxSource::Auto, None, Some(exe.path()), Some(&path_var)).unwrap();
+        assert_eq!(got.path, on_path);
+        assert_eq!(got.source, KeryxSource::Path);
+        assert!(got.note.is_none());
+    }
+
+    #[test]
+    fn auto_falls_back_to_the_sidecar_with_a_note() {
+        let exe = tempfile::tempdir().unwrap();
+        let bin = tempfile::tempdir().unwrap();
+        let sidecar = make_exec(exe.path(), "keryx");
+        let path_var = std::env::join_paths([bin.path()]).unwrap();
+        let got = locate(KeryxSource::Auto, None, Some(exe.path()), Some(&path_var)).unwrap();
+        assert_eq!(got.path, sidecar);
+        assert_eq!(got.source, KeryxSource::Bundled);
+        assert!(got.note.is_some());
+        assert!(locate(KeryxSource::Auto, None, Some(bin.path()), Some(&path_var)).is_err());
+    }
+
+    #[test]
+    fn auto_serializes_as_lowercase() {
+        assert_eq!(serde_json::to_string(&KeryxSource::Auto).unwrap(), "\"auto\"");
     }
 
     #[test]
