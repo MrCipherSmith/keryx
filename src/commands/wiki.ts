@@ -679,7 +679,7 @@ async function runEnrich(args: string[]): Promise<void> {
   // the same way `keryx shell` and `keryx auth` do, or enrich reports "no credential".
   const { applyOAuthAccessToEnv } = await import("../lib/oauth/grants");
   applyOAuthAccessToEnv();
-  const { defaultEnrichProgress, planWikiEnrich, wikiEnrich } = await import("../wiki/enrich");
+  const { defaultEnrichProgress, planEnrichGroups, planWikiEnrich, wikiEnrich } = await import("../wiki/enrich");
   const prompt = optionValue(args, "--prompt");
   const provider = optionValue(args, "--provider");
   const model = optionValue(args, "--model");
@@ -692,9 +692,15 @@ async function runEnrich(args: string[]): Promise<void> {
   const refreshGraph = args.includes("--refresh-graph");
   const dryRun = args.includes("--dry-run");
   const noValidate = args.includes("--no-validate");
+  const groupRaw = optionValue(args, "--group");
+  const groupSizeRaw = optionValue(args, "--group-size");
+  const pagesRaw = optionValue(args, "--pages");
   // Positional page = first bare token that is neither a flag nor a flag's value.
   const valueFlags = new Set([
     "--page",
+    "--pages",
+    "--group",
+    "--group-size",
     "--prompt",
     "--provider",
     "--model",
@@ -702,9 +708,74 @@ async function runEnrich(args: string[]): Promise<void> {
     "--concurrency",
     "--max-tokens",
   ]);
-  const page = args.find(
-    (arg, i) => !arg.startsWith("--") && !(i > 0 && valueFlags.has(args[i - 1] as string)),
-  );
+  // `--page <p>` and a bare `<p>` both name one page (the hint `wiki status`
+  // prints uses `--page`; it used to be swallowed as a flag value).
+  const page =
+    optionValue(args, "--page") ??
+    args.find((arg, i) => !arg.startsWith("--") && !(i > 0 && valueFlags.has(args[i - 1] as string)));
+
+  const { DEFAULT_GROUP_SIZE, parseGroupSize, parsePagesArgument } = await import("../wiki/service");
+  if (groupRaw !== undefined && groupRaw !== "related") {
+    console.error(`--group accepts only "related", got "${groupRaw}"`);
+    process.exitCode = 1;
+    return;
+  }
+  const group = groupRaw === "related" ? ("related" as const) : undefined;
+  let groupSize = DEFAULT_GROUP_SIZE;
+  let pageList: string[] | undefined;
+  try {
+    if (groupSizeRaw !== undefined) groupSize = parseGroupSize(groupSizeRaw);
+    if (pagesRaw !== undefined) {
+      const { readFileSync, statSync } = await import("node:fs");
+      pageList = parsePagesArgument(pagesRaw, (file) => {
+        try {
+          return statSync(file).isFile() ? readFileSync(file, "utf8") : null;
+        } catch {
+          return null;
+        }
+      });
+    }
+  } catch (cause) {
+    console.error(cause instanceof Error ? cause.message : String(cause));
+    process.exitCode = 1;
+    return;
+  }
+  if (pageList !== undefined && page !== undefined) {
+    console.error("--pages and a single <page> cannot be combined; put the page in the --pages list");
+    process.exitCode = 1;
+    return;
+  }
+
+  const limit = limitRaw !== undefined ? Number.parseInt(limitRaw, 10) : undefined;
+
+  if (listOnly && group === "related") {
+    const groups = await planEnrichGroups({
+      cwd: process.cwd(),
+      force,
+      resume,
+      groupSize,
+      ...(pageList !== undefined ? { pages: pageList } : {}),
+      ...(typeof limit === "number" && Number.isFinite(limit) ? { limit } : {}),
+    });
+    if (args.includes("--json")) {
+      console.log(JSON.stringify({ groupSize, groups }, null, 2));
+      return;
+    }
+    console.log("# gdwiki enrich — related groups");
+    console.log("");
+    console.log(`${groups.reduce((n, g) => n + g.length, 0)} page(s) in ${groups.length} group(s), size ${groupSize.min}-${groupSize.max}`);
+    for (const [i, members] of groups.entries()) {
+      console.log("");
+      console.log(`## Group ${i + 1} (${members.length})`);
+      for (const member of members) console.log(`- ${member}`);
+    }
+    console.log("");
+    console.log("Run all groups in one process (N groups at a time):");
+    console.log(`  keryx wiki enrich --all${force ? " --force" : ""} --group related --group-size ${groupSize.min}-${groupSize.max} --concurrency N`);
+    console.log("Or one group per worker (a background task or an external agent):");
+    console.log("  keryx wiki enrich --pages <comma-list|file>");
+    return;
+  }
 
   if (listOnly) {
     const plan = await planWikiEnrich(process.cwd());
@@ -759,7 +830,6 @@ async function runEnrich(args: string[]): Promise<void> {
     return;
   }
 
-  const limit = limitRaw !== undefined ? Number.parseInt(limitRaw, 10) : undefined;
   const concurrency = concurrencyRaw !== undefined ? Number.parseInt(concurrencyRaw, 10) : undefined;
   const maxOutputTokens = maxTokensRaw !== undefined ? Number.parseInt(maxTokensRaw, 10) : undefined;
 
@@ -768,6 +838,8 @@ async function runEnrich(args: string[]): Promise<void> {
     history,
     cwd: process.cwd(),
     ...(page ? { page } : {}),
+    ...(pageList !== undefined ? { pages: pageList } : {}),
+    ...(group !== undefined ? { group, groupSize } : {}),
     all: args.includes("--all"),
     force,
     resume,
@@ -795,9 +867,16 @@ async function runEnrich(args: string[]): Promise<void> {
   console.log("");
   console.log(`provider: ${result.provider} (${result.model})`);
   console.log(`credential available: ${result.credentialAvailable ? "yes" : "no"}`);
-  console.log(`concurrency: ${result.concurrency}`);
   console.log(
-    `mode: ${page ? `page ${page}` : force ? "batch --force (all statuses)" : "batch drafts only"}` +
+    `concurrency: ${result.concurrency}` +
+      (result.concurrencyClamped !== undefined
+        ? ` (asked ${result.concurrencyClamped.requested}, cap ${result.concurrencyClamped.max})`
+        : "") +
+      (result.groups !== undefined ? ` group(s) at a time, ${result.groups.length} group(s)` : ""),
+  );
+  console.log(
+    `mode: ${pageList !== undefined ? `pages (${pageList.length})` : page ? `page ${page}` : force ? "batch --force (all statuses)" : "batch drafts only"}` +
+      (group !== undefined ? ` +group related ${groupSize.min}-${groupSize.max}` : "") +
       (resume ? " +resume" : "") +
       (refreshGraph ? " +refresh-graph" : ""),
   );
@@ -873,11 +952,20 @@ Usage:
                          # --as-of admits non-current wiki pages/memory entries
                          # too, each marked HISTORICAL with its lifecycle state
                          # and reason; without it, only current items are cited
-  keryx wiki enrich [<page>|--all] [--force] [--list] [--resume] [--limit N] [--concurrency N]
+  keryx wiki enrich [<page>|--page <p>|--pages <list|file>|--all] [--force] [--list] [--resume]
+                    [--limit N] [--concurrency N] [--group related] [--group-size MIN-MAX]
                     [--refresh-graph] [--max-tokens N] [--no-validate]
                     [--prompt "<i>"] [--provider <p>] [--model <m>] [--dry-run] [--json]
                          # defaults: drafts only; provider/model from auth.json; validate on;
-                         # concurrency 1 (raise for parallel page swarm)
+                         # concurrency 1; --concurrency is capped at 16 and says so when clamped
+                         # --group related: cluster pages by wiki links, backlinks and shared
+                         # code paths into groups (default 10-20); each worker takes one whole
+                         # group and every prompt names its group mates; --concurrency = groups
+                         # at a time. e.g. waves of 10 groups of 10-20 related pages:
+                         #   keryx wiki enrich --all --group related --group-size 10-20 --concurrency 10
+                         # --list --group related [--json]: print the groups, run nothing
+                         # --pages a,b,c (or a file: one per line, or a JSON array): enrich exactly
+                         # these pages, any status, as one group in one worker
                          # rewrites prose only — Status is always left exactly as it was
                          # before the run; enrich can never itself accept a page (issue #391)
   keryx wiki sections [--json]
