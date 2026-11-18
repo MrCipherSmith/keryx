@@ -66,5 +66,7 @@ jobs:
         working-directory: apps/desktop/src-tauri
         run: cargo clippy --locked --all-targets -- -D warnings
 
+      # From the app's own folder: the root bunfig.toml keeps apps/desktop out of root runs.
       - name: Web view unit tests
-        run: bun test apps/desktop
+        working-directory: apps/desktop
+        run: bun test src
