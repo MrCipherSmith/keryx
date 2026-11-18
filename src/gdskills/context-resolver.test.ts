@@ -171,6 +171,25 @@ test("the bundled task-type table adds the rules it adds today, only those prese
   expect(paths(none.entries)).toEqual([C("tdd-workflow.mdc"), C("error-handling.mdc"), C("solid-principles.mdc")]);
 });
 
+test("each role loads its activity rule first: implement, test and review (ADR-0001 P5); absent where it is not installed", async () => {
+  const root = await project();
+  await core(root, { "tdd-workflow.mdc": "a\n", "error-handling.mdc": "b\n", "solid-principles.mdc": "c\n" });
+  const before = await resolveProjectContext({ projectRoot: root, files: ["src/s.ts"], for: "review" });
+  expect(paths(before.entries)).toEqual([]);
+  const A = (name: string): string => `.metaproject/rules/activity/${name}.mdc`;
+  for (const name of ["implement", "test", "review"]) await put(root, A(name), `${name}\n`);
+  const impl = await resolveProjectContext({ projectRoot: root, files: ["src/s.ts"], for: "implement" });
+  expect(paths(impl.entries)).toEqual([A("implement"), C("tdd-workflow.mdc"), C("error-handling.mdc"), C("solid-principles.mdc")]);
+  const test_ = await resolveProjectContext({ projectRoot: root, files: ["src/s.test.ts"], for: "test" });
+  expect(paths(test_.entries)).toEqual([A("test"), C("tdd-workflow.mdc")]);
+  const review = await resolveProjectContext({ projectRoot: root, files: ["src/s.ts"], for: "review" });
+  expect(review.entries.map((entry) => [entry.path, entry.reason, entry.tier])).toEqual([[A("review"), "bundled-default", "must_read"]]);
+  // A project override at rules/project/activity/<name>.mdc replaces the bundled copy.
+  await importRules(root, { "activity/review.mdc": ruleText({}) });
+  const overridden = await resolveProjectContext({ projectRoot: root, files: ["src/s.ts"], for: "review" });
+  expect(paths(overridden.entries)).toEqual([P("activity/review.mdc")]);
+});
+
 test("a task type's stack rule is absent where its pack is not installed, and listed once where a task file's glob also selects it", async () => {
   const root = await project();
   await core(root, { "tdd-workflow.mdc": "a\n", "error-handling.mdc": "b\n", "solid-principles.mdc": "c\n" });

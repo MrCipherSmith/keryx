@@ -63,9 +63,6 @@ Architecture Review Progress:
 
 See shared script: `.metaproject/skills/gdskills/shared/git-merge-base.md`
 
-Review scope: **changes introduced in the current branch since merge-base only**.
-Do not review pre-existing architectural problems unless they are directly touched by the diff.
-
 **Supplied text first.** When the payload carries `slices`, `context_files`, `diff` or `file_contents`, review exactly that text and never rebuild the diff. A choice's history (law 4) is read with `git log`, `git blame` and `git show` only where the host gives a read-only child git; on keryx shell a read-only child has no shell and no git tool, so read the `git log -L`/`git blame` excerpts the payload supplies, or say the history was not read. Only with none supplied, collect it:
 ```bash
 git diff --name-status "${BASE_SHA}" && git diff "${BASE_SHA}" && git ls-files --others --exclude-standard
@@ -234,15 +231,7 @@ conditions land under that rubric, not a second rubric.
 
 ### Shared laws (every reviewer)
 
-1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot name the input, call, or condition that reaches the code, you have an observation, not a finding. Report it as `info` and say what would settle it.
-2. **Never flag the theoretical.** The path you describe must exist in the code under review. Do not report a safe API because it could be misused, or a pattern because it is often wrong elsewhere.
-3. **One finding per class, not one per occurrence.** When the same shape appears at several sites, report it once and list every site. Ten findings that are one finding hide the other nine problems.
-4. **A deliberate choice is not a defect until its reason is read and shown wrong.** An explicit override, suppression or exemption, a comment or commit giving a reason, or a sibling doing the same is a decision: read its reason (the comment, `git log -L` or `git blame`, the sibling) before you report it, and report it only when you can show that reason wrong. A project rule is checked against accepted platform practice and its known exceptions before a deviation from it is reported.
-
-Severity levels are defined once, in `review-orchestrator/SKILL.md` →
-**Severity (canonical)**. This reviewer does not restate them: `blocker` is the
-four merge-blocking shapes named there and nothing else, and the `major`/`minor`
-boundary is the trigger-and-outcome test.
+Read `.metaproject/rules/activity/review.mdc` before the diff. It holds what every reviewer applies and this file does not restate: scope (the change, not pre-existing debt), the four shared laws, `info`, one finding per defect across lenses, and where severity comes from.
 
 ### Architecture laws
 

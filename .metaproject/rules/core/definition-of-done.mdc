@@ -54,7 +54,8 @@ this list is what says whether the bar moved.
 
 | Document | Owns |
 |---|---|
-| `rules/core/tdd-workflow.mdc` | Clause 2 for tests specifically: the red-green-refactor sequence, and the invariant that `STATUS: DONE` requires a green suite (its Iron Law 1, and Iron Law 3 forbidding deletion of tests to get there — clause 4's test case). |
+| `rules/core/tdd-workflow.mdc` | Clause 2 for tests specifically: the invariant that `STATUS: DONE` requires a green suite (its Iron Law 1, and Iron Law 3 forbidding deletion of tests to get there — clause 4's test case). |
+| `rules/activity/implement.mdc` | The red-green-refactor sequence that produces the evidence for clauses 1 and 2, and the change scope a task stays inside. |
 | `.metaproject/skills/gdskills/orchestration/code-verifier/SKILL.md` | Clause 3: the gate decision, and the ruling that a check which did not run reports `status: skipped`, never `pass`. It also owns the distinction between the gate's result and the skill's own `STATUS:`. |
 | `rules/process/implementation-doc-mandate.mdc` | The shape of the evidence for clauses 1 and 2 — the Verification Gate block, the Acceptance Criteria Met list, and its Iron Law 3: the numbers must come from an independent verifier, not from self-assessment. |
 | `rules/process/subagent-status-protocol.md` | How the result is reported: `STATUS:` on line one, the five statuses, and the verification block every `DONE` response carries. |

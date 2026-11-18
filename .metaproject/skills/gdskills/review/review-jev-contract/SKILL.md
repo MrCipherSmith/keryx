@@ -136,10 +136,7 @@ object (`sites`, `enumeration_method`) — never a bare label.
 
 ### Shared laws (every reviewer)
 
-1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot name the input, call, or condition that reaches the code, you have an observation, not a finding. Report it as `info` and say what would settle it.
-2. **Never flag the theoretical.** The path you describe must exist in the code under review. Do not report a safe API because it could be misused, or a pattern because it is often wrong elsewhere.
-3. **One finding per class, not one per occurrence.** When the same shape appears at several sites, report it once and list every site. Ten findings that are one finding hide the other nine problems.
-4. **A deliberate choice is not a defect until its reason is read and shown wrong.** An explicit override, suppression or exemption, a comment or commit giving a reason, or a sibling doing the same is a decision: read its reason (the comment, `git log -L` or `git blame`, the sibling) before you report it, and report it only when you can show that reason wrong. A project rule is checked against accepted platform practice and its known exceptions before a deviation from it is reported.
+Read `.metaproject/rules/activity/review.mdc` before the diff. It holds what every reviewer applies and this file does not restate: scope (the change, not pre-existing debt), the four shared laws, `info`, one finding per defect across lenses, and where severity comes from.
 
 This reviewer satisfies laws 1-3 by construction (law 4 is the premise judge's question, Wave D, for its findings at `minor` and above): `evidence` always names the
 matched artefacts/facts and the claim text (never an unreproducible claim); a

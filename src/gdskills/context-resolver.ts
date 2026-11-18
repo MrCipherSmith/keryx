@@ -106,9 +106,19 @@ const TYPE_RULES: Record<string, string[]> = {
   service_api: ["stacks/nestjs/nestjs-dto", "api-contracts"],
 };
 
-/** Project-relative path of a bundled rule named in `ALWAYS_RULES`/`TYPE_RULES`/`CONDITIONAL_RULES`. */
+/**
+ * The activity rule each role loads first (ADR-0001 D5): how to apply the
+ * layers in that role. It sets scope and method and rates nothing.
+ */
+const ACTIVITY_RULES: Record<ContextFor, string> = {
+  implement: "activity/implement",
+  test: "activity/test",
+  review: "activity/review",
+};
+
+/** Project-relative path of a bundled rule named in `ALWAYS_RULES`/`TYPE_RULES`/`CONDITIONAL_RULES`/`ACTIVITY_RULES`. */
 function bundledRulePath(name: string): string {
-  return name.startsWith("stacks/") ? `.metaproject/rules/${name}.mdc` : `${BUNDLED_RULES_DIR}/${name}.mdc`;
+  return name.startsWith("stacks/") || name.startsWith("activity/") ? `.metaproject/rules/${name}.mdc` : `${BUNDLED_RULES_DIR}/${name}.mdc`;
 }
 const TEST_RULES = ["tdd-workflow"];
 
@@ -151,9 +161,10 @@ export const CONDITIONAL_RULES: readonly ConditionalRule[] = [
 const compare = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
 function bundledRuleNames(forWhat: ContextFor, taskType: string | undefined): string[] {
-  if (forWhat === "review") return [];
-  if (forWhat === "test") return TEST_RULES;
-  const names = [...ALWAYS_RULES];
+  const activity = ACTIVITY_RULES[forWhat];
+  if (forWhat === "review") return [activity];
+  if (forWhat === "test") return [activity, ...TEST_RULES];
+  const names = [activity, ...ALWAYS_RULES];
   const byType = taskType === "mixed" ? ["ui_component", "store_logic", "service_api"].flatMap((type) => TYPE_RULES[type] ?? []) : (TYPE_RULES[taskType ?? ""] ?? []);
   for (const name of byType) if (!names.includes(name)) names.push(name);
   return names;
