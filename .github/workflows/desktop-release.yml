@@ -22,7 +22,7 @@ permissions:
 jobs:
   desktop:
     name: build, sign, release
-    runs-on: macos-14
+    runs-on: macos-15 # macos-14 is refused on this repo ("macos-14-arm64-us-default is not supported")
     timeout-minutes: 90
     environment: ${{ (github.event_name == 'push' && github.ref_type == 'tag') && 'desktop-release' || '' }}
     steps:
