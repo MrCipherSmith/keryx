@@ -13017,7 +13017,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "9aa502ea4679c1bfb0df85c0bec679b8cdf390a46356dc78dcff901ffd1bbd08"
+      "receiptDigest": "3544acef61648a231c2ac8205095497864790efa395a8e63dce60185f913f613"
     },
     {
       "variantId": "setup.refresh",
@@ -13025,7 +13025,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "fe48deb2c58894ff815c32757a46887fed92110b4a1256909b3b72ce69a53dd6"
+      "receiptDigest": "6d50baabd159786a2d2d4c8360b5f2a788718fba14aee97886b9af8a57e0b218"
     },
     {
       "variantId": "setup.repair",
@@ -13033,7 +13033,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "f41154803bd2abfcbabd21b0de51ff4dc58ac260be4bb6af8ea0833a681f1b74"
+      "receiptDigest": "31cdaf2221e662d9404fd40007bc4e9773dfb97716259e75b1f6c630bf454ca2"
     },
     {
       "variantId": "ac.cached",

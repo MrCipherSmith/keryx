@@ -17,6 +17,7 @@ import { AppShell, type View } from "./shell/AppShell";
 import { CommandPalette, type PaletteItem } from "./shell/CommandPalette";
 import { SettingsView } from "./shell/SettingsView";
 import { Welcome } from "./shell/Welcome";
+import { UpdateBanner } from "./shell/UpdateBanner";
 import { FlowsBoard } from "./flows/FlowsBoard";
 import type { LinkedSession } from "./flows/FlowDetail";
 import { sessionFlags } from "./acp/types";
@@ -65,6 +66,7 @@ export function App() {
       ) : (
         <Welcome onOpen={setCwd} onSettings={() => setWelcomeSettings(true)} />
       )}
+      <UpdateBanner />
       {prompt ? (
         <PathPrompt
           title={prompt.title}

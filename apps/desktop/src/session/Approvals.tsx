@@ -580,7 +580,9 @@ export function FatalDialog({
             session alive while you switch between them, so it needs a newer keryx.
           </p>
         )}
-        <p className="dialog-sub">Use the bundled keryx in Settings — it always matches this app — or update keryx.</p>
+        <p className="dialog-sub">
+          Update keryx (<code className="mono">npm i -g @mrciphersmith/keryx</code>), or use the bundled keryx in Settings — it always matches this app.
+        </p>
       </Dialog>
     );
   }

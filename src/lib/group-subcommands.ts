@@ -56,6 +56,8 @@ export const GROUP_SUBCOMMANDS: ReadonlyMap<string, readonly string[]> = new Map
   ["approvals", ["list", "allow", "deny"]],
   // commands/permissions-command.ts (flow 396): list (also the bare default), remove
   ["permissions", ["list", "remove"]],
+  // commands/app.ts appCommand switch
+  ["app", ["status", "install", "update", "build", "help"]],
   // commands/version.ts:19 (`args[0] !== "check"` is refused)
   ["version", ["check"]],
   // commands/gdgraph.ts:81-206

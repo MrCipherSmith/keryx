@@ -1,3 +1,4 @@
+pub mod appupdate;
 pub mod bridge;
 pub mod child;
 pub mod framing;
@@ -63,6 +64,8 @@ pub fn run() {
             flows::flows_action,
             flows::flows_watch,
             gitinfo::git_info,
+            appupdate::app_update_check,
+            appupdate::app_update_run,
         ])
         .build(tauri::generate_context!())
         .expect("error while building the Keryx app");

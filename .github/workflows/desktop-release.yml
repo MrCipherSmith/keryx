@@ -216,6 +216,42 @@ jobs:
           ls -l "$DMG"
           echo "path=$DMG" >> "$GITHUB_OUTPUT"
 
+      # `keryx app install|update` (decision D-10) downloads the app as a
+      # tarball, not the dmg: `tar` keeps the bundle's symlinks, modes and
+      # signature, and needs no hdiutil. SHA256SUMS covers both assets.
+      - name: Pack the app archive and SHA256SUMS
+        id: archive
+        env:
+          DMG: ${{ steps.dmg.outputs.path }}
+        run: |
+          set -euo pipefail
+          BUNDLE="apps/desktop/src-tauri/target/universal-apple-darwin/release/bundle"
+          VERSION="$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').version")"
+          OUT="$RUNNER_TEMP/desktop-assets"
+          mkdir -p "$OUT"
+          ARCHIVE="Keryx_${VERSION}_universal.app.tar.gz"
+          if [ ! -d "$BUNDLE/macos/Keryx.app" ]; then
+            echo "::error::no Keryx.app under $BUNDLE/macos"
+            exit 1
+          fi
+          # COPYFILE_DISABLE: no AppleDouble ._ files in the archive.
+          COPYFILE_DISABLE=1 tar -C "$BUNDLE/macos" -czf "$OUT/$ARCHIVE" Keryx.app
+          cp "$DMG" "$OUT/"
+          (cd "$OUT" && shasum -a 256 "$ARCHIVE" "$(basename "$DMG")" > SHA256SUMS)
+          cat "$OUT/SHA256SUMS"
+          # The archive must unpack to an app of exactly this version and a
+          # valid signature: that is what `keryx app install` relies on.
+          CHECK="$RUNNER_TEMP/desktop-archive-check"
+          mkdir -p "$CHECK"
+          tar -xzf "$OUT/$ARCHIVE" -C "$CHECK"
+          GOT="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$CHECK/Keryx.app/Contents/Info.plist")"
+          if [ "$GOT" != "$VERSION" ]; then
+            echo "::error::the archive holds Keryx.app $GOT, expected $VERSION"
+            exit 1
+          fi
+          codesign --verify --deep --strict "$CHECK/Keryx.app"
+          echo "dir=$OUT" >> "$GITHUB_OUTPUT"
+
       - name: Write the release notes
         if: steps.release.outputs.release == 'true'
         env:
@@ -225,6 +261,9 @@ jobs:
           VERSION="${GITHUB_REF_NAME#desktop-v}"
           {
             echo "Keryx Desktop ${VERSION} for macOS (universal: Apple Silicon and Intel)."
+            echo
+            echo "Install or update it with the keryx CLI: \`keryx app install\` / \`keryx app update\`."
+            echo "A file the CLI downloads is not quarantined, so it opens directly."
             echo
             if [ "$SIGNED" = "true" ]; then
               echo "Signed with a Developer ID certificate and notarized by Apple."
@@ -241,7 +280,7 @@ jobs:
         if: steps.release.outputs.release == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          DMG: ${{ steps.dmg.outputs.path }}
+          ASSETS: ${{ steps.archive.outputs.dir }}
         run: |
           set -euo pipefail
           PRERELEASE=""
@@ -252,4 +291,4 @@ jobs:
             --title "Keryx Desktop ${GITHUB_REF_NAME#desktop-v}" \
             --notes-file "$RUNNER_TEMP/notes.md" \
             $PRERELEASE \
-            "$DMG"
+            "$ASSETS"/*.dmg "$ASSETS"/*.app.tar.gz "$ASSETS/SHA256SUMS"

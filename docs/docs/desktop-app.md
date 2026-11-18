@@ -6,17 +6,34 @@ draws the conversation, tool calls, approvals, the plan and token usage. The
 agent, its policy, sandbox and session store stay inside keryx: the app is a
 client.
 
-Status: **preview (M1).** Apple silicon only, ad-hoc signed, not notarized,
-no auto-update. Images, subagents, background tasks, rewind/compact and the
+Status: **preview (M1).** Ad-hoc signed, not notarized. Updates come
+through the keryx CLI (`keryx app update`, or the app's update banner), not a
+built-in updater. Images, subagents, background tasks, rewind/compact and the
 full slash-command set are not in the app yet; use `keryx shell` for those.
 The design and its acceptance criteria are in
 `docs/requirements/keryx-desktop-client/`.
 
 ## Install
 
-### From a built `.dmg`
+### With the keryx CLI (recommended)
 
-1. Open `Keryx_<version>_aarch64.dmg` and drag **Keryx** to **Applications**.
+```bash
+npm i -g @mrciphersmith/keryx
+keryx app install
+```
+
+`keryx app install` downloads the newest `desktop-v*` release from GitHub,
+checks its SHA-256 against the release's `SHA256SUMS`, and installs
+`/Applications/Keryx.app` (`--dir <folder>` for another place). A file the CLI
+downloads is not quarantined, so the ad-hoc signed app opens without the
+`xattr` step below. `keryx app status` shows what is installed and what is
+released; `keryx app update` installs a newer release when there is one. The
+[CLI reference](./cli-reference.md#app) has every flag.
+
+### From a downloaded `.dmg`
+
+1. Open `Keryx_<version>_universal.dmg` (from a release) or the
+   `_aarch64.dmg` you built, and drag **Keryx** to **Applications**.
 2. Start it from Applications or Spotlight.
 
 The app is ad-hoc signed, not signed with a Developer ID. A `.dmg` you built
@@ -38,6 +55,9 @@ bun install
 bun run desktop:build
 ```
 
+`keryx app build` does the same from anywhere inside the checkout and refuses
+outside one.
+
 `desktop:build` compiles keryx into a single binary, puts it inside the app
 and runs `tauri build`. The results:
 
@@ -45,25 +65,50 @@ and runs `tauri build`. The results:
 - `apps/desktop/src-tauri/target/release/bundle/dmg/Keryx_<version>_aarch64.dmg`
 
 Releases tagged `desktop-v*` are built by `.github/workflows/desktop-release.yml`
-into a universal `.dmg`; Developer ID signing and notarization switch on once
-the `APPLE_*` secrets exist.
+into a universal `.dmg`, the `Keryx_<version>_universal.app.tar.gz` that
+`keryx app install` downloads, and `SHA256SUMS` over both; Developer ID
+signing and notarization switch on once the `APPLE_*` secrets exist.
 
 ### Which keryx the app runs
 
-**Settings → keryx** has three sources:
+**Settings → keryx** has four sources:
 
 | Source | What runs |
 |---|---|
-| Bundled (default) | The keryx built into `Keryx.app/Contents/MacOS/keryx`. |
-| PATH | The `keryx` on your login-shell `PATH`, for example a global npm install. |
+| Automatic (default) | The `keryx` on your login-shell `PATH` — the npm install, so `npm i -g @mrciphersmith/keryx` updates the agent without a new app — and the bundled keryx when there is none. |
+| Bundled | The keryx built into `Keryx.app/Contents/MacOS/keryx`; it changes only with the app. |
+| PATH | Only the `keryx` on your login-shell `PATH`. |
 | Custom path | Any executable, for example a wrapper that runs a development checkout. |
+
+An app that stored **Bundled** before the Automatic source existed is moved to
+Automatic once, because it saved that default on every change; choosing
+Bundled again afterwards sticks.
 
 The app needs a keryx whose `initialize` answer reports the `shell` profile
 with live sessions. 0.4.32 is only the protocol floor the app checks; the
 released 0.4.32 to 0.4.35 have no shell profile, so they do not qualify. With
 a keryx that does not qualify the start fails with a "This keryx is too old
-for the app" dialog (use the bundled keryx or update) instead of starting
-silently. The bundled keryx, the default source, always qualifies.
+for the app" dialog (update keryx with npm, or use the bundled keryx) instead
+of starting silently. The bundled keryx always qualifies.
+
+### Updates
+
+A few seconds after it starts, and every 6 hours while it is open, the app
+asks the keryx it runs (`keryx app status --json`) for the newest release and
+for the oldest app that keryx works with. A card in the bottom-left corner
+then offers **Update and relaunch** when:
+
+- a newer `desktop-v*` release exists (**Skip this version** hides it until
+  the next one), or
+- the keryx needs a newer app than this one (`minDesktopVersion`); this card
+  comes back on every start until the app is updated.
+
+**Update and relaunch** starts `keryx app update --wait-pid <the app> --relaunch`
+and quits the app; the CLI waits for it to exit, swaps the bundle in place and
+opens the new app. If the update fails the old app is kept and reopened; the
+CLI's output is in `~/Library/Logs/dev.keryx.desktop/app-update.log`. No card
+appears offline, with a keryx older than `keryx app`, or in a development
+build that does not run from `Keryx.app`.
 
 The app reads your login-shell environment once at startup, so `PATH` and the
 provider API keys you export in `~/.zshrc` reach keryx even when the app is
