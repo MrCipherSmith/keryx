@@ -53,6 +53,7 @@ input, select, textarea { font: inherit; color: var(--fg); }
 .field-label { font-size: var(--fs-sm); font-weight: 600; color: var(--fg); padding: 0; }
 .field-hint { font-size: var(--fs-sm); color: var(--fg-muted); }
 .field-error { font-size: var(--fs-sm); color: var(--danger); }
+.field-error { font-size: var(--fs-sm); color: var(--danger); }
 .field input, .field textarea, .field select, .text-input {
   width: 100%; padding: 6px 8px; background: var(--bg-surface);
   border: 1px solid var(--border-strong); border-radius: var(--r-md); line-height: 1.4;

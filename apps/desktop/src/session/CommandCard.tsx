@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { CommandView, ViewAction, ViewField } from "../acp/types";
-import { fillTemplate, initialValues, missingRequired, type FieldValues } from "../acp/commands";
+import { fieldError, fieldVisible, fillTemplate, initialValues, invalidFields, missingRequired, type FieldValues } from "../acp/commands";
 import { Icon } from "../components/Icon";
 import { Dialog } from "../components/ui";
 import type { CommandItem } from "./reducer";
@@ -118,8 +118,10 @@ function ViewFormPanel({ form, disabled, onSubmit }: { form: NonNullable<Command
   const [values, setValues] = useState<FieldValues>(() => initialValues(form.fields));
   const set = (id: string, v: string | boolean) => setValues((x) => ({ ...x, [id]: v }));
   const missing = missingRequired(form.fields, values);
+  const invalid = invalidFields(form.fields, values);
+  const blocked = missing.length > 0 || invalid.length > 0 || form.disabled !== undefined;
   const submit = () => {
-    if (missing.length > 0) return;
+    if (blocked) return;
     onSubmit(fillTemplate(form.submit, form.fields, values), fillTemplate(form.submit, form.fields, values, true));
     // A secret never lingers in the form once it is sent.
     setValues((x) => {
@@ -136,14 +138,21 @@ function ViewFormPanel({ form, disabled, onSubmit }: { form: NonNullable<Command
         if (!disabled) submit();
       }}
     >
-      {form.fields.map((f) => (
-        <FieldInput key={f.id} field={f} value={values[f.id]} onChange={(v) => set(f.id, v)} disabled={disabled} />
-      ))}
+      {form.disabled !== undefined ? (
+        <div className="notice notice-warn" role="status">
+          <span>{form.disabled}</span>
+        </div>
+      ) : null}
+      {form.fields
+        .filter((f) => fieldVisible(f, form.fields, values))
+        .map((f) => (
+          <FieldInput key={f.id} field={f} value={values[f.id]} onChange={(v) => set(f.id, v)} disabled={disabled} />
+        ))}
       <div>
-        <button type="submit" className="btn btn-sm btn-primary" disabled={disabled || missing.length > 0}>
+        <button type="submit" className="btn btn-sm btn-primary" disabled={disabled || blocked}>
           {form.submitLabel ?? "Submit"}
         </button>
-        {missing.length > 0 ? (
+        {missing.length > 0 && form.disabled === undefined ? (
           <span className="field-hint" role="note">
             Fill in {missing.map((f) => f.label).join(", ")} first.
           </span>
@@ -163,6 +172,7 @@ function FieldInput({ field, value, onChange, disabled }: { field: ViewField; va
       </label>
     );
   }
+  const message = fieldError(field, value);
   return (
     <label className="field" htmlFor={id}>
       <span className="field-label">
@@ -185,6 +195,10 @@ function FieldInput({ field, value, onChange, disabled }: { field: ViewField; va
         <input
           id={id}
           type={field.kind === "secret" ? "password" : "text"}
+          inputMode={field.kind === "number" ? "decimal" : undefined}
+          aria-invalid={message !== undefined ? true : undefined}
+          aria-describedby={message !== undefined ? `${id}-error` : undefined}
+          data-kind={field.kind}
           autoComplete={field.kind === "secret" ? "off" : undefined}
           value={typeof value === "string" ? value : ""}
           placeholder={field.placeholder}
@@ -193,6 +207,11 @@ function FieldInput({ field, value, onChange, disabled }: { field: ViewField; va
           onChange={(e) => onChange(e.target.value)}
         />
       )}
+      {message !== undefined ? (
+        <span id={`${id}-error`} className="field-error" role="alert">
+          {message}
+        </span>
+      ) : null}
     </label>
   );
 }

@@ -85,20 +85,32 @@ export interface ViewRow {
 export interface ViewField {
   id: string;
   label: string;
-  kind: "text" | "secret" | "choice" | "toggle" | (string & {});
+  kind: "text" | "secret" | "choice" | "toggle" | "number" | "time" | (string & {});
   options?: Array<string | { value: string; label?: string }>;
   value?: string | boolean | null;
   /** A hint shown while a text field is empty. */
   placeholder?: string;
   /** Submit stays disabled until the field is non-empty. */
   required?: boolean;
+  /** The field exists only while `field` holds one of `equals`; hidden, it is not required, not validated and not sent. */
+  showWhen?: { field: string; equals: string[] };
+  /** number: smallest accepted value (inclusive). */
+  min?: number;
+  /** number: step of the input. */
+  step?: number;
+  /** text: regular expression the whole value must match. A time field is always HH:MM. */
+  pattern?: string;
+  /** Said under the field when its value fails `min` or `pattern`. */
+  error?: string;
 }
 
 export interface ViewForm {
   fields: ViewField[];
-  /** A command line with `{fieldId}` placeholders. */
+  /** A command line with `{fieldId}` placeholders; a hidden field's placeholder goes with the `--flag` before it. */
   submit: string;
   submitLabel?: string;
+  /** Why the form cannot be submitted right now; Submit stays disabled and this is shown. */
+  disabled?: string;
 }
 
 export interface CommandView {

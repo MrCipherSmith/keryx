@@ -223,7 +223,7 @@ form answers with a structured view instead of (or beside) text, in
               "actions": [ { "label": "Resume", "command": "/schedules resume s1" },
                            { "label": "Delete", "command": "/schedules delete s1", "confirm": "Delete nightly review?" } ] } ],
   "body": "optional detail text",
-  "form": { "fields": [ { "id": "text", "label": "Task", "kind": "text|secret|choice|toggle", "options": [] } ],
+  "form": { "fields": [ { "id": "text", "label": "Task", "kind": "text|secret|choice|toggle|number|time", "options": [] } ],
             "submit": "/task {text}" } }
 ```
 
@@ -238,6 +238,26 @@ the TUI modal acts through a closure and the shell has no such subcommand
 command module so both surfaces share it. A confirmation the TUI shows as a
 card (`/schedule`, `/mode auto`, `/external-diff apply` hash) is the action's
 `confirm`; destructive actions always carry one.
+
+*Form fields.* Besides `id`, `label`, `kind`, `options` (strings or
+`{ value, label }`), `value` (prefill), `placeholder` and `required`, a field
+may carry: `showWhen: { field, equals: [...] }` (shown only while another field
+holds one of those values; a hidden field is not required, not validated and
+not sent: its `{placeholder}` is dropped from the submit line together with the
+`--flag` before it); `min` and `step` (kind `number`: inclusive lower bound,
+input step); `pattern` (kind `text`: the whole value must match; kind `time` is
+always `HH:MM`); `error` (the text shown under the field when `min` or
+`pattern` fails). The form may carry `disabled` (a reason: Submit stays
+disabled and the reason is shown). The client validates before submit (required,
+number, `min`, `time`, `pattern`) and shows the message under the field; this is
+convenience only, keryx still validates the command and a refusal still shows
+inline. `/schedule` is the model: its cadence is a `Repeat` choice (minutes /
+hours / daily / weekdays / cron) with dependent fields whose values come from
+the shell's own cadence rule, its provider choice lists only connected
+providers the schedule's usage-reporting rule accepts, and its rates are two
+number fields. The form submits form-only flags (`--repeat --minutes --hours
+--at --cron --rate-in --rate-out`) that `keryx acp` converts to the shell's
+`--every "<cadence>"` and `--rates in,out` before the shell's parser runs.
 
 `/queue` and `/delegate`: while a turn runs the desktop holds the composer's
 queued prompts itself (one queue per session, sent in order when the turn

@@ -11,7 +11,6 @@
 // supervisor to own it) and a `/task` when this checkout has no Hub connection.
 
 import { readFile } from "node:fs/promises";
-import { loadModelProfiles, profileKey } from "../harness/routing/model-profile";
 import path from "node:path";
 import { readLatestGovernanceReport, governanceDataRoot } from "../governance/service";
 import { flowEntriesFrom } from "../tui/governance-flows";
@@ -20,7 +19,8 @@ import { eventEntries, loadTriggerLedgerView, scheduledEntries, type TriggerEntr
 import { formatTriggerDetailLines, type TriggerModalItem } from "../tui/triggers-inspector";
 import { defaultDescribeInstall, grantsLines, overviewLines, reportText, runsLines } from "../tui/schedules-inspector";
 import { formatLastOutcome, formatNextRun, latestOutcome } from "../tui/schedules-panel";
-import { runScheduleSlashCommand, SCHEDULE_SLASH_USAGE } from "../tui/schedule-command";
+import { runScheduleSlashCommand } from "../tui/schedule-command";
+import { scheduleFormView, toShellScheduleLine } from "./schedule-form";
 import { autoReviewListText, readAutoReviewArbiter, readAutoReviewRuns, parseAutoReviewArgs } from "../tui/autoreview-surface";
 import {
   describeFire,
@@ -220,19 +220,6 @@ export async function runSchedules(host: ShellCommandHost, args: string): Promis
 // /schedule: the draft card is the confirmation
 // ---------------------------------------------------------------------------
 
-/** The session model's "<in>,<out>" USD per million tokens when keryx knows the price (stored or curated profile). */
-function knownRates(host: ShellCommandHost): string | undefined {
-  try {
-    const { providerId, modelId } = host.session.modelIds();
-    const profile = loadModelProfiles(host.configDir)[profileKey(providerId, modelId)];
-    const input = profile?.priceInputPerMillion.value;
-    const output = profile?.priceOutputPerMillion.value;
-    return typeof input === "number" && typeof output === "number" ? `${input},${output}` : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 /**
  * `/schedule <flags> -- <prompt>` drafts the schedule and answers a view whose one action
  * creates it, carrying the card as its `confirm`. `/schedule confirmed <same arguments>`
@@ -242,36 +229,14 @@ export async function runSchedule(host: ShellCommandHost, args: string): Promise
   const trimmed = args.trim();
   const confirmed = /^confirmed(\s|$)/.test(trimmed);
   const raw = confirmed ? trimmed.replace(/^confirmed\s*/, "") : trimmed;
-  if (raw.length === 0) {
-    const rates = knownRates(host);
-    return viewOutcome({
-      title: "Schedule",
-      rows: [],
-      body: SCHEDULE_SLASH_USAGE.join("\n"),
-      form: {
-        fields: [
-          { id: "name", label: "Name", kind: "text", required: true, placeholder: "e.g. nightly-review" },
-          { id: "every", label: "Cadence", kind: "text", required: true, placeholder: "every 30 minutes · daily at 08:00 · weekdays at 09:30 · cron" },
-          {
-            id: "rates",
-            label: "Token rates, USD per million tokens (in,out)",
-            kind: "text",
-            required: true,
-            ...(rates !== undefined ? { value: rates } : {}),
-            placeholder: "e.g. 1.25,10 (USD per 1M tokens in,out)",
-          },
-          { id: "ceiling", label: "Spend ceiling per run, USD", kind: "text", required: true, value: "0.50", placeholder: "0.50" },
-          { id: "prompt", label: "What the agent should do", kind: "text", required: true, placeholder: "e.g. Review yesterday's commits and report risks" },
-        ],
-        submit: '/schedule --name {name} --every "{every}" --rates {rates} --ceiling {ceiling} -- {prompt}',
-      },
-    });
-  }
+  if (raw.length === 0) return viewOutcome(await scheduleFormView(host));
+  const shellLine = toShellScheduleLine(raw);
+  if ("error" in shellLine) return refusal(`/schedule: ${shellLine.error}`);
   const lines: string[] = [];
   let card: readonly string[] | undefined;
   const { providerId, modelId } = host.session.modelIds();
   try {
-    const created = await runScheduleSlashCommand(raw, {
+    const created = await runScheduleSlashCommand(shellLine.line, {
       ...host.scheduleOverrides,
       cwd: host.cwd,
       defaults: () => ({ provider: providerId, model: modelId }),
@@ -292,7 +257,7 @@ export async function runSchedule(host: ShellCommandHost, args: string): Promise
   return viewOutcome({
     title: "Schedule: review before creating",
     body: card.join("\n"),
-    rows: [viewRow("create", "Create this schedule", { actions: [action("Create", `/schedule confirmed ${raw}`, card.join("\n"))] })],
+    rows: [viewRow("create", "Create this schedule", { actions: [action("Create", `/schedule confirmed ${shellLine.line}`, card.join("\n"))] })],
   });
 }
 

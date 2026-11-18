@@ -87,18 +87,72 @@ function fieldText(v: string | boolean | undefined): string {
   return v ?? "";
 }
 
-/** Fills `{fieldId}` placeholders. With `mask`, secret fields are shown as bullets: the line to display, never to send. */
+/** Whether a field is shown: no `showWhen`, or its controlling field is itself shown and holds one of the listed values. */
+export function fieldVisible(field: ViewField, fields: readonly ViewField[], values: FieldValues, depth = 0): boolean {
+  const when = field.showWhen;
+  if (!when) return true;
+  if (depth > fields.length) return false;
+  const parent = fields.find((x) => x.id === when.field);
+  if (!parent || !fieldVisible(parent, fields, values, depth + 1)) return false;
+  return when.equals.includes(fieldText(values[when.field]));
+}
+
+const escapeRe = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** Fills `{fieldId}` placeholders. With `mask`, secret fields are shown as bullets: the line to display, never to send. A hidden field's placeholder is dropped with the `--flag` before it. */
 export function fillTemplate(template: string, fields: readonly ViewField[], values: FieldValues, mask = false): string {
-  return template.replace(/\{([^{}\s]+)\}/g, (whole, id: string) => {
+  let line = template;
+  for (const f of fields) {
+    if (fieldVisible(f, fields, values)) continue;
+    const id = escapeRe(f.id);
+    line = line.replace(new RegExp(`\\s*--[\\w-]+\\s+["']?\\{${id}\\}["']?`, "g"), "").replace(new RegExp(`["']?\\{${id}\\}["']?`, "g"), "");
+  }
+  return line.replace(/\{([^{}\s]+)\}/g, (whole, id: string) => {
     const f = fields.find((x) => x.id === id);
     if (!f) return whole;
     return mask && f.kind === "secret" ? SECRET_MASK : fieldText(values[id]);
   });
 }
 
-/** The required fields that are still empty (blank text counts as empty). A toggle always has a value. */
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/** The message for a shown field whose non-empty value is wrong, or undefined. An empty value is a "required" matter, not an error. */
+export function fieldError(field: ViewField, value: string | boolean | undefined): string | undefined {
+  if (typeof value !== "string" || value.trim() === "") return undefined;
+  const text = value.trim();
+  if (field.kind === "number") {
+    const n = Number(text);
+    if (!Number.isFinite(n)) return field.error ?? "Enter a number";
+    if (field.min !== undefined && n < field.min) return field.error ?? `Enter a number of ${field.min} or more`;
+    return undefined;
+  }
+  if (field.kind === "time") return TIME_RE.test(text) ? undefined : (field.error ?? "Use HH:MM, 00:00-23:59");
+  if (field.pattern !== undefined) {
+    try {
+      if (!new RegExp(field.pattern).test(text)) return field.error ?? "This value is not in the expected form";
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
+/** The shown required fields that are still empty (blank text counts as empty). A toggle always has a value. */
 export function missingRequired(fields: readonly ViewField[], values: FieldValues): ViewField[] {
-  return fields.filter((f) => f.required === true && f.kind !== "toggle" && (typeof values[f.id] !== "string" || (values[f.id] as string).trim() === ""));
+  return fields.filter(
+    (f) => fieldVisible(f, fields, values) && f.required === true && f.kind !== "toggle" && (typeof values[f.id] !== "string" || (values[f.id] as string).trim() === ""),
+  );
+}
+
+/** The shown fields holding a wrong value, with the message for each. */
+export function invalidFields(fields: readonly ViewField[], values: FieldValues): Array<{ field: ViewField; message: string }> {
+  const out: Array<{ field: ViewField; message: string }> = [];
+  for (const f of fields) {
+    if (!fieldVisible(f, fields, values)) continue;
+    const message = fieldError(f, values[f.id]);
+    if (message !== undefined) out.push({ field: f, message });
+  }
+  return out;
 }
 
 export function initialValues(fields: readonly ViewField[]): FieldValues {

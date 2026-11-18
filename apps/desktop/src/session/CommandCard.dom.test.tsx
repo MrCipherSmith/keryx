@@ -168,3 +168,74 @@ test("a form with required fields keeps Submit disabled until each is filled, an
   await click(button("Submit"));
   expect(runs.map((r) => r.line)).toEqual(["/schedule --name nightly --ceiling 0.50"]);
 });
+
+test("showWhen hides and shows fields; a hidden field is not required, not validated and not sent", async () => {
+  const form: CommandView = {
+    title: "Schedule",
+    form: {
+      submit: '/schedule --repeat {repeat} --minutes {minutes} --at {at} --cron "{cron}" --ceiling {ceiling}',
+      fields: [
+        { id: "repeat", label: "Repeat", kind: "choice", required: true, options: [{ value: "minutes", label: "every N minutes" }, { value: "daily", label: "daily" }, { value: "cron", label: "cron (advanced)" }], value: "minutes" },
+        { id: "minutes", label: "Every (minutes)", kind: "choice", required: true, options: ["5", "10", "30"], value: "30", showWhen: { field: "repeat", equals: ["minutes"] } },
+        { id: "at", label: "At", kind: "time", required: true, showWhen: { field: "repeat", equals: ["daily"] } },
+        { id: "cron", label: "Cron", kind: "text", required: true, showWhen: { field: "repeat", equals: ["cron"] } },
+        { id: "ceiling", label: "Ceiling", kind: "number", required: true, min: 0.01, value: "0.50", error: "Enter an amount above 0" },
+      ],
+    },
+  };
+  const runs = await render(item({ line: "/schedule", view: form }));
+  const labels = () => Array.from(host.querySelectorAll(".field-label")).map((l) => l.textContent!.replace(" *", ""));
+  expect(labels()).toEqual(["Repeat", "Every (minutes)", "Ceiling"]);
+  expect((button("Submit") as HTMLButtonElement).disabled).toBe(false);
+  await click(button("Submit"));
+  expect(runs.map((r) => r.line)).toEqual(["/schedule --repeat minutes --minutes 30 --ceiling 0.50"]);
+
+  const repeat = host.querySelector("select#cf-repeat") as HTMLSelectElement;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(repeat, "daily");
+    repeat.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  expect(labels()).toEqual(["Repeat", "At", "Ceiling"]);
+  expect((button("Submit") as HTMLButtonElement).disabled).toBe(true);
+  const at = host.querySelector("#cf-at") as HTMLInputElement;
+  await setValue(at, "25:99");
+  expect(host.querySelector("#cf-at-error")!.textContent).toBe("Use HH:MM, 00:00-23:59");
+  expect((button("Submit") as HTMLButtonElement).disabled).toBe(true);
+  await setValue(at, "08:30");
+  expect(host.querySelector("#cf-at-error")).toBeNull();
+  await click(button("Submit"));
+  expect(runs.at(-1)!.line).toBe("/schedule --repeat daily --at 08:30 --ceiling 0.50");
+});
+
+test("number fields say what is wrong inline and keep Submit disabled until valid", async () => {
+  const form: CommandView = {
+    title: "Schedule",
+    form: {
+      submit: "/schedule --rate-in {rateIn} --ceiling {ceiling}",
+      fields: [
+        { id: "rateIn", label: "Input $/1M", kind: "number", required: true, min: 0 },
+        { id: "ceiling", label: "Ceiling", kind: "number", required: true, min: 0.01, value: "0.50", error: "Enter an amount above 0" },
+      ],
+    },
+  };
+  await render(item({ line: "/schedule", view: form }));
+  const rate = host.querySelector("#cf-rateIn") as HTMLInputElement;
+  const ceiling = host.querySelector("#cf-ceiling") as HTMLInputElement;
+  expect((button("Submit") as HTMLButtonElement).disabled).toBe(true);
+  await setValue(rate, "ten");
+  expect(host.querySelector("#cf-rateIn-error")!.textContent).toBe("Enter a number");
+  await setValue(rate, "10");
+  expect(host.querySelector("#cf-rateIn-error")).toBeNull();
+  expect((button("Submit") as HTMLButtonElement).disabled).toBe(false);
+  await setValue(ceiling, "0");
+  expect(host.querySelector("#cf-ceiling-error")!.textContent).toBe("Enter an amount above 0");
+  expect((button("Submit") as HTMLButtonElement).disabled).toBe(true);
+});
+
+test("a form that says it is disabled shows the reason and cannot be submitted", async () => {
+  const form: CommandView = { title: "Schedule", form: { submit: "/schedule", fields: [], disabled: "Connect a provider first." } };
+  const runs = await render(item({ line: "/schedule", view: form }));
+  expect(host.textContent).toContain("Connect a provider first.");
+  expect((button("Submit") as HTMLButtonElement).disabled).toBe(true);
+  expect(runs).toHaveLength(0);
+});
