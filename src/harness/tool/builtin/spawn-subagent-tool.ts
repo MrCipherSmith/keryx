@@ -119,6 +119,8 @@ export type SpawnSubagentFleetEvent =
       task?: string;
       runtime?: "external";
       agentId?: string;
+      /** The host's id for the `spawn_subagent` call that started this child (`InteractiveToolContext.toolCallId`). */
+      parentToolCallId?: string;
     }
   | { kind: "log"; id: string; entry: { kind: "task" | "text" | "reasoning" | "tool" | "result" | "system"; text: string } };
 
@@ -1079,7 +1081,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
   };
   let ledger = new RemainingBudgetLedger(ledgerLimits, SUBAGENT_LEDGER_CAPS);
   const routingBudgets = new Map<string, RoutingBudgetLedger>();
-  const emitFleetEvent = (event: SpawnSubagentFleetEvent): void => {
+  const emitHostFleetEvent = (event: SpawnSubagentFleetEvent): void => {
     try {
       deps.onFleetEvent?.(event);
     } catch {
@@ -1279,6 +1281,10 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       risk: "delegate",
     },
     invoke: async (input, toolCtx): Promise<StructuredSubagentResult> => {
+      // Every upsert of this dispatch names the call that spawned it, when the host gave one.
+      const parentToolCallId = toolCtx?.toolCallId;
+      const emitFleetEvent = (event: SpawnSubagentFleetEvent): void =>
+        emitHostFleetEvent(parentToolCallId === undefined || event.kind !== "upsert" ? event : { ...event, parentToolCallId });
       if (deps.nativeOnly === true && readExternalRuntimeRequest(input) !== undefined) return { status: "Denied", isError: true, output: "external-runtime-not-authorized: this host supports native children only" };
       const taskText = typeof input.task === "string" ? input.task.trim() : "";
       if (taskText.length === 0) {

@@ -1,11 +1,16 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
+import { BrandMark } from "../components/BrandMark";
 import type { ToolCallContent, ToolKind } from "../acp/types";
-import type { Item } from "./reducer";
+import type { CommandItem, DelegateResultItem, Item } from "./reducer";
+import type { Subagent } from "./activity";
+import { CommandCard } from "./CommandCard";
+import { DelegateResultCard } from "./DelegateResultCard";
 import { blockText } from "./reducer";
 import { Markdown } from "../components/Markdown";
 import { Icon, type IconName } from "../components/Icon";
 import { Spinner } from "../components/ui";
-import { argLabel, hasRestArgs, primaryInput, restArgs, visibleProse, visibleText } from "./toolInput";
+import { argLabel, hasRestArgs, primaryInput, quoteArgv, restArgs, visibleProse, visibleText } from "./toolInput";
+import { runInTerminal, runnableCommand } from "../panels/panelBus";
 
 type ToolItem = Extract<Item, { kind: "tool" }>;
 
@@ -118,6 +123,18 @@ function ToolContent({ c }: { c: ToolCallContent }) {
   return <pre className="out-pre">terminal {c.terminalId}</pre>;
 }
 
+/** The command an `execute` call ran, when it is one command shown exactly as it reads (D-13 Run button). */
+export function runnableToolCommand(item: Pick<ToolItem, "toolKind" | "rawInput">): string | null {
+  if (item.toolKind !== "execute") return null;
+  const raw = item.rawInput;
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  const v = o["command"] ?? o["cmd"];
+  const cmd = typeof v === "string" ? v : Array.isArray(v) && v.length > 0 && v.every((x) => typeof x === "string") ? quoteArgv(v as string[]) : null;
+  if (cmd === null || visibleText(cmd) !== cmd) return null;
+  return runnableCommand(cmd);
+}
+
 function StatusGlyph({ status }: { status: ToolItem["status"] }) {
   if (status === "in_progress") return <Spinner size={13} />;
   if (status === "completed") return <Icon name="check" size={13} strokeWidth={2.25} />;
@@ -125,7 +142,7 @@ function StatusGlyph({ status }: { status: ToolItem["status"] }) {
   return <Icon name="circle" size={11} />;
 }
 
-const ToolRow = memo(function ToolRow({ item }: { item: ToolItem }) {
+const ToolRow = memo(function ToolRow({ item, subagentId, onShowSubagent }: { item: ToolItem; subagentId?: string; onShowSubagent?: (id: string) => void }) {
   const [open, setOpen] = useState(false);
   const raw = useMemo(() => pretty(item.rawOutput), [item.rawOutput]);
   const primary = useMemo(() => primaryInput(item.rawInput), [item.rawInput]);
@@ -134,6 +151,7 @@ const ToolRow = memo(function ToolRow({ item }: { item: ToolItem }) {
   const title = useMemo(() => visibleProse(item.title), [item.title]);
   const hasBody = item.content.length > 0 || raw !== "" || hasRestArgs(item.rawInput);
   const dur = item.endedAt !== null ? item.endedAt - item.startedAt : null;
+  const runnable = useMemo(() => runnableToolCommand(item), [item]);
   return (
     <div className={`tool status-${item.status}${open ? " is-open" : ""}`}>
       <button className="tool-row" onClick={() => setOpen((o) => !o)} aria-expanded={hasBody ? open : undefined} disabled={!hasBody}>
@@ -160,7 +178,14 @@ const ToolRow = memo(function ToolRow({ item }: { item: ToolItem }) {
         <div className="tool-body">
           {primary ? (
             <div className="tool-section">
-              <div className="tool-label">{primary.label}</div>
+              <div className="tool-label">
+                {primary.label}
+                {runnable !== null ? (
+                  <button className="tool-run" onClick={() => runInTerminal(runnable)} title="Run in the terminal panel">
+                    <Icon name="play" size={10} /> Run
+                  </button>
+                ) : null}
+              </div>
               <pre className="out-pre mono-strong">{primary.value}</pre>
             </div>
           ) : null}
@@ -180,6 +205,11 @@ const ToolRow = memo(function ToolRow({ item }: { item: ToolItem }) {
             </div>
           ) : null}
         </div>
+      ) : null}
+      {subagentId && onShowSubagent ? (
+        <button className="tool-link" onClick={() => onShowSubagent(subagentId)}>
+          <Icon name="external" size={12} /> Show subagent
+        </button>
       ) : null}
     </div>
   );
@@ -213,7 +243,9 @@ type Block =
   | { type: "agent"; item: Extract<Item, { kind: "agent" }>; first: boolean }
   | { type: "thought"; item: Extract<Item, { kind: "thought" }>; first: boolean }
   | { type: "tools"; items: ToolItem[]; first: boolean }
-  | { type: "notice"; item: Extract<Item, { kind: "notice" }> };
+  | { type: "notice"; item: Extract<Item, { kind: "notice" }> }
+  | { type: "command"; item: CommandItem }
+  | { type: "delegate"; item: DelegateResultItem };
 
 function toBlocks(items: Item[]): Block[] {
   const out: Block[] = [];
@@ -226,6 +258,14 @@ function toBlocks(items: Item[]): Block[] {
     }
     if (it.kind === "notice") {
       out.push({ type: "notice", item: it });
+      continue;
+    }
+    if (it.kind === "command") {
+      out.push({ type: "command", item: it });
+      continue;
+    }
+    if (it.kind === "delegate") {
+      out.push({ type: "delegate", item: it });
       continue;
     }
     const first = !agentTurnOpen;
@@ -242,12 +282,22 @@ function toBlocks(items: Item[]): Block[] {
 
 interface Props {
   items: Item[];
+  /** Runs a command line a card's view sends; returns when its result is shown. */
+  onRunCommand?: (line: string, opts: { display?: string; replaceId: number }) => void | Promise<unknown>;
   busy: boolean;
   replaying: boolean;
   empty: ReactNode;
+  /** The session's subagents: a tool card whose call spawned one links to it. */
+  subagents?: readonly Subagent[];
+  onShowSubagent?: (id: string) => void;
 }
 
-export function Transcript({ items, busy, replaying, empty }: Props) {
+export function Transcript({ items, busy, replaying, empty, onRunCommand, subagents, onShowSubagent }: Props) {
+  const spawned = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const a of subagents ?? []) if (a.parentToolCallId && !m.has(a.parentToolCallId)) m.set(a.parentToolCallId, a.id);
+    return m;
+  }, [subagents]);
   const ref = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   const [stuck, setStuck] = useState(true);
@@ -348,11 +398,15 @@ export function Transcript({ items, busy, replaying, empty }: Props) {
                     {b.first ? <AgentLabel /> : null}
                     <div className="tool-group">
                       {b.items.map((t) => (
-                        <ToolRow key={t.id} item={t} />
+                        <ToolRow key={t.id} item={t} subagentId={spawned.get(t.toolCallId)} onShowSubagent={onShowSubagent} />
                       ))}
                     </div>
                   </div>
                 );
+              case "delegate":
+                return <DelegateResultCard key={b.item.id} item={b.item} />;
+              case "command":
+                return <CommandCard key={b.item.id} item={b.item} onRun={onRunCommand} />;
               case "notice":
                 return (
                   <div key={b.item.id} className={`notice notice-${b.item.level}`} role={b.item.level === "error" ? "alert" : undefined}>
@@ -386,7 +440,7 @@ export function Transcript({ items, busy, replaying, empty }: Props) {
 function AgentLabel() {
   return (
     <div className="agent-label" aria-hidden>
-      <span className="agent-mark">k</span>
+      <BrandMark className="agent-mark" />
       keryx
     </div>
   );

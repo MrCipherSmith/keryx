@@ -76,7 +76,6 @@ function deps(answer: boolean): ScheduleSlashDeps {
     accountOf: async () => "MrCipherSmith",
     // Flow 302: no model is ever called in this suite, so the two new draft-time checks
     // are stubbed to stay out of its way; they get their own dedicated tests.
-    providerReportsUsage: () => true,
     checkCredential: async () => ({ ok: true }),
   };
 }
@@ -117,8 +116,9 @@ describe("AC6: /schedule", () => {
       "cadence: 0 */4 * * * (every 4 hours)",
       "next runs: ", // three ISO times follow
       "prompt: Check my open PRs and issues and summarise what needs my attention",
-      "runner: anthropic/claude-x, mode ask",
-      "budget: ceiling $0.5 for this schedule",
+      "runner: anthropic/claude-x, permission mode ask",
+      "never a limit",
+      "over its $0.5 ceiling",
       "max 300s per run",
       "network: NETWORK ON",
       `  - gh.pr.list: ${path.join(keyHome, "bin", "gh")}`,

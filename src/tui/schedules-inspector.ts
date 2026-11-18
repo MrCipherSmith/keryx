@@ -21,7 +21,7 @@
 // trigger declared in the committed triggers.json is read-only here.
 
 import type { AgentTaskAction } from "../trigger/config";
-import { describeCost, describeFire, NETWORK_ON_WARNING } from "../trigger/describe";
+import { describeCost, describeFire, NETWORK_ON_WARNING, scheduleModeNote } from "../trigger/describe";
 import { grantedToolSpec } from "../trigger/granted-tools";
 import { isScheduleInstalled, lingerStatus, planInstall, type ScheduleHost } from "../trigger/install";
 import { expectedReportRelPath, type TriggerRunRecord } from "../trigger/record";
@@ -142,8 +142,9 @@ export function overviewLines(item: TriggerEntryView, now: Date, install: Instal
     lines.push("", "digest", ...digestStatusLines(digest).map((l) => `  ${l}`), "  read-only: the digest only reads GitHub (gh) and the flow board; it changes nothing");
   } else if (task !== undefined) {
     lines.push(
-      `runner     ${task.dispatch.provider}/${task.dispatch.model}, mode ${task.dispatch.permissionMode}`,
-      `budget     ceiling $${task.dispatch.ceilingUsd}, max ${task.dispatch.maxSeconds}s per run`,
+      `runner     ${task.dispatch.provider}/${task.dispatch.model}`,
+      `mode       ${task.dispatch.permissionMode} (${scheduleModeNote(task.dispatch.permissionMode)})`,
+      `cost       reported in every run, never a limit; ${task.dispatch.ceilingUsd === undefined ? "no ceiling" : `ceiling $${task.dispatch.ceilingUsd} is informational`}; max ${task.dispatch.maxSeconds}s per run`,
       "",
       "prompt",
       ...task.prompt.split("\n").map((l) => `  ${l}`),
@@ -504,7 +505,7 @@ export function openScheduleDetail(otui: unknown, chrome: unknown, name: string,
         } else {
           armed = "run";
           const task = agentTask(item);
-          statusText = `run ${name} now (keryx trigger run --schedule ${name})?${task !== undefined ? ` spends up to $${task.dispatch.ceilingUsd}, network ${task.grants.network}` : ""} · y to confirm · any other key cancels`;
+          statusText = `run ${name} now (keryx trigger run --schedule ${name})?${task !== undefined ? ` mode ${task.dispatch.permissionMode}, network ${task.grants.network}` : ""} · y to confirm · any other key cancels`;
         }
       } else {
         armed = "delete";

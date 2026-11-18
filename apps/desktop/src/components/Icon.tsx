@@ -35,6 +35,8 @@ const PATHS = {
   sparkle: "M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z",
   globe: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18",
   arrowDown: "M12 5v14M6 13l6 6 6-6",
+  arrowLeft: "M19 12H5M11 6l-6 6 6 6",
+  arrowRight: "M5 12h14M13 6l6 6-6 6",
   arrowUp: "M12 19V5M6 11l6-6 6 6",
   command: "M9 6v12M15 6v12M9 6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3M9 18a3 3 0 1 1-3-3h12a3 3 0 1 1-3 3",
   external: "M14 4h6v6M20 4l-9 9M18 14v6H4V6h6",

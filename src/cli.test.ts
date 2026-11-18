@@ -345,6 +345,21 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
         // The pre-flow fixture is immutable; allow only this explicit change.
         reconstructed = reconstructed.replace(newLine, oldLine);
       }
+      if (verb === "trigger") {
+        // Intended product change (schedule permission modes): cost on a schedule is reported,
+        // never a gate, so the ceiling sentence now applies to open-flow / flow-next entries only.
+        // The pre-flow fixture is immutable; allow only this explicit rewording.
+        const newText =
+          "    run refuses at once) — or, for an open-flow / flow-next entry, when a spend\n" +
+          "    ceiling (project-wide, or the trigger's own dispatch.ceilingUsd) is already\n" +
+          "    reached. A schedule (agent-task) is never refused or stopped on cost: its\n" +
+          "    cost is REPORTED in every run's report, and a ceiling there is informational.\n";
+        const oldText =
+          "    run refuses at once) — or when a spend ceiling (project-wide, or the\n" +
+          "    trigger's own dispatch.ceilingUsd) is already reached.\n";
+        expect(reconstructed).toContain(newText);
+        reconstructed = reconstructed.replace(newText, oldText);
+      }
       expect(reconstructed).toBe(preFlow);
     },
   );

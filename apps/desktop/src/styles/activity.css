@@ -1,0 +1,120 @@
+/* Providers dialog, Activity panel (subagents and tasks), transcript link to a subagent. */
+
+.session-topbar { display: flex; align-items: center; gap: var(--sp-2); }
+
+/* Subagents under their session in the sidebar: a pill on the right of the row toggles them; no chevron on sessions (those are the day groups'). */
+.session-node { list-style: none; }
+.session-row.has-children { display: flex; align-items: stretch; }
+.session-row.has-children .session-item { flex: 1; min-width: 0; }
+.session-row.has-children .session-more { position: static; transform: none; flex: none; align-self: center; width: 0; min-width: 0; margin: 0; padding: 0; overflow: hidden; border: 0; }
+.session-row.has-children:hover .session-more, .session-row.has-children.is-menu .session-more, .session-row.has-children .session-more:focus-visible { width: 24px; }
+.session-agents {
+  flex: none; align-self: center; display: inline-flex; align-items: center; gap: 5px; height: 20px; margin-left: 2px; padding: 0 8px;
+  border: 1px solid var(--border); border-radius: var(--r-pill); background: none; color: var(--fg-muted);
+  font: inherit; font-size: var(--fs-xs); font-variant-numeric: tabular-nums; white-space: nowrap; cursor: default;
+}
+.session-agents:hover { color: var(--fg); background: var(--bg-hover); }
+.session-agents[aria-expanded="true"] { color: var(--accent-text); border-color: color-mix(in srgb, var(--accent) 35%, transparent); background: var(--accent-soft); }
+.session-agents:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.session-agents-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: pulse 1.4s ease-in-out infinite; }
+.session-children { list-style: none; margin: 0 0 4px 14px; padding: 0 0 0 8px; border-left: 1px solid var(--border); }
+.session-child {
+  display: flex; align-items: center; gap: var(--sp-2); width: 100%; padding: 3px var(--sp-2); border: 0; border-radius: var(--r-md);
+  background: none; color: var(--fg-muted); font: inherit; font-size: var(--fs-xs); text-align: left; cursor: default;
+}
+.session-child:hover { background: var(--bg-hover); color: var(--fg); }
+.session-child:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.session-child-label { flex: 1; min-width: 0; }
+.session-child-model { flex: none; max-width: 80px; font-size: var(--fs-xs); color: var(--fg-subtle); }
+.session-child-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--fg-subtle); }
+.session-child-dot.status-running { background: var(--accent); animation: pulse 1.4s ease-in-out infinite; }
+.session-child-dot.status-done, .session-child-dot.status-completed { background: var(--ok); }
+.session-child-dot.status-idle { background: var(--warn); }
+.session-child-dot.status-failed, .session-child-dot.status-killed { background: var(--danger); }
+@media (prefers-reduced-motion: reduce) { .session-child-dot.status-running, .session-agents-dot { animation: none; } }
+
+.session-item-badge {
+  flex: none; align-self: center; font-size: var(--fs-xs); line-height: 1; padding: 2px 5px; border-radius: var(--r-pill);
+  background: var(--accent-soft); color: var(--accent-text); font-variant-numeric: tabular-nums;
+}
+
+.activity-panel { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; background: var(--bg-surface); }
+.activity-head { display: flex; align-items: center; padding-right: var(--sp-2); border-bottom: 1px solid var(--border); }
+.activity-tabs { flex: 1; border-bottom: 0; padding: 0 var(--sp-2); }
+.activity-body { flex: 1; min-height: 0; min-width: 0; overflow-x: hidden; overflow-y: auto; overflow-wrap: anywhere; padding: var(--sp-3); display: flex; flex-direction: column; gap: var(--sp-2); }
+/* Nothing in the panel may widen it: long words wrap, a pre block scrolls inside itself. */
+.activity-body > * { min-width: 0; max-width: 100%; }
+.activity-body pre { max-width: 100%; overflow: auto; }
+.activity-empty { margin: var(--sp-3) 0; }
+.activity-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.activity-row {
+  display: flex; align-items: center; gap: var(--sp-2); width: 100%; text-align: left; padding: 6px var(--sp-2);
+  border: 0; border-radius: var(--r-md); background: none; color: var(--fg); font: inherit; cursor: default;
+}
+.activity-row:hover { background: var(--bg-hover); }
+.activity-main { display: grid; min-width: 0; flex: 1; }
+.activity-label { font-size: var(--fs-md); }
+.activity-detail { font-size: var(--fs-xs); color: var(--fg-muted); }
+.activity-model { max-width: 90px; }
+.activity-status { display: inline-flex; flex: none; color: var(--fg-muted); }
+.activity-status.status-done, .activity-status.status-completed { color: var(--ok); }
+.activity-status.status-idle { color: var(--warn); }
+.activity-status.status-failed, .activity-status.status-killed { color: var(--danger); }
+
+.subagent-detail { display: grid; gap: var(--sp-2); }
+.subagent-title { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+.subagent-task { padding: var(--sp-2); border-radius: var(--r-md); background: var(--bg-sunken); }
+.subagent-task-text { white-space: pre-wrap; font-size: var(--fs-sm); }
+.subagent-log { display: grid; gap: var(--sp-2); }
+.subagent-entry { font-size: var(--fs-sm); min-width: 0; }
+.entry-reasoning summary { cursor: default; color: var(--fg-muted); }
+.entry-reasoning-body { white-space: pre-wrap; color: var(--fg-muted); padding: var(--sp-1) 0 0 var(--sp-3); }
+.entry-system { color: var(--fg-subtle); font-style: italic; }
+.entry-tool .out-pre, .entry-result .out-pre { font-family: var(--mono); max-height: 180px; overflow: auto; }
+.task-output { display: grid; gap: var(--sp-1); }
+.task-out { max-height: 360px; overflow: auto; font-family: var(--mono); margin: 0; }
+.task-gap { text-align: center; font-size: var(--fs-xs); color: var(--fg-subtle); border-top: 1px dashed var(--border-strong); padding-top: 2px; }
+
+.tool-link {
+  display: inline-flex; align-items: center; gap: 4px; margin: 2px 0 var(--sp-1) 34px; padding: 0; border: 0; background: none;
+  color: var(--accent-text); font: inherit; font-size: var(--fs-sm); cursor: default;
+}
+.tool-link:hover { text-decoration: underline; }
+
+.providers-tabs { padding: 0; margin-bottom: var(--sp-3); }
+.providers-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.providers-row { display: flex; align-items: center; gap: var(--sp-2); padding: 6px 0; border-bottom: 1px solid var(--border); }
+.providers-row-main { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.providers-row-label { font-weight: 600; }
+.providers-row-detail { font-size: var(--fs-xs); color: var(--fg-muted); }
+.providers-refusal { font-size: var(--fs-sm); color: var(--warn); }
+.providers-test { font-size: var(--fs-sm); }
+.providers-test.is-ok { color: var(--ok); }
+.providers-test.is-bad { color: var(--danger); }
+.providers-back { margin-bottom: var(--sp-2); }
+.providers-form { display: grid; gap: var(--sp-2); }
+.providers-form-title { margin: 0 0 var(--sp-1); font-size: var(--fs-lg); }
+.providers-inline-key { width: 160px; }
+.providers-device { display: grid; gap: var(--sp-2); padding: var(--sp-3); border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--bg-sunken); }
+.providers-device-actions { display: flex; gap: var(--sp-2); }
+.device-code { font: 700 28px/1.2 var(--mono); letter-spacing: 0.12em; text-align: center; padding: var(--sp-3); user-select: all; }
+.device-code-url { text-align: center; font-size: var(--fs-sm); color: var(--fg-muted); }
+
+/* A `/delegate` terminal run's answer, in the parent's transcript: collapsible, from the CLI, never instructions. */
+.schedules-tab { display: grid; gap: var(--sp-2); }
+.schedules-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+.schedule-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-2); }
+.schedule-row { display: grid; gap: 4px; padding: var(--sp-2); background: var(--bg-sunken); border-radius: var(--r-md); }
+.schedule-main { display: flex; align-items: center; gap: var(--sp-2); }
+.schedule-name { flex: 1; min-width: 0; font-weight: 500; }
+.schedule-detail { font-size: var(--fs-sm); color: var(--fg-muted); white-space: pre-line; overflow-wrap: anywhere; }
+.schedule-actions { display: flex; flex-wrap: wrap; gap: 4px; }
+
+/* Runs: a schedule's recent runs, and one run's report and log. */
+.runs-tab { display: grid; gap: var(--sp-2); min-width: 0; }
+.runs-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+.runs-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.run-summary { display: grid; gap: 2px; font-size: var(--fs-sm); color: var(--fg-muted); }
+.run-section { display: grid; gap: 4px; min-width: 0; }
+.run-section-head { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-sm); font-weight: 600; }
+.run-text { margin: 0; padding: var(--sp-2); max-height: 320px; overflow: auto; background: var(--bg-sunken); border-radius: var(--r-md); font: var(--fs-sm) var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }

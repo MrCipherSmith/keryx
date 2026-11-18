@@ -132,7 +132,7 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
   {
     // Flow 492 T11: the quick start. Needs the TUI (a modal) and a Hub connection.
     name: "/task",
-    description: "Start work from a short form: pick a mode, describe it, answer a few questions",
+    description: "Start work from a short form: pick a mode, describe it, answer a few questions; or in one line: /task <mode> <description> [|| criterion; criterion]",
     modes: AGENT_ONLY,
   },
   {
@@ -150,7 +150,7 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
   },
   {
     name: "/ac",
-    description: "Check the active flow's acceptance criteria (advisory, cached) — press `c` in /flows to re-check",
+    description: "Check the active flow's acceptance criteria (advisory, cached) — press `c` in /flows to re-check, or /ac recheck <flow id>",
     modes: AGENT_ONLY,
   },
   {
@@ -163,7 +163,7 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
   },
   {
     name: "/review",
-    description: "Show project-wide items needing review (proposals, blocked sessions)",
+    description: "Show project-wide items needing review (proposals, blocked sessions); /review accept|accept-ack|decline <workspace id> <proposal id> decides one",
     // TUI-only, same reasoning as /workspace: the sidebar badge, mouse
     // click, and list+detail modal (with its [a]/[y] accept) all need the
     // OpenTUI surface.
@@ -245,14 +245,14 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     // Flow 300: TUI-only, same reasoning as /review — the sidebar section, the
     // background run and the report modal all need the OpenTUI surface.
     name: "/governance",
-    description: "Flows with summary and effect — check and complete them; the governance report",
+    description: "Flows with summary and effect — check and complete them; the governance report: /governance run | check <flow id> | close <flow id>",
     modes: AGENT_ONLY,
   },
   {
     // Flow 300: TUI-only — the sidebar section and the list+detail modal with
     // run-now (`keryx trigger run <name>` in a child process).
     name: "/triggers",
-    description: "Declared triggers: last outcome, spend, reservations — run one now",
+    description: "Declared triggers: last outcome, spend, reservations — run one now: /triggers run <name>",
     modes: AGENT_ONLY,
   },
   {
@@ -260,7 +260,7 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     // reasoning as /governance/ /triggers — the list+detail modal and its
     // flat searchable model picker need the OpenTUI surface.
     name: "/routing",
-    description: "Route task categories to models — a flat, searchable list across every connected provider",
+    description: "Route task categories to models — a flat, searchable list across every connected provider; /routing set <category> <provider/model | baseline> | /routing trust",
     modes: AGENT_ONLY,
   },
   {
@@ -274,7 +274,7 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     // Flow 295 (AC12): the Schedules list and detail modals — keyboard access to
     // everything the sidebar section offers (pause/resume, run now, delete, report).
     name: "/schedules",
-    description: "Scheduled tasks: next run, last outcome, report — pause, resume, run now, delete",
+    description: "Scheduled tasks: next run, last outcome, report — /schedules pause|resume|run|delete <name>",
     modes: AGENT_ONLY,
   },
   {
@@ -319,14 +319,14 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     // advisory flaky/infra/real-regression pipeline. TUI-only, same reasoning
     // as `/review`: it renders into the transcript of an OpenTUI session.
     name: "/ci",
-    description: "Failed CI runs/jobs of the current branch's PR, each with an advisory triage",
+    description: "Failed CI runs/jobs of the current branch's PR, each with an advisory triage: /ci triage <run id> [job name]",
     modes: AGENT_ONLY,
   },
   {
     // Flow 308 (AC12): reference-document conformance mode — pick a doc and a
     // target, then walk its clauses. TUI-only, same reasoning as `/ci`.
     name: "/conform",
-    description: "Check a PR, a review report, or a diff against a reference document's clauses, with Jev",
+    description: "Check a PR, a review report, or a diff against a reference document's clauses, with Jev: /conform run <target id> <reference document>",
     modes: AGENT_ONLY,
   },
   {
@@ -466,7 +466,7 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     // above, because there are nine keys here, not one — see
     // `jev-profile-inspector.ts`'s header.
     name: "/jevprofile",
-    description: "Show every Jev review setting next to its measured verdict; toggle one or apply the recommended profile",
+    description: "Show every Jev review setting next to its measured verdict; /jevprofile set <key> on|off toggles one, /jevprofile apply applies the recommended profile",
     modes: AGENT_ONLY,
   },
   {

@@ -1,5 +1,5 @@
 # Keryx Desktop Client — Decisions
-Version: 0.1.1
+Version: 0.2.0
 
 All decisions below were taken by the owner on 2026-11-17 in the session
 that produced this package.
@@ -99,6 +99,171 @@ with a Reopen banner.
 Rejected: one active session per connection (switching killed background work
 and surprised users).
 
+## D-10 Commands: `_keryx/command`, not prompt text — decided 2026-11-17
+
+Chosen: the desktop runs a slash command with the `_keryx/command` request.
+It is not a turn: it does not take the prompt slot, stays out of the model's
+history and can run during a turn under the shell's own busy rules
+(`busy-dispatch.ts`). The command set is the shell's `AGENT_SLASH_COMMANDS`
+(the owner chose every command, pickers included), never a second
+vocabulary. A picker or modal command answers with a generic view (rows,
+actions, form) whose every action is another command line, so each TUI modal
+action gets a shared text subcommand instead of a desktop-only dialog. Commands
+whose meaning is a client surface (`/new`, `/resume`, `/interrupt`, `/mode`,
+`/model`, `/connect`) are advertised with `surface: client|dialog` and handled
+by the app. `session/prompt` slash text stays for editors (§3.7).
+
+Rejected: sending commands as `session/prompt` text (blocks while a turn runs,
+mixes command output into the session as if it were a turn); a bespoke
+desktop dialog per TUI modal (two implementations of each action).
+
+## D-11 Provider login without a terminal — decided 2026-11-17
+
+Chosen: `/connect` is an in-app dialog over `_keryx/providers/*`. API keys
+are typed into a password field and sent once to keryx over the stdio pipe;
+device-code logins (openai-codex, github-copilot, grok) show the code in the
+app and open the verification URL in the system browser while keryx polls.
+Every step reuses the functions the TUI already calls; only the orchestration
+(`runProviderConnectSequence`) is re-expressed. No provider in the catalogue
+needs a terminal; a browser PKCE loopback flow, if one is added later, runs in
+keryx with the app opening the URL the same way.
+
+Rejected: opening Terminal with `keryx auth login` (leaves the app, no
+feedback); keeping keys in the web view's storage (keys stay in keryx's
+`auth.json` only).
+
+## D-12 Subagents over ACP — decided 2026-11-17
+
+Chosen: `spawn_subagent` with native children (plus `/delegate` external
+runs), sent as the shell's own fleet events in
+`_keryx/subagent` per session, linked to the spawning tool call by a new
+`toolCallId` in the tool context. Spawn deps come from one factory shared
+with `keryx shell`. Children keep never asking the user. Cancel is per turn.
+The desktop keeps a session's subagents until `/new` (owner, 2026-11-17),
+not per turn as the TUI does; they are not persisted across a reload.
+
+Rejected: reusing the TUI's module-global subagent bridge (it cannot tell
+sessions apart); a model-chosen external runtime and per-subagent cancel in
+M2a (M2b).
+
+## D-13 Side panels: terminal and browser — decided 2026-11-18
+
+Owner answers 2026-11-18 (question cards; the research of 2026-11-17 compared
+the Claude desktop Code tab, the Codex app, Cursor, Warp and Zed). The brief
+named D-11, but M2 had already used D-10..D-12.
+
+Chosen:
+- **One right-side panel per project window** with two tabs, Terminal and
+  Browser. Title-bar toggles; `Ctrl+\`` opens the terminal, `Cmd+Shift+B` the
+  browser. While open, the panel takes the place of the info/activity dock.
+- **Terminal**: xterm.js in the web view, a PTY per tab in the Rust core
+  (`portable-pty`), output streamed over a Tauri `Channel`, a 1 MiB ring
+  buffer per tab for replay and for the agent. A tab starts the user's
+  `$SHELL -l` in the project root with the login-shell environment
+  (`shellenv.rs`) and `TERM=xterm-256color`. Each shell leads its own process
+  group; closing a tab or the window, or quitting the app, sends SIGHUP to the
+  group, then SIGKILL after a short grace. Tabs belong to the window, not to a
+  session.
+- **Run button**: a fenced block tagged `bash`/`sh`/`zsh`/`shell`/`console`
+  that holds one command, and an `execute` tool call's command, get a Run
+  button that types the command plus Enter into the active terminal tab,
+  opening the panel (and a tab) when needed. Nothing is sent to keryx.
+- **Browser**: a child WKWebView in the project window (Tauri multi-webview,
+  `unstable` feature), one per browser tab, laid over the panel's body.
+  Localhost and external sites; the user signs in inside the panel; no import
+  of another browser's cookies. Storage is a per-project
+  `WKWebsiteDataStore` (`data_store_identifier` from a hash of the project
+  path) on macOS 14+; on macOS 12–13 the store is non-persistent and logins
+  last until the window closes. The minimum macOS stays 12. Only `http(s)`
+  pages load; the page gets no app IPC (capabilities stay local-only), no new
+  windows, no `file:`/`tauri:` navigation.
+- **Agent tools** through one client-hosted MCP server per window, passed in
+  `session/new`/`session/load` `mcpServers` as a stdio entry whose command is
+  the app's own binary in relay mode (`--panel-mcp`): it pipes MCP JSON-RPC
+  between keryx and a 0600 Unix socket the Rust core listens on, authenticated
+  by a random per-window token in the entry's `env`. Tools: `terminal_list`,
+  `terminal_read`, `terminal_run`, `browser_tabs`, `browser_navigate`,
+  `browser_snapshot`, `browser_click`, `browser_type`, `browser_screenshot`,
+  `browser_console`. Names and arguments are backend-neutral, so a CDP
+  backend can replace WKWebView later without changing them.
+- **Approvals** (owner, revised 2026-11-18 after the first click-through):
+  the panel server is marked first-party (`_meta.keryx.firstParty`), and its
+  tools follow the session's mode even after untrusted content (page text, a
+  `search_tool` result) entered the turn. `auto` and unattended
+  orchestrator/agent turns run them without asking; `trust` asks once
+  ("Allow for this session"), and that grant covers every panel tool; `ask`
+  asks every call. The exception is `terminal_run`
+  (`_meta.keryx.floorTools`): after untrusted content it still asks in every
+  mode, and an unattended turn may not run it. A command typed into a shell
+  must not follow from page text. Over ACP keryx now keeps MCP session grants
+  (`trustedMcpTools`) itself, as the shell does. There are no per-site rules.
+- **Terminal access** (owner): the agent reads the output of any tab of the
+  window and runs commands only in tabs it opened itself (`terminal_run`
+  without a tab opens an agent tab).
+- Page text, console lines, terminal output and screenshots are untrusted
+  tool results; password fields are never read or typed into.
+
+Rejected: ACP v1 `terminal/*` (one command per terminal; removed in ACP v2);
+`_keryx/*` native tools (keryx code per tool, desktop-only); a bundled
+Chromium or a system Chrome over CDP (owner chose WKWebView now; 150–300 MB,
+or a dependency on an installed Chrome); importing Chrome cookies; per-site
+approval rules; raising the minimum macOS to 14.
+
+## D-14 `/delegate` runs interactively in the built-in terminal — decided 2026-11-18
+
+Owner decisions 2026-11-18.
+
+Chosen:
+- **Interactive, in the terminal.** In the desktop `/delegate <agent> <task>`
+  runs the vendor CLI (claude / codex / agy) interactively in a new tab of the
+  Terminal side panel (D-13), and the app opens that tab at once. The user can
+  talk to the agent there. keryx sees only the start and the end. The CLI's own
+  permission prompts apply; keryx's sandbox does not, and the approval dialog
+  says so. Approval is still asked first (allow once / reject once).
+- **Protocol.** The desktop advertises `clientCapabilities._meta.keryx.terminal`;
+  keryx then answers `/delegate` with the `openTerminal` effect and an argv it
+  builds from the agent registry (task as one element). Editors, which do not
+  advertise it, keep the headless run.
+- **On by default in the desktop.** With the `terminal` capability the external
+  agent runtime counts as enabled unless the user config explicitly sets
+  `externalAgents.enabled` to `false`; every run still asks approval, and the
+  per-agent and vendor gates stay.
+- **A subagent.** The run appears as a subagent (`runtime: "external"`) in the
+  Activity panel and under its session in the sidebar; clicking it focuses its
+  terminal tab. Its end is the process's exit code, or the tab being closed.
+- **Turn-done signal and hand-back (owner feedback 2026-11-18).** A real run
+  showed the CLI answering in the terminal while the run stayed "running" and
+  the answer never reached the parent. keryx now injects the CLI's own
+  end-of-turn hook at launch (claude `Stop` through `--settings`, codex
+  `notify` through `-c`; agy has none, `turnHook: none`, exit-only). The hook
+  appends its payload to `<session dir>/delegate/<runId>.jsonl`, which keryx
+  watches. A turn sets the new status `idle` ("waiting for you": CLI open, turn
+  done) with a result log entry, and the answer joins the parent's history as a
+  labelled, untrusted, size-capped note WITHOUT starting a turn; the desktop
+  shows a "returned" card. The exit still decides done/failed. `/bin/sh` plus
+  a fixed command, not a `keryx` subcommand: the sidecar path is not reliable
+  for the ACP server and an update replaces it under a running terminal.
+
+- **Who starts a run decides the approval (owner 2026-11-18).** A human
+  `/delegate` keeps the approval dialog. A run started BY THE MODEL
+  (`spawn_subagent` with an external runtime, routed to the same terminal
+  launch through `_keryx/delegate_terminal`) is allowed only in trust or auto
+  mode and then starts without a question; in ask mode it is refused with
+  "external agents may only be started by the model in trust or auto mode".
+  The capability gate, per-agent gates and the `agy` consent still apply.
+- **Auto-close for model-started runs.** The tool call waits for the first
+  turn-done (or the exit; `agy` has no hook, so it waits for the exit) and
+  returns the text as the tool result; the client then marks the subagent done
+  and closes the tab (kills the PTY). The vendor keeps its own session; keryx
+  keeps the result in history. Human-started runs keep their tab open.
+- **A clearer result card.** Header (agent, turn, status, "from <agent>, not
+  instructions"), a Markdown preview (12 lines / 1200 characters, "Show all"),
+  "Open terminal" and "Copy". The text stays untrusted and goes only through the
+  sanitising Markdown component.
+Rejected: running it headless and mirroring its output into the terminal tab
+(the user could not talk to the agent, and the mirror would hide the CLI's own
+prompts).
+
 ## D-15 keryx from npm by default; the CLI installs and updates the app — decided 2026-11-17
 
 Numbered D-15 because D-10 to D-14 were taken by the M2 work (PR #1230),
@@ -120,6 +285,11 @@ Chosen:
   stay selectable. A settings file written before D-15 (no
   `settingsVersion`) holding `keryxSource: "bundled"` is read as `auto`
   once, because the old app stored its default on every save.
+  A keryx on `PATH` that cannot serve the app (no shell profile, or below
+  the floor) does not stop Automatic: the app starts once more on the bundled
+  keryx and says so in an info banner (owner 2026-11-18, after npm 0.4.36
+  predated the shell profile). `keryx on PATH` chosen explicitly still shows
+  the incompatible-keryx dialog.
 - **`keryx app install|update|build|status`** in the CLI:
   - `install` / `update` read the `desktop-v*` releases of
     `MrCipherSmith/keryx` on GitHub, take the newest non-draft one

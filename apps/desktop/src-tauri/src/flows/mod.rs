@@ -16,7 +16,7 @@ use serde::Serialize;
 use serde_json::Value;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use tauri::{AppHandle, Manager, State, WebviewWindow};
+use tauri::{AppHandle, Manager, State, Window};
 
 const MAX_FILE_BYTES: u64 = 512 * 1024;
 const FLOWS_SUBDIR: &str = ".metaproject/flows";
@@ -282,7 +282,7 @@ pub async fn flows_action(
 #[tauri::command]
 pub fn flows_watch(
     app: AppHandle,
-    window: WebviewWindow,
+    window: Window,
     state: State<'_, watch::FlowWatchers>,
     cwd: String,
 ) -> Result<(), String> {

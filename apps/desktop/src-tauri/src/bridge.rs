@@ -17,7 +17,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
-use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder, Window};
 
 /// Overall budget for stopping every window at app quit. It must outlast one
 /// graceful stop, or the quit gives up before the process-group SIGKILL.
@@ -265,6 +265,8 @@ pub struct StartInfo {
     note: Option<String>,
     log_path: String,
     min_keryx_version: &'static str,
+    /// Automatic ran the keryx on PATH and a bundled one exists: the app may start again on it.
+    can_fall_back: bool,
 }
 
 #[derive(Serialize, Clone)]
@@ -327,9 +329,10 @@ fn answer_fs(proc: &Arc<AcpProcess>, root: &Path, request: &fs::FsRequest) {
 #[tauri::command]
 pub async fn acp_start(
     app: AppHandle,
-    window: WebviewWindow,
+    window: Window,
     cwd: String,
     no_profile: Option<bool>,
+    prefer_bundled: Option<bool>,
 ) -> Result<StartInfo, String> {
     let label = window.label().to_string();
     // Numbered before the first await: see `begin_start`.
@@ -338,14 +341,14 @@ pub async fn acp_start(
     // the spawn all block: keep them off the async runtime's workers.
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
-        state.start_session(&label, start, || launch(&app, &label, &cwd, no_profile.unwrap_or(false)))
+        state.start_session(&label, start, || launch(&app, &label, &cwd, no_profile.unwrap_or(false), prefer_bundled.unwrap_or(false)))
     })
     .await
     .map_err(|e| format!("keryx start failed: {e}"))?
 }
 
 /// Locate and spawn keryx for one window; the caller installs the process.
-fn launch(app: &AppHandle, label: &str, cwd: &str, no_profile: bool) -> Result<(Arc<AcpProcess>, StartInfo), String> {
+fn launch(app: &AppHandle, label: &str, cwd: &str, no_profile: bool, prefer_bundled: bool) -> Result<(Arc<AcpProcess>, StartInfo), String> {
     let root = Path::new(cwd)
         .canonicalize()
         .map_err(|e| format!("The project folder is not available ({cwd}): {e}"))?;
@@ -358,12 +361,14 @@ fn launch(app: &AppHandle, label: &str, cwd: &str, no_profile: bool) -> Result<(
     let fs_root = fs::project_root(&root, env.get("PATH").map(String::as_str));
     let settings = settings::load_settings(app);
     let exe_dir = std::env::current_exe().ok().and_then(|p| p.parent().map(Path::to_path_buf));
-    let located = locator::locate(
+    let located = locator::locate_for_app(
         settings.keryx_source,
         settings.custom_path.as_deref(),
         exe_dir.as_deref(),
         env.get("PATH").map(std::ffi::OsString::from).as_deref(),
+        prefer_bundled,
     )?;
+    let can_fall_back = locator::can_fall_back(settings.keryx_source, &located, exe_dir.as_deref());
 
     let mut args = vec!["acp".to_string()];
     if !no_profile {
@@ -424,6 +429,7 @@ fn launch(app: &AppHandle, label: &str, cwd: &str, no_profile: bool) -> Result<(
         note: located.note,
         log_path: log_path.display().to_string(),
         min_keryx_version: version::MIN_KERYX_VERSION,
+        can_fall_back,
     };
     Ok((proc, info))
 }
@@ -437,13 +443,13 @@ fn launch(app: &AppHandle, label: &str, cwd: &str, no_profile: bool) -> Result<(
 /// safe here because `send_line` never waits: it only pushes onto the queue
 /// under a short lock and fails at once when the queue is full.
 #[tauri::command]
-pub fn acp_send(window: WebviewWindow, state: State<'_, AppState>, message: String) -> Result<(), String> {
+pub fn acp_send(window: Window, state: State<'_, AppState>, message: String) -> Result<(), String> {
     let proc = state.session(window.label()).ok_or("keryx is not running in this window")?;
     proc.send_line(&message)
 }
 
 #[tauri::command]
-pub async fn acp_stop(app: AppHandle, window: WebviewWindow) -> Result<(), String> {
+pub async fn acp_stop(app: AppHandle, window: Window) -> Result<(), String> {
     let label = window.label().to_string();
     // Bound to the starts issued before it, before the first await: see
     // `begin_stop`.
@@ -483,7 +489,7 @@ pub async fn window_open_project(app: AppHandle, state: State<'_, AppState>, cwd
 
 /// The folder a freshly created project window should open (taken once).
 #[tauri::command]
-pub fn window_initial_cwd(window: WebviewWindow, state: State<'_, AppState>) -> Option<String> {
+pub fn window_initial_cwd(window: Window, state: State<'_, AppState>) -> Option<String> {
     state.pending_cwd.lock().unwrap().remove(window.label())
 }
 

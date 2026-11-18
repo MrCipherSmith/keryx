@@ -50,7 +50,7 @@ export const ACP_SLASH_COMMANDS: readonly AcpSlashCommandSpec[] = [
 /**
  * `keryx acp --profile shell` (Keryx Desktop Client M1, specification §3.7):
  * the editor set plus `/mode`, which has the same effect as `session/set_mode`.
- * The full shell command set is M2.
+ * The full command set is the served table in `shell-commands.ts` (M2a).
  */
 export const ACP_SHELL_SLASH_COMMANDS: readonly AcpSlashCommandSpec[] = [
   ...ACP_SLASH_COMMANDS,
@@ -62,28 +62,14 @@ export const ACP_SHELL_SLASH_COMMANDS: readonly AcpSlashCommandSpec[] = [
 ];
 
 /**
- * Shell commands that exist only as a TUI surface. Never advertised over ACP;
- * pinned so a later widening of `ACP_SLASH_COMMANDS` cannot pick one up.
+ * Agent-mode commands the desktop never advertises (specification §3.9.2): meaningless
+ * outside a terminal (`/think`, `/expand`, `/copy`, `/theme`, `/game`, `/exit` with its
+ * alias `/quit`) or about wiring an editor to keryx (`/integrate`: the desktop is already
+ * wired). Every OTHER agent-mode command is a row of `shell-commands.ts`; a command that
+ * is neither fails `shell-commands.test.ts`. Chat-only commands (`/models`) are not
+ * agent-mode and are not listed.
  */
-export const ACP_TUI_ONLY_COMMANDS: readonly string[] = [
-  "workspace",
-  "review",
-  "governance",
-  "decisions",
-  "product",
-  "triggers",
-  // Flow 295: scheduling confirms a card in the TUI; an editor never reaches it.
-  "schedule",
-  "schedules",
-  "autoreview",
-  "approvals",
-  "permissions",
-  "remote-policy",
-  "external-diff",
-  "integrate",
-  "mcp",
-  "game",
-];
+export const ACP_TUI_ONLY_COMMANDS: readonly string[] = ["think", "expand", "copy", "theme", "game", "exit", "integrate"];
 
 /** The `availableCommands` payload, in the published shape (`name`, `description`, optional `input.hint`). */
 export function acpAvailableCommands(commands: readonly AcpSlashCommandSpec[] = ACP_SLASH_COMMANDS): AcpAvailableCommand[] {

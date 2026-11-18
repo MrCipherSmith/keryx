@@ -192,7 +192,7 @@ describe("where the module is reached from", () => {
     return out;
   }
 
-  test("only the command adapter, the TUI surface and the shell that opens it import the module", async () => {
+  test("only the command adapter, the TUI surface, the shell that opens it and the desktop shell's read-only view import the module", async () => {
     const repo = path.resolve(import.meta.dir, "..", "..");
     const importers: string[] = [];
     for (const file of await sourceFiles(path.join(repo, "src"))) {
@@ -200,7 +200,7 @@ describe("where the module is reached from", () => {
       if (relative.startsWith(path.join("src", "product") + path.sep)) continue;
       if (productSpecifiers(await readFile(file, "utf8")).length > 0) importers.push(relative);
     }
-    expect(importers.sort()).toEqual(["src/cli-registry.ts", "src/commands/product.ts", "src/tui/product-open-surface.ts", "src/tui/tui-shell.ts"]);
+    expect(importers.sort()).toEqual(["src/acp/shell-views-review.ts", "src/cli-registry.ts", "src/commands/product.ts", "src/tui/product-open-surface.ts", "src/tui/tui-shell.ts"]);
   });
 
   test("the flow module, its gates and the completion path never import it, in any spelling", async () => {

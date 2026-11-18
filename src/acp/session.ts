@@ -10,7 +10,7 @@
 // operator needs `requestedCwd` too.
 
 import type { NormalizedMessage } from "../harness/provider/types";
-import { listSessions, resolveProjectRoot, TranscriptUnreadableError, type SessionHandle } from "../session";
+import { listSessions, repairInjectedTitle, resolveProjectRoot, TranscriptUnreadableError, type SessionHandle } from "../session";
 import { openLeasedSession, releaseSessionLease, type SessionLeaseHandle } from "../session/lease";
 import type { AcpClientCapabilities } from "./protocol";
 
@@ -197,11 +197,13 @@ export class AcpSessionRegistry {
       }
       throw cause;
     }
+    // A title taken from an injected note (a `/delegate` result) is recomputed from the first real message.
+    const handle = repairInjectedTitle(opened.handle, opened.archive.length > 0 ? opened.archive : opened.history);
     const state: AcpSessionState = {
-      sessionId: opened.handle.summary.id,
+      sessionId: handle.summary.id,
       requestedCwd: cwd,
       resolvedRoot,
-      handle: opened.handle,
+      handle,
       // Mutated in place by `runAgentTurn` from here on, same contract as
       // `create()` — a loaded session's later `session/prompt` calls continue
       // this exact array, not a fresh empty one.

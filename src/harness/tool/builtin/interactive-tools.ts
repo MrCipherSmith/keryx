@@ -71,6 +71,13 @@ export interface InteractiveToolContext {
    * the review arbiter can tell a question that may have been shaped by that content and never decide it.
    */
   untrustedContentSeen?: boolean;
+  /**
+   * The id the host shows the person for THIS call, when it has one that differs from the model's own
+   * (`keryx acp --profile shell`: the `tool_call` the client was shown). `spawn_subagent` copies it onto
+   * its fleet events as `parentToolCallId` so a surface can link a subagent to the call that spawned it.
+   * Absent in `keryx shell`; every other tool ignores it.
+   */
+  toolCallId?: string;
 }
 
 /** A tool the interactive agent can offer to the model and execute for content. */

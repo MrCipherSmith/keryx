@@ -5,7 +5,10 @@ import { MOD, setPrefs, usePrefs } from "../lib/prefs";
 import { Icon } from "../components/Icon";
 import { Menu, type MenuItem } from "../components/Menu";
 import { Dialog, Spinner } from "../components/ui";
+import { runningSubagents, statusLabel, type Subagent } from "./activity";
 import { lostText, type SessionMark } from "./reducer";
+
+const NO_KIDS: readonly Subagent[] = [];
 import { countViews, groupSessions, type SidebarView } from "./sessionGroups";
 
 interface Props {
@@ -20,7 +23,11 @@ interface Props {
   canOrganize: boolean;
   onNew: () => void;
   onLoad: (id: string) => void;
+  /** Show a session (if not shown) and open the Activity panel on one of its subagents. */
+  onShowSubagent: (sessionId: string, subagentId: string) => void;
   onCollapse: () => void;
+  /** Starts dragging the docked sidebar's right edge; absent where it floats. */
+  onResizeStart?: (e: React.PointerEvent) => void;
   onSetFlags: (
     id: string,
     change: { archived?: boolean; pinned?: boolean },
@@ -30,13 +37,21 @@ interface Props {
 }
 
 /** What the sidebar says about a session: working, waiting for you, or loading. */
-function Mark({
-  mark,
-  loading,
-}: {
-  mark: SessionMark | undefined;
-  loading: boolean;
-}) {
+function Mark({ mark, loading }: { mark: SessionMark | undefined; loading: boolean }) {
+  const running = mark?.running ?? 0;
+  return (
+    <>
+      {running > 0 ? (
+        <span className="session-item-badge" title={`${running} running (subagents and tasks)`} aria-label={`${running} running`}>
+          {running}
+        </span>
+      ) : null}
+      <StateMark mark={mark} loading={loading} />
+    </>
+  );
+}
+
+function StateMark({ mark, loading }: { mark: SessionMark | undefined; loading: boolean }) {
   if (mark?.waiting) {
     return (
       <span
@@ -80,7 +95,9 @@ export const SessionSidebar = memo(function SessionSidebar({
   canOrganize,
   onNew,
   onLoad,
+  onShowSubagent,
   onCollapse,
+  onResizeStart,
   onSetFlags,
   onTrash,
 }: Props) {
@@ -108,6 +125,12 @@ export const SessionSidebar = memo(function SessionSidebar({
     },
     [collapsed],
   );
+
+  // A session's subagents show while any runs, unless the user chose either way for that session.
+  const subagentsOpen = (sid: string, kids: readonly Subagent[]): boolean =>
+    prefs.subagentTree?.[sid] ?? runningSubagents(kids) > 0;
+  const toggleSubagents = (sid: string, open: boolean) =>
+    setPrefs({ subagentTree: { ...prefs.subagentTree, [sid]: !open } });
 
   const counts = useMemo(() => countViews(sessions), [sessions]);
   const groups = useMemo(() => {
@@ -172,6 +195,9 @@ export const SessionSidebar = memo(function SessionSidebar({
 
   return (
     <aside className="session-sidebar" aria-label="Sessions">
+      {onResizeStart ? (
+        <div className="sidebar-resize" onPointerDown={onResizeStart} role="separator" aria-orientation="vertical" aria-label="Resize sessions sidebar" />
+      ) : null}
       <div className="sidebar-head">
         <h2>Sessions</h2>
         <div className="grow" />
@@ -273,10 +299,12 @@ export const SessionSidebar = memo(function SessionSidebar({
                     const current = s.sessionId === currentId;
                     const mark = marks[s.sessionId];
                     const menuOpen = menu?.id === s.sessionId;
+                    const kids = mark?.held === false ? NO_KIDS : (mark?.subagents ?? NO_KIDS);
+                    const open = subagentsOpen(s.sessionId, kids);
                     return (
-                      <li
-                        key={s.sessionId}
-                        className={`session-row${menuOpen ? " is-menu" : ""}`}
+                      <li key={s.sessionId} className="session-node">
+                      <div
+                        className={`session-row${menuOpen ? " is-menu" : ""}${kids.length > 0 ? " has-children" : ""}`}
                       >
                         <button
                           className={`session-item${current ? " is-current" : ""}${mark && !mark.held ? " is-released" : ""}`}
@@ -295,6 +323,19 @@ export const SessionSidebar = memo(function SessionSidebar({
                             {relativeTime(s.updatedAt)}
                           </span>
                         </button>
+                        {kids.length > 0 ? (
+                          <button
+                            className="session-agents"
+                            aria-expanded={open}
+                            aria-controls={`subagents-${s.sessionId}`}
+                            aria-label={`${open ? "Hide" : "Show"} ${kids.length} subagent${kids.length === 1 ? "" : "s"} of ${titleOf(s, mark)}`}
+                            title={`${open ? "Hide" : "Show"} subagents`}
+                            onClick={() => toggleSubagents(s.sessionId, open)}
+                          >
+                            {runningSubagents(kids) > 0 ? <span className="session-agents-dot" aria-hidden="true" /> : null}
+                            {kids.length} {kids.length === 1 ? "agent" : "agents"}
+                          </button>
+                        ) : null}
                         {canOrganize ? (
                           <button
                             className="icon-btn session-more"
@@ -317,6 +358,43 @@ export const SessionSidebar = memo(function SessionSidebar({
                             <Icon name="more" size={14} />
                           </button>
                         ) : null}
+                      </div>
+                      {kids.length > 0 && open ? (
+                        <ul
+                          className="session-children"
+                          id={`subagents-${s.sessionId}`}
+                          role="group"
+                          aria-label={`Subagents of ${titleOf(s, mark)}`}
+                        >
+                          {kids.map((a) => (
+                            <li key={a.id}>
+                              <button
+                                className="session-child"
+                                title={a.task ?? a.detail ?? a.label}
+                                onClick={() => onShowSubagent(s.sessionId, a.id)}
+                              >
+                                <span
+                                  className={`session-child-dot status-${a.status}`}
+                                  role="img"
+                                  aria-label={statusLabel(a.status)}
+                                  title={statusLabel(a.status)}
+                                />
+                                <span className="session-child-label truncate">
+                                  {a.label}
+                                </span>
+                                {a.runtime === "external" ? (
+                                  <span className="badge badge-neutral">external</span>
+                                ) : null}
+                                {a.model ? (
+                                  <span className="session-child-model truncate">
+                                    {a.model}
+                                  </span>
+                                ) : null}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
                       </li>
                     );
                   })}

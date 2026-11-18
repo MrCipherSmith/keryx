@@ -23,9 +23,9 @@
 //   askUser                 `_keryx/ask_user` to the client (`ask-user.ts`) — or, when the
 //                           client did not advertise it, the tool is denied
 //   mcp                     keryx's configured servers merged with the client's `mcpServers`
-//   spawnTool               the session's own `spawn_subagent` (`server.ts`, one per
-//                           session); a host that passes none gets a refusing
-//                           placeholder, denied by name below
+//   spawnTool               `spawn_subagent` over `buildSessionSpawnDeps` — the wiring `keryx shell`
+//                           uses — with native children only (`nativeOnly`) unless the client runs terminals (`runExternal`); the session's own
+//                           fleet-event closure, hook runtime and live parent model (`spawn`)
 //   bus, schedules,         M2: omitted, so the factory never builds them
 //   operatorConfirm, reviewAgents
 //
@@ -42,33 +42,18 @@ import type { SearchProviderController } from "../harness/search";
 import type { AskUserFn } from "../harness/tool/builtin/ask-user-tool";
 import type { JobRegistry } from "../harness/tool/builtin/background-job-registry";
 import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
+import { createSpawnSubagentTool, type SpawnSubagentToolDeps } from "../harness/tool/builtin/spawn-subagent-tool";
+import { buildSessionSpawnDeps, type SessionSpawnDepsInput } from "../commands/spawn-deps";
 import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import { acpAwareReadFileTool, type AcpFsReader } from "./capability-tools";
 import type { AcpClientCapabilities } from "./protocol";
 
 /**
- * Denied when the host gave the roster no spawn tool. Without `spawn_subagent`
- * every orchestrator skill (flow-, job-, review-orchestrator) answers
- * `STATUS: BLOCKED nested_dispatch_unavailable`, even in a top-level session.
+ * What `spawn_subagent` needs from the ACP host, per session. `nativeOnly` and `runExternal` are not here: a
+ * model-chosen external runtime is `AcpShellRosterInput.runExternal` (the desktop's terminal run, D-14).
  */
-export const ACP_SHELL_NO_SPAWN_DENIED_TOOLS: readonly string[] = ["spawn_subagent"];
-
-/**
- * The factory requires a spawn tool. A host without a spawn port gets this
- * placeholder, which the denial above removes before any turn sees it. Its
- * invoke refuses too, so a change that dropped the denial would fail loudly
- * instead of delegating.
- */
-const SPAWN_PLACEHOLDER: InteractiveTool = {
-  definition: {
-    name: "spawn_subagent",
-    description: "Not available in this ACP host.",
-    inputSchema: { type: "object", properties: {}, additionalProperties: true },
-    risk: "delegate",
-  },
-  invoke: async () => ({ output: "spawn_subagent is not available in this ACP host", isError: true }),
-};
+export type AcpShellSpawnInput = Omit<SessionSpawnDepsInput, "cwd" | "nativeOnly" | "runExternal">;
 
 export interface AcpShellRosterInput {
   readonly root: string;
@@ -76,6 +61,7 @@ export interface AcpShellRosterInput {
   readonly readViaClient: AcpFsReader;
   readonly searchController: SearchProviderController;
   readonly jobRegistry: JobRegistry;
+  readonly spawn: AcpShellSpawnInput;
   readonly getSessionDir: () => string | undefined;
   /** Present only when the client advertised `_meta.keryx.askUser`; absent → `ask_user` is denied. */
   readonly askUser?: AskUserFn;
@@ -85,11 +71,16 @@ export interface AcpShellRosterInput {
   readonly metaprojectPort?: MetaprojectPort;
   /** The session's `spawn_subagent`. Absent → the tool is denied. */
   readonly spawnTool?: InteractiveTool;
+  /**
+   * The model-started external run (trust/auto only, in the client's terminal). Absent → `spawn_subagent`
+   * offers native children only and refuses `runtime.kind: "external"` by name.
+   */
+  readonly runExternal?: SpawnSubagentToolDeps["runExternal"];
 }
 
-/** The names the shell profile denies: `spawn_subagent` without a spawn tool, `ask_user` without a client to ask. */
-export function acpShellDeniedTools(askUserOffered: boolean, spawnOffered: boolean): string[] {
-  return [...(spawnOffered ? [] : ACP_SHELL_NO_SPAWN_DENIED_TOOLS), ...(askUserOffered ? [] : ["ask_user"])];
+/** The names the shell profile denies for this input: `ask_user` without a client to ask. */
+export function acpShellDeniedTools(askUserOffered: boolean): string[] {
+  return askUserOffered ? [] : ["ask_user"];
 }
 
 export function buildAcpShellSessionTools(input: AcpShellRosterInput): InteractiveTool[] {
@@ -98,16 +89,34 @@ export function buildAcpShellSessionTools(input: AcpShellRosterInput): Interacti
     cwd: root,
     metaprojectPort: input.metaprojectPort ?? createMetaprojectAdapter(root),
     searchController: input.searchController,
-    spawnTool: input.spawnTool ?? SPAWN_PLACEHOLDER,
+    spawnTool: createSpawnSubagentTool(buildSessionSpawnDeps({ ...input.spawn, cwd: root, ...(input.runExternal !== undefined ? { runExternal: input.runExternal } : { nativeOnly: true }) })),
     getSessionDir: input.getSessionDir,
     jobRegistry: input.jobRegistry,
     ...(input.askUser !== undefined ? { askUser: input.askUser } : {}),
     ...(input.mcp !== undefined ? { mcp: input.mcp } : {}),
-    denyTools: acpShellDeniedTools(input.askUser !== undefined, input.spawnTool !== undefined),
+    denyTools: acpShellDeniedTools(input.askUser !== undefined),
   });
   return tools.map((tool) =>
     tool.definition.name === "read_file"
       ? acpAwareReadFileTool(tool, root, input.clientCapabilities, input.readViaClient)
       : tool,
   );
+}
+
+/**
+ * `tool` with the host's id for each call passed as `InteractiveToolContext.toolCallId`. `idFor` is read
+ * at invoke time, from the turn's own `AgentIO` (`AcpAgentIo.toolCallIdFor`): the id the client was
+ * shown is minted there, not by the model.
+ */
+export function withHostToolCallId(
+  tool: InteractiveTool,
+  idFor: (name: string, input: Record<string, unknown>) => string | undefined,
+): InteractiveTool {
+  return {
+    ...tool,
+    invoke: (input, ctx) => {
+      const toolCallId = idFor(tool.definition.name, input);
+      return tool.invoke(input, toolCallId === undefined ? ctx : { ...ctx, toolCallId });
+    },
+  };
 }

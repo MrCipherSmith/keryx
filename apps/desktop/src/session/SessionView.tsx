@@ -1,14 +1,21 @@
-import { forwardRef, useMemo, useState } from "react";
+import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { BrandMark } from "../components/BrandMark";
+import { createPortal } from "react-dom";
 import type { PlanEntry } from "../acp/types";
 import { formatTokens } from "../lib/format";
-import { setPrefs, usePrefs, MOD } from "../lib/prefs";
+import { setPrefs, usePrefs, MOD, SESSION_SIDEBAR_MIN } from "../lib/prefs";
 import { Icon } from "../components/Icon";
-import { Kbd, Spinner } from "../components/ui";
+import { Dialog, Kbd, Spinner } from "../components/ui";
 import { Composer, type ComposerHandle } from "./Composer";
+import { ActivityPanel, type ActivityTab } from "./ActivityPanel";
+import { runningSubagents } from "./activity";
+import { isRunning } from "../acp/providers";
+import { setActivityRunning, useSlot } from "../panels/sideSlots";
 import { SessionInfoPanel } from "./SessionInfoPanel";
 import { SessionSidebar } from "./SessionSidebar";
 import { Transcript } from "./Transcript";
-import { lostText, type Usage } from "./reducer";
+import { lostText, type QueuedPrompt, type Usage } from "./reducer";
+import { resolveMode, resolveModel, type UiActions } from "./commandRunner";
 import { modelOption, type useAcpSession } from "./useAcpSession";
 
 type Session = ReturnType<typeof useAcpSession>;
@@ -20,6 +27,8 @@ interface Props {
   onGoFlows: () => void;
   onGoSettings: () => void;
   narrow: boolean;
+  /** Open the Providers dialog (`/connect`, `/search-provider`). */
+  onProviders: (name: string, args: string) => void;
 }
 
 const SUGGESTIONS = [
@@ -28,12 +37,49 @@ const SUGGESTIONS = [
   { icon: "search" as const, text: "Find TODO and FIXME comments and group them by area." },
 ];
 
-export const SessionView = forwardRef<ComposerHandle, Props>(function SessionView({ s, cwd, projectName, onGoFlows, onGoSettings, narrow }, composerRef) {
+export const SessionView = forwardRef<ComposerHandle, Props>(function SessionView({ s, cwd, projectName, onGoFlows, onGoSettings, narrow, onProviders }, composerRef) {
   const { state } = s;
   const prefs = usePrefs();
   const sidebarOpen = prefs.sessionSidebar && !narrow;
-  const [narrowSidebar, setNarrowSidebar] = useState(false);
-  const infoOpen = prefs.infoPanel;
+  // The sidebar floats over the conversation when it is not docked: opened by the Sessions button
+  // ("pinned", stays until dismissed) or by the pointer reaching the window's left edge ("hover",
+  // closes when the pointer leaves it), as the Claude app does.
+  const [floating, setFloating] = useState<"pinned" | "hover" | null>(null);
+  const narrowSidebar = floating !== null;
+  const setNarrowSidebar = useCallback((open: boolean) => setFloating(open ? "pinned" : null), []);
+  // Activity lives in the window's side panel (a tab beside Terminal and Browser); what it shows is kept here.
+  const [activity, setActivity] = useState<{ tab: ActivityTab; subagentId: string | null }>({ tab: "subagents", subagentId: null });
+  const activityOpen = prefs.sidePanel === "activity";
+  const openActivity = useCallback(() => setPrefs({ sidePanel: "activity" }), []);
+  const activitySlot = useSlot("activity");
+  const infoSlot = useSlot("info");
+  // A sidebar click on another session's subagent loads that session first; the panel opens on it once it is shown.
+  const pendingSubagent = useRef<{ sessionId: string; id: string } | null>(null);
+  useEffect(() => {
+    const p = pendingSubagent.current;
+    if (p && p.sessionId === state.sessionId) {
+      pendingSubagent.current = null;
+      setActivity({ tab: "subagents", subagentId: p.id });
+      openActivity();
+    } else setActivity((a) => (a.subagentId === null ? a : { ...a, subagentId: null }));
+  }, [state.sessionId]);
+  const activityApi = useMemo(() => ({ request: s.rpc, extensions: s.extensions }), [s.rpc, s.extensions]);
+  const activityRunning = runningSubagents(state.subagents) + state.tasks.filter(isRunning).length;
+  useEffect(() => {
+    setActivityRunning(activityRunning);
+    return () => setActivityRunning(0);
+  }, [activityRunning]);
+  // A subagent's entry opens the side panel on Activity; a `/delegate` run's detail has an "Open terminal" button.
+  const showSubagent = useCallback(
+    (id: string) => {
+      setActivity({ tab: "subagents", subagentId: id });
+      openActivity();
+    },
+    [openActivity],
+  );
+  const refreshTasks = useCallback(() => {
+    if (state.sessionId) void s.refreshTasks(state.sessionId);
+  }, [s, state.sessionId]);
   const ready = state.phase === "ready" && state.sessionId !== null && state.held;
   const incompatible = s.fatal?.kind === "incompatible" || s.fatal?.kind === "noShell";
 
@@ -59,11 +105,54 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
     handle?.setText(text);
   };
 
+  const handle = () => (composerRef && typeof composerRef !== "function" ? composerRef.current : null);
+  const focusSessions = useCallback(() => {
+    if (narrow) setNarrowSidebar(true);
+    else if (!prefs.sessionSidebar) setPrefs({ sessionSidebar: true });
+    requestAnimationFrame(() => document.querySelector<HTMLElement>(".session-sidebar .session-item.is-current, .session-sidebar .session-item")?.focus());
+  }, [narrow, prefs.sessionSidebar]);
+
+  // One confirmation at a time: a command answered with a draft to confirm (`confirmAction`).
+  const [ask, setAsk] = useState<{ label: string; confirm: string; resolve: (yes: boolean) => void } | null>(null);
+  const askRef = useRef(ask);
+  askRef.current = ask;
+  const confirm = useCallback(
+    (q: { label: string; confirm: string }) =>
+      new Promise<boolean>((resolve) => {
+        askRef.current?.resolve(false);
+        setAsk({ ...q, resolve });
+      }),
+    [],
+  );
+  const answer = (yes: boolean) => {
+    askRef.current?.resolve(yes);
+    setAsk(null);
+  };
+
+  const ui: UiActions = {
+    confirm,
+    focusSessions,
+    fillComposer: fill,
+    openProviders: onProviders,
+    mode: (arg) => {
+      if (!arg) return handle()?.openMenu("mode");
+      const id = resolveMode(state.modes, arg);
+      if (id) void s.setMode(id);
+      else s.notify("warn", `No mode named "${arg}". Modes: ${(state.modes?.availableModes ?? []).map((m) => m.id).join(", ")}.`);
+    },
+    model: (arg) => {
+      const option = modelOption(state.configOptions);
+      if (!arg) return handle()?.openMenu("model");
+      const value = resolveModel(option, arg);
+      if (option && value) void s.setModel(option.id, value);
+      else s.notify("warn", `No model named "${arg}".`);
+    },
+  };
+  const run = (line: string, opts: { display?: string; replaceId?: number } = {}) => s.runCommand(line, ui, opts);
+
   const empty = (
     <div className="session-empty">
-      <div className="session-empty-mark" aria-hidden>
-        k
-      </div>
+      <BrandMark className="session-empty-mark" />
       <h1>What should we work on in {projectName}?</h1>
       <p>keryx reads the project, runs tools with your approval, and keeps sessions you can come back to.</p>
       <div className="suggestions">
@@ -92,6 +181,25 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
     </div>
   );
 
+  /** Drag the docked sidebar's edge: its width follows the pointer, between 200 px and a fifth of the window. */
+  const startSidebarResize = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
+    const target = e.currentTarget as HTMLElement;
+    const startX = e.clientX;
+    const startW = (target.parentElement?.offsetWidth ?? prefs.sessionSidebarWidth);
+    target.setPointerCapture(e.pointerId);
+    const move = (ev: PointerEvent) => {
+      const max = Math.max(SESSION_SIDEBAR_MIN, Math.floor(window.innerWidth / 5));
+      setPrefs({ sessionSidebarWidth: Math.round(Math.min(max, Math.max(SESSION_SIDEBAR_MIN, startW + ev.clientX - startX))) });
+    };
+    const up = () => {
+      target.removeEventListener("pointermove", move);
+      target.removeEventListener("pointerup", up);
+    };
+    target.addEventListener("pointermove", move);
+    target.addEventListener("pointerup", up);
+  }, [prefs.sessionSidebarWidth]);
+
   const sidebar = (
     <SessionSidebar
       sessions={state.sessions}
@@ -105,34 +213,64 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
         setNarrowSidebar(false);
         void s.loadSession(id);
       }}
-      onCollapse={() => (narrow ? setNarrowSidebar(false) : setPrefs({ sessionSidebar: false }))}
+      onShowSubagent={(sessionId, id) => {
+        setNarrowSidebar(false);
+        if (sessionId === state.sessionId) showSubagent(id);
+        else {
+          pendingSubagent.current = { sessionId, id };
+          void s.loadSession(sessionId);
+        }
+      }}
+      onCollapse={() => (sidebarOpen ? setPrefs({ sessionSidebar: false }) : setNarrowSidebar(false))}
+      {...(sidebarOpen ? { onResizeStart: startSidebarResize } : {})}
       onSetFlags={(id, change) => void s.setFlags(id, change)}
       onTrash={s.trashSession}
     />
   );
 
   return (
-    <div className={`session-view${sidebarOpen ? " with-sidebar" : ""}${infoOpen && !narrow ? " with-info" : ""}`}>
+    <div
+      className={`session-view${sidebarOpen ? " with-sidebar" : ""}${narrow ? " is-narrow" : ""}`}
+      style={{ "--sidebar-w": `${prefs.sessionSidebarWidth}px` } as React.CSSProperties}>
       {sidebarOpen ? sidebar : null}
-      {narrow && narrowSidebar ? (
-        <div className="sidebar-float" onMouseDown={(e) => e.target === e.currentTarget && setNarrowSidebar(false)}>
-          {sidebar}
+      {!sidebarOpen && floating === null ? (
+        <div className="sidebar-hover-zone" aria-hidden="true" onMouseEnter={() => setFloating("hover")} />
+      ) : null}
+      {!sidebarOpen && narrowSidebar ? (
+        <div
+          className={`sidebar-float${floating === "hover" ? " is-hover" : ""}`}
+          onMouseDown={(e) => e.target === e.currentTarget && setNarrowSidebar(false)}
+        >
+          <div className="sidebar-float-panel" onMouseLeave={() => floating === "hover" && setFloating(null)}>
+            {sidebar}
+          </div>
         </div>
       ) : null}
       <section className="session-main" aria-label="Conversation">
-
-        {!sidebarOpen ? (
-          <div className="session-topbar">
+        <div className="session-topbar">
+          {!sidebarOpen ? (
             <button
               className="btn btn-sm btn-ghost"
-              onClick={() => (narrow ? setNarrowSidebar(true) : setPrefs({ sessionSidebar: true }))}
+              onClick={() => (narrow ? setNarrowSidebar(true) : (setFloating(null), setPrefs({ sessionSidebar: true })))}
               title="Show sessions"
             >
               <Icon name="list" size={14} /> Sessions
               {state.sessions.length ? <span className="tab-count">{state.sessions.length}</span> : null}
             </button>
-          </div>
-        ) : null}
+          ) : null}
+          <span className="grow" />
+          {state.sessionId ? (
+            <button
+              className="btn btn-sm btn-ghost activity-toggle"
+              onClick={() => setPrefs({ sidePanel: activityOpen ? null : "activity" })}
+              aria-pressed={activityOpen}
+              title="Subagents and background tasks"
+            >
+              <Icon name="checklist" size={14} /> Activity
+              {activityRunning > 0 ? <span className="tab-count" title="Running">{activityRunning}</span> : null}
+            </button>
+          ) : null}
+        </div>
 
         {state.banners.length > 0 ? (
           <div className="session-banners">
@@ -194,12 +332,16 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
           key={state.sessionId ?? ""}
           items={state.items}
           busy={state.busy}
+          onRunCommand={(line, o) => run(line, o)}
+          subagents={state.subagents}
+          onShowSubagent={showSubagent}
           replaying={state.replaying || (state.sessionId === null && state.opening)}
           empty={state.phase === "ready" ? empty : null}
         />
 
         <div className="composer-dock">
           {state.plan.length > 0 ? <PlanCard plan={state.plan} /> : null}
+          <QueueChips queue={state.queue} onRemove={s.removeQueued} />
           <Composer
             ref={composerRef}
             sessionId={state.sessionId}
@@ -209,22 +351,72 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
             modes={state.modes}
             model={modelOption(state.configOptions)}
             sendKey={prefs.sendKey}
-            onSend={(t) => s.sendPrompt(t)}
+            onSend={(t) => run(t)}
             onStop={s.cancel}
             onMode={(id) => void s.setMode(id)}
             onModel={(c, v) => void s.setModel(c, v)}
+            onProviders={() => onProviders("connect", "")}
           />
           <UsageFooter usage={state.usage} version={state.agentVersion} />
         </div>
       </section>
-      {infoOpen ? (
-        <div className={narrow ? "info-float" : "info-dock"}>
-          <SessionInfoPanel state={state} cwd={cwd} projectName={projectName} onClose={() => setPrefs({ infoPanel: false })} />
-        </div>
+      {ask ? (
+        <Dialog
+          title="Confirm"
+          icon="alert"
+          tone="warn"
+          onClose={() => answer(false)}
+          footer={
+            <>
+              <button className="btn" onClick={() => answer(false)}>
+                Cancel
+              </button>
+              <button className="btn btn-primary" data-autofocus onClick={() => answer(true)}>
+                {ask.label}
+              </button>
+            </>
+          }
+        >
+          <pre className="out-pre command-out">{ask.confirm}</pre>
+        </Dialog>
       ) : null}
+      {activityOpen && activitySlot && state.sessionId
+        ? createPortal(
+            <ActivityPanel
+              sessionId={state.sessionId}
+              subagents={state.subagents}
+              tasks={state.tasks}
+              api={activityApi}
+              tab={activity.tab}
+              onTab={(tab) => setActivity((a) => ({ ...a, tab }))}
+              subagentId={activity.subagentId}
+              onSubagent={(subagentId) => setActivity((a) => ({ ...a, subagentId }))}
+              onRefreshTasks={refreshTasks}
+            />,
+            activitySlot,
+          )
+        : null}
+      {prefs.sidePanel === "info" && infoSlot ? createPortal(<SessionInfoPanel state={state} cwd={cwd} projectName={projectName} />, infoSlot) : null}
     </div>
   );
 });
+
+function QueueChips({ queue, onRemove }: { queue: QueuedPrompt[]; onRemove: (index: number) => void }) {
+  if (queue.length === 0) return null;
+  return (
+    <ul className="queue-chips" aria-label="Queued prompts">
+      {queue.map((q, i) => (
+        <li key={q.id} className="queue-chip" title={q.text}>
+          <span className="queue-chip-n">{i + 1}</span>
+          <span className="queue-chip-text truncate">{q.text}</span>
+          <button className="icon-btn icon-btn-sm" onClick={() => onRemove(i)} aria-label={`Remove queued prompt ${i + 1}`} title="Remove">
+            <Icon name="x" size={12} />
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 function ExitBanner({ exit, onRestart }: { exit: { code: number | null; stderrTail: string } | null; onRestart: () => void }) {
   const [open, setOpen] = useState(false);

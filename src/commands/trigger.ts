@@ -486,7 +486,7 @@ async function runFlowNext(
     projectRoot,
     "flow-next",
     {},
-    dispatch === undefined ? undefined : { name: entry.name, ceilingUsd: dispatch.ceilingUsd },
+    dispatch?.ceilingUsd === undefined ? undefined : { name: entry.name, ceilingUsd: dispatch.ceilingUsd },
   );
   if (!budget.allowed) {
     await refuseOnBudget(projectRoot, name, entry, budget.reason);
@@ -556,21 +556,10 @@ async function runAgentTask(
   action: Extract<TriggerAction, { kind: "agent-task" }>,
   overrides: TriggerRunOverrides,
 ): Promise<void> {
-  // The fast, lock-free budget refusal; the authoritative decision is the
-  // reservation the run takes under the spend lock before its first model call.
-  // Flow 389: a scheduled digest does not take it. Its model call is only a summary,
-  // so a spent budget degrades the digest (no summary, a report entry and a status
-  // line) instead of silencing it; `runDigestDispatch` reserves spend itself.
+  // Owner decision 2026-11-18: a schedule's cost is REPORTED, never a gate. No spend check
+  // refuses or stops an agent-task tick; the run's report carries its cost.
   const isDigest = action.digest !== undefined;
-  // Flow 424: a scheduled review is bounded by its own minutes/tokens budget, not the dollar ceiling.
   const isReview = action.review !== undefined;
-  const budget = isDigest || isReview
-    ? { allowed: true as const }
-    : await evaluateTriggerBudget(projectRoot, "agent-task", {}, { name: entry.name, ceilingUsd: action.dispatch.ceilingUsd });
-  if (!budget.allowed) {
-    await refuseOnBudget(projectRoot, name, entry, budget.reason);
-    return;
-  }
   let result;
   try {
     result = isDigest
@@ -964,8 +953,10 @@ created (the per-machine store .metaproject/data/trigger/schedules.json). \`run\
   - refuses cleanly (exit 0, recorded) when another keryx run holds this
     project's maintenance lock — the same lock a manual \`keryx sync --apply\`
     or \`keryx gdgraph build\` takes (those WAIT for it, bounded; a triggered
-    run refuses at once) — or when a spend ceiling (project-wide, or the
-    trigger's own dispatch.ceilingUsd) is already reached.
+    run refuses at once) — or, for an open-flow / flow-next entry, when a spend
+    ceiling (project-wide, or the trigger's own dispatch.ceilingUsd) is already
+    reached. A schedule (agent-task) is never refused or stopped on cost: its
+    cost is REPORTED in every run's report, and a ceiling there is informational.
 
 Actions:
   reconcile   -> \`keryx sync --apply\`

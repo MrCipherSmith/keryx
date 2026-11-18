@@ -7,6 +7,9 @@
       "dependencies": {
         "@tauri-apps/api": "^2",
         "@tauri-apps/plugin-dialog": "^2",
+        "@tauri-apps/plugin-opener": "^2",
+        "@xterm/addon-fit": "0.10.0",
+        "@xterm/xterm": "5.5.0",
         "dompurify": "^3.4.18",
         "marked": "^18.2.1",
         "react": "^18.3.1",
@@ -209,6 +212,8 @@
 
     "@tauri-apps/plugin-dialog": ["@tauri-apps/plugin-dialog@2.8.4", "", { "dependencies": { "@tauri-apps/api": "^2.12.0" } }, "sha512-+6ZOiXenOaxXwb8qCbBPdT2jX2cFPaVVHGIskrpmJLpmWj+qKRTD6X/z9x7hTdSQn7NedcoXCkWGej4a7dC4lw=="],
 
+    "@tauri-apps/plugin-opener": ["@tauri-apps/plugin-opener@2.7.3", "", { "dependencies": { "@tauri-apps/api": "^2.12.0" } }, "sha512-Nm+v7vLBCDzYZxrmCJhpMgtPsPsKt5myMs7SMU/aBjPOmAFI1RrHfhMz7t5KlxjMOzRcelyNq1/j0pmC9SmBVA=="],
+
     "@types/babel__core": ["@types/babel__core@7.20.5", "", { "dependencies": { "@babel/parser": "^7.20.7", "@babel/types": "^7.20.7", "@types/babel__generator": "*", "@types/babel__template": "*", "@types/babel__traverse": "*" } }, "sha512-qoQprZvz5wQFJwMDqeseRXWv3rqMvhgpbXFfVyWhbx9X47POIA6i/+dXefEmZKoAgOaTdaIgNSMqMIU61yRyzA=="],
 
     "@types/babel__generator": ["@types/babel__generator@7.27.0", "", { "dependencies": { "@babel/types": "^7.0.0" } }, "sha512-ufFd2Xi92OAVPYsy+P4n7/U7e68fex0+Ee8gSG9KX7eo084CWiQ4sdxktvdl0bOPupXtVJPY19zk6EwWqUQ8lg=="],
@@ -234,6 +239,10 @@
     "@types/ws": ["@types/ws@8.18.2", "", { "dependencies": { "@types/node": "*" } }, "sha512-67MQl+fpWKVTT1NYdnmo3U4sc/xPo/zQBncVnI74qmQa0z/b+1g6iYqNmGCPbxO+zz2aklb08a0oHfegiVd0/w=="],
 
     "@vitejs/plugin-react": ["@vitejs/plugin-react@4.7.0", "", { "dependencies": { "@babel/core": "^7.28.0", "@babel/plugin-transform-react-jsx-self": "^7.27.1", "@babel/plugin-transform-react-jsx-source": "^7.27.1", "@rolldown/pluginutils": "1.0.0-beta.27", "@types/babel__core": "^7.20.5", "react-refresh": "^0.17.0" }, "peerDependencies": { "vite": "^4.2.0 || ^5.0.0 || ^6.0.0 || ^7.0.0" } }, "sha512-gUu9hwfWvvEDBBmgtAowQCojwZmJ5mcLn3aufeCsitijs3+f2NsrPtlAWIR6OPiqljl96GVCUbLe0HyqIpVaoA=="],
+
+    "@xterm/addon-fit": ["@xterm/addon-fit@0.10.0", "", { "peerDependencies": { "@xterm/xterm": "^5.0.0" } }, "sha512-UFYkDm4HUahf2lnEyHvio51TNGiLK66mqP2JoATy7hRZeXaGMRDr00JiSF7m63vR5WKATF605yEggJKsw0JpMQ=="],
+
+    "@xterm/xterm": ["@xterm/xterm@5.5.0", "", {}, "sha512-hqJHYaQb5OptNunnyAnkHyM8aCjZ1MEIDTQu1iIbbTD/xops91NB5yq1ZK/dC2JDbVWtF23zUtl9JE2NqwT87A=="],
 
     "baseline-browser-mapping": ["baseline-browser-mapping@2.11.37", "", { "bin": { "baseline-browser-mapping": "dist/cli.cjs" } }, "sha512-QYph+vfurmaxhNwi9FprfmtkT5cx2Keg8FzZ0vnjO8ukscIybVyZGMFwdllKGlTI6qyU8ck43OM9UXh+IFJihQ=="],
 

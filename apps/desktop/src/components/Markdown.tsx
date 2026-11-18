@@ -3,6 +3,7 @@ import { marked } from "marked";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { codeBlockCopyText, revealCodeBlock } from "./codeBlock";
 import { emptyCache, renderStreaming, type RenderTokens, type StreamFrame } from "./markdownStream";
+import { isShellLang, runInTerminal, runnableCommand } from "../panels/panelBus";
 
 marked.setOptions({ gfm: true, breaks: false });
 
@@ -53,6 +54,13 @@ function blockLinks(e: React.MouseEvent<HTMLElement>) {
 function onClick(e: React.MouseEvent<HTMLDivElement>) {
   const target = e.target as HTMLElement;
   blockLinks(e);
+  const run = target.closest<HTMLButtonElement>("button.code-run");
+  if (run) {
+    const block = run.closest<HTMLElement>(".code-block");
+    const command = runnableCommand(codeBlockCopyText(block ?? null, block?.querySelector("code") ?? null));
+    if (command) runInTerminal(command);
+    return;
+  }
   const copy = target.closest<HTMLButtonElement>("button.code-copy");
   if (copy) {
     const block = copy.closest<HTMLElement>(".code-block");
@@ -90,7 +98,18 @@ function decorateCodeBlocks(html: string): string {
     btn.className = "code-copy";
     btn.type = "button";
     btn.textContent = "Copy";
-    head.append(label, btn);
+    head.append(label);
+    // One shell command gets Run (D-13): it is typed into the side panel's terminal. A block that
+    // had hidden characters revealed never does.
+    if (isShellLang(lang) && wrap.dataset.raw === undefined && runnableCommand(code?.textContent ?? "") !== null) {
+      const runBtn = doc.createElement("button");
+      runBtn.className = "code-run";
+      runBtn.type = "button";
+      runBtn.title = "Run in the terminal panel";
+      runBtn.textContent = "Run";
+      head.append(runBtn);
+    }
+    head.append(btn);
     pre.replaceWith(wrap);
     wrap.append(head, pre);
   }

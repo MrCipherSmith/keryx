@@ -57,6 +57,7 @@ import { ensureLocksDir } from "../lib/maintenance-lock";
 import { redactSensitiveText } from "../security/service";
 import { protectJsonIds } from "./granted-json-ids";
 import type { AgentTaskAction, TriggerDispatch, TriggerEntry } from "../trigger/config";
+import { scheduleModeNote } from "../trigger/describe";
 import { identityOf, sameIdentity, type VerifiedFile } from "../trigger/granted-binary";
 import { confirmedContentProblem, verifyGrantedBinaries } from "../trigger/schedule-verify";
 import {
@@ -74,7 +75,6 @@ import type {
   TriggerRunOutcomeKind,
   UnattendedDenial,
 } from "../trigger/record";
-import { evaluateTriggerBudget, reserveTriggerSpend } from "../trigger/run";
 export { verifyGrantedBinaries } from "../trigger/schedule-verify";
 import { ensureTriggerDataIgnored, triggerReportsDir } from "../trigger/store";
 import { isUnattendedExcludedTool, unattendedRefusal } from "../trigger/unattended";
@@ -89,7 +89,7 @@ import {
 import {
   createSpendMeter,
   deniedUnattendedApproval,
-  defaultMakeProvider,
+  makeScheduleProvider,
   dispatchLockPath,
   guardUsage,
   keryxInvocation,
@@ -515,11 +515,11 @@ async function runLocked(
       home: homedir(),
       ...(typeof process.getuid === "function" ? { uid: process.getuid() } : {}),
     });
-    if (!sandbox.ok && dispatch.permissionMode === "trust") {
+    if (!sandbox.ok && dispatch.permissionMode !== "ask") {
       return refusal(
         runId,
         "sandbox-unavailable",
-        `permissionMode "trust" runs commands, and it never does so uncontained — refusing: ${sandbox.reason}. ` +
+        `permissionMode "${dispatch.permissionMode}" runs commands, and it never does so uncontained — refusing: ${sandbox.reason}. ` +
           'Fix the sandbox, or use permissionMode "ask" (read-only: every command is denied; granted tools still run).',
         action,
       );
@@ -535,7 +535,7 @@ async function runLocked(
       : `none (${sandbox.reason}) — "ask" mode, every shell_exec refused`;
 
     // --- 4. provider, then the reservation (AC14) ----------------------------
-    const built = (deps.makeProvider ?? defaultMakeProvider)(dispatch);
+    const built = (deps.makeProvider ?? makeScheduleProvider)(dispatch);
     if ("error" in built) {
       if (built.code !== undefined) return refusal(runId, built.code, built.error, action);
       return {
@@ -547,7 +547,7 @@ async function runLocked(
       };
     }
     const env = deps.grantedEnv ?? process.env;
-    const providerFor = cachedRoutingProviders(dispatch, built, deps.makeProvider ?? defaultMakeProvider);
+    const providerFor = cachedRoutingProviders(dispatch, built, deps.makeProvider ?? makeScheduleProvider);
     // Resolve the exact roster before routing so capability and context gates inspect the request that will run.
     const extraSecrets = await ghAuthToken(binaries.realpaths["gh"], grantedCwd, env);
     const grantedCalls: GrantedCallRecord[] = [];
@@ -564,16 +564,6 @@ async function runLocked(
     const offending = tools.filter((tool) => isUnattendedExcludedTool(tool.definition.name));
     if (offending.length > 0) throw new Error(`agent-task roster must not offer: ${offending.map((tool) => tool.definition.name).join(", ")}`);
     const taskPrompt = buildAgentTaskPrompt(entry, action);
-    const currentBudget = await evaluateTriggerBudget(projectRoot, "agent-task", {}, { name: entry.name, ceilingUsd: dispatch.ceilingUsd });
-    if (!currentBudget.allowed) {
-      return {
-        outcome: "budget-refused",
-        detail: currentBudget.reason,
-        cost: { recorded: false, reason: "run was refused on the spend ceiling before any model call" },
-        agentTask: { runId, permissionMode: dispatch.permissionMode, network: action.grants.network },
-        exitCode: 0,
-      };
-    }
     const routingShellConfig = loadShellConfig(deps.routingConfigDir);
     const routingModelParams = resolveProviderModelParamsByName(dispatch.provider, routingShellConfig, deps.routingConfigDir);
     const routingRuntime = {
@@ -588,6 +578,7 @@ async function runLocked(
         modelId: dispatch.model,
         toolNames: tools.map((tool) => tool.definition.name),
       }),
+      costNeverGates: true,
     };
     const routing = await resolveUnattendedRouting(
       projectRoot,
@@ -596,7 +587,7 @@ async function runLocked(
       providerFor,
       taskPrompt,
       tools.map((tool) => tool.definition),
-      currentBudget.remainingUsd,
+      undefined,
       routingRuntime,
       deps,
     );
@@ -610,28 +601,10 @@ async function runLocked(
         action,
       );
     }
-    const reservation = await reserveTriggerSpend(projectRoot, {
-      runId,
-      trigger: entry.name,
-      firedBy: entry.fire,
-      action: entry.action,
-      perTrigger: { name: entry.name, ceilingUsd: dispatch.ceilingUsd },
-      now,
-      actionKind: "agent-task",
-    });
-    if (!reservation.reserved) {
-      return {
-        outcome: "budget-refused",
-        detail: reservation.reason,
-        cost: { recorded: false, reason: "run was refused on the spend ceiling before any model call" },
-        agentTask: { runId, permissionMode: dispatch.permissionMode, network: action.grants.network },
-        exitCode: 0,
-      };
-    }
-
-    // From here on every path returns a result carrying `runId`, which closes the reservation.
+    // Owner decision 2026-11-18: a schedule's cost is REPORTED, never a gate. There is no spend
+    // reservation, no ceiling check and no spend stop; the meter only measures.
     const controller = new AbortController();
-    const meter = createSpendMeter(dispatch, reservation.usd, () => controller.abort());
+    const meter = createSpendMeter(dispatch, undefined, () => {});
     const denials: UnattendedDenial[] = [];
     let timedOut = false;
     let providerError: string | undefined;
@@ -649,7 +622,7 @@ async function runLocked(
           projectRoot,
           deps.routingConfigDir,
           dispatch,
-          reservation.usd,
+          undefined,
           built,
           providerFor,
           routing,
@@ -726,13 +699,8 @@ async function runLocked(
     }
 
     const cost = meter.cost();
-    const { spendStopped, usageMissing } = meter.state;
     const why =
-      usageMissing
-        ? "the provider sent a response without token usage — charged the whole reservation"
-        : spendStopped
-          ? "spend cap reached — the run was stopped at its remaining allowance"
-          : timedOut
+      timedOut
             ? `timed out after ${dispatch.maxSeconds}s`
             : crashed !== undefined
               ? `the agent run threw: ${crashed}`
@@ -772,7 +740,7 @@ async function runLocked(
         `${outcome === "ok" ? "report written" : `run ${outcome}: ${why}`}${reportPath !== undefined ? ` → ${reportPath}` : ""}${reportNote} ` +
         `[sandbox: ${sandboxNote}; ${grantedCalls.length} granted call(s); ${denials.length} denial(s)` +
         `${action.grants.network === "allowlist" ? `; ${networkRefusals} network refusal(s)` : ""}; ` +
-        `$${cost.recorded ? cost.usd.toFixed(4) : "?"} of $${reservation.usd.toFixed(4)} reserved]`,
+        `${costSentence(cost, dispatch.ceilingUsd)}]`,
       cost,
       agentTask: {
         runId,
@@ -808,6 +776,17 @@ function sandboxedRunner(workdir: string, plan: UnattendedSandboxPlan): CommandR
   );
 }
 
+/**
+ * One phrase for a run's cost. Cost is REPORTED, never a gate (owner decision 2026-11-18):
+ * "$0.0222", or "cost unknown" when the provider reports no usage, plus "over the ceiling" when the
+ * schedule has an informational ceiling and the run cost more than it.
+ */
+export function costSentence(cost: TriggerRunCost, ceilingUsd: number | undefined): string {
+  if (!cost.recorded) return "cost unknown";
+  const base = `$${cost.usd.toFixed(4)}`;
+  return ceilingUsd !== undefined && cost.usd > ceilingUsd ? `${base} — over the ceiling of $${ceilingUsd}` : base;
+}
+
 function renderReport(input: {
   entry: TriggerEntry;
   action: AgentTaskAction;
@@ -823,8 +802,8 @@ function renderReport(input: {
   networkDecisions: readonly NetworkDecisionEntry[];
 }): string {
   const cost = input.cost.recorded
-    ? `$${input.cost.usd.toFixed(4)} (${input.cost.tokens?.input ?? 0} in / ${input.cost.tokens?.output ?? 0} out tokens)`
-    : `not recorded (${input.cost.reason})`;
+    ? `${costSentence(input.cost, input.action.dispatch.ceilingUsd)} (${input.cost.tokens?.input ?? 0} in / ${input.cost.tokens?.output ?? 0} out tokens)`
+    : `${costSentence(input.cost, input.action.dispatch.ceilingUsd)} (${input.cost.reason})`;
   const lines = [
     `# ${input.entry.name} — scheduled report`,
     "",
@@ -833,6 +812,7 @@ function renderReport(input: {
     `- outcome: ${input.outcome}${input.why !== undefined ? ` — ${input.why}` : ""}`,
     `- cost: ${cost}`,
     `- runner: ${input.action.dispatch.provider}/${input.action.dispatch.model}, mode ${input.action.dispatch.permissionMode}`,
+    `- permission mode: ${input.action.dispatch.permissionMode} — ${scheduleModeNote(input.action.dispatch.permissionMode)}`,
     `- sandbox: ${input.sandboxNote}`,
     `- granted calls: ${input.grantedCalls.length === 0 ? "none" : ""}`,
     ...input.grantedCalls.map((c) => `  - ${c.tool}: \`${c.argv.slice(1).join(" ")}\` → ${c.ok ? "ok" : `exit ${c.exitCode ?? "?"}`}`),

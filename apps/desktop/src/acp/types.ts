@@ -40,10 +40,97 @@ export interface PlanEntry {
   _meta?: { keryx?: { id?: string; status?: string } } & Meta;
 }
 
+/** `_meta.keryx` of an advertised command (shell profile). Absent on an older keryx or the editor profile. */
+export interface CommandMeta {
+  group?: string;
+  /** text: run with _keryx/command; view: the answer carries a view; dialog / client: the app acts alone. */
+  surface?: "text" | "view" | "dialog" | "client";
+  /** What the shell does while a turn runs: run the command, or refuse it. */
+  busy?: "run" | "refuse";
+}
+
 export interface AvailableCommand {
   name: string;
   description: string;
   input?: { hint: string } | null;
+  _meta?: { keryx?: CommandMeta } & Meta;
+}
+
+/** `_keryx/command` request params. */
+export interface CommandParams {
+  sessionId: string;
+  name: string;
+  args: string;
+}
+
+/** Names of state a command changed, so the client can refresh without parsing text. */
+export type CommandEffect = "mode" | "model" | "config" | "plan" | "transcript" | "tasks" | "startTurn" | "openTerminal" | (string & {});
+
+export interface ViewAction {
+  label: string;
+  /** A command line, sent back through _keryx/command. */
+  command: string;
+  /** Ask first; the text is the question. */
+  confirm?: string;
+}
+
+export interface ViewRow {
+  id: string;
+  label: string;
+  detail?: string | null;
+  status?: string | null;
+  actions?: ViewAction[];
+}
+
+export interface ViewField {
+  id: string;
+  label: string;
+  kind: "text" | "secret" | "choice" | "toggle" | "number" | "time" | (string & {});
+  options?: Array<string | { value: string; label?: string }>;
+  value?: string | boolean | null;
+  /** A hint shown while a text field is empty. */
+  placeholder?: string;
+  /** Submit stays disabled until the field is non-empty. */
+  required?: boolean;
+  /** The field exists only while `field` holds one of `equals`; hidden, it is not required, not validated and not sent. */
+  showWhen?: { field: string; equals: string[] };
+  /** number: smallest accepted value (inclusive). */
+  min?: number;
+  /** number: step of the input. */
+  step?: number;
+  /** text: regular expression the whole value must match. A time field is always HH:MM. */
+  pattern?: string;
+  /** Said under the field when its value fails `min` or `pattern`. */
+  error?: string;
+}
+
+export interface ViewForm {
+  fields: ViewField[];
+  /** A command line with `{fieldId}` placeholders; a hidden field's placeholder goes with the `--flag` before it. */
+  submit: string;
+  submitLabel?: string;
+  /** Why the form cannot be submitted right now; Submit stays disabled and this is shown. */
+  disabled?: string;
+}
+
+export interface CommandView {
+  title: string;
+  rows?: ViewRow[];
+  body?: string | null;
+  form?: ViewForm | null;
+}
+
+/** "Ask now, then run": the client asks `confirm` at once (one dialog, `label` on its button), then runs `command`. */
+export interface ConfirmAction {
+  label: string;
+  confirm: string;
+  command: string;
+}
+
+/** Result of `_keryx/command`. */
+export interface CommandResult {
+  text?: string;
+  _meta?: { keryx?: { effects?: CommandEffect[]; refused?: boolean; view?: CommandView | null; prompt?: string; terminal?: { runId: string; agentId: string; title: string; argv: string[]; cwd: string }; confirmAction?: ConfirmAction } } & Meta;
 }
 
 export interface SessionMode { id: string; name: string; description?: string | null }
@@ -140,6 +227,21 @@ export interface InitializeResult {
 export const SESSION_RELEASED = "_keryx/session_released";
 /** Notification to keryx: the user switched the shown session locally (counts for its idle-cap LRU). */
 export const SESSION_SHOWN = "_keryx/session_shown";
+/** Notification from keryx: a `/delegate` terminal run finished a turn; `text` is its (capped, untrusted) answer. */
+export const DELEGATE_RESULT = "_keryx/delegate_result";
+/** Notification to keryx: a `/delegate` run's terminal process ended (it stops watching the run's hook file). */
+export const DELEGATE_EXITED = "_keryx/delegate_exited";
+/** Notification from keryx: the MODEL started an external run (trust/auto mode); open it in a terminal tab. */
+export const DELEGATE_TERMINAL = "_keryx/delegate_terminal";
+export interface DelegateResultParams {
+  sessionId: string;
+  runId: string;
+  agentId: string;
+  turn: number;
+  text: string;
+  /** A model-started run: keryx returned the text as the tool result; the tab closes. */
+  autoClose?: boolean;
+}
 /** Request to keryx: archive/unarchive, pin/unpin a stored session; answers the flags as stored. */
 export const SESSION_FLAGS = "_keryx/session_flags";
 /** Request to keryx: move a stored session to the system trash (a held, idle one is released first). */

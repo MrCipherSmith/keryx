@@ -98,7 +98,7 @@ describe("AC8: keryx schedule list and show name the digest", () => {
     expect(text).not.toContain("NOT installed");
     expect(text).toContain("digest: GitHub (read-only) and the product board for MrCipherSmith/keryx");
     expect(text).toContain('topic "Mornings"');
-    expect(text).toContain("limits $0.2, 600s, 512 MiB");
+    expect(text).toContain("limits ceiling $0.2 (informational), 600s, 512 MiB");
     // 08:00 local after 12:00:30 UTC: a concrete instant, not a dash
     expect(text).toMatch(/next run: \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/);
     expect(text).toContain("last run: never ran");
@@ -130,7 +130,7 @@ describe("AC8: keryx schedule list and show name the digest", () => {
     expect(text).toContain("next run:");
     expect(text).toContain("last run: never ran");
     expect(text).toContain("last delivery: none yet");
-    expect(text).toContain("ceiling $0.2, max 600s");
+    expect(text).toContain("ceiling $0.2 (informational), max 600s");
     expect(text).not.toContain("prompt:");
   });
 

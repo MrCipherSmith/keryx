@@ -104,7 +104,8 @@ describe("AC3 — session/set_mode and /mode", () => {
       const { sessionId } = await h.newSession();
       const commands = await h.waitFor(isUpdate("available_commands_update"));
       const names = (updateOf(commands)["availableCommands"] as { name: string }[]).map((command) => command.name);
-      expect(names).toEqual(["help", "model", "reasoning", "status", "mode"]);
+      // The shell profile advertises the whole served table (shell-commands.test.ts pins it); these five stay first-class.
+      for (const name of ["help", "model", "reasoning", "status", "mode"]) expect(names).toContain(name);
 
       const set = h.prompt(sessionId, "/mode trust");
       expect((await h.waitFor((f) => f.id === set)).result).toEqual({ stopReason: "end_turn" });

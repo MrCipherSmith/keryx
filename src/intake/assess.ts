@@ -129,7 +129,8 @@ export function createDefaultModelCall(root: string, options: DefaultModelCallOp
     const built = (options.makeProvider ?? defaultMakeProvider)(dispatch);
     if ("error" in built) return { ok: false, reason: `model not available: ${built.error}`, costUsd: 0 };
 
-    const limit = Math.min(request.limitUsd, dispatch.ceilingUsd);
+    // The poll's own budget is the limit; a schedule's ceiling is informational (owner decision 2026-11-18).
+    const limit = request.limitUsd;
     const local = new AbortController();
     const stop = (): void => local.abort();
     if (request.signal.aborted) local.abort();

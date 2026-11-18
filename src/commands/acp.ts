@@ -16,7 +16,7 @@ import { loadAcpFixture } from "../acp/fixture-provider";
 import { acpModelChoice, type AcpModelChoice, type AcpModelSource, type AcpTurnSettings } from "../acp/models";
 import { FakeProvider } from "../harness/provider/fake-provider";
 import type { ProviderPort } from "../harness/provider/types";
-import { envWithSavedApiKeys, loadShellConfig, shellConfigPath } from "../lib/shell-config";
+import { envWithSavedApiKeys, loadShellConfig, shellConfigPath, updateShellConfig } from "../lib/shell-config";
 import { resolveAgentMaxOutputTokens, resolveReasoningEffort } from "./agent";
 import { resolveModelsForPicker, resolveProviderModelParamsByName } from "./providers";
 import { detectProviders, type DetectedProvider } from "./select";
@@ -440,6 +440,20 @@ export function shellGrantRefresh(
   };
 }
 
+/**
+ * Save an explicitly chosen model as `keryx shell`'s saved provider/model (the
+ * keys its `/model` writes), so the terminal and the desktop start new sessions
+ * on the same one. A choice without a base URL clears a stale saved one.
+ */
+export function rememberAcpModel(choice: AcpModelChoice, configDir?: string): void {
+  updateShellConfig(({ baseUrl: _dropped, ...rest }) => ({
+    ...rest,
+    provider: choice.providerId,
+    model: choice.modelId,
+    ...(choice.baseUrl !== undefined ? { baseUrl: choice.baseUrl } : {}),
+  }), configDir);
+}
+
 export async function acpCommand(args: string[]): Promise<void> {
   if (args[0] === "help" || args.includes("--help") || args.includes("-h")) {
     printHelp();
@@ -507,12 +521,14 @@ export async function acpCommand(args: string[]): Promise<void> {
             modelId: resolution.modelId,
             turnSettings: resolution.turnSettings,
             ...(resolution.models !== undefined ? { models: resolution.models } : {}),
-            // A child on another model than the session's is built the way `keryx shell` builds it.
-            ...(resolution.source !== "fixture" ? { makeSubagentProvider: realMakeProvider(() => {}) } : {}),
+      // An explicit model switch is keryx shell's saved selection too (the keys its /model saves).
+      rememberModel: (choice) => rememberAcpModel(choice),
           }
         : { providerUnavailable: resolution.message, providerId: "", modelId: "" }),
       agentInfo: { name: "keryx", version: packageJson.version },
       profile,
+      // The shell profile's `spawn_subagent` builds a child's provider the way `keryx shell` does.
+      makeProvider: realMakeProvider(() => {}),
       ...(parsed.dataDir !== undefined ? { dataDir: parsed.dataDir } : {}),
       idSeq: () => randomUUID(),
     });
@@ -568,9 +584,10 @@ protocol frames is ever written to stdout; every diagnostic goes to stderr.
 Profiles (--profile, default editor): everything above is the editor
 profile. --profile shell is what the keryx desktop app launches: keryx
 shell's tool roster (web_fetch/web_search, keryx's own MCP servers merged
-with the client's, background shell tasks, plan tools, ask_user when the
-client advertises clientCapabilities._meta.keryx.askUser) minus
-spawn_subagent and the bus, scheduling and operator-confirm tools; permission modes ask, trust and auto
+with the client's, background shell tasks, plan tools, spawn_subagent with
+native children only, ask_user when the client advertises
+clientCapabilities._meta.keryx.askUser) minus the bus, scheduling and
+operator-confirm tools; permission modes ask, trust and auto
 (session/set_mode, /mode, starting from the project's saved default);
 and plan, usage_update and session_info_update session updates. Sessions
 stay live: opening or loading one releases none, and turns and shell tasks

@@ -19,6 +19,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import packageJson from "../../package.json" with { type: "json" };
 import { buildInteractiveAgentTools } from "../commands/interactive-agent-tools";
+import { buildSessionSpawnDeps, type SessionSpawnDepsInput } from "../commands/spawn-deps";
+import { createSpawnSubagentTool } from "../harness/tool/builtin/spawn-subagent-tool";
 import { createDefaultSearchProviderController } from "../harness/search";
 import { createJobRegistry } from "../harness/tool/builtin/background-job-registry";
 import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
@@ -29,7 +31,7 @@ import { ACP_PERMISSION_OPTION_IDS } from "./permission";
 import { MIN_DESKTOP_VERSION } from "./profile";
 import { AcpProcessClient, type WireMessage } from "./process-client.test-helpers";
 import { ACP_PROTOCOL_VERSION } from "./protocol";
-import { ACP_SHELL_NO_SPAWN_DENIED_TOOLS, buildAcpShellSessionTools } from "./shell-roster";
+import { buildAcpShellSessionTools } from "./shell-roster";
 import { callsOf, driveTurn, isUpdate, shellHarness, textRound, toolRound, updateOf, updates } from "./shell-profile.test-helpers";
 
 const TIMEOUT_MS = 60_000;
@@ -38,14 +40,18 @@ const TIMEOUT_MS = 60_000;
 // AC1 — the roster
 // ---------------------------------------------------------------------------
 
-describe("AC1 — the shell profile's roster is keryx shell's factory", () => {
-  const spawnStub: InteractiveTool = {
-    definition: { name: "spawn_subagent", description: "stub", inputSchema: { type: "object" }, risk: "delegate" },
-    invoke: async () => ({ output: "", isError: true }),
+describe("AC1 — the shell profile's roster is keryx shell's factory, spawn_subagent included", () => {
+  // The spawn wiring `keryx shell` and the ACP host share (`buildSessionSpawnDeps`).
+  const spawn: Omit<SessionSpawnDepsInput, "cwd" | "nativeOnly" | "runExternal"> = {
+    getParentModel: () => ({ providerId: "test", modelId: "test-model" }),
+    providerFactory: () => {
+      throw new Error("no provider in a roster test");
+    },
+    getDetectedProviders: () => [],
   };
   const emptyMcp = { catalog: () => ({ entries: [], skipped: [] }), servers: () => [] };
 
-  function rosters(withAskUser: boolean, withSpawn = false): { acp: InteractiveTool[]; factory: InteractiveTool[] } {
+  function rosters(withAskUser: boolean): { acp: InteractiveTool[]; factory: InteractiveTool[] } {
     const root = realpathSync(mkdtempSync(path.join(tmpdir(), "keryx-acp-shell-roster-")));
     mkdirSync(path.join(root, ".metaproject"));
     writeFileSync(path.join(root, ".metaproject", "metaproject.json"), "{}", "utf8");
@@ -55,19 +61,20 @@ describe("AC1 — the shell profile's roster is keryx shell's factory", () => {
       getSessionDir: () => undefined,
       mcp: emptyMcp,
     };
+    const spawnTool = createSpawnSubagentTool(buildSessionSpawnDeps({ ...spawn, cwd: root, nativeOnly: true }));
     const askUser = async (): Promise<string> => "a";
     const acp = buildAcpShellSessionTools({
       root,
       clientCapabilities: undefined,
       readViaClient: async () => undefined,
+      spawn,
       ...shared,
       ...(withAskUser ? { askUser } : {}),
-      ...(withSpawn ? { spawnTool: spawnStub } : {}),
     });
     const factory = buildInteractiveAgentTools({
       cwd: root,
       metaprojectPort: createMetaprojectAdapter(root),
-      spawnTool: spawnStub,
+      spawnTool,
       askUser,
       ...shared,
     });
@@ -76,10 +83,11 @@ describe("AC1 — the shell profile's roster is keryx shell's factory", () => {
 
   const names = (tools: readonly InteractiveTool[]): string[] => tools.map((tool) => tool.definition.name).sort();
 
-  test("with ask_user advertised and no spawn tool: every factory tool but spawn_subagent, with identical definitions", () => {
+  test("with ask_user advertised: every factory tool, spawn_subagent among them, with identical definitions", () => {
     const { acp, factory } = rosters(true);
-    const expected = factory.filter((tool) => !ACP_SHELL_NO_SPAWN_DENIED_TOOLS.includes(tool.definition.name));
+    const expected = factory;
     expect(names(acp)).toEqual(names(expected));
+    expect(names(acp)).toContain("spawn_subagent");
     const byName = (tools: readonly InteractiveTool[]) => Object.fromEntries(tools.map((tool) => [tool.definition.name, tool.definition]));
     expect(byName(acp)).toEqual(byName(expected));
     // The tools the PRD names as what the editor profile lacked are here.
@@ -88,17 +96,12 @@ describe("AC1 — the shell profile's roster is keryx shell's factory", () => {
     }
   });
 
-  test("without ask_user advertised: ask_user is denied too; spawn, bus and scheduling tools never appear", () => {
+  test("without ask_user advertised: ask_user is denied; spawn_subagent stays; bus and scheduling tools never appear", () => {
     const { acp, factory } = rosters(false);
-    const expected = factory.filter((tool) => ![...ACP_SHELL_NO_SPAWN_DENIED_TOOLS, "ask_user"].includes(tool.definition.name));
+    const expected = factory.filter((tool) => tool.definition.name !== "ask_user");
     expect(names(acp)).toEqual(names(expected));
-    expect(names(acp).filter((name) => name === "spawn_subagent" || name.startsWith("bus_") || name.startsWith("schedule_"))).toEqual([]);
-  });
-
-  test("with a spawn tool: the roster is the whole factory, spawn_subagent included", () => {
-    const { acp, factory } = rosters(true, true);
-    expect(names(acp)).toEqual(names(factory));
-    expect(acp.find((tool) => tool.definition.name === "spawn_subagent")).toBe(spawnStub);
+    expect(names(acp)).toContain("spawn_subagent");
+    expect(names(acp).filter((name) => name.startsWith("bus_") || name.startsWith("schedule_"))).toEqual([]);
   });
 
   test("every shell-profile tool renders with a real ACP kind", () => {
@@ -441,8 +444,27 @@ describe("AC6 — initialize reports the real version and the profiles; _keryx/i
           "_keryx/ask_user",
           "_keryx/session_released",
           "_keryx/session_shown",
+          "_keryx/command",
+          "_keryx/providers/list",
+          "_keryx/providers/test",
+          "_keryx/providers/disconnect",
+          "_keryx/providers/connect",
+          "_keryx/providers/login",
+          "_keryx/providers/login_cancel",
+          "_keryx/providers/login_challenge",
+          "_keryx/search_providers/list",
+          "_keryx/search_providers/connect",
+          "_keryx/search_providers/select",
+          "_keryx/subagent",
+          "_keryx/tasks/event",
+          "_keryx/tasks/list",
+          "_keryx/tasks/output",
+          "_keryx/tasks/kill",
           "_keryx/session_flags",
           "_keryx/session_trash",
+          "_keryx/delegate_result",
+          "_keryx/delegate_exited",
+          "_keryx/delegate_terminal",
         ],
         liveSessions: true,
         minDesktopVersion: MIN_DESKTOP_VERSION,

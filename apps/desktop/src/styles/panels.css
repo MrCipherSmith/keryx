@@ -1,0 +1,56 @@
+/* Side panel: terminal and browser (D-13). */
+:root { --term-bg: #111513; --term-fg: #e4ebe7; --term-selection: #3a5a50; }
+
+.app-shell.with-side { grid-template-columns: var(--rail-w) minmax(0, 1fr) var(--side-w, 520px); }
+.side-panel {
+  position: relative; min-width: 0; min-height: 0; display: flex; flex-direction: column;
+  background: var(--bg-canvas); border-left: 1px solid var(--border);
+}
+.side-resize { position: absolute; left: -3px; top: 0; bottom: 0; width: 6px; cursor: col-resize; z-index: 5; }
+.side-resize:hover { background: var(--accent-soft); }
+.side-head { display: flex; align-items: center; gap: var(--sp-2); height: 36px; padding: 0 var(--sp-2); border-bottom: 1px solid var(--border); flex: none; }
+.side-switch { display: inline-flex; gap: 2px; padding: 2px; background: var(--bg-hover); border-radius: var(--r-md); }
+.side-switch-btn {
+  display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; border: 0; border-radius: var(--r-sm);
+  font-size: var(--fs-sm); font-weight: 500; color: var(--fg-muted); background: none; cursor: default;
+}
+.side-switch-btn.is-active { color: var(--fg); background: var(--bg-surface); box-shadow: 0 0 0 1px var(--border); }
+.side-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.side-pane { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.side-pane[hidden] { display: none; }
+/* Activity and Info are portaled in by the session view; with no session shown the slot says so. */
+.side-slot:empty { align-items: center; justify-content: center; padding: var(--sp-4); color: var(--fg-muted); font-size: var(--fs-sm); text-align: center; }
+.side-slot:empty::before { content: "Open a session to see this."; }
+.side-slot > .info-panel { width: auto; flex: 1; border-left: 0; }
+
+.panel-tabs { display: flex; align-items: center; gap: 2px; padding: 4px var(--sp-2); border-bottom: 1px solid var(--border); overflow-x: auto; flex: none; }
+.panel-tab { display: inline-flex; align-items: center; gap: 2px; max-width: 180px; padding-right: 2px; border-radius: var(--r-md); color: var(--fg-muted); }
+.panel-tab.is-active { background: var(--bg-selected); color: var(--fg); }
+.panel-tab.is-exited .panel-tab-btn { opacity: 0.6; }
+.panel-tab-btn { display: inline-flex; align-items: center; gap: 5px; min-width: 0; height: 24px; padding: 0 6px; border: 0; background: none; color: inherit; font-size: var(--fs-sm); cursor: default; }
+.panel-empty { flex: 1; display: flex; align-items: center; justify-content: center; gap: var(--sp-2); padding: var(--sp-4); color: var(--fg-muted); font-size: var(--fs-sm); text-align: center; }
+
+.term-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.term-body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--term-bg); }
+.term-view { flex: 1; min-height: 0; padding: 6px 0 0 8px; }
+.term-view[hidden] { display: none; }
+.term-body .panel-empty { color: #9fb0a8; }
+
+/* Run buttons on shell blocks and command tool calls. */
+.code-run, .tool-run {
+  display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 7px; border: 1px solid var(--border); border-radius: var(--r-sm);
+  font-size: var(--fs-xs); font-weight: 600; color: var(--accent-text); background: var(--bg-surface); cursor: default;
+}
+.code-run:hover, .tool-run:hover { border-color: var(--accent); }
+.tool-label .tool-run { margin-left: 8px; text-transform: none; letter-spacing: 0; vertical-align: 1px; }
+
+.browser-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.browser-bar { display: flex; align-items: center; gap: 2px; padding: 4px var(--sp-2); border-bottom: 1px solid var(--border); flex: none; }
+.browser-address {
+  flex: 1; min-width: 0; height: 24px; margin-left: 4px; padding: 0 8px; border: 1px solid var(--border); border-radius: var(--r-md);
+  font: var(--fs-sm) var(--font); color: var(--fg); background: var(--bg-surface); outline: none;
+}
+.browser-address:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.browser-error { display: flex; align-items: center; gap: 6px; padding: 6px var(--sp-2); font-size: var(--fs-sm); color: var(--danger); border-bottom: 1px solid var(--border); flex: none; }
+.browser-body { position: relative; flex: 1; min-height: 0; display: flex; background: var(--bg-surface); }
+.code-head .code-run { margin-left: auto; margin-right: 6px; }

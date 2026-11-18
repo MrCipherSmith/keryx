@@ -678,31 +678,33 @@ async function runGoalVerifier(
   return parseVerifierVerdict(result.output);
 }
 
+/** What {@link prepareGoalRun} needs: the `/goal` inputs minus the turn machinery (`deps`, `onTurnResult`). */
+export type PrepareGoalRunParams = Omit<RunGoalCommandParams, "deps" | "onTurnResult"> & {
+  /** The provider and model the slate records when it opens. */
+  model: Pick<AgentDeps, "providerId" | "modelId">;
+};
+
+/** What `/goal` decided before its first turn: the parsed goal and what `--auto` bound the slate to. */
+export interface PreparedGoalRun {
+  /** `parsed.text` is exactly the first turn's text. */
+  readonly parsed: ParsedGoalArgs;
+  readonly boundFlowRef: string | undefined;
+  readonly boundWorkspaceId: string | undefined;
+}
+
 /**
- * Run `/goal`'s full sequence: parse → (if `--workspace` was given) validate
- * it FIRST via `resolveWorkspaceForActor` — fail-closed, no slate opened, no
- * turn run on rejection (AC1) → open the slate (bypassing `isActionRequest`'s
- * heuristic; `/goal` IS the deterministic alternative) → bind
- * `slate.workspaceId`: an explicit, validated `--workspace` always wins
- * (AC2, v1 behavior, unchanged); when `--workspace` was omitted, SLATE-16's
- * resolve-or-create now runs instead (supersedes v1's "leave unset") and
- * only when this slate has no workspaceId bound yet — a `/goal` reusing an
- * already-bound slate mid-session is never re-resolved (AC-25) → (if
- * `--auto` was given) auto-provision/reuse a bound Task Manager flow and arm
- * a per-attempt continuation budget → run the turn with the parsed text →
- * (SLATE-27, flow 186) when armed, re-drive the turn in a round-capped loop
- * until the bound flow's course is done (observed via `slateSession.opened`,
- * the same signal `closeSlateOnFlowDone` already computes — no second
- * `isCourseDone` call) or the round budget is exhausted, then run one
- * independent `spawn_subagent` verifier pass before the final stop, with at
- * most one extra "second chance" round if it disagrees.
+ * The deterministic part of `/goal` (parse, `--workspace` validation, slate open + Anchors,
+ * workspace bind, `--auto` flow provisioning and arm), up to but excluding the first model turn.
+ * `undefined` = refused (the reason went to `io`). A host that starts the turn itself, such as the
+ * ACP desktop host, calls this and sends `parsed.text`; `runGoalCommand` calls it and runs the turn.
  */
-export async function runGoalCommand(params: RunGoalCommandParams): Promise<void> {
-  const { raw, cwd, io, deps, history, slateSession, mintAttemptId } = params;
+export async function prepareGoalRun(params: PrepareGoalRunParams): Promise<PreparedGoalRun | undefined> {
+  const { raw, cwd, io, history, slateSession, mintAttemptId } = params;
+  const deps = params.model;
   const parsed = params.parsed ?? parseGoalArgs(raw);
   if ("error" in parsed) {
     systemLine(io, `/goal: ${parsed.error}\n`);
-    return;
+    return undefined;
   }
   // T10: snapshot of what --auto bound this slate to, captured at arm time
   // (below) while it is still guaranteed fresh — used only if the verifier
@@ -718,7 +720,7 @@ export async function runGoalCommand(params: RunGoalCommandParams): Promise<void
         `/goal: --workspace "${parsed.workspaceId}" was rejected (${resolved.error.code}): ${resolved.error.message}. ` +
           `The slate was not opened and the goal was not run.\n`,
       );
-      return;
+      return undefined;
     }
   }
 
@@ -835,6 +837,35 @@ export async function runGoalCommand(params: RunGoalCommandParams): Promise<void
       systemLine(io, `/goal: slate bookkeeping failed (ignored): ${err instanceof Error ? err.message : String(err)}\n`);
     }
   }
+  return { parsed, boundFlowRef, boundWorkspaceId };
+}
+
+/**
+ * Run `/goal`'s full sequence: parse → (if `--workspace` was given) validate
+ * it FIRST via `resolveWorkspaceForActor` — fail-closed, no slate opened, no
+ * turn run on rejection (AC1) → open the slate (bypassing `isActionRequest`'s
+ * heuristic; `/goal` IS the deterministic alternative) → bind
+ * `slate.workspaceId`: an explicit, validated `--workspace` always wins
+ * (AC2, v1 behavior, unchanged); when `--workspace` was omitted, SLATE-16's
+ * resolve-or-create now runs instead (supersedes v1's "leave unset") and
+ * only when this slate has no workspaceId bound yet — a `/goal` reusing an
+ * already-bound slate mid-session is never re-resolved (AC-25) → (if
+ * `--auto` was given) auto-provision/reuse a bound Task Manager flow and arm
+ * a per-attempt continuation budget → run the turn with the parsed text →
+ * (SLATE-27, flow 186) when armed, re-drive the turn in a round-capped loop
+ * until the bound flow's course is done (observed via `slateSession.opened`,
+ * the same signal `closeSlateOnFlowDone` already computes — no second
+ * `isCourseDone` call) or the round budget is exhausted, then run one
+ * independent `spawn_subagent` verifier pass before the final stop, with at
+ * most one extra "second chance" round if it disagrees.
+ */
+export async function runGoalCommand(params: RunGoalCommandParams): Promise<void> {
+  const { cwd, io, deps, history, slateSession, mintAttemptId } = params;
+  const prepared = await prepareGoalRun({ ...params, model: deps });
+  if (prepared === undefined) {
+    return;
+  }
+  const { parsed, boundFlowRef, boundWorkspaceId } = prepared;
 
   // Review finding: `/goal` already opened the slate (and bound workspaceId)
   // above, deterministically — `runAgentTurn`'s own heuristic close-phrase

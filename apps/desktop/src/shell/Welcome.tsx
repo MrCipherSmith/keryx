@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { BrandMark } from "../components/BrandMark";
 import { hostKind, pickFolder, settingsGet, type Settings } from "../platform/commands";
 import { basename } from "../lib/format";
 import { MOD } from "../lib/prefs";
@@ -41,9 +42,7 @@ export function Welcome({ onOpen, onSettings }: { onOpen: (cwd: string) => void;
       <div className="welcome-drag" data-tauri-drag-region />
       <div className="welcome-col">
         <div className="welcome-brand">
-          <div className="brand-mark" aria-hidden>
-            k
-          </div>
+          <BrandMark className="brand-mark" />
           <div>
             <h1>Keryx</h1>
             <p>Open a project folder to work on it with keryx.</p>

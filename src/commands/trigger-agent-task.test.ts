@@ -147,14 +147,25 @@ let logged: string[] = [];
 const realLog = console.log;
 const realError = console.error;
 
-function entry(overrides: { mode?: "ask" | "trust"; network?: "off" | "full"; tools?: string[]; bins?: Record<string, string>; ceilingUsd?: number } = {}, name = "check-github"): Record<string, unknown> {
+function entry(
+  overrides: { mode?: "ask" | "trust" | "auto"; network?: "off" | "full"; tools?: string[]; bins?: Record<string, string>; ceilingUsd?: number | null; rates?: boolean } = {},
+  name = "check-github",
+): Record<string, unknown> {
   return {
     name,
     on: { kind: "schedule", cron: "0 */4 * * *" },
     action: {
       kind: "agent-task",
       prompt: "Check open PRs on MrCipherSmith/keryx and summarise what needs my attention.",
-      dispatch: { provider: "scripted", model: "m", permissionMode: overrides.mode ?? "ask", rates: RATES, ceilingUsd: overrides.ceilingUsd ?? 1, maxSeconds: 120 },
+      dispatch: {
+        provider: "scripted",
+        model: "m",
+        permissionMode: overrides.mode ?? "ask",
+        // Owner decision 2026-11-18: rates and ceiling are optional on a schedule.
+        ...(overrides.rates === false ? {} : { rates: RATES }),
+        ...(overrides.ceilingUsd === null ? {} : { ceilingUsd: overrides.ceilingUsd ?? 1 }),
+        maxSeconds: 120,
+      },
       grants: {
         network: overrides.network ?? "off",
         tools: overrides.tools ?? [],
@@ -538,21 +549,27 @@ describe("AC5: the posture and the floor hold under every grant, and a changed s
   });
 });
 
-describe("AC14: spend is reserved before the first call and closed by the run's own record", () => {
-  test("the closing record carries the runId, tokens and USD, and no reservation stays open", async () => {
+// Owner decision 2026-11-18 (replaces flow 295 AC14 for schedules): a schedule's cost is REPORTED, never a gate.
+// There is no reservation, no ceiling refusal and no spend stop; the report says what the run cost.
+describe("cost is reported, never a gate (owner decision 2026-11-18)", () => {
+  /** A provider whose responses carry no token usage at all. */
+  const noUsage = (text: string): Round[] => [[{ kind: "text_delta", text }, { kind: "model_end" }]];
+
+  test("the closing record carries the runId, tokens and USD; nothing is reserved", async () => {
     await addConfirmedSchedule(root, entry());
     await run(scripted([finalText("ok")]));
     const read = await readTriggerRuns(root);
     if (read.state !== "present") throw new Error("no ledger");
-    const reserved = read.records.find((r) => r.outcome === "reserved")!;
+    expect(read.records.some((r) => r.outcome === "reserved")).toBe(false);
     const closing = read.records[read.records.length - 1]!;
-    expect(reserved.detail).toContain("reserved $1");
-    expect(closing.agentTask?.runId).toBe(reserved.reservation!.runId);
+    expect(closing.outcome).toBe("ok");
     expect(closing.cost).toEqual({ recorded: true, usd: ROUND_USD, tokens: { input: 1000, output: 200 } });
+    expect(closing.detail).toContain(`$${ROUND_USD.toFixed(4)}`);
+    expect(closing.detail).not.toContain("reserved");
     expect(openReservations(read.records)).toEqual([]);
   });
 
-  test("over the schedule's own ceiling: budget-refused, no model call", async () => {
+  test("earlier recorded spend over the schedule's ceiling does not refuse the tick", async () => {
     await addConfirmedSchedule(root, entry({ ceilingUsd: 0.01 }));
     await mkdir(path.join(root, ".metaproject", "data", "trigger"), { recursive: true });
     await appendTriggerRunRecord(root, {
@@ -564,11 +581,100 @@ describe("AC14: spend is reserved before the first call and closed by the run's 
       detail: "earlier spend",
       cost: { recorded: true, usd: 0.02 },
     });
-    const provider = scripted([finalText("never")]);
+    const provider = scripted([finalText("ran anyway")]);
     await run(provider);
     const record = await lastRecord();
-    expect(record.outcome).toBe("budget-refused");
-    expect(provider.calls()).toBe(0);
+    expect(record.outcome).toBe("ok");
+    expect(provider.calls()).toBe(1);
+  });
+
+  test("a tick over its ceiling completes; the report and the record say over the ceiling, with the cost", async () => {
+    await addConfirmedSchedule(root, entry({ ceilingUsd: 0.001 }));
+    // Two rounds: a tool call, then the final message. The run is far past the $0.001 ceiling after the first.
+    const provider = scripted([toolCall("shell_exec", { command: "ls" }, "c1"), finalText("finished the whole task")]);
+    await run(provider);
+    const record = await lastRecord();
+    expect(record.outcome).toBe("ok");
+    expect(provider.calls()).toBe(2);
+    expect(record.cost).toEqual({ recorded: true, usd: ROUND_USD * 2, tokens: { input: 2000, output: 400 } });
+    expect(record.detail).toContain(`$${(ROUND_USD * 2).toFixed(4)} — over the ceiling of $0.001`);
+    const report = await readFile(path.join(root, record.agentTask!.reportPath!), "utf8");
+    expect(report).toContain(`- cost: $${(ROUND_USD * 2).toFixed(4)} — over the ceiling of $0.001`);
+    expect(report).toContain("finished the whole task");
+  });
+
+  test("a provider that reports no token usage is not refused or aborted: the report says cost unknown", async () => {
+    await addConfirmedSchedule(root, entry());
+    const provider = scripted(noUsage("done without usage"));
+    await run(provider);
+    const record = await lastRecord();
+    expect(record.outcome).toBe("ok");
+    expect(record.agentTask?.refusal).toBeUndefined();
+    expect(record.cost.recorded).toBe(false);
+    expect(record.detail).toContain("cost unknown");
+    const report = await readFile(path.join(root, record.agentTask!.reportPath!), "utf8");
+    expect(report).toContain("- cost: cost unknown");
+    expect(report).toContain("done without usage");
+  });
+
+  test("a schedule with no rates and no ceiling runs, and its cost reads unknown", async () => {
+    await addConfirmedSchedule(root, entry({ rates: false, ceilingUsd: null }));
+    const provider = scripted([finalText("ok")]);
+    await run(provider);
+    const record = await lastRecord();
+    expect(record.outcome).toBe("ok");
+    expect(provider.calls()).toBe(1);
+    expect(record.cost.recorded).toBe(false);
+    expect(record.detail).toContain("cost unknown");
+  });
+});
+
+describe("the permission mode of a schedule is the mode its tick runs in (owner decision 2026-11-18)", () => {
+  const shellThenDone = (): Round[] => [toolCall("shell_exec", { command: "echo hi" }, "c1"), finalText("done")];
+
+  test("ask: the shell call is denied (nobody answers an unattended run), and the report names the mode", async () => {
+    await addConfirmedSchedule(root, entry({ mode: "ask" }));
+    await run(scripted(shellThenDone()));
+    const record = await lastRecord();
+    expect(record.agentTask?.permissionMode).toBe("ask");
+    expect(record.agentTask?.denials?.some((d) => d.tool === "shell_exec")).toBe(true);
+    const report = await readFile(path.join(root, record.agentTask!.reportPath!), "utf8");
+    expect(report).toContain("- permission mode: ask — every command that needs approval is denied");
+  });
+
+  for (const mode of ["trust", "auto"] as const) {
+    test(`${mode}: the same shell call is allowed, and the record and report carry the mode`, async () => {
+      await addConfirmedSchedule(root, entry({ mode }));
+      await run(scripted(shellThenDone()));
+      const record = await lastRecord();
+      expect(record.outcome).toBe("ok");
+      expect(record.agentTask?.permissionMode).toBe(mode);
+      expect(record.agentTask?.denials?.some((d) => d.tool === "shell_exec")).not.toBe(true);
+      const report = await readFile(path.join(root, record.agentTask!.reportPath!), "utf8");
+      expect(report).toContain(`- permission mode: ${mode} —`);
+    });
+  }
+
+  test("auto still stops at the floors: a credential-touching command is denied", async () => {
+    await addConfirmedSchedule(root, entry({ mode: "auto" }));
+    await run(scripted([toolCall("shell_exec", { command: "cat ~/.config/keryx/auth.json" }, "c1"), finalText("done")]));
+    const record = await lastRecord();
+    expect(record.agentTask?.denials?.some((d) => d.tool === "shell_exec")).toBe(true);
+  });
+
+  test("trust and auto refuse to start without the hardened sandbox, ask does not", async () => {
+    const noSandbox = { planSandbox: () => ({ ok: false as const, reason: "no bwrap here" }) };
+    for (const mode of ["trust", "auto"] as const) {
+      await addConfirmedSchedule(root, entry({ mode }, `sb-${mode}`));
+      await run(scripted([finalText("never")]), `sb-${mode}`, noSandbox);
+      const record = await lastRecord();
+      expect(record.outcome).toBe("dispatch-refused");
+      expect(record.agentTask?.refusal).toBe("sandbox-unavailable");
+      expect(record.detail).toContain(`permissionMode "${mode}"`);
+    }
+    await addConfirmedSchedule(root, entry({ mode: "ask" }, "sb-ask"));
+    await run(scripted([finalText("fine")]), "sb-ask", noSandbox);
+    expect((await lastRecord()).outcome).toBe("ok");
   });
 });
 

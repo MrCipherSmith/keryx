@@ -1,5 +1,6 @@
 import type {
   AvailableCommand,
+  CommandView,
   ConfigOption,
   ContentBlock,
   PlanEntry,
@@ -12,6 +13,8 @@ import type {
   ToolCallStatus,
   ToolKind,
 } from "../acp/types";
+import type { TaskInfo } from "../acp/providers";
+import { applySubagentEvent, MAX_SUBAGENT_RESULT_CHARS, runningSubagents, type Subagent } from "./activity";
 
 export type Item =
   | { kind: "user"; id: number; text: string; messageId?: string | null }
@@ -32,7 +35,45 @@ export type Item =
       startedAt: number;
       endedAt: number | null;
     }
-  | { kind: "notice"; id: number; level: "info" | "warn" | "error"; text: string };
+  | { kind: "notice"; id: number; level: "info" | "warn" | "error"; text: string }
+  | DelegateResultItem
+  | CommandItem;
+
+/**
+ * A `/delegate` terminal run finished a turn: its answer as keryx put it in the parent's history, shown
+ * as a collapsed card. Untrusted text (rendered verbatim, never as markup). Client-only, like a command card.
+ */
+export interface DelegateResultItem {
+  kind: "delegate";
+  id: number;
+  runId: string;
+  agentId: string;
+  turn: number;
+  text: string;
+}
+
+/**
+ * The card a slash command leaves in the transcript. Client-only: it is never sent to the model and a
+ * session/load replay does not bring it back.
+ */
+export interface CommandItem {
+  kind: "command";
+  id: number;
+  /** The command line as shown (a secret field's value is already masked). */
+  line: string;
+  text: string;
+  /** keryx (or the app, while a turn runs) refused the command: shown as a notice. */
+  refused: boolean;
+  /** The request itself failed (not a keryx refusal): shown as an error. */
+  error?: boolean;
+  view: CommandView | null;
+}
+
+/** A prompt typed while the turn runs; sent in order when it ends. */
+export interface QueuedPrompt {
+  id: number;
+  text: string;
+}
 
 export interface Banner {
   id: number;
@@ -74,10 +115,16 @@ export interface ConvState {
   plan: PlanEntry[];
   usage: Usage | null;
   title: string | null;
+  /** Prompts waiting for the running turn to end. Client-side only. */
+  queue: QueuedPrompt[];
   /** keryx holds it on this connection. False after `_keryx/session_released` or a lost connection: read-only until reloaded. */
   held: boolean;
   /** Why it is not held: keryx's idle cap released it, or the connection was lost. Null while held. */
   lostReason: LostReason | null;
+  /** Subagents of this session, kept until a new session (not cleared per turn). Not persisted: empty after session/load. */
+  subagents: readonly Subagent[];
+  /** Background tasks, as last listed by keryx. */
+  tasks: readonly TaskInfo[];
 }
 
 export type LostReason = "idle-cap" | "connection";
@@ -86,6 +133,9 @@ export type LostReason = "idle-cap" | "connection";
 export function lostText(reason: LostReason | null): string {
   return reason === "connection" ? "The connection to keryx was lost" : "keryx closed this idle session to save memory";
 }
+
+const NO_SUBAGENTS: readonly Subagent[] = [];
+const NO_TASKS: readonly TaskInfo[] = [];
 
 export function newConv(
   sessionId: string,
@@ -103,8 +153,11 @@ export function newConv(
     plan: [],
     usage: null,
     title: null,
+    queue: [],
     held: true,
     lostReason: null,
+    subagents: NO_SUBAGENTS,
+    tasks: NO_TASKS,
   };
 }
 
@@ -199,6 +252,35 @@ function upsertTool(d: ConvState, u: ToolCallFields, isNew: boolean, at: number)
   return true;
 }
 
+/** `_meta.keryx.delegateResult` of a replayed user chunk: a `/delegate` run's turn answer kept in the history. */
+function delegateNoteOf(meta: unknown): { runId: string; agentId: string; turn: number; text: string } | null {
+  const n = (meta as { keryx?: { delegateResult?: Record<string, unknown> } } | null | undefined)?.keryx?.delegateResult;
+  if (!n || typeof n.runId !== "string" || typeof n.text !== "string") return null;
+  return { runId: n.runId, agentId: typeof n.agentId === "string" ? n.agentId : "agent", turn: typeof n.turn === "number" ? n.turn : 1, text: n.text };
+}
+
+/**
+ * A replayed delegate note: the "returned" card, and the run as a finished subagent, so the sidebar's
+ * "N agents" and Activity still show it after a reload. Subagents are not persisted by keryx; the run is
+ * rebuilt from its notes (the last turn wins). No terminal exists any more, so the entry has no tab.
+ */
+function replayDelegateNote(d: ConvState, n: { runId: string; agentId: string; turn: number; text: string }): boolean {
+  d.items.push({ kind: "delegate", id: d.nextId, runId: n.runId, agentId: n.agentId, turn: n.turn, text: n.text });
+  d.nextId += 1;
+  const restored: Subagent = {
+    id: n.runId,
+    label: n.agentId,
+    status: "done",
+    detail: "from history",
+    runtime: "external",
+    agentId: n.agentId,
+    entries: [{ kind: "result", text: n.text.slice(0, MAX_SUBAGENT_RESULT_CHARS) }],
+  };
+  const at = d.subagents.findIndex((a) => a.id === n.runId);
+  d.subagents = at < 0 ? [...d.subagents, restored] : d.subagents.map((a, i) => (i === at ? { ...a, ...restored } : a));
+  return true;
+}
+
 interface ChunkUpdate {
   content: ContentBlock;
   messageId?: string | null;
@@ -219,6 +301,8 @@ function applyUpdate(d: ConvState, u: SessionUpdate, at: number): boolean {
     case "user_message_chunk": {
       if (!d.replaying) return false; // live user text is added locally on send
       const c = u as ChunkUpdate;
+      const note = delegateNoteOf((u as { _meta?: unknown })._meta);
+      if (note) return replayDelegateNote(d, note);
       return appendChunk(d, "user", blockText(c.content), c.messageId);
     }
     case "agent_message_chunk": {
@@ -282,6 +366,15 @@ export function applyUpdates(conv: ConvState, updates: readonly QueuedUpdate[]):
   return changed ? d : conv;
 }
 
+/**
+ * The queued prompt to send now: the front one, once the session is idle (no turn, held, not replaying).
+ * One per call: sending it makes the session busy again, so the next waits for that turn to end.
+ */
+export function pendingQueueSend(conv: ConvState, turnRunning: boolean): QueuedPrompt | null {
+  if (conv.busy || turnRunning || !conv.held || conv.replaying) return null;
+  return conv.queue[0] ?? null;
+}
+
 // ---- the window -----------------------------------------------------------
 
 /**
@@ -328,6 +421,20 @@ export type Action =
   | { t: "userSent"; sessionId: string; text: string }
   | { t: "notice"; sessionId: string; level: "info" | "warn" | "error"; text: string }
   | { t: "busy"; sessionId: string; busy: boolean }
+  /** A command card; with `replaceId` it takes the place of that card (a view acting on itself). */
+  /** `_keryx/delegate_result`: a terminal run's turn answer, shown in the session it was delegated from. */
+  | { t: "delegateResult"; sessionId: string; runId: string; agentId: string; turn: number; text: string }
+  | { t: "command"; sessionId: string; card: Omit<CommandItem, "kind" | "id">; replaceId?: number }
+  | { t: "queueAdd"; sessionId: string; text: string }
+  | { t: "queueRemove"; sessionId: string; index: number }
+  /** The prompt at the front was sent. */
+  | { t: "queueShift"; sessionId: string }
+  /** Make entry `index` the next one sent. */
+  | { t: "queueFront"; sessionId: string; index: number }
+  /** A `_keryx/subagent` fleet event for the session it names. */
+  | { t: "subagent"; sessionId: string; event: unknown }
+  /** The session's task list, as `_keryx/tasks/list` returned it. */
+  | { t: "tasks"; sessionId: string; tasks: readonly TaskInfo[] }
   | { t: "config"; sessionId: string; configOptions: ConfigOption[] }
   | { t: "creating"; delta: 1 | -1 }
   | { t: "created"; sessionId: string; modes?: SessionModeState | null; configOptions?: ConfigOption[] | null; show: boolean }
@@ -396,6 +503,40 @@ export function reducer(state: WindowState, a: Action): WindowState {
         nextId: c.nextId + 1,
         items: [...c.items, { kind: "notice", id: c.nextId, level: a.level, text: a.text }],
       }));
+    case "command":
+      return withConv(state, a.sessionId, (c) => {
+        if (a.replaceId !== undefined && c.items.some((i) => i.kind === "command" && i.id === a.replaceId)) {
+          return { ...c, items: c.items.map((i) => (i.kind === "command" && i.id === a.replaceId ? { ...a.card, kind: "command" as const, id: i.id } : i)) };
+        }
+        return { ...c, nextId: c.nextId + 1, items: [...c.items, { ...a.card, kind: "command", id: c.nextId }] };
+      });
+    case "delegateResult":
+      return withConv(state, a.sessionId, (c) => ({
+        ...c,
+        nextId: c.nextId + 1,
+        items: [...c.items, { kind: "delegate", id: c.nextId, runId: a.runId, agentId: a.agentId, turn: a.turn, text: a.text }],
+      }));
+    case "queueAdd":
+      return withConv(state, a.sessionId, (c) =>
+        a.text.trim() ? { ...c, nextId: c.nextId + 1, queue: [...c.queue, { id: c.nextId, text: a.text }] } : c,
+      );
+    case "queueRemove":
+      return withConv(state, a.sessionId, (c) => (a.index >= 0 && a.index < c.queue.length ? { ...c, queue: c.queue.filter((_, i) => i !== a.index) } : c));
+    case "queueShift":
+      return withConv(state, a.sessionId, (c) => (c.queue.length ? { ...c, queue: c.queue.slice(1) } : c));
+    case "queueFront":
+      return withConv(state, a.sessionId, (c) => {
+        if (a.index <= 0 || a.index >= c.queue.length) return c;
+        const picked = c.queue[a.index]!;
+        return { ...c, queue: [picked, ...c.queue.filter((_, i) => i !== a.index)] };
+      });
+    case "subagent":
+      return withConv(state, a.sessionId, (c) => {
+        const next = applySubagentEvent(c.subagents, a.event);
+        return next === c.subagents ? c : { ...c, subagents: next };
+      });
+    case "tasks":
+      return withConv(state, a.sessionId, (c) => ({ ...c, tasks: a.tasks }));
     case "busy":
       return withConv(state, a.sessionId, (c) => (c.busy === a.busy ? c : { ...c, busy: a.busy }));
     case "config":
@@ -416,6 +557,10 @@ export function reducer(state: WindowState, a: Action): WindowState {
         replaying: false,
         held: true,
         lostReason: null,
+        // A reload (after /compact or /rewind) keeps what the window itself holds.
+        queue: state.convs[a.sessionId]?.queue ?? [],
+        // Tasks live in keryx and survive a replay; subagents are not persisted, so they start empty.
+        tasks: state.convs[a.sessionId]?.tasks ?? [],
         modes: a.modes ?? loaded.modes,
         configOptions: a.configOptions ?? loaded.configOptions,
       };
@@ -483,6 +628,10 @@ export interface SessionMark {
   held: boolean;
   lostReason: LostReason | null;
   title: string | null;
+  /** Running subagents plus running tasks. */
+  running: number;
+  /** The session's subagents (native and external); empty unless the session is held. */
+  subagents: readonly Subagent[];
 }
 
 /** The shown session flattened with the window's own fields: what SessionView and App render. */
@@ -508,6 +657,9 @@ export interface SessionState {
   plan: PlanEntry[];
   usage: Usage | null;
   title: string | null;
+  queue: QueuedPrompt[];
+  subagents: readonly Subagent[];
+  tasks: readonly TaskInfo[];
   /** A session/new or session/load is in flight. */
   opening: boolean;
   /** Session ids whose session/load is in flight. */
@@ -518,6 +670,7 @@ const NO_ITEMS: Item[] = [];
 const NO_COMMANDS: AvailableCommand[] = [];
 const NO_CONFIG: ConfigOption[] = [];
 const NO_PLAN: PlanEntry[] = [];
+const NO_QUEUE: QueuedPrompt[] = [];
 
 export function shownView(w: WindowState): SessionState {
   const c = w.shownId ? w.convs[w.shownId] : undefined;
@@ -542,14 +695,22 @@ export function shownView(w: WindowState): SessionState {
     plan: c?.plan ?? NO_PLAN,
     usage: c?.usage ?? null,
     title: c?.title ?? null,
+    queue: c?.queue ?? NO_QUEUE,
+    subagents: c?.subagents ?? NO_SUBAGENTS,
+    tasks: c?.tasks ?? NO_TASKS,
     opening: w.creating > 0 || loadingIds.length > 0,
     loadingIds,
   };
 }
 
+/** Running subagents plus running tasks of one session. */
+export function activityCount(c: Pick<ConvState, "subagents" | "tasks">): number {
+  return runningSubagents(c.subagents) + c.tasks.filter((t) => t.status === "running").length;
+}
+
 /** Marks for every session the window has, for the sidebar. */
 export function sessionMarks(w: WindowState, waiting: ReadonlySet<string>): Record<string, SessionMark> {
   const out: Record<string, SessionMark> = {};
-  for (const [sid, c] of Object.entries(w.convs)) out[sid] = { busy: c.busy, waiting: waiting.has(sid), held: c.held, lostReason: c.lostReason, title: c.title };
+  for (const [sid, c] of Object.entries(w.convs)) out[sid] = { busy: c.busy, waiting: waiting.has(sid), held: c.held, lostReason: c.lostReason, title: c.title, running: activityCount(c), subagents: c.held ? c.subagents : NO_SUBAGENTS };
   return out;
 }

@@ -46,6 +46,35 @@ export const KERYX_ACP_EXTENSION_METHODS = {
    */
   sessionShown: "_keryx/session_shown",
   /**
+   * Client → agent request, shell profile: `{ sessionId, name, args? }`. Runs one
+   * command of the served table (`shell-commands.ts`) and answers `{ text, _meta:
+   * { keryx: { effects?, refused? } } }`. Not a turn: no prompt slot, nothing added
+   * to the model's history (specification §3.9.1).
+   */
+  command: "_keryx/command",
+  /** Client → agent requests, shell profile (specification §3.9.3): connect a model provider without a terminal. */
+  providersList: "_keryx/providers/list",
+  providersTest: "_keryx/providers/test",
+  providersDisconnect: "_keryx/providers/disconnect",
+  providersConnect: "_keryx/providers/connect",
+  /** Answered when the device login ends; `providersLoginChallenge` is sent while it runs. */
+  providersLogin: "_keryx/providers/login",
+  providersLoginCancel: "_keryx/providers/login_cancel",
+  /** Agent → client notification, shell profile: `{ loginId, providerId, userCode, verificationUri, verificationUriComplete?, instructions? }`. */
+  providersLoginChallenge: "_keryx/providers/login_challenge",
+  /** Client → agent requests, shell profile (§3.9.3): the `/search-provider` dialog. */
+  searchProvidersList: "_keryx/search_providers/list",
+  searchProvidersConnect: "_keryx/search_providers/connect",
+  searchProvidersSelect: "_keryx/search_providers/select",
+  /** Agent → client notification, shell profile (§3.9.4): `{ sessionId, event }`, `event` the shell's `SpawnSubagentFleetEvent`. */
+  subagent: "_keryx/subagent",
+  /** Agent → client notification, shell profile (§3.9.5): `{ sessionId, event }` for a task's start, phase and exit (never output). */
+  tasksEvent: "_keryx/tasks/event",
+  /** Client → agent requests, shell profile (§3.9.5): `{ sessionId }`, `{ sessionId, taskId, since? }`, `{ sessionId, taskId }`. */
+  tasksList: "_keryx/tasks/list",
+  tasksOutput: "_keryx/tasks/output",
+  tasksKill: "_keryx/tasks/kill",
+  /**
    * Client → agent request, shell profile: `{ sessionId, cwd?, archived?,
    * pinned?, flow? }` → `{ archivedAt?, pinnedAt?, flow? }`. Archives, pins or
    * links to a flow package a stored session (`<sessionDir>/flags.json`;
@@ -59,6 +88,22 @@ export const KERYX_ACP_EXTENSION_METHODS = {
    * another keryx process, is refused.
    */
   sessionTrash: "_keryx/session_trash",
+  /**
+   * Agent → client notification, shell profile (§3.9.5a, D-14): `{ sessionId, runId, agentId, turn, text }`.
+   * A `/delegate` run in the client's terminal finished a turn; `text` is its answer (capped, untrusted).
+   * keryx has put the same text in the parent session's history as a labelled note, without a turn (a
+   * model-started run, `autoClose: true`, returns it as the `spawn_subagent` result instead, and the client closes the tab).
+   */
+  delegateResult: "_keryx/delegate_result",
+  /** Client → agent notification, shell profile: `{ sessionId, runId }`. The run's terminal process ended; keryx stops watching its hook file. */
+  delegateExited: "_keryx/delegate_exited",
+  /**
+   * Agent → client notification, shell profile (§3.9.5a, D-14): `{ sessionId, runId, agentId, title, argv, cwd, autoClose: true }`.
+   * The MODEL started an external run (`spawn_subagent` with an external runtime, allowed only in trust or auto
+   * mode): the client opens it in a terminal tab like a `/delegate` run, and closes the tab when the run's
+   * first turn is returned (`_keryx/delegate_result` with `autoClose`) or the process exits.
+   */
+  delegateTerminal: "_keryx/delegate_terminal",
 } as const;
 
 /** The extensions a profile speaks, as `initialize._meta.keryx.extensions` and `_keryx/info` list them. */
@@ -69,8 +114,27 @@ export function acpProfileExtensions(profile: AcpProfile): string[] {
         KERYX_ACP_EXTENSION_METHODS.askUser,
         KERYX_ACP_EXTENSION_METHODS.sessionReleased,
         KERYX_ACP_EXTENSION_METHODS.sessionShown,
+        KERYX_ACP_EXTENSION_METHODS.command,
+        KERYX_ACP_EXTENSION_METHODS.providersList,
+        KERYX_ACP_EXTENSION_METHODS.providersTest,
+        KERYX_ACP_EXTENSION_METHODS.providersDisconnect,
+        KERYX_ACP_EXTENSION_METHODS.providersConnect,
+        KERYX_ACP_EXTENSION_METHODS.providersLogin,
+        KERYX_ACP_EXTENSION_METHODS.providersLoginCancel,
+        KERYX_ACP_EXTENSION_METHODS.providersLoginChallenge,
+        KERYX_ACP_EXTENSION_METHODS.searchProvidersList,
+        KERYX_ACP_EXTENSION_METHODS.searchProvidersConnect,
+        KERYX_ACP_EXTENSION_METHODS.searchProvidersSelect,
+        KERYX_ACP_EXTENSION_METHODS.subagent,
+        KERYX_ACP_EXTENSION_METHODS.tasksEvent,
+        KERYX_ACP_EXTENSION_METHODS.tasksList,
+        KERYX_ACP_EXTENSION_METHODS.tasksOutput,
+        KERYX_ACP_EXTENSION_METHODS.tasksKill,
         KERYX_ACP_EXTENSION_METHODS.sessionFlags,
         KERYX_ACP_EXTENSION_METHODS.sessionTrash,
+        KERYX_ACP_EXTENSION_METHODS.delegateResult,
+        KERYX_ACP_EXTENSION_METHODS.delegateExited,
+        KERYX_ACP_EXTENSION_METHODS.delegateTerminal,
       ]
     : [KERYX_ACP_EXTENSION_METHODS.info];
 }

@@ -32,9 +32,12 @@ operator reads in the shell's Schedules section.
   "sometimes". Ask.
 - **Prompt**: the task in the operator's words, written for an agent that runs
   alone and whose final message is the report.
-- **Budget**: `rates` (USD per million input/output tokens for the model) and
-  `ceilingUsd`. keryx has no price table. If you do not know the rates, ASK.
-  Never guess them.
+- **Permission mode**: ASK which one the unattended run uses: `ask` (commands
+  needing approval are DENIED), `trust` (non-destructive commands run in the
+  sandbox) or `auto` (all but credential-touching ones run in the sandbox).
+- **Cost** (optional): `rates` (USD per million tokens) only prices the report;
+  `ceilingUsd` is informational. Cost is reported, never a limit. No price
+  table: if rates are unknown, leave them out. Never guess them.
 
 ### Step 2: Grant only what the task needs
 - `tools`: pick from the fixed catalogue: `gh.pr.list`, `gh.pr.view`,
@@ -48,12 +51,10 @@ operator reads in the shell's Schedules section.
   tools cover it. `full` hands the shell the whole host network; say why. `allowlist`
   (Linux only, `domains` required) reaches only the named domains, and governs only
   the agent's own shell — never the model call or a granted tool.
-- `permissionMode`: `ask` (the default) is read-only, and granted tools still run.
-  Propose `trust` only when the scheduled agent must run shell commands.
 
 ### Step 3: Propose with schedule_create
 Call `schedule_create`. The operator then sees a confirmation card: cadence and
-next runs, prompt, runner, budget, network, every granted tool with its binary
+next runs, prompt, runner, permission mode, network, every granted tool with its binary
 and account, and exactly what gets installed. You do not confirm it. Only the
 operator can, and every permission mode asks, `auto` included. Changing an existing schedule works the same way (`schedule_pause`, `schedule_resume`, `schedule_run`, `schedule_remove`): the operator answers a card; never send them to a terminal.
 
@@ -85,7 +86,6 @@ that nothing was written. Point to `/schedules` for the list and the reports.
 | "The operator said 'every so often' — I'll pick hourly" | A cadence runs and spends unattended. Ask for it |
 | "I'll grant every gh tool so the agent is not stuck" | Grants are the operator's credentials acting unattended. Grant what the prompt needs |
 | "Network full is simpler than granted tools" | It gives the unattended shell the whole host network. Granted tools need none |
-| "I know roughly what the model costs" | A wrong rate makes both spend ceilings wrong by the same factor. Ask |
 
 ## Verification
 

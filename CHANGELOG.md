@@ -5,6 +5,19 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.37] - 2026-11-18
+
+### Added
+
+- **Keryx Desktop 0.2.0 runs on this keryx** (`keryx acp --profile shell`; the app needs keryx 0.4.37 or newer). Every shell slash command works in the app through the `_keryx/command` request, including the picker commands, which answer with generic views; `/connect` is an in-app Providers dialog (API keys and device-code logins, no terminal); subagents and background tasks show in the Activity panel; `/schedule` has a form, a Schedules tab and a Runs log, with the unattended permission mode `ask`/`trust`/`auto` (cost is reported, never a gate).
+- **`/delegate` in the desktop runs the agent CLI (claude, codex, agy) interactively in the app's built-in terminal.** External agents are on by default there. An operator's `/delegate` asks for approval first; a run the model starts is allowed only in `trust`/`auto`, closes itself when it returns, and its answer becomes the `spawn_subagent` result. Each finished turn comes back to the parent session as a "returned" card and an untrusted note in its history, without starting a turn. An unnamed session takes its title from the delegated task.
+- **`keryx app install|update|build|status`** installs and updates the desktop app from the `desktop-v*` GitHub releases (checksum-verified), and the app shows an update banner. By default the app runs the keryx on your `PATH` (an npm install) and falls back to the keryx bundled with it when that one is missing or too old for the app.
+
+### Fixed
+
+- Delegate notes no longer name a session or show up as raw user messages when a session is reopened; old `[delegate …` titles are repaired on load.
+
+
 ## [0.4.36] - 2026-11-18
 
 ### Added

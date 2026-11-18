@@ -11,7 +11,7 @@
 // module-level globals — two connections in the same test process (or two
 // launches of the CLI) never see each other's state.
 
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import {
   agentContextWindow,
   buildAgentSystemInstruction,
@@ -26,7 +26,7 @@ import {
 import { buildShellHookRuntime, type ShellHookContext } from "../commands/agent-hooks";
 import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
 import type { NormalizedMessage, ProviderPort } from "../harness/provider/types";
-import { listSessions, persistHistory, resolveProjectRoot } from "../session";
+import { isInjectedUserMessage, listedTitle, listSessions, persistHistory, renameSession, resolveProjectRoot, titleFromPrompt } from "../session";
 import { describeLeaseHolder, describeLeaseLoss, SessionLeasedError } from "../session/lease";
 import {
   readSessionFlags,
@@ -37,6 +37,9 @@ import {
   type TrashOptions,
 } from "../session/organize";
 import { sessionDir } from "../session/paths";
+
+/** Titles a session carries before anything has named it. */
+const UNNAMED_SESSION_TITLES = new Set(["New session", "Untitled session", "Untitled", ""]);
 import { selfAnsweredLine } from "../lib/terminal-safe";
 import { createAcpAgentIo, toolKindFor, tryParseJson, type AcpPermissionAsker } from "./agent-io";
 import type { AcpFsReader } from "./capability-tools";
@@ -104,8 +107,11 @@ import {
 } from "./protocol";
 import { renderAcpPromptContent } from "./prompt-content";
 import { AcpSessionRegistry, AcpSessionTranscriptUnreadableError, syncAcpArchive, type AcpSessionState } from "./session";
+import { SessionMcpGrants } from "./mcp-grants";
+import { catalogDestructiveResolver, catalogFingerprintResolver } from "../mcp-servers/approval-render";
 import {
   acpMcpSetKey,
+  firstPartyFloorExempt,
   parseAcpMcpServers,
   startAcpSessionMcp,
   type AcpMcpServerProblem,
@@ -134,8 +140,24 @@ import {
   keryxAcpProfileMeta,
   type AcpProfile,
 } from "./profile";
-import { buildAcpShellSessionTools, type AcpShellRosterInput } from "./shell-roster";
-import { createSpawnSubagentTool } from "../harness/tool/builtin/spawn-subagent-tool";
+import { buildAcpShellSessionTools, withHostToolCallId, type AcpShellRosterInput } from "./shell-roster";
+import type { ShellConfirmAction, ShellView } from "./shell-views";
+import { withSessionProvider } from "../commands/spawn-deps";
+import { createProvidersHandlers, type AcpProvidersSeams } from "./providers";
+import { createTasksHandlers, taskEventSink } from "./shell-tasks";
+import { clientRunsTerminal, createSessionExternalRuns, type DelegateTerminalLaunch, type DelegateTurnResult, type SessionExternalRuns } from "./shell-delegate";
+import { capResultText, delegateResultNote, parseDelegateNote } from "./delegate-turn-hook";
+import type { RunExternalFn, CreateRunExternalOptions } from "../harness/run-external-factory";
+import type { SlateSessionRef } from "../session/slate-lifecycle";
+import { busyRefusalText, findShellCommand, shellAvailableCommands, viewNotServedText } from "./shell-commands";
+import {
+  createAcpSessionRewind,
+  runShellTextCommand,
+  type AcpSessionRewind,
+  type ShellCommandEffect,
+  type ShellCommandHost,
+  type ShellCommandOutcome,
+} from "./shell-command-runners";
 import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 
@@ -176,6 +198,13 @@ export interface AcpServerOptions {
    * model is the only choice.
    */
   readonly models?: AcpModelSource;
+  /**
+   * Called after an EXPLICIT model switch (`session/set_config_option` or
+   * `/model`) took effect: never per turn, never on a load's restore. The CLI
+   * saves it as `keryx shell`'s saved provider/model, so the terminal and the
+   * desktop agree on the default. Best-effort: a throw is logged, not raised.
+   */
+  readonly rememberModel?: (choice: AcpModelChoice) => void;
   /**
    * The longest a `session/new`/`session/load` waits for the model list
    * (flow 288, T14). `DEFAULT_MODEL_LIST_TIMEOUT_MS` otherwise.
@@ -221,15 +250,21 @@ export interface AcpServerOptions {
   readonly keryxMcp?: AcpKeryxMcpSource;
   /** Shell profile: `web_search`/`web_fetch`'s controller. `createDefaultSearchProviderController()` otherwise. */
   readonly searchController?: SearchProviderController;
+  /**
+   * Shell profile: builds the provider a `spawn_subagent` child runs on, the way `keryx shell`'s
+   * factory does (`realMakeProvider`). Absent: a child can run only on its parent's own model.
+   */
+  readonly makeProvider?: (providerId: string, modelId: string, baseUrl?: string) => ProviderPort;
   /** Shell profile test seam: builds a session's roster. `buildAcpShellSessionTools` otherwise. */
   readonly buildShellRoster?: (input: AcpShellRosterInput) => InteractiveTool[];
-  /**
-   * Shell profile: builds the provider a `spawn_subagent` child runs on when
-   * its `model_tier` resolves to a model other than the session's own —
-   * `keryx shell`'s provider factory (`../commands/acp.ts`). Absent: every
-   * child runs on the session's own provider.
-   */
-  readonly makeSubagentProvider?: (providerId: string, modelId: string, baseUrl?: string) => ProviderPort;
+  /** Shell profile: the user-global config directory `_keryx/command`'s settings commands read and write. The default one otherwise. Test seam. */
+  readonly shellConfigDir?: string;
+  /** Shell profile test seam for `/delegate`: the external-run port. `createLazyRunExternal` otherwise. */
+  /** Test seam: the environment the external-agent gate reads for `/delegate` in a terminal (transport, CI markers). */
+  readonly externalGateEnv?: Readonly<Record<string, string | undefined>>;
+  readonly makeRunExternal?: (options: CreateRunExternalOptions) => RunExternalFn;
+  /** Shell profile test seams for `_keryx/providers/*`: the config directory, environment and network it uses. */
+  readonly providers?: AcpProvidersSeams;
 }
 
 export type { AcpTurnSettings } from "./models";
@@ -502,11 +537,42 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   const jobsFor = (sessionId: string, root: string): JobRegistry => {
     let jobs = sessionJobs.get(sessionId);
     if (jobs === undefined) {
-      jobs = createJobRegistry({ cwd: root });
+      // Shell profile: the Tasks panel hears of a task starting, going to the background and
+      // exiting (`_keryx/tasks/event`, specification §3.9.5). The editor profile has no panel.
+      const created: { registry?: JobRegistry } = {};
+      jobs = createJobRegistry({
+        cwd: root,
+        ...(shellProfile
+          ? {
+              onEvent: taskEventSink(
+                sessionId,
+                () => created.registry,
+                (method, params) => {
+                  if (!stopping) writeMessage(notificationMessage(method, params));
+                },
+              ),
+            }
+          : {}),
+      });
+      created.registry = jobs;
       sessionJobs.set(sessionId, jobs);
     }
     return jobs;
   };
+
+  /** `/plan`: each session's read-only flag, read fresh by every gated call (`AgentIO.readOnly`). */
+  const sessionReadOnly = new Map<string, boolean>();
+  /** `/rewind`: one snapshot recorder and readline state machine per session, built on first use. */
+  const sessionRewinds = new Map<string, AcpSessionRewind>();
+  /** `/delegate`: each session's external runs (§3.9.4), built on first use; stopped by a cancel or a release. */
+  const sessionExternalRuns = new Map<string, SessionExternalRuns>();
+  /** Delegate-result notes that arrived while the session's turn was running; they join the history when it ends. */
+  const pendingDelegateNotes = new Map<string, string[]>();
+  /**
+   * `/goal`: each session's slate ref, as the shells keep one per session (`opened: false` until the
+   * goal opens it) and the goal turn text a turn must carry to skip the close-phrase check once.
+   */
+  const sessionSlates = new Map<string, { ref: SlateSessionRef; goalPrompt?: string }>();
 
   let searchController: SearchProviderController | undefined = options.searchController;
   const searchControllerFor = (): SearchProviderController => (searchController ??= createDefaultSearchProviderController());
@@ -600,46 +666,6 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   }
   const shellRosters = new Map<string, ShellRoster>();
   const buildShellRoster = options.buildShellRoster ?? buildAcpShellSessionTools;
-  /**
-   * Shell profile: each session's own `spawn_subagent`, built once per session
-   * and root (its child-budget ledger lives in it), and the reset hook the
-   * ledger hands back, called before every turn as `keryx shell` does. Without
-   * this tool every orchestrator skill answers `STATUS: BLOCKED
-   * nested_dispatch_unavailable` in a top-level desktop session.
-   */
-  const sessionSpawnTools = new Map<string, { readonly root: string; readonly tool: InteractiveTool }>();
-  const subagentBudgetResets = new Map<string, () => void>();
-  function spawnToolFor(sessionId: string, root: string): InteractiveTool {
-    const cached = sessionSpawnTools.get(sessionId);
-    if (cached !== undefined && cached.root === root) return cached.tool;
-    // Read when a child is dispatched, not now: `/model` may switch the session between turns.
-    const parent = (): SessionModel => sessionModel(sessionId, ACP_AGENT_METHODS.sessionPrompt);
-    const hooks = shellHooksBySession.get(sessionId);
-    const tool = createSpawnSubagentTool({
-      cwd: root,
-      ...(hooks !== undefined ? { hooks: hooks.runtime } : {}),
-      onLedgerReady: (controls) => {
-        subagentBudgetResets.set(sessionId, controls.resetBudget);
-      },
-      getParentModel: () => {
-        const { choice, binding } = parent();
-        return {
-          providerId: binding.providerId,
-          modelId: binding.modelId,
-          ...(choice.baseUrl !== undefined ? { baseUrl: choice.baseUrl } : {}),
-        };
-      },
-      makeProvider: (providerId, modelId, baseUrl) => {
-        const { binding } = parent();
-        if (providerId === binding.providerId && modelId === binding.modelId) return binding.provider;
-        return options.makeSubagentProvider?.(providerId, modelId, baseUrl) ?? binding.provider;
-      },
-      // The session's provider only: a `model_tier` resolves to the session's model.
-      getDetectedProviders: () => [{ name: parent().binding.providerId, models: [] }],
-    });
-    sessionSpawnTools.set(sessionId, { root, tool });
-    return tool;
-  }
   /** The cached roster when its inputs still hold. Never starts keryx's MCP runtime. */
   function cachedShellRoster(sessionId: string, state: AcpSessionState): InteractiveTool[] | undefined {
     const cached = shellRosters.get(sessionId);
@@ -788,14 +814,20 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       if (owner === sessionId) planDirSessions.delete(dir);
     }
     shellRosters.delete(sessionId);
-    sessionSpawnTools.delete(sessionId);
-    subagentBudgetResets.delete(sessionId);
+    mcpGrants.delete(sessionId);
     unbindSessionMcp(sessionId);
     const model = sessionModels.get(sessionId);
     if (model !== undefined) releasedModelChoices.set(sessionId, model.choice.value);
     sessionModels.delete(sessionId);
     switchApplied.delete(sessionId);
     pendingLateModelList.delete(sessionId);
+    sessionReadOnly.delete(sessionId);
+    sessionRewinds.delete(sessionId);
+    sessionExternalRuns.get(sessionId)?.stop("the session was released");
+    sessionExternalRuns.get(sessionId)?.dispose();
+    sessionExternalRuns.delete(sessionId);
+    pendingDelegateNotes.delete(sessionId);
+    sessionSlates.delete(sessionId);
     const jobs = sessionJobs.get(sessionId);
     sessionJobs.delete(sessionId);
     const hooks = shellHooksBySession.get(sessionId);
@@ -1114,6 +1146,12 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   /** `/reasoning <level>` for one session — the shell's session override, never saved. */
   const reasoningOverrides = new Map<string, ReasoningEffortLevel>();
   const launchChoice = acpModelChoice(options.providerId, options.modelId);
+  /**
+   * The model an operator last switched to explicitly on this connection. A NEW
+   * session starts on it (when it is still a choice and can be bound), else on
+   * the launch model, which is itself the saved selection unless flags said otherwise.
+   */
+  let rememberedValue: string | undefined;
 
   function launchModel(method: string): SessionModel {
     return {
@@ -1148,14 +1186,22 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   const modelListTimeoutMs = options.modelListTimeoutMs ?? DEFAULT_MODEL_LIST_TIMEOUT_MS;
   let listedChoices: readonly AcpModelChoice[] | undefined;
   let listing: Promise<readonly AcpModelChoice[]> | undefined;
-  const startListing = (source: AcpModelSource): Promise<readonly AcpModelChoice[]> =>
-    (listing ??= source.choices().then(
-      (listed) => (listedChoices = withLaunch(listed)),
+  /** Bumped when the providers change: a listing started before it is stale and must not become the cached list. */
+  let listingGeneration = 0;
+  const startListing = (source: AcpModelSource): Promise<readonly AcpModelChoice[]> => {
+    const generation = listingGeneration;
+    return (listing ??= source.choices().then(
+      (listed) => {
+        const choices = withLaunch(listed);
+        if (generation === listingGeneration) listedChoices = choices;
+        return choices;
+      },
       (error: unknown) => {
-        listing = undefined;
+        if (generation === listingGeneration) listing = undefined;
         throw error;
       },
     ));
+  };
   /**
    * Sessions currently holding a configOptions built from the launch-only
    * list because THEIR wait timed out (flow 288, T15). Drained by
@@ -1236,6 +1282,43 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     });
   }
 
+  /**
+   * Shell profile, after `_keryx/providers/*` connected or disconnected a provider (specification
+   * §3.9.3): the model list is read again from the source (`keryx shell`'s picker detection over
+   * the credentials now saved) and every held session is sent a `config_option_update`, so its
+   * model option reflects the providers. A session's own model is never switched. Not awaited by
+   * the request: the live model lists can take seconds. A failed listing keeps the list the
+   * sessions already have and says so on stderr.
+   */
+  function refreshModelChoicesAfterProviderChange(): void {
+    const source = options.models;
+    if (source === undefined || stopping) return;
+    listingGeneration += 1;
+    listedChoices = undefined;
+    listing = undefined;
+    pendingLateModelList.clear();
+    const generation = listingGeneration;
+    const method = KERYX_ACP_EXTENSION_METHODS.providersList;
+    track(
+      startListing(source).then(
+        async () => {
+          if (stopping || generation !== listingGeneration) return;
+          for (const sessionId of registry.ids()) {
+            const configOptions = await configOptionsFor(sessionId, method);
+            if (stopping || generation !== listingGeneration || registry.get(sessionId) === undefined) continue;
+            sendUpdate(sessionId, { sessionUpdate: "config_option_update", configOptions });
+          }
+        },
+        (error: unknown) => {
+          options.logError(
+            `acp: listing models after a provider change failed (${error instanceof Error ? error.message : String(error)}); ` +
+              "sessions keep the list they have",
+          );
+        },
+      ),
+    );
+  }
+
   async function configOptionsFor(sessionId: string, method: string): Promise<AcpSessionConfigOption[]> {
     const choices = await modelChoices(sessionId, method);
     return [acpModelConfigOption(choices, sessionModel(sessionId, method).choice)];
@@ -1256,8 +1339,8 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   /**
    * Switch `sessionId` to the model `requested` names, from its next turn on.
    * Refused — with the reason, and the session left on its current model —
-   * when `requested` is not a choice or its provider cannot be built. Never
-   * writes `keryx shell`'s saved selection: the choice lives in this map.
+   * when `requested` is not a choice or its provider cannot be built. An
+   * explicit switch is also handed to `options.rememberModel` (the saved default for new sessions).
    * `"cancelled"` when `signal` (a `/model` command's turn slot) was aborted
    * while the provider was being built: nothing is applied.
    */
@@ -1299,7 +1382,28 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         data: { sessionId, condition: "session-released" },
       });
     }
+    rememberedValue = choice.value;
+    try {
+      options.rememberModel?.(choice);
+    } catch (error) {
+      options.logError(`acp: could not save ${choice.value} as the default model (${error instanceof Error ? error.message : String(error)})`);
+    }
     return sessionModels.get(sessionId) ?? next;
+  }
+
+  /** A NEW session starts on the remembered model when it is still available; otherwise it keeps the launch model. */
+  async function startOnRememberedModel(sessionId: string, method: string): Promise<void> {
+    const value = rememberedValue;
+    if (value === undefined || value === launchChoice.value || sessionModels.has(sessionId)) return;
+    const ticket = beginSwitch(sessionId);
+    const choice = findAcpModelChoice(await modelChoices(sessionId, method), value, false);
+    if (choice === undefined) return;
+    const built = await bindChoice(choice, method);
+    if (typeof built === "string") {
+      options.logError(`acp: remembered model ${value} cannot run (${built}); the session starts on ${launchChoice.value}`);
+      return;
+    }
+    applySwitch(sessionId, ticket, { choice, binding: built });
   }
 
   /**
@@ -1344,7 +1448,11 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   /** Tell the client which commands keryx handles, once the reply creating/loading the session is out. */
   function announceCommands(sessionId: string, requestId: JsonRpcId): void {
     onReplied(requestId, () => {
-      sendUpdate(sessionId, { sessionUpdate: "available_commands_update", availableCommands: acpAvailableCommands(slashCommands) });
+      sendUpdate(sessionId, {
+        sessionUpdate: "available_commands_update",
+        // The shell profile advertises the whole served table with `_meta.keryx`; the editor list is unchanged.
+        availableCommands: shellProfile ? shellAvailableCommands() : acpAvailableCommands(slashCommands),
+      });
     });
   }
 
@@ -1570,6 +1678,8 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         bindSessionMcp(sessionId, requestId, parsed, state.resolvedRoot);
         announceCommands(sessionId, requestId);
         const mode = shellProfile ? bindShellSession(state, requestId) : undefined;
+        await startOnRememberedModel(sessionId, method);
+        refuseIfStopping(method);
         // The model list, which the connection started resolving at launch (flow 288, AC5).
         const configOptions = await configOptionsFor(sessionId, method);
         refuseIfStopping(method);
@@ -1618,12 +1728,59 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     });
   }
 
+  /** Each session's MCP trust grants (`trustedMcpTools`), never persisted; dropped with the session. */
+  const mcpGrants = new Map<string, SessionMcpGrants>();
+
+  /** Each session's `spawn_subagent` budget reset, called at the start of every turn (the shell's `deps.resetSubagentBudget`). */
+  const subagentBudgetResets = new Map<string, () => void>();
+
+  /**
+   * What `spawn_subagent` needs for one session (specification §3.9.4): its live parent model, the
+   * provider factory, the providers a child may route to (the connection's model list, grouped), its
+   * hook runtime, and ITS OWN fleet closure — `_keryx/subagent { sessionId, event }` — never a bridge
+   * shared with another session.
+   */
+  function spawnInputFor(sessionId: string, ownsBudget: boolean): AcpShellRosterInput["spawn"] {
+    const method = KERYX_ACP_EXTENSION_METHODS.subagent;
+    const parent = (): { providerId: string; modelId: string; baseUrl?: string } => {
+      const { binding, choice } = sessionModel(sessionId, method);
+      return { providerId: binding.providerId, modelId: binding.modelId, ...(choice.baseUrl !== undefined ? { baseUrl: choice.baseUrl } : {}) };
+    };
+    const hooks = shellHooksBySession.get(sessionId)?.runtime;
+    return {
+      getParentModel: parent,
+      providerFactory: (providerId, modelId, baseUrl) => {
+        if (options.makeProvider !== undefined) return options.makeProvider(providerId, modelId, baseUrl);
+        const { binding } = sessionModel(sessionId, method);
+        if (providerId === binding.providerId && modelId === binding.modelId) return binding.provider;
+        throw new Error(`keryx acp has no provider factory for ${providerId}/${modelId}; a subagent runs on its parent's model here`);
+      },
+      getDetectedProviders: () => {
+        const byProvider = new Map<string, string[]>();
+        for (const choice of listedChoices ?? []) byProvider.set(choice.providerId, [...(byProvider.get(choice.providerId) ?? []), choice.modelId]);
+        return withSessionProvider(
+          parent().providerId,
+          [...byProvider].map(([name, models]) => ({ name, models })),
+        );
+      },
+      onFleetEvent: (event) => {
+        if (!stopping) writeMessage(notificationMessage(KERYX_ACP_EXTENSION_METHODS.subagent, { sessionId, event }));
+      },
+      // Only the roster the session keeps owns the turn's budget; the throwaway `/status` builds none.
+      onLedgerReady: (controls) => {
+        if (ownsBudget) subagentBudgetResets.set(sessionId, controls.resetBudget);
+      },
+      ...(hooks !== undefined ? { hooks } : {}),
+    };
+  }
+
   /** Builds the shell-profile roster for one session with the given MCP binding. */
   function shellRosterTools(
     sessionId: string,
     state: AcpSessionState,
     readViaClient: AcpFsReader,
     mcp: McpToolBinding | undefined,
+    ownsBudget = true,
   ): InteractiveTool[] {
     const root = state.resolvedRoot;
     return buildShellRoster({
@@ -1632,10 +1789,12 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       readViaClient,
       searchController: searchControllerFor(),
       jobRegistry: jobsFor(sessionId, root),
+      spawn: spawnInputFor(sessionId, ownsBudget),
+      // A model-chosen external run needs the client's terminal (the desktop); without one it stays native-only.
+      ...(clientRunsTerminal(state.clientCapabilities) ? { runExternal: (request) => externalRunsFor(sessionId, state).startForModel(request) } : {}),
       // Read through the registry, not captured: `persistHistory` replaces the handle.
       getSessionDir: () => registry.get(sessionId)?.handle.dir,
       metaprojectPort: metaprojectFor(root),
-      spawnTool: spawnToolFor(sessionId, root),
       ...(clientAnswersAskUser(state.clientCapabilities) ? { askUser: askUserFor(sessionId) } : {}),
       ...(mcp !== undefined ? { mcp } : {}),
     });
@@ -1654,7 +1813,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     if (cached !== undefined) return cached.map((tool) => tool.definition.name);
     const binds = acpMcpBinds(keryxMcpWouldBind(state.resolvedRoot), sessionMcp.get(sessionId)?.mcp);
     const namesOnly: McpToolBinding | undefined = binds ? { catalog: () => mergeCatalogs([]), servers: () => [] } : undefined;
-    return shellRosterTools(sessionId, state, clientFsReader(sessionId), namesOnly).map((tool) => tool.definition.name);
+    return shellRosterTools(sessionId, state, clientFsReader(sessionId), namesOnly, false).map((tool) => tool.definition.name);
   }
 
   /** `fs/read_text_file` to the client for one session; `undefined` for any non-answer. */
@@ -1774,6 +1933,251 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     }
   }
 
+  /** `/rewind`'s per-session recorder and state machine, built on first use over the session's live registry entry. */
+  function rewindFor(sessionId: string): AcpSessionRewind {
+    const held = sessionRewinds.get(sessionId);
+    if (held !== undefined) return held;
+    const state = registry.get(sessionId);
+    if (state === undefined) {
+      refuse({ code: JSON_RPC_ERROR_CODES.resourceNotFound, message: `Unknown ACP session: ${sessionId}`, data: { sessionId } });
+    }
+    const created = createAcpSessionRewind({
+      root: state.resolvedRoot,
+      session: commandSession(sessionId),
+      sessionDir: () => registry.get(sessionId)?.handle.dir,
+      onError: (message) => options.logError(`acp: rewind: ${message}`),
+    });
+    sessionRewinds.set(sessionId, created);
+    return created;
+  }
+
+  /**
+   * A terminal `/delegate` run finished a turn (D-14, §3.9.5a): tell the client (`_keryx/delegate_result`,
+   * the "returned" card) and put the answer in the parent's history as a labelled, untrusted user-role
+   * note. No turn starts: the operator decides what the parent does with it. A note that arrives while
+   * the session's turn runs waits for the turn to end, so it never lands between a tool call and its result.
+   */
+  function handOffDelegateResult(sessionId: string, result: DelegateTurnResult): void {
+    if (stopping) return;
+    writeMessage(notificationMessage(KERYX_ACP_EXTENSION_METHODS.delegateResult, { sessionId, ...result, text: capResultText(result.text) }));
+    // A model-started run returns its text as the `spawn_subagent` result: no history note on top of it.
+    if (result.autoClose === true) return;
+    const note = delegateResultNote({ ...result, nonce: randomBytes(6).toString("hex") });
+    if (activeTurns.has(sessionId)) {
+      pendingDelegateNotes.set(sessionId, [...(pendingDelegateNotes.get(sessionId) ?? []), note]);
+      return;
+    }
+    appendDelegateNotes(sessionId, [note]);
+  }
+
+  /**
+   * A session nobody has named yet (no operator message: it was opened only to run `/delegate`)
+   * takes its title from the delegated task, "Claude Code: fix the login test", so the sidebar
+   * does not show "Untitled session". A titled session keeps its title.
+   */
+  function nameSessionFromDelegate(sessionId: string, run: { label: string; task: string }): void {
+    const state = registry.get(sessionId);
+    if (state === undefined || !UNNAMED_SESSION_TITLES.has(state.handle.summary.title)) return;
+    if (!registry.canPersist(sessionId)) return;
+    try {
+      registry.updateHandle(sessionId, renameSession(state.handle, titleFromPrompt(`${run.label}: ${run.task}`)));
+    } catch (cause) {
+      options.logError(`acp: session title not saved: ${cause instanceof Error ? cause.message : String(cause)}`);
+      return;
+    }
+    const named = registry.get(sessionId)?.handle.summary;
+    if (named !== undefined && !stopping) sendUpdate(sessionId, { sessionUpdate: "session_info_update", title: named.title, updatedAt: named.updatedAt });
+  }
+
+  function appendDelegateNotes(sessionId: string, notes: readonly string[]): void {
+    const state = registry.get(sessionId);
+    if (state === undefined || notes.length === 0) return;
+    for (const note of notes) state.history.push({ role: "user", content: note, provenance: "harness", injected: true });
+    syncAcpArchive(state.archive, state.history);
+    if (!registry.canPersist(sessionId)) return;
+    try {
+      const { providerId, modelId } = sessionModel(sessionId, KERYX_ACP_EXTENSION_METHODS.delegateResult).binding;
+      registry.updateHandle(sessionId, persistHistory(state.handle, state.history, { provider: providerId, model: modelId, archive: state.archive.messages }));
+    } catch (cause) {
+      options.logError(`acp: delegate result not persisted: ${cause instanceof Error ? cause.message : String(cause)}`);
+    }
+  }
+
+  /** `_keryx/delegate_exited` (shell profile): the run's terminal process ended; its hook file is read once more and removed. */
+  function handleDelegateExited(params: unknown): void {
+    if (typeof params !== "object" || params === null) return;
+    const { sessionId, runId } = params as Record<string, unknown>;
+    if (typeof sessionId === "string" && typeof runId === "string") sessionExternalRuns.get(sessionId)?.exited(runId);
+  }
+
+  /** `/delegate`'s runs for one session: the approval is a `session/request_permission`, the events `_keryx/subagent`. */
+  function externalRunsFor(sessionId: string, state: AcpSessionState): SessionExternalRuns {
+    const held = sessionExternalRuns.get(sessionId);
+    if (held !== undefined) return held;
+    const created = createSessionExternalRuns({
+      cwd: state.resolvedRoot,
+      configDir: options.shellConfigDir,
+      sessionId,
+      terminalCapable: clientRunsTerminal(state.clientCapabilities),
+      sessionDir: () => registry.get(sessionId)?.handle.dir,
+      onTurnResult: (result) => handOffDelegateResult(sessionId, result),
+      onRunStarted: (run) => nameSessionFromDelegate(sessionId, run),
+      permissionMode: () => modeOf(sessionId),
+      openTerminal: (launch) => {
+        if (!stopping) writeMessage(notificationMessage(KERYX_ACP_EXTENSION_METHODS.delegateTerminal, { sessionId, ...launch }));
+      },
+      onHookError: (message) => options.logError(`acp: ${message}`),
+      gateEnv: options.externalGateEnv,
+      makeRunExternal: options.makeRunExternal,
+      emitFleet: (event) => {
+        if (!stopping) writeMessage(notificationMessage(KERYX_ACP_EXTENSION_METHODS.subagent, { sessionId, event }));
+      },
+      ask: async (request, onSent) => {
+        if (!clientAnswersPermissions) return undefined;
+        const outcome = await clientRequests.request(ACP_CLIENT_METHODS.sessionRequestPermission, request, onSent);
+        if (outcome.kind !== "result") return undefined;
+        const result = outcome.result;
+        return typeof result === "object" && result !== null && !Array.isArray(result) ? (result as AcpRequestPermissionResponse) : undefined;
+      },
+      withdraw: (requestId, reason) => {
+        clientRequests.cancel(requestId, reason);
+      },
+    });
+    sessionExternalRuns.set(sessionId, created);
+    return created;
+  }
+
+  /** The session as a transcript command sees it. Read through the registry: `session/load` and `persistHistory` replace entries. */
+  function commandSession(sessionId: string): ShellCommandHost["session"] {
+    const live = (): AcpSessionState => {
+      const state = registry.get(sessionId);
+      if (state === undefined) {
+        refuse({ code: JSON_RPC_ERROR_CODES.resourceNotFound, message: `Unknown ACP session: ${sessionId}`, data: { sessionId } });
+      }
+      return state;
+    };
+    return {
+      get history() {
+        return live().history;
+      },
+      get archive() {
+        return live().archive;
+      },
+      handle: () => live().handle,
+      setHandle: (handle) => registry.updateHandle(sessionId, handle),
+      canPersist: () => registry.canPersist(sessionId),
+      modelIds: () => {
+        const { providerId, modelId } = sessionModel(sessionId, KERYX_ACP_EXTENSION_METHODS.command).binding;
+        return { providerId, modelId };
+      },
+    };
+  }
+
+  /** What `_keryx/command` lends a runner: this session's state and the server's own answers (`status`, `model`, `reasoning`, `mode`). */
+  function commandHost(sessionId: string, state: AcpSessionState): ShellCommandHost {
+    const method = KERYX_ACP_EXTENSION_METHODS.command;
+    return {
+      cwd: state.resolvedRoot,
+      configDir: options.shellConfigDir,
+      session: commandSession(sessionId),
+      sessionDir: () => registry.get(sessionId)?.handle.dir,
+      permissionMode: () => modeOf(sessionId),
+      reasoningOverride: () => reasoningOverrides.get(sessionId),
+      readOnly: () => sessionReadOnly.get(sessionId) === true,
+      setReadOnly: (on) => {
+        sessionReadOnly.set(sessionId, on);
+      },
+      jobs: () => jobsFor(sessionId, state.resolvedRoot),
+      searchController: searchControllerFor,
+      rewind: () => rewindFor(sessionId).command,
+      slate: () => {
+        const held = sessionSlates.get(sessionId);
+        if (held !== undefined) return held.ref;
+        const dir = registry.get(sessionId)?.handle.dir;
+        if (dir === undefined) return undefined;
+        const ref: SlateSessionRef = { dir, cwd: state.resolvedRoot, opened: false };
+        sessionSlates.set(sessionId, { ref });
+        return ref;
+      },
+      goalStarted: (prompt) => {
+        const held = sessionSlates.get(sessionId);
+        if (held !== undefined) held.goalPrompt = prompt;
+      },
+      externalRuns: () => externalRunsFor(sessionId, state),
+      modelChoices: () => modelChoices(sessionId, method),
+      serverCommand: async (name, args): Promise<ShellCommandOutcome> => {
+        const before = { mode: modeOf(sessionId), model: sessionModel(sessionId, method).choice.value, reasoning: reasoningOverrides.get(sessionId) };
+        // Not tied to `session/cancel`: this is not a turn, so there is nothing for a cancel to reach.
+        const reply = await runSlashCommand(sessionId, state, name, args, new AbortController().signal);
+        const effects: ShellCommandEffect[] = [];
+        if (modeOf(sessionId) !== before.mode) effects.push("mode");
+        if (sessionModel(sessionId, method).choice.value !== before.model) effects.push("model");
+        if (reasoningOverrides.get(sessionId) !== before.reasoning) effects.push("config");
+        return { text: reply.length === 0 || reply.endsWith("\n") ? reply : `${reply}\n`, ...(effects.length > 0 ? { effects } : {}) };
+      },
+    };
+  }
+
+  /**
+   * `_keryx/command` (shell profile, specification §3.9.1): runs one command of the served
+   * table. Not a turn: no prompt slot, nothing added to the model's history, and it may run
+   * while a turn runs, by `busy-dispatch.ts`'s rules — a command the shell would queue or
+   * refuse while busy is answered `{ text, _meta.keryx.refused }` with the shell's wording.
+   * The two that rewrite the transcript (`/compact`, `/rewind`) hold the session's slot while
+   * they run, so a prompt cannot interleave with the rewrite.
+   */
+  async function handleKeryxCommand(params: unknown): Promise<{ text: string; _meta: { keryx: { effects?: ShellCommandEffect[]; refused?: true; view?: ShellView; prompt?: string; terminal?: DelegateTerminalLaunch; confirmAction?: ShellConfirmAction } } }> {
+    const method = KERYX_ACP_EXTENSION_METHODS.command;
+    requireInitialized(method);
+    const obj = requireObjectParams(params, method);
+    const sessionId = requireStringField(obj, "sessionId", method);
+    const rawName = requireStringField(obj, "name", method);
+    const argsField = obj["args"];
+    if (argsField !== undefined && typeof argsField !== "string") {
+      refuse(invalidParams(`${method}: args must be a string`, { received: argsField }));
+    }
+    const name = rawName.replace(/^\//, "").toLowerCase();
+    const args = (argsField ?? "").trim();
+    const row = findShellCommand(name);
+    if (row === undefined) {
+      refuse(invalidParams(`${method}: keryx does not serve /${name}`, { name }));
+    }
+    if (row.surface === "client" || row.surface === "dialog") {
+      refuse(invalidParams(`${method}: /${name} is handled by the desktop client, not by keryx`, { name, surface: row.surface }));
+    }
+    const state = registry.get(sessionId);
+    if (state === undefined) {
+      refuse({ code: JSON_RPC_ERROR_CODES.resourceNotFound, message: `Unknown ACP session: ${sessionId}`, data: { sessionId } });
+    }
+    refuseIfOpening(method, sessionId);
+    const refusedResult = (reason: string) => ({ text: reason, _meta: { keryx: { refused: true as const } } });
+    if (activeTurns.has(sessionId) && row.busy === "refuse") {
+      return refusedResult(busyRefusalText(name));
+    }
+    touch(sessionId);
+    const rewritesTranscript = row.name === "compact" || row.name === "rewind";
+    // Counted as work on the session, so the idle cap does not release it mid-command.
+    return withSessionWork(sessionId, async () => {
+      const slot: AcpActiveTurn | undefined = rewritesTranscript
+        ? { controller: new AbortController(), cancelled: false, permissionRequestIds: new Set() }
+        : undefined;
+      if (slot !== undefined) activeTurns.set(sessionId, slot);
+      try {
+        const outcome = await runShellTextCommand(commandHost(sessionId, state), row, args);
+        // A view command with no text form for these arguments: T10b's views replace this answer.
+        if (outcome === undefined) return refusedResult(viewNotServedText(name));
+        if (outcome.refused === true) return refusedResult(outcome.text);
+        return {
+          text: outcome.text,
+          _meta: { keryx: { effects: [...(outcome.effects ?? [])], ...(outcome.view !== undefined ? { view: outcome.view } : {}), ...(outcome.prompt !== undefined ? { prompt: outcome.prompt } : {}), ...(outcome.terminal !== undefined ? { terminal: outcome.terminal } : {}), ...(outcome.confirmAction !== undefined ? { confirmAction: outcome.confirmAction } : {}) } },
+        };
+      } finally {
+        if (slot !== undefined && activeTurns.get(sessionId) === slot) activeTurns.delete(sessionId);
+        touch(sessionId);
+      }
+    });
+  }
+
   async function handleSessionPrompt(params: unknown): Promise<AcpPromptResponse> {
     requireInitialized(ACP_AGENT_METHODS.sessionPrompt);
     const obj = requireObjectParams(params, ACP_AGENT_METHODS.sessionPrompt);
@@ -1852,10 +2256,6 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       }),
       controlNonce: controlNonceFor(sessionId),
       idSeq,
-      ...((): { resetSubagentBudget: () => void } | Record<string, never> => {
-        const reset = subagentBudgetResets.get(sessionId);
-        return reset !== undefined ? { resetSubagentBudget: reset } : {};
-      })(),
       // Flow 306 (W6, T15): this session's own `HookRuntime` (built at
       // `session/new`/`session/load`, `ensureShellHooksAndFireStart` above),
       // absent only when `KERYX_HOOKS=off` — every existing PreToolUse/
@@ -1909,6 +2309,32 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         shellProfile ? { permissionMode: () => modeOf(sessionId), permissionReasons: true } : {},
       );
       if (shellProfile) {
+        // `spawn_subagent` links its subagents to THIS call: the id the client was shown is minted by
+        // the turn's IO, so the tool gets it through its context (`InteractiveToolContext.toolCallId`).
+        deps.tools = deps.tools.map((tool) =>
+          tool.definition.name === "spawn_subagent" ? withHostToolCallId(tool, io.toolCallIdFor) : tool,
+        );
+        // A turn starts with a fresh subagent budget, as the shell's turn driver does.
+        subagentBudgetResets.get(sessionId)?.();
+        // `/plan on`: read fresh by every gated call, as the readline shell's own flag is.
+        io.readOnly = () => sessionReadOnly.get(sessionId) === true;
+        // The client's MCP servers: trust grants for the session, and the first-party ones
+        // (the desktop side panel, D-13) exempt from the untrusted-content floor per tool.
+        const clientMcpSet = sessionMcp.get(sessionId)?.mcp;
+        if (clientMcpSet !== undefined) {
+          let grants = mcpGrants.get(sessionId);
+          if (grants === undefined) {
+            grants = new SessionMcpGrants(
+              () => sessionMcp.get(sessionId)?.mcp.firstParty,
+              () => sessionMcp.get(sessionId)?.mcp.catalog() ?? { entries: [] },
+            );
+            mcpGrants.set(sessionId, grants);
+          }
+          io.trustedMcpTools = grants;
+          io.mcpToolFingerprint = (fqn) => catalogFingerprintResolver(clientMcpSet.catalog())(fqn);
+          io.mcpToolDestructive = (fqn) => catalogDestructiveResolver(clientMcpSet.catalog())(fqn);
+          io.mcpFloorExempt = (fqn) => firstPartyFloorExempt(clientMcpSet.firstParty, fqn);
+        }
         // `auto` mode answers ask_user itself; without this the client would
         // see the answer land in the model's context but never be told.
         io.onQuestionSelfAnswered = (question, answerLabel) => {
@@ -1950,7 +2376,21 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       deps.onContextCompaction = () => {
         archive.next = state.history.length;
       };
-      const result = await runAgentTurn(io, deps, state.history, userLine, { signal: turn.controller.signal });
+      if (shellProfile) {
+        // `/rewind`: a snapshot of the files before each mutating call, and the turn's place in the archive.
+        const rewind = rewindFor(sessionId);
+        io.beforeMutation = () => rewind.recorder.beforeMutation();
+        rewind.recorder.beginTurn({ archiveIndex: archive.messages.length, prompt: userLine });
+      }
+      // After a `/goal` the session keeps its slate, as the shells do; the goal's own turn skips the
+      // close-phrase check once, since `/goal` has just opened the slate it would archive.
+      const slate = sessionSlates.get(sessionId);
+      const goalTurn = slate !== undefined && slate.goalPrompt !== undefined && slate.goalPrompt === userLine;
+      if (slate !== undefined) delete slate.goalPrompt;
+      const result = await runAgentTurn(io, deps, state.history, userLine, {
+        signal: turn.controller.signal,
+        ...(slate !== undefined ? { slateSession: slate.ref, ...(goalTurn ? { skipCloseTrigger: true } : {}) } : {}),
+      });
       syncAcpArchive(archive, state.history);
       if (!registry.canPersist(sessionId)) {
         // Another instance took the lease over mid-turn: its transcript is not
@@ -1995,6 +2435,11 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       // the busy guard above ever regressed, hand a later turn's slot away.
       if (activeTurns.get(sessionId) === turn) {
         activeTurns.delete(sessionId);
+        const notes = pendingDelegateNotes.get(sessionId);
+        if (notes !== undefined) {
+          pendingDelegateNotes.delete(sessionId);
+          appendDelegateNotes(sessionId, notes);
+        }
       }
       touch(sessionId);
     }
@@ -2044,6 +2489,8 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   function handleSessionCancel(params: unknown): void {
     const obj = requireObjectParams(params, ACP_AGENT_METHODS.sessionCancel);
     const sessionId = requireStringField(obj, "sessionId", ACP_AGENT_METHODS.sessionCancel);
+    // A `/delegate` run is not a turn, but a cancel stops it all the same.
+    sessionExternalRuns.get(sessionId)?.stop("cancelled by session/cancel");
     const turn = activeTurns.get(sessionId);
     if (turn === undefined) {
       options.logError(
@@ -2089,7 +2536,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       // even take per-session — honest, and consistent with what
       // `session/load`'s own cwd check compares against.
       cwd: summary.projectPath,
-      title: summary.title,
+      title: listedTitle(cwd, summary, options.dataDir),
       updatedAt: summary.updatedAt,
       // Shell profile: how the person organised it (archived, pinned). The editor profile's wire stays as it was.
       ...(shellProfile ? flagsMeta(readSessionFlags(sessionDir(summary.projectPath, summary.id, options.dataDir))) : {}),
@@ -2176,7 +2623,8 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
    *
    * The role mapping F-9 asks every implementation to decide explicitly:
    *
-   *   `user`      -> `user_message_chunk` (skipped when the content is empty —
+   *   `user`      -> `user_message_chunk` (a delegate note: its text + `_meta.keryx.delegateResult`;
+   *                  skipped when the content is empty —
    *                  mirrors `AgentIO.write`/`onSystem`'s own "nothing to
    *                  say" no-op below).
    *   `assistant` -> `agent_message_chunk` for the text (if any), followed by
@@ -2209,9 +2657,20 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         continue;
       }
       if (message.role === "user") {
-        if (message.content.length > 0) {
-          sendUpdate(sessionId, { sessionUpdate: "user_message_chunk", content: textBlock(message.content) });
+        if (message.content.length === 0) continue;
+        // A delegate note replays as what it is: the result text with the run it came from in `_meta`,
+        // never the envelope (the model-facing history keeps it). A client that does not know the
+        // meta shows the plain text.
+        const note = isInjectedUserMessage(message) ? parseDelegateNote(message.content) : undefined;
+        if (note !== undefined) {
+          sendUpdate(sessionId, {
+            sessionUpdate: "user_message_chunk",
+            content: textBlock(note.text),
+            _meta: { keryx: { delegateResult: note } },
+          });
+          continue;
         }
+        sendUpdate(sessionId, { sessionUpdate: "user_message_chunk", content: textBlock(message.content) });
         continue;
       }
       if (message.role === "assistant") {
@@ -2419,6 +2878,19 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     });
   }
 
+  /** Shell profile: `_keryx/providers/*` and `_keryx/search_providers/*` (specification §3.9.3). */
+  const providers = shellProfile
+    ? createProvidersHandlers({
+        ...options.providers,
+        ...(options.providers?.configDir === undefined && options.shellConfigDir !== undefined ? { configDir: options.shellConfigDir } : {}),
+        searchController: searchControllerFor,
+        requireInitialized,
+        notify: (method, params) => writeMessage(notificationMessage(method, params)),
+        onProvidersChanged: refreshModelChoicesAfterProviderChange,
+        newId: idSeq,
+      })
+    : undefined;
+
   const dispatcher = new AcpDispatcher(
     {
       requests: {
@@ -2433,6 +2905,15 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         ...(shellProfile
           ? {
               [ACP_AGENT_METHODS.sessionSetMode]: (params: unknown, context: { id: JsonRpcId }) => handleSetMode(params, context.id),
+              [KERYX_ACP_EXTENSION_METHODS.command]: (params: unknown) => handleKeryxCommand(params),
+              ...(providers?.requests ?? {}),
+              ...createTasksHandlers({
+                requireInitialized,
+                jobsOf: (sessionId) => {
+                  const state = registry.get(sessionId);
+                  return state === undefined ? undefined : jobsFor(sessionId, state.resolvedRoot);
+                },
+              }).requests,
               [KERYX_ACP_EXTENSION_METHODS.sessionFlags]: (params: unknown) => handleSessionFlags(params),
               [KERYX_ACP_EXTENSION_METHODS.sessionTrash]: (params: unknown) => handleSessionTrash(params),
             }
@@ -2442,7 +2923,10 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         [ACP_AGENT_METHODS.sessionCancel]: (params) => handleSessionCancel(params),
         // Shell profile only: the editor profile leaves it unhandled (logged, ignored).
         ...(shellProfile
-          ? { [KERYX_ACP_EXTENSION_METHODS.sessionShown]: (params: unknown) => handleSessionShown(params) }
+          ? {
+              [KERYX_ACP_EXTENSION_METHODS.sessionShown]: (params: unknown) => handleSessionShown(params),
+              [KERYX_ACP_EXTENSION_METHODS.delegateExited]: (params: unknown) => handleDelegateExited(params),
+            }
           : {}),
       },
     },
@@ -2566,6 +3050,10 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         turn.cancelled = true;
         turn.controller.abort();
       }
+      for (const runs of sessionExternalRuns.values()) {
+        runs.stop("keryx acp is shutting down");
+        runs.dispose();
+      }
       await within(Promise.allSettled([...inflight]), SHUTDOWN_TURN_GRACE_MS);
     } else {
       // Shell profile: nobody is left to watch a turn, and a trust or auto
@@ -2576,6 +3064,10 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
           turn.cancelled = true;
           turn.controller.abort();
         }
+        for (const runs of sessionExternalRuns.values()) {
+        runs.stop("the client closed the connection");
+        runs.dispose();
+      }
       }
       // A turn started before the close still has a response to write, and the
       // stream it writes to is still open. Draining is what makes the denial
@@ -2587,6 +3079,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     endReason = ended === "shutdown" ? "shutdown" : "connection-closed";
   } finally {
     stopping = true;
+    providers?.close();
     // Flow 306 (W6, T15): ACP advertises no `session/close` (see the
     // `SharedMcpSet` doc comment above) — the connection itself is the only
     // boundary every session this process created actually has. The same

@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { isTauri } from "../platform/backend";
+import { isTauri, listen } from "../platform/backend";
 import { basename } from "../lib/format";
-import { MOD, setPrefs, usePrefs } from "../lib/prefs";
+import { getPrefs, MOD, setPrefs, usePrefs, type SidePanelTab } from "../lib/prefs";
+import { SidePanel } from "../panels/SidePanel";
+import { overlayOpen } from "../components/ui";
 import { Icon, type IconName } from "../components/Icon";
 import { Menu, type MenuItem } from "../components/Menu";
 import { Kbd } from "../components/ui";
@@ -41,29 +43,112 @@ interface ShellProps {
   children: ReactNode;
 }
 
+let lastToggle = 0;
+
+export function toggleSidePanel(tab: SidePanelTab, current: SidePanelTab | null): void {
+  lastToggle = Date.now();
+  setPrefs({ sidePanel: current === tab ? null : tab });
+}
+
+/**
+ * A panel shortcut from the native menu (`menu://panel`). The menu also sees keys the page already
+ * handled; a toggle the page made a moment ago is that same key press and is not repeated.
+ */
+export function onMenuPanel(id: string, openPalette: () => void): void {
+  if (overlayOpen() && id !== "palette") return;
+  if (id === "palette") openPalette();
+  else if ((id === "terminal" || id === "browser") && Date.now() - lastToggle > 250) toggleSidePanel(id, getPrefs().sidePanel);
+}
+
+/** `Ctrl+\`` toggles the terminal, `Cmd+Shift+B` the browser; caught before a focused terminal sees them. */
+export function sidePanelShortcut(e: Pick<KeyboardEvent, "code" | "ctrlKey" | "metaKey" | "shiftKey" | "altKey">): SidePanelTab | null {
+  if (e.altKey) return null;
+  if (e.code === "Backquote" && e.ctrlKey && !e.metaKey) return "terminal";
+  if (e.code === "KeyB" && e.metaKey && e.shiftKey && !e.ctrlKey) return "browser";
+  return null;
+}
+
+function useSidePanelShortcuts(openPalette: () => void): void {
+  const palette = useRef(openPalette);
+  palette.current = openPalette;
+  useEffect(() => {
+    let off: (() => void) | null = null;
+    let live = true;
+    void listen<string>("menu://panel", (id) => onMenuPanel(id, () => palette.current())).then((u) => (live ? (off = u) : u()));
+    return () => {
+      live = false;
+      off?.();
+    };
+  }, []);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const tab = sidePanelShortcut(e);
+      if (!tab || overlayOpen()) return;
+      e.preventDefault();
+      e.stopPropagation();
+      toggleSidePanel(tab, getPrefs().sidePanel);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, []);
+}
+
 export function AppShell(p: ShellProps) {
   const overlay = useTitlebarInset();
+  const prefs = usePrefs();
+  useSidePanelShortcuts(p.onPalette);
+  const side = prefs.sidePanel !== null;
   return (
-    <div className={`app-shell${overlay ? " titlebar-overlay" : ""}`}>
+    <div
+      className={`app-shell${overlay ? " titlebar-overlay" : ""}${side ? " with-side" : ""}`}
+      style={side ? ({ "--side-w": `${prefs.sidePanelWidth}px` } as React.CSSProperties) : undefined}
+    >
       <TitleBar {...p} />
       <Rail view={p.view} onView={p.onView} flowsActive={p.flowsActive} />
       <main className="app-main" id="main">
         {p.children}
       </main>
+      <SidePanel cwd={p.cwd} />
     </div>
   );
 }
 
-/** Shows or hides the session info panel (on the session view only). */
+/** Title-bar toggles of the side panel's terminal and browser. */
+function SideToggles() {
+  const prefs = usePrefs();
+  const items: Array<{ tab: SidePanelTab; icon: IconName; label: string; keys: string }> = [
+    { tab: "terminal", icon: "terminal", label: "Terminal", keys: "Ctrl+`" },
+    { tab: "browser", icon: "globe", label: "Browser", keys: `${MOD}⇧B` },
+  ];
+  return (
+    <>
+      {items.map((i) => (
+        <button
+          key={i.tab}
+          className={`icon-btn titlebar-toggle${prefs.sidePanel === i.tab ? " is-on" : ""}`}
+          onClick={() => toggleSidePanel(i.tab, prefs.sidePanel)}
+          aria-pressed={prefs.sidePanel === i.tab}
+          title={`${prefs.sidePanel === i.tab ? "Hide" : "Show"} ${i.label.toLowerCase()} (${i.keys})`}
+          aria-label={i.label}
+        >
+          <Icon name={i.icon} size={15} />
+        </button>
+      ))}
+    </>
+  );
+}
+
+/** Shows or hides the session info (the side panel's Info tab; on the session view only). */
 function InfoToggle({ show }: { show: boolean }) {
   const prefs = usePrefs();
   if (!show) return null;
+  const on = prefs.sidePanel === "info";
   return (
     <button
-      className={`icon-btn titlebar-toggle${prefs.infoPanel ? " is-on" : ""}`}
-      onClick={() => setPrefs({ infoPanel: !prefs.infoPanel })}
-      aria-pressed={prefs.infoPanel}
-      title={prefs.infoPanel ? "Hide session info" : "Show session info"}
+      className={`icon-btn titlebar-toggle${on ? " is-on" : ""}`}
+      onClick={() => toggleSidePanel("info", prefs.sidePanel)}
+      aria-pressed={on}
+      title={on ? "Hide session info" : "Show session info"}
       aria-label="Session info"
     >
       <Icon name="info" size={15} />
@@ -119,6 +204,7 @@ function TitleBar(p: ShellProps) {
           {status.label}
         </span>
         <InfoToggle show={p.view === "session"} />
+        <SideToggles />
         <button className="palette-btn" onClick={onPalette} title="Commands and sessions">
           <Icon name="search" size={13} />
           <span>Commands</span>

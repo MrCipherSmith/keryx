@@ -10,7 +10,6 @@ interface Props {
   state: SessionState;
   cwd: string;
   projectName: string;
-  onClose: () => void;
 }
 
 function optionName(option: ConfigOption | undefined): string | null {
@@ -51,7 +50,7 @@ function useGit(cwd: string, sessionId: string | null, busy: boolean): GitInfo |
 }
 
 /** What one session runs in and has used so far: project, branch, model, context and tokens. */
-export const SessionInfoPanel = memo(function SessionInfoPanel({ state, cwd, projectName, onClose }: Props) {
+export const SessionInfoPanel = memo(function SessionInfoPanel({ state, cwd, projectName }: Props) {
   const git = useGit(cwd, state.sessionId, state.busy);
   const usage = state.usage;
   const ctx = usage && usage.size > 0 ? Math.min(100, Math.round((usage.used / usage.size) * 100)) : null;
@@ -61,13 +60,6 @@ export const SessionInfoPanel = memo(function SessionInfoPanel({ state, cwd, pro
 
   return (
     <aside className="info-panel" aria-label="Session info">
-      <div className="sidebar-head">
-        <h2>Session</h2>
-        <div className="grow" />
-        <button className="icon-btn" onClick={onClose} title="Hide session info" aria-label="Hide session info">
-          <Icon name="x" size={14} />
-        </button>
-      </div>
       <div className="info-body">
         <section className="info-section" aria-label="Environment">
           <div className="info-line" title={cwd}>

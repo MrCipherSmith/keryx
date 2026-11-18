@@ -771,7 +771,8 @@ describe.skipIf(!liveSandbox.ok)("AC10/AC13 (live bwrap): a dispatched agent's c
       else process.env["GITHUB_TOKEN"] = savedToken;
     }
     const record = await lastRecord();
-    expect(record.detail).toContain("hardened bubblewrap sandbox, network off");
+    // The live sandbox is the host's own: bubblewrap on Linux, Seatbelt on macOS (#1231).
+    expect(record.detail).toMatch(/hardened (bubblewrap|macOS Seatbelt) sandbox, network off/);
     expect(record.outcome).toBe("ok");
     expect(git(root, ["show", `trigger/${flowId}-T1:lock-proof.txt`])).toBe("acquired no-token");
     expect(git(root, ["ls-tree", "-r", "--name-only", `trigger/${flowId}-T1`])).not.toContain(".locks");
