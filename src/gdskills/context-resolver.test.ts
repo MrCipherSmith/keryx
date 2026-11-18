@@ -59,6 +59,8 @@ async function core(root: string, names: Record<string, string>): Promise<void> 
 const paths = (entries: ContextEntry[]): string[] => entries.map((entry) => entry.path);
 const P = (ref: string): string => `.metaproject/rules/project/${ref}`;
 const C = (name: string): string => `.metaproject/rules/core/${name}`;
+/** An installed stack-pack rule: `S("react/code-style-patterns.mdc")`. */
+const S = (packAndName: string): string => `.metaproject/rules/stacks/${packAndName}`;
 
 test("every project entry precedes every bundled entry, sha256 is the hash of the file bytes, and the output is byte-identical on a second run", async () => {
   const root = await project();
@@ -94,13 +96,17 @@ test("a project rule with a bundled name is read even when its globs do not matc
   expect(result.entries.map((entry) => [entry.path, entry.reason, entry.tier])).toEqual([[P("error-handling.mdc"), "replaces-bundled", "must_read"]]);
 });
 
-test("a project rule under rules/project/core/ shadows the bundled rule of the same name, as a flat one does", async () => {
+test("a project rule under rules/project/<layer or stacks/pack>/ shadows the bundled rule of the same name, as a flat one does", async () => {
   const root = await project();
-  await core(root, { "tdd-workflow.mdc": "tdd\n", "frontend-assistant.mdc": "bundled frontend\n", "storybook-guidelines.mdc": "bundled stories\n" });
-  await importRules(root, { "core/storybook-guidelines.mdc": ruleText({ globs: "src/**/*.tsx" }), "core/frontend-assistant.mdc": ruleText({ globs: "docs/**" }) });
+  await core(root, { "tdd-workflow.mdc": "tdd\n", "frontend-assistant.mdc": "bundled frontend\n" });
+  await put(root, S("storybook/storybook-guidelines.mdc"), "bundled stories\n");
+  await importRules(root, {
+    "stacks/storybook/storybook-guidelines.mdc": ruleText({ globs: "src/**/*.tsx" }),
+    "core/frontend-assistant.mdc": ruleText({ globs: "docs/**" }),
+  });
   const result = await resolveProjectContext({ projectRoot: root, files: ["src/a.tsx"], taskType: "ui_component", for: "implement" });
   expect(result.entries.map((entry) => [entry.path, entry.reason, entry.shadows])).toEqual([
-    [P("core/storybook-guidelines.mdc"), "glob:src/**/*.tsx", C("storybook-guidelines.mdc")],
+    [P("stacks/storybook/storybook-guidelines.mdc"), "glob:src/**/*.tsx", S("storybook/storybook-guidelines.mdc")],
     [P("core/frontend-assistant.mdc"), "replaces-bundled", C("frontend-assistant.mdc")],
     [C("tdd-workflow.mdc"), "bundled-default", undefined],
   ]);
@@ -146,18 +152,68 @@ test("the bundled task-type table adds the rules it adds today, only those prese
     "tdd-workflow.mdc": "a\n",
     "error-handling.mdc": "b\n",
     "solid-principles.mdc": "c\n",
-    "code-style-patterns.mdc": "d\n",
-    "mobx-store-template.mdc": "e\n",
-    "nestjs-dto.mdc": "f\n",
+    "api-contracts.mdc": "g\n",
   });
+  // ADR-0001 P4: the stack rules a task type names come from the installed packs.
+  await put(root, S("react/code-style-patterns.mdc"), "d\n");
+  await put(root, S("mobx/mobx-store-template.mdc"), "e\n");
+  await put(root, S("nestjs/nestjs-dto.mdc"), "f\n");
   const store = await resolveProjectContext({ projectRoot: root, files: ["src/s.ts"], taskType: "store_logic", for: "implement" });
-  expect(paths(store.entries)).toEqual([C("tdd-workflow.mdc"), C("error-handling.mdc"), C("solid-principles.mdc"), C("code-style-patterns.mdc"), C("mobx-store-template.mdc")]);
+  expect(paths(store.entries)).toEqual([C("tdd-workflow.mdc"), C("error-handling.mdc"), C("solid-principles.mdc"), S("react/code-style-patterns.mdc"), S("mobx/mobx-store-template.mdc")]);
   expect(store.entries.every((entry) => entry.source === "bundled" && entry.tier === "must_read")).toBe(true);
   expect(store.budget).toMatchObject({ usedBytes: 0, exceeded: false });
   const mixed = await resolveProjectContext({ projectRoot: root, files: ["src/s.ts"], taskType: "mixed", for: "implement" });
-  expect(paths(mixed.entries)).toContain(C("nestjs-dto.mdc"));
+  expect(paths(mixed.entries)).toContain(S("nestjs/nestjs-dto.mdc"));
+  // A backend task no longer loads the React rule (ADR-0001 Context).
+  const api = await resolveProjectContext({ projectRoot: root, files: ["src/s.ts"], taskType: "service_api", for: "implement" });
+  expect(paths(api.entries)).toEqual([C("tdd-workflow.mdc"), C("error-handling.mdc"), C("solid-principles.mdc"), S("nestjs/nestjs-dto.mdc"), C("api-contracts.mdc")]);
   const none = await resolveProjectContext({ projectRoot: root, files: ["src/s.ts"], for: "implement" });
   expect(paths(none.entries)).toEqual([C("tdd-workflow.mdc"), C("error-handling.mdc"), C("solid-principles.mdc")]);
+});
+
+test("each role loads its activity rule first: implement, test and review (ADR-0001 P5); absent where it is not installed", async () => {
+  const root = await project();
+  await core(root, { "tdd-workflow.mdc": "a\n", "error-handling.mdc": "b\n", "solid-principles.mdc": "c\n" });
+  const before = await resolveProjectContext({ projectRoot: root, files: ["src/s.ts"], for: "review" });
+  expect(paths(before.entries)).toEqual([]);
+  const A = (name: string): string => `.metaproject/rules/activity/${name}.mdc`;
+  for (const name of ["implement", "test", "review"]) await put(root, A(name), `${name}\n`);
+  const impl = await resolveProjectContext({ projectRoot: root, files: ["src/s.ts"], for: "implement" });
+  expect(paths(impl.entries)).toEqual([A("implement"), C("tdd-workflow.mdc"), C("error-handling.mdc"), C("solid-principles.mdc")]);
+  const test_ = await resolveProjectContext({ projectRoot: root, files: ["src/s.test.ts"], for: "test" });
+  expect(paths(test_.entries)).toEqual([A("test"), C("tdd-workflow.mdc")]);
+  const review = await resolveProjectContext({ projectRoot: root, files: ["src/s.ts"], for: "review" });
+  expect(review.entries.map((entry) => [entry.path, entry.reason, entry.tier])).toEqual([[A("review"), "bundled-default", "must_read"]]);
+  // A project override at rules/project/activity/<name>.mdc replaces the bundled copy.
+  await importRules(root, { "activity/review.mdc": ruleText({}) });
+  const overridden = await resolveProjectContext({ projectRoot: root, files: ["src/s.ts"], for: "review" });
+  expect(paths(overridden.entries)).toEqual([P("activity/review.mdc")]);
+});
+
+test("the activity rule leads the bundled rules, ahead of a stack pack's (P5 review R4)", async () => {
+  const root = await project();
+  await core(root, { "tdd-workflow.mdc": "a\n", "error-handling.mdc": "b\n", "solid-principles.mdc": "c\n" });
+  await put(root, ".metaproject/rules/activity/implement.mdc", "implement\n");
+  await put(root, S("mobx/mobx-store-template.mdc"), '---\npaths: ["**/*store*.ts"]\n---\nstores\n');
+  const resolved = await resolveProjectContext({ projectRoot: root, files: ["src/store.ts"], taskType: "store_logic", for: "implement" });
+  expect(paths(resolved.entries)).toEqual([
+    ".metaproject/rules/activity/implement.mdc",
+    S("mobx/mobx-store-template.mdc"),
+    C("tdd-workflow.mdc"),
+    C("error-handling.mdc"),
+    C("solid-principles.mdc"),
+  ]);
+});
+
+test("a task type's stack rule is absent where its pack is not installed, and listed once where a task file's glob also selects it", async () => {
+  const root = await project();
+  await core(root, { "tdd-workflow.mdc": "a\n", "error-handling.mdc": "b\n", "solid-principles.mdc": "c\n" });
+  const noPacks = await resolveProjectContext({ projectRoot: root, files: ["src/store.ts"], taskType: "store_logic", for: "implement" });
+  expect(paths(noPacks.entries)).toEqual([C("tdd-workflow.mdc"), C("error-handling.mdc"), C("solid-principles.mdc")]);
+  await put(root, S("mobx/mobx-store-template.mdc"), '---\npaths: ["**/*store*.ts"]\n---\nstores\n');
+  const both = await resolveProjectContext({ projectRoot: root, files: ["src/store.ts"], taskType: "store_logic", for: "implement" });
+  expect(paths(both.entries).filter((entry) => entry === S("mobx/mobx-store-template.mdc"))).toHaveLength(1);
+  expect(both.entries.find((entry) => entry.path === S("mobx/mobx-store-template.mdc"))?.reason).toBe("glob:**/*store*.ts");
 });
 
 test("for test returns testing skills and project rules for the test files; for review returns project rules only", async () => {

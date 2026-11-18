@@ -213,20 +213,20 @@ Required context sources:
 
 Required rules:
 
-- `.metaproject/rules/core/requirements-management.mdc`
-- `.metaproject/rules/core/implementation-plans.mdc`
-- `.metaproject/rules/core/subagent-context-construction.md`
-- `.metaproject/rules/core/subagent-status-protocol.md`
-- `.metaproject/rules/core/tdd-workflow.mdc`
-- `.metaproject/rules/core/code-style-patterns.mdc`
+- `.metaproject/rules/process/requirements-management.mdc`
+- `.metaproject/rules/process/implementation-plans.mdc`
+- `.metaproject/rules/process/subagent-context-construction.md`
+- `.metaproject/rules/process/subagent-status-protocol.md`
+- `.metaproject/rules/core/tdd-workflow.mdc`, and per role `.metaproject/rules/activity/implement.mdc`, `test.mdc` or `review.mdc`
+- `.metaproject/rules/stacks/react/code-style-patterns.mdc`
 - `.metaproject/rules/core/error-handling.mdc`
-- `.metaproject/rules/core/implementation-doc-mandate.mdc`
-- `.metaproject/rules/core/execution-metrics.md`
-- `.metaproject/rules/core/git-concurrency.mdc` — no `git stash`, no unscoped `git add`, pin every dispatch to its worktree
+- `.metaproject/rules/process/implementation-doc-mandate.mdc`
+- `.metaproject/rules/process/execution-metrics.md`
+- `.metaproject/rules/process/git-concurrency.mdc` — no `git stash`, no unscoped `git add`, pin every dispatch to its worktree
 
 Execution metrics (opt-in): when a USER runs this orchestrator directly, at the
 start ask "Collect execution statistics for this run? (yes/no)" per
-`rules/core/execution-metrics.md`. If yes, append the `## Execution Metrics`
+`rules/process/execution-metrics.md`. If yes, append the `## Execution Metrics`
 section at the end and save it under the flow dir (`<flow-dir>/metrics/`). Never
 ask or emit it when dispatched as a subagent.
 
@@ -297,20 +297,20 @@ Recommended worker routing:
 ### Worker communication is schema-governed
 
 Workers do not inherit session state; every dispatch is constructed explicitly
-(`.metaproject/rules/core/subagent-context-construction.md`). Each dispatch is a
+(`.metaproject/rules/process/subagent-context-construction.md`). Each dispatch is a
 `subagent-dispatch` object
 (`.metaproject/core/gdskills/contracts/subagent-dispatch.schema.json`) and each
 worker reply is a `subagent-result` object
 (`.metaproject/core/gdskills/contracts/subagent-result.schema.json`) whose first
 line is `STATUS: <status>`
-(`.metaproject/rules/core/subagent-status-protocol.md`).
+(`.metaproject/rules/process/subagent-status-protocol.md`).
 
 `<worktree_path>` below is the absolute root of the checkout this flow's work
 happens in: the git worktree the flow runs in, or the project root when it runs
 in the main checkout. Resolve it once, before the first dispatch
 (`git rev-parse --show-toplevel` from that checkout), check
 `git -C <worktree_path> branch --show-current` is the branch the work belongs
-on, and pin every dispatch to it (`rules/core/git-concurrency.mdc`, "Pinning A
+on, and pin every dispatch to it (`rules/process/git-concurrency.mdc`, "Pinning A
 Dispatch To Its Worktree").
 
 Workers do not commit: flow-orchestrator owns every commit and dispatches with
@@ -343,7 +343,7 @@ Dispatch payload, bound to the flow (map `target_skill` from the routing table):
     "Never edit frozen acceptance criteria.",
     "resolved_context_file: .metaproject/flows/<dir>/resolved/<Tn>.<for>.json — read its must_read entries and cite each in project_context_applied; an entry promoted by a condition also needs its anchor and a summary.",
     "Return a subagent-result; first line must be STATUS:.",
-    "Follow rules/core/git-concurrency.mdc: never git stash; never git add -A.",
+    "Agent conduct (mandatory): <the \"Dispatch form\" line of .metaproject/rules/process/agent-conduct.mdc, verbatim>", "Follow rules/process/git-concurrency.mdc: never git stash; never git add -A.",
     "Root: <worktree_path>. Before the first write run `cd <worktree_path> && pwd && git branch --show-current`; run every git command as `git -C <worktree_path>`.",
     "Auto-commit is off (automation.auto_commit: false): do not commit; list every path you changed in changed_files. flow-orchestrator commits them at the task boundary."
   ],
@@ -357,7 +357,7 @@ Dispatch payload, bound to the flow (map `target_skill` from the routing table):
 **Task boundary commit, after every accepted worker result** (`DONE` or
 `DONE_WITH_CONCERNS`), then mark task progress. It commits exactly those
 `changed_files` from the worker's `subagent-result` that git still shows as
-changed, never `-A`/`--all`/`.` (`rules/core/git-concurrency.mdc` rule 4 and
+changed, never `-A`/`--all`/`.` (`rules/process/git-concurrency.mdc` rule 4 and
 "Reporting Back"). It skips cleanly when none remain (expected for a worker that
 reported no files or committed on its own, like tests-creator's stubs):
 
@@ -437,12 +437,12 @@ Before accepting implementation:
    - **Red probes → ONE implementer.** When reviewers left red probes (failing tests or commands on the findings), pass them as `test_case_specs` to one `task-implementer` dispatch — no separate `tests-creator` task. `tests-creator` runs only for a new contract no probe covers.
    - **A held finding is not fixed.** A finding `review-premise` held (`challenged` or `owner-decision`) is neither fixable nor clean: it never goes into `fix_context.review_feedback` and it blocks the loop until answered. Ask the operator about it as `review-orchestrator` "Wave D" says (the card in keryx shell; elsewhere the host's question tool, naming the finding id, then `keryx review decide-premise` with `--answered-by <source>:<ref> --answer-text … --question-text …` to record the answer) and journal the recorded answer; only an upheld finding enters a fix round, carrying `premise_verdict` and `premise_answer` as task-implementer's `FIX_CONTEXT` defines them. A dispatched run leaves it held and journals it.
    - **`suggested_fix` is a hypothesis.** Pass each finding's `id` and `suggested_fix` in `fix_context.review_feedback`; the implementer reproduces the finding (red), checks the suggestion against the state × event matrix, then fixes (task-implementer 1.3). Journal every `suggested_fix diverged` / `did not reproduce` note it returns.
-7. Close the skill-learning loop (see `rules/core/skill-lifecycle.mdc`). Collect
+7. Close the skill-learning loop (see `rules/process/skill-lifecycle.mdc`). Collect
    the `skill_drift` fields from task-implementer results and the
    `## Skill Learning` block from review-orchestrator. For each flagged
    project-skill, dispatch a subagent — on a cheaper / non-flagship model if one
    is available (`keryx review tier --findings 1 --diff-lines 0` resolves one from runtime
-   provider detection; see `rules/core/model-selection.mdc`), otherwise the session model — to run
+   provider detection; see `rules/process/model-selection.mdc`), otherwise the session model — to run
    `keryx skills learn --from-review <report> --skill <m>/<s>` and return the
    proposal. Then read the proposal and `skills learn apply` it, or discard it.
    Never apply unread; never put `learn` in a hook.
@@ -511,7 +511,7 @@ answered it and who is behind it.
 | Input | Obey it as |
 |---|---|
 | `base_branch` | Cut the flow branch from **that** branch and merge back into it. Never substitute the repository default: a fix aimed at a pull request's own branch has to land inside that pull request, and the default branch is a different review. Absent, resolve the base yourself and record what you resolved. |
-| `completion_outcome: create-pr-and-merge` | Skip the Completion Choice question, run the PR review/fix loop, merge into `base_branch`, complete the flow. |
+| `completion_outcome: create-pr-and-merge` | Skip the Completion Choice question and run the PR review/fix loop. Merge into `base_branch` only on the explicit merge ask (`rules/process/agent-conduct.mdc` rule 2). For a dispatch that ask is `operator_confirmed`, which the input contract requires with this outcome: it must name the human who asked. |
 | `operator_confirmed` | The human decision behind an outward-facing completion. See the row below for when its absence is a refusal. |
 | `review: the caller owns the reply on #<n>` | Pass it through to every `review-orchestrator` dispatch. Reviews of **this flow's own** PR reply as normal — that is a separate conversation. What the round must not do is answer `#<n>`, which the caller is already answering. |
 | `attempt budget: at most <n> attempts` | A numeric ceiling BELOW your own bound is obeyed. One at or above it is not — the bound is yours, and the paragraph under this table says why. |
@@ -572,7 +572,7 @@ the bound plus an escalation — never an unbounded loop.
    re-planned approach still cannot produce a mergeable PR, leave the flow
    `in-progress` and report the blocker instead of forcing completion.
 
-When the PR is mergeable and required checks are green, merge it into the
+When the PR is mergeable, required checks are green and the merge was explicitly asked for (the user picked A in this session, or `operator_confirmed`; otherwise stop and ask — agent-conduct rule 2), merge it into the
 recorded base branch (the branch from which the flow branch was created),
 verify that the merge completed, and only then record it through the CLI:
 

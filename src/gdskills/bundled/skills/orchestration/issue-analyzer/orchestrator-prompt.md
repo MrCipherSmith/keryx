@@ -64,6 +64,8 @@ DO NOT ask the user any questions. Execute the full workflow end-to-end.
 
 Load the skill: issue-analyzer (from skills/gdskills/orchestration/issue-analyzer/SKILL.md)
 
+Agent conduct (mandatory): <the "Dispatch form" line of .metaproject/rules/process/agent-conduct.mdc, verbatim>
+
 ═══════════════════════════════════════════════
   INPUT PARAMETERS
 ═══════════════════════════════════════════════

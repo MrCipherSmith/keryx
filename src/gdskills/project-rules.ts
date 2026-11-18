@@ -87,3 +87,39 @@ export async function updateProjectRuleRegistry(
     await writeContained(projectRoot, PROJECT_SKILLS_MANIFEST_PATH, `${JSON.stringify(manifest, null, 2)}\n`);
   });
 }
+
+/** One registry entry a rule move rewrote: `from` -> `to` are refs below `rules/project/`. */
+export type MovedRegistryEntry = { from: string; to: string };
+
+/**
+ * Follow a rule move in the `skills import --rules` registry (review LS-2): an
+ * entry registered at `core/<name>` for a rule keryx moved to `<layer>/<name>`
+ * is re-keyed to the new ref and slot, so `skills update --rules` writes the
+ * slot references now resolve through instead of recreating the old one.
+ *
+ * Only when nothing is left at the old slot (the installer moved the copy, or
+ * the entry is a link) and no entry holds the new ref yet: with both slots
+ * taken the installer has already warned, and the entry stays where it is.
+ */
+export async function migrateMovedRuleRegistry(
+  projectRoot: string,
+  moves: readonly { fileName: string; movedTo: string }[],
+  oldSlotExists: (ref: string) => Promise<boolean>,
+): Promise<MovedRegistryEntry[]> {
+  const registry = await readProjectRuleRegistry(projectRoot);
+  if (registry.length === 0) return [];
+  const refs = new Set(registry.map((entry) => entry.ref));
+  const upsert: ProjectRuleRegistryEntry[] = [];
+  const remove: string[] = [];
+  const moved: MovedRegistryEntry[] = [];
+  for (const move of moves) {
+    const from = `core/${move.fileName}`;
+    const entry = registry.find((candidate) => candidate.ref === from);
+    if (entry === undefined || refs.has(move.movedTo) || (await oldSlotExists(from))) continue;
+    upsert.push({ ...entry, ref: move.movedTo, path: path.posix.join(PROJECT_RULES_DIR, move.movedTo) });
+    remove.push(from);
+    moved.push({ from, to: move.movedTo });
+  }
+  if (moved.length > 0) await updateProjectRuleRegistry(projectRoot, { upsert, remove });
+  return moved;
+}

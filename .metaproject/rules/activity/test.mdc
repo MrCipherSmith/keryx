@@ -1,0 +1,46 @@
+---
+description: "Test design whatever the stack: what a test pins, the cases at the boundaries, fixtures and test doubles, determinism, and what to do with a failing test. Use when writing or changing tests, including failing stubs before implementation."
+alwaysApply: false
+---
+
+# Activity: test
+
+How a test writer applies the testing rules. This rule sets method only. It
+rates nothing: `rules/core/tdd-workflow.mdc` and the installed stack pack's
+`testing.mdc` hold the testing rules and their severities.
+
+## What a test pins
+
+- Write tests that describe WHAT the code should do, not HOW. Assert observable behaviour.
+- Cover every acceptance criterion with at least one test.
+- One behaviour per test, and let the description name it.
+- A test that passes before the implementation is broken.
+
+## Cases: the boundaries
+
+**Functions:** happy path, edge cases (empty/null/zero/negative), error cases, boundary values
+
+**Components:** renders, props, interactions, conditional rendering, states
+
+**Endpoints:** success (200), validation (400), not found (404), auth (401/403)
+
+**Classes:** constructor, methods, state transitions, errors
+
+## Fixtures and doubles
+
+- Match existing test patterns in the project: read 1-2 neighboring test files to match import style, describe/it structure, mock patterns, assertion style.
+- Arrange/Act/Assert; mock external dependencies, not internal module logic (`tdd-workflow.mdc` Rule 4). A test whose collaborators are all mocked asserts that your mocks agree with each other.
+
+## Determinism
+
+`tdd-workflow.mdc` Rules 5–7: a unit test uses no real network and no
+wall-clock time, never waits with a sleep or a fixed delay, and a flaky test is
+fixed by waiting on the state it races.
+
+## A failing test
+
+A test that asserts nothing covers nothing while reporting coverage — strictly
+worse than no test. Never loosen an assertion to get green. When the test is
+right and the code is wrong, an implementer fixes the code (GREEN in
+`rules/activity/implement.mdc`); a test writer who may not edit the source
+reports the failure.

@@ -36,6 +36,13 @@ prompt, before the task:
 > this repository is available and you are encouraged to use it for reading and
 > searching.
 
+The directive is followed by the mandatory agent-conduct block (ADR-0001 D2,
+`docs/decisions/rules-layers/ADR-0001-rules-layer-model.md`), rendered from
+`src/lib/agent-conduct.ts`: no attribution lines, no commit/push/merge/release
+without an explicit ask, never destroy others' work, no secrets or personal
+data, honest reporting. Both directive variants (read-only and
+`worktree-write`) carry it.
+
 The directive is written as instruction to the model rather than imposed by
 modifying the operator's own CLI configuration, which belongs to them and is
 used for other work.

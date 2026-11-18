@@ -24,7 +24,7 @@ export type SyncRuntimeSkillsResult = {
 
 /**
  * The global sync mapping described by
- * `src/gdskills/bundled/rules/core/skills-storage-workflow.mdc` ("Global Sync
+ * `src/gdskills/bundled/rules/process/skills-storage-workflow.mdc` ("Global Sync
  * Mapping"), which documented these destinations long before any code wrote to
  * them.
  *

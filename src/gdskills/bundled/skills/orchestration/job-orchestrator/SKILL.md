@@ -34,7 +34,7 @@ Dynamic orchestrator that builds execution plans based on user intent. Unlike a 
 
 **The package is the state.** `keryx job` is the only writer of `state.json`; it validates every write against the registered contract `job-orchestrator-state` and refuses one that does not conform. Never hand-write `state.json`, and never hold a step's outcome only in this session — a step recorded nowhere is a step that did not happen as far as the next session is concerned.
 
-**Execution metrics (opt-in):** when a USER runs this orchestrator directly (not as a dispatched subagent), at the start ask "Collect execution statistics for this run? (yes/no)" per `.metaproject/rules/core/execution-metrics.md`. If yes, append the `## Execution Metrics` section at the end and save it under the job dir (`jobs/<job>/metrics/`). Never ask or emit it when dispatched as a subagent.
+**Execution metrics (opt-in):** when a USER runs this orchestrator directly (not as a dispatched subagent), at the start ask "Collect execution statistics for this run? (yes/no)" per `.metaproject/rules/process/execution-metrics.md`. If yes, append the `## Execution Metrics` section at the end and save it under the job dir (`jobs/<job>/metrics/`). Never ask or emit it when dispatched as a subagent.
 
 **Key design principle** (from Anthropic's "Building Effective Agents"):
 > "The key difference from parallelization is its flexibility — subtasks aren't pre-defined, but determined by the orchestrator based on the specific input."
@@ -691,7 +691,7 @@ fi
 
 > **IMPORTANT**: After creating the worktree, ALL subsequent operations (implementation, review, lint, test, git) MUST run in the **worktree directory**, NOT in the original project directory.
 
-> **Concurrency**: every subsequent git command MUST use `git -C <worktree_path>`, never a bare `git`, and MUST NOT `git stash` or `git add -A`/`--all`/`.` — see `rules/core/git-concurrency.mdc`. Pin each dispatch to `<worktree_path>` explicitly; a dispatched agent's first action is `cd <worktree_path> && pwd && git branch --show-current`, re-checked before its first write.
+> **Concurrency**: every subsequent git command MUST use `git -C <worktree_path>`, never a bare `git`, and MUST NOT `git stash` or `git add -A`/`--all`/`.` — see `rules/process/git-concurrency.mdc`. Pin each dispatch to `<worktree_path>` explicitly; a dispatched agent's first action is `cd <worktree_path> && pwd && git branch --show-current`, re-checked before its first write.
 
 **Record state:**
 ```
@@ -845,7 +845,7 @@ leaves it out gets a worker that commits even when `implementer_settings.auto_co
 is `false`.
 
 **Task boundary commit, for every accepted result, whatever `auto_commit` was:**
-a task is not done until its diff is committed (`rules/core/git-concurrency.mdc`
+a task is not done until its diff is committed (`rules/process/git-concurrency.mdc`
 rule 4, "Reporting Back"). As soon as a result is accepted (`STATUS: DONE` or
 `DONE_WITH_CONCERNS`), take its reported `files_modified`/`files_created`/
 `files_deleted` from the result file and commit the ones git still shows as
@@ -1458,7 +1458,7 @@ keryx job step <job-name> perf-check --status completed|skipped --reason "<resul
 
 ### 2.8.3 Step: SKILL LEARNING (conditional)
 
-Close the self-learning loop (see `rules/core/skill-lifecycle.mdc`). Collect the
+Close the self-learning loop (see `rules/process/skill-lifecycle.mdc`). Collect the
 learning signals produced upstream:
 - `skill_drift` fields from each task-implementer result (`stale:`/`missing:`).
 - the `## Skill Learning` block from `review-orchestrator`.
@@ -1474,7 +1474,7 @@ ELSE for each flagged project-skill:
        and paste the `model` block into the dispatch. The command names no model:
        it ranks what the provider reports at runtime, and when it cannot rank
        anything it prints `inherit: true`, which means the dispatch runs on the
-       session model. See rules/core/model-selection.mdc for what the tiers mean.
+       session model. See rules/process/model-selection.mdc for what the tiers mean.
      - Command: keryx skills learn --from-review <review-report-path> \
                   --skill <module>/<skill>
        (or --from-test / --from-failure when the signal came from verification)
@@ -1805,7 +1805,7 @@ a resumed session does not depend on remembering where it was.
 
 ## Interpreting Subagent Results
 
-**Rule:** `rules/core/subagent-status-protocol.md`
+**Rule:** `rules/process/subagent-status-protocol.md`
 
 All subagents dispatched by this orchestrator MUST begin their final response with `STATUS: <STATUS>`. The orchestrator reads this line first and routes accordingly.
 
@@ -1813,7 +1813,7 @@ All subagents dispatched by this orchestrator MUST begin their final response wi
 
 **IF A SUBAGENT DOES NOT START WITH `STATUS:`, TREAT IT AS `NEEDS_CONTEXT` AND REQUEST A PROPERLY FORMATTED RESPONSE**
 
-Do not attempt to infer status from prose. Do not trust a response that "looks fine" but lacks the status line. Run one explicit retry: "Your response did not start with STATUS: <STATUS>. Please reformat using the subagent status protocol (rules/core/subagent-status-protocol.md) and resend your result."
+Do not attempt to infer status from prose. Do not trust a response that "looks fine" but lacks the status line. Run one explicit retry: "Your response did not start with STATUS: <STATUS>. Please reformat using the subagent status protocol (rules/process/subagent-status-protocol.md) and resend your result."
 
 ### How to handle each status
 
@@ -1855,7 +1855,7 @@ Do not accept this. A subagent that ignores the status protocol is unpredictable
 
 ## Constructing Subagent Context
 
-**Rule:** `rules/core/subagent-context-construction.md`
+**Rule:** `rules/process/subagent-context-construction.md`
 
 Every prompt dispatched to a subagent must be **explicitly constructed** by the orchestrator. Subagents do not inherit session context, job state, or prior agent output — they only know what the orchestrator tells them.
 
@@ -1884,7 +1884,7 @@ Task({
 
     ## Constraints
     - Do NOT modify <file or pattern>
-    - <other hard stops>
+    - Agent conduct (mandatory): <the "Dispatch form" line of .metaproject/rules/process/agent-conduct.mdc, verbatim>; then <other hard stops>
 })
 ```
 

@@ -100,7 +100,7 @@ Step 0 runs on **every** round. Step 14 runs **once**, after the last one. They 
 
 ### Step 6 — the model is computed, not chosen
 
-Before dispatching each reviewer, run `keryx review tier` with the signals you hold (`--scope`, `--findings`, `--diff-lines`, `--fix-attempt`, `--verifier`, `--security`, `--forced-strategy-change`) and paste the `model` block it prints into that dispatch. The tier comes from the command, not from reading `rules/core/model-selection.mdc`.
+Before dispatching each reviewer, run `keryx review tier` with the signals you hold (`--scope`, `--findings`, `--diff-lines`, `--fix-attempt`, `--verifier`, `--security`, `--forced-strategy-change`) and paste the `model` block it prints into that dispatch. The tier comes from the command, not from reading `rules/process/model-selection.mdc`.
 
 It names a model only if you gave it your session (`--session-provider`/`--session-model` or `KERYX_SESSION_*`) and discovery found another. Otherwise it prints `inherit: true` with the tier — **adaptive**: pick your own runtime's model for that tier (`standard` = your session model; `light`/`deep` = your runtime's lighter/most capable class if its dispatch tool offers one, else the session model). A model id never goes into a dispatch by hand.
 
@@ -1162,6 +1162,7 @@ skill_path: <absolute path of <path>/SKILL.md — project reviewers only; omit f
 scope_mode: diff | path
 context_doc: <path or empty>
 issue_url: <url or empty>
+conduct: <the "Dispatch form" line of .metaproject/rules/process/agent-conduct.mdc, verbatim>
 model: <the `model` block `keryx review tier` printed for this dispatch — paste verbatim>
 budget:
   max_prompt_tokens: <number or null>
@@ -1177,9 +1178,7 @@ target_path: <resolved path or file list>
 file_contents: <bounded file contents relevant to this reviewer>
 ```
 
-Each reviewer must return a `REVIEW_RESULT` object matching `.metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json`, followed by a concise markdown summary. The orchestrator must reject or normalize free-form reports before consolidation.
-
-**Important for path mode:** instruct each reviewer to check the **entire file**, not just changes. The scope report should say "Path: `<TARGET_PATH>`" instead of a branch/merge-base.
+Each reviewer must return a `REVIEW_RESULT` object matching `.metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json`, followed by a concise markdown summary. The orchestrator must reject or normalize free-form reports before consolidation. **Important for path mode:** instruct each reviewer to check the **entire file**, not just changes. The scope report should say "Path: `<TARGET_PATH>`" instead of a branch/merge-base.
 
 ## Scope Boundaries
 
@@ -1308,13 +1307,7 @@ inventing a fifth level to express it would put us back where we started.
 
 ### Shared laws (every reviewer)
 
-1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot name the input, call, or condition that reaches the code, you have an observation, not a finding. Report it as `info` and say what would settle it.
-2. **Never flag the theoretical.** The path you describe must exist in the code under review. Do not report a safe API because it could be misused, or a pattern because it is often wrong elsewhere.
-3. **One finding per class, not one per occurrence.** When the same shape appears at several sites, report it once and list every site. Ten findings that are one finding hide the other nine problems.
-4. **A deliberate choice is not a defect until its reason is read and shown wrong.** An explicit override, suppression or exemption, a comment or commit giving a reason, or a sibling doing the same is a decision: read its reason (the comment, `git log -L` or `git blame`, the sibling) before you report it, and report it only when you can show that reason wrong. A project rule is checked against accepted platform practice and its known exceptions before a deviation from it is reported.
-
-`review-security-code` carries a fifth — a finding that claims attacker impact states its vector; one without a vector
-is rated by trigger and outcome — which does not generalise and stays there.
+Read the review activity rule before the code: `.metaproject/rules/project/activity/review.mdc` when the project keeps its own, else `.metaproject/rules/activity/review.mdc`. It holds what every reviewer applies and this file does not restate: scope (diff mode: the change; path mode: the whole file), the four shared laws, `info`, one finding per defect across lenses, and where severity comes from.
 
 ## Finding Format
 
@@ -1465,7 +1458,7 @@ not a table cell.
 ## Skill Learning Handoff
 
 After findings are consolidated, decide whether any of them should re-train a
-project-skill (see `rules/core/skill-lifecycle.mdc`). A review is the strongest
+project-skill (see `rules/process/skill-lifecycle.mdc`). A review is the strongest
 learning signal: a finding that a project-skill *should have prevented* means the
 skill is stale or incomplete.
 

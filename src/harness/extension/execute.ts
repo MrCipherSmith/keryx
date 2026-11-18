@@ -17,6 +17,7 @@
 // Fail-closed at every gate. Deterministic: the only non-determinism is the
 // injected `deps.idSeq`/`deps.clock` (no `Date.now`/`Math.random`/network/fs
 // mutation). This module NEVER writes flow.json — the parent owns completion.
+import { AGENT_CONDUCT_DISPATCH_CONSTRAINT } from "../../lib/agent-conduct";
 import { buildChildDispatchExtension, parseChildResult } from "../child/contract";
 import type { ChildContractExtension, ParsedChildResult } from "../child/contract";
 import type { BudgetReservation } from "../child/isolation";
@@ -137,7 +138,7 @@ export function dispatchExtension(
     acceptance_criteria: [...input.acceptanceCriteria],
     context_refs: [],
     files_to_read: [],
-    constraints: [],
+    constraints: [AGENT_CONDUCT_DISPATCH_CONSTRAINT],
     allowed_actions: [...input.capabilityGrant.capabilities],
     output_contract: {
       schema: "subagent-result.schema.json",

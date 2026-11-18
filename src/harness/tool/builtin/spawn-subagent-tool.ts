@@ -7,6 +7,7 @@
 //
 // Risk: `delegate` (agent driver requires approval when an approver is present).
 
+import { AGENT_CONDUCT_PROMPT_BLOCK } from "../../../lib/agent-conduct";
 import { callDiagnostics } from "../../../lib/call-diagnostics";
 import { tracePhase } from "../../../lib/phase-trace";
 import { createHash, randomUUID } from "node:crypto";
@@ -2219,7 +2220,8 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           "spending rounds probing the same dead end. When a tool result says your budget is nearly " +
           "spent, stop exploring and return your result. If a limit is reached you get one final round " +
           "in which the only tool is submit_result — use it to hand back a partial result. " +
-          "End with a short factual summary the parent can use.",
+          "End with a short factual summary the parent can use.\n\n" +
+          AGENT_CONDUCT_PROMPT_BLOCK,
         idSeq: () => idSeq(),
         // Flow 347 T17: the child's OWN control-nudge nonce, never the parent's —
         // a child that echoes its nudges back cannot hand the parent a marker

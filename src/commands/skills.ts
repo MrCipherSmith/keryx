@@ -29,6 +29,7 @@ import {
   uninstallInstall,
   HARNESS_IDS,
   SUPPORTED_TARGETS,
+  type ApplySkippedFile,
   type HarnessId,
   type InstallPlan,
 } from "../gdskills/manifest";
@@ -630,12 +631,13 @@ async function installFromManifest(opts: {
   } else {
     printInstallPlanHuman(plan);
     console.log(`  ${style.green(symbols.ok)} Wrote ${result.written.length} file(s) for target "${plan.target}".`);
-    if (result.skipped.length > 0) {
-      console.log("Skipped (existing file not recorded in install-state, or drifted — rerun with --force to overwrite):");
-      for (const skipped of result.skipped) {
-        console.log(`- ${skipped.path}: ${skipped.reason}`);
-      }
+    if (result.alreadyPresent.length > 0) {
+      console.log(
+        `  ${style.green(symbols.ok)} ${result.alreadyPresent.length} file(s) already present with the bundled content ` +
+          "(written by keryx init/update) — left alone and not recorded, so uninstall will not remove them.",
+      );
     }
+    for (const line of renderSkippedInstallFiles(result.skipped, style.cyan)) console.log(line);
     if (result.errors.length > 0) {
       console.log("Errors:");
       for (const error of result.errors) {
@@ -644,6 +646,34 @@ async function installFromManifest(opts: {
     }
   }
   if (!result.ok) process.exitCode = 1;
+}
+
+/**
+ * The skipped files of a manifest install, in two groups (R3-1): a rule-layer
+ * file `keryx init`/`update` publish is fixed by `keryx update`; any other by
+ * `--force`. Exported so the grouping is pinned by a test.
+ */
+export function renderSkippedInstallFiles(
+  skipped: readonly ApplySkippedFile[],
+  highlight: (text: string) => string = (text) => text,
+): string[] {
+  const keryxPublished = skipped.filter((file) => file.keryxPublished === true);
+  const others = skipped.filter((file) => file.keryxPublished !== true);
+  const lines: string[] = [];
+  if (keryxPublished.length > 0) {
+    lines.push(
+      `Skipped (keryx init/update publish these and they differ from this keryx's copy — an older version's or a local edit; run ${highlight("keryx update")} first, then re-run — it overwrites local edits, so move yours to rules/project/ or project-skills/ first):`,
+    );
+    lines.push(...keryxPublished.map((file) => `- ${file.path}`));
+    if (keryxPublished.some((file) => file.path.startsWith(".metaproject/skills/"))) {
+      lines.push("  A skill that still differs after keryx update is not in its profile: re-run with --force (the file stays unrecorded).");
+    }
+  }
+  if (others.length > 0) {
+    lines.push("Skipped (existing file not recorded in install-state, or drifted — rerun with --force to overwrite):");
+    lines.push(...others.map((file) => `- ${file.path}: ${file.reason}`));
+  }
+  return lines;
 }
 
 async function doctorSkillsCommand(args: string[]): Promise<void> {
@@ -723,6 +753,12 @@ async function uninstallSkillsCommand(args: string[]): Promise<void> {
       console.log(`  ${style.red(symbols.cross)} ${result.error}`);
     }
     console.log(`  ${style.green(symbols.ok)} Removed ${result.removed.length} file(s).`);
+    if (result.keptShared !== undefined) {
+      console.log("Kept (another owner holds them — another installed module, or keryx init/update):");
+      for (const kept of result.keptShared) {
+        console.log(`- ${kept.path}: ${kept.reason}`);
+      }
+    }
     if (result.diffs.length > 0) {
       console.log("Force-removed drifted files:");
       for (const diff of result.diffs) {
@@ -2209,7 +2245,7 @@ Usage:
   keryx skills sync --runtime <runtime> --target <dir> [--dry-run] [--json]
   keryx skills sync --runtime <runtime> --global [--dry-run] [--json]
 
-Global sync mapping (rules/core/skills-storage-workflow.mdc):
+Global sync mapping (rules/process/skills-storage-workflow.mdc):
 ${mapping}
 
 Notes:

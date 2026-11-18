@@ -1,0 +1,138 @@
+---
+description: "Defines Metaproject requirements package structure, versioning, verification and review rules."
+alwaysApply: false
+---
+
+# Requirements Package Standard
+
+## Purpose
+
+Use this rule when creating or updating a requirements package under
+`docs/requirements/<module-or-topic>/`.
+
+## Required Core Files
+
+Every module-level documentation package must contain:
+
+```text
+docs/requirements/<name>/
+  README.md
+  prd.md
+  specification.md
+```
+
+Optional files are added only when the topic needs them:
+
+```text
+brainstorm.md
+policies.md
+agent-protocol.md
+ci-protocol.md
+artifact-lifecycle.md
+metrics-and-validation.md
+implementation-plan.md
+schemas/*.json
+```
+
+## Required Metadata
+
+Every Markdown document must include:
+
+```markdown
+Version: x.y.z
+```
+
+The field must be directly under the H1. Increment the version whenever the
+document changes.
+
+## README Contract
+
+`README.md` must state:
+
+- package purpose;
+- current status;
+- document index;
+- scope and non-goals;
+- related modules.
+
+## PRD Contract
+
+`prd.md` must state:
+
+- problem;
+- goal;
+- users;
+- requirements, each carrying a verification field (see Verification Field below);
+- success criteria, split into two lists (see Success Contract below);
+- risks;
+- recommendation.
+
+### Success Contract
+
+The PRD's success criteria are two lists, never one:
+
+- **Release criteria** are checkable when the work ships: a test, a command, a
+  file, a count. Each is something a release can be blocked on.
+- **Outcome criteria** are what should be true some time after release: adoption,
+  a measured change, a behavior seen in use. Each outcome criterion either names
+  the observation that would confirm it (what is looked at, where, and when) or
+  declares `not measured — <reason>`.
+
+An outcome criterion with neither an observation nor a `not measured — <reason>`
+is not a criterion. A list whose every entry is `not measured` is acceptable: it
+is honest. A PRD with no outcome list at all is not.
+
+## Specification Contract
+
+`specification.md` must state:
+
+- module identity;
+- storage structure;
+- manifest/config shape;
+- CLI or skill surface;
+- data contracts;
+- integration points;
+- acceptance criteria.
+
+### Verification Field
+
+Every requirement in the PRD (each `R<n>` under Requirements) carries one verification field, in the
+same vocabulary a flow criterion's trailing marker uses:
+
+```markdown
+Verification: exec `<command>`            # a command whose exit code decides it
+Verification: invariant `<command>`       # a command that must keep passing
+Verification: judged                      # a person reads the evidence
+Verification: none — <reason>             # honestly unverifiable, with the reason
+```
+
+`exec` and `invariant` name a backticked command; `none` names its reason after
+an em dash. A requirement with no field is a defect, not a `none`.
+
+## Verification Contract
+
+Before finishing:
+
+- verify required files exist;
+- verify all Markdown files have `Version`;
+- verify README links to all package files;
+- verify schemas are referenced from specification when present;
+- verify status is honest: `draft`, `spec ready`, `implemented`, or `future`;
+- verify every PRD requirement carries a `Verification:` field, and
+  fail the package when one does not, naming that requirement;
+- verify the PRD has both a release-criteria list and an outcome-criteria list,
+  and fail the package when the outcome list is missing (an outcome list whose
+  entries are all `not measured — <reason>` passes);
+- update `docs/requirements/roadmap.md` when the package represents a module or
+  standard capability.
+
+## Review Contract
+
+Documentation review must check:
+
+- completeness against this rule;
+- contradictions across README/PRD/spec;
+- unsupported implementation claims;
+- missing integration points;
+- stale roadmap or version references;
+- unsafe overpromising versus current implementation.

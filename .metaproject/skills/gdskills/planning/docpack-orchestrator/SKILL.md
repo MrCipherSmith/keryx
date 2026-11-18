@@ -32,7 +32,7 @@ current codebase and produce architecture/onboarding/developer documentation.
 
 When a USER runs this orchestrator directly (not as a dispatched subagent), at
 the start ask "Collect execution statistics for this run? (yes/no)" per
-`.metaproject/rules/core/execution-metrics.md`. If yes, append the
+`.metaproject/rules/process/execution-metrics.md`. If yes, append the
 `## Execution Metrics` section at the end and save it under the docpack output
 dir. Never ask or emit it when dispatched as a subagent. Plan bridge: publish `phase-0`…`phase-5` with `plan_set`/`plan_update`, and hold them `proposed` while Phase 0's location question is open — see the `session-plan-bridge` rule.
 
@@ -41,7 +41,7 @@ dir. Never ask or emit it when dispatched as a subagent. Plan bridge: publish `p
 | # | Law |
 |---|---|
 | 1 | Never create a single loose doc when a package is needed. |
-| 2 | Always follow `rules/core/requirements-package-standard.mdc`. |
+| 2 | Always follow `rules/process/requirements-package-standard.mdc`. |
 | 3 | Every Markdown doc must have `Version`. |
 | 4 | README, PRD and specification are required for module packages. |
 | 5 | Verification and documentation review are mandatory before final output. |

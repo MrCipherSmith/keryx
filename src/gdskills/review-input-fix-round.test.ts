@@ -9,6 +9,7 @@
 // The requirement is conditional: a first-pass review has no prior findings and
 // must not be forced to invent an empty array's worth of ceremony.
 
+import { AGENT_CONDUCT_DISPATCH_CONSTRAINT } from "../lib/agent-conduct";
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -37,6 +38,7 @@ function baseInput(): Record<string, unknown> {
       token_policy: { context_mode: "light", omissions: [] },
     },
     reviewer: "review-security-code",
+    conduct: AGENT_CONDUCT_DISPATCH_CONSTRAINT,
     scope_mode: "diff",
     model: {
       tier: "standard",

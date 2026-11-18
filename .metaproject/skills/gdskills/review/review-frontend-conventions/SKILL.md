@@ -58,14 +58,14 @@ project-specific guide was found.
 
 ### TypeScript
 
-- Avoid broad `as` casts. Prefer type guards, discriminated unions, and precise types. `any`, `!` and the `I` prefix are `.metaproject/rules/core/code-style-patterns.mdc` Rule 8.
+- Avoid broad `as` casts. Prefer type guards, discriminated unions, and precise types. `any` and `!` are `.metaproject/rules/stacks/ts-js-node/coding-style.mdc` Review severities; the `I` prefix is `.metaproject/rules/stacks/react/code-style-patterns.mdc` Rule 8.
 - Keep tests and stories typed unless intentionally exercising invalid edge cases.
 - Follow local React type import conventions consistently.
 - Write new code in the direction of stricter compiler settings.
 
 ### React Components and State Stores
 
-Components follow `.metaproject/rules/core/code-style-patterns.mdc` (reactive wrapper, thin components, where state lives, effects and cleanup, props naming) and stores follow `.metaproject/rules/core/mobx-store-template.mdc` (naming and file casing, reactivity in the constructor, member order, `@action.bound` on public UI-called methods only, actions around async mutations). Each takes its severity from that rule's **Review severities** table, and a local guide that is stricter wins. Local `useState` for UI-only state and a memo over non-store values are correct. Beyond the rules:
+Components follow `.metaproject/rules/stacks/react/code-style-patterns.mdc` (reactive wrapper, thin components, where state lives, effects and cleanup, props naming) and stores follow `.metaproject/rules/stacks/mobx/mobx-store-template.mdc` (naming and file casing, reactivity in the constructor, member order, `@action.bound` on public UI-called methods only, actions around async mutations). Each takes its severity from that rule's **Review severities** table, and a local guide that is stricter wins. Local `useState` for UI-only state and a memo over non-store values are correct. Beyond the rules:
 
 - Derived serializable state has a single source of truth such as `currentState` when that is the
   local pattern.
@@ -82,7 +82,7 @@ Components follow `.metaproject/rules/core/code-style-patterns.mdc` (reactive wr
 
 ### Stories and Tooling
 
-- New reusable UI surfaces have stories or examples matching local standards; which states they cover is `.metaproject/rules/core/storybook-guidelines.mdc` Rule 2.
+- New reusable UI surfaces have stories or examples matching local standards; which states they cover is `.metaproject/rules/stacks/storybook/storybook-guidelines.mdc` Rule 2.
 - Wrapper components expose plain props for controls when the primary component is store-only.
 - Treat unused-code tools as signals: preserve intentional public APIs with narrow ignores rather
   than deleting documented runtime/story/test entrypoints.
@@ -93,15 +93,7 @@ Components follow `.metaproject/rules/core/code-style-patterns.mdc` (reactive wr
 
 ### Shared laws (every reviewer)
 
-1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot name the input, call, or condition that reaches the code, you have an observation, not a finding. Report it as `info` and say what would settle it.
-2. **Never flag the theoretical.** The path you describe must exist in the code under review. Do not report a safe API because it could be misused, or a pattern because it is often wrong elsewhere.
-3. **One finding per class, not one per occurrence.** When the same shape appears at several sites, report it once and list every site. Ten findings that are one finding hide the other nine problems.
-4. **A deliberate choice is not a defect until its reason is read and shown wrong.** An explicit override, suppression or exemption, a comment or commit giving a reason, or a sibling doing the same is a decision: read its reason (the comment, `git log -L` or `git blame`, the sibling) before you report it, and report it only when you can show that reason wrong. A project rule is checked against accepted platform practice and its known exceptions before a deviation from it is reported.
-
-Severity levels are defined once, in `review-orchestrator/SKILL.md` →
-**Severity (canonical)**. This reviewer does not restate them: `blocker` is the
-four merge-blocking shapes named there and nothing else, and the `major`/`minor`
-boundary is the trigger-and-outcome test.
+Read the review activity rule before the code: `.metaproject/rules/project/activity/review.mdc` when the project keeps its own, else `.metaproject/rules/activity/review.mdc`. It holds what every reviewer applies and this file does not restate: scope (diff mode: the change; path mode: the whole file), the four shared laws, `info`, one finding per defect across lenses, and where severity comes from.
 
 ---
 

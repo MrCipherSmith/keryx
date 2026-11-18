@@ -1,3 +1,4 @@
+import { AGENT_CONDUCT_PROMPT_BLOCK } from "../../lib/agent-conduct";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { loadAgentCatalog } from "../../agents/catalog";
@@ -334,6 +335,7 @@ function nativeSystemInstruction(
     `Offered tools: ${tools.length === 0 ? "none" : tools.map((tool) => tool.definition.name).join(", ")}.`,
     entity,
     skill === "" ? "" : `Selected review skill:\n\n${skill}`,
+    AGENT_CONDUCT_PROMPT_BLOCK,
   ].filter(Boolean).join("\n\n");
 }
 

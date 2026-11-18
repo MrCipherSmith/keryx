@@ -59,3 +59,21 @@ code; component composition patterns belong to the `react` pack.
 - **try/catch that only rethrows the same error unchanged**: adds a stack
   frame and nothing else; either add context (`cause`, a wrapped error
   type) or remove the try/catch.
+
+## Async and concurrency in Node.js (core `async-patterns`, `concurrency-patterns`)
+
+Canon applies: `Promise.all` / `allSettled` semantics (MDN), the Node.js "Don't Block the Event Loop" guide, `@typescript-eslint/no-floating-promises`, the `wx` open flag and `child_process` stream semantics. The principles and their severities are `core/async-patterns.mdc` and `core/concurrency-patterns.mdc`; these are their Node.js values.
+
+- **Independent awaits** (async Rule 1): if B does not depend on A, use `Promise.all`; use `Promise.allSettled` when some results are optional, and handle each rejection.
+- **Timeouts** (async Rule 2) are set with `AbortSignal.timeout(ms)`.
+- **The event loop** (async Rule 4): `JSON.parse` / `JSON.stringify` of a payload over 1MB, sync file reads in hot paths and CPU-heavy loops go to a stream, `fs.promises` or a worker thread.
+- **Lock files** (concurrency Rule 1) are taken with the `wx` open flag.
+- **Child output** (concurrency Rule 5): child stdout and stderr are read as streams into a ring buffer or a file.
+
+### Review severities (shared with reviewers)
+
+`review-logic` rates these patterns by this table. A Node.js form of a core signal (`Promise.all` over an optional call, a call with no `AbortSignal`, sync `fs` or `JSON.parse` of a large payload on a request path) is rated by the matching row of `core/async-patterns.mdc` Review severities, not here. Change a row here, never in a reviewer.
+
+| Signal | A finding when | Default | Not a finding |
+|---|---|---|---|
+| Timeout built from `AbortController` + `setTimeout` (async Rule 2) | always | `minor` | — |

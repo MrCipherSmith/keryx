@@ -6,10 +6,13 @@ import { ContainedWriteError, writeContained } from "../lib/contained-write";
 import { pathExists, toPosix } from "../lib/fs";
 import { BUNDLED_GDSKILLS } from "./catalog";
 import { bundledRulesSourcePath } from "./install";
+import { movedToPackId } from "./retired-rules";
+import { bundledPackRulesPath, bundledStacksSourcePath, stackPackInstallCommand } from "./stack-rules-install";
 import {
+  isKeryxRuleLayer,
   isRegularFile,
-  KERYX_RULES_DIR,
   literalRulePath,
+  preMoveRuleReferences,
   projectRulePath,
   resolveRuleReference,
   ruleReferences,
@@ -151,9 +154,9 @@ export function onlyOption(args: readonly string[], label: string): string[] {
  * - `imported` / `would-import` — found beside the skill's source tree
  *   (`<overlay>/rules/<ref>`) and copied to `.metaproject/rules/<ref>`.
  * - `imported-project` / `would-import-project` — the same, for a name keryx
- *   itself ships under `rules/core/`: copied to the project slot, because
- *   `keryx init`, `keryx update` and `keryx skills install` overwrite
- *   `rules/core/<name>`.
+ *   itself ships under a rule layer (`rules/core/`, `rules/process/`,
+ *   `rules/activity/`): copied to the project slot, because `keryx init`,
+ *   `keryx update` and `keryx skills install` overwrite `rules/<layer>/<name>`.
  * - `unresolved` — nowhere to take it from; the skill will cite a rule the
  *   project does not have, and `keryx review reviewers` keeps saying so.
  */
@@ -1664,14 +1667,21 @@ function versionOption(content: string): { version?: string } {
  * Only a regular file is the overlay's rule. `notRegular` is the first
  * candidate something else sits at, so a lookup that finds no file can say
  * which path was passed over.
+ *
+ * A rule keryx moved out of `core/` is cited under its new path
+ * (`canonicalRuleReference`), but an overlay written before the move keeps its
+ * copy under the old one; both are looked for, the new path first.
  */
 async function findOverlayRule(sourcePath: string, ref: string): Promise<{ found?: string; notRegular?: string }> {
+  const names = [ref, ...preMoveRuleReferences(ref)];
   let dir = path.dirname(sourcePath);
   let notRegular: string | undefined;
   for (let depth = 0; depth <= 3; depth += 1) {
-    const candidate = path.join(dir, "rules", ref);
-    if (await isRegularFile(candidate)) return { found: candidate };
-    if (notRegular === undefined && (await pathExists(candidate))) notRegular = candidate;
+    for (const name of names) {
+      const candidate = path.join(dir, "rules", name);
+      if (await isRegularFile(candidate)) return { found: candidate };
+      if (notRegular === undefined && (await pathExists(candidate))) notRegular = candidate;
+    }
     const parent = path.dirname(dir);
     if (parent === dir) break;
     dir = parent;
@@ -1789,23 +1799,24 @@ function refusedRuleRow(
  */
 type RuleDecision = { row: ImportedRule } | { placement: RulePlacement; dryRunReason?: string; gate: WriteGate };
 
-async function decideRule(
-  options: ImportProjectSkillsOptions,
-  citation: RuleCitation,
-  bundledRules: string,
-): Promise<RuleDecision> {
+async function decideRule(options: ImportProjectSkillsOptions, citation: RuleCitation): Promise<RuleDecision> {
   const base = { ref: citation.ref, citedBy: citation.citedBy };
   const resolution = await resolveRuleReference(options.projectRoot, citation.ref);
   const existing = resolution.resolved;
-  // A name keryx itself ships under rules/core is installed — and overwritten
-  // on every run — by `keryx init`, `keryx update` and `keryx skills install`.
-  // An overlay's file copied there would be silently replaced by a different
-  // file of the same name.
-  // `ruleReferences` already spelled a case variant of the directory as
-  // KERYX_RULES_DIR, so this comparison is exact.
-  const shipsWithKeryx =
-    citation.ref.startsWith(`${KERYX_RULES_DIR}/`) &&
-    (await pathExists(path.join(bundledRules, path.basename(citation.ref))));
+  // A name keryx itself ships under one of its rule layers (rules/core,
+  // rules/process, rules/activity) is installed — and overwritten on every run
+  // — by `keryx init`, `keryx update` and `keryx skills install`. An overlay's
+  // file copied there would be silently replaced by a different file of the
+  // same name.
+  // `ruleReferences` already spelled a case variant of a layer directory as
+  // keryx spells it, so this comparison is exact.
+  // A stack pack's rule (`stacks/<pack>/<name>.mdc`) is the same case: `keryx
+  // update` writes it wherever the project's stack selects the pack.
+  const layer = citation.ref.slice(0, citation.ref.indexOf("/"));
+  const pack = movedToPackId(citation.ref);
+  const shipsWithKeryx = pack !== undefined
+    ? await pathExists(path.join(bundledPackRulesPath(bundledStacksSourcePath(), pack), path.basename(citation.ref)))
+    : isKeryxRuleLayer(layer) && (await pathExists(path.join(bundledRulesSourcePath(layer), path.basename(citation.ref))));
   // Something at a candidate that is not a regular file (a directory, say) is
   // neither read nor written over: the reference stays unresolved, named by
   // path, as `keryx review reviewers` reports it, and the rest of the import
@@ -1826,8 +1837,12 @@ async function decideRule(
       // Nothing to compare it with: the project's file is the only version.
       return { row: { ...base, status: "present", existing } };
     }
+    // A pack rule installs only with its pack; plain `keryx skills install`
+    // does not add a pack the project's stack was not detected as (LS-6).
     const reason = shipsWithKeryx
-      ? "ships with keryx — run `keryx skills install` to restore it"
+      ? pack !== undefined
+        ? `ships with keryx in the ${pack} stack pack — run \`${stackPackInstallCommand(pack)}\` to install it`
+        : "ships with keryx — run `keryx skills install` to restore it"
       : notRegularFiles[0] !== undefined
         ? `${notRegularFiles[0]} is not a regular file`
         : overlayNotRegular !== undefined
@@ -1912,7 +1927,6 @@ async function decideReferencedRules(
   sources: ImportSource[],
   refusedPackages: ReadonlySet<string>,
 ): Promise<RuleDecision[]> {
-  const bundledRules = bundledRulesSourcePath();
   const decisions: RuleDecision[] = [];
   for (const citation of collectRuleCitations(sources)) {
     // A rule only refused packages cite has no reader: it is not written. One an
@@ -1923,7 +1937,7 @@ async function decideReferencedRules(
       });
       continue;
     }
-    decisions.push(await decideRule(options, citation, bundledRules));
+    decisions.push(await decideRule(options, citation));
   }
   return decisions;
 }

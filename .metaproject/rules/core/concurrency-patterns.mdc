@@ -5,11 +5,11 @@ alwaysApply: false
 
 # Concurrency Patterns
 
-Canon applies: POSIX `rename(2)` atomicity, `O_EXCL` / the Node.js `wx` open flag, and `child_process` stream semantics. This rule holds only this project's decisions for state shared by concurrent sessions and processes.
+Canon applies: POSIX `rename(2)` atomicity, `O_EXCL` exclusive create, and the runtime's child-process stream semantics. The Node.js forms are in `stacks/ts-js-node/patterns.mdc`. This rule holds only this project's decisions for state shared by concurrent sessions and processes.
 
 ## Rules
 
-1. **A lock file is taken by exclusive create** (`wx`), never check-then-create. It is released in `finally`, and a stale lock is recovered by the holder's PID or age without taking a live holder's lock.
+1. **A lock file is taken by exclusive create** (`O_EXCL`), never check-then-create. It is released in `finally`, and a stale lock is recovered by the holder's PID or age without taking a live holder's lock.
 2. **A shared state file is written to a temp file in the same directory and renamed over the target.** A read-modify-write of it holds a lock (Rule 1).
 3. **One JSONL record is one write.** A record is serialised whole, with its newline, and appended in a single call.
 4. **Child-process fan-out is bounded.** One child per file, flow, finding or input item goes through a concurrency limit; default 4.

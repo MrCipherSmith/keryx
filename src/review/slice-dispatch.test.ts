@@ -1,3 +1,4 @@
+import { AGENT_CONDUCT_DISPATCH_CONSTRAINT } from "../lib/agent-conduct";
 import { describe, expect, test } from "bun:test";
 import { checkDispatch } from "./dispatch-check";
 import { MAX_RETRY_ROUNDS, type RetryState, notRunLine, planRetry, readSliceIds } from "./retry-plan";
@@ -12,6 +13,7 @@ function payload(overrides: Record<string, unknown> = {}): Record<string, unknow
       token_policy: { context_mode: "light", omissions: [] },
     },
     reviewer: "review-logic",
+    conduct: AGENT_CONDUCT_DISPATCH_CONSTRAINT,
     scope_mode: "diff",
     model: { tier: "standard", tier_reasons: ["base"], tier_resolution: "session-fallback", model_discovery: {}, inherit: true },
     budget: { max_findings: 10 },

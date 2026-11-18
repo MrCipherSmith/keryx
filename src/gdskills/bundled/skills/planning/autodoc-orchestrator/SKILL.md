@@ -37,7 +37,7 @@ with no human gates.
 
 When a USER runs this orchestrator directly (not as a dispatched subagent), at
 the start ask "Collect execution statistics for this run? (yes/no)" per
-`.metaproject/rules/core/execution-metrics.md`. If yes, append the
+`.metaproject/rules/process/execution-metrics.md`. If yes, append the
 `## Execution Metrics` section at the end and save it under the run's artifact
 dir (`.metaproject/data/gdwiki/metrics/` or the docs output dir). Never ask or
 emit it when dispatched as a subagent.
@@ -145,7 +145,7 @@ Agent({
   description: "<phase>: <task>",
   prompt: |
     ## Your Role
-    You are <agent_role>. Load skill: skills/<skill-name>/SKILL.md
+    You are <agent_role>. Load skill: skills/<skill-name>/SKILL.md. Agent conduct (mandatory): <the "Dispatch form" line of .metaproject/rules/process/agent-conduct.mdc, verbatim>
 
     ## Task
     <specific task>

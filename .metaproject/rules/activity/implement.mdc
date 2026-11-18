@@ -1,0 +1,55 @@
+---
+description: "How an implementer works, whatever the stack: read before writing, the red-green-refactor order and its report, change scope, back-compat, and the bar \"done\" points at. Use when implementing a task, fixing a bug or refactoring."
+alwaysApply: false
+---
+
+# Activity: implement
+
+How a writer applies the core, language and framework rules to a change. This
+rule sets order, scope and method only. It rates nothing: the coding rules the
+context resolver returns for the task are the standard the change is written
+against, and the one it is reviewed against.
+
+## Before the first line
+
+Read all specified files and the context document before writing a single line
+of code. Module patterns and conventions only emerge from reading the actual
+files, not the description. Follow the project's existing code patterns.
+
+## Order of work
+
+1. **RED.** Write the failing test first, from the task's `acceptance_criteria` (each criterion maps to at least one test; use `test_case_specs` or run `tests-creator` when none exist). Run it and confirm it fails for the right reason: a test that passes before the implementation is broken.
+2. **GREEN.** Write the minimal code that passes it. Run the tests after each logical chunk.
+3. **REFACTOR.** Clean up with the suite green; re-run it after every step.
+4. **Report.** The full suite (`bun test`, `npm test`, `pytest` or the project's equivalent) passes with 0 failures before `STATUS: DONE`.
+
+Output contract on completion:
+
+```
+tests_written: <N>
+tests_passing: <N>
+tests_failing: 0
+coverage_notes: "<which acceptance criteria are covered>"
+```
+
+The iron laws of this order live in `rules/core/tdd-workflow.mdc`; how the tests
+themselves are designed is `rules/activity/test.mdc`.
+
+## Change scope
+
+- Do not modify files outside the task's target scope unless absolutely necessary (e.g., shared type file).
+- REFACTOR cleans up the code this change touched. A cleanup of code the task does not touch is a change of its own: name it in the report instead of folding it in.
+
+## Back-compat
+
+A change to something other code relies on — an exported signature, a CLI flag,
+a file or wire format, a stored field — keeps the old callers working. Where a
+rule allows a break (a new major version, a deprecation window), follow that
+rule, and name in the report every caller the change breaks.
+
+## Done
+
+A change is done when it clears the bar in `rules/core/definition-of-done.mdc`.
+The rules it must satisfy are the ones the resolver listed for the task, this
+one included. A deviation from one of them is stated in the report, not left for
+review to find; stating it does not make it acceptable.
