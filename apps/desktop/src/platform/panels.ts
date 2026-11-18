@@ -14,6 +14,9 @@ export interface PtyTab {
 export type PtyEvent = { kind: "data"; data: string } | { kind: "exit"; code: number | null };
 
 export const ptyOpen = (cwd: string, cols: number, rows: number) => invoke<PtyTab>("pty_open", { cwd, cols, rows });
+/** A tab whose process is `argv` itself (`/delegate`'s vendor CLI, D-14), in `cwd`. Rejects when the program cannot start. */
+export const ptyOpenRun = (cwd: string, argv: readonly string[], title: string, cols: number, rows: number) =>
+  invoke<PtyTab>("pty_open_run", { cwd, argv, title, cols, rows });
 export const ptyList = () => invoke<PtyTab[]>("pty_list");
 export const ptyWrite = (id: number, data: string) => invoke<void>("pty_write", { id, data });
 export const ptyResize = (id: number, cols: number, rows: number) => invoke<void>("pty_resize", { id, cols, rows });
@@ -27,6 +30,10 @@ export async function ptyAttach(id: number, onEvent: (e: PtyEvent) => void): Pro
   channel.onmessage = onEvent;
   return invoke<PtyTab>("pty_attach", { id, onEvent: channel });
 }
+
+/** A tab opened by `ptyOpenRun` ended; delivered whether or not its view is on screen. */
+export const onPtyExit = (handler: (e: { id: number; code: number | null }) => void): Promise<Unlisten> =>
+  listen<{ id: number; code: number | null }>("panel://pty-exit", handler);
 
 /** A tab the agent opened through the panel MCP server. */
 export const onAgentTerminal = (handler: (tab: PtyTab) => void): Promise<Unlisten> => listen<PtyTab>("panel://terminal", handler);

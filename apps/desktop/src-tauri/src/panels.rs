@@ -48,7 +48,7 @@ fn sink(channel: Channel<PtyEvent>) -> crate::pty::Sink {
 pub fn open_tab(app: &AppHandle, window: &str, root: &Path, owner: Owner, cols: u16, rows: u16) -> Result<TabInfo, String> {
     let env = app.state::<AppState>().environment().clone();
     let env = if env.is_empty() { std::env::vars().collect() } else { env };
-    let pty = app.state::<PtyManager>().open(OpenSpec { window, owner, cwd: root, env: &env, cols, rows, program: None })?;
+    let pty = app.state::<PtyManager>().open(OpenSpec { window, owner, cwd: root, env: &env, cols, rows, program: None, title: None, on_exit: None })?;
     let info = pty.info();
     if owner == Owner::Agent {
         let _ = app.emit_to(window, "panel://terminal", &info);
@@ -70,6 +70,56 @@ pub async fn pty_open(
     tauri::async_runtime::spawn_blocking(move || open_tab(&app, &label, &root, Owner::User, cols, rows))
     .await
     .map_err(|e| e.to_string())?
+}
+
+/// Exit of a tab opened by `pty_open_run`, announced to its window.
+#[derive(serde::Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct PtyExit {
+    pub id: u64,
+    pub code: Option<u32>,
+}
+
+/// Open a tab whose process is `argv` itself (`/delegate`'s vendor CLI, D-14), in `root`, with the
+/// login-shell environment. The window gets `panel://pty-exit` when it ends, whether or not the tab is
+/// on screen. A program that cannot start is an error and no tab exists.
+pub fn open_run_tab(app: &AppHandle, window: &str, root: &Path, argv: &[String], title: &str, cols: u16, rows: u16) -> Result<TabInfo, String> {
+    let Some((program, rest)) = argv.split_first() else { return Err("Nothing to run".into()) };
+    let env = app.state::<AppState>().environment().clone();
+    let env = if env.is_empty() { std::env::vars().collect() } else { env };
+    let rest: Vec<&str> = rest.iter().map(String::as_str).collect();
+    let (hook_app, hook_window) = (app.clone(), window.to_string());
+    let pty = app.state::<PtyManager>().open(OpenSpec {
+        window,
+        owner: Owner::User,
+        cwd: root,
+        env: &env,
+        cols,
+        rows,
+        program: Some((program.as_str(), &rest)),
+        title: Some(title),
+        on_exit: Some(Box::new(move |id, code| {
+            let _ = hook_app.emit_to(hook_window.as_str(), "panel://pty-exit", &PtyExit { id, code });
+        })),
+    })?;
+    Ok(pty.info())
+}
+
+#[tauri::command]
+pub async fn pty_open_run(
+    app: AppHandle,
+    window: Window,
+    cwd: String,
+    argv: Vec<String>,
+    title: String,
+    cols: u16,
+    rows: u16,
+) -> Result<TabInfo, String> {
+    let root = project_dir(&cwd)?;
+    let label = window.label().to_string();
+    tauri::async_runtime::spawn_blocking(move || open_run_tab(&app, &label, &root, &argv, &title, cols, rows))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]

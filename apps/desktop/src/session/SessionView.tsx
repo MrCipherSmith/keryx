@@ -51,7 +51,15 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
   }, [state.sessionId]);
   const activityApi = useMemo(() => ({ request: s.rpc, extensions: s.extensions }), [s.rpc, s.extensions]);
   const activityRunning = runningSubagents(state.subagents) + state.tasks.filter(isRunning).length;
-  const showSubagent = useCallback((id: string) => setActivity({ open: true, tab: "subagents", subagentId: id }), []);
+  // A `/delegate` run in the terminal: its entry also brings up its terminal tab (when the tab is still open).
+  const focusRun = s.focusDelegateTerminal;
+  const showSubagent = useCallback(
+    (id: string) => {
+      setActivity({ open: true, tab: "subagents", subagentId: id });
+      focusRun(id);
+    },
+    [focusRun],
+  );
   const refreshTasks = useCallback(() => {
     if (state.sessionId) void s.refreshTasks(state.sessionId);
   }, [s, state.sessionId]);
@@ -161,6 +169,7 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
         if (sessionId === state.sessionId) showSubagent(id);
         else {
           pendingSubagent.current = { sessionId, id };
+          focusRun(id);
           void s.loadSession(sessionId);
         }
       }}
@@ -301,7 +310,10 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
           tab={activity.tab}
           onTab={(tab) => setActivity((a) => ({ ...a, tab }))}
           subagentId={activity.subagentId}
-          onSubagent={(subagentId) => setActivity((a) => ({ ...a, subagentId }))}
+          onSubagent={(subagentId) => {
+            setActivity((a) => ({ ...a, subagentId }));
+            if (subagentId) focusRun(subagentId);
+          }}
           onRefreshTasks={refreshTasks}
           onClose={() => setActivity((a) => ({ ...a, open: false }))}
         />

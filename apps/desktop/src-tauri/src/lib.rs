@@ -78,6 +78,7 @@ pub fn run() {
             flows::flows_watch,
             gitinfo::git_info,
             panels::pty_open,
+            panels::pty_open_run,
             panels::pty_attach,
             panels::pty_write,
             panels::pty_resize,

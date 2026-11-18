@@ -3,6 +3,7 @@
 
 import { COMMAND_METHOD, commandMeta, commandSurface, findCommand } from "../acp/commands";
 import type { AvailableCommand, CommandEffect, CommandResult, CommandView, ConfigOption, SessionModeState } from "../acp/types";
+import type { DelegateLaunch } from "./delegateTerminals";
 import type { Action, QueuedPrompt } from "./reducer";
 
 /** What only the window can do: the app's own UI. */
@@ -34,6 +35,8 @@ export interface RunDeps {
   newSession(): void;
   interrupt(): void;
   applyEffects(sessionId: string, effects: readonly CommandEffect[]): void;
+  /** `/delegate` answered `openTerminal`: open the run's tab and register it as a subagent of `sessionId`. */
+  openTerminal?(sessionId: string, launch: DelegateLaunch): void;
   ui: UiActions;
   /** Marks a command in flight for the session until the returned function is called, so keryx's mid-command questions are admitted. */
   trackCommand?(sessionId: string): () => void;
@@ -99,6 +102,8 @@ export async function runCommandLine(line: string, deps: RunDeps, opts: RunOptio
         deps.dispatch({ t: "notice", sessionId, level: "warn", text: "The goal's turn was not started: the session is busy. Send the goal as a message when it is free." });
       }
     }
+    // `/delegate`: keryx handed over the vendor CLI's argv; it runs in the app's terminal.
+    if (!refused && k?.effects?.includes("openTerminal") && k.terminal) deps.openTerminal?.(sessionId, k.terminal);
     return true;
   } catch (e) {
     return refuse(errText(e));

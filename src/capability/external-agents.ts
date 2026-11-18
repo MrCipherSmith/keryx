@@ -257,6 +257,16 @@ export function loadExternalAgentsConfig(dir?: string): ExternalAgentsConfig {
   return parseExternalAgentsConfig(loadShellConfig(dir).externalAgents);
 }
 
+/**
+ * Whether the user config never wrote `externalAgents.enabled` at all (absent block or absent key),
+ * as opposed to writing `false`. The desktop's default-on (D-14) reads only this: a stated "off"
+ * is the operator's decision and is kept. `dir` overrides the config directory (tests).
+ */
+export function externalAgentsEnabledIsUnset(dir?: string): boolean {
+  const raw = loadShellConfig(dir).externalAgents as unknown;
+  return typeof raw !== "object" || raw === null || Array.isArray(raw) || (raw as { enabled?: unknown }).enabled === undefined;
+}
+
 /** This agent's config, or the default for an id the operator never mentioned. */
 export function agentConfig(config: ExternalAgentsConfig, agentId: string): ExternalAgentConfig {
   return config.agents[agentId] ?? DEFAULT_AGENT_CONFIG;
@@ -492,6 +502,12 @@ export interface ExternalAgentsGateInput {
   readonly config?: ExternalAgentsConfig;
   /** Shell-config directory override (tests). */
   readonly configDir?: string;
+  /**
+   * The host is the desktop's built-in terminal (D-14): an `externalAgents.enabled` the operator
+   * never wrote counts as on, and a manifest that does not list the capability yet does not veto.
+   * An explicit `false` (user config) or `enabled: false` (manifest) still refuses.
+   */
+  readonly defaultOn?: boolean;
 }
 
 /** Whether the capability is available, and the reason when it is not. */
@@ -532,7 +548,9 @@ export async function resolveExternalAgentsCapability(
     };
   }
 
-  const config = input.config ?? loadExternalAgentsConfig(input.configDir);
+  let config = input.config ?? loadExternalAgentsConfig(input.configDir);
+  const implicitOn = input.defaultOn === true && !config.enabled && externalAgentsEnabledIsUnset(input.configDir);
+  if (implicitOn) config = { ...config, enabled: true };
   if (!config.enabled) {
     return {
       ok: false,
@@ -549,7 +567,7 @@ export async function resolveExternalAgentsCapability(
       reason: `this project has not enabled \`${EXTERNAL_AGENTS_CAPABILITY_ID}\`; ${ENABLE_HINT} to opt in`,
     };
   }
-  if (manifest === "unlisted") {
+  if (manifest === "unlisted" && !implicitOn) {
     return {
       ok: false,
       reason:

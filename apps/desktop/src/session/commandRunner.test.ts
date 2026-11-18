@@ -11,6 +11,7 @@ const cmd = (name: string, surface: "text" | "view" | "dialog" | "client" = "tex
 const COMMANDS = [
   cmd("tasks"),
   cmd("goal", "text", "refuse"),
+  cmd("delegate"),
   cmd("schedules", "view"),
   cmd("compact"),
   cmd("rewind", "text", "refuse"),
@@ -357,5 +358,25 @@ describe("queue state", () => {
     w = reducer(w, { t: "command", sessionId: "s1", card: { line: "/b", text: "2", refused: false, view: null } });
     w = reducer(w, { t: "command", sessionId: "s1", card: { line: "/a2", text: "3", refused: false, view: null }, replaceId: 1 });
     expect(w.convs.s1!.items.map((i) => (i.kind === "command" ? `${i.id}:${i.line}` : i.kind))).toEqual(["1:/a2", "2:/b"]);
+  });
+});
+
+describe("/delegate opens a terminal (openTerminal effect)", () => {
+  const launch = { runId: "ext:1", agentId: "claude-cli", title: "Claude · fix the build", argv: ["claude", "--", "fix the build"], cwd: "/p" };
+  const reply = (): CommandResult => ({ text: "opened\n", _meta: { keryx: { effects: ["openTerminal"], terminal: launch } } });
+
+  test("the launch keryx answered goes to openTerminal for the session the command ran in", async () => {
+    const opened: Array<[string, unknown]> = [];
+    const r = rig({ openTerminal: (s, l) => void opened.push([s, l]) }, reply);
+    expect(await runCommandLine("/delegate claude fix the build", r.deps)).toBe(true);
+    expect(opened).toEqual([["s1", launch]]);
+    expect(r.sent).toHaveLength(0);
+  });
+
+  test("a refused /delegate opens nothing", async () => {
+    const opened: unknown[] = [];
+    const r = rig({ openTerminal: (_s, l) => void opened.push(l) }, () => ({ text: "refused", _meta: { keryx: { refused: true, terminal: launch, effects: ["openTerminal"] } } }) satisfies CommandResult);
+    await runCommandLine("/delegate claude x", r.deps);
+    expect(opened).toHaveLength(0);
   });
 });

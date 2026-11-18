@@ -12,7 +12,10 @@ import {
   type LoginChallenge,
 } from "../acp/providers";
 import { acpStart, acpTransport, acpStop, listenBridge, setWindowTitle, versionCheck } from "../platform/commands";
-import { panelMcpServers } from "../platform/panels";
+import { isTauri } from "../platform/backend";
+import { onPtyExit, panelMcpServers, ptyOpenRun } from "../platform/panels";
+import { onTabClosed, showTerminalTab } from "../panels/panelBus";
+import { createDelegateTerminals, type DelegateLaunch } from "./delegateTerminals";
 import {
   canOrganizeSessions,
   hasLiveSessions,
@@ -140,6 +143,36 @@ export function useAcpSession(cwd: string) {
       rawDispatch(a);
     },
     [flushUpdates],
+  );
+
+  /** `/delegate` runs in the built-in terminal (D-14): tabs, and their subagent entries in the session's Activity list. */
+  const delegates = useMemo(
+    () =>
+      createDelegateTerminals({
+        openRun: (launch) => ptyOpenRun(launch.cwd, launch.argv, launch.title, 80, 24),
+        showTab: showTerminalTab,
+        dispatch,
+      }),
+    [dispatch],
+  );
+  useEffect(() => {
+    let live = true;
+    let off: (() => void) | null = null;
+    void onPtyExit((e) => delegates.exited(e.id, e.code)).then((u) => (live ? (off = u) : u()));
+    const offClosed = onTabClosed((id) => delegates.closed(id));
+    return () => {
+      live = false;
+      off?.();
+      offClosed();
+    };
+  }, [delegates]);
+  const openTerminal = useCallback(
+    (sessionId: string, launch: DelegateLaunch) => {
+      delegates.start(sessionId, launch).catch((e: unknown) =>
+        dispatch({ t: "notice", sessionId, level: "error", text: `Could not open the terminal: ${errMessage(e)}` }),
+      );
+    },
+    [delegates, dispatch],
   );
 
   /** Flow links waiting for keryx to store a new session (it lists one only after its first save). */
@@ -388,7 +421,8 @@ export function useAcpSession(cwd: string) {
           clientCapabilities: {
             fs: { readTextFile: true, writeTextFile: false },
             terminal: false,
-            _meta: { keryx: { askUser: true } },
+            // `terminal`: /delegate runs the vendor CLI in the side panel's terminal (D-14); only the app has one.
+            _meta: { keryx: { askUser: true, ...(isTauri() ? { terminal: true } : {}) } },
           },
           clientInfo: { name: "keryx-desktop", title: "Keryx", version: "0.1.0" },
         });
@@ -663,13 +697,14 @@ export function useAcpSession(cwd: string) {
           newSession: () => void newSession(),
           interrupt: cancel,
           applyEffects,
+          openTerminal,
           ui,
           trackCommand: (target) => l.reg.beginCommand(target),
         },
         opts,
       );
     },
-    [dispatch, sendPrompt, newSession, cancel, applyEffects],
+    [dispatch, sendPrompt, newSession, cancel, applyEffects, openTerminal],
   );
 
   /** Archive/unarchive or pin/unpin a stored session. Errors show as a banner. */
@@ -755,6 +790,8 @@ export function useAcpSession(cwd: string) {
     hideFatal: () => setFatalHidden(true),
     sendPrompt,
     runCommand,
+    /** Show a `/delegate` run's terminal tab; false when it is closed (or not a terminal run). */
+    focusDelegateTerminal: (runId: string): boolean => delegates.focus(runId),
     rpc,
     extensions,
     onLoginChallenge,

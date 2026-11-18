@@ -19,6 +19,8 @@ export interface Subagent {
   model?: string;
   task?: string;
   runtime?: string;
+  /** Registry id of an external agent (`claude-cli`). */
+  agentId?: string;
   parentToolCallId?: string;
   entries: SubagentEntry[];
 }
@@ -33,6 +35,7 @@ export type SubagentEvent =
       model?: string;
       task?: string;
       runtime?: string;
+      agentId?: string;
       parentToolCallId?: string;
     }
   | { kind: "log"; id: string; entry: SubagentEntry };
@@ -66,6 +69,7 @@ export function applySubagentEvent(list: readonly Subagent[], ev: unknown): read
       model: str(e.model) ?? prev.model,
       task: str(e.task) ?? prev.task,
       runtime: str(e.runtime) ?? prev.runtime,
+      agentId: str(e.agentId) ?? prev.agentId,
       parentToolCallId: str(e.parentToolCallId) ?? prev.parentToolCallId,
     };
   } else if (e.kind === "log") {

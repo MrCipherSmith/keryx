@@ -74,7 +74,7 @@ import { join as joinPath } from "node:path";
 import type { ScheduleSlashDeps } from "../tui/schedule-command";
 import type { ShellView } from "./shell-views";
 import { runAcpGoal } from "./shell-goal";
-import type { SessionExternalRuns } from "./shell-delegate";
+import type { DelegateTerminalLaunch, SessionExternalRuns } from "./shell-delegate";
 import type { SlateSessionRef } from "../session/slate-lifecycle";
 import { busView, editGuardView, guardView, mcpView, projectContextView, runJevProfile, runRouting } from "./shell-views-config";
 import { runAc, runCi, runConform, runDecisions, runReadOnlyView, runReview } from "./shell-views-review";
@@ -82,7 +82,7 @@ import { runAutoReview, runGovernance, runSchedule, runSchedules, runTask, runTr
 import { refusal, viewOutcome } from "./shell-views-outcome";
 
 /** What a command changed, so the client refreshes without parsing text (§3.9.1). */
-export type ShellCommandEffect = "mode" | "model" | "config" | "plan" | "transcript" | "tasks" | "startTurn";
+export type ShellCommandEffect = "mode" | "model" | "config" | "plan" | "transcript" | "tasks" | "startTurn" | "openTerminal";
 
 export interface ShellCommandOutcome {
   readonly text: string;
@@ -93,6 +93,8 @@ export interface ShellCommandOutcome {
   readonly view?: ShellView;
   /** With the `startTurn` effect: the exact turn text the client sends as `session/prompt` (`/goal`). */
   readonly prompt?: string;
+  /** With the `openTerminal` effect: the interactive run the client starts in its terminal (`/delegate`, D-14). */
+  readonly terminal?: DelegateTerminalLaunch;
 }
 
 /** The session a transcript command works on: the live history (mutated in place) and what persists it. */
@@ -473,7 +475,8 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
   },
   delegate: async (host, args) => {
     const answer = await host.externalRuns().delegate(args);
-    return answer.refused === true ? refused(answer.text.trim()) : text(answer.text);
+    if (answer.refused === true) return refused(answer.text.trim());
+    return answer.terminal !== undefined ? { text: answer.text, effects: ["openTerminal" as const], terminal: answer.terminal } : text(answer.text);
   },
   bus: async (_host, args) => {
     const sub = words(args)[0];

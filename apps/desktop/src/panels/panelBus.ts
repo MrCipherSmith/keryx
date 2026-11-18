@@ -1,6 +1,7 @@
 // Requests to the side panel from elsewhere in the window: the Run buttons (D-13).
 
 import { setPrefs } from "../lib/prefs";
+import type { PtyTab } from "../platform/panels";
 
 type RunListener = (command: string) => void;
 
@@ -23,6 +24,41 @@ export function onRunRequest(l: RunListener): () => void {
   return () => {
     if (listener === l) listener = null;
   };
+}
+
+type TabListener = (tab: PtyTab) => void;
+
+let tabListener: TabListener | null = null;
+let pendingTabs: PtyTab[] = [];
+
+/** Open the panel on Terminal and show `tab` (adding it when the panel does not list it yet), focused. */
+export function showTerminalTab(tab: PtyTab): void {
+  setPrefs({ sidePanel: "terminal" });
+  if (tabListener) tabListener(tab);
+  else pendingTabs.push(tab);
+}
+
+/** The terminal panel takes tab requests; ones made before it mounted are delivered at once. */
+export function onShowTab(l: TabListener): () => void {
+  tabListener = l;
+  const queued = pendingTabs;
+  pendingTabs = [];
+  queued.forEach((t) => l(t));
+  return () => {
+    if (tabListener === l) tabListener = null;
+  };
+}
+
+const closedListeners = new Set<(id: number) => void>();
+
+/** The user closed terminal tab `id` in the panel. */
+export function notifyTabClosed(id: number): void {
+  closedListeners.forEach((l) => l(id));
+}
+
+export function onTabClosed(l: (id: number) => void): () => void {
+  closedListeners.add(l);
+  return () => void closedListeners.delete(l);
 }
 
 const SHELL_LANGS = new Set(["bash", "sh", "zsh", "shell", "console", "shellscript", "fish", "terminal"]);

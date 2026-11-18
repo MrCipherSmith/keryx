@@ -34,6 +34,8 @@ export const EXTERNAL_AGENTS: readonly ExternalAgentEntry[] = [
     versionPattern:
       "^codex-cli (\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?)[ \\t\\r\\n]*$(?![\\s\\S])",
     knownGoodRange: { min: "0.147.0" },
+    // `codex [OPTIONS] [PROMPT]` starts the TUI on a prompt; `--` keeps a task that begins with a dash a prompt.
+    interactiveArgs: ["--"],
     sandboxModes: ["read-only", "worktree-write"],
     // No documented mid-run input channel; operator messages go through resume.
     streamingInput: false,
@@ -54,6 +56,8 @@ export const EXTERNAL_AGENTS: readonly ExternalAgentEntry[] = [
     detect: ["--version"],
     versionPattern: "(\\d+\\.\\d+\\.\\d+)",
     knownGoodRange: { min: "2.1.220" },
+    // `claude [prompt]` starts an interactive session on a prompt; `--` ends the options.
+    interactiveArgs: ["--"],
     sandboxModes: ["read-only", "worktree-write"],
     streamingInput: true,
     resumable: true,
@@ -76,6 +80,8 @@ export const EXTERNAL_AGENTS: readonly ExternalAgentEntry[] = [
     // `agy --version` prints a bare `1.2.12`, no prefix — verified on 1.2.12.
     versionPattern: "(\\d+\\.\\d+\\.\\d+)",
     knownGoodRange: { min: "1.2.12" },
+    // `agy -i <prompt>` (`--prompt-interactive`): run an initial prompt interactively and continue the session.
+    interactiveArgs: ["-i"],
     sandboxModes: ["read-only", "worktree-write"],
     // `agy --help` documents `--input-format stream-json` for print mode, the
     // same shape claude's steerable run uses. Declared true because the CLI
@@ -156,6 +162,16 @@ const EXTERNAL_AGENT_ALIASES: Readonly<Record<string, string>> = {
 export function canonicalExternalAgentId(input: string): string {
   const key = input.trim().toLowerCase();
   return Object.hasOwn(EXTERNAL_AGENT_ALIASES, key) ? (EXTERNAL_AGENT_ALIASES[key] as string) : input;
+}
+
+/**
+ * The argv that runs `entry`'s vendor CLI interactively on `task`: `[binary, ...interactiveArgs, task]`.
+ * The task is one element (never shell-interpolated). Undefined when the agent has no interactive
+ * form, which `/delegate` in a terminal answers as a refusal. Pure.
+ */
+export function interactiveArgvFor(entry: ExternalAgentEntry, task: string): string[] | undefined {
+  if (entry.interactiveArgs === undefined) return undefined;
+  return [entry.binary, ...entry.interactiveArgs, task];
 }
 
 /** Every registered agent id, in registry order. */

@@ -352,9 +352,16 @@ pub struct OpenSpec<'a> {
     pub env: &'a HashMap<String, String>,
     pub cols: u16,
     pub rows: u16,
-    /// Program to run instead of the login shell (tests).
+    /// Program to run instead of the login shell: `/delegate`'s vendor CLI (D-14) and tests. It gets the
+    /// same login-shell environment and the same hang-up-on-close semantics as a shell tab.
     pub program: Option<(&'a str, &'a [&'a str])>,
+    /// Tab title when it is not the shell's or the agent's name.
+    pub title: Option<&'a str>,
+    /// Called once with the tab id and the exit code (absent when killed by a signal) when the process has exited.
+    pub on_exit: Option<ExitHook>,
 }
+
+pub type ExitHook = Box<dyn FnOnce(u64, Option<u32>) + Send>;
 
 #[derive(Default)]
 pub struct PtyManager {
@@ -404,9 +411,10 @@ impl PtyManager {
         let reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
         let writer = pair.master.take_writer().map_err(|e| e.to_string())?;
         let id = self.next.fetch_add(1, Ordering::SeqCst) + 1;
-        let title = match spec.owner {
-            Owner::User => Path::new(&shell).file_name().and_then(|s| s.to_str()).unwrap_or("shell").to_string(),
-            Owner::Agent => {
+        let title = match (spec.title, spec.owner) {
+            (Some(t), _) => t.to_string(),
+            (None, Owner::User) => Path::new(&shell).file_name().and_then(|s| s.to_str()).unwrap_or("shell").to_string(),
+            (None, Owner::Agent) => {
                 let mut counts = self.agent_counts.lock().unwrap();
                 let n = counts.entry(spec.window.to_string()).or_default();
                 *n += 1;
@@ -429,7 +437,7 @@ impl PtyManager {
             exit: Mutex::new(None),
             closed: Default::default(),
         });
-        spawn_reader(pty.clone(), reader, move || child.wait().ok().map(|s| s.exit_code()));
+        spawn_reader(pty.clone(), reader, spec.on_exit, move || child.wait().ok().map(|s| s.exit_code()));
         self.tabs.lock().unwrap().insert(id, pty.clone());
         Ok(pty)
     }
@@ -491,7 +499,7 @@ impl PtyManager {
     }
 }
 
-fn spawn_reader(pty: Arc<Pty>, mut reader: Box<dyn Read + Send>, wait: impl FnOnce() -> Option<u32> + Send + 'static) {
+fn spawn_reader(pty: Arc<Pty>, mut reader: Box<dyn Read + Send>, on_exit: Option<ExitHook>, wait: impl FnOnce() -> Option<u32> + Send + 'static) {
     std::thread::spawn(move || {
         let mut buf = vec![0u8; 64 * 1024];
         let mut carry = Vec::new();
@@ -526,6 +534,9 @@ fn spawn_reader(pty: Arc<Pty>, mut reader: Box<dyn Read + Send>, wait: impl FnOn
             }
         }
         pty.activity.notify_all();
+        if let Some(hook) = on_exit {
+            hook(pty.id, code);
+        }
     });
 }
 
@@ -570,6 +581,8 @@ mod tests {
             cols: 80,
             rows: 24,
             program: Some(("/bin/sh", &[])),
+            title: None,
+            on_exit: None,
         })
         .unwrap()
     }
@@ -681,6 +694,74 @@ mod tests {
         assert!(mgr.list("w1").is_empty());
         assert_eq!(mgr.list("w2").len(), 1);
         mgr.close("w2", b.id);
+    }
+
+    #[test]
+    fn a_program_runs_directly_with_its_title_and_reports_its_exit_code() {
+        let dir = tempfile::tempdir().unwrap();
+        let mgr = PtyManager::default();
+        let (tx, rx) = mpsc::channel();
+        let args: [&str; 1] = ["hi there"];
+        let pty = mgr
+            .open(OpenSpec {
+                window: "w",
+                owner: Owner::User,
+                cwd: dir.path(),
+                env: &env(),
+                cols: 80,
+                rows: 24,
+                program: Some(("/bin/echo", &args)),
+                title: Some("Claude · hi there"),
+                on_exit: Some(Box::new(move |_id, code| {
+                    let _ = tx.send(code);
+                })),
+            })
+            .unwrap();
+        assert_eq!(mgr.list("w")[0].title, "Claude · hi there");
+        assert_eq!(rx.recv_timeout(Duration::from_secs(10)).unwrap(), Some(0));
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while Instant::now() < deadline && !pty.has_exited() {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert_eq!(pty.info().exit_code, Some(0));
+        assert!(plain_text(&pty.output_since(0)).contains("hi there"));
+        mgr.close("w", pty.id);
+    }
+
+    #[test]
+    fn a_failing_program_reports_a_non_zero_code_and_a_missing_one_is_an_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let mgr = PtyManager::default();
+        let (tx, rx) = mpsc::channel();
+        let args: [&str; 2] = ["-c", "exit 7"];
+        mgr.open(OpenSpec {
+            window: "w",
+            owner: Owner::User,
+            cwd: dir.path(),
+            env: &env(),
+            cols: 80,
+            rows: 24,
+            program: Some(("/bin/sh", &args)),
+            title: Some("t"),
+            on_exit: Some(Box::new(move |_id, code| {
+                let _ = tx.send(code);
+            })),
+        })
+        .unwrap();
+        assert_eq!(rx.recv_timeout(Duration::from_secs(10)).unwrap(), Some(7));
+        let missing = mgr.open(OpenSpec {
+            window: "w",
+            owner: Owner::User,
+            cwd: dir.path(),
+            env: &env(),
+            cols: 80,
+            rows: 24,
+            program: Some(("/no/such/program-keryx", &[])),
+            title: None,
+            on_exit: None,
+        });
+        assert!(missing.is_err());
+        mgr.close_all();
     }
 
     #[test]

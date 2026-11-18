@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "../components/Icon";
 import { useToast } from "../components/Toasts";
 import { onAgentTerminal, ptyClose, ptyList, ptyOpen, ptyWrite, type PtyTab } from "../platform/panels";
-import { onRunRequest } from "./panelBus";
+import { notifyTabClosed, onRunRequest, onShowTab } from "./panelBus";
 import { TermView } from "./TermView";
 
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -86,7 +86,18 @@ export function TerminalPanel({ cwd }: { cwd: string }) {
     [open, toast],
   );
 
+  // `/delegate`: a tab opened by the app; shown and focused.
+  useEffect(
+    () =>
+      onShowTab((tab) => {
+        setTabs((t) => (t.some((x) => x.id === tab.id) ? t : [...t, tab]));
+        setActive(tab.id);
+      }),
+    [],
+  );
+
   const close = (id: number) => {
+    notifyTabClosed(id);
     void ptyClose(id).catch(() => {});
     setTabs((t) => {
       const rest = t.filter((x) => x.id !== id);

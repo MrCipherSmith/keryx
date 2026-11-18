@@ -126,6 +126,7 @@ function SubagentDetail({ agent }: { agent: Subagent }) {
           {[agent.model, agent.runtime].filter(Boolean).join(" · ")}
         </div>
       ) : null}
+      {agent.runtime === "external" && agent.detail ? <div className="field-hint">{agent.detail === "closed" ? "Terminal closed." : agent.detail}</div> : null}
       {task ? (
         <div className="subagent-task">
           <div className="tool-label">Task</div>

@@ -139,7 +139,7 @@ import type { ShellView } from "./shell-views";
 import { withSessionProvider } from "../commands/spawn-deps";
 import { createProvidersHandlers, type AcpProvidersSeams } from "./providers";
 import { createTasksHandlers, taskEventSink } from "./shell-tasks";
-import { createSessionExternalRuns, type SessionExternalRuns } from "./shell-delegate";
+import { clientRunsTerminal, createSessionExternalRuns, type DelegateTerminalLaunch, type SessionExternalRuns } from "./shell-delegate";
 import type { RunExternalFn, CreateRunExternalOptions } from "../harness/run-external-factory";
 import type { SlateSessionRef } from "../session/slate-lifecycle";
 import { busyRefusalText, findShellCommand, shellAvailableCommands, viewNotServedText } from "./shell-commands";
@@ -246,6 +246,8 @@ export interface AcpServerOptions {
   /** Shell profile: the user-global config directory `_keryx/command`'s settings commands read and write. The default one otherwise. Test seam. */
   readonly shellConfigDir?: string;
   /** Shell profile test seam for `/delegate`: the external-run port. `createLazyRunExternal` otherwise. */
+  /** Test seam: the environment the external-agent gate reads for `/delegate` in a terminal (transport, CI markers). */
+  readonly externalGateEnv?: Readonly<Record<string, string | undefined>>;
   readonly makeRunExternal?: (options: CreateRunExternalOptions) => RunExternalFn;
   /** Shell profile test seams for `_keryx/providers/*`: the config directory, environment and network it uses. */
   readonly providers?: AcpProvidersSeams;
@@ -1904,6 +1906,8 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       cwd: state.resolvedRoot,
       configDir: options.shellConfigDir,
       sessionId,
+      terminalCapable: clientRunsTerminal(state.clientCapabilities),
+      gateEnv: options.externalGateEnv,
       makeRunExternal: options.makeRunExternal,
       emitFleet: (event) => {
         if (!stopping) writeMessage(notificationMessage(KERYX_ACP_EXTENSION_METHODS.subagent, { sessionId, event }));
@@ -2002,7 +2006,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
    * The two that rewrite the transcript (`/compact`, `/rewind`) hold the session's slot while
    * they run, so a prompt cannot interleave with the rewrite.
    */
-  async function handleKeryxCommand(params: unknown): Promise<{ text: string; _meta: { keryx: { effects?: ShellCommandEffect[]; refused?: true; view?: ShellView; prompt?: string } } }> {
+  async function handleKeryxCommand(params: unknown): Promise<{ text: string; _meta: { keryx: { effects?: ShellCommandEffect[]; refused?: true; view?: ShellView; prompt?: string; terminal?: DelegateTerminalLaunch } } }> {
     const method = KERYX_ACP_EXTENSION_METHODS.command;
     requireInitialized(method);
     const obj = requireObjectParams(params, method);
@@ -2045,7 +2049,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         if (outcome.refused === true) return refusedResult(outcome.text);
         return {
           text: outcome.text,
-          _meta: { keryx: { effects: [...(outcome.effects ?? [])], ...(outcome.view !== undefined ? { view: outcome.view } : {}), ...(outcome.prompt !== undefined ? { prompt: outcome.prompt } : {}) } },
+          _meta: { keryx: { effects: [...(outcome.effects ?? [])], ...(outcome.view !== undefined ? { view: outcome.view } : {}), ...(outcome.prompt !== undefined ? { prompt: outcome.prompt } : {}), ...(outcome.terminal !== undefined ? { terminal: outcome.terminal } : {}) } },
         };
       } finally {
         if (slot !== undefined && activeTurns.get(sessionId) === slot) activeTurns.delete(sessionId);

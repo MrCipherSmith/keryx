@@ -263,7 +263,8 @@ number fields. The form submits form-only flags (`--repeat --minutes --hours
 queued prompts itself (one queue per session, sent in order when the turn
 ends); `/queue` is a `client` command over that queue (list, remove, edit,
 force = cancel and send next). `/delegate` is a `text` command whose external
-run appears in the Subagents tab (§3.9.4, `runtime: "external"`).
+run appears in the Subagents tab (§3.9.4, `runtime: "external"`); in the
+desktop it runs interactively in the built-in terminal (D-14, §3.9.5a, §4.4).
 
 #### 3.9.2 `available_commands_update` in the `shell` profile
 
@@ -408,6 +409,28 @@ Where the implementation differs from the text above
   runs after it, so a disabled agent answers refused after an approval.
   `session/cancel`, a release of the session and the connection's end stop
   the run (and withdraw an approval still being asked).
+- `/delegate` in the desktop (D-14, owner 2026-11-18): the client advertises
+  `initialize.clientCapabilities._meta.keryx.terminal: true` (the app only, not
+  the browser dev bridge). With it, the approval is the same
+  `session/request_permission` (allow once / reject once) but says the CLI runs
+  interactively in the terminal with its own permission prompts and keryx's
+  sandbox does not apply; after an allow keryx does NOT spawn the headless run.
+  It answers `{ text, _meta.keryx: { effects: ["openTerminal"], terminal: {
+  runId, agentId, title, argv, cwd } } }`. `argv` is built by keryx from the
+  registry (`interactiveArgs` of the agent entry, task appended as one element;
+  never from client input, never a shell string): `claude -- <task>`,
+  `codex -- <task>`, `agy -i <task>`; an agent without `interactiveArgs`
+  (`gemini-acp`) is refused. `title` is "<Agent> · <first words of the task>".
+  Without the capability (editors) the headless path above is unchanged. The
+  external runtime is on by default here: the gate (`defaultOn`) treats an
+  `externalAgents.enabled` the user config never wrote as on and lets a project
+  manifest that does not list the capability yet pass; an explicit `false` in
+  the user config, `enabled: false` in the manifest, a remote transport, CI, a
+  disabled per-agent entry and the per-agent vendor gates (block-list,
+  one-time consent for `agy`) still refuse, with their own sentence, before
+  any approval is asked. The client opens the Terminal panel on a new tab
+  whose process is the argv (§4.4) and registers the run as a client-side
+  subagent (`runtime: "external"`); keryx sees only the start.
 - Refused with a reason, not served: every `/bus` subcommand (the ACP
   host does not join the bus), `/autoreview start|stop` (detached process
   with no supervisor), `/mcp connect|disconnect`, `/task` without a Hub
@@ -546,7 +569,22 @@ Rust core:
 Web view:
 - `panels/SidePanel.tsx` with the Terminal and Browser tabs; open state, tab
   and width are per-viewer prefs.
-- `panels/panelBus.ts` — `runInTerminal(command)` used by the Run buttons.
+- `panels/panelBus.ts` — `runInTerminal(command)` used by the Run buttons;
+  `showTerminalTab(tab)` opens the panel on Terminal and focuses a tab;
+  `notifyTabClosed(id)` tells the app a tab was closed in the panel.
+- `/delegate` runs (D-14): `pty_open_run(cwd, argv, title, cols, rows)` opens a
+  tab whose process is `argv` itself (no shell), with the same login-shell
+  environment and the same SIGHUP-then-SIGKILL close as a shell tab; a program
+  that cannot start is an error and no tab exists. When the process ends the
+  window gets `panel://pty-exit { id, code }` whether or not the tab is on
+  screen. `session/delegateTerminals.ts` keeps each run as a subagent of the
+  session (`runtime: "external"`, `agentId`, `task` = the argv's last element):
+  `running` on start; exit 0 -> `done` ("exit 0"); non-zero -> `failed`
+  ("exit N"; a signal -> "ended by a signal"); the tab closed while running ->
+  `failed` ("closed"). Clicking the run in the Activity panel or in the
+  sidebar's subagent tree opens the panel and focuses the tab; once the tab is
+  closed the entry shows the stored task and "Terminal closed.". Runs are not
+  persisted across a reload, like every subagent (D-12).
 - `session/useAcpSession.ts` adds the panel entry to `mcpServers` of every
   `session/new` and `session/load` inside the app.
 

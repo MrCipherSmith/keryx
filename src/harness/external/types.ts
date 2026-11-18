@@ -60,6 +60,13 @@ export interface ExternalAgentEntry {
   /** Argv after `binary` that starts the agent in ACP mode. Only read when `transport` is `"acp"`. */
   readonly acpArgs?: readonly string[];
   /**
+   * Argv after `binary` that starts the vendor CLI INTERACTIVELY on one task (the desktop's
+   * `/delegate` in a built-in terminal, D-14). The task is appended as ONE more argv element, so a
+   * task is never parsed by a shell. Absent means the agent has no verified interactive form and
+   * `/delegate` cannot run it in a terminal.
+   */
+  readonly interactiveArgs?: readonly string[];
+  /**
    * Per-agent override of the stderr-read budget (flow 298 T14), for an agent
    * whose CLI is known to be unusually chatty on stderr by design — `codex
    * exec` narrates itself there and prints the contents of files it reads

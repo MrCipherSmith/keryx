@@ -64,7 +64,7 @@ export interface CommandParams {
 }
 
 /** Names of state a command changed, so the client can refresh without parsing text. */
-export type CommandEffect = "mode" | "model" | "config" | "plan" | "transcript" | "tasks" | "startTurn" | (string & {});
+export type CommandEffect = "mode" | "model" | "config" | "plan" | "transcript" | "tasks" | "startTurn" | "openTerminal" | (string & {});
 
 export interface ViewAction {
   label: string;
@@ -123,7 +123,7 @@ export interface CommandView {
 /** Result of `_keryx/command`. */
 export interface CommandResult {
   text?: string;
-  _meta?: { keryx?: { effects?: CommandEffect[]; refused?: boolean; view?: CommandView | null; prompt?: string } } & Meta;
+  _meta?: { keryx?: { effects?: CommandEffect[]; refused?: boolean; view?: CommandView | null; prompt?: string; terminal?: { runId: string; agentId: string; title: string; argv: string[]; cwd: string } } } & Meta;
 }
 
 export interface SessionMode { id: string; name: string; description?: string | null }

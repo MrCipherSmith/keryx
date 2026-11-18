@@ -17,7 +17,8 @@
 import { parseDelegateCommand } from "../commands/agent-commands";
 import type { ExternalRunHandle } from "../harness/external/supervise";
 import type { ExternalEvent } from "../harness/external/types";
-import { canonicalExternalAgentId, getExternalAgent } from "../harness/external/registry";
+import { canonicalExternalAgentId, getExternalAgent, interactiveArgvFor } from "../harness/external/registry";
+import { agentConfig, checkExternalAgentVendorGates, resolveExternalAgentsCapability } from "../capability/external-agents";
 import {
   createLazyRunExternal,
   type CreateRunExternalOptions,
@@ -29,9 +30,29 @@ import { delegateReport, OPERATOR_SANDBOX, type DelegateOutcome } from "../tui/e
 import { approvalFromPermissionResponse, ACP_PERMISSION_OPTION_IDS } from "./permission";
 import type { AcpPermissionOption, AcpRequestPermissionRequest, AcpRequestPermissionResponse } from "./protocol";
 
+/**
+ * The run `/delegate` hands the desktop to start in its built-in terminal (D-14): argv is built by
+ * keryx from the registry, never from client input; the client spawns it as given, in `cwd`.
+ */
+export interface DelegateTerminalLaunch {
+  readonly runId: string;
+  readonly agentId: string;
+  readonly title: string;
+  readonly argv: readonly string[];
+  readonly cwd: string;
+}
+
+/** True when the client advertised `initialize.clientCapabilities._meta.keryx.terminal === true` (the desktop). */
+export function clientRunsTerminal(capabilities: { readonly _meta?: Record<string, unknown> | undefined } | undefined): boolean {
+  const keryx = capabilities?._meta?.["keryx"];
+  return typeof keryx === "object" && keryx !== null && (keryx as Record<string, unknown>)["terminal"] === true;
+}
+
 /** What `/delegate` answers `_keryx/command` with. */
 export interface DelegateAnswer {
   readonly text: string;
+  /** With the `openTerminal` effect: the interactive run the client starts. Absent on the headless path. */
+  readonly terminal?: DelegateTerminalLaunch;
   /** A refusal (bad usage, rejected approval, capability off) as opposed to a run that ran. */
   readonly refused?: true;
 }
@@ -55,6 +76,10 @@ export interface SessionExternalRunsInput {
   ) => Promise<AcpRequestPermissionResponse | undefined>;
   readonly withdraw: (requestId: string, reason: string) => void;
   readonly sessionId: string;
+  /** The client runs terminals (the desktop): `/delegate` opens one interactive run instead of a headless one. */
+  readonly terminalCapable?: boolean | undefined;
+  /** Environment the capability gate reads (transport, CI markers); `process.env` otherwise. Test seam. */
+  readonly gateEnv?: Readonly<Record<string, string | undefined>> | undefined;
   readonly emitFleet: (event: SpawnSubagentFleetEvent) => void;
   /** Test seam: the run port. `createLazyRunExternal` otherwise. */
   readonly makeRunExternal?: ((options: CreateRunExternalOptions) => RunExternalFn) | undefined;
@@ -106,17 +131,23 @@ export function createSessionExternalRuns(input: SessionExternalRunsInput): Sess
   };
 
   /** The approval: `true` only for an explicit allow. */
-  const approved = async (agentId: string, task: string, runId: string): Promise<boolean> => {
+  const approved = async (agentId: string, task: string, runId: string, interactive: readonly string[] | undefined): Promise<boolean> => {
     const response = await input.ask(
       {
         sessionId: input.sessionId,
         toolCall: {
           toolCallId: runId,
-          title: `Run ${agentId} on this task`,
+          title:
+            interactive === undefined
+              ? `Run ${agentId} on this task`
+              : `Run ${agentId} interactively in the terminal on this task. It uses the CLI's own permission prompts; keryx's sandbox does not apply.`,
           name: "delegate",
           kind: "execute",
           status: "pending",
-          rawInput: { agent: agentId, task, sandbox: OPERATOR_SANDBOX },
+          rawInput:
+            interactive === undefined
+              ? { agent: agentId, task, sandbox: OPERATOR_SANDBOX }
+              : { agent: agentId, task, interactive: true, command: interactive.join(" "), sandbox: "none (the CLI's own permission prompts)" },
         },
         options: APPROVAL_OPTIONS,
       },
@@ -136,13 +167,47 @@ export function createSessionExternalRuns(input: SessionExternalRunsInput): Sess
     stopped = undefined;
 
     const runId = `ext:${(input.idSeq ?? (() => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`))()}`;
-    if (!(await approved(entry.id, parsed.task, runId))) {
+    const interactiveArgv = input.terminalCapable === true ? interactiveArgvFor(entry, parsed.task) : undefined;
+    if (input.terminalCapable === true) {
+      if (interactiveArgv === undefined) return { text: `◇ ${entry.id} has no interactive form to run in the terminal\n`, refused: true };
+      // Default-on in the desktop (D-14): an `externalAgents.enabled` never written counts as on.
+      const gate = await resolveExternalAgentsCapability({
+        cwd: input.cwd,
+        env: input.gateEnv ?? process.env,
+        defaultOn: true,
+        ...(input.configDir !== undefined ? { configDir: input.configDir } : {}),
+      });
+      if (!gate.ok) return { text: `◇ /delegate refused: ${gate.reason}\n`, refused: true };
+      if (!agentConfig(gate.config, entry.id).enabled) {
+        return {
+          text: `◇ /delegate refused: external agent "${entry.id}" is disabled; enable it under \`externalAgents.agents.${entry.id}\` in the keryx user config\n`,
+          refused: true,
+        };
+      }
+      const vendorGate = await checkExternalAgentVendorGates({
+        agentId: entry.id,
+        cwd: input.cwd,
+        config: gate.config,
+        ...(input.configDir !== undefined ? { configDir: input.configDir } : {}),
+      });
+      if (vendorGate !== undefined) return { text: `◇ /delegate refused: ${vendorGate.reason}\n`, refused: true };
+    }
+    if (!(await approved(entry.id, parsed.task, runId, interactiveArgv))) {
       return {
         text: stopped !== undefined ? `◇ /delegate stopped: ${stopped}\n` : `◇ /delegate refused: ${entry.id} was not approved to run\n`,
         refused: true,
       };
     }
     if (stopped !== undefined) return { text: `◇ /delegate stopped: ${stopped}\n`, refused: true };
+
+    if (interactiveArgv !== undefined) {
+      const firstWords = parsed.task.split(/\s+/).slice(0, 5).join(" ");
+      const title = `${entry.label.trim() || entry.id} · ${firstWords.length > 32 ? `${firstWords.slice(0, 31)}…` : firstWords}`;
+      return {
+        text: `◇ ${entry.id} opened in the terminal: ${title}\n`,
+        terminal: { runId, agentId: entry.id, title, argv: interactiveArgv, cwd: input.cwd },
+      };
+    }
 
     const label = entry.label.trim().length > 18 ? `${entry.label.trim().slice(0, 15)}…` : entry.label.trim() || "external";
     const fleet = (status: "running" | "done" | "failed", detail: string): void =>

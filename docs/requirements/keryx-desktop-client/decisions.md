@@ -200,3 +200,30 @@ Rejected: ACP v1 `terminal/*` (one command per terminal; removed in ACP v2);
 Chromium or a system Chrome over CDP (owner chose WKWebView now; 150–300 MB,
 or a dependency on an installed Chrome); importing Chrome cookies; per-site
 approval rules; raising the minimum macOS to 14.
+
+## D-14 `/delegate` runs interactively in the built-in terminal — decided 2026-11-18
+
+Owner decisions 2026-11-18.
+
+Chosen:
+- **Interactive, in the terminal.** In the desktop `/delegate <agent> <task>`
+  runs the vendor CLI (claude / codex / agy) interactively in a new tab of the
+  Terminal side panel (D-13), and the app opens that tab at once. The user can
+  talk to the agent there. keryx sees only the start and the end. The CLI's own
+  permission prompts apply; keryx's sandbox does not, and the approval dialog
+  says so. Approval is still asked first (allow once / reject once).
+- **Protocol.** The desktop advertises `clientCapabilities._meta.keryx.terminal`;
+  keryx then answers `/delegate` with the `openTerminal` effect and an argv it
+  builds from the agent registry (task as one element). Editors, which do not
+  advertise it, keep the headless run.
+- **On by default in the desktop.** With the `terminal` capability the external
+  agent runtime counts as enabled unless the user config explicitly sets
+  `externalAgents.enabled` to `false`; every run still asks approval, and the
+  per-agent and vendor gates stay.
+- **A subagent.** The run appears as a subagent (`runtime: "external"`) in the
+  Activity panel and under its session in the sidebar; clicking it focuses its
+  terminal tab. Its end is the process's exit code, or the tab being closed.
+
+Rejected: running it headless and mirroring its output into the terminal tab
+(the user could not talk to the agent, and the mirror would hide the CLI's own
+prompts).

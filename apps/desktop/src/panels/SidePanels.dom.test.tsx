@@ -18,6 +18,13 @@ mock.module("../platform/panels", () => ({
     tabs = [...tabs, t];
     return t;
   },
+  ptyOpenRun: async (cwd: string, argv: string[], title: string) => {
+    calls.push(["openrun", cwd, argv, title]);
+    const t = { ...tab(nextId++), title };
+    tabs = [...tabs, t];
+    return t;
+  },
+  onPtyExit: async () => () => {},
   ptyWrite: async (id: number, data: string) => void calls.push(["write", id, data]),
   ptyClose: async (id: number) => void calls.push(["close", id]),
   ptyResize: async () => {},
@@ -136,4 +143,37 @@ test("browser tab labels and updates", () => {
   expect(list).toHaveLength(1);
   expect(list[0]!.title).toBe("Loaded");
   expect(browser.applyBrowserTab(list, { ...t, id: 2 })).toHaveLength(2);
+});
+
+test("a tab the app opens (/delegate) is added and focused, the panel opens on Terminal, and closing it is announced", async () => {
+  await act(() => root.render(createElement("div")));
+  calls.length = 0;
+  tabs = [tab(20)];
+  const prefs = await import("../lib/prefs");
+  prefs.setPrefs({ sidePanel: null });
+  await act(() => root.render(createElement(ToastProvider, null, createElement(TerminalPanel, { cwd: "/proj" }))));
+  await flush();
+  const closed: number[] = [];
+  const off = bus.onTabClosed((id) => closed.push(id));
+  const run: PtyTab = { id: 21, title: "Claude · fix the build", owner: "user", cwd: "/proj", running: true, exitCode: null };
+  await act(async () => bus.showTerminalTab(run));
+  await flush();
+  expect(prefs.getPrefs().sidePanel).toBe("terminal");
+  expect(host.querySelector('[role="tab"][aria-selected="true"]')!.textContent).toContain("Claude · fix the build");
+  expect(host.querySelector('[data-term="21"]')!.hasAttribute("hidden")).toBe(false);
+  expect(host.querySelector('[data-term="20"]')!.hasAttribute("hidden")).toBe(true);
+  await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="Close Claude · fix the build"]')!.click());
+  await flush();
+  expect(closed).toEqual([21]);
+  off();
+});
+
+test("a tab requested before the terminal panel listens is delivered when it does", async () => {
+  await act(() => root.render(createElement("div")));
+  const run: PtyTab = { id: 30, title: "Codex · x", owner: "user", cwd: "/p", running: true, exitCode: null };
+  bus.showTerminalTab(run);
+  const got: number[] = [];
+  const off = bus.onShowTab((t) => got.push(t.id));
+  expect(got).toEqual([30]);
+  off();
 });
