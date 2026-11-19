@@ -119,7 +119,7 @@ describe("mergeAcpMcp — server-name collisions", () => {
 // A client's first-party server owning a tool-name prefix (the desktop app's browser panel).
 describe("owned prefixes", () => {
   const keryxCatalog: ServerCatalog = {
-    entries: [entry("playwright", "browser_navigate"), entry("playwright", "browser_take_screenshot"), entry("github", "search_code")],
+    entries: [entry("other-browser", "browser_navigate"), entry("other-browser", "browser_take_screenshot"), entry("github", "search_code")],
     skipped: [],
   };
   const panelCatalog: ServerCatalog = { entries: [entry("keryx-panels", "browser_navigate"), entry("keryx-panels", "terminal_run")], skipped: [] };
@@ -136,23 +136,23 @@ describe("owned prefixes", () => {
   });
 
   test("the merged catalog keeps only the client's browser tools and every other keryx tool", () => {
-    const keryx = keryxRuntime([{ name: "playwright" } as ServerState, { name: "github" } as ServerState], keryxCatalog);
+    const keryx = keryxRuntime([{ name: "other-browser" } as ServerState, { name: "github" } as ServerState], keryxCatalog);
     const client: AcpSessionMcp = { ...clientSet([{ name: "keryx-panels", status: "connected" } as ServerState], panelCatalog), owned: new Map([["keryx-panels", ["browser_"]]]) };
     const fqns = mergeAcpMcp(keryx, client).binding!.catalog().entries.map((e) => e.fqn);
     expect(fqns).toContain(buildFqn("keryx-panels", "browser_navigate"));
     expect(fqns).toContain(buildFqn("github", "search_code"));
-    expect(fqns.some((f) => f.startsWith("playwright"))).toBe(false);
+    expect(fqns.some((f) => f.startsWith("other-browser"))).toBe(false);
   });
 
   test("an owner that is not connected owns nothing, so keryx's tools stay usable", () => {
-    const keryx = keryxRuntime([{ name: "playwright" } as ServerState], keryxCatalog);
+    const keryx = keryxRuntime([{ name: "other-browser" } as ServerState], keryxCatalog);
     const client: AcpSessionMcp = { ...clientSet([{ name: "keryx-panels", status: "failed" } as ServerState], panelCatalog), owned: new Map([["keryx-panels", ["browser_"]]]) };
-    expect(mergeAcpMcp(keryx, client).binding!.catalog().entries.some((e) => e.server === "playwright")).toBe(true);
+    expect(mergeAcpMcp(keryx, client).binding!.catalog().entries.some((e) => e.server === "other-browser")).toBe(true);
   });
 
   test("without an owned prefix nothing of keryx's is dropped", () => {
-    const keryx = keryxRuntime([{ name: "playwright" } as ServerState], keryxCatalog);
+    const keryx = keryxRuntime([{ name: "other-browser" } as ServerState], keryxCatalog);
     const merged = mergeAcpMcp(keryx, clientSet([{ name: "keryx-panels" } as ServerState], panelCatalog)).binding!.catalog();
-    expect(merged.entries.some((e) => e.server === "playwright")).toBe(true);
+    expect(merged.entries.some((e) => e.server === "other-browser")).toBe(true);
   });
 });
