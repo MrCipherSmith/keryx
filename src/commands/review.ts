@@ -665,6 +665,8 @@ export interface ReviewCommandSeams {
   priorRound?: Partial<Omit<PriorRoundDeps, "cwd" | "forced" | "excludeReviewId">>;
   /** Test seam: a pull request's own base ref for `start|attach|ingest` of a PR target. Default: `gh pr view` (see ghPrBase). */
   prBase?: (ref: string) => Promise<string | undefined>;
+  /** Test seam: a pull request's own head commit for `start` of a PR target. Default: `gh pr view` (see ghPrHead). */
+  prHead?: (ref: string) => Promise<string | undefined>;
   /** Live Review agents host binding. Omitted means fail-closed: no adapter or authority is invented by the CLI. */
   reviewAgentsFactory?: ReviewAgentCliFactory;
 }
@@ -692,6 +694,37 @@ export async function ghPrBase(ref: string): Promise<string | undefined> {
   } catch {
     return undefined;
   }
+}
+
+/**
+ * The pull request's own head commit, read with `gh pr view`; undefined when gh is missing, signed out or offline, or
+ * prints something that is not a full SHA. Never throws. `KERYX_REVIEW_PR_BASE=off` skips this lookup too.
+ */
+export async function ghPrHead(ref: string): Promise<string | undefined> {
+  if (process.env.KERYX_REVIEW_PR_BASE === "off" || ref.startsWith("-") || Bun.which("gh") === null) return undefined;
+  try {
+    const proc = Bun.spawn(["gh", "pr", "view", ref, "--json", "headRefOid", "--jq", ".headRefOid"], { stdin: "ignore", stdout: "pipe", stderr: "ignore", timeout: PR_BASE_TIMEOUT_MS, killSignal: "SIGKILL" });
+    const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+    const sha = stdout.trim().toLowerCase();
+    return exitCode === 0 && /^[0-9a-f]{40}$/.test(sha) ? sha : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Why a PR round started without `--head` is refused: the checkout is at another commit than the pull request, so the
+ * round would plan, slice and record a commit that is not the one under review, and only the completion gate would say
+ * so. Undefined when the two agree or either is unknown (no checkout, gh unavailable).
+ */
+export function prHeadMismatchRefusal(input: { ref: string; localHead: string | null; prHead: string | undefined }): string | undefined {
+  const { ref, localHead, prHead } = input;
+  if (localHead === null || prHead === undefined || localHead.toLowerCase() === prHead.toLowerCase()) return undefined;
+  return [
+    `This checkout is at ${localHead.slice(0, 12)}, but pull request ${ref} is at ${prHead.slice(0, 12)}: a round started here would review the wrong commit.`,
+    `Pin the pull request's head: \`git fetch origin ${prHead}\`, then run this command again with \`--head ${prHead}\`. Or check the pull request out first (\`gh pr checkout ${ref}\`).`,
+    `To review this checkout as it is, pass \`--head ${localHead}\`.`,
+  ].join("\n");
 }
 
 async function trackerPrLookup(ref: string): Promise<PrSnapshot | null> {
@@ -1118,6 +1151,13 @@ async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: R
   }
   const cwd = process.cwd();
   const head = await resolveCreateHead(args, targetKind, targetRef, cwd);
+  // A PR round started without --head records the checkout's commit (resolveTargetHead). When that is not the pull
+  // request's head the plan is cut over the wrong commit, so it is refused here instead of at the completion gate.
+  if (mode === "review-flow" && targetKind === "pr" && optionValue(args, "--head") === undefined) {
+    const localHead = await resolveGitHead(cwd);
+    const refusal = localHead === null ? undefined : prHeadMismatchRefusal({ ref: targetRef, localHead, prHead: await (createSeams.prHead ?? ghPrHead)(targetRef) });
+    if (refusal !== undefined) throw new Error(refusal);
+  }
   // Recorded on the target (flow 460): the coverage gate's light recheck diffs against `target.base` before any default.
   // A pull request started without --base records its own base, read from GitHub, so a PR into another branch than main is
   // measured against that branch (review F-004); beside a --base, the PR's base is kept as `prBase`, which the recheck
