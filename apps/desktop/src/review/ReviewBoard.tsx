@@ -153,7 +153,9 @@ function RepositoryBoard({ cwd, flows, onOpenFlow, loadDetail, watcherCommand, r
     const request = ++sequence.current;
     const badges = new Map<number, Pick<ReviewCard, "baseSha" | "headSha" | "localReview">>();
     pendingBadges.current = badges;
-    setRead((old) => ({ scope, snapshot: scope === old.scope ? old.snapshot : null, error: "", loading: true }));
+    setRead(old => scope === old.scope && old.snapshot
+      ? { ...old, loading: true }
+      : { scope, snapshot: null, error: "", loading: true });
     void load(cwd, scope, repo).then((snapshot) => {
       if (request !== sequence.current) return;
       const nextIdentity = JSON.stringify([snapshot.repositoryId, snapshot.viewer]);

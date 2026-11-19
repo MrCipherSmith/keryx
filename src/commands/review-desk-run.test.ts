@@ -1,13 +1,34 @@
 import { expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, watch, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { DeskRunStore } from "../review/desk-run-store";
 import type { DeskRunSnapshot } from "../review/desk-run-types";
 
 const base = "a".repeat(40),
   head = "b".repeat(40);
 const cli = path.resolve(import.meta.dir, "../cli.ts");
+
+// A worker may publish the marker or SQLite commit before the observer subscribes.
+// Subscribe first, inspect immediately, then re-read only on filesystem notifications.
+async function waitForChange(directory: string, ready: () => boolean, description: string) {
+  await new Promise<void>((resolve, reject) => {
+    const watcher = watch(directory, check);
+    const timeout = setTimeout(() => done(new Error("Timed out waiting for " + description)), 15_000);
+    function done(error?: Error) {
+      clearTimeout(timeout);
+      watcher.close();
+      if (error) reject(error); else resolve();
+    }
+    function check() {
+      try { if (ready()) done(); }
+      catch (error) { done(error as Error); }
+    }
+    watcher.once("error", done);
+    check();
+  });
+}
 
 test("two linked worktrees attach to one worker and can cancel while its revision is being verified", async () => {
   const root = mkdtempSync(path.join(tmpdir(), "keryx-desk-cli-"));
@@ -45,7 +66,10 @@ if mkdir "$FIXTURE/once" 2>/dev/null; then
   :
 elif mkdir "$FIXTURE/checking" 2>/dev/null; then
   i=0
-  while [ ! -f "$FIXTURE/continue" ] && [ "$i" -lt 200 ]; do sleep 0.05; i=$((i+1)); done
+  while [ ! -f "$FIXTURE/continue" ]; do
+    if [ "$i" -ge 240 ]; then touch "$FIXTURE/timed-out"; exit 75; fi
+    sleep 0.05; i=$((i+1))
+  done
 fi
 echo '{"data":{"viewer":{"login":"viewer"},"repository":{"id":"node","pullRequest":{"state":"OPEN","baseRefOid":"${base}","headRefOid":"${head}"}}}}'
 `,
@@ -66,7 +90,10 @@ echo '{"data":{"viewer":{"login":"viewer"},"repository":{"id":"node","pullReques
     const proc = Bun.spawn([process.execPath, cli, "review", "desk-run", action, ...commonArgs, ...extra], {
       cwd,
       env: {
-        ...process.env,
+        HOME: root,
+        APPDATA: root,
+        XDG_DATA_HOME: root,
+        GIT_ALLOW_PROTOCOL: "file",
         FIXTURE: root,
         KERYX_DATA_DIR: path.join(root, "data"),
         PATH: bin + path.delimiter + process.env.PATH,
@@ -85,17 +112,20 @@ echo '{"data":{"viewer":{"login":"viewer"},"repository":{"id":"node","pullReques
   try {
     const first = await call(project, "start", ["--base", base, "--head", head]);
     const id = first.runs[0]!.id;
-    for (let i = 0; i < 200 && !existsSync(path.join(root, "checking")); i++) await Bun.sleep(25);
-    expect(existsSync(path.join(root, "checking"))).toBe(true);
+    await waitForChange(root, () => existsSync(path.join(root, "checking")), "the worker to enter revision verification");
     const second = await call(worktree, "start", ["--base", base, "--head", head]);
     expect(second.runs.map((r) => r.id)).toEqual([id]);
     expect((await call(worktree, "cancel", ["--id", id])).runs[0]!.state).toBe("cancelling");
-    writeFileSync(gate, "");
-    let state = await call(project, "status");
-    for (let i = 0; i < 12 && state.runs[0]?.state !== "cancelled"; i++) {
-      await Bun.sleep(50);
-      state = await call(project, "status");
+    const storePath = path.join(root, "data", "desktop-review");
+    const store = new DeskRunStore(storePath, true);
+    try {
+      writeFileSync(gate, "");
+      await waitForChange(storePath, () => store.byId(id)?.run.state === "cancelled", "the worker's terminal commit");
+    } finally {
+      store.close();
     }
+    expect(existsSync(path.join(root, "timed-out"))).toBe(false);
+    const state = await call(project, "status");
     expect((await call(project, "status", ["--activity-id", id])).runs.map(run => run.id)).toEqual([id]);
     await expect(call(project, "status", ["--id", id, "--activity-id", id])).rejects.toThrow("desk-run");
     expect(state.runs[0]?.state).toBe("cancelled");

@@ -20,8 +20,9 @@
 .review-table th:first-child { width: 40%; }
 .review-table th:nth-child(4) { width: 18%; }
 .review-table .review-progress-caption { min-width: 0; white-space: normal; }
-.review-list-link { border: 0; background: none; color: var(--fg); font: inherit; padding: 4px 0; text-align: left; width: 100%; white-space: normal; overflow-wrap: anywhere; }
-.review-list-link:hover { color: var(--accent-text); }
+.review-table tbody tr:hover { background: transparent; }
+.review-list-link { border: 0; background: none; color: var(--accent-text); font: inherit; padding: 4px 0; text-align: left; width: 100%; white-space: normal; overflow-wrap: anywhere; text-decoration: underline; text-underline-offset: 0.14em; cursor: pointer; }
+.review-list-link:hover { text-decoration-thickness: 2px; }
 .review-filter-hint { margin: 0 0 var(--sp-3); color: var(--fg-muted); font-size: var(--fs-sm); }
 .review-filter-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 168px), 1fr)); gap: var(--sp-4); }
 .review-filter-groups fieldset { min-width: 0; border: 0; margin: 0; padding: 0; }
@@ -29,7 +30,7 @@
 .review-filter-values { max-height: 180px; overflow: auto; }
 .review-filter-values label { display: flex; gap: 6px; align-items: baseline; padding: 3px 0; font-size: var(--fs-sm); overflow-wrap: anywhere; }
 .review-filter-values input { flex: none; accent-color: var(--accent); }
-.review-board .segmented [aria-pressed="true"] { color: var(--fg); background: var(--bg-surface); box-shadow: var(--shadow-1); }
+.review-board .segmented [aria-pressed="true"] { color: var(--fg); background: var(--bg-surface); box-shadow: inset 0 -2px var(--accent-text), var(--shadow-1); }
 
 .watcher-indicator { color: var(--fg-muted); font-size: var(--fs-xs); }
 .review-watcher { display: grid; gap: var(--sp-3); overflow-wrap: anywhere; }

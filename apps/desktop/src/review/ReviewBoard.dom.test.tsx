@@ -105,6 +105,23 @@ test("refresh failure preserves last available snapshot, access loss hides its c
   expect(host.textContent).not.toContain("No open pull requests");
 });
 
+test("a pending retry keeps the previously failed snapshot labeled stale until success", async () => {
+  let calls = 0;
+  let complete!: (value: ReviewBoardSnapshot) => void;
+  await render(async () => {
+    if (++calls === 1) return snapshot([pr]);
+    if (calls === 2) throw new Error("unavailable: GitHub timed out");
+    return new Promise(resolve => { complete = resolve; });
+  });
+  await click(button("Refresh pull requests"));
+  await click(button("Try again"));
+  expect(host.textContent).toContain("Last available snapshot");
+  expect(host.textContent).toContain(pr.title);
+  await act(async () => complete(snapshot([pr])));
+  expect(host.textContent).toContain("Synced");
+  expect(host.textContent).not.toContain("Last available snapshot");
+});
+
 test("a late response for the previous project cannot replace the current one", async () => {
   let finish!: (snapshot: ReviewBoardSnapshot) => void;
   const old = new Promise<ReviewBoardSnapshot>((resolve) => { finish = resolve; });

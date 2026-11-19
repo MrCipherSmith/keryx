@@ -4,12 +4,15 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { parseWatchArgs, requestWatch } from "./review-watch";
 import { pollWatcher } from "../review/watcher";
+import type { ReviewBoardSnapshot, ReviewCard } from "../review/board-types";
 import { watcherLabel } from "../review/watch-launchd";
 import type { ScheduleHost } from "../trigger/install";
 
 const key = { repo: "org/repo", repositoryId: "R_test", viewer: "alice" };
 let dir: string, project: string, host: ScheduleHost;
 let loaded: Set<string>, calls: string[], failBootstrap: boolean;
+const savedGhToken = process.env.GH_TOKEN, savedGithubToken = process.env.GITHUB_TOKEN;
+const ghToken = "test-only-login-one", githubToken = "test-only-login-two";
 const oldData = process.env.KERYX_DATA_DIR,
   oldPath = process.env.PATH;
 beforeEach(async () => {
@@ -20,6 +23,8 @@ beforeEach(async () => {
   await mkdir(tools);
   await writeFile(path.join(tools, "gh"), "#!/bin/sh\nexit 1\n", { mode: 0o700 });
   process.env.KERYX_DATA_DIR = path.join(dir, "data");
+  process.env.GH_TOKEN = ghToken;
+  process.env.GITHUB_TOKEN = githubToken;
   process.env.PATH = tools + path.delimiter + oldPath;
   loaded = new Set();
   calls = [];
@@ -47,6 +52,10 @@ beforeEach(async () => {
   };
 });
 afterEach(async () => {
+  if (savedGhToken === undefined) delete process.env.GH_TOKEN;
+  else process.env.GH_TOKEN = savedGhToken;
+  if (savedGithubToken === undefined) delete process.env.GITHUB_TOKEN;
+  else process.env.GITHUB_TOKEN = savedGithubToken;
   if (oldData === undefined) delete process.env.KERYX_DATA_DIR;
   else process.env.KERYX_DATA_DIR = oldData;
   if (oldPath === undefined) delete process.env.PATH;
@@ -59,14 +68,28 @@ const control = (action: "enable" | "status" | "pause" | "resume", mins?: number
 const plist = () => path.join(host.launchAgentsDir!, watcherLabel(project, key) + ".plist");
 
 test("schedule is independent of Desktop, executable paths are pinned and concurrent enables install once", async () => {
-  const results = await Promise.all([control("enable", 7), control("enable", 7)]);
+  const verifiedEnvs: (NodeJS.ProcessEnv | undefined)[] = [];
+  const enable = () => requestWatch(project, { key, action: "enable", minutes: 7 }, host, async (_cwd, _key, env) => {
+    verifiedEnvs.push(env);
+  });
+  const results = await Promise.all([enable(), enable()]);
   expect(results.map((r) => r.installed)).toEqual([true, true]);
   const contents = await readFile(plist(), "utf8");
   expect(contents).toContain("<integer>420</integer>");
   expect(contents).toContain("<key>RunAtLoad</key><true/>");
   expect(contents).toContain("<string>tick</string>");
   expect(contents).toContain("&amp; &lt;project&gt;");
-  expect(contents).not.toContain("GH_TOKEN");
+  expect(verifiedEnvs.filter(env => !env)).toHaveLength(2);
+  const scheduledEnvs = verifiedEnvs.filter(env => env !== undefined);
+  expect(scheduledEnvs).toHaveLength(2);
+  for (const env of scheduledEnvs) {
+    expect(env.HOME).toBeTruthy();
+    expect(env.GH_TOKEN).toBeUndefined();
+    expect(env.GITHUB_TOKEN).toBeUndefined();
+    expect(Object.values(env)).not.toContain(ghToken);
+    expect(Object.values(env)).not.toContain(githubToken);
+  }
+  for (const value of ["GH_TOKEN", "GITHUB_TOKEN", ghToken, githubToken]) expect(contents).not.toContain(value);
   expect(calls.filter((c) => c === "bootstrap")).toHaveLength(1);
   await control("enable", 12);
   expect(await readFile(plist(), "utf8")).toContain("<integer>720</integer>");
@@ -162,19 +185,35 @@ test("foreign loaded source and replaced plist cannot be removed", async () => {
 
 test("scoped pause preserves confirmed poll errors but completes offline and redacts private history", async () => {
   await control("enable", 1);
+  const card: ReviewCard = {
+    number: 14, state: "open", draft: false, title: "Fixture PR", url: "", author: "alice",
+    assignees: [], reviewers: [], ci: "passed", decision: null, updatedAt: "1", baseSha: "base", headSha: "head",
+  };
+  const observe = (cards: ReviewCard[]) => pollWatcher(project, key, {
+    fetch: async (): Promise<ReviewBoardSnapshot> => ({
+      version: 1, ...key, repositories: [key.repo], fetchedAt: new Date().toISOString(), cards, warnings: [],
+    }),
+  });
+  await observe([]);
+  await observe([card]);
   await pollWatcher(project, key, {
     fetch: async () => {
       throw Error("configuration: synthetic poll details");
     },
   });
-  const confirmed = await control("pause");
+  const confirmed = await control("status");
   expect(confirmed.lastError).toContain("synthetic");
+  expect(confirmed.events).toContainEqual(expect.objectContaining({ kind: "opened", number: card.number }));
+  expect(loaded.size).toBe(1);
+  const jobsAtVerification: number[] = [];
   const hidden = await requestWatch(project, { key, action: "pause", minutes: undefined }, host, async () => {
-    expect(loaded.size).toBe(0);
+    jobsAtVerification.push(loaded.size);
     throw Error("revoked");
   });
+  expect(jobsAtVerification).toEqual([0]);
   expect(hidden).toMatchObject({ historyAvailable: false, events: [], state: "paused", installed: false });
   expect(hidden.lastError).not.toContain("synthetic");
+  expect((await control("pause")).lastError).toBe(confirmed.lastError);
   const local = await requestWatch(
     project,
     { key: undefined, action: "pause", minutes: undefined },

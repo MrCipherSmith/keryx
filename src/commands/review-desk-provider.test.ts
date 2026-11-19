@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
+import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { approveProjectRouting, setRoutingCategory } from "../harness/routing/settings";
+import { writeProjectExternalSetting } from "../lib/external-switch";
 import { saveShellConfig } from "../lib/shell-config";
 import { makeDeskReviewProvider, resolveDeskReviewModel } from "./review-desk-provider";
 
@@ -11,9 +13,19 @@ beforeEach(() => { dir = mkdtempSync(path.join(tmpdir(), "desk-provider-")); });
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
 test("watcher resolves the saved model and credential in a fresh process with no terminal environment", async () => {
-  saveShellConfig({ provider: "anthropic", model: "selected-model", apiKeys: { ANTHROPIC_API_KEY: "fixture" } }, dir);
-  expect(await resolveDeskReviewModel(dir, dir, {})).toEqual({ provider: "anthropic", model: "selected-model" });
-  expect(makeDeskReviewProvider("anthropic", "selected-model", dir, {}).describe().descriptor.providerId).toBe("anthropic");
+  saveShellConfig({ provider: "anthropic", model: "selected-model", apiKeys: { ANTHROPIC_API_KEY: "fixture" } }, path.join(dir, "keryx"));
+  const modulePath = path.join(import.meta.dir, "review-desk-provider.ts");
+  const probe = `
+    import { resolveDeskReviewModel, makeDeskReviewProvider } from ${JSON.stringify(modulePath)};
+    globalThis.fetch = () => { throw new Error("Provider selection must stay offline"); };
+    const { provider, model } = await resolveDeskReviewModel(process.cwd());
+    const adapter = makeDeskReviewProvider(provider, model);
+    console.log(JSON.stringify({ provider, model, adapter: adapter.describe().descriptor.providerId }));
+  `;
+  const result = execFileSync(process.execPath, ["--no-env-file", "-e", probe], {
+    cwd: dir, env: { HOME: dir, XDG_DATA_HOME: dir, APPDATA: dir }, encoding: "utf8", timeout: 10_000,
+  });
+  expect(JSON.parse(result)).toEqual({ provider: "anthropic", model: "selected-model", adapter: "anthropic" });
 });
 
 test("a concrete review routing assignment wins over the persisted shell selection", async () => {
@@ -35,7 +47,8 @@ test("no saved selection uses one credentialed provider and refuses an ambiguous
 });
 
 test("the project external policy applies to the provider before model work begins", async () => {
-  saveShellConfig({ provider: "deepseek", model: "review-model", external: "off" }, dir);
+  saveShellConfig({ provider: "deepseek", model: "review-model", external: "on" }, dir);
+  await writeProjectExternalSetting(dir, "off");
   await expect(resolveDeskReviewModel(dir, dir, { DEEPSEEK_API_KEY: "fixture" })).rejects.toThrow("blocked");
 });
 
