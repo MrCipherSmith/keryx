@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
 import { constants } from "node:fs";
-import { access, readFile, rm } from "node:fs/promises";
+import { access, lstat, rm } from "node:fs/promises";
 import path from "node:path";
 import { isNotFound, writeFileAtomic } from "../lib/fs";
-import { keryxDataDir } from "../session/paths";
+import { keryxDataDir, readConfigFile } from "../lib/config-dir";
 import { launchAgentsDir, runner, xml, type ScheduleHost } from "../trigger/install";
 import { invocationArgv, resolveKeryxInvocation } from "../trigger/schedule";
 import type { WatcherKey } from "./watcher-types";
@@ -69,13 +69,15 @@ function marked(label: string) {
 }
 
 async function ownedContents(plist: string, label: string) {
-  let contents: string;
   try {
-    contents = await readFile(plist, "utf8");
+    if (!(await lstat(plist)).isFile()) throw new Error("configuration: Expected a regular LaunchAgent file.");
   } catch (error) {
     if (isNotFound(error)) return null;
     throw error;
   }
+  const result = readConfigFile(plist);
+  if (!result.ok) throw new Error("configuration: Cannot read the watcher LaunchAgent file.");
+  const contents = result.text;
   if (!contents.includes(marked(label))) {
     throw new Error(
       "configuration: The watcher's LaunchAgent path contains a file managed by another application.",

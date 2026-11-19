@@ -1,12 +1,10 @@
 import { Database } from "bun:sqlite";
-import { mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { keryxDataDir } from "../session/paths";
+import { ensureKeryxSubdir, keryxDataDir } from "../lib/config-dir";
 import type { WatcherKey } from "./watcher-types";
 
 export function watcherTransaction<T>(action: (db: Database) => T): T {
-  const root = join(keryxDataDir(), "desktop-review");
-  mkdirSync(root, { recursive: true, mode: 0o700 });
+  const root = ensureKeryxSubdir(["desktop-review"], keryxDataDir());
   const db = new Database(join(root, "watchers.sqlite"));
   try {
     db.exec("PRAGMA busy_timeout=8000");

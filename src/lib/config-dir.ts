@@ -31,14 +31,7 @@
 //                           `readFileSync` calls, so this entry named the path
 //                           while the read had no bound at all.
 //
-// NOT resolved through this function, stated rather than glossed over:
-// `src/session/paths.ts` has its own `keryxDataDir()`, which applies the same
-// platform rules but ALSO honours a `KERYX_DATA_DIR` override. With that
-// variable set the two disagree, and `sessions/` moves while `auth.json` does
-// not. That divergence predates this flow and is left alone deliberately:
-// teaching this resolver about `KERYX_DATA_DIR` would relocate the `auth.json`
-// of any existing install that sets it, which is a migration, not a cleanup.
-// It is recorded here so the next person finds it rather than discovering it.
+// The data root can move independently via KERYX_DATA_DIR. Credentials stay at the config root.
 
 import {
   appendFileSync,
@@ -84,6 +77,11 @@ export function keryxConfigDir(dir?: string): string {
   const xdg = process.env.XDG_DATA_HOME;
   const base = xdg !== undefined && xdg.length > 0 ? xdg : path.join(home, ".local", "share");
   return path.join(base, "keryx");
+}
+
+/** The data root for sessions and local Review. Configuration and credentials always use keryxConfigDir. */
+export function keryxDataDir(override?: string): string {
+  return override || process.env.KERYX_DATA_DIR || keryxConfigDir();
 }
 
 /**

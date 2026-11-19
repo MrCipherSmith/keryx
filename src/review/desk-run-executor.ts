@@ -7,6 +7,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { invocationArgv, resolveKeryxInvocation } from "../trigger/schedule";
 import { isCompiledBinaryEntry } from "../lib/self-invocation";
+import { revisionOperand } from "../lib/git-revision";
 import { shellQuote } from "../lib/shell-quote";
 import { writeFileAtomic } from "../lib/fs";
 import { runAutonomousReview, defaultSpawn, privateGitEnv, type SpawnChild, type RunProgress } from "./autonomous-run";
@@ -86,6 +87,7 @@ async function git(cwd: string, args: string[], signal: AbortSignal): Promise<st
 
 async function prepareCheckout(options: DeskExecutionOptions, checkout: string, ports: ExecutorPorts) {
   const { cwd, repo, number, signal, baseSha, headSha } = options;
+  if (!recordedSha(baseSha) || !recordedSha(headSha)) throw new Error("Invalid commit ID for the private review checkout.");
   const readRevision = ports.revision ?? revision;
   const matchesRequest = (pr: Revision) => pr.state === "OPEN" && pr.baseRefOid === baseSha && pr.headRefOid === headSha;
   const pull = await readRevision(options);
@@ -99,7 +101,7 @@ async function prepareCheckout(options: DeskExecutionOptions, checkout: string, 
   await run(["-c", "credential.helper=", "-c", "credential.https://github.com.helper=!gh auth git-credential",
     "fetch", "--no-tags", "origin", `+refs/heads/${pull.baseRefName}:${baseRef}`, `+refs/pull/${number}/head:refs/keryx/review-head`]);
   if (await run(["rev-parse", "refs/keryx/review-head"]) !== headSha) return false;
-  if (await run(["rev-parse", baseRef]) !== baseSha) {
+  if (await run(["rev-parse", "--verify", ...revisionOperand(baseRef)]) !== baseSha) {
     // GitHub can retain this PR's base OID after its target branch advances. Trust only a commit
     // reachable from the fetched base branch, and recheck GitHub before keeping the older range.
     const containing = await run(["for-each-ref", "--contains", baseSha, "--format=%(refname)", baseRef]);

@@ -1,9 +1,9 @@
 import { Database } from "bun:sqlite";
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import type { ReviewBoardSnapshot } from "./board-types";
-import { keryxDataDir } from "../session/paths";
+import { ensureKeryxConfigDir, keryxDataDir, readConfigFile } from "../lib/config-dir";
 import { DESK_RUN_SCOPE } from "./desk-run-types";
 import type { DeskFinish, DeskRevision, DeskRun, DeskRunKey, DeskRunSnapshot, DeskSchedule } from "./desk-run-types";
 
@@ -44,7 +44,7 @@ export class DeskRunStore {
       this.db = new Database(path.join(root, "runs.sqlite"), { readonly: true });
       return;
     }
-    mkdirSync(root, { recursive: true, mode: 0o700 });
+    ensureKeryxConfigDir(root);
     this.db = new Database(path.join(root, "runs.sqlite"));
     this.db.exec("PRAGMA busy_timeout=8000");
     this.db.exec(`CREATE TABLE IF NOT EXISTS runs (
@@ -340,8 +340,10 @@ export class DeskRunStore {
     if (!a || a.pid === null || alive(a.pid)) return;
     const directory = this.directory(a.run.id);
     const guard = path.join(directory, "child.json");
-    if (existsSync(guard)) {
-      const child = JSON.parse(readFileSync(guard, "utf8")) as { pid: number };
+    const marker = readConfigFile(guard);
+    if (!marker.ok && marker.reason !== "absent") throw new Error("Cannot inspect the Review worker process marker.");
+    if (marker.ok) {
+      const child = JSON.parse(marker.text) as { pid: number };
       if (
         Number.isSafeInteger(child.pid) &&
         child.pid > 0 &&
