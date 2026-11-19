@@ -13,6 +13,7 @@ export function watcherTransaction<T>(action: (db: Database) => T): T {
       intervalMinutes INTEGER NOT NULL, lastAttemptAt TEXT, lastSuccessAt TEXT, lastError TEXT,
       baseline TEXT, lease TEXT, pid INTEGER
     );
+    CREATE TABLE IF NOT EXISTS watcher_pauses (watcher TEXT PRIMARY KEY, generation INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS watcher_events (id INTEGER PRIMARY KEY, watcher TEXT NOT NULL, event TEXT NOT NULL);
     CREATE INDEX IF NOT EXISTS recent_watcher_events ON watcher_events(watcher, id DESC);
     CREATE TABLE IF NOT EXISTS review_rules (

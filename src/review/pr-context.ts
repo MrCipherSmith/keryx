@@ -9,6 +9,7 @@ import { readExistingReviews } from "./desk-run-legacy";
 import { artifactDirectories, readKnown } from "./project-artifacts";
 import { DeskRunStore, deskRunRoot } from "./desk-run-store";
 import type { DeskRun, DeskRunKey } from "./desk-run-types";
+import { flowManifestStamp, openFlowLinkIndex } from "./flow-link-index";
 import { mainCheckout } from "./watcher-project";
 
 export const PR_CONTEXT_FILE = ".keryx-review-context.json";
@@ -27,21 +28,31 @@ async function projectRoots(cwd: string) {
   const [primary, current] = await Promise.all([mainCheckout(cwd), gitToplevel(cwd)]);
   return [...new Set([primary, realpathSync(current ?? cwd)])];
 }
-function* flowRefs(roots: string[], id?: string) {
+function* flowRefs(roots: string[], id?: string, wanted?: string) {
   const seen = new Set<string>();
   for (const root of roots) {
+    const index = wanted ? openFlowLinkIndex(root) : undefined;
     for (const dir of artifactDirectories(flowsRoot(root))) {
       const directory = path.basename(dir);
       if (seen.has(directory) || !/^\d+-/.test(directory) || (id && !directory.startsWith(id + "-"))) continue;
-      const raw = readKnown(path.join(dir, "flow.json"), 1024 * 1024);
+      const file = path.join(dir, "flow.json");
+      const stamp = index && flowManifestStamp(file);
+      const link = index?.lookup(directory, stamp);
+      if (link !== undefined && link !== wanted) {
+        seen.add(directory);
+        continue;
+      }
+      const raw = readKnown(file, 1024 * 1024);
       if (!raw) continue;
       let flow: FlowState;
       try { flow = JSON.parse(raw.text); } catch { continue; }
       if (typeof flow?.id !== "string" || !/^\d+$/.test(flow.id) || !directory.startsWith(flow.id + "-")) continue;
       seen.add(directory);
       const target = parseProjectPr(flow.pr?.url);
+      index?.record(directory, stamp, target ? target.repo + "#" + target.number : "");
       if (target) yield { dir, directory, flow, target, root };
     }
+    index?.save();
   }
 }
 
@@ -84,7 +95,7 @@ export async function readLinkedFlows(cwd: string, repo: string, number: number,
 function linkedFlows(roots: string[], repo: string, number: number, search?: string) {
   let totalFlows = 0;
   const flows: LinkedFlowContext[] = [];
-  for (const { dir, directory, flow, target, root } of flowRefs(roots)) {
+  for (const { dir, directory, flow, target, root } of flowRefs(roots, undefined, repo.toLowerCase() + "#" + number)) {
     if (target.number !== number || target.repo !== repo.toLowerCase()) continue;
     totalFlows++;
     if (flows.length >= maxFlows) continue;

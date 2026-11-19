@@ -13,6 +13,8 @@ carrying the measurement that found it and the reason it was not done then.
 <!-- retired-spellings-ok: section — a dated record of what each release stated at the time; renaming commands inside it would make the record claim a spelling that did not exist on that date -->
 > **Changelog**
 >
+> - [Desktop Review v1 implementation](keryx-desktop-review/live-acceptance.md) — the project board, manual review, local watcher and automatic rules are implemented. The acceptance record identifies the live macOS and GitHub scenarios, controlled events and remaining field checks.
+>
 > - **0.29.34** — [Keryx Desktop Review v1](keryx-desktop-review/README.md). Draft requirements and delivery plan for the project PR board, manual review runs, a local watcher, and rule-based dispatch through review-orchestrator. Implementation planned.
 >
 > - **0.29.33**: [Keryx Desktop Client](keryx-desktop-client/README.md) — **M1 implemented on `feat/desktop-client`, owner acceptance pending**. macOS Tauri v2 client over `keryx acp --profile shell` (shell roster, ask/trust/auto modes, plan/usage updates, `_keryx/*` extensions), bundled keryx sidecar, local `.dmg`; shell parity in three milestones. Shares one Tauri app with Keryx Desktop App (D-08, awaiting owner confirmation).

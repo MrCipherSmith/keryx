@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { approveProjectRouting, setRoutingCategory } from "../harness/routing/settings";
+import { externalProvidersConfigPath } from "../lib/external-providers";
 import { writeProjectExternalSetting } from "../lib/external-switch";
 import { saveShellConfig } from "../lib/shell-config";
 import { makeDeskReviewProvider, resolveDeskReviewModel } from "./review-desk-provider";
@@ -60,4 +61,15 @@ test("a mismatched reviewer route is named before a model call, and only an appr
   await expect(resolveDeskReviewModel(dir, dir, {})).rejects.toThrow("Review requires anthropic/review-model, but Subagents is set to openrouter/different in user routing settings");
   expect(approveProjectRouting(location).ok).toBe(true);
   expect(await resolveDeskReviewModel(dir, dir, {})).toEqual({ provider: "anthropic", model: "review-model" });
+});
+
+test("an external policy entry remains binding without a display reason", async () => {
+  saveShellConfig({ provider: "openai", model: "review-model", external: "off" }, dir);
+  for (const block of [
+    { providers: [{ id: "openai" }], modelPatterns: [] },
+    { providers: [], modelPatterns: [{ pattern: "review-*", reason: "" }] },
+  ]) {
+    writeFileSync(externalProvidersConfigPath(dir), JSON.stringify({ version: 1, notes: "", ...block }));
+    await expect(resolveDeskReviewModel(dir, dir, { OPENAI_API_KEY: "fixture" })).rejects.toThrow("blocked");
+  }
 });

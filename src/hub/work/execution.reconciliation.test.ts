@@ -29,12 +29,14 @@ test('reconcileSession parses only the pending operation lineage and never cold 
         f.store.remote.put('remote_session', 's', { record: { state: 'idle' } });
         f.store.work.saveExecutionReservation(reservation);
         f.store.remote.put('remote_queue', 'owned-queue', { item: { operationId: reservation.operationId, queueItemId: 'owned-queue', state: 'removed', version: 2, replacesOperationId: null }, sessionId: 's', projectId: 'p', machineId: 'm' }, { sessionId: 's' });
-        for (let n = 0; n < 2000; n++) {
-            const id = `cold-${n}`, marker = 'cold-reconciliation-history';
-            f.store.remote.put('remote_queue', id, { marker, item: { operationId: id, queueItemId: id, state: 'removed', version: 1, replacesOperationId: null } }, { sessionId: 's' });
-            f.store.remote.put('remote_command', id, { marker, operationId: id, status: 'applied' }, { sessionId: 's' });
-            f.store.remote.put('remote_operation', id, { id, marker, request: { unrelated: true } }, { sessionId: 's' });
-        }
+        f.store.workTransaction(() => {
+            for (let n = 0; n < 2000; n++) {
+                const id = `cold-${n}`, marker = 'cold-reconciliation-history';
+                f.store.remote.put('remote_queue', id, { marker, item: { operationId: id, queueItemId: id, state: 'removed', version: 1, replacesOperationId: null } }, { sessionId: 's' });
+                f.store.remote.put('remote_command', id, { marker, operationId: id, status: 'applied' }, { sessionId: 's' });
+                f.store.remote.put('remote_operation', id, { id, marker, request: { unrelated: true } }, { sessionId: 's' });
+            }
+        });
         const parse = JSON.parse; let coldReads = 0;
         const parsed = spyOn(JSON, 'parse').mockImplementation((text, reviver) => { if (text.includes('cold-reconciliation-history')) coldReads++; return parse(text, reviver); });
         try { createWorkExecution(f.store).reconcileSession('s'); } finally { parsed.mockRestore(); }

@@ -10,17 +10,23 @@ const url = "https://github.com/example/project/pull/42";
 const key = { repo: "example/project", viewer: "alice", repositoryId: "repo1", number: 42 };
 const pr = { title: "feature", state: "OPEN", baseRefOid: "a".repeat(40), headRefOid: "b".repeat(40) };
 let project: string, wt: string, store: DeskRunStore;
+let previousDataDir: string | undefined;
 const git = (...cmd: string[]) => execFileSync("git", ["-c", "core.hooksPath=/dev/null", "-C", project, ...cmd], { stdio: "ignore" });
 
 beforeEach(() => {
   project = realpathSync(mkdtempSync(path.join(tmpdir(), "pr-context-")));
+  previousDataDir = process.env.KERYX_DATA_DIR;
+  process.env.KERYX_DATA_DIR = path.join(project, "data");
   wt = project + "-wt";
   git("init", "-q");
   git("-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "--allow-empty", "-qm", "base");
   git("worktree", "add", "--detach", wt);
   store = new DeskRunStore(path.join(project, "db"));
 });
-afterEach(() => { store.close(); rmSync(wt, { recursive: true, force: true }); rmSync(project, { recursive: true, force: true }); });
+afterEach(() => {
+  if (previousDataDir === undefined) delete process.env.KERYX_DATA_DIR;
+  else process.env.KERYX_DATA_DIR = previousDataDir;
+  store.close(); rmSync(wt, { recursive: true, force: true }); rmSync(project, { recursive: true, force: true }); });
 
 function flow(root: string, id: string, link: string, plan: string) {
   const dir = path.join(root, ".metaproject/flows", id + "-feature");
@@ -86,4 +92,15 @@ test("a standalone review can search previous reports, with reviewed SHA separat
   expect(result.history[0]?.report).toContain("Verify migration order");
   expect(result.history[0]!.report.length).toBeLessThan(2300);
   expect((await collectPrContext(wt, key, pr, store, "missing phrase")).history).toEqual([]);
+});
+
+
+test("the Flow link index follows edits, deletions and newly linked manifests across checkouts", async () => {
+  const dir = flow(project, "001", url.replace("/42", "/41"), "old");
+  flow(wt, "001", url, "worktree");
+  expect((await readLinkedFlows(wt, key.repo, 42)).totalFlows).toBe(0);
+  flow(project, "001", url, "updated");
+  expect((await readLinkedFlows(wt, key.repo, 42)).flows[0]?.documents["plan.md"]).toBe("updated");
+  rmSync(dir, { recursive: true });
+  expect((await readLinkedFlows(wt, key.repo, 42)).flows[0]?.documents["plan.md"]).toBe("worktree");
 });

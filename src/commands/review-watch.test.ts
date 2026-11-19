@@ -114,6 +114,24 @@ test("offline pause removes the job and survives login, resume reinstalls the pr
   expect(await control("resume")).toMatchObject({ state: "enabled", installed: true, intervalMinutes: 9 });
 });
 
+test("a local pause stops the timer while another request is still verifying GitHub access", async () => {
+  await control("enable", 5);
+  let entered!: () => void, release!: () => void;
+  const started = new Promise<void>(resolve => { entered = resolve; });
+  const verified = new Promise<void>(resolve => { release = resolve; });
+  const enabling = requestWatch(project, { key, action: "enable", minutes: 1 }, host, async () => {
+    entered();
+    await verified;
+  });
+  await started;
+  try {
+    expect((await control("pause")).state).toBe("paused");
+    expect(loaded.size).toBe(0);
+  } finally { release(); }
+  await expect(enabling).rejects.toThrow("paused during verification");
+  expect((await control("status")).installed).toBe(false);
+});
+
 test("failed bootstrap is visible and recoverable, missing prerequisites do not install", async () => {
   await expect(
     requestWatch(project, { key, action: "enable", minutes: 1 }, host, async () => {

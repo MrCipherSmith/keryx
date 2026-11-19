@@ -9,6 +9,7 @@ import {
   pauseWatcher,
   pollWatcher,
   readWatcher,
+  watcherPauseGeneration,
 } from "../review/watcher";
 import { DEFAULT_WATCHER_MINUTES, type WatcherKey, type WatcherSnapshot } from "../review/watcher-types";
 import {
@@ -108,36 +109,31 @@ export async function requestWatch(
     return scopedStatus(project, request.key, snapshot, verify);
   }
   const lock = path.join(keryxDataDir(), "review-watch", watcherLabel(project, target) + ".lock");
-  const result = await withFileLock(
-    lock,
-    async () => {
-      const before = readWatcher(project, target);
-      if (action === "pause") {
-        if (before.state === "disabled") return before;
-        const paused = pauseWatcher(project, target);
-        paused.installed = await reconcileWatcherTimer(project, target, host);
-        return paused;
-      }
-      if (action === "resume" && before.state === "disabled")
-        throw new Error("configuration: Enable this watcher before resuming it.");
-      if ((host.platform ?? process.platform) !== "darwin")
-        throw new Error("configuration: A local Review watcher requires macOS launchd.");
-      const program = await watcherProgram(project, host);
-      // Verify the credential available to the installed timer, including Keychain auth.
-      // A temporary interactive GH_TOKEN must not be copied into a login LaunchAgent.
-      if (process.env.GH_TOKEN || process.env.GITHUB_TOKEN) await verify(project, target);
-      await verify(project, target, { ...program.env, HOME: homedir() });
-      const minutes = request.minutes ?? before.intervalMinutes;
-      // Persist desired state before RunAtLoad can dispatch the first tick. A failed
-      // installation remains visibly enabled/missing and can be repaired or paused.
-      configureWatcher(project, target, minutes);
-      const installed = await reconcileWatcherTimer(project, target, host, { minutes, program });
-      return { ...readWatcher(project, target), installed };
-    },
-    { timeoutMs: 45_000 },
-  );
-  // Stop the job before checking GitHub and release the control lock while verifying access.
-  return action === "pause" ? scopedStatus(project, request.key, result, verify) : result;
+  if (action === "pause") {
+    const paused = await withFileLock(lock, async () => {
+      const snapshot = pauseWatcher(project, target);
+      if (snapshot.state !== "disabled") snapshot.installed = await reconcileWatcherTimer(project, target, host);
+      return snapshot;
+    }, { timeoutMs: 45_000 });
+    return scopedStatus(project, request.key, paused, verify);
+  }
+  if ((host.platform ?? process.platform) !== "darwin")
+    throw new Error("configuration: A local Review watcher requires macOS launchd.");
+  const generation = watcherPauseGeneration(project, target);
+  if (action === "resume" && readWatcher(project, target).state === "disabled")
+    throw new Error("configuration: Enable this watcher before resuming it.");
+  const program = await watcherProgram(project, host);
+  // The interactive credentials and the credentials launchd can use must both authorize this project.
+  if (process.env.GH_TOKEN || process.env.GITHUB_TOKEN) await verify(project, target);
+  await verify(project, target, { ...program.env, HOME: homedir() });
+  return withFileLock(lock, async () => {
+    if (generation !== watcherPauseGeneration(project, target))
+      throw new Error("configuration: The watcher was paused during verification. Resume it to continue.");
+    const minutes = request.minutes ?? readWatcher(project, target).intervalMinutes;
+    configureWatcher(project, target, minutes);
+    const installed = await reconcileWatcherTimer(project, target, host, { minutes, program });
+    return { ...readWatcher(project, target), installed };
+  }, { timeoutMs: 45_000 });
 }
 
 export async function runReviewWatch(args: string[]) {

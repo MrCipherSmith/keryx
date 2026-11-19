@@ -51,7 +51,7 @@ export async function resolveDeskReviewModel(cwd: string, configDir?: string, en
     throw new Error("The selected review provider is outside the project's routing scope. Check Keryx routing settings and retry.");
   }
   const external = await resolveExternalSetting({ cwd, ...(configDir ? { dir: configDir } : {}) });
-  if (external.value === "off" && externalBlockReason(provider, model, loadExternalProvidersConfig(configDir).config)) {
+  if (external.value === "off" && externalBlockReason(provider, model, loadExternalProvidersConfig(configDir).config) !== undefined) {
     throw new Error("The selected review model is blocked by this project's external provider settings. Choose an allowed review model and retry.");
   }
   const reviewer = routing.categories.subagents;

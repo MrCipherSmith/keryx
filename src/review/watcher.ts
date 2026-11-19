@@ -76,9 +76,16 @@ export function configureWatcher(cwd: string, key: WatcherKey, intervalMinutes: 
   });
 }
 
+/** An explicit pause cancels installation requests still waiting for GitHub. */
+export function watcherPauseGeneration(cwd: string, key: WatcherKey): number {
+  return access(db => db.query<{generation: number}, [string]>("SELECT generation FROM watcher_pauses WHERE watcher=?")
+    .get(scope(cwd, key))?.generation ?? 0);
+}
+
 export function pauseWatcher(cwd: string, key: WatcherKey): WatcherSnapshot {
   const id = scope(cwd, key);
   return access((db) => {
+    db.run("INSERT INTO watcher_pauses(watcher,generation) VALUES(?,1) ON CONFLICT(watcher) DO UPDATE SET generation=generation+1", [id]);
     invalidateRuleWork(db, id, "Watcher paused");
     db.run("UPDATE watchers SET state='paused',baseline=NULL,lease=NULL,pid=NULL WHERE id=?", [id]);
     return snapshot(db, id);
