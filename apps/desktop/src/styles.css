@@ -537,7 +537,7 @@ button { font: inherit; }
 .welcome, .standalone { height: 100%; position: relative; overflow: auto; background: var(--bg-canvas); }
 .welcome-drag { position: absolute; top: 0; left: 0; right: 0; height: var(--titlebar-h); z-index: 1; }
 .welcome { display: grid; place-items: center; padding: var(--sp-6) var(--sp-5); }
-.welcome-col { width: 520px; max-width: 100%; display: grid; gap: var(--sp-5); position: relative; z-index: 2; }
+.welcome-col { width: 520px; max-width: 100%; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-5); position: relative; z-index: 2; }
 .welcome-brand { display: flex; align-items: center; gap: var(--sp-3); }
 .brand-mark { width: 52px; height: 52px; }
 .welcome-brand h1 { font-size: calc(24px * var(--text-scale)); font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
@@ -558,7 +558,7 @@ button { font: inherit; }
 .recent:hover { background: var(--bg-hover); }
 .recent > .icon:first-child { color: var(--fg-muted); }
 .recent-name { font-weight: 600; flex: none; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.recent-path { flex: 1; color: var(--fg-subtle); font-size: var(--fs-sm); }
+.recent-path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg-subtle); font-size: var(--fs-sm); }
 .recent-chev { color: var(--fg-subtle); opacity: 0; transition: opacity var(--dur-fast) ease; }
 .recent:hover .recent-chev, .recent:focus-visible .recent-chev { opacity: 1; }
 .recents-empty { margin: 0; padding: var(--sp-4); color: var(--fg-muted); text-align: center; background: var(--bg-surface); border: 1px dashed var(--border-strong); border-radius: var(--r-lg); }

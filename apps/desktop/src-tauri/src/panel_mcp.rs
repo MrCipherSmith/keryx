@@ -21,7 +21,7 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
-use tauri::{AppHandle, Manager, Window};
+use tauri::{AppHandle, Manager, Webview};
 
 pub const SERVER_NAME: &str = "keryx-panels";
 pub const ENV_SOCKET: &str = "KERYX_PANEL_SOCKET";
@@ -351,8 +351,8 @@ fn browser_tool(app: &AppHandle, window: &str, name: &str, params: &Value) -> Re
                     tab
                 }
                 None => {
-                    let ww: Window = app.get_window(window).ok_or("The window is gone")?;
-                    let info = browser::open_tab(app, &ww, url)?;
+                    let owner = app.get_webview(window).ok_or("The project is gone")?;
+                    let info = browser::open_tab(app, &owner, url)?;
                     let tab = browsers.tab(window, Some(info.id))?;
                     browser::reveal(app, window, tab.id);
                     browser::wait_ready(app, &tab, browser::LOAD_TIMEOUT);
@@ -420,10 +420,10 @@ fn browser_tool(app: &AppHandle, window: &str, name: &str, params: &Value) -> Re
 /// The `mcpServers` entry for this window's sessions. Registers the window's
 /// project root for agent terminal tabs and the browser store.
 #[tauri::command]
-pub fn panel_mcp_entry(app: AppHandle, window: Window, cwd: String) -> Result<McpEntry, String> {
-    app.state::<PanelRoots>().set(window.label(), panels::project_dir(&cwd)?);
+pub fn panel_mcp_entry(app: AppHandle, view: Webview, cwd: String) -> Result<McpEntry, String> {
+    app.state::<PanelRoots>().set(view.label(), panels::project_dir(&cwd)?);
     let socket = socket(&app)?;
-    let token = app.state::<PanelMcp>().token_for(window.label());
+    let token = app.state::<PanelMcp>().token_for(view.label());
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     Ok(McpEntry {
         name: SERVER_NAME.into(),

@@ -149,32 +149,6 @@ mod imp {
 #[cfg(target_os = "macos")]
 pub use imp::{call_js, go, snapshot_png};
 
-/// Height of the window's title bar in points. Child web views are placed in
-/// the window frame, while the app's page starts below the title bar.
-#[cfg(target_os = "macos")]
-pub fn title_bar_height(window: &tauri::Window) -> f64 {
-    let (tx, rx) = mpsc::channel();
-    let Ok(ptr) = window.ns_window() else { return 0.0 };
-    let ptr = ptr as usize;
-    if window
-        .run_on_main_thread(move || {
-            // SAFETY: on the main thread; the pointer is the live NSWindow of this Tauri window.
-            let ns = unsafe { &*(ptr as *const objc2_app_kit::NSWindow) };
-            let h = ns.frame().size.height - ns.contentLayoutRect().size.height;
-            let _ = tx.send(h.max(0.0));
-        })
-        .is_err()
-    {
-        return 0.0;
-    }
-    rx.recv_timeout(Duration::from_secs(1)).unwrap_or(0.0)
-}
-
-#[cfg(not(target_os = "macos"))]
-pub fn title_bar_height(_: &tauri::Window) -> f64 {
-    0.0
-}
-
 #[cfg(not(target_os = "macos"))]
 pub fn call_js(_: &Webview, _: String, _: World) -> Result<String, String> {
     Err("The browser panel's agent tools need macOS".into())

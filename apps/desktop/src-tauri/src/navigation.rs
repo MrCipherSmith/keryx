@@ -1,12 +1,12 @@
-//! Keep every window on the app's own pages.
+//! Keep every project view on the app's own pages.
 //!
 //! The web view renders text from the model and from repository files, and
 //! links in it are inert in the DOM. The host enforces the same rule: a
 //! navigation away from the app origin (for example the WebKit context menu's
 //! "Open Link") is refused, and no page may open a new window.
 
-use tauri::webview::NewWindowResponse;
-use tauri::{AppHandle, Manager, Runtime, Url, WebviewWindowBuilder};
+use tauri::webview::{NewWindowResponse, WebviewBuilder};
+use tauri::{AppHandle, Runtime, Url};
 
 /// True for the app's own origin and, in a debug build, the Vite dev server
 /// origin. The app origin is `tauri://localhost` on macOS and Linux. Only on
@@ -32,12 +32,9 @@ pub fn dev_url<R: Runtime>(app: &AppHandle<R>) -> Option<Url> {
     }
 }
 
-/// Apply the navigation allowlist and refuse new windows. Every window builder
-/// goes through this.
-pub fn guard<'a, R: Runtime, M: Manager<R>>(
-    builder: WebviewWindowBuilder<'a, R, M>,
-    dev_url: Option<Url>,
-) -> WebviewWindowBuilder<'a, R, M> {
+/// Apply the navigation allowlist and refuse new windows. Every project view
+/// (a child web view of a host window, see `projects`) goes through this.
+pub fn guard<R: Runtime>(builder: WebviewBuilder<R>, dev_url: Option<Url>) -> WebviewBuilder<R> {
     builder
         .on_navigation(move |url| navigation_allowed(url, dev_url.as_ref()))
         .on_new_window(|_, _| NewWindowResponse::Deny)

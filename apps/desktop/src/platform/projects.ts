@@ -1,6 +1,7 @@
 // Projects kept live in the background (src-tauri/src/projects.rs). Each project runs in its own
-// window; switching hides the one you leave instead of stopping its keryx. Browser dev mode has
-// one page and no windows: there these calls do nothing and switching reloads the page instead.
+// view inside a host window; switching hides the view you leave (its keryx keeps running) and shows
+// the target's view in the same window. Browser dev mode has one page and no windows: there these
+// calls do nothing and switching reloads the page instead.
 
 import { invoke, isTauri, listen, type Unlisten } from "./backend";
 import type { ProjectActivity } from "../shell/projectRail";
@@ -8,7 +9,7 @@ import type { ProjectActivity } from "../shell/projectRail";
 export interface LiveProject {
   cwd: string;
   activity: ProjectActivity;
-  /** Its window is on screen (the open project, or one opened in a window of its own). */
+  /** Its view is the one in front of a window (the open project, or one open in another window). */
   visible: boolean;
 }
 

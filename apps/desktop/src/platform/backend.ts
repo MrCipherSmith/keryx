@@ -11,8 +11,9 @@ export interface Backend {
   readonly kind: "tauri" | "browser-dev" | "none";
   invoke<T>(command: string, args?: Record<string, unknown>): Promise<T>;
   /**
-   * Events for this window. `scope: "window"` (default) hears events addressed
-   * to the current webview window; `"app"` hears events from any target.
+   * Events for this project view. `scope: "window"` (default) hears events
+   * addressed to the current webview (one project view of a host window);
+   * `"app"` hears events from any target.
    */
   listen<T>(event: string, handler: (payload: T) => void, scope?: "window" | "app"): Promise<Unlisten>;
 }
