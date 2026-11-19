@@ -765,6 +765,13 @@ pub async fn browser_frames(app: AppHandle, view: Webview, on_frame: tauri::ipc:
     blocking(move || engine::attach_frames(&app, &label, on_frame)).await
 }
 
+/// The JPEG of the newest screencast frame of tab `tab`, as raw bytes (empty when there is none).
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+pub fn browser_frame(app: AppHandle, view: Webview, tab: u64) -> tauri::ipc::Response {
+    tauri::ipc::Response::new(engine::frame(&app, view.label(), tab).as_ref().clone())
+}
+
 /// The user's mouse, wheel and keys on the panel's canvas (Chromium engine).
 #[tauri::command]
 /// Synchronous on purpose: commands run in arrival order, and the engine queues the event for one

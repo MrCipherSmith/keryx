@@ -5,10 +5,11 @@
 //! - Tab changes (URL, title, loading, popups, closes) go to the view as the same
 //!   `panel://browser` events the WebKit engine sends, so the panel's chrome
 //!   (tabs, address bar) works unchanged.
-//! - The active tab is shown as a screencast: `Page.startScreencast` frames go
-//!   to the view over a Tauri channel (`browser_frames`) and are drawn on a
-//!   canvas; the user's mouse, wheel and keys come back as real CDP input
-//!   (`browser_input`).
+//! - The active tab is shown as a screencast: the newest `Page.startScreencast`
+//!   frame is kept here, a small notice of it goes to the view over a Tauri
+//!   channel (`browser_frames`), and the view fetches the JPEG (`browser_frame`)
+//!   and draws it on a canvas; the user's mouse, wheel and keys come back as
+//!   real CDP input (`browser_input`).
 //! - The page's viewport is the panel body's size (`layout`), so pages lay out
 //!   for the space they are shown in.
 //!
@@ -18,6 +19,7 @@
 
 use super::launch::{find_chrome, profile_dir, Chromium};
 use super::page::{Browser, Page};
+use base64::Engine as _;
 use crate::browser::{self, BrowserEvent, BrowserTabInfo};
 use crate::panels::PanelRoots;
 use serde::{Deserialize, Serialize};
@@ -56,16 +58,29 @@ pub fn resolve(setting: EngineSetting, chrome_found: bool) -> Kind {
     }
 }
 
-/// A screencast frame for the panel's canvas.
-#[derive(Serialize, Clone, Debug)]
+/// A notice that tab `tab` has a new screencast frame; the panel fetches its JPEG with
+/// `browser_frame`.
+///
+/// Only this small notice travels on the channel. A channel message too big to be sent inline is
+/// fetched by the webview in a separate request, and the channel delivers its messages strictly in
+/// order: one such fetch that fails holds back every later message, so the canvas froze on its last
+/// frame while the page went on. A notice is always sent inline; a failed fetch of a frame costs
+/// that frame only.
+#[derive(Serialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Frame {
     pub tab: u64,
-    /// JPEG, base64.
-    pub data: String,
+    /// Grows with every frame of the view.
+    pub seq: u64,
     /// The page's size in CSS pixels the frame shows.
     pub width: f64,
     pub height: f64,
+}
+
+/// The newest screencast frame of a view.
+struct Latest {
+    tab: u64,
+    jpeg: Arc<Vec<u8>>,
 }
 
 /// User input from the panel's canvas, in the page's CSS pixels.
@@ -217,6 +232,24 @@ struct ViewState {
     frames: Option<Channel<Frame>>,
     /// The session the screencast runs on.
     casting: Option<String>,
+    latest: Option<Latest>,
+    frame_seq: u64,
+}
+
+impl ViewState {
+    /// Keep a screencast frame (`data`: base64 JPEG) of tab `tab` as the newest, and return the
+    /// notice for the panel; `None` for data that does not decode.
+    fn keep_frame(&mut self, tab: u64, data: &str, width: f64, height: f64) -> Option<Frame> {
+        let jpeg = base64::engine::general_purpose::STANDARD.decode(data).ok()?;
+        self.frame_seq += 1;
+        self.latest = Some(Latest { tab, jpeg: Arc::new(jpeg) });
+        Some(Frame { tab, seq: self.frame_seq, width, height })
+    }
+
+    /// The newest frame's JPEG, if it is of tab `tab`.
+    fn frame_of(&self, tab: u64) -> Option<Arc<Vec<u8>>> {
+        self.latest.as_ref().filter(|l| l.tab == tab).map(|l| l.jpeg.clone())
+    }
 }
 
 pub struct View {
@@ -467,16 +500,17 @@ fn on_event(app: &AppHandle, v: &Arc<View>, method: &str, session: Option<&str>,
             let ack = p.get("sessionId").cloned().unwrap_or(Value::Null);
             let Some(session) = session else { return };
             {
-                let s = v.state.lock().unwrap();
-                if s.casting.as_deref() == Some(session) {
-                    if let (Some(ch), Some(tab)) = (&s.frames, s.tabs.iter().find(|t| t.page.session == session)) {
-                        let meta = p.get("metadata").cloned().unwrap_or(Value::Null);
-                        let _ = ch.send(Frame {
-                            tab: tab.id,
-                            data: p.get("data").and_then(|d| d.as_str()).unwrap_or("").to_string(),
-                            width: meta.get("deviceWidth").and_then(|w| w.as_f64()).unwrap_or(0.0),
-                            height: meta.get("deviceHeight").and_then(|h| h.as_f64()).unwrap_or(0.0),
-                        });
+                let mut s = v.state.lock().unwrap();
+                let tab = s.tabs.iter().find(|t| t.page.session == session).map(|t| t.id);
+                if let (true, Some(tab)) = (s.casting.as_deref() == Some(session), tab) {
+                    let meta = p.get("metadata").cloned().unwrap_or(Value::Null);
+                    let data = p.get("data").and_then(|d| d.as_str()).unwrap_or("");
+                    let width = meta.get("deviceWidth").and_then(|w| w.as_f64()).unwrap_or(0.0);
+                    let height = meta.get("deviceHeight").and_then(|h| h.as_f64()).unwrap_or(0.0);
+                    if let Some(notice) = s.keep_frame(tab, data, width, height) {
+                        if let Some(ch) = &s.frames {
+                            let _ = ch.send(notice);
+                        }
                     }
                 }
             }
@@ -684,6 +718,11 @@ pub fn attach_frames(app: &AppHandle, label: &str, channel: Channel<Frame>) -> R
     Ok(())
 }
 
+/// The JPEG of the newest screencast frame, if it is of tab `tab` (empty otherwise).
+pub fn frame(app: &AppHandle, label: &str, tab: u64) -> Arc<Vec<u8>> {
+    existing(app, label).and_then(|v| v.state.lock().unwrap().frame_of(tab)).unwrap_or_default()
+}
+
 /// Queue the user's input for tab `id`; one worker per view applies it in arrival order.
 pub fn input(app: &AppHandle, label: &str, id: u64, ev: InputEvent) -> Result<(), String> {
     let v = existing(app, label).ok_or("The browser is not running")?;
@@ -768,6 +807,26 @@ pub fn close_all(app: &AppHandle) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_newest_frame_is_kept_and_only_a_small_notice_is_sent() {
+        let mut s = ViewState::default();
+        let jpeg = base64::engine::general_purpose::STANDARD.encode(vec![0xffu8; 300_000]);
+        let first = s.keep_frame(7, &jpeg, 800.0, 600.0).unwrap();
+        assert_eq!(first, Frame { tab: 7, seq: 1, width: 800.0, height: 600.0 });
+        // The notice stays far below the size a channel sends inline (it never needs a fetch).
+        assert!(serde_json::to_string(&first).unwrap().len() < 200);
+        assert_eq!(s.frame_of(7).unwrap().len(), 300_000);
+        assert!(s.frame_of(8).is_none(), "another tab's frame is not this tab's");
+
+        let second = s.keep_frame(8, &base64::engine::general_purpose::STANDARD.encode([1u8, 2, 3]), 10.0, 10.0).unwrap();
+        assert_eq!(second.seq, 2);
+        assert!(s.frame_of(7).is_none(), "only the newest frame is kept");
+        assert_eq!(s.frame_of(8).unwrap().as_slice(), &[1, 2, 3]);
+
+        assert!(s.keep_frame(8, "not base64!", 10.0, 10.0).is_none());
+        assert_eq!(s.frame_of(8).unwrap().as_slice(), &[1, 2, 3], "a bad frame leaves the last good one");
+    }
 
     #[test]
     fn auto_uses_chromium_only_when_chrome_is_there() {

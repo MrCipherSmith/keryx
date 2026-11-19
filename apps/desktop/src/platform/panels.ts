@@ -78,15 +78,23 @@ export const browserLayout = (bounds: Bounds | null, visible: boolean) =>
 export type BrowserEngine = "webkit" | "chromium";
 export const browserEngine = () => invoke<BrowserEngine>("browser_engine");
 
-/** A Chromium screencast frame: JPEG (base64) of the page, `width`×`height` CSS pixels. */
+/**
+ * A notice of a new Chromium screencast frame of `tab`, showing `width`×`height` CSS pixels of the
+ * page; its JPEG is fetched with `browserFrame`. (The notice is small so the channel always sends it
+ * inline: a large channel message goes through a fetch, and one failed fetch held back every later
+ * message, freezing the canvas.)
+ */
 export interface BrowserFrame {
   tab: number;
-  data: string;
+  seq: number;
   width: number;
   height: number;
 }
 
-/** Stream the active Chromium tab's frames to `onFrame` (replaces an earlier stream). */
+/** The JPEG of the newest frame of `tab` (empty when there is none). */
+export const browserFrame = (tab: number) => invoke<ArrayBuffer>("browser_frame", { tab });
+
+/** Stream notices of the active Chromium tab's frames to `onFrame` (replaces an earlier stream). */
 export async function browserFrames(onFrame: (f: BrowserFrame) => void): Promise<void> {
   if (!isTauri()) throw new Error("The browser needs the Keryx app.");
   const { Channel } = await import("@tauri-apps/api/core");

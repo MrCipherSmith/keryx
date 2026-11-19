@@ -152,6 +152,70 @@ fn persistent_cookies_are_encrypted_with_the_real_keychain() {
     assert_eq!(with_mock, None);
 }
 
+/// The screencast keeps sending frames after the tab moves to another site (a renderer swap).
+#[test]
+#[ignore]
+fn the_screencast_survives_a_cross_site_navigation() {
+    let profile = tempfile::tempdir().unwrap();
+    let a = serve();
+    let b = serve_cookie();
+    let (proc, cdp) = Chromium::launch(&chrome(), profile.path(), true, Duration::from_secs(20)).expect("launch");
+    let page = Browser::new(cdp.clone()).open_page().expect("page");
+    let _ = page.call("Emulation.setDeviceMetricsOverride", serde_json::json!({ "width": 400, "height": 300, "deviceScaleFactor": 1, "mobile": false }));
+    page.navigate(&format!("http://127.0.0.1:{a}/")).expect("navigate a");
+    let paint = |colour: &str| {
+        let _ = page.evaluate(&format!("document.documentElement.innerHTML = '<body style=\\'margin:0;background:{colour}\\'></body>'"));
+    };
+    paint("rgb(0,0,255)");
+    let events = cdp.subscribe();
+    page.call("Page.startScreencast", serde_json::json!({ "format": "jpeg", "quality": 90, "everyNthFrame": 1 })).expect("cast");
+    // The frames of the next `secs` seconds: how many, and the colour of the last one.
+    let frames = |secs: u64| {
+        let deadline = std::time::Instant::now() + Duration::from_secs(secs);
+        let (mut n, mut last) = (0, None);
+        while let Ok(ev) = events.recv_timeout(deadline.saturating_duration_since(std::time::Instant::now())) {
+            if ev.method == "Page.screencastFrame" && ev.session.as_deref() == Some(page.session.as_str()) {
+                n += 1;
+                last = ev.params["data"].as_str().map(String::from);
+                let _ = cdp.call(Some(&page.session), "Page.screencastFrameAck", serde_json::json!({ "sessionId": ev.params["sessionId"] }));
+            }
+            if std::time::Instant::now() >= deadline {
+                break;
+            }
+        }
+        (n, last.map(|d| centre_colour(&d)))
+    };
+    let (before, colour_before) = frames(2);
+    // Another site: localhost instead of 127.0.0.1.
+    page.navigate(&format!("http://localhost:{b}/")).expect("navigate b");
+    paint("rgb(255,0,0)");
+    let (after, colour_after) = frames(3);
+    println!("frames before {before} {colour_before:?}, after the cross-site navigation {after} {colour_after:?}");
+    let blue = colour_before.expect("a frame before");
+    assert!(blue.2 > 200 && blue.0 < 60, "{blue:?}");
+    let red = colour_after.expect("a frame after the cross-site navigation");
+    assert!(red.0 > 200 && red.2 < 60, "the frames after the navigation still show the old page: {red:?}");
+    drop(proc);
+}
+
+/// The colour at the centre of a base64 JPEG frame, read through `sips` (macOS) as a BMP.
+fn centre_colour(b64: &str) -> (u8, u8, u8) {
+    use base64::Engine as _;
+    let dir = tempfile::tempdir().unwrap();
+    let jpg = dir.path().join("f.jpg");
+    let bmp = dir.path().join("f.bmp");
+    std::fs::write(&jpg, base64::engine::general_purpose::STANDARD.decode(b64).unwrap()).unwrap();
+    let ok = std::process::Command::new("sips").args(["-s", "format", "bmp"]).arg(&jpg).arg("--out").arg(&bmp).output().unwrap();
+    assert!(ok.status.success(), "{}", String::from_utf8_lossy(&ok.stderr));
+    let d = std::fs::read(&bmp).unwrap();
+    let u32_at = |i: usize| u32::from_le_bytes(d[i..i + 4].try_into().unwrap()) as usize;
+    let (offset, width, height) = (u32_at(10), u32_at(18), (u32_at(22) as i32).unsigned_abs() as usize);
+    let bpp = usize::from(u16::from_le_bytes([d[28], d[29]])) / 8;
+    let row = (width * bpp).div_ceil(4) * 4;
+    let i = offset + (height / 2) * row + (width / 2) * bpp;
+    (d[i + 2], d[i + 1], d[i])
+}
+
 #[test]
 #[ignore]
 fn drive_a_local_page_with_real_input() {

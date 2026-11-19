@@ -134,6 +134,7 @@ pub fn run() {
             browser::browser_list,
             browser::browser_engine,
             browser::browser_frames,
+            browser::browser_frame,
             browser::browser_input,
             images::local_image,
             chromium::consent::browser_consent_answer,

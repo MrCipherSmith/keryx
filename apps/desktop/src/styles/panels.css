@@ -54,7 +54,7 @@
 .browser-error { display: flex; align-items: center; gap: 6px; padding: 6px var(--sp-2); font-size: var(--fs-sm); color: var(--danger); border-bottom: 1px solid var(--border); flex: none; }
 .browser-body { position: relative; flex: 1; min-height: 0; display: flex; background: var(--bg-surface); }
 /* The Chromium engine's page: a screencast canvas the size of the panel body (the page's viewport). */
-.chrome-view { position: absolute; inset: 0; overflow: hidden; background: #fff; }
+.chrome-view { position: absolute; inset: 0; overflow: hidden; background: #fff; outline: none; }
 .chrome-view canvas { display: block; width: 100%; height: 100%; cursor: default; }
 .chrome-keys { position: absolute; left: 0; top: 0; width: 1px; height: 1px; opacity: 0; border: 0; padding: 0; resize: none; pointer-events: none; }
 /* The host's question before the agent acts on an outside site. */
