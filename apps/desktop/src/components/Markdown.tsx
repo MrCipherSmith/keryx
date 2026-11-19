@@ -6,8 +6,21 @@ import { highlightToHtml } from "./highlight";
 import { diffLines, diffStats, looksLikeUnifiedDiff } from "./unifiedDiff";
 import { emptyCache, renderStreaming, type RenderTokens, type StreamFrame } from "./markdownStream";
 import { isShellLang, runInTerminal, runnableCommand } from "../panels/panelBus";
+import { localImage } from "../platform/commands";
+import { clickedImageLink, decorateImageLinks, loadCached, openImagePreview } from "./imagePreview";
 
 marked.setOptions({ gfm: true, breaks: false });
+
+const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+// An image in a message is shown as a link (images are not rendered from markup); a local one then gets a
+// thumbnail from the host (see imagePreview.ts).
+marked.use({
+  renderer: {
+    image({ href, text }: { href: string; text: string }) {
+      return `<a href="${escapeHtml(href ?? "")}">${escapeHtml(text || href || "image")}</a>`;
+    },
+  },
+});
 
 // Agent output is untrusted: an explicit allow-list, no <style>, forms, form controls, ids or inline styles.
 const SANITIZE = {
@@ -19,7 +32,9 @@ const SANITIZE = {
   FORBID_TAGS: ["style", "form", "input", "button", "textarea", "select", "iframe", "object", "embed", "img", "svg", "math", "script"],
   FORBID_ATTR: ["style", "id", "action", "formaction", "src", "srcset", "name", "target"],
   ALLOW_DATA_ATTR: false,
-  ALLOWED_URI_REGEXP: /^(?:https?:|mailto:|#)/i,
+  // Links: web, mail, anchors, and local image files (shown as thumbnails; nothing else local is linked).
+  ALLOWED_URI_REGEXP:
+    /^(?:https?:|mailto:|#|file:\/\/\/[^?#]*\.(?:png|jpe?g|webp|gif)$|\/(?!\/)[^?#]*\.(?:png|jpe?g|webp|gif)$|(?![a-z][a-z0-9+.-]*:)[^/?#][^?#]*\.(?:png|jpe?g|webp|gif)$)/i,
 };
 const LANG_CLASS = /^language-[\w+#.-]+$/;
 const ALIGN = /^(?:left|right|center)$/;
@@ -56,6 +71,14 @@ function blockLinks(e: React.MouseEvent<HTMLElement>) {
 function onClick(e: React.MouseEvent<HTMLDivElement>) {
   const target = e.target as HTMLElement;
   blockLinks(e);
+  const image = clickedImageLink(target);
+  if (image) {
+    const alt = target.closest(".md-thumb")?.querySelector("img")?.alt ?? target.textContent ?? "";
+    void loadCached(image, localImage)
+      .then((src) => openImagePreview(src, alt))
+      .catch(() => {});
+    return;
+  }
   const run = target.closest<HTMLButtonElement>("button.code-run");
   if (run) {
     const block = run.closest<HTMLElement>(".code-block");
@@ -264,6 +287,26 @@ export const Markdown = memo(function Markdown({ text, className }: { text: stri
       else showFinal(el, st.view, final);
     }, SETTLE_MS);
   }, [text]);
+
+  // Local-image links get thumbnails, also as the message streams in (throttled to a frame).
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof MutationObserver === "undefined") return;
+    let raf = 0;
+    const run = () => {
+      raf = 0;
+      decorateImageLinks(el, localImage);
+    };
+    run();
+    const mo = new MutationObserver(() => {
+      if (!raf) raf = requestAnimationFrame(run);
+    });
+    mo.observe(el, { childList: true, subtree: true });
+    return () => {
+      mo.disconnect();
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, []);
 
   useEffect(
     () => () => {

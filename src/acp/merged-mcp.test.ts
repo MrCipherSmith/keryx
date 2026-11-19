@@ -8,7 +8,7 @@ import { buildFqn, mergeCatalogs, type CatalogEntry, type ServerCatalog } from "
 import type { ServerState } from "../mcp-servers/manager";
 import type { McpRuntime } from "../mcp-servers/runtime";
 import { createMcpInteractiveTools } from "../mcp-servers/tools";
-import { acpMcpBinds, clientMcpServers, mergeAcpMcp, SHADOWED_CLIENT_SERVER_REASON } from "./merged-mcp";
+import { acpMcpBinds, clientMcpServers, mergeAcpMcp, ownedToolReason, SHADOWED_CLIENT_SERVER_REASON, withoutOwned } from "./merged-mcp";
 import type { AcpSessionMcp } from "./session-mcp";
 
 function entry(server: string, rawName: string): CatalogEntry {
@@ -113,5 +113,40 @@ describe("mergeAcpMcp — server-name collisions", () => {
     expect(acpMcpBinds(false, empty)).toBe(false);
     expect(acpMcpBinds(true, empty)).toBe(true);
     expect(mergeAcpMcp(undefined, empty).binding).toBeUndefined();
+  });
+});
+
+// A client's first-party server owning a tool-name prefix (the desktop app's browser panel).
+describe("owned prefixes", () => {
+  const keryxCatalog: ServerCatalog = {
+    entries: [entry("playwright", "browser_navigate"), entry("playwright", "browser_take_screenshot"), entry("github", "search_code")],
+    skipped: [],
+  };
+  const panelCatalog: ServerCatalog = { entries: [entry("keryx-panels", "browser_navigate"), entry("keryx-panels", "terminal_run")], skipped: [] };
+
+  test("keryx tools under a prefix the client's first-party server owns are not offered, with a reason", () => {
+    const owned = new Map([["keryx-panels", ["browser_"]]]);
+    const out = withoutOwned(keryxCatalog, owned);
+    expect(out.entries.map((e) => e.fqn)).toEqual([buildFqn("github", "search_code")]);
+    expect(out.skipped.map((s) => s.rawName)).toEqual(["browser_navigate", "browser_take_screenshot"]);
+    expect(out.skipped[0]!.reason).toBe(ownedToolReason("keryx-panels", "browser_"));
+    // The owner's own tools are never dropped, and no owner means no change.
+    expect(withoutOwned(panelCatalog, owned).entries).toHaveLength(2);
+    expect(withoutOwned(keryxCatalog, undefined)).toBe(keryxCatalog);
+  });
+
+  test("the merged catalog keeps only the client's browser tools and every other keryx tool", () => {
+    const keryx = keryxRuntime([{ name: "playwright" } as ServerState, { name: "github" } as ServerState], keryxCatalog);
+    const client: AcpSessionMcp = { ...clientSet([{ name: "keryx-panels" } as ServerState], panelCatalog), owned: new Map([["keryx-panels", ["browser_"]]]) };
+    const fqns = mergeAcpMcp(keryx, client).binding!.catalog().entries.map((e) => e.fqn);
+    expect(fqns).toContain(buildFqn("keryx-panels", "browser_navigate"));
+    expect(fqns).toContain(buildFqn("github", "search_code"));
+    expect(fqns.some((f) => f.startsWith("playwright"))).toBe(false);
+  });
+
+  test("without an owned prefix nothing of keryx's is dropped", () => {
+    const keryx = keryxRuntime([{ name: "playwright" } as ServerState], keryxCatalog);
+    const merged = mergeAcpMcp(keryx, clientSet([{ name: "keryx-panels" } as ServerState], panelCatalog)).binding!.catalog();
+    expect(merged.entries.some((e) => e.server === "playwright")).toBe(true);
   });
 });

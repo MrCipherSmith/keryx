@@ -33,6 +33,16 @@ interface Props {
   onModel: (configId: string, value: string) => void;
   /** Open the Providers dialog (the provider picker's last item, the same as /connect). */
   onProviders?: () => void;
+  /** Context that goes out with the next message (page elements picked in the browser panel). */
+  attachments?: readonly ComposerAttachment[];
+  onRemoveAttachment?: (key: number) => void;
+}
+
+export interface ComposerAttachment {
+  key: number;
+  label: string;
+  /** Tooltip: where it came from. */
+  title?: string;
 }
 
 export const COMPOSER_MAX_PX = 260;
@@ -75,7 +85,7 @@ function modelChoices(option: ConfigOption | undefined): ConfigSelectOption[] {
 }
 
 export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
-  { sessionId, busy, disabledReason, commands, modes, model, sendKey, onSend, onStop, onMode, onModel, onProviders },
+  { sessionId, busy, disabledReason, commands, modes, model, sendKey, onSend, onStop, onMode, onModel, onProviders, attachments = [], onRemoveAttachment },
   ref,
 ) {
   const [drafts, setDrafts] = useState<Drafts>({});
@@ -150,7 +160,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   const send = async () => {
     // A command line is trimmed; other text keeps a leading space, which is what makes "/x" text for the model.
     const t = text.startsWith("/") ? text.trim() : text.replace(/^[\r\n]+/, "").trimEnd();
-    if (!t.trim() || disabled) return;
+    if ((!t.trim() && attachments.length === 0) || disabled) return;
     const ok = await onSend(t);
     if (ok && textRef.current === text) setText("");
   };
@@ -280,6 +290,21 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
           ))}
         </ul>
       ) : null}
+      {attachments.length > 0 ? (
+        <ul className="composer-attachments" aria-label="Attached page elements">
+          {attachments.map((a) => (
+            <li key={a.key} className="attach-chip" title={a.title}>
+              <Icon name="pick" size={12} />
+              <span className="truncate">{a.label}</span>
+              {onRemoveAttachment ? (
+                <button className="icon-btn icon-btn-sm" onClick={() => onRemoveAttachment(a.key)} aria-label={`Remove ${a.label}`} title="Remove">
+                  <Icon name="x" size={10} />
+                </button>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
       <textarea
         ref={area}
         rows={1}
@@ -347,7 +372,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
             <Icon name="stop" size={12} strokeWidth={0} className="filled" />
           </button>
         ) : (
-          <button className="send-btn" onClick={() => void send()} disabled={disabled || !text.trim()} title="Send" aria-label="Send">
+          <button className="send-btn" onClick={() => void send()} disabled={disabled || (!text.trim() && attachments.length === 0)} title="Send" aria-label="Send">
             <Icon name="arrowUp" size={16} strokeWidth={2.25} />
           </button>
         )}

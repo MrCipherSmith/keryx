@@ -16,6 +16,7 @@
 
 use crate::panels::PanelRoots;
 use crate::projects::ProjectWindows;
+use crate::chromium::engine;
 use crate::webkit::{self, World};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -80,6 +81,8 @@ struct WindowTabs {
     active: Option<u64>,
     bounds: Option<Bounds>,
     visible: bool,
+    /// The panel page's device pixel ratio (the Chromium engine renders at it).
+    scale: f64,
     /// Newest `browser_layout` call applied (calls may arrive out of order).
     layout_seq: u64,
 }
@@ -178,6 +181,16 @@ fn emit(app: &AppHandle, window: &str, event: BrowserEvent) {
     let _ = app.emit_to(window, "panel://browser", event);
 }
 
+/// Send a browser event to project view `window` (the Chromium engine's tabs use it too).
+pub fn emit_event(app: &AppHandle, window: &str, event: BrowserEvent) {
+    emit(app, window, event);
+}
+
+/// A new tab id, unique across both engines.
+pub fn next_tab_id(app: &AppHandle) -> u64 {
+    app.state::<Browsers>().next.fetch_add(1, Ordering::SeqCst) + 1
+}
+
 fn emit_tab(app: &AppHandle, window: &str, id: u64) {
     if let Some(tab) = app.state::<Browsers>().info(window, id) {
         emit(app, window, BrowserEvent::Tab { tab });
@@ -191,10 +204,16 @@ fn webview(app: &AppHandle, tab: &BrowserTab) -> Result<Webview, String> {
 /// Show the active tab over the panel body, hide every other one; hide them all while the owning
 /// project view (`window`) is not the one in front of its window.
 pub fn apply_layout(app: &AppHandle, window: &str) {
-    let (tabs, active, bounds, visible) = app
+    let (tabs, active, bounds, visible, scale) = app
         .state::<Browsers>()
-        .with_window(window, |w| (w.tabs.clone(), w.active, w.bounds, w.visible));
+        .with_window(window, |w| (w.tabs.clone(), w.active, w.bounds, w.visible, w.scale));
     let visible = visible && app.state::<ProjectWindows>().is_front(window);
+    if engine::is_chromium(app, window) {
+        // The page is drawn by the panel itself (a screencast); only its size and visibility matter.
+        let (app, window) = (app.clone(), window.to_string());
+        std::thread::spawn(move || engine::layout(&app, &window, bounds, visible, if scale > 0.0 { scale } else { 2.0 }));
+        return;
+    }
     // The project view fills its host window from (0, 0) and the tabs are its siblings there, so
     // the page's own coordinates are the tabs' coordinates.
     for t in tabs {
@@ -225,6 +244,7 @@ pub fn reparent_tabs(app: &AppHandle, owner: &str, window: &Window) {
 
 /// Close every tab of a project view (the view is closing).
 pub fn close_window(app: &AppHandle, window: &str) {
+    engine::close_view(app, window);
     let tabs = app.state::<Browsers>().with_window(window, |w| std::mem::take(&mut w.tabs));
     for t in tabs {
         if let Some(wv) = app.get_webview(&t.label) {
@@ -532,6 +552,61 @@ pub fn go(app: &AppHandle, tab: &BrowserTab, forward: bool) -> Result<(), String
     webkit::go(&webview(app, tab)?, forward)
 }
 
+// ---- the element picker (the user hands page elements to the agent as context) ----
+
+/// The picker script (`pick.js`): runs in the client content world until the user clicks or cancels.
+const PICK_JS: &str = include_str!("pick.js");
+/// How long a picker waits for the user before it gives up.
+pub const PICK_TIMEOUT: Duration = Duration::from_secs(600);
+const PICK_CANCEL_JS: &str = "if (globalThis.__kxPick) globalThis.__kxPick.cancel(); return JSON.stringify({ ok: true });";
+
+/// The part of a picked element's box that is on screen, in the page's viewport coordinates.
+pub fn visible_rect(rect: &serde_json::Value, viewport: &serde_json::Value) -> Option<(f64, f64, f64, f64)> {
+    let n = |v: &serde_json::Value, k: &str| v.get(k).and_then(|x| x.as_f64());
+    let (x, y, w, h) = (n(rect, "x")?, n(rect, "y")?, n(rect, "width")?, n(rect, "height")?);
+    let (vw, vh) = (n(viewport, "width")?, n(viewport, "height")?);
+    let (left, top) = (x.max(0.0), y.max(0.0));
+    let (right, bottom) = ((x + w).min(vw), (y + h).min(vh));
+    (right - left >= 1.0 && bottom - top >= 1.0).then_some((left, top, right - left, bottom - top))
+}
+
+pub fn save_png(name: &str, png: &[u8]) -> Result<std::path::PathBuf, String> {
+    let dir = std::env::temp_dir().join("keryx-panel-screenshots");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
+    let path = dir.join(format!("{name}-{stamp}.png"));
+    std::fs::write(&path, png).map_err(|e| e.to_string())?;
+    Ok(path)
+}
+
+/// Let the user pick an element of the tab's page; `{cancelled: true}` when they do not. A picked
+/// element comes back described (`pick.js`) with a PNG of its visible part under `screenshot`.
+pub fn pick(app: &AppHandle, tab: &BrowserTab) -> Result<serde_json::Value, String> {
+    let wv = webview(app, tab)?;
+    let text = webkit::call_js_within(&wv, PICK_JS.to_string(), World::Client, PICK_TIMEOUT).inspect_err(|_| {
+        let _ = webkit::call_js(&wv, PICK_CANCEL_JS.to_string(), World::Client);
+    })?;
+    let mut value: serde_json::Value = serde_json::from_str(&text).map_err(|_| "The page returned no result".to_string())?;
+    if let Some(err) = value.get("error").and_then(|e| e.as_str()) {
+        return Err(err.to_string());
+    }
+    if value.get("cancelled").is_some() {
+        return Ok(value);
+    }
+    let clip = match (value.get("rect"), value.get("viewport")) {
+        (Some(r), Some(v)) => visible_rect(r, v),
+        _ => None,
+    };
+    if let Some((x, y, w, h)) = clip {
+        // The overlay is gone by the time the script answers; give WebKit a frame to repaint without it.
+        std::thread::sleep(Duration::from_millis(60));
+        if let Ok(path) = webkit::snapshot_png_rect(&wv, x, y, w, h).and_then(|png| save_png(&format!("pick-{}", tab.id), &png)) {
+            value["screenshot"] = serde_json::Value::String(path.to_string_lossy().into_owned());
+        }
+    }
+    Ok(value)
+}
+
 // ---- commands (async: `add_child` and WebKit calls wait on the main thread) ----
 
 #[tauri::command]
@@ -541,17 +616,38 @@ pub async fn browser_open(app: AppHandle, view: Webview, cwd: String, url: Strin
     if !page_allowed(&url, crate::navigation::dev_url(&app).as_ref()) {
         return Err(format!("The browser panel does not open {url}"));
     }
+    if engine::is_chromium(&app, view.label()) {
+        let label = view.label().to_string();
+        return blocking(move || engine::open_tab(&app, &label, url.as_str())).await;
+    }
     open_tab(&app, &view, url)
+}
+
+/// Run blocking engine work off the async workers.
+async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Result<T, String> + Send + 'static) -> Result<T, String> {
+    tauri::async_runtime::spawn_blocking(f).await.map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
 pub async fn browser_navigate(app: AppHandle, view: Webview, id: u64, url: String) -> Result<(), String> {
+    if engine::is_chromium(&app, view.label()) {
+        let url = normalize_url(&url)?;
+        if !page_allowed(&url, crate::navigation::dev_url(&app).as_ref()) {
+            return Err(format!("The browser panel does not open {url}"));
+        }
+        let label = view.label().to_string();
+        return blocking(move || engine::page(&app, &label, Some(id))?.1.navigate(url.as_str())).await;
+    }
     let tab = app.state::<Browsers>().tab(view.label(), Some(id))?;
     navigate(&app, &tab, normalize_url(&url)?)
 }
 
 #[tauri::command]
 pub async fn browser_go(app: AppHandle, view: Webview, id: u64, action: String) -> Result<(), String> {
+    if engine::is_chromium(&app, view.label()) {
+        let label = view.label().to_string();
+        return blocking(move || engine::go(&app, &label, id, &action)).await;
+    }
     let tab = app.state::<Browsers>().tab(view.label(), Some(id))?;
     match action.as_str() {
         "back" => go(&app, &tab, false),
@@ -563,22 +659,40 @@ pub async fn browser_go(app: AppHandle, view: Webview, id: u64, action: String) 
 
 #[tauri::command]
 pub async fn browser_close(app: AppHandle, view: Webview, id: u64) -> Result<(), String> {
+    if engine::is_chromium(&app, view.label()) {
+        let label = view.label().to_string();
+        return blocking(move || engine::close_tab(&app, &label, id)).await;
+    }
     close_tab(&app, view.label(), id)
 }
 
 #[tauri::command]
 pub async fn browser_select(app: AppHandle, view: Webview, id: u64) -> Result<(), String> {
+    if engine::is_chromium(&app, view.label()) {
+        let label = view.label().to_string();
+        return blocking(move || engine::select(&app, &label, id)).await;
+    }
     select(&app, view.label(), id)
 }
 
 /// Where the panel body is and whether the browser is showing; `None` bounds hide every tab.
 #[tauri::command]
-pub async fn browser_layout(app: AppHandle, view: Webview, bounds: Option<Bounds>, visible: bool, seq: u64) -> Result<(), String> {
+pub async fn browser_layout(
+    app: AppHandle,
+    view: Webview,
+    bounds: Option<Bounds>,
+    visible: bool,
+    seq: u64,
+    scale: Option<f64>,
+) -> Result<(), String> {
     let fresh = app.state::<Browsers>().with_window(view.label(), |w| {
         if seq < w.layout_seq {
             return false;
         }
         w.layout_seq = seq;
+        if let Some(s) = scale {
+            w.scale = s;
+        }
         if bounds.is_some() {
             w.bounds = bounds;
         }
@@ -591,9 +705,56 @@ pub async fn browser_layout(app: AppHandle, view: Webview, bounds: Option<Bounds
     Ok(())
 }
 
+/// Pick an element on tab `id` (blocks until the user clicks it or cancels).
+#[tauri::command]
+pub async fn browser_pick(app: AppHandle, view: Webview, id: u64) -> Result<serde_json::Value, String> {
+    if engine::is_chromium(&app, view.label()) {
+        let label = view.label().to_string();
+        return blocking(move || engine::pick(&app, &label, id, PICK_JS, PICK_TIMEOUT)).await;
+    }
+    let tab = app.state::<Browsers>().tab(view.label(), Some(id))?;
+    tauri::async_runtime::spawn_blocking(move || pick(&app, &tab)).await.map_err(|e| e.to_string())?
+}
+
+/// Stop a running picker on tab `id`; its `browser_pick` answers `{cancelled: true}`.
+#[tauri::command]
+pub async fn browser_pick_cancel(app: AppHandle, view: Webview, id: u64) -> Result<(), String> {
+    if engine::is_chromium(&app, view.label()) {
+        let label = view.label().to_string();
+        return blocking(move || engine::pick_cancel(&app, &label, id, PICK_CANCEL_JS)).await;
+    }
+    let tab = app.state::<Browsers>().tab(view.label(), Some(id))?;
+    tauri::async_runtime::spawn_blocking(move || run_js(&app, &tab, PICK_CANCEL_JS.to_string(), World::Client).map(|_| ()))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 #[tauri::command]
 pub fn browser_list(app: AppHandle, view: Webview) -> Vec<BrowserTabInfo> {
+    if engine::is_chromium(&app, view.label()) {
+        return engine::list(&app, view.label());
+    }
     app.state::<Browsers>().list(view.label())
+}
+
+/// Which engine this project view's browser uses (`webkit` or `chromium`).
+#[tauri::command]
+pub fn browser_engine(app: AppHandle, view: Webview) -> engine::Kind {
+    engine::kind(&app, view.label())
+}
+
+/// The Chromium engine's screencast of the active tab, for the panel's canvas.
+#[tauri::command]
+pub async fn browser_frames(app: AppHandle, view: Webview, on_frame: tauri::ipc::Channel<engine::Frame>) -> Result<(), String> {
+    let label = view.label().to_string();
+    blocking(move || engine::attach_frames(&app, &label, on_frame)).await
+}
+
+/// The user's mouse, wheel and keys on the panel's canvas (Chromium engine).
+#[tauri::command]
+pub async fn browser_input(app: AppHandle, view: Webview, id: u64, event: engine::InputEvent) -> Result<(), String> {
+    let label = view.label().to_string();
+    blocking(move || engine::input(&app, &label, id, &event)).await
 }
 
 #[cfg(test)]
@@ -628,6 +789,17 @@ mod tests {
         let a = store_id(Path::new("/Users/me/a"));
         assert_eq!(a, store_id(Path::new("/Users/me/a")));
         assert_ne!(a, store_id(Path::new("/Users/me/b")));
+    }
+
+    #[test]
+    fn a_pick_screenshot_covers_only_the_visible_part_of_the_element() {
+        let vp = serde_json::json!({ "width": 800.0, "height": 600.0 });
+        let r = |x: f64, y: f64, w: f64, h: f64| serde_json::json!({ "x": x, "y": y, "width": w, "height": h });
+        assert_eq!(visible_rect(&r(10.0, 20.0, 100.0, 50.0), &vp), Some((10.0, 20.0, 100.0, 50.0)));
+        assert_eq!(visible_rect(&r(-20.0, 580.0, 100.0, 50.0), &vp), Some((0.0, 580.0, 80.0, 20.0)));
+        assert_eq!(visible_rect(&r(10.0, 700.0, 100.0, 50.0), &vp), None);
+        assert_eq!(visible_rect(&r(10.0, 10.0, 0.0, 0.0), &vp), None);
+        assert_eq!(visible_rect(&serde_json::json!({}), &vp), None);
     }
 
     #[test]

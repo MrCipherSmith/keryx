@@ -129,3 +129,34 @@ test("a long provider or model label carries its full text in the title and trun
   const labels = Array.from(host.querySelectorAll<HTMLElement>(".chip-btn .truncate"));
   for (const l of labels) expect(l.getAttribute("title")).toBe(l.textContent);
 });
+
+// ---- attachments (page elements picked in the browser panel) -----------------------------------------
+
+test("attached elements show as removable chips and can be sent without text", async () => {
+  const ref = createRef<import("./Composer").ComposerHandle>();
+  const sent: string[] = [];
+  const removed: number[] = [];
+  const attachments = [{ key: 4, label: 'button "Save"', title: "#save" }];
+  await act(() =>
+    root.render(
+      createElement(Composer, {
+        ...props("ATT", ref),
+        attachments,
+        onRemoveAttachment: (k: number) => void removed.push(k),
+        onSend: (t: string) => (sent.push(t), true),
+      }),
+    ),
+  );
+  const chip = host.querySelector(".attach-chip")!;
+  expect(chip.textContent).toContain('button "Save"');
+  const send = host.querySelector<HTMLButtonElement>(".send-btn")!;
+  expect(send.disabled).toBe(false);
+  await act(async () => send.click());
+  expect(sent).toEqual([""]);
+  await act(async () => chip.querySelector<HTMLButtonElement>("button")!.click());
+  expect(removed).toEqual([4]);
+
+  await act(() => root.render(createElement(Composer, { ...props("ATT", ref), attachments: [] })));
+  expect(host.querySelector(".attach-chip")).toBeNull();
+  expect(host.querySelector<HTMLButtonElement>(".send-btn")!.disabled).toBe(true);
+});

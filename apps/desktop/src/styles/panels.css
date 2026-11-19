@@ -53,4 +53,21 @@
 .browser-address:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
 .browser-error { display: flex; align-items: center; gap: 6px; padding: 6px var(--sp-2); font-size: var(--fs-sm); color: var(--danger); border-bottom: 1px solid var(--border); flex: none; }
 .browser-body { position: relative; flex: 1; min-height: 0; display: flex; background: var(--bg-surface); }
+/* The Chromium engine's page: a screencast canvas the size of the panel body (the page's viewport). */
+.chrome-view { position: absolute; inset: 0; overflow: hidden; background: #fff; }
+.chrome-view canvas { display: block; width: 100%; height: 100%; cursor: default; }
+.chrome-keys { position: absolute; left: 0; top: 0; width: 1px; height: 1px; opacity: 0; border: 0; padding: 0; resize: none; pointer-events: none; }
+/* The host's question before the agent acts on an outside site. */
+.consent-site { font: 600 var(--fs-sm) var(--mono); word-break: break-all; }
+.consent-note { color: var(--fg-muted); font-size: var(--fs-sm); }
 .code-head .code-run { margin-left: auto; margin-right: 6px; }
+
+/* Importing cookies from Chrome (CookieImportDialog). */
+.cookie-note { color: var(--fg-muted); font-size: var(--fs-sm); margin: 0 0 var(--sp-2); }
+.cookie-row { display: flex; gap: var(--sp-2); margin-bottom: var(--sp-2); }
+.cookie-list { list-style: none; margin: 0 0 var(--sp-2); padding: 4px; max-height: 260px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--r-md); }
+.cookie-list label { display: flex; align-items: center; gap: var(--sp-2); padding: 3px 6px; border-radius: var(--r-sm); font-size: var(--fs-sm); }
+.cookie-list label:hover { background: var(--bg-sunken); }
+.cookie-domain { flex: 1; min-width: 0; font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cookie-count { color: var(--fg-subtle); font-variant-numeric: tabular-nums; }
+.cookie-done { color: var(--ok, var(--accent)); font-size: var(--fs-sm); margin: 0 0 var(--sp-2); }

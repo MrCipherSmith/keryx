@@ -70,6 +70,25 @@ export interface ParsedAcpMcpServers {
    * of such a server is exempt from that floor.
    */
   readonly firstParty?: ReadonlyMap<string, ReadonlySet<string>>;
+  /**
+   * Tool-name prefixes a first-party server owns (`_meta.keryx.owns`, e.g. the
+   * desktop app's `browser_`): tools of OTHER servers whose names start with one
+   * of them are not offered in the session, so the model drives the client's
+   * own browser rather than a second one keryx happens to have configured.
+   */
+  readonly owned?: ReadonlyMap<string, readonly string[]>;
+}
+
+/** An owned prefix: a lower-case tool-name start of at least 3 characters (never "everything"). */
+const OWNED_PREFIX = /^[a-z][a-z0-9_]{2,}$/;
+
+/** `_meta.keryx.owns` of a first-party entry: valid prefixes only. */
+function readOwned(entry: Record<string, unknown>): readonly string[] {
+  const meta = entry["_meta"];
+  const keryx = isRecord(meta) ? meta["keryx"] : undefined;
+  const owns = isRecord(keryx) ? keryx["owns"] : undefined;
+  if (!Array.isArray(owns)) return [];
+  return [...new Set(owns.filter((p): p is string => typeof p === "string" && OWNED_PREFIX.test(p)))].sort();
 }
 
 /** `_meta.keryx.firstParty` / `floorTools` of one entry; `undefined` for an ordinary server. */
@@ -149,6 +168,7 @@ export function parseAcpMcpServers(method: string, raw: unknown): ParsedAcpMcpSe
   const refused: AcpMcpServerProblem[] = [];
   const secrets: string[] = [];
   const firstParty = new Map<string, ReadonlySet<string>>();
+  const owned = new Map<string, readonly string[]>();
   const seen = new Set<string>();
   raw.forEach((entry, index) => {
     if (!isRecord(entry) || typeof entry["name"] !== "string" || entry["name"].length === 0) {
@@ -195,7 +215,11 @@ export function parseAcpMcpServers(method: string, raw: unknown): ParsedAcpMcpSe
       return;
     }
     const floorTools = readFirstParty(entry);
-    if (floorTools !== undefined) firstParty.set(name, floorTools);
+    if (floorTools !== undefined) {
+      firstParty.set(name, floorTools);
+      const prefixes = readOwned(entry);
+      if (prefixes.length > 0) owned.set(name, prefixes);
+    }
     stdio.push({
       name,
       // No ACP source exists in `McpServerSource`; "user" is the standing these
@@ -217,7 +241,7 @@ export function parseAcpMcpServers(method: string, raw: unknown): ParsedAcpMcpSe
       },
     });
   });
-  return { stdio, refused, secrets, ...(firstParty.size > 0 ? { firstParty } : {}) };
+  return { stdio, refused, secrets, ...(firstParty.size > 0 ? { firstParty } : {}), ...(owned.size > 0 ? { owned } : {}) };
 }
 
 /**
@@ -299,6 +323,7 @@ export function acpMcpSetKey(parsed: ParsedAcpMcpServers): string {
     })),
     refused: parsed.refused,
     firstParty: [...(parsed.firstParty ?? new Map()).entries()].map(([server, floor]) => [server, [...floor].sort()]),
+    owned: [...(parsed.owned ?? new Map()).entries()],
   };
   return createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
 }
@@ -321,6 +346,8 @@ export interface AcpSessionMcp {
   readonly refused: readonly AcpMcpServerProblem[];
   /** First-party servers of this set (see {@link ParsedAcpMcpServers.firstParty}). */
   readonly firstParty?: ReadonlyMap<string, ReadonlySet<string>>;
+  /** Tool-name prefixes those servers own (see {@link ParsedAcpMcpServers.owned}). */
+  readonly owned?: ReadonlyMap<string, readonly string[]>;
   /** Servers that were dialled and did not start. Complete once `ready` has settled. Scrubbed. */
   failed(): readonly AcpMcpServerProblem[];
   /**
@@ -428,6 +455,7 @@ export function startAcpSessionMcp(parsed: ParsedAcpMcpServers, options: StartAc
     redact: (text) => scrub(text, parsed.secrets),
     refused,
     ...(parsed.firstParty !== undefined ? { firstParty: parsed.firstParty } : {}),
+    ...(parsed.owned !== undefined ? { owned: parsed.owned } : {}),
     failed: () =>
       states
         .filter((state) => state.status === "failed")

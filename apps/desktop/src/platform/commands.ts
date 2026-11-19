@@ -5,10 +5,14 @@ import { backend, invoke, isTauri, listen, type Unlisten } from "./backend";
 
 export type KeryxSource = "auto" | "bundled" | "path" | "custom";
 
+/** The browser panel's engine: `auto` is Chromium when a Chrome is installed, else WebKit. */
+export type BrowserEngineSetting = "auto" | "chromium" | "webkit";
+
 export interface Settings {
   keryxSource: KeryxSource;
   customPath: string | null;
   recentProjects: string[];
+  browserEngine?: BrowserEngineSetting;
 }
 
 export interface StartInfo {
@@ -106,6 +110,9 @@ export async function windowOpenProject(cwd: string): Promise<void> {
 }
 
 /** Open an http(s) URL in the system browser (the Tauri opener plugin; a new tab in browser dev mode). */
+/** A local image the agent linked to, as a data: URL (the host reads image files inside the project only). */
+export const localImage = (path: string) => invoke<string>("local_image", { path });
+
 export async function openExternal(url: string): Promise<void> {
   if (!/^https?:\/\//i.test(url)) throw new Error("Only http and https links can be opened.");
   if (isTauri()) {

@@ -3,6 +3,7 @@ import { isTauri, listen } from "../platform/backend";
 import { basename } from "../lib/format";
 import { getPrefs, MOD, setPrefs, usePrefs, type SidePanelTab } from "../lib/prefs";
 import { SidePanel } from "../panels/SidePanel";
+import { ConsentDialog } from "../panels/ConsentDialog";
 import { overlayOpen } from "../components/ui";
 import { Icon, type IconName } from "../components/Icon";
 import { Menu, type MenuItem } from "../components/Menu";
@@ -120,6 +121,7 @@ export function AppShell(p: ShellProps) {
         {p.children}
       </main>
       <SidePanel cwd={p.cwd} />
+      <ConsentDialog />
     </div>
   );
 }

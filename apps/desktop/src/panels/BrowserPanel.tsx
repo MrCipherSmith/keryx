@@ -3,15 +3,23 @@ import { Icon } from "../components/Icon";
 import { onOverlayChange, overlayOpen } from "../components/ui";
 import {
   browserClose,
+  browserEngine,
   browserGo,
   browserLayout,
   browserList,
   browserNavigate,
   browserOpen,
+  browserPick,
+  browserPickCancel,
   browserSelect,
+  isPicked,
   onBrowserEvent,
+  type BrowserEngine,
   type BrowserTab,
 } from "../platform/panels";
+import { ChromeView } from "./ChromeView";
+import { CookieImportDialog } from "./CookieImportDialog";
+import { addPick } from "./elementPicks";
 
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -35,9 +43,10 @@ export function applyBrowserTab(tabs: BrowserTab[], tab: BrowserTab): BrowserTab
 }
 
 /**
- * Browser tabs of the side panel. The pages themselves are native child web views the host lays over
- * `.browser-body`; this view owns the chrome (tabs, address, back/forward/reload) and reports where
- * the body is. The pages stay hidden while a dialog or menu is open, which they would cover.
+ * Browser tabs of the side panel. This view owns the chrome (tabs, address, back/forward/reload) and
+ * reports where `.browser-body` is. On the WebKit engine the pages are native child web views the
+ * host lays over the body (hidden while a dialog or menu is open, which they would cover); on the
+ * Chromium engine the host sizes the page to the body and this view draws it (`ChromeView`).
  */
 export function BrowserPanel({ cwd, visible }: { cwd: string; visible: boolean }) {
   const [tabs, setTabs] = useState<BrowserTab[]>([]);
@@ -48,6 +57,18 @@ export function BrowserPanel({ cwd, visible }: { cwd: string; visible: boolean }
   const body = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const activeTab = tabs.find((t) => t.id === active) ?? null;
+  const [engine, setEngine] = useState<BrowserEngine | null>(null);
+  const [cookiesOpen, setCookiesOpen] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    browserEngine()
+      .then((e) => live && setEngine(e))
+      .catch(() => live && setEngine("webkit"));
+    return () => {
+      live = false;
+    };
+  }, []);
 
   useEffect(() => {
     let live = true;
@@ -138,6 +159,47 @@ export function BrowserPanel({ cwd, visible }: { cwd: string; visible: boolean }
     void browserSelect(id).catch(() => {});
   };
 
+  // The element picker: one at a time, on the active tab. It ends when the user clicks an element or
+  // presses Esc in the page, when the button is pressed again, or when the tab or panel goes away.
+  const [picking, setPicking] = useState<number | null>(null);
+  const pickingRef = useRef(picking);
+  pickingRef.current = picking;
+  const togglePick = useCallback(async () => {
+    const current = pickingRef.current;
+    if (current !== null) {
+      void browserPickCancel(current).catch(() => {});
+      return;
+    }
+    if (active === null) return;
+    const id = active;
+    setError(null);
+    setPicking(id);
+    try {
+      const result = await browserPick(id);
+      if (isPicked(result)) addPick(cwd, result);
+    } catch (e) {
+      setError(`Could not pick an element: ${errText(e)}`);
+    } finally {
+      setPicking((p) => (p === id ? null : p));
+    }
+  }, [active, cwd]);
+  useEffect(() => {
+    if (picking === null || (visible && active === picking)) return;
+    void browserPickCancel(picking).catch(() => {});
+  }, [picking, visible, active]);
+  useEffect(() => () => void (pickingRef.current !== null && browserPickCancel(pickingRef.current).catch(() => {})), []);
+  // Cmd+Shift+C starts or stops it while the app (not the page) has focus.
+  useEffect(() => {
+    if (!visible) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== "KeyC" || !e.metaKey || !e.shiftKey || e.ctrlKey || e.altKey) return;
+      e.preventDefault();
+      void togglePick();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [visible, togglePick]);
+
   const close = (id: number) => {
     void browserClose(id).catch(() => {});
     const rest = tabs.filter((t) => t.id !== id);
@@ -201,7 +263,28 @@ export function BrowserPanel({ cwd, visible }: { cwd: string; visible: boolean }
             }
           }}
         />
+        <button
+          type="button"
+          className={`icon-btn icon-btn-sm${picking !== null ? " is-on" : ""}`}
+          disabled={!activeTab || activeTab.loading}
+          onClick={() => void togglePick()}
+          aria-pressed={picking !== null}
+          aria-label={picking !== null ? "Stop picking" : "Pick an element"}
+          title={picking !== null ? "Stop picking (Esc in the page)" : "Pick an element to add to the message (⌘⇧C)"}
+        >
+          <Icon name="pick" size={13} />
+        </button>
+        <button
+          type="button"
+          className="icon-btn icon-btn-sm"
+          onClick={() => setCookiesOpen(true)}
+          aria-label="Import cookies from Chrome"
+          title="Import cookies from Chrome…"
+        >
+          <Icon name="lock" size={13} />
+        </button>
       </form>
+      {cookiesOpen ? <CookieImportDialog cwd={cwd} engine={engine} onClose={() => setCookiesOpen(false)} /> : null}
       {error ? (
         <div className="browser-error" role="alert">
           <Icon name="alert" size={13} />
@@ -209,6 +292,7 @@ export function BrowserPanel({ cwd, visible }: { cwd: string; visible: boolean }
         </div>
       ) : null}
       <div ref={body} className="browser-body" data-testid="browser-body">
+        {engine === "chromium" && activeTab ? <ChromeView tab={activeTab.id} /> : null}
         {!activeTab ? (
           <div className="panel-empty">
             <span>Type a local dev server address (localhost:5173) or any http(s) address. Pages here keep their own storage for this project.</span>

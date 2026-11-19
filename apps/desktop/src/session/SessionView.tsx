@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { BrandMark } from "../components/BrandMark";
 import { createPortal } from "react-dom";
 import type { PlanEntry } from "../acp/types";
@@ -11,6 +11,7 @@ import { ActivityPanel, type ActivityTab } from "./ActivityPanel";
 import { runningSubagents } from "./activity";
 import { isRunning } from "../acp/providers";
 import { setActivityRunning, useSlot } from "../panels/sideSlots";
+import { clearPicks, onPicksChange, pickLabel, picksOf, removePick, withPicks } from "../panels/elementPicks";
 import { GitStatus } from "./GitStatus";
 import { SessionInfoPanel } from "./SessionInfoPanel";
 import { SessionSidebar } from "./SessionSidebar";
@@ -150,6 +151,16 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
     },
   };
   const run = (line: string, opts: { display?: string; replaceId?: number } = {}) => s.runCommand(line, ui, opts);
+  // Page elements picked in the browser panel go out with the next message (not with a command line).
+  const picks = useSyncExternalStore(onPicksChange, () => picksOf(cwd));
+  const attachments = useMemo(() => picks.map((p) => ({ key: p.key, label: pickLabel(p), title: `${p.selector}\n${p.url}` })), [picks]);
+  const send = async (text: string) => {
+    if (text.startsWith("/") || picks.length === 0) return run(text);
+    const sent = picks;
+    const ok = await run(withPicks(text, sent));
+    if (ok) clearPicks(cwd, sent);
+    return ok;
+  };
 
   const empty = (
     <div className="session-empty">
@@ -352,7 +363,9 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
             modes={state.modes}
             model={modelOption(state.configOptions)}
             sendKey={prefs.sendKey}
-            onSend={(t) => run(t)}
+            onSend={send}
+            attachments={attachments}
+            onRemoveAttachment={(key) => removePick(cwd, key)}
             onStop={s.cancel}
             onMode={(id) => void s.setMode(id)}
             onModel={(c, v) => void s.setModel(c, v)}
