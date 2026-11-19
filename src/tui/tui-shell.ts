@@ -4509,6 +4509,7 @@ export function renderRoutingBlockedMessage(reason: string): string {
     "candidate-unverified": "model availability could not be verified; refresh provider detection or choose another model",
     "capability-missing": "no connected model supports the capabilities this turn needs; connect or choose a compatible model",
     "context-insufficient": "no eligible model has enough context for this turn; shorten the conversation or choose a larger-context model",
+    "context-unknown": "the routed model has no known context length; record it with `keryx routing profile set <provider>/<model> --context <tokens>` or route this category to the session model in /routing",
     cooldown: "eligible models are temporarily cooling down; wait briefly and retry",
     "cost-unknown": "model cost is unknown under the current budget policy; add pricing data or allow unknown cost",
     "budget-exceeded": "the routing budget is too low for an eligible model; raise the limit or choose a lower-cost class",

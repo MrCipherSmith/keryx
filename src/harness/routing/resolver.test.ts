@@ -310,3 +310,70 @@ test("invalid or duplicate snapshot facts fail closed", () => {
   expect(tamperedDecision.status).toBe("blocked");
   if (tamperedDecision.status === "blocked") expect(tamperedDecision.reason).toBe("config-invalid");
 });
+
+test("an unknown context length is its own reason, apart from a context that is too small", () => {
+  const expert = ref("alpha", "expert");
+  const { config, snapshot, req } = setup(expertLayer([expert]), [facts(baseline), facts(expert, { contextLength: null })]);
+  const decision = resolveRoutingDecision(req, snapshot, config);
+  expect(decision.status).toBe("blocked");
+  expect(decision.exclusions).toEqual([{ target: expert, modelClass: "expert", reason: "context-unknown" }]);
+});
+
+test("a user pin with an unknown context length is honoured and the decision carries a notice", () => {
+  const pinned = ref("openai-codex", "gpt-6.1-sol");
+  const current = ref("openai-codex", "gpt-6.1-terra");
+  const req = request({ baseline: current, requirements: { capabilities: ["tools"], inputTokensRequired: 2_048, outputTokensReserved: 4_096 } });
+  const layer: RoutingConfigLayer = { schemaVersion: 2, categories: { review: { mode: "model", target: pinned } } };
+  const { config, snapshot } = setup(layer, [facts(current, { contextLength: null }), facts(pinned, { contextLength: null })], req);
+  const decision = resolveRoutingDecision(req, snapshot, config);
+  expect(decision.assignmentSource).toBe("user");
+  expect(selectionOf(decision)).toEqual(pinned);
+  expect(decision.exclusions).toEqual([]);
+  expect(decision.notices).toEqual([{ target: pinned, reason: "context-unknown" }]);
+});
+
+test("a per-request user override with an unknown context length is honoured too", () => {
+  const pinned = ref("beta", "pinned");
+  const req = request({ userOverride: { mode: "model", target: pinned } });
+  const { config, snapshot } = setup({ schemaVersion: 2 }, [facts(baseline), facts(pinned, { contextLength: null })], req);
+  const decision = resolveRoutingDecision(req, snapshot, config);
+  expect(decision.assignmentSource).toBe("user-override");
+  expect(selectionOf(decision)).toEqual(pinned);
+  expect(decision.notices).toEqual([{ target: pinned, reason: "context-unknown" }]);
+});
+
+test("a user pin still fails every other gate, and a known-too-small context still refuses it", () => {
+  const pinned = ref("beta", "pinned");
+  const layer: RoutingConfigLayer = { schemaVersion: 2, categories: { review: { mode: "model", target: pinned } } };
+  for (const [patch, reason] of [
+    [{ contextLength: 1_500 }, "context-insufficient"],
+    [{ contextLength: null, credentialsAvailable: false }, "credentials-missing"],
+    [{ contextLength: null, capabilities: [] }, "capability-missing"],
+  ] as Array<[Partial<RoutingModelFacts>, RoutingReason]>) {
+    const req = request({ requirements: { capabilities: ["tools"], inputTokensRequired: 1_000, outputTokensReserved: 1_000 } });
+    const { config, snapshot } = setup(layer, [facts(baseline), facts(pinned, patch)], req);
+    const decision = resolveRoutingDecision(req, snapshot, config);
+    expect(decision.status).toBe("blocked");
+    expect(decision.exclusions).toEqual([{ target: pinned, reason }]);
+    expect(decision.notices).toBeUndefined();
+  }
+});
+
+test("a project pin with an unknown context length is refused as context-unknown, not honoured", () => {
+  const pinned = ref("beta", "pinned");
+  const config = normalizeRoutingConfig({ project: { schemaVersion: 2, categories: { review: { mode: "model", target: pinned } } } });
+  const req = request();
+  const snapshot = createRoutingSnapshot({ configDigest: config.configDigest, observedAt: "2026-11-04T00:00:00.000Z", catalogRevision: "catalog-v1", policyRevision: "p1", capabilityRevision: "c1", authFailedProviderIds: [], baseline, models: [facts(baseline), facts(pinned, { contextLength: null })] });
+  const decision = resolveRoutingDecision(req, snapshot, config);
+  expect(decision.assignmentSource).toBe("project");
+  expect(decision.status).toBe("blocked");
+  expect(decision.exclusions).toEqual([{ target: pinned, reason: "context-unknown" }]);
+});
+
+test("the baseline with an unknown context length is kept without a notice", () => {
+  const layer: RoutingConfigLayer = { schemaVersion: 2, categories: { review: { mode: "baseline" } } };
+  const { config, snapshot, req } = setup(layer, [facts(baseline, { contextLength: null })]);
+  const decision = resolveRoutingDecision(req, snapshot, config);
+  expect(selectionOf(decision)).toEqual(baseline);
+  expect(decision.notices).toBeUndefined();
+});

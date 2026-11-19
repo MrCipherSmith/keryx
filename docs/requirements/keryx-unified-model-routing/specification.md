@@ -97,7 +97,7 @@ Native remote execution в текущем protocol остаётся одно-п�
 
 401/403 → исключить credential identity до её изменения; 404 model-not-found → исключить пару до catalog refresh; 429 → уважать Retry-After и пробовать другой допустимый кандидат; 5xx → следующий кандидат без немедленного повтора той же пары. Permission/capability отказ нельзя лечить ослаблением policy. Общий maxAttempts=3 для executor, classifier attempts ограничены отдельно; selection deadline покрывает probes и перебор, а execution timeout остаётся собственностью harness. Cooldown ключуется по фактической identity; общий provider quota блокирует все соответствующие кандидаты. В пределах одного decision пара не исполняется дважды, даже если включена в разные классы.
 
-Полный набор причин: policy-denied, provider-scope-conflict, credentials-missing, auth-failed, model-unavailable, candidate-unverified, capability-missing, context-insufficient, cooldown, budget-exceeded, cost-unknown, minimum-class-unproven, class-below-minimum, empty-class, classifier-failed, config-invalid, attempts-exhausted, cancelled, uncertain-outcome. Человекочитаемые подробности редактируются существующей redaction системой.
+Полный набор причин: policy-denied, provider-scope-conflict, credentials-missing, auth-failed, model-unavailable, candidate-unverified, capability-missing, context-insufficient, context-unknown, cooldown, budget-exceeded, cost-unknown, minimum-class-unproven, class-below-minimum, empty-class, classifier-failed, config-invalid, attempts-exhausted, cancelled, uncertain-outcome. Человекочитаемые подробности редактируются существующей redaction системой.
 
 ## 9. Поверхности и наблюдаемость
 

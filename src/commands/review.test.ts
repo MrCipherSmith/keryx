@@ -1028,6 +1028,59 @@ test("routing review reports an unauthorized target without dispatching or faili
   expect(parsed.notices.join("\n")).toContain("no dispatch target was selected");
 });
 
+test("a user-pinned review model with no profile is dispatched, with a notice naming the unknown context", async () => {
+  // The pinned model has no stored profile, so its context length is unknown. Before, every
+  // diff, even a one-line one, was refused as `context-insufficient` and the reason never said why.
+  await setModelProfileField("ollama", "llama3.1:latest", { field: "contextLength", value: 100_000 });
+  // A fresh live listing, as detection gives it: the model is available, only its profile is missing.
+  await writeFile(path.join(ROOT, "catalog.json"), JSON.stringify([
+    { name: "ollama", models: ["llama3.1:latest", "llama3.2"], observedAt: new Date().toISOString() },
+  ]), "utf8");
+  await configureUserRouting({
+    schemaVersion: 2,
+    categories: { review: { mode: "model", target: { providerId: "ollama", modelId: "llama3.2" } } },
+  });
+  await reviewCommand([
+    "tier", "--session-provider", "ollama", "--session-model", "llama3.1:latest",
+    "--catalog", "catalog.json", "--diff-lines", "1", "--json",
+  ]);
+
+  expect(process.exitCode).toBe(0);
+  const parsed = JSON.parse(logs.join("\n")) as {
+    model: Record<string, unknown>;
+    routing: { decision: { status: string; assignmentSource: string; notices?: unknown[] } };
+    notices: string[];
+  };
+  expect(parsed.model).toMatchObject({ provider: "ollama", model: "llama3.2", routed: true });
+  expect(parsed.routing.decision).toMatchObject({
+    status: "selected",
+    assignmentSource: "user",
+    notices: [{ target: { providerId: "ollama", modelId: "llama3.2" }, reason: "context-unknown" }],
+  });
+  const notice = parsed.notices.join("\n");
+  expect(notice).toContain("ollama/llama3.2, pinned by you");
+  expect(notice).toContain("keryx routing profile set ollama/llama3.2 --context <tokens>");
+});
+
+test("`review tier` with no session model names the flags that supply one instead of a bare invalid baseline", async () => {
+  const saved = { provider: process.env.KERYX_SESSION_PROVIDER, model: process.env.KERYX_SESSION_MODEL };
+  delete process.env.KERYX_SESSION_PROVIDER;
+  delete process.env.KERYX_SESSION_MODEL;
+  try {
+    await writeFile(path.join(ROOT, "catalog.json"), CATALOG, "utf8");
+    await reviewCommand(["tier", "--catalog", "catalog.json", "--json"]);
+  } finally {
+    if (saved.provider !== undefined) process.env.KERYX_SESSION_PROVIDER = saved.provider;
+    if (saved.model !== undefined) process.env.KERYX_SESSION_MODEL = saved.model;
+  }
+
+  expect(process.exitCode).toBe(1);
+  const message = errors.join("\n");
+  expect(message).not.toContain("routing snapshot baseline is invalid");
+  expect(message).toContain("--from-shell-config");
+  expect(message).toContain("--session-provider <id> --session-model <id>");
+});
+
 test("`review tier` never runs a security finding below standard, even when verified by execution", async () => {
   await tier("--verifier", "execution", "--security", "--json");
 

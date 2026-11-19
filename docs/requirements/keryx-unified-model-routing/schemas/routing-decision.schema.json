@@ -97,6 +97,7 @@
         "candidate-unverified",
         "capability-missing",
         "context-insufficient",
+        "context-unknown",
         "cooldown",
         "budget-exceeded",
         "cost-unknown",
@@ -165,6 +166,7 @@
               "candidate-unverified",
               "capability-missing",
               "context-insufficient",
+              "context-unknown",
               "cooldown",
               "budget-exceeded",
               "cost-unknown",
@@ -180,6 +182,42 @@
           }
         },
         "required": [
+          "reason"
+        ]
+      }
+    },
+    "notices": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "target": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "providerId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "modelId": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "providerId",
+              "modelId"
+            ]
+          },
+          "reason": {
+            "enum": [
+              "context-unknown"
+            ]
+          }
+        },
+        "required": [
+          "target",
           "reason"
         ]
       }
