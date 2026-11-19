@@ -20,7 +20,8 @@ use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use tauri::{AppHandle, Webview};
+use tauri::{AppHandle, Manager, Webview};
+use zeroize::Zeroizing;
 
 type Aes128CbcDec = cbc::Decryptor<aes::Aes128>;
 
@@ -29,7 +30,6 @@ const WINDOWS_TO_UNIX: f64 = 11_644_473_600.0;
 /// Chrome databases from this version on prefix each decrypted value with SHA-256(host_key).
 const HASH_PREFIX_VERSION: i64 = 24;
 const SQLITE: &str = "/usr/bin/sqlite3";
-const SECURITY: &str = "/usr/bin/security";
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -56,7 +56,7 @@ pub struct ImportResult {
 }
 
 /// One row of Chrome's `cookies` table (the value still encrypted).
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct Row {
     pub host_key: String,
     pub name: String,
@@ -158,7 +158,8 @@ impl Drop for TempCopy {
 /// Run a read-only query with the system `sqlite3` and return its rows as JSON objects.
 pub fn query(db: &Path, sql: &str) -> Result<Vec<Value>, String> {
     let out = Command::new(SQLITE)
-        .args(["-readonly", "-json"])
+        // No ~/.sqliterc or other start-up file is read.
+        .args(["-init", "/dev/null", "-readonly", "-json"])
         .arg(db)
         .arg(sql)
         .output()
@@ -302,6 +303,19 @@ pub fn to_cdp(row: &Row, value: String, now_unix: f64) -> Option<Value> {
     Some(c)
 }
 
+impl std::fmt::Debug for Row {
+    /// Values never reach a log: only where the cookie belongs and how long its value is.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Row")
+            .field("host_key", &self.host_key)
+            .field("name", &self.name)
+            .field("path", &self.path)
+            .field("value", &"<redacted>")
+            .field("encrypted_len", &self.encrypted.len())
+            .finish()
+    }
+}
+
 /// Turn rows into CDP cookies with `key`; returns (cookies, skipped).
 pub fn prepare(rows: &[Row], version: i64, key: &[u8; 16], now_unix: f64) -> (Vec<Value>, u64) {
     let strip = version >= HASH_PREFIX_VERSION;
@@ -309,7 +323,9 @@ pub fn prepare(rows: &[Row], version: i64, key: &[u8; 16], now_unix: f64) -> (Ve
     let mut skipped = 0;
     for r in rows {
         let value = if r.encrypted.is_empty() { Some(r.value.clone()) } else { decrypt(&r.encrypted, key, strip) };
-        match value.and_then(|v| to_cdp(r, v, now_unix)) {
+        // The plain value is wiped once copied into the browser call.
+        let value = value.map(Zeroizing::new);
+        match value.and_then(|v| to_cdp(r, v.to_string(), now_unix)) {
             Some(c) => out.push(c),
             None => skipped += 1,
         }
@@ -317,20 +333,33 @@ pub fn prepare(rows: &[Row], version: i64, key: &[u8; 16], now_unix: f64) -> (Ve
     (out, skipped)
 }
 
-/// The "Chrome Safe Storage" password; macOS asks the user to allow the read.
-fn keychain_password() -> Result<Vec<u8>, String> {
-    let out = Command::new(SECURITY)
-        .args(["find-generic-password", "-w", "-s", "Chrome Safe Storage", "-a", "Chrome"])
-        .output()
-        .map_err(|e| format!("Could not reach the Keychain: {e}"))?;
-    if !out.status.success() {
-        return Err("Keychain access to Chrome's key was not allowed (or Chrome has no key yet)".into());
+/// The "Chrome Safe Storage" password, read in this process with Security.framework: macOS asks the
+/// user to let Keryx (not a helper tool) read it, and an "Always Allow" there grants Keryx alone.
+#[cfg(target_os = "macos")]
+fn keychain_password() -> Result<Zeroizing<Vec<u8>>, String> {
+    security_framework::passwords::get_generic_password("Chrome Safe Storage", "Chrome")
+        .map(Zeroizing::new)
+        .map_err(|_| "Keychain access to Chrome's key was not allowed (or Chrome has no key yet)".into())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn keychain_password() -> Result<Zeroizing<Vec<u8>>, String> {
+    Err("Importing cookies from Chrome needs macOS".into())
+}
+
+/// Copies an earlier run left behind (it crashed mid-import): removed when the app starts.
+pub fn remove_stale_copies() {
+    let Ok(entries) = std::fs::read_dir(std::env::temp_dir()) else { return };
+    for e in entries.flatten() {
+        if e.file_name().to_string_lossy().starts_with("keryx-cookies-") {
+            let _ = std::fs::remove_dir_all(e.path());
+        }
     }
-    let mut pw = out.stdout;
-    while pw.last().is_some_and(|b| b.is_ascii_whitespace()) {
-        pw.pop();
-    }
-    Ok(pw)
+}
+
+/// Whether the caller is a project view (the cookie commands serve the browser panel only).
+fn is_project_view(app: &AppHandle, view: &Webview) -> Result<(), String> {
+    app.state::<crate::panels::PanelRoots>().get(view.label()).map(|_| ()).ok_or_else(|| "Open a project first".to_string())
 }
 
 fn now_unix() -> f64 {
@@ -342,14 +371,16 @@ fn chrome_root_or_err() -> Result<PathBuf, String> {
 }
 
 #[tauri::command]
-pub async fn cookie_profiles() -> Result<Vec<ChromeProfile>, String> {
+pub async fn cookie_profiles(app: AppHandle, view: Webview) -> Result<Vec<ChromeProfile>, String> {
+    is_project_view(&app, &view)?;
     let root = chrome_root_or_err()?;
     Ok(profiles(&root))
 }
 
 /// The domains in a Chrome profile, with cookie counts (nothing is decrypted).
 #[tauri::command]
-pub async fn cookie_scan(profile: String) -> Result<Vec<DomainCount>, String> {
+pub async fn cookie_scan(app: AppHandle, view: Webview, profile: String) -> Result<Vec<DomainCount>, String> {
+    is_project_view(&app, &view)?;
     tauri::async_runtime::spawn_blocking(move || {
         let root = chrome_root_or_err()?;
         let copy = TempCopy::of(&cookies_file(&root, &profile)?)?;
@@ -365,6 +396,7 @@ pub async fn cookie_scan(profile: String) -> Result<Vec<DomainCount>, String> {
 /// Copy the picked domains' cookies from Chrome profile `profile` into this project's browser.
 #[tauri::command]
 pub async fn cookie_import(app: AppHandle, view: Webview, profile: String, domains: Vec<String>) -> Result<ImportResult, String> {
+    is_project_view(&app, &view)?;
     let label = view.label().to_string();
     if !engine::is_chromium(&app, &label) {
         return Err("Importing cookies needs the Chromium browser engine (Settings → Browser panel)".into());
@@ -382,14 +414,7 @@ pub async fn cookie_import(app: AppHandle, view: Webview, profile: String, domai
         if rows.is_empty() {
             return Ok(result);
         }
-        let key = if rows.iter().any(|r| !r.encrypted.is_empty()) {
-            let mut pw = keychain_password()?;
-            let k = derive_key(&pw);
-            pw.iter_mut().for_each(|b| *b = 0);
-            k
-        } else {
-            [0u8; 16]
-        };
+        let key = Zeroizing::new(if rows.iter().any(|r| !r.encrypted.is_empty()) { derive_key(&keychain_password()?) } else { [0u8; 16] });
         let (cookies, skipped) = prepare(&rows, version, &key, now_unix());
         result.skipped = skipped;
         let cdp = engine::browser_cdp(&app, &label)?;
@@ -532,6 +557,15 @@ mod tests {
         assert!(c.get("domain").is_none());
         assert_eq!(c["secure"], true);
         assert_eq!(c["path"], "/");
+    }
+
+    #[test]
+    fn rows_never_print_their_values() {
+        let mut r = row("github.com", "user_session", b"v10secret-bytes".to_vec());
+        r.value = "plain-secret".into();
+        let shown = format!("{r:?}");
+        assert!(shown.contains("user_session") && shown.contains("<redacted>"));
+        assert!(!shown.contains("plain-secret") && !shown.contains("secret-bytes"));
     }
 
     #[test]

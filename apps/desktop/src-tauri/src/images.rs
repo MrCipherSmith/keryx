@@ -69,8 +69,10 @@ fn screenshots_dir() -> PathBuf {
 /// Read an allowed local image as a `data:` URL.
 pub fn read_image(link: &str, root: Option<&Path>, extra_roots: &[PathBuf]) -> Result<String, String> {
     let path = link_path(link, root).ok_or("Not a local file")?;
-    let mime = image_mime(&path).ok_or("Not an image file")?;
+    image_mime(&path).ok_or("Not an image file")?;
     let real = path.canonicalize().map_err(|_| "The image is not there".to_string())?;
+    // The target decides, not the link's name: a link called x.png may point at any file.
+    let mime = image_mime(&real).ok_or("Not an image file")?;
     let mut roots: Vec<PathBuf> = extra_roots.iter().filter_map(|r| r.canonicalize().ok()).collect();
     if let Some(r) = root.and_then(|r| r.canonicalize().ok()) {
         roots.push(r);
@@ -124,6 +126,17 @@ mod tests {
         assert!(read_image(dir.path().join("outside.png").to_str().unwrap(), Some(&root), &[]).unwrap_err().contains("inside the project"));
         assert!(read_image(dir.path().join("outside.png").to_str().unwrap(), Some(&root), &[dir.path().to_path_buf()]).is_ok());
         assert!(read_image("shots/missing.png", Some(&root), &[]).unwrap_err().contains("not there"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_named_like_an_image_must_point_at_an_image() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("proj");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("notes.txt"), b"secret").unwrap();
+        std::os::unix::fs::symlink(root.join("notes.txt"), root.join("shot.png")).unwrap();
+        assert!(read_image("shot.png", Some(&root), &[]).unwrap_err().contains("Not an image"));
     }
 
     #[cfg(unix)]

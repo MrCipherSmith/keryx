@@ -115,6 +115,8 @@ impl Cdp {
             let mut w = self.writer.lock().unwrap();
             w.write_all(&text).and_then(|_| w.flush())
         };
+        // A call may carry secrets (imported cookie values): wipe our copy of the text.
+        zeroize::Zeroize::zeroize(&mut text);
         if let Err(e) = written {
             self.pending.lock().unwrap().remove(&id);
             self.closed.store(true, Ordering::SeqCst);

@@ -29,6 +29,8 @@ const PANEL_MENU_TERMINAL: &str = "panel-terminal";
 const PANEL_MENU_BROWSER: &str = "panel-browser";
 
 pub fn run() {
+    // An import interrupted by a crash leaves a private copy of Chrome's cookie database behind.
+    chromium::cookies::remove_stale_copies();
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
