@@ -1,8 +1,9 @@
 import { memo, useEffect, useState } from "react";
 import type { ConfigOption } from "../acp/types";
-import { absoluteTime, formatTokens, relativeTime } from "../lib/format";
+import { absoluteTime, copyText, formatTokens, relativeTime } from "../lib/format";
 import { gitInfo, type GitInfo } from "../platform/commands";
 import { Icon } from "../components/Icon";
+import { useToast } from "../components/Toasts";
 import type { SessionState, TokenPair } from "./reducer";
 import { modelOption } from "./useAcpSession";
 
@@ -32,6 +33,20 @@ function Pair({ label, pair, title }: { label: string; pair: TokenPair | null; t
   );
 }
 
+/** Puts the whole `value` on the clipboard (not the shortened text a row may show) and says so in a toast. */
+function CopyButton({ value, what }: { value: string; what: string }) {
+  const toast = useToast();
+  const copy = async () => {
+    if (await copyText(value)) toast({ level: "ok", title: `Copied ${what}`, body: value });
+    else toast({ level: "error", title: `Could not copy the ${what}`, detail: value });
+  };
+  return (
+    <button type="button" className="icon-btn info-copy" onClick={() => void copy()} aria-label={`Copy ${what}`} title={`Copy ${what}`}>
+      <Icon name="copy" size={12} />
+    </button>
+  );
+}
+
 /** The git state of `cwd`, read again when the shown session or its busy state changes. */
 function useGit(cwd: string, sessionId: string | null, busy: boolean): GitInfo | null | undefined {
   const [git, setGit] = useState<GitInfo | null | undefined>(undefined);
@@ -57,6 +72,8 @@ export const SessionInfoPanel = memo(function SessionInfoPanel({ state, cwd, pro
   const info = state.sessions.find((x) => x.sessionId === state.sessionId);
   const mode = state.modes?.availableModes.find((m) => m.id === state.modes?.currentModeId)?.name ?? state.modes?.currentModeId;
   const done = state.plan.filter((p) => p.status === "completed").length;
+  const model = modelOption(state.configOptions);
+  const modelId = model?.currentValue || null;
 
   return (
     <aside className="info-panel" aria-label="Session info">
@@ -67,6 +84,7 @@ export const SessionInfoPanel = memo(function SessionInfoPanel({ state, cwd, pro
             <span className="truncate">
               {projectName} <span className="info-dim">· {cwd.replace(/^\/Users\/[^/]+/, "~")}</span>
             </span>
+            <CopyButton value={cwd} what="folder path" />
           </div>
           <div className="info-line">
             <Icon name="branch" size={14} />
@@ -98,7 +116,10 @@ export const SessionInfoPanel = memo(function SessionInfoPanel({ state, cwd, pro
         <section className="info-section" aria-label="Agent">
           <div className="info-row">
             <span className="info-key">Model</span>
-            <span className="info-val truncate">{optionName(modelOption(state.configOptions)) ?? "—"}</span>
+            <span className="info-val truncate" title={modelId ?? undefined}>
+              {optionName(model) ?? "—"}
+            </span>
+            {modelId ? <CopyButton value={modelId} what="model id" /> : null}
           </div>
           <div className="info-row">
             <span className="info-key">Mode</span>
@@ -158,6 +179,7 @@ export const SessionInfoPanel = memo(function SessionInfoPanel({ state, cwd, pro
               <span className="info-val mono" title={state.sessionId}>
                 {state.sessionId.replace(/-/g, "").slice(-8)}
               </span>
+              <CopyButton value={state.sessionId} what="session id" />
             </div>
             {info?.updatedAt ? (
               <div className="info-row" title={absoluteTime(info.updatedAt)}>

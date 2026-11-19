@@ -14,7 +14,7 @@ body {
 }
 /* Content people read or copy stays selectable. */
 .md, .user-msg, .out-pre, .code-pre, pre, code, input, textarea, .criterion-text, .journal-detail, .toast-detail, .exit-tail,
-.sheet-title, .dialog-body p, .ask-question, .flow-error {
+.sheet-title, .dialog-body p, .ask-question, .flow-error, .info-val, .info-line .truncate {
   user-select: text;
   -webkit-user-select: text;
 }
@@ -175,6 +175,8 @@ button { font: inherit; }
 .info-key { flex: none; width: 74px; color: var(--fg-muted); }
 .info-val { flex: 1; min-width: 0; text-align: right; font-variant-numeric: tabular-nums; }
 .info-val.mono { font-family: var(--mono); font-size: var(--fs-sm); }
+.info-row .info-copy, .info-line .info-copy { flex: none; width: 20px; height: 20px; align-self: center; }
+.info-line .info-copy { margin-left: auto; }
 .info-dim { color: var(--fg-subtle); }
 .info-meter { height: 4px; border-radius: 2px; background: var(--bg-hover); overflow: hidden; }
 .info-meter > span { display: block; height: 100%; background: var(--accent); }
