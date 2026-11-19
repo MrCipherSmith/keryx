@@ -2394,7 +2394,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       if (slate !== undefined) delete slate.goalPrompt;
       const result = await runAgentTurn(io, deps, state.history, userLine, {
         signal: turn.controller.signal,
-        ...(rendered.untrusted ? { untrustedPrompt: true } : {}),
+        ...(rendered.untrusted ? { untrustedPrompt: true, operatorText: rendered.trustedText } : {}),
         ...(slate !== undefined ? { slateSession: slate.ref, ...(goalTurn ? { skipCloseTrigger: true } : {}) } : {}),
       });
       syncAcpArchive(archive, state.history);

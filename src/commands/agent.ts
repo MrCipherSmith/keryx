@@ -960,6 +960,12 @@ export interface RunAgentTurnOptions {
    */
   untrustedPrompt?: boolean;
   /**
+   * With `untrustedPrompt`: the part of the line the operator wrote. Decisions only the operator may
+   * make from their own words (such as asking for an automatic review) read this, never the
+   * untrusted content around it.
+   */
+  operatorText?: string;
+  /**
    * Whether this turn belongs to an automatic review. Absent: decided from the
    * operator's own line (`isAutomaticReviewRequest`) for an operator turn, and
    * `false` for a notification turn. It is a run mode, not a permission mode: it
@@ -2346,11 +2352,14 @@ async function emitTerminalState(
   }
 }
 
-/** Only an operator turn's own line can ask for an automatic review: a child's task text is model-written. */
-function asksForAutomaticReview(deps: AgentDeps, options: RunAgentTurnOptions, userLine: string): boolean {
+/**
+ * Only an operator turn's own words can ask for an automatic review: a child's task text is
+ * model-written, and untrusted content in the prompt (`operatorText` set) is not the operator's.
+ */
+export function asksForAutomaticReview(deps: Pick<AgentDeps, "subagentBudget">, options: RunAgentTurnOptions, userLine: string): boolean {
   return (
     options.automaticReview ??
-    ((options.origin ?? "operator") === "operator" && deps.subagentBudget === undefined && isAutomaticReviewRequest(userLine))
+    ((options.origin ?? "operator") === "operator" && deps.subagentBudget === undefined && isAutomaticReviewRequest(options.operatorText ?? userLine))
   );
 }
 

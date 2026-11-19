@@ -44,6 +44,8 @@ export interface RenderedAcpPrompt {
   readonly text: string;
   /** The prompt holds a block marked untrusted. */
   readonly untrusted: boolean;
+  /** The text without the untrusted blocks: what the user wrote, for decisions only they may make. */
+  readonly trustedText: string;
 }
 
 export function renderAcpPromptContent(blocks: readonly unknown[]): string {
@@ -52,6 +54,7 @@ export function renderAcpPromptContent(blocks: readonly unknown[]): string {
 
 export function renderAcpPrompt(blocks: readonly unknown[]): RenderedAcpPrompt {
   const parts: string[] = [];
+  const trusted: string[] = [];
   let untrusted = false;
   for (const block of blocks) {
     if (!isContentBlock(block)) {
@@ -60,6 +63,7 @@ export function renderAcpPrompt(blocks: readonly unknown[]): RenderedAcpPrompt {
     switch (block.type) {
       case "text":
         parts.push(block.text);
+        trusted.push(block.text);
         break;
       case "resource": {
         const resource = block.resource;
@@ -68,6 +72,7 @@ export function renderAcpPrompt(blocks: readonly unknown[]): RenderedAcpPrompt {
           parts.push(untrustedBoundary(resource.uri, "text" in resource ? resource.text : "[binary content omitted]"));
         } else if ("text" in resource) {
           parts.push(resource.text);
+          trusted.push(resource.text);
         } else {
           parts.push(`[embedded resource omitted (binary, ${resource.mimeType ?? "unknown type"}): ${resource.uri}]`);
         }
@@ -86,5 +91,5 @@ export function renderAcpPrompt(blocks: readonly unknown[]): RenderedAcpPrompt {
         break;
     }
   }
-  return { text: parts.join("\n\n"), untrusted };
+  return { text: parts.join("\n\n"), untrusted, trustedText: trusted.join("\n\n") };
 }

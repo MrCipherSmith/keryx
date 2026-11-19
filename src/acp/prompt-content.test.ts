@@ -17,6 +17,13 @@ describe("untrusted resource blocks (page elements picked in Keryx Desktop)", ()
     expect(out.text).toMatch(/\[end of external content [0-9a-f]{8}\]$/);
   });
 
+  test("the trusted text leaves the untrusted blocks out", () => {
+    const out = renderAcpPrompt([{ type: "text", text: "make it red" }, picked]);
+    expect(out.trustedText).toBe("make it red");
+    expect(renderAcpPrompt([picked]).trustedText).toBe("");
+    expect(renderAcpPrompt([{ type: "text", text: "a" }, { type: "resource", resource: { uri: "file:///b", text: "b" } }]).trustedText).toBe("a\n\nb");
+  });
+
   test("only an explicit marker counts; a plain resource and plain text are the user's", () => {
     expect(isUntrustedBlock(picked)).toBe(true);
     expect(isUntrustedBlock({ ...picked, _meta: { keryx: { untrusted: "yes" } } })).toBe(false);
