@@ -23,11 +23,11 @@ describe("flow-orchestrator: the verification kind of every criterion", () => {
     expect(flat(SKILL)).toContain(phrase);
   });
 
-  test("a Red Flags row refuses to set the kind later", () => {
-    const rows = SKILL.slice(SKILL.indexOf("## Red Flags")).split("\n");
-    const row = rows.find((line) => line.startsWith('| "I\'ll set the verification kind later."')) ?? "";
-    expect(row).toContain("An `unclassified` criterion cannot become data afterwards without a recorded rewrite");
-    expect(row).toContain("keryx flow ac update");
+  test("the criteria step refuses to set the kind later", () => {
+    const step = SKILL.split("\n").find((line) => line.startsWith("- `acceptance-criteria.md` —")) ?? "";
+    expect(step).toContain("Put the marker on every criterion before freeze");
+    expect(step).toContain("an `unclassified` criterion cannot become data afterwards without a recorded rewrite");
+    expect(step).toContain("keryx flow ac update");
   });
 
   test("the .metaproject copy is byte-identical to the bundled skill", () => {

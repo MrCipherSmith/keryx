@@ -105,7 +105,7 @@ const CEILINGS_BY_KEY = {
   "orchestration/code-verifier": 339,
   "orchestration/context-collector": 662,
   "orchestration/feature-analyzer": 447,
-  "orchestration/flow-orchestrator": 682,
+  "orchestration/flow-orchestrator": 393,
   "orchestration/issue-analyzer": 373,
   "orchestration/job-orchestrator": 2197,
   "orchestration/task-implementer": 660,
