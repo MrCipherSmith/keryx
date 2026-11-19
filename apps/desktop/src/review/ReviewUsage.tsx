@@ -48,7 +48,7 @@ export function ReviewUsage({ usage }: { usage: ReviewRunUsage }) {
         <tbody>
           <tr><th scope="row">Orchestrator</th>{values(usage.coordinator)}</tr>
           {usage.reviewers.map((reviewer, i) => <tr key={i}>
-            <th scope="row">{reviewer.reviewer}
+            <th scope="row">{reviewer.reviewer}{reviewer.partial && <small>Partial usage</small>}
               {(reviewer.provider || reviewer.model) && <small>{[reviewer.provider, reviewer.model].filter(Boolean).join(" · ")}</small>}
             </th>{values(reviewer)}
           </tr>)}

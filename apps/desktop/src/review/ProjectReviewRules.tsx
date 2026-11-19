@@ -44,8 +44,8 @@ function RuleEditor({ initial, saving, onCancel, onSave }: {
 
 function RulesDialog({ onClose, ...props }: RulesProps & { onClose: () => void }) {
   const { request, refresh, snapshot, error, saving } = useReviewRules(props);
-  const [editor, setEditor] = useState<ReviewRule | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState("");
+  const [editor, setEditor] = useState<{ draft: ReviewRule; expected: ReviewRule | null } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<ReviewRule | null>(null);
   return <Dialog title="Review rules" icon="checklist" width={580} onClose={onClose} focusRoot
     footer={<button className="btn" onClick={onClose}>Close</button>}>
     <div className="project-review-rules">
@@ -53,23 +53,23 @@ function RulesDialog({ onClose, ...props }: RulesProps & { onClose: () => void }
       <p className="review-detail-muted">Enabled rules use the PR watcher’s schedule. Turn on the watcher to run reviews in the background.</p>
       {error && <p className="inline-banner tone-warn" role="alert">{error} <button className="btn btn-sm" disabled={saving} onClick={refresh}>Refresh rules</button></p>}
       {!snapshot && !error && <Spinner label="Loading rules" />}
-      {snapshot && (editor ? <RuleEditor key={editor.id} initial={editor} saving={saving} onCancel={() => setEditor(null)}
-        onSave={async rule => { if (await request({ kind: "save", rule })) setEditor(null); }} /> : <>
-        <div className="rule-heading"><h3>Project rules</h3><button className="btn btn-primary btn-sm" onClick={() => setEditor(newRule())}>New rule</button></div>
+      {snapshot && (editor ? <RuleEditor key={editor.draft.id} initial={editor.draft} saving={saving} onCancel={() => setEditor(null)}
+        onSave={async rule => { if (await request({ kind: "save", rule, expected: editor.expected })) setEditor(null); }} /> : <>
+        <div className="rule-heading"><h3>Project rules</h3><button className="btn btn-primary btn-sm" onClick={() => setEditor({ draft: newRule(), expected: null })}>New rule</button></div>
         {!snapshot.rules.length && <p className="review-detail-muted">No automatic review rules yet.</p>}
         {snapshot.rules.map(rule => <article key={rule.id} className="rule-entry" aria-label={rule.name}>
           <div className="rule-heading"><strong>{rule.name}</strong><span className="badge">{rule.enabled ? "Enabled" : "Disabled"}</span></div>
           <p>{describeRule(rule)}</p>
           <small>{runLimits(rule.budgetMinutes, rule.budgetTokens)}</small>
-          {confirmDelete === rule.id ? <div className="rule-actions">
+          {confirmDelete?.id === rule.id ? <div className="rule-actions">
             <span>Delete this rule?</span>
             <button className="btn btn-sm" disabled={saving} onClick={async () => {
-              if (await request({ kind: "delete", id: rule.id })) setConfirmDelete("");
-            }}>Confirm delete</button><button className="btn btn-sm" disabled={saving} onClick={() => setConfirmDelete("")}>Keep rule</button>
+              if (await request({ kind: "delete", id: rule.id, expected: confirmDelete })) setConfirmDelete(null);
+            }}>Confirm delete</button><button className="btn btn-sm" disabled={saving} onClick={() => setConfirmDelete(null)}>Keep rule</button>
           </div> : <div className="rule-actions">
-            <button className="btn btn-sm" disabled={saving} onClick={() => setEditor(rule)}>Edit</button>
-            <button className="btn btn-sm" disabled={saving} onClick={() => void request({ kind: "save", rule: { ...rule, enabled: !rule.enabled } })}>{rule.enabled ? "Disable" : "Enable"}</button>
-            <button className="link-btn" disabled={saving} onClick={() => setConfirmDelete(rule.id)}>Delete</button>
+            <button className="btn btn-sm" disabled={saving} onClick={() => setEditor({ draft: rule, expected: rule })}>Edit</button>
+            <button className="btn btn-sm" disabled={saving} onClick={() => void request({ kind: "save", rule: { ...rule, enabled: !rule.enabled }, expected: rule })}>{rule.enabled ? "Disable" : "Enable"}</button>
+            <button className="link-btn" disabled={saving} onClick={() => setConfirmDelete(rule)}>Delete</button>
           </div>}
         </article>)}
         <RuleActivity events={snapshot.activity} showNumber />

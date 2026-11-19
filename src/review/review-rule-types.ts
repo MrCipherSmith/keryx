@@ -17,8 +17,8 @@ export type ReviewPrMode = { mode: "project" | "manual" } | { mode: "auto"; rule
 
 export type ReviewRuleAction =
   | { kind: "status"; number?: number | undefined }
-  | { kind: "save"; rule: ReviewRule; number?: number | undefined }
-  | { kind: "delete"; id: string; number?: number | undefined }
+  | { kind: "save"; rule: ReviewRule; expected?: ReviewRule | null | undefined; number?: number | undefined }
+  | { kind: "delete"; id: string; expected?: ReviewRule | undefined; number?: number | undefined }
   | { kind: "mode"; number: number; choice: ReviewPrMode };
 
 export interface ReviewRuleActivity {

@@ -47,8 +47,9 @@ export function parseWatchArgs(args: string[]) {
   return { action: action as Action, key, minutes };
 }
 
-function publicStatus(s: WatcherSnapshot, message: string | null = null): WatcherSnapshot {
-  return { ...s, historyAvailable: false, events: [], lastError: message };
+function publicStatus(s: WatcherSnapshot): WatcherSnapshot {
+  return { ...s, historyAvailable: false, events: [],
+    lastError: s.lastError ? "The last scheduled poll failed. Reconnect to GitHub to inspect it." : null };
 }
 
 async function scopedStatus(
@@ -58,18 +59,12 @@ async function scopedStatus(
   verify: typeof verifyIdentity,
 ) {
   if (!verifiedKey)
-    return publicStatus(
-      snapshot,
-      snapshot.lastError ? "The last scheduled poll failed. Reconnect to GitHub to inspect it." : null,
-    );
+    return publicStatus(snapshot);
   if (snapshot.events.length || snapshot.lastError) {
     try {
       await verify(project, verifiedKey);
     } catch {
-      return publicStatus(
-        snapshot,
-        "GitHub access could not be confirmed. Reconnect to view watcher activity.",
-      );
+      return publicStatus(snapshot);
     }
   }
   return snapshot;

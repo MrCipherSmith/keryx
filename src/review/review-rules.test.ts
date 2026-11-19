@@ -289,3 +289,17 @@ test("authorization refuses an uncapped spawn for a rule with an explicit token 
   expect(status().activity[0]?.runId).toBeUndefined();
   expect(status().activity[0]?.reason).toContain("rule conditions changed");
 });
+
+test("saving an older editor cannot restore a deleted rule or overwrite a newer budget", () => {
+  const original = rule();
+  const changed = rule({ budgetTokens: 100 });
+  const apply = (action: ReviewRuleAction) => applyReviewRuleAction(project, key, action);
+  apply({ kind: "save", rule: original, expected: null });
+  apply({ kind: "save", rule: changed, expected: original });
+  expect(() => apply({ kind: "save", rule: original, expected: original })).toThrow("conflict");
+  expect(() => apply({ kind: "delete", id: original.id, expected: original })).toThrow("conflict");
+  expect(apply({ kind: "status" }).rules).toEqual([changed]);
+  apply({ kind: "delete", id: original.id, expected: changed });
+  expect(() => apply({ kind: "save", rule: changed, expected: changed })).toThrow("conflict");
+  expect(apply({ kind: "status" }).rules).toEqual([]);
+});

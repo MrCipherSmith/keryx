@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from "node:util";
 import type { Database } from "bun:sqlite";
 import type {
   ReviewPrMode,
@@ -61,12 +62,18 @@ export function applyReviewRuleAction(
 ): ReviewRuleSnapshot {
   const scope = watcherScope(project, key);
   return watcherTransaction((db) => {
+    const mutatingRule = action.kind === "save" || action.kind === "delete";
+    const current = mutatingRule
+      ? db.query<{ rule: string }, [string, string]>("SELECT rule FROM review_rules WHERE watcher=? AND id=?")
+          .get(scope, action.kind === "save" ? action.rule.id : action.id)
+      : null;
+    if (mutatingRule && action.expected !== undefined &&
+        !isDeepStrictEqual(action.expected, current ? JSON.parse(current.rule) : null)) {
+      throw new Error("conflict: This rule was changed or deleted. Refresh the rules and open the editor again.");
+    }
     if (action.kind === "save") {
       const encoded = JSON.stringify(action.rule);
-      const before = db
-        .query<{ rule: string }, [string, string]>("SELECT rule FROM review_rules WHERE watcher=? AND id=?")
-        .get(scope, action.rule.id);
-      if (before?.rule !== encoded) {
+      if (current?.rule !== encoded) {
         invalidateRuleWork(db, scope, `Rule settings changed: ${action.rule.name}`, action.rule.id);
         db.run(
           `INSERT INTO review_rules(watcher,id,rule) VALUES(?,?,?) ON CONFLICT(watcher,id)
@@ -75,14 +82,11 @@ export function applyReviewRuleAction(
         );
       }
     } else if (action.kind === "delete") {
-      const row = db
-        .query<{ rule: string }, [string, string]>("SELECT rule FROM review_rules WHERE watcher=? AND id=?")
-        .get(scope, action.id);
-      if (row) {
+      if (current) {
         invalidateRuleWork(
           db,
           scope,
-          `Rule deleted: ${(JSON.parse(row.rule) as ReviewRule).name}`,
+          `Rule deleted: ${(JSON.parse(current.rule) as ReviewRule).name}`,
           action.id,
         );
         db.run("DELETE FROM review_rules WHERE watcher=? AND id=?", [scope, action.id]);

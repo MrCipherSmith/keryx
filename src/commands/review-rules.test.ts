@@ -20,6 +20,9 @@ test("rule settings normalize GitHub names and preserve bounded budgets", () => 
   });
   for (const patch of [
     { budgetMinutes: 0 },
+    { author: "@" },
+    { assignee: " @" },
+    { reviewer: "@ " },
     { budgetTokens: 0 },
     { budgetTokens: 1.5 },
     { budgetTokens: Number.MAX_SAFE_INTEGER + 1 },

@@ -14,6 +14,7 @@ const filter = (team: boolean) =>
     .string()
     .trim()
     .max(180)
+    .refine(value => value !== "@", "Enter a GitHub login or leave the field empty.")
     .transform((value) => value.replace(/^@/, ""))
     .pipe(z.string().regex(new RegExp(team ? `^(?:${login}(?:/[a-z0-9._-]+)?)?$` : `^(?:${login})?$`, "i")));
 const rule = z.strictObject({
@@ -41,8 +42,8 @@ const choice = z.discriminatedUnion("mode", [
 const actions = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("status"), number: number.optional() }),
   z.strictObject({ kind: z.literal("mode"), number, choice }),
-  z.strictObject({ kind: z.literal("save"), rule, number: number.optional() }),
-  z.strictObject({ kind: z.literal("delete"), id, number: number.optional() }),
+  z.strictObject({ kind: z.literal("save"), rule, expected: rule.nullable().optional(), number: number.optional() }),
+  z.strictObject({ kind: z.literal("delete"), id, expected: rule.optional(), number: number.optional() }),
 ]);
 
 export function parseRuleRequest(raw: string): ReviewRuleAction {
