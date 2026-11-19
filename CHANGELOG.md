@@ -5,6 +5,26 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.39] - 2026-11-19
+
+### Added
+
+- **keryx marks its own notes in the ACP stream.** Gate, budget, recovery, MCP-problem, hook and model-fallback notes sent as `agent_message_chunk` carry `_meta.keryx.system: true`, so a client can show them apart from the model's reply. Clients that do not know the marker show the text as before.
+- **Keryx Desktop 0.2.2:**
+  - keryx notes (`[review-gate]`, budget, recovery) are their own blocks in the feed instead of being glued into the reply; the gate's refusal reasons render as a list. Older keryx is handled by the note's shape.
+  - Syntax highlighting for code blocks, coloured diffs with +N/−M counts (also for `git diff` output in tool cards), inline images, and resource links and embedded files.
+  - The session info panel can be selected and copied from; the session id, folder path and model id rows have a copy button.
+
+### Changed
+
+- **`trust` keeps a review going after untrusted content.** `keryx review plan` and `git cat-file -e|-t <object>` are now in the routine table, so an adaptive review no longer asks on most shell calls once a search, web or MCP result entered the turn. `-p`, `--batch`, `--textconv` and `--filters` still ask. The review-orchestrator skill (1.16.2) keeps each shell call routine in `trust`/`auto` sessions.
+- **A user-pinned review model with an unknown context length is used.** `keryx routing set review <model> --user` is honoured with a `context-unknown` notice instead of refused as `context-insufficient` for every diff. `context-insufficient` now means only "known and too small", and the message names the model and the fix (`keryx routing profile set <model> --context <tokens>` or `keryx routing set review baseline`).
+
+### Fixed
+
+- **A PR review round is refused when the checkout is not at the PR head.** `review start` and `review plan` without `--head` read the pull request's head and refuse a mismatch before opening a package, naming both commits and the ways out, instead of cutting the plan over the wrong commit.
+- `review tier` with no session model names `--from-shell-config`, `--session-provider/--session-model` and `KERYX_SESSION_*`, and the review gate reports a `dispatchable: false` routing refusal as the real blocker instead of re-prompting the agent.
+
 ## [0.4.38] - 2026-11-19
 
 ### Added
