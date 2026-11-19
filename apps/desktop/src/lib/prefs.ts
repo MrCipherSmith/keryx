@@ -62,6 +62,27 @@ export type SidePanelTab = "terminal" | "browser" | "activity" | "info";
 const SIDE_TABS: readonly string[] = ["terminal", "browser", "activity", "info"];
 export const SIDE_PANEL_MIN = 320;
 export const SIDE_PANEL_MAX = 1200;
+/** The narrowest the chat column gets while the side panel is open. */
+export const CHAT_MIN = 360;
+/** The side panel's share of the window, at most. */
+export const SIDE_PANEL_SHARE = 0.6;
+/** Below this the side panel is too narrow to use; the chat column then gives way. */
+const SIDE_PANEL_FLOOR = 240;
+/** The project rail's width (`--rail-w`). */
+const RAIL_W = 60;
+
+/**
+ * The side panel's width in a window `windowWidth` wide, from the stored width: at most 60% of the
+ * window, and never so wide that the chat column (next to the session sidebar, `sidebarWidth` when
+ * it shows) gets narrower than `CHAT_MIN`. A width stored in a larger window or in full screen
+ * therefore no longer squeezes the chat to a sliver.
+ */
+export function fitSidePanelWidth(stored: number, windowWidth: number, sidebarWidth = 0): number {
+  const wanted = Number.isFinite(stored) ? Math.min(SIDE_PANEL_MAX, Math.max(SIDE_PANEL_MIN, stored)) : SIDE_PANEL_MIN;
+  if (!Number.isFinite(windowWidth) || windowWidth <= 0) return Math.round(wanted);
+  const room = Math.min(Math.floor(windowWidth * SIDE_PANEL_SHARE), windowWidth - RAIL_W - sidebarWidth - CHAT_MIN);
+  return Math.round(Math.max(SIDE_PANEL_FLOOR, Math.min(wanted, room)));
+}
 export const SESSION_SIDEBAR_MIN = 200;
 export const SESSION_SIDEBAR_MAX = 560;
 

@@ -8,6 +8,9 @@ import type { PtyTab } from "../platform/panels";
 const calls: Array<[string, ...unknown[]]> = [];
 let tabs: PtyTab[] = [];
 let nextId = 1;
+// The browser panel's event handler, to send it page events; and a gate holding a new tab's open.
+let browserEvent: ((e: unknown) => void) | null = null;
+let openGate: Promise<void> | null = null;
 const tab = (id: number, running = true): PtyTab => ({ id, title: "zsh", owner: "user", cwd: "/p", running, exitCode: null });
 
 mock.module("../platform/panels", () => ({
@@ -30,18 +33,31 @@ mock.module("../platform/panels", () => ({
   ptyResize: async () => {},
   ptyAttach: async () => tab(0),
   onAgentTerminal: async () => () => {},
-  onBrowserEvent: async () => () => {},
+  onBrowserEvent: async (h: (e: unknown) => void) => ((browserEvent = h), () => {}),
   browserEngine: async () => "webkit",
   onConsent: async () => () => {},
   onConsentClosed: async () => () => {},
   browserConsentAnswer: async () => {},
   browserList: async () => [],
-  browserOpen: async (cwd: string, url: string) => (calls.push(["bopen", cwd, url]), { id: 9, url: "http://localhost:3000/", title: "", loading: true, active: true }),
+  browserOpen: async (cwd: string, url: string) => {
+    calls.push(["bopen", cwd, url]);
+    if (openGate) await openGate;
+    return { id: 9, url: "http://localhost:3000/", title: "", loading: true, active: true };
+  },
   browserNavigate: async (id: number, url: string) => void calls.push(["bnav", id, url]),
   browserGo: async () => {},
   browserClose: async () => {},
   browserSelect: async () => {},
   browserLayout: async () => {},
+  browserFrames: async () => {},
+  browserFrame: async () => new ArrayBuffer(0),
+  browserInput: async () => {},
+  browserPick: async () => null,
+  browserPickCancel: async () => {},
+  isPicked: (r: unknown) => typeof r === "object" && r !== null,
+  cookieProfiles: async () => [],
+  cookieScan: async () => [],
+  cookieImport: async () => ({ imported: 0, skipped: 0 }),
   panelMcpServers: async () => [],
 }));
 mock.module("./TermView", () => ({
@@ -137,6 +153,67 @@ test("the browser opens a tab from the address bar, then navigates that tab", as
   expect(host.querySelector('[role="tab"][aria-selected="true"]')!.textContent).toContain("localhost:3000");
   await type("localhost:3000/about");
   expect(calls).toContainEqual(["bnav", 9, "localhost:3000/about"]);
+});
+
+async function renderBrowser() {
+  await act(() => root.render(createElement("div")));
+  calls.length = 0;
+  await act(() => root.render(createElement(browser.BrowserPanel, { cwd: "/proj", visible: true })));
+  await flush();
+  return {
+    addr: host.querySelector<HTMLInputElement>('input[aria-label="Address"]')!,
+    form: host.querySelector<HTMLFormElement>("form.browser-bar")!,
+  };
+}
+
+async function typeInto(addr: HTMLInputElement, v: string) {
+  await act(async () => {
+    const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+    set.call(addr, v);
+    addr.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+test("a click into the address bar selects the whole address, and the page's events never replace a draft", async () => {
+  const { addr, form } = await renderBrowser();
+  await typeInto(addr, "localhost:3000");
+  await act(async () => form.requestSubmit());
+  await flush();
+  expect(addr.value).toBe("http://localhost:3000/");
+
+  // The click's release would put the caret at the click point; the whole address stays selected.
+  await act(async () => {
+    addr.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+    addr.focus();
+    addr.setSelectionRange(5, 5);
+    addr.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true }));
+  });
+  expect([addr.selectionStart, addr.selectionEnd]).toEqual([0, addr.value.length]);
+
+  await typeInto(addr, "github.com/login");
+  await act(async () => browserEvent!({ kind: "tab", tab: { id: 9, url: "http://localhost:3000/next", title: "Next", loading: false, active: true } }));
+  await flush();
+  expect(addr.value).toBe("github.com/login");
+});
+
+test("Enter hands the bar back to the page, and a second Enter while the tab opens opens no second tab", async () => {
+  let release = () => {};
+  openGate = new Promise<void>((r) => (release = r));
+  const { addr, form } = await renderBrowser();
+  await act(async () => addr.focus());
+  await typeInto(addr, "github.com/login");
+  await act(async () => form.requestSubmit());
+  await flush();
+  expect(document.activeElement).not.toBe(addr);
+  // While the tab opens the bar keeps showing what was typed.
+  expect(addr.value).toBe("github.com/login");
+  await act(async () => form.requestSubmit());
+  await flush();
+  expect(calls.filter((c) => c[0] === "bopen")).toEqual([["bopen", "/proj", "github.com/login"]]);
+  openGate = null;
+  await act(async () => release());
+  await flush();
+  expect(addr.value).toBe("http://localhost:3000/");
 });
 
 test("browser tab labels and updates", () => {

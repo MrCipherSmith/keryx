@@ -53,6 +53,11 @@ export function BrowserPanel({ cwd, visible }: { cwd: string; visible: boolean }
   const [active, setActive] = useState<number | null>(null);
   const [address, setAddress] = useState("");
   const [editing, setEditing] = useState(false);
+  // The address a new tab is being opened on, shown in the bar until the tab exists.
+  const [opening, setOpening] = useState<string | null>(null);
+  // A click that focuses the bar selects its whole text (the click's release would put the caret
+  // at the click point and drop the selection, so new typing was added to the old address).
+  const selectOnRelease = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const body = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
@@ -98,7 +103,7 @@ export function BrowserPanel({ cwd, visible }: { cwd: string; visible: boolean }
   }, []);
 
   // The address bar follows the active page unless the user is typing in it.
-  const shownUrl = activeTab && activeTab.url !== "about:blank" ? activeTab.url : "";
+  const shownUrl = activeTab ? (activeTab.url !== "about:blank" ? activeTab.url : "") : (opening ?? "");
   useEffect(() => {
     if (!editing) setAddress(shownUrl);
   }, [shownUrl, editing]);
@@ -134,17 +139,24 @@ export function BrowserPanel({ cwd, visible }: { cwd: string; visible: boolean }
   useEffect(() => () => void browserLayout(null, false).catch(() => {}), []);
 
   const go = async (raw: string) => {
+    // A second Enter while the new tab opens would open another one.
+    if (!activeTab && opening !== null) return;
     setError(null);
+    // The page takes over: the bar shows its address from now on, not the draft.
     setEditing(false);
+    input.current?.blur();
     try {
       if (activeTab) await browserNavigate(activeTab.id, raw);
       else {
+        setOpening(raw.trim());
         const t = await browserOpen(cwd, raw);
         setTabs((list) => applyBrowserTab(list, t));
         setActive(t.id);
       }
     } catch (e) {
       setError(errText(e));
+    } finally {
+      setOpening(null);
     }
   };
 
@@ -252,12 +264,25 @@ export function BrowserPanel({ cwd, visible }: { cwd: string; visible: boolean }
           autoCapitalize="off"
           autoCorrect="off"
           aria-label="Address"
+          onMouseDown={(e) => {
+            selectOnRelease.current = document.activeElement !== e.currentTarget;
+          }}
+          onMouseUp={(e) => {
+            if (!selectOnRelease.current) return;
+            selectOnRelease.current = false;
+            e.preventDefault();
+            e.currentTarget.select();
+          }}
           onFocus={(e) => {
             setEditing(true);
             e.currentTarget.select();
           }}
           onBlur={() => setEditing(false)}
-          onChange={(e) => setAddress(e.target.value)}
+          onChange={(e) => {
+            // Typing is editing, whatever the focus events said: the page's address never replaces a draft.
+            setEditing(true);
+            setAddress(e.target.value);
+          }}
           onKeyDown={(e) => {
             if (e.key === "Escape") {
               setEditing(false);
