@@ -5,6 +5,29 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.40] - 2026-11-20
+
+### Added
+
+- **Keryx Desktop 0.2.3 has a Chromium browser panel** (the app needs keryx 0.4.40 or newer):
+  - The side-panel browser runs on the installed Chrome, else Chrome for Testing, over a debugging pipe (no open port), with one profile per project. Settings → browser engine: Auto / Chromium / WebKit; WebKit stays as the fallback when Chrome is missing or fails to start, and a crashed Chrome is relaunched.
+  - The agent's `browser_*` tools run on it: real input, screenshots, an accessibility snapshot, console and network.
+  - Any agent action or read on a site other than localhost asks first, in every permission mode; "Allow for this session" lifts it per site. The page address comes from Chrome, never from the page, and an unreadable address asks.
+  - Element picker (Cmd+Shift+C): hover highlights, click picks; only real user input counts. The pick goes to the agent as untrusted page content.
+  - Cookie import: pick sites from a Chrome profile; their cookies are decrypted with Chrome's Keychain key (read in-process, so macOS names Keryx) and stored in the project profile under the real Keychain. A one-time snapshot, not a sync; saved passwords are never imported.
+  - Local images the agent links to show as thumbnails with a full-size viewer.
+- **Untrusted prompt content in ACP.** A client can send page-sourced content as a `resource` block marked `_meta.keryx.untrusted`; keryx wraps it in an external-content boundary and treats the turn as untrusted, so it cannot authorize tool calls. Automatic-review mode is switched on only by the operator's own words.
+- **A client's first-party MCP server can own a tool-name prefix** (`_meta.keryx.owns`), hiding other servers' tools of that prefix in its sessions while it is connected.
+
+### Changed
+
+- **Keryx Desktop keeps every project in one window.** Each project is its own view inside the window, so switching projects keeps fullscreen, size and position (no more black fullscreen Space) and is instant; background projects keep running.
+- **review-orchestrator** (1.17.0) and **flow-orchestrator** (1.5.0) skills are shorter: text the CLI already enforces is replaced by the command to run.
+
+### Fixed
+
+- Keryx Desktop: the welcome screen no longer overflows on a long recent project path; the browser address bar keeps what you type; the browser panel never squeezes the chat column below 360 px.
+
 ## [0.4.39] - 2026-11-19
 
 ### Added
