@@ -20,7 +20,7 @@ pub mod version;
 pub mod webkit;
 
 use tauri::menu::{Menu, MenuItem, Submenu};
-use tauri::{Emitter, Manager, RunEvent, WebviewWindowBuilder, WindowEvent};
+use tauri::{Emitter, Manager, RunEvent, WindowEvent};
 
 const PANEL_MENU_PALETTE: &str = "panel-palette";
 const PANEL_MENU_TERMINAL: &str = "panel-terminal";
@@ -39,18 +39,10 @@ pub fn run() {
         .manage(projects::ProjectWindows::default())
         .setup(|app| {
             // The main window is declared in tauri.conf.json with `create: false`
-            // and built here, so it gets the same navigation guard as every
-            // project window.
-            let main = app
-                .config()
-                .app
-                .windows
-                .iter()
-                .find(|w| w.label == "main")
-                .cloned()
-                .ok_or("tauri.conf.json declares no `main` window")?;
+            // and built here as a bare host window with one project view (the
+            // welcome screen), like every other window (see `projects`).
             let handle = app.handle();
-            navigation::guard(WebviewWindowBuilder::from_config(handle, &main)?, navigation::dev_url(handle)).build()?;
+            projects::create_main_window(handle)?;
 
             // Panel shortcuts as menu key equivalents: they also fire while a browser tab of the side
             // panel has the keyboard, where the app page's own key handler never sees the keys.
@@ -81,27 +73,20 @@ pub fn run() {
             if ![PANEL_MENU_PALETTE, PANEL_MENU_TERMINAL, PANEL_MENU_BROWSER].contains(&id) {
                 return;
             }
+            // To the project in front of the focused window: the others of that window are hidden.
             let focused = app.windows().into_values().find(|w| w.is_focused().unwrap_or(false));
-            if let Some(w) = focused {
-                let _ = app.emit_to(w.label(), "menu://panel", id.trim_start_matches("panel-"));
+            let front = focused.and_then(|w| app.state::<projects::ProjectWindows>().front_of(w.label()));
+            if let Some(view) = front {
+                let _ = app.emit_to(view.as_str(), "menu://panel", id.trim_start_matches("panel-"));
             }
         })
         .on_window_event(|window, event| {
-            if let WindowEvent::CloseRequested { .. } = event {
-                // A background project takes the closing window's place on screen.
-                projects::on_close_requested(window.app_handle(), window);
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                // Only the project in front closes while the window holds another one.
+                projects::on_close_requested(window.app_handle(), window, api);
             }
             if let WindowEvent::Destroyed = event {
-                let projects = window.app_handle().state::<projects::ProjectWindows>();
-                projects.forget(window.label());
-                projects.broadcast(window.app_handle());
-                // Never wait out the stop grace period on the event loop.
-                window.app_handle().state::<bridge::AppState>().window_destroyed(window.label());
-                window.app_handle().state::<flows::watch::FlowWatchers>().stop_window(window.label());
-                window.app_handle().state::<pty::PtyManager>().close_window(window.label());
-                window.app_handle().state::<panels::PanelRoots>().remove(window.label());
-                window.app_handle().state::<browser::Browsers>().forget_window(window.label());
-                window.app_handle().state::<panel_mcp::PanelMcp>().forget_window(window.label());
+                projects::on_window_destroyed(window.app_handle(), window.label());
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -117,6 +102,7 @@ pub fn run() {
             projects::project_register,
             projects::project_activity,
             projects::project_switch,
+            projects::project_title,
             projects::projects_state,
             flows::flows_list,
             flows::flows_get,

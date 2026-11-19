@@ -1,23 +1,25 @@
-//! Tauri commands that connect a window to its own `keryx acp` process.
+//! Tauri commands that connect a project view to its own `keryx acp` process.
 //!
-//! The Rust core does not interpret ACP beyond framing and the `fs/*`
-//! handler: every other line goes to the window verbatim as `acp://message`.
+//! A project view is a child web view of a host window (see `projects`);
+//! several share one window, so the identity everywhere here is the calling
+//! view's label, never the window's. The Rust core does not interpret ACP
+//! beyond framing and the `fs/*` handler: every other line goes to the view
+//! verbatim as `acp://message`.
 
 use crate::fs;
 use crate::locator::{self, KeryxSource};
-use crate::navigation;
 use crate::process::{AcpProcess, ProcessEvent, SpawnConfig, GRACEFUL_STOP};
+use crate::projects;
 use crate::settings;
 use crate::shellenv;
 use crate::version;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
-use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder, Window};
+use tauri::{AppHandle, Emitter, Manager, State, Webview};
 
 /// Overall budget for stopping every window at app quit. It must outlast one
 /// graceful stop, or the quit gives up before the process-group SIGKILL.
@@ -57,7 +59,6 @@ pub struct AppState {
     start_locks: Mutex<HashMap<String, Arc<Mutex<()>>>>,
     pending_cwd: Mutex<HashMap<String, String>>,
     login_env: OnceLock<HashMap<String, String>>,
-    window_counter: AtomicU64,
 }
 
 /// Stop every process in parallel; wait for all of them, but no longer than `deadline`.
@@ -80,7 +81,7 @@ fn kill_all(procs: Vec<Arc<AcpProcess>>, deadline: Duration) {
     }
 }
 
-const WINDOW_CLOSED: &str = "This window was closed while keryx was starting";
+const WINDOW_CLOSED: &str = "This project was closed while keryx was starting";
 const START_CANCELLED: &str = "This keryx start was cancelled by a stop issued after it";
 const START_SUPERSEDED: &str = "A newer keryx start for this window replaced this one";
 
@@ -93,7 +94,7 @@ impl AppState {
     /// The per-window lock that serialises `acp_start` for one label; `None`
     /// once the window is destroyed.
     fn start_lock(&self, label: &str) -> Option<Arc<Mutex<()>>> {
-        // Lock order: sessions, then start_locks (as in `window_destroyed`).
+        // Lock order: sessions, then start_locks (as in `view_closed`).
         let sessions = self.sessions.lock().unwrap();
         if sessions.closed.contains(label) {
             return None;
@@ -223,11 +224,16 @@ impl AppState {
         }
     }
 
-    /// The window was destroyed: mark its label closed (so an in-flight start
-    /// stops what it spawns), drop its start lock, and stop its process on a
-    /// background thread (called from the event loop, which must not wait out
-    /// the grace period).
-    pub fn window_destroyed(&self, label: &str) {
+    /// The folder project view `label` opens once its page asks (`window_initial_cwd`).
+    pub fn set_pending_cwd(&self, label: &str, cwd: String) {
+        self.pending_cwd.lock().unwrap().insert(label.to_string(), cwd);
+    }
+
+    /// The project view was closed (or its window destroyed): mark its label
+    /// closed (so an in-flight start stops what it spawns), drop its start
+    /// lock, and stop its process on a background thread (callers may be on
+    /// the event loop, which must not wait out the grace period).
+    pub fn view_closed(&self, label: &str) {
         let proc = {
             let mut sessions = self.sessions.lock().unwrap();
             sessions.closed.insert(label.to_string());
@@ -329,12 +335,12 @@ fn answer_fs(proc: &Arc<AcpProcess>, root: &Path, request: &fs::FsRequest) {
 #[tauri::command]
 pub async fn acp_start(
     app: AppHandle,
-    window: Window,
+    webview: Webview,
     cwd: String,
     no_profile: Option<bool>,
     prefer_bundled: Option<bool>,
 ) -> Result<StartInfo, String> {
-    let label = window.label().to_string();
+    let label = webview.label().to_string();
     // Numbered before the first await: see `begin_start`.
     let start = app.state::<AppState>().begin_start(&label);
     // Stopping the previous process (grace), the login-env capture, git and
@@ -443,14 +449,14 @@ fn launch(app: &AppHandle, label: &str, cwd: &str, no_profile: bool, prefer_bund
 /// safe here because `send_line` never waits: it only pushes onto the queue
 /// under a short lock and fails at once when the queue is full.
 #[tauri::command]
-pub fn acp_send(window: Window, state: State<'_, AppState>, message: String) -> Result<(), String> {
-    let proc = state.session(window.label()).ok_or("keryx is not running in this window")?;
+pub fn acp_send(webview: Webview, state: State<'_, AppState>, message: String) -> Result<(), String> {
+    let proc = state.session(webview.label()).ok_or("keryx is not running in this window")?;
     proc.send_line(&message)
 }
 
 #[tauri::command]
-pub async fn acp_stop(app: AppHandle, window: Window) -> Result<(), String> {
-    let label = window.label().to_string();
+pub async fn acp_stop(app: AppHandle, webview: Webview) -> Result<(), String> {
+    let label = webview.label().to_string();
     // Bound to the starts issued before it, before the first await: see
     // `begin_stop`.
     let through = app.state::<AppState>().begin_stop(&label);
@@ -473,30 +479,16 @@ pub fn version_check(found: String) -> VersionCheck {
     VersionCheck { ok: version::is_compatible(&found), found, required: version::MIN_KERYX_VERSION }
 }
 
-/// Open a project in a new window (one keryx process per window).
+/// Open a project in a new host window (one keryx process per project view).
 #[tauri::command]
-pub async fn window_open_project(app: AppHandle, state: State<'_, AppState>, cwd: String) -> Result<(), String> {
-    create_project_window(&app, &state, cwd, true).map(|_| ())
+pub async fn window_open_project(app: AppHandle, cwd: String) -> Result<(), String> {
+    projects::open_in_new_window(&app, cwd)
 }
 
-/// A new project window that opens `cwd`; hidden when `visible` is false (the caller places and
-/// shows it).
-pub fn create_project_window(app: &AppHandle, state: &AppState, cwd: String, visible: bool) -> Result<tauri::WebviewWindow, String> {
-    let n = state.window_counter.fetch_add(1, Ordering::SeqCst) + 1;
-    let label = format!("project-{n}");
-    state.pending_cwd.lock().unwrap().insert(label.clone(), cwd);
-    let builder = WebviewWindowBuilder::new(app, &label, WebviewUrl::App("index.html".into()))
-        .title("Keryx")
-        .inner_size(1180.0, 780.0)
-        .min_inner_size(720.0, 480.0)
-        .visible(visible);
-    navigation::guard(builder, navigation::dev_url(app)).build().map_err(|e| e.to_string())
-}
-
-/// The folder a freshly created project window should open (taken once).
+/// The folder a freshly created project view should open (taken once).
 #[tauri::command]
-pub fn window_initial_cwd(window: Window, state: State<'_, AppState>) -> Option<String> {
-    state.pending_cwd.lock().unwrap().remove(window.label())
+pub fn window_initial_cwd(webview: Webview, state: State<'_, AppState>) -> Option<String> {
+    state.pending_cwd.lock().unwrap().remove(webview.label())
 }
 
 #[cfg(all(test, unix))]
@@ -550,7 +542,7 @@ mod tests {
         let mut spawned = None;
         let result = state.start_session("w", state.begin_start("w"), || {
             // The window closes while keryx is being located and spawned.
-            state.window_destroyed("w");
+            state.view_closed("w");
             let p = sleeper();
             spawned = Some(p.clone());
             Ok((p, ()))
@@ -566,7 +558,7 @@ mod tests {
     fn a_destroyed_window_drops_its_start_lock_and_refuses_new_starts() {
         let state = AppState::default();
         state.start_lock("w").unwrap();
-        state.window_destroyed("w");
+        state.view_closed("w");
         assert!(!state.start_locks.lock().unwrap().contains_key("w"));
         assert!(state.start_lock("w").is_none());
         let mut launched = false;
@@ -693,7 +685,7 @@ mod tests {
     #[test]
     fn a_stop_for_a_destroyed_window_is_a_no_op() {
         let state = AppState::default();
-        state.window_destroyed("w");
+        state.view_closed("w");
         state.stop_session("w", state.begin_stop("w"));
         assert!(state.start_lock("w").is_none(), "a stop must not resurrect the start lock");
         assert!(!state.sessions.lock().unwrap().epochs.contains_key("w"));
@@ -706,7 +698,7 @@ mod tests {
         state.install("a", state.begin_start("a"), a.clone()).unwrap();
         state.install("b", state.begin_start("b"), b.clone()).unwrap();
         state.install("c", state.begin_start("c"), c.clone()).unwrap();
-        state.window_destroyed("c");
+        state.view_closed("c");
         state.stop_all();
         assert!(a.is_stopped() && b.is_stopped() && c.is_stopped());
     }

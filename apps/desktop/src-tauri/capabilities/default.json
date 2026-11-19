@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capabilities for every Keryx window (the welcome window and project windows).",
+  "description": "Capabilities for every Keryx host window and the project views in it (welcome screen and projects).",
   "windows": ["*"],
-  "permissions": ["core:default", "core:window:allow-set-title", "dialog:allow-open", "opener:allow-open-url"]
+  "permissions": ["core:default", "dialog:allow-open", "opener:allow-open-url"]
 }

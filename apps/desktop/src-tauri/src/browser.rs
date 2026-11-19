@@ -1,5 +1,8 @@
 //! Browser tabs of the side panel (D-13): each tab is a child WKWebView of the
-//! project window, laid over the panel's body by the web view (`browser_layout`).
+//! host window, owned by one project view (see `projects`) and laid over the
+//! panel's body by that view's page (`browser_layout`). Tabs are keyed by the
+//! project view's label; they show only while their project view is the one in
+//! front of its window, and sit above it (added after it).
 //!
 //! Pages are untrusted. They load only over `http`/`https`, open no windows,
 //! download nothing, and reach no app command: Tauri refuses every custom
@@ -12,6 +15,7 @@
 //! non-persistent there.
 
 use crate::panels::PanelRoots;
+use crate::projects::ProjectWindows;
 use crate::webkit::{self, World};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -184,19 +188,20 @@ fn webview(app: &AppHandle, tab: &BrowserTab) -> Result<Webview, String> {
     app.get_webview(&tab.label).ok_or_else(|| format!("Browser tab {} is gone", tab.id))
 }
 
-/// Show the active tab over the panel body, hide every other one.
+/// Show the active tab over the panel body, hide every other one; hide them all while the owning
+/// project view (`window`) is not the one in front of its window.
 pub fn apply_layout(app: &AppHandle, window: &str) {
     let (tabs, active, bounds, visible) = app
         .state::<Browsers>()
         .with_window(window, |w| (w.tabs.clone(), w.active, w.bounds, w.visible));
-    // Child web views are placed in the window frame, title bar included, while the page measures
-    // from its own top: shift by the gap between the frame and the app's own web view.
-    let top = app.get_window(window).map(|w| webkit::title_bar_height(&w)).unwrap_or(0.0);
+    let visible = visible && app.state::<ProjectWindows>().is_front(window);
+    // The project view fills its host window from (0, 0) and the tabs are its siblings there, so
+    // the page's own coordinates are the tabs' coordinates.
     for t in tabs {
         let Some(wv) = app.get_webview(&t.label) else { continue };
         match (visible && active == Some(t.id), bounds) {
             (true, Some(b)) if b.width >= 1.0 && b.height >= 1.0 => {
-                let _ = wv.set_position(LogicalPosition::new(b.x, b.y + top));
+                let _ = wv.set_position(LogicalPosition::new(b.x, b.y));
                 let _ = wv.set_size(LogicalSize::new(b.width, b.height));
                 let _ = wv.show();
             }
@@ -207,7 +212,18 @@ pub fn apply_layout(app: &AppHandle, window: &str) {
     }
 }
 
-/// Close every tab of a window (the window is being destroyed or its project closed).
+/// Move every tab of project view `owner` into `window` (the view moved there), in tab order so
+/// they stay above the view.
+pub fn reparent_tabs(app: &AppHandle, owner: &str, window: &Window) {
+    let tabs = app.state::<Browsers>().with_window(owner, |w| w.tabs.clone());
+    for t in tabs {
+        if let Some(wv) = app.get_webview(&t.label) {
+            let _ = wv.reparent(window);
+        }
+    }
+}
+
+/// Close every tab of a project view (the view is closing).
 pub fn close_window(app: &AppHandle, window: &str) {
     let tabs = app.state::<Browsers>().with_window(window, |w| std::mem::take(&mut w.tabs));
     for t in tabs {
@@ -238,9 +254,9 @@ const CONSOLE_SHIM: &str = r#"(() => {
   addEventListener("unhandledrejection", (e) => push("error", ["Unhandled rejection: " + ((e.reason && e.reason.stack) || e.reason)]));
 })();"#;
 
-/// Open a tab on `url` in `window` and make it the active one.
-pub fn open_tab(app: &AppHandle, window: &Window, url: Url) -> Result<BrowserTabInfo, String> {
-    let label = window.label().to_string();
+/// Open a tab on `url` for project view `owner` and make it the active one.
+pub fn open_tab(app: &AppHandle, owner: &Webview, url: Url) -> Result<BrowserTabInfo, String> {
+    let label = owner.label().to_string();
     let root = app.state::<PanelRoots>().get(&label);
     let id = app.state::<Browsers>().next.fetch_add(1, Ordering::SeqCst) + 1;
     let wv_label = format!("{label}-browser-{id}");
@@ -313,7 +329,7 @@ pub fn open_tab(app: &AppHandle, window: &Window, url: Url) -> Result<BrowserTab
         w.tabs.push(tab.clone());
         w.active.replace(id)
     });
-    if let Err(e) = window.add_child(builder, pos, size) {
+    if let Err(e) = owner.window().add_child(builder, pos, size) {
         app.state::<Browsers>().with_window(&label, |w| {
             w.tabs.retain(|t| t.id != id);
             w.active = previous;
@@ -519,24 +535,24 @@ pub fn go(app: &AppHandle, tab: &BrowserTab, forward: bool) -> Result<(), String
 // ---- commands (async: `add_child` and WebKit calls wait on the main thread) ----
 
 #[tauri::command]
-pub async fn browser_open(app: AppHandle, window: Window, cwd: String, url: String) -> Result<BrowserTabInfo, String> {
-    app.state::<PanelRoots>().set(window.label(), crate::panels::project_dir(&cwd)?);
+pub async fn browser_open(app: AppHandle, view: Webview, cwd: String, url: String) -> Result<BrowserTabInfo, String> {
+    app.state::<PanelRoots>().set(view.label(), crate::panels::project_dir(&cwd)?);
     let url = normalize_url(&url)?;
     if !page_allowed(&url, crate::navigation::dev_url(&app).as_ref()) {
         return Err(format!("The browser panel does not open {url}"));
     }
-    open_tab(&app, &window, url)
+    open_tab(&app, &view, url)
 }
 
 #[tauri::command]
-pub async fn browser_navigate(app: AppHandle, window: Window, id: u64, url: String) -> Result<(), String> {
-    let tab = app.state::<Browsers>().tab(window.label(), Some(id))?;
+pub async fn browser_navigate(app: AppHandle, view: Webview, id: u64, url: String) -> Result<(), String> {
+    let tab = app.state::<Browsers>().tab(view.label(), Some(id))?;
     navigate(&app, &tab, normalize_url(&url)?)
 }
 
 #[tauri::command]
-pub async fn browser_go(app: AppHandle, window: Window, id: u64, action: String) -> Result<(), String> {
-    let tab = app.state::<Browsers>().tab(window.label(), Some(id))?;
+pub async fn browser_go(app: AppHandle, view: Webview, id: u64, action: String) -> Result<(), String> {
+    let tab = app.state::<Browsers>().tab(view.label(), Some(id))?;
     match action.as_str() {
         "back" => go(&app, &tab, false),
         "forward" => go(&app, &tab, true),
@@ -546,19 +562,19 @@ pub async fn browser_go(app: AppHandle, window: Window, id: u64, action: String)
 }
 
 #[tauri::command]
-pub async fn browser_close(app: AppHandle, window: Window, id: u64) -> Result<(), String> {
-    close_tab(&app, window.label(), id)
+pub async fn browser_close(app: AppHandle, view: Webview, id: u64) -> Result<(), String> {
+    close_tab(&app, view.label(), id)
 }
 
 #[tauri::command]
-pub async fn browser_select(app: AppHandle, window: Window, id: u64) -> Result<(), String> {
-    select(&app, window.label(), id)
+pub async fn browser_select(app: AppHandle, view: Webview, id: u64) -> Result<(), String> {
+    select(&app, view.label(), id)
 }
 
 /// Where the panel body is and whether the browser is showing; `None` bounds hide every tab.
 #[tauri::command]
-pub async fn browser_layout(app: AppHandle, window: Window, bounds: Option<Bounds>, visible: bool, seq: u64) -> Result<(), String> {
-    let fresh = app.state::<Browsers>().with_window(window.label(), |w| {
+pub async fn browser_layout(app: AppHandle, view: Webview, bounds: Option<Bounds>, visible: bool, seq: u64) -> Result<(), String> {
+    let fresh = app.state::<Browsers>().with_window(view.label(), |w| {
         if seq < w.layout_seq {
             return false;
         }
@@ -570,14 +586,14 @@ pub async fn browser_layout(app: AppHandle, window: Window, bounds: Option<Bound
         true
     });
     if fresh {
-        apply_layout(&app, window.label());
+        apply_layout(&app, view.label());
     }
     Ok(())
 }
 
 #[tauri::command]
-pub fn browser_list(app: AppHandle, window: Window) -> Vec<BrowserTabInfo> {
-    app.state::<Browsers>().list(window.label())
+pub fn browser_list(app: AppHandle, view: Webview) -> Vec<BrowserTabInfo> {
+    app.state::<Browsers>().list(view.label())
 }
 
 #[cfg(test)]

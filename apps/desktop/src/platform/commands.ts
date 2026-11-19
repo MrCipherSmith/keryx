@@ -77,14 +77,17 @@ export async function listenBridge(l: BridgeListeners): Promise<Unlisten> {
 
 // ---- window / host helpers ------------------------------------------------
 
+/**
+ * The title this project view wants for its window. Several views share one window, so the host
+ * applies it only while this view is in front, and again whenever it comes back to the front.
+ */
 export async function setWindowTitle(title: string): Promise<void> {
   if (!isTauri()) {
     document.title = title;
     return;
   }
   try {
-    const { getCurrentWebviewWindow } = await import("@tauri-apps/api/webviewWindow");
-    await getCurrentWebviewWindow().setTitle(title);
+    await invoke<void>("project_title", { title });
   } catch {
     /* not critical */
   }
