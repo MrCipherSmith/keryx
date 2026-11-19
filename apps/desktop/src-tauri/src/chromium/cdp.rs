@@ -18,6 +18,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 pub const CALL_TIMEOUT: Duration = Duration::from_secs(30);
+/// How long a write may block (a browser that stopped reading): the connection then counts as dead.
+pub const WRITE_DEADLINE: Duration = Duration::from_secs(10);
 /// The largest message read (a full-page screenshot is big).
 const MAX_MESSAGE: usize = 512 << 20;
 
@@ -31,9 +33,11 @@ pub struct Event {
 
 type Pending = Arc<Mutex<HashMap<u64, Sender<Result<Value, String>>>>>;
 type Subscribers = Arc<Mutex<Vec<Sender<Event>>>>;
+type WriteJob = (Vec<u8>, Sender<std::io::Result<()>>);
 
 pub struct Cdp {
-    writer: Mutex<Box<dyn Write + Send>>,
+    /// Messages for the writer thread, which owns the stream (a stuck write blocks it, not callers).
+    writer: Mutex<Sender<WriteJob>>,
     pending: Pending,
     subscribers: Subscribers,
     next: AtomicU64,
@@ -78,9 +82,18 @@ pub fn call_text(id: u64, session: Option<&str>, method: &str, params: Value) ->
 
 impl Cdp {
     /// Talk CDP over a pair of streams: `reader` carries the browser's messages, `writer` takes ours.
-    pub fn over(reader: impl Read + Send + 'static, writer: impl Write + Send + 'static) -> Arc<Cdp> {
+    pub fn over(reader: impl Read + Send + 'static, mut writer: impl Write + Send + 'static) -> Arc<Cdp> {
+        let (write_tx, write_rx) = mpsc::channel::<WriteJob>();
+        let _ = std::thread::Builder::new().name("cdp-writer".into()).spawn(move || {
+            while let Ok((mut text, done)) = write_rx.recv() {
+                let r = writer.write_all(&text).and_then(|_| writer.flush());
+                // A call may carry secrets (imported cookie values): wipe the text once written.
+                zeroize::Zeroize::zeroize(&mut text);
+                let _ = done.send(r);
+            }
+        });
         let cdp = Arc::new(Cdp {
-            writer: Mutex::new(Box::new(writer)),
+            writer: Mutex::new(write_tx),
             pending: Arc::default(),
             subscribers: Arc::default(),
             next: AtomicU64::new(0),
@@ -111,14 +124,16 @@ impl Cdp {
         self.pending.lock().unwrap().insert(id, tx);
         let mut text = call_text(id, session, method, params).into_bytes();
         text.push(0);
-        let written = {
-            let mut w = self.writer.lock().unwrap();
-            w.write_all(&text).and_then(|_| w.flush())
+        let (done_tx, done_rx) = mpsc::channel();
+        let queued = self.writer.lock().unwrap().send((std::mem::take(&mut text), done_tx)).is_ok();
+        let written = if queued {
+            done_rx.recv_timeout(WRITE_DEADLINE).map_err(|_| "the browser stopped reading".to_string()).and_then(|r| r.map_err(|e| e.to_string()))
+        } else {
+            Err("the writer is gone".to_string())
         };
-        // A call may carry secrets (imported cookie values): wipe our copy of the text.
-        zeroize::Zeroize::zeroize(&mut text);
         if let Err(e) = written {
             self.pending.lock().unwrap().remove(&id);
+            // A dead or stuck browser: the view drops it and starts a new one on its next use.
             self.closed.store(true, Ordering::SeqCst);
             return Err(format!("The browser connection broke: {e}"));
         }
@@ -225,6 +240,27 @@ mod tests {
         assert_eq!(cdp.call(Some("S"), "Page.enable", json!({})).unwrap(), json!({ "echo": "Page.enable" }));
         let ev = events.recv_timeout(Duration::from_secs(2)).unwrap();
         assert_eq!((ev.method.as_str(), ev.session.as_deref()), ("Test.called", Some("S")));
+    }
+
+    /// A stream that refuses every write, like a browser that went away.
+    struct Broken;
+    impl Write for Broken {
+        fn write(&mut self, _: &[u8]) -> std::io::Result<usize> {
+            Err(std::io::Error::new(std::io::ErrorKind::BrokenPipe, "gone"))
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn a_failed_write_closes_the_connection_instead_of_waiting_for_an_answer() {
+        let (_keep, reader) = std::os::unix::net::UnixStream::pair().unwrap();
+        let cdp = Cdp::over(reader, Broken);
+        let started = std::time::Instant::now();
+        assert!(cdp.call(None, "Browser.getVersion", json!({})).unwrap_err().contains("broke"));
+        assert!(cdp.is_closed());
+        assert!(started.elapsed() < Duration::from_secs(5));
     }
 
     #[cfg(unix)]

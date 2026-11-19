@@ -78,6 +78,80 @@ fn a_browser_left_on_the_profile_is_replaced() {
     assert!(browser.open_page().is_ok());
 }
 
+/// A server whose `/` sets one persistent cookie.
+fn serve_cookie() -> u16 {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(mut s) = stream else { continue };
+            let mut buf = [0u8; 4096];
+            let _ = s.read(&mut buf);
+            let body = "<!doctype html><title>cookie</title>ok";
+            let _ = write!(
+                s,
+                "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nSet-Cookie: keryx_probe=hello-keychain-123; Max-Age=86400; Path=/\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            );
+        }
+    });
+    port
+}
+
+fn close_and_wait(proc: Chromium, cdp: &std::sync::Arc<keryx_desktop_lib::chromium::cdp::Cdp>) {
+    // A clean shutdown writes the cookie store to disk.
+    let _ = cdp.call_within(None, "Browser.close", serde_json::json!({}), Duration::from_secs(5));
+    std::thread::sleep(Duration::from_secs(2));
+    drop(proc);
+}
+
+/// S4: the project profile keeps a persistent cookie across a restart, stored encrypted, with a key
+/// that lives neither in the profile nor in the mock keychain: the same profile opened with the mock
+/// keychain cannot read it, and opened normally again it can. That key is Chrome's Keychain item.
+#[test]
+#[ignore]
+fn persistent_cookies_are_encrypted_with_the_real_keychain() {
+    let profile = tempfile::tempdir().unwrap();
+    let port = serve_cookie();
+    let read_back = |extra: &[&str]| -> Option<String> {
+        let (proc, cdp) = Chromium::launch_with_args(&chrome(), profile.path(), true, extra, Duration::from_secs(20)).expect("relaunch");
+        let got = cdp.call(None, "Storage.getCookies", serde_json::json!({})).expect("cookies");
+        let value = got["cookies"].as_array().unwrap().iter().find(|c| c["name"] == "keryx_probe").map(|c| c["value"].as_str().unwrap().to_string());
+        close_and_wait(proc, &cdp);
+        value
+    };
+
+    let (proc, cdp) = Chromium::launch(&chrome(), profile.path(), true, Duration::from_secs(20)).expect("launch");
+    let page = Browser::new(cdp.clone()).open_page().expect("page");
+    page.navigate(&format!("http://127.0.0.1:{port}/")).expect("navigate");
+    close_and_wait(proc, &cdp);
+
+    // On disk: encrypted (Chrome's v10/v11 formats), never the plain value, and no key in the profile.
+    let db = profile.path().join("Default/Cookies");
+    let out = std::process::Command::new("/usr/bin/sqlite3")
+        .args(["-init", "/dev/null", "-readonly"])
+        .arg(&db)
+        .arg("SELECT substr(hex(encrypted_value), 1, 6) || '|' || value FROM cookies WHERE name = 'keryx_probe'")
+        .output()
+        .unwrap();
+    let row = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    println!("stored: prefix {row}");
+    let (prefix, plain) = row.split_once('|').expect("the cookie is in the profile's database");
+    assert!(plain.is_empty(), "the value is not stored in plain text");
+    assert!(prefix == "763130" || prefix == "763131", "stored encrypted, got prefix {prefix}");
+    let local_state = std::fs::read_to_string(profile.path().join("Local State")).unwrap_or_default();
+    assert!(!local_state.contains("encrypted_key"), "no cookie key is kept in the profile");
+
+    // The normal browser reads it after a restart; the mock keychain cannot (and, failing to decrypt,
+    // Chrome drops the cookie, so this check goes last).
+    let normal = read_back(&[]);
+    println!("read after a normal restart: {}", if normal.is_some() { "yes" } else { "no" });
+    assert_eq!(normal.as_deref(), Some("hello-keychain-123"));
+    let with_mock = read_back(&["--use-mock-keychain"]);
+    println!("read with the mock keychain: {}", if with_mock.is_some() { "yes" } else { "no" });
+    assert_eq!(with_mock, None);
+}
+
 #[test]
 #[ignore]
 fn drive_a_local_page_with_real_input() {

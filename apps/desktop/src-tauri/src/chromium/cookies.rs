@@ -323,7 +323,8 @@ pub fn prepare(rows: &[Row], version: i64, key: &[u8; 16], now_unix: f64) -> (Ve
     let mut skipped = 0;
     for r in rows {
         let value = if r.encrypted.is_empty() { Some(r.value.clone()) } else { decrypt(&r.encrypted, key, strip) };
-        // The plain value is wiped once copied into the browser call.
+        // This buffer is wiped when dropped. The copy placed in the CDP cookie (a JSON value) is not
+        // wiped; only the text of the CDP call that carries it is (see `Cdp::call_within`).
         let value = value.map(Zeroizing::new);
         match value.and_then(|v| to_cdp(r, v.to_string(), now_unix)) {
             Some(c) => out.push(c),

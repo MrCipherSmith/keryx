@@ -79,11 +79,30 @@ fn alive(pid: i32) -> bool {
     pid > 1 && unsafe { libc::kill(pid, 0) } == 0
 }
 
-/// Whether the app process named in the profile's owner file still runs (another app instance's
-/// browser must not be taken over). A missing or unreadable file counts as gone.
+/// When process `pid` started, as `ps` reports it (`None` when it does not run).
 #[cfg(unix)]
-fn owner_alive(profile: &Path) -> bool {
-    std::fs::read_to_string(profile.join(OWNER_FILE)).ok().and_then(|t| t.trim().parse::<i32>().ok()).is_some_and(alive)
+fn started_at(pid: i32) -> Option<String> {
+    let out = Command::new("/bin/ps").args(["-o", "lstart=", "-p", &pid.to_string()]).output().ok()?;
+    let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    (out.status.success() && !s.is_empty()).then_some(s)
+}
+
+/// The owner file's text for this app process: its pid and when it started.
+#[cfg(unix)]
+pub fn owner_record() -> String {
+    let pid = std::process::id() as i32;
+    format!("{pid}\n{}", started_at(pid).unwrap_or_default())
+}
+
+/// Whether the owner file names a process that runs now and started when it says, so a pid reused
+/// by another process is not taken for the owner. A missing or unreadable file counts as gone.
+#[cfg(unix)]
+pub fn owner_alive(profile: &Path) -> bool {
+    let Ok(text) = std::fs::read_to_string(profile.join(OWNER_FILE)) else { return false };
+    let mut lines = text.lines();
+    let Some(pid) = lines.next().and_then(|l| l.trim().parse::<i32>().ok()) else { return false };
+    let recorded = lines.next().unwrap_or("").trim();
+    alive(pid) && !recorded.is_empty() && started_at(pid).as_deref() == Some(recorded)
 }
 
 /// A browser left running on `profile` by an earlier app run that did not stop it (killed, crashed)
@@ -160,6 +179,12 @@ impl Chromium {
     /// Start `binary` on `profile` and connect to it over its debugging pipe (waiting up to `timeout`).
     #[cfg(unix)]
     pub fn launch(binary: &Path, profile: &Path, headless: bool, timeout: Duration) -> Result<(Chromium, Arc<Cdp>), String> {
+        Self::launch_with_args(binary, profile, headless, &[], timeout)
+    }
+
+    /// [`Chromium::launch`] with extra command-line flags (the live tests use it to compare modes).
+    #[cfg(unix)]
+    pub fn launch_with_args(binary: &Path, profile: &Path, headless: bool, extra: &[&str], timeout: Duration) -> Result<(Chromium, Arc<Cdp>), String> {
         use std::os::fd::FromRawFd;
         use std::os::unix::process::CommandExt;
         private_dir(profile)?;
@@ -168,7 +193,7 @@ impl Chromium {
         let (to_browser, from_browser) = debug_pipes()?;
         let (child_in, child_out) = (to_browser[0], from_browser[1]);
         let mut cmd = Command::new(binary);
-        cmd.args(args(profile, headless)).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+        cmd.args(args(profile, headless)).args(extra).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
         // Its own process group, so stopping it stops the helper processes too.
         cmd.process_group(0);
         // SAFETY: only async-signal-safe calls (fcntl, dup2, close) between fork and exec.
@@ -202,7 +227,6 @@ impl Chromium {
                 return Err(format!("Could not start {}: {e}", binary.display()));
             }
         };
-        let _ = std::fs::write(profile.join(OWNER_FILE), std::process::id().to_string());
         // SAFETY: each fd is open, owned by nobody else, and wrapped exactly once.
         let (writer, reader) = unsafe { (std::fs::File::from_raw_fd(to_browser[1]), std::fs::File::from_raw_fd(from_browser[0])) };
         let mut browser = Chromium { child, profile: profile.to_path_buf() };
@@ -213,6 +237,8 @@ impl Chromium {
                 return Err(format!("The browser exited at once ({status}). Another Chrome may already use the profile {}.", profile.display()));
             }
             if cdp.call_within(None, "Browser.getVersion", json!({}), Duration::from_secs(2)).is_ok() {
+                // Only a browser that answers is ours to record.
+                let _ = std::fs::write(profile.join(OWNER_FILE), owner_record());
                 return Ok((browser, cdp));
             }
             if Instant::now() >= deadline {
@@ -321,9 +347,14 @@ mod tests {
     fn a_browser_whose_app_still_runs_is_left_alone() {
         let dir = tempfile::tempdir().unwrap();
         // The owner is this test process, which runs: nothing is reclaimed whatever holds the lock.
-        std::fs::write(dir.path().join(OWNER_FILE), std::process::id().to_string()).unwrap();
+        std::fs::write(dir.path().join(OWNER_FILE), owner_record()).unwrap();
         assert!(owner_alive(dir.path()));
-        std::fs::write(dir.path().join(OWNER_FILE), "999999").unwrap();
+        // A dead pid, a bare pid without a start time, and a live pid with another start time are not owners.
+        std::fs::write(dir.path().join(OWNER_FILE), "999999\nMon Jan  1 00:00:00 2024").unwrap();
+        assert!(!owner_alive(dir.path()));
+        std::fs::write(dir.path().join(OWNER_FILE), std::process::id().to_string()).unwrap();
+        assert!(!owner_alive(dir.path()));
+        std::fs::write(dir.path().join(OWNER_FILE), format!("{}\nMon Jan  1 00:00:00 2024", std::process::id())).unwrap();
         assert!(!owner_alive(dir.path()));
     }
 

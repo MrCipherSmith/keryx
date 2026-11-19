@@ -5,6 +5,7 @@ import type { PlanEntry } from "../acp/types";
 import { formatTokens } from "../lib/format";
 import { setPrefs, usePrefs, MOD, SESSION_SIDEBAR_MIN } from "../lib/prefs";
 import { Icon } from "../components/Icon";
+import { useToast } from "../components/Toasts";
 import { Dialog, Kbd, Spinner } from "../components/ui";
 import { Composer, type ComposerHandle } from "./Composer";
 import { ActivityPanel, type ActivityTab } from "./ActivityPanel";
@@ -151,6 +152,7 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
     },
   };
   const run = (line: string, opts: { display?: string; replaceId?: number } = {}) => s.runCommand(line, ui, opts);
+  const toast = useToast();
   // Page elements picked in the browser panel go out with the next message (not with a command line).
   const picks = useSyncExternalStore(onPicksChange, () => picksOf(cwd));
   const attachments = useMemo(() => picks.map((p) => ({ key: p.key, label: pickLabel(p), title: `${p.selector}\n${p.url}` })), [picks]);
@@ -161,6 +163,7 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
     const sent = picks;
     const ok = s.sendPrompt(text, undefined, [picksBlock(sent)]);
     if (ok) clearPicks(cwd, sent);
+    else if (state.busy) toast({ level: "info", title: "Picked elements wait for this turn", body: "Send again when keryx finishes; your message and picks are kept." });
     return ok;
   };
 
