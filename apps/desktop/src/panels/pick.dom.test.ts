@@ -7,6 +7,8 @@ import { registerDom, unregisterDom } from "../test/dom";
 let PICK_JS = "";
 
 beforeAll(async () => {
+  // happy-dom cannot make trusted events; the picker's own test switch stands in for a real user.
+  (globalThis as { __kxPickTrustAll?: boolean }).__kxPickTrustAll = true;
   // The host embeds this file with include_str!; read it as text, the same bytes.
   const script: string = "../../src-tauri/src/pick.js";
   PICK_JS = ((await import(script, { with: { type: "text" } })) as { default: string }).default;
@@ -26,6 +28,25 @@ function startPick(): Promise<Picked> {
 }
 
 const flush = () => new Promise((r) => setTimeout(r, 0));
+const trustAll = (on: boolean) => {
+  (globalThis as { __kxPickTrustAll?: boolean }).__kxPickTrustAll = on;
+};
+
+test("events the page dispatches itself cannot pick or cancel", async () => {
+  trustAll(false);
+  document.body.innerHTML = `<button id="bait">Pick me</button>`;
+  let settled = false;
+  const picked = startPick().then((r) => ((settled = true), r));
+  await flush();
+  const bait = document.getElementById("bait")!;
+  bait.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true, cancelable: true }));
+  window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+  await flush();
+  expect(settled).toBe(false);
+  (globalThis as unknown as { __kxPick: { cancel(): void } }).__kxPick.cancel();
+  expect(await picked).toEqual({ cancelled: true });
+  trustAll(true);
+});
 
 test("clicking an element answers with its description, and the page never sees the click", async () => {
   document.body.innerHTML = `

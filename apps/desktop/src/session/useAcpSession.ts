@@ -598,17 +598,20 @@ export function useAcpSession(cwd: string) {
 
   /** Starts a turn in the shown session; returns true only when the prompt was accepted (the caller may then clear its draft). */
   const sendPrompt = useCallback(
-    (text: string, target?: string): boolean => {
+    (text: string, target?: string, extra: readonly object[] = []): boolean => {
       const l = live.current;
       const client = l.client;
       const sessionId = target ?? l.reg.shown;
-      if (!client || !l.initialized || !sessionId || !l.reg.held.has(sessionId) || l.reg.turns.has(sessionId) || !text.trim()) return false;
-      dispatch({ t: "userSent", sessionId, text });
+      if (!client || !l.initialized || !sessionId || !l.reg.held.has(sessionId) || l.reg.turns.has(sessionId) || (!text.trim() && extra.length === 0)) return false;
+      // Extra blocks (picked page elements) are shown as a count, not as their page-sourced text.
+      const shown = extra.length ? `${text}${text.trim() ? "\n\n" : ""}_(${extra.length === 1 ? "picked page elements attached" : `${extra.length} attachments`})_` : text;
+      dispatch({ t: "userSent", sessionId, text: shown });
       dispatch({ t: "busy", sessionId, busy: true });
       const turn = { client } as Turn;
       turn.done = (async () => {
         try {
-          const r = await client.request<{ stopReason?: string }>("session/prompt", { sessionId, prompt: [{ type: "text", text }] });
+          const prompt = [...(text.trim() ? [{ type: "text", text }] : []), ...extra];
+          const r = await client.request<{ stopReason?: string }>("session/prompt", { sessionId, prompt });
           if (l.client !== client) return;
           const notice = (level: "info" | "warn", t: string) => dispatch({ t: "notice", sessionId, level, text: t });
           if (r?.stopReason === "max_tokens") notice("warn", "Stopped: the model hit its token limit.");

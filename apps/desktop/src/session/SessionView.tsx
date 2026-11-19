@@ -11,7 +11,7 @@ import { ActivityPanel, type ActivityTab } from "./ActivityPanel";
 import { runningSubagents } from "./activity";
 import { isRunning } from "../acp/providers";
 import { setActivityRunning, useSlot } from "../panels/sideSlots";
-import { clearPicks, onPicksChange, pickLabel, picksOf, removePick, withPicks } from "../panels/elementPicks";
+import { clearPicks, onPicksChange, pickLabel, picksBlock, picksOf, removePick } from "../panels/elementPicks";
 import { GitStatus } from "./GitStatus";
 import { SessionInfoPanel } from "./SessionInfoPanel";
 import { SessionSidebar } from "./SessionSidebar";
@@ -156,8 +156,10 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
   const attachments = useMemo(() => picks.map((p) => ({ key: p.key, label: pickLabel(p), title: `${p.selector}\n${p.url}` })), [picks]);
   const send = async (text: string) => {
     if (text.startsWith("/") || picks.length === 0) return run(text);
+    // The picks travel as their own block, marked untrusted, never as the user's text. While a turn
+    // runs this returns false and the draft and picks stay for the next send.
     const sent = picks;
-    const ok = await run(withPicks(text, sent));
+    const ok = s.sendPrompt(text, undefined, [picksBlock(sent)]);
     if (ok) clearPicks(cwd, sent);
     return ok;
   };

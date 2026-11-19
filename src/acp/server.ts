@@ -106,7 +106,7 @@ import {
   type AcpSetSessionConfigOptionResponse,
   type AcpStopReason,
 } from "./protocol";
-import { renderAcpPromptContent } from "./prompt-content";
+import { renderAcpPrompt } from "./prompt-content";
 import { AcpSessionRegistry, AcpSessionTranscriptUnreadableError, syncAcpArchive, type AcpSessionState } from "./session";
 import { SessionMcpGrants } from "./mcp-grants";
 import { catalogDestructiveResolver, catalogFingerprintResolver } from "../mcp-servers/approval-render";
@@ -2239,7 +2239,8 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       }
     }
 
-    const userLine = renderAcpPromptContent(promptField);
+    const rendered = renderAcpPrompt(promptField);
+    const userLine = rendered.text;
     // The roster, and why it is exactly what it is: `roster.ts`.
     const tools = sessionTools(sessionId, state);
     const toolNames = tools.map((tool) => tool.definition.name);
@@ -2393,6 +2394,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       if (slate !== undefined) delete slate.goalPrompt;
       const result = await runAgentTurn(io, deps, state.history, userLine, {
         signal: turn.controller.signal,
+        ...(rendered.untrusted ? { untrustedPrompt: true } : {}),
         ...(slate !== undefined ? { slateSession: slate.ref, ...(goalTurn ? { skipCloseTrigger: true } : {}) } : {}),
       });
       syncAcpArchive(archive, state.history);

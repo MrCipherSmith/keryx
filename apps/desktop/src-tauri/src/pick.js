@@ -210,6 +210,11 @@ const show = (el) => {
   hint.style.display = r.top < 40 && r.left < innerWidth / 2 + 200 && r.right > innerWidth / 2 - 200 ? "none" : "block";
 };
 
+// Only the user's own input counts: events the page dispatches itself (isTrusted false) cannot pick
+// an element or end the picker. (`__kxPickTrustAll` lives in this isolated world, out of the page's
+// reach; only the picker's own tests set it, because a test DOM cannot make trusted events.)
+const trusted = (e) => e.isTrusted === true || globalThis.__kxPickTrustAll === true;
+
 return await new Promise((resolve) => {
   const swallow = (e) => {
     e.preventDefault();
@@ -227,18 +232,20 @@ return await new Promise((resolve) => {
     resolve(JSON.stringify(value));
   };
   const onMove = (e) => {
+    if (!trusted(e)) return;
     const el = targetOf(e);
     if (el !== current) show(el);
   };
   const onScroll = () => show(current);
   const onKey = (e) => {
-    if (e.key === "Escape") {
+    if (trusted(e) && e.key === "Escape") {
       swallow(e);
       finish({ cancelled: true });
     }
   };
   const onClick = (e) => {
     swallow(e);
+    if (!trusted(e)) return;
     const el = targetOf(e) || current;
     if (!el) return;
     let picked;

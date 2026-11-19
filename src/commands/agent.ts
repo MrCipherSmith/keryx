@@ -954,6 +954,12 @@ export interface RunAgentTurnOptions {
    */
   origin?: "operator" | "task-notification" | "bus-message" | "agent-message";
   /**
+   * The operator's prompt carries content the client marked untrusted (an ACP resource block with
+   * `_meta.keryx.untrusted`, such as page elements picked in Keryx Desktop's browser): the turn holds
+   * untrusted content from its start, as an agent message does.
+   */
+  untrustedPrompt?: boolean;
+  /**
    * Whether this turn belongs to an automatic review. Absent: decided from the
    * operator's own line (`isAutomaticReviewRequest`) for an operator turn, and
    * `false` for a notification turn. It is a run mode, not a permission mode: it
@@ -3449,7 +3455,7 @@ async function runAgentTurnCore(
   // effect an injected instruction asked for, so it stays usable.
   // Flow 486: so does a report from a process that is not a keryx shell (`keryx report`), at any of the three bus drains
   // (the turn-start drain above, the text-only drain and the round boundary below). A keryx peer's message does not.
-  let untrustedContentSeen = options.origin === "agent-message" || externalReportAtTurnStart;
+  let untrustedContentSeen = options.origin === "agent-message" || options.untrustedPrompt === true || externalReportAtTurnStart;
   // Flow 425: the review arbiter runs one tier below this model. Only a turn that can ask the operator reports it,
   // so a reviewer subagent on a lighter model does not move the arbiter's tier.
   if (deps.tools.some((tool) => tool.definition.name === "ask_user")) {

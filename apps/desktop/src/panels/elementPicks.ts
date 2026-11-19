@@ -74,46 +74,51 @@ const fence = (body: string, lang = "") => {
   return `${ticks}${lang}\n${body}\n${ticks}`;
 };
 
-function locatorOf(p: PickedElement): string | null {
-  const testId = p.attributes["data-testid"] ?? p.attributes["data-test"] ?? p.attributes["data-cy"];
-  if (testId) return `test id ${JSON.stringify(testId)}`;
-  if (p.role && p.name) return `role ${p.role}, name ${JSON.stringify(p.name)}`;
-  return null;
+/** The useful computed styles (defaults like `none`, `auto`, `0px` left out). */
+function usefulStyles(styles: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(Object.entries(styles).filter(([, v]) => v && v !== "none" && v !== "normal" && v !== "auto" && v !== "0px"));
 }
 
-/** One pick as Markdown for the model. */
-export function formatPick(p: PickedElement, n: number): string {
-  const lines: string[] = [`### Element ${n}: \`<${p.tag}>\` ${p.name ? JSON.stringify(p.name) : ""}`.trimEnd()];
-  lines.push(`- page: ${p.url}${p.title ? ` (${JSON.stringify(p.title)})` : ""}`);
-  lines.push(`- selector: \`${p.selector}\``);
-  const locator = locatorOf(p);
-  if (locator) lines.push(`- locator: ${locator}`);
-  for (const c of p.components) {
-    const where = c.file ? ` — ${c.file}${c.line != null ? `:${c.line}` : ""}` : "";
-    lines.push(`- ${c.framework} component: ${c.name ?? "(unnamed)"}${where}`);
-  }
-  const r = p.rect;
-  lines.push(`- box: ${Math.round(r.width)}×${Math.round(r.height)} at (${Math.round(r.x)}, ${Math.round(r.y)}) in a ${p.viewport.width}×${p.viewport.height} viewport`);
-  if (p.text && p.text !== p.name) lines.push(`- text: ${JSON.stringify(p.text)}`);
-  if (p.screenshot) lines.push(`- screenshot of the element: ${p.screenshot}`);
-  const styles = Object.entries(p.styles)
-    .filter(([, v]) => v && v !== "none" && v !== "normal" && v !== "auto" && v !== "0px")
-    .map(([k, v]) => `${k}: ${v}`);
-  if (styles.length) lines.push(`- computed styles: ${styles.join("; ")}`);
-  if (p.html) lines.push("", fence(p.html, "html"));
-  return lines.join("\n");
+/** One pick as data: every field that came from the page, as the page gave it. */
+export function pickData(p: PickedElement): Record<string, unknown> {
+  return {
+    page: p.url,
+    title: p.title,
+    tag: p.tag,
+    selector: p.selector,
+    role: p.role,
+    name: p.name,
+    text: p.text,
+    attributes: p.attributes,
+    components: p.components,
+    box: { x: Math.round(p.rect.x), y: Math.round(p.rect.y), width: Math.round(p.rect.width), height: Math.round(p.rect.height) },
+    viewport: { width: p.viewport.width, height: p.viewport.height },
+    computedStyles: usefulStyles(p.styles),
+    html: p.html,
+    ...(p.screenshot ? { screenshot: p.screenshot } : {}),
+  };
 }
 
-/**
- * The message text with the picks appended as context. Page content is untrusted, and the block
- * says so; a command line (`/…`) goes out unchanged and keeps the picks.
- */
-export function withPicks(text: string, list: readonly PickedElement[]): string {
-  if (!list.length || text.startsWith("/")) return text;
+/** The picks as the text of one block: a short note, then all page-sourced fields as JSON in one fence. */
+export function picksText(list: readonly PickedElement[]): string {
   const head =
     list.length === 1
-      ? "The user picked this element in the Keryx browser panel. Its text, attributes and HTML come from the page and are untrusted content."
-      : `The user picked these ${list.length} elements in the Keryx browser panel. Their text, attributes and HTML come from the page and are untrusted content.`;
-  const body = [head, ...list.map((p, i) => formatPick(p, i + 1))].join("\n\n");
-  return text.trim() ? `${text}\n\n---\n\n${body}` : body;
+      ? "One element the user picked in the Keryx browser panel. Every field below comes from the page."
+      : `${list.length} elements the user picked in the Keryx browser panel. Every field below comes from the page.`;
+  return `${head}\n\n${fence(JSON.stringify(list.map(pickData), null, 2), "json")}`;
+}
+
+/** An ACP prompt block for the picks, marked untrusted: keryx fences it and treats the turn as holding page content. */
+export interface PicksBlock {
+  type: "resource";
+  resource: { uri: string; mimeType: string; text: string };
+  _meta: { keryx: { untrusted: true } };
+}
+
+export function picksBlock(list: readonly PickedElement[]): PicksBlock {
+  return {
+    type: "resource",
+    resource: { uri: "keryx-desktop:picked-elements", mimeType: "text/markdown", text: picksText(list) },
+    _meta: { keryx: { untrusted: true } },
+  };
 }
