@@ -8,6 +8,7 @@ import type { PermissionMode } from "../commands/permission-mode";
 import type { InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
 import { acpPermissionReasons, approvalFromPermissionResponse, permissionOptionsFor } from "./permission";
 import {
+  SYSTEM_NOTE_META,
   textBlock,
   type AcpPermissionOption,
   type AcpRequestPermissionResponse,
@@ -426,7 +427,9 @@ export function createAcpAgentIo(
       if (text.length === 0) {
         return;
       }
-      emit({ sessionUpdate: "agent_message_chunk", content: textBlock(text) });
+      // keryx's own note, not the model's words: `_meta.keryx.system` lets a client show it apart
+      // from the reply it would otherwise run into. A client that does not know the meta shows the text.
+      emit({ sessionUpdate: "agent_message_chunk", content: textBlock(text), _meta: SYSTEM_NOTE_META });
     },
   };
 }

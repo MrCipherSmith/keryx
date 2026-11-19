@@ -48,3 +48,43 @@ test("a rendered code block shows the escape marker and Copy writes the raw text
   });
   expect(written).toEqual([`${raw}\n`]);
 });
+
+test("a fenced block in a known language is highlighted; its text and Copy stay the source", async () => {
+  await act(() => root.render(createElement(Markdown, { text: "lead-in\n\n```ts\nconst a: number = 1; // one\n```" })));
+  const code = host.querySelector(".code-block pre code");
+  expect(code?.classList.contains("hljs")).toBe(true);
+  expect(code?.querySelector(".hljs-keyword")?.textContent).toBe("const");
+  expect(code?.querySelector(".hljs-comment")?.textContent).toBe("// one");
+  expect(code?.textContent).toBe("const a: number = 1; // one\n");
+});
+
+test("source that looks like markup is escaped by the highlighter, never parsed", async () => {
+  await act(() => root.render(createElement(Markdown, { text: "lead-in\n\n```html\n<img src=x onerror=alert(1)>\n```" })));
+  expect(host.querySelector(".code-block img")).toBeNull();
+  expect(host.querySelector(".code-block code")?.textContent).toContain("<img src=x onerror=alert(1)>");
+});
+
+test("a diff fence shows coloured lines with counts, and Copy writes the patch as it was", async () => {
+  const patch = "--- a/x.ts\n+++ b/x.ts\n@@ -1,2 +1,2 @@\n keep\n-old\n+new\n";
+  const written: string[] = [];
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: { writeText: (t: string) => (written.push(t), Promise.resolve()) },
+  });
+  await act(() => root.render(createElement(Markdown, { text: "lead-in\n\n```diff\n" + patch + "```" })));
+  const block = host.querySelector(".code-block.is-diff");
+  expect(block).not.toBeNull();
+  const kinds = Array.from(block!.querySelectorAll(".diff-line")).map((l) => l.className.replace("diff-line diff-", ""));
+  expect(kinds).toEqual(["meta", "meta", "hunk", "ctx", "del", "add"]);
+  expect(block!.querySelector(".diff-stat.add")?.textContent).toBe("+1");
+  expect(block!.querySelector(".diff-stat.del")?.textContent).toBe("\u22121");
+  await act(async () => {
+    block!.querySelector<HTMLButtonElement>("button.code-copy")!.click();
+  });
+  expect(written).toEqual([patch]);
+});
+
+test("an unlabelled fence holding a unified diff is shown as one", async () => {
+  await act(() => root.render(createElement(Markdown, { text: "lead-in\n\n```\n@@ -1 +1 @@\n-a\n+b\n```" })));
+  expect(host.querySelector(".code-block.is-diff .code-lang")?.textContent).toBe("diff");
+});

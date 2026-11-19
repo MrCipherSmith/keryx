@@ -374,6 +374,15 @@ export function textBlock(text: string): AcpTextContent {
   return { type: "text", text };
 }
 
+/**
+ * `_meta` of an `agent_message_chunk` that carries keryx's own note (a gate,
+ * budget or recovery line), not the model's words. ACP has no system-message
+ * update, so the note rides the agent channel every client renders; a client
+ * that reads this marker shows it apart from the reply instead of running it
+ * into the model's prose.
+ */
+export const SYSTEM_NOTE_META: AcpMeta = Object.freeze({ keryx: Object.freeze({ system: true }) });
+
 // ---------------------------------------------------------------------------
 // Capabilities
 // ---------------------------------------------------------------------------

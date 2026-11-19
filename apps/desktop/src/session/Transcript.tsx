@@ -6,6 +6,7 @@ import type { Subagent } from "./activity";
 import { CommandCard } from "./CommandCard";
 import { DelegateResultCard } from "./DelegateResultCard";
 import { blockText } from "./reducer";
+import { ContentBlockView } from "./ContentBlockView";
 import { Markdown } from "../components/Markdown";
 import { Icon, type IconName } from "../components/Icon";
 import { Spinner } from "../components/ui";
@@ -13,6 +14,7 @@ import { argLabel, hasRestArgs, primaryInput, quoteArgv, restArgs, visibleProse,
 import { runInTerminal, runnableCommand } from "../panels/panelBus";
 
 type ToolItem = Extract<Item, { kind: "tool" }>;
+type BlockItem = Extract<Item, { kind: "block" }>;
 
 const KIND_ICON: Record<ToolKind, IconName> = {
   read: "file",
@@ -115,12 +117,21 @@ export function DiffView({
 }
 
 function ToolContent({ c }: { c: ToolCallContent }) {
-  if (c.type === "content") {
-    const t = blockText(c.content).trim();
-    return t ? <pre className="out-pre">{t}</pre> : null;
-  }
+  if (c.type === "content") return <ContentBlockView block={c.content} />;
   if (c.type === "diff") return <DiffView path={c.path} oldText={c.oldText} newText={c.newText} />;
-  return <pre className="out-pre">terminal {c.terminalId}</pre>;
+  return (
+    <div className="feed-chip is-muted">
+      <Icon name="terminal" size={13} /> Terminal {c.terminalId}
+    </div>
+  );
+}
+
+/** The call's text content, joined: raw output that only repeats it is not shown twice. */
+export function contentText(content: readonly ToolCallContent[]): string {
+  return content
+    .map((c) => (c.type === "content" && c.content.type === "text" ? blockText(c.content) : ""))
+    .join("")
+    .trim();
 }
 
 /** The command an `execute` call ran, when it is one command shown exactly as it reads (D-13 Run button). */
@@ -144,7 +155,10 @@ function StatusGlyph({ status }: { status: ToolItem["status"] }) {
 
 const ToolRow = memo(function ToolRow({ item, subagentId, onShowSubagent }: { item: ToolItem; subagentId?: string; onShowSubagent?: (id: string) => void }) {
   const [open, setOpen] = useState(false);
-  const raw = useMemo(() => pretty(item.rawOutput), [item.rawOutput]);
+  const raw = useMemo(() => {
+    const r = pretty(item.rawOutput);
+    return r.trim() === contentText(item.content) ? "" : r;
+  }, [item.rawOutput, item.content]);
   const primary = useMemo(() => primaryInput(item.rawInput), [item.rawInput]);
   // The arguments are serialised only once the row is opened; a closed row needs just "are there any".
   const args = useMemo(() => (open ? restArgs(item.rawInput) : []), [open, item.rawInput]);
@@ -244,6 +258,8 @@ type Block =
   | { type: "thought"; item: Extract<Item, { kind: "thought" }>; first: boolean }
   | { type: "tools"; items: ToolItem[]; first: boolean }
   | { type: "notice"; item: Extract<Item, { kind: "notice" }> }
+  | { type: "userBlock"; item: BlockItem }
+  | { type: "agentBlock"; item: BlockItem; first: boolean }
   | { type: "command"; item: CommandItem }
   | { type: "delegate"; item: DelegateResultItem };
 
@@ -268,6 +284,11 @@ function toBlocks(items: Item[]): Block[] {
       out.push({ type: "delegate", item: it });
       continue;
     }
+    if (it.kind === "block" && it.role === "user") {
+      out.push({ type: "userBlock", item: it });
+      agentTurnOpen = false;
+      continue;
+    }
     const first = !agentTurnOpen;
     agentTurnOpen = true;
     if (it.kind === "tool") {
@@ -275,6 +296,7 @@ function toBlocks(items: Item[]): Block[] {
       if (last?.type === "tools") last.items.push(it);
       else out.push({ type: "tools", items: [it], first });
     } else if (it.kind === "agent") out.push({ type: "agent", item: it, first });
+    else if (it.kind === "block") out.push({ type: "agentBlock", item: it, first });
     else out.push({ type: "thought", item: it, first });
   }
   return out;
@@ -407,13 +429,23 @@ export function Transcript({ items, busy, replaying, empty, onRunCommand, subage
                 return <DelegateResultCard key={b.item.id} item={b.item} />;
               case "command":
                 return <CommandCard key={b.item.id} item={b.item} onRun={onRunCommand} />;
-              case "notice":
+              case "userBlock":
                 return (
-                  <div key={b.item.id} className={`notice notice-${b.item.level}`} role={b.item.level === "error" ? "alert" : undefined}>
-                    <Icon name={b.item.level === "error" ? "alert" : b.item.level === "warn" ? "alert" : "info"} size={14} />
-                    <span>{b.item.text}</span>
+                  <div key={b.item.id} className="turn-user">
+                    <div className="user-block">
+                      <ContentBlockView block={b.item.block} />
+                    </div>
                   </div>
                 );
+              case "agentBlock":
+                return (
+                  <div key={b.item.id} className={`turn-agent${b.first ? " turn-start" : ""}`}>
+                    {b.first ? <AgentLabel /> : null}
+                    <ContentBlockView block={b.item.block} />
+                  </div>
+                );
+              case "notice":
+                return <NoticeRow key={b.item.id} item={b.item} />;
             }
           })}
           {busy && !streamingAgent && !streamingThought ? (
@@ -436,6 +468,28 @@ export function Transcript({ items, busy, replaying, empty, onRunCommand, subage
     </div>
   );
 }
+
+const NoticeRow = memo(function NoticeRow({ item }: { item: Extract<Item, { kind: "notice" }> }) {
+  const icon: IconName = item.level === "info" ? "info" : "alert";
+  if (!item.system) {
+    return (
+      <div className={`notice notice-${item.level}`} role={item.level === "error" ? "alert" : undefined}>
+        <Icon name={icon} size={14} />
+        <span>{item.text}</span>
+      </div>
+    );
+  }
+  // keryx's own note: its tag as a label, the body as Markdown (a gate report carries a list of reasons).
+  return (
+    <div className={`notice notice-system notice-${item.level}`} role={item.level === "error" ? "alert" : undefined}>
+      <Icon name={icon} size={14} />
+      <div className="notice-main">
+        {item.system.tag ? <span className="notice-tag">{item.system.tag}</span> : null}
+        {item.text ? <Markdown text={item.text} className="notice-md" /> : null}
+      </div>
+    </div>
+  );
+});
 
 function AgentLabel() {
   return (

@@ -8,6 +8,7 @@ import "./styles/components.css";
 import "./styles/flows.css";
 import "./styles/activity.css";
 import "./styles/delegate.css";
+import "./styles/feed.css";
 import "@xterm/xterm/css/xterm.css";
 import "./styles/panels.css";
 
