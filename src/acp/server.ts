@@ -85,6 +85,7 @@ import {
   negotiateProtocolVersion,
   requireObjectParams,
   requireStringField,
+  SYSTEM_NOTE_META,
   textBlock,
   type AcpClientCapabilities,
   type AcpImplementation,
@@ -1436,6 +1437,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         content: textBlock(
           `keryx: this session ${kept !== undefined ? "was on" : "last ran"} ${value}, but ${reason}; it continues on ${launchChoice.value}.\n`,
         ),
+        _meta: SYSTEM_NOTE_META,
       });
     });
   }
@@ -1475,6 +1477,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       sendUpdate(sessionId, {
         sessionUpdate: "agent_message_chunk",
         content: textBlock(`keryx: MCP server "${problem.name}" ${problem.reason}\n`),
+        _meta: SYSTEM_NOTE_META,
       });
     }
   }
@@ -1492,6 +1495,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       sendUpdate(sessionId, {
         sessionUpdate: "agent_message_chunk",
         content: textBlock(`${line}\n`),
+        _meta: SYSTEM_NOTE_META,
       });
     }
   }

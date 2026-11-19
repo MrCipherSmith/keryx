@@ -15,6 +15,7 @@ import type {
 } from "../acp/types";
 import type { TaskInfo } from "../acp/providers";
 import { applySubagentEvent, MAX_SUBAGENT_RESULT_CHARS, runningSubagents, type Subagent } from "./activity";
+import { isLegacySystemText, isSystemMeta, parseSystemNote } from "./systemNote";
 
 export type Item =
   | { kind: "user"; id: number; text: string; messageId?: string | null }
@@ -35,7 +36,16 @@ export type Item =
       startedAt: number;
       endedAt: number | null;
     }
-  | { kind: "notice"; id: number; level: "info" | "warn" | "error"; text: string }
+  | {
+      kind: "notice";
+      id: number;
+      level: "info" | "warn" | "error";
+      text: string;
+      /** keryx's own note (gate, budget, recovery…), rendered as Markdown under its `[tag]`; absent for the app's own notices. */
+      system?: { tag: string | null };
+    }
+  /** A non-text content block (image, resource link, embedded resource) of a message, shown as itself. */
+  | { kind: "block"; id: number; role: "user" | "agent"; block: ContentBlock }
   | DelegateResultItem
   | CommandItem;
 
@@ -284,6 +294,26 @@ function replayDelegateNote(d: ConvState, n: { runId: string; agentId: string; t
 interface ChunkUpdate {
   content: ContentBlock;
   messageId?: string | null;
+  _meta?: unknown;
+}
+
+/** Content blocks a message shows as themselves rather than as text. */
+const MEDIA_BLOCKS = new Set(["image", "resource_link", "resource"]);
+
+/** A message's image or resource: its own item, so the text around it stays two separate messages. */
+function pushBlock(d: ConvState, role: "user" | "agent", block: ContentBlock): true {
+  d.items.push({ kind: "block", id: d.nextId, role, block });
+  d.nextId += 1;
+  return true;
+}
+
+/** keryx's own note: a notice of its own, never appended to the model's reply. */
+function pushSystemNote(d: ConvState, text: string): boolean {
+  const note = parseSystemNote(text);
+  if (note.body === "" && note.tag === null) return false;
+  d.items.push({ kind: "notice", id: d.nextId, level: note.level, text: note.body, system: { tag: note.tag } });
+  d.nextId += 1;
+  return true;
 }
 
 function tokenPair(v: unknown): TokenPair | null {
@@ -303,11 +333,15 @@ function applyUpdate(d: ConvState, u: SessionUpdate, at: number): boolean {
       const c = u as ChunkUpdate;
       const note = delegateNoteOf((u as { _meta?: unknown })._meta);
       if (note) return replayDelegateNote(d, note);
+      if (MEDIA_BLOCKS.has(c.content?.type)) return pushBlock(d, "user", c.content);
       return appendChunk(d, "user", blockText(c.content), c.messageId);
     }
     case "agent_message_chunk": {
       const c = u as ChunkUpdate;
-      return appendChunk(d, "agent", blockText(c.content), c.messageId);
+      if (MEDIA_BLOCKS.has(c.content?.type)) return pushBlock(d, "agent", c.content);
+      const text = blockText(c.content);
+      if (isSystemMeta(c._meta) || isLegacySystemText(text)) return pushSystemNote(d, text);
+      return appendChunk(d, "agent", text, c.messageId);
     }
     case "agent_thought_chunk": {
       const c = u as ChunkUpdate;

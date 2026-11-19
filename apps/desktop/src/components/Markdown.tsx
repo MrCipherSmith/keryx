@@ -2,6 +2,8 @@ import DOMPurify from "dompurify";
 import { marked } from "marked";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { codeBlockCopyText, revealCodeBlock } from "./codeBlock";
+import { highlightToHtml } from "./highlight";
+import { diffLines, diffStats, looksLikeUnifiedDiff } from "./unifiedDiff";
 import { emptyCache, renderStreaming, type RenderTokens, type StreamFrame } from "./markdownStream";
 import { isShellLang, runInTerminal, runnableCommand } from "../panels/panelBus";
 
@@ -85,10 +87,35 @@ function decorateCodeBlocks(html: string): string {
   if (!root) return html;
   for (const pre of Array.from(root.querySelectorAll("pre"))) {
     const code = pre.querySelector("code");
-    const lang = /language-([\w+#.-]+)/.exec(code?.className ?? "")?.[1] ?? "";
+    const fenceLang = /language-([\w+#.-]+)/.exec(code?.className ?? "")?.[1] ?? "";
+    const rawText = (code ?? pre).textContent ?? "";
+    const isDiff = /^(?:diff|patch|udiff)$/i.test(fenceLang) || (fenceLang === "" && looksLikeUnifiedDiff(rawText));
+    const lang = isDiff ? "diff" : fenceLang;
     const wrap = doc.createElement("div");
-    wrap.className = "code-block";
+    wrap.className = isDiff ? "code-block is-diff" : "code-block";
     revealCodeBlock(code ?? pre, wrap);
+    // A block that had hidden characters revealed is shown as escaped text, uncoloured.
+    const revealed = wrap.dataset.raw !== undefined;
+    let stats: { added: number; removed: number } | null = null;
+    if (code && isDiff) {
+      const lines = diffLines(code.textContent ?? "");
+      stats = diffStats(lines);
+      if (!revealed) wrap.dataset.raw = rawText;
+      code.replaceChildren(
+        ...lines.map((l) => {
+          const row = doc.createElement("span");
+          row.className = `diff-line diff-${l.kind}`;
+          row.textContent = l.text || " ";
+          return row;
+        }),
+      );
+    } else if (code && !revealed && lang) {
+      const html = highlightToHtml(rawText, lang);
+      if (html !== null) {
+        code.innerHTML = html;
+        code.classList.add("hljs");
+      }
+    }
     const head = doc.createElement("div");
     head.className = "code-head";
     const label = doc.createElement("span");
@@ -99,6 +126,18 @@ function decorateCodeBlocks(html: string): string {
     btn.type = "button";
     btn.textContent = "Copy";
     head.append(label);
+    if (stats) {
+      const st = doc.createElement("span");
+      st.className = "code-diff-stat";
+      const add = doc.createElement("span");
+      add.className = "diff-stat add";
+      add.textContent = `+${stats.added}`;
+      const del = doc.createElement("span");
+      del.className = "diff-stat del";
+      del.textContent = `\u2212${stats.removed}`;
+      st.append(add, del);
+      head.append(st);
+    }
     // One shell command gets Run (D-13): it is typed into the side panel's terminal. A block that
     // had hidden characters revealed never does.
     if (isShellLang(lang) && wrap.dataset.raw === undefined && runnableCommand(code?.textContent ?? "") !== null) {

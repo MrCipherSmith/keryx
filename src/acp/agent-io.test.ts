@@ -121,10 +121,22 @@ describe("createAcpAgentIo", () => {
     }
   });
 
-  test("onSystem streams as an agent_message_chunk", () => {
+  test("onSystem streams as an agent_message_chunk marked as keryx's own note", () => {
     const { updates, io } = collect();
     io.onSystem?.("note to operator");
-    expect(updates).toEqual([{ sessionUpdate: "agent_message_chunk", content: { type: "text", text: "note to operator" } }]);
+    expect(updates).toEqual([
+      {
+        sessionUpdate: "agent_message_chunk",
+        content: { type: "text", text: "note to operator" },
+        _meta: { keryx: { system: true } },
+      },
+    ]);
+  });
+
+  test("the model's own text carries no system marker", () => {
+    const { updates, io } = collect();
+    io.write("hello");
+    expect(updates).toEqual([{ sessionUpdate: "agent_message_chunk", content: { type: "text", text: "hello" } }]);
   });
 
   test("every update carries the session id passed to createAcpAgentIo", () => {
