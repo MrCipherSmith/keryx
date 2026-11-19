@@ -56,6 +56,8 @@ pub enum BrowserEvent {
     Closed { id: u64 },
     /// The agent acted on the browser: show the panel on this tab.
     Show { id: u64 },
+    /// The view's engine changed (Chromium could not start: WebKit from now on).
+    Engine { engine: String },
 }
 
 #[derive(Default)]
@@ -201,19 +203,27 @@ fn webview(app: &AppHandle, tab: &BrowserTab) -> Result<Webview, String> {
     app.get_webview(&tab.label).ok_or_else(|| format!("Browser tab {} is gone", tab.id))
 }
 
+/// The newest panel layout of project view `window` for the Chromium engine: body bounds, whether the
+/// browser shows (panel visible and the view in front), and the page's device pixel ratio.
+pub fn chromium_layout(app: &AppHandle, window: &str) -> (Option<Bounds>, bool, f64) {
+    let (bounds, visible, scale) = app.state::<Browsers>().with_window(window, |w| (w.bounds, w.visible, w.scale));
+    (bounds, visible && app.state::<ProjectWindows>().is_front(window), if scale > 0.0 { scale } else { 2.0 })
+}
+
 /// Show the active tab over the panel body, hide every other one; hide them all while the owning
 /// project view (`window`) is not the one in front of its window.
 pub fn apply_layout(app: &AppHandle, window: &str) {
-    let (tabs, active, bounds, visible, scale) = app
-        .state::<Browsers>()
-        .with_window(window, |w| (w.tabs.clone(), w.active, w.bounds, w.visible, w.scale));
-    let visible = visible && app.state::<ProjectWindows>().is_front(window);
     if engine::is_chromium(app, window) {
         // The page is drawn by the panel itself (a screencast); only its size and visibility matter.
+        // The engine reads the newest layout when it runs, so the order these threads run in does not.
         let (app, window) = (app.clone(), window.to_string());
-        std::thread::spawn(move || engine::layout(&app, &window, bounds, visible, if scale > 0.0 { scale } else { 2.0 }));
+        std::thread::spawn(move || engine::layout(&app, &window));
         return;
     }
+    let (tabs, active, bounds, visible) = app
+        .state::<Browsers>()
+        .with_window(window, |w| (w.tabs.clone(), w.active, w.bounds, w.visible));
+    let visible = visible && app.state::<ProjectWindows>().is_front(window);
     // The project view fills its host window from (0, 0) and the tabs are its siblings there, so
     // the page's own coordinates are the tabs' coordinates.
     for t in tabs {
@@ -618,7 +628,12 @@ pub async fn browser_open(app: AppHandle, view: Webview, cwd: String, url: Strin
     }
     if engine::is_chromium(&app, view.label()) {
         let label = view.label().to_string();
-        return blocking(move || engine::open_tab(&app, &label, url.as_str())).await;
+        let (app2, u) = (app.clone(), url.clone());
+        match blocking(move || engine::open_tab(&app2, &label, u.as_str())).await {
+            // Chrome could not start: the view is WebKit now, so the tab opens there.
+            Err(_) if !engine::is_chromium(&app, view.label()) => {}
+            other => return other,
+        }
     }
     open_tab(&app, &view, url)
 }
@@ -752,9 +767,11 @@ pub async fn browser_frames(app: AppHandle, view: Webview, on_frame: tauri::ipc:
 
 /// The user's mouse, wheel and keys on the panel's canvas (Chromium engine).
 #[tauri::command]
-pub async fn browser_input(app: AppHandle, view: Webview, id: u64, event: engine::InputEvent) -> Result<(), String> {
-    let label = view.label().to_string();
-    blocking(move || engine::input(&app, &label, id, &event)).await
+/// Synchronous on purpose: commands run in arrival order, and the engine queues the event for one
+/// worker, so the page sees input in the order the user gave it.
+#[allow(clippy::needless_pass_by_value)]
+pub fn browser_input(app: AppHandle, view: Webview, id: u64, event: engine::InputEvent) -> Result<(), String> {
+    engine::input(&app, view.label(), id, event)
 }
 
 #[cfg(test)]

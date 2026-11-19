@@ -1,23 +1,25 @@
-//! A Chrome DevTools Protocol client over the browser's WebSocket.
+//! A Chrome DevTools Protocol client over the browser's debugging pipe
+//! (`--remote-debugging-pipe`): messages are JSON, each ended by a NUL byte;
+//! the app writes to the browser's fd 3 and reads from its fd 4. There is no
+//! network port, so no other local process can attach to the browser.
 //!
-//! One I/O thread owns the socket: it reads with a short timeout and, between
-//! reads, sends queued calls. A call waits on its own channel for the answer
-//! with the same id; every other message is an event, fanned out to the
-//! subscribers. Sessions are flat (`Target.attachToTarget` with
-//! `flatten: true`): a call or event names its `sessionId`.
+//! Calls are written from the calling thread (one writer at a time) and each
+//! waits on its own channel for the answer with the same id; a reader thread
+//! routes answers and fans every event out to the subscribers. Sessions are
+//! flat (`Target.attachToTarget` with `flatten: true`): a call or event names
+//! its `sessionId`.
 
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use std::net::TcpStream;
+use std::io::{BufRead, BufReader, Read, Write};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tungstenite::protocol::WebSocketConfig;
-use tungstenite::{Message, WebSocket};
 
 pub const CALL_TIMEOUT: Duration = Duration::from_secs(30);
-const POLL: Duration = Duration::from_millis(10);
+/// The largest message read (a full-page screenshot is big).
+const MAX_MESSAGE: usize = 512 << 20;
 
 /// A CDP event: `method` and `params`, from the browser (`session: None`) or one attached target.
 #[derive(Clone, Debug, PartialEq)]
@@ -28,16 +30,17 @@ pub struct Event {
 }
 
 type Pending = Arc<Mutex<HashMap<u64, Sender<Result<Value, String>>>>>;
+type Subscribers = Arc<Mutex<Vec<Sender<Event>>>>;
 
 pub struct Cdp {
-    outgoing: Sender<String>,
+    writer: Mutex<Box<dyn Write + Send>>,
     pending: Pending,
-    subscribers: Arc<Mutex<Vec<Sender<Event>>>>,
+    subscribers: Subscribers,
     next: AtomicU64,
     closed: Arc<AtomicBool>,
 }
 
-/// What one incoming text frame is.
+/// What one incoming message is.
 #[derive(Debug, PartialEq)]
 pub enum Incoming {
     Reply { id: u64, result: Result<Value, String> },
@@ -74,24 +77,10 @@ pub fn call_text(id: u64, session: Option<&str>, method: &str, params: Value) ->
 }
 
 impl Cdp {
-    /// Connect to `ws://127.0.0.1:<port>/devtools/...`.
-    pub fn connect(ws_url: &str) -> Result<Arc<Cdp>, String> {
-        let url = tungstenite::http::Uri::try_from(ws_url).map_err(|e| format!("Bad DevTools address {ws_url}: {e}"))?;
-        let host = url.host().unwrap_or("127.0.0.1");
-        if host != "127.0.0.1" && host != "localhost" && host != "[::1]" {
-            return Err(format!("The DevTools address must be local, not {host}"));
-        }
-        let port = url.port_u16().ok_or("The DevTools address has no port")?;
-        let stream = TcpStream::connect((host, port)).map_err(|e| format!("Could not reach the browser: {e}"))?;
-        stream.set_nodelay(true).ok();
-        let config = WebSocketConfig { max_message_size: Some(512 << 20), max_frame_size: Some(512 << 20), ..Default::default() };
-        let (socket, _) = tungstenite::client::client_with_config(ws_url, stream, Some(config))
-            .map_err(|e| format!("Could not open the DevTools socket: {e}"))?;
-        socket.get_ref().set_read_timeout(Some(POLL)).map_err(|e| e.to_string())?;
-
-        let (outgoing, queue) = mpsc::channel::<String>();
+    /// Talk CDP over a pair of streams: `reader` carries the browser's messages, `writer` takes ours.
+    pub fn over(reader: impl Read + Send + 'static, writer: impl Write + Send + 'static) -> Arc<Cdp> {
         let cdp = Arc::new(Cdp {
-            outgoing,
+            writer: Mutex::new(Box::new(writer)),
             pending: Arc::default(),
             subscribers: Arc::default(),
             next: AtomicU64::new(0),
@@ -100,11 +89,8 @@ impl Cdp {
         let pending = cdp.pending.clone();
         let subscribers = cdp.subscribers.clone();
         let closed = cdp.closed.clone();
-        std::thread::Builder::new()
-            .name("cdp-io".into())
-            .spawn(move || io_loop(socket, queue, pending, subscribers, closed))
-            .map_err(|e| e.to_string())?;
-        Ok(cdp)
+        let _ = std::thread::Builder::new().name("cdp-reader".into()).spawn(move || read_loop(reader, pending, subscribers, closed));
+        cdp
     }
 
     pub fn is_closed(&self) -> bool {
@@ -123,9 +109,16 @@ impl Cdp {
         let id = self.next.fetch_add(1, Ordering::SeqCst) + 1;
         let (tx, rx) = mpsc::channel();
         self.pending.lock().unwrap().insert(id, tx);
-        if self.outgoing.send(call_text(id, session, method, params)).is_err() {
+        let mut text = call_text(id, session, method, params).into_bytes();
+        text.push(0);
+        let written = {
+            let mut w = self.writer.lock().unwrap();
+            w.write_all(&text).and_then(|_| w.flush())
+        };
+        if let Err(e) = written {
             self.pending.lock().unwrap().remove(&id);
-            return Err("The browser connection is closed".into());
+            self.closed.store(true, Ordering::SeqCst);
+            return Err(format!("The browser connection broke: {e}"));
         }
         match rx.recv_timeout(timeout) {
             Ok(r) => r.map_err(|e| format!("{method}: {e}")),
@@ -136,7 +129,8 @@ impl Cdp {
         }
     }
 
-    /// Every event from now on (all sessions); filter on `Event::session`.
+    /// Every event from now on (all sessions); filter on `Event::session`. The channel ends when the
+    /// browser connection closes.
     pub fn subscribe(&self) -> Receiver<Event> {
         let (tx, rx) = mpsc::channel();
         self.subscribers.lock().unwrap().push(tx);
@@ -144,62 +138,37 @@ impl Cdp {
     }
 }
 
-fn io_loop(
-    mut socket: WebSocket<TcpStream>,
-    queue: Receiver<String>,
-    pending: Pending,
-    subscribers: Arc<Mutex<Vec<Sender<Event>>>>,
-    closed: Arc<AtomicBool>,
-) {
-    let fail_all = |why: &str| {
-        for (_, tx) in pending.lock().unwrap().drain() {
-            let _ = tx.send(Err(why.to_string()));
-        }
-    };
+fn read_loop(reader: impl Read, pending: Pending, subscribers: Subscribers, closed: Arc<AtomicBool>) {
+    let mut r = BufReader::new(reader);
+    let mut buf = Vec::new();
     loop {
-        // Send everything queued.
-        loop {
-            match queue.try_recv() {
-                Ok(text) => {
-                    if let Err(e) = socket.send(Message::Text(text)) {
-                        closed.store(true, Ordering::SeqCst);
-                        fail_all(&format!("The browser connection broke: {e}"));
-                        return;
-                    }
-                }
-                Err(mpsc::TryRecvError::Empty) => break,
-                // Every `Cdp` handle is gone: close quietly.
-                Err(mpsc::TryRecvError::Disconnected) => {
-                    let _ = socket.close(None);
-                    closed.store(true, Ordering::SeqCst);
-                    return;
-                }
-            }
-        }
-        match socket.read() {
-            Ok(Message::Text(text)) => match parse_incoming(&text) {
-                Incoming::Reply { id, result } => {
-                    if let Some(tx) = pending.lock().unwrap().remove(&id) {
-                        let _ = tx.send(result);
-                    }
-                }
-                Incoming::Event(ev) => subscribers.lock().unwrap().retain(|s| s.send(ev.clone()).is_ok()),
-                Incoming::Junk => {}
-            },
-            Ok(Message::Close(_)) => {
-                closed.store(true, Ordering::SeqCst);
-                fail_all("The browser closed the connection");
-                return;
-            }
+        buf.clear();
+        match r.by_ref().take(MAX_MESSAGE as u64).read_until(0, &mut buf) {
+            Ok(0) | Err(_) => break,
             Ok(_) => {}
-            Err(tungstenite::Error::Io(e)) if matches!(e.kind(), std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut) => {}
-            Err(e) => {
-                closed.store(true, Ordering::SeqCst);
-                fail_all(&format!("The browser connection broke: {e}"));
-                return;
+        }
+        if buf.last() == Some(&0) {
+            buf.pop();
+        } else if buf.len() >= MAX_MESSAGE {
+            // An oversized message cannot be framed again: give up on the connection.
+            break;
+        }
+        match parse_incoming(&String::from_utf8_lossy(&buf)) {
+            Incoming::Reply { id, result } => {
+                if let Some(tx) = pending.lock().unwrap().remove(&id) {
+                    let _ = tx.send(result);
+                }
             }
+            Incoming::Event(ev) => subscribers.lock().unwrap().retain(|s| s.send(ev.clone()).is_ok()),
+            Incoming::Junk => {}
         }
     }
+    closed.store(true, Ordering::SeqCst);
+    for (_, tx) in pending.lock().unwrap().drain() {
+        let _ = tx.send(Err("The browser closed the connection".into()));
+    }
+    // Dropping the senders ends every subscriber's channel.
+    subscribers.lock().unwrap().clear();
 }
 
 #[cfg(test)]
@@ -229,9 +198,44 @@ mod tests {
         assert!(v.get("sessionId").is_none());
     }
 
+    /// A fake browser on a socket pair: answers every call with its method and sends an event first.
+    #[cfg(unix)]
     #[test]
-    fn only_local_browsers_are_reached() {
-        let err = Cdp::connect("ws://example.com:9222/devtools/browser/x").err().unwrap();
-        assert!(err.contains("must be local"), "{err}");
+    fn calls_and_events_travel_over_nul_framed_streams() {
+        use std::os::unix::net::UnixStream;
+        let (app_side, browser_side) = UnixStream::pair().unwrap();
+        let cdp = Cdp::over(app_side.try_clone().unwrap(), app_side);
+        let events = cdp.subscribe();
+        std::thread::spawn(move || {
+            let mut r = BufReader::new(browser_side.try_clone().unwrap());
+            let mut w = browser_side;
+            let mut buf = Vec::new();
+            while r.read_until(0, &mut buf).unwrap_or(0) > 0 {
+                buf.pop();
+                let v: Value = serde_json::from_slice(&buf).unwrap();
+                let ev = json!({ "method": "Test.called", "params": { "m": v["method"] }, "sessionId": "S" }).to_string();
+                let reply = json!({ "id": v["id"], "result": { "echo": v["method"] } }).to_string();
+                w.write_all(format!("{ev}\0{reply}\0").as_bytes()).unwrap();
+                buf.clear();
+            }
+        });
+        assert_eq!(cdp.call(None, "Browser.getVersion", json!({})).unwrap(), json!({ "echo": "Browser.getVersion" }));
+        assert_eq!(cdp.call(Some("S"), "Page.enable", json!({})).unwrap(), json!({ "echo": "Page.enable" }));
+        let ev = events.recv_timeout(Duration::from_secs(2)).unwrap();
+        assert_eq!((ev.method.as_str(), ev.session.as_deref()), ("Test.called", Some("S")));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_closed_browser_fails_calls_and_ends_event_channels() {
+        use std::os::unix::net::UnixStream;
+        let (app_side, browser_side) = UnixStream::pair().unwrap();
+        let cdp = Cdp::over(app_side.try_clone().unwrap(), app_side);
+        let events = cdp.subscribe();
+        drop(browser_side);
+        std::thread::sleep(Duration::from_millis(150));
+        assert!(cdp.is_closed());
+        assert!(cdp.call(None, "Browser.getVersion", json!({})).is_err());
+        assert!(events.recv_timeout(Duration::from_secs(1)).is_err());
     }
 }

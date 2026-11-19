@@ -84,6 +84,10 @@ fn record(logs: &mut Logs, ev: &Event) {
             let text = d.get("exception").and_then(|e| e.get("description")).and_then(|x| x.as_str()).map(String::from).unwrap_or_else(|| str_of(&d, "text"));
             push_capped(&mut logs.console, ConsoleEntry { level: "error".into(), text: text.chars().take(2000).collect(), time: now_ms() });
         }
+        "Page.javascriptDialogOpening" => {
+            let text = format!("{} dialog: {}", str_of(p, "type"), str_of(p, "message"));
+            push_capped(&mut logs.console, ConsoleEntry { level: "dialog".into(), text: text.chars().take(2000).collect(), time: now_ms() });
+        }
         "Log.entryAdded" => {
             let e = p.get("entry").cloned().unwrap_or(Value::Null);
             let url = str_of(&e, "url");
@@ -127,6 +131,12 @@ fn record(logs: &mut Logs, ev: &Event) {
         }
         _ => {}
     }
+}
+
+/// Whether an opened JavaScript dialog is accepted: only `beforeunload` (so leaving the page works);
+/// alert, confirm and prompt are dismissed.
+pub fn dialog_accepts(params: &Value) -> bool {
+    params.get("type").and_then(|t| t.as_str()) == Some("beforeunload")
 }
 
 /// What a screenshot covers.
@@ -186,8 +196,8 @@ pub struct Browser {
 }
 
 impl Browser {
-    pub fn connect(ws_url: &str) -> Result<Browser, String> {
-        Ok(Browser { cdp: Cdp::connect(ws_url)? })
+    pub fn new(cdp: Arc<Cdp>) -> Browser {
+        Browser { cdp }
     }
 
     /// Open a new tab (on `about:blank`; navigate it afterwards).
@@ -224,12 +234,24 @@ impl Page {
         });
         let logs = page.logs.clone();
         let closed = page.closed.clone();
+        let dialog_cdp = cdp.clone();
         std::thread::Builder::new()
             .name("cdp-page-events".into())
             .spawn(move || {
                 while !closed.load(Ordering::SeqCst) {
                     match events.recv_timeout(Duration::from_millis(500)) {
-                        Ok(ev) if ev.session.as_deref() == Some(session.as_str()) => record(&mut logs.lock().unwrap(), &ev),
+                        Ok(ev) if ev.session.as_deref() == Some(session.as_str()) => {
+                            record(&mut logs.lock().unwrap(), &ev);
+                            if ev.method == "Page.javascriptDialogOpening" {
+                                // A dialog blocks the page and every call to it: answer at once (and
+                                // log it for the agent). Leaving the page is allowed; others are dismissed.
+                                let accept = dialog_accepts(&ev.params);
+                                let (cdp, s) = (dialog_cdp.clone(), session.clone());
+                                std::thread::spawn(move || {
+                                    let _ = cdp.call_within(Some(&s), "Page.handleJavaScriptDialog", json!({ "accept": accept }), Duration::from_secs(5));
+                                });
+                            }
+                        }
                         Ok(ev) if ev.method == "Target.detachedFromTarget"
                             && ev.params.get("sessionId").and_then(|s| s.as_str()) == Some(session.as_str()) =>
                         {
@@ -292,10 +314,22 @@ impl Page {
         Ok(r.get("result").and_then(|r| r.get("value")).cloned().unwrap_or(Value::Null))
     }
 
+    /// The tab's address and title as the browser knows them (`Target.getTargetInfo`), never from
+    /// script in the page, which could lie, throw or hang. Empty strings when the browser cannot say;
+    /// consent treats an empty address as an outside page.
     pub fn url_and_title(&self) -> (String, String) {
-        let v = self.evaluate("({ url: location.href, title: document.title })").unwrap_or(Value::Null);
-        let g = |k| v.get(k).and_then(|x: &Value| x.as_str()).unwrap_or("").to_string();
+        let v = self
+            .cdp
+            .call_within(None, "Target.getTargetInfo", json!({ "targetId": self.target_id }), Duration::from_secs(5))
+            .unwrap_or(Value::Null);
+        let info = v.get("targetInfo").cloned().unwrap_or(Value::Null);
+        let g = |k| info.get(k).and_then(|x: &Value| x.as_str()).unwrap_or("").to_string();
         (g("url"), g("title"))
+    }
+
+    /// The tab's address (see [`Page::url_and_title`]).
+    pub fn url(&self) -> String {
+        self.url_and_title().0
     }
 
     /// Wait until `document.readyState` is `complete` (after a short settle).
@@ -560,6 +594,16 @@ mod tests {
         let a = &logs.network[0];
         assert_eq!((a.method.as_str(), a.status, a.mime_type.as_deref(), a.bytes, a.finished), ("POST", Some(404), Some("application/json"), Some(120.0), true));
         assert_eq!(logs.network[1].failed.as_deref(), Some("net::ERR_BLOCKED"));
+    }
+
+    #[test]
+    fn dialogs_are_logged_and_only_leaving_the_page_is_accepted() {
+        let mut logs = Logs::default();
+        record(&mut logs, &ev("Page.javascriptDialogOpening", json!({ "type": "confirm", "message": "Delete it?" })));
+        assert_eq!(logs.console.back().map(|e| (e.level.as_str(), e.text.as_str())), Some(("dialog", "confirm dialog: Delete it?")));
+        assert!(!dialog_accepts(&json!({ "type": "alert" })));
+        assert!(!dialog_accepts(&json!({ "type": "prompt" })));
+        assert!(dialog_accepts(&json!({ "type": "beforeunload" })));
     }
 
     #[test]

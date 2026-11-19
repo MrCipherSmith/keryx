@@ -73,12 +73,18 @@ fn tab_line(app: &AppHandle, window: &str, id: u64) -> String {
 /// Run one `browser_*` tool for project view `window`.
 pub fn call(app: &AppHandle, window: &str, name: &str, params: &Value) -> Result<String, String> {
     let tab_arg = arg_u64(params, "tab");
-    let act = |verb: &str| -> Result<(u64, std::sync::Arc<super::page::Page>), String> {
+    // Every action and every read on a page asks first when the page is not local (decision 2,
+    // reads included); the address comes from the browser and is checked again after the answer.
+    let guarded = |verb: &str, reveal: bool| -> Result<(u64, std::sync::Arc<super::page::Page>), String> {
         let (id, page) = engine::page(app, window, tab_arg)?;
-        consent::confirm(app, window, verb, &page.url_and_title().0)?;
-        engine::reveal(app, window, id);
+        consent::confirm_current(app, window, verb, || engine::consent_url(app, window, id))?;
+        if reveal {
+            engine::reveal(app, window, id);
+        }
         Ok((id, page))
     };
+    let act = |verb: &str| guarded(verb, true);
+    let read = |verb: &str| guarded(verb, false);
     match name {
         "browser_tabs" => Ok(pretty(&engine::list(app, window))),
         "browser_navigate" => {
@@ -103,7 +109,7 @@ pub fn call(app: &AppHandle, window: &str, name: &str, params: &Value) -> Result
             Ok(tab_line(app, window, id))
         }
         "browser_snapshot" => {
-            let (id, page) = engine::page(app, window, tab_arg)?;
+            let (id, page) = read("read")?;
             let snap = page.snapshot()?;
             let (url, title) = page.url_and_title();
             let more = if snap.truncated { "\n[snapshot truncated]" } else { "" };
@@ -138,7 +144,7 @@ pub fn call(app: &AppHandle, window: &str, name: &str, params: &Value) -> Result
             Ok(format!("done; now {}", tab_line(app, window, id)))
         }
         "browser_screenshot" => {
-            let (id, page) = engine::page(app, window, tab_arg)?;
+            let (id, page) = read("take a screenshot of")?;
             let format = arg_str(params, "format").unwrap_or("png");
             let shot = match (arg_str(params, "ref"), arg_bool(params, "full_page")) {
                 (Some(r), _) => Shot::Element(r.to_string()),
@@ -162,13 +168,13 @@ pub fn call(app: &AppHandle, window: &str, name: &str, params: &Value) -> Result
             Ok(format!("Saved a screenshot of the {what} ({} bytes) to {}", bytes.len(), path.display()))
         }
         "browser_console" => {
-            let (_, page) = engine::page(app, window, tab_arg)?;
+            let (_, page) = read("read the console of")?;
             let limit = arg_u64(params, "limit").unwrap_or(100).clamp(1, 500) as usize;
             let lines: Vec<String> = page.console(limit).iter().map(|e| format!("[{}] {}", e.level, e.text)).collect();
             Ok(if lines.is_empty() { "No console messages since the tab opened.".into() } else { lines.join("\n") })
         }
         "browser_network" => {
-            let (_, page) = engine::page(app, window, tab_arg)?;
+            let (_, page) = read("read the network log of")?;
             if let Some(req) = arg_str(params, "request_id") {
                 return page.response_body(req, 20_000);
             }

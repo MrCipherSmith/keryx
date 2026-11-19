@@ -7,7 +7,7 @@
 //!   cargo test --test chromium_live -- --ignored --nocapture
 //! or point CHROME_BIN at another Chrome/Chromium binary.
 
-use keryx_desktop_lib::chromium::launch::{find_chrome, Chromium};
+use keryx_desktop_lib::chromium::launch::{find_chrome, Chromium, OWNER_FILE};
 use keryx_desktop_lib::chromium::page::{Browser, Shot};
 use std::io::{Read, Write};
 use std::net::TcpListener;
@@ -19,9 +19,12 @@ const PAGE: &str = r#"<!doctype html><html><head><title>Live test</title>
 <h1>Settings</h1>
 <label for="mail">Email</label> <input id="mail">
 <label for="pw">Password</label> <input id="pw" type="password">
-<button id="save" onclick="document.title = 'CLICKED ' + event.isTrusted + ' ' + document.getElementById('mail').value; console.log('saved', 42)">Save changes</button>
+<button id="save" onclick="console.log('clicked', event.isTrusted, document.getElementById('mail').value); console.log('saved', 42)">Save changes</button>
 <script>
   console.warn('booted');
+  // A hostile page: its title cannot be read from script, and it opens a dialog on load.
+  Object.defineProperty(document, 'title', { get() { throw new Error('no title for you'); }, set() {} });
+  alert('hello from the page');
   fetch('/api/missing').catch(() => {});
 </script>
 </body></html>"#;
@@ -52,42 +55,45 @@ fn chrome() -> PathBuf {
         .expect("no Chrome found; set CHROME_BIN")
 }
 
-/// The app was killed and its browser kept running on the project's profile: the next launch takes it over.
+/// The app was killed and its browser kept running on the project's profile: the next launch takes it
+/// over. A browser whose app still runs is left alone.
 #[test]
 #[ignore]
 fn a_browser_left_on_the_profile_is_replaced() {
     let profile = tempfile::tempdir().unwrap();
     let first = Chromium::launch(&chrome(), profile.path(), true, Duration::from_secs(20)).expect("first launch");
-    let first_pid = first.pid() as i32;
+    let first_pid = first.0.pid() as i32;
+    // Its app (this test) still runs: a second launch must not take it over.
+    assert!(Chromium::launch(&chrome(), profile.path(), true, Duration::from_secs(10)).is_err());
     // As if the app died without stopping it.
     std::mem::forget(first);
+    std::fs::write(profile.path().join(OWNER_FILE), "999999").unwrap();
     let second = Chromium::launch(&chrome(), profile.path(), true, Duration::from_secs(20)).expect("second launch takes over");
-    assert_ne!(second.pid() as i32, first_pid);
+    assert_ne!(second.0.pid() as i32, first_pid);
     // Gone, or a zombie only because this test is its parent and never waits for it (launchd reaps it in the app).
     let out = std::process::Command::new("/bin/ps").args(["-o", "stat=", "-p", &first_pid.to_string()]).output().unwrap();
     let stat = String::from_utf8_lossy(&out.stdout).trim().to_string();
     assert!(stat.is_empty() || stat.starts_with('Z'), "the old browser still runs: {stat}");
-    let browser = Browser::connect(&second.ws_url).expect("connect");
+    let browser = Browser::new(second.1.clone());
     assert!(browser.open_page().is_ok());
 }
 
 #[test]
 #[ignore]
 fn drive_a_local_page_with_real_input() {
-    let chrome = std::env::var("CHROME_BIN")
-        .map(PathBuf::from)
-        .ok()
-        .or_else(|| find_chrome(std::env::var("HOME").ok().map(PathBuf::from).as_deref(), &[]))
-        .expect("no Chrome found; set CHROME_BIN");
     let profile = tempfile::tempdir().unwrap();
-    let browser_proc = Chromium::launch(&chrome, profile.path(), true, Duration::from_secs(20)).expect("launch");
-    println!("browser on {}", browser_proc.ws_url);
+    // Over the debugging pipe: no port is opened.
+    let (browser_proc, cdp) = Chromium::launch(&chrome(), profile.path(), true, Duration::from_secs(20)).expect("launch");
     let port = serve();
 
-    let browser = Browser::connect(&browser_proc.ws_url).expect("connect");
+    let browser = Browser::new(cdp);
     let page = browser.open_page().expect("open page");
+    // The page's alert on load is answered, so navigation finishes.
     page.navigate(&format!("http://127.0.0.1:{port}/")).expect("navigate");
-    assert_eq!(page.url_and_title().1, "Live test");
+    // The address and title come from the browser, not from the page's (throwing) script.
+    let (url, title) = page.url_and_title();
+    assert_eq!(url, format!("http://127.0.0.1:{port}/"));
+    assert_eq!(title, "Live test");
 
     let snap = page.snapshot().expect("snapshot");
     println!("{}", snap.text);
@@ -103,7 +109,7 @@ fn drive_a_local_page_with_real_input() {
     page.click(&save).expect("click");
     std::thread::sleep(Duration::from_millis(200));
     // A trusted click, and the typed value reached the page.
-    assert_eq!(page.url_and_title().1, "CLICKED true me@example.test");
+    // The page's own title setter is a no-op now, so check the click through its console line.
 
     let png = page.screenshot(&Shot::Viewport, "png").expect("viewport shot");
     assert_eq!(&png[..8], b"\x89PNG\r\n\x1a\n");
@@ -116,6 +122,9 @@ fn drive_a_local_page_with_real_input() {
     println!("{console:?}");
     assert!(console.iter().any(|l| l == "warn: booted"), "{console:?}");
     assert!(console.iter().any(|l| l == "log: saved 42"), "{console:?}");
+    // A trusted click, and the typed value reached the page.
+    assert!(console.iter().any(|l| l == "log: clicked true me@example.test"), "{console:?}");
+    assert!(console.iter().any(|l| l == "dialog: alert dialog: hello from the page"), "{console:?}");
 
     let net = page.network(50, Some("/api/"));
     println!("{net:?}");

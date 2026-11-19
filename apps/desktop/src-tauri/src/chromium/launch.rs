@@ -5,15 +5,21 @@
 //! profile anyway); otherwise Chrome for Testing, downloaded with consent into
 //! the app's data directory (the download itself is not part of this module).
 //!
-//! Decision 5: the debugging port is a random free port on 127.0.0.1 (`0`),
-//! read back from `DevToolsActivePort` in the profile, so that the app's own
-//! CDP client, chrome-devtools-mcp and Playwright can all attach to it. The
-//! port has no authentication; the profile is the project's own and the
-//! process lives only as long as the window.
+//! The browser is driven over its debugging pipe (`--remote-debugging-pipe`,
+//! fds 3 and 4), never a network port: no other local process can attach to it
+//! and reach the project's signed-in sessions. Its profile is the project's own
+//! (mode 0700) and keeps cookies with the real Keychain, so a sign-in survives a
+//! restart and is not readable from the profile files alone.
 
+use super::cdp::Cdp;
+use serde_json::json;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
+
+/// The file in a profile naming the app process that runs its browser.
+pub const OWNER_FILE: &str = "keryx-owner-pid";
 
 /// Where a Chrome binary may live, best first. `extra` are app-managed installs
 /// (Chrome for Testing under the app's data directory).
@@ -35,31 +41,16 @@ pub fn find_chrome(home: Option<&Path>, extra: &[PathBuf]) -> Option<PathBuf> {
     candidates(home, extra).into_iter().find(|p| p.is_file())
 }
 
-/// `DevToolsActivePort` holds the port on its first line and the browser
-/// target's path (`/devtools/browser/<id>`) on the second.
-pub fn parse_active_port(text: &str) -> Option<(u16, String)> {
-    let mut lines = text.lines();
-    let port: u16 = lines.next()?.trim().parse().ok()?;
-    let path = lines.next()?.trim();
-    if port == 0 || !path.starts_with("/devtools/browser/") {
-        return None;
-    }
-    Some((port, path.to_string()))
-}
-
 /// The command line for a project's browser.
 pub fn args(profile: &Path, headless: bool) -> Vec<String> {
     let mut a = vec![
         format!("--user-data-dir={}", profile.display()),
-        "--remote-debugging-port=0".into(),
-        "--remote-debugging-address=127.0.0.1".into(),
+        "--remote-debugging-pipe".into(),
         "--no-first-run".into(),
         "--no-default-browser-check".into(),
         "--disable-background-networking".into(),
         "--disable-sync".into(),
         "--disable-component-update".into(),
-        "--password-store=basic".into(),
-        "--use-mock-keychain".into(),
         "--window-size=1280,800".into(),
     ];
     if headless {
@@ -82,15 +73,28 @@ fn command_of(pid: i32) -> Option<String> {
     (out.status.success() && !s.is_empty()).then_some(s)
 }
 
+#[cfg(unix)]
+fn alive(pid: i32) -> bool {
+    // SAFETY: signal 0 only checks whether the process exists.
+    pid > 1 && unsafe { libc::kill(pid, 0) } == 0
+}
+
+/// Whether the app process named in the profile's owner file still runs (another app instance's
+/// browser must not be taken over). A missing or unreadable file counts as gone.
+#[cfg(unix)]
+fn owner_alive(profile: &Path) -> bool {
+    std::fs::read_to_string(profile.join(OWNER_FILE)).ok().and_then(|t| t.trim().parse::<i32>().ok()).is_some_and(alive)
+}
+
 /// A browser left running on `profile` by an earlier app run that did not stop it (killed, crashed)
-/// holds the profile's lock, so a new one would exit at once. Stop it when it is ours: a process
-/// whose command line names this exact profile (these profiles are the app's own).
+/// holds the profile's lock, so a new one would exit at once. Stop it only when it is ours and
+/// orphaned: its command line names this exact profile and the app that started it is gone.
 #[cfg(unix)]
 pub fn reclaim_profile(profile: &Path) -> bool {
     let Ok(target) = std::fs::read_link(profile.join("SingletonLock")) else { return false };
     let Some(pid) = lock_pid(&target.to_string_lossy()) else { return false };
     let Some(cmd) = command_of(pid) else { return false };
-    if !cmd.contains(&format!("--user-data-dir={}", profile.display())) {
+    if !cmd.contains(&format!("--user-data-dir={}", profile.display())) || owner_alive(profile) {
         return false;
     }
     // SAFETY: plain signal calls on a process that runs on this profile.
@@ -117,53 +121,111 @@ pub fn reclaim_profile(_: &Path) -> bool {
 /// A running browser. Dropping it stops the browser and its helpers.
 pub struct Chromium {
     child: Child,
-    pub port: u16,
-    /// `ws://127.0.0.1:<port>/devtools/browser/<id>`
-    pub ws_url: String,
     pub profile: PathBuf,
 }
 
+/// Create the profile folder for this user only.
+fn private_dir(dir: &Path) -> Result<(), String> {
+    std::fs::create_dir_all(dir).map_err(|e| format!("Could not create the browser profile {}: {e}", dir.display()))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700));
+        if let Some(parent) = dir.parent() {
+            let _ = std::fs::set_permissions(parent, std::fs::Permissions::from_mode(0o700));
+        }
+    }
+    Ok(())
+}
+
+/// Two pipes for the debugging channel: (the child's fd 3 end, our write end), (our read end, the
+/// child's fd 4 end). All four are close-on-exec; the child gets its two ends as 3 and 4.
+#[cfg(unix)]
+fn debug_pipes() -> Result<([i32; 2], [i32; 2]), String> {
+    let mut to_browser = [0i32; 2];
+    let mut from_browser = [0i32; 2];
+    // SAFETY: plain pipe/fcntl calls on fresh descriptors.
+    unsafe {
+        if libc::pipe(to_browser.as_mut_ptr()) != 0 || libc::pipe(from_browser.as_mut_ptr()) != 0 {
+            return Err(format!("Could not open the browser pipe: {}", std::io::Error::last_os_error()));
+        }
+        for fd in to_browser.iter().chain(from_browser.iter()) {
+            libc::fcntl(*fd, libc::F_SETFD, libc::FD_CLOEXEC);
+        }
+    }
+    Ok((to_browser, from_browser))
+}
+
 impl Chromium {
-    /// Start `binary` on `profile` and wait (up to `timeout`) for its debugging port.
-    pub fn launch(binary: &Path, profile: &Path, headless: bool, timeout: Duration) -> Result<Chromium, String> {
-        std::fs::create_dir_all(profile).map_err(|e| format!("Could not create the browser profile {}: {e}", profile.display()))?;
-        let port_file = profile.join("DevToolsActivePort");
-        // An earlier run's browser may still hold the profile; a file it left would point at its port.
+    /// Start `binary` on `profile` and connect to it over its debugging pipe (waiting up to `timeout`).
+    #[cfg(unix)]
+    pub fn launch(binary: &Path, profile: &Path, headless: bool, timeout: Duration) -> Result<(Chromium, Arc<Cdp>), String> {
+        use std::os::fd::FromRawFd;
+        use std::os::unix::process::CommandExt;
+        private_dir(profile)?;
+        // An earlier run's orphaned browser may still hold the profile.
         reclaim_profile(profile);
-        let _ = std::fs::remove_file(&port_file);
+        let (to_browser, from_browser) = debug_pipes()?;
+        let (child_in, child_out) = (to_browser[0], from_browser[1]);
         let mut cmd = Command::new(binary);
         cmd.args(args(profile, headless)).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
-        #[cfg(unix)]
-        {
-            use std::os::unix::process::CommandExt;
-            // Its own process group, so stopping it stops the helper processes too.
-            cmd.process_group(0);
+        // Its own process group, so stopping it stops the helper processes too.
+        cmd.process_group(0);
+        // SAFETY: only async-signal-safe calls (fcntl, dup2, close) between fork and exec.
+        unsafe {
+            cmd.pre_exec(move || {
+                // Move both ends above 3/4 first, so placing one cannot overwrite the other.
+                let a = libc::fcntl(child_in, libc::F_DUPFD, 10);
+                let b = libc::fcntl(child_out, libc::F_DUPFD, 10);
+                if a < 0 || b < 0 || libc::dup2(a, 3) < 0 || libc::dup2(b, 4) < 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                libc::close(a);
+                libc::close(b);
+                Ok(())
+            });
         }
-        let child = cmd.spawn().map_err(|e| format!("Could not start {}: {e}", binary.display()))?;
-        let mut browser = Chromium { child, port: 0, ws_url: String::new(), profile: profile.to_path_buf() };
+        let spawned = cmd.spawn();
+        // SAFETY: the child's ends are ours to close once it has them (or failed to start).
+        unsafe {
+            libc::close(child_in);
+            libc::close(child_out);
+        }
+        let child = match spawned {
+            Ok(c) => c,
+            Err(e) => {
+                // SAFETY: our ends were never wrapped.
+                unsafe {
+                    libc::close(to_browser[1]);
+                    libc::close(from_browser[0]);
+                }
+                return Err(format!("Could not start {}: {e}", binary.display()));
+            }
+        };
+        let _ = std::fs::write(profile.join(OWNER_FILE), std::process::id().to_string());
+        // SAFETY: each fd is open, owned by nobody else, and wrapped exactly once.
+        let (writer, reader) = unsafe { (std::fs::File::from_raw_fd(to_browser[1]), std::fs::File::from_raw_fd(from_browser[0])) };
+        let mut browser = Chromium { child, profile: profile.to_path_buf() };
+        let cdp = Cdp::over(reader, writer);
         let deadline = Instant::now() + timeout;
         loop {
             if let Ok(Some(status)) = browser.child.try_wait() {
-                return Err(format!(
-                    "The browser exited at once ({status}). Another Chrome may already use the profile {}.",
-                    profile.display()
-                ));
+                return Err(format!("The browser exited at once ({status}). Another Chrome may already use the profile {}.", profile.display()));
             }
-            if let Some((port, path)) = std::fs::read_to_string(&port_file).ok().as_deref().and_then(parse_active_port) {
-                browser.port = port;
-                browser.ws_url = format!("ws://127.0.0.1:{port}{path}");
-                return Ok(browser);
+            if cdp.call_within(None, "Browser.getVersion", json!({}), Duration::from_secs(2)).is_ok() {
+                return Ok((browser, cdp));
             }
             if Instant::now() >= deadline {
-                return Err("The browser did not open its debugging port in time".into());
+                browser.stop();
+                return Err("The browser did not answer on its debugging pipe in time".into());
             }
             std::thread::sleep(Duration::from_millis(50));
         }
     }
 
-    /// `http://127.0.0.1:<port>`, for tools that attach with a browser URL.
-    pub fn http_url(&self) -> String {
-        format!("http://127.0.0.1:{}", self.port)
+    #[cfg(not(unix))]
+    pub fn launch(_: &Path, _: &Path, _: bool, _: Duration) -> Result<(Chromium, Arc<Cdp>), String> {
+        Err("The Chromium engine needs macOS".into())
     }
 
     pub fn pid(&self) -> u32 {
@@ -215,18 +277,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_active_port_file_gives_port_and_browser_path() {
-        assert_eq!(
-            parse_active_port("53211\n/devtools/browser/0b1c-2d\n"),
-            Some((53211, "/devtools/browser/0b1c-2d".to_string()))
-        );
-        assert_eq!(parse_active_port("0\n/devtools/browser/x"), None);
-        assert_eq!(parse_active_port("53211\n/json/version"), None);
-        assert_eq!(parse_active_port("53211"), None);
-        assert_eq!(parse_active_port(""), None);
-    }
-
-    #[test]
     fn installed_chrome_comes_before_app_managed_installs() {
         let extra = vec![PathBuf::from("/data/chromium/131/Google Chrome for Testing")];
         let c = candidates(Some(Path::new("/Users/me")), &extra);
@@ -236,11 +286,12 @@ mod tests {
     }
 
     #[test]
-    fn the_browser_gets_a_private_profile_and_a_local_random_port() {
+    fn the_browser_gets_a_private_profile_a_pipe_and_the_real_keychain() {
         let a = args(Path::new("/p"), true);
         assert!(a.contains(&"--user-data-dir=/p".to_string()));
-        assert!(a.contains(&"--remote-debugging-port=0".to_string()));
-        assert!(a.contains(&"--remote-debugging-address=127.0.0.1".to_string()));
+        assert!(a.contains(&"--remote-debugging-pipe".to_string()));
+        assert!(!a.iter().any(|x| x.starts_with("--remote-debugging-port") || x.starts_with("--remote-debugging-address")));
+        assert!(!a.iter().any(|x| x == "--use-mock-keychain" || x.starts_with("--password-store")));
         assert!(a.contains(&"--headless=new".to_string()));
         assert!(!args(Path::new("/p"), false).contains(&"--headless=new".to_string()));
     }
@@ -263,6 +314,27 @@ mod tests {
             std::os::unix::fs::symlink(format!("host-{}", std::process::id()), dir.path().join("SingletonLock")).unwrap();
             assert!(!reclaim_profile(dir.path()));
         }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_browser_whose_app_still_runs_is_left_alone() {
+        let dir = tempfile::tempdir().unwrap();
+        // The owner is this test process, which runs: nothing is reclaimed whatever holds the lock.
+        std::fs::write(dir.path().join(OWNER_FILE), std::process::id().to_string()).unwrap();
+        assert!(owner_alive(dir.path()));
+        std::fs::write(dir.path().join(OWNER_FILE), "999999").unwrap();
+        assert!(!owner_alive(dir.path()));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn profiles_are_private() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("chromium-profiles/abc");
+        private_dir(&p).unwrap();
+        assert_eq!(std::fs::metadata(&p).unwrap().permissions().mode() & 0o777, 0o700);
     }
 
     #[test]

@@ -371,12 +371,18 @@ fn terminal_tool(app: &AppHandle, window: &str, name: &str, params: &Value) -> R
 
 fn browser_tool(app: &AppHandle, window: &str, name: &str, params: &Value) -> Result<String, String> {
     if chromium::engine::is_chromium(app, window) {
-        return chromium::tools::call(app, window, name, params);
+        match chromium::tools::call(app, window, name, params) {
+            // Chrome could not start: the view is WebKit now, and the call is made there.
+            Err(_) if !chromium::engine::is_chromium(app, window) => {}
+            other => return other,
+        }
     }
     let browsers = app.state::<Browsers>();
     let tab_arg = arg_u64(params, "tab");
-    // Acting on a page that is not local asks the user first (decision 2).
-    let current_url = |id: Option<u64>| browsers.tab(window, id).ok().and_then(|t| browsers.info(window, t.id)).map(|i| i.url).unwrap_or_default();
+    // Acting on or reading a page that is not local asks the user first (decision 2); the address is
+    // the host's own (page-load events), an unknown one asks, and it is read again after the answer.
+    let current_url = |id: u64| browsers.info(window, id).map(|i| i.url).unwrap_or_default();
+    let guard = |id: u64, verb: &str| chromium::consent::confirm_current(app, window, verb, || current_url(id));
     match name {
         "browser_tabs" => Ok(pretty(&browsers.list(window))),
         "browser_navigate" => {
@@ -403,6 +409,7 @@ fn browser_tool(app: &AppHandle, window: &str, name: &str, params: &Value) -> Re
         }
         "browser_snapshot" => {
             let tab = browsers.tab(window, tab_arg)?;
+            guard(tab.id, "read")?;
             let v = browser::run_js(app, &tab, browser::snapshot_js(), World::Client)?;
             let text = v.get("snapshot").and_then(|s| s.as_str()).unwrap_or("");
             let more = if v.get("truncated").and_then(|t| t.as_bool()) == Some(true) { "\n[snapshot truncated]" } else { "" };
@@ -416,7 +423,7 @@ fn browser_tool(app: &AppHandle, window: &str, name: &str, params: &Value) -> Re
         "browser_click" | "browser_type" => {
             let tab = browsers.tab(window, tab_arg)?;
             let reference = arg_str(params, "ref").ok_or("ref is required")?;
-            chromium::consent::confirm(app, window, if name == "browser_click" { "click" } else { "type into" }, &current_url(Some(tab.id)))?;
+            guard(tab.id, if name == "browser_click" { "click" } else { "type into" })?;
             let js = if name == "browser_click" {
                 browser::click_js(reference)
             } else {
@@ -430,6 +437,7 @@ fn browser_tool(app: &AppHandle, window: &str, name: &str, params: &Value) -> Re
         }
         "browser_screenshot" => {
             let tab = browsers.tab(window, tab_arg)?;
+            guard(tab.id, "take a screenshot of")?;
             browser::reveal(app, window, tab.id);
             std::thread::sleep(Duration::from_millis(150));
             let png = browser::screenshot(app, &tab)?;
@@ -442,6 +450,7 @@ fn browser_tool(app: &AppHandle, window: &str, name: &str, params: &Value) -> Re
         }
         "browser_console" => {
             let tab = browsers.tab(window, tab_arg)?;
+            guard(tab.id, "read the console of")?;
             let limit = arg_u64(params, "limit").unwrap_or(100).clamp(1, 500) as usize;
             let v = browser::run_js(app, &tab, browser::console_js(limit), World::Page)?;
             let lines: Vec<String> = v

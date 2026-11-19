@@ -348,6 +348,8 @@ fn release(app: &AppHandle, label: &str, close_tabs: bool) {
     app.state::<flows::watch::FlowWatchers>().stop_window(label);
     app.state::<pty::PtyManager>().close_window(label);
     app.state::<panels::PanelRoots>().remove(label);
+    // The view's Chrome is a separate process: it stops whether or not the window took the tab views along.
+    crate::chromium::engine::close_view(app, label);
     if close_tabs {
         browser::close_window(app, label);
     } else {
