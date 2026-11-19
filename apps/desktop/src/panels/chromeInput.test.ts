@@ -22,6 +22,9 @@ test("mouse buttons, double clicks and moves", () => {
   });
   expect(mouseInput("mousePressed", { ...none, button: 2, detail: 2 }, { x: 1, y: 2 })).toMatchObject({ button: "right", clicks: 2 });
   expect(mouseInput("mouseMoved", { ...none, button: 0, detail: 0 }, { x: 1, y: 2 })).toMatchObject({ button: "none", clicks: 0 });
+  // A move with the left button held is a drag: it carries the button and the held mask.
+  expect(mouseInput("mouseMoved", { ...none, button: 0, detail: 0 }, { x: 1, y: 2 }, 0)).toMatchObject({ button: "left", buttons: 1 });
+  expect(mouseInput("mouseMoved", { ...none, button: 0, detail: 0 }, { x: 1, y: 2 }, 2)).toMatchObject({ button: "right", buttons: 2 });
 });
 
 test("wheel lines become pixels", () => {

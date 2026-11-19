@@ -99,11 +99,13 @@ export function mergeAcpMcp(keryx: McpRuntime | undefined, clientSet: AcpSession
     return new Set(client.servers().map((state) => state.name).filter((name) => taken.has(name)));
   };
   const shadowed = [...shadowedNames()].map((name) => ({ name, reason: SHADOWED_CLIENT_SERVER_REASON }));
-  // A shadowed client server owns nothing: keryx's own server of that name is the one in use.
+  // A client server owns its prefixes only while it is connected (its tools can then be offered in
+  // place of keryx's) and is not shadowed (keryx's own server of that name is then the one in use).
   const ownedLive = (dropped: ReadonlySet<string>): ReadonlyMap<string, readonly string[]> | undefined => {
     const owned = client?.owned;
     if (owned === undefined) return undefined;
-    return new Map([...owned].filter(([server]) => !dropped.has(server)));
+    const connected = new Set((client?.servers() ?? []).filter((state) => state.status === "connected").map((state) => state.name));
+    return new Map([...owned].filter(([server]) => !dropped.has(server) && connected.has(server)));
   };
   return {
     binding: {

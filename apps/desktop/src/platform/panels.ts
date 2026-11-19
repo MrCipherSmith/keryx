@@ -55,7 +55,12 @@ export interface Bounds {
   height: number;
 }
 
-export type BrowserEvent = { kind: "tab"; tab: BrowserTab } | { kind: "closed"; id: number } | { kind: "show"; id: number };
+export type BrowserEvent =
+  | { kind: "tab"; tab: BrowserTab }
+  | { kind: "closed"; id: number }
+  | { kind: "show"; id: number }
+  /** The project's browser engine changed (Chromium could not start: WebKit from now on). */
+  | { kind: "engine"; engine: "webkit" | "chromium" };
 
 export const browserList = () => invoke<BrowserTab[]>("browser_list");
 export const browserOpen = (cwd: string, url: string) => invoke<BrowserTab>("browser_open", { cwd, url });
@@ -92,7 +97,7 @@ export async function browserFrames(onFrame: (f: BrowserFrame) => void): Promise
 
 /** The user's input on the Chromium canvas, in the page's CSS pixels. */
 export type BrowserInput =
-  | { kind: "mouse"; type: "mousePressed" | "mouseReleased" | "mouseMoved"; x: number; y: number; button?: "left" | "middle" | "right" | "none"; clicks?: number; modifiers?: number }
+  | { kind: "mouse"; type: "mousePressed" | "mouseReleased" | "mouseMoved"; x: number; y: number; button?: "left" | "middle" | "right" | "none"; buttons?: number; clicks?: number; modifiers?: number }
   | { kind: "wheel"; x: number; y: number; dx: number; dy: number; modifiers?: number }
   | { kind: "key"; type: "keyDown" | "keyUp"; key: string; code: string; text?: string; keyCode?: number; modifiers?: number }
   | { kind: "text"; text: string };

@@ -19,13 +19,24 @@ export function pagePoint(e: Pick<MouseEvent, "clientX" | "clientY">, rect: Pick
   return { x: Math.round((e.clientX - rect.left) * sx), y: Math.round((e.clientY - rect.top) * sy) };
 }
 
+/** CDP's held-buttons mask for a DOM button index: left 1, right 2, middle 4. */
+export const BUTTON_MASK = [1, 4, 2] as const;
+
+/**
+ * A mouse event. A move made while a button is held (`held`: the DOM button index) carries that
+ * button and the held mask, which is what makes a drag a drag in the page.
+ */
 export function mouseInput(
   type: "mousePressed" | "mouseReleased" | "mouseMoved",
   e: Pick<MouseEvent, "button" | "detail" | "altKey" | "ctrlKey" | "metaKey" | "shiftKey">,
   point: { x: number; y: number },
+  held: number | null = null,
 ): BrowserInput {
-  const button = type === "mouseMoved" ? "none" : (BUTTONS[e.button] ?? "left");
-  return { kind: "mouse", type, ...point, button, clicks: type === "mouseMoved" ? 0 : Math.max(1, e.detail || 1), modifiers: modifiers(e) };
+  if (type === "mouseMoved") {
+    if (held === null) return { kind: "mouse", type, ...point, button: "none", clicks: 0, modifiers: modifiers(e) };
+    return { kind: "mouse", type, ...point, button: BUTTONS[held] ?? "left", buttons: BUTTON_MASK[held] ?? 1, clicks: 0, modifiers: modifiers(e) };
+  }
+  return { kind: "mouse", type, ...point, button: BUTTONS[e.button] ?? "left", clicks: Math.max(1, e.detail || 1), modifiers: modifiers(e) };
 }
 
 export function wheelInput(e: Pick<WheelEvent, "deltaX" | "deltaY" | "deltaMode" | "altKey" | "ctrlKey" | "metaKey" | "shiftKey">, point: { x: number; y: number }): BrowserInput {

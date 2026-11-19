@@ -72,18 +72,26 @@ export function ChromeView({ tab }: { tab: number }) {
     };
     let moveQueued: MouseEvent | null = null;
     let moveRaf = 0;
+    // The button pressed on the canvas, held until it is released (anywhere): drags and releases
+    // outside the canvas still reach the page, and no stray release is sent for a press elsewhere.
+    let held: number | null = null;
     const onDown = (e: MouseEvent) => {
       k.focus({ preventScroll: true });
       e.preventDefault();
+      held = e.button;
       send(mouseInput("mousePressed", e, point(e)));
     };
-    const onUp = (e: MouseEvent) => send(mouseInput("mouseReleased", e, point(e)));
+    const onUp = (e: MouseEvent) => {
+      if (held === null) return;
+      held = null;
+      send(mouseInput("mouseReleased", e, point(e)));
+    };
     const onMove = (e: MouseEvent) => {
       moveQueued = e;
       if (moveRaf) return;
       moveRaf = requestAnimationFrame(() => {
         moveRaf = 0;
-        if (moveQueued) send(mouseInput("mouseMoved", moveQueued, point(moveQueued)));
+        if (moveQueued) send(mouseInput("mouseMoved", moveQueued, point(moveQueued), held));
         moveQueued = null;
       });
     };
@@ -118,6 +126,11 @@ export function ChromeView({ tab }: { tab: number }) {
     c.addEventListener("mousedown", onDown);
     window.addEventListener("mouseup", onUp);
     c.addEventListener("mousemove", onMove);
+    // While a button is held the drag continues outside the canvas.
+    const onWindowMove = (e: MouseEvent) => {
+      if (held !== null && e.target !== c) onMove(e);
+    };
+    window.addEventListener("mousemove", onWindowMove);
     c.addEventListener("wheel", onWheel, { passive: false });
     k.addEventListener("keydown", onKey);
     k.addEventListener("keyup", onKey);
@@ -131,6 +144,7 @@ export function ChromeView({ tab }: { tab: number }) {
       c.removeEventListener("mousedown", onDown);
       window.removeEventListener("mouseup", onUp);
       c.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mousemove", onWindowMove);
       c.removeEventListener("wheel", onWheel);
       k.removeEventListener("keydown", onKey);
       k.removeEventListener("keyup", onKey);

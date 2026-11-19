@@ -84,6 +84,8 @@ export function BrowserPanel({ cwd, visible }: { cwd: string; visible: boolean }
       if (e.kind === "tab") {
         setTabs((t) => applyBrowserTab(t, e.tab));
         if (e.tab.active) setActive(e.tab.id);
+      } else if (e.kind === "engine") {
+        setEngine(e.engine);
       } else if (e.kind === "closed") {
         setTabs((t) => t.filter((x) => x.id !== e.id));
         setActive((a) => (a === e.id ? null : a));
