@@ -63,22 +63,27 @@ function option(group: string, name: string) {
 }
 
 test("shows unassigned colleagues and drafts; board and list share author, team, decision and CI filters", async () => {
-  const draft: ReviewCard = { ...pr, number: 102, title: "Draft from author", draft: true, author: "bob", reviewers: [], decision: null, ci: "none" };
-  await render(async () => snapshot([draft, pr]));
-  expect(host.querySelectorAll(".review-card")).toHaveLength(2);
+  const cards: ReviewCard[] = [
+    pr,
+    { ...pr, number: 102, author: "bob" },
+    { ...pr, number: 103, reviewers: ["org/other"] },
+    { ...pr, number: 104, decision: "APPROVED" },
+    { ...pr, number: 105, ci: "failed" },
+    { ...pr, number: 106, title: "Draft from author", draft: true, author: "bob", reviewers: [], decision: null, ci: "none" },
+  ];
+  await render(async () => snapshot(cards));
+  expect(host.querySelectorAll(".review-card")).toHaveLength(cards.length);
   await click(button("Filters"));
   await click(option("Author", "lee"));
   await click(option("Review requested from", "org/team"));
   await click(option("GitHub review decision", "Review required"));
   await click(option("Checks on head commit", "CI passed"));
   await click(button("Apply filters"));
-  expect(host.querySelectorAll(".review-card")).toHaveLength(1);
-  expect(host.querySelector(".review-card")!.textContent).toContain("Update from colleague");
+  expect(Array.from(host.querySelectorAll(".review-card .flow-id"), id => id.textContent)).toEqual(["#101"]);
   await click(button("List"));
-  expect(host.querySelectorAll("tbody tr")).toHaveLength(1);
-  expect(host.querySelector("tbody")!.textContent).toContain("#101");
+  expect(Array.from(host.querySelectorAll("tbody .flow-id"), id => id.textContent)).toEqual(["#101"]);
   await click(button("Clear filters"));
-  expect(host.querySelectorAll("tbody tr")).toHaveLength(2);
+  expect(host.querySelectorAll("tbody tr")).toHaveLength(cards.length);
 });
 
 test("refresh failure preserves last available snapshot, access loss hides its cards and identity", async () => {
@@ -187,15 +192,19 @@ test("a board refresh started before a local launch preserves the live lane afte
   const load: typeof fetchReviewBoard = async () => ++calls === 1 ? snapshot([pr]) : new Promise(resolve => { finish = resolve; });
   const loadDetail: typeof fetchReviewDetail = async () => ({ version: 1, repositoryId: "repo1", viewer: "ann",
     number: pr.number, headSha: pr.headSha, fetchedAt: pr.updatedAt, threads: [], reviews: [], comments: [], checks: [], warnings: [] });
-  const runCommand: typeof reviewRun = async (_cwd, _key, action) => ({ version: 1, runs: action.kind === "status" ? [] : [{
+  let finishLaunch!: () => void;
+  const runCommand: typeof reviewRun = async (_cwd, _key, action) => {
+    if (action.kind !== "status") await new Promise<void>(resolve => { finishLaunch = resolve; });
+    return { version: 1, runs: action.kind === "status" ? [] : [{
     id: "1", state: "running", phase: "Reading", reviewerProgress: { wave: 3, planned: 4, finished: 2, sessions: [] }, baseSha: pr.baseSha, headSha: pr.headSha, source: "manual", reason: "",
     createdAt: pr.updatedAt, startedAt: pr.updatedAt, finishedAt: null, result: null,
-  }] });
+  }] }; };
   await render(load, "/project", ++renderKey, undefined, loadDetail, runCommand);
   await click(button("Refresh pull requests"));
   await click(host.querySelector<HTMLButtonElement>(".review-card")!);
   await click(button("Start review"));
   await click(button("Close details"));
+  await act(async () => finishLaunch());
   await act(async () => finish(snapshot([pr])));
   const tile = host.querySelector('section[aria-label="In review"] .review-card')!;
   expect(tile.textContent).toContain(pr.title);
@@ -257,6 +266,19 @@ test("Review controls the schedule for the base repository and displays persiste
   expect(actions.at(-1)).toEqual({ kind: "resume" });
   await click(button("Close"));
   expect(button("PR watcher · Watching").disabled).toBe(false);
+});
+
+test("an access refusal while enabling the watcher evicts the private board", async () => {
+  const watcher: typeof reviewWatcher = async (_cwd, _target, action) => {
+    if (action.kind === "enable") throw new Error("access: GitHub access was revoked.");
+    return watcherOff;
+  };
+  await render(async () => snapshot([pr]), "/project", ++renderKey, undefined, undefined, undefined, watcher);
+  expect(host.textContent).toContain(pr.title);
+  await click(button("PR watcher · Off"));
+  await click(button("Enable watcher"));
+  expect(host.textContent).toContain("GitHub access was revoked");
+  expect(host.textContent).not.toContain(pr.title);
 });
 
 test("an offline board exposes the unique local pause control without revealing cached events or enabling schedules", async () => {
@@ -324,6 +346,10 @@ test("project rule previews its scope and budgets, can be disabled, edited and d
   const backend = rulesBackend([]);
   await render(async () => snapshot([pr]), "/project", ++renderKey, undefined, undefined, undefined, watcherDisabled, backend.command);
   await click(button("Review rules"));
+  const dialog = host.querySelector<HTMLElement>('[role="dialog"]')!;
+  expect(document.activeElement).toBe(dialog);
+  dialog.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true }));
+  expect(document.activeElement).toBe(button("Close"));
   await click(button("New rule"));
   const field = (text: string) => Array.from(host.querySelectorAll("form label")).find(x => x.firstChild?.textContent === text)!.querySelector("input")!;
   const fill = (text: string, value: string) => act(async () => {
@@ -333,7 +359,15 @@ test("project rule previews its scope and budgets, can be disabled, edited and d
   });
   expect(field("Token limit (optional)").value).toBe("");
   expect(field("Token limit (optional)").required).toBe(false);
+  await fill("Rule name", "   ");
+  await click(button("Save rule"));
+  const name = field("Rule name");
+  expect(document.activeElement).toBe(name);
+  expect(name.getAttribute("aria-invalid")).toBe("true");
+  expect(document.getElementById(name.getAttribute("aria-describedby")!)?.textContent).toBe("Enter a rule name.");
+  expect(backend.actions.some(action => action.kind === "save")).toBe(false);
   await fill("Rule name", automationRule.name);
+  expect(name.hasAttribute("aria-invalid")).toBe(false);
   await click(button("Save rule"));
   expect(backend.actions.at(-1)).toMatchObject({ kind: "save", rule: { budgetTokens: null } });
   await click(button("Edit"));
@@ -402,4 +436,108 @@ test("a rules dialog pending for a previous account cannot expose that account's
   await act(async () => resolveRules({ version: 1, rules: [{ ...automationRule, name: "Previous account secret rule" }], choice: { mode: "project" }, activity: [] }));
   expect(host.querySelector('[role="dialog"]')).toBeNull();
   expect(host.textContent).not.toContain("Previous account secret rule");
+});
+
+test("project tabs restore the selected repository and last snapshot after a disconnect, and evict on denied access", async () => {
+  const key = ++renderKey;
+  let problem = "";
+  const load: typeof fetchReviewBoard = async (_cwd, _state, repo) => {
+    if (problem) throw new Error(problem);
+    return { ...snapshot([{ ...pr, title: repo === "org/upstream" ? "Upstream card" : "Fork card" }]), repo: repo ?? "org/fork", repositories: ["org/fork","org/upstream"] };
+  };
+  const show = (active: boolean) => act(async () => root.render(createElement(ReviewBoard, {
+    key, cwd: "/project", flows: [], onOpenFlow: () => {}, active, load, watcherCommand: watcherDisabled, listRepositories: async () => [],
+  })));
+  await show(true);
+  const select = host.querySelector<HTMLSelectElement>('select[aria-label="Base repository"]')!;
+  await act(async () => { select.value = "org/upstream"; select.dispatchEvent(new Event("change", {bubbles: true})); });
+  expect(host.textContent).toContain("Upstream card");
+  await show(false);
+  expect(host.textContent).not.toContain("Upstream card");
+  problem = "unavailable: The dev bridge connection closed.";
+  await show(true);
+  expect(host.textContent).toContain("Upstream card");
+  expect(host.textContent).toContain("Last available snapshot");
+  expect(host.textContent).not.toContain("Fork card");
+  problem = "access: Grant revoked";
+  await click(button("Refresh pull requests"));
+  await show(false);
+  problem = "unavailable: offline";
+  await show(true);
+  expect(host.textContent).not.toContain("Upstream card");
+});
+
+test("a missing author has a named filter and consistent reason in board and list", async () => {
+  await render(async () => snapshot([pr, {...pr, author:"", number:1002, title:"From a deleted account"}]));
+  await click(button("Filters"));
+  await click(option("Author","Unknown author"));
+  await click(button("Apply filters"));
+  expect(host.textContent).toContain("Author · Unknown author");
+  expect(host.querySelectorAll(".review-card")).toHaveLength(1);
+  expect(host.querySelector(".review-card")!.textContent).toContain("Unknown author");
+  await click(button("List"));
+  expect(host.querySelector("tbody")!.textContent).toContain("Unknown author");
+});
+
+test("marking a new addressed reply locally clears its board and list reason", async () => {
+  const card = { ...pr, reviewers: [], decision: null, addressedReplyIds: ["reply-addr-test"] };
+  const data = { version: 1 as const, viewer:"ann", repositoryId:"repo1", number:card.number,
+    fetchedAt:pr.updatedAt, headSha:pr.headSha, comments:[{id:"reply-addr-test",author:"bob",own:false,body:"@ann ready",url:"",createdAt:pr.updatedAt}], reviews:[],threads:[],checks:[],warnings:[] };
+  await render(async () => snapshot([card]), "/project", ++renderKey, undefined, async () => data, async () => ({version:1,runs:[]}));
+  expect(host.querySelector('[aria-label="Needs attention"]')!.textContent).toContain("New reply to you");
+  await click(host.querySelector<HTMLElement>(".review-card")!);
+  await click(button("Mark 1 as read"));
+  await act(async () => new Promise(resolve => setTimeout(resolve, 10)));
+  await click(button("Close details"));
+  expect(host.querySelector('[aria-label="Open"]')!.textContent).toContain(pr.title);
+  await click(button("List"));
+  expect(host.querySelector("tbody")!.textContent).not.toContain("New reply to you");
+});
+
+test("an offline return from merged history restores only the earlier open query for this viewer", async () => {
+  let offline = false;
+  await render(async (_cwd, scope) => {
+    if (offline) throw new Error("unavailable: network");
+    return snapshot(scope === "open" ? [pr] : [{ ...pr, number: 203, state:"merged", title:"Old merged history" }]);
+  });
+  await click(button("Filters"));
+  await click(option("PR state", "Open")); await click(option("PR state", "Draft")); await click(option("PR state","Merged"));
+  await click(button("Apply filters"));
+  expect(host.textContent).toContain("Old merged history");
+  offline = true;
+  await click(button("Clear filters"));
+  expect(host.textContent).toContain("Last available snapshot");
+  expect(host.textContent).toContain(pr.title);
+  expect(host.textContent).not.toContain("Old merged history");
+});
+
+test("a refreshed-away drawer remains closed even if the same PR later returns", async () => {
+  let cards = [pr];
+  await render(async () => snapshot(cards), "/project", ++renderKey, undefined, async () => ({
+    version: 1, viewer:"ann", repositoryId:"repo1", number: pr.number, headSha:pr.headSha, fetchedAt:pr.updatedAt,
+    comments:[],reviews:[],threads:[],checks:[],warnings:[],
+  }), async () => ({ version:1, runs:[] }));
+  await click(host.querySelector<HTMLElement>(".review-card")!);
+  expect(host.querySelector('[role="dialog"]')).not.toBeNull();
+  cards = [];
+  await click(button("Refresh pull requests"));
+  expect(host.querySelector('[role="dialog"]')).toBeNull();
+  cards = [pr];
+  await click(button("Refresh pull requests"));
+  expect(host.querySelector('[role="dialog"]')).toBeNull();
+});
+
+test("clearing filters preserves the independently entered search", async () => {
+  await render(async () => snapshot([pr, { ...pr, number:102, title:"Another change" }]));
+  const input = host.querySelector<HTMLInputElement>('[aria-label="Search pull requests"]')!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "colleague");
+    input.dispatchEvent(new Event("input", { bubbles:true }));
+  });
+  await click(button("Filters"));
+  await click(option("Author","lee"));
+  await click(button("Apply filters"));
+  await click(button("Clear filters"));
+  expect(input.value).toBe("colleague");
+  expect(host.querySelectorAll(".review-card")).toHaveLength(1);
 });

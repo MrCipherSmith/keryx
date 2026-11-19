@@ -12,7 +12,9 @@ test("watcher installation pins the board identity and interval", () => {
 test("offline status and pause are available while the worker and invalid targets are private", () => {
   expect(reviewWatcherArgs(null, {kind: "status"})).toEqual(["review", "watch", "status", "--json"]);
   expect(reviewWatcherArgs(null, {kind: "pause"})).toContain("pause");
-  for (const kind of ["tick", "enable", "resume"]) expect(() => reviewWatcherArgs(null, {kind})).toThrow();
+  expect(() => reviewWatcherArgs(target, {kind: "tick"})).toThrow("Unknown watcher operation");
+  expect(() => reviewWatcherArgs(null, {kind: "enable", intervalMinutes: 5})).toThrow("Select a repository");
+  expect(() => reviewWatcherArgs(null, {kind: "resume"})).toThrow("Select a repository");
   for (const intervalMinutes of [0, 1.5, 1441]) expect(() => reviewWatcherArgs(target, {kind: "enable", intervalMinutes})).toThrow();
   expect(() => reviewWatcherArgs({...target, repo: "--repo"}, {kind: "pause"})).toThrow();
 });

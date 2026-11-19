@@ -34,12 +34,22 @@ function card(number: number): ReviewCard {
     draft: false, author: "author", assignees: [], reviewers: [], decision: null, ci: "passed", baseSha: "base", headSha: "head", updatedAt: time };
 }
 
+test("read receipts preserve existing reads and independent acknowledgements from another view", async () => {
+  const { markRepliesRead, readReplies } = await import("./reviewReadState");
+  localStorage.setItem(JSON.stringify(["keryx.review.read", "me", "test-repo", 4]), JSON.stringify(["old"]));
+  markRepliesRead("me", "test-repo", 4, ["reply-a"]);
+  markRepliesRead("me", "test-repo", 4, ["reply-b"]);
+  const ids = ["old", "reply-a", "reply-b"];
+  expect(readReplies("me", "test-repo", 4, ids)).toEqual(new Set(ids));
+  expect(readReplies("someone", "test-repo", 4, ids).size).toBe(0);
+});
+
 function detail(number: number): ReviewDetailSnapshot {
   const comment = { id: "comment", body: "Comment for PR " + number, author: "author", own: false, createdAt: time, url: "https://example.com/comment" };
   return {
     version: 1, viewer: "me", repositoryId: "repo-node", number, fetchedAt: time, headSha: "head",
     comments: [comment], reviews: [], threads: [{ id: "thread", path: "file.ts", line: 3, resolved: true, outdated: false,
-      messages: [{ ...comment, id: "reply", body: "My reply", own: true, author: "me" }] }],
+      messages: [{ ...comment, id: "thread-root" }, { ...comment, id: "reply", body: "My reply", own: true, author: "me" }] }],
     checks: [{ id: "check", name: "Verify", status: "SUCCESS", url: "javascript:alert(1)" }], warnings: [],
   };
 }
@@ -58,7 +68,10 @@ test("own replies, local unread markers and GitHub resolution remain independent
   expect(document.activeElement?.getAttribute("aria-label")).toBe("Close details");
   expect(document.body.textContent).toContain("You");
   expect(document.body.textContent).toContain("Resolved");
-  await act(async () => button("Mark 1 as read").click());
+  const ownReply = [...document.querySelectorAll(".review-detail-message")].find(el => el.textContent?.includes("My reply"));
+  expect(ownReply?.textContent).toContain("Reply");
+  expect(ownReply?.textContent).not.toContain("Unread");
+  await act(async () => button("Mark 2 as read").click());
   expect(document.body.textContent).not.toContain("Unread");
   expect(document.body.textContent).toContain("Resolved");
   await act(async () => button("Checks").click());

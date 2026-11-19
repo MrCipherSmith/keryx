@@ -2,9 +2,10 @@
 import { readLinkedFlows } from "../review/pr-context";
 import { attachDeskRunBadges } from "../review/desk-run-store";
 import { parseArgs } from "node:util";
+import { attachAddressedReplies } from "../review/board-addressed-replies";
 import { listReviewCards } from "../review/board";
 import { readReviewBoardDetail } from "../review/board-detail";
-import { boardGraphql, reviewRepositories, selectRepository } from "../review/board-github";
+import { boardGh, boardGraphql, reviewRepositories, selectRepository } from "../review/board-github";
 
 export const BOARD_USAGE = "keryx review board --json [--repo owner/name] [--state open|closed|merged|all | --number N]\n  keryx review board --json --repositories";
 
@@ -32,6 +33,8 @@ export async function runReviewBoard(args: string[], cwd = process.cwd()): Promi
     ? attachDeskRunBadges(await listReviewCards(repo, repositories, state, (query, params) => boardGraphql(cwd, query, params)))
     : await readReviewBoardDetail(repo, Number(values.number), cwd);
   if ("comments" in result) result.projectContext = await readLinkedFlows(cwd, repo, result.number);
+  else await attachAddressedReplies(result, async (endpoint, timeoutMs) =>
+    JSON.parse(await boardGh(cwd, ["api", "--hostname", "github.com", endpoint], undefined, timeoutMs)));
   // The desktop hosts read through a pipe. Wait until even a large history or
   // discussion snapshot has been flushed before returning from the command.
   await new Promise<void>((resolve, reject) => {

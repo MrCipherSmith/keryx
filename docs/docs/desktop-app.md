@@ -34,8 +34,8 @@ and shows the time of the last successful read when an update fails.
 
 ### Run a review from a card
 
-Open a PR and choose **Start review** to review the base and head shown on
-that card. The Keryx review panel shows the current phase, the revision and
+Open a PR and choose **Start review** to review the base and head commits recorded when
+the card was fetched. The Keryx review panel shows the current phase, the revision and
 the reason the run stopped. You can return to the card later, cancel an
 active review or retry an interrupted one. Two windows requesting the same
 active revision share the run. Manual reviews have a 30-minute time limit and

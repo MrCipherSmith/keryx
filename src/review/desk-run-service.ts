@@ -184,7 +184,7 @@ export async function scheduleDeskReview(
 }
 
 export type DeskAction =
-  | { action: "status"; id?: string }
+  | { action: "status"; id?: string; activityId?: string }
   | { action: "start"; revision: DeskRevision }
   | { action: "cancel"; id: string };
 export async function requestDeskRun(
@@ -206,8 +206,8 @@ export async function requestDeskRun(
       dispatchNext(store, key);
       return store.history(key, input.action === "status" ? input.id : undefined);
     });
-    const detailed = input.action === "status" && input.id !== undefined;
     for (const run of snapshot.runs) {
+      const detailed = input.action === "status" && (input.id === run.id || input.activityId === run.id);
       if (detailed || (!run.reviewerProgress && (run.state === "running" || run.state === "cancelling"))) {
         const progress = readDeskReviewerProgress(store.directory(run.id), key, run, detailed);
         if (progress) run.reviewerProgress = progress;

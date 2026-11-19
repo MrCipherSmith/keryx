@@ -297,7 +297,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
   const paletteItems = useMemo<PaletteItem[]>(() => {
     const items: PaletteItem[] = [
       ...PROJECT_VIEWS.map(({ id, label, icon, shortcut }) => ({
-        id: `v-${id}`, group: basename(cwd), label, icon, hint: shortcut, run: () => go(id),
+        id: `v-${id}`, group: basename(cwd), label: `Go to ${label}`, icon, hint: shortcut, run: () => go(id),
       })),
       { id: "v-settings", group: "Go to", label: "Settings", icon: "settings", hint: `${MOD},`, run: () => go("settings") },
       {
@@ -400,14 +400,12 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
           <FlowsBoard initialOpenDir={linkedFlow} cwd={cwd} flows={flows} linkedSessions={linkedSessions} onWorkOn={(c, target) => void workOn(c, target)} />
         </div>
       ) : null}
-      {view === "review" ? (
-        <div className="view">
-          <ReviewBoard cwd={cwd} flows={flows.cards} onOpenFlow={(dir) => {
-            setLinkedFlow(dir);
-            setView("flows");
-          }} />
-        </div>
-      ) : null}
+      <div className="view" hidden={view !== "review"}>
+        <ReviewBoard active={view === "review"} cwd={cwd} flows={flows.cards} onOpenFlow={(dir) => {
+          setLinkedFlow(dir);
+          setView("flows");
+        }} />
+      </div>
       {view === "settings" ? (
         <div className="view">
           <SettingsView agentVersion={state.agentVersion} />

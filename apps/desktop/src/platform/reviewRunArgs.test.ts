@@ -10,6 +10,8 @@ test("the bridge forwards the selected PR and revision as separate arguments", (
     "review", "desk-run", "start", "--json", "--repo", "org/project", "--repository-id", "R_123",
     "--viewer", "reviewer", "--number", "42", "--base", base, "--head", head,
   ]);
+  expect(reviewRunArgs(target, { kind: "status", activityId: "attempt" }).slice(-2)).toEqual(["--activity-id", "attempt"]);
+  expect(() => reviewRunArgs(target, { kind: "status", activityId: "attempt", id: "another" })).toThrow();
   expect(reviewRunArgs(target, { kind: "cancel", id: "attempt" }).slice(-2)).toEqual(["--id", "attempt"]);
 });
 

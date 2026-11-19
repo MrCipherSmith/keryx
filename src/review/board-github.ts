@@ -61,9 +61,9 @@ function githubFailure(diagnostic: string): Error {
   return new Error("unavailable: Could not read from GitHub. Check the connection and refresh.");
 }
 
-export async function boardGh(cwd: string, args: string[], env?: NodeJS.ProcessEnv): Promise<string> {
+export async function boardGh(cwd: string, args: string[], env?: NodeJS.ProcessEnv, timeout = 18_000): Promise<string> {
   try {
-    return (await exec("gh", args, commandOptions(cwd, env))).stdout;
+    return (await exec("gh", args, { ...commandOptions(cwd, env), timeout })).stdout;
   } catch (error) {
     const failure = error as { code?: unknown; stderr?: string; stdout?: string };
     if (failure.code === "ENOENT") throw new Error("configuration: Install GitHub CLI (gh) and sign in.", { cause: error });

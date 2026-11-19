@@ -553,13 +553,18 @@ async function projectCwd(conn: Conn, cwd: string): Promise<string> {
   return conn.root;
 }
 
-async function runReviewCli(root: string, argv: string[]): Promise<unknown> {
+let reviewReaders = 0;
+async function runReviewCli(root: string, argv: string[], readOnly: boolean): Promise<unknown> {
+  if (readOnly && reviewReaders >= 8) throw new Error("unavailable: Too many Review reads are running. Retry shortly.");
+  if (readOnly) reviewReaders++;
   let stdout: string;
   try {
     ({ stdout } = await runFile(KERYX_CMD[0]!, [...KERYX_CMD.slice(1), ...argv], { cwd: root, timeout: 150_000, maxBuffer: 32 * 1024 * 1024 }));
   } catch (error) {
     const reason = (error as { stderr?: string }).stderr?.trim();
     throw new Error(reason || "unavailable: Could not run the Review reader");
+  } finally {
+    if (readOnly) reviewReaders--;
   }
   try {
     return JSON.parse(stdout);
@@ -623,19 +628,19 @@ async function handle(ws: ServerWebSocket<Conn>, cmd: string, args: Json): Promi
       } else {
         throw new Error("configuration: Select a PR state or a repository and PR number");
       }
-      return runReviewCli(root, argv);
+      return runReviewCli(root, argv, true);
     }
     case "review_rules": {
       const root = await projectCwd(ws.data, cwd);
-      return runReviewCli(root, reviewRuleArgs(args.target, args.action));
+      return runReviewCli(root, reviewRuleArgs(args.target, args.action), (args.action as Json)?.kind === "status");
     }
     case "review_watcher": {
       const root = await projectCwd(ws.data, cwd);
-      return runReviewCli(root, reviewWatcherArgs(args.target, args.action));
+      return runReviewCli(root, reviewWatcherArgs(args.target, args.action), (args.action as Json)?.kind === "status");
     }
     case "review_run": {
       const root = await projectCwd(ws.data, cwd);
-      return runReviewCli(root, reviewRunArgs(args.target, args.action));
+      return runReviewCli(root, reviewRunArgs(args.target, args.action), (args.action as Json)?.kind === "status");
     }
     case "flows_list":
       return flowsList(await projectCwd(ws.data, cwd));

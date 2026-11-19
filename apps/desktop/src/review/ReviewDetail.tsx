@@ -12,6 +12,7 @@ import { useReviewRuns, type RunObserver } from "./useReviewRuns";
 import { fetchReviewDetail } from "../platform/review";
 import type { ReviewDetailSnapshot, ReviewMessage } from "./ReviewDetailTypes";
 import type { ReviewCard } from "./types";
+import { markRepliesRead, readReplies, subscribeReviewReads } from "./reviewReadState";
 import "./ReviewDetail.css";
 
 interface Props {
@@ -29,6 +30,7 @@ interface Props {
   onRunSnapshot?: RunObserver;
   rulesCommand?: typeof reviewRules;
   onRefreshBoard?: () => void;
+  onDiscussionLoaded?: (detail: ReviewDetailSnapshot) => void;
 }
 
 function External({ url, children }: { url: string | null; children: ReactNode }) {
@@ -59,35 +61,27 @@ function Message({ item, label, read }: { item: ReviewMessage; label: string; re
   </article>;
 }
 
-function storedRead(key: string): Set<string> {
-  try {
-    const saved: unknown = JSON.parse(localStorage.getItem(key) ?? "[]");
-    return new Set(Array.isArray(saved) ? saved.filter((v): v is string => typeof v === "string") : []);
-  } catch {
-    return new Set();
-  }
-}
-
 function Discussion({ data }: { data: ReviewDetailSnapshot }) {
-  const key = JSON.stringify(["keryx.review.read", data.viewer, data.repositoryId, data.number]);
-  const [read, setRead] = useState(() => storedRead(key));
+  const messages = useMemo(() => [...data.comments, ...data.reviews, ...data.threads.flatMap(t => t.messages)], [data]);
+  const ids = useMemo(() => messages.map(item => item.id), [messages]);
+  const { viewer, repositoryId, number } = data;
+  const [read, setRead] = useState(() => readReplies(viewer, repositoryId, number, ids));
+  const [viewOnly, setViewOnly] = useState<Set<string>>(() => new Set());
   const toast = useToast();
   useEffect(() => {
-    setRead(storedRead(key));
-    const changed = (event: StorageEvent) => {
-      if (event.key === key || event.key === null) setRead(storedRead(key));
-    };
-    window.addEventListener("storage", changed);
-    return () => window.removeEventListener("storage", changed);
-  }, [key]);
-  const messages = [...data.comments, ...data.reviews, ...data.threads.flatMap(t => t.messages)];
-  const unread = messages.filter(item => !item.own && !read.has(item.id));
+    const refresh = () => setRead(readReplies(viewer, repositoryId, number, ids));
+    refresh();
+    return subscribeReviewReads(viewer, repositoryId, number, refresh);
+  }, [viewer, repositoryId, number, ids]);
+  const visibleRead = useMemo(() => new Set([...read, ...viewOnly]), [read, viewOnly]);
+  const unread = messages.filter(item => !item.own && !visibleRead.has(item.id));
   function markRead() {
-    const next = new Set([...storedRead(key), ...read, ...unread.map(item => item.id)]);
-    setRead(next);
+    const marked = unread.map(item => item.id);
     try {
-      localStorage.setItem(key, JSON.stringify([...next]));
+      markRepliesRead(viewer, repositoryId, number, marked);
+      setRead(previous => new Set([...previous, ...marked]));
     } catch {
+      setViewOnly(previous => new Set([...previous, ...marked]));
       toast({ level: "info", title: "Read status saved for this view only" });
     }
   }
@@ -100,14 +94,14 @@ function Discussion({ data }: { data: ReviewDetailSnapshot }) {
   return <>
     {unread.length > 0 && <button className="btn" onClick={markRead}>Mark {unread.length} as read</button>}
     {activity.length > 0 && <section aria-label="Conversation">{activity.map(({ item, label }) =>
-      <Message key={item.id} item={item} label={label} read={read} />)}</section>}
+      <Message key={item.id} item={item} label={label} read={visibleRead} />)}</section>}
     {data.threads.map(thread => <section key={thread.id} className="review-detail-thread">
       <header className="review-detail-meta">
         <strong className="mono">{thread.path}{thread.line !== null ? `:${thread.line}` : ""}</strong>
         <span className="badge">{thread.resolved ? "Resolved" : "Unresolved"}</span>
         {thread.outdated && <span>Outdated</span>}
       </header>
-      {thread.messages.map((item, i) => <Message key={item.id} item={item} label={i === 0 ? "Inline comment" : "Reply"} read={read} />)}
+      {thread.messages.map((item, i) => <Message key={item.id} item={item} label={i === 0 ? "Inline comment" : "Reply"} read={visibleRead} />)}
     </section>)}
     {!activity.length && !data.threads.length && <p className="review-detail-muted">{data.warnings.length ? "No discussion loaded." : "No discussion yet."}</p>}
   </>;
@@ -117,7 +111,7 @@ export function ReviewDetail(props: Props) {
   return <ReviewDetailSheet key={JSON.stringify([props.cwd, props.repo, props.repositoryId, props.viewer, props.card.number])} {...props} />;
 }
 
-function ReviewDetailSheet({ cwd, repo, repositoryId, viewer, card, flow, onOpenFlow, onClose, onAccessLost, load = fetchReviewDetail, runCommand = reviewRun, onRunSnapshot, onRefreshBoard, rulesCommand }: Props) {
+function ReviewDetailSheet({ cwd, repo, repositoryId, viewer, card, flow, onOpenFlow, onClose, onAccessLost, load = fetchReviewDetail, runCommand = reviewRun, onRunSnapshot, onRefreshBoard, rulesCommand, onDiscussionLoaded }: Props) {
   const [data, setData] = useState<ReviewDetailSnapshot | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(true);
@@ -146,6 +140,7 @@ function ReviewDetailSheet({ cwd, repo, repositoryId, viewer, card, flow, onOpen
         throw new Error("access: The GitHub account or pull request changed. Refresh the board.");
       }
       setData(detail);
+      onDiscussionLoaded?.(detail);
     }).catch(cause => {
       if (!live) return;
       const problem = errMessage(cause);
@@ -156,7 +151,7 @@ function ReviewDetailSheet({ cwd, repo, repositoryId, viewer, card, flow, onOpen
       setError(problem);
     }).finally(() => { if (live) setBusy(false); });
     return () => { live = false; };
-  }, [cwd, repo, repositoryId, viewer, card.number, card.headSha, card.updatedAt, refresh, load, onAccessLost]);
+  }, [cwd, repo, repositoryId, viewer, card.number, card.headSha, card.updatedAt, refresh, load, onAccessLost, onDiscussionLoaded]);
 
   return <Sheet label={`Pull request #${card.number}`} onClose={onClose} width={720}>
     <header className="sheet-head">
@@ -168,8 +163,8 @@ function ReviewDetailSheet({ cwd, repo, repositoryId, viewer, card, flow, onOpen
       <h2 className="sheet-title">{card.title}</h2>
       <div className="sheet-actions">
         {card.state === "open" && <button className="btn btn-primary" onClick={launch}
-          disabled={local.working || (!action.open && !!revisionChanged)}>
-          {local.working ? "Updating review…" : action.label}
+          disabled={local.working || !local.loaded || (!action.open && !!revisionChanged)}>
+          {local.working ? "Updating review…" : !local.loaded && !local.error ? "Checking review…" : action.label}
         </button>}
         <External url={card.url}>Open pull request</External>
         {flow && (onOpenFlow ? <button className="link-btn" onClick={() => onOpenFlow(flow.dir)}>Flow #{flow.id} · {flow.title}</button>
@@ -206,7 +201,7 @@ function ReviewDetailSheet({ cwd, repo, repositoryId, viewer, card, flow, onOpen
       {data && <>
         {data.warnings.map(w => <p className="inline-banner" key={w} role="status">{w}</p>)}
         <div className="review-detail-meta"><span>Read {absoluteTime(data.fetchedAt)}</span><span className="mono">{data.headSha.slice(0, 9)}</span></div>
-        {tab === "discussion" ? <Discussion data={data} /> : <>
+        {tab === "discussion" ? <Discussion key={JSON.stringify([data.viewer, data.repositoryId, data.number])} data={data} /> : <>
           {data.checks.map(check => <div key={check.id} className="review-detail-check">
             <External url={check.url}>{check.name}</External><span>{check.status.toLowerCase().replaceAll("_", " ")}</span>
           </div>)}

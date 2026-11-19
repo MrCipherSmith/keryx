@@ -6,6 +6,8 @@ export type ReviewCi = "passed" | "failed" | "pending" | "none" | "unknown";
 
 export interface ReviewCard {
   localReview?: { active: boolean; ready: boolean; progress?: Pick<DeskReviewerProgress, "wave" | "planned" | "finished"> | undefined };
+  /** GitHub message node IDs addressed to this snapshot’s viewer. */
+  addressedReplyIds?: string[];
   number: number;
   title: string;
   url: string;

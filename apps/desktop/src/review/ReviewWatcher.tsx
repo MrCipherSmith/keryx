@@ -4,7 +4,7 @@ import { Icon } from "../components/Icon";
 import { absoluteTime, errMessage } from "../lib/format";
 import { reviewWatcher, type ReviewWatcherAction, type ReviewWatcherKey, type ReviewWatcherSnapshot } from "../platform/reviewWatcher";
 
-type Props = { cwd: string; target: ReviewWatcherKey | null; command?: typeof reviewWatcher };
+type Props = { cwd: string; target: ReviewWatcherKey | null; command?: typeof reviewWatcher; onAccessLost?: ((reason: string) => void) | undefined };
 
 function watcherState(snapshot: ReviewWatcherSnapshot | null, error: string) {
   if (error) return "Status unavailable";
@@ -20,7 +20,7 @@ function Timestamp({ value }: { value: string | null }) {
   return value ? <time dateTime={value}>{absoluteTime(value)}</time> : <>Never</>;
 }
 
-export function ReviewWatcher({ cwd, target, command = reviewWatcher }: Props) {
+export function ReviewWatcher({ cwd, target, command = reviewWatcher, onAccessLost }: Props) {
   const [open, setOpen] = useState(false);
   const [snapshot, setSnapshot] = useState<ReviewWatcherSnapshot | null>(null);
   const [readError, setReadError] = useState("");
@@ -44,12 +44,17 @@ export function ReviewWatcher({ cwd, target, command = reviewWatcher }: Props) {
       if (mutation) setDraftMinutes(null);
     } catch (cause) {
       if (sequence.current !== id) return;
-      if (mutation) setActionError(errMessage(cause));
-      else { setReadError(errMessage(cause)); setSnapshot(null); }
+      const message = errMessage(cause);
+      if (/^access:/i.test(message)) {
+        setSnapshot(null);
+        setReadError(message);
+        onAccessLost?.(message);
+      } else if (mutation) setActionError(message);
+      else { setReadError(message); setSnapshot(null); }
     } finally {
       if (sequence.current === id) { pending.current = null; setWorking(false); }
     }
-  }, [command, cwd, target]);
+  }, [command, cwd, target, onAccessLost]);
 
   useEffect(() => {
     void request({ kind: "status" });

@@ -44,6 +44,28 @@ describe("readReviewBoardDetail", () => {
     expect(d.threads).toHaveLength(1);
     expect(d.warnings.join(" ")).toContain("discussion");
   });
+  test("large paginated discussions and inline replies share the Desktop response budget", async () => {
+    const normal = fixture();
+    const body = '🧪"'.repeat(12_000);
+    const pages = { comments: 0, replies: 0 };
+    const request: DetailQuery = async (query, vars) => {
+      const kind = query.includes("on PullRequestReviewThread") ? "replies"
+        : query.includes("on PullRequest { comments") ? "comments" : null;
+      if (!kind) return normal(query, vars);
+      pages[kind]++;
+      const index = Number(vars.cursor === "next" ? 0 : vars.cursor ?? 0);
+      const nodes = Array.from({ length: 50 }, (_, i) => ({ ...message(kind + (index * 50 + i)), body }));
+      return { viewer: { login: "viewer" }, node: { comments: page(nodes, index < 7 ? String(index + 1) : null) } };
+    };
+    const detail = await readReviewBoardDetail("org/repo", 1, ".", request);
+    expect(detail.comments.length).toBeGreaterThan(0);
+    expect(detail.threads[0]?.messages.length).toBeGreaterThan(1);
+    expect(detail.checks[0]?.status).toBe("FAILURE");
+    expect(detail.reviews[0]?.state).toBe("CHANGES_REQUESTED");
+    expect(detail.warnings.join(" ")).toContain("Open pull request");
+    expect(pages.comments + pages.replies).toBeLessThan(16);
+    expect(Buffer.byteLength(JSON.stringify(detail)) + 1).toBeLessThan(32 * 1024 * 1024);
+  });
   test("revoked access or a changed viewer invalidates all previously fetched detail", async () => {
     const read = fixture();
     const switched: DetailQuery = (query, vars) => query.includes("on Commit")

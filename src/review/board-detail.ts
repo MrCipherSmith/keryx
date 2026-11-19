@@ -78,33 +78,9 @@ function check(record: Fields): ReviewCheck {
   throw new Error("Unknown GitHub check type.");
 }
 
-async function readPages<T extends { id: string }>(
-  read: (cursor?: string) => Promise<unknown>, parse: (node: Fields) => T,
-  label: string, warnings: string[], firstPage?: unknown,
-): Promise<T[]> {
-  const entries = new Map<string, T>();
-  const cursors = new Set<string>();
-  let cursor: string | undefined;
-  try {
-    do {
-      const page = fields(cursor === undefined && firstPage !== undefined ? firstPage : await read(cursor));
-      for (const node of rows(page.nodes)) {
-        const entry = parse(fields(node));
-        entries.set(entry.id, entry);
-      }
-      const info = fields(page.pageInfo);
-      if (!flag(info, "hasNextPage")) break;
-      cursor = requiredText(info, "endCursor");
-      if (!cursor || cursors.has(cursor)) throw new Error("Repeated or missing GitHub cursor.");
-      cursors.add(cursor);
-    } while (cursor);
-  } catch (e) {
-    // Do not return private data if the active account has lost access.
-    if (e instanceof Error && /^(access|configuration):/.test(e.message)) throw e;
-    warnings.push(`Could not read all ${label}.`);
-  }
-  return [...entries.values()];
-}
+// Both Desktop hosts cap CLI stdout at 32 MiB. Leave room for the response envelope,
+// linked Flow excerpts and warnings. Charge complete UTF-8 JSON entries as they arrive.
+const DETAIL_ENTRY_BYTES = 30 * 1024 * 1024;
 
 export async function readReviewBoardDetail(
   repo: string, number: number, cwd: string,
@@ -126,7 +102,48 @@ export async function readReviewBoardDetail(
   const prId = requiredText(pr, "id");
   const viewer = requiredText(fields(meta.viewer), "login");
   const headSha = requiredText(pr, "headRefOid");
-  const warnings: string[] = [];
+  const warnings = new Set<string>();
+  let remainingBytes = DETAIL_ENTRY_BYTES;
+
+  async function readPages<T extends { id: string }>(
+    read: (cursor?: string) => Promise<unknown>, parse: (node: Fields) => T, label: string,
+    firstPage?: unknown, hydrate?: (entry: T, node: Fields) => Promise<void>,
+  ): Promise<T[]> {
+    const entries = new Map<string, T>();
+    const cursors = new Set<string>();
+    let cursor: string | undefined;
+    try {
+      while (remainingBytes > 0) {
+        const page = fields(cursor === undefined && firstPage !== undefined ? firstPage : await read(cursor));
+        for (const raw of rows(page.nodes)) {
+          if (remainingBytes === 0) break;
+          const node = fields(raw);
+          const entry = parse(node);
+          const previous = entries.get(entry.id);
+          const bytes = Buffer.byteLength(JSON.stringify(entry)) + 1;
+          const replacedBytes = previous ? Buffer.byteLength(JSON.stringify(previous)) + 1 : 0;
+          if (bytes - replacedBytes >= remainingBytes) {
+            remainingBytes = 0;
+            warnings.add("Showing a partial snapshot of this large PR. Choose Open pull request to see all comments and checks on GitHub.");
+            break;
+          }
+          remainingBytes -= bytes - replacedBytes;
+          entries.set(entry.id, entry);
+          if (hydrate) await hydrate(entry, node);
+        }
+        const info = fields(page.pageInfo);
+        if (!flag(info, "hasNextPage")) break;
+        cursor = requiredText(info, "endCursor");
+        if (!cursor || cursors.has(cursor)) throw new Error("Repeated or missing GitHub cursor.");
+        cursors.add(cursor);
+      }
+    } catch (e) {
+      // Do not return private data if the active account has lost access.
+      if (e instanceof Error && /^(access|configuration):/.test(e.message)) throw e;
+      warnings.add(`Could not read all ${label}.`);
+    }
+    return [...entries.values()];
+  }
 
   function fromNode(id: string, document: string, fieldName: string) {
     return async (cursor?: string): Promise<unknown> => {
@@ -139,16 +156,12 @@ export async function readReviewBoardDetail(
   }
 
   async function readThreads(): Promise<ReviewThread[]> {
-    const threads = await readPages(fromNode(prId, THREADS, "reviewThreads"), (node) => ({
+    return readPages<ReviewThread>(fromNode(prId, THREADS, "reviewThreads"), (node) => ({
       id: requiredText(node, "id"), path: requiredText(node, "path"), line: typeof node.line === "number" ? node.line : null,
-      resolved: flag(node, "isResolved"), outdated: flag(node, "isOutdated"), first: node.comments,
-    }), "review threads", warnings);
-    const result: ReviewThread[] = [];
-    for (const { first, ...thread } of threads) {
-      const messages = await readPages(fromNode(thread.id, REPLIES, "comments"), message, `replies on ${thread.path}`, warnings, first);
-      result.push({ ...thread, messages });
-    }
-    return result;
+      resolved: flag(node, "isResolved"), outdated: flag(node, "isOutdated"), messages: [],
+    }), "review threads", undefined, async (thread, node) => {
+      thread.messages = await readPages(fromNode(thread.id, REPLIES, "comments"), message, "inline replies", node.comments);
+    });
   }
 
   async function readChecks(): Promise<ReviewCheck[]> {
@@ -159,7 +172,7 @@ export async function readReviewBoardDetail(
       if (requiredText(commit, "oid") !== headSha) throw new Error("Head changed.");
       commitId = requiredText(commit, "id");
     } catch {
-      warnings.push("The commit changed or its checks are unavailable.");
+      warnings.add("The commit changed or its checks are unavailable.");
       return [];
     }
     const read = fromNode(commitId, CHECKS, "statusCheckRollup");
@@ -167,15 +180,15 @@ export async function readReviewBoardDetail(
       const rollup = await read(cursor);
       if (rollup === null) return { nodes: [], pageInfo: { hasNextPage: false } };
       return fields(rollup).contexts;
-    }, check, "checks", warnings);
+    }, check, "checks");
   }
 
   const [comments, reviews, threads, checks] = await Promise.all([
-    readPages(fromNode(prId, DISCUSSION, "comments"), message, "discussion comments", warnings),
-    readPages(fromNode(prId, REVIEWS, "reviews"), review, "submitted reviews", warnings), readThreads(), readChecks(),
+    readPages(fromNode(prId, DISCUSSION, "comments"), message, "discussion comments"),
+    readPages(fromNode(prId, REVIEWS, "reviews"), review, "submitted reviews"), readThreads(), readChecks(),
   ]);
   return {
     version: 1, viewer, repositoryId: requiredText(repository, "id"), number, fetchedAt: new Date().toISOString(), headSha,
-    comments, reviews: reviews.filter(item => item.state !== "PENDING"), threads, checks, warnings: [...new Set(warnings)],
+    comments, reviews: reviews.filter(item => item.state !== "PENDING"), threads, checks, warnings: [...warnings],
   };
 }

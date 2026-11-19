@@ -4,7 +4,7 @@ import { useEffect, useId, useRef, type ReactNode } from "react";
 import { Icon, type IconName } from "./Icon";
 
 const FOCUSABLE =
-  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), details > summary:first-of-type, [tabindex]:not([tabindex="-1"])';
 
 /** Traps Tab inside `ref`, focuses the first field (or `[data-autofocus]`), restores focus on unmount. */
 export function useFocusTrap(ref: React.RefObject<HTMLElement>, active = true, focusRoot = false) {
@@ -18,10 +18,13 @@ export function useFocusTrap(ref: React.RefObject<HTMLElement>, active = true, f
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Tab") return;
       const items = Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((el) => el.offsetParent !== null);
-      if (items.length === 0) return;
+      if (items.length === 0) {
+        e.preventDefault();
+        return;
+      }
       const first = items[0]!;
       const last = items[items.length - 1]!;
-      if (e.shiftKey && document.activeElement === first) {
+      if (e.shiftKey && (document.activeElement === root || document.activeElement === first)) {
         e.preventDefault();
         last.focus();
       } else if (!e.shiftKey && document.activeElement === last) {

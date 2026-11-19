@@ -96,6 +96,8 @@ echo '{"data":{"viewer":{"login":"viewer"},"repository":{"id":"node","pullReques
       await Bun.sleep(50);
       state = await call(project, "status");
     }
+    expect((await call(project, "status", ["--activity-id", id])).runs.map(run => run.id)).toEqual([id]);
+    await expect(call(project, "status", ["--id", id, "--activity-id", id])).rejects.toThrow("desk-run");
     expect(state.runs[0]?.state).toBe("cancelled");
     expect(state.runs[0]?.reason).toContain("cancel");
     await expect(call(project, "start", ["--base", base, "--head", "f".repeat(40)])).rejects.toThrow("stale:");

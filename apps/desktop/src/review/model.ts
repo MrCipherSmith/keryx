@@ -44,20 +44,26 @@ export function filterReviews(cards: ReviewCard[], f: Filters, query: string) {
   ));
 }
 
+function attentionReason(c: ReviewCard): string | null {
+  if (c.localReview?.ready) return "Keryx review result available";
+  if (c.decision === "CHANGES_REQUESTED") return DECISION_LABEL.CHANGES_REQUESTED;
+  if (c.reviewers.length) return "Review requested";
+  if (c.ci === "failed") return "Checks failed";
+  if (c.addressedReplyIds?.length) return "New reply to you";
+  return null;
+}
+
 export function reviewLane(c: ReviewCard): Lane {
   if (c.state !== "open") return "done";
   if (c.localReview?.active) return "review";
-  if (c.localReview?.ready || c.decision === "CHANGES_REQUESTED" || c.reviewers.length || c.ci === "failed") return "attention";
-  return "open";
+  return attentionReason(c) ? "attention" : "open";
 }
 
 export function laneReason(c: ReviewCard) {
   if (c.state !== "open") return STATE_LABEL[c.state];
   if (c.localReview?.active) return "Keryx review in progress";
-  if (c.localReview?.ready) return "Keryx review result available";
-  if (c.decision === "CHANGES_REQUESTED") return DECISION_LABEL.CHANGES_REQUESTED;
-  if (c.reviewers.length) return "Review requested";
-  if (c.ci === "failed") return "Checks failed";
+  const attention = attentionReason(c);
+  if (attention) return attention;
   if (c.decision) return DECISION_LABEL[c.decision];
   if (c.draft) return "Draft pull request";
   return c.reviewersComplete === false ? "Review requests incomplete" : "No review requested";

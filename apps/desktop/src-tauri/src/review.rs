@@ -1,8 +1,9 @@
 //! Read the versioned Review board protocol from the Keryx CLI.
 use crate::{bridge::AppState, child, locator, panels::project_dir, projects::ProjectWindows, settings};
 use serde::Deserialize;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use serde_json::Value;
-use std::{ffi::OsStr, process::Command, time::Duration};
+use std::{ffi::OsStr, path::PathBuf, process::Command, time::Duration};
 use tauri::{AppHandle, Manager, Webview};
 
 fn board_args(
@@ -35,6 +36,24 @@ fn board_args(
     Ok(args)
 }
 
+// Across webviews, keep slow reads from exhausting subprocesses and pipe threads.
+static READERS: AtomicUsize = AtomicUsize::new(0);
+const MAX_READERS: usize = 8;
+
+struct ReadPermit<'a>(&'a AtomicUsize);
+impl<'a> ReadPermit<'a> {
+    fn acquire(count: &'a AtomicUsize) -> Result<Self, String> {
+        count.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| (n < MAX_READERS).then_some(n + 1))
+            .map(|_| Self(count))
+            .map_err(|_| "unavailable: Too many Review reads are running. Retry shortly.".into())
+    }
+}
+impl Drop for ReadPermit<'_> {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::Relaxed);
+    }
+}
+
 fn run_reader(cmd: Command) -> Result<Value, String> {
     let out = child::run_bounded(cmd, Duration::from_secs(150), 32 * 1024 * 1024)
         .map_err(|e| format!("unavailable: Could not run the Review reader: {e:?}"))?;
@@ -52,6 +71,7 @@ fn run_reader(cmd: Command) -> Result<Value, String> {
 #[tauri::command]
 pub async fn review_board(
     app: AppHandle,
+    view: Webview,
     cwd: String,
     pr_state: Option<String>,
     repo: Option<String>,
@@ -59,12 +79,22 @@ pub async fn review_board(
     repositories_only: Option<bool>,
 ) -> Result<Value, String> {
     let args = board_args(pr_state.as_deref(), repo.as_deref(), number, repositories_only.unwrap_or(false))?;
-    invoke_review(app, cwd, args).await
+    invoke_review(app, view, cwd, args, true).await
 }
 
-async fn invoke_review(app: AppHandle, cwd: String, args: Vec<String>) -> Result<Value, String> {
+fn review_project(registered: Option<&str>, requested: &str) -> Result<PathBuf, String> {
+    match registered {
+        Some(cwd) if cwd == requested => project_dir(cwd),
+        _ => Err("configuration: Open this project in the current view to use Review.".into()),
+    }
+}
+
+async fn invoke_review(app: AppHandle, view: Webview, cwd: String, args: Vec<String>, read_only: bool) -> Result<Value, String> {
+    let registered = app.state::<ProjectWindows>().cwd_for(view.label());
+    let permit = read_only.then(|| ReadPermit::acquire(&READERS)).transpose()?;
     tauri::async_runtime::spawn_blocking(move || {
-        let root = project_dir(&cwd)?;
+        let _permit = permit;
+        let root = review_project(registered.as_deref(), &cwd)?;
         let state = app.state::<AppState>();
         let env = state.environment();
         let prefs = settings::load_settings(&app);
@@ -97,7 +127,7 @@ pub struct RunTarget {
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase", deny_unknown_fields)]
 pub enum RunAction {
-    Status { id: Option<String> },
+    Status { id: Option<String>, #[serde(rename = "activityId")] activity_id: Option<String> },
     Start {
         #[serde(rename = "baseSha")]
         base_sha: String,
@@ -112,7 +142,9 @@ fn run_args(target: RunTarget, action: RunAction) -> Result<Vec<String>, String>
         return Err("configuration: Invalid pull request number".into());
     }
     let (operation, extra) = match action {
-        RunAction::Status { id } => ("status", id.into_iter().map(|id| ("--id", id)).collect()),
+        RunAction::Status { id: Some(_), activity_id: Some(_) } => return Err("Choose one Review attempt scope.".into()),
+        RunAction::Status { id, activity_id } => ("status", id.into_iter().map(|id| ("--id", id))
+            .chain(activity_id.into_iter().map(|id| ("--activity-id", id))).collect()),
         RunAction::Start { base_sha, head_sha } => ("start", vec![("--base", base_sha), ("--head", head_sha)]),
         RunAction::Cancel { id } => ("cancel", vec![("--id", id)]),
     };
@@ -140,16 +172,8 @@ pub async fn review_run(
     target: RunTarget,
     action: RunAction,
 ) -> Result<Value, String> {
-    require_project_view(&app, &view, &cwd)?;
-    invoke_review(app, cwd, run_args(target, action)?).await
-}
-
-fn require_project_view(app: &AppHandle, view: &Webview, cwd: &str) -> Result<(), String> {
-    let registered = app.state::<ProjectWindows>().cwd_for(view.label());
-    if registered.as_deref() != Some(cwd) {
-        return Err("configuration: Open this project in the current view to use Review.".into());
-    }
-    Ok(())
+    let read_only = matches!(action, RunAction::Status { .. });
+    invoke_review(app, view, cwd, run_args(target, action)?, read_only).await
 }
 
 #[derive(Deserialize)]
@@ -204,8 +228,8 @@ pub async fn review_rules(
     target: WatcherTarget,
     action: Value,
 ) -> Result<Value, String> {
-    require_project_view(&app, &view, &cwd)?;
-    invoke_review(app, cwd, rule_args(target, action)?).await
+    let read_only = action["kind"] == "status";
+    invoke_review(app, view, cwd, rule_args(target, action)?, read_only).await
 }
 
 fn watcher_args(target: Option<WatcherTarget>, action: WatcherAction) -> Result<Vec<String>, String> {
@@ -236,13 +260,23 @@ pub async fn review_watcher(
     target: Option<WatcherTarget>,
     action: WatcherAction,
 ) -> Result<Value, String> {
-    require_project_view(&app, &view, &cwd)?;
-    invoke_review(app, cwd, watcher_args(target, action)?).await
+    let read_only = matches!(action, WatcherAction::Status);
+    invoke_review(app, view, cwd, watcher_args(target, action)?, read_only).await
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn review_commands_resolve_only_the_registered_project() {
+        let project = tempfile::tempdir().unwrap();
+        let other = tempfile::tempdir().unwrap();
+        let cwd = project.path().to_str().unwrap();
+        assert_eq!(review_project(Some(cwd), cwd).unwrap(), project.path());
+        assert!(review_project(Some(cwd), other.path().to_str().unwrap()).is_err());
+        assert!(review_project(None, cwd).is_err());
+    }
 
     #[cfg(unix)]
     #[test]
@@ -295,7 +329,16 @@ mod tests {
         assert!(run_args(target(), RunAction::Cancel { id: "--worker".into() }).is_err());
         let mut invalid = target();
         invalid.number = 0;
-        assert!(run_args(invalid, RunAction::Status { id: None }).is_err());
+        assert!(run_args(invalid, RunAction::Status { id: None, activity_id: None }).is_err());
+    }
+
+    #[test]
+    fn reader_capacity_is_released_after_completion() {
+        let count = AtomicUsize::new(0);
+        let mut acquired: Vec<_> = (0..MAX_READERS).map(|_| ReadPermit::acquire(&count).unwrap()).collect();
+        assert!(ReadPermit::acquire(&count).is_err());
+        acquired.pop();
+        assert!(ReadPermit::acquire(&count).is_ok());
     }
 
     #[test]

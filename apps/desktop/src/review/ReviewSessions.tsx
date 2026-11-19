@@ -62,7 +62,14 @@ function ReviewerDialog({ session, error, loading, active, onClose, onRetry }: {
   </Dialog>, document.body);
 }
 
-export function ReviewSessions({ run, loadAttempt, onAccessLost }: {
+export interface ActivitySubscription {
+  follow: (id: string) => () => void;
+  loaded: string | undefined;
+  error: string;
+}
+
+export function ReviewSessions({ run, loadAttempt, onAccessLost, activity }: {
+  activity: ActivitySubscription;
   run: DeskRun; loadAttempt: LoadReviewAttempt; onAccessLost?: (reason: string) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -73,13 +80,15 @@ export function ReviewSessions({ run, loadAttempt, onAccessLost }: {
   const [attempt, setAttempt] = useState(0);
   const active = runActive(run);
   // Historical summaries may predate the reviewer ledger. Read the exact attempt when it is expanded.
-  const fetchDetail = selected !== null || (open && !run.reviewerProgress?.sessions.length);
+  const fetchDetail = open && !selected && !run.reviewerProgress?.sessions.length;
+  // The drawer owns the single live poll. Include this attempt’s activity in its history response.
+  useEffect(() => {
+    if (selected) return activity.follow(run.id);
+  }, [activity.follow, selected, run.id, attempt]);
   useEffect(() => {
     if (!fetchDetail) return;
-    let live = true, busy = false;
+    let live = true;
     async function read() {
-      if (busy) return;
-      busy = true;
       try {
         const current = await loadAttempt(run.id);
         if (!live) return;
@@ -96,20 +105,16 @@ export function ReviewSessions({ run, loadAttempt, onAccessLost }: {
           onAccessLost?.(message);
         }
       } finally {
-        busy = false;
         if (live) setLoading(false);
       }
     }
     setLoading(true);
     void read();
-    const visibleRead = () => { if (!document.hidden) void read(); };
-    const timer = active ? window.setInterval(visibleRead, 3000) : undefined;
-    if (active) window.addEventListener("focus", visibleRead);
-    return () => { live = false; window.clearInterval(timer); window.removeEventListener("focus", visibleRead); };
-  }, [fetchDetail, selected, active, run.id, loadAttempt, onAccessLost, attempt]);
+    return () => { live = false; };
+  }, [fetchDetail, run.id, loadAttempt, onAccessLost, attempt]);
 
   const sessions = run.reviewerProgress?.sessions.length ? run.reviewerProgress.sessions : detail?.reviewerProgress?.sessions ?? [];
-  const session = detail?.reviewerProgress?.sessions.find(s => s.id === selected) ?? sessions.find(s => s.id === selected);
+  const session = sessions.find(s => s.id === selected);
   const attempts = new Map<string, number>();
   return <>
     <details className="review-sessions" onToggle={e => setOpen(e.currentTarget.open)}>
@@ -121,7 +126,7 @@ export function ReviewSessions({ run, loadAttempt, onAccessLost }: {
           attempts.set(group, ordinal);
           const retry = ordinal > 1 ? ` · Attempt ${ordinal}` : "";
           return <button key={item.id} className="review-session-row" aria-haspopup="dialog" disabled={item.state === "planned"}
-            aria-label={`Open ${item.reviewer} session, wave ${item.wave}${retry}`} onClick={() => { setError(""); setSelected(item.id); }}>
+            aria-label={`${item.state === "planned" ? "" : "Open "}${item.reviewer} session, wave ${item.wave}${retry}, ${status[item.state]}`} onClick={() => { setError(""); setSelected(item.id); }}>
             <span>{item.reviewer}{retry}</span><span className="review-wave">Wave {item.wave}</span>
             <span className="review-session-status" data-state={item.state}>{status[item.state]}</span>
             {item.state !== "planned" && <Icon name="chevronRight" size={14} />}
@@ -130,7 +135,7 @@ export function ReviewSessions({ run, loadAttempt, onAccessLost }: {
       </div> : <p className="review-detail-muted">{error ? "Reviewer details unavailable." : loading ? "Loading reviewers…" : "No reviewer sessions recorded."}</p>}
       {!selected && error && <p role="alert" className="inline-banner tone-warn">{error} <button className="btn btn-sm" onClick={() => setAttempt(n => n + 1)}>Retry</button></p>}
     </details>
-    {session && <ReviewerDialog session={session} active={active} error={error} loading={loading}
+    {session && <ReviewerDialog session={session} active={active} error={activity.error} loading={activity.loaded !== run.id}
       onClose={() => setSelected(null)} onRetry={() => setAttempt(n => n + 1)} />}
   </>;
 }

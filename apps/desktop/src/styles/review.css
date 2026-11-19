@@ -1,6 +1,8 @@
 .review-context { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2) var(--sp-3); padding: var(--sp-2) var(--sp-5); color: var(--fg-muted); font-size: var(--fs-sm); border-bottom: 1px solid var(--border); }
 .review-context strong { color: var(--fg); overflow-wrap: anywhere; }
-.review-active-filters { flex-basis: 100%; display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+.review-board .sheet-head-row .flow-id { min-width: 0; overflow-wrap: anywhere; }
+.review-active-filters { flex-basis: 100%; display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; max-height: min(8rem, 20vh); overflow: auto; }
+.review-active-filters .link-btn { order: -1; }
 .review-active-filters > span { background: var(--bg-sunken); border-radius: var(--r-sm); padding: 3px 6px; overflow-wrap: anywhere; }
 .review-loading { display: flex; align-items: center; justify-content: center; gap: var(--sp-2); padding: var(--sp-5); color: var(--fg-muted); }
 .review-lanes .lane { flex: 1 0 230px; }
@@ -17,6 +19,7 @@
 .review-table { min-width: 660px; }
 .review-table th:first-child { width: 40%; }
 .review-table th:nth-child(4) { width: 18%; }
+.review-table .review-progress-caption { min-width: 0; white-space: normal; }
 .review-list-link { border: 0; background: none; color: var(--fg); font: inherit; padding: 4px 0; text-align: left; width: 100%; white-space: normal; overflow-wrap: anywhere; }
 .review-list-link:hover { color: var(--accent-text); }
 .review-filter-hint { margin: 0 0 var(--sp-3); color: var(--fg-muted); font-size: var(--fs-sm); }
@@ -29,7 +32,7 @@
 .review-board .segmented [aria-pressed="true"] { color: var(--fg); background: var(--bg-surface); box-shadow: var(--shadow-1); }
 
 .watcher-indicator { color: var(--fg-muted); font-size: var(--fs-xs); }
-.review-watcher { display: grid; gap: var(--sp-3); }
+.review-watcher { display: grid; gap: var(--sp-3); overflow-wrap: anywhere; }
 .review-watcher p, .review-watcher dl, .watcher-history ol { margin: 0; }
 .watcher-facts { display: grid; grid-template-columns: max-content 1fr; gap: var(--sp-1) var(--sp-4); }
 .watcher-facts dt, .watcher-history time { color: var(--fg-muted); }
@@ -45,6 +48,7 @@
 .watcher-history time { font-size: var(--fs-xs); }
 
 .project-review-rules, .pr-automation, .review-rule-editor fieldset { display: grid; gap: var(--sp-3); }
+.project-review-rules { overflow-wrap: anywhere; }
 .project-review-rules p, .pr-automation p, .rule-heading h3, .automation-history h3 { margin: 0; }
 .rule-heading, .rule-actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2); }
 .rule-heading { justify-content: space-between; }

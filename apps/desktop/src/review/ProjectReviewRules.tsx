@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useRef, useState } from "react";
 import type { ReviewRule } from "../../../../src/review/review-rule-types";
 import { Icon } from "../components/Icon";
 import { Dialog, Spinner } from "../components/ui";
@@ -14,11 +14,22 @@ function RuleEditor({ initial, saving, onCancel, onSave }: {
   initial: ReviewRule; saving: boolean; onCancel: () => void; onSave: (rule: ReviewRule) => void;
 }) {
   const [draft, setDraft] = useState(initial);
+  const [nameMissing, setNameMissing] = useState(false);
+  const nameErrorId = useId();
+  const nameField = useRef<HTMLInputElement>(null);
   const set = <K extends keyof ReviewRule>(key: K, value: ReviewRule[K]) => setDraft(old => ({ ...old, [key]: value }));
-  const submit = () => onSave({ ...draft, name: draft.name.trim(), author: draft.author.trim(), assignee: draft.assignee.trim(), reviewer: draft.reviewer.trim() });
-  return <form className="review-rule-editor" onSubmit={e => { e.preventDefault(); if (draft.name.trim()) submit(); }}>
+  const requireName = () => { setNameMissing(true); nameField.current?.focus(); };
+  return <form className="review-rule-editor" onSubmit={e => {
+    e.preventDefault();
+    if (!draft.name.trim()) return requireName();
+    onSave({ ...draft, name: draft.name.trim(), author: draft.author.trim(), assignee: draft.assignee.trim(), reviewer: draft.reviewer.trim() });
+  }}>
     <fieldset disabled={saving}>
-      <label>Rule name<input className="input" required maxLength={100} value={draft.name} onChange={e => set("name", e.target.value)} /></label>
+      <label>Rule name<input ref={nameField} className="input" required maxLength={100} value={draft.name}
+        aria-invalid={nameMissing || undefined} aria-describedby={nameMissing ? nameErrorId : undefined}
+        onInvalid={e => { e.preventDefault(); requireName(); }}
+        onChange={e => { set("name", e.target.value); if (e.target.value.trim()) setNameMissing(false); }} /></label>
+      {nameMissing && <small id={nameErrorId}>Enter a rule name.</small>}
       <label>Trigger<select className="select-compact" value={draft.event} onChange={e => set("event", e.target.value as ReviewRule["event"])}>
         <option value="review_requested">Review requested or re-requested</option><option value="push">New head commit</option>
       </select></label>
@@ -36,7 +47,7 @@ function RuleEditor({ initial, saving, onCancel, onSave }: {
       </div>
       <p className="rule-preview" aria-label="Rule preview">{describeRule(draft)}</p>
       <label className="rule-check"><input type="checkbox" checked={draft.enabled} onChange={e => set("enabled", e.target.checked)} />Enable this rule</label>
-      <div className="rule-actions"><button type="submit" className="btn btn-primary" disabled={!draft.name.trim()}>Save rule</button>
+      <div className="rule-actions"><button type="submit" className="btn btn-primary">Save rule</button>
         <button type="button" className="btn" onClick={onCancel}>Cancel</button></div>
     </fieldset>
   </form>;

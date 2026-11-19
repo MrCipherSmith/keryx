@@ -6,7 +6,7 @@ import { DECISION_LABEL } from "./model";
 import type { ReviewCard } from "./types";
 import { runActive, sameRange } from "./useReviewRuns";
 import { ReviewProgress } from "./ReviewProgress";
-import { ReviewSessions, type LoadReviewAttempt } from "./ReviewSessions";
+import { ReviewSessions, type LoadReviewAttempt, type ActivitySubscription } from "./ReviewSessions";
 import { ReviewUsage } from "./ReviewUsage";
 import { runLimits } from "./ReviewRuleInfo";
 
@@ -66,8 +66,8 @@ function ReviewReport({ run, loadAttempt, onAccessLost }: { run: DeskRun } & Rep
   </details>;
 }
 
-function RunAttempt({ run, card, onCancel, working, loadAttempt, onAccessLost }: ReportProps & {
-  run: DeskRun; card: ReviewCard; working: boolean; onCancel: (id: string) => void;
+function RunAttempt({ run, card, onCancel, working, loadAttempt, onAccessLost, activity }: ReportProps & {
+  activity: ActivitySubscription; run: DeskRun; card: ReviewCard; working: boolean; onCancel: (id: string) => void;
 }) {
   const active = runActive(run);
   const result = run.result;
@@ -105,23 +105,24 @@ function RunAttempt({ run, card, onCancel, working, loadAttempt, onAccessLost }:
     {run.reason && <p className="desk-run-reason">{run.reason}</p>}
     {result?.reviewed && !sameRange(result.reviewed, run) && <p className="inline-banner tone-warn">The recorded review covers a different range from the request.</p>}
     {run.usage ? <ReviewUsage usage={run.usage} /> : !active && <p className="review-detail-muted">Token usage was not recorded.</p>}
-    {run.source !== "existing" || run.reviewerProgress ? <ReviewSessions run={run} loadAttempt={loadAttempt} onAccessLost={onAccessLost} /> : null}
+    {run.source !== "existing" || run.reviewerProgress ? <ReviewSessions run={run} activity={activity} loadAttempt={loadAttempt} onAccessLost={onAccessLost} /> : null}
     <ReviewReport run={run} loadAttempt={loadAttempt} onAccessLost={onAccessLost} />
   </article>;
 }
 
 interface Props extends ReportProps {
+  activity: ActivitySubscription;
   card: ReviewCard; runs: DeskRun[]; error: string; working: boolean; loaded: boolean;
   onCancel: (id: string) => void; onRefresh: () => void;
 }
 
-export function ReviewRuns({ card, runs, error, loaded, working, onCancel, onRefresh, loadAttempt, onAccessLost }: Props) {
+export function ReviewRuns({ activity, card, runs, error, loaded, working, onCancel, onRefresh, loadAttempt, onAccessLost }: Props) {
   return <section className="desk-runs" aria-label="Keryx review history">
     <header className="desk-run-head"><h3>Review history</h3><button className="btn btn-sm" disabled={working} onClick={onRefresh}>Refresh runs</button></header>
     <p className="review-detail-muted">GitHub review decision · {card.decision ? DECISION_LABEL[card.decision] : "No decision"}</p>
     {error && <p className="inline-banner tone-warn" role="alert">{error}</p>}
     {!loaded && !error && <Spinner label="Loading review history" />}
     {loaded && !runs.length && <p className="review-detail-muted">No Keryx reviews for this pull request yet.</p>}
-    {runs.map(run => <RunAttempt key={run.id} run={run} card={card} working={working} onCancel={onCancel} loadAttempt={loadAttempt} onAccessLost={onAccessLost} />)}
+    {runs.map(run => <RunAttempt key={run.id} activity={activity} run={run} card={card} working={working} onCancel={onCancel} loadAttempt={loadAttempt} onAccessLost={onAccessLost} />)}
   </section>;
 }

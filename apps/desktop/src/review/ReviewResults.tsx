@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import { ReviewProgress } from "./ReviewProgress";
 import { Icon } from "../components/Icon";
 import { absoluteTime, relativeTime } from "../lib/format";
@@ -15,7 +15,7 @@ function ReviewTile({ card, onOpen }: { card: ReviewCard; onOpen: (n: number) =>
       <time className="flow-time" dateTime={card.updatedAt} title={absoluteTime(card.updatedAt)}>{relativeTime(card.updatedAt)}</time>
     </span>
     <span className="flow-title">{card.title}</span>
-    <span className="flow-meta"><span className="meta-item"><Icon name="user" size={12} />{card.author}</span>
+    <span className="flow-meta"><span className="meta-item"><Icon name="user" size={12} />{card.author || "Unknown author"}</span>
       <span className={'review-ci ci-' + card.ci}>{CI_LABEL[card.ci]}</span>
     </span>
     <span className={card.localReview?.active ? "review-reason review-live-state" : "review-reason"}>{reason}</span>
@@ -38,7 +38,7 @@ function ReviewLane({ lane, cards, onOpen }: { lane: Lane; cards: ReviewCard[]; 
   </section>;
 }
 
-export function ReviewResults({ cards, view, onOpen }: { cards: ReviewCard[]; view: "board" | "list"; onOpen: (n: number) => void }) {
+export const ReviewResults = memo(function ReviewResults({ cards, view, onOpen }: { cards: ReviewCard[]; view: "board" | "list"; onOpen: (n: number) => void }) {
   const [limit, setLimit] = useState(150);
   if (view === "board") {
     const lanes: Record<Lane, ReviewCard[]> = { attention: [], review: [], open: [], done: [] };
@@ -51,9 +51,9 @@ export function ReviewResults({ cards, view, onOpen }: { cards: ReviewCard[]; vi
       <th>Pull request</th><th>Author</th><th>State</th><th>Reason</th><th>Checks</th>
     </tr></thead><tbody>{cards.slice(0, limit).map((c) => <tr key={c.number}>
       <td><button className="review-list-link" onClick={() => onOpen(c.number)}><span className="flow-id">#{c.number}</span> {c.title}</button></td>
-      <td>{c.author}</td><td>{STATE_LABEL[prState(c)]}</td><td title={laneReason(c)}><span className={c.localReview?.active ? "review-live-state" : undefined}>{laneReason(c)}</span>
+      <td>{c.author || "Unknown author"}</td><td>{STATE_LABEL[prState(c)]}</td><td title={laneReason(c)}><span className={c.localReview?.active ? "review-live-state" : undefined}>{laneReason(c)}</span>
         {c.localReview?.active && <ReviewProgress active progress={c.localReview.progress} />}</td><td><span className={'review-ci ci-' + c.ci}>{CI_LABEL[c.ci]}</span></td>
     </tr>)}</tbody></table>
     {cards.length > limit && <button className="lane-more" onClick={() => setLimit(limit + 150)}>Show more ({cards.length - limit})</button>}
   </div>;
-}
+});

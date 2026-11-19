@@ -15,6 +15,10 @@ export function reviewRunArgs(target: unknown, action: unknown): string[] {
   const fields: [string, unknown][] = [
     ["--repo", key.repo], ["--repository-id", key.repositoryId], ["--viewer", key.viewer], ["--number", String(key.number)],
   ];
+  if (op.kind === "status" && op.activityId !== undefined) {
+    if (op.id !== undefined) throw new Error("Choose one Review attempt scope.");
+    fields.push(["--activity-id", op.activityId]);
+  }
   if (op.kind === "start") fields.push(["--base", op.baseSha], ["--head", op.headSha]);
   if (op.kind === "cancel" || (op.kind === "status" && op.id !== undefined)) fields.push(["--id", op.id]);
   const args = ["review", "desk-run", op.kind, "--json"];

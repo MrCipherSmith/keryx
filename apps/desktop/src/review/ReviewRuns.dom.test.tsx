@@ -62,23 +62,49 @@ test("starts the pinned range, ignores an older read and polls through to a dist
     if (launched) return { version: 1, runs: [complete] };
     return new Promise(resolve => { old = resolve; });
   };
-  await show(command, pr);
-  await click("Start review");
-  expect(actions[1]).toEqual({ kind: "start", baseSha: "base", headSha: "head" });
-  expect(document.body.textContent).toContain("Reviewing diff");
-  await act(async () => old({ version: 1, runs: [] }));
-  expect(document.body.textContent).toContain("In progress");
-  await act(async () => { window.dispatchEvent(new Event("focus")); });
-  expect(document.body.textContent).toContain("REQUEST_CHANGES");
-  expect(document.body.textContent).toContain("GitHub review decision · Approved");
-  expect(document.body.textContent).toContain("1 blocker");
-  expect(document.querySelector(".desk-run-report summary")?.textContent).toBe("Open review report");
-  const disclosure = document.querySelector<HTMLDetailsElement>(".desk-run-report")!;
-  await act(async () => { disclosure.open = true; disclosure.dispatchEvent(new Event("toggle")); });
-  expect(disclosure.textContent).toContain("Incorrect owner on rename");
-  expect(disclosure.querySelector("script")).toBeNull();
-  await click("View review result");
-  expect(actions.filter(a => a.kind === "start")).toHaveLength(1);
+  const clock: Window = window;
+  const schedule = clock.setInterval, cancel = clock.clearInterval;
+  const activeTimers = new Map<number, () => void>();
+  let nextTimer = -1;
+  clock.setInterval = (fn, delay, ...args) => {
+    if (delay !== 3000 || typeof fn !== "function") return schedule.call(window, fn, delay, ...args);
+    const id = nextTimer--;
+    activeTimers.set(id, () => fn(...args));
+    return id;
+  };
+  clock.clearInterval = id => {
+    if (id === undefined || !activeTimers.delete(id)) cancel.call(window, id);
+  };
+  try {
+    await show(command, pr);
+    expect(btn("Checking review…").disabled).toBe(true);
+    await act(async () => old({ version: 1, runs: [] }));
+    await click("Keryx review");
+    await click("Refresh runs");
+    await click("Start review");
+    expect(actions.at(-1)).toEqual({ kind: "start", baseSha: "base", headSha: "head" });
+    expect(document.body.textContent).toContain("Reviewing diff");
+    await act(async () => old({ version: 1, runs: [] }));
+    expect(document.body.textContent).toContain("In progress");
+    expect(activeTimers.size).toBe(1);
+    const [tick] = activeTimers.values();
+    const beforeTick = actions.length;
+    await act(async () => { tick!(); });
+    expect(actions.slice(beforeTick)).toEqual([{ kind: "status" }]);
+    expect(document.body.textContent).toContain("REQUEST_CHANGES");
+    expect(document.body.textContent).toContain("GitHub review decision · Approved");
+    expect(document.body.textContent).toContain("1 blocker");
+    expect(document.querySelector(".desk-run-report summary")?.textContent).toBe("Open review report");
+    const disclosure = document.querySelector<HTMLDetailsElement>(".desk-run-report")!;
+    await act(async () => { disclosure.open = true; disclosure.dispatchEvent(new Event("toggle")); });
+    expect(disclosure.textContent).toContain("Incorrect owner on rename");
+    expect(disclosure.querySelector("script")).toBeNull();
+    await click("View review result");
+    expect(actions.filter(a => a.kind === "start")).toHaveLength(1);
+  } finally {
+    clock.setInterval = schedule;
+    clock.clearInterval = cancel;
+  }
 });
 
 test("historic result survives a push, and retry and stop target the correct attempt", async () => {
@@ -129,8 +155,15 @@ test("a stale range keeps the board refresh action through status polling; denie
   await click("Refresh runs");
   await click("Refresh board");
   expect(refreshed).toBe(1);
+  const attempt = document.querySelector(`article[aria-label="Review attempt ${complete.id}"]`)!;
+  expect(attempt.textContent).toContain("REQUEST_CHANGES");
+  const disclosure = attempt.querySelector<HTMLDetailsElement>(".desk-run-report")!;
+  await act(async () => { disclosure.open = true; disclosure.dispatchEvent(new Event("toggle")); });
+  expect(disclosure.textContent).toContain("Incorrect owner on rename");
   deny = true;
   await click("Refresh runs");
+  expect(document.body.contains(attempt)).toBe(false);
+  expect(document.querySelector("article.desk-run")).toBeNull();
   expect(denied).toBe("access: Permission revoked");
   expect(document.body.textContent).not.toContain("Incorrect owner");
 });
@@ -151,6 +184,8 @@ test("opening one deferred report loads its own attempt and leaves concurrent hi
   await act(async () => { disclosure.open = true; disclosure.dispatchEvent(new Event("toggle")); });
   expect(actions.at(-1)).toEqual({ kind: "status", id: complete.id });
   await click("Refresh runs");
+  expect(actions).toEqual([{ kind: "status" }, { kind: "status", id: complete.id }, { kind: "status" }]);
+  expect(disclosure.textContent).not.toContain("Incorrect owner on rename");
   await act(async () => finish({ version: 1, runs: [complete] }));
   expect(disclosure.textContent).toContain("Incorrect owner on rename");
   expect(actions.filter(action => action.kind === "status" && action.id)).toHaveLength(1);
@@ -167,6 +202,21 @@ test("a closed result from an earlier review scope stays readable and allows a n
   expect(document.body.textContent).toContain("Open review report");
   await click("Retry review");
   expect(requests.at(-1)).toEqual({ kind: "start", baseSha: pr.baseSha, headSha: pr.headSha });
+});
+
+test("Tab wraps after the final report disclosure and Shift+Tab returns to it", async () => {
+  await show(async () => ({ version: 1, runs: [complete] }), { ...pr, number: 105 });
+  await click("View review result");
+  const report = document.querySelector<HTMLElement>(".desk-run-report summary")!;
+  const close = document.querySelector<HTMLButtonElement>('[aria-label="Close details"]')!;
+  const tab = (shiftKey: boolean) => document.activeElement!.dispatchEvent(
+    new KeyboardEvent("keydown", { key: "Tab", shiftKey, bubbles: true, cancelable: true }),
+  );
+  close.focus();
+  expect(tab(true)).toBe(false);
+  expect(document.activeElement).toBe(report);
+  expect(tab(false)).toBe(false);
+  expect(document.activeElement).toBe(close);
 });
 
 test("a scheduled review shares the card action and identifies its rule and budget in history", async () => {
@@ -254,10 +304,12 @@ test("a reviewer session follows its own wave through completion and Escape retu
   const current = { id: "logic-2", reviewer: "review-logic", wave: 2, state: "running" as const,
     provider: "codex", model: "review-model", startedAt: time };
   let finished = false, closeSheet = 0;
+  const actions: ReviewRunAction[] = [];
   const command: typeof reviewRun = async (_cwd, _target, action) => {
+    actions.push(action);
     const recent = finished ? { ...current, state: "completed" as const, finishedAt: "2026-11-19T12:00:35Z",
       usage: { inputTokens: 0, outputTokens: 21, totalTokens: 21 } } : current;
-    const detailed = action.kind === "status" && action.id === running.id;
+    const detailed = action.kind === "status" && action.activityId === running.id;
     const session = detailed ? { ...recent, activity: [{ at: time, label: finished ? "Review saved" : "Reading file" }] } : recent;
     return { version: 1, runs: [{ ...(finished ? complete : running),
       reviewerProgress: { planned: 2, finished: finished ? 2 : 1, wave: 2, sessions: [early, session] } }] };
@@ -267,7 +319,7 @@ test("a reviewer session follows its own wave through completion and Escape retu
   expect(document.querySelector('[role="progressbar"]')?.getAttribute("aria-valuenow")).toBe("1");
   const list = document.querySelector<HTMLDetailsElement>(".review-sessions")!;
   await act(async () => list.querySelector("summary")!.click());
-  const row = list.querySelector<HTMLButtonElement>('[aria-label="Open review-logic session, wave 2"]')!;
+  const row = list.querySelector<HTMLButtonElement>('[aria-label="Open review-logic session, wave 2, In progress"]')!;
   row.focus();
   await act(async () => row.click());
   const dialog = document.querySelector<HTMLElement>(".dialog")!;
@@ -276,7 +328,9 @@ test("a reviewer session follows its own wave through completion and Escape retu
   expect(dialog.textContent).toContain("Wave 2");
   expect(dialog.textContent).toContain("Tokens unreported");
   finished = true;
+  actions.length = 0;
   await act(async () => { window.dispatchEvent(new Event("focus")); });
+  expect(actions).toEqual([{ kind: "status", activityId: running.id }]);
   expect(dialog.textContent).toContain("Review saved");
   expect(dialog.textContent).toContain("0 in");
   expect(dialog.textContent).toContain("35s");
@@ -296,16 +350,18 @@ test("a running attempt with unknown reviewer count shows indeterminate progress
 
 test("expanding a historical session recovers its recorded failure without assigning a duration or token estimate", async () => {
   const command: typeof reviewRun = async (_cwd, _target, action) => {
-    const item = action.kind === "status" && action.id === complete.id ? { ...complete,
+    const item = action.kind === "status" && (action.id === complete.id || action.activityId === complete.id) ? { ...complete,
       reviewerProgress: { planned: null, wave: 3, finished: 1, sessions: [{ id: "partial-runner", reviewer: "review-style", wave: 3,
-        state: "failed" as const, activity: [{ label: "Runner exited" }] }] } } : complete;
+        state: "failed" as const, activity: [{ label: "Runner exited" }] },
+        { id: "queued-runner", reviewer: "review-logic", wave: 4, state: "planned" as const }] } } : complete;
     return { version: 1, runs: [item] };
   };
   await show(command, { ...pr, number: 93 });
   await click("View review result");
   const details = document.querySelector<HTMLDetailsElement>(".review-sessions")!;
   await act(async () => { details.open = true; details.dispatchEvent(new Event("toggle")); });
-  const row = details.querySelector<HTMLButtonElement>('[aria-label="Open review-style session, wave 3"]')!;
+  const row = details.querySelector<HTMLButtonElement>('[aria-label="Open review-style session, wave 3, Failed"]')!;
+  expect(details.querySelector<HTMLButtonElement>('[aria-label="review-logic session, wave 4, Planned"]')?.disabled).toBe(true);
   await act(async () => row.click());
   const dialog = document.querySelector(".dialog")!;
   expect(dialog.textContent).toContain("Failed");

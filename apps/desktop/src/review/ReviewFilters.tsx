@@ -10,7 +10,7 @@ const DIMENSIONS: Record<Dimension, string> = {
 
 function roleOptions(values: string[], extra: string[], emptyLabel?: string) {
   const entries = [...new Set([...values, ...extra])].filter((v) => v !== ":none").sort((a, b) => a.localeCompare(b));
-  return Object.fromEntries([...(emptyLabel ? [[":none", emptyLabel]] : []), ...entries.map((v) => [v, v])]);
+  return Object.fromEntries([...(emptyLabel ? [[":none", emptyLabel]] : []), ...entries.map((v) => [v, v || "Unknown author"])]);
 }
 
 export function filterSummary(f: Filters): string[] {
@@ -20,7 +20,7 @@ export function filterSummary(f: Filters): string[] {
     if (dim === "state" && val.length === 2 && val.includes("open") && val.includes("draft")) continue;
     if (!val.length && dim !== "state") continue;
     const labels: Record<string, string> = dim === "state" ? STATE_LABEL : dim === "ci" ? CI_LABEL
-      : dim === "decision" ? { ...DECISION_LABEL, ":none": "No decision" } : { ":none": "None" };
+      : dim === "decision" ? { ...DECISION_LABEL, ":none": "No decision" } : dim === "author" ? { "": "Unknown author" } : { ":none": "None" };
     result.push(DIMENSIONS[dim] + " · " + (val.map((v) => labels[v] ?? v).join(", ") || "All"));
   }
   return result;
@@ -36,7 +36,7 @@ interface Props {
 export function ReviewFilters({ cards, filters, onClose, onApply }: Props) {
   const [draft, setDraft] = useState(filters);
   const options = useMemo<Record<Dimension, Record<string, string>>>(() => ({
-    author: roleOptions(cards.map((c) => c.author), filters.author),
+    author: roleOptions(cards.map(c => c.author), filters.author),
     assignee: roleOptions(cards.flatMap((c) => c.assignees), filters.assignee, "Unassigned"),
     reviewer: roleOptions(cards.flatMap((c) => c.reviewers), filters.reviewer, "No review requests"),
     decision: { ...DECISION_LABEL, ":none": "No decision" },
