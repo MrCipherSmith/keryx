@@ -7,3 +7,5 @@ The second revision exercises the scheduled review after the Desktop instance ha
 The scheduled review tracks the new revision while the desktop application is closed.
 
 This revision verifies the watcher using the orchestrator shipped in pull request 1247.
+
+This run measures input and output tokens across the review.
