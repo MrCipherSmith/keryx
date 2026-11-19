@@ -284,9 +284,17 @@ describe("parseCodexLine against the recorded success transcript", () => {
 
   test("turn.completed folds to usage then child_finished, in that order", () => {
     expect(parseCodexEvents(lines[3] as string)).toEqual([
-      { kind: "usage", inputTokens: 34063, cacheReadTokens: 11008, outputTokens: 5 },
+      { kind: "usage", inputTokens: 34063, cacheReadTokens: 11008, cacheWriteTokens: 0, outputTokens: 5 },
       { kind: "child_finished" },
     ]);
+  });
+
+  test("absent and positive cache writes preserve the provider input total", () => {
+    for (const cacheWriteTokens of [undefined, 3]) {
+      const line = JSON.stringify({ type: "turn.completed", usage: { input_tokens: 20, output_tokens: 5, cache_write_input_tokens: cacheWriteTokens } });
+      expect(parseCodexEvents(line)[0]).toEqual({ kind: "usage", inputTokens: 20, outputTokens: 5,
+        ...(cacheWriteTokens === undefined ? {} : { cacheWriteTokens }) });
+    }
   });
 
   test("parseLine keeps the TERMINAL half of turn.completed, not the usage half", () => {

@@ -2,6 +2,7 @@ import { Database } from "bun:sqlite";
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import path from "node:path";
+import { localBadge, type BadgeCard } from "./board-badges";
 import type { ReviewBoardSnapshot } from "./board-types";
 import { ensureKeryxConfigDir, keryxDataDir, readConfigFile } from "../lib/config-dir";
 import { DESK_RUN_SCOPE } from "./desk-run-types";
@@ -42,6 +43,7 @@ export class DeskRunStore {
   constructor(readonly root = deskRunRoot(), readOnly = false) {
     if (readOnly) {
       this.db = new Database(path.join(root, "runs.sqlite"), { readonly: true });
+      this.db.exec("PRAGMA busy_timeout=8000");
       return;
     }
     ensureKeryxConfigDir(root);
@@ -185,46 +187,37 @@ export class DeskRunStore {
     return { version: 1, runs };
   }
 
-  attachBadges(snapshot: ReviewBoardSnapshot) {
-    type BadgeRow = {
-      pr: number;
-      state: string;
-      base: string | null;
-      head: string | null;
-      requestedBase: string;
-      requestedHead: string;
-      planned: number | null;
-      finished: number | null;
-      wave: number | null;
-    };
-    const rows = this.db
-      .query<BadgeRow, [string, string]>(
-        `
-      SELECT pr,state,json_extract(details,'$.result.reviewed.baseSha') AS base,
-        json_extract(details,'$.result.reviewed.headSha') AS head,
-        json_extract(details,'$.baseSha') AS requestedBase, json_extract(details,'$.headSha') AS requestedHead,
-        json_extract(details,'$.reviewerProgress.planned') AS planned, json_extract(details,'$.reviewerProgress.finished') AS finished,
-        json_extract(details,'$.reviewerProgress.wave') AS wave
-      FROM runs WHERE repo=? AND viewer=? AND json_extract(details,'$.source') IN ('manual','scheduled')`,
-      )
-      .all(snapshot.repositoryId, snapshot.viewer);
-    const cards = new Map(snapshot.cards.map((card) => [card.number, card]));
-    for (const row of rows) {
-      const card = cards.get(row.pr);
-      if (!card) continue;
-      const badge = (card.localReview ??= { active: false, ready: false });
-      if (["queued", "running", "cancelling"].includes(row.state)) {
-        badge.active = true;
-        if (row.finished !== null && row.requestedBase === card.baseSha && row.requestedHead === card.headSha) {
-          badge.progress = { planned: row.planned, finished: row.finished, wave: row.wave };
-        }
+  attachBadges(snapshot: { repositoryId: string; viewer: string; cards: BadgeCard[] }) {
+    type Row = { pr: number; state: DeskRun["state"]; source: DeskRun["source"]; base: string | null;
+      head: string | null; baseSha: string; headSha: string; planned: number | null; finished: number | null; wave: number | null };
+    // Join the requested cards using the (repo,viewer,pr) index. Historical rows for other PRs or
+    // other revisions never cross the SQLite boundary. No reports or session histories are returned.
+    const query = this.db.query<Row, [string, string, string]>(`
+      SELECT DISTINCT r.pr,r.state,json_extract(r.details,'$.source') AS source,
+        json_extract(r.details,'$.result.reviewed.baseSha') AS base,json_extract(r.details,'$.result.reviewed.headSha') AS head,
+        json_extract(r.details,'$.baseSha') AS baseSha,json_extract(r.details,'$.headSha') AS headSha,
+        CASE WHEN r.state IN ('running','cancelling','queued') THEN json_extract(r.details,'$.reviewerProgress.planned') END AS planned,
+        CASE WHEN r.state IN ('running','cancelling','queued') THEN json_extract(r.details,'$.reviewerProgress.finished') END AS finished,
+        CASE WHEN r.state IN ('running','cancelling','queued') THEN json_extract(r.details,'$.reviewerProgress.wave') END AS wave
+      FROM json_each(?) wanted CROSS JOIN runs r
+      WHERE r.repo=? AND r.viewer=? AND r.pr=json_extract(wanted.value,'$.number')
+        AND source IN ('manual','scheduled') AND
+        (r.state IN ('running','cancelling','queued') OR
+          (base=json_extract(wanted.value,'$.baseSha') AND head=json_extract(wanted.value,'$.headSha')))`);
+    for (let i = 0; i < snapshot.cards.length; i += 200) {
+      const cards = snapshot.cards.slice(i, i + 200);
+      const rows = query.all(JSON.stringify(cards.map(({number, baseSha, headSha}) => ({number,baseSha,headSha}))), snapshot.repositoryId, snapshot.viewer);
+      const byPr = new Map<number, Parameters<typeof localBadge>[0][number][]>();
+      for (const row of rows) {
+        const runs = byPr.get(row.pr) ?? [];
+        if (!runs.length) byPr.set(row.pr, runs);
+        runs.push({ ...row, result: row.base && row.head ? { reviewed: { baseSha: row.base, headSha: row.head } } : null,
+          reviewerProgress: row.finished === null ? undefined : { planned: row.planned, finished: row.finished, wave: row.wave } });
       }
-      if (
-        ["completed", "partial", "budget"].includes(row.state) &&
-        row.base === card.baseSha &&
-        row.head === card.headSha
-      )
-        badge.ready = true;
+      for (const card of cards) {
+        const runs = byPr.get(card.number);
+        if (runs) card.localReview = localBadge(runs, card);
+      }
     }
   }
 
@@ -392,17 +385,14 @@ export function scheduledRunOutcomes(ids: string[], root = deskRunRoot()): {retr
   } finally { db.close(); }
 }
 
-// A project without review history can list its PRs without creating a store.
+// Reading badges must neither create a new store nor change a run or dispatch a worker.
+export function readLocalBadges(snapshot: { repositoryId: string; viewer: string; cards: BadgeCard[] }) {
+  if (!existsSync(path.join(deskRunRoot(), "runs.sqlite"))) return;
+  const store = new DeskRunStore(deskRunRoot(), true);
+  try { store.attachBadges(snapshot); } finally { store.close(); }
+}
+
 export function attachDeskRunBadges(snapshot: ReviewBoardSnapshot) {
-  if (!existsSync(path.join(deskRunRoot(), "runs.sqlite"))) return snapshot;
-  let store: DeskRunStore | undefined;
-  try {
-    store = new DeskRunStore();
-    store.attachBadges(snapshot);
-  } catch {
-    snapshot.warnings.push("Local review progress could not be read.");
-  } finally {
-    store?.close();
-  }
+  try { readLocalBadges(snapshot); } catch { snapshot.warnings.push("Local review progress could not be read."); }
   return snapshot;
 }

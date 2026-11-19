@@ -709,40 +709,30 @@ test("status: Timeout passes NON-EMPTY partial output through the same quarantin
   }
 });
 
-/**
- * Streams a keep-alive chunk every 5ms and watches its OWN `opts.signal` —
- * exactly what a real, cancellable provider does — stopping only once that
- * signal aborts. It never stops on its own otherwise, so this isolates AC6:
- * the only way this test can settle quickly is if `toolCtx.signal` (passed
- * to `tool.invoke` as a real caller would via `commands/agent.ts`) actually
- * reaches this generator's `opts.signal`.
- */
-function abortAwareProvider(): ProviderPort {
+/** The stream can finish only when the actual provider signal is aborted. */
+function abortAwareProvider(onStarted: () => void): ProviderPort {
   return {
     describe: () => ({ capabilities: PROBE_CAPABILITIES, descriptor: { providerId: "abort-aware" } }),
     async *stream(_req, opts: StreamOptions): AsyncGenerator<NormalizedEvent> {
-      let n = 0;
-      yield { kind: "text_delta", sequence: n++, attemptId: opts.attemptId, text: "streaming" };
-      while (!(opts.signal?.aborted ?? false)) {
-        await new Promise((resolve) => setTimeout(resolve, 5));
-        yield { kind: "text_delta", sequence: n++, attemptId: opts.attemptId, text: "." };
-      }
+      const signal = opts.signal;
+      if (!signal) throw new Error("expected a cancellable provider stream");
+      onStarted();
+      yield { kind: "text_delta", sequence: 0, attemptId: opts.attemptId, text: "streaming" };
+      if (!signal.aborted) await new Promise<void>(resolve => signal.addEventListener("abort", () => resolve(), { once: true }));
     },
   };
 }
 
 test("AC6 (flow 352 audit): aborting the PARENT turn's signal reaches the in-flight child", async () => {
-  // Long enough that hitting it (instead of the abort) would fail the bound
-  // below outright — without the fix, `toolCtx.signal` was never wired into
-  // the child's own signal, so `abortAwareProvider`'s loop above never sees
-  // it abort and the call would run until this deadline, not before it.
+  // Keep the child deadline beyond the test timeout to distinguish parent cancellation.
   const prev = process.env[ENV_SUBAGENT_TIMEOUT_MS];
   process.env[ENV_SUBAGENT_TIMEOUT_MS] = "60000";
+  const started = Promise.withResolvers<void>();
   try {
     const tool = createSpawnSubagentTool({
       cwd: process.cwd(),
       getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
-      makeProvider: () => abortAwareProvider(),
+      makeProvider: () => abortAwareProvider(started.resolve),
       getDetectedProviders: () => [{ name: "ollama" }],
       idSeq: (() => {
         let n = 0;
@@ -752,26 +742,14 @@ test("AC6 (flow 352 audit): aborting the PARENT turn's signal reaches the in-fli
     });
     const parentTurn = new AbortController();
     const resultPromise = tool.invoke({ task: "stream until the parent turn aborts" }, { signal: parentTurn.signal });
-    // Let the child actually start streaming before interrupting it.
-    await new Promise((resolve) => setTimeout(resolve, 30));
+    await started.promise;
     parentTurn.abort();
-
-    const race = await Promise.race([
-      resultPromise.then((result) => ({ settled: true as const, result })),
-      new Promise<{ settled: false }>((resolve) => setTimeout(() => resolve({ settled: false }), 2000)),
-    ]);
-
-    expect(race.settled).toBe(true);
-    if (race.settled) {
-      // It settled on the ABORT, not on the 60s deadline this test would
-      // otherwise have had to wait out.
-      expect(race.result.status).not.toBe("Timeout");
-    }
+    expect((await resultPromise).status).not.toBe("Timeout");
   } finally {
     if (prev === undefined) delete process.env[ENV_SUBAGENT_TIMEOUT_MS];
     else process.env[ENV_SUBAGENT_TIMEOUT_MS] = prev;
   }
-});
+}, 2_000);
 
 test("status: Denied keeps the existing isError:true behavior and gains the matching status (AC7)", async () => {
   const tool = createSpawnSubagentTool({
@@ -1299,7 +1277,9 @@ test("review dispatch telemetry links actual tool activity and usage across wave
         observeReviewProvider(port, sink, { participant: "reviewer", reviewer, ...(sessionId && { sessionId }) }, provider, model, root),
       getParentModel: () => ({ providerId: "ollama", modelId: "test" }),
       makeProvider: () => scriptedChildProvider(i => i === 1
-        ? toolCalls({ id: "1", name: "get_cwd", input: '{"private":"SECRET_ARGUMENT"}' }, { id: "2", name: "SECRET_MODEL_GENERATED_NAME" })
+        ? toolCalls({ id: "1", name: "get_cwd", input: '{"private":"SECRET_ARGUMENT"}' },
+          { id: "2", name: "SECRET_MODEL_GENERATED_NAME" }, { id: "3", name: "private_unregistered_name" },
+          { id: "4", name: "get_cwd", input: "{}" })
         : [{ kind: "text_delta", text: "SECRET_ANSWER" }, { kind: "usage_update", usage: { exact: true, inputTokens: 12, outputTokens: 3 } }, { kind: "model_end" }]).provider,
       getDetectedProviders: () => [{ name: "ollama" }],
     });
@@ -1308,12 +1288,13 @@ test("review dispatch telemetry links actual tool activity and usage across wave
       await tool.invoke({ task: "SECRET_TASK", save_result_to: `raw/review-logic-w${wave}.txt` });
       const batch = events.slice(offset);
       const activity = batch.filter(event => event.type === "reviewer_activity");
-      expect(activity.map(event => event.activity)).toEqual(["started", "tool_start", "tool_end", "tool_start", "tool_end", "finished"]);
-      expect(activity[1]).toMatchObject({ tool: "get_cwd" });
-      expect(activity[2]).toMatchObject({ tool: "get_cwd", ok: false });
-      expect(activity[3]).toMatchObject({ tool: "unknown_tool" });
-      expect(activity[4]).toMatchObject({ tool: "unknown_tool", ok: false });
-      expect(activity[5]).toMatchObject({ outcome: "completed" });
+      expect(activity).toMatchObject([
+        { activity: "started" }, { activity: "tool_start", tool: "get_cwd" },
+        { activity: "tool_end", tool: "get_cwd", ok: false }, { activity: "tool_start", tool: "unknown_tool" },
+        { activity: "tool_end", tool: "unknown_tool", ok: false }, { activity: "tool_start", tool: "unknown_tool" },
+        { activity: "tool_end", tool: "unknown_tool", ok: false }, { activity: "tool_start", tool: "get_cwd" },
+        { activity: "tool_end", tool: "get_cwd", ok: true }, { activity: "finished", outcome: "completed" },
+      ]);
       const sessionId = activity[0]!.sessionId;
       for (const event of activity) {
         expect(event).toMatchObject({ sessionId, reviewer: "review-logic", wave });
@@ -1326,6 +1307,7 @@ test("review dispatch telemetry links actual tool activity and usage across wave
     const sessions = events.filter(e => e.type === "reviewer_activity" && e.activity === "started");
     expect(new Set(sessions.map(e => "sessionId" in e && e.sessionId)).size).toBe(3);
     expect(JSON.stringify(events)).not.toContain("SECRET_");
+    expect(JSON.stringify(events)).not.toContain("private_unregistered_name");
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -1337,20 +1319,23 @@ test("review dispatch telemetry closes errors and aborted sessions without expos
   const parent = new AbortController();
   try {
     for (const cancel of [false, true]) {
+      const started = Promise.withResolvers<void>();
       const tool = createSpawnSubagentTool({
         cwd: root,
         onReviewerActivity: event => events.push(event),
         getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
         getDetectedProviders: () => [{ name: "ollama" }],
         makeProvider: () => {
-          if (cancel) {
-            setTimeout(() => parent.abort(), 10);
-            return abortAwareProvider();
-          }
+          if (cancel) return abortAwareProvider(started.resolve);
           throw new Error("PRIVATE_PROVIDER_FAILURE");
         },
       });
-      await tool.invoke({ task: "test", save_result_to: "raw/review-style.txt" }, { signal: parent.signal }).catch(() => {});
+      const result = tool.invoke({ task: "test", save_result_to: "raw/review-style.txt" }, { signal: parent.signal });
+      if (cancel) {
+        await started.promise;
+        parent.abort();
+      }
+      await result.catch(() => {});
     }
     expect(events).toMatchObject([
       { activity: "started", wave: 1 }, { activity: "finished", outcome: "failed" },

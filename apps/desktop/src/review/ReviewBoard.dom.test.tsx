@@ -558,3 +558,41 @@ test("clearing filters preserves the independently entered search", async () => 
   expect(input.value).toBe("colleague");
   expect(host.querySelectorAll(".review-card")).toHaveLength(1);
 });
+
+test("one board tick updates every active PR from scoped badges and access denial clears the board", async () => {
+  const clock: Window = window;
+  const schedule = clock.setTimeout;
+  let tick: (() => unknown) | undefined;
+  clock.setTimeout = (fn, ms, ...args) => {
+    if (ms !== 6000 || typeof fn !== "function") return schedule.call(window, fn, ms, ...args);
+    tick = () => fn(...args); return -77;
+  };
+  const live = (number: number) => ({ ...pr, number, localReview: {active:true, ready:false} });
+  const cards = [live(101), live(102), { ...pr, number: 103 }];
+  let polls = 0;
+  try {
+    await act(async () => { root.render(createElement(ReviewBoard, {
+      key: ++renderKey, cwd: "/project", flows: [], onOpenFlow() {}, load: async () => snapshot(cards),
+      watcherCommand: watcherDisabled,
+      loadBadges: async (_cwd, key, subjects) => {
+        polls++;
+        expect(key).toEqual({ repo:"org/repo", viewer:"ann", repositoryId:"repo1" });
+        if (polls > 1) throw Error("access: Repository access revoked.");
+        expect(subjects.map(c => c.number)).toEqual([101,102]);
+        return {version:1, ...key, cards:[
+          {...subjects[0]!,localReview:{active:false,ready:true}},
+          {...subjects[1]!,localReview:{active:true,ready:false,progress:{wave:2,planned:5,finished:3}}},
+        ]};
+      },
+    })); });
+    expect(typeof tick).toBe("function");
+    await act(async () => { await tick!(); });
+    expect(polls).toBe(1);
+    expect(host.querySelector('[aria-label="Needs attention"]')!.textContent).toContain("#101");
+    expect(host.querySelector('[aria-label="In review"]')!.textContent).toContain("#102");
+    expect(host.textContent).toContain("3 of 5");
+    await act(async () => { await tick!(); });
+    expect(host.textContent).toContain("Repository access revoked");
+    expect(host.textContent).not.toContain(pr.title);
+  } finally { clock.setTimeout = schedule; }
+});

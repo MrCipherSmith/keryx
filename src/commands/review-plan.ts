@@ -16,7 +16,7 @@ import { DESK_REVIEW_SHELL } from "../review/autonomous-profile";
 import { collectDesktopPlanContext, prepareDesktopDispatch } from "./review-plan-desktop";
 import { REVIEW_HOSTS } from "../review/host-profile";
 import { requiredSlices } from "../review/waves";
-import { packageReviewers, writeWaveDrivers } from "../review/wave-drivers";
+import { writeWaveDrivers } from "../review/wave-drivers";
 
 export const PLAN_FILE = "plan.json";
 export const PLAN_FLAGS = ["--target", "--ref", "--head", "--host", "--memory-query", "--unattended", "--json", "--help", "-h"] as const;
@@ -218,7 +218,8 @@ export async function runPlan(args: string[], deps: PlanDeps): Promise<void> {
   const estimate = await estimatePackage(packageDir);
   // `slice` wrote its drivers before `required` recorded the round's depth, so they were cut for the full roster. Write
   // them again now, for the roster the estimate counts: one driver per dispatch, so `review next` and plan.json agree.
-  const drivers = await writeWaveDrivers({ packageDir, manifest, sliceDir: path.dirname(manifestPath), reviewers: await packageReviewers(packageDir, manifest) });
+  const plannedRoles = estimate.perRole.map(entry => entry.role);
+  const drivers = await writeWaveDrivers({ packageDir, manifest, sliceDir: path.dirname(manifestPath), reviewers: plannedRoles });
   if (drivers.length !== estimate.dispatches) warnings.push(`${drivers.length} driver(s) written for ${estimate.dispatches} planned dispatch(es); re-run \`keryx review slice --package ${packageDir}\``);
   const confirmed = planConfirmed(packageDir, estimate);
   const byKind = slicesByKind(manifest);
@@ -239,7 +240,7 @@ export async function runPlan(args: string[], deps: PlanDeps): Promise<void> {
       line: round === undefined ? "round 1 — no round record" : renderRoundLine(round),
     },
     slices: byKind,
-    roster,
+    roster: desktopContext ? plannedRoles : roster,
     dispatches: estimate.dispatches,
     minutes: estimate.minutes,
     ...(estimate.split === undefined ? {} : { split: estimate.split }),

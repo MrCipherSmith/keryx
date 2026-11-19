@@ -17,7 +17,7 @@ import { computeVerdict, renderVerdict } from "./verdict";
 import { boardGh } from "./board-github";
 import type { ManagedReviewManifest } from "./types";
 import type { CoverageReport } from "./coverage-complete";
-import { hasDesktopReviewerEvidence, hasFullCoverage, recordedSha } from "./desk-run-executor-recovery";
+import { desktopRoutedOut, hasDesktopReviewerEvidence, hasFullCoverage, recordedSha } from "./desk-run-executor-recovery";
 import { DESK_REVIEW_PROJECT_ROOT, DESK_REVIEW_SHELL } from "./autonomous-profile";
 import { isReviewPackageDir } from "./package-location";
 export { recoverDeskExecution } from "./desk-run-executor-recovery";
@@ -194,9 +194,10 @@ async function collectResult(options: DeskExecutionOptions, checkout: string, su
       // An ingested zero-finding reviewer can have no raw result. A recorded run
       // accounts for it; a selected reviewer absent even from coverage is missing.
       const ran = new Set(entries.filter(entry => entry.status === "run").map(entry => entry.reviewer));
-      const missing = evaluated.pendingReviewers?.some(reviewer => !evaluated.pendingAmbiguous || !ran.has(reviewer));
+      const routed = desktopRoutedOut(dir);
+      const missing = evaluated.pendingReviewers?.some(reviewer => !routed.has(reviewer) && (!evaluated.pendingAmbiguous || !ran.has(reviewer)));
       const fileReport = await readJson<CoverageReport>(path.join(dir, "coverage.json"));
-      const fullyCovered = !missing && !evaluated.unreadable.length && hasFullCoverage(entries, fileReport) && hasDesktopReviewerEvidence(dir, summary.usage);
+      const fullyCovered = !missing && !evaluated.unreadable.length && hasFullCoverage(entries.filter(entry => !routed.has(entry.reviewer)), fileReport) && hasDesktopReviewerEvidence(dir, summary.usage, routed);
       coverage = matching && outcome === "complete" && fullyCovered ? "complete" : "partial";
     }
     if (evaluated.source !== "none") {

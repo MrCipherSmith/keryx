@@ -6,6 +6,7 @@ import type { ReviewAgentAdapterRequest } from "./types";
 import type { ExternalBridgeSocketServer } from "./external-transport";
 import {
   createKeryxExternalGeneralRunner,
+  createKeryxExternalProcessPort,
   type KeryxExternalChild,
   type KeryxExternalProcessPort,
 } from "../../commands/review-agents-runtime/keryx-general-runner";
@@ -96,6 +97,36 @@ test("runner cancellation waits for process-group absence and returns stop evide
   });
   await expect(running).rejects.toThrow("cancelled");
   expect(await runner.reconcile?.({ runId: "run-1", dispatchId: "general-1" })).toBe("cancelled");
+});
+
+test("forwards measured usage while the external process lives, retaining it after cancellation", async () => {
+  const { runDir, configDir } = await dirs();
+  const secondStarted = Promise.withResolvers<void>();
+  const observations: unknown[] = [];
+  const realProcess = createKeryxExternalProcessPort();
+  const fixture = [
+    `console.log('KERYX_REQUEST {"number":1}')`,
+    `console.log('KERYX_REQUEST {"number":1,"usage":{"inputTokens":5,"outputTokens":1,"cost":{"amount":0.01,"currency":"USD"}}}')`,
+    `console.log('KERYX_REQUEST {"number":2}')`,
+    "setTimeout(() => process.exit(42), 2000)",
+  ].join("\n");
+  const runner = await createKeryxExternalGeneralRunner({
+    runDir, configDir, bridgeServer: server, provider: "fixture", model: "test", compileInstructions: () => "trusted fixture",
+    launcher: { available: true, platform: "darwin", path: "/usr/bin/sandbox-exec" },
+    processPort: { spawn: options => realProcess.spawn({ ...options, argv: [process.execPath, "-e", fixture] }) },
+  });
+  const running = runner.execute({ ...input(), observeRequest(number, usage) {
+    observations.push([number, usage]);
+    if (number === 2) secondStarted.resolve();
+  } });
+  try {
+    await Promise.race([secondStarted.promise, running.then(() => { throw new Error("worker exited early"); })]);
+  } finally {
+    await runner.cancel?.({ runId: "run-1", dispatchId: "general-1", reason: "fixture stop" });
+  }
+  await expect(running).rejects.toThrow("cancelled");
+  expect(observations).toEqual([[1, undefined], [1, { inputTokens: 5, outputTokens: 1, totalTokens: 6,
+    cost: { amount: 0.01, currency: "USD" } }], [2, undefined]]);
 });
 
 test("runner refuses a read-only capability when no OS launcher is available", async () => {

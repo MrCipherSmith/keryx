@@ -632,6 +632,7 @@ describe("AC7 — every run is a keryx session", () => {
       expect(persisted["usage"]).toEqual({ used: 50, size: 2000 });
       // Raw, never converted, never folded into the USD `costUnits`.
       expect(persisted["cost"]).toEqual({ amount: 3, currency: "EUR" });
+      expect(outcome.usage?.cost).toEqual({ amount: 3, currency: "EUR" });
       expect(outcome.costUnits).toBeUndefined();
       expect(persisted["mode"]).toEqual({ requested: "trust", effective: "ask", clamped: true });
       const fs = persisted["fsRequests"] as Array<Record<string, unknown>>;
@@ -654,6 +655,7 @@ describe("AC7 — every run is a keryx session", () => {
       const outcome = await run(s);
       expect(outcome.acp?.cost).toBe("missing");
       expect(outcome.acp?.usage).toBe("missing");
+      expect(outcome.usage).toBeUndefined();
       expect(outcome.costUnits).toBeUndefined();
       const persisted = JSON.parse(
         readFileSync(path.join(findSessionDir(outcome.acp?.sessionId ?? ""), ACP_RUN_RECORD_FILE), "utf8"),

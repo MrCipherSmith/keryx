@@ -42,3 +42,12 @@ test("a changed GitHub viewer cannot attach another account's reply signals", as
     path.includes("notifications?") ? [notice] : [comment(1, "@lee")]) as T)).rejects.toThrow("access:");
   expect(result.cards[0]!.addressedReplyIds).toBeUndefined();
 });
+
+test("a first paged result carries addressed replies for later PRs without scanning notifications per page", async () => {
+  const result = board();
+  const n = result.cards[0]!.number;
+  result.cards[0]!.number = n+5;
+  await attachAddressedReplies(result, async <T>(path: string) => (path === "user" ? {login:"lee"} :
+    path.includes("notifications?") ? [notice] : path.includes("/issues/") ? [comment(3,"@lee")] : []) as T, true);
+  expect(result.replyHints).toEqual([{number:n,ids:["C3"]}]);
+});

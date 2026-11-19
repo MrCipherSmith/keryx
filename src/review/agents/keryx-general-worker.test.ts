@@ -45,6 +45,23 @@ test("dedicated worker exposes only scoped bridge tools and consolidates a soldi
   expect(scripted.requests[0]?.tools?.some((tool) => ["shell_exec", "spawn_subagent", "use_tool", "review_agents_start"].includes(tool.name))).toBe(false);
 });
 
+test("worker reports each provider request before a later request fails", async () => {
+  const receipt = { inputTokens: 36, outputTokens: 4, cost: { amount: 0.012, currency: "USD" } };
+  const scripted = scriptedProvider([
+    [...callRound("read", "review_agents_bridge_status", '{"dispatchId":"child"}').slice(0, -1),
+      { kind: "usage_update", usage: receipt }, { kind: "model_end" }],
+    [{ kind: "provider_error", error: { kind: "authentication", retryable: false, message: "fixture denied" } }],
+  ]);
+  const signal = new AbortController().signal;
+  const observations: unknown[] = [];
+  await expect(runKeryxExternalWorker({
+    request: request(signal), provider: scripted.provider, providerId: "scripted", modelId: "test", signal,
+    bridge: { invoke: async () => ({ ok: true, value: {} }) },
+    observeRequest: (number, usage) => observations.push([number, usage]),
+  })).rejects.toThrow("provider attempt did not complete cleanly");
+  expect(observations).toEqual([[1, undefined], [1, { ...receipt, totalTokens: 40 }], [2, undefined]]);
+});
+
 test("bridge spawn schema rejects host-only reserve selection and nested coordinators", () => {
   const tools = createKeryxExternalBridgeTools({ invoke: async () => ({ ok: true, value: {} }) });
   const schema = tools.find((tool) => tool.definition.name === "review_agents_bridge_spawn")?.definition.inputSchema as {

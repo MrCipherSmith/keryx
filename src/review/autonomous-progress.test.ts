@@ -136,9 +136,9 @@ test("attributes parallel provider requests, leaves an unreported retry partial 
   const state = events.reduce(foldEvent, emptyProgress());
   expect(state.tokens).toBe(130);
   expect(state.usage).toEqual({
-    total: { inputTokens: 120, outputTokens: 10, totalTokens: 130, cacheReadTokens: 90, cacheWriteTokens: 5 },
+    total: { inputTokens: 120, outputTokens: 10, totalTokens: 130, cacheReadTokens: 90, cacheWriteTokens: 5, reportedCosts: [childUsage.cost] },
     coordinator: rootUsage,
-    reviewers: [{ partial: true, inputTokens: 20, outputTokens: 0, cacheWriteTokens: 5, totalTokens: 20, reviewer: "review-logic", provider: "openrouter", model: "review-model" }],
+    reviewers: [{ partial: true, inputTokens: 20, outputTokens: 0, cacheWriteTokens: 5, totalTokens: 20, reportedCosts: [childUsage.cost], reviewer: "review-logic", provider: "openrouter", model: "review-model" }],
     partial: true,
   });
 });
@@ -156,5 +156,6 @@ test("adds confirmed charges once, preserves a reported zero and withholds sums 
   expect(complete?.partial).toBe(false);
   const mixed = [free, receipt("b", "review-logic", 2, "EUR")].reduce(foldEvent, emptyProgress()).usage;
   expect(mixed?.total.cost).toBeUndefined();
+  expect(mixed?.total.reportedCosts).toEqual([{ amount: 0, currency: "USD" }, { amount: 2, currency: "EUR" }]);
   expect(mixed?.reviewers[1]?.cost).toEqual({ amount: 2, currency: "EUR" });
 });

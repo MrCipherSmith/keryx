@@ -9,6 +9,8 @@ export interface ReviewUsageCounts {
   cacheWriteTokens?: number;
   cost?: ReviewMoney;
   estimatedCost?: ReviewMoney;
+  /** Known charges by currency when the complete cost cannot be totaled. */
+  reportedCosts?: ReviewMoney[];
 }
 export interface ReviewerUsage extends ReviewUsageCounts {
   reviewer: string;
@@ -25,8 +27,9 @@ export interface ReviewRunUsage {
 }
 
 const tokenFields = ["inputTokens", "outputTokens", "totalTokens", "cacheReadTokens", "cacheWriteTokens"] as const;
-function saneMoney(value?: ReviewMoney): value is ReviewMoney {
-  return !!value && Number.isFinite(value.amount) && value.amount >= 0 && /^[A-Z]{3}$/.test(value.currency);
+function saneMoney(value: unknown): value is ReviewMoney {
+  return record(value) && typeof value.amount === "number" && Number.isFinite(value.amount) && value.amount >= 0 &&
+    typeof value.currency === "string" && /^[A-Z]{3}$/.test(value.currency);
 }
 export function usageCounts(raw: ReviewUsageCounts): ReviewUsageCounts {
   const counts: ReviewUsageCounts = {};
@@ -37,7 +40,14 @@ export function usageCounts(raw: ReviewUsageCounts): ReviewUsageCounts {
   if (counts.totalTokens === undefined && (counts.inputTokens !== undefined || counts.outputTokens !== undefined)) {
     counts.totalTokens = (counts.inputTokens ?? 0) + (counts.outputTokens ?? 0);
   }
-  for (const key of ["cost", "estimatedCost"] as const) if (saneMoney(raw[key])) counts[key] = raw[key];
+  for (const key of ["cost", "estimatedCost"] as const) {
+    const charge = raw[key];
+    if (saneMoney(charge)) counts[key] = { amount: charge.amount, currency: charge.currency };
+  }
+  if (!counts.cost && Array.isArray(raw.reportedCosts)) {
+    const charges = raw.reportedCosts.filter(saneMoney).map(({ amount, currency }) => ({ amount, currency }));
+    if (charges.length) counts.reportedCosts = charges;
+  }
   return counts;
 }
 export function sumCounts(a: ReviewUsageCounts | undefined, b: ReviewUsageCounts): ReviewUsageCounts {
@@ -49,6 +59,15 @@ export function sumCounts(a: ReviewUsageCounts | undefined, b: ReviewUsageCounts
   for (const key of ["cost", "estimatedCost"] as const) {
     const l = a[key], r = b[key];
     if (l && r && l.currency === r.currency) sum[key] = { amount: l.amount + r.amount, currency: l.currency };
+  }
+  if (!sum.cost && (a.cost || b.cost || a.reportedCosts || b.reportedCosts)) {
+    const subtotals = new Map<string, number>();
+    for (const counts of [a, b]) {
+      for (const charge of counts.cost ? [counts.cost] : counts.reportedCosts ?? []) {
+        subtotals.set(charge.currency, (subtotals.get(charge.currency) ?? 0) + charge.amount);
+      }
+    }
+    if (subtotals.size) sum.reportedCosts = Array.from(subtotals, ([currency, amount]) => ({ amount, currency }));
   }
   return sum;
 }
@@ -75,9 +94,9 @@ function record(v: unknown): v is Record<string, unknown> { return !!v && typeof
 
 export function validUsageCounts(v: unknown): v is ReviewUsageCounts {
   if (!record(v)) return false;
+  if (v.reportedCosts !== undefined && !(Array.isArray(v.reportedCosts) && v.reportedCosts.every(saneMoney))) return false;
   return tokenFields.every(key => v[key] === undefined || (typeof v[key] === "number" && Number.isSafeInteger(v[key]) && v[key] >= 0)) &&
-    ["cost", "estimatedCost"].every(key => v[key] === undefined || (record(v[key]) && typeof v[key].currency === "string"
-      && typeof v[key].amount === "number" && saneMoney({ amount: v[key].amount, currency: v[key].currency })));
+    ["cost", "estimatedCost"].every(key => v[key] === undefined || saneMoney(v[key]));
 }
 
 export function validRunUsage(value: unknown): value is ReviewRunUsage {

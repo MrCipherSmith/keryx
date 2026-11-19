@@ -336,3 +336,23 @@ test("a Desktop wave needs both its real result and the host's reviewer receipt"
   writeFileSync(raw, 'reviewer was routed out; no result was dispatched');
   expect(hasDesktopReviewerEvidence(pkg, participation)).toBe(false);
 });
+
+test("Desktop exempts only the zero-wave roles verified by the original slice routing", () => {
+  const pkg = path.join(root, "package"), role = "review-logic", excluded = "review-style";
+  mkdirSync(path.join(pkg, "raw"), { recursive: true });
+  mkdirSync(path.join(pkg, "slices"));
+  const target = "raw/review-logic-w1.txt";
+  const queue = { calls: [{ label: role, save_result_to: target }], routedOut: [excluded] };
+  writeFileSync(path.join(pkg, "plan.json"), JSON.stringify({ roster: [role, excluded], dispatches: 1, desktopDispatch: "desktop-dispatch.json" }));
+  writeFileSync(path.join(pkg, "desktop-dispatch.json"), JSON.stringify(queue));
+  const manifest = { schemaVersion: 1, maxBytes: 100, waveBytes: 100, slices: [{ id: "slice-01", bytes: 10, files: ["src.ts"], roles: [role], depth: "light" }] };
+  const manifestFile = path.join(pkg, "slices/manifest.json");
+  writeFileSync(manifestFile, JSON.stringify(manifest));
+  const usage = { total: {}, coordinator: {}, reviewers: [{ reviewer: role, partial: true as const }], partial: true };
+  expect(hasDesktopReviewerEvidence(pkg, usage)).toBe(false);
+  writeFileSync(path.join(pkg, target), 'STATUS: DONE\nREVIEW_RESULT:\n' + JSON.stringify({ reviewer: role, status: "DONE", findings: [] }));
+  expect(hasDesktopReviewerEvidence(pkg, usage)).toBe(true);
+  manifest.slices[0]!.roles.push(excluded);
+  writeFileSync(manifestFile, JSON.stringify(manifest));
+  expect(hasDesktopReviewerEvidence(pkg, usage)).toBe(false);
+});

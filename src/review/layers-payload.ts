@@ -54,7 +54,7 @@ export interface LayersBlock {
   symbols: LayersBlockSymbol[];
   relatedTests: string[];
   wiki: Array<{ page: string; title: string }>;
-  memory: Array<{ path: string; title: string; status: string; module: string }>;
+  memory: Array<{ path: string; type: string; title: string; status: string; module: string }>;
   truncated: LayersBlockTruncation[];
   unavailable: LayersBlockUnavailable[];
 }
@@ -204,7 +204,7 @@ function modulesOf(file: string): string[] {
 async function memoryFor(
   projectRoot: string,
   files: readonly string[],
-): Promise<Read<{ path: string; title: string; status: string; module: string }>> {
+): Promise<Read<{ path: string; type: string; title: string; status: string; module: string }>> {
   let entries;
   try {
     entries = await collectEntries(projectRoot);
@@ -213,13 +213,13 @@ async function memoryFor(
   }
   const modules = new Set(files.flatMap(modulesOf));
   const wanted = new Set(files);
-  const out: Array<{ path: string; title: string; status: string; module: string }> = [];
+  const out: Array<{ path: string; type: string; title: string; status: string; module: string }> = [];
   for (const entry of entries) {
     if (entry.status === "deprecated" || entry.status === "superseded") continue;
     const module = entry.scopes.module?.toLowerCase() ?? null;
     const byModule = module !== null && modules.has(module);
     const byFile = entry.scopes.files.some((file) => wanted.has(normalizePath(file)));
-    if (byModule || byFile) out.push({ path: entry.relativePath, title: entry.title, status: entry.status, module: module ?? "" });
+    if (byModule || byFile) out.push({ path: entry.relativePath, type: entry.type, title: entry.title, status: entry.status, module: module ?? "" });
   }
   return { items: out.sort((a, b) => a.path.localeCompare(b.path)), unavailable: null };
 }

@@ -196,3 +196,21 @@ test("board reads compact progress for this account's active range", () => {
   expect(changed.cards[0]?.localReview?.progress).toBeUndefined();
   expect(colleague.cards[0]?.localReview).toBeUndefined();
 });
+
+test("a multi-chunk scoped badge query agrees with history on ready, stale and queued revisions", async () => {
+  const { localBadge } = await import("./board-badges");
+  const attempt = started();
+  store.end(attempt, finish);
+  store.request("/fixture", key, next);
+  const timeline = store.history(key).runs;
+  const rows: import("./board-badges").BadgeCard[] = Array.from({length:202}, (_, i) => ({ number:i+100, ...revision }));
+  rows.push({number:key.number, ...revision});
+  store.attachBadges({ ...key, cards:rows });
+  expect(rows.at(-1)?.localReview).toEqual(localBadge(timeline, revision));
+  expect(rows.at(-1)?.localReview).toEqual({active:true,ready:true});
+  expect(rows.slice(0,202).every(c => c.localReview === undefined)).toBe(true);
+  const changed = [{number:key.number, ...next}] as import("./board-badges").BadgeCard[];
+  store.attachBadges({ ...key, cards:changed });
+  expect(changed[0]?.localReview).toEqual(localBadge(timeline, next));
+  expect(changed[0]?.localReview).toEqual({active:true,ready:false});
+});

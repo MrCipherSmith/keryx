@@ -240,7 +240,7 @@ test("review history shows measured tokens for each reviewer, the orchestrator a
       { reviewer: "review-logic", provider: "codex", model: "test-model", inputTokens: 1200, outputTokens: 34, totalTokens: 1234, cacheReadTokens: 600, cost: { amount: 0.005, currency: "USD" } },
       { reviewer: "review-style", inputTokens: 15, estimatedCost: { amount: 0.001, currency: "USD" } },
     ],
-    total: { inputTokens: 1215, outputTokens: 34, totalTokens: 1249, cost: { amount: 0.005, currency: "USD" } },
+    total: { inputTokens: 1215, outputTokens: 34, totalTokens: 1249, reportedCosts: [{ amount: 0.005, currency: "USD" }] },
     partial: true,
   };
   await show(async () => ({ version: 1, runs: [{ ...complete, usage }] }), { ...pr, number: 81 });
@@ -265,6 +265,7 @@ test("review history shows measured tokens for each reviewer, the orchestrator a
   expect(table.textContent).toContain("Estimated cost");
   expect(cells("review-style").textContent).toContain(`${(0.001).toLocaleString()} USD`);
   expect(cells("review-style").cells[2]!.getAttribute("aria-label")).toBe("Unreported");
+  expect(cells("Total").textContent).toContain(`Reported subtotal · ${(0.005).toLocaleString()} USD`);
   expect(cells("Total").cells[1]!.textContent).toBe((1215).toLocaleString());
   expect(document.body.textContent).toContain("Partial usage");
   summary.click();

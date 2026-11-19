@@ -356,15 +356,19 @@ test("AC4: agent \"claude\" is refused by agents[\"claude-cli\"].enabled=false, 
 
 
 test("external review records a single runtime receipt and identifies an unreported dispatch", async () => {
-  const usage = { inputTokens: 10, outputTokens: 2, cost: { amount: 0.03, currency: "USD" } };
-  for (const measurement of [usage, undefined]) {
+  const tokens = { inputTokens: 10, outputTokens: 2 };
+  for (const [agent, measurement] of [
+    ["codex-cli", tokens],
+    ["claude-cli", { ...tokens, cost: { amount: 0.03, currency: "USD" } }],
+    ["codex-cli", undefined],
+  ] as const) {
     const receipts: unknown[] = [];
     const tool = makeTool(async () => ({ ...EXTERNAL_RESULT, ...(measurement ? { usage: measurement } : {}) }), undefined,
       (reviewer, provider) => {
         receipts.push({ reviewer, provider });
         return receipt => receipts.push(receipt);
       });
-    await tool.invoke({ task: "review", label: "review-logic", runtime: { kind: "external", agent: "codex-cli", sandbox: "read-only" } });
-    expect(receipts).toEqual([{ reviewer: "review-logic", provider: "codex-cli" }, measurement]);
+    await tool.invoke({ task: "review", label: "review-logic", runtime: { kind: "external", agent, sandbox: "read-only" } });
+    expect(receipts).toEqual([{ reviewer: "review-logic", provider: agent }, measurement]);
   }
 });

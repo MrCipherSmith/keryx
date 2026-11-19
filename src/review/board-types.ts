@@ -36,6 +36,12 @@ export interface ReviewBoardSnapshot {
   repositoryId: string;
   viewer: string;
   fetchedAt: string;
+  /** Present only for paged Desktop reads. null identifies the last page. */
+  nextCursor?: string | null;
+  /** JSON of one exceptional card split over transport frames, indexed from zero. */
+  cardPart?: { digest: string; index: number; last: boolean; text: string; localReview?: ReviewCard["localReview"]; addressedReplyIds?: string[] };
+  /** First transport page only: viewer-scoped reply IDs for PRs on subsequent pages. */
+  replyHints?: { number: number; ids: string[] }[];
   cards: ReviewCard[];
   /** Missing pages or fields. A successful empty list has no warnings. */
   warnings: string[];

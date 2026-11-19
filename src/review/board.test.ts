@@ -184,3 +184,32 @@ test("a scheduled run rechecks the current revision, CI, assignee and paginated 
     ),
   ).rejects.toThrow("access:");
 });
+
+test("Desktop continuation reads only one GitHub page and honors its supplied cursor", async () => {
+  const vars: unknown[] = [];
+  const pages = [page([card(1)], more), page([card(2)], end)];
+  const read = async <T>(_query: string, variables: Record<string, string | number>) => { vars.push(variables); return pages.shift() as T; };
+  const a = await listReviewCards(repo, [repo], "open", read, false, { cursor: null });
+  expect(a.cards.map(c => c.number)).toEqual([1]);
+  expect(a.nextCursor).toBe("next");
+  const b = await listReviewCards(repo, [repo], "open", read, false, { cursor: a.nextCursor! });
+  expect(b.nextCursor).toBeNull();
+  expect(vars).toEqual([{owner:"org",name:"base"}, {owner:"org",name:"base",cursor:"next"}]);
+});
+
+test("a badge batch verifies every PR in one identity-scoped read before consulting local state", async () => {
+  const { readBoardBadges } = await import("./board-badge-read");
+  const key = {repo, viewer: "me", repositoryId: "R"};
+  const requested = [1,2].map(number => ({number, baseSha:"a".repeat(40), headSha:"b".repeat(40)}));
+  let queries = 0, lookups = 0;
+  const accepted = { viewer:{login:"me"}, repository:{id:"R",p1:{number:1},p2:{number:2}} };
+  const result = await readBoardBadges("/fixture", key, requested, () => lookups++, async <T>(query: string) => {
+    queries++; expect(query).toContain("p1:pullRequest(number:1)"); expect(query).toContain("p2:pullRequest(number:2)");
+    return accepted as T;
+  });
+  expect(result.cards).toEqual(requested); expect(queries).toBe(1); expect(lookups).toBe(1);
+  for (const denied of [{...accepted,viewer:{login:"other"}}, {...accepted,repository:null}, {...accepted,repository:{id:"R",p1:{number:1},p2:null}}]) {
+    await expect(readBoardBadges("/fixture", key, requested, () => lookups++, queryFrom([denied]))).rejects.toThrow("access:");
+  }
+  expect(lookups).toBe(1);
+});

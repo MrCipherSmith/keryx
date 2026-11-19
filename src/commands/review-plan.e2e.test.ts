@@ -108,6 +108,8 @@ describe("plan → ingest with an unplaceable quote → fix commit → plan", ()
     const second = await plan();
     expect(second.package).not.toBe(first.package);
     expect(second.round).toMatchObject({ number: 2, mode: "delta", previous: firstId });
+    const prior = JSON.parse(await readFile(path.join(second.package, "prior_findings.json"), "utf8")) as Array<{ id: string; finding: unknown }>;
+    expect(prior.find(entry => entry.id === "F-1")?.finding).toEqual(byId["F-1"]);
     expect(second.round.fixHunks).toBeGreaterThan(0);
     expect(second.slices.fix.length).toBeGreaterThan(0);
     const fix = second.slices.fix.find((slice) => slice.findingIds?.includes("F-1"));

@@ -7,6 +7,7 @@ import { packageHasBlastRadius, packageHasPrContext, packageRoundDepth, packageS
 import { installedRosterRoles } from "./roster";
 import { packageEnabledRoles } from "./role-switches";
 import type { SliceManifest } from "./slice";
+import { projectReviewersRoot } from "../gdskills/project-reviewers";
 import { roleDispatchWaves } from "./estimate";
 
 /** Flow 458 AC12: the reviewers of a package and the per-wave driver files `review slice --package` writes for them. */
@@ -59,12 +60,14 @@ export async function writeWaveDrivers(input: { packageDir: string; manifest: Sl
     try { kept.set(name, JSON.parse(await readFile(path.join(dir, name), "utf8")) as DriverFile); } catch { /* an unreadable stale driver is replaced */ }
     await rm(path.join(dir, name), { force: true });
   }
+  const projectDefinitions = path.relative(root, projectReviewersRoot(root)).split(path.sep).join("/");
   const written: string[] = [];
   for (const reviewer of [...input.reviewers].sort()) {
     // The estimate's own count (one kind per dispatch; a role that runs without slices gets one empty wave; a routed-out
     // role none), so plan.json's dispatches equal the drivers written here.
     const waves = roleDispatchWaves(manifest, reviewer);
-    const definition = DEFINITION_CANDIDATES(reviewer).find((candidate) => existsSync(path.resolve(root, candidate)));
+    const definition = [path.posix.join(projectDefinitions, reviewer, "SKILL.md"), ...DEFINITION_CANDIDATES(reviewer)]
+      .find(candidate => existsSync(path.resolve(root, candidate)));
     for (const [at, wave] of waves.entries()) {
       const number = at + 1;
       const name = `${reviewer}-w${number}.json`;

@@ -123,6 +123,7 @@ export interface ReviewAgentAdapterUsage {
   readonly toolCalls?: number;
   readonly activeMs?: number;
   readonly cost?: { readonly amount: number; readonly currency: string };
+  readonly reportedCosts?: { amount: number; currency: string }[];
 }
 
 export interface ReviewAgentAdapterResult {
@@ -138,7 +139,11 @@ export interface ReviewAgentTerminalResult {
   readonly error?: string;
 }
 
+/** A provider call may emit multiple cumulative measurements under the same sequence number. */
+export type ReviewAgentRequestObservation = (requestNumber: number, usage?: ReviewAgentAdapterUsage) => void;
+
 export interface ReviewAgentAdapterContext {
+  readonly observeRequest?: ReviewAgentRequestObservation;
   readonly signal: AbortSignal;
   readonly controller: ReviewAgentScopedController;
   readonly spawnChild: (input: ReviewAgentSpawnInput) => Promise<ReviewAgentTerminalResult>;

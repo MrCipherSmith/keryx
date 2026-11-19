@@ -10,9 +10,9 @@ export function mentionsViewer(body: string, viewer: string): boolean {
     .some(match => match[1]?.toLowerCase() === viewer.toLowerCase());
 }
 
-export async function attachAddressedReplies(snapshot: ReviewBoardSnapshot, read: Read): Promise<void> {
+export async function attachAddressedReplies(snapshot: ReviewBoardSnapshot, read: Read, includeLaterPages = false): Promise<void> {
   const cards = new Map(snapshot.cards.filter(c => c.state === "open").map(c => [c.number, c]));
-  if (!cards.size) return;
+  if (!cards.size && !includeLaterPages) return;
   const repo = "repos/" + snapshot.repo;
   const viewer = snapshot.viewer.toLowerCase();
   const signals = new Map<number, Set<string>>();
@@ -38,7 +38,7 @@ export async function attachAddressedReplies(snapshot: ReviewBoardSnapshot, read
     await pages<Notice>(repo + "/notifications", async notice => {
       if (notice.repository?.node_id !== snapshot.repositoryId || notice.subject?.type !== "PullRequest") return;
       const number = Number(notice.subject.url.match(/\/pulls\/(\d+)$/)?.[1]);
-      if (!cards.has(number) || seen.has(number)) return;
+      if (!Number.isSafeInteger(number) || number <= 0 || (!includeLaterPages && !cards.has(number)) || seen.has(number)) return;
       seen.add(number);
       const since = notice.last_read_at;
       const query = since ? "?since=" + encodeURIComponent(since) : "";
@@ -77,5 +77,9 @@ export async function attachAddressedReplies(snapshot: ReviewBoardSnapshot, read
     return;
   }
   if (current.login?.toLowerCase() !== viewer) throw new Error("access: GitHub account changed. Refresh the board.");
-  for (const [number, ids] of signals) cards.get(number)!.addressedReplyIds = [...ids];
+  for (const [number, ids] of signals) {
+    const card = cards.get(number);
+    if (card) card.addressedReplyIds = [...ids];
+    else if (includeLaterPages) (snapshot.replyHints ??= []).push({ number, ids: [...ids] });
+  }
 }

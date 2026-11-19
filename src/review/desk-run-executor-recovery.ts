@@ -1,3 +1,5 @@
+import { roleDispatchWaves } from "./estimate";
+import type { SliceManifest } from "./slice";
 // Called under the run-store transaction only after the worker and reviewer process group have exited.
 import { existsSync, lstatSync, openSync, readFileSync, readdirSync, readSync, closeSync, renameSync } from "node:fs";
 import path from "node:path";
@@ -30,21 +32,47 @@ function json<T>(file: string): T | null {
   } catch { return null; }
 }
 
+/** Only original slice routing can exempt a roster member from producing a result. */
+export function desktopRoutedOut(dir: string): Set<string> {
+  const queue = json<{ routedOut?: string[] }>(path.join(dir, "desktop-dispatch.json"));
+  const routed = new Set<string>();
+  if (!Array.isArray(queue?.routedOut) || !queue.routedOut.length) return routed;
+  const manifest = json<SliceManifest>(path.join(dir, "slices/manifest.json"));
+  if (!manifest || !Array.isArray(manifest.slices)) return routed;
+  try {
+    for (const role of queue.routedOut) if (typeof role === "string" && roleDispatchWaves(manifest, role).length === 0) routed.add(role);
+  } catch { return new Set(); }
+  return routed;
+}
+
 /** A new Desktop plan has one saved result per wave and host-observed participation per reviewer.
  * A ledger note explaining a skipped role is useful evidence of the skip, never a reviewer result. */
-export function hasDesktopReviewerEvidence(dir: string, usage: ReviewRunUsage | undefined): boolean {
+export function hasDesktopReviewerEvidence(dir: string, usage: ReviewRunUsage | undefined, routed = desktopRoutedOut(dir)): boolean {
   const plan = json<{ desktopDispatch?: string; roster?: string[]; dispatches?: number }>(path.join(dir, "plan.json"));
   const queueFile = path.join(dir, "desktop-dispatch.json");
   if (!plan?.desktopDispatch && !existsSync(queueFile)) return true; // packages created before prepared dispatch
-  const queue = json<{ calls: Array<{ label: string; save_result_to: string }> }>(queueFile);
-  if (!Array.isArray(plan?.roster) || !Array.isArray(queue?.calls) || !queue.calls.length || plan.dispatches !== queue.calls.length) return false;
+  const queue = json<{ blocked?: unknown[]; calls: Array<{ label: string; save_result_to: string }> }>(queueFile);
+  if (!Array.isArray(plan?.roster) || !Array.isArray(queue?.calls) || !!queue.blocked?.length || !queue.calls.length || plan.dispatches !== queue.calls.length) return false;
+  const sliceFile = path.join(dir, "slices/manifest.json");
+  const expected = new Set<string>();
+  if (existsSync(sliceFile)) {
+    const manifest = json<SliceManifest>(sliceFile);
+    if (!Array.isArray(manifest?.slices)) return false;
+    try {
+      const original = { ...manifest, slices: manifest.slices.filter(slice => !slice.retryOf) };
+      for (const role of plan.roster) {
+        roleDispatchWaves(original, role).forEach((_, i) => expected.add(`${role}-w${i + 1}.txt`));
+      }
+    } catch { return false; }
+    if (expected.size !== queue.calls.length) return false;
+  }
   const observed = new Set(usage?.reviewers.map(record => record.reviewer));
   const roles = new Set<string>();
   const files = new Set<string>();
   for (const call of queue.calls) {
-    if (!call || typeof call.label !== "string" || !observed.has(call.label) || typeof call.save_result_to !== "string") return false;
+    if (!call || typeof call.label !== "string" || !plan.roster.includes(call.label) || routed.has(call.label) || !observed.has(call.label) || typeof call.save_result_to !== "string") return false;
     const name = path.basename(call.save_result_to);
-    if (files.has(name) || !name.startsWith(call.label + "-w") || !/-w[1-9][0-9]*\.txt$/.test(name)) return false;
+    if ((expected.size && !expected.has(name)) || files.has(name) || !name.startsWith(call.label + "-w") || !/-w[1-9][0-9]*\.txt$/.test(name)) return false;
     try {
       const { body, incomplete } = splitUsage(readFileSync(path.join(dir, "raw", name), "utf8"));
       const reply = parseReviewResult(body);
@@ -53,7 +81,7 @@ export function hasDesktopReviewerEvidence(dir: string, usage: ReviewRunUsage | 
     files.add(name);
     roles.add(call.label);
   }
-  return plan.roster.length > 0 && plan.roster.every(role => roles.has(role));
+  return plan.roster.length > 0 && plan.roster.every(role => roles.has(role) || routed.has(role));
 }
 
 function preview(file: string): string {
@@ -106,11 +134,12 @@ export function recoverDeskExecution(runDir: string, request: Request): DeskExec
   const research = found ? json<{ dispatch?: { selected?: string[]; skipped?: unknown[] } }>(path.join(pkg, "research.json")) : null;
   const required = research?.dispatch?.selected ?? [];
   const ran = new Set(entries.filter(entry => entry?.status === "run").map(entry => entry.reviewer));
-  const accounted = hasFullCoverage(entries, found ? json<CoverageReport>(path.join(pkg, "coverage.json")) : null) &&
-    Array.isArray(required) && required.every(name => ran.has(name)) && !research?.dispatch?.skipped?.length;
+  const routed = found ? desktopRoutedOut(pkg) : new Set<string>();
+  const accounted = hasFullCoverage(entries.filter(entry => !routed.has(entry.reviewer)), found ? json<CoverageReport>(path.join(pkg, "coverage.json")) : null) &&
+    Array.isArray(required) && required.every(name => ran.has(name) || routed.has(name)) && !research?.dispatch?.skipped?.length;
   const matching = checkedBase === request.baseSha && checkedHead === request.headSha;
   const closed = found && manifest.status === "closed";
-  const complete = closed && matching && accounted && hasDesktopReviewerEvidence(pkg, usage) && Array.isArray(items) && (!summary || summary.status === "complete");
+  const complete = closed && matching && accounted && hasDesktopReviewerEvidence(pkg, usage, routed) && Array.isArray(items) && (!summary || summary.status === "complete");
   const coverage = complete ? "complete" : (entries.length && Array.isArray(items)) ? "partial" : "unknown";
   const findings = Array.isArray(items) ? countFindings(items) : summary?.findings ?? countFindings(null);
   const outcome = complete ? "complete" : request.cancelled ? "cancelled" : summary?.status === "budget" ? "budget" :

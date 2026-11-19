@@ -36,6 +36,41 @@ fn board_args(
     Ok(args)
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BadgeTarget {
+    repository_id: String,
+    viewer: String,
+    revisions: String,
+}
+
+fn board_read_args(pr_state: Option<&str>, repo: Option<&str>, number: Option<u32>, repositories_only: bool,
+    paged: bool, cursor: Option<&str>, badges: Option<BadgeTarget>) -> Result<Vec<String>, String> {
+    if let Some(target) = badges {
+        if paged || cursor.is_some() || repositories_only || pr_state.is_some() || number.is_some() || target.revisions.is_empty()
+            || target.revisions.len() > 50000 || !target.revisions.bytes().all(|b| b.is_ascii_hexdigit() || b == b':' || b == b',') {
+            return Err("configuration: Invalid badge request".into());
+        }
+        let mut args = vec!["review".into(), "board".into(), "--json".into()];
+        for (flag, value) in [("--repo", repo.unwrap_or_default()), ("--viewer", &target.viewer), ("--repository-id", &target.repository_id)] {
+            if value.is_empty() || value.starts_with('-') || value.contains(char::is_whitespace) { return Err("configuration: Invalid badge identity".into()); }
+            args.extend([flag.into(), value.into()]);
+        }
+        args.extend(["--badge-revisions".into(), target.revisions]);
+        return Ok(args);
+    }
+    let mut args = board_args(pr_state, repo, number, repositories_only)?;
+    if paged {
+        if pr_state.is_none() { return Err("configuration: Select a board state to page".into()); }
+        args.push("--page".into());
+    }
+    if let Some(value) = cursor {
+        if !paged || value.is_empty() || value.len() > 4096 { return Err("configuration: Invalid board cursor".into()); }
+        args.push(format!("--cursor={value}"));
+    }
+    Ok(args)
+}
+
 // Across webviews, keep slow reads from exhausting subprocesses and pipe threads.
 static READERS: AtomicUsize = AtomicUsize::new(0);
 const MAX_READERS: usize = 8;
@@ -43,9 +78,14 @@ const MAX_READERS: usize = 8;
 struct ReadPermit<'a>(&'a AtomicUsize);
 impl<'a> ReadPermit<'a> {
     fn acquire(count: &'a AtomicUsize) -> Result<Self, String> {
-        count.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| (n < MAX_READERS).then_some(n + 1))
-            .map(|_| Self(count))
-            .map_err(|_| "unavailable: Too many Review reads are running. Retry shortly.".into())
+        let mut readers = count.load(Ordering::Relaxed);
+        while readers < MAX_READERS {
+            match count.compare_exchange_weak(readers, readers + 1, Ordering::Relaxed, Ordering::Relaxed) {
+                Ok(_) => return Ok(Self(count)),
+                Err(actual) => readers = actual,
+            }
+        }
+        Err("unavailable: Too many Review reads are running. Retry shortly.".into())
     }
 }
 impl Drop for ReadPermit<'_> {
@@ -68,6 +108,7 @@ fn run_reader(cmd: Command) -> Result<Value, String> {
     serde_json::from_str(&out.stdout).map_err(|_| "unavailable: The selected Keryx CLI did not return a valid Review response. Check the CLI version in Settings.".into())
 }
 
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn review_board(
     app: AppHandle,
@@ -77,8 +118,11 @@ pub async fn review_board(
     repo: Option<String>,
     number: Option<u32>,
     repositories_only: Option<bool>,
+    paged: Option<bool>,
+    cursor: Option<String>,
+    badge_target: Option<BadgeTarget>,
 ) -> Result<Value, String> {
-    let args = board_args(pr_state.as_deref(), repo.as_deref(), number, repositories_only.unwrap_or(false))?;
+    let args = board_read_args(pr_state.as_deref(), repo.as_deref(), number, repositories_only.unwrap_or(false), paged.unwrap_or(false), cursor.as_deref(), badge_target)?;
     invoke_review(app, view, cwd, args, true).await
 }
 
@@ -303,6 +347,17 @@ mod tests {
         assert_eq!(&args[..5], ["review","rules","--json","--repo","org/repo"]);
         assert_eq!(args[9], "--request");
         assert_eq!(serde_json::from_str::<Value>(&args[10]).unwrap()["choice"]["mode"], "manual");
+    }
+
+    #[test]
+    fn badge_batches_and_page_cursors_are_read_only_board_queries() {
+        let r = format!("1:{}:{}", "a".repeat(40), "b".repeat(40));
+        let target = BadgeTarget { repository_id: "R".into(), viewer: "me".into(), revisions: r.clone() };
+        assert_eq!(board_read_args(None, Some("org/repo"), None, false, false, None, Some(target)).unwrap(),
+            ["review","board","--json","--repo","org/repo","--viewer","me","--repository-id","R","--badge-revisions",&r]);
+        assert_eq!(board_read_args(Some("open"),None,None,false,true,Some("-abc"),None).unwrap(),
+            ["review","board","--json","--state","open","--page","--cursor=-abc"]);
+        assert!(board_read_args(None,Some("org/repo"),Some(1),false,true,None,None).is_err());
     }
 
     #[test]

@@ -3,6 +3,7 @@ import type {
   ReviewAgentAdapter,
   ReviewAgentAdapterCapabilities,
   ReviewAgentAdapterRequest,
+  ReviewAgentAdapterContext,
   ReviewAgentAdapterResult,
   ReviewAgentSpawnInput,
 } from "./types";
@@ -283,6 +284,7 @@ export interface ExternalGeneralRunnerInput {
   readonly request: ReviewAgentAdapterRequest;
   readonly signal: AbortSignal;
   readonly grant: ExternalBridgeGrant;
+  readonly observeRequest?: ReviewAgentAdapterContext["observeRequest"];
   readonly bridge: Pick<ExternalGeneralBridge, "invoke">;
 }
 
@@ -342,7 +344,7 @@ export function createExternalGeneralAdapter(options: {
   return {
     id: options.id,
     capabilities,
-    async execute(request) {
+    async execute(request, context) {
       const local = new AbortController();
       active.set(request.dispatchId, local);
       const grant = options.bridge.issue({ parentDispatchId: request.dispatchId, ttlMs: options.grantTtlMs });
@@ -350,7 +352,7 @@ export function createExternalGeneralAdapter(options: {
       let result: ReviewAgentAdapterResult | undefined;
       let executionError: unknown;
       try {
-        result = await options.runner.execute({ request, signal, grant, bridge: options.bridge });
+        result = await options.runner.execute({ request, signal, grant, bridge: options.bridge, observeRequest: context.observeRequest });
       } catch (error) {
         executionError = error;
       }

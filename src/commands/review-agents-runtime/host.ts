@@ -440,12 +440,27 @@ export function createReviewAgentHost(options: ReviewAgentHostOptions): ReviewAg
 }
 
 function observeExternalAdapter(adapter: ReviewAgentAdapter, runtime: ReviewAgentHostRuntime): ReviewAgentAdapter {
-  if (!runtime.observeExternal) return adapter;
+  const start = runtime.observeExternal;
+  if (!start) return adapter;
   return { ...adapter, async execute(request, context) {
-    const finish = runtime.observeExternal?.(request.skillRef ?? request.entity);
-    const result = await adapter.execute(request, context);
-    finish?.(result.usage);
-    return result;
+    const reviewer = request.skillRef ?? request.entity;
+    const receipts = new Map<number, (usage?: ReviewAgentAdapterUsage) => void>();
+    let finalUsage: ReviewAgentAdapterUsage | undefined;
+    try {
+      const result = await adapter.execute(request, { ...context, observeRequest(number, usage) {
+        let update = receipts.get(number);
+        if (!update) {
+          update = start(reviewer);
+          receipts.set(number, update);
+        }
+        if (usage) update(usage);
+      } });
+      finalUsage = result.usage;
+      return result;
+    } finally {
+      // Older hosts may supply only the final aggregate. Never add it to streamed receipts.
+      if (receipts.size === 0) start(reviewer)(finalUsage);
+    }
   } };
 }
 

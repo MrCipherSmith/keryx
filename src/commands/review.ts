@@ -599,6 +599,7 @@ const TIER_FLAGS = [
   "--forced-strategy-change",
   "--findings",
   "--diff-lines",
+  "--input-tokens",
   "--verifier",
   "--security",
   "--premise",
@@ -659,6 +660,7 @@ function rejectReviewFlags(args: readonly string[], allowed: readonly string[], 
 
 /** Test seam: whether a person is at a terminal. Default: stdin and stdout are both TTYs. */
 export interface ReviewCommandSeams {
+  tierCatalog?: typeof tierCatalog;
   isTerminal?: () => boolean;
   /** Test seam: reads a PR's state and head for `complete`. Default: the GitHub tracker adapter. */
   prLookup?: PrLookup;
@@ -866,7 +868,7 @@ export async function reviewCommand(args: string[], seams?: ReviewCommandSeams):
       return;
     }
     if (command === "tier") {
-      await runTier(args.slice(1));
+      await runTier(args.slice(1), seams?.tierCatalog);
       return;
     }
     if (command === "comments") {
@@ -990,7 +992,11 @@ export async function reviewCommand(args: string[], seams?: ReviewCommandSeams):
       return;
     }
     if (command === "plan") {
-      await runPlan(args.slice(1), { rejectUnknownFlags: rejectReviewFlags, run: (stepArgs) => captureReviewStep(stepArgs, seams) });
+      // All tier lookups in this plan share one session and provider catalogue.
+      let catalog: ReturnType<typeof tierCatalog> | undefined;
+      const planSeams = { ...seams, tierCatalog: (flags: string[], session: SessionModelContext) =>
+        catalog ??= (seams?.tierCatalog ?? tierCatalog)(flags, session) };
+      await runPlan(args.slice(1), { rejectUnknownFlags: rejectReviewFlags, run: (stepArgs) => captureReviewStep(stepArgs, planSeams) });
       return;
     }
     if (command === "plan-eval") {
@@ -1818,7 +1824,7 @@ async function applyReviewRoutingCategory(
   };
 }
 
-async function runTier(args: string[]): Promise<void> {
+async function runTier(args: string[], discover = tierCatalog): Promise<void> {
   if (args.includes("--help") || args.includes("-h")) {
     printTierHelp();
     return;
@@ -1826,7 +1832,7 @@ async function runTier(args: string[]): Promise<void> {
   rejectReviewFlags(args, TIER_FLAGS, "tier");
   const signals = tierSignalsFromArgs(args);
   const { session, source } = sessionModelFromArgs(args);
-  const catalog = await tierCatalog(args, session);
+  const catalog = await discover(args, session);
   const routingRoot = deskReviewRoutingRoot() ?? process.cwd();
   const settings = readRoutingSettings({ cwd: routingRoot });
   const routingConfig = normalizeRoutingConfig(settings.layers, ROUTING_NORMALIZATION);
@@ -1842,7 +1848,7 @@ async function runTier(args: string[]): Promise<void> {
     JSON.stringify({ category: "review", signals }),
     {
       capabilities: ["tools"],
-      inputTokensRequired: Math.max(2_048, (signals.diffLines ?? 128) * 32),
+      inputTokensRequired: Math.max(2_048, parseNonNegativeInteger(optionValue(args, "--input-tokens"), "--input-tokens") ?? (signals.diffLines ?? 128) * 32),
       outputTokensReserved: 4_096,
     },
   );
@@ -5192,7 +5198,7 @@ function printTierHelp(): void {
   console.log(`keryx review tier — usage:
 
   keryx review tier [--scope <scope>] [--fix-attempt <n>] [--forced-strategy-change]
-                    [--findings <n>] [--diff-lines <n>]
+                    [--findings <n>] [--diff-lines <n>] [--input-tokens <estimated context tokens>]
                     [--verifier ${VERIFICATION_METHODS.join("|")}] [--security] [--premise]
                     [--session-provider <id>] [--session-model <id>]
                     [--from-shell-config] [--catalog <file|->] [--json]
@@ -5647,7 +5653,7 @@ Usage:
   keryx review budget [--spent <usd>] [--ceiling <usd>]
                       [--reviewers a,b] [--parallel <n>] [--outstanding <n>] [--full]
   keryx review tier [--scope <scope>] [--fix-attempt <n>] [--forced-strategy-change]
-                    [--findings <n>] [--diff-lines <n>]
+                    [--findings <n>] [--diff-lines <n>] [--input-tokens <estimated context tokens>]
                     [--verifier ${VERIFICATION_METHODS.join("|")}] [--security] [--premise]
                     [--session-provider <id>] [--session-model <id>]
                     [--catalog <file|->] [--json]

@@ -229,7 +229,11 @@ describe("AC2 — opts.signal aborted mid-drain still yields exactly one cancell
 });
 
 test("only attaches the OpenRouter account charge from its own usage-bearing response", async () => {
-  for (const baseUrl of ["https://openrouter.ai/api", "https://example.org"]) {
+  for (const [baseUrl, expectedCost] of [
+    ["https://openrouter.ai/api", { amount: 0.003, currency: "USD" }],
+    ["https://example.org", undefined],
+    ["https://example.org/openrouter.ai", undefined],
+  ] as const) {
     const stream = controlledStream();
     stream.enqueue('data: {"choices":[],"usage":{"prompt_tokens":194,"completion_tokens":2,"total_tokens":196,"cost":0.003,"prompt_tokens_details":{"cached_tokens":90,"cache_write_tokens":10}}}\n\n');
     stream.enqueue('data: [DONE]\n\n');
@@ -238,6 +242,6 @@ test("only attaches the OpenRouter account charge from its own usage-bearing res
     const events = await collectEvents(port.stream(buildRequest("usage"), { attemptId: "receipt" }));
     const usage = events.find(event => event.kind === "usage_update")?.usage;
     expect(usage).toMatchObject({ inputTokens: 194, outputTokens: 2, totalTokens: 196, cacheReadTokens: 90, cacheWriteTokens: 10 });
-    expect(usage?.cost).toEqual(baseUrl.includes("openrouter.ai") ? { amount: 0.003, currency: "USD" } : undefined);
+    expect(usage?.cost).toEqual(expectedCost);
   }
 });

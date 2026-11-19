@@ -13,6 +13,7 @@
 // flows://changed. One WebSocket connection is one "window" with its own
 // keryx process. Development only: it listens on loopback and is never bundled.
 
+import { reviewBoardArgs } from "./reviewBoard";
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync, mkdirSync, writeFileSync } from "node:fs";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -609,25 +610,7 @@ async function handle(ws: ServerWebSocket<Conn>, cmd: string, args: Json): Promi
       throw new Error("Browser dev mode runs no Keryx.app; use `keryx app update` in a terminal.");
     case "review_board": {
       const root = await projectCwd(ws.data, cwd);
-      const argv = ["review", "board", "--json"];
-      if (args.repo != null) {
-        if (typeof args.repo !== "string" || !args.repo || args.repo.startsWith("-") || /\s/.test(args.repo)) {
-          throw new Error("configuration: Invalid repository");
-        }
-        argv.push("--repo", args.repo);
-      }
-      if (args.repositoriesOnly === true) {
-        if (args.repo != null || args.prState != null || args.number != null) {
-          throw new Error("configuration: Repository discovery cannot be combined with a PR query");
-        }
-        argv.push("--repositories");
-      } else if (args.number != null && args.prState == null && args.repo && Number.isSafeInteger(args.number) && Number(args.number) > 0) {
-        argv.push("--number", String(args.number));
-      } else if (args.number == null && ["open", "closed", "merged", "all"].includes(String(args.prState))) {
-        argv.push("--state", String(args.prState));
-      } else {
-        throw new Error("configuration: Select a PR state or a repository and PR number");
-      }
+      const argv = reviewBoardArgs(args);
       return runReviewCli(root, argv, true);
     }
     case "review_rules": {

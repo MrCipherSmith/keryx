@@ -1,3 +1,5 @@
+import { observeExternalReview } from "../../commands/shell-events";
+import { emptyProgress, foldEvent } from "../autonomous-progress";
 import { describe, expect, test } from "bun:test";
 import { mkdtemp, mkdir, rm, symlink } from "node:fs/promises";
 import path from "node:path";
@@ -18,8 +20,13 @@ const fakeExternalGeneralHostFactory: NonNullable<ReviewAgentHostOptions["extern
   adapter: {
     id: "keryx-external-general",
     capabilities: { readOnlyEnforced: true, resultPersistence: true, cancellation: true, hierarchy: true, usageAccounting: false },
-    async execute(request) {
+    async execute(request, context) {
+      const receipt = { inputTokens: 20, outputTokens: 3, cost: { amount: 0.12, currency: "USD" } };
+      context.observeRequest?.(1);
+      context.observeRequest?.(1, { ...receipt, outputTokens: 1 });
+      context.observeRequest?.(1, receipt);
       if (!(await options.authorize({ operation: "spawn", runId: request.runId, parentDispatchId: request.dispatchId }))) {
+        context.observeRequest?.(2);
         throw new Error("test external authority was denied");
       }
       const controller = options.controller();
@@ -30,7 +37,7 @@ const fakeExternalGeneralHostFactory: NonNullable<ReviewAgentHostOptions["extern
       }) as { ok: boolean; dispatchId?: string; message?: string };
       if (!admission.ok || admission.dispatchId === undefined) throw new Error(admission.message ?? "test child was refused");
       await controller.wait(admission.dispatchId);
-      return { content: { ...reviewResult, summary: JSON.stringify({ child: await controller.result(admission.dispatchId) }) } };
+      return { usage: receipt, content: { ...reviewResult, summary: JSON.stringify({ child: await controller.result(admission.dispatchId) }) } };
     },
     async cancel() {},
     async reconcile() { return "unknown" as const; },
@@ -258,6 +265,8 @@ describe("Review agents host binding", () => {
   test("runs an external Keryx general and native soldier through the shared ledger", async () => {
     const root = await mkdtemp(path.join(process.cwd(), ".metaproject", "data", "review-agents-host-external-"));
     const scripted = scriptedProvider([okReply]);
+    let progress = emptyProgress();
+    const meter = (reviewer: string) => observeExternalReview({ emit(e) { progress = foldEvent(progress, e); } }, reviewer, "ollama", "test");
     try {
       const host = createReviewAgentHost({
         ...hostTestSeams(),
@@ -266,7 +275,7 @@ describe("Review agents host binding", () => {
         snapshotRevision: async (_projectRoot, _revision, destination) => { await mkdir(path.join(destination, "source"), { recursive: true }); return "e".repeat(40); },
       });
       const tools = host.tools({
-        provider: scripted.provider, providerId: "ollama", modelId: "test",
+        observeExternal: meter, provider: scripted.provider, providerId: "ollama", modelId: "test",
         io: () => ({ requestApproval: async () => true, permissionMode: () => "ask" }), authorizeReviewAgentAction: () => true,
       });
       const started = await named(tools, "review_agents_start").invoke({ run_id: "external", revision: "HEAD" });
@@ -288,6 +297,8 @@ describe("Review agents host binding", () => {
       const state = await host.controller("external").then((controller) => controller.status()) as { assignments: Record<string, { adapterId: string; parentDispatchId?: string }> };
       expect(Object.values(state.assignments)).toHaveLength(2);
       expect(Object.values(state.assignments)).toContainEqual(expect.objectContaining({ adapterId: "native", parentDispatchId: dispatchId }));
+      expect(progress.usage?.total).toEqual({ inputTokens: 20, outputTokens: 3, totalTokens: 23, cost: { amount: 0.12, currency: "USD" } });
+      expect(progress.usage?.partial).toBe(false);
       expect(scripted.requests).toHaveLength(1);
       await host.close();
     } finally { await rm(root, { recursive: true, force: true }); }
@@ -296,13 +307,15 @@ describe("Review agents host binding", () => {
   test("rechecks the background-safe live authority before an external bridge operation", async () => {
     const root = await mkdtemp(path.join(process.cwd(), ".metaproject", "data", "review-agents-host-external-revoke-"));
     const scripted = scriptedProvider([okReply]);
+    let progress = emptyProgress();
+    const meter = (reviewer: string) => observeExternalReview({ emit(e) { progress = foldEvent(progress, e); } }, reviewer, "ollama", "test");
     try {
       const host = createReviewAgentHost({
         ...hostTestSeams(), projectRoot: process.cwd(), runsRoot: path.join(root, "runs"), ownerId: "external-revoke-host",
         snapshotRevision: async (_projectRoot, _revision, destination) => { await mkdir(path.join(destination, "source"), { recursive: true }); return "1".repeat(40); },
       });
       const tools = host.tools({
-        provider: scripted.provider, providerId: "ollama", modelId: "test", io: () => ({}), authorizeReviewAgentAction: () => false,
+        observeExternal: meter, provider: scripted.provider, providerId: "ollama", modelId: "test", io: () => ({}), authorizeReviewAgentAction: () => false,
       });
       const started = await named(tools, "review_agents_start").invoke({ run_id: "external-revoke", revision: "HEAD" });
       await registerPlan(tools, "external-revoke", JSON.parse(started.output).revision, { taskId: "external-area", entity: "review-coordinator", role: "coordinator", scopeId: "src/a.ts" }, "external-area-soldier");
@@ -310,6 +323,10 @@ describe("Review agents host binding", () => {
       const dispatchId = JSON.parse(admitted.output).dispatchId as string;
       const terminal = await named(tools, "review_agents_wait").invoke({ run_id: "external-revoke", dispatch_id: dispatchId });
       expect(JSON.parse(terminal.output).status).toBe("failed");
+      expect(progress.usage?.reviewers[0]).toMatchObject({ partial: true, inputTokens: 20, outputTokens: 3,
+        reportedCosts: [{ amount: 0.12, currency: "USD" }] });
+      expect(progress.usage?.total.totalTokens).toBe(23);
+      expect(progress.usage?.partial).toBe(true);
       expect(scripted.requests).toHaveLength(0);
       await host.close();
     } finally { await rm(root, { recursive: true, force: true }); }

@@ -1,3 +1,5 @@
+import { CONTEXT_FILE_DENYLIST, SUBAGENT_CONTEXT_FILES_MAX_BYTES, SUBAGENT_CONTEXT_FILES_MAX_COUNT } from "../../../lib/subagent-context";
+export { SUBAGENT_CONTEXT_FILES_MAX_BYTES } from "../../../lib/subagent-context";
 // Interactive `spawn_subagent` tool — wires MAE `spawnSubagent` into the shell agent.
 //
 // The model proposes a bounded child task. The host:
@@ -26,7 +28,7 @@ import { slateWriteSeedTool } from "./slate-tool";
 import { createMetaprojectAdapter } from "../metaproject-adapter";
 import { RemainingBudgetLedger } from "../../child/ledger";
 import { DEFAULT_MAX_PASSES } from "../../../review/chunks-estimate";
-import { describeReviewWave, resolveReviewWave } from "../../../review/wave-key";
+import { describeReviewWave, resolveReviewWave, REVIEW_WAVE_MAX_CHILDREN } from "../../../review/wave-key";
 import { type DispatchUsage, NO_TEXT_PLACEHOLDER, formatOtherUsageLine, formatRecordLine, isEmptyBody, splitUsage } from "../../../review/dispatch-usage";
 import { spawnSubagent, foldChildSummary } from "../../child/orchestrate";
 import type { SubagentContext } from "../../child/orchestrate";
@@ -225,13 +227,6 @@ function parseIntEnvVar(env: Record<string, string | undefined>, key: string): n
   const n = Number.parseInt(raw.trim(), 10);
   return Number.isFinite(n) ? n : undefined;
 }
-
-/** Total bytes of `context_files` the host will inline into one child's task. */
-export const SUBAGENT_CONTEXT_FILES_MAX_BYTES = 400_000;
-const SUBAGENT_CONTEXT_FILES_MAX_COUNT = 40;
-/** Credential files and VCS internals are never copied into a child prompt. */
-const CONTEXT_FILE_DENYLIST =
-  /(^|\/)(\.env[^/]*|\.npmrc|\.netrc|id_[^/]*|[^/]*\.(pem|key|p12|pfx)|\.git(\/.*)?)$/i;
 
 /**
  * Read `context_files` under `root` and render them as fenced blocks appended
@@ -463,7 +458,7 @@ export const SUBAGENT_TURN_MAX_CHILDREN = 32;
  * round), named by the dispatcher in `review_wave`; each wave counts its own 32, so a deep review is not stopped by
  * the turn's count.
  */
-export const SUBAGENT_WAVE_MAX_CHILDREN = 32;
+export const SUBAGENT_WAVE_MAX_CHILDREN = REVIEW_WAVE_MAX_CHILDREN;
 
 /** Waves one parent turn may open: the chunk plan's own pass bound, so waves x 32 stays finite. */
 export const SUBAGENT_TURN_MAX_WAVES = DEFAULT_MAX_PASSES;

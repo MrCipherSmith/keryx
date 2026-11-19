@@ -22,13 +22,17 @@ function UsageCell({ value }: { value?: string | undefined }) {
 export function ReviewUsage({ usage }: { usage: ReviewRunUsage }) {
   const rows = [usage.total, usage.coordinator, ...usage.reviewers];
   const columns = tokens.filter(({ key }) => key !== "cacheReadTokens" && key !== "cacheWriteTokens" || rows.some(row => row[key] !== undefined));
-  const costColumns = costs.filter(({ key }) => rows.some(row => row[key] !== undefined));
+  const costColumns = costs.filter(({ key }) => rows.some(row => row[key] !== undefined || (key === "cost" && row.reportedCosts?.length)));
+  const money = (cost: { amount: number; currency: string }) =>
+    `${cost.amount.toLocaleString(undefined, { maximumSignificantDigits: 8 })} ${cost.currency}`;
   function values(counts: ReviewUsageCounts) {
     return <>
       {columns.map(({ key }) => <UsageCell key={key} value={counts[key]?.toLocaleString()} />)}
       {costColumns.map(({ key }) => {
         const cost = counts[key];
-        return <UsageCell key={key} value={cost && `${cost.amount.toLocaleString(undefined, { maximumSignificantDigits: 8 })} ${cost.currency}`} />;
+        const subtotals = key === "cost" ? counts.reportedCosts : undefined;
+        const value = cost ? money(cost) : subtotals?.length ? `Reported subtotal · ${subtotals.map(money).join(" + ")}` : undefined;
+        return <UsageCell key={key} value={value} />;
       })}
     </>;
   }

@@ -1,16 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { DeskRevision, DeskRun, DeskRunKey, DeskRunSnapshot } from "../../../../src/review/desk-run-types";
+import type { DeskRevision, DeskRunKey, DeskRunSnapshot } from "../../../../src/review/desk-run-types";
 import { errMessage } from "../lib/format";
 import { readRunStatus } from "./runPolling";
 import { reviewRun } from "../platform/reviewRuns";
 
-export function runActive(run: DeskRun) {
-  return run.state === "running" || run.state === "queued" || run.state === "cancelling";
-}
-
-export function sameRange(a: DeskRevision | null, b: DeskRevision) {
-  return a?.baseSha === b.baseSha && a.headSha === b.headSha;
-}
+import { runActive } from "../../../../src/review/board-badges";
+export { runActive, sameRange } from "../../../../src/review/board-badges";
 
 export type RunObserver = (key: DeskRunKey, revision: DeskRevision, snapshot: DeskRunSnapshot) => void;
 

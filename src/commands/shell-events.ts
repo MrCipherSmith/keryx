@@ -169,7 +169,7 @@ export function observeReviewProvider(port: ProviderPort, sink: ShellEventSink, 
   };
 }
 
-/** External hosts return one receipt per dispatch. A throw or missing receipt leaves the request partial. */
+/** Open one external request (or a legacy dispatch). Cumulative updates share its identity. */
 export function observeExternalReview(sink: ShellEventSink, reviewer: string, provider: string, model?: string) {
   const identity = { participant: "reviewer" as const, reviewer, source: "external-runtime" as const,
     requestId: randomUUID(), provider, ...(model ? { model } : {}) };

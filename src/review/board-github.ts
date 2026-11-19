@@ -66,6 +66,7 @@ export async function boardGh(cwd: string, args: string[], env?: NodeJS.ProcessE
     return (await exec("gh", args, { ...commandOptions(cwd, env), timeout })).stdout;
   } catch (error) {
     const failure = error as { code?: unknown; stderr?: string; stdout?: string };
+    if (failure.code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER") throw new Error("unavailable: GitHub page exceeds the reader output limit.", { cause: error });
     if (failure.code === "ENOENT") throw new Error("configuration: Install GitHub CLI (gh) and sign in.", { cause: error });
     // Command errors may include private URLs, tokens or full queries. Expose fixed diagnostics only.
     throw githubFailure(failure.stderr ?? "");

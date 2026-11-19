@@ -3,9 +3,10 @@ import { Icon } from "../components/Icon";
 import { EmptyState, overlayOpen, Spinner } from "../components/ui";
 import { absoluteTime, errMessage } from "../lib/format";
 import type { FlowCard } from "../platform/commands";
-import { fetchReviewBoard, fetchReviewRepositories, type fetchReviewDetail } from "../platform/review";
-import { readRunStatus } from "./runPolling";
-import { runActive, sameRange, type RunObserver } from "./useReviewRuns";
+import { fetchReviewBadges, fetchReviewBoard, fetchReviewRepositories, type fetchReviewDetail } from "../platform/review";
+import { withRunBackoff } from "./runPolling";
+import { localBadge, type LocalBadge } from "../../../../src/review/board-badges";
+import { sameRange, type RunObserver } from "./useReviewRuns";
 import { reviewRun } from "../platform/reviewRuns";
 import type { reviewWatcher } from "../platform/reviewWatcher";
 import { ProjectReviewRules } from "./ProjectReviewRules";
@@ -26,6 +27,7 @@ interface Props {
   flows: FlowCard[];
   onOpenFlow: (dir: string) => void;
   load?: typeof fetchReviewBoard;
+  loadBadges?: typeof fetchReviewBadges;
   listRepositories?: typeof fetchReviewRepositories;
   loadDetail?: typeof fetchReviewDetail;
   runCommand?: typeof reviewRun;
@@ -38,6 +40,11 @@ interface ReadState {
   snapshot: ReviewBoardSnapshot | null;
   error: string;
   loading: boolean;
+}
+
+function badgesEqual(a: LocalBadge | undefined, b: LocalBadge | undefined) {
+  return !!a?.active === !!b?.active && !!a?.ready === !!b?.ready && a?.progress?.wave === b?.progress?.wave
+    && a?.progress?.finished === b?.progress?.finished && a?.progress?.planned === b?.progress?.planned;
 }
 
 export function ReviewBoard(props: Props) {
@@ -57,7 +64,7 @@ function ProjectBoard(props: Props) {
   return <RepositoryBoard cache={cache} key={JSON.stringify([props.cwd, repo])} {...props} repo={repo} selectRepo={setRepo} />;
 }
 
-function RepositoryBoard({ cwd, flows, onOpenFlow, loadDetail, watcherCommand, rulesCommand, runCommand = reviewRun, load = fetchReviewBoard, listRepositories = fetchReviewRepositories, repo, selectRepo, cache }: Props & {
+function RepositoryBoard({ cwd, flows, onOpenFlow, loadDetail, watcherCommand, rulesCommand, runCommand = reviewRun, loadBadges = fetchReviewBadges, load = fetchReviewBoard, listRepositories = fetchReviewRepositories, repo, selectRepo, cache }: Props & {
   cache: BoardCache;
   repo?: string;
   selectRepo: (repo?: string) => void;
@@ -93,13 +100,7 @@ function RepositoryBoard({ cwd, flows, onOpenFlow, loadDetail, watcherCommand, r
   }, []);
 
   const updateRunSummary = useCallback<RunObserver>((key, revision, runs) => {
-    const current = runs.runs.find(run => runActive(run) && run.state !== "queued") ?? runs.runs.find(runActive);
-    const active = !!current;
-    const roster = current && sameRange(current, revision) ? current.reviewerProgress : undefined;
-    const progress = roster && { wave: roster.wave, planned: roster.planned, finished: roster.finished };
-    const ready = runs.runs.some(run => run.source !== "existing" && ["completed", "partial", "budget"].includes(run.state)
-      && !!run.result && sameRange(run.result.reviewed, revision));
-    const localReview = { active, ready, progress };
+    const localReview = localBadge(runs.runs, revision);
     if (identity.current === JSON.stringify([key.repositoryId, key.viewer])) {
       pendingBadges.current?.set(key.number, { ...revision, localReview });
     }
@@ -108,9 +109,7 @@ function RepositoryBoard({ cwd, flows, onOpenFlow, loadDetail, watcherCommand, r
       if (!board || key.repositoryId !== board.repositoryId || key.viewer !== board.viewer) return old;
       const card = board.cards.find(c => c.number === key.number);
       if (!card || !sameRange(card, revision)) return old;
-      const prior = card.localReview?.progress;
-      if (!!card.localReview?.active === active && !!card.localReview?.ready === ready &&
-        prior?.wave === progress?.wave && prior?.planned === progress?.planned && prior?.finished === progress?.finished) return old;
+      if (badgesEqual(card.localReview, localReview)) return old;
       const updated = { ...card, localReview };
       return { ...old, snapshot: { ...board, cards: board.cards.map(c => c === card ? updated : c) } };
     });
@@ -156,7 +155,8 @@ function RepositoryBoard({ cwd, flows, onOpenFlow, loadDetail, watcherCommand, r
     setRead(old => scope === old.scope && old.snapshot
       ? { ...old, loading: true }
       : { scope, snapshot: null, error: "", loading: true });
-    void load(cwd, scope, repo).then((snapshot) => {
+    const controller = new AbortController();
+    void load(cwd, scope, repo, controller.signal).then((snapshot) => {
       if (request !== sequence.current) return;
       const nextIdentity = JSON.stringify([snapshot.repositoryId, snapshot.viewer]);
       if (identity.current && identity.current !== nextIdentity) {
@@ -183,7 +183,7 @@ function RepositoryBoard({ cwd, flows, onOpenFlow, loadDetail, watcherCommand, r
         accessLost(message);
       }
     });
-    return () => { sequence.current++; };
+    return () => { sequence.current++; controller.abort(); };
   }, [cwd, scope, repo, attempt, load, clearPrivateView, accessLost, cache]);
 
   useEffect(() => {
@@ -203,31 +203,44 @@ function RepositoryBoard({ cwd, flows, onOpenFlow, loadDetail, watcherCommand, r
   }, []);
 
   const snapshot = read.scope === scope ? read.snapshot : null;
-  const pollCursor = useRef(0);
-  // After the drawer closes, follow known active jobs without reloading the repository's PR pages.
   useEffect(() => {
     if (!snapshot || selected !== null) return;
     const { repo, repositoryId, viewer } = snapshot;
-    const active = snapshot.cards.filter(card => card.state === "open" && card.localReview?.active);
+    const active = snapshot.cards.filter(c => c.state === "open" && c.localReview?.active);
     if (!active.length) return;
     let cancelled = false;
     async function poll() {
       if (!document.hidden && !cancelled) {
-        const card = active[pollCursor.current++ % active.length]!;
-        const key = { number: card.number, repo, repositoryId, viewer };
         try {
-          const runs = await readRunStatus(runCommand, cwd, key, undefined, true);
-          if (!cancelled && runs) updateRunSummary(key, card, runs);
+          const key = { repo, repositoryId, viewer };
+          const result = await withRunBackoff(runCommand, key, true, () => loadBadges(cwd, key, active));
+          if (!cancelled && result) {
+            const latest = new Map(result.cards.map(card => [card.number, card]));
+            if (identity.current === JSON.stringify([repositoryId, viewer])) {
+              for (const badge of result.cards) pendingBadges.current?.set(badge.number, badge);
+            }
+            setRead(old => {
+              if (old.snapshot !== snapshot || !old.snapshot) return old;
+              let changed = false;
+              const cards = old.snapshot.cards.map(card => {
+                const badge = latest.get(card.number);
+                if (!badge || !sameRange(card, badge) || badgesEqual(card.localReview, badge.localReview)) return card;
+                changed = true;
+                return { ...card, localReview: badge.localReview };
+              });
+              return changed ? { ...old, snapshot: { ...old.snapshot, cards } } : old;
+            });
+          }
         } catch (cause) {
           const message = errMessage(cause);
-          if (!cancelled && /^access:/i.test(message)) accessLost(message);
+          if (!cancelled && /^(access|configuration):/i.test(message)) accessLost(message);
         }
       }
       if (!cancelled) timer = window.setTimeout(poll, 6000);
     }
     let timer = window.setTimeout(poll, 6000);
     return () => { cancelled = true; window.clearTimeout(timer); };
-  }, [accessLost, cwd, runCommand, selected, snapshot, updateRunSummary]);
+  }, [accessLost, cwd, loadBadges, runCommand, selected, snapshot]);
   const needRepositories = read.scope === scope && !!read.error && !snapshot;
   useEffect(() => {
     if (!needRepositories) return;
@@ -295,7 +308,7 @@ function RepositoryBoard({ cwd, flows, onOpenFlow, loadDetail, watcherCommand, r
           : <strong>{snapshot.repo}</strong>}
         <span>Signed in as {snapshot.viewer}</span>
         <span className="grow" />
-        <span>{error ? "Last available snapshot" : "Synced"} <time dateTime={snapshot.fetchedAt}>{absoluteTime(snapshot.fetchedAt)}</time></span>
+        <span>{error ? "Last available snapshot" : snapshot.warnings.length ? "Partial snapshot" : "Synced"} <time dateTime={snapshot.fetchedAt}>{absoluteTime(snapshot.fetchedAt)}</time></span>
       </>}
       {needRepositories && alternatives.length > 0 && <select className="select-compact" aria-label="Base repository"
         value={repo ?? ""} onChange={(e) => selectRepo(e.target.value)}>

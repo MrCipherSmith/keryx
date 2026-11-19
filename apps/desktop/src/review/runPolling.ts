@@ -9,13 +9,17 @@ const deadlines = new WeakMap<typeof reviewRun, Map<string, Backoff>>();
 export async function readRunStatus(
   invoke: typeof reviewRun, cwd: string, key: DeskRunKey, action: Extract<ReviewRunAction, { kind: "status" }> = { kind: "status" }, automatic = false,
 ) {
+  return withRunBackoff(invoke, key, automatic, () => invoke(cwd, key, action));
+}
+
+export async function withRunBackoff<T>(invoke: typeof reviewRun, key: Pick<DeskRunKey, "repositoryId" | "viewer">, automatic: boolean, read: () => Promise<T>) {
   const scope = JSON.stringify([key.repositoryId, key.viewer.toLowerCase()]);
   let retries = deadlines.get(invoke);
   if (!retries) deadlines.set(invoke, retries = new Map());
   const old = retries.get(scope);
   if (automatic && old && old.until > Date.now()) return;
   try {
-    const result = await invoke(cwd, key, action);
+    const result = await read();
     retries.delete(scope);
     return result;
   } catch (error) {

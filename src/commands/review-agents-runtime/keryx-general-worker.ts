@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { runAgentTurn, type AgentIO } from "../agent";
 import type { InteractiveTool } from "../../harness/tool/builtin/interactive-tools";
 import type { NormalizedMessage, ProviderPort } from "../../harness/provider/types";
-import type { ReviewAgentAdapterRequest, ReviewAgentSpawnInput } from "../../review/agents/types";
+import type { ReviewAgentAdapterRequest, ReviewAgentRequestObservation, ReviewAgentSpawnInput } from "../../review/agents/types";
 import type { ExternalBridgeRequest, ExternalBridgeResponse } from "../../review/agents/external-adapter";
 
 export const KERYX_EXTERNAL_BRIDGE_TOOL_NAMES = [
@@ -31,6 +31,7 @@ export interface KeryxExternalWorkerInput {
   readonly signal: AbortSignal;
   readonly maxOutputTokens?: number;
   readonly id?: () => string;
+  readonly observeRequest?: ReviewAgentRequestObservation;
 }
 
 export interface KeryxExternalWorkerResult {
@@ -144,15 +145,21 @@ export async function runKeryxExternalWorker(input: KeryxExternalWorkerInput): P
   let lastAttemptFailed = false;
   let measured: ReviewUsageCounts | undefined;
   let partial = false;
+  let requestNumber = 0;
   const monitoredProvider: ProviderPort = {
     ...input.provider,
     describe: () => input.provider.describe(),
     stream: (request, options) => (async function* () {
       lastAttemptEnded = false;
       lastAttemptFailed = false;
+      const number = ++requestNumber;
+      input.observeRequest?.(number);
       let receipt: ReviewUsageCounts | undefined;
       for await (const event of input.provider.stream(request, options)) {
-        if (event.kind === "usage_update" && event.usage) receipt = usageCounts(event.usage);
+        if (event.kind === "usage_update" && event.usage) {
+          receipt = usageCounts(event.usage);
+          input.observeRequest?.(number, receipt);
+        }
         if (event.kind === "provider_error") lastAttemptFailed = true;
         if (event.kind === "model_end") {
           lastAttemptEnded = true;
