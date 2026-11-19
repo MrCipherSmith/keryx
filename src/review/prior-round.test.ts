@@ -3,7 +3,7 @@
 // the pull request read is always injected, so nothing here reaches GitHub.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { reviewCommand } from "../commands/review";
@@ -690,6 +690,41 @@ describe("keryx review start writes the round record", () => {
     // gh unavailable: nothing is invented, the defaults apply later.
     const offlineStart = await start(["--review-id", "r-no-gh", "--no-prior-round"]);
     expect(target(offlineStart.dir).base).toBeUndefined();
+  }, 60_000);
+
+  test("a pull request started without --head is refused when the checkout is not at the pull request's head", async () => {
+    prepare();
+    process.chdir(root);
+    const local = git("rev-parse", "HEAD").trim();
+    const elsewhere = local === A ? B : A;
+    const run = (id: string, extra: string[], prHead: string | undefined): Promise<void> =>
+      reviewCommand(["start", "--target", "pr", "--ref", PR, "--review-id", id, "--no-prior-round", ...extra], { isTerminal: () => false, priorRound: { github: offline }, prBase: async () => undefined, prHead: async () => prHead });
+    const original = { log: console.log, error: console.error, exitCode: process.exitCode };
+    const errors: string[] = [];
+    console.log = () => {};
+    console.error = (...parts: unknown[]) => void errors.push(parts.join(" "));
+    const manifestOf = (id: string): string => path.join(root, ".metaproject", "reviews", id, "manifest.json");
+    try {
+      // The refusal names both commits and the flag that pins the pull request's head, and opens no package.
+      await run("r-head-moved", [], elsewhere);
+      expect(process.exitCode).toBe(1);
+      expect(errors.join("\n")).toContain(`This checkout is at ${local.slice(0, 12)}, but pull request ${PR} is at ${elsewhere.slice(0, 12)}`);
+      expect(errors.join("\n")).toContain(`--head ${elsewhere}`);
+      expect(existsSync(manifestOf("r-head-moved"))).toBe(false);
+      // Same commit, an unknown pull request head (gh offline), or an explicit --head: the round starts.
+      process.exitCode = 0;
+      await run("r-head-same", [], local);
+      await run("r-head-unknown", [], undefined);
+      await run("r-head-pinned", ["--head", elsewhere], elsewhere);
+      expect(process.exitCode).toBe(0);
+    } finally {
+      console.log = original.log;
+      console.error = original.error;
+      process.exitCode = original.exitCode ?? 0;
+    }
+    const head = (id: string): unknown => JSON.parse(readFileSync(manifestOf(id), "utf8")).target.head;
+    expect(head("r-head-same")).toBe(local);
+    expect(head("r-head-pinned")).toBe(elsewhere);
   }, 60_000);
 
   test("review start carries the operator's premise answer into the delta round's package (review T2-001)", async () => {

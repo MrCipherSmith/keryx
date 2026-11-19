@@ -33,6 +33,9 @@ const GIT_READ_SUBCOMMANDS: ReadonlySet<string> = new Set([
   "merge-base",
   "blame",
 ]);
+// `git cat-file` is routine only as an existence or type check of one object; its other modes print contents, read a
+// batch from standard input or run the repository's filters.
+const GIT_CAT_FILE_CHECK_FLAGS: ReadonlySet<string> = new Set(["-e", "-t"]);
 const BUN_TEST_FLAGS: ReadonlySet<string> = new Set(["--bail", "--only", "--todo"]);
 const BUN_TEST_COUNT_FLAGS: ReadonlySet<string> = new Set(["--rerun-each", "--timeout"]);
 const EXEC_FLAGS: readonly string[] = ["--pre", "--hostname-bin", "--output", "--ext-diff", "--exec", "--upload-pack", "--post", "--publish", "--push"];
@@ -79,6 +82,9 @@ export const TRUST_ROUTINE_KEYRYX: readonly RoutineKeryxEntry[] = [
   ...rows("review", [
     "attach",
     "start",
+    // The round plan in one command: it runs start, scope, blast-radius, slice, required and estimate, each routine on
+    // its own, takes no path flag and dispatches nothing.
+    "plan",
     "scope",
     "slice",
     "dispatch-check",
@@ -366,6 +372,11 @@ function isGitReadConfined(words: readonly string[], walk: Walk): boolean {
   return !words.slice(2).some((w) => !w.startsWith("-") && isEscapingOperand(w, cwd, walk.projectRoot));
 }
 
+/** `git cat-file -e <object>` or `git cat-file -t <object>`: exactly one flag and one object name. */
+function isGitObjectCheck(words: readonly string[]): boolean {
+  return words.length === 4 && GIT_CAT_FILE_CHECK_FLAGS.has(words[2] as string) && !(words[3] as string).startsWith("-");
+}
+
 function isRoutineSegment(words: readonly string[], walk: Walk): boolean {
   if (words.length === 0 || stripAssignments(words).length !== words.length) return false;
   switch (words[0]) {
@@ -378,6 +389,7 @@ function isRoutineSegment(words: readonly string[], walk: Walk): boolean {
     case "bun":
       return words[1] === "test" && isRoutineBunTest(words, walk);
     case "git":
+      if (words[1] === "cat-file") return isGitObjectCheck(words) && isGitReadConfined(words, walk);
       return words[1] !== undefined && GIT_READ_SUBCOMMANDS.has(words[1]) && !hasExecWord(words) && isGitReadConfined(words, walk);
     default:
       return false;

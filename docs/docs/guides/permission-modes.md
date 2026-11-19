@@ -274,7 +274,7 @@ outside the working tree. This table is the single list; the code reads it from
 | `keryx <command> --help` | up to four words, no other flags |
 | `keryx harness list`, `status`, `--help` | |
 | `keryx agents external list --no-probe` | only with `--no-probe` |
-| `keryx review attach`, `start`, `scope`, `slice`, `dispatch-check`, `retry-plan`, `ledger`, `floor`, `blast-radius`, `budget`, `tier`, `status`, `reviewers`, `required`, `ingest`, `complete` | |
+| `keryx review attach`, `start`, `plan`, `scope`, `slice`, `dispatch-check`, `retry-plan`, `ledger`, `floor`, `blast-radius`, `budget`, `tier`, `status`, `reviewers`, `required`, `ingest`, `complete` | |
 | `keryx flow status`, `list`, `check`, `next` | |
 | `keryx gdgraph find`, `context`, `affected`, `cycles`, `orphans` | |
 | `keryx ctx rg`, `read`, `diff` | |

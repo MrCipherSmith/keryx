@@ -840,6 +840,56 @@ test("git reads that print a file from outside the project are not routine (--no
   }
 });
 
+test("review plan is routine with a pinned base and head; an exec flag or a substitution in it still prompts", () => {
+  for (const command of [
+    "keryx review plan --target https://github.com/acme/app/pull/7 --ref 0123456789abcdef0123456789abcdef01234567 --head 89abcdef0123456789abcdef0123456789abcdef --host keryx-shell",
+    "keryx review plan --target 7 --host keryx-shell --memory-query 'review notes for the pull request'",
+    "keryx review plan --help",
+  ]) {
+    expect(isTrustRoutineCommand(command), command).toBe(true);
+    expect(isTrustRoutineCommand(command, { untrustedContent: true }), command).toBe(true);
+  }
+  for (const command of [
+    'keryx review plan --target 7 --ref "$(gh pr view 7 --json baseRefOid --jq .baseRefOid)"',
+    "keryx review plan --target 7 --ref=--output=/tmp/x",
+    "keryx review plan --target 7 --ref --output=/tmp/x",
+    "keryx review plan --target 7 -c core.pager=sh",
+    "gh pr view 7 && keryx review plan --target 7",
+  ]) {
+    expect(isTrustRoutineCommand(command), command).toBe(false);
+  }
+});
+
+test("git cat-file is routine only as an existence or type check of one object", () => {
+  const cwd = realpathSync(mkdtempSync(path.join(tmpdir(), "keryx-trust-cat-file-")));
+  const sha = "0123456789abcdef0123456789abcdef01234567";
+  try {
+    for (const command of [`git cat-file -e ${sha}`, `git cat-file -t ${sha}`, `git cat-file -e '${sha}^{commit}'`, `git status --short && git rev-parse HEAD && git cat-file -e '${sha}^{commit}'`]) {
+      expect(isTrustRoutineCommand(command, { cwd }), command).toBe(true);
+      expect(isTrustRoutineCommand(command, { cwd, untrustedContent: true }), command).toBe(true);
+    }
+    for (const command of [
+      // An unquoted brace is an expansion the table cannot judge; the quoted spelling above is the routine one.
+      `git cat-file -e ${sha}^{commit}`,
+      `git cat-file -p ${sha}`,
+      `git cat-file ${sha}`,
+      `git cat-file blob ${sha}`,
+      "git cat-file --batch",
+      "git cat-file --batch-all-objects --batch-check",
+      `git cat-file --textconv ${sha}:a.txt`,
+      `git cat-file --filters ${sha}:a.txt`,
+      `git cat-file -e -t ${sha}`,
+      `git cat-file -e ${sha} ${sha}`,
+      "git cat-file -e --batch",
+      "git cat-file -e /etc/hosts",
+    ]) {
+      expect(isTrustRoutineCommand(command, { cwd }), command).toBe(false);
+    }
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
 test("a git read after a cd that leaves the project is not routine (review-logic-w5:F-002, review-security-code-w4:F-002)", () => {
   const base = realpathSync(mkdtempSync(path.join(tmpdir(), "keryx-trust-git-cd-")));
   const project = path.join(base, "project");
