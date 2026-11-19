@@ -3,3 +3,5 @@
 This draft provides a real pull request for a local Desktop acceptance check. The first revision exercises a manual review from the PR card.
 
 The second revision exercises the scheduled review after the Desktop instance has exited.
+
+The scheduled review tracks the new revision while the desktop application is closed.
