@@ -160,7 +160,7 @@ const CEILINGS_BY_KEY = {
   "review/review-jev-scenarios": 179,
   "review/review-layout": 228,
   "review/review-logic": 356,
-  "review/review-orchestrator": 1558,
+  "review/review-orchestrator": 918,
   "review/review-performance": 324,
   "review/review-pr-contract": 185,
   "review/review-pr-feedback": 893,
