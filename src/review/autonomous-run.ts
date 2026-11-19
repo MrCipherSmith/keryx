@@ -9,6 +9,7 @@
 import { execFile, spawn as nodeSpawn } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { invocationArgv, resolveKeryxInvocation } from "../trigger/schedule";
 import { ARBITER_LOG_NAME, ENV_ARBITER_LOG, copyArbiterLogToPackage } from "./arbiter-log";
 import { ENV_AUTONOMOUS_ANSWERS_FILE, readAutoAnswers } from "./autonomous-answers";
 import {
@@ -21,6 +22,9 @@ import {
   type AutonomousStatus,
   type AutonomousTarget,
 } from "./autonomous-profile";
+import { mergeRunUsage, type ReviewRunUsage } from "./run-usage";
+import { ReviewerActivityRecorder } from "./reviewer-activity";
+import type { DeskReviewerSession } from "./desk-run-types";
 import { createEventTail, type Progress } from "./autonomous-progress";
 import { countFindings, validateSummary, writeSummary, type AutonomousSummary } from "./autonomous-summary";
 import { reviewsRoot } from "./package-location";
@@ -41,6 +45,7 @@ export interface ChildSpec {
 }
 
 export interface ChildHandle {
+  readonly pid?: number | undefined;
   readonly exited: Promise<number>;
   kill(signal?: "SIGTERM" | "SIGKILL"): void;
 }
@@ -50,6 +55,8 @@ export type SpawnChild = (spec: ChildSpec) => ChildHandle;
 export interface AutonomousRunOptions {
   readonly cwd: string;
   readonly ref: string;
+  /** Immutable PR base for a Desktop attempt. The detached checkout supplies the fixed head. */
+  readonly fixedBase?: string;
   /** Flow 457: an already parsed target (a local range); default: `ref` parsed as a pull request URL. */
   readonly target?: AutonomousTarget | undefined;
   readonly budgetMinutes?: number | undefined;
@@ -74,10 +81,12 @@ export interface AutonomousRunOptions {
 
 export interface RunProgress {
   readonly state: "running" | AutonomousStatus;
+  readonly reviewerSessions?: DeskReviewerSession[];
   readonly ref: string;
   readonly phase: string;
   readonly rounds: number;
   readonly tokens: number;
+  readonly usage?: ReviewRunUsage;
   readonly startedAt: string;
   readonly pid: number;
   readonly packageId?: string;
@@ -107,9 +116,11 @@ export class AutonomousRunLockedError extends Error {
 
 interface RunState {
   head: string | null;
+  fixedBase?: string;
   attempts: number;
   packageId: string | null;
   tokens: number;
+  usage?: ReviewRunUsage;
   rounds: number;
 }
 
@@ -202,22 +213,54 @@ export async function resolveHeadWithGh(target: AutonomousTarget, cwd: string): 
   });
 }
 
-export function defaultSpawn(command?: { readonly execPath: string; readonly script: string }): SpawnChild {
+/** Git populates these variables in hook processes. They may redirect a child
+ * at the caller's index or gitdir even when its cwd is an isolated checkout. */
+export function privateGitEnv(): NodeJS.ProcessEnv {
+  return Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_")));
+}
+
+export function defaultSpawn(command?: { readonly execPath: string; readonly script: string }, childGuard?: string): SpawnChild {
   return (spec) => {
     const execPath = command?.execPath ?? process.execPath;
     const script = command?.script ?? process.argv[1] ?? "";
+    const argv = invocationArgv(resolveKeryxInvocation(script, execPath));
+    const group = Boolean(childGuard) && process.platform !== "win32";
     const log = openSync(spec.logFile, "a");
-    const child = nodeSpawn(execPath, [script, ...spec.argv], {
+    // A detached Desktop reviewer must never start untracked if its worker
+    // dies between spawn and recording the reviewer PID. The shell is only an
+    // exec barrier; the program, paths and arguments remain separate argv.
+    const start = group
+      ? ["/bin/sh", "-c", 'while [ ! -f "$1" ]; do kill -0 "$2" 2>/dev/null || exit 125; sleep 0.05; done; shift 2; exec "$@"',
+          "review-child", childGuard!, String(process.pid), ...argv, ...spec.argv]
+      : [...argv, ...spec.argv];
+    const child = nodeSpawn(start[0]!, start.slice(1), {
       cwd: spec.cwd,
-      env: { ...process.env, ...spec.env },
+      detached: group,
+      env: { ...(childGuard ? privateGitEnv() : process.env), ...spec.env },
       stdio: ["ignore", log, log],
     });
     closeSync(log);
     const exited = new Promise<number>((resolve) => {
       child.on("error", () => resolve(127));
-      child.on("close", (code, signal) => resolve(code ?? (signal === null ? 1 : 128)));
+      child.on("close", (code, signal) => {
+        if (group && child.pid) {
+          // The model shell has exited. A reviewer that ignored the shell's
+          // stop must not outlive its attempt or overlap the next round.
+          try { process.kill(-child.pid, "SIGKILL"); } catch { /* group already exited */ }
+        }
+        resolve(code ?? (signal === null ? 1 : 128));
+      });
     });
-    return { exited, kill: (signal) => void child.kill(signal ?? "SIGTERM") };
+    return {
+      pid: child.pid,
+      exited,
+      kill(signal = "SIGTERM") {
+        if (group && child.pid) {
+          try { process.kill(-child.pid, signal); }
+          catch (error) { if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error; }
+        } else child.kill(signal);
+      },
+    };
   };
 }
 
@@ -242,7 +285,7 @@ async function runLocked(options: AutonomousRunOptions, target: AutonomousTarget
   const stateFile = path.join(runDir, "run.json");
   const summaryFile = path.join(runDir, "summary.json");
   const prior = readJson<RunState>(stateFile);
-  const sameHead = head !== null && prior !== undefined && prior.head === head;
+  const sameHead = head !== null && prior !== undefined && prior.head === head && prior.fixedBase === options.fixedBase;
 
   if (sameHead) {
     const previous = readJson<AutonomousSummary>(summaryFile);
@@ -260,7 +303,7 @@ async function runLocked(options: AutonomousRunOptions, target: AutonomousTarget
 
   const state: RunState = sameHead
     ? { ...prior, head, attempts: prior.attempts + 1 }
-    : { head, attempts: 1, packageId: null, tokens: 0, rounds: 0 };
+    : { head, ...(options.fixedBase ? { fixedBase: options.fixedBase } : {}), attempts: 1, packageId: null, tokens: 0, rounds: 0 };
 
   const before = new Set(listPackages(cwd, target).map((p) => p.id));
   let resumePackage: string | undefined;
@@ -278,7 +321,7 @@ async function runLocked(options: AutonomousRunOptions, target: AutonomousTarget
 
   const spec: ChildSpec = {
     argv: buildAutonomousShellArgv({
-      prompt: buildAutonomousPrompt({ ref: target.ref, resumePackage, head, scopeFile: autonomousScopeFile(runDir, cwd), ...(target.kind === "range" ? { base: target.base } : {}) }),
+      prompt: buildAutonomousPrompt({ fixedBase: options.fixedBase, ref: target.ref, resumePackage, head, scopeFile: autonomousScopeFile(runDir, cwd), ...(target.kind === "range" ? { base: target.base } : {}) }),
       eventsFile,
       provider: options.provider,
       model: options.model,
@@ -309,7 +352,8 @@ async function runLocked(options: AutonomousRunOptions, target: AutonomousTarget
     },
   );
 
-  const tail = createEventTail(eventsFile);
+  const recorder = options.fixedBase ? new ReviewerActivityRecorder() : undefined;
+  const tail = createEventTail(eventsFile, recorder && ((event) => recorder.observe(event)));
   let progress: Progress = tail.poll();
   let lastGrowth = Date.now();
   let lastSeen = -1;
@@ -324,16 +368,26 @@ async function runLocked(options: AutonomousRunOptions, target: AutonomousTarget
     return all.find((p) => p.id === resumePackage) ?? all.find((p) => !before.has(p.id));
   };
 
+  const usageSnapshot = (): { usage?: ReviewRunUsage } => {
+    if (!progress.usage) return state.usage ? { usage: state.usage } : {};
+    const priorUsage = state.usage ?? (state.tokens > 0
+      ? { total: { totalTokens: state.tokens }, coordinator: {}, reviewers: [], partial: true } : undefined);
+    return { usage: mergeRunUsage(priorUsage, progress.usage) };
+  };
+
   const publish = (stateName: RunProgress["state"], extra: { exitCode?: number; reason?: string } = {}): void => {
     const answers = readAutoAnswers(answersFile);
     const last = answers[answers.length - 1];
     const pkg = currentPackage();
+    const reviewerSessions = recorder?.sessions();
     const snapshot: RunProgress = {
+      ...(reviewerSessions?.length ? { reviewerSessions } : {}),
       state: stateName,
       ref: target.ref,
       phase: progress.phase,
       rounds: state.rounds + progress.rounds,
       tokens: state.tokens + progress.tokens,
+      ...usageSnapshot(),
       startedAt,
       pid: process.pid,
       ...(pkg === undefined ? {} : { packageId: pkg.id }),
@@ -448,6 +502,7 @@ async function runLocked(options: AutonomousRunOptions, target: AutonomousTarget
     attempts: state.attempts,
     rounds: state.rounds + progress.rounds,
     tokens: state.tokens + progress.tokens,
+    ...usageSnapshot(),
     package: found === undefined ? null : { id: found.id, status: found.status, path: path.relative(cwd, found.dir) },
     findings: countFindings(findings),
     floorRefusals: progress.floorRefusals.length,
@@ -463,8 +518,10 @@ async function runLocked(options: AutonomousRunOptions, target: AutonomousTarget
   writeJson(stateFile, {
     head,
     attempts: state.attempts,
+    ...(options.fixedBase ? { fixedBase: options.fixedBase } : {}),
     packageId: found?.id ?? state.packageId,
     tokens: summary.tokens,
+    ...(summary.usage ? { usage: summary.usage } : {}),
     rounds: summary.rounds,
   } satisfies RunState);
   publish(status, { exitCode: summary.exitCode, reason });

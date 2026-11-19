@@ -37,6 +37,8 @@ import {
 import { createLargeReviewConfig } from "../../review/agents/config";
 import { ReviewAgentController } from "../../review/agents/controller";
 import type {
+  ReviewAgentAdapter,
+  ReviewAgentAdapterUsage,
   ReviewAgentAuthority,
   ReviewAgentAdapterRequest,
   ReviewAgentConfig,
@@ -56,6 +58,9 @@ const ENTITY_ROLES: Readonly<Record<string, ReviewAgentRole>> = {
 };
 
 export interface ReviewAgentHostRuntime {
+  readonly providerForReviewer?: (reviewer: string) => ProviderPort;
+  /** A separate external process cannot report through the native provider stream. */
+  readonly observeExternal?: (reviewer: string) => (usage?: ReviewAgentAdapterUsage) => void;
   readonly provider: ProviderPort;
   readonly providerId: string;
   readonly modelId: string;
@@ -248,7 +253,7 @@ export function createReviewAgentHost(options: ReviewAgentHostOptions): ReviewAg
       const external = await createExternalHost(runId, directory, runtime, () => controller, config, snapshot);
       try {
         controller = await ReviewAgentController.open({
-          storageDir: directory, adapters: [nativeAdapter(sourceRoot, () => runtime, snapshot), external.adapter].map((adapter) =>
+          storageDir: directory, adapters: [nativeAdapter(sourceRoot, () => runtime, snapshot), observeExternalAdapter(external.adapter, runtime)].map((adapter) =>
             bindSnapshotAdapter(adapter, directory, snapshot, async () => {
               if (!controller) throw new Error("Review controller unavailable");
               return (await controller.status() as ReviewAgentRunState).activePlan;
@@ -302,7 +307,7 @@ export function createReviewAgentHost(options: ReviewAgentHostOptions): ReviewAg
             external = await createExternalHost(runId, destination, runtime, () => controller, config, snapshot);
             controller = await ReviewAgentController.create({
               storageDir: destination, runId, revision: resolvedRevision, config,
-              adapters: [nativeAdapter(path.join(destination, "source"), () => runtime, snapshot), external.adapter].map((adapter) =>
+              adapters: [nativeAdapter(path.join(destination, "source"), () => runtime, snapshot), observeExternalAdapter(external.adapter, runtime)].map((adapter) =>
                 bindSnapshotAdapter(adapter, destination, snapshot, async () => {
                   if (!controller) throw new Error("Review controller unavailable");
                   return (await controller.status() as ReviewAgentRunState).activePlan;
@@ -434,11 +439,25 @@ export function createReviewAgentHost(options: ReviewAgentHostOptions): ReviewAg
   return { tools, controller: boundController, close };
 }
 
+function observeExternalAdapter(adapter: ReviewAgentAdapter, runtime: ReviewAgentHostRuntime): ReviewAgentAdapter {
+  if (!runtime.observeExternal) return adapter;
+  return { ...adapter, async execute(request, context) {
+    const finish = runtime.observeExternal?.(request.skillRef ?? request.entity);
+    const result = await adapter.execute(request, context);
+    finish?.(result.usage);
+    return result;
+  } };
+}
+
 function nativeAdapter(sourceRoot: string, runtime: () => ReviewAgentHostRuntime, snapshot: RunInputSnapshot) {
   const catalog = snapshot.catalog.agents.map((agent) => agent.definition);
   return createReviewAgentNativeAdapter({
     cwd: sourceRoot,
-    providerFor: async () => { const bound = runtime(); return { provider: bound.provider, providerId: bound.providerId, modelId: bound.modelId }; },
+    providerFor: async request => {
+      const bound = runtime();
+      return { provider: bound.providerForReviewer?.(request.skillRef ?? request.entity) ?? bound.provider,
+        providerId: bound.providerId, modelId: bound.modelId };
+    },
     toolsFor: async (request) => reviewTools(sourceRoot, catalog.find((entry) => entry.name === request.entity)),
     beforeAction: async (request, action) => {
       const authorizeAction = runtime().authorizeReviewAgentAction;

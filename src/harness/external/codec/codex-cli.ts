@@ -439,11 +439,13 @@ function parseUsage(raw: unknown): ExternalEvent | undefined {
   if (typeof raw !== "object" || raw === null) return undefined;
   const usage = raw as Record<string, unknown>;
   const inputTokens = asNumber(usage.input_tokens);
+  const cacheReadTokens = asNumber(usage.cached_input_tokens);
   const outputTokens = asNumber(usage.output_tokens);
   if (inputTokens === undefined && outputTokens === undefined) return undefined;
   return {
     kind: "usage",
     ...(inputTokens === undefined ? {} : { inputTokens }),
+    ...(cacheReadTokens === undefined ? {} : { cacheReadTokens }),
     ...(outputTokens === undefined ? {} : { outputTokens }),
   };
 }

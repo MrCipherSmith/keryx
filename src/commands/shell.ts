@@ -59,7 +59,7 @@ import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import { buildApprovalContext } from "./agent-approval-context";
 import { buildInteractiveAgentTools, interactiveAgentToolNames } from "./interactive-agent-tools";
-import { createFileEventSink, type ShellEvent, type ShellEventSink } from "./shell-events";
+import { createFileEventSink, observeExternalReview, observeReviewProvider, type ShellEvent, type ShellEventSink } from "./shell-events";
 import { approvalCauseLine, causeOfMeta } from "./approval-cause";
 import { evaluateShellApproval, formatShellApprovalHints, rememberExactShellGrant } from "./shell-approval";
 import {
@@ -150,6 +150,9 @@ import {
   isSessionInfoCommand,
 } from "../tui/session-info";
 import { loadSessionLimits, startSessionLimits } from "./model-limits";
+import { ENV_REVIEW_SYSTEM } from "../review/review-system";
+import { AUTONOMOUS_PROFILE, DESK_REVIEW_SHELL, deskReviewRoutingRoot } from "../review/autonomous-profile";
+import { makeDeskReviewProvider } from "./review-desk-provider";
 import { applySavedApiKeys, envWithSavedApiKeys, loadShellConfig, saveShellConfig } from "../lib/shell-config";
 import { formatReasoningOneLiner, resolveThinkDisplayMode } from "../tui/reasoning-display";
 import { parseShellExecCommand, shellPermissionsFingerprint } from "../lib/shell-permissions";
@@ -4761,7 +4764,9 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       }
     }
 
-    const baseFactory = realMakeProvider(emitSystem);
+    const baseFactory: ShellDeps["makeProvider"] = process.env[DESK_REVIEW_SHELL] === "1"
+      ? (provider, model) => makeDeskReviewProvider(provider, model, runtime.cacheDir)
+      : realMakeProvider(emitSystem);
     // flow 268: resolved once at readline startup, same as the TUI branches
     // above; re-resolved on every `/model`/`/connect` re-selection
     // by `realSelectProviderModel`'s own wrapping (see its definition).
@@ -4795,7 +4800,20 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
     if (agentMode) {
       // Agent mode: give the model read-only hands + metaproject orientation.
       exportCallerSession(provider, model);
-      const agentProvider = baseFactory(provider, model, baseUrl);
+      const events =
+        flags.eventsFile === undefined
+          ? undefined
+          : createFileEventSink(
+              flags.eventsFile,
+              (message) => {
+                emitSystem(`${message}\n`);
+              },
+              flags.eventsMaxField,
+            );
+      const meter = process.env[ENV_REVIEW_SYSTEM] === AUTONOMOUS_PROFILE.reviewSystem ? events : undefined;
+      const port = baseFactory(provider, model, baseUrl);
+      const configDir = keryxConfigDir(runtime.cacheDir);
+      const agentProvider = meter ? observeReviewProvider(port, meter, { participant: "coordinator" }, provider, model, configDir) : port;
       let orient: string;
       try {
         orient = await buildOrientation(process.cwd());
@@ -4858,8 +4876,13 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       catch { /* Plain/incomplete projects do not advertise Review agents tools. */ }
       // Same reset-per-turn wiring as the TUI's makeAgentDeps (own spawn_subagent instance).
       let resetSubagentBudget: (() => void) | undefined;
+      const reviewerRoutingRoot = deskReviewRoutingRoot();
       const spawnTool = createSpawnSubagentTool({
         cwd: agentCwd,
+        ...(reviewerRoutingRoot ? { routingProjectRoot: reviewerRoutingRoot } : {}),
+        ...(meter ? { onReviewerActivity: meter.emit, observeExternal: (reviewer: string, runtime: string) => observeExternalReview(meter, reviewer, runtime),
+          observeProvider: (port: ProviderPort, reviewer: string, provider: string, model: string, sessionId?: string) =>
+          observeReviewProvider(port, meter, { participant: "reviewer", reviewer, ...(sessionId && { sessionId }) }, provider, model, configDir) } : {}),
         // Flow 306 (W6 T13): same `shellHooks` as `agentDepsBase.hooks` below.
         ...(shellHooks !== undefined ? { hooks: shellHooks.runtime } : {}),
         getParentModel: () => ({
@@ -4900,6 +4923,10 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           mcp: mcpRuntime,
           ...(readlineReviewAgentHost === undefined ? {} : { reviewAgents: { tools: readlineReviewAgentHost.tools({
             provider: agentProvider, providerId: provider, modelId: model, io: () => readlineReviewIo,
+            ...(meter ? {
+              providerForReviewer: (reviewer: string) => observeReviewProvider(port, meter, { participant: "reviewer", reviewer }, provider, model, configDir),
+              observeExternal: (reviewer: string) => observeExternalReview(meter, reviewer, provider, model),
+            } : {}),
             authorizeReviewAgentAction: ({ signal }) => readlineReviewAgentOpen && signal?.aborted !== true && busBox.current?.leaseView().held() !== true,
           }) } }),
           ...(flags.denyTools !== undefined ? { denyTools: flags.denyTools } : {}),
@@ -4972,16 +4999,6 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       if (flags.resumePick === true && resumeId === undefined) {
         resumeId = bareResumeId();
       }
-      const events =
-        flags.eventsFile === undefined
-          ? undefined
-          : createFileEventSink(
-              flags.eventsFile,
-              (message) => {
-                emitSystem(`${message}\n`);
-              },
-              flags.eventsMaxField,
-            );
       // One REPL run per session opts: `runWithLeaseChoice` re-runs it with
       // `fork`/`takeOver`, or as a new session, after a leased refusal.
       //

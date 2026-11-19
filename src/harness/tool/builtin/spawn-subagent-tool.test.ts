@@ -1,3 +1,4 @@
+import { observeReviewProvider, type ShellEvent } from "../../../commands/shell-events";
 import { afterEach, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
@@ -20,6 +21,7 @@ import {
 } from "./spawn-subagent-tool";
 import { harnessEnvelopePrefix, runAgentTurn } from "../../../commands/agent";
 import type { NormalizedEvent, NormalizedRequest, ProviderPort, StreamOptions } from "../../provider/types";
+import { approveProjectRouting, setRoutingCategory } from "../../routing/settings";
 import { splitUsage } from "../../../review/dispatch-usage";
 import { isEmptyOutput, parseReviewResult } from "../../../review/ledger";
 
@@ -982,6 +984,30 @@ test("an UNAPPROVED project `subagents` routing entry is ignored — the child i
   expect(usedProviderModel).toEqual({ providerId: "ollama", modelId: "parent-model" });
 });
 
+test("an isolated reviewer reads the approved host project routing and verifies the exact planned model", async () => {
+  const project = await mkdtemp(path.join(tmpdir(), "keryx-desk-routing-"));
+  routingRoots.push(project);
+  const checkout = path.join(project, "private-checkout");
+  await mkdir(checkout);
+  const location = { cwd: project, configDir: project };
+  const session = { providerId: "ollama", modelId: "session-model" };
+  await setRoutingCategory("user", location, "subagents", { mode: "model", target: { providerId: "other", modelId: "unconnected" } });
+  await setRoutingCategory("project", location, "subagents", { mode: "model", target: session });
+  let children = 0;
+  const tool = createSpawnSubagentTool({
+    cwd: checkout, routingProjectRoot: project, routingConfigDir: project,
+    getParentModel: () => session, getDetectedProviders: () => [{ name: "ollama" }],
+    makeProvider() { children++; return stubProvider("reviewed"); },
+  });
+  const request = { task: "Inspect the changes", mode: "read_only", expected_model: { provider: "ollama", model: "session-model" } };
+  expect((await tool.invoke(request)).output).toContain("candidate-unverified");
+  expect(approveProjectRouting(location).ok).toBe(true);
+  expect((await tool.invoke({ ...request, expected_model: { provider: "ollama", model: "different" } })).output).toContain("does not match the review plan");
+  expect(children).toBe(0);
+  expect((await tool.invoke(request)).isError).toBe(false);
+  expect(children).toBe(1);
+});
+
 test("a malformed routing.config.json refuses the spawn with the reason, never routing around it", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "keryx-spawn-routing-"));
   routingRoots.push(root);
@@ -1230,14 +1256,19 @@ test("flow 460 (H): save_result_to carries the child's token use as a KERYX_USAG
     },
   });
   try {
+    const events: ShellEvent[] = [];
     const measured = createSpawnSubagentTool({
+      observeProvider: (port, reviewer, provider, model) =>
+        observeReviewProvider(port, { emit: event => events.push(event) }, { participant: "reviewer", reviewer }, provider, model, root),
       cwd: root,
       getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
       makeProvider: () => usageProvider({ inputTokens: 1200, outputTokens: 340 }),
       getDetectedProviders: () => [{ name: "ollama" }],
     });
-    expect((await measured.invoke({ task: "review", save_result_to: "raw/review-logic.txt" })).status).toBe("Completed");
-    const saved = await readFile(path.join(root, "raw/review-logic.txt"), "utf8");
+    expect((await measured.invoke({ task: "review", save_result_to: "raw/review-logic-w2.txt" })).status).toBe("Completed");
+    expect(events.map(event => event.type)).toEqual(["request_start", "request_usage"]);
+    expect(events[1]).toMatchObject({ reviewer: "review-logic", provider: "ollama", model: "fake", usage: { inputTokens: 1200, outputTokens: 340 } });
+    const saved = await readFile(path.join(root, "raw/review-logic-w2.txt"), "utf8");
     const { body, usage } = splitUsage(saved);
     expect(usage).toEqual({ tokens_in: 1200, tokens_out: 340, model: "ollama/fake" });
     expect(parseReviewResult(saved)).toMatchObject({ reviewer: "review-logic", status: "DONE" });
@@ -1251,6 +1282,81 @@ test("flow 460 (H): save_result_to carries the child's token use as a KERYX_USAG
     });
     await silent.invoke({ task: "review", save_result_to: "raw/review-style.txt" });
     expect(await readFile(path.join(root, "raw/review-style.txt"), "utf8")).not.toContain("KERYX_USAGE");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("review dispatch telemetry links actual tool activity and usage across waves and retries", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-review-activity-"));
+  const events: ShellEvent[] = [];
+  const sink = { emit: (event: ShellEvent) => events.push(event) };
+  try {
+    const tool = createSpawnSubagentTool({
+      cwd: root,
+      onReviewerActivity: sink.emit,
+      observeProvider: (port, reviewer, provider, model, sessionId) =>
+        observeReviewProvider(port, sink, { participant: "reviewer", reviewer, ...(sessionId && { sessionId }) }, provider, model, root),
+      getParentModel: () => ({ providerId: "ollama", modelId: "test" }),
+      makeProvider: () => scriptedChildProvider(i => i === 1
+        ? toolCalls({ id: "1", name: "get_cwd", input: '{"private":"SECRET_ARGUMENT"}' }, { id: "2", name: "SECRET_MODEL_GENERATED_NAME" })
+        : [{ kind: "text_delta", text: "SECRET_ANSWER" }, { kind: "usage_update", usage: { exact: true, inputTokens: 12, outputTokens: 3 } }, { kind: "model_end" }]).provider,
+      getDetectedProviders: () => [{ name: "ollama" }],
+    });
+    for (const wave of [1, 2, 2]) {
+      const offset = events.length;
+      await tool.invoke({ task: "SECRET_TASK", save_result_to: `raw/review-logic-w${wave}.txt` });
+      const batch = events.slice(offset);
+      const activity = batch.filter(event => event.type === "reviewer_activity");
+      expect(activity.map(event => event.activity)).toEqual(["started", "tool_start", "tool_end", "tool_start", "tool_end", "finished"]);
+      expect(activity[1]).toMatchObject({ tool: "get_cwd" });
+      expect(activity[2]).toMatchObject({ tool: "get_cwd", ok: false });
+      expect(activity[3]).toMatchObject({ tool: "unknown_tool" });
+      expect(activity[4]).toMatchObject({ tool: "unknown_tool", ok: false });
+      expect(activity[5]).toMatchObject({ outcome: "completed" });
+      const sessionId = activity[0]!.sessionId;
+      for (const event of activity) {
+        expect(event).toMatchObject({ sessionId, reviewer: "review-logic", wave });
+        expect(Number.isFinite(Date.parse(event.at))).toBe(true);
+      }
+      expect(batch.filter(event => event.type === "request_usage")).toContainEqual(expect.objectContaining({
+        sessionId, model: "test", usage: expect.objectContaining({ inputTokens: 12, outputTokens: 3 }),
+      }));
+    }
+    const sessions = events.filter(e => e.type === "reviewer_activity" && e.activity === "started");
+    expect(new Set(sessions.map(e => "sessionId" in e && e.sessionId)).size).toBe(3);
+    expect(JSON.stringify(events)).not.toContain("SECRET_");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("review dispatch telemetry closes errors and aborted sessions without exposing provider output", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-review-ended-"));
+  const events: ShellEvent[] = [];
+  const parent = new AbortController();
+  try {
+    for (const cancel of [false, true]) {
+      const tool = createSpawnSubagentTool({
+        cwd: root,
+        onReviewerActivity: event => events.push(event),
+        getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
+        getDetectedProviders: () => [{ name: "ollama" }],
+        makeProvider: () => {
+          if (cancel) {
+            setTimeout(() => parent.abort(), 10);
+            return abortAwareProvider();
+          }
+          throw new Error("PRIVATE_PROVIDER_FAILURE");
+        },
+      });
+      await tool.invoke({ task: "test", save_result_to: "raw/review-style.txt" }, { signal: parent.signal }).catch(() => {});
+    }
+    expect(events).toMatchObject([
+      { activity: "started", wave: 1 }, { activity: "finished", outcome: "failed" },
+      { activity: "started", wave: 1 }, { activity: "finished", outcome: "cancelled" },
+    ]);
+    expect(JSON.stringify(events)).not.toContain("PRIVATE_PROVIDER_FAILURE");
   } finally {
     await rm(root, { recursive: true, force: true });
   }

@@ -1,3 +1,5 @@
+import path from "node:path";
+
 // How keryx re-invokes ITSELF — one rule, shared by every place that does it
 // (`keryxSelfCommand` in `src/harness/tool/builtin/metaproject-tools.ts`, and
 // `resolveKeryxInvocation` in `src/trigger/schedule.ts`, which the TUI's
@@ -12,4 +14,12 @@
 /** True when `entry` is a compiled binary's embedded entry module, not a real file. */
 export function isCompiledBinaryEntry(entry: string): boolean {
   return entry.startsWith("/$bunfs/") || /^[A-Za-z]:[\\/]~BUN[\\/]/.test(entry);
+}
+
+/** Assets installed beside the native macOS Desktop sidecar, independent of the project being reviewed. */
+export function desktopResourceDirectory(entry = process.argv[1] ?? "", executable = process.execPath): string | undefined {
+  const bin = path.dirname(executable);
+  return isCompiledBinaryEntry(entry) && path.basename(bin) === "MacOS"
+    ? path.resolve(bin, "../Resources")
+    : undefined;
 }

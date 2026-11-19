@@ -1,0 +1,64 @@
+import type { ReviewBoardState, ReviewCard, ReviewCi } from "./types";
+
+export const CI_LABEL: Record<ReviewCi, string> = {
+  passed: "CI passed", failed: "CI failed", pending: "CI running", none: "No checks", unknown: "CI unknown",
+};
+export const DECISION_LABEL = {
+  APPROVED: "Approved", CHANGES_REQUESTED: "Changes requested", REVIEW_REQUIRED: "Review required",
+};
+export const STATE_LABEL = { open: "Open", draft: "Draft", closed: "Closed", merged: "Merged" };
+export const LANES = {
+  attention: "Needs attention", review: "In review", open: "Open", done: "Done",
+} as const;
+export type Lane = keyof typeof LANES;
+export type Dimension = "author" | "assignee" | "reviewer" | "decision" | "state" | "ci";
+export type Filters = Record<Dimension, string[]>;
+export const EMPTY_FILTERS: Filters = {
+  author: [], assignee: [], reviewer: [], decision: [], state: ["open", "draft"], ci: [],
+};
+
+export function stateQuery(states: string[]): ReviewBoardState {
+  if (states.length && states.every((s) => s === "draft" || s === "open")) return "open";
+  if (states.length === 1 && (states[0] === "closed" || states[0] === "merged")) return states[0];
+  return "all";
+}
+
+export function prState(c: ReviewCard) {
+  return c.state === "open" && c.draft ? "draft" : c.state;
+}
+
+function matchesRole(selected: string[], values: string[], complete = true) {
+  return !selected.length || selected.some((v) => values.includes(v) || (v === ":none" && complete && !values.length));
+}
+
+export function filterReviews(cards: ReviewCard[], f: Filters, query: string) {
+  const q = query.trim().toLowerCase();
+  return cards.filter((c) => (
+    (!q || c.title.toLowerCase().includes(q) || String(c.number).includes(q.replace(/^#(?=\d)/, ""))) &&
+    (!f.author.length || f.author.includes(c.author)) &&
+    matchesRole(f.assignee, c.assignees, c.assigneesComplete) &&
+    matchesRole(f.reviewer, c.reviewers, c.reviewersComplete) &&
+    (!f.decision.length || f.decision.includes(c.decision ?? ":none")) &&
+    (!f.ci.length || f.ci.includes(c.ci)) &&
+    (!f.state.length || f.state.includes(prState(c)))
+  ));
+}
+
+export function reviewLane(c: ReviewCard): Lane {
+  if (c.state !== "open") return "done";
+  if (c.localReview?.active) return "review";
+  if (c.localReview?.ready || c.decision === "CHANGES_REQUESTED" || c.reviewers.length || c.ci === "failed") return "attention";
+  return "open";
+}
+
+export function laneReason(c: ReviewCard) {
+  if (c.state !== "open") return STATE_LABEL[c.state];
+  if (c.localReview?.active) return "Keryx review in progress";
+  if (c.localReview?.ready) return "Keryx review result available";
+  if (c.decision === "CHANGES_REQUESTED") return DECISION_LABEL.CHANGES_REQUESTED;
+  if (c.reviewers.length) return "Review requested";
+  if (c.ci === "failed") return "Checks failed";
+  if (c.decision) return DECISION_LABEL[c.decision];
+  if (c.draft) return "Draft pull request";
+  return c.reviewersComplete === false ? "Review requests incomplete" : "No review requested";
+}

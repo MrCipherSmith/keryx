@@ -39,7 +39,6 @@ export function useFocusTrap(ref: React.RefObject<HTMLElement>, active = true, f
 
 // Esc closes only the topmost layer: layers register on a stack in mount order.
 const escapeStack: Array<{ current: (() => void) | null }> = [];
-let escapeBound = false;
 
 function onEscapeKey(e: KeyboardEvent) {
   if (e.key !== "Escape" || e.isComposing || e.defaultPrevented) return;
@@ -54,16 +53,14 @@ export function useEscape(handler: (() => void) | null) {
   const ref = useRef(handler);
   ref.current = handler;
   useEffect(() => {
-    if (!escapeBound) {
-      window.addEventListener("keydown", onEscapeKey);
-      escapeBound = true;
-    }
+    if (!escapeStack.length) window.addEventListener("keydown", onEscapeKey);
     const entry = { get current() { return ref.current; } };
     escapeStack.push(entry);
     overlayListeners.forEach((l) => l());
     return () => {
       const i = escapeStack.indexOf(entry);
       if (i >= 0) escapeStack.splice(i, 1);
+      if (!escapeStack.length) window.removeEventListener("keydown", onEscapeKey);
       overlayListeners.forEach((l) => l());
     };
   }, []);

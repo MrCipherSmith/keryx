@@ -198,6 +198,21 @@ async function recordedPackageHead(packageDir: string): Promise<string | undefin
   }
 }
 
+/** Re-ingesting a report into a pinned PR package adds evidence to that same revision. */
+async function ingestTarget(input: ManagedReviewInput, packageDir: string, head: string | null): Promise<ManagedReviewTarget> {
+  const requested = targetWithHead(input.target, head);
+  if (input.mode !== "ingest" || !input.reviewId) return requested;
+  const file = path.join(packageDir, "manifest.json");
+  if (!await pathExists(file)) return requested;
+  const prior = (JSON.parse(await readFile(file, "utf8")) as ManagedReviewManifest).target;
+  if (prior?.kind !== "pr" || !prior.base || prior.head !== head) return requested;
+  if (prior.ref !== requested.ref || (requested.kind !== "report" && requested.kind !== prior.kind)
+      || (requested.base !== undefined && requested.base !== prior.base)) {
+    throw new Error("The report target conflicts with the pinned PR package. Ingest the same PR, base and head, or start a separate round.");
+  }
+  return { ...requested, ...prior };
+}
+
 /** Whether `sha` names a commit in the repository at `cwd`. */
 async function commitExists(cwd: string, sha: string): Promise<boolean> {
   try {
@@ -499,7 +514,7 @@ export async function createManagedReviewPackage(
   });
   const manifest = buildManifest({
     input,
-    target: targetWithHead(input.target, head),
+    target: await ingestTarget(input, packageDir, head),
     reviewId,
     packageDir,
     flowMatch,
@@ -1329,7 +1344,7 @@ function coverageFromResearch(runs: readonly DispatchRun[]): ReviewCoverageEntry
     if (seen.has(reviewer)) continue;
     seen.add(reviewer);
     // A routed-out role is recorded complete but was never dispatched: coverage.md says so rather than "dispatched".
-    if (status === "complete" && routedOut === true) entries.push({ reviewer, status: "run", reason: "routed out: slice routing gave this role no slice, so it was not dispatched" });
+    if (status === "complete" && routedOut === true) entries.push({ reviewer, status: "skipped", reason: "routed out: slice routing gave this role no slice, so it was not dispatched" });
     else if (status === "complete") entries.push({ reviewer, status: "run", reason: "dispatched; the research ledger records it complete" });
     else if (status === "incomplete") entries.push({ reviewer, status: "needs_context", reason: `dispatched; the research ledger records it incomplete${executionReason === undefined ? "" : ` (${executionReason})`}` });
     else if (status === "not-run" || status === undefined) entries.push({ reviewer, status: "failed", reason: `not run: ${notRunReason ?? "the research ledger records no result"}` });

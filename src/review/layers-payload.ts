@@ -5,7 +5,7 @@ import type { GraphData } from "../gdgraph/types";
 import { shellQuote } from "../lib/shell-quote";
 import { collectEntries } from "../memory/store";
 import { relatedByNamingAndDirectory, TEST_FILE_RE, normalizePath } from "../testing/selection";
-import { collectPages, computeModuleKeyFiles } from "../wiki/collect";
+import { collectPages, computeModuleKeyFiles, WikiCollectionError } from "../wiki/collect";
 import { resolveDescribeSet } from "../wiki/describes";
 import { moduleNameFromProjectPath } from "../wiki/service";
 import { loadPackageGraph, packageGraphDir } from "./layers";
@@ -168,7 +168,8 @@ async function wikiFor(
   try {
     pages = await collectPages(projectRoot);
   } catch (error) {
-    return { items: [], unavailable: `the wiki could not be read — ${reasonOf(error)}` };
+    const location = error instanceof WikiCollectionError ? ` (${path.relative(projectRoot, error.dir)})` : "";
+    return { items: [], unavailable: `the wiki could not be read${location} — ${reasonOf(error)}` };
   }
   const knownPaths = new Set(graph.nodes.map((node) => node.path));
   const keyFilesIndex = computeModuleKeyFiles(graph);

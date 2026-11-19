@@ -67,6 +67,22 @@ describe("plan → ingest with an unplaceable quote → fix commit → plan", ()
     return plans.reduce((newest, candidate) => (candidate.round.number > newest.round.number ? candidate : newest));
   };
 
+  test("a light code-only change dispatches its testing reviewer on the actual diff", async () => {
+    for (const role of ["review-logic", "review-testing-practices"]) {
+      const installed = path.join(repo, ".metaproject/skills/gdskills/review", role);
+      await mkdir(installed, { recursive: true });
+      await writeFile(path.join(installed, "SKILL.md"), `# ${role}\n`);
+    }
+    const recorded = await plan();
+    expect(recorded.roster).toContain("review-testing-practices");
+    const driver = JSON.parse(await readFile(path.join(recorded.package, "drivers/review-testing-practices-w1.json"), "utf8"));
+    expect(driver.slices).toContain("slice-01");
+    expect((await readFile(driver.slicePaths[0].path, "utf8"))).toContain("src/a.ts");
+    const actualDrivers = (await readdir(path.join(recorded.package, "drivers"))).filter(name => name.endsWith(".json"));
+    expect(recorded.dispatches).toBe(actualDrivers.length);
+    expect(recorded.slices.new[0]?.roles).toContain("review-testing-practices");
+  }, E2E_TIMEOUT_MS);
+
   test("the round with the unplaced quote is recorded, and the plan after the fix is a delta round with a fix slice for the finding", async () => {
     const first = await plan();
     expect(first.round.mode).toBe("first");

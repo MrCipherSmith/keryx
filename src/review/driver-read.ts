@@ -73,6 +73,10 @@ export async function readDrivers(inputDir: string, root: string): Promise<Drive
     }
     if (typeof driver.toolLog === "string" && driver.toolLog.trim() !== "") toolLogs[driver.reviewer] = driver.toolLog;
     if (typeof driver.model === "string" && driver.model.trim() !== "") models[driver.reviewer] = driver.model.trim();
+    else if (driver.model && typeof driver.model === "object" && "model" in driver.model && typeof driver.model.model === "string") {
+      const provider = "provider" in driver.model && typeof driver.model.provider === "string" ? driver.model.provider + "/" : "";
+      models[driver.reviewer] = provider + driver.model.model;
+    }
     for (const candidate of definitionCandidates(driver)) {
       const definition = path.resolve(root, candidate);
       if (existsSync(definition)) { ruleFiles[driver.reviewer] = path.relative(root, definition); break; }

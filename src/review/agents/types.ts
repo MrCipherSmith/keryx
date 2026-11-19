@@ -113,6 +113,12 @@ export interface ReviewAgentAdapterRequest {
 }
 
 export interface ReviewAgentAdapterUsage {
+  readonly inputTokens?: number;
+  readonly outputTokens?: number;
+  readonly totalTokens?: number;
+  readonly cacheReadTokens?: number;
+  readonly cacheWriteTokens?: number;
+  readonly partial?: boolean;
   readonly modelRounds?: number;
   readonly toolCalls?: number;
   readonly activeMs?: number;

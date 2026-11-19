@@ -1,3 +1,4 @@
+import { usageCounts, validUsageCounts } from "../../review/run-usage";
 import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -260,13 +261,16 @@ export async function createKeryxExternalGeneralRunner(
           if (exitCode !== 0) throw new Error(`external Keryx general exited with code ${exitCode}`);
           const parsed: unknown = JSON.parse(stdout);
           if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed) ||
-            Object.keys(parsed).sort().join(",") !== "content,metadata" ||
+            !["content,metadata", "content,metadata,usage"].includes(Object.keys(parsed).sort().join(",")) ||
             typeof Reflect.get(parsed, "content") !== "string" || (Reflect.get(parsed, "content") as string).trim() === "" ||
             typeof Reflect.get(parsed, "metadata") !== "object" || Reflect.get(parsed, "metadata") === null ||
             Reflect.get(Reflect.get(parsed, "metadata") as object, "harness") !== "keryx-dedicated-review-agents-worker") {
             throw new Error("dedicated external Keryx worker returned an invalid or empty result");
           }
+          const measured: unknown = Reflect.get(parsed, "usage");
+          if (measured !== undefined && !validUsageCounts(measured)) throw new Error("dedicated external Keryx worker returned invalid usage");
           return {
+            ...(measured && validUsageCounts(measured) ? { usage: { ...usageCounts(measured), ...(Reflect.get(measured, "partial") === true ? { partial: true } : {}) } } : {}),
             content: Reflect.get(parsed, "content"),
             metadata: { externalHarness: "keryx-dedicated-review-agents-worker", exitCode, containment: launcher.platform },
           };

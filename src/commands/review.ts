@@ -1,3 +1,9 @@
+import { deskReviewRoutingRoot } from "../review/autonomous-profile";
+import { RULES_USAGE, runReviewRules } from "./review-rules";
+import { runReviewWatch, WATCH_USAGE } from "./review-watch";
+import { PR_CONTEXT_USAGE, runPrContext } from "./review-pr-context";
+import { DESK_USAGE, runReviewDesk } from "./review-desk-run";
+import { BOARD_USAGE, runReviewBoard } from "./review-board";
 import { reviewCompletionHostAnswer } from "./review-operator";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -771,6 +777,26 @@ export async function reviewCommand(args: string[], seams?: ReviewCommandSeams):
   }
 
   try {
+    if (command === "rules") {
+    await runReviewRules(args.slice(1));
+    return;
+  }
+  if (command === "watch") {
+      await runReviewWatch(args.slice(1));
+      return;
+    }
+    if (command === "pr-context") {
+      await runPrContext(args.slice(1));
+      return;
+    }
+    if (command === "desk-run") {
+      await runReviewDesk(args.slice(1));
+      return;
+    }
+    if (command === "board") {
+      await runReviewBoard(args.slice(1));
+      return;
+    }
     if (command === "attach") {
       await runCreate("attach-review", args.slice(1), seams);
       return;
@@ -1801,14 +1827,15 @@ async function runTier(args: string[]): Promise<void> {
   const signals = tierSignalsFromArgs(args);
   const { session, source } = sessionModelFromArgs(args);
   const catalog = await tierCatalog(args, session);
-  const settings = readRoutingSettings({ cwd: process.cwd() });
+  const routingRoot = deskReviewRoutingRoot() ?? process.cwd();
+  const settings = readRoutingSettings({ cwd: routingRoot });
   const routingConfig = normalizeRoutingConfig(settings.layers, ROUTING_NORMALIZATION);
   // The tier is a reporting field: only the routing receipt below selects the
   // dispatch provider/model, so the tier never ranks candidates itself.
   const tierDecision = decideDispatchModel(session, signals, []);
   const { decision, routed, routingRefused, notices: routeNotices, routing } = await applyReviewRoutingCategory(
     tierDecision,
-    process.cwd(),
+    routingRoot,
     catalog,
     session,
     routingConfig,
@@ -5283,6 +5310,11 @@ run-scoped bridge grant and cannot combine it with the root environment.
  * subcommand, mutating or not; a subcommand with no entry gets the group help.
  */
 const REVIEW_SUBCOMMAND_HELP: ReadonlyMap<string, () => void> = new Map([
+  ["board", () => console.log(BOARD_USAGE)],
+  ["rules", () => console.log(RULES_USAGE)],
+  ["watch", () => console.log(WATCH_USAGE)],
+  ["pr-context", () => console.log(PR_CONTEXT_USAGE)],
+  ["desk-run", () => console.log(DESK_USAGE)],
   ["agents", printReviewAgentHelp],
   ["start", printStartHelp],
   ["ingest", printIngestHelp],
@@ -5442,6 +5474,15 @@ function reviewHelpText(): string {
   return `keryx review
 
 Usage:
+  ${BOARD_USAGE}
+                        Reads pull requests and discussions of a connected GitHub repository.
+  ${WATCH_USAGE}
+  ${RULES_USAGE}
+                        Manages the local macOS pull request watcher.
+  ${DESK_USAGE}
+                        Starts, inspects or cancels a local review of a pull request revision.
+  ${PR_CONTEXT_USAGE}
+                        Reads linked Flow evidence and review history for one pull request.
   keryx review agents serve --project <dir> [--runs-root <dir>] --provider <id> --model <id>
                         --config-dir <dir> --cost-mode cost-unknown --permission-mode trust
   keryx review agents <start|plan|capabilities|status|spawn|wait|cancel|result> --run-dir <dir> ...

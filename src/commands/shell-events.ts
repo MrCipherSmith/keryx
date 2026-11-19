@@ -11,6 +11,11 @@
 // mode that renders differently is a different code path, and then the thing
 // measured is not the thing people run.
 
+import { randomUUID } from "node:crypto";
+import type { ReviewerActivityEvent } from "../harness/tool/builtin/reviewer-activity";
+import type { NormalizedUsage, ProviderPort } from "../harness/provider/types";
+import type { ReviewUsageCounts } from "../review/run-usage";
+import { estimateTurnCostUsd } from "../harness/routing/turn-cost";
 import { appendFileSync } from "node:fs";
 // Through the security facade, not `security/redact`: reaching past a facade
 // reaches everything behind it, and the import policy counts that as a bypass
@@ -18,13 +23,14 @@ import { appendFileSync } from "node:fs";
 import { redactSensitiveText } from "../security/service";
 
 /** Provider-reported usage, in the shape `NormalizedUsage` already carries. */
-export interface ShellEventUsage {
-  readonly inputTokens?: number;
-  readonly outputTokens?: number;
-  readonly totalTokens?: number;
-}
+export type ShellEventUsage = NormalizedUsage;
+export type RequestOwner = { participant: "coordinator" } | { participant: "reviewer"; reviewer: string; sessionId?: string };
+type RequestIdentity = RequestOwner & { provider: string; model?: string; requestId: string; source?: "external-runtime"; partial?: boolean };
 
 export type ShellEvent =
+  | ReviewerActivityEvent
+  | ({ type: "request_start" } & RequestIdentity)
+  | ({ type: "request_usage"; usage: ReviewUsageCounts } & RequestIdentity)
   | { readonly type: "turn_start"; readonly prompt: string; readonly provider: string; readonly model: string }
   | { readonly type: "assistant"; readonly text: string }
   | { readonly type: "tool_call"; readonly name: string; readonly input: string }
@@ -72,6 +78,14 @@ export function serializeShellEvent(event: ShellEvent, fieldLimit: number = FIEL
   const safe = (value: string): string => clip(redactSensitiveText(value), fieldLimit);
   let redacted: ShellEvent;
   switch (event.type) {
+    case "reviewer_activity":
+      redacted = { ...event, reviewer: safe(event.reviewer) };
+      break;
+    case "request_start":
+    case "request_usage":
+      redacted = { ...event, ...(event.model ? { model: safe(event.model) } : {}), provider: safe(event.provider),
+        ...(event.participant === "reviewer" ? { reviewer: safe(event.reviewer) } : {}) };
+      break;
     case "turn_start":
       redacted = { ...event, prompt: safe(event.prompt) };
       break;
@@ -128,5 +142,39 @@ export function createFileEventSink(
         );
       }
     },
+  };
+}
+
+/** Instrument the actual stream (including retries). An interrupted request leaves a start without a receipt. */
+export function observeReviewProvider(port: ProviderPort, sink: ShellEventSink, owner: RequestOwner,
+  provider: string, model: string, userConfigDir: string): ProviderPort {
+  return {
+    describe: () => port.describe(),
+    async *stream(request, opts) {
+      const identity = { ...owner, provider, model, requestId: randomUUID() };
+      sink.emit({ type: "request_start", ...identity });
+      for await (const event of port.stream(request, opts)) {
+        if (event.kind === "usage_update" && event.usage !== undefined) {
+          const u = event.usage;
+          // A Codex subscription does not bill its account at an API model's token price.
+          const usd = provider !== "openai-codex" && !u.cost && u.inputTokens !== undefined && u.outputTokens !== undefined
+            ? estimateTurnCostUsd({ providerId: provider, modelId: model, userConfigDir, ...u, inputTokens: u.inputTokens, outputTokens: u.outputTokens })
+            : undefined;
+          sink.emit({ type: "request_usage", ...identity, usage: { ...u,
+            ...(usd !== undefined && Number.isFinite(usd) && usd >= 0 ? { estimatedCost: { amount: usd, currency: "USD" } } : {}) } });
+        }
+        yield event;
+      }
+    },
+  };
+}
+
+/** External hosts return one receipt per dispatch. A throw or missing receipt leaves the request partial. */
+export function observeExternalReview(sink: ShellEventSink, reviewer: string, provider: string, model?: string) {
+  const identity = { participant: "reviewer" as const, reviewer, source: "external-runtime" as const,
+    requestId: randomUUID(), provider, ...(model ? { model } : {}) };
+  sink.emit({ type: "request_start", ...identity });
+  return (usage?: ReviewUsageCounts & { partial?: boolean }) => {
+    if (usage) sink.emit({ type: "request_usage", ...identity, ...(usage.partial ? { partial: true } : {}), usage });
   };
 }

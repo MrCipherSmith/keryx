@@ -1,7 +1,8 @@
 import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import reviewContextSchema from "../gdskills/bundled/skills/review/review-orchestrator/review-context.schema.json";
+import reviewFindingSchema from "../gdskills/contracts/review-finding.schema.json";
+import reviewerInputSchema from "../gdskills/bundled/skills/review/review-orchestrator/reviewer-input.schema.json";
 import { type JsonSchema, validateJson } from "../gdskills/contracts";
 import { DISPLAY_ID_FORM, displayIdHasHash } from "./display-id";
 import { DEFAULT_SLICE_MAX_BYTES, type SliceManifest, byteLength, manifestSizeProblem, waveBytesOf } from "./slice";
@@ -32,22 +33,14 @@ export type DispatchCheckResult = {
   errors: DispatchCheckError[];
 };
 
-const SCHEMA_CANDIDATES = [
-  new URL("../gdskills/bundled/skills/review/review-orchestrator/reviewer-input.schema.json", import.meta.url),
-  new URL("./bundled/skills/review/review-orchestrator/reviewer-input.schema.json", import.meta.url),
-  // the packaged build runs from dist/, with the bundled skills under src/ one level up
-  new URL("../src/gdskills/bundled/skills/review/review-orchestrator/reviewer-input.schema.json", import.meta.url),
-];
+const reviewerSiblings = new Map<string, JsonSchema>([
+  ["review-context.schema.json", reviewContextSchema],
+  ["review-finding.schema.json", reviewFindingSchema],
+]);
 
-/** The reviewer-input contract is deliberately not a registered ContractName, so it is read from the bundled skill. */
+/** Use the skill's canonical schema in both source and single-binary installations. */
 export async function loadReviewerInputSchema(): Promise<JsonSchema> {
-  for (const url of SCHEMA_CANDIDATES) {
-    const file = fileURLToPath(url);
-    if (existsSync(file)) {
-      return JSON.parse(await readFile(file, "utf8")) as JsonSchema;
-    }
-  }
-  throw new Error("reviewer-input.schema.json is not in this install");
+  return structuredClone(reviewerInputSchema) as JsonSchema;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -110,7 +103,7 @@ export async function checkDispatch(payloads: readonly unknown[], options: Check
 
   for (const [index, payload] of payloads.entries()) {
     const reviewer = isRecord(payload) && typeof payload.reviewer === "string" && payload.reviewer !== "" ? payload.reviewer : `payload[${index}]`;
-    for (const problem of await validateJson(payload, schema)) {
+    for (const problem of await validateJson(payload, schema, reviewerSiblings)) {
       errors.push({ code: "REVIEWER_INPUT_INVALID", reviewer, path: problem.path, message: problem.message });
     }
     if (isRecord(payload)) {

@@ -1201,14 +1201,21 @@ export class OpenAiCompatEngine implements ProviderPort {
         // A trailing usage-bearing chunk (`choices:[]` + `usage:{...}`) -> usage_update.
         if (data.usage !== undefined) {
           const usage = asRecord(data.usage);
+          // OpenRouter reports the account charge in USD-denominated credits.
+          // Other compatible gateways do not define the unit of their cost field.
+          const charge = host === "openrouter.ai" ? asNumber(usage.cost) : undefined;
+          const written = asNumber(asRecord(usage.prompt_tokens_details).cache_write_tokens);
           bodies.push({
             kind: "usage_update",
-            usage: mergeUsage(
+            usage: { ...mergeUsage(
               asNumber(usage.prompt_tokens),
               asNumber(usage.completion_tokens),
               asNumber(usage.total_tokens),
               asNumber(asRecord(usage.prompt_tokens_details).cached_tokens),
             ),
+              ...(written !== undefined && written >= 0 ? { cacheWriteTokens: written } : {}),
+              ...(charge !== undefined && Number.isFinite(charge) && charge >= 0 ? { cost: { amount: charge, currency: "USD" } } : {}),
+            },
           });
         }
 

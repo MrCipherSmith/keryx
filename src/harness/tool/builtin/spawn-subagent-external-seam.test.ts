@@ -42,6 +42,7 @@ function stubProvider(text: string): ProviderPort {
 function makeTool(
   runExternal?: Parameters<typeof createSpawnSubagentTool>[0]["runExternal"],
   onFleetEvent?: Parameters<typeof createSpawnSubagentTool>[0]["onFleetEvent"],
+  observeExternal?: Parameters<typeof createSpawnSubagentTool>[0]["observeExternal"],
 ) {
   return createSpawnSubagentTool({
     cwd: process.cwd(),
@@ -54,6 +55,7 @@ function makeTool(
     })(),
     clock: () => "2020-01-01T00:00:00.000Z",
     ...(runExternal === undefined ? {} : { runExternal }),
+    ...(observeExternal ? { observeExternal } : {}),
     ...(onFleetEvent === undefined ? {} : { onFleetEvent }),
   });
 }
@@ -350,4 +352,19 @@ test("AC4: agent \"claude\" is refused by agents[\"claude-cli\"].enabled=false, 
   expect(result.status).toBe("Denied");
   expect(result.output).toContain("claude-cli");
   expect(spawned).toBe(0);
+});
+
+
+test("external review records a single runtime receipt and identifies an unreported dispatch", async () => {
+  const usage = { inputTokens: 10, outputTokens: 2, cost: { amount: 0.03, currency: "USD" } };
+  for (const measurement of [usage, undefined]) {
+    const receipts: unknown[] = [];
+    const tool = makeTool(async () => ({ ...EXTERNAL_RESULT, ...(measurement ? { usage: measurement } : {}) }), undefined,
+      (reviewer, provider) => {
+        receipts.push({ reviewer, provider });
+        return receipt => receipts.push(receipt);
+      });
+    await tool.invoke({ task: "review", label: "review-logic", runtime: { kind: "external", agent: "codex-cli", sandbox: "read-only" } });
+    expect(receipts).toEqual([{ reviewer: "review-logic", provider: "codex-cli" }, measurement]);
+  }
 });

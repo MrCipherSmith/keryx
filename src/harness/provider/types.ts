@@ -141,6 +141,8 @@ export interface NormalizedEvent {
 
 /** Normalized token usage. Fields are absent when the provider did not report them. */
 export interface NormalizedUsage {
+  /** Charge reported by the provider for this request. */
+  cost?: { amount: number; currency: string };
   inputTokens?: number;
   outputTokens?: number;
   totalTokens?: number;

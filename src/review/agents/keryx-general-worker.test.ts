@@ -23,7 +23,8 @@ function request(signal: AbortSignal): ReviewAgentAdapterRequest {
 test("dedicated worker exposes only scoped bridge tools and consolidates a soldier result", async () => {
   const spawn = { taskId: "auth-worker", task: "inspect auth", attempt: 1, entity: "review-worker", role: "worker" as const, adapterId: "native" };
   const scripted = scriptedProvider([
-    callRound("call-1", "review_agents_bridge_spawn", JSON.stringify(spawn)),
+    callRound("call-1", "review_agents_bridge_spawn", JSON.stringify(spawn)).flatMap(event =>
+      event.kind === "model_end" ? [{ ...event, kind: "usage_update" as const, usage: { inputTokens: 20, outputTokens: 10, cacheReadTokens: 5 } }, event] : [event]),
     okReply.map((event) => event.kind === "text_delta" ? { ...event, text: "one consolidated finding" } : event),
   ]);
   const calls: ExternalBridgeRequest[] = [];
@@ -38,6 +39,7 @@ test("dedicated worker exposes only scoped bridge tools and consolidates a soldi
     request: request(signal), provider: scripted.provider, providerId: "scripted", modelId: "test", bridge, signal,
   });
   expect(result.content).toBe("one consolidated finding");
+  expect(result.usage).toEqual({ inputTokens: 20, outputTokens: 10, totalTokens: 30, cacheReadTokens: 5, partial: true });
   expect(calls).toEqual([{ operation: "spawn", input: spawn }]);
   expect(scripted.requests[0]?.tools?.map((tool) => tool.name)).toEqual([...KERYX_EXTERNAL_BRIDGE_TOOL_NAMES]);
   expect(scripted.requests[0]?.tools?.some((tool) => ["shell_exec", "spawn_subagent", "use_tool", "review_agents_start"].includes(tool.name))).toBe(false);

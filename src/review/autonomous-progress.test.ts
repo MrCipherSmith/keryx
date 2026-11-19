@@ -118,3 +118,43 @@ describe("event tail", () => {
     expect(createEventTail(file).poll().toolCalls).toBe(1);
   });
 });
+
+test("attributes parallel provider requests, leaves an unreported retry partial and ignores aggregate echoes", () => {
+  const parent = { participant: "coordinator" as const, provider: "openai-codex", model: "configured" };
+  const child = { participant: "reviewer" as const, reviewer: "review-logic", provider: "openrouter", model: "review-model" };
+  const rootUsage = { inputTokens: 100, outputTokens: 10, cacheReadTokens: 90, totalTokens: 110 };
+  const childUsage = { inputTokens: 20, outputTokens: 0, cacheWriteTokens: 5, cost: { amount: 0.003, currency: "USD" } };
+  const events = [
+    { type: "request_start", requestId: "1", ...parent },
+    { type: "request_usage", requestId: "1", ...parent, usage: rootUsage },
+    { type: "usage", usage: rootUsage },
+    { type: "request_start", requestId: "2", ...child },
+    { type: "request_usage", requestId: "2", ...child, usage: childUsage },
+    { type: "request_start", requestId: "3", ...child },
+    { type: "turn_end", usage: rootUsage },
+  ];
+  const state = events.reduce(foldEvent, emptyProgress());
+  expect(state.tokens).toBe(130);
+  expect(state.usage).toEqual({
+    total: { inputTokens: 120, outputTokens: 10, totalTokens: 130, cacheReadTokens: 90, cacheWriteTokens: 5 },
+    coordinator: rootUsage,
+    reviewers: [{ partial: true, inputTokens: 20, outputTokens: 0, cacheWriteTokens: 5, totalTokens: 20, reviewer: "review-logic", provider: "openrouter", model: "review-model" }],
+    partial: true,
+  });
+});
+
+test("adds confirmed charges once, preserves a reported zero and withholds sums across currencies", () => {
+  const receipt = (requestId: string, reviewer: string, amount: number, currency: string) => ({
+    type: "request_usage", requestId, participant: "reviewer", reviewer, provider: "vendor", model: "m",
+    usage: { inputTokens: 10, outputTokens: 2, cost: { amount, currency } },
+  });
+  const free = receipt("a", "review-style", 0, "USD");
+  const billed = receipt("b", "review-logic", 0.025, "USD");
+  const complete = [free, billed, billed].reduce(foldEvent, emptyProgress()).usage;
+  expect(complete?.total).toEqual({ inputTokens: 20, outputTokens: 4, totalTokens: 24, cost: { amount: 0.025, currency: "USD" } });
+  expect(complete?.reviewers[0]?.cost).toEqual({ amount: 0, currency: "USD" });
+  expect(complete?.partial).toBe(false);
+  const mixed = [free, receipt("b", "review-logic", 2, "EUR")].reduce(foldEvent, emptyProgress()).usage;
+  expect(mixed?.total.cost).toBeUndefined();
+  expect(mixed?.reviewers[1]?.cost).toEqual({ amount: 2, currency: "EUR" });
+});

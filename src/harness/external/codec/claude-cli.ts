@@ -427,6 +427,8 @@ function usageEvent(obj: JsonObject): ExternalEvent | undefined {
   return {
     kind: "usage",
     ...(inputTotal === undefined ? {} : { inputTokens: inputTotal }),
+    ...(cacheRead === undefined ? {} : { cacheReadTokens: cacheRead }),
+    ...(cacheWrite === undefined ? {} : { cacheWriteTokens: cacheWrite }),
     ...(output === undefined ? {} : { outputTokens: output }),
     ...(cost === undefined ? {} : { costUnits: cost }),
   };

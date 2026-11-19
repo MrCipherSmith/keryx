@@ -115,7 +115,7 @@ function refuseRealHost(what: string): never {
   );
 }
 
-function runner(host: ScheduleHost): NonNullable<ScheduleHost["run"]> {
+export function runner(host: ScheduleHost): NonNullable<ScheduleHost["run"]> {
   if (host.run !== undefined) return host.run;
   if (inTestContext()) refuseRealHost("scheduler (systemctl / launchctl / crontab / loginctl)");
   return defaultRun;
@@ -193,7 +193,7 @@ export function systemdUserUnitDir(host: ScheduleHost = {}): string {
   return path.join(process.env["XDG_CONFIG_HOME"] ?? path.join(homedir(), ".config"), "systemd", "user");
 }
 
-function launchAgentsDir(host: ScheduleHost): string {
+export function launchAgentsDir(host: ScheduleHost): string {
   if (host.launchAgentsDir !== undefined) return host.launchAgentsDir;
   if (inTestContext()) refuseRealHost("LaunchAgents directory (~/Library/LaunchAgents)");
   return path.join(homedir(), "Library", "LaunchAgents");
@@ -211,7 +211,7 @@ export async function lingerStatus(host: ScheduleHost = {}): Promise<"yes" | "no
   return match === null ? "unknown" : (match[1] as "yes" | "no");
 }
 
-function xml(value: string): string {
+export function xml(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 

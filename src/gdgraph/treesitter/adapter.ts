@@ -10,6 +10,8 @@
 // It NEVER throws out (C0-11): every parse error is caught and the file is
 // skipped, so an opt-in ceiling can never break the deterministic seam.
 
+import path from "node:path";
+import { desktopResourceDirectory } from "../../lib/self-invocation";
 import { isCapabilityEnabled, resolveCapability, type CapabilityAdapter, type CapabilitySpec } from "../../capability/seam";
 import { warnCapabilityDegraded } from "../../capability/warn-once";
 import type { CallEdge, SymbolLayer, SymbolNode } from "../types";
@@ -386,12 +388,13 @@ function normalizeParserApi(dep: unknown): ParserApi | null {
     return null;
   }
 
+  type ParserInit = (options?: { locateFile: (name: string, prefix: string) => string }) => Promise<void>;
   const classInit = (ParserClass as unknown as { init?: unknown }).init;
   const init =
     typeof classInit === "function"
-      ? (classInit as () => Promise<void>).bind(ParserClass)
+      ? (classInit as ParserInit).bind(ParserClass)
       : typeof ns.init === "function"
-        ? (ns.init as () => Promise<void>).bind(ns)
+        ? (ns.init as ParserInit).bind(ns)
         : undefined;
 
   // Resolve the grammar loader LAZILY: in 0.22 `Parser.Language.load` only
@@ -410,7 +413,12 @@ function normalizeParserApi(dep: unknown): ParserApi | null {
   };
 
   return {
-    ...(init ? { init } : {}),
+    ...(init ? { init: () => {
+      const resources = desktopResourceDirectory();
+      if (!resources) return init();
+      return init({ locateFile: (name, prefix) =>
+        name === "tree-sitter.wasm" ? path.join(resources, "tree-sitter.wasm") : path.resolve(prefix, name) });
+    } } : {}),
     loadLanguage,
     create: () => new ParserClass(),
   };

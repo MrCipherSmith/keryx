@@ -151,3 +151,15 @@ test("the report template links each finding at the blob of the reviewed SHA, in
   for (const text of copies) expect(text).toContain("/blob/<head>/");
   expect(copies[0]).toBe(copies[1]!);
 });
+
+
+test("report ingest retains the PR range of an existing pinned package and refuses to replace its base", async () => {
+  const ref = "https://github.com/example/repo/pull/17";
+  const target = { kind: "pr", ref, base: "a".repeat(40), head } as const;
+  const initial = await ingest({ mode: "review-flow", target });
+  const result = await ingest({ target: { kind: "report", ref, head } });
+  expect(result.path).toBe(initial.path);
+  expect(result.manifest.target).toEqual(target);
+  await expect(ingest({ target: { ...target, base: "b".repeat(40) } })).rejects.toThrow("conflicts with the pinned PR package");
+  expect(JSON.parse(await readFile(path.join(dir, result.path, "manifest.json"), "utf8")).target).toEqual(target);
+});

@@ -284,7 +284,7 @@ describe("parseCodexLine against the recorded success transcript", () => {
 
   test("turn.completed folds to usage then child_finished, in that order", () => {
     expect(parseCodexEvents(lines[3] as string)).toEqual([
-      { kind: "usage", inputTokens: 34063, outputTokens: 5 },
+      { kind: "usage", inputTokens: 34063, cacheReadTokens: 11008, outputTokens: 5 },
       { kind: "child_finished" },
     ]);
   });

@@ -475,6 +475,7 @@ describe("regressions found by the live smoke (T19)", () => {
       baseDeps({ spawn: fakeSpawn(transcript("claude-cli", "success.stdout.jsonl")).port }),
     );
     expect(result.costUnits).toBeGreaterThan(0);
+    expect(result.usage).toMatchObject({ inputTokens: 5120, outputTokens: 4, cacheReadTokens: 5118, cost: { amount: result.costUnits, currency: "USD" } });
   });
 
   test("an agent that reports no cost still reports none, not zero", async () => {
@@ -484,6 +485,8 @@ describe("regressions found by the live smoke (T19)", () => {
       baseDeps({ spawn: fakeSpawn(transcript("codex-cli", "success.stdout.jsonl")).port }),
     );
     expect(result.costUnits).toBeUndefined();
+    expect(result.usage).toMatchObject({ inputTokens: 34063, outputTokens: 5 });
+    expect(result.usage?.cost).toBeUndefined();
   });
 
   test("a healthy run scores zero parse skips for both agents", async () => {

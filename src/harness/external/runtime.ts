@@ -22,6 +22,7 @@
 // The worktree is removed on EVERY terminal path, including thrown errors. A
 // leaked worktree is a leaked escape hatch: containment (D-08) rests on that
 // directory being disposable, not on the tool roster being complete.
+import type { NormalizedUsage } from "../provider/types";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -79,6 +80,7 @@ export type ExternalCompletionStatus =
 
 /** What one external child run produced. Structurally a `StructuredSubagentResult`. */
 export interface ExternalChildOutcome {
+  readonly usage?: NormalizedUsage;
   readonly status: ExternalCompletionStatus;
   readonly output: string;
   readonly isError: boolean;
@@ -662,6 +664,7 @@ async function runAcpBranch(args: {
   }
 
   const { supervised } = ran;
+  const usage = externalReceipt(supervised.events, ran.record.cost === "missing" ? undefined : ran.record.cost);
   const costUnits = findCostUnits(supervised.events);
   const base = {
     argv: ran.record.argv,
@@ -669,6 +672,7 @@ async function runAcpBranch(args: {
     skippedLines: 0,
     ...(supervised.sessionId === undefined ? {} : { sessionRef: supervised.sessionId }),
     ...(costUnits === undefined ? {} : { costUnits }),
+    ...(usage ? { usage } : {}),
   };
   const text = supervised.assistantText.trim();
   const built: ExternalChildOutcome =
@@ -714,6 +718,7 @@ function buildOutcome(args: {
 }): ExternalChildOutcome {
   const { cause, outcome, argv, worktreePath, finalMessageOnly } = args;
   const sessionRef = findSessionRef(outcome.events);
+  const usage = externalReceipt(outcome.events);
   const costUnits = findCostUnits(outcome.events);
   const text = collectAssistantText(outcome.events, finalMessageOnly);
 
@@ -723,6 +728,7 @@ function buildOutcome(args: {
     skippedLines: outcome.skippedLines,
     ...(sessionRef === undefined ? {} : { sessionRef }),
     ...(costUnits === undefined ? {} : { costUnits }),
+    ...(usage ? { usage } : {}),
   };
 
   if (cause === null) {
@@ -753,6 +759,25 @@ function findSessionRef(events: readonly ExternalEvent[]): string | undefined {
     if (event.kind === "child_started" && event.sessionRef !== undefined) return event.sessionRef;
   }
   return undefined;
+}
+
+/** The CLI result's terminal usage is a dispatch aggregate, including any prior updates. */
+function externalReceipt(events: readonly ExternalEvent[], accountCost?: NormalizedUsage["cost"]): NormalizedUsage | undefined {
+  let receipt: NormalizedUsage | undefined;
+  for (const e of events) {
+    if (e.kind === "usage") {
+      receipt = {
+        ...receipt,
+        ...(e.inputTokens !== undefined ? { inputTokens: e.inputTokens } : {}),
+        ...(e.outputTokens !== undefined ? { outputTokens: e.outputTokens } : {}),
+        ...(e.cacheReadTokens !== undefined ? { cacheReadTokens: e.cacheReadTokens } : {}),
+        ...(e.cacheWriteTokens !== undefined ? { cacheWriteTokens: e.cacheWriteTokens } : {}),
+      };
+    }
+  }
+  const usd = findCostUnits(events);
+  const cost = accountCost ?? (usd === undefined ? undefined : { amount: usd, currency: "USD" });
+  return !receipt && !cost ? undefined : { ...receipt, ...(cost ? { cost } : {}) };
 }
 
 /** The last reported cost. Absent stays absent — a missing figure is never zero. */

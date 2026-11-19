@@ -2155,7 +2155,7 @@ describe("flow 460 F: coverage reconciles with the dispatch record", () => {
     routed.dispatch.runs.push({ ...READY_DISPATCH.runs[0], reviewer: "review-architecture", executionId: "c", routedOut: true } as (typeof routed.dispatch.runs)[number]);
     const created = await ingest({ research: routed });
     const entry = created.manifest.coverage.find((item) => item.reviewer === "review-architecture");
-    expect(entry).toMatchObject({ status: "run" });
+    expect(entry).toMatchObject({ status: "skipped" });
     expect(entry?.reason).toContain("routed out");
     expect(entry?.reason).not.toContain("dispatched;");
     const md = await readFile(path.join(ROOT, created.path, "coverage.md"), "utf8");

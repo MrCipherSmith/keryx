@@ -14,15 +14,21 @@
 // keryx process. Development only: it listens on loopback and is never bundled.
 
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync, mkdirSync, writeFileSync } from "node:fs";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { homedir } from "node:os";
 import { basename, isAbsolute, join, resolve, sep } from "node:path";
 import type { ServerWebSocket, Subprocess } from "bun";
 
+import { reviewWatcherArgs, reviewRuleArgs } from "./reviewWatcher";
+import { reviewRunArgs } from "./reviewRun";
+import { SAFE_BUN_SPAWN_ARGS } from "../../../src/lib/safe-exec";
+
+const runFile = promisify(execFile);
 const PORT = 1421;
 const REPO_ROOT = resolve(import.meta.dir, "../../..");
-const KERYX_CMD = (process.env.KERYX_DEV_CMD ?? `bun run ${join(REPO_ROOT, "src/cli.ts")}`)
-  .split(/\s+/)
-  .filter(Boolean);
+const KERYX_CMD = process.env.KERYX_DEV_CMD?.split(/\s+/).filter(Boolean)
+  ?? ["bun", ...SAFE_BUN_SPAWN_ARGS, join(REPO_ROOT, "src/cli.ts")];
 const MIN_KERYX_VERSION = readMinVersion();
 const SETTINGS_PATH = join(homedir(), ".keryx-desktop-dev", "settings.json");
 const MAX_FILE_BYTES = 16 * 1024 * 1024;
@@ -547,6 +553,21 @@ async function projectCwd(conn: Conn, cwd: string): Promise<string> {
   return conn.root;
 }
 
+async function runReviewCli(root: string, argv: string[]): Promise<unknown> {
+  let stdout: string;
+  try {
+    ({ stdout } = await runFile(KERYX_CMD[0]!, [...KERYX_CMD.slice(1), ...argv], { cwd: root, timeout: 150_000, maxBuffer: 32 * 1024 * 1024 }));
+  } catch (error) {
+    const reason = (error as { stderr?: string }).stderr?.trim();
+    throw new Error(reason || "unavailable: Could not run the Review reader");
+  }
+  try {
+    return JSON.parse(stdout);
+  } catch {
+    throw new Error("unavailable: The selected Keryx CLI did not return a valid Review response.");
+  }
+}
+
 async function handle(ws: ServerWebSocket<Conn>, cmd: string, args: Json): Promise<unknown> {
   const cwd = typeof args.cwd === "string" ? args.cwd : "";
   switch (cmd) {
@@ -581,6 +602,41 @@ async function handle(ws: ServerWebSocket<Conn>, cmd: string, args: Json): Promi
       return null;
     case "app_update_run":
       throw new Error("Browser dev mode runs no Keryx.app; use `keryx app update` in a terminal.");
+    case "review_board": {
+      const root = await projectCwd(ws.data, cwd);
+      const argv = ["review", "board", "--json"];
+      if (args.repo != null) {
+        if (typeof args.repo !== "string" || !args.repo || args.repo.startsWith("-") || /\s/.test(args.repo)) {
+          throw new Error("configuration: Invalid repository");
+        }
+        argv.push("--repo", args.repo);
+      }
+      if (args.repositoriesOnly === true) {
+        if (args.repo != null || args.prState != null || args.number != null) {
+          throw new Error("configuration: Repository discovery cannot be combined with a PR query");
+        }
+        argv.push("--repositories");
+      } else if (args.number != null && args.prState == null && args.repo && Number.isSafeInteger(args.number) && Number(args.number) > 0) {
+        argv.push("--number", String(args.number));
+      } else if (args.number == null && ["open", "closed", "merged", "all"].includes(String(args.prState))) {
+        argv.push("--state", String(args.prState));
+      } else {
+        throw new Error("configuration: Select a PR state or a repository and PR number");
+      }
+      return runReviewCli(root, argv);
+    }
+    case "review_rules": {
+      const root = await projectCwd(ws.data, cwd);
+      return runReviewCli(root, reviewRuleArgs(args.target, args.action));
+    }
+    case "review_watcher": {
+      const root = await projectCwd(ws.data, cwd);
+      return runReviewCli(root, reviewWatcherArgs(args.target, args.action));
+    }
+    case "review_run": {
+      const root = await projectCwd(ws.data, cwd);
+      return runReviewCli(root, reviewRunArgs(args.target, args.action));
+    }
     case "flows_list":
       return flowsList(await projectCwd(ws.data, cwd));
     case "flows_get":
