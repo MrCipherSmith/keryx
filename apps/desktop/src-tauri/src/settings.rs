@@ -19,6 +19,8 @@ pub struct Settings {
     pub keryx_source: KeryxSource,
     pub custom_path: Option<String>,
     pub recent_projects: Vec<String>,
+    /// The browser panel's engine (`auto`: Chromium when a Chrome is installed).
+    pub browser_engine: crate::chromium::engine::EngineSetting,
     /// Absent (0) in files written before D-15.
     pub settings_version: u32,
 }
@@ -149,11 +151,13 @@ mod tests {
             keryx_source: KeryxSource::Custom,
             custom_path: Some("/x/keryx".into()),
             recent_projects: vec!["/p".into()],
+            browser_engine: crate::chromium::engine::EngineSetting::Webkit,
             settings_version: SETTINGS_VERSION,
         };
         s.save(&path).unwrap();
         let raw = std::fs::read_to_string(&path).unwrap();
         assert!(raw.contains("\"keryxSource\": \"custom\""));
+        assert!(raw.contains("\"browserEngine\": \"webkit\""));
         assert_eq!(Settings::load(&path), s);
     }
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { hostKind, pickFile, settingsGet, settingsSet, type KeryxSource, type Settings } from "../platform/commands";
+import { hostKind, pickFile, settingsGet, settingsSet, type BrowserEngineSetting, type KeryxSource, type Settings } from "../platform/commands";
 import { setPrefs, usePrefs, MOD, PALETTES, type PaletteId, type Prefs } from "../lib/prefs";
 import { errMessage } from "../lib/format";
 import { RETENTION_CHOICES, retentionDays, setRetentionDays } from "../lib/retention";
@@ -69,6 +69,18 @@ export function SettingsView({ onBack, agentVersion }: { onBack?: () => void; ag
     rev.current += 1;
     setDirty(true);
     setSettings((cur) => (cur ? { ...cur, ...patch } : cur));
+  };
+
+  // The engine is saved at once, merged into the stored settings (an unsaved keryx choice stays a draft).
+  const setBrowserEngine = async (browserEngine: BrowserEngineSetting) => {
+    try {
+      const stored = await settingsSet({ ...(await settingsGet()), browserEngine });
+      setSettings((cur) => (cur ? { ...cur, browserEngine: stored.browserEngine } : stored));
+      setError(null);
+      toast({ level: "ok", title: "Browser engine saved", body: "It applies to projects opened from now on." });
+    } catch (e) {
+      setError(errMessage(e));
+    }
   };
 
   const save = async () => {
@@ -245,6 +257,29 @@ export function SettingsView({ onBack, agentVersion }: { onBack?: () => void; ag
                 setRetention(Number(v));
               }}
               options={RETENTION_CHOICES.map((d) => ({ id: String(d), label: d === 0 ? "Never" : `${d} d` }))}
+            />
+          </div>
+        </section>
+
+        <section className="settings-group" aria-labelledby="s-browser">
+          <h2 id="s-browser">Browser panel</h2>
+          <div className="settings-row">
+            <div className="settings-row-text">
+              <div className="settings-row-title">Engine</div>
+              <div className="settings-row-help">
+                Chromium runs your installed Google Chrome with a separate profile for each project, so the agent clicks and types for real and
+                reads the network; WebKit is the built-in fallback. Auto picks Chromium when Chrome is installed. Applies to projects opened after the change.
+              </div>
+            </div>
+            <Segmented<BrowserEngineSetting>
+              label="Browser engine"
+              value={settings?.browserEngine ?? "auto"}
+              onChange={(v) => void setBrowserEngine(v)}
+              options={[
+                { id: "auto", label: "Auto" },
+                { id: "chromium", label: "Chromium" },
+                { id: "webkit", label: "WebKit" },
+              ]}
             />
           </div>
         </section>

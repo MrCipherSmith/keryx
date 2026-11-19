@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { onAgentTerminal, onBrowserEvent } from "../platform/panels";
 import { Icon } from "../components/Icon";
-import { setPrefs, SIDE_PANEL_MAX, SIDE_PANEL_MIN, usePrefs, type SidePanelTab } from "../lib/prefs";
+import { fitSidePanelWidth, setPrefs, usePrefs, type SidePanelTab } from "../lib/prefs";
 import { Spinner } from "../components/ui";
 import type { IconName } from "../components/Icon";
 import { slotRef, useActivityRunning } from "./sideSlots";
@@ -52,8 +52,9 @@ export function SidePanel({ cwd }: { cwd: string }) {
     const target = e.currentTarget as HTMLElement;
     target.setPointerCapture(e.pointerId);
     const move = (ev: PointerEvent) => {
-      const w = Math.min(SIDE_PANEL_MAX, Math.max(SIDE_PANEL_MIN, startW + (startX - ev.clientX)));
-      setPrefs({ sidePanelWidth: Math.round(w) });
+      // As wide as the window allows: dragging past that stores no width the chat cannot afford.
+      const sidebar = document.querySelector<HTMLElement>(".session-sidebar")?.offsetWidth ?? 0;
+      setPrefs({ sidePanelWidth: fitSidePanelWidth(startW + (startX - ev.clientX), window.innerWidth, sidebar) });
     };
     const up = () => {
       target.removeEventListener("pointermove", move);

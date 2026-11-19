@@ -38,12 +38,13 @@ mod imp {
     use objc2::runtime::AnyObject;
     use objc2::MainThreadMarker;
     use objc2_app_kit::{NSBitmapImageFileType, NSBitmapImageRep, NSImage};
-    use objc2_foundation::{NSDictionary, NSError, NSString};
-    use objc2_web_kit::{WKContentWorld, WKWebView};
+    use objc2_foundation::{NSDictionary, NSError, NSPoint, NSRect, NSSize, NSString};
+    use objc2_web_kit::{WKContentWorld, WKSnapshotConfiguration, WKWebView};
     use std::sync::Mutex;
 
     fn on_webview<T: Send + 'static>(
         webview: &Webview,
+        timeout: Duration,
         f: impl FnOnce(&WKWebView, MainThreadMarker, mpsc::Sender<Result<T, String>>) + Send + 'static,
     ) -> Result<T, String> {
         let (tx, rx) = mpsc::channel();
@@ -60,7 +61,7 @@ mod imp {
                 let _ = err_tx.send(Err(e.to_string()));
                 e.to_string()
             })?;
-        rx.recv_timeout(JS_TIMEOUT).unwrap_or_else(|_| Err("The page did not answer in time".into()))
+        rx.recv_timeout(timeout).unwrap_or_else(|_| Err("The page did not answer in time".into()))
     }
 
     fn error_text(error: *mut NSError) -> String {
@@ -74,7 +75,12 @@ mod imp {
     /// Run `body` as the body of an async function; it must `return` a string
     /// (JSON for structured results).
     pub fn call_js(webview: &Webview, body: String, world: World) -> Result<String, String> {
-        on_webview(webview, move |wk, mtm, tx| {
+        call_js_within(webview, body, world, JS_TIMEOUT)
+    }
+
+    /// `call_js` with its own time limit, for a script that waits on the user (the element picker).
+    pub fn call_js_within(webview: &Webview, body: String, world: World, timeout: Duration) -> Result<String, String> {
+        on_webview(webview, timeout, move |wk, mtm, tx| {
             let tx = Mutex::new(Some(tx));
             let block = RcBlock::new(move |result: *mut AnyObject, error: *mut NSError| {
                 let Some(tx) = tx.lock().unwrap().take() else { return };
@@ -110,7 +116,16 @@ mod imp {
 
     /// The visible part of the page as PNG bytes.
     pub fn snapshot_png(webview: &Webview) -> Result<Vec<u8>, String> {
-        on_webview(webview, move |wk, _mtm, tx| {
+        snapshot(webview, None)
+    }
+
+    /// A PNG of one rectangle of the page, in the view's points (the page's CSS pixels at zoom 1).
+    pub fn snapshot_png_rect(webview: &Webview, x: f64, y: f64, width: f64, height: f64) -> Result<Vec<u8>, String> {
+        snapshot(webview, Some(NSRect::new(NSPoint::new(x, y), NSSize::new(width, height))))
+    }
+
+    fn snapshot(webview: &Webview, rect: Option<NSRect>) -> Result<Vec<u8>, String> {
+        on_webview(webview, JS_TIMEOUT, move |wk, mtm, tx| {
             let tx = Mutex::new(Some(tx));
             let block = RcBlock::new(move |image: *mut NSImage, error: *mut NSError| {
                 let Some(tx) = tx.lock().unwrap().take() else { return };
@@ -126,13 +141,20 @@ mod imp {
                 });
                 let _ = tx.send(png.map(|d| d.to_vec()).ok_or_else(|| "Could not encode the snapshot".to_string()));
             });
-            // SAFETY: nil configuration snapshots the visible bounds.
-            unsafe { wk.takeSnapshotWithConfiguration_completionHandler(None, &block) };
+            // SAFETY: a nil configuration snapshots the visible bounds; a configured rect only narrows it.
+            unsafe {
+                let config = rect.map(|r| {
+                    let c = WKSnapshotConfiguration::new(mtm);
+                    c.setRect(r);
+                    c
+                });
+                wk.takeSnapshotWithConfiguration_completionHandler(config.as_deref(), &block)
+            };
         })
     }
 
     pub fn go(webview: &Webview, forward: bool) -> Result<(), String> {
-        on_webview(webview, move |wk, _mtm, tx| {
+        on_webview(webview, JS_TIMEOUT, move |wk, _mtm, tx| {
             // SAFETY: plain WebKit calls on the main thread.
             unsafe {
                 if forward {
@@ -147,11 +169,21 @@ mod imp {
 }
 
 #[cfg(target_os = "macos")]
-pub use imp::{call_js, go, snapshot_png};
+pub use imp::{call_js, call_js_within, go, snapshot_png, snapshot_png_rect};
 
 #[cfg(not(target_os = "macos"))]
 pub fn call_js(_: &Webview, _: String, _: World) -> Result<String, String> {
     Err("The browser panel's agent tools need macOS".into())
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn call_js_within(_: &Webview, _: String, _: World, _: Duration) -> Result<String, String> {
+    Err("The browser panel's agent tools need macOS".into())
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn snapshot_png_rect(_: &Webview, _: f64, _: f64, _: f64, _: f64) -> Result<Vec<u8>, String> {
+    Err("Screenshots need macOS".into())
 }
 
 #[cfg(not(target_os = "macos"))]

@@ -954,6 +954,18 @@ export interface RunAgentTurnOptions {
    */
   origin?: "operator" | "task-notification" | "bus-message" | "agent-message";
   /**
+   * The operator's prompt carries content the client marked untrusted (an ACP resource block with
+   * `_meta.keryx.untrusted`, such as page elements picked in Keryx Desktop's browser): the turn holds
+   * untrusted content from its start, as an agent message does.
+   */
+  untrustedPrompt?: boolean;
+  /**
+   * With `untrustedPrompt`: the part of the line the operator wrote. Decisions only the operator may
+   * make from their own words (such as asking for an automatic review) read this, never the
+   * untrusted content around it.
+   */
+  operatorText?: string;
+  /**
    * Whether this turn belongs to an automatic review. Absent: decided from the
    * operator's own line (`isAutomaticReviewRequest`) for an operator turn, and
    * `false` for a notification turn. It is a run mode, not a permission mode: it
@@ -2340,11 +2352,14 @@ async function emitTerminalState(
   }
 }
 
-/** Only an operator turn's own line can ask for an automatic review: a child's task text is model-written. */
-function asksForAutomaticReview(deps: AgentDeps, options: RunAgentTurnOptions, userLine: string): boolean {
+/**
+ * Only an operator turn's own words can ask for an automatic review: a child's task text is
+ * model-written, and untrusted content in the prompt (`operatorText` set) is not the operator's.
+ */
+export function asksForAutomaticReview(deps: Pick<AgentDeps, "subagentBudget">, options: RunAgentTurnOptions, userLine: string): boolean {
   return (
     options.automaticReview ??
-    ((options.origin ?? "operator") === "operator" && deps.subagentBudget === undefined && isAutomaticReviewRequest(userLine))
+    ((options.origin ?? "operator") === "operator" && deps.subagentBudget === undefined && isAutomaticReviewRequest(options.operatorText ?? userLine))
   );
 }
 
@@ -3449,7 +3464,7 @@ async function runAgentTurnCore(
   // effect an injected instruction asked for, so it stays usable.
   // Flow 486: so does a report from a process that is not a keryx shell (`keryx report`), at any of the three bus drains
   // (the turn-start drain above, the text-only drain and the round boundary below). A keryx peer's message does not.
-  let untrustedContentSeen = options.origin === "agent-message" || externalReportAtTurnStart;
+  let untrustedContentSeen = options.origin === "agent-message" || options.untrustedPrompt === true || externalReportAtTurnStart;
   // Flow 425: the review arbiter runs one tier below this model. Only a turn that can ask the operator reports it,
   // so a reviewer subagent on a lighter model does not move the arbiter's tier.
   if (deps.tools.some((tool) => tool.definition.name === "ask_user")) {

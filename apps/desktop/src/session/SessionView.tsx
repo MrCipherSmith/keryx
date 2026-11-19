@@ -1,16 +1,18 @@
-import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { BrandMark } from "../components/BrandMark";
 import { createPortal } from "react-dom";
 import type { PlanEntry } from "../acp/types";
 import { formatTokens } from "../lib/format";
 import { setPrefs, usePrefs, MOD, SESSION_SIDEBAR_MIN } from "../lib/prefs";
 import { Icon } from "../components/Icon";
+import { useToast } from "../components/Toasts";
 import { Dialog, Kbd, Spinner } from "../components/ui";
 import { Composer, type ComposerHandle } from "./Composer";
 import { ActivityPanel, type ActivityTab } from "./ActivityPanel";
 import { runningSubagents } from "./activity";
 import { isRunning } from "../acp/providers";
 import { setActivityRunning, useSlot } from "../panels/sideSlots";
+import { clearPicks, onPicksChange, pickLabel, picksBlock, picksOf, removePick } from "../panels/elementPicks";
 import { GitStatus } from "./GitStatus";
 import { SessionInfoPanel } from "./SessionInfoPanel";
 import { SessionSidebar } from "./SessionSidebar";
@@ -150,6 +152,20 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
     },
   };
   const run = (line: string, opts: { display?: string; replaceId?: number } = {}) => s.runCommand(line, ui, opts);
+  const toast = useToast();
+  // Page elements picked in the browser panel go out with the next message (not with a command line).
+  const picks = useSyncExternalStore(onPicksChange, () => picksOf(cwd));
+  const attachments = useMemo(() => picks.map((p) => ({ key: p.key, label: pickLabel(p), title: `${p.selector}\n${p.url}` })), [picks]);
+  const send = async (text: string) => {
+    if (text.startsWith("/") || picks.length === 0) return run(text);
+    // The picks travel as their own block, marked untrusted, never as the user's text. While a turn
+    // runs this returns false and the draft and picks stay for the next send.
+    const sent = picks;
+    const ok = s.sendPrompt(text, undefined, [picksBlock(sent)]);
+    if (ok) clearPicks(cwd, sent);
+    else if (state.busy) toast({ level: "info", title: "Picked elements wait for this turn", body: "Send again when keryx finishes; your message and picks are kept." });
+    return ok;
+  };
 
   const empty = (
     <div className="session-empty">
@@ -352,7 +368,9 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
             modes={state.modes}
             model={modelOption(state.configOptions)}
             sendKey={prefs.sendKey}
-            onSend={(t) => run(t)}
+            onSend={send}
+            attachments={attachments}
+            onRemoveAttachment={(key) => removePick(cwd, key)}
             onStop={s.cancel}
             onMode={(id) => void s.setMode(id)}
             onModel={(c, v) => void s.setModel(c, v)}

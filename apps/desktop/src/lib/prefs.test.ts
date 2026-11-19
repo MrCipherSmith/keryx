@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { PALETTES, parsePrefs } from "./prefs";
+import { CHAT_MIN, fitSidePanelWidth, PALETTES, parsePrefs } from "./prefs";
 
 describe("palette pref", () => {
   test("defaults to default", () => {
@@ -43,5 +43,27 @@ describe("palette pref", () => {
       expect(block).toContain(`--bg-canvas: ${p.canvas};`);
       expect(block).toContain(`--accent: ${p.accent};`);
     }
+  });
+});
+
+describe("fitSidePanelWidth", () => {
+  test("a width stored in a larger window leaves the chat its minimum and takes at most 60% of the window", () => {
+    // 1200 px wide, session sidebar 248: 1200 - 60 - 248 - 360 = 532 left for the panel.
+    expect(fitSidePanelWidth(1100, 1200, 248)).toBe(532);
+    expect(1200 - 60 - 248 - fitSidePanelWidth(1100, 1200, 248) >= CHAT_MIN).toBe(true);
+    // Without the sidebar the 60% share binds first.
+    expect(fitSidePanelWidth(1100, 1200)).toBe(720);
+  });
+
+  test("a width that fits is kept, and out-of-range values are brought into range", () => {
+    expect(fitSidePanelWidth(520, 1800, 248)).toBe(520);
+    expect(fitSidePanelWidth(100, 1800)).toBe(320);
+    expect(fitSidePanelWidth(Number.NaN, 1800)).toBe(320);
+    expect(fitSidePanelWidth(5000, 4000)).toBe(1200);
+  });
+
+  test("in a very small window the panel keeps a usable floor; no window size keeps the stored width", () => {
+    expect(fitSidePanelWidth(520, 600)).toBe(240);
+    expect(fitSidePanelWidth(520, 0)).toBe(520);
   });
 });

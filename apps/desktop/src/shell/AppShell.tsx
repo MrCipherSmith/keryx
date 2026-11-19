@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { isTauri, listen } from "../platform/backend";
 import { basename } from "../lib/format";
-import { getPrefs, MOD, setPrefs, usePrefs, type SidePanelTab } from "../lib/prefs";
+import { fitSidePanelWidth, getPrefs, MOD, setPrefs, usePrefs, type SidePanelTab } from "../lib/prefs";
 import { SidePanel } from "../panels/SidePanel";
+import { ConsentDialog } from "../panels/ConsentDialog";
 import { overlayOpen } from "../components/ui";
 import { Icon, type IconName } from "../components/Icon";
 import { Menu, type MenuItem } from "../components/Menu";
@@ -104,15 +105,32 @@ function useSidePanelShortcuts(openPalette: () => void): void {
   }, []);
 }
 
+/** The window's inner width, following resizes. */
+function useWindowWidth(): number {
+  const [width, setWidth] = useState(() => (typeof window === "undefined" ? 0 : window.innerWidth));
+  useEffect(() => {
+    const on = () => setWidth(window.innerWidth);
+    window.addEventListener("resize", on);
+    return () => window.removeEventListener("resize", on);
+  }, []);
+  return width;
+}
+
+/** The session sidebar shows beside the chat in a window at least this wide (`useNarrow` in App). */
+const SIDEBAR_WINDOW_MIN = 1000;
+
 export function AppShell(p: ShellProps) {
   const overlay = useTitlebarInset();
   const prefs = usePrefs();
+  const windowWidth = useWindowWidth();
   useSidePanelShortcuts(p.onPalette);
   const side = prefs.sidePanel !== null;
+  const sidebar = prefs.sessionSidebar && windowWidth >= SIDEBAR_WINDOW_MIN ? prefs.sessionSidebarWidth : 0;
+  const sideWidth = fitSidePanelWidth(prefs.sidePanelWidth, windowWidth, sidebar);
   return (
     <div
       className={`app-shell${overlay ? " titlebar-overlay" : ""}${side ? " with-side" : ""}`}
-      style={side ? ({ "--side-w": `${prefs.sidePanelWidth}px` } as React.CSSProperties) : undefined}
+      style={side ? ({ "--side-w": `${sideWidth}px` } as React.CSSProperties) : undefined}
     >
       <TitleBar {...p} />
       <Rail {...p} />
@@ -120,6 +138,7 @@ export function AppShell(p: ShellProps) {
         {p.children}
       </main>
       <SidePanel cwd={p.cwd} />
+      <ConsentDialog />
     </div>
   );
 }

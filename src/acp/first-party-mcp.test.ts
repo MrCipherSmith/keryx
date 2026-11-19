@@ -2,6 +2,14 @@ import { describe, expect, test } from "bun:test";
 import { approvalFromPermissionResponse, permissionOptionsFor } from "./permission";
 import { firstPartyFloorExempt, firstPartyServerOf, parseAcpMcpServers } from "./session-mcp";
 
+test("a first-party entry's owned tool-name prefixes are read; junk and ordinary servers own nothing", () => {
+  const parsed = parseAcpMcpServers("session/new", [
+    { name: "keryx-panels", command: "/app", args: [], env: [], _meta: { keryx: { firstParty: true, owns: ["browser_", "", "x", "Browser_", 7, "browser_"] } } },
+    { name: "other", command: "/o", args: [], env: [], _meta: { keryx: { owns: ["terminal_"] } } },
+  ]);
+  expect([...(parsed.owned ?? new Map()).entries()]).toEqual([["keryx-panels", ["browser_"]]]);
+});
+
 describe("first-party client MCP servers (desktop side panel, D-13)", () => {
   test("an entry marked _meta.keryx.firstParty is recorded with its floor tools", () => {
     const parsed = parseAcpMcpServers("session/new", [

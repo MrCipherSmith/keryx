@@ -2,9 +2,11 @@ pub mod appupdate;
 pub mod bridge;
 pub mod browser;
 pub mod child;
+pub mod chromium;
 pub mod framing;
 pub mod flows;
 pub mod fs;
+pub mod images;
 pub mod gitinfo;
 pub mod locator;
 pub mod navigation;
@@ -27,6 +29,8 @@ const PANEL_MENU_TERMINAL: &str = "panel-terminal";
 const PANEL_MENU_BROWSER: &str = "panel-browser";
 
 pub fn run() {
+    // An import interrupted by a crash leaves a private copy of Chrome's cookie database behind.
+    chromium::cookies::remove_stale_copies();
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
@@ -35,6 +39,8 @@ pub fn run() {
         .manage(pty::PtyManager::default())
         .manage(panels::PanelRoots::default())
         .manage(browser::Browsers::default())
+        .manage(chromium::engine::Engines::default())
+        .manage(chromium::consent::Consents::default())
         .manage(panel_mcp::PanelMcp::default())
         .manage(projects::ProjectWindows::default())
         .setup(|app| {
@@ -119,11 +125,22 @@ pub fn run() {
             panels::pty_list,
             browser::browser_open,
             browser::browser_navigate,
+            browser::browser_pick,
+            browser::browser_pick_cancel,
             browser::browser_go,
             browser::browser_close,
             browser::browser_select,
             browser::browser_layout,
             browser::browser_list,
+            browser::browser_engine,
+            browser::browser_frames,
+            browser::browser_frame,
+            browser::browser_input,
+            images::local_image,
+            chromium::consent::browser_consent_answer,
+            chromium::cookies::cookie_profiles,
+            chromium::cookies::cookie_scan,
+            chromium::cookies::cookie_import,
             panel_mcp::panel_mcp_entry,
             appupdate::app_update_check,
             appupdate::app_update_run,
@@ -134,6 +151,7 @@ pub fn run() {
     app.run(|handle, event| {
         if let RunEvent::Exit = event {
             handle.state::<pty::PtyManager>().close_all();
+            chromium::engine::close_all(handle);
             let _ = std::fs::remove_file(std::env::temp_dir().join(format!("keryx-panels-{}.sock", std::process::id())));
             handle.state::<bridge::AppState>().stop_all();
         }

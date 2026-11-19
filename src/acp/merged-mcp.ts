@@ -11,7 +11,7 @@
 // returned in `shadowed` for the caller to report.
 
 import type { McpToolBinding } from "../commands/interactive-agent-tools";
-import { mergeCatalogs, type ServerCatalog } from "../mcp-servers/catalog";
+import { mergeCatalogs, type CatalogEntry, type ServerCatalog } from "../mcp-servers/catalog";
 import type { McpRuntime } from "../mcp-servers/runtime";
 import type { AcpMcpServerProblem, AcpSessionMcp } from "./session-mcp";
 
@@ -58,6 +58,35 @@ function withoutServers(catalog: ServerCatalog, names: ReadonlySet<string>): Ser
   };
 }
 
+/** The reason a keryx tool left out for a client's owned prefix is reported with. */
+export function ownedToolReason(owner: string, prefix: string): string {
+  return `not offered: the client's own server "${owner}" provides the ${prefix}* tools in this session`;
+}
+
+/**
+ * Drops keryx's tools whose raw names start with a prefix a client first-party
+ * server owns (`_meta.keryx.owns`), recording each as skipped. The client's own
+ * tools are never touched.
+ */
+export function withoutOwned(catalog: ServerCatalog, owned: ReadonlyMap<string, readonly string[]> | undefined): ServerCatalog {
+  if (owned === undefined || owned.size === 0) return catalog;
+  const ownerOf = (rawName: string): [string, string] | undefined => {
+    for (const [server, prefixes] of owned) {
+      const p = prefixes.find((x) => rawName.startsWith(x));
+      if (p !== undefined) return [server, p];
+    }
+    return undefined;
+  };
+  const kept: CatalogEntry[] = [];
+  const skipped = [...catalog.skipped];
+  for (const entry of catalog.entries) {
+    const hit = owned.has(entry.server) ? undefined : ownerOf(entry.rawName);
+    if (hit === undefined) kept.push(entry);
+    else skipped.push({ server: entry.server, rawName: entry.rawName, fqn: entry.fqn, reason: ownedToolReason(hit[0], hit[1]) });
+  }
+  return { entries: kept, skipped };
+}
+
 /** One binding over both sides; `undefined` when neither has servers. */
 export function mergeAcpMcp(keryx: McpRuntime | undefined, clientSet: AcpSessionMcp | undefined): AcpMergedMcp {
   const client = clientMcpServers(clientSet);
@@ -70,12 +99,21 @@ export function mergeAcpMcp(keryx: McpRuntime | undefined, clientSet: AcpSession
     return new Set(client.servers().map((state) => state.name).filter((name) => taken.has(name)));
   };
   const shadowed = [...shadowedNames()].map((name) => ({ name, reason: SHADOWED_CLIENT_SERVER_REASON }));
+  // A client server owns its prefixes only while it is connected (its tools can then be offered in
+  // place of keryx's) and is not shadowed (keryx's own server of that name is then the one in use).
+  const ownedLive = (dropped: ReadonlySet<string>): ReadonlyMap<string, readonly string[]> | undefined => {
+    const owned = client?.owned;
+    if (owned === undefined) return undefined;
+    const connected = new Set((client?.servers() ?? []).filter((state) => state.status === "connected").map((state) => state.name));
+    return new Map([...owned].filter(([server]) => !dropped.has(server) && connected.has(server)));
+  };
   return {
     binding: {
       catalog: () => {
         const dropped = shadowedNames();
         return mergeCatalogs([
-          ...(keryx !== undefined ? [keryx.catalog()] : []),
+          // A client's first-party server may own a tool-name prefix: keryx's tools under it give way.
+          ...(keryx !== undefined ? [withoutOwned(keryx.catalog(), ownedLive(dropped))] : []),
           ...(client !== undefined ? [withoutServers(client.catalog(), dropped)] : []),
         ]);
       },
