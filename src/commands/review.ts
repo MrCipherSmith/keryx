@@ -145,6 +145,7 @@ import { detectFloorRegressions, renderFloorMarkdown, floorCannotScan, FLOOR_FIN
 import { loadRouting, readRoutingSettings, ROUTING_NORMALIZATION } from "../harness/routing/settings";
 import { normalizeRoutingConfig, type NormalizedRoutingConfig } from "../harness/routing/config";
 import { loadModelProfiles, profileKey } from "../harness/routing/model-profile";
+import { contextUnknownLines } from "../harness/routing/context-guidance";
 import { resolveRoutingForRuntime, type RoutingDecisionReceipt } from "../harness/routing/routing-runtime";
 import { buildCatalogRoutingSnapshot, catalogRoutingRevision, estimateModelCostUsd } from "../harness/routing/snapshot-adapter";
 import type { RoutingRequest, RoutingRequirements } from "../harness/routing/routing-request";
@@ -1646,6 +1647,15 @@ async function resolveReviewRouting(
   const env = envWithSavedApiKeys();
   const external = await resolveExternalSetting({ cwd });
   const { config: externalConfig } = loadExternalProvidersConfig();
+  if (session.providerId === "" || session.modelId === "") {
+    // Routing measures every candidate against the caller's session model; without one the
+    // snapshot is refused with a bare "baseline is invalid" that names neither cause nor fix.
+    throw new Error(
+      "review routing needs the session model as its baseline, and none was named. "
+        + "Pass --from-shell-config (the model `keryx shell` saved; if you already did, `keryx shell` has not saved one yet), "
+        + "or --session-provider <id> --session-model <id>, or set KERYX_SESSION_PROVIDER and KERYX_SESSION_MODEL.",
+    );
+  }
   const baseline = { providerId: session.providerId, modelId: session.modelId };
   const parentConnected = connectedPredicateFrom(catalog, baseline);
   const policyConnected = externalAllowedConnectedPredicate(parentConnected, external.value === "on", externalConfig);
@@ -1756,13 +1766,17 @@ async function applyReviewRoutingCategory(
     routingTask,
     routingRequirements,
   );
+  const contextLines = contextUnknownLines(receipt.decision, "review");
   if (receipt.decision.status !== "selected") {
     const reason = receipt.decision.status === "blocked" ? receipt.decision.reason : receipt.decision.status;
     return {
       decision,
       routed: false,
       routingRefused: true,
-      notices: [`routing refused review selection: ${reason} (decision ${receipt.decision.decisionId}); no dispatch target was selected`],
+      notices: [
+        `routing refused review selection: ${reason} (decision ${receipt.decision.decisionId}); no dispatch target was selected`,
+        ...contextLines,
+      ],
       routing: receipt,
     };
   }
@@ -1773,7 +1787,7 @@ async function applyReviewRoutingCategory(
       model: receipt.decision.selection.modelId,
     },
     routed: true,
-    notices: [],
+    notices: contextLines,
     routing: receipt,
   };
 }
@@ -2814,7 +2828,10 @@ async function resolveConformExplainModel(cwd: string, routingTask: string): Pro
   {
     const session = resolveCallerSession();
     if (session.providerId === "" || session.modelId === "") {
-      throw new Error("routing requires the caller session provider/model for review explanations");
+      throw new Error(
+        "routing requires the caller session provider/model for review explanations: "
+          + "set KERYX_SESSION_PROVIDER and KERYX_SESSION_MODEL, or run inside `keryx shell`.",
+      );
     }
     const catalog = await tierCatalog([], session);
     const budget = new RoutingBudgetLedger({
@@ -2836,7 +2853,8 @@ async function resolveConformExplainModel(cwd: string, routingTask: string): Pro
     );
     if (receipt.decision.status !== "selected") {
       const reason = receipt.decision.status === "blocked" ? receipt.decision.reason : receipt.decision.status;
-      throw new Error(`routing refused review explanation: ${reason} (decision ${receipt.decision.decisionId})`);
+      const detail = contextUnknownLines(receipt.decision, "review").map((line) => ` ${line}`).join("");
+      throw new Error(`routing refused review explanation: ${reason} (decision ${receipt.decision.decisionId}).${detail}`);
     }
     const selected = receipt.decision.selection;
     const profile = loadModelProfiles()[profileKey(selected.providerId, selected.modelId)];

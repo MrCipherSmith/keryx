@@ -9,6 +9,8 @@ export type RoutingReason =
   | "candidate-unverified"
   | "capability-missing"
   | "context-insufficient"
+  /** The candidate has no known context length (no profile), so it cannot be shown to fit the request. */
+  | "context-unknown"
   | "cooldown"
   | "budget-exceeded"
   | "cost-unknown"
@@ -24,6 +26,16 @@ export type RoutingReason =
 export type RoutingAssignmentSource = "user-override" | "project" | "user" | "builtin";
 export type RoutingRecommendationSource = "none" | "task-signals" | "agent" | "classifier" | "classifier-fallback";
 export type RoutingFallbackReason = "candidate-fallback" | "class-escalated" | "class-downgraded" | "pin-fallback" | "classifier-fallback";
+
+/**
+ * A selection made on a fact routing could not verify. Today only one: an explicit user pin
+ * (`assignmentSource` `user` or `user-override`) whose context length is unknown is honoured,
+ * because the user chose that model by name, and the decision says so instead of refusing it.
+ */
+export interface RoutingNotice {
+  readonly target: ModelRef;
+  readonly reason: "context-unknown";
+}
 
 export interface RoutingExclusion {
   readonly target?: ModelRef;
@@ -45,6 +57,7 @@ interface RoutingDecisionBase {
   readonly exclusions: readonly RoutingExclusion[];
   readonly classifierReceiptId?: string;
   readonly fallbackReason?: RoutingFallbackReason;
+  readonly notices?: readonly RoutingNotice[];
 }
 
 export type RoutingDecision =

@@ -950,6 +950,7 @@ export function decideReviewGate(input: ReviewGateInput): ReviewGateDecision {
       `${nextStep(open, card)}\n` +
       "Do the next missing step now. Step 1 (Build Review Context Pack) has no CLI command; it is a prose step, so mark it done and move on. " +
       "A command that is refused is not a blocker: run `keryx review --help` for the accepted usage and retry with the right flags. " +
+      "A routing refusal is the exception: when `keryx review tier` reports `dispatchable: false`, the operator's routing configuration refuses the reviewer model and no retry changes that, so report it as the one real blocker with the `routing:` lines it printed. " +
       "A plan item you marked blocked for such a reason is not blocked: mark it in_progress. " +
       "A tool loop guard or an empty child result is not a reason to ask the operator to resend the request or to continue: change the arguments, retry the failed pass on a smaller slice, and keep going. " +
       `Stop only after ${card ? "the `review_complete` card has" : "`keryx review complete` has"} closed the package, or report the one real blocker with its evidence.`,

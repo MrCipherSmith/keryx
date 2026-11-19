@@ -1,5 +1,5 @@
 import { routingDigest, type ModelClassConfig, type NormalizedRoutingConfig, type RoutingAssignment, type RoutingCandidate } from "./config";
-import type { RoutingAssignmentSource, RoutingDecision, RoutingExclusion, RoutingFallbackReason, RoutingReason } from "./decision";
+import type { RoutingAssignmentSource, RoutingDecision, RoutingExclusion, RoutingFallbackReason, RoutingNotice, RoutingReason } from "./decision";
 import { compareModelClasses, isModelClass, modelRefKey, sameModelRef, type ModelClass, type ModelRef } from "./model-class";
 import { ROUTING_CAPABILITIES, type RoutingRequest } from "./routing-request";
 import { isVerifiedRoutingSnapshot, type RoutingModelFacts, type RoutingSnapshot } from "./snapshot";
@@ -128,6 +128,7 @@ function commonDecision(
   exclusions: readonly RoutingExclusion[],
   requestedClass?: ModelClass,
   fallbackReason?: RoutingFallbackReason,
+  notices: readonly RoutingNotice[] = [],
 ) {
   const snapshotDigest = typeof snapshot?.snapshotDigest === "string" && snapshot.snapshotDigest.length > 0
     ? snapshot.snapshotDigest
@@ -145,6 +146,7 @@ function commonDecision(
     ...(requestedClass !== undefined ? { requestedClass } : {}),
     ...(resolved.classifierReceiptId !== undefined ? { classifierReceiptId: resolved.classifierReceiptId } : {}),
     ...(fallbackReason !== undefined ? { fallbackReason } : {}),
+    ...(notices.length > 0 ? { notices } : {}),
   };
 }
 
@@ -160,12 +162,32 @@ function effectiveCostLimit(request: RoutingRequest, config: NormalizedRoutingCo
   return limits.length === 0 ? undefined : Math.min(...limits);
 }
 
+/** Context the request needs: input plus reserved output tokens. */
+function requiredContext(request: RoutingRequest): number {
+  return request.requirements.inputTokensRequired + request.requirements.outputTokensReserved;
+}
+
+/** True when the candidate's context length is unknown and that, alone, would decide against it. */
+function contextUnknownFor(candidate: ModelRef, facts: RoutingModelFacts | undefined, request: RoutingRequest): boolean {
+  return facts !== undefined && facts.contextLength === null && requiredContext(request) > 0 && !sameModelRef(candidate, request.baseline);
+}
+
+/**
+ * A pin the user wrote themself (`keryx routing set … --user`, or a per-request override): routing honours it
+ * even when the model's context length is unknown, because the user named the model. A project pin is not
+ * included: it was written for everyone who opens the project, not chosen by the person running it.
+ */
+function explicitUserPin(resolved: AssignmentResolution): boolean {
+  return resolved.assignment.mode === "model" && (resolved.source === "user" || resolved.source === "user-override");
+}
+
 function candidateRejection(
   candidate: ModelRef,
   facts: RoutingModelFacts | undefined,
   authFailedProviderIds: ReadonlySet<string>,
   request: RoutingRequest,
   config: NormalizedRoutingConfig,
+  allowUnknownContext = false,
 ): RoutingReason | undefined {
   if (!providerAllowed(candidate, request, config)) return "provider-scope-conflict";
   if (authFailedProviderIds.has(candidate.providerId)) return "auth-failed";
@@ -178,10 +200,14 @@ function candidateRejection(
   if (facts.availability === "unknown" && !sameModelRef(candidate, request.baseline)) return "candidate-unverified";
   if (facts.cooldown) return "cooldown";
   if (request.requirements.capabilities.some((capability) => !facts.capabilities.includes(capability))) return "capability-missing";
-  const requiredContext = request.requirements.inputTokensRequired + request.requirements.outputTokensReserved;
   // An unknown context length cannot justify switching to another model, but the
   // baseline is the model the caller already runs on: keeping it needs no proof.
-  if (requiredContext > 0 && (facts.contextLength === null ? !sameModelRef(candidate, request.baseline) : facts.contextLength < requiredContext)) return "context-insufficient";
+  // It is reported apart from "too small": the fix is a profile, not a bigger model.
+  if (contextUnknownFor(candidate, facts, request)) {
+    if (!allowUnknownContext) return "context-unknown";
+  } else if (facts.contextLength !== null && facts.contextLength < requiredContext(request)) {
+    return "context-insufficient";
+  }
   const costLimit = effectiveCostLimit(request, config);
   if (facts.estimatedCostUsd === null && (costLimit !== undefined || config.execution.unknownCost === "deny")) return "cost-unknown";
   if (facts.estimatedCostUsd !== null && (!Number.isFinite(facts.estimatedCostUsd) || facts.estimatedCostUsd < 0)) return "cost-unknown";
@@ -265,11 +291,16 @@ export function resolveRoutingDecision(request: RoutingRequest, snapshot: Routin
   const directTarget = assignment.mode === "baseline" ? request.baseline : assignment.mode === "model" ? assignment.target : undefined;
   let pinFallbackUsed = false;
   if (directTarget !== undefined) {
-    const reason = candidateRejection(directTarget, facts.get(modelRefKey(directTarget)), authFailedProviderIds, request, config)
+    const directFacts = facts.get(modelRefKey(directTarget));
+    const userPin = assignment.mode === "model" && explicitUserPin(resolved);
+    const reason = candidateRejection(directTarget, directFacts, authFailedProviderIds, request, config, userPin)
       ?? minimumClassRejection(directTarget, request, config);
     if (reason === undefined) {
       const fallbackReason = resolved.recommendationSource === "classifier-fallback" ? "classifier-fallback" : undefined;
-      return { ...commonDecision(request, snapshot, config, resolved, exclusions, undefined, fallbackReason), status: "selected", selection: directTarget };
+      const notices: RoutingNotice[] = userPin && contextUnknownFor(directTarget, directFacts, request)
+        ? [{ target: directTarget, reason: "context-unknown" }]
+        : [];
+      return { ...commonDecision(request, snapshot, config, resolved, exclusions, undefined, fallbackReason, notices), status: "selected", selection: directTarget };
     }
     exclusions.push({ target: directTarget, reason });
     const fallbackClass = assignment.mode === "baseline" || assignment.mode === "model" ? assignment.fallbackClass : undefined;
