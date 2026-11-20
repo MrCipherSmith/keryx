@@ -181,7 +181,7 @@ export async function pollWatcher(
   let failure: string | null = null;
   let links: ReturnType<typeof linkedReviewRuns> = [];
   try {
-    await beforeFetch?.();
+    if (beforeFetch) await beforeFetch();
     const board = await fetch(cwd, key);
     validateObservation(board, key);
     links = access((db) => db.query("SELECT 1 FROM watchers WHERE id=? AND lease=? AND state='enabled'").get(id, token)
