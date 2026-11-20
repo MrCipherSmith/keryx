@@ -1,6 +1,6 @@
 import { parseArgs } from "node:util";
 import { z } from "zod";
-import type { PublicationRequest } from "../review/desk-publication-types";
+import type { PublicationOptionId, PublicationRequest } from "../review/desk-publication-types";
 import type { DeskRunKey } from "../review/desk-run-types";
 
 export const DESK_PUBLISH_USAGE =
@@ -10,13 +10,15 @@ const REQUEST_LIMIT = 32 * 1024;
 const attemptId = z.string().regex(/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i);
 const answerKey = z.string().regex(/^[A-Za-z0-9_.:/#-]{1,512}$/)
   .refine(key => key !== "__proto__" && key !== "constructor" && key !== "prototype");
+const optionId = z.string().refine((value): value is PublicationOptionId => /^option:[0-9a-f]{64}$/.test(value));
 const settings = z.strictObject({
   inline: z.boolean(),
   general: z.boolean(),
   keryxTemplate: z.boolean(),
   overlay: z.boolean(),
   verdict: z.enum(["approve", "suggestions", "changes", "comment"]),
-  answers: z.record(answerKey, z.enum(["uphold", "dismiss"])).refine(answers => Object.keys(answers).length <= 100),
+  answers: z.record(answerKey, z.union([z.enum(["uphold", "dismiss"]), optionId]))
+    .refine(answers => Object.keys(answers).length <= 100),
 });
 const request = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("preview"), id: attemptId, settings: settings.optional() }),

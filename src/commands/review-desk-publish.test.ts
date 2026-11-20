@@ -6,7 +6,7 @@ const target = { repo: "org/repo", repositoryId: "R_42", viewer: "reviewer", num
 const settings = {
   inline: true, general: true, keryxTemplate: false, overlay: false, verdict: "suggestions",
   answers: { "round#reviewer:F-001": "uphold" },
-};
+} as const;
 
 describe("Desktop publication requests", () => {
   test("only preview uses the read lane, and submit forwards the reviewed form as one argument", () => {
@@ -21,6 +21,11 @@ describe("Desktop publication requests", () => {
     ]);
   });
 
+  test("accepts a concrete option ID in the draft settings", () => {
+    const action = { kind: "save", id, settings: { ...settings, answers: { "F-001": `option:${"a".repeat(64)}` } } } as const;
+    expect(parsePublicationRequest(JSON.stringify(action))).toEqual(action);
+  });
+
   test("rejects unknown actions, invalid scopes, and incomplete or oversize forms", () => {
     for (const input of [
       { kind: "worker", id },
@@ -30,6 +35,7 @@ describe("Desktop publication requests", () => {
       { kind: "submit", id, settings, digest: "too-short" },
       { kind: "save", id, settings: { ...settings, answers: { constructor: "dismiss" } } },
       { kind: "save", id, settings: { ...settings, answers: { "F-001": "accept" } } },
+      { kind: "save", id, settings: { ...settings, answers: { "F-001": "option:1" } } },
     ]) {
       expect(() => parsePublicationRequest(JSON.stringify(input))).toThrow("Invalid Review publication request.");
     }

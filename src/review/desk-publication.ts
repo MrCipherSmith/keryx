@@ -7,7 +7,7 @@ import { parseDiffHunks, type ReviewComment } from "./bot/post";
 import { screenCommentBody } from "./bot/redaction";
 import { verifyDeskSubject } from "./desk-run-service";
 import { DeskRunStore } from "./desk-run-store";
-import type { PublicationRequest, PublicationSettings, PublicationState } from "./desk-publication-types";
+import type { PublicationAnswer, PublicationOptionId, PublicationRequest, PublicationSettings, PublicationState } from "./desk-publication-types";
 import type { DeskRunKey } from "./desk-run-types";
 import { namedGithubEnvironment, reviewCommandOptions, reviewTool } from "./github-cli";
 import { callGitHub, createGhPort, parseGhJson, renderRoundBlock } from "./pr-comments";
@@ -25,7 +25,7 @@ const placeholder = "{{review}}";
 const eventFor: Record<PublicationSettings["verdict"], ReviewEvent> = {
   approve: "APPROVE", suggestions: "APPROVE", changes: "REQUEST_CHANGES", comment: "COMMENT",
 };
-type Finding = { id: string; severity: VerdictFinding["severity"]; problem: string; file: string | null; line: number | null; impact: string; suggested_fix: string };
+type Finding = { id: string; severity: VerdictFinding["severity"]; problem: string; file: string | null; line: number | null; impact: string; suggested_fix: string; selectedAnswer?: string };
 type Draft = { settings: PublicationSettings; body: string; comments: ReviewComment[]; savedAt: string };
 type Receipt = { url?: string };
 type Prepared = { state: PublicationState; comments: ReviewComment[]; publicationBody: string };
@@ -65,6 +65,7 @@ function markdown(finding: Finding) {
   return [
     `**${finding.severity.toUpperCase()} · ${escapedLocation(finding.id)}**${location ? ` · \`${location}${finding.line ? `:${finding.line}` : ""}\`` : ""}`,
     finding.problem, finding.impact && `Impact: ${finding.impact}`, finding.suggested_fix && `Suggested fix: ${finding.suggested_fix}`,
+    finding.selectedAnswer && `**Selected answer:** ${finding.selectedAnswer}`,
   ].filter(Boolean).join("\n\n");
 }
 
@@ -112,20 +113,42 @@ async function prepare(input: {
   const recordFor = (entry: VerdictFinding) => recorded.records.find(row =>
     row.id === entry.id && (!row.reviewer || row.reviewer === entry.reviewer));
   const questionId = (entry: VerdictFinding) => text(recordFor(entry)?.global_id) || entry.id;
-  const questions = verdict.held.map(entry => {
+  const questions = verdict.held.map<PublicationState["questions"][number]>(entry => {
     const premise = object(recordFor(entry)?.premise);
-    const options = Array.isArray(premise?.options) ? premise.options.filter((v): v is string => typeof v === "string").slice(0, 8) : [];
-    return {
-      id: questionId(entry), text: text(premise?.question) || entry.problem,
-      recommendation: premise?.verdict === "challenged" ? "dismiss" as const : "uphold" as const,
-      ...(options.length ? { options } : {}),
-    };
+    const id = questionId(entry);
+    const labels = Array.isArray(premise?.options) ? [...new Set(premise.options.map(text).filter(Boolean))] : [];
+    const options = labels.map(label => ({
+      // Store the option's identity, so a reordered report never changes a saved choice.
+      id: `option:${createHash("sha256").update(JSON.stringify([id, label])).digest("hex")}` as PublicationOptionId,
+      label,
+    }));
+    const question = { id, text: text(premise?.question) || entry.problem };
+    const recommendation = premise?.verdict === "challenged" ? "dismiss" as const : "uphold" as const;
+    return options.length ? { ...question, options } : { ...question, recommendation };
   });
-  const allowed = new Set(questions.map(question => question.id));
   const saved = request.settings ?? draft?.settings;
-  const answers = Object.fromEntries(Object.entries(saved?.answers ?? {}).filter(([id]) => allowed.has(id)));
-  const findings = [...verdict.open, ...verdict.minors, ...verdict.held.filter(finding => answers[questionId(finding)] === "uphold")]
-    .map(entry => findingOf(entry, recordFor(entry)));
+  const selections = new Map<string, PublicationAnswer>();
+  const selectedLabels = new Map<string, string>();
+  for (const question of questions) {
+    if (!saved || !Object.hasOwn(saved.answers, question.id)) continue;
+    const answer = saved.answers[question.id];
+    if (question.options) {
+      const selected = question.options.find(option => option.id === answer);
+      if (selected) {
+        selections.set(question.id, selected.id);
+        selectedLabels.set(question.id, selected.label);
+      }
+    } else if (answer === "uphold" || answer === "dismiss") selections.set(question.id, answer);
+  }
+  const answers = Object.fromEntries(selections);
+  const findings = [...verdict.open, ...verdict.minors].map(entry => findingOf(entry, recordFor(entry)));
+  for (const entry of verdict.held) {
+    const id = questionId(entry);
+    const selectedAnswer = selectedLabels.get(id);
+    if (selectedAnswer || selections.get(id) === "uphold") findings.push({
+      ...findingOf(entry, recordFor(entry)), ...(selectedAnswer && { selectedAnswer }),
+    });
+  }
   const answered = questions.every(question => Object.hasOwn(answers, question.id));
   const failing = failingItems(readiness).filter(item =>
     item.id !== "premise-decisions" || !answered ||

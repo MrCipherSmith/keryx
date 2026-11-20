@@ -391,9 +391,13 @@ test("interrupted reviewer dialog marks its recorded tokens partial", async () =
 test("previews a GitHub draft, collects finding answers and only publishes the confirmed settings on submit", async () => {
   const actions: PublicationRequest[] = [];
   let refuseSubmission = true;
+  let saved: PublicationSettings | undefined;
   const defaults: PublicationSettings = { inline: true, general: true, keryxTemplate: true, overlay: false, verdict: "changes", answers: {} };
   const questions: PublicationState["questions"] = [
-    { id: "first", text: "Keep the owner finding?", recommendation: "uphold", options: ["Include the ownership finding", "Omit it as out of scope"] },
+    { id: "first", text: "Keep the owner finding?", recommendation: "option:first", options: [
+      { id: "option:first", label: "Include the ownership finding" },
+      { id: "option:second", label: "Omit it as out of scope" },
+    ] },
     { id: "second", text: "Keep the unrelated case?", recommendation: "dismiss" },
   ];
   await show(async () => ({ version: 1, runs: [complete] }), pr, {
@@ -406,46 +410,55 @@ test("previews a GitHub draft, collects finding answers and only publishes the c
         refuseSubmission = false;
         throw new Error("permission: GitHub refused the review. Check the project's account and its permission to submit reviews.");
       }
-      const settings = request.settings ?? defaults;
+      const settings = request.settings ?? saved ?? defaults;
+      if (request.kind === "save") saved = settings;
       return {
         version: 1, settings, questions, overlayAvailable: true,
         body: "Draft lead-in\n\n## Formatted draft\n\n<script>alert(1)</script>\n\n[Ignore link](https://example.invalid)\n\n![Remote image](https://example.invalid/image.png)\n\n<img src='https://example.invalid/raw.png'>",
         inlineCount: settings.inline ? 1 : 0, canSubmit: true, digest: String(actions.length),
-        ...(request.kind === "save" ? { savedAt: time } : {}),
+        ...(saved ? { savedAt: time } : {}),
         ...(request.kind === "submit" ? { publishedUrl: pr.url + "#pullrequestreview-17" } : {}),
       };
     },
   });
   await click("View review result");
   await click("Publish to GitHub");
-  const dialog = document.querySelector<HTMLElement>(".dialog")!;
+  let dialog = document.querySelector<HTMLElement>(".dialog")!;
   expect(dialog.querySelector(".review-publish-markdown h2")?.textContent).toBe("Formatted draft");
   expect(Array.from(dialog.querySelectorAll(".review-publish-markdown :is(script, img, a[href])"), node => node.outerHTML)).toEqual([]);
   expect(dialog.querySelector(".review-publish-markdown a")?.textContent).toBe("Ignore link");
   expect(btn("Submit review").disabled).toBe(true);
   expect(dialog.textContent).toContain("Question 1 of 2");
-  expect(dialog.textContent).toContain("Recommended");
-  expect(dialog.textContent).toContain("Include the ownership finding");
-  const field = (name: string) => [...dialog.querySelectorAll<HTMLLabelElement>("label")].find(label => label.textContent?.trim().startsWith(name))!.querySelector<HTMLInputElement>("input")!;
+  const label = (name: string) => [...dialog.querySelectorAll<HTMLLabelElement>("label")].find(label => label.textContent?.trim().startsWith(name));
+  const field = (name: string) => label(name)!.querySelector<HTMLInputElement>("input")!;
+  expect(label("Include the ownership finding")?.textContent).toContain("Recommended");
+  expect(label("Keep finding")).toBeUndefined();
   expect(field("Request changes").checked).toBe(true);
   await act(async () => field("Project overlay").click());
   await act(async () => field("Approve with suggestions").click());
-  await act(async () => field("Keep finding").click());
+  await act(async () => field("Omit it as out of scope").click());
   await click("Next question");
   expect(dialog.textContent).toContain("Question 2 of 2");
   await act(async () => field("Dismiss finding").click());
   expect(actions.every(action => action.kind === "preview")).toBe(true);
   await click("Save locally");
-  expect(actions.at(-1)).toMatchObject({ kind: "save", settings: { verdict: "suggestions", overlay: true, answers: { first: "uphold", second: "dismiss" } } });
+  const answers = { first: "option:second", second: "dismiss" };
+  expect(actions.at(-1)).toMatchObject({ kind: "save", settings: { verdict: "suggestions", overlay: true, answers } });
   expect(dialog.textContent).toContain("Last saved locally");
+  await click("Close");
+  await click("Publish to GitHub");
+  dialog = document.querySelector<HTMLElement>(".dialog")!;
+  expect(field("Omit it as out of scope").checked).toBe(true);
+  await click("Next question");
+  expect(field("Dismiss finding").checked).toBe(true);
   const digest = String(actions.length);
   await click("Submit review");
-  expect(actions.at(-1)).toMatchObject({ kind: "submit", digest });
+  expect(actions.at(-1)).toMatchObject({ kind: "submit", digest, settings: { answers } });
   expect(dialog.querySelector('[role="alert"]')?.textContent).toContain("permission to submit reviews");
   expect(field("Approve with suggestions").checked).toBe(true);
   expect(field("Dismiss finding").checked).toBe(true);
   await click("Submit review");
-  expect(actions.at(-1)).toMatchObject({ kind: "submit", digest });
+  expect(actions.at(-1)).toMatchObject({ kind: "submit", digest, settings: { answers } });
   expect(dialog.textContent).toContain("Review published on GitHub.");
   await click("Close");
 });

@@ -83,7 +83,7 @@ beforeEach(() => {
     { id: "F-001", global_id: "fixture#F-001", severity: "major", reviewer: "review-logic", problem: "The filter drops active rows.",
       file: "src/a.ts", line: 1, impact: "Open rows are hidden.", suggested_fix: "Keep active rows." },
     { id: "F-002", global_id: "fixture#F-002", severity: "minor", reviewer: "review-logic", problem: "A label is ambiguous.",
-      premise: { verdict: "challenged", question: "Is this label intentional?", options: ["Keep the finding.", "Dismiss the finding."] } },
+      premise: { verdict: "challenged", question: "Is this label intentional?" } },
   ]);
   writeFileSync(path.join(pkg, "report.md"), "Fixture review.\n\nNot verified: 1\n");
   mkdirSync(path.join(project, ".metaproject"));
@@ -134,4 +134,43 @@ test("partial approval and a moved revision cannot send a review", async () => {
   expect(stale.savedAt).toBeDefined();
   expect(stale.blockedReason).toContain("revision moved");
   expect(existsSync(process.env.FIXTURE_BODY!)).toBe(false);
+});
+
+test("a concrete report option is saved by identity and published with the finding", async () => {
+  const findingsFile = path.join(directory, "package", "findings.json");
+  const findings = JSON.parse(readFileSync(findingsFile, "utf8"));
+  const options = ["Rename the label.", "Keep the label and add help text."];
+  const writeOptions = (labels: string[]) => {
+    findings[1].premise = { verdict: "owner-decision", question: "How should we clarify the label?", options: labels };
+    json(findingsFile, findings);
+  };
+  writeOptions(options);
+
+  const preview = await requestDeskPublication(project, key, { kind: "preview", id });
+  const question = preview.questions[0]!;
+  expect(question.options?.map(option => option.label)).toEqual(options);
+  expect(question.recommendation).toBeUndefined();
+  const invalid = await requestDeskPublication(project, key, { kind: "preview", id,
+    settings: { ...preview.settings, answers: { [question.id]: "uphold" } } });
+  expect(invalid.settings.answers).toEqual({});
+  expect(invalid.canSubmit).toBe(false);
+
+  const selected = question.options![1]!;
+  const draft = await requestDeskPublication(project, key, { kind: "save", id,
+    settings: { ...preview.settings, answers: { [question.id]: selected.id } } });
+  expect(draft.body).toContain(`**Selected answer:** ${selected.label}`);
+  expect(draft.body).not.toContain(options[0]!);
+  expect(existsSync(process.env.FIXTURE_BODY!)).toBe(false);
+
+  writeOptions([options[0]!]);
+  const removed = await requestDeskPublication(project, key, { kind: "preview", id });
+  expect(removed.settings.answers).toEqual({});
+  expect(removed.canSubmit).toBe(false);
+
+  writeOptions([...options].reverse());
+  const reopened = await requestDeskPublication(project, key, { kind: "preview", id });
+  expect(reopened.settings.answers[question.id]).toBe(selected.id);
+  expect(reopened.canSubmit).toBe(true);
+  await requestDeskPublication(project, key, { kind: "submit", id, settings: reopened.settings, digest: reopened.digest });
+  expect(JSON.parse(readFileSync(process.env.FIXTURE_BODY!, "utf8")).body).toContain(`**Selected answer:** ${selected.label}`);
 });

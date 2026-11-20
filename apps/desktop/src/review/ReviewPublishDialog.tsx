@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { PublicationRequest, PublicationSettings, PublicationState } from "../../../../src/review/desk-publication-types";
+import type { PublicationAnswer, PublicationRequest, PublicationSettings, PublicationState } from "../../../../src/review/desk-publication-types";
 import type { DeskRunKey } from "../../../../src/review/desk-run-types";
 import { renderMarkdown } from "../components/Markdown";
 import { Dialog, Spinner } from "../components/ui";
@@ -18,6 +18,15 @@ const verdicts: ReadonlyArray<{ value: PublicationSettings["verdict"]; label: st
   { value: "changes", label: "Request changes" },
   { value: "comment", label: "Comment only" },
 ];
+
+const findingActions = [
+  { id: "uphold", label: "Keep finding" },
+  { id: "dismiss", label: "Dismiss finding" },
+] as const;
+
+function choicesFor(question: PublicationState["questions"][number]): ReadonlyArray<{ id: PublicationAnswer; label: string }> {
+  return question.options?.length ? question.options : findingActions;
+}
 
 function Preview({ text }: { text: string }) {
   const html = useMemo(() => {
@@ -97,10 +106,7 @@ export function ReviewPublishDialog({ cwd, target, id, command = reviewPublish, 
   const posted = Boolean(draft?.publishedUrl);
   const questions = draft?.questions ?? [];
   const question = questions[Math.min(questionIndex, questions.length - 1)];
-  const unanswered = questions.filter(({ id }) => {
-    const answer = settings?.answers[id];
-    return answer !== "uphold" && answer !== "dismiss";
-  }).length;
+  const unanswered = questions.filter(item => !choicesFor(item).some(choice => choice.id === settings?.answers[item.id])).length;
   const canUsePreview = !!draft && !!settings && !busy && !previewStale && !posted;
 
   return createPortal(<Dialog title="Publish to GitHub" width={780} focusRoot
@@ -149,14 +155,12 @@ export function ReviewPublishDialog({ cwd, target, id, command = reviewPublish, 
           </div>
           <fieldset disabled={busy}>
             <legend>{question.text}</legend>
-            {!!question.options?.length && <ul className="review-publish-question-options">
-              {question.options.map((option, index) => <li key={index}>{option}</li>)}
-            </ul>}
-            {(["uphold", "dismiss"] as const).map(answer => <label key={answer}>
-              <input type="radio" name={answerName} checked={settings.answers[question.id] === answer}
-                onChange={() => update({ ...settings, answers: { ...settings.answers, [question.id]: answer } })} />
-              {answer === "uphold" ? "Keep finding" : "Dismiss finding"}
-              {answer === question.recommendation && <span className="badge">Recommended</span>}
+            {!question.recommendation && <small className="review-detail-muted">The report has no recommendation.</small>}
+            {choicesFor(question).map(choice => <label key={choice.id}>
+              <input type="radio" name={answerName} value={choice.id} checked={settings.answers[question.id] === choice.id}
+                onChange={() => update({ ...settings, answers: { ...settings.answers, [question.id]: choice.id } })} />
+              {choice.label}
+              {choice.id === question.recommendation && <span className="badge">Recommended</span>}
             </label>)}
           </fieldset>
           <div className="review-publish-navigation">

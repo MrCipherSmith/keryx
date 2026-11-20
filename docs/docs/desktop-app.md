@@ -90,10 +90,12 @@ where the generated comment should appear.
 The review suggests a verdict based on its findings and coverage. You can
 change it. **Approve with suggestions** sends a GitHub approval with the
 selected review text. An incomplete review can be sent as a comment or request
-changes. Questions about findings show a recommendation and let you keep or
-dismiss each finding before publishing.
+changes. When the report gives you options for a finding, select the answer you
+want to include with that finding. Other questions let you keep or dismiss the
+finding and highlight the recommended action.
 
-**Save locally** preserves the draft for the next time you open this review.
+**Save locally** preserves the draft and its selected answers for the next time
+you open this review.
 Only **Submit review** writes to GitHub. Keryx rechecks the GitHub account,
 repository, and reviewed revision before submitting. If the PR has moved or
 closed, you can still save the draft locally.

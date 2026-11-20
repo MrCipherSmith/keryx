@@ -1,11 +1,14 @@
 // Desktop wire contract for the draft a user can explicitly publish from Review.
+export type PublicationOptionId = `option:${string}`;
+export type PublicationAnswer = "uphold" | "dismiss" | PublicationOptionId;
+
 export interface PublicationSettings {
   inline: boolean;
   general: boolean;
   keryxTemplate: boolean;
   overlay: boolean;
   verdict: "approve" | "suggestions" | "changes" | "comment";
-  answers: Record<string, "uphold" | "dismiss">;
+  answers: Record<string, PublicationAnswer>;
 }
 
 export type PublicationRequest =
@@ -21,8 +24,8 @@ export interface PublicationState {
   questions: {
     id: string;
     text: string;
-    recommendation: "uphold" | "dismiss";
-    options?: string[];
+    recommendation?: PublicationAnswer;
+    options?: { id: PublicationOptionId; label: string }[];
   }[];
   overlayAvailable: boolean;
   canSubmit: boolean;
