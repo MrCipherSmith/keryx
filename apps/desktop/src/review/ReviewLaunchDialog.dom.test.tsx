@@ -53,7 +53,7 @@ const changeText = (el: HTMLInputElement, value: string) => act(async () => {
   Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(el, value);
   el.dispatchEvent(new Event("input", { bubbles: true }));
 });
-const limit = (text: string) => [...document.querySelectorAll("label")].find(l => l.textContent?.startsWith(text))!.querySelector("input")!;
+const limit = (text: string) => [...document.querySelectorAll("label")].find(l => l.textContent?.trimStart().startsWith(text))!.querySelector("input")!;
 const addModel = (tier: string) => document.querySelector<HTMLButtonElement>(`[aria-label="Add model to ${tier} tier"]`)!;
 async function pickModel(tier: string, provider: string) {
   await click(addModel(tier));
