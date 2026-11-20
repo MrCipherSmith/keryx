@@ -271,6 +271,27 @@ test("a refused send keeps the files unsent, so unmounting discards them", async
   expect(discarded).toEqual([path]);
 });
 
+test("a send refused after the session was switched away discards its files", async () => {
+  await act(() => root.render(null));
+  const discarded: string[] = [];
+  let release: (ok: boolean) => void = () => {};
+  const path = "/tmp/keryx-chat-images-late/a.png";
+  const base = {
+    saveImage: async () => path,
+    discardFile: async (p: string) => { discarded.push(p); },
+    loadImage: async () => SHOT,
+    onSend: () => new Promise<boolean>((resolve) => { release = resolve; }),
+  };
+  await act(() => root.render(createElement(Composer, { ...props("LATE1", createRef()), ...base })));
+  await pasteImages(1);
+  await act(async () => { host.querySelector<HTMLButtonElement>('[aria-label="Send"]')?.click(); });
+  await act(() => root.render(createElement(Composer, { ...props("LATE2", createRef()), ...base })));
+  expect(discarded).toEqual([]);
+  await act(async () => { release(false); });
+  expect(discarded).toEqual([path]);
+  await act(() => root.render(null));
+});
+
 test("four pasted images are saved one at a time and a busy refusal is retried", async () => {
   await act(() => root.render(null));
   let active = 0;

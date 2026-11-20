@@ -201,6 +201,19 @@ test("the unavailable note is linked to the disabled Edit button by aria-describ
   expect(note?.getAttribute("role")).toBe("note");
 });
 
+test("the not-sent note disappears once the message is resent", async () => {
+  await act(() => root.render(createElement(Transcript, {
+    items: [{ kind: "user", id: 71, text: "hello", failed: true } as Item],
+    busy: false, replaying: false, empty: null,
+    onEditMessage: () => true,
+  })));
+  expect(host.querySelector('[role="alert"]')).not.toBeNull();
+  await act(() => host.querySelector<HTMLButtonElement>('[aria-label="Edit message"]')?.click());
+  await act(() => host.querySelector<HTMLButtonElement>('button[type="submit"]')?.click());
+  expect(host.querySelector("textarea")).toBeNull();
+  expect(host.querySelector('[role="alert"]')).toBeNull();
+});
+
 test("a literal image marker in message text is not treated as an attachment", async () => {
   const text = "Example\n\n[Local image attachments (use local tools to inspect):]\n/tmp/keryx-chat-images-test/example.png";
   await show([{ kind: "user", id: 1, text }]);

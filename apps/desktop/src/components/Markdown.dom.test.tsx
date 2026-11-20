@@ -81,6 +81,7 @@ test("soft-wrapped and inline-formatted PR references become links", async () =>
   const anchors = Array.from(host.querySelectorAll<HTMLAnchorElement>(".md a"));
   expect(anchors.length).toBe(3);
   expect(anchors[1]?.getAttribute("aria-hidden")).toBeNull();
+  expect(anchors[1]?.getAttribute("aria-label")).toBe("PR #77");
   expect(anchors[1]?.getAttribute("tabindex")).not.toBe("-1");
   expect(anchors[2]?.getAttribute("tabindex")).toBe("-1");
   expect(anchors[2]?.getAttribute("aria-hidden")).toBe("true");

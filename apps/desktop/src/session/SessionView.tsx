@@ -1,3 +1,4 @@
+import { lookupWithRetry } from "../lib/repoLookup";
 import { forwardRef, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { BrandMark } from "../components/BrandMark";
 import { createPortal } from "react-dom";
@@ -161,29 +162,9 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
   const run = (line: string, opts: { display?: string; replaceId?: number } = {}) => s.runCommand(line, ui, opts);
   const toast = useToast();
   const [repo, setRepo] = useState<{ cwd: string; name: string | null } | null>(null);
-  useEffect(() => {
-    let active = true;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    // A rejection (for example "busy" while the bridge is saturated) is retryable; only a successful answer,
-    // or running out of retries, is remembered.
-    const delays = [400, 1200, 3000];
-    const attempt = (n: number) => {
-      void gitRepository(cwd).then(
-        (name) => { if (active) setRepo({ cwd, name }); },
-        () => {
-          if (!active) return;
-          const delay = delays[n];
-          if (delay === undefined) { setRepo({ cwd, name: null }); return; }
-          timer = setTimeout(() => attempt(n + 1), delay);
-        },
-      );
-    };
-    attempt(0);
-    return () => {
-      active = false;
-      if (timer !== undefined) clearTimeout(timer);
-    };
-  }, [cwd]);
+  // Only a real answer is remembered: a rejection (for example "busy") is retried with jitter and, if it never
+  // succeeds, the repository simply stays unknown rather than being cached as "no GitHub remote".
+  useEffect(() => lookupWithRetry(() => gitRepository(cwd), (name) => setRepo({ cwd, name })), [cwd]);
   const prLinks = useMemo<PrLinks>(() => ({
     repository: repo?.cwd === cwd ? repo.name ?? undefined : undefined,
     openExternal: (url) => void openExternal(url).catch((e) =>

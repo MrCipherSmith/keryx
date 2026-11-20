@@ -24,6 +24,8 @@ export const UserMessage = memo(function UserMessage({ message: text, context, o
   const editButton = useRef<HTMLButtonElement>(null);
   const returnFocus = useRef(false);
   const [draft, setDraft] = useState<string | null>(null);
+  // Once this message has been resent successfully its "not sent" note has done its job.
+  const [resent, setResent] = useState(false);
   useLayoutEffect(() => {
     if (draft !== null || !returnFocus.current) return;
     returnFocus.current = false;
@@ -44,7 +46,7 @@ export const UserMessage = memo(function UserMessage({ message: text, context, o
         {draft === null ? text : (
           <form className="user-msg-edit" onSubmit={(e) => {
             e.preventDefault();
-            if ((draft.trim() || hasContext) && (context ? onEdit?.(draft, context) : onEdit?.(draft))) { returnFocus.current = true; setDraft(null); }
+            if ((draft.trim() || hasContext) && (context ? onEdit?.(draft, context) : onEdit?.(draft))) { returnFocus.current = true; setResent(true); setDraft(null); }
           }}>
             <textarea aria-label="Edit sent message" autoFocus rows={3} value={draft} onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Escape" && !e.nativeEvent.isComposing) { e.stopPropagation(); cancel(); } }} />
@@ -64,7 +66,7 @@ export const UserMessage = memo(function UserMessage({ message: text, context, o
         </div>
       ) : null}
       {unavailable ? <div id={noteId} className="user-msg-note" role="note">{CANNOT_RESEND}: the saved history does not keep the original attachments. Send a new message with fresh attachments.</div> : null}
-      {failed && draft === null ? <div className="user-msg-note is-failed" role="alert">Not sent — edit to retry</div> : null}
+      {failed && !resent && draft === null ? <div className="user-msg-note is-failed" role="alert">Not sent — edit to retry</div> : null}
     </div>
   );
 });

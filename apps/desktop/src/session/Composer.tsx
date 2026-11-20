@@ -124,16 +124,20 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   const latestItems = useRef(localDraft.items);
   const sentPaths = useRef(new Set<string>());
   const discardRef = useRef(discardFile);
+  // The session the composer shows right now (null once it is switched away or unmounted).
+  const liveSession = useRef(sessionId);
   const dropDraft = localDraft.drop;
   // Refs are written after commit, never during render. Effect cleanups of a session switch run before this one,
   // so at cleanup time `latestItems` still holds the old session's items.
   useEffect(() => {
     latestItems.current = localDraft.items;
     discardRef.current = discardFile;
+    liveSession.current = sessionId;
   });
   useEffect(() => {
     if (!sessionId) return;
     return () => {
+      liveSession.current = null;
       const items = latestItems.current;
       for (const item of items) {
         const sent = sentPaths.current.has(item.path);
@@ -209,11 +213,17 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     const local = localDraft.items.filter((item) => item.kind !== "image");
     const sentFiles = localDraft.items.filter((item) => item.kind !== "folder").map((item) => item.path);
     for (const p of sentFiles) sentPaths.current.add(p);
+    const startedIn = sessionId;
     let ok = false;
     try {
       ok = await onSend(t, images, local);
     } finally {
-      if (!ok) for (const p of sentFiles) sentPaths.current.delete(p);
+      if (!ok) {
+        for (const p of sentFiles) sentPaths.current.delete(p);
+        // The draft is gone (the session was switched or the view closed while this send was pending), so nothing
+        // else will discard these files.
+        if (liveSession.current !== startedIn) for (const p of sentFiles) void discardRef.current?.(p)?.catch(() => {});
+      }
     }
     if (ok) {
       setSlashSession(null);

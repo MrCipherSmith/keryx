@@ -49,6 +49,8 @@ interface Piece {
   href: string;
   /** True for the first anchor of a reference; later anchors (split across inline nodes) are hidden from tab order and AT. */
   primary: boolean;
+  /** The whole matched reference, whitespace collapsed (the accessible name of the primary anchor of a split reference). */
+  label: string;
 }
 
 /**
@@ -79,7 +81,7 @@ function referencePieces(run: Text[], repository: string): Map<Text, Piece[]> {
       const b = Math.min(to, s + n.data.length);
       if (a >= b) continue;
       const list = pieces.get(n) ?? [];
-      list.push({ from: a - s, to: b - s, href, primary });
+      list.push({ from: a - s, to: b - s, href, primary, label: match[0].replace(/\s+/g, " ") });
       pieces.set(n, list);
       primary = false;
     }
@@ -97,6 +99,7 @@ function linkPieces(node: Text, pieces: Piece[]): DocumentFragment {
     link.href = p.href;
     link.textContent = node.data.slice(p.from, p.to);
     link.title = "Open pull request in browser · right-click for options";
+    if (p.primary && p.label !== link.textContent) link.setAttribute("aria-label", p.label);
     if (!p.primary) {
       link.setAttribute("tabindex", "-1");
       link.setAttribute("aria-hidden", "true");

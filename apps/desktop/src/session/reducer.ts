@@ -532,19 +532,8 @@ export function reducer(state: WindowState, a: Action): WindowState {
     case "updates":
       return routeUpdates(state, a.updates);
     case "userSent":
-      return withConv(state, a.sessionId, (c) => ({
-        ...c,
-        nextId: c.nextId + 1,
-        // A new send supersedes an earlier "not sent" flag.
-        items: [
-          ...c.items.map((i) => {
-            if (i.kind !== "user" || !i.failed) return i;
-            const { failed: _failed, ...rest } = i;
-            return rest;
-          }),
-          { kind: "user", id: c.nextId, text: a.text, ...(a.context ? { context: a.context } : {}) },
-        ],
-      }));
+      // An earlier "not sent" flag stays: an unrelated later message does not deliver it (resending it hides the note).
+      return withConv(state, a.sessionId, (c) => ({ ...c, nextId: c.nextId + 1, items: [...c.items, { kind: "user", id: c.nextId, text: a.text, ...(a.context ? { context: a.context } : {}) }] }));
     case "userSendFailed":
       return withConv(state, a.sessionId, (c) => {
         const at = a.itemId !== undefined

@@ -2,23 +2,15 @@ import { BUSY_DELAYS, isBusy } from "../lib/busy";
 import { useEffect, useRef, useState } from "react";
 import { basename } from "../lib/format";
 import { localImage } from "../platform/commands";
+import { createImageCache } from "./imageCache";
 
 const LIMIT = 3;
-const RESOLVED_MAX = 8;
 let running = 0;
 interface Job { start: () => void; eager: boolean }
 const queue: Job[] = [];
 
-/** Small LRU of resolved image URLs by path (oldest entry is dropped on overflow). */
-const resolved = new Map<string, string>();
-function remember(path: string, url: string): void {
-  resolved.delete(path);
-  resolved.set(path, url);
-  if (resolved.size > RESOLVED_MAX) {
-    const oldest = resolved.keys().next().value;
-    if (oldest !== undefined) resolved.delete(oldest);
-  }
-}
+/** Resolved image URLs by path: at most 8, and at most ~24 MB of data URLs (they can be megabytes each). */
+const resolved = createImageCache(8, 24 * 1024 * 1024);
 
 function schedulePreview(run: () => Promise<void>, eager: boolean): () => void {
   const start = () => {
@@ -70,7 +62,6 @@ export function AttachmentImage({ path, alt, eager = false, load = localImage }:
     if (!visible) { setSrc(undefined); return; }
     const hit = resolved.get(path);
     if (hit) {
-      remember(path, hit);
       setSrc(hit);
       return;
     }
@@ -81,7 +72,7 @@ export function AttachmentImage({ path, alt, eager = false, load = localImage }:
       cancel = schedulePreview(async () => {
         try {
           const url = await load(path);
-          remember(path, url);
+          resolved.set(path, url);
           if (!active) return;
           setSrc(url);
         } catch (err) {

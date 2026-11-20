@@ -240,14 +240,14 @@ describe("userSendFailed", () => {
     expect(userOf(s).failed).toBeUndefined();
   });
 
-  test("is cleared by the next successful userSent", () => {
+  test("stays when an unrelated message is sent later", () => {
     const s = run(
       twoHeld,
       { t: "userSent", sessionId: "s1", text: "a" },
       { t: "userSendFailed", sessionId: "s1" },
       { t: "userSent", sessionId: "s1", text: "b" },
     );
-    expect(userOf(s, 0).failed).toBeUndefined();
+    expect(userOf(s, 0).failed).toBeTrue();
     expect(userOf(s, 1).failed).toBeUndefined();
   });
 
