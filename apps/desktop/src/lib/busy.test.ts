@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { BUSY_DELAYS, busyMessage, isBusy } from "./busy";
+import { BUSY_DELAYS, busyDelay, busyMessage, isBusy } from "./busy";
 
 test("a busy refusal is recognised as a plain string (Tauri) and as an Error (dev bridge)", () => {
   expect(isBusy("busy: Chat attachments are busy; try again")).toBe(true);
@@ -15,6 +15,12 @@ test("only the busy: prefix counts, not any mention of busy", () => {
   expect(isBusy(undefined)).toBe(false);
   expect(isBusy({ message: "busy: nope" })).toBe(false);
   expect(busyMessage("ENOENT")).toBeNull();
+});
+
+test("busyDelay spreads each step by about 20% and ends with the ladder", () => {
+  expect(busyDelay(0, () => 0)).toBe(Math.round(BUSY_DELAYS[0] * 0.8));
+  expect(busyDelay(0, () => 1)).toBe(Math.round(BUSY_DELAYS[0] * 1.2));
+  expect(busyDelay(BUSY_DELAYS.length)).toBeUndefined();
 });
 
 test("the backoff ladder is bounded and increasing", () => {

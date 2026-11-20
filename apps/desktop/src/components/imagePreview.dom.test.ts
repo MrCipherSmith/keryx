@@ -73,12 +73,34 @@ test("a busy refusal as a plain string (Tauri) is retried and the thumbnail then
     return "data:image/png;base64,AAAA";
   };
   mod.decorateImageLinks(root, load);
-  await new Promise((r) => setTimeout(r, 450));
+  const started = Date.now();
+  while (calls < 2 && Date.now() - started < 3000) await new Promise((r) => setTimeout(r, 20));
+  await new Promise((r) => setTimeout(r, 20));
   expect(calls).toBe(2);
   const thumb = root.querySelector<HTMLButtonElement>(".md-thumb");
   expect(thumb?.hidden).toBe(false);
   expect(root.querySelectorAll(".md-thumb")).toHaveLength(1);
   root.remove();
+});
+
+test("loadCached shares one read between concurrent callers and keeps the resolved URL", async () => {
+  let calls = 0;
+  const load = async () => { calls++; await new Promise((r) => setTimeout(r, 5)); return "data:image/png;base64,QQ=="; };
+  const [a, b] = await Promise.all([mod.loadCached("cache/one.png", load), mod.loadCached("cache/one.png", load)]);
+  expect(a).toBe(b);
+  expect(calls).toBe(1);
+  expect(await mod.loadCached("cache/one.png", load)).toBe(a);
+  expect(calls).toBe(1);
+});
+
+test("a rejected read is not cached: the next call asks the host again", async () => {
+  let calls = 0;
+  const load = async () => { calls++; if (calls === 1) throw new Error("not there"); return "data:image/png;base64,QQ=="; };
+  let message = "";
+  try { await mod.loadCached("cache/late.png", load); } catch (e) { message = (e as Error).message; }
+  expect(message).toBe("not there");
+  expect(await mod.loadCached("cache/late.png", load)).toBe("data:image/png;base64,QQ==");
+  expect(calls).toBe(2);
 });
 
 test("a failed thumbnail stays failed: re-decoration does not ask the host again", async () => {

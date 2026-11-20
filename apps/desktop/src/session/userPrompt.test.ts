@@ -22,6 +22,8 @@ test("a replay shaped like renderAcpPrompt output is flattened context, whatever
 });
 
 test("ordinary text is not flattened context", () => {
+  expect(replayHasFlattenedContext("text\n[end of external content 1a2b3c4d]")).toBe(true);
+  expect(replayHasFlattenedContext("make it red\n\n[external content 1a2b3c4d from some page; id 7]\nbody")).toBe(true);
   expect(replayHasFlattenedContext("please explain this")).toBe(false);
   expect(replayHasFlattenedContext("see the external content from the page")).toBe(false);
   expect(replayHasFlattenedContext("quote: [external content] is untrusted")).toBe(false);

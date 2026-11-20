@@ -124,20 +124,20 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   const latestItems = useRef(localDraft.items);
   const sentPaths = useRef(new Set<string>());
   const discardRef = useRef(discardFile);
-  // The session the composer shows right now (null once it is switched away or unmounted).
-  const liveSession = useRef(sessionId);
+  // Incremented every time a draft is dropped (session switch, unmount): a send that began earlier and is refused
+  // afterwards compares it, so A -> B -> A is told apart from "never left A".
+  const draftGen = useRef(0);
   const dropDraft = localDraft.drop;
   // Refs are written after commit, never during render. Effect cleanups of a session switch run before this one,
   // so at cleanup time `latestItems` still holds the old session's items.
   useEffect(() => {
     latestItems.current = localDraft.items;
     discardRef.current = discardFile;
-    liveSession.current = sessionId;
   });
   useEffect(() => {
     if (!sessionId) return;
     return () => {
-      liveSession.current = null;
+      draftGen.current += 1;
       const items = latestItems.current;
       for (const item of items) {
         const sent = sentPaths.current.has(item.path);
@@ -208,12 +208,16 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   const send = async () => {
     // A command line is trimmed; other text keeps a leading space, which is what makes "/x" text for the model.
     const t = text.startsWith("/") ? text.trim() : text.replace(/^[\r\n]+/, "").trimEnd();
-    if ((!t.trim() && !hasAttachments) || disabled || localDraft.isSaving()) return;
+    if ((!t.trim() && !hasAttachments) || disabled) return;
+    if (localDraft.isSaving()) {
+      localDraft.warn("Wait for the attachments to finish, then send again.");
+      return;
+    }
     const images = localDraft.items.flatMap((item) => item.kind === "image" ? [item.path] : []);
     const local = localDraft.items.filter((item) => item.kind !== "image");
     const sentFiles = localDraft.items.filter((item) => item.kind !== "folder").map((item) => item.path);
     for (const p of sentFiles) sentPaths.current.add(p);
-    const startedIn = sessionId;
+    const gen = draftGen.current;
     let ok = false;
     try {
       ok = await onSend(t, images, local);
@@ -222,7 +226,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
         for (const p of sentFiles) sentPaths.current.delete(p);
         // The draft is gone (the session was switched or the view closed while this send was pending), so nothing
         // else will discard these files.
-        if (liveSession.current !== startedIn) for (const p of sentFiles) void discardRef.current?.(p)?.catch(() => {});
+        if (draftGen.current !== gen) for (const p of sentFiles) void discardRef.current?.(p)?.catch(() => {});
       }
     }
     if (ok) {
@@ -406,7 +410,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
         aria-expanded={matches.length > 0 ? true : undefined}
         aria-controls={matches.length > 0 ? listId : undefined}
         aria-activedescendant={matches.length > 0 ? `${listId}-opt-${active}` : undefined}
-        placeholder={disabledReason ?? (busy ? "keryx is working. Enter queues your next message" : "Ask keryx, or type / for commands")}
+        placeholder={disabledReason ?? (busy ? `keryx is working. ${sendKey === "enter" ? "Enter" : `${MOD}Return`} queues your next message` : "Ask keryx, or type / for commands")}
         onChange={(e) => {
           setText(e.target.value);
           setSlashSession(null);

@@ -292,6 +292,49 @@ test("a send refused after the session was switched away discards its files", as
   await act(() => root.render(null));
 });
 
+test("a save that finishes after the draft was dropped is discarded, not kept", async () => {
+  await act(() => root.render(null));
+  const discarded: string[] = [];
+  let release: (path: string) => void = () => {};
+  await act(() => root.render(createElement(Composer, {
+    ...props("DROP", createRef()),
+    saveImage: () => new Promise<string>((resolve) => { release = resolve; }),
+    discardFile: async (p: string) => { discarded.push(p); },
+    loadImage: async () => SHOT,
+  })));
+  const event = new Event("paste", { bubbles: true, cancelable: true });
+  const file = new File([Uint8Array.of(137, 80, 78, 71, 13, 10, 26, 10)], "late.png", { type: "image/png" });
+  Object.defineProperty(event, "clipboardData", { value: { files: [file], getData: () => "" } });
+  await act(async () => { host.querySelector("textarea")?.dispatchEvent(event); });
+  await new Promise((r) => setTimeout(r, 30));
+  await act(() => root.render(null));
+  await act(async () => { release("/tmp/keryx-chat-images-drop/late.png"); });
+  await new Promise((r) => setTimeout(r, 20));
+  expect(discarded).toEqual(["/tmp/keryx-chat-images-drop/late.png"]);
+});
+
+test("sending while attachments are still saving says so instead of doing nothing", async () => {
+  await act(() => root.render(null));
+  const ref = createRef<import("./Composer").ComposerHandle>();
+  let release: (path: string) => void = () => {};
+  await act(() => root.render(createElement(Composer, {
+    ...props("WAIT", ref),
+    saveImage: () => new Promise<string>((resolve) => { release = resolve; }),
+    loadImage: async () => SHOT,
+  })));
+  await act(async () => ref.current!.setText("hello"));
+  const event = new Event("paste", { bubbles: true, cancelable: true });
+  const file = new File([Uint8Array.of(137, 80, 78, 71, 13, 10, 26, 10)], "slow.png", { type: "image/png" });
+  Object.defineProperty(event, "clipboardData", { value: { files: [file], getData: () => "" } });
+  await act(async () => { host.querySelector("textarea")?.dispatchEvent(event); });
+  await new Promise((r) => setTimeout(r, 30));
+  await act(async () => { host.querySelector("textarea")?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true })); });
+  expect(host.querySelector('[role="alert"]')?.textContent).toContain("Wait for the attachments");
+  await act(async () => { release("/tmp/keryx-chat-images-wait/slow.png"); });
+  await waitFor(() => savingDone(host), act);
+  await act(() => root.render(null));
+});
+
 test("four pasted images are saved one at a time and a busy refusal is retried", async () => {
   await act(() => root.render(null));
   let active = 0;

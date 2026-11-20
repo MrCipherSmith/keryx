@@ -31,5 +31,6 @@ export function buildUserPrompt(text: string, extra: readonly object[], literal 
 
 // Older ACP replays flatten resource blocks to annotated text. Do not resend that text as operator instructions.
 export function replayHasFlattenedContext(text: string): boolean {
-  return /(?:^|\n)\[external content [\w-]+ from [^\s:]+:/.test(text);
+  // The header line and the closing marker of an untrusted block (see untrustedBoundary in src/acp/prompt-content.ts).
+  return /(?:^|\n)\[(?:external content [\w-]+ from [^\n\]]+|end of external content [\w-]+\])/.test(text);
 }

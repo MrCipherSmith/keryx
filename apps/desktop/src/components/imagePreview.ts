@@ -2,7 +2,9 @@
 // under the link in the message, and a full-size preview on click. The host reads the file
 // (`local_image`, images inside the project only); nothing here opens a file or follows a URL.
 
-import { BUSY_DELAYS, isBusy } from "../lib/busy";
+import { busyDelay, isBusy } from "../lib/busy";
+import { schedulePreview } from "../lib/previewQueue";
+import { createImageCache } from "../session/imageCache";
 
 const IMAGE = /\.(?:png|jpe?g|webp|gif)$/i;
 
@@ -16,27 +18,51 @@ export function isLocalImageLink(href: string): boolean {
   return !/^[a-z][a-z0-9+.-]*:/i.test(h);
 }
 
-const cache = new Map<string, Promise<string>>();
+const urls = createImageCache(16, 32 * 1024 * 1024);
+const inflight = new Map<string, Promise<string>>();
 
-/** Load an image once per link (a streaming message re-renders its tail every frame). */
+/**
+ * Load an image once per link (a streaming message re-renders its tail every frame). Resolved data URLs are kept in a
+ * bounded cache (they can be megabytes), concurrent callers share one read, and a failure is never cached: the file
+ * may appear later (a screenshot being written).
+ */
 export function loadCached(href: string, load: (href: string) => Promise<string>): Promise<string> {
-  let p = cache.get(href);
+  const hit = urls.get(href);
+  if (hit !== undefined) return Promise.resolve(hit);
+  let p = inflight.get(href);
   if (!p) {
-    p = load(href);
-    // A failure is not cached: the file may appear later (a screenshot being written).
-    p.catch(() => cache.delete(href));
-    cache.set(href, p);
+    p = load(href)
+      .then((src) => { urls.set(href, src); return src; })
+      .finally(() => { inflight.delete(href); });
+    inflight.set(href, p);
   }
   return p;
 }
 
+// A link that failed is not asked again for a while, whatever happens to its DOM node: a re-render of a streaming
+// message creates fresh anchors, and each must not start the whole retry ladder over. After the TTL it may retry
+// (the screenshot may be written by now).
+const FAILED_TTL_MS = 15_000;
+const failedAt = new Map<string, number>();
+const recentlyFailed = (href: string): boolean => {
+  const at = failedAt.get(href);
+  return at !== undefined && Date.now() - at < FAILED_TTL_MS;
+};
+
 /** Put a thumbnail after every local-image link in `root` that has none yet. */
 export function decorateImageLinks(root: HTMLElement, load: (href: string) => Promise<string>): void {
+  const queued = (href: string): Promise<string> =>
+    loadCached(href, (h) => new Promise<string>((resolve, reject) => {
+      schedulePreview(async () => {
+        try { resolve(await load(h)); } catch (e) { reject(e); }
+      }, false);
+    }));
   for (const a of Array.from(root.querySelectorAll<HTMLAnchorElement>("a[href]"))) {
     const href = a.getAttribute("href") ?? "";
-    if (a.dataset.thumb || !isLocalImageLink(href)) continue;
+    if (a.dataset.thumb === "1" || !isLocalImageLink(href)) continue;
     // A thumbnail still waiting on a busy retry sits right after the link: do not add a second one.
     if (a.nextElementSibling?.classList.contains("md-thumb")) continue;
+    if (recentlyFailed(href)) { a.dataset.thumb = "failed"; continue; }
     a.dataset.thumb = "1";
     const btn = document.createElement("button");
     btn.type = "button";
@@ -49,17 +75,18 @@ export function decorateImageLinks(root: HTMLElement, load: (href: string) => Pr
     btn.append(img);
     a.after(btn);
     const attempt = (n: number): void => {
-      loadCached(href, load)
+      queued(href)
         .then((src) => {
           img.src = src;
           btn.hidden = false;
           a.dataset.thumb = "1";
         })
         .catch((err: unknown) => {
-          const delay = isBusy(err) ? BUSY_DELAYS[n] : undefined;
+          const delay = isBusy(err) ? busyDelay(n) : undefined;
           if (delay === undefined) {
-            // Terminal: a failed link, or one whose retries ran out, keeps a marker so the next
-            // re-decoration does not start the whole ladder again.
+            // Terminal for now: the link is remembered as failed (see FAILED_TTL_MS), so no ladder restarts.
+            if (failedAt.size > 200) failedAt.clear();
+            failedAt.set(href, Date.now());
             a.dataset.thumb = "failed";
             btn.remove();
             return;

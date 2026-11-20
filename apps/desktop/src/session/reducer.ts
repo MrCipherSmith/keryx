@@ -452,7 +452,7 @@ export const initialState: WindowState = {
 export type Action =
   /** Session updates coalesced into one render, each routed to the session it names. */
   | { t: "updates"; updates: readonly RoutedUpdate[] }
-  | { t: "userSent"; sessionId: string; text: string; context?: import("./userPrompt").UserPromptContext }
+  | { t: "userSent"; sessionId: string; text: string; context?: import("./userPrompt").UserPromptContext; replaces?: number }
   /** session/prompt was rejected: flags the optimistic user item (`itemId`, default the last user item) as failed. */
   | { t: "userSendFailed"; sessionId: string; itemId?: number }
   | { t: "notice"; sessionId: string; level: "info" | "warn" | "error"; text: string }
@@ -532,8 +532,21 @@ export function reducer(state: WindowState, a: Action): WindowState {
     case "updates":
       return routeUpdates(state, a.updates);
     case "userSent":
-      // An earlier "not sent" flag stays: an unrelated later message does not deliver it (resending it hides the note).
-      return withConv(state, a.sessionId, (c) => ({ ...c, nextId: c.nextId + 1, items: [...c.items, { kind: "user", id: c.nextId, text: a.text, ...(a.context ? { context: a.context } : {}) }] }));
+      // A "not sent" flag clears only when this send delivers that message again: an edit that names it (`replaces`),
+      // or the same text sent again from the composer. An unrelated later message leaves it.
+      return withConv(state, a.sessionId, (c) => ({
+        ...c,
+        nextId: c.nextId + 1,
+        items: [
+          ...c.items.map((i) => {
+            if (i.kind !== "user" || !i.failed) return i;
+            if (a.replaces !== undefined ? i.id !== a.replaces : i.text !== a.text) return i;
+            const { failed: _failed, ...rest } = i;
+            return rest;
+          }),
+          { kind: "user", id: c.nextId, text: a.text, ...(a.context ? { context: a.context } : {}) },
+        ],
+      }));
     case "userSendFailed":
       return withConv(state, a.sessionId, (c) => {
         const at = a.itemId !== undefined

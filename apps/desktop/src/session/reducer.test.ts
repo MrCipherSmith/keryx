@@ -251,6 +251,34 @@ describe("userSendFailed", () => {
     expect(userOf(s, 1).failed).toBeUndefined();
   });
 
+  test("an edit that names the failed message clears only that message's flag", () => {
+    const sent = run(twoHeld, { t: "userSent", sessionId: "s1", text: "a" });
+    const id = userOf(sent, 0).id;
+    const s = run(sent, { t: "userSendFailed", sessionId: "s1" }, { t: "userSent", sessionId: "s1", text: "edited a", replaces: id });
+    expect(userOf(s, 0).failed).toBeUndefined();
+    expect(userOf(s, 1).failed).toBeUndefined();
+  });
+
+  test("an edit naming a different message leaves the failed flag", () => {
+    const s = run(
+      twoHeld,
+      { t: "userSent", sessionId: "s1", text: "a" },
+      { t: "userSendFailed", sessionId: "s1" },
+      { t: "userSent", sessionId: "s1", text: "a", replaces: 999 },
+    );
+    expect(userOf(s, 0).failed).toBeTrue();
+  });
+
+  test("sending the same text again from the composer clears the flag of the failed copy", () => {
+    const s = run(
+      twoHeld,
+      { t: "userSent", sessionId: "s1", text: "a" },
+      { t: "userSendFailed", sessionId: "s1" },
+      { t: "userSent", sessionId: "s1", text: "a" },
+    );
+    expect(userOf(s, 0).failed).toBeUndefined();
+  });
+
   test("an itemId flags that item; a missing item changes nothing", () => {
     const sent = run(twoHeld, { t: "userSent", sessionId: "s1", text: "a" });
     const id = userOf(sent).id;

@@ -1,3 +1,5 @@
+import { isBusy } from "./busy";
+
 /** Seconds-scale ladder: the host answers "busy" while saturated; the repository only auto-links bare "PR #n" text. */
 export const REPO_RETRY_DELAYS = [400, 1200, 3000, 15000, 30000] as const;
 
@@ -8,9 +10,9 @@ const timerSchedule: Schedule = (run, ms) => {
 };
 
 /**
- * Ask for the project's GitHub repository, retrying a rejection (with jitter so views started together do not retry
- * in lockstep). Only a real answer is reported; when the retries run out nothing is reported, so "unknown" is never
- * remembered as "no GitHub remote". Returns a cancel function.
+ * Ask for the project's GitHub repository. Only a "busy" refusal is retried (with jitter so views started together do
+ * not retry in lockstep); any other failure (not a repository, git missing) is final, and nothing is reported for it.
+ * Only a real answer is reported, so "unknown" is never remembered as "no GitHub remote". Returns a cancel function.
  */
 export function lookupWithRetry(
   lookup: () => Promise<string | null>,
@@ -21,10 +23,11 @@ export function lookupWithRetry(
   let active = true;
   let cancelTimer: () => void = () => {};
   const attempt = (n: number): void => {
-    void lookup().then(
+    // `then(lookup)` also turns a synchronous throw into a rejection instead of an uncaught exception in a timer.
+    void Promise.resolve().then(lookup).then(
       (name) => { if (active) onResult(name); },
-      () => {
-        if (!active) return;
+      (error: unknown) => {
+        if (!active || !isBusy(error)) return;
         const delay = REPO_RETRY_DELAYS[n];
         if (delay === undefined) return;
         cancelTimer = schedule(() => attempt(n + 1), Math.round(delay * (0.8 + jitter() * 0.4)));

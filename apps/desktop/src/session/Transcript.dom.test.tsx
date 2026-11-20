@@ -105,7 +105,7 @@ test("resend keeps exact indentation and the original attachment blocks", async 
   })));
   await act(() => host.querySelector<HTMLButtonElement>('[aria-label="Edit message"]')?.click());
   await act(() => host.querySelector<HTMLButtonElement>('button[type="submit"]')?.click());
-  expect(sent).toEqual([[" /help", context]]);
+  expect(sent).toEqual([[" /help", context, 1]]);
 });
 
 test("copy of a picked-elements-only message copies the count, never page data", async () => {
@@ -201,17 +201,27 @@ test("the unavailable note is linked to the disabled Edit button by aria-describ
   expect(note?.getAttribute("role")).toBe("note");
 });
 
-test("the not-sent note disappears once the message is resent", async () => {
+test("an edit names the message it replaces, and the not-sent note follows the state, not the row", async () => {
+  const calls: unknown[][] = [];
+  const failed = { kind: "user", id: 71, text: "hello", failed: true } as Item;
   await act(() => root.render(createElement(Transcript, {
-    items: [{ kind: "user", id: 71, text: "hello", failed: true } as Item],
-    busy: false, replaying: false, empty: null,
-    onEditMessage: () => true,
+    items: [failed], busy: false, replaying: false, empty: null,
+    onEditMessage: (...args: unknown[]) => { calls.push(args); return true; },
   })));
-  expect(host.querySelector('[role="alert"]')).not.toBeNull();
+  const note = host.querySelector('[role="alert"]');
+  expect(note?.textContent).toBe("Not sent — edit to retry");
+  expect(host.querySelector('[aria-label="Edit message"]')?.getAttribute("aria-describedby")).toBe(note?.id);
   await act(() => host.querySelector<HTMLButtonElement>('[aria-label="Edit message"]')?.click());
   await act(() => host.querySelector<HTMLButtonElement>('button[type="submit"]')?.click());
-  expect(host.querySelector("textarea")).toBeNull();
+  expect(calls).toEqual([["hello", undefined, 71]]);
+  // The state (not the row) clears the flag: the same item without it shows no note, and a remount keeps it that way.
+  await act(() => root.render(createElement(Transcript, { items: [{ kind: "user", id: 71, text: "hello" } as Item], busy: false, replaying: false, empty: null, onEditMessage: () => true })));
   expect(host.querySelector('[role="alert"]')).toBeNull();
+});
+
+test("the not-sent note without an Edit action says only that the message was not sent", async () => {
+  await act(() => root.render(createElement(Transcript, { items: [{ kind: "user", id: 72, text: "hello", failed: true } as Item], busy: false, replaying: false, empty: null })));
+  expect(host.querySelector('[role="alert"]')?.textContent).toBe("Not sent");
 });
 
 test("a literal image marker in message text is not treated as an attachment", async () => {

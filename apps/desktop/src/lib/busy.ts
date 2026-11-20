@@ -10,6 +10,12 @@ function messageOf(error: unknown): string {
   return "";
 }
 
+/** The delay before retry `n` of a busy refusal, spread by about 20% so views that started together do not retry in lockstep. */
+export function busyDelay(n: number, random: () => number = Math.random): number | undefined {
+  const base = BUSY_DELAYS[n];
+  return base === undefined ? undefined : Math.round(base * (0.8 + random() * 0.4));
+}
+
 /** The text after `busy:` when `error` is a host admission refusal, otherwise null. */
 export function busyMessage(error: unknown): string | null {
   const message = messageOf(error);

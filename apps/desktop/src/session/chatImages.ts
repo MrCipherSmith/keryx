@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { BUSY_DELAYS, busyMessage, isBusy } from "../lib/busy";
+import { busyDelay, busyMessage, isBusy } from "../lib/busy";
 import { errMessage } from "../lib/format";
 
 export type SaveChatImage = (mimeType: string, data: string) => Promise<string>;
@@ -30,29 +30,31 @@ async function fileBase64(file: File): Promise<string> {
 
 const shown = (reason: unknown): string => busyMessage(reason) ?? errMessage(reason);
 
-/** The host admits only a few saves at once: wait and retry a busy refusal instead of losing the file. */
-async function withBusyRetry<T>(run: () => Promise<T>): Promise<T> {
+/** The host admits only a few saves at once: wait and retry a busy refusal, but stop as soon as the draft is gone. */
+async function withBusyRetry<T>(run: () => Promise<T>, alive: () => boolean): Promise<T> {
   for (let n = 0; ; n++) {
+    if (!alive()) throw new Error("The draft was closed.");
     try {
       return await run();
     } catch (error) {
-      const delay = isBusy(error) ? BUSY_DELAYS[n] : undefined;
+      const delay = isBusy(error) ? busyDelay(n) : undefined;
       if (delay === undefined) throw error;
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
 }
 
-async function storeFile(file: File, options: { saveImage?: SaveChatImage; saveFile?: SaveChatFile; imageOnly: boolean }): Promise<ChatAttachment> {
-  if (options.saveImage && IMAGE_TYPES.has(file.type)) {
+/** Read and encode a file once; the returned function only asks the host to store it, so a busy retry re-sends, not re-encodes. */
+async function prepareFile(file: File, options: { saveImage?: SaveChatImage; saveFile?: SaveChatFile; imageOnly: boolean }): Promise<() => Promise<ChatAttachment>> {
+  const { saveImage, saveFile } = options;
+  if (saveImage && IMAGE_TYPES.has(file.type)) {
     const data = await fileBase64(file);
-    const path = await options.saveImage(file.type, data);
-    return { kind: "image", path };
+    return async () => ({ kind: "image", path: await saveImage(file.type, data) });
   }
-  if (options.imageOnly || !options.saveFile) throw new Error("Paste a PNG, JPEG, GIF, or WebP image.");
+  if (options.imageOnly || !saveFile) throw new Error("Paste a PNG, JPEG, GIF, or WebP image.");
   const extension = /\.([a-z0-9]{1,12})$/i.exec(file.name)?.[1]?.toLowerCase() ?? "bin";
-  const path = await options.saveFile(extension, await fileBase64(file));
-  return { kind: "file", path, label: file.name };
+  const data = await fileBase64(file);
+  return async () => ({ kind: "file", path: await saveFile(extension, data), label: file.name });
 }
 
 export function useChatAttachments(sessionId: string | null, options: {
@@ -63,18 +65,23 @@ export function useChatAttachments(sessionId: string | null, options: {
 }) {
   const [drafts, setDrafts] = useState<Record<string, AttachmentDraft>>({});
   const saving = useRef(new Set<string>());
+  // Bumped when a session's draft is dropped: a save that started before then must not write into the new draft.
+  const epochs = useRef(new Map<string, number>());
   const draft = (sessionId && drafts[sessionId]) || EMPTY;
   /** Forget a session's chips without touching the saved files (the caller discards those). */
-  const drop = useCallback((id: string) => setDrafts((all) => {
-    if (!(id in all)) return all;
-    const rest = { ...all };
-    delete rest[id];
-    return rest;
-  }), []);
+  const drop = useCallback((id: string) => {
+    epochs.current.set(id, (epochs.current.get(id) ?? 0) + 1);
+    setDrafts((all) => {
+      if (!(id in all)) return all;
+      const rest = { ...all };
+      delete rest[id];
+      return rest;
+    });
+  }, []);
   const update = (change: (current: AttachmentDraft) => AttachmentDraft) => {
     if (sessionId) setDrafts((all) => ({ ...all, [sessionId]: change(all[sessionId] ?? EMPTY) }));
   };
-  const add = async (count: number, load: () => Promise<readonly PromiseSettledResult<ChatAttachment>[]>) => {
+  const add = async (count: number, load: (alive: () => boolean) => Promise<readonly PromiseSettledResult<ChatAttachment>[]>) => {
     if (!sessionId || !count) return;
     if (saving.current.has(sessionId)) {
       update((d) => ({ ...d, error: "Wait for the previous attachment to finish, then try again." }));
@@ -84,27 +91,41 @@ export function useChatAttachments(sessionId: string | null, options: {
       update((d) => ({ ...d, error: `Up to ${MAX_IMAGES} attachments per message.` }));
       return;
     }
+    const epoch = epochs.current.get(sessionId) ?? 0;
+    const alive = () => (epochs.current.get(sessionId) ?? 0) === epoch;
     saving.current.add(sessionId);
     update((d) => ({ ...d, pending: true, error: undefined }));
     try {
-      const results = await load();
+      const results = await load(alive);
       const items = results.flatMap((r) => r.status === "fulfilled" ? [r.value] : []);
+      if (!alive()) {
+        // The draft was dropped while this ran (session switched, view closed): nothing will ever show or discard these.
+        for (const item of items) if (item.kind !== "folder") void options.discardFile?.(item.path)?.catch(() => {});
+        return;
+      }
       const failed = results.find((r) => r.status === "rejected");
-      update((d) => ({ items: [...new Map([...d.items, ...items].map((item) => [item.path, item])).values()], error: failed ? shown(failed.reason) : d.error }));
+      const skipped = count - results.length;
+      const reason = failed ? `${shown(failed.reason)}${skipped > 0 ? ` ${skipped} more not added.` : ""}` : undefined;
+      // The final state replaces any transient notice (such as "wait for the previous attachment").
+      update((d) => ({ items: [...new Map([...d.items, ...items].map((item) => [item.path, item])).values()], error: reason }));
     } catch (error) {
-      update((d) => ({ ...d, pending: false, error: shown(error) }));
+      if (alive()) update((d) => ({ ...d, pending: false, error: shown(error) }));
     } finally {
       saving.current.delete(sessionId);
     }
   };
-  // One at a time: a batch of four must not trip the host's cap of three concurrent saves.
-  const addFiles = (files: readonly File[], imageOnly = false) => add(files.length, async () => {
+  // One at a time: a batch of four must not trip the host's cap of three concurrent saves. After the first busy
+  // refusal that outlasts the retries, the rest are not attempted (the user is told how many were left out).
+  const addFiles = (files: readonly File[], imageOnly = false) => add(files.length, async (alive) => {
     const results: PromiseSettledResult<ChatAttachment>[] = [];
     for (const file of files) {
+      if (!alive()) break;
       try {
-        results.push({ status: "fulfilled", value: await withBusyRetry(() => storeFile(file, { ...options, imageOnly })) });
+        const save = await prepareFile(file, { ...options, imageOnly });
+        results.push({ status: "fulfilled", value: await withBusyRetry(save, alive) });
       } catch (reason) {
         results.push({ status: "rejected", reason });
+        if (isBusy(reason)) break;
       }
     }
     return results;
@@ -132,5 +153,7 @@ export function useChatAttachments(sessionId: string | null, options: {
       update((d) => ({ ...d, pending: false }));
     }
   };
-  return { ...draft, addFiles, addFolder, remove, discard, drop, isSaving: () => !!sessionId && saving.current.has(sessionId) };
+  /** A notice in the composer's status line (for example "wait for the attachments"). */
+  const warn = (message: string) => update((d) => ({ ...d, error: message }));
+  return { ...draft, addFiles, addFolder, remove, discard, drop, warn, isSaving: () => !!sessionId && saving.current.has(sessionId) };
 }

@@ -9,23 +9,24 @@ const NO_IMAGES: readonly string[] = [];
 /** The one wording for "this replayed message cannot be resent": the button title is this alone, the note adds the reason. */
 const CANNOT_RESEND = "Cannot resend";
 
-export const UserMessage = memo(function UserMessage({ message: text, context, onEdit, failed }: {
+export const UserMessage = memo(function UserMessage({ message: text, context, onEdit, failed, itemId }: {
   message: string;
   failed?: boolean;
+  /** The transcript item this row shows: an edit names it, so only its "not sent" flag clears. */
+  itemId?: number;
   context?: UserPromptContext;
-  onEdit?: (text: string, context?: UserPromptContext) => boolean;
+  onEdit?: (text: string, context?: UserPromptContext, replaces?: number) => boolean;
 }) {
   const paths = context?.images ?? NO_IMAGES;
   const unavailable = !context && replayHasFlattenedContext(text);
   const hasContext = Boolean(context?.blocks.length);
   const noteId = useId();
+  const failedId = `${noteId}-failed`;
   const pickedLabel = context?.pickedCount ? `${context.pickedCount} picked page ${context.pickedCount === 1 ? "element" : "elements"}` : "";
   const row = useRef<HTMLDivElement>(null);
   const editButton = useRef<HTMLButtonElement>(null);
   const returnFocus = useRef(false);
   const [draft, setDraft] = useState<string | null>(null);
-  // Once this message has been resent successfully its "not sent" note has done its job.
-  const [resent, setResent] = useState(false);
   useLayoutEffect(() => {
     if (draft !== null || !returnFocus.current) return;
     returnFocus.current = false;
@@ -46,7 +47,7 @@ export const UserMessage = memo(function UserMessage({ message: text, context, o
         {draft === null ? text : (
           <form className="user-msg-edit" onSubmit={(e) => {
             e.preventDefault();
-            if ((draft.trim() || hasContext) && (context ? onEdit?.(draft, context) : onEdit?.(draft))) { returnFocus.current = true; setResent(true); setDraft(null); }
+            if ((draft.trim() || hasContext) && onEdit?.(draft, context, itemId)) { returnFocus.current = true; setDraft(null); }
           }}>
             <textarea aria-label="Edit sent message" autoFocus rows={3} value={draft} onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Escape" && !e.nativeEvent.isComposing) { e.stopPropagation(); cancel(); } }} />
@@ -59,14 +60,14 @@ export const UserMessage = memo(function UserMessage({ message: text, context, o
       </div>
       {draft === null ? (
         <div className="user-msg-actions" role="group" aria-label="Message actions">
-          <button ref={editButton} type="button" className="icon-btn icon-btn-sm" aria-label="Edit message" aria-describedby={unavailable ? noteId : undefined} title={unavailable ? CANNOT_RESEND : "Edit and resend"}
+          <button ref={editButton} type="button" className="icon-btn icon-btn-sm" aria-label="Edit message" aria-describedby={unavailable ? noteId : failed ? failedId : undefined} title={unavailable ? CANNOT_RESEND : "Edit and resend"}
             disabled={!onEdit || unavailable} onClick={() => setDraft(text)}><Icon name="pencil" size={14} /></button>
           <button type="button" className="icon-btn icon-btn-sm" aria-label="Copy message" title="Copy message"
             onClick={() => void copy()}><Icon name="copy" size={14} /></button>
         </div>
       ) : null}
       {unavailable ? <div id={noteId} className="user-msg-note" role="note">{CANNOT_RESEND}: the saved history does not keep the original attachments. Send a new message with fresh attachments.</div> : null}
-      {failed && !resent && draft === null ? <div className="user-msg-note is-failed" role="alert">Not sent — edit to retry</div> : null}
+      {failed && draft === null ? <div id={failedId} className="user-msg-note is-failed" role="alert">{onEdit && !unavailable ? "Not sent — edit to retry" : "Not sent"}</div> : null}
     </div>
   );
 });

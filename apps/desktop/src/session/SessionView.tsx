@@ -199,8 +199,8 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
 
   const sendPrompt = s.sendPrompt;
   const editMessage = useCallback(
-    (text: string, context?: UserPromptContext) => {
-      const ok = sendPrompt(text, undefined, context, true);
+    (text: string, context?: UserPromptContext, replaces?: number) => {
+      const ok = sendPrompt(text, undefined, context, true, replaces);
       if (!ok) toast({ level: "error", title: "Could not send the edited message" });
       else {
         // After the row's own focus handling has run (it returns focus to its Edit button), the composer takes it.

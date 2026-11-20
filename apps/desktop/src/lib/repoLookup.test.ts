@@ -63,3 +63,40 @@ test("jitter spreads the delay and cancelling stops further work", async () => {
   cancel();
   expect(high.pending).toHaveLength(0);
 });
+
+test("a rejection that is not busy is final: nothing is reported and nothing is retried", async () => {
+  const h = harness([new Error("not a git repository")]);
+  lookupWithRetry(h.lookup, (n) => h.answers.push(n), h.schedule);
+  await h.flush();
+  expect(h.calls()).toBe(1);
+  expect(h.answers).toEqual([]);
+  expect(h.pending).toHaveLength(0);
+});
+
+test("a synchronous throw from the lookup is handled like a rejection", async () => {
+  const delays: number[] = [];
+  const answers: Array<string | null> = [];
+  lookupWithRetry(() => { throw new Error("busy: now"); }, (n) => answers.push(n), (_run, ms) => { delays.push(ms); return () => {}; }, () => 0.5);
+  await new Promise((r) => setTimeout(r, 0));
+  expect(delays).toEqual([REPO_RETRY_DELAYS[0]]);
+  expect(answers).toEqual([]);
+});
+
+test("cancelling while the lookup is in flight drops its answer and schedules no retry", async () => {
+  let resolve: (name: string | null) => void = () => {};
+  let reject: (e: Error) => void = () => {};
+  const answers: Array<string | null> = [];
+  const delays: number[] = [];
+  const schedule = (_run: () => void, ms: number) => { delays.push(ms); return () => {}; };
+  const a = lookupWithRetry(() => new Promise((res) => { resolve = res; }), (n) => answers.push(n), schedule);
+  await new Promise((r) => setTimeout(r, 0));
+  a();
+  resolve("o/r");
+  const b = lookupWithRetry(() => new Promise((_res, rej) => { reject = rej; }), (n) => answers.push(n), schedule);
+  await new Promise((r) => setTimeout(r, 0));
+  b();
+  reject(new Error("busy: x"));
+  await new Promise((r) => setTimeout(r, 0));
+  expect(answers).toEqual([]);
+  expect(delays).toEqual([]);
+});

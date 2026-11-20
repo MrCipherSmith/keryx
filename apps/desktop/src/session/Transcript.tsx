@@ -309,7 +309,7 @@ interface Props {
   items: Item[];
   /** Runs a command line a card's view sends; returns when its result is shown. */
   onRunCommand?: (line: string, opts: { display?: string; replaceId: number }) => void | Promise<unknown>;
-  onEditMessage?: (text: string, context?: UserPromptContext) => boolean;
+  onEditMessage?: (text: string, context?: UserPromptContext, replaces?: number) => boolean;
   prLinks?: PrLinks;
   busy: boolean;
   replaying: boolean;
@@ -400,7 +400,7 @@ export function Transcript({ items, busy, replaying, empty, onRunCommand, onEdit
             const isLast = i === blocks.length - 1;
             switch (b.type) {
               case "user":
-                return <UserMessage key={b.item.id} message={b.item.text} context={b.item.context} failed={b.item.failed} onEdit={onEditMessage} />;
+                return <UserMessage key={b.item.id} message={b.item.text} context={b.item.context} failed={b.item.failed} itemId={b.item.id} onEdit={onEditMessage} />;
               case "agent":
                 return (
                   <div key={b.item.id} className={`turn-agent${b.first ? " turn-start" : ""}`}>

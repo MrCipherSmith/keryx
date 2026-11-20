@@ -72,22 +72,39 @@ export function Menu({ anchor, items, onClose, placement = "below", closeOnScrol
   const closeRef = useRef(onClose);
   useLayoutEffect(() => { closeRef.current = onClose; });
 
+  // Focus is given back to the anchor when the menu goes away while focus is still inside it (Escape, a selection);
+  // a click elsewhere or Tab sets this false first, so focus then stays where the user sent it.
+  const inside = useRef(false);
+  useLayoutEffect(() => {
+    if (!anchor) return;
+    return () => {
+      if (inside.current) anchor.focus();
+    };
+  }, [anchor]);
+
   useLayoutEffect(() => {
     const onDown = (e: MouseEvent) => {
       const t = e.target as Node;
       if (ref.current?.contains(t) || anchor?.contains(t)) return;
-      onClose();
+      inside.current = false;
+      closeRef.current();
     };
     window.addEventListener("mousedown", onDown, true);
     return () => window.removeEventListener("mousedown", onDown, true);
-  }, [anchor, onClose]);
+  }, [anchor]);
 
   useLayoutEffect(() => {
     if (!anchor || !closeOnScroll) return;
     const start = anchor.getBoundingClientRect();
-    const onScroll = () => {
+    // One layout read per frame, not one per scroll event (a streaming transcript scrolls continuously).
+    let frame = 0;
+    const check = () => {
+      frame = 0;
       const r = anchor.getBoundingClientRect();
       if (Math.abs(r.top - start.top) > 2 || Math.abs(r.left - start.left) > 2) closeRef.current();
+    };
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(check);
     };
     const onResize = () => closeRef.current();
     window.addEventListener("scroll", onScroll, { capture: true, passive: true });
@@ -95,6 +112,7 @@ export function Menu({ anchor, items, onClose, placement = "below", closeOnScrol
     return () => {
       window.removeEventListener("scroll", onScroll, { capture: true });
       window.removeEventListener("resize", onResize);
+      if (frame) cancelAnimationFrame(frame);
     };
   }, [anchor, closeOnScroll]);
 
@@ -108,12 +126,15 @@ export function Menu({ anchor, items, onClose, placement = "below", closeOnScrol
       e.preventDefault();
       all[(i - 1 + all.length) % all.length]?.focus();
     } else if (e.key === "Tab") {
+      inside.current = false;
       onClose();
     }
   };
 
   return (
-    <div ref={ref} className="menu" role="menu" aria-label={label} style={{ ...pos, width }} onKeyDown={onKeyDown}>
+    <div ref={ref} className="menu" role="menu" aria-label={label} style={{ ...pos, width }} onKeyDown={onKeyDown}
+      onFocus={() => { inside.current = true; }}
+      onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) inside.current = false; }}>
       {items.map((it) => {
         if (it.kind === "separator") return <div key={it.id} className="menu-sep" role="separator" />;
         if (it.kind === "header") return <div key={it.id} className="menu-header">{it.label}</div>;

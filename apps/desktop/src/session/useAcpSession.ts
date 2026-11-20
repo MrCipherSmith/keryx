@@ -599,13 +599,13 @@ export function useAcpSession(cwd: string) {
 
   /** Starts a turn in the shown session; returns true only when the prompt was accepted (the caller may then clear its draft). */
   const sendPrompt = useCallback(
-    (text: string, target?: string, context?: UserPromptContext, literal = false): boolean => {
+    (text: string, target?: string, context?: UserPromptContext, literal = false, replaces?: number): boolean => {
       const extra = context?.blocks ?? [];
       const l = live.current;
       const client = l.client;
       const sessionId = target ?? l.reg.shown;
       if (!client || !l.initialized || !sessionId || !l.reg.held.has(sessionId) || l.reg.turns.has(sessionId) || (!text.trim() && extra.length === 0)) return false;
-      dispatch({ t: "userSent", sessionId, text, context });
+      dispatch({ t: "userSent", sessionId, text, context, ...(replaces !== undefined ? { replaces } : {}) });
       dispatch({ t: "busy", sessionId, busy: true });
       const turn = { client } as Turn;
       turn.done = (async () => {

@@ -120,6 +120,16 @@ test("a busy refusal as a plain string (Tauri) is retried and then shows the ima
   await unmountAll();
 });
 
+test("two rows showing the same attachment share one host read", async () => {
+  const path = "/tmp/dedupe-same-path.png";
+  let calls = 0;
+  const load: Load = async (p) => { calls++; await new Promise((r) => setTimeout(r, 30)); return urlFor(p); };
+  await mount([path, path], load);
+  expect(await waitFor(() => host.querySelectorAll("img.sent-image").length === 2, 3000)).toBe(true);
+  expect(calls).toBe(1);
+  await unmountAll();
+});
+
 test("a non-busy rejection shows 'Image no longer available'", async () => {
   let calls = 0;
   const load: Load = async () => { calls++; throw new Error("ENOENT: no such file"); };
