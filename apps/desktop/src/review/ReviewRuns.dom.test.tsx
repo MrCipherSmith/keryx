@@ -46,11 +46,40 @@ async function show(command: typeof reviewRun, card: ReviewCard, extra?: Partial
   });
 }
 function btn(text: string) {
-  const b = [...document.querySelectorAll("button")].find(b => b.textContent === text);
+  const b = [...document.querySelectorAll("button")].find(b => (b.getAttribute("aria-label") ?? b.textContent) === text);
   if (!b) throw new Error("Missing button " + text);
   return b;
 }
 const click = (name: string) => act(async () => btn(name).click());
+
+test("completion pre-fills the coordinator reason and requires an explicit exception", async () => {
+  let attempt: DeskRun = { ...running, state: "partial", finishedAt: time };
+  const actions: ReviewRunAction[] = [];
+  await act(() => root.render(null));
+  await show(async (_cwd, _key, action) => {
+    actions.push(action);
+    if (action.kind === "readiness") return { version: 1, runs: [attempt], completion: { checks: [
+      { id: "reviewers", title: "All reviewers reported", evidence: "Two reviewers did not report", canWaive: true },
+    ] } };
+    if (action.kind === "status" && action.id) return { version: 1, runs: [{ ...attempt, coordinatorActivity: [
+      { kind: "message", final: true, text: "Suggested review action: complete — Retain the explicitly limited result." },
+    ] }] };
+    if (action.kind === "decide") attempt = { ...attempt, closure: "completed",
+      decision: { action: action.decision, reason: action.reason, at: time } };
+    return { version: 1, runs: [attempt] };
+  }, pr);
+  await click("Keryx review");
+  await click("Complete review");
+  const dialog = document.querySelector('[role="dialog"][aria-modal="true"]:has(textarea)')!;
+  expect(dialog.querySelector("textarea")?.value).toBe("Retain the explicitly limited result.");
+  expect([...dialog.querySelectorAll("button")].find(button => button.textContent === "Complete review")?.disabled).toBe(true);
+  await act(async () => dialog.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click());
+  await click("Complete with exceptions");
+  expect(actions.find(action => action.kind === "decide")).toEqual({ kind: "decide", id: attempt.id,
+    decision: "complete", reason: "Retain the explicitly limited result.", waive: ["reviewers"] });
+  expect(document.body.textContent).toContain("Completed by operator");
+  await act(() => root.render(null));
+});
 
 test("starts the pinned range, ignores an older read and polls through to a distinct local verdict", async () => {
   let old!: (r: DeskRunSnapshot) => void;
@@ -92,11 +121,13 @@ test("starts the pinned range, ignores an older read and polls through to a dist
     const beforeTick = actions.length;
     await act(async () => { tick!(); });
     expect(actions.slice(beforeTick)).toEqual([{ kind: "status" }]);
-    expect(document.body.textContent).toContain("REQUEST_CHANGES");
+    const outcome = document.querySelector('article [aria-label="Review result"]');
+    expect(outcome?.textContent).toContain("REQUEST_CHANGES");
     expect(document.body.textContent).toContain("GitHub review decision · Approved");
-    expect(document.body.textContent).toContain("1 blocker");
+    expect(outcome?.textContent).toContain("1 blocker");
     expect(document.querySelector(".desk-run-report summary")?.textContent).toBe("Open review report");
     const disclosure = document.querySelector<HTMLDetailsElement>(".desk-run-report")!;
+    expect(disclosure.open).toBe(false);
     await act(async () => { disclosure.open = true; disclosure.dispatchEvent(new Event("toggle")); });
     expect(disclosure.textContent).toContain("Incorrect owner on rename");
     expect(disclosure.querySelector("script")).toBeNull();
@@ -120,7 +151,8 @@ test("historic result survives a push, and retry and stop target the correct att
   };
   await show(command, newer);
   await click("Review changes");
-  expect(document.body.textContent).toContain("Earlier revision");
+  expect(document.querySelectorAll("article.desk-run")).toHaveLength(1);
+  expect(document.body.textContent).not.toContain("Earlier revision");
   await click("Stop review");
   expect(actions.at(-1)).toEqual({ kind: "cancel", id: "attempt-2" });
   expect(document.body.textContent).toContain("Stopped by user");
@@ -209,15 +241,15 @@ test("Tab wraps after the publish action and Shift+Tab returns to it", async () 
   await show(async () => ({ version: 1, runs: [complete] }), { ...pr, number: 105 });
   await click("View review result");
   const publish = btn("Publish to GitHub");
-  const close = document.querySelector<HTMLButtonElement>('[aria-label="Close details"]')!;
+  const first = document.querySelector<HTMLButtonElement>('.review-run-history button')!;
   const tab = (shiftKey: boolean) => document.activeElement!.dispatchEvent(
     new KeyboardEvent("keydown", { key: "Tab", shiftKey, bubbles: true, cancelable: true }),
   );
-  close.focus();
+  first.focus();
   expect(tab(true)).toBe(false);
   expect(document.activeElement).toBe(publish);
   expect(tab(false)).toBe(false);
-  expect(document.activeElement).toBe(close);
+  expect(document.activeElement).toBe(first);
 });
 
 test("a scheduled review shares the card action and identifies its rule and budget in history", async () => {
@@ -314,11 +346,11 @@ test("a reviewer session follows its own wave through completion and Escape retu
     const detailed = action.kind === "status" && action.activityId === running.id;
     const session = detailed ? { ...recent, activity: [{ at: time, label: finished ? "Review saved" : "Reading file" }] } : recent;
     return { version: 1, runs: [{ ...(finished ? complete : running),
-      reviewerProgress: { planned: 2, finished: finished ? 2 : 1, wave: 2, sessions: [early, session] } }] };
+      reviewerProgress: { planned: 2, finished: finished ? 2 : 1, completed: finished ? 2 : 1, wave: 2, sessions: [early, session] } }] };
   };
   await show(command, { ...pr, number: 91 }, { onClose: () => { closeSheet++; } });
   await click("View active review");
-  expect(document.querySelector('[role="progressbar"]')?.getAttribute("aria-valuenow")).toBe("1");
+  expect(document.querySelector('[role="progressbar"]')?.getAttribute("aria-valuenow")).toBe("50");
   const list = document.querySelector<HTMLDetailsElement>(".review-sessions")!;
   await act(async () => list.querySelector("summary")!.click());
   const row = list.querySelector<HTMLButtonElement>('[aria-label="Open review-logic session, wave 2, In progress"]')!;
@@ -342,12 +374,12 @@ test("a reviewer session follows its own wave through completion and Escape retu
   expect(document.activeElement).toBe(row);
 });
 
-test("a running attempt with unknown reviewer count shows indeterminate progress", async () => {
+test("a starting attempt shows five percent while preparing the plan", async () => {
   await show(async () => ({ version: 1, runs: [running] }), { ...pr, number: 92 });
   await click("View active review");
   const progress = document.querySelector('[role="progressbar"]');
   expect(progress).not.toBeNull();
-  expect(progress!.hasAttribute("aria-valuenow")).toBe(false);
+  expect(progress!.getAttribute("aria-valuenow")).toBe("5");
 });
 
 test("expanding a historical session recovers its recorded failure without assigning a duration or token estimate", async () => {
@@ -590,4 +622,286 @@ test("switching pull requests drops a late publication preview and sends no writ
   expect(document.querySelector(".review-publish")).toBeNull();
   expect(document.body.textContent).not.toContain("Prior preview");
   expect(actions.map(action => action.kind)).toEqual(["preview"]);
+});
+
+test("history opens a specific earlier attempt in a dialog and keeps it selected as new runs arrive", async () => {
+  const old = { ...complete, id: "older-run", headSha: "old", result: { ...complete.result!, reviewed: { baseSha: "base", headSha: "old" } } };
+  const newer = { ...complete, id: "newer-run" };
+  let runs = [newer, old];
+  await show(async (_cwd, _key, action) => ({ version: 1, runs: runs.map(run => action.kind === "status" && action.activityId === run.id ?
+    { ...run, coordinatorActivity: [{ kind: "message", text: "Coordinator for " + run.id }] } : run) }), { ...pr, number: 107 });
+  const trigger = document.querySelector<HTMLButtonElement>(".review-run-history button")!;
+  await act(async () => trigger.click());
+  const entries = document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]');
+  expect(entries).toHaveLength(2);
+  await act(async () => entries[1]!.click());
+  const dialog = document.querySelector(".dialog")!;
+  expect(dialog.textContent).toContain("Earlier revision");
+  expect(dialog.textContent).toContain("Coordinator for older-run");
+  expect(document.querySelector('[role="menu"]')).toBeNull();
+  runs = [{ ...newer, id: "another-run" }, newer, old];
+  await act(async () => { window.dispatchEvent(new Event("focus")); });
+  expect(document.querySelector(".dialog")).toBe(dialog);
+  expect(dialog.textContent).toContain("Coordinator for older-run");
+  expect(dialog.textContent).not.toContain("another-run");
+  await click("Close");
+  expect(document.activeElement).toBe(trigger);
+  expect(document.querySelector(".sheet")).not.toBeNull();
+});
+
+test("review session renders public activity and sends the selected answer for the waiting manual attempt", async () => {
+  const actions: ReviewRunAction[] = [];
+  let answered = false;
+  const command: typeof reviewRun = async (_cwd, key, action) => {
+    expect(key.number).toBe(108);
+    actions.push(action);
+    if (action.kind === "answer") answered = true;
+    return { version: 1, runs: [{ ...running,
+      ...(!answered && { pendingQuestion: { id: "question-7", question: "Which files?", allowFreeform: true,
+        options: [{ id: "diff", label: "Changed files", description: "Use this revision" }] } }),
+      ...(action.kind === "status" && action.activityId === running.id && {
+        coordinatorActivity: [{ kind: "tool", text: "read_file" }, { kind: "message", text: "<script>public message</script>" }],
+      }),
+    }] };
+  };
+  await show(command, { ...pr, number: 108 });
+  await click("Reply to coordinator");
+  const log = document.querySelector('[role="log"][aria-label="Coordinator activity"]')!;
+  expect(log.textContent).toContain("read_file");
+  expect(log.textContent).toContain("<script>public message</script>");
+  expect(log.querySelector("script")).toBeNull();
+  const form = document.querySelector(".review-question")!;
+  expect(form.textContent).toContain("Which files?");
+  expect(btn("Send reply").disabled).toBe(true);
+  await act(async () => (form.querySelector(".review-answer-option") as HTMLButtonElement).click());
+  expect(actions).toContainEqual({ kind: "answer", id: running.id, questionId: "question-7", answer: "diff" });
+  expect(document.querySelector(".review-question")).toBeNull();
+  await click("Close");
+});
+
+test("a failed freeform answer keeps its draft and retries the same scoped question", async () => {
+  let accepted = false;
+  const attempts: ReviewRunAction[] = [];
+  const command: typeof reviewRun = async (_cwd, _key, action) => {
+    if (action.kind === "answer") {
+      attempts.push(action);
+      if (attempts.length === 1) throw new Error("Could not deliver this reply");
+      accepted = true;
+    }
+    return { version: 1, runs: [{ ...running, ...(!accepted && { pendingQuestion: {
+      id: "question-8", question: "Which workflow?", allowFreeform: true, options: [],
+    } }) }] };
+  };
+  await show(command, { ...pr, number: 109 });
+  await click("Reply to coordinator");
+  const field = document.querySelector<HTMLTextAreaElement>(".review-question textarea")!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(field, "Check CI first");
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await click("Send reply");
+  expect(document.querySelector(".dialog [role=alert]")?.textContent).toContain("Could not deliver");
+  expect(document.body.textContent).not.toContain("PR revision changed");
+  expect(field.value).toBe("Check CI first");
+  await click("Send reply");
+  expect(attempts).toHaveLength(2);
+  expect(attempts[0]).toEqual({ kind: "answer", id: running.id, questionId: "question-8", answer: "Check CI first" });
+  expect(attempts[1]).toEqual(attempts[0]);
+  expect(document.querySelector(".review-question")).toBeNull();
+  await click("Close");
+});
+
+test("review assignments stop at 95% until the run completes and a partial run retains only measured progress", async () => {
+  const roster = { wave: 2, planned: 4, finished: 4, completed: 4, sessions: [] };
+  const values: Array<[DeskRun, string | null]> = [
+    [{ ...running, reviewerProgress: roster }, "95"],
+    [{ ...complete, reviewerProgress: roster }, "100"],
+    [{ ...running, state: "partial", reviewerProgress: { ...roster, completed: 2 } }, "50"],
+    [{ ...running, state: "cancelled" }, null],
+  ];
+  for (const [index, [run, percent]] of values.entries()) {
+    await show(async () => ({ version: 1, runs: [run] }), { ...pr, number: 140 + index });
+    await click("Keryx review");
+    expect(document.querySelector('[role="progressbar"]')?.getAttribute("aria-valuenow") ?? null).toBe(percent);
+    expect(document.querySelector(".review-progress-caption")!.textContent).toContain(percent ? percent + "%" : "Progress unavailable");
+  }
+});
+
+test("reviewer return and partial reason remain visible above the transcript while adjacent tool records collapse together", async () => {
+  const reviewer = {
+    id: "returned-session", reviewer: "review-logic", wave: 2, state: "partial" as const,
+    activity: [
+      { kind: "status" as const, label: "Examining changes" },
+      { kind: "tool" as const, label: "read src/long-file.ts" },
+      { kind: "result" as const, label: "Read 20 lines" },
+      { kind: "tool" as const, label: "list fixtures" },
+      { kind: "message" as const, label: "The fixture omits a rename." },
+    ], finalOutput: "One reproducible rename issue. <script>ignored()</script>", outcomeReason: "Verification stopped after the timeout.",
+  };
+  await show(async () => ({ version: 1, runs: [{ ...complete, reviewerProgress: { wave: 2, planned: 1, finished: 1, sessions: [reviewer] } }] }),
+    { ...pr, number: 188 });
+  await click("View review result");
+  const list = document.querySelector<HTMLDetailsElement>(".review-sessions")!;
+  await act(async () => list.querySelector("summary")!.click());
+  await act(async () => list.querySelector<HTMLButtonElement>(".review-session-row")!.click());
+  const dialog = document.querySelector(".dialog")!;
+  const result = dialog.querySelector('[aria-label="Reviewer result"]')!;
+  expect(result.textContent).toContain(reviewer.finalOutput);
+  expect(result.textContent).toContain(reviewer.outcomeReason);
+  expect(result.querySelector("script")).toBeNull();
+  expect(result.closest("details")).toBeNull();
+  const transcript = dialog.querySelector('[role="log"]')!;
+  const tools = transcript.querySelector<HTMLDetailsElement>("details")!;
+  expect(tools.open).toBe(false);
+  expect(tools.querySelector("summary")!.textContent).toBe("2 tool calls");
+  expect(tools.textContent).toContain("Read 20 lines");
+  expect(transcript.querySelector('[data-kind="message"]')!.textContent).toContain("The fixture omits a rename.");
+  expect(transcript.querySelector('[data-kind="status"]')!.textContent).toContain("Examining changes");
+  await act(async () => tools.querySelector("summary")!.click());
+  expect(tools.open).toBe(true);
+  await click("Close");
+});
+
+test("coordinator separates progress and replies from compact tool records and shows the partial outcome", async () => {
+  const run: DeskRun = { ...running, state: "partial", reason: "A reviewer returned without a receipt.",
+    coordinatorActivity: [
+      { kind: "tool", text: "Read project plan" }, { kind: "result", text: "Accepted" },
+      { kind: "status", text: "Wave 2 started" }, { kind: "answer", text: "Review the rename" },
+    ] };
+  await show(async () => ({ version: 1, runs: [run] }), { ...pr, number: 189 });
+  await click("Keryx review");
+  await click("Open review session");
+  const dialog = document.querySelector(".dialog")!;
+  expect(dialog.querySelector('[aria-label="Review result"]')?.textContent).toContain(run.reason);
+  expect(dialog.querySelector('[data-kind="answer"]')?.textContent).toContain("Review the rename");
+  expect(dialog.querySelector('[data-kind="status"]')?.textContent).toContain("Wave 2 started");
+  expect(dialog.querySelector<HTMLDetailsElement>(".review-transcript-tools")?.open).toBe(false);
+  expect(dialog.querySelector<HTMLDetailsElement>(".review-session-details")?.open).toBe(false);
+  await click("Close");
+});
+
+test("status distinguishes missing, quiet and recent transcripts, an outstanding question and a partial verdict", async () => {
+  const question = { id: "waiting", question: "Continue this wave?", options: [], allowFreeform: true };
+  let observed: DeskRun = running;
+  await show(async () => ({ version: 1, runs: [observed] }), { ...pr, number: 225 });
+  await click("Keryx review");
+  const article = () => document.querySelector("article.desk-run")!;
+  expect(article().textContent).toContain("No transcript activity recorded yet");
+  observed = { ...running, lastActivityAt: time };
+  await click("Refresh runs");
+  expect(article().textContent).toContain("No recent transcript events");
+  observed = { ...running, lastActivityAt: new Date().toISOString() };
+  await click("Refresh runs");
+  expect(article().textContent).toContain("Transcript updated");
+  observed = { ...observed, pendingQuestion: question };
+  await click("Refresh runs");
+  expect(article().querySelector("header strong")?.textContent).toBe("Awaiting your answer");
+  expect(article().textContent).toContain(question.question);
+  expect(btn("Answer review question").disabled).toBe(false);
+  observed = { ...observed, state: "partial", reason: "No reviewer dispatch recorded." };
+  await click("Refresh runs");
+  expect(article().querySelector("header strong")?.textContent).toBe("Partial");
+  expect(article().textContent).toContain("before completion");
+  expect(article().textContent).toContain(observed.reason);
+  expect(article().textContent).not.toContain(question.question);
+  observed = { ...observed, reviewerProgress: {
+    planned: 1, finished: 1, completed: 0, wave: 1,
+    sessions: [{ id: "security", reviewer: "review-security-code", wave: 1, state: "partial", needsContext: true }],
+  } };
+  await click("Refresh runs");
+  expect(article().querySelector('[aria-label="Review result"]')?.textContent).toContain("Needs context · review-security-code");
+});
+
+test("a stale answer intent never starts a review or opens a question on another range", async () => {
+  const actions: string[] = [];
+  await show(async (_cwd, _key, action) => {
+    actions.push(action.kind);
+    return { version: 1, runs: [{ ...running, headSha: "older", pendingQuestion: {
+      id: "stale", question: "Old question", options: [], allowFreeform: true,
+    } }] };
+  }, { ...pr, number: 226 }, { reviewIntent: { kind: "answer", baseSha: pr.baseSha, headSha: pr.headSha } });
+  expect(document.querySelector(".review-question")).toBeNull();
+  expect(actions).toEqual(["status"]);
+});
+
+test("an answer intent opens the waiting reviewer directly and submits only its exact question", async () => {
+  const q = { id: "real-reviewer-q", reviewerSessionId: "s-logic", reviewer: "review-logic", wave: 4,
+    question: "Which configuration applies?", options: [{ id: "choice-7", label: "Production", description: "Use prod flags" }], allowFreeform: true };
+  let waiting = true;
+  const actions: ReviewRunAction[] = [];
+  await show(async (_cwd, _key, action) => {
+    actions.push(action);
+    if (action.kind === "answer") waiting = false;
+    return { version: 1, runs: [{ ...complete, id: "newer-skipped", state: "skipped" }, { ...running, pendingQuestions: waiting ? [q] : [], reviewerProgress: {
+      planned: 1, finished: 0, wave: 4, sessions: [{ id: "s-logic", reviewer: "review-logic", wave: 4, state: "running" }],
+    } }] };
+  }, { ...pr, number: 190 }, { reviewIntent: { kind: "answer", baseSha: "base", headSha: "head" } });
+  const dialog = document.querySelector(".dialog")!;
+  expect(document.querySelectorAll(".dialog")).toHaveLength(1);
+  expect(dialog.querySelector("h2")!.textContent).toContain("review-logic");
+  expect(dialog.textContent).toContain("Action required");
+  expect(dialog.querySelector("legend")!.textContent).toBe("review-logic question");
+  expect(document.querySelector('[aria-label="Open review-logic session, wave 4, Action required"]')).not.toBeNull();
+  await act(async () => dialog.querySelector<HTMLButtonElement>(".review-answer-option")!.click());
+  expect(actions.filter(a => a.kind === "answer")).toEqual([{ kind: "answer", id: running.id, questionId: q.id, answer: "choice-7" }]);
+  expect(dialog.querySelector(".review-question")).toBeNull();
+  await click("Close");
+});
+
+test("multiple pending questions let the user choose the reviewer or coordinator before replying", async () => {
+  const a = { id: "a1", question: "Approve another wave?", options: [], allowFreeform: true };
+  const b = { ...a, id: "b1", reviewerSessionId: "s-reviewer", reviewer: "review-style", wave: 3, question: "Which style guide?" };
+  const c = { ...b, id: "c1", reviewerSessionId: "s-layout", reviewer: "review-layout", question: "Which viewport?" };
+  const requests: ReviewRunAction[] = [];
+  await show(async (_cwd, _key, action) => {
+    requests.push(action);
+    return { version: 1, runs: [{ ...running, pendingQuestion: a, pendingQuestions: [a,b,c] }] };
+  }, { ...pr, number: 191 });
+  await click("Answer questions");
+  const choose = (text: string) => act(async () => [...document.querySelectorAll<HTMLButtonElement>(".review-question-chooser button")]
+    .find(item => item.textContent?.includes(text))!.click());
+  expect(document.querySelectorAll(".review-question-chooser button")).toHaveLength(3);
+  await choose("review-layout");
+  expect(document.querySelector(".dialog .review-question p")?.textContent).toBe(c.question);
+  await click("All questions");
+  await choose("Coordinator");
+  expect(document.querySelector(".dialog .review-question p")?.textContent).toBe(a.question);
+  expect(requests.some(r => r.kind === "answer")).toBe(false);
+  await click("Close");
+});
+
+test("ended reviewer context explicitly addresses the current coordinator question and waits for submission", async () => {
+  const q = { id: "coord-approval", question: "Authorize the additional wave?", options: [
+    { id: "yes", label: "Approve budget", description: "" }], allowFreeform: true };
+  const commands: ReviewRunAction[] = [];
+  await show(async (_cwd, _key, action) => {
+    commands.push(action);
+    return { version: 1, runs: [{ ...running, pendingQuestion: q, reviewerProgress: {
+      planned: 1, finished: 1, wave: 2, sessions: [{ id: "finished-logic", reviewer: "review-logic", wave: 2,
+        state: "partial", needsContext: true, outcomeReason: "The migration version is missing." }],
+    } }] };
+  }, { ...pr, number: 192 });
+  await click("Keryx review");
+  const list = document.querySelector<HTMLDetailsElement>(".review-sessions")!;
+  await act(async () => list.querySelector("summary")!.click());
+  await act(async () => list.querySelector<HTMLButtonElement>(".review-session-row")!.click());
+  expect(document.querySelector(".dialog .review-session-outcome")?.textContent).toContain("The migration version is missing.");
+  await click("Provide context to coordinator");
+  const dialog = document.querySelector(".dialog")!;
+  expect(dialog.querySelector("legend")!.textContent).toBe("Coordinator question");
+  expect(dialog.textContent).toContain(q.question);
+  expect(dialog.textContent).toContain("Approve budget");
+  expect(dialog.textContent).toContain("review-logic has finished");
+  const textarea = dialog.querySelector("textarea")!;
+  expect(textarea.value).toContain("review-logic");
+  expect(btn("Send reply").disabled).toBe(true);
+  expect(commands.some(a => a.kind === "answer")).toBe(false);
+  const draft = textarea.value + "The migration targets v3.";
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(textarea, draft);
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await click("Send reply");
+  expect(commands.filter(a => a.kind === "answer")).toEqual([{ kind: "answer", id: running.id, questionId: q.id, answer: draft }]);
+  await click("Close");
 });

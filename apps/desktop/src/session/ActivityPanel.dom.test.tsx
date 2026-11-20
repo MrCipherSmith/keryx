@@ -3,7 +3,6 @@ import type { Root } from "react-dom/client";
 import type { TaskInfo } from "../acp/providers";
 import type { Subagent } from "./activity";
 import type { Item } from "./reducer";
-import type { ProjectGitHubAccount } from "../platform/githubAccounts";
 import { registerDom, unregisterDom } from "../test/dom";
 
 let root: Root;
@@ -75,7 +74,7 @@ interface PanelOver {
   onRefreshTasks?: () => void;
   extensions?: string[];
   onTab?: (t: "subagents" | "tasks" | "schedules" | "runs") => void;
-  githubAccount?: ProjectGitHubAccount;
+  githubAccount?: React.ComponentProps<typeof ActivityPanel>["githubAccount"];
   onProjectSettings?: () => void;
 }
 async function renderPanel(o: PanelOver = {}) {
@@ -288,9 +287,10 @@ const extAgent = (over: Partial<Subagent> = {}): Subagent => ({
 test("an idle external run reads \"waiting for you\" in its own colour class, and only running runs count on the tab", async () => {
   await renderPanel({ tab: "subagents", subagents: [extAgent(), extAgent({ id: "ext:2", status: "running", entries: [] })] });
   const rows = Array.from(document.querySelectorAll("[data-subagent]"));
-  expect(rows[0]!.querySelector(".activity-status")!.className).toContain("status-idle");
-  expect(rows[0]!.querySelector(".activity-status")!.getAttribute("title")).toBe("waiting for you");
-  expect(rows[1]!.querySelector(".activity-status")!.className).toContain("status-running");
+  expect(rows[0]!.getAttribute("data-subagent")).toBe("ext:2");
+  expect(rows[0]!.querySelector(".activity-status")!.className).toContain("status-running");
+  expect(rows[1]!.querySelector(".activity-status")!.className).toContain("status-idle");
+  expect(rows[1]!.querySelector(".activity-status")!.getAttribute("title")).toBe("waiting for you");
   // two external runs, one idle: the tab counts the running one only
   expect(document.querySelector('[role="tab"][aria-selected="true"] .tab-count')!.textContent).toBe("1");
 });

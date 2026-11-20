@@ -6,7 +6,7 @@ import { MOD } from "../lib/prefs";
 import { Icon } from "../components/Icon";
 import { Kbd } from "../components/ui";
 
-export function Welcome({ onOpen, onSettings }: { onOpen: (cwd: string) => void; onSettings: () => void }) {
+export function Welcome({ onOpen, onSettings }: { onOpen: (cwd: string) => void | Promise<void>; onSettings: () => void }) {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [host, setHost] = useState<string>("");
@@ -18,9 +18,22 @@ export function Welcome({ onOpen, onSettings }: { onOpen: (cwd: string) => void;
     void hostKind().then(setHost);
   }, []);
 
+  const open = async (folder: string) => {
+    setError(null);
+    try {
+      await onOpen(folder);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
   const pick = async () => {
-    const picked = await pickFolder();
-    if (picked) onOpen(picked);
+    try {
+      const picked = await pickFolder();
+      if (picked) await open(picked);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
   };
 
   useEffect(() => {
@@ -68,7 +81,7 @@ export function Welcome({ onOpen, onSettings }: { onOpen: (cwd: string) => void;
             <ul>
               {recents.map((p) => (
                 <li key={p}>
-                  <button className="recent" onClick={() => onOpen(p)} title={p}>
+                  <button className="recent" onClick={() => void open(p)} title={p}>
                     <Icon name="folder" size={15} />
                     <span className="recent-name">{basename(p)}</span>
                     <span className="recent-path truncate">{p}</span>

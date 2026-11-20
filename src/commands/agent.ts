@@ -1,8 +1,9 @@
 import { AGENT_CONDUCT_PROMPT_BLOCK, containsAgentConduct } from "../lib/agent-conduct";
+import { DEFAULT_REVIEW_PARALLEL } from "../review/wave-limits";
 import { isTransportFailure } from "../harness/provider/provider-port";
 import { rememberArbiterSession } from "../review/arbiter-session";
 import { decideReviewGate, findReviewGateState, sessionReviewNames, sessionStartedAt } from "../review/completion-gate";
-import { ENV_AUTONOMOUS_ANSWERS_FILE } from "../review/autonomous-answers";
+import { desktopQuestionRun, ENV_AUTONOMOUS_ANSWERS_FILE } from "../review/autonomous-answers";
 import { REFUSED_EARLIER, asksForReviewAuto, noteOperatorRefusal, operatorDenied, recordOperatorDenial, refusalFingerprint, reviewAutoActive, reviewAutoGrants, setReviewSystem } from "../review/review-system";
 import { classifyApprovalCause } from "./approval-cause";
 import type { ApprovalCause } from "./approval-cause";
@@ -668,6 +669,8 @@ export interface AgentDeps {
    *    `submittedResult` / `submitResultError`.
    */
   subagentBudget?: { advisoryToolCalls?: number };
+  /** A native reviewer can wait for an operator's missing evidence before ending a text round. */
+  requestReviewerContext?: (publicReply: string) => Promise<string | undefined>;
   /**
    * Flow 290 (AC5): a hard floor consulted for every non-`read` tool call
    * BEFORE the permission mode is resolved — so `trust` (or any mode) cannot
@@ -1167,7 +1170,7 @@ export const MAX_PLAN_FOLLOW_THROUGHS = 8;
  * the orchestrator halve its wave and honour `retry-after`. Overridable per run
  * via {@link AgentDeps.maxSubagentConcurrency}.
  */
-export const DEFAULT_MAX_SUBAGENT_CONCURRENCY = 10;
+export const DEFAULT_MAX_SUBAGENT_CONCURRENCY = DEFAULT_REVIEW_PARALLEL;
 
 /**
  * Default per-request output-token budget for the main agent turn round
@@ -4143,6 +4146,15 @@ async function runAgentTurnCore(
     }
     overflowRetried = false;
     if (calls.length === 0) {
+      if (deps.requestReviewerContext && roundState.round < roundState.maxRounds) {
+        const answer = await deps.requestReviewerContext(assistantText);
+        if (isAborted()) return { finishReason: "interrupted" };
+        if (answer !== undefined) {
+          history.push({ role: "user", content: scrub(answer), provenance: "tool", ts: now() });
+          io.onHistoryChange?.("user");
+          continue;
+        }
+      }
       // Flow 347 T6 (AC8): a round in THIS turn already executed a tool call
       // (`turnExecutedToolCall`), or this toolless reply is itself a
       // complete, structured answer (unless it ends on a bare colon — still
@@ -4543,7 +4555,9 @@ async function runAgentTurnCore(
         }
         return {};
       }
-      if (deps.unattended === true && call.name === "ask_user") {
+      const desktopQuestion = call.name === "ask_user" && deps.subagentBudget === undefined &&
+        desktopQuestionRun(deps.cwd ?? process.cwd()) !== undefined;
+      if (deps.unattended === true && call.name === "ask_user" && !desktopQuestion) {
         // SLATE-11 (AC3): no human is present to answer — deny BEFORE the real
         // `ask` callback ever runs (it is never invoked) and stop the ENTIRE
         // turn immediately (journal.md's accepted reading: a whole-turn stop
@@ -4633,12 +4647,12 @@ async function runAgentTurnCore(
       // executes exactly as before.
       const precomputedResult = concurrentSpawnResults?.get(call.id);
       let result: InteractiveToolResult;
-      const storedAnswer = precomputedResult === undefined ? await storedAskUserAnswer(call, options) : undefined;
+      const storedAnswer = precomputedResult === undefined && !desktopQuestion ? await storedAskUserAnswer(call, options) : undefined;
       // Not an invocation: nothing ran, so the invocation budget is untouched (the attempt guard has already counted
       // the call), and the hooks and the approval gate (a `read` tool never reaches the latter) are skipped, as for the
       // automatic review's own answers. A hook that wants every `ask_user` to reach a person is not consulted here.
       const selfAnswered =
-        precomputedResult === undefined && storedAnswer === undefined
+        precomputedResult === undefined && storedAnswer === undefined && !desktopQuestion
           ? selfAnsweredQuestion(
               call,
               toolByName,
@@ -4680,7 +4694,7 @@ async function runAgentTurnCore(
             deps.unattended === true ? undefined : io.beforeMutation,
             undefined,
             untrustedContentSeen,
-            reviewRun,
+            desktopQuestion ? undefined : reviewRun,
             io.mcpGrantsApply?.() === false ? undefined : (io.hcLaunchGrants ??= new Set<string>()),
           );
         } catch (err) {
@@ -6359,6 +6373,7 @@ async function executeCallUnbounded(
   // and making the parameter conditional would hide which calls are abortable.
   mark("invoke");
   const result = await tool.invoke(input, {
+    ...(call.name === "spawn_subagent" && stage ? { onReviewerWait: (waiting: boolean) => mark(waiting ? "reviewer-question" : "invoke") } : {}),
     ...(signal !== undefined ? { signal } : {}),
     ...(confirmationToken !== undefined ? { confirmationToken } : {}),
     ...(confirmationToken !== undefined && confirmationVia !== undefined ? { confirmationVia } : {}),

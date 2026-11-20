@@ -260,18 +260,21 @@ fn build_host_window(app: &AppHandle, label: &str) -> Result<Window, String> {
 pub fn add_view(app: &AppHandle, window: &Window, cwd: Option<String>) -> Result<Webview, String> {
     let state = app.state::<ProjectWindows>();
     let n = state.next_view.fetch_add(1, Ordering::SeqCst) + 1;
+    let size = window.inner_size().map_err(|e| e.to_string())?;
     let label = format!("project-{n}");
     if let Some(cwd) = cwd {
+        let root = panels::project_dir(&cwd)?;
+        app.state::<panels::PanelRoots>().set(&label, root);
         app.state::<bridge::AppState>().set_pending_cwd(&label, cwd);
     }
     // Registered first: the page may call in before `add_child` returns.
     state.inner.lock().unwrap().add(&label, window.label());
     let builder = navigation_guarded(app, &label).auto_resize();
-    let size = window.inner_size().map_err(|e| e.to_string())?;
     match window.add_child(builder, PhysicalPosition::new(0, 0), size) {
         Ok(view) => Ok(view),
         Err(e) => {
             state.inner.lock().unwrap().remove(&label);
+            app.state::<panels::PanelRoots>().remove(&label);
             app.state::<bridge::AppState>().view_closed(&label);
             Err(format!("Could not open the project view: {e}"))
         }
@@ -350,6 +353,8 @@ fn move_view(app: &AppHandle, view: &Webview, window: &Window) -> Result<(), Str
 fn release(app: &AppHandle, label: &str, close_tabs: bool) {
     // Never wait out the stop grace period here.
     app.state::<bridge::AppState>().view_closed(label);
+    // Unsent chat attachments of a closed view go with it; sent ones stay until the app exits.
+    crate::images::release_view(app, label);
     app.state::<flows::watch::FlowWatchers>().stop_window(label);
     app.state::<pty::PtyManager>().close_window(label);
     app.state::<panels::PanelRoots>().remove(label);

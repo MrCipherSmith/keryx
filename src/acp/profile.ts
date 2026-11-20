@@ -6,6 +6,7 @@
 //
 // Pure: importing this reads nothing and spawns nothing.
 
+import { PREPARE_REVIEW_METHOD } from "./review-draft";
 import { PERMISSION_MODES, type PermissionMode } from "../commands/permission-mode";
 import type { AcpSessionMode, AcpSessionModeState } from "./protocol";
 
@@ -157,17 +158,17 @@ export interface KeryxAcpInfo extends KeryxAcpProfileMeta {
   readonly version: string;
 }
 
-export function keryxAcpProfileMeta(profile: AcpProfile): KeryxAcpProfileMeta {
+export function keryxAcpProfileMeta(profile: AcpProfile, prepareReview = false): KeryxAcpProfileMeta {
   return {
     profile,
     profiles: [...ACP_PROFILES],
-    extensions: acpProfileExtensions(profile),
+    extensions: [...acpProfileExtensions(profile), ...(profile === "shell" && prepareReview ? [PREPARE_REVIEW_METHOD] : [])],
     ...(profile === "shell" ? { liveSessions: true as const, minDesktopVersion: MIN_DESKTOP_VERSION } : {}),
   };
 }
 
-export function keryxAcpInfo(version: string, profile: AcpProfile): KeryxAcpInfo {
-  return { version, ...keryxAcpProfileMeta(profile) };
+export function keryxAcpInfo(version: string, profile: AcpProfile, prepareReview = false): KeryxAcpInfo {
+  return { version, ...keryxAcpProfileMeta(profile, prepareReview) };
 }
 
 /** The shell's three postures, as ACP session modes (`.metaproject/wiki/architecture/permission-modes.md`). */

@@ -13,6 +13,15 @@ import { askFloor } from "./arbiter-floor";
 /** Set by the runner on the child shell; its presence turns the autonomous answer path on. */
 export const ENV_AUTONOMOUS_ANSWERS_FILE = "KERYX_AUTONOMOUS_ANSWERS_FILE";
 
+/** Only the manual Desktop coordinator in its private attempt checkout can host a question. */
+export function desktopQuestionRun(cwd: string, env: NodeJS.ProcessEnv = process.env): string | undefined {
+  const id = env.KERYX_DESK_OPERATOR_RUN;
+  if (env.KERYX_DESK_REVIEW_SHELL !== "1" || !id || !/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(id)) return;
+  const attempt = path.dirname(cwd);
+  if (path.basename(attempt) === id && path.basename(cwd) === "checkout" &&
+      env[ENV_AUTONOMOUS_ANSWERS_FILE] === path.join(attempt, "run", "answers.ndjson")) return id;
+}
+
 export function autonomousAnswersEnabled(env: Record<string, string | undefined> = process.env): boolean {
   const file = env[ENV_AUTONOMOUS_ANSWERS_FILE];
   return file !== undefined && file.length > 0;

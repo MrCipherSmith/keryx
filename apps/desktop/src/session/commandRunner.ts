@@ -3,6 +3,7 @@
 
 import { COMMAND_METHOD, commandMeta, commandSurface, findCommand } from "../acp/commands";
 import type { AvailableCommand, CommandEffect, CommandResult, CommandView, ConfigOption, ConfirmAction, SessionModeState } from "../acp/types";
+import { parseReviewDraft, type ReviewDraftHints } from "../../../../src/acp/review-draft";
 import type { DelegateLaunch } from "./delegateTerminals";
 import type { Action, QueuedPrompt } from "./reducer";
 
@@ -21,6 +22,7 @@ export interface UiActions {
 }
 
 export interface RunDeps {
+  prepareReview?: (sessionId: string, hints: ReviewDraftHints, prompt?: string) => void;
   client: { request<T>(method: string, params?: unknown): Promise<T> } | null;
   sessionId: string | null;
   /** The shown session's turn is running. */
@@ -44,6 +46,34 @@ export interface RunDeps {
   trackCommand?(sessionId: string): () => void;
 }
 
+const reviewCommand: AvailableCommand = {
+  name: "review", description: "Configure a Keryx pull request review", input: { hint: "[#number or GitHub PR URL]" },
+  _meta: { keryx: { group: "Review", surface: "dialog", busy: "run" } },
+};
+
+export function desktopReviewCommands(commands: readonly AvailableCommand[]): AvailableCommand[] {
+  return [...commands.filter(command => command.name.toLowerCase() !== reviewCommand.name), reviewCommand];
+}
+
+/** Recognize direct launch commands before a model can interpret them as an inline review.
+ * Keep the whole message in scope: questions and requests with extra work still go to the agent.
+ */
+export function desktopReviewRequest(line: string): ReviewDraftHints | undefined {
+  if (/[\r\n]/.test(line.trim())) return;
+  const text = line.trim().replace(/[.!?]$/, "");
+  const launch = /^(?:пожалуйста,?\s+)?(?:запусти|начни)\s+(?:(?:адаптивное|фоновое|автономное|автоматическое)\s+)*ревью(?=\s|$)/iu.exec(text)
+    ?? /^(?:please\s+)?(?:start|run|launch)\s+(?:(?:an?|the|adaptive|background|autonomous|automatic)\s+)*(?:pr\s+)?review(?=\s|$)/iu.exec(text);
+  if (!launch) return;
+  const target = text.slice(launch[0].length).trim()
+    .replace(/(?:^|\s)(?:в|in)\s+keryx(?:\s+desktop)?$/iu, "")
+    .replace(/(?:^|\s)(?:с(?:\s+помощью)?|через|using|with|via)\s+`?review-orchestrator`?$/iu, "")
+    .replace(/^(?:этого\s+pr|текущего\s+pr|pr|для|for|of)(?:\s+|$)/iu, "")
+    .trim()
+    .replace(/^<([^<>]+)>$|^`([^`]+)`$/u, "$1$2");
+  const draft = parseReviewDraft(target ? { target } : {});
+  return draft.ok ? draft.hints : undefined;
+}
+
 export interface RunOptions {
   /** The line to show in the transcript when it must not show the real one (a masked secret). */
   display?: string;
@@ -61,7 +91,14 @@ function errText(e: unknown): string {
  * (busy) or the request failed, so the user can fix and resend the draft.
  */
 export async function runCommandLine(line: string, deps: RunDeps, opts: RunOptions = {}): Promise<boolean> {
-  const found = findCommand(deps.commands, line);
+  if (deps.prepareReview && deps.sessionId && opts.replaceId === undefined) {
+    const request = desktopReviewRequest(line);
+    if (request) {
+      deps.prepareReview(deps.sessionId, request, opts.display ?? line);
+      return true;
+    }
+  }
+  const found = findCommand(deps.prepareReview ? desktopReviewCommands(deps.commands) : deps.commands, line);
   // Not an advertised command: ordinary text for the model.
   if (!found) return sendOrQueue(line, deps);
   const { command, parsed } = found;
@@ -138,6 +175,13 @@ type CardFn = (text: string, refused?: boolean) => void;
 
 function runClient(name: string, args: string, deps: RunDeps, card: CardFn, refuse: (text: string) => false): boolean {
   switch (name) {
+    case "review": {
+      const parsed = parseReviewDraft(args ? { target: args } : {});
+      if (!parsed.ok) return refuse(parsed.message);
+      if (!deps.prepareReview || !deps.sessionId) return false;
+      deps.prepareReview(deps.sessionId, parsed.hints, args ? "/review " + args : "/review");
+      return true;
+    }
     case "new":
     case "clear":
       deps.newSession();

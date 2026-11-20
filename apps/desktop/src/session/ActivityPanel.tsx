@@ -3,7 +3,7 @@ import { TASKS_KILL, TASKS_OUTPUT, isRunning, supportsTasks, type TaskInfo, type
 import { Icon } from "../components/Icon";
 import { Markdown } from "../components/Markdown";
 import { Dialog, Spinner } from "../components/ui";
-import { runningSubagents, statusLabel, type Subagent } from "./activity";
+import { partitionSubagents, runningSubagents, statusLabel, type Subagent } from "./activity";
 import { SchedulesTab } from "./SchedulesTab";
 import { RunsTab } from "./RunsTab";
 import { focusDelegateRun, isDelegateRunOpen, onDelegateChange } from "./delegateBus";
@@ -122,10 +122,11 @@ function SubagentsTab({ subagents, selected, onSelect }: { subagents: readonly S
       </>
     );
   }
-  if (subagents.length === 0) return <p className="field-hint activity-empty">No subagents in this session yet.</p>;
+  const { current: recent } = partitionSubagents(subagents);
+  if (!recent.length) return <p className="field-hint activity-empty">{subagents.length ? "Earlier subagents are in the session’s archive." : "No subagents in this session yet."}</p>;
   return (
     <ul className="activity-list">
-      {subagents.map((a) => (
+      {recent.map((a) => (
         <li key={a.id}>
           <button className="activity-row" onClick={() => onSelect(a.id)} data-subagent={a.id}>
             <span className={`activity-status status-${a.status}`} title={statusLabel(a.status)}>
@@ -147,7 +148,7 @@ function SubagentsTab({ subagents, selected, onSelect }: { subagents: readonly S
   );
 }
 
-function SubagentDetail({ agent }: { agent: Subagent }) {
+export function SubagentDetail({ agent }: { agent: Subagent }) {
   const task = agent.task?.trim() || agent.entries.find((e) => e.kind === "task")?.text.trim() || "";
   return (
     <div className="subagent-detail" data-subagent-detail={agent.id}>

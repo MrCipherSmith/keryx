@@ -2,22 +2,30 @@
 .review-context strong { color: var(--fg); overflow-wrap: anywhere; }
 .review-board .sheet-head-row .flow-id { min-width: 0; overflow-wrap: anywhere; }
 .review-active-filters { flex-basis: 100%; display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; max-height: min(8rem, 20vh); overflow: auto; }
-.review-active-filters .link-btn { order: -1; }
+.review-dismiss-warning { margin-inline-start: auto; }
 .review-active-filters > span { background: var(--bg-sunken); border-radius: var(--r-sm); padding: 3px 6px; overflow-wrap: anywhere; }
 .review-loading { display: flex; align-items: center; justify-content: center; gap: var(--sp-2); padding: var(--sp-5); color: var(--fg-muted); }
 .review-lanes .lane { flex: 1 0 230px; }
 .review-lane-attention { background: var(--warn); }
 .review-lane-review { background: var(--accent); }
 .review-lane-done { background: var(--ok); }
-.review-state { color: var(--fg-muted); font-size: var(--fs-xs); }
+.review-card { display: grid; gap: 6px; padding: 0; border: 0; color: inherit; background: transparent; font: inherit; text-align: start; }
+.review-tags { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+.review-tags .badge { white-space: normal; color: var(--fg-muted); background: var(--bg-sunken); }
+.review-tags .pr-open, .review-tags .pr-approved { color: var(--ok); background: var(--ok-soft); }
+.review-tags .pr-merged, .review-tags .pr-review_requested { color: var(--info); background: var(--info-soft); }
+.review-tags .pr-changes_requested { color: var(--warn); background: var(--warn-soft); }
+.review-row-action { justify-self: start; }
 .review-reason { border-top: 1px solid var(--border); padding-top: 6px; color: var(--fg); font-size: var(--fs-xs); font-weight: 600; }
+.review-activity-stamp { display: block; white-space: normal; font-size: var(--fs-xs); color: var(--fg-muted); }
 .review-request { font-size: var(--fs-xs); color: var(--fg-muted); overflow-wrap: anywhere; }
 .review-ci { font-size: var(--fs-xs); font-weight: 550; color: var(--fg-muted); }
 .review-ci.ci-passed { color: var(--ok); }
 .review-ci.ci-failed { color: var(--danger); }
 .review-ci.ci-pending { color: var(--warn); }
-.review-table { min-width: 660px; }
-.review-table th:first-child { width: 40%; }
+.review-table { min-width: 780px; }
+.review-table th:first-child { width: 30%; }
+.review-table th:last-child { width: 106px; }
 .review-table th:nth-child(4) { width: 18%; }
 .review-table .review-progress-caption { min-width: 0; white-space: normal; }
 .review-table tbody tr:hover { background: transparent; }

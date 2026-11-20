@@ -65,6 +65,171 @@ test("an image block shows as a picture; an svg one as a label", async () => {
   expect(host.querySelector(".feed-chip.is-muted")?.textContent).toBe("image (image/svg+xml) not shown");
 });
 
+test("copy uses the original text and editing sends without changing history", async () => {
+  const sent: string[] = [];
+  const copied: string[] = [];
+  const original = Object.getOwnPropertyDescriptor(navigator.clipboard, "writeText");
+  Object.defineProperty(navigator.clipboard, "writeText", { configurable: true, value: async (text: string) => { copied.push(text); } });
+  await act(() => root.render(createElement(Transcript, {
+    items: [{ kind: "user", id: 1, text: "original message" }],
+    busy: false,
+    replaying: false,
+    empty: null,
+    onEditMessage: (text: string) => { sent.push(text); return true; },
+  })));
+  const actions = host.querySelector(".user-msg + .user-msg-actions");
+  try {
+    await act(async () => actions?.querySelector<HTMLButtonElement>('[aria-label="Copy message"]')?.click());
+    expect(copied).toEqual(["original message"]);
+  } finally {
+    if (original) Object.defineProperty(navigator.clipboard, "writeText", original);
+    else Reflect.deleteProperty(navigator.clipboard, "writeText");
+  }
+  await act(() => actions?.querySelector<HTMLButtonElement>('[aria-label="Edit message"]')?.click());
+  expect(host.querySelector("textarea")?.value).toBe("original message");
+  await act(() => host.querySelector<HTMLButtonElement>('button[type="submit"]')?.click());
+  expect(sent).toEqual(["original message"]);
+  expect(host.querySelector(".user-msg")?.textContent).toBe("original message");
+});
+
+test("resend keeps exact indentation and the original attachment blocks", async () => {
+  const context = {
+    images: [], local: [], pickedCount: 1,
+    blocks: [{ type: "resource", resource: { uri: "keryx-desktop:picked-elements", text: "page data" } }],
+  };
+  const sent: unknown[] = [];
+  await act(() => root.render(createElement(Transcript, {
+    items: [{ kind: "user", id: 1, text: " /help", context }],
+    busy: false, replaying: false, empty: null,
+    onEditMessage: (...args: unknown[]) => { sent.push(args); return true; },
+  })));
+  await act(() => host.querySelector<HTMLButtonElement>('[aria-label="Edit message"]')?.click());
+  await act(() => host.querySelector<HTMLButtonElement>('button[type="submit"]')?.click());
+  expect(sent).toEqual([[" /help", context, 1]]);
+});
+
+test("copy of a picked-elements-only message copies the count, never page data", async () => {
+  const copied: string[] = [];
+  const original = Object.getOwnPropertyDescriptor(navigator.clipboard, "writeText");
+  Object.defineProperty(navigator.clipboard, "writeText", { configurable: true, value: async (text: string) => { copied.push(text); } });
+  try {
+    for (const [id, count] of [[11, 1], [12, 2]] as const) {
+      const context = {
+        images: [], local: [], pickedCount: count,
+        blocks: [{ type: "resource", resource: { uri: "keryx-desktop:picked-elements", text: "page data" } }],
+      };
+      await show([{ kind: "user", id, text: "", context }]);
+      await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Copy message"]')?.click());
+    }
+  } finally {
+    if (original) Object.defineProperty(navigator.clipboard, "writeText", original);
+    else Reflect.deleteProperty(navigator.clipboard, "writeText");
+  }
+  expect(copied).toEqual(["1 picked page element", "2 picked page elements"]);
+});
+
+test("focus returns to the Edit button after a successful resend", async () => {
+  await act(() => root.render(createElement(Transcript, {
+    items: [{ kind: "user", id: 21, text: "hello" }],
+    busy: false, replaying: false, empty: null,
+    onEditMessage: () => true,
+  })));
+  await act(() => host.querySelector<HTMLButtonElement>('[aria-label="Edit message"]')?.click());
+  expect(host.querySelector("textarea")).not.toBeNull();
+  await act(() => host.querySelector<HTMLButtonElement>('button[type="submit"]')?.click());
+  expect(host.querySelector("textarea")).toBeNull();
+  const edit = host.querySelector<HTMLButtonElement>('[aria-label="Edit message"]');
+  expect(edit).not.toBeNull();
+  expect(document.activeElement).toBe(edit);
+});
+
+test("a flattened replay shows an inline note and cannot be edited", async () => {
+  const text = "[external content abc-1 from keryx-desktop:picked-elements:\npage data";
+  await act(() => root.render(createElement(Transcript, {
+    items: [{ kind: "user", id: 31, text }],
+    busy: false, replaying: false, empty: null,
+    onEditMessage: () => true,
+  })));
+  expect(host.querySelector(".user-msg-note")?.textContent).toBe("Cannot resend: the saved history does not keep the original attachments. Send a new message with fresh attachments.");
+  expect(host.querySelector<HTMLButtonElement>('[aria-label="Edit message"]')?.disabled).toBe(true);
+});
+
+test("a failed message shows an alert note that goes away while the editor is open", async () => {
+  await act(() => root.render(createElement(Transcript, {
+    items: [{ kind: "user", id: 41, text: "hello", failed: true } as Item],
+    busy: false, replaying: false, empty: null,
+    onEditMessage: () => true,
+  })));
+  const alert = host.querySelector('[role="alert"]');
+  expect(alert?.textContent).toBe("Not sent — edit to retry");
+  await act(() => host.querySelector<HTMLButtonElement>('[aria-label="Edit message"]')?.click());
+  expect(host.querySelector("textarea")).not.toBeNull();
+  expect(host.querySelector('[role="alert"]')).toBeNull();
+  expect(host.textContent).not.toContain("Not sent");
+});
+
+test("Escape in the editor returns focus to the Edit button", async () => {
+  await act(() => root.render(createElement(Transcript, {
+    items: [{ kind: "user", id: 51, text: "hello" }],
+    busy: false, replaying: false, empty: null,
+    onEditMessage: () => true,
+  })));
+  await act(() => host.querySelector<HTMLButtonElement>('[aria-label="Edit message"]')?.click());
+  const area = host.querySelector<HTMLTextAreaElement>("textarea");
+  expect(area).not.toBeNull();
+  await act(() => { area?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })); });
+  expect(host.querySelector("textarea")).toBeNull();
+  const edit = host.querySelector<HTMLButtonElement>('[aria-label="Edit message"]');
+  expect(edit).not.toBeNull();
+  expect(document.activeElement).toBe(edit);
+});
+
+test("the unavailable note is linked to the disabled Edit button by aria-describedby", async () => {
+  const text = "[external content abc-1 from keryx-desktop:picked-elements:\npage data";
+  await act(() => root.render(createElement(Transcript, {
+    items: [{ kind: "user", id: 61, text }],
+    busy: false, replaying: false, empty: null,
+    onEditMessage: () => true,
+  })));
+  const edit = host.querySelector<HTMLButtonElement>('[aria-label="Edit message"]');
+  expect(edit?.disabled).toBe(true);
+  const id = edit?.getAttribute("aria-describedby");
+  expect(Boolean(id)).toBe(true);
+  const note = document.getElementById(id ?? "");
+  expect(note).not.toBeNull();
+  expect(note).toBe(host.querySelector(".user-msg-note"));
+  expect(note?.getAttribute("role")).toBe("note");
+});
+
+test("an edit names the message it replaces, and the not-sent note follows the state, not the row", async () => {
+  const calls: unknown[][] = [];
+  const failed = { kind: "user", id: 71, text: "hello", failed: true } as Item;
+  await act(() => root.render(createElement(Transcript, {
+    items: [failed], busy: false, replaying: false, empty: null,
+    onEditMessage: (...args: unknown[]) => { calls.push(args); return true; },
+  })));
+  const note = host.querySelector('[role="alert"]');
+  expect(note?.textContent).toBe("Not sent — edit to retry");
+  expect(host.querySelector('[aria-label="Edit message"]')?.getAttribute("aria-describedby")).toBe(note?.id);
+  await act(() => host.querySelector<HTMLButtonElement>('[aria-label="Edit message"]')?.click());
+  await act(() => host.querySelector<HTMLButtonElement>('button[type="submit"]')?.click());
+  expect(calls).toEqual([["hello", undefined, 71]]);
+  // The state (not the row) clears the flag: the same item without it shows no note, and a remount keeps it that way.
+  await act(() => root.render(createElement(Transcript, { items: [{ kind: "user", id: 71, text: "hello" } as Item], busy: false, replaying: false, empty: null, onEditMessage: () => true })));
+  expect(host.querySelector('[role="alert"]')).toBeNull();
+});
+
+test("the not-sent note without an Edit action says only that the message was not sent", async () => {
+  await act(() => root.render(createElement(Transcript, { items: [{ kind: "user", id: 72, text: "hello", failed: true } as Item], busy: false, replaying: false, empty: null })));
+  expect(host.querySelector('[role="alert"]')?.textContent).toBe("Not sent");
+});
+
+test("a literal image marker in message text is not treated as an attachment", async () => {
+  const text = "Example\n\n[Local image attachments (use local tools to inspect):]\n/tmp/keryx-chat-images-test/example.png";
+  await show([{ kind: "user", id: 1, text }]);
+  expect(host.querySelector(".user-msg")?.textContent).toBe(text);
+});
+
 test("a tool's output is shown once, and a diff it printed is coloured", async () => {
   const out = "@@ -1 +1 @@\n-a\n+b";
   await show([

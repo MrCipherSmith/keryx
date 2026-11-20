@@ -12,7 +12,7 @@ import { estimatePackage, planConfirmed, type RoundEstimate, CONFIRM_PLAN_TOOL }
 import { readPriorFindings, readRoundRecord, renderRoundLine, type RoundRecord } from "../review/round-record";
 import { isDeltaRound } from "../review/round-split";
 import type { SliceEntry, SliceManifest } from "../review/slice";
-import { DESK_REVIEW_SHELL } from "../review/autonomous-profile";
+import { DESK_REVIEW_SHELL, deskReviewOptions } from "../review/autonomous-profile";
 import { collectDesktopPlanContext, prepareDesktopDispatch } from "./review-plan-desktop";
 import { REVIEW_HOSTS } from "../review/host-profile";
 import { requiredSlices } from "../review/waves";
@@ -49,6 +49,7 @@ export type ReviewPlan = {
   warnings: string[];
   next: string;
   desktopDispatch?: string;
+  launchOptions?: import("../review/desk-run-options").DeskReviewOptions;
 };
 
 export function printPlanHelp(): void {
@@ -113,7 +114,7 @@ export function renderPlanSummary(plan: ReviewPlan): string {
     `estimate: ${plan.dispatches} dispatches, ${plan.minutes.min}-${plan.minutes.max} min${plan.overThreshold ? ` — over threshold (${plan.overReasons.join("; ")})` : ""}`,
     ...plan.warnings.map((warning) => `warning: ${warning}`),
     `next: ${plan.next}`,
-    ...(plan.desktopDispatch ? [`Read ${plan.desktopDispatch} with read_file and dispatch each calls entry verbatim with spawn_subagent. All payloads passed dispatch-check.`] : []),
+    ...(plan.desktopDispatch ? [`Read ${plan.desktopDispatch} with read_file and pass each path in assignments to spawn_subagent as its sole assignment argument. All payloads passed dispatch-check.`] : []),
     `written: ${path.join(plan.package, PLAN_FILE)}`,
   ];
   return lines.join("\n");
@@ -152,6 +153,7 @@ export async function runPlan(args: string[], deps: PlanDeps): Promise<void> {
   const packageDir = packagePathOf(started.stdout, cwd);
   if (packageDir === undefined || !existsSync(packageDir)) throw new Error("review plan: `review start` printed no package path; the plan stops here.");
   const desktopMode = process.env[DESK_REVIEW_SHELL] === "1" && host === "keryx-shell" && kind === "pr" && head && base;
+  const launchOptions = desktopMode ? deskReviewOptions() : undefined;
   if (desktopMode) await rm(path.join(packageDir, "desktop-dispatch.json"), { force: true });
   const desktopContext = desktopMode
     ? await collectDesktopPlanContext(target, head, packageDir, deps.run) : undefined;
@@ -225,6 +227,7 @@ export async function runPlan(args: string[], deps: PlanDeps): Promise<void> {
   const byKind = slicesByKind(manifest);
   const plan: ReviewPlan = {
     v: 1,
+    ...(launchOptions ? { launchOptions } : {}),
     package: packageDir,
     target: { kind, ref: target, base: baseRef ?? null, head: round?.range.head ?? head ?? null },
     round: {
@@ -253,7 +256,7 @@ export async function runPlan(args: string[], deps: PlanDeps): Promise<void> {
   const planFile = path.join(packageDir, PLAN_FILE);
   await writeFileAtomic(planFile, `${JSON.stringify(plan, null, 2)}\n`);
   if (desktopContext && base && plan.next === "dispatch") {
-    plan.desktopDispatch = await prepareDesktopDispatch(cwd, plan, base, manifest, drivers, desktopContext, deps.run);
+    plan.desktopDispatch = await prepareDesktopDispatch(cwd, plan, base, manifest, drivers, desktopContext, deps.run, launchOptions);
     await writeFileAtomic(planFile, `${JSON.stringify(plan, null, 2)}\n`);
   }
   console.log(args.includes("--json") ? JSON.stringify(plan, null, 2) : renderPlanSummary(plan));

@@ -62,6 +62,61 @@ test("thumbnails appear once per link, only when the host returns the image", as
   expect(mod.clickedImageLink(root.querySelectorAll("a")[2]!)).toBeNull();
 });
 
+test("a busy refusal as a plain string (Tauri) is retried and the thumbnail then appears", async () => {
+  const root = document.createElement("div");
+  root.innerHTML = `<p><a href="shots/b.png">b</a></p>`;
+  document.body.append(root); // a retry only runs while the link is still in the page
+  let calls = 0;
+  const load = async () => {
+    calls++;
+    if (calls === 1) throw "busy: Chat attachments are busy; try again"; // Tauri's rejection is a bare string
+    return "data:image/png;base64,AAAA";
+  };
+  mod.decorateImageLinks(root, load);
+  const started = Date.now();
+  while (calls < 2 && Date.now() - started < 3000) await new Promise((r) => setTimeout(r, 20));
+  await new Promise((r) => setTimeout(r, 20));
+  expect(calls).toBe(2);
+  const thumb = root.querySelector<HTMLButtonElement>(".md-thumb");
+  expect(thumb?.hidden).toBe(false);
+  expect(root.querySelectorAll(".md-thumb")).toHaveLength(1);
+  root.remove();
+});
+
+test("loadCached shares one read between concurrent callers and keeps the resolved URL", async () => {
+  let calls = 0;
+  const load = async () => { calls++; await new Promise((r) => setTimeout(r, 5)); return "data:image/png;base64,QQ=="; };
+  const [a, b] = await Promise.all([mod.loadCached("cache/one.png", load), mod.loadCached("cache/one.png", load)]);
+  expect(a).toBe(b);
+  expect(calls).toBe(1);
+  expect(await mod.loadCached("cache/one.png", load)).toBe(a);
+  expect(calls).toBe(1);
+});
+
+test("a rejected read is not cached: the next call asks the host again", async () => {
+  let calls = 0;
+  const load = async () => { calls++; if (calls === 1) throw new Error("not there"); return "data:image/png;base64,QQ=="; };
+  let message = "";
+  try { await mod.loadCached("cache/late.png", load); } catch (e) { message = (e as Error).message; }
+  expect(message).toBe("not there");
+  expect(await mod.loadCached("cache/late.png", load)).toBe("data:image/png;base64,QQ==");
+  expect(calls).toBe(2);
+});
+
+test("a failed thumbnail stays failed: re-decoration does not ask the host again", async () => {
+  const root = document.createElement("div");
+  root.innerHTML = `<p><a href="shots/gone.png">g</a></p>`;
+  let calls = 0;
+  const load = async () => { calls++; throw new Error("not there"); };
+  mod.decorateImageLinks(root, load);
+  await new Promise((r) => setTimeout(r, 0));
+  expect(root.querySelector("a")?.dataset.thumb).toBe("failed");
+  expect(root.querySelector(".md-thumb")).toBeNull();
+  mod.decorateImageLinks(root, load);
+  await new Promise((r) => setTimeout(r, 0));
+  expect(calls).toBe(1);
+});
+
 test("the preview closes on Esc or a click", () => {
   const close = mod.openImagePreview("data:image/png;base64,AAAA", "shot");
   expect(document.querySelector(".img-preview img")!.getAttribute("alt")).toBe("shot");

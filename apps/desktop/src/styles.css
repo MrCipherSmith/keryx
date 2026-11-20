@@ -37,21 +37,22 @@ button { font: inherit; }
 
 .titlebar {
   grid-column: 1 / -1;
-  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(max-content, 1fr); align-items: center; gap: var(--sp-3);
+  display: grid; grid-template-columns: minmax(0, 1fr) max-content; align-items: center; gap: var(--sp-3);
   padding: 0 var(--sp-3) 0 var(--titlebar-inset);
   background: var(--bg-canvas); border-bottom: 1px solid var(--border);
 }
 .titlebar-left, .titlebar-right { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
 .titlebar-right { justify-content: flex-end; }
+.titlebar-title { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Tauri checks the hit element itself when starting a drag. */
+.titlebar-title > * { pointer-events: none; }
 .titlebar-session-controls { display: flex; align-items: center; gap: var(--sp-1); min-width: 0; }
 .titlebar-session-controls:empty { display: none; }
-.titlebar-session-controls .project-github-account { min-width: 0; max-width: 18rem; }
 .titlebar-session-controls .icon-btn, .project-switcher .icon { flex-shrink: 0; }
 .titlebar-activity { position: relative; }
 .titlebar-activity .tab-count { position: absolute; inset-block-start: -2px; inset-inline-end: -3px; pointer-events: none; }
-.titlebar-center { text-align: center; font-weight: 600; font-size: var(--fs-md); color: var(--fg); min-width: 0; display: flex; justify-content: center; }
 .project-switcher {
-  display: inline-flex; align-items: center; gap: 6px; height: 26px; min-width: 0; max-width: 100%; padding: 0 var(--sp-2);
+  display: inline-flex; align-items: center; gap: 6px; height: 26px; max-width: min(17rem, 48%); min-width: 0; padding: 0 var(--sp-2);
   font-weight: 600; color: var(--fg); background: transparent; border: 1px solid transparent; border-radius: var(--r-md); cursor: default;
 }
 .project-switcher:hover, .project-switcher[aria-expanded="true"] { background: var(--bg-hover); border-color: var(--border); }
@@ -130,6 +131,10 @@ button { font: inherit; }
 .project-views button:hover { color: var(--fg); background: var(--bg-hover); }
 .project-views button[aria-current="page"] { color: var(--accent-text); border-bottom-color: var(--accent); }
 .project-views button:focus-visible { outline: 2px solid var(--focus); outline-offset: -3px; }
+.review-tab-dot {
+  width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: var(--info);
+}
+.review-tab-dot[data-indicator="attention"] { background: var(--warn); }
 .project-content { flex: 1; min-height: 0; min-width: 0; position: relative; }
 .view { height: 100%; min-height: 0; }
 
@@ -271,6 +276,17 @@ button { font: inherit; }
 .transcript-inner { max-width: calc(var(--measure) + 2 * var(--sp-5)); margin: 0 auto; padding: var(--sp-5) var(--sp-5) var(--sp-6); display: flex; flex-direction: column; gap: var(--sp-3); }
 .turn-user { display: flex; justify-content: flex-end; margin-top: var(--sp-3); }
 .turn-user:first-child { margin-top: 0; }
+.turn-user.with-actions { flex-direction: column; align-items: flex-end; gap: 4px; }
+.user-msg-actions { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.user-msg-edit { display: grid; gap: var(--sp-2); width: min(420px, 100%); }
+.user-msg-edit textarea { color: var(--fg); background: var(--bg-canvas); width: 100%; min-width: 0; resize: vertical; }
+.sent-images { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
+.sent-images:not(:last-child) { margin-bottom: var(--sp-2); }
+.sent-image { display: block; max-width: 100%; max-height: 180px; object-fit: contain; border-radius: var(--r-md); }
+.sent-image-slot { display: block; min-width: 0; max-width: 100%; }
+.sent-image-label { font-size: var(--fs-sm); color: var(--fg-muted); min-width: 0; overflow-wrap: anywhere; }
+.user-msg-note { max-width: 85%; font-size: var(--fs-sm); color: var(--fg-muted); text-align: right; }
+.user-msg-note.is-failed { color: var(--danger); }
 .user-msg {
   max-width: 85%; padding: 9px 14px; background: var(--bg-sunken); border: 1px solid var(--border);
   border-radius: var(--r-xl) var(--r-xl) var(--r-sm) var(--r-xl); white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.55;
@@ -415,10 +431,16 @@ button { font: inherit; }
   font-size: var(--fs-sm); color: var(--fg); background: var(--accent-soft); border-radius: var(--r-md);
 }
 .attach-chip > .icon { flex: none; color: var(--accent); }
+.attach-chip.image-chip { height: auto; max-width: 100%; padding: 4px; align-items: flex-start; }
+.image-chip img { display: block; width: 54px; height: 54px; object-fit: contain; border-radius: var(--r-sm); }
+.composer-image-status { padding: 6px 12px 0; color: var(--fg-muted); font-size: var(--fs-sm); }
+.composer-image-status[role="alert"] { color: var(--danger); }
 .browser-bar .icon-btn.is-on { color: var(--accent-text); background: var(--bg-selected); }
 .composer textarea:disabled { cursor: not-allowed; }
 .composer-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px; min-width: 0; padding: 4px 6px 6px 8px; }
 .composer-bar > .grow { flex: 1 1 0; min-width: 0; }
+.icon-btn.composer-add { flex: none; width: 30px; height: 30px; border: 1px solid var(--border); border-radius: var(--r-md); }
+.composer-add[aria-expanded="true"] { background: var(--bg-selected); color: var(--accent-text); }
 .chip-btn {
   display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 8px; max-width: 220px; min-width: 0; flex: 0 1 auto; overflow: hidden;
   font-size: var(--fs-sm); font-weight: 500; color: var(--fg-muted); background: var(--bg-sunken);
@@ -490,6 +512,10 @@ button { font: inherit; }
 .usage-footer { display: flex; align-items: center; gap: var(--sp-3); min-height: 24px; padding: 4px 4px 0; font-size: var(--fs-xs); color: var(--fg-subtle); font-variant-numeric: tabular-nums; }
 .usage-ctx { display: inline-flex; align-items: center; gap: 6px; }
 .git-status { display: inline-flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+.usage-footer .project-github-account {
+  height: auto; min-width: 0; max-width: 26ch; padding: 0; border: 0; font-size: inherit; color: var(--fg-muted);
+}
+.usage-footer .project-github-account:hover { color: var(--fg); text-decoration: underline; background: none; }
 .git-status .icon { flex: none; }
 .git-branch, .git-pr, .git-threads, .git-changes { display: inline-flex; align-items: center; gap: 3px; min-width: 0; }
 .git-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 22ch; }

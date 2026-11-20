@@ -15,12 +15,15 @@
 
 import { reviewBoardArgs } from "./reviewBoard";
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync, mkdirSync, writeFileSync } from "node:fs";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { rmSync } from "node:fs";
+import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { homedir, tmpdir } from "node:os";
 import { basename, isAbsolute, join, resolve, sep } from "node:path";
 import type { ServerWebSocket, Subprocess } from "bun";
+import { createChatAttachmentStore, type ChatOwner } from "./chatAttachments";
+import { githubRepositoryFromOrigin } from "../src/lib/githubPr";
 
 import { reviewWatcherArgs, reviewRuleArgs } from "./reviewWatcher";
 import { reviewRunArgs } from "./reviewRun";
@@ -435,6 +438,7 @@ setInterval(() => {
 // ---- ACP process per connection --------------------------------------------
 
 interface Conn {
+  attachmentOwner: ChatOwner;
   proc: Subprocess<"pipe", "pipe", "pipe"> | null;
   root: string | null;
   gen: number;
@@ -484,6 +488,13 @@ function acpStart(ws: ServerWebSocket<Conn>, cwd: string, noProfile: boolean) {
   const proc = Bun.spawn([...cmd, ...args], { cwd: root, stdin: "pipe", stdout: "pipe", stderr: "pipe" });
   const gen = conn.gen;
   conn.proc = proc;
+  if (conn.root !== null && conn.root !== root) {
+    const oldOwner = conn.attachmentOwner;
+    conn.attachmentOwner = { closed: false };
+    void chatStore.cleanupChatOwner(oldOwner).catch((error: unknown) => {
+      console.error("[bridge] could not clean up drafts on project switch", error);
+    });
+  }
   conn.root = root;
   for (const wake of conn.rootWaiters.splice(0)) wake();
   let stderrTail = "";
@@ -530,6 +541,36 @@ function acpStart(ws: ServerWebSocket<Conn>, cwd: string, noProfile: boolean) {
   };
 }
 
+// ---- temporary chat images ---------------------------------------------------
+
+const chatStore = createChatAttachmentStore({
+  onRoot(dir) { process.once("exit", () => rmSync(dir, { recursive: true, force: true })); },
+});
+
+const execGitFile = promisify(execFile);
+const MAX_GIT_REPOSITORY_CHILDREN = 4;
+let gitRepositoryChildren = 0;
+
+async function gitRepository(cwd: string): Promise<string | null> {
+  if (gitRepositoryChildren >= MAX_GIT_REPOSITORY_CHILDREN) throw new Error("busy: too many repository lookups; try again");
+  gitRepositoryChildren++;
+  try {
+    const { stdout } = await execGitFile("git", ["config", "--local", "--get", "remote.origin.url"], {
+      cwd,
+      encoding: "utf8",
+      timeout: 3000,
+      maxBuffer: 16 * 1024,
+      killSignal: "SIGKILL",
+    });
+    return githubRepositoryFromOrigin(stdout);
+  } catch {
+    // Match native behavior when git is missing, times out, or has no usable origin.
+    return null;
+  } finally {
+    gitRepositoryChildren--;
+  }
+}
+
 // ---- dispatch ----------------------------------------------------------------
 
 /**
@@ -548,7 +589,7 @@ async function projectCwd(conn: Conn, cwd: string): Promise<string> {
   }
   let real: string;
   try {
-    real = realpathSync(cwd);
+    real = await realpath(cwd);
   } catch {
     throw new Error(`The project folder is not available (${cwd})`);
   }
@@ -562,7 +603,9 @@ async function runReviewCli(root: string, argv: string[], readOnly: boolean): Pr
   if (readOnly) reviewReaders++;
   let stdout: string;
   try {
-    ({ stdout } = await runFile(KERYX_CMD[0]!, [...KERYX_CMD.slice(1), ...argv], { cwd: root, timeout: 150_000, maxBuffer: 32 * 1024 * 1024 }));
+    const desktopDecision = argv[0] === "review" && argv[1] === "desk-run" && argv[2] === "decide";
+    ({ stdout } = await runFile(KERYX_CMD[0]!, [...KERYX_CMD.slice(1), ...argv], { cwd: root, timeout: 150_000, maxBuffer: 32 * 1024 * 1024,
+      ...(desktopDecision && { env: { ...process.env, KERYX_DESKTOP_REVIEW_ACTION: "1" } }) }));
   } catch (error) {
     const reason = (error as { stderr?: string }).stderr?.trim();
     throw new Error(reason || "unavailable: Could not run the Review reader");
@@ -629,6 +672,19 @@ async function handle(ws: ServerWebSocket<Conn>, cmd: string, args: Json): Promi
     case "acp_stop":
       stopProc(ws.data);
       return null;
+    case "save_chat_file":
+      if (!ws.data.root) throw new Error("Open a project before attaching files.");
+      return chatStore.saveChatFile(ws.data.attachmentOwner, args);
+    case "save_chat_image":
+      if (!ws.data.root) throw new Error("Open a project before pasting images.");
+      return chatStore.saveChatImage(ws.data.attachmentOwner, args);
+    case "discard_chat_attachment":
+      return chatStore.discardChatAttachment(ws.data.attachmentOwner, args.path);
+    case "commit_chat_attachments":
+      return chatStore.commitChatAttachments(ws.data.attachmentOwner, args.paths, ws.data.root);
+    case "local_image": {
+      return chatStore.localImage(ws.data.attachmentOwner, ws.data.root, args.path);
+    }
     case "settings_get":
       return loadSettings();
     case "settings_set": {
@@ -682,7 +738,8 @@ async function handle(ws: ServerWebSocket<Conn>, cmd: string, args: Json): Promi
     }
     case "review_run": {
       const root = await projectCwd(ws.data, cwd);
-      return runReviewCli(root, reviewRunArgs(args.target, args.action), (args.action as Json)?.kind === "status");
+      const argv = reviewRunArgs(args.target, args.action);
+      return runReviewCli(root, argv, argv[2] === "status" || argv[2] === "readiness");
     }
     case "review_publish": {
       const root = await projectCwd(ws.data, cwd);
@@ -701,6 +758,8 @@ async function handle(ws: ServerWebSocket<Conn>, cmd: string, args: Json): Promi
       watched.set(root, w);
       return null;
     }
+    case "git_repository":
+      return gitRepository(await projectCwd(ws.data, cwd));
     case "git_info": {
       // Same parse as src-tauri/src/gitinfo.rs, for the browser dev mode.
       const r = Bun.spawnSync(["git", "status", "--porcelain=v2", "--branch"], { cwd: await projectCwd(ws.data, cwd), env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" } });
@@ -804,10 +863,12 @@ Bun.serve<Conn>({
     if (!/^http:\/\/(localhost|127\.0\.0\.1):1420$/.test(origin)) {
       return new Response("forbidden origin", { status: 403 });
     }
-    if (server.upgrade(req, { data: { proc: null, root: null, gen: 0, rootWaiters: [] } })) return undefined;
+    if (server.upgrade(req, { data: { proc: null, root: null, gen: 0, rootWaiters: [], attachmentOwner: { closed: false } } })) return undefined;
     return new Response("keryx desktop dev bridge", { status: 426 });
   },
   websocket: {
+    // 5 MiB attachment as base64 (~6.7 MiB) plus JSON overhead fits comfortably.
+    maxPayloadLength: 12 * 1024 * 1024,
     async message(ws, raw) {
       let msg: { id?: number; cmd?: string; args?: Json };
       try {
@@ -824,11 +885,19 @@ Bun.serve<Conn>({
       }
     },
     close(ws) {
+      void chatStore.cleanupChatOwner(ws.data.attachmentOwner).catch((error) => {
+        console.error("[bridge] chat attachment cleanup failed", error);
+      });
       stopProc(ws.data);
       for (const w of watched.values()) w.sockets.delete(ws);
     },
   },
 });
+
+// These signals skip the "exit" event by default; exiting explicitly runs the chat image root cleanup.
+for (const [signal, code] of [["SIGINT", 130], ["SIGTERM", 143], ["SIGHUP", 129]] as const) {
+  process.on(signal, () => process.exit(code));
+}
 
 console.log(`[bridge] keryx desktop dev bridge on ws://127.0.0.1:${PORT}`);
 console.log(`[bridge] keryx command: ${KERYX_CMD.join(" ")}`);
