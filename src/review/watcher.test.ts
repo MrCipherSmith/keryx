@@ -97,8 +97,10 @@ test("stores only the newest 50 observed events per watcher", async () => {
   });
   await pollSecond([]);
   await pollSecond([card({ number: 700 })]);
+  const older = [card({ number: 90 }), card({ number: 91 })];
+  await tick(board(...older));
   const cards = Array.from({ length: 65 }, (_, index) => card({ number: index + 1 }));
-  const snapshot = await tick(board(...cards));
+  const snapshot = await tick(board(...older, ...cards));
   const count = watcherTransaction(db => db.query<{ count: number }, [string]>(
     "SELECT count(*) AS count FROM watcher_events WHERE watcher=?",
   ).get(watcherScope(cwd, key))?.count);

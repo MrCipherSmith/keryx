@@ -1,4 +1,4 @@
-import type { scheduledRunOutcomes } from "./desk-run-store";
+import { scheduledRunOutcomes } from "./desk-run-store";
 import type { Database } from "bun:sqlite";
 import { randomUUID } from "node:crypto";
 import { watcherTransaction as access, watcherScope as scope } from "./watcher-db";
@@ -25,9 +25,10 @@ type Row = State & { baseline: string | null; lease: string | null; pid: number 
 const historyLimit = 50;
 
 function snapshot(db: Database, id: string): WatcherSnapshot {
-  const state = db
-    .query<State, [string]>(
-      "SELECT state,intervalMinutes,lastAttemptAt,lastSuccessAt,lastError FROM watchers WHERE id=?",
+  const { warning, ...state } = db
+    .query<State & { warning: string | null }, [string]>(
+      `SELECT state,intervalMinutes,lastAttemptAt,lastSuccessAt,lastError,warning
+       FROM watchers LEFT JOIN watcher_recovery_warnings ON watcher=id WHERE id=?`,
     )
     .get(id) ?? {
     state: "disabled",
@@ -35,6 +36,7 @@ function snapshot(db: Database, id: string): WatcherSnapshot {
     lastAttemptAt: null,
     lastSuccessAt: null,
     lastError: null,
+    warning: null,
   };
   const rows = db
     .query<{ event: string }, [string, number]>(
@@ -45,6 +47,7 @@ function snapshot(db: Database, id: string): WatcherSnapshot {
     version: 1,
     installed: false,
     ...state,
+    ...(warning ? { recoveryWarning: warning } : {}),
     events: rows.map((r) => JSON.parse(r.event) as WatcherEvent),
   };
 }
@@ -77,16 +80,34 @@ export function configureWatcher(cwd: string, key: WatcherKey, intervalMinutes: 
   });
 }
 
+function nextOperation(db: Database): number {
+  return db.query<{ ordinal: number }, []>(
+    `INSERT INTO watcher_operation_order (id,ordinal)
+      VALUES (1, (SELECT COALESCE(MAX(generation),0) + 1 FROM watcher_pauses))
+      ON CONFLICT(id) DO UPDATE SET ordinal=MAX(watcher_operation_order.ordinal+1,excluded.ordinal)
+      RETURNING ordinal`,
+  ).get()!.ordinal;
+}
+
+/** Reserve the user's ordering before any asynchronous checkout or GitHub lookup. */
+export function beginWatcherOperation(): number {
+  return access(nextOperation);
+}
+
 /** An explicit pause cancels installation requests still waiting for GitHub. */
 export function watcherPauseGeneration(cwd: string, key: WatcherKey): number {
   return access(db => db.query<{generation: number}, [string]>("SELECT generation FROM watcher_pauses WHERE watcher=?")
     .get(scope(cwd, key))?.generation ?? 0);
 }
 
-export function pauseWatcher(cwd: string, key: WatcherKey): WatcherSnapshot {
+export function pauseWatcher(cwd: string, key: WatcherKey, order?: number): WatcherSnapshot {
   const id = scope(cwd, key);
   return access((db) => {
-    db.run("INSERT INTO watcher_pauses(watcher,generation) VALUES(?,1) ON CONFLICT(watcher) DO UPDATE SET generation=generation+1", [id]);
+    db.run(
+      `INSERT INTO watcher_pauses(watcher,generation) VALUES(?,?)
+       ON CONFLICT(watcher) DO UPDATE SET generation=MAX(generation,excluded.generation)`,
+      [id, order ?? nextOperation(db)],
+    );
     invalidateRuleWork(db, id, "Watcher paused");
     db.run("UPDATE watchers SET state='paused',baseline=NULL,lease=NULL,pid=NULL WHERE id=?", [id]);
     return snapshot(db, id);
@@ -151,14 +172,12 @@ export async function pollWatcher(
   key: WatcherKey,
   {
     fetch = fetchOpenCards,
-    beforeFetch,
     dispatch,
-    outcomes,
+    outcomes = scheduledRunOutcomes,
   }: {
     dispatch?: DispatchReviewRule;
     outcomes?: typeof scheduledRunOutcomes;
     fetch?: (cwd: string, key: WatcherKey) => Promise<ReviewBoardSnapshot>;
-    beforeFetch?: () => Promise<void>;
   } = {},
 ): Promise<WatcherSnapshot> {
   const id = scope(cwd, key),
@@ -180,14 +199,13 @@ export async function pollWatcher(
   let cards: WatchedCard[] | undefined;
   let failure: string | null = null;
   let recoveryWarning: string | null = null;
-  let links: ReturnType<typeof linkedReviewRuns> = [];
+  let settled: { links: ReturnType<typeof linkedReviewRuns>; outcomes: ReturnType<typeof scheduledRunOutcomes> } | undefined;
   try {
-    if (beforeFetch) await beforeFetch();
     const board = await fetch(cwd, key);
     validateObservation(board, key);
     cards = observedCards(board.cards);
     try {
-      links = access((db) => db.query("SELECT 1 FROM watchers WHERE id=? AND lease=? AND state='enabled'").get(id, token)
+      const links = access((db) => db.query("SELECT 1 FROM watchers WHERE id=? AND lease=? AND state='enabled'").get(id, token)
         ? linkedReviewRuns(db, id) : []);
       if (links.length) {
         // Read a verdict outside the SQLite transaction and only after verifying this account.
@@ -195,6 +213,7 @@ export async function pollWatcher(
         if (!await reconcileLinkedScheduledRuns(cwd, key, links, new Set(board.cards.map(card => card.number)))) {
           recoveryWarning = "A scheduled review could not be recovered. The watcher will retry.";
         }
+        settled = { links, outcomes: outcomes(links.map(link => link.runId)) };
       }
     } catch {
       recoveryWarning = "Scheduled review history could not be recovered. The watcher will retry.";
@@ -218,7 +237,7 @@ export async function pollWatcher(
       const at = new Date().toISOString();
       const changes =
         row.baseline === null ? [] : watcherChanges(JSON.parse(row.baseline) as WatchedCard[], cards, at);
-      observeRules(db, id, cards, changes, at, outcomes, links);
+      observeRules(db, id, cards, changes, at, settled);
       if (changes.length) {
         const insert = db.prepare("INSERT INTO watcher_events (watcher,event) VALUES (?,?)");
         for (const event of changes.slice(-historyLimit)) insert.run(id, JSON.stringify(event));
@@ -226,8 +245,13 @@ export async function pollWatcher(
           SELECT id FROM watcher_events WHERE watcher=? ORDER BY id DESC LIMIT 1 OFFSET ?)`,
         [id, id, historyLimit - 1]);
       }
-      db.run("UPDATE watchers SET lease=NULL,pid=NULL,lastError=?,lastSuccessAt=?,baseline=? WHERE id=?", [
-        recoveryWarning,
+      if (recoveryWarning) {
+        db.run(`INSERT INTO watcher_recovery_warnings(watcher,warning) VALUES(?,?)
+          ON CONFLICT(watcher) DO UPDATE SET warning=excluded.warning`, [id, recoveryWarning]);
+      } else {
+        db.run("DELETE FROM watcher_recovery_warnings WHERE watcher=?", [id]);
+      }
+      db.run("UPDATE watchers SET lease=NULL,pid=NULL,lastError=NULL,lastSuccessAt=?,baseline=? WHERE id=?", [
         at,
         JSON.stringify(cards),
         id,

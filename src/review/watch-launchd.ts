@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
 import { constants } from "node:fs";
-import { access, lstat, mkdir, readdir, realpath, rm, stat, symlink } from "node:fs/promises";
+import { access, lstat, mkdtemp, readdir, realpath, rm, stat, symlink } from "node:fs/promises";
 import path from "node:path";
 import { isNotFound, writeFileAtomic } from "../lib/fs";
-import { keryxDataDir, readConfigFile } from "../lib/config-dir";
+import { createOwnerOnlyDirectory, ensureKeryxSubdir, keryxDataDir, readConfigFile } from "../lib/config-dir";
 import { launchAgentsDir, runner, xml, type ScheduleHost } from "../trigger/install";
 import { invocationArgv, resolveKeryxInvocation } from "../trigger/schedule";
 import type { WatcherKey } from "./watcher-types";
@@ -93,9 +93,7 @@ export async function verifyWatcherTimerTools(env: NodeJS.ProcessEnv = process.e
   if (!directory || !path.isAbsolute(directory) || directory.includes(path.delimiter) ||
       env.PATH !== [directory, ...systemDirs].join(path.delimiter)) throw new Error(restoreTimer);
   try {
-    const info = await lstat(directory);
-    if (!info.isDirectory() || info.uid !== process.getuid?.() || (info.mode & 0o077) !== 0 ||
-        await realpath(directory) !== directory) throw new Error(restoreTimer);
+    await verifyToolDirectory(directory);
     const names = await readdir(directory);
     if (names.length !== links.size || names.some(name => !links.has(name))) throw new Error(restoreTimer);
     await Promise.all([...links].map(async ([name, target]) => {
@@ -107,6 +105,12 @@ export async function verifyWatcherTimerTools(env: NodeJS.ProcessEnv = process.e
   } catch {
     throw new Error(restoreTimer);
   }
+}
+
+async function verifyToolDirectory(directory: string) {
+  const info = await lstat(directory);
+  if (!info.isDirectory() || info.uid !== process.getuid?.() || (info.mode & 0o077) !== 0 ||
+      await realpath(directory) !== directory) throw new Error(restoreTimer);
 }
 
 function marked(label: string) {
@@ -171,30 +175,38 @@ async function watcherToolsPath(checkouts: string[]) {
   }
   const configuration = path.resolve(keryxDataDir());
   if (!outsideCheckouts(configuration)) throw new Error("configuration: Store Review timer tools outside the project's worktrees.");
-  const toolsRoot = path.join(configuration, "review-watch", "tools");
-  await mkdir(toolsRoot, { recursive: true, mode: 0o700 });
+  const toolsRoot = ensureKeryxSubdir(["review-watch", "tools"], configuration);
   const canonical = await realpath(toolsRoot);
   if (!outsideCheckouts(canonical) || canonical.includes(path.delimiter)) throw new Error(restoreTimer);
   const hash = createHash("sha256").update(JSON.stringify([...found].sort())).digest("hex");
-  const directory = path.join(canonical, hash);
-  await mkdir(directory, { recursive: true, mode: 0o700 });
-  await Promise.all([...found].map(async ([name, target]) => {
-    try {
-      await symlink(target, path.join(directory, name));
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-    }
-  }));
-  const rg = found.get("rg");
-  const env = {
-    PATH: [directory, ...systemDirs].join(path.delimiter),
-    KERYX_REVIEW_TOOLS_DIR: directory,
-    KERYX_REVIEW_GH_BIN: found.get("gh")!,
-    KERYX_REVIEW_GIT_BIN: found.get("git")!,
-    ...(rg ? { KERYX_REVIEW_RG_BIN: rg } : {}),
-  };
-  await verifyWatcherTimerTools(env);
-  return env;
+  async function provision(directory: string) {
+    await verifyToolDirectory(directory);
+    await Promise.all([...found].map(async ([name, target]) => {
+      try {
+        await symlink(target, path.join(directory, name));
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      }
+    }));
+    const rg = found.get("rg");
+    const env = {
+      PATH: [directory, ...systemDirs].join(path.delimiter),
+      KERYX_REVIEW_TOOLS_DIR: directory,
+      KERYX_REVIEW_GH_BIN: found.get("gh")!,
+      KERYX_REVIEW_GIT_BIN: found.get("git")!,
+      ...(rg ? { KERYX_REVIEW_RG_BIN: rg } : {}),
+    };
+    await verifyWatcherTimerTools(env);
+    return env;
+  }
+  const preferred = path.join(canonical, hash);
+  try {
+    createOwnerOnlyDirectory(preferred);
+    return await provision(preferred);
+  } catch {
+    // Leave a loaded timer's environment intact until the replacement is active.
+    return provision(await mkdtemp(preferred + "-"));
+  }
 }
 
 export async function watcherProgram(checkouts: string[], host: ScheduleHost) {

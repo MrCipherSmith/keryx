@@ -328,6 +328,15 @@ export function ensureKeryxSubdir(segments: readonly string[], dir?: string): st
   return current;
 }
 
+/** Create an owner-only leaf, preserving existing entries for the caller to verify. */
+export function createOwnerOnlyDirectory(directory: string): void {
+  try {
+    mkdirSync(directory, { mode: 0o700 });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+  }
+}
+
 /**
  * Append one line to an owner-only file under the shared directory.
  *

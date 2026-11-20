@@ -275,6 +275,10 @@ test("Review controls the schedule for the base repository and displays persiste
   expect(host.querySelector('[role="dialog"]')?.textContent).toContain("#101 New commits");
   expect(host.querySelectorAll('time[datetime="' + at + '"]')).toHaveLength(3);
   expect(host.textContent).toContain("Connection timed out");
+  state = { ...state, lastError: null, recoveryWarning: "One earlier review could not be recovered." };
+  await act(async () => { window.dispatchEvent(new Event("focus")); });
+  expect(button("PR watcher · Watching").disabled).toBe(false);
+  expect(host.textContent).toContain("One earlier review could not be recovered.");
   await click(button("Pause watcher"));
   expect(host.textContent).toContain("fresh baseline");
   expect(host.textContent).toContain("Reconnect to GitHub to view PR activity.");

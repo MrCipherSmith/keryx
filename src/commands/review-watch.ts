@@ -4,6 +4,7 @@ import { parseArgs } from "node:util";
 import { withFileLock } from "../lib/fs";
 import { mainCheckout, parseWatcherKey, verifyIdentity, watcherDiscoveryEnvironment, watcherWorktrees } from "../review/watcher-project";
 import {
+  beginWatcherOperation,
   configureWatcher,
   listConfiguredWatchers,
   pauseWatcher,
@@ -50,7 +51,8 @@ export function parseWatchArgs(args: string[]) {
 }
 
 function publicStatus(s: WatcherSnapshot): WatcherSnapshot {
-  return { ...s, historyAvailable: false, events: [],
+  const { recoveryWarning: _recoveryWarning, ...status } = s;
+  return { ...status, historyAvailable: false, events: [],
     lastError: s.lastError ? "The last scheduled poll reported a problem. Reconnect to GitHub to inspect it." : null };
 }
 
@@ -62,7 +64,7 @@ async function scopedStatus(
 ) {
   if (!verifiedKey)
     return publicStatus(snapshot);
-  if (snapshot.events.length || snapshot.lastError) {
+  if (snapshot.events.length || snapshot.lastError || snapshot.recoveryWarning) {
     try {
       await verify(project, verifiedKey);
     } catch {
@@ -88,14 +90,15 @@ export async function requestWatch(
   request: ReturnType<typeof parseWatchArgs>,
   host: ScheduleHost = {},
   verify = verifyIdentity,
-  worktrees = watcherWorktrees,
+  discovery: { primary?: typeof mainCheckout; worktrees?: typeof watcherWorktrees } = {},
 ): Promise<WatcherSnapshot> {
   const { action } = request;
   const installing = action === "enable" || action === "resume";
   if (installing && (host.platform ?? process.platform) !== "darwin")
     throw new Error("configuration: A local Review watcher requires macOS launchd.");
+  const order = installing || action === "pause" ? beginWatcherOperation() : 0;
   const systemEnv = (host.platform ?? process.platform) === "darwin" ? watcherDiscoveryEnvironment() : undefined;
-  const project = await mainCheckout(cwd, systemEnv);
+  const project = await (discovery.primary ?? mainCheckout)(cwd, systemEnv);
   let key = request.key;
   if (!key) {
     const keys = listConfiguredWatchers(project);
@@ -107,7 +110,8 @@ export async function requestWatch(
   const target = key;
   if (action === "tick") {
     // All full baseline/history writes are owned and fenced by the poll service.
-    return publicStatus(await pollWatcher(project, target, { beforeFetch: () => verifyWatcherTimerTools() }));
+    await verifyWatcherTimerTools();
+    return publicStatus(await pollWatcher(project, target));
   }
   if (action === "status") {
     const snapshot = readWatcher(project, target);
@@ -117,16 +121,15 @@ export async function requestWatch(
   const lock = path.join(keryxDataDir(), "review-watch", watcherLabel(project, target) + ".lock");
   if (action === "pause") {
     const paused = await withFileLock(lock, async () => {
-      const snapshot = pauseWatcher(project, target);
+      const snapshot = pauseWatcher(project, target, order);
       if (snapshot.state !== "disabled") snapshot.installed = await reconcileWatcherTimer(project, target, host);
       return snapshot;
     }, { timeoutMs: 45_000 });
     return scopedStatus(project, request.key, paused, verify);
   }
-  const generation = watcherPauseGeneration(project, target);
   if (action === "resume" && readWatcher(project, target).state === "disabled")
     throw new Error("configuration: Enable this watcher before resuming it.");
-  const checkouts = await worktrees(cwd);
+  const checkouts = await (discovery.worktrees ?? watcherWorktrees)(cwd);
   if (checkouts[0] !== project)
     throw new Error("configuration: The primary checkout changed during verification. Try again from Review.");
   const program = await watcherProgram(checkouts, host);
@@ -135,7 +138,7 @@ export async function requestWatch(
     await verify(project, target, { ...program.env, HOME: homedir(), GH_TOKEN: process.env.GH_TOKEN, GITHUB_TOKEN: process.env.GITHUB_TOKEN });
   await verify(project, target, { ...program.env, HOME: homedir() });
   return withFileLock(lock, async () => {
-    if (generation !== watcherPauseGeneration(project, target))
+    if (watcherPauseGeneration(project, target) > order)
       throw new Error("configuration: The watcher was paused during verification. Resume it to continue.");
     const minutes = request.minutes ?? readWatcher(project, target).intervalMinutes;
     configureWatcher(project, target, minutes);

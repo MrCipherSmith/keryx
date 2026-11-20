@@ -166,9 +166,10 @@ function spawnWorker(a: Attempt) {
 /** Caller owns a write transaction. A worker must acquire that transaction
  * and match its pid before it can act, including after a launcher crash. */
 export function dispatchNext(store: DeskRunStore, key: DeskRunKey, launch = spawnWorker) {
-  if (store.active(key)) return;
   const a = store.queued(key);
   if (!a) return;
+  store.releaseDeadForeignSlot(key);
+  if (store.active(key)) return;
   try {
     a.pid = launch(a);
     a.workerIdentity = readProcessIdentity(a.pid) ?? undefined;

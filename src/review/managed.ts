@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { withCompletionLock } from "./completion-lock";
 import { completionSnapshot } from "./completion-snapshot";
 import { completionWriter, type CompletionWriter } from "./completion-write";
@@ -209,7 +210,7 @@ async function recordedPackageHead(packageDir: string): Promise<string | undefin
 /** A named package keeps its checked PR revision across starts and ingests. */
 async function managedTarget(input: ManagedReviewIngestInput, packageDir: string, head: string | null): Promise<ManagedReviewTarget> {
   const requested = targetWithHead(input.target, head);
-  if (!input.reviewId || (input.mode !== "ingest" && requested.kind !== "pr")) return requested;
+  if (!input.reviewId) return requested;
   const file = path.join(packageDir, "manifest.json");
   const prior = await pathExists(file) ? (JSON.parse(await readFile(file, "utf8")) as ManagedReviewManifest).target : undefined;
   if (prior?.kind === "pr" && prior.base && prior.head) {
@@ -366,7 +367,11 @@ export async function createManagedReviewPackage(
   const premiseClaims = parsePremiseClaimSets(input.premises);
   const flowMatch = await resolvePackageFlow(input);
   const allocated = await allocatePackage(input, flowMatch, at);
-  return withFileLock(allocated.packageDir + ".write.lock", async () => {
+  const project = await realpath(input.cwd);
+  const relative = path.relative(input.cwd, allocated.packageDir);
+  const key = createHash("sha256").update(path.resolve(project, relative)).digest("hex");
+  const lock = path.join(project, ".metaproject", "data", "review-write-locks", key);
+  return withFileLock(lock, async () => {
     if (input.reviewId === undefined && await pathExists(allocated.packageDir)) {
       throw new Error("Another process opened this review round. Run the command again to open the next round.");
     }

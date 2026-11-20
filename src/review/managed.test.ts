@@ -2138,6 +2138,21 @@ describe("named PR packages keep one revision", () => {
     });
     expect((await ingest(head)).manifest.target).toEqual(target);
     await expect(ingest(otherHead)).rejects.toThrow("that commit is not in this checkout");
+    await expect(createManagedReviewPackage({
+      ...options(), mode: "review-flow", target: { kind: "branch", ref: "feature", head },
+    })).rejects.toThrow("conflicts with the pinned PR package");
+  });
+
+  test("a named review package can use a lock-shaped ID", async () => {
+    await fresh();
+    const target = { kind: "pr", ref, base, head } as const;
+    const separate = await createManagedReviewPackage({
+      ...options(), mode: "review-flow", target, reviewId: options().reviewId + ".write.lock",
+    });
+    const current = await createManagedReviewPackage({ ...options(), mode: "review-flow", target });
+    expect(current.path).not.toBe(separate.path);
+    const manifest = JSON.parse(await readFile(path.join(ROOT, separate.path, "manifest.json"), "utf8"));
+    expect(manifest.reviewId).toBe(options().reviewId + ".write.lock");
   });
 
   test("start cannot overwrite a revision another writer pinned under the same name", async () => {

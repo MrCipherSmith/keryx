@@ -319,7 +319,7 @@ for (const checkpoint of [true, false]) {
     await child.exited;
     const store = new DeskRunStore();
     let runId = "", submissions = 0;
-    const current = board(requested());
+    const current = board(requested(), card({ number: 99 }));
     const submit: DispatchReviewRule = async (_cwd, target, revision, schedule, authorize) => authorize(() => {
       submissions++;
       const recorded = store.requestAttempt(project, target, revision, schedule)!;
@@ -338,7 +338,7 @@ for (const checkpoint of [true, false]) {
     });
     try {
       action({ kind: "save", rule: rule({requireGreen:false}) });
-      await tick(board(card()), submit);
+      await tick(board(card(), card({ number: 99 })), submit);
       await tick(current, submit);
       expect(store.byId(runId)?.run.state).toBe("running");
       expect((await tick({...current,viewer:"changed"}, submit)).lastError).toContain("access:");
@@ -349,11 +349,27 @@ for (const checkpoint of [true, false]) {
       if (checkpoint) {
         const marker = join(store.directory(runId), "child.json");
         writeFileSync(marker, "{");
-        const accepted = await tick({ ...current, cards: [...current.cards, card({ number: 99 })] }, submit);
-        expect(accepted.lastError).toContain("could not be recovered");
-        expect(accepted.events).toContainEqual(expect.objectContaining({ kind: "opened", number: 99 }));
+        let unrelated = false;
+        const accepted = await tick(board(current.cards[0]!, requested({ number: 99 })), async (...args) => {
+          if (args[1].number !== 99) return submit(...args);
+          return args[4](() => {
+            unrelated = true;
+            return { id: "other-attempt" };
+          });
+        });
+        expect(accepted.lastError).toBeNull();
+        expect(accepted.recoveryWarning).toContain("could not be recovered");
+        expect(accepted.events).toContainEqual(expect.objectContaining({ kind: "review_requested", number: 99 }));
+        expect(unrelated).toBe(true);
         expect(store.byId(runId)?.run.state).toBe("running");
         rmSync(marker);
+        const unavailable = await pollWatcher(project, key, {
+          fetch: async () => ({ ...current, cards: [...current.cards, card({ number: 100 })] }),
+          outcomes: () => { throw new Error("Run history cannot be read"); },
+        });
+        expect(unavailable.lastError).toBeNull();
+        expect(unavailable.recoveryWarning).toContain("history could not be recovered");
+        expect(unavailable.events).toContainEqual(expect.objectContaining({ kind: "opened", number: 100 }));
       }
       if (!checkpoint) action({ kind: "mode", number: current.cards[0]!.number, choice: { mode: "manual" } });
       await tick(current, submit);
@@ -364,7 +380,7 @@ for (const checkpoint of [true, false]) {
       expect(ended.retryableBeforeSpend).not.toBe(true);
       await tick(current, submit);
       expect(submissions).toBe(1);
-      expect(status().activity[0]?.runId).toBe(runId);
+      expect(status().activity.find(item => item.number === current.cards[0]!.number)?.runId).toBe(runId);
     } finally { store.close(); }
   });
 }

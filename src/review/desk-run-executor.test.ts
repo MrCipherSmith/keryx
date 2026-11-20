@@ -174,6 +174,27 @@ test("an advancing remote base keeps the API-pinned range independent of the loc
   expect(result).toMatchObject({ outcome: "complete", checkedBase: baseSha, checkedHead: headSha });
 });
 
+test("reverifies default branch controls when the advertised commit moves before fetch", async () => {
+  const policyCheckout = path.join(root, "policy");
+  git(cwd, "worktree", "add", "--quiet", "-b", "policy", policyCheckout, baseSha);
+  writeFileSync(path.join(policyCheckout, skill), "new verified controls");
+  git(policyCheckout, "add", skill);
+  git(policyCheckout, "commit", "-qm", "Advance policy branch");
+  const policyHead = git(policyCheckout, "rev-parse", "HEAD");
+  let reads = 0;
+  const result = await executeDeskReview(options(), {
+    selectModel, remoteUrl: cwd,
+    revision: async () => ({ ...await revision(), defaultBranch: { name: "policy", oid: ++reads === 1 ? baseSha : policyHead } }),
+    spawn(spec) {
+      expect(readFileSync(path.join(spec.cwd, skill), "utf8")).toBe("new verified controls");
+      observedPreparedPackage(spec);
+      return { exited: Promise.resolve(0), kill() {} };
+    },
+  });
+  expect(reads).toBe(2);
+  expect(result).toMatchObject({ outcome: "complete", checkedBase: baseSha, checkedHead: headSha });
+});
+
 test("an alternate PR target from a linked checkout cannot select Desktop's review controls", async () => {
   const linked = path.join(root, "linked");
   git(cwd, "worktree", "add", "--quiet", "-b", "alternate", linked, baseSha);
@@ -304,7 +325,7 @@ test("a selected reviewer absent from coverage keeps the result partial, even wi
   });
 });
 
-test.each(["missing", "truncated", "invalid", "duplicate", "waived", "oversized"])("prepared Desktop coverage fails closed for %s evidence in collection and recovery", async kind => {
+test.each(["missing", "truncated", "invalid", "duplicate", "omitted from scope", "waived", "oversized"])("prepared Desktop coverage fails closed for %s evidence in collection and recovery", async kind => {
   const result = await executeDeskReview(options(), { selectModel, remoteUrl: cwd, revision, spawn(spec) {
     preparedPackageAt(spec);
     const file = path.join(spec.cwd, ".metaproject/reviews/pkg/coverage.json");
@@ -312,9 +333,11 @@ test.each(["missing", "truncated", "invalid", "duplicate", "waived", "oversized"
     else if (kind === "truncated") writeFileSync(file, "{");
     else if (kind === "invalid") writeFileSync(file, JSON.stringify({ ...coveredFile, files: [{ file: "src.ts", status: "uncovered", scope: "A" }] }));
     else if (kind === "duplicate") {
-      writeFileSync(path.join(path.dirname(file), "scope-files.json"), JSON.stringify({ files: ["src.ts", "another.ts"] }));
+      writeFileSync(path.join(path.dirname(file), "scope-files.json"), JSON.stringify({ files: ["src.ts"] }));
       writeFileSync(file, JSON.stringify({ ...coveredFile, counts: { ...coveredFile.counts, covered: 2, inScope: 2 },
         files: [...coveredFile.files, coveredFile.files[0]] }));
+    } else if (kind === "omitted from scope") {
+      writeFileSync(path.join(path.dirname(file), "scope-files.json"), JSON.stringify({ files: ["src.ts", "another.ts"] }));
     } else if (kind === "waived") writeFileSync(file, JSON.stringify({ ...coveredFile, waived: true }));
     else writeFileSync(file, JSON.stringify(coveredFile) + " ".repeat(8 * 1024 * 1024));
     writeFileSync(spec.eventsFile, JSON.stringify({ type: "request_usage", requestId: "review", participant: "reviewer",

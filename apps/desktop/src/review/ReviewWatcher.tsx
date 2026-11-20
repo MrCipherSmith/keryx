@@ -11,7 +11,7 @@ function watcherState(snapshot: ReviewWatcherSnapshot | null, error: string) {
   if (!snapshot) return "Checking…";
   if (snapshot.state === "disabled") return "Off";
   if (snapshot.state === "paused") return "Paused";
-  if (!snapshot.installed) return "Timer missing";
+  if (!snapshot.installed) return "Needs repair";
   if (snapshot.lastError) return "Poll failed";
   return "Watching";
 }
@@ -103,6 +103,7 @@ export function ReviewWatcher({ cwd, target, command = reviewWatcher, onAccessLo
             </>}
           </dl>
           {target && snapshot.lastError && <p className="watcher-notice" role="status">Last poll error · {snapshot.lastError}</p>}
+          {target && snapshot.recoveryWarning && <p className="watcher-notice" role="status">{snapshot.recoveryWarning}</p>}
           {!target && <p>Reconnect to GitHub to manage the interval and view PR activity.</p>}
           {canConfigure && <p>{snapshot.state === "paused"
             ? "Resuming starts a fresh baseline. Changes made during the pause are skipped."

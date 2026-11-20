@@ -14,6 +14,8 @@ export function watcherTransaction<T>(action: (db: Database) => T): T {
       baseline TEXT, lease TEXT, pid INTEGER
     );
     CREATE TABLE IF NOT EXISTS watcher_pauses (watcher TEXT PRIMARY KEY, generation INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS watcher_operation_order (id INTEGER PRIMARY KEY CHECK(id=1), ordinal INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS watcher_recovery_warnings (watcher TEXT PRIMARY KEY, warning TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS watcher_events (id INTEGER PRIMARY KEY, watcher TEXT NOT NULL, event TEXT NOT NULL);
     CREATE INDEX IF NOT EXISTS recent_watcher_events ON watcher_events(watcher, id DESC);
     CREATE TABLE IF NOT EXISTS review_rules (
@@ -31,7 +33,7 @@ export function watcherTransaction<T>(action: (db: Database) => T): T {
       checked INTEGER NOT NULL DEFAULT 0
     );
     CREATE INDEX IF NOT EXISTS review_rule_queue ON review_rule_work(watcher, state, number);
-    CREATE INDEX IF NOT EXISTS review_rule_linked_run ON review_rule_work(watcher, runId) WHERE valid=1 AND runId IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS review_rule_recorded_run ON review_rule_work(watcher, runId) WHERE runId IS NOT NULL;
     CREATE INDEX IF NOT EXISTS review_rule_history ON review_rule_work(watcher, at DESC);`);
     return db.transaction(() => action(db)).immediate();
   } finally {

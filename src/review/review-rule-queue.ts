@@ -1,4 +1,4 @@
-import { scheduledRunOutcomes } from "./desk-run-store";
+import type { scheduledRunOutcomes } from "./desk-run-store";
 import type { Database } from "bun:sqlite";
 import { randomUUID } from "node:crypto";
 import type { ReviewPrMode, ReviewRule, ReviewRuleActivity } from "./review-rule-types";
@@ -55,10 +55,8 @@ export function linkedReviewRuns(db: Database, scope: string) {
 }
 
 /** Only an explicit zero-spend refusal from the runner permits another automatic attempt. */
-function refreshLinkedRuns(db: Database, scope: string, outcomes: typeof scheduledRunOutcomes, at: string,
+function refreshLinkedRuns(db: Database, scope: string, {retryable, terminal}: ReturnType<typeof scheduledRunOutcomes>, at: string,
   linked: ReturnType<typeof linkedReviewRuns>) {
-  if (!linked.length) return;
-  const { retryable, terminal } = outcomes(linked.map((row) => row.runId));
   for (const { runId } of linked) {
     if (retryable.has(runId)) {
       db.run("UPDATE review_rule_work SET checked=-1 WHERE watcher=? AND runId=? AND valid=0", [scope, runId]);
@@ -84,10 +82,9 @@ export function observeRules(
   cards: WatchedCard[],
   events: WatcherEvent[],
   at: string,
-  outcomes: typeof scheduledRunOutcomes = scheduledRunOutcomes,
-  linked = linkedReviewRuns(db, scope),
+  settled?: { links: ReturnType<typeof linkedReviewRuns>; outcomes: ReturnType<typeof scheduledRunOutcomes> },
 ) {
-  refreshLinkedRuns(db, scope, outcomes, at, linked);
+  if (settled) refreshLinkedRuns(db, scope, settled.outcomes, at, settled.links);
   const rules = new Map<string, ReviewRule>();
   for (const row of ruleRows(db, scope)) {
     const rule = JSON.parse(row.rule) as ReviewRule;

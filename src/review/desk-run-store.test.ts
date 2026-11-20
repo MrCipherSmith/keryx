@@ -138,6 +138,28 @@ test("orphan settlement preserves an unarchived review package after the last ch
   expect(existsSync(raw)).toBe(true);
 });
 
+test("another viewer reclaims the dead shared slot while only its original viewer can recover the result", async () => {
+  const previous = started(2_000_000_000);
+  const evidence = path.join(store.directory(previous.run.id), "checkout", ".metaproject", "reviews", "unarchived");
+  mkdirSync(evidence, { recursive: true });
+  const successor = store.atomic(() => store.request("/project", other, revision))!;
+  expect(successor).not.toBe(previous.run.id);
+  expect(store.active(key)).toBeUndefined();
+  expect(store.history(other).runs.map(run => run.id)).toEqual([successor]);
+  const newAttempt = store.byId(successor)!;
+  newAttempt.pid = process.pid;
+  newAttempt.run.state = "running";
+  store.save(newAttempt);
+  let reads = 0;
+  await store.reconcile(other, () => { reads++; return finish; });
+  expect(reads).toBe(0);
+  await store.reconcile(key, () => { reads++; return finish; });
+  expect(reads).toBe(1);
+  expect(store.history(key).runs[0]?.result?.verdict).toBe("REQUEST_CHANGES");
+  expect(store.active(other)?.run.id).toBe(successor);
+  expect(existsSync(evidence)).toBe(true);
+});
+
 test.each(["queued", "already finished"] as const)(
   "a stale validation cannot replace a newer admission when it is %s",
   async state => {

@@ -130,16 +130,32 @@ async function prepareCheckout(options: DeskExecutionOptions, checkout: string, 
   }
   // Project controls come from GitHub's default branch. A locally checked-out PR
   // and a PR-selected comparison branch remain inputs to the diff only.
-  let controlsHead: string | null = null;
-  const policy = pull.defaultBranch;
-  if (policy) {
-    const policyRef = policy.name === pull.baseRefName ? baseRef : "refs/keryx/review-controls";
+  const verifyPolicy = async (policy: ControlRef, reuseBase: boolean) => {
+    const policyRef = reuseBase && policy.name === pull.baseRefName ? baseRef : "refs/keryx/review-controls";
     if (policyRef !== baseRef) {
       const source = `refs/heads/${policy.name}`;
       await run(["check-ref-format", source]);
       await fetch(`+${source}:${policyRef}`);
     }
-    if (await run(["rev-parse", "--verify", ...revisionOperand(policyRef)]) === policy.oid) controlsHead = policy.oid;
+    return await run(["rev-parse", "--verify", ...revisionOperand(policyRef)]) === policy.oid ? policy.oid : null;
+  };
+  let controlsHead: string | null = null;
+  if (pull.defaultBranch) {
+    controlsHead = await verifyPolicy(pull.defaultBranch, true).catch(() => {
+      signal.throwIfAborted();
+      return null;
+    });
+    if (!controlsHead) {
+      const refreshed = await readRevision();
+      if (!matchesRequest(refreshed) || refreshed.baseRefName !== pull.baseRefName) return false;
+      if (refreshed.defaultBranch) {
+        controlsHead = await verifyPolicy(refreshed.defaultBranch, false).catch(() => {
+          signal.throwIfAborted();
+          return null;
+        });
+      }
+      if (!controlsHead) throw new Error("unavailable: The default branch changed or could not be verified. Retry the review.");
+    }
   }
   // No PR file ever becomes an active policy, preload, smudge filter, or runnable project hook.
   // Source reads use the pinned Git objects. The index stays at head for existing range tools.
@@ -284,7 +300,11 @@ export async function executeDeskReview(options: DeskExecutionOptions, ports: Ex
         throw error;
       }
     };
-    if (!await prepareCheckout(options, checkout, ports, readRevision)) {
+    const prepared = await prepareCheckout(options, checkout, ports, readRevision).catch(error => {
+      beforeSpawnFailure = retryablePreflight(error);
+      throw error;
+    });
+    if (!prepared) {
       result = { ...EMPTY, outcome: "blocked", reason: "The PR closed or its base/head changed. Refresh the card before starting another review." };
     } else {
       if (options.context) writeFileSync(path.join(checkout, PR_CONTEXT_FILE), JSON.stringify(options.context), { flag: "wx", mode: 0o600 });

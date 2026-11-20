@@ -29,6 +29,8 @@ export interface WatcherSnapshot {
   lastAttemptAt: string | null;
   lastSuccessAt: string | null;
   lastError: string | null;
+  /** A poll succeeded, but an earlier attempt could not be recovered. */
+  recoveryWarning?: string;
   /** False when the local schedule can be shown but access to repository activity has not been verified. */
   historyAvailable?: boolean;
   events: WatcherEvent[];

@@ -162,12 +162,27 @@ test("install from a linked worktree keeps only verified external tool paths and
   for (const excluded of [alias, linkedTools, mixed]) expect(contents).not.toContain(excluded);
 });
 
+test("restoring a timer can replace an unusable private tools directory", async () => {
+  let toolsDirectory = "";
+  const enable = () => requestWatch(project, { key, action: "enable", minutes: 8 }, host, async (_cwd, _key, env) => {
+    toolsDirectory = env?.KERYX_REVIEW_TOOLS_DIR ?? "";
+  });
+  await enable();
+  const original = toolsDirectory;
+  await writeFile(path.join(original, "unrelated.txt"), "fixture");
+  expect((await control("status")).installed).toBe(false);
+  expect((await enable()).installed).toBe(true);
+  expect(toolsDirectory).not.toBe(original);
+  expect((await control("status")).intervalMinutes).toBe(8);
+  expect(await readFile(path.join(original, "unrelated.txt"), "utf8")).toBe("fixture");
+});
+
 test("an enabled timer does not make an unpinned command invocation eligible to poll", async () => {
   await control("enable", 5);
   expect((await control("status")).installed).toBe(true);
-  await requestWatch(project, { action: "tick", key, minutes: undefined }, host);
+  await expect(requestWatch(project, { action: "tick", key, minutes: undefined }, host)).rejects.toThrow("Restore timer");
   const status = await control("status");
-  expect(status.lastError).toContain("Restore timer");
+  expect(status.lastError).toBeNull();
   expect(status.lastSuccessAt).toBeNull();
 });
 
@@ -176,8 +191,8 @@ test("a loaded legacy timer requires repair before another scheduled GitHub read
   const contents = await readFile(plist(), "utf8");
   await writeFile(plist(), contents.replace("<key>KERYX_REVIEW_GIT_BIN</key>", "<key>legacy</key>"));
   expect((await control("status")).installed).toBe(false);
-  await requestWatch(project, { action: "tick", key, minutes: undefined }, host);
-  expect((await control("status")).lastError).toContain("Restore timer");
+  await expect(requestWatch(project, { action: "tick", key, minutes: undefined }, host)).rejects.toThrow("Restore timer");
+  expect((await control("status")).lastError).toBeNull();
   await control("enable", 5);
   expect((await control("status")).installed).toBe(true);
 });
@@ -217,15 +232,17 @@ test("a local pause stops the timer while another request is still verifying Git
   expect((await control("status")).installed).toBe(false);
 });
 
-test("pause fences an older enable during worktree verification", async () => {
+test.each(["primary", "worktrees"] as const)("pause fences an older enable during %s discovery", async stage => {
   await control("enable", 9);
   const entered = Promise.withResolvers<void>();
   const release = Promise.withResolvers<void>();
-  const enabling = requestWatch(project, { key, action: "enable", minutes: 1 }, host, verify, async () => {
+  const hold = async () => {
     entered.resolve();
     await release.promise;
-    return [project];
-  });
+  };
+  const discovery = stage === "primary" ? { primary: async () => { await hold(); return project; } } :
+    { worktrees: async () => { await hold(); return [project]; } };
+  const enabling = requestWatch(project, { key, action: "enable", minutes: 1 }, host, verify, discovery);
   await entered.promise;
   try {
     expect((await control("pause")).state).toBe("paused");

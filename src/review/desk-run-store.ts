@@ -15,10 +15,11 @@ export const deskRunRoot = () => path.join(keryxDataDir(), "desktop-review");
 export const MAX_SCHEDULED_PREFLIGHT_ATTEMPTS = 3;
 const maxScheduledWorkers = 4;
 const liveStates = "('running', 'cancelling')";
+const unsettledStates = "('running', 'cancelling', 'recoverable')";
 const scheduledReservation = "state IN ('queued','running','cancelling') AND json_extract(details,'$.source')='scheduled'";
 type ScheduledLink = { project: string; runId: string };
-const linkedActiveRow = `FROM runs WHERE id=? AND repo=? AND pr=? AND viewer=?
-  AND state IN ${liveStates} AND json_extract(details,'$.source')='scheduled'
+const linkedUnsettledRow = `FROM runs WHERE id=? AND repo=? AND pr=? AND viewer=?
+  AND state IN ${unsettledStates} AND json_extract(details,'$.source')='scheduled'
   AND json_extract(details,'$.schedule.project')=?`;
 const linkParams = (key: DeskRunKey, link: ScheduledLink): [string, string, number, string, string] =>
   [link.runId, key.repositoryId, key.number, key.viewer, link.project];
@@ -214,17 +215,17 @@ export class DeskRunStore {
     // Return small recent reports inline and load the rest by attempt id.
     const reportSelect =
       id === undefined ? "CASE WHEN cumulative <= 131072 THEN report ELSE '' END" : "substr(report,1,524288)";
-    type Item = { details: string; bytes: number; chars: number; report: string };
+    type Item = { details: string; state: string; bytes: number; chars: number; report: string };
     const selected = id === undefined ? "" : " AND id=?";
     const sql = `WITH scoped AS (
-        SELECT rowid AS seq,json_extract(details,'$.createdAt') AS created, json_remove(details,'$.result.report','$.workerIdentity') AS metadata,
+        SELECT rowid AS seq,state,json_extract(details,'$.createdAt') AS created, json_remove(details,'$.result.report','$.workerIdentity') AS metadata,
           coalesce(json_extract(details,'$.result.report'),'') AS report
         FROM runs WHERE repo=? AND pr=? AND viewer=?${selected}
       ), measured AS (
         SELECT *,length(CAST(report AS BLOB)) AS bytes,
           sum(length(CAST(report AS BLOB))) OVER (ORDER BY created DESC,seq DESC) AS cumulative
         FROM scoped
-      ) SELECT metadata AS details,bytes,length(report) AS chars,${reportSelect} AS report
+      ) SELECT metadata AS details,state,bytes,length(report) AS chars,${reportSelect} AS report
         FROM measured ORDER BY created DESC,seq DESC`;
     const params = [key.repositoryId, key.number, key.viewer];
     if (id !== undefined) params.push(id);
@@ -233,6 +234,11 @@ export class DeskRunStore {
       throw new Error("access: This attempt is unavailable for the selected account and pull request.");
     const runs = rows.map((row) => {
       const run = JSON.parse(row.details) as DeskRun;
+      if (row.state === "recoverable") {
+        run.state = "failed";
+        run.phase = "Interrupted";
+        run.reason = "The worker stopped. Saved review evidence is awaiting recovery.";
+      }
       finalizeReviewerProgress(run);
       if (run.result) {
         run.result.report = row.report;
@@ -336,6 +342,7 @@ export class DeskRunStore {
       a.key.viewer.toLowerCase() === key.viewer.toLowerCase() &&
       a.run.baseSha === revision.baseSha &&
       a.run.headSha === revision.headSha;
+    this.releaseDeadForeignSlot(key);
     const active = this.active(key);
     const queued = this.queued(key);
     if (active && match(active)) return { id: active.run.id, reused: true };
@@ -420,7 +427,7 @@ export class DeskRunStore {
       `SELECT r.pr AS number,r.id AS runId FROM json_each(?) wanted
         CROSS JOIN runs r WHERE r.id=json_extract(wanted.value,'$.runId')
           AND r.pr=json_extract(wanted.value,'$.number') AND r.repo=? AND r.viewer=?
-          AND r.state IN ${liveStates} AND json_extract(r.details,'$.source')='scheduled'
+          AND r.state IN ${unsettledStates} AND json_extract(r.details,'$.source')='scheduled'
           AND json_extract(r.details,'$.schedule.project')=?`,
     ).all(JSON.stringify(links), key.repositoryId, key.viewer, project);
   }
@@ -428,27 +435,36 @@ export class DeskRunStore {
   scheduledOwnerExited(key: DeskRunKey, link: ScheduledLink): boolean {
     // Liveness alone is sufficient to decide whether a missing-from-board PR needs a fresh access check.
     const row = this.db.query<{ pid: number | null; workerIdentity: string | null }, ReturnType<typeof linkParams>>(
-      `SELECT pid,json_extract(details,'$.workerIdentity') AS workerIdentity ${linkedActiveRow}`,
+      `SELECT pid,json_extract(details,'$.workerIdentity') AS workerIdentity ${linkedUnsettledRow}`,
     ).get(...linkParams(key, link));
     return row?.pid != null && !processMayRemain(row.pid, row.workerIdentity ? JSON.parse(row.workerIdentity) as ProcessIdentity : undefined);
   }
 
-  /** Verify both owner and descendant liveness before freeing the single execution slot. */
-  private orphan(key: DeskRunKey, link?: ScheduledLink): Attempt | undefined {
-    let a: Attempt | undefined;
-    if (link) {
-      // A linked PR can now be occupied by another user, project, or a manual successor.
-      // Constrain the row before reading process markers or any private recovery artifacts.
-      const row = this.db.query<Row, ReturnType<typeof linkParams>>(
-        `SELECT request,details,pid,cwd ${linkedActiveRow}`,
-      ).get(...linkParams(key, link));
-      a = row ? decode(row) : undefined;
-    } else {
-      a = this.active(key);
-    }
-    if (!a || a.key.viewer.toLowerCase() !== key.viewer.toLowerCase() ||
-        a.pid === null || processMayRemain(a.pid, a.workerIdentity)) return;
-    return this.childMayRemain(a.run.id) ? undefined : a;
+  private processExited(attempt: Attempt): boolean {
+    return attempt.pid !== null && !processMayRemain(attempt.pid, attempt.workerIdentity) &&
+      !this.childMayRemain(attempt.run.id);
+  }
+
+  /** Release only the shared reservation. The original account owns evidence settlement. */
+  releaseDeadForeignSlot(key: DeskRunKey) {
+    const active = this.active(key);
+    if (!active || active.key.viewer.toLowerCase() === key.viewer.toLowerCase()) return;
+    try {
+      if (this.processExited(active)) {
+        this.db.run(`UPDATE runs SET state='recoverable' WHERE id=? AND state IN ${liveStates}`, [active.run.id]);
+      }
+    } catch { /* Uncertain ownership keeps the reservation. */ }
+  }
+
+  private orphan(key: DeskRunKey, link?: ScheduledLink, expected?: string): Attempt | undefined {
+    const candidates = link ? this.db.query<Row, ReturnType<typeof linkParams>>(
+      `SELECT request,details,pid,cwd ${linkedUnsettledRow}`,
+    ).all(...linkParams(key, link)) : this.db.query<Row, [string, number, string, string | null, string | null]>(
+      `SELECT request,details,pid,cwd FROM runs WHERE repo=? AND pr=? AND viewer=?
+       AND state IN ${unsettledStates} AND (? IS NULL OR id=?) ORDER BY rowid`,
+    ).all(key.repositoryId, key.number, key.viewer, expected ?? null, expected ?? null);
+    // Every candidate is owner-matched before reading its process marker.
+    return candidates.map(decode).find(attempt => this.processExited(attempt));
   }
 
   private childMayRemain(id: string): boolean {
@@ -470,7 +486,7 @@ export class DeskRunStore {
     const finish = await readFinish(directory, orphan);
     const committed = this.atomic(() => {
       // Another reconciler may have finished the dead attempt and started its successor while we read its verdict.
-      const a = this.orphan(key, link);
+      const a = this.orphan(key, link, orphan.run.id);
       if (!a || a.run.id !== orphan.run.id || a.pid !== orphan.pid) return;
       const cancelled = a.run.state === "cancelling";
       if (finish) {
@@ -514,7 +530,7 @@ export function scheduledRunOutcomes(ids: string[], root = deskRunRoot()): {retr
       const batch = ids.slice(i, i + 200);
       const rows = db.query<{id:string; retryable:number | null},string[]>(
         `SELECT id, json_extract(details,'$.retryableBeforeSpend') AS retryable FROM runs
-         WHERE id IN (${batch.map(() => "?").join(",")}) AND state NOT IN ('queued','running','cancelling')`
+         WHERE id IN (${batch.map(() => "?").join(",")}) AND state NOT IN ('queued','running','cancelling','recoverable')`
       ).all(...batch);
       for (const row of rows) (row.retryable ? result.retryable : result.terminal).add(row.id);
     }
