@@ -8,7 +8,7 @@ import { parseArgs } from "node:util";
 import { attachAddressedReplies } from "../review/board-addressed-replies";
 import { listReviewCards } from "../review/board";
 import { readReviewBoardDetail } from "../review/board-detail";
-import { boardGh, boardGraphql, reviewRepositories, selectRepository } from "../review/board-github";
+import { boardGh, boardGraphql, projectGithubConnection, reviewRepositories, selectRepository, withCurrentGithubBinding, type GithubConnection } from "../review/board-github";
 
 export const BOARD_USAGE = "keryx review board --json [--repo owner/name] [--state open|closed|merged|all | --number N]\n  keryx review board --json --repositories\n  keryx review board --json --state STATE --page [--cursor CURSOR] [--repo owner/name]\n  keryx review board --json --repo owner/name --badge-revisions N:BASE:HEAD[,...] --repository-id ID --viewer LOGIN";
 
@@ -30,12 +30,13 @@ export async function runReviewBoard(args: string[], cwd = process.cwd()): Promi
     const key = parseWatcherKey(values);
     if (!key || values.repositories || values.state || values.number) throw new Error(BOARD_USAGE);
     selectRepository(await reviewRepositories(cwd), key.repo);
+    const auth = await projectGithubConnection(cwd, process.env, key.viewer);
     const result = await readBoardBadges(cwd, key, revisions.split(",").map(item => {
       const match = /^([1-9]\d*):([a-f0-9]{40}):([a-f0-9]{40})$/.exec(item);
       if (!match) throw new Error(BOARD_USAGE);
       return { number: Number(match[1]), baseSha: match[2]!, headSha: match[3]! };
-    }), readLocalBadges);
-    await writeJson(result);
+    }), readLocalBadges, (text, params) => boardGraphql(cwd, text, params, auth));
+    await writeJson(result, auth);
     return;
   }
   if (values.viewer !== undefined || values["repository-id"] !== undefined) throw new Error(BOARD_USAGE);
@@ -49,13 +50,14 @@ export async function runReviewBoard(args: string[], cwd = process.cwd()): Promi
   }
   const repositories = await reviewRepositories(cwd);
   const repo = selectRepository(repositories, values.repo);
+  const auth = await projectGithubConnection(cwd);
+  const query = <T>(text: string, params: Record<string, string | number>) => boardGraphql<T>(cwd, text, params, auth);
   if (values.number !== undefined) {
-    const result = await readReviewBoardDetail(repo, Number(values.number), cwd);
+    const result = await readReviewBoardDetail(repo, Number(values.number), cwd, query);
     result.projectContext = await readLinkedFlows(cwd, repo, result.number);
-    await writeJson(result);
+    await writeJson(result, auth);
     return;
   }
-  const query = <T>(text: string, params: Record<string, string | number>) => boardGraphql<T>(cwd, text, params);
   const continuation = decodeBoardCursor(values.cursor);
   let size = continuation.part ? 1 : 100;
   for (;;) {
@@ -71,26 +73,31 @@ export async function runReviewBoard(args: string[], cwd = process.cwd()): Promi
     // Check the notification feed once per refresh, including unread candidates beyond page one.
     if (!page?.cursor && !continuation.part && (state === "open" || state === "all"))
       await attachAddressedReplies(result, async (endpoint, timeoutMs) =>
-        JSON.parse(await boardGh(cwd, ["api", "--hostname", "github.com", endpoint], undefined, timeoutMs)), !!result.nextCursor);
+        JSON.parse(await boardGh(cwd, ["api", "--hostname", "github.com", endpoint], auth, timeoutMs)), !!result.nextCursor);
     const json = JSON.stringify(result);
     if (!continuation.part && (!page || Buffer.byteLength(json) <= 30 * 1024 * 1024)) {
-      await writeSerialized(json);
+      await writeSerialized(json, auth);
       return;
     }
     if (size === 1) {
-      await writeJson(splitBoardCard(result, continuation));
+      await writeJson(splitBoardCard(result, continuation), auth);
       return;
     }
     size = Math.ceil(size / 2);
   }
 }
 
-function writeJson(result: unknown) { return writeSerialized(JSON.stringify(result)); }
+function writeJson(result: unknown, auth: GithubConnection) { return writeSerialized(JSON.stringify(result), auth); }
 
-async function writeSerialized(json: string) {
+async function writeSerialized(json: string, auth: GithubConnection) {
   // The desktop hosts read through a pipe. Wait until even a large history or
   // discussion snapshot has been flushed before returning from the command.
   await new Promise<void>((resolve, reject) => {
-    process.stdout.write(json + "\n", (error) => error ? reject(error) : resolve());
+    // Optional API reads can convert their errors into warnings. Check again
+    // at the publication boundary, excluding concurrent writers until the
+    // complete payload is handed to the pipe.
+    withCurrentGithubBinding(auth, () => {
+      process.stdout.write(json + "\n", (error) => error ? reject(error) : resolve());
+    });
   });
 }

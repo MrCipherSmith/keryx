@@ -43,7 +43,6 @@ let root: Root;
 let host: HTMLElement;
 let act: (fn: () => void | Promise<void>) => Promise<void>;
 let React: typeof import("react");
-let SidePanel: typeof import("./SidePanel").SidePanel;
 let SessionView: typeof import("../session/SessionView").SessionView;
 let prefs: typeof import("../lib/prefs");
 let reducer: typeof import("../session/reducer");
@@ -56,7 +55,6 @@ beforeAll(async () => {
   React = await import("react");
   const client = await import("react-dom/client");
   act = React.act as unknown as typeof act;
-  SidePanel = (await import("./SidePanel")).SidePanel;
   SessionView = (await import("../session/SessionView")).SessionView;
   prefs = await import("../lib/prefs");
   reducer = await import("../session/reducer");
@@ -101,10 +99,15 @@ async function mount(over: { subagents?: Subagent[]; items?: Item[] } = {}) {
       React.createElement(
         ToastProvider,
         null,
-        React.createElement(SessionView, {
-          s: s as never, cwd: "/p", projectName: "p", onGoFlows: () => {}, onGoSettings: () => {}, narrow: false, onProviders: () => {},
+        React.createElement(shell.AppShell, {
+          cwd: "/p", recents: [], projects: ["/p"], live: [], view: "session", title: "Session", hasSession: true,
+          status: { tone: "ok", label: "Ready" }, flowsActive: 0, activity: "idle",
+          onView: () => {}, onRemoveProject: () => {}, onOpenFolder: () => {}, onSwitchProject: () => {},
+          onNewWindow: () => {}, onCloseProject: () => {}, onPalette: () => {},
+          children: React.createElement(SessionView, {
+            s: s as never, cwd: "/p", projectName: "p", onGoFlows: () => {}, onGoSettings: () => {}, narrow: false, onProviders: () => {},
+          }),
         }),
-        React.createElement(SidePanel, { cwd: "/p" }),
       ),
     ),
   );
@@ -142,13 +145,19 @@ test("there is no separate Activity or info column or resize handle any more", a
   expect(document.querySelectorAll('[role="separator"]')).toHaveLength(1); // the side panel's own
 });
 
-test("the top-bar Activity button opens the side panel on Activity and a second press closes it", async () => {
-  await mount();
-  await click(document.querySelector(".activity-toggle")!);
+test("Activity and collapsed sessions are accessible from the main header without a second toolbar", async () => {
+  await mount({ subagents: [AGENT] });
+  const activityButton = document.querySelector('.titlebar-right [aria-label="Activity"]')!;
+  expect(activityButton.querySelector(".tab-count")?.textContent).toBe("1");
+  expect(document.querySelector(".session-topbar")).toBeNull();
+  await click(activityButton);
   expect(prefs.getPrefs().sidePanel).toBe("activity");
+  expect(activityButton.getAttribute("aria-pressed")).toBe("true");
   expect(tabBtn("Activity").getAttribute("aria-selected")).toBe("true");
-  await click(document.querySelector(".activity-toggle")!);
+  await click(activityButton);
   expect(prefs.getPrefs().sidePanel).toBeNull();
+  await click(document.querySelector('.titlebar-left [aria-label="Show sessions"]')!);
+  expect(prefs.getPrefs().sessionSidebar).toBe(true);
 });
 
 test("Show subagent on a tool card opens Activity on that subagent, even from the Browser tab", async () => {

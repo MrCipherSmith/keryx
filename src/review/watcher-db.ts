@@ -13,6 +13,8 @@ export function watcherTransaction<T>(action: (db: Database) => T): T {
       intervalMinutes INTEGER NOT NULL, lastAttemptAt TEXT, lastSuccessAt TEXT, lastError TEXT,
       baseline TEXT, lease TEXT, pid INTEGER
     );
+    CREATE TABLE IF NOT EXISTS review_github_accounts (project TEXT PRIMARY KEY, login TEXT, generation INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS review_github_account_intents (project TEXT PRIMARY KEY, ordinal INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS watcher_pauses (watcher TEXT PRIMARY KEY, generation INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS watcher_operation_order (id INTEGER PRIMARY KEY CHECK(id=1), ordinal INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS watcher_recovery_warnings (watcher TEXT PRIMARY KEY, warning TEXT NOT NULL);

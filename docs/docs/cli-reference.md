@@ -5171,6 +5171,16 @@ discussion and checks with `--number N`. A partial list includes warnings.
 `keryx review board --json --repositories` lists the configured GitHub.com fetch
 remotes without contacting GitHub, with the origin repository first.
 
+`keryx review accounts list --json` lists local GitHub CLI accounts and their status.
+`keryx review accounts project --json` shows the current project's selection.
+Use `keryx review accounts bind --login LOGIN --json` to verify and select an account
+for the project and its linked worktrees. Add `--repo owner/name` to check a connected
+remote other than the default. The board, private review fetch and local watcher
+use the selected account. The credentials stay in GitHub CLI.
+Use `keryx review accounts bind --skip --json` to continue without a connection.
+Changing or removing a connection pauses the project's watchers. Enable the
+watcher manually after choosing an account.
+
 `keryx review desk-run start --json --repo owner/name --repository-id ID --viewer LOGIN --number N --base SHA --head SHA`
 requests review of a card’s displayed revision. With the same repository, viewer and PR flags, use
 `status` to read progress and history, or `cancel --id UUID` to stop a specific attempt.

@@ -6,7 +6,7 @@ import { resolveGitCommonDir } from "../lib/git-worktrees";
 import type { WatcherKey } from "./watcher-types";
 import { realpath } from "node:fs/promises";
 import { isNotFound } from "../lib/fs";
-import { boardGraphql, reviewRepositories, reviewTool } from "./board-github";
+import { boardGraphql, projectGithubConnection, reviewRepositories, reviewTool } from "./board-github";
 
 const exec = promisify(execFile);
 
@@ -105,11 +105,12 @@ export async function mainCheckout(cwd: string, env?: NodeJS.ProcessEnv) {
 export async function verifyIdentity(project: string, key: WatcherKey, env?: NodeJS.ProcessEnv) {
   const cwd = await resolveWatcherCheckout(project, key.repo, env);
   const [owner, name] = key.repo.split("/");
+  const auth = await projectGithubConnection(cwd, env, key.viewer);
   const data = await boardGraphql<{ viewer?: { login: string }; repository?: { id: string } }>(
     cwd,
     "query($owner:String!, $name:String!) { viewer { login } repository(owner:$owner,name:$name) { id } }",
     { owner: owner!, name: name! },
-    env,
+    auth,
   );
   if (
     data.viewer?.login?.toLowerCase() !== key.viewer.toLowerCase() ||

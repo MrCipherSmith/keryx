@@ -1,28 +1,19 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { realpathSync } from "node:fs";
+import { resolveGitCommonDir } from "../lib/git-worktrees";
+import { withoutGitDiscoveryOverrides } from "../lib/git-env";
+import { projectGithubBinding } from "./github-account-store";
+import { watcherTransaction } from "./watcher-db";
+import { namedGithubEnvironment, reviewCommandOptions, reviewTool, withoutGithubCredentials } from "./github-cli";
+export { reviewTool } from "./github-cli";
+
+const projectNotConnected = "access: Choose a GitHub account in Project Settings.";
 
 // Each board PR has up to two independent people connections. Four parents keep
 // that page at eight parallel gh workers, with cursors within a connection still sequential.
 export const OVERFLOW_PARENTS = 4;
 
 const exec = promisify(execFile);
-const commandOptions = (cwd: string, env: NodeJS.ProcessEnv = process.env) => ({
-  cwd, encoding: "utf8" as const, timeout: 18_000, maxBuffer: 8 * 1024 * 1024,
-  env: { ...env, GH_PROMPT_DISABLED: "1", GH_NO_UPDATE_NOTIFIER: "1", GIT_TERMINAL_PROMPT: "0" },
-});
-
-/** A launchd pin must still match the command on its installed PATH. */
-export function reviewTool(name: "gh" | "git", env: NodeJS.ProcessEnv = process.env): string {
-  const pin = env[name === "gh" ? "KERYX_REVIEW_GH_BIN" : "KERYX_REVIEW_GIT_BIN"];
-  if (!pin) return name;
-  const candidate = Bun.which(name, { PATH: env.PATH ?? "" });
-  try {
-    if (candidate && realpathSync.native(candidate) === pin) return pin;
-  } catch { /* The executable may have been replaced between lookup and resolution. */ }
-  throw new Error("configuration: A watcher executable moved. Select Restore timer in Desktop or enable the watcher again from the CLI.");
-}
-
 /** Extract only owner/name. Remotes may include credentials; never return or log their full URL. */
 function githubRemote(raw: string): string | undefined {
   const scp = /^git@github\.com:(.+)$/i.exec(raw);
@@ -58,45 +49,105 @@ export function selectRepository(repositories: string[], requested?: string): st
   return selected;
 }
 
+export function reviewGitEnvironment(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  return withoutGitDiscoveryOverrides(withoutGithubCredentials(env));
+}
+
+export function reviewGitCommonDir(cwd: string, env?: NodeJS.ProcessEnv): Promise<string | undefined> {
+  reviewTool("git", env); // Retain the timer's executable pin before resolving the shared directory.
+  return resolveGitCommonDir(cwd, reviewGitEnvironment(env));
+}
+
 export async function reviewRepositories(cwd: string, env?: NodeJS.ProcessEnv): Promise<string[]> {
   const git = reviewTool("git", env);
   try {
-    const { stdout } = await exec(git, ["remote", "-v"], commandOptions(cwd, env));
+    const { stdout } = await exec(git, ["remote", "-v"], reviewCommandOptions(cwd, reviewGitEnvironment(env)));
     return configuredRepositories(stdout);
   } catch {
     throw new Error("configuration: Open a Git project with a GitHub.com remote.");
   }
 }
 
-function githubFailure(diagnostic: string): Error {
+function githubFailure(diagnostic: string, login: string | null): Error {
   if (/rate limit|too many requests|HTTP 429/i.test(diagnostic)) {
     return new Error("unavailable: GitHub rate limit reached. Refresh after the limit resets.");
   }
   if (/HTTP (?:401|403|404)|forbidden|not authorized|bad credentials|authenticate|auth login|not logged|could not resolve to a repository|not accessible|authentication|not found in the repository/i.test(diagnostic)) {
-    return new Error("access: Check the active gh account and its access to this repository.");
+    return new Error(login
+      ? `access: Check that @${login} is connected in Settings → Integrations and has access to this repository.`
+      : "access: Check the active gh account and its access to this repository.");
   }
   return new Error("unavailable: Could not read from GitHub. Check the connection and refresh.");
 }
 
-export async function boardGh(cwd: string, args: string[], env?: NodeJS.ProcessEnv, timeout = 18_000): Promise<string> {
-  const gh = reviewTool("gh", env);
-  try {
-    return (await exec(gh, args, { ...commandOptions(cwd, env), timeout })).stdout;
-  } catch (error) {
-    const failure = error as { code?: unknown; stderr?: string; stdout?: string };
-    if (failure.code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER") throw new Error("unavailable: GitHub page exceeds the reader output limit.", { cause: error });
-    if (failure.code === "ENOENT") throw new Error("configuration: Install GitHub CLI (gh) and sign in.", { cause: error });
-    // Command errors may include private URLs, tokens or full queries. Expose fixed diagnostics only.
-    throw githubFailure(failure.stderr ?? "");
-  }
+export interface GithubConnection {
+  login: string | null;
+  env: NodeJS.ProcessEnv;
+  binding?: { project: string; generation: number | null };
 }
 
-export async function boardGraphql<T>(cwd: string, query: string, variables: Record<string, string | number>, env?: NodeJS.ProcessEnv): Promise<T> {
+export function withCurrentGithubBinding<T>(connection: GithubConnection, useConnection: () => T): T {
+  if (!connection.binding) return useConnection();
+  const { project, generation } = connection.binding;
+  return watcherTransaction((db) => {
+    if ((projectGithubBinding(project, db)?.generation ?? null) !== generation)
+      throw new Error("access: The project's GitHub account changed. Refresh Review.");
+    return useConnection();
+  });
+}
+
+export function verifyGithubBindingUnchanged(connection: GithubConnection): void {
+  withCurrentGithubBinding(connection, () => undefined);
+}
+
+export async function projectGithubConnection(
+  cwd: string, env: NodeJS.ProcessEnv = process.env, expectedViewer?: string,
+): Promise<GithubConnection> {
+  const project = await reviewGitCommonDir(cwd, env);
+  if (!project) throw new Error("configuration: Open a Git project to connect GitHub.");
+  const binding = projectGithubBinding(project);
+  if (binding?.login === null) throw new Error(projectNotConnected);
+  const login = binding?.login ?? null;
+  if (login && expectedViewer && login.toLowerCase() !== expectedViewer.toLowerCase())
+    throw new Error("access: The project's GitHub account changed. Refresh Review.");
+  return { login, env: login ? await namedGithubEnvironment(cwd, login, env) : env,
+    binding: { project, generation: binding?.generation ?? null } };
+}
+
+export async function boardGh(
+  cwd: string, args: string[], connection?: GithubConnection, timeout = 18_000,
+): Promise<string> {
+  const auth = connection ?? await projectGithubConnection(cwd);
+  const gh = reviewTool("gh", auth.env);
+  let output: string;
+  try {
+    output = (await exec(gh, args, { ...reviewCommandOptions(cwd, auth.env), timeout })).stdout;
+  } catch (error) {
+    const failure = error as { code?: unknown; stderr?: string; stdout?: string };
+    if (failure.code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER") {
+      // eslint-disable-next-line preserve-caught-error -- The subprocess error can contain private response bodies.
+      throw new Error("unavailable: GitHub page exceeds the reader output limit.");
+    }
+    if (failure.code === "ENOENT") {
+      // eslint-disable-next-line preserve-caught-error -- The subprocess error can contain private request arguments.
+      throw new Error("configuration: Install GitHub CLI (gh) and sign in.");
+    }
+    // Command errors may include private URLs, tokens or full queries. Expose fixed diagnostics only.
+    throw githubFailure(failure.stderr ?? "", auth.login);
+  }
+  verifyGithubBindingUnchanged(auth);
+  return output;
+}
+
+export async function boardGraphql<T>(
+  cwd: string, query: string, variables: Record<string, string | number>, connection?: GithubConnection,
+): Promise<T> {
   const args = ["api", "--hostname", "github.com", "graphql", "-f", `query=${query}`];
   for (const [name, value] of Object.entries(variables)) {
     args.push(typeof value === "number" ? "-F" : "-f", `${name}=${value}`);
   }
-  const raw = await boardGh(cwd, args, env);
+  const auth = connection ?? await projectGithubConnection(cwd);
+  const raw = await boardGh(cwd, args, auth);
   let response: { data?: T; errors?: { message?: string }[] };
   try {
     response = JSON.parse(raw);
@@ -104,7 +155,10 @@ export async function boardGraphql<T>(cwd: string, query: string, variables: Rec
     throw new Error("unavailable: GitHub returned an unreadable response.");
   }
   if (!response?.data || response.errors?.length) {
-    throw githubFailure(response?.errors?.map((entry) => entry.message ?? "").join(" ") ?? "");
+    throw githubFailure(response?.errors?.map((entry) => entry.message ?? "").join(" ") ?? "", auth.login);
   }
+  const viewer = (response.data as { viewer?: { login?: string } | null }).viewer;
+  if (auth.login && viewer !== undefined && viewer?.login?.toLowerCase() !== auth.login.toLowerCase())
+    throw new Error(`access: Reconnect @${auth.login} in Settings → Integrations.`);
   return response.data;
 }

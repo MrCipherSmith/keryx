@@ -13,10 +13,32 @@ background tasks; anything it does not draw yet still works in `keryx shell`.
 The design and its acceptance criteria are in
 `docs/requirements/keryx-desktop-client/`.
 
+## Set up GitHub for a project
+
+1. Open **Settings → Integrations**, then select **Connect account** under
+   **GitHub**. Follow the GitHub sign-in prompt. Repeat for each account you
+   want to use. **Refresh accounts** reloads the list from GitHub CLI.
+2. Open a project with a GitHub.com remote. Choose an account with access to
+   its repository when prompted. You can change the selection or disconnect
+   in **Project Settings** from the project menu.
+3. In **Sessions**, the main header displays the project account as
+   **GitHub · @login**. Select it to open **Project Settings**. The
+   **Activity** icon in the same header opens the side panel with subagents
+   and background tasks. The badge on the icon shows how many are running.
+
+The selection is local to the project and shared by its Git worktrees. Use
+different accounts for different projects without switching the active
+GitHub CLI account. Review and the PR watcher use the project selection.
+On a project with no saved selection, Review can still use the active
+`gh` account. Choosing **Disconnect from project** turns off that fallback.
+A GitHub login does not change the model provider or Git commit author.
+
+If Desktop reports that the selected CLI does not support GitHub accounts,
+choose **Settings → Desktop → Bundled keryx**, then retry.
+
 ## Find a pull request in Review
 
-Select a project in the left sidebar, then choose **Review** in its **Sessions / Flows / Review** navigation. Switching sections preserves the session draft. **Settings** at the bottom of the sidebar opens app-wide preferences. Sign in with GitHub CLI
-(`gh auth login`) using an account that can read the repository. Review starts
+Select a project in the left sidebar, then choose **Review** in its **Sessions / Flows / Review** navigation. Switching sections preserves the session draft. **Settings** at the bottom of the sidebar opens app-wide preferences. Review starts
 with all open pull requests, including drafts and contributions from forks.
 When the project has several GitHub.com remotes, select the base repository
 whose pull requests you want to see.
@@ -59,7 +81,11 @@ records its result locally.
 
 From **Review**, open **PR watcher**, choose a polling interval and select **Enable watcher**. The default is five minutes. The first successful poll records which PRs are open, their revisions, requested reviewers and CI. The history shows the 50 latest changes with the time Keryx observed them.
 
-Sign in with `gh auth login` so the background process can read the repository after your shell exits. macOS runs the schedule while you are logged in and the Mac is awake. You can quit Keryx Desktop. If the timer needs repair after an upgrade or a local tool moves, open **PR watcher** and select **Restore timer**. After sleep or a failed poll, the watcher compares the next complete result with the last successful one. Open **PR watcher** to check the timer, last attempt and last success, or select **Pause watcher**. **Resume watcher** starts with a fresh baseline so changes that occurred during an explicit pause do not appear as new events.
+Connect your account in **Settings → Integrations** so the background process can read the repository after your shell exits. macOS runs the schedule while you are logged in and the Mac is awake. You can quit Keryx Desktop. If the timer needs repair after an upgrade or a local tool moves, open **PR watcher** and select **Restore timer**. After sleep or a failed poll, the watcher compares the next complete result with the last successful one. Open **PR watcher** to check the timer, last attempt and last success, or select **Pause watcher**. **Resume watcher** starts with a fresh baseline so changes that occurred during an explicit pause do not appear as new events.
+
+Keeping the same GitHub account preserves an existing schedule. Changing
+accounts or disconnecting pauses the previous watcher and clears its pending
+automatic reviews. Enable the watcher under the new account when ready.
 
 ### Set up automatic PR reviews
 
@@ -157,7 +183,7 @@ signing and notarization switch on once the `APPLE_*` secrets exist.
 
 ### Which keryx the app runs
 
-**Settings → keryx** has four sources:
+**Settings → Desktop → Which keryx to run** has four sources:
 
 | Source | What runs |
 |---|---|
@@ -289,9 +315,16 @@ the whole session, the latest turn and the last model call.
 
 ### Appearance
 
+Open **Settings** from the sidebar and use the **Appearance**, **Sessions**,
+**Integrations** and **Desktop** tabs. Close Settings with the top-right
+button or Escape to return to the project view you were using.
+
 Settings → Appearance sets the theme, the interface font (System, Rounded,
 Serif, Mono), the code font, the text size and the conversation width
 (Narrow, Wide, Full).
+
+Choose a light palette and a dark or black palette independently. **System**
+follows macOS appearance and applies the palette saved for the current mode.
 
 ### Flows board
 

@@ -1,5 +1,109 @@
-/* Selectable color themes (Settings > Appearance). Each block sets every color role of the dark token set.
-   The app forces data-theme="dark" whenever a palette is chosen, so these win by specificity. */
+/* Color palettes override the token set for their own display mode. */
+
+:root[data-palette="light-sky"][data-theme="light"] {
+  color-scheme: light;
+  --bg-canvas: #edf3fa;
+  --bg-surface: #fbfdff;
+  --bg-sunken: #e4edf7;
+  --bg-hover: rgba(38, 75, 120, 0.06);
+  --bg-active: rgba(38, 75, 120, 0.12);
+  --bg-selected: #dbe9fa;
+  --bg-overlay: rgba(17, 39, 67, 0.34);
+  --fg: #1b2b3f;
+  --fg-muted: #475d78;
+  --fg-subtle: #5c7089;
+  --border: #c8d7e8;
+  --border-strong: #859bb4;
+  --accent: #235a9d;
+  --accent-hover: #1a4880;
+  --accent-fg: #ffffff;
+  --accent-soft: #dbe9fa;
+  --accent-text: #194c88;
+  --focus: #2b68ae;
+  --danger: #a33337;
+  --danger-soft: #f8e5e5;
+  --warn: #80510d;
+  --warn-soft: #f9eedb;
+  --ok: #2a6b47;
+  --ok-soft: #e0f0e6;
+  --info: #2d5a86;
+  --info-soft: #e3edf7;
+  --code-bg: #e5edf7;
+  --code-fg: #1b2b3f;
+  --shadow-1: 0 1px 2px rgba(16, 28, 40, 0.08);
+  --shadow-pop: 0 10px 30px rgba(16, 28, 40, 0.16), 0 0 0 1px rgba(16, 28, 40, 0.07);
+  --shadow-sheet: -12px 0 40px rgba(16, 28, 40, 0.15);
+}
+
+:root[data-palette="light-linen"][data-theme="light"] {
+  color-scheme: light;
+  --bg-canvas: #f5eee2;
+  --bg-surface: #fffcf5;
+  --bg-sunken: #efe5d4;
+  --bg-hover: rgba(95, 61, 33, 0.07);
+  --bg-active: rgba(95, 61, 33, 0.13);
+  --bg-selected: #f0e0c9;
+  --bg-overlay: rgba(51, 33, 20, 0.34);
+  --fg: #32271e;
+  --fg-muted: #66513e;
+  --fg-subtle: #74604c;
+  --border: #dfd1bb;
+  --border-strong: #a38d72;
+  --accent: #895225;
+  --accent-hover: #713f1a;
+  --accent-fg: #ffffff;
+  --accent-soft: #f0e0c9;
+  --accent-text: #76441e;
+  --focus: #986038;
+  --danger: #a33337;
+  --danger-soft: #f8e5e5;
+  --warn: #80510d;
+  --warn-soft: #f9eedb;
+  --ok: #2a6b47;
+  --ok-soft: #e0f0e6;
+  --info: #2d5a86;
+  --info-soft: #e3edf7;
+  --code-bg: #f1e7d7;
+  --code-fg: #32271e;
+  --shadow-1: 0 1px 2px rgba(16, 28, 40, 0.08);
+  --shadow-pop: 0 10px 30px rgba(16, 28, 40, 0.16), 0 0 0 1px rgba(16, 28, 40, 0.07);
+  --shadow-sheet: -12px 0 40px rgba(16, 28, 40, 0.15);
+}
+
+:root[data-palette="light-rose"][data-theme="light"] {
+  color-scheme: light;
+  --bg-canvas: #f7edf1;
+  --bg-surface: #fffafd;
+  --bg-sunken: #f0e1e9;
+  --bg-hover: rgba(91, 41, 65, 0.07);
+  --bg-active: rgba(91, 41, 65, 0.13);
+  --bg-selected: #f2deea;
+  --bg-overlay: rgba(49, 26, 39, 0.34);
+  --fg: #352533;
+  --fg-muted: #684e60;
+  --fg-subtle: #7c5e72;
+  --border: #e3d0dc;
+  --border-strong: #a78a9d;
+  --accent: #8b3f65;
+  --accent-hover: #733152;
+  --accent-fg: #ffffff;
+  --accent-soft: #f2deea;
+  --accent-text: #793354;
+  --focus: #a04a76;
+  --danger: #a33337;
+  --danger-soft: #f8e5e5;
+  --warn: #80510d;
+  --warn-soft: #f9eedb;
+  --ok: #2a6b47;
+  --ok-soft: #e0f0e6;
+  --info: #2d5a86;
+  --info-soft: #e3edf7;
+  --code-bg: #f4e6ee;
+  --code-fg: #352533;
+  --shadow-1: 0 1px 2px rgba(16, 28, 40, 0.08);
+  --shadow-pop: 0 10px 30px rgba(16, 28, 40, 0.16), 0 0 0 1px rgba(16, 28, 40, 0.07);
+  --shadow-sheet: -12px 0 40px rgba(16, 28, 40, 0.15);
+}
 
 :root[data-palette="dark-navy"][data-theme="dark"] {
   color-scheme: dark;
@@ -351,16 +455,22 @@
   --shadow-sheet: -12px 0 40px rgba(0, 0, 0, 0.75);
 }
 
-/* Settings > Appearance: color theme swatches. */
-.palette-row { flex-wrap: wrap; align-items: flex-start; }
-.palette-picker { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: var(--sp-4); align-items: flex-start; }
-.palette-group { display: flex; flex-direction: column; gap: var(--sp-1); }
-.palette-group-title { font-size: var(--fs-xs); color: var(--fg-muted); text-transform: uppercase; letter-spacing: 0.04em; }
-.palette-swatches { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
-.palette-swatch { display: flex; flex-direction: column; align-items: center; gap: var(--sp-1); padding: var(--sp-1); background: none; border: 1px solid transparent; border-radius: var(--r-md); color: var(--fg-muted); font: inherit; font-size: var(--fs-xs); cursor: pointer; }
-.palette-swatch:hover { color: var(--fg); }
+/* Settings > Appearance swatches. */
+.settings-row.palette-row { display: grid; gap: var(--sp-3); }
+.palette-picker, .palette-black-group { display: grid; gap: var(--sp-2); min-width: 0; }
+.palette-black-group { padding-top: var(--sp-3); border-top: 1px solid var(--border); }
+.palette-group-title { font-size: var(--fs-xs); color: var(--fg-muted); font-weight: 600; }
+.palette-swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(62px, 1fr)); gap: var(--sp-2); }
+.palette-swatch {
+  display: grid; justify-items: center; align-content: start; gap: var(--sp-1); min-width: 0;
+  padding: var(--sp-2) var(--sp-1); background: none; border: 1px solid transparent;
+  border-radius: var(--r-md); color: var(--fg-muted); font-size: var(--fs-xs); cursor: pointer;
+}
+.palette-swatch:hover { color: var(--fg); background: var(--bg-hover); }
 .palette-swatch[aria-checked="true"] { color: var(--fg); border-color: var(--accent); background: var(--bg-selected); }
 .palette-chip { position: relative; display: block; width: 48px; height: 32px; overflow: hidden; border: 1px solid var(--border-strong); border-radius: var(--r-sm); }
-.palette-chip[data-default="true"] { background: linear-gradient(135deg, var(--bg-canvas) 50%, var(--accent) 50%); }
+.palette-chip[data-default="true"] { background: linear-gradient(135deg, #f4f7f5 50%, #265f50 50%); }
+:root[data-theme="dark"] .palette-chip[data-default="true"] { background: linear-gradient(135deg, #111915 50%, #8dc7ab 50%); }
 .palette-chip-surface { position: absolute; left: 4px; top: 4px; right: 18px; bottom: 4px; border-radius: 2px; }
 .palette-chip-accent { position: absolute; right: 4px; bottom: 4px; width: 10px; height: 10px; border-radius: 50%; }
+.palette-label { overflow-wrap: anywhere; }

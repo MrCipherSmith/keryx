@@ -1,0 +1,327 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "504",
+  "slug": "desktop-settings-theme-palettes-and-proj",
+  "title": "Desktop Settings, theme palettes and project GitHub accounts",
+  "status": "in-progress",
+  "createdAt": "2026-11-20T14:55:58.641Z",
+  "updatedAt": "2026-11-20T15:23:59.096Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:bac7cad1bb3fe770f84711980ff1bf4772bf5ee3574b6259e5300756ffb655e6",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Replaced by the three scoped implementation tasks T5–T7"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [
+        "T3"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Group Settings, restore previous view and split light and dark palettes",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-20T14:56:56.783Z",
+            "outcome": "started",
+            "detail": "Settings navigation and appearance implementation"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Bind GitHub account to project and route board, fetch and watcher through it",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-20T14:56:57.050Z",
+            "outcome": "started",
+            "detail": "Project identity and Review integration"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Connect GitHub accounts in Integrations, Project Settings and Activity",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T5",
+        "T6"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-20T15:03:13.736Z",
+            "outcome": "started",
+            "detail": "Native bridge and project account UI integration"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Verify desktop layout, account isolation, Git fetch and detached watcher",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T7"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-20T15:12:03.524Z",
+            "outcome": "started",
+            "detail": "Desktop visual and native tests plus two real GitHub account launchd polling"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-11-20T14:55:58.641Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-11-20T14:56:41.249Z",
+      "event": "origin-set",
+      "detail": "unknown -> human-request; quote: \"В одном фло\"; source: Codex conversation, 2026-11-20 (Desktop settings and Review account requirements)"
+    },
+    {
+      "at": "2026-11-20T14:56:41.529Z",
+      "event": "task-added",
+      "detail": "T5: Group Settings, restore previous view and split light and dark palettes"
+    },
+    {
+      "at": "2026-11-20T14:56:41.815Z",
+      "event": "task-added",
+      "detail": "T6: Bind GitHub account to project and route board, fetch and watcher through it"
+    },
+    {
+      "at": "2026-11-20T14:56:42.102Z",
+      "event": "task-added",
+      "detail": "T7: Connect GitHub accounts in Integrations, Project Settings and Activity"
+    },
+    {
+      "at": "2026-11-20T14:56:42.378Z",
+      "event": "task-added",
+      "detail": "T8: Verify desktop layout, account isolation, Git fetch and detached watcher"
+    },
+    {
+      "at": "2026-11-20T14:56:42.651Z",
+      "event": "frozen",
+      "detail": "7 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-11-20T14:56:42.916Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-11-20T14:56:43.197Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-11-20T14:56:55.989Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-11-20T14:56:56.257Z",
+      "event": "task-depends-set",
+      "detail": "T3: dependsOn T8 (was empty) — Test and capture acceptance after all changes"
+    },
+    {
+      "at": "2026-11-20T14:56:56.520Z",
+      "event": "task-depends-set",
+      "detail": "T4: dependsOn T3 (was empty) — Review after verification"
+    },
+    {
+      "at": "2026-11-20T14:56:56.783Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — Settings navigation and appearance implementation"
+    },
+    {
+      "at": "2026-11-20T14:56:57.050Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — Project identity and Review integration"
+    },
+    {
+      "at": "2026-11-20T15:03:13.736Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — Native bridge and project account UI integration"
+    },
+    {
+      "at": "2026-11-20T15:09:34.504Z",
+      "event": "task-done",
+      "detail": "T5: Group Settings, restore previous view and split light and dark palettes"
+    },
+    {
+      "at": "2026-11-20T15:10:56.005Z",
+      "event": "task-done",
+      "detail": "T6: Bind GitHub account to project and route board, fetch and watcher through it"
+    },
+    {
+      "at": "2026-11-20T15:12:03.189Z",
+      "event": "task-done",
+      "detail": "T7: Connect GitHub accounts in Integrations, Project Settings and Activity"
+    },
+    {
+      "at": "2026-11-20T15:12:03.524Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — Desktop visual and native tests plus two real GitHub account launchd polling"
+    },
+    {
+      "at": "2026-11-20T15:13:14.348Z",
+      "event": "origin-set",
+      "detail": "human-request; quote: \"В одном фло\"; source: Codex conversation, 2026-11-20 -> human-request; quote: \"3 Таба integrations и там можно подключать аккаунты, причем несколько гитхаба, пока ограничимся гитхабом.\"; source: Codex conversation, 2026-11-20 (Record the original Desktop and GitHub integration request)"
+    },
+    {
+      "at": "2026-11-20T15:13:14.642Z",
+      "event": "task-done",
+      "detail": "T8: Verify desktop layout, account isolation, Git fetch and detached watcher"
+    },
+    {
+      "at": "2026-11-20T15:23:59.096Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    }
+  ],
+  "origin": {
+    "kind": "human-request",
+    "quote": "3 Таба integrations и там можно подключать аккаунты, причем несколько гитхаба, пока ограничимся гитхабом.",
+    "source": "Codex conversation, 2026-11-20"
+  },
+  "acKinds": {
+    "AC1": {
+      "kind": "judged"
+    },
+    "AC2": {
+      "kind": "judged"
+    },
+    "AC3": {
+      "kind": "judged"
+    },
+    "AC4": {
+      "kind": "judged"
+    },
+    "AC5": {
+      "kind": "judged"
+    },
+    "AC6": {
+      "kind": "judged"
+    },
+    "AC7": {
+      "kind": "judged"
+    }
+  }
+}

@@ -20,6 +20,8 @@ import { Transcript } from "./Transcript";
 import { lostText, type QueuedPrompt, type Usage } from "./reducer";
 import { resolveMode, resolveModel, type UiActions } from "./commandRunner";
 import { modelOption, type useAcpSession } from "./useAcpSession";
+import type { ProjectGitHubAccount } from "../platform/githubAccounts";
+import { ProjectGitHubAccountButton } from "../project/GitHubSettings";
 
 type Session = ReturnType<typeof useAcpSession>;
 
@@ -29,6 +31,8 @@ interface Props {
   projectName: string;
   onGoFlows: () => void;
   onGoSettings: () => void;
+  githubAccount?: ProjectGitHubAccount;
+  onProjectSettings?: () => void;
   narrow: boolean;
   /** Open the Providers dialog (`/connect`, `/search-provider`). */
   onProviders: (name: string, args: string) => void;
@@ -40,7 +44,7 @@ const SUGGESTIONS = [
   { icon: "search" as const, text: "Find TODO and FIXME comments and group them by area." },
 ];
 
-export const SessionView = forwardRef<ComposerHandle, Props>(function SessionView({ s, cwd, projectName, onGoFlows, onGoSettings, narrow, onProviders }, composerRef) {
+export const SessionView = forwardRef<ComposerHandle, Props>(function SessionView({ s, cwd, projectName, onGoFlows, onGoSettings, githubAccount, onProjectSettings, narrow, onProviders }, composerRef) {
   const { state } = s;
   const prefs = usePrefs();
   const sidebarOpen = prefs.sessionSidebar && !narrow;
@@ -56,6 +60,7 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
   const openActivity = useCallback(() => setPrefs({ sidePanel: "activity" }), []);
   const activitySlot = useSlot("activity");
   const infoSlot = useSlot("info");
+  const sessionControls = useSlot("sessionControls");
   // A sidebar click on another session's subagent loads that session first; the panel opens on it once it is shown.
   const pendingSubagent = useRef<{ sessionId: string; id: string } | null>(null);
   useEffect(() => {
@@ -264,30 +269,19 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
         </div>
       ) : null}
       <section className="session-main" aria-label="Conversation">
-        <div className="session-topbar">
+        {sessionControls && createPortal(<>
           {!sidebarOpen ? (
             <button
-              className="btn btn-sm btn-ghost"
+              className="icon-btn titlebar-toggle"
               onClick={() => (narrow ? setNarrowSidebar(true) : (setFloating(null), setPrefs({ sessionSidebar: true })))}
+              aria-label="Show sessions"
               title="Show sessions"
             >
-              <Icon name="list" size={14} /> Sessions
-              {state.sessions.length ? <span className="tab-count">{state.sessions.length}</span> : null}
+              <Icon name="list" size={15} />
             </button>
           ) : null}
-          <span className="grow" />
-          {state.sessionId ? (
-            <button
-              className="btn btn-sm btn-ghost activity-toggle"
-              onClick={() => setPrefs({ sidePanel: activityOpen ? null : "activity" })}
-              aria-pressed={activityOpen}
-              title="Subagents and background tasks"
-            >
-              <Icon name="checklist" size={14} /> Activity
-              {activityRunning > 0 ? <span className="tab-count" title="Running">{activityRunning}</span> : null}
-            </button>
-          ) : null}
-        </div>
+          {githubAccount && <ProjectGitHubAccountButton account={githubAccount} onOpen={onProjectSettings} />}
+        </>, sessionControls)}
 
         {state.banners.length > 0 ? (
           <div className="session-banners">
@@ -411,6 +405,8 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
               subagentId={activity.subagentId}
               onSubagent={(subagentId) => setActivity((a) => ({ ...a, subagentId }))}
               onRefreshTasks={refreshTasks}
+              githubAccount={githubAccount}
+              onProjectSettings={onProjectSettings}
             />,
             activitySlot,
           )

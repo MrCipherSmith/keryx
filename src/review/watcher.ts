@@ -6,7 +6,8 @@ import { linkedReviewRuns, observeRules } from "./review-rule-queue";
 import { invalidateRuleWork } from "./review-rules";
 import { dispatchReadyRules, type DispatchReviewRule } from "./review-rule-dispatch";
 import { listReviewCards } from "./board";
-import { boardGraphql } from "./board-github";
+import { boardGraphql, projectGithubConnection } from "./board-github";
+import { projectGithubBinding, saveProjectGithubBinding, verifyProjectGithubAccountIntent } from "./github-account-store";
 import { resolveWatcherCheckout } from "./watcher-project";
 import type { ReviewBoardSnapshot } from "./board-types";
 import { observedCards, watcherChanges, type WatchedCard } from "./watcher-events";
@@ -56,21 +57,29 @@ export function readWatcher(cwd: string, key: WatcherKey): WatcherSnapshot {
   return access((db) => snapshot(db, scope(cwd, key)));
 }
 
-export function listConfiguredWatchers(cwd: string): WatcherKey[] {
-  return access((db) =>
-    db
-      .query<{ target: string }, [string]>("SELECT target FROM watchers WHERE cwd=? ORDER BY id")
-      .all(cwd)
-      .map((row) => JSON.parse(row.target) as WatcherKey),
-  );
+export function listConfiguredWatchers(cwd: string, connection?: Database): WatcherKey[] {
+  if (!connection) return access((db) => listConfiguredWatchers(cwd, db));
+  return connection.query<{ target: string }, [string]>("SELECT target FROM watchers WHERE cwd=? ORDER BY id")
+    .all(cwd)
+    .map((row) => JSON.parse(row.target) as WatcherKey);
 }
 
-export function configureWatcher(cwd: string, key: WatcherKey, intervalMinutes: number): WatcherSnapshot {
+export function configureWatcher(
+  cwd: string, key: WatcherKey, intervalMinutes: number,
+  guard?: { project: string; order: number },
+): WatcherSnapshot {
   if (!Number.isInteger(intervalMinutes) || intervalMinutes < 1 || intervalMinutes > 1440) {
     throw new Error("configuration: Choose an interval between 1 and 1440 minutes.");
   }
   const id = scope(cwd, key);
   return access((db) => {
+    if (guard) {
+      const binding = projectGithubBinding(guard.project, db);
+      if (binding && (binding.generation > guard.order ||
+          binding.login?.toLowerCase() !== key.viewer.toLowerCase())) {
+        throw new Error("access: The project's GitHub account changed. Refresh Review.");
+      }
+    }
     db.run(
       `INSERT INTO watchers (id,cwd,target,state,intervalMinutes) VALUES (?,?,?,'enabled',?)
       ON CONFLICT(id) DO UPDATE SET state='enabled', target=excluded.target, intervalMinutes=excluded.intervalMinutes`,
@@ -100,27 +109,48 @@ export function watcherPauseGeneration(cwd: string, key: WatcherKey): number {
     .get(scope(cwd, key))?.generation ?? 0);
 }
 
+function pauseWatcherInTransaction(db: Database, id: string, order: number) {
+  db.run(
+    `INSERT INTO watcher_pauses(watcher,generation) VALUES(?,?)
+     ON CONFLICT(watcher) DO UPDATE SET generation=MAX(generation,excluded.generation)`,
+    [id, order],
+  );
+  invalidateRuleWork(db, id, "Watcher paused");
+  db.run("UPDATE watchers SET state='paused',baseline=NULL,lease=NULL,pid=NULL WHERE id=?", [id]);
+}
+
 export function pauseWatcher(cwd: string, key: WatcherKey, order?: number): WatcherSnapshot {
   const id = scope(cwd, key);
   return access((db) => {
-    db.run(
-      `INSERT INTO watcher_pauses(watcher,generation) VALUES(?,?)
-       ON CONFLICT(watcher) DO UPDATE SET generation=MAX(generation,excluded.generation)`,
-      [id, order ?? nextOperation(db)],
-    );
-    invalidateRuleWork(db, id, "Watcher paused");
-    db.run("UPDATE watchers SET state='paused',baseline=NULL,lease=NULL,pid=NULL WHERE id=?", [id]);
+    pauseWatcherInTransaction(db, id, order ?? nextOperation(db));
     return snapshot(db, id);
+  });
+}
+
+/** The binding change and invalidation of existing scheduled work share one transaction. */
+export function changeProjectGithubBinding(project: string, cwd: string, login: string | null, order: number): WatcherKey[] {
+  return access((db) => {
+    verifyProjectGithubAccountIntent(db, project, order);
+    const previous = projectGithubBinding(project, db);
+    const selected = login?.toLowerCase();
+    if (previous && previous.login?.toLowerCase() === selected) return [];
+    // A matching legacy watcher has already verified this viewer and repository.
+    // Preserve its schedule and baseline when the same viewer is first made explicit.
+    const keys = listConfiguredWatchers(cwd, db).filter(key => previous !== null || key.viewer.toLowerCase() !== selected);
+    for (const key of keys) pauseWatcherInTransaction(db, scope(cwd, key), order);
+    saveProjectGithubBinding(db, project, login, order);
+    return keys;
   });
 }
 
 async function fetchOpenCards(cwd: string, key: WatcherKey): Promise<ReviewBoardSnapshot> {
   const checkout = await resolveWatcherCheckout(cwd, key.repo);
+  const auth = await projectGithubConnection(checkout, process.env, key.viewer);
   return listReviewCards(
     key.repo,
     [key.repo],
     "open",
-    (query, params) => boardGraphql(checkout, query, params),
+    (query, params) => boardGraphql(checkout, query, params, auth),
     true,
   );
 }
