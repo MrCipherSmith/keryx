@@ -3,6 +3,7 @@ import { promisify } from "node:util";
 import { resolveGitCommonDir } from "../lib/git-worktrees";
 import { withoutGitDiscoveryOverrides } from "../lib/git-env";
 import { projectGithubBinding } from "./github-account-store";
+import { watcherTransaction } from "./watcher-db";
 import { namedGithubEnvironment, reviewCommandOptions, reviewTool, withoutGithubCredentials } from "./github-cli";
 export { reviewTool } from "./github-cli";
 
@@ -85,11 +86,18 @@ export interface GithubConnection {
   binding?: { project: string; generation: number | null };
 }
 
-export function verifyGithubBindingUnchanged(connection: GithubConnection): void {
-  if (!connection.binding) return;
+export function withCurrentGithubBinding<T>(connection: GithubConnection, useConnection: () => T): T {
+  if (!connection.binding) return useConnection();
   const { project, generation } = connection.binding;
-  if ((projectGithubBinding(project)?.generation ?? null) !== generation)
-    throw new Error("access: The project's GitHub account changed. Refresh Review.");
+  return watcherTransaction((db) => {
+    if ((projectGithubBinding(project, db)?.generation ?? null) !== generation)
+      throw new Error("access: The project's GitHub account changed. Refresh Review.");
+    return useConnection();
+  });
+}
+
+export function verifyGithubBindingUnchanged(connection: GithubConnection): void {
+  withCurrentGithubBinding(connection, () => undefined);
 }
 
 export async function projectGithubConnection(

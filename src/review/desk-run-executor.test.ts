@@ -10,7 +10,8 @@ import { executeDeskReview, recoverDeskExecution } from "./desk-run-executor";
 import { SAFE_BUN_SPAWN_ARGS } from "../lib/safe-exec";
 import { privateGitEnv, type ChildSpec } from "./autonomous-run";
 import { reviewGitCommonDir } from "./board-github";
-import { changeProjectGithubBinding } from "./watcher";
+import { beginWatcherOperation, changeProjectGithubBinding } from "./watcher";
+import { claimProjectGithubAccountIntent } from "./github-account-store";
 
 const fixtureGitEnv = () => ({ ...privateGitEnv(), GIT_CONFIG_GLOBAL: devNull, GIT_CONFIG_NOSYSTEM: "1" });
 const git = (cwd: string, ...args: string[]) => execFileSync("git", ["-c", "core.hooksPath=/dev/null", ...args],
@@ -163,11 +164,16 @@ esac
 exec /usr/bin/git "$@"
 `, { mode: 0o700 });
     const project = (await reviewGitCommonDir(cwd))!;
-    changeProjectGithubBinding(project, cwd, "fixture");
+    const bind = (login: string | null) => {
+      const order = beginWatcherOperation();
+      claimProjectGithubAccountIntent(project, order);
+      changeProjectGithubBinding(project, cwd, login, order);
+    };
+    bind("fixture");
     let launches = 0;
     const result = await executeDeskReview({
       ...options(), viewer: "fixture",
-      verifyBeforeExecution: async () => { changeProjectGithubBinding(project, cwd, null); },
+      verifyBeforeExecution: async () => { bind(null); },
     }, {
       selectModel, remoteUrl: cwd, revision,
       spawn() { launches++; return { exited: Promise.resolve(0), kill() {} }; },

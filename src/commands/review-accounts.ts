@@ -3,9 +3,9 @@ import { parseArgs } from "node:util";
 import { withFileLock } from "../lib/fs";
 import { keryxDataDir } from "../lib/config-dir";
 import { boardGraphql, reviewGitCommonDir, reviewGitEnvironment, reviewRepositories, selectRepository } from "../review/board-github";
-import { projectGithubBinding } from "../review/github-account-store";
+import { claimProjectGithubAccountIntent, projectGithubBinding } from "../review/github-account-store";
 import { listGithubAccounts, namedGithubEnvironment, validGithubLogin } from "../review/github-cli";
-import { changeProjectGithubBinding, readWatcher } from "../review/watcher";
+import { beginWatcherOperation, changeProjectGithubBinding, readWatcher } from "../review/watcher";
 import { mainCheckout } from "../review/watcher-project";
 import { reconcileWatcherTimer, watcherLabel } from "../review/watch-launchd";
 
@@ -30,8 +30,10 @@ export async function readProjectGithubAccount(cwd: string): Promise<ProjectGith
 export async function bindProjectGithubAccount(
   cwd: string, login: string | null, requested?: string,
 ): Promise<ProjectGithubAccount> {
+  const order = beginWatcherOperation();
   const commonDir = await reviewGitCommonDir(cwd);
   if (!commonDir) throw new Error("configuration: Open a Git project to connect GitHub.");
+  claimProjectGithubAccountIntent(commonDir, order);
   const repo = selectRepository(await reviewRepositories(cwd), requested);
   if (login !== null) {
     const [owner, name] = repo.split("/") as [string, string];
@@ -45,7 +47,7 @@ export async function bindProjectGithubAccount(
     login = data.viewer.login;
   }
   const project = await mainCheckout(cwd, reviewGitEnvironment());
-  const stopped = changeProjectGithubBinding(commonDir, project, login);
+  const stopped = changeProjectGithubBinding(commonDir, project, login, order);
   // Watcher state already prevents a stale timer from claiming work. Clean up
   // the timer as well, without tearing down a watcher explicitly re-enabled later.
   await Promise.allSettled(stopped.map(async (key) => {

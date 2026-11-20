@@ -458,6 +458,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       view={view}
       onView={go}
       title={title}
+      hasSession={state.sessionId !== null}
       status={status}
       flowsActive={flowsActive}
       projects={projects}

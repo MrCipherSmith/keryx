@@ -3,6 +3,7 @@ import { isTauri, listen } from "../platform/backend";
 import { basename } from "../lib/format";
 import { fitSidePanelWidth, getPrefs, MOD, setPrefs, usePrefs, type SidePanelTab } from "../lib/prefs";
 import { SidePanel } from "../panels/SidePanel";
+import { slotRef, useActivityRunning } from "../panels/sideSlots";
 import { ConsentDialog } from "../panels/ConsentDialog";
 import { overlayOpen } from "../components/ui";
 import { Icon, type IconName } from "../components/Icon";
@@ -43,6 +44,7 @@ interface ShellProps {
   onView: (v: View) => void;
   onProjectSettings?: () => void;
   title: ReactNode;
+  hasSession?: boolean;
   status: { tone: "ok" | "busy" | "warn" | "danger" | "idle"; label: string; detail?: string };
   flowsActive: number;
   /** The projects on the rail, in the user's order; `cwd` is one of them. */
@@ -205,6 +207,18 @@ function InfoToggle({ show }: { show: boolean }) {
   );
 }
 
+function ActivityToggle() {
+  const { sidePanel } = usePrefs();
+  const running = useActivityRunning();
+  const on = sidePanel === "activity";
+  return <button type="button" className={`icon-btn titlebar-toggle titlebar-activity${on ? " is-on" : ""}`}
+    onClick={() => toggleSidePanel("activity", sidePanel)} aria-pressed={on} aria-label="Activity"
+    title={`${on ? "Hide" : "Show"} activity${running ? ` · ${running} running` : ""}`}>
+    <Icon name="checklist" size={15} />
+    {running > 0 && <span className="tab-count" aria-label={`${running} running`}>{running}</span>}
+  </button>;
+}
+
 function TitleBar(p: ShellProps) {
   const { cwd, recents, title, status, onOpenFolder, onSwitchProject, onNewWindow, onCloseProject, onPalette } = p;
   const [menu, setMenu] = useState(false);
@@ -244,6 +258,7 @@ function TitleBar(p: ShellProps) {
           <Icon name="chevronDown" size={12} />
         </button>
         {menu ? <Menu anchor={btn.current} items={items} onClose={() => setMenu(false)} label="Project" width={320} /> : null}
+        {p.view === "session" && <div className="titlebar-session-controls" ref={slotRef("sessionControls")} />}
       </div>
       <div className="titlebar-center" data-tauri-drag-region>
         {title}
@@ -254,6 +269,7 @@ function TitleBar(p: ShellProps) {
           {status.label}
         </span>
         <InfoToggle show={p.view === "session"} />
+        {p.view === "session" && p.hasSession && <ActivityToggle />}
         <SideToggles />
         {p.actions}
         <button className="palette-btn" onClick={onPalette} title="Commands and sessions">

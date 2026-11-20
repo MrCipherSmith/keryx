@@ -1,6 +1,6 @@
 /* Providers dialog, Activity panel (subagents and tasks), transcript link to a subagent. */
 
-.session-topbar { display: flex; align-items: center; gap: var(--sp-2); }
+.project-github-account svg { flex-shrink: 0; }
 
 /* Subagents under their session in the sidebar: a pill on the right of the row toggles them; no chevron on sessions (those are the day groups'). */
 .session-node { list-style: none; }

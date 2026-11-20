@@ -9,7 +9,11 @@ const cwd = "/dev/project-navigation";
 let offline = false;
 const reads: string[] = [];
 let account: string | null = null;
+let accountConfigured = false;
 let connectedNewAccount = false;
+let accountListReads = 0;
+let accountListGate: Promise<void> | undefined;
+let oldCli = false;
 mockWindows("project-navigation");
 mockIPC(async (cmd, args) => {
   switch (cmd) {
@@ -21,13 +25,21 @@ mockIPC(async (cmd, args) => {
     case "github_login": connectedNewAccount = true; return null;
     case "github_accounts": {
       const request = args as {action: string; cwd?: string; login?: string};
-      if (request.action === "list") return { accounts: [
-        { login: "me", active: !connectedNewAccount }, { login: "second", active: false },
-        ...(connectedNewAccount ? [{ login: "new-account", active: true }] : []),
-      ] };
+      if (request.action === "list") {
+        accountListReads++;
+        await accountListGate;
+        if (oldCli) throw "Unknown command: accounts. Run `keryx review --help` for the list.";
+        return { accounts: [
+          { login: "me", active: !connectedNewAccount }, { login: "second", active: false },
+          ...(connectedNewAccount ? [{ login: "new-account", active: true }] : []),
+        ] };
+      }
       assert.equal(request.cwd, cwd);
-      if (request.action === "bind") account = request.login ?? null;
-      return { eligible: true, configured: account !== null, login: account };
+      if (request.action === "bind") {
+        account = request.login ?? null;
+        accountConfigured = true;
+      }
+      return { eligible: true, configured: accountConfigured, login: account };
     }
     case "acp_send": {
       const { method, id } = JSON.parse(String((args as {message:string}).message));
@@ -86,15 +98,37 @@ try {
   assert.ok(host.textContent?.includes("Choose a GitHub account"));
   await React.act(() => namedButton("Manage GitHub accounts").click());
   assert.equal(host.querySelector('[role="tab"][aria-selected="true"]')?.textContent, "Integrations");
+  const beforeRefresh = accountListReads;
+  let finishList!: () => void;
+  accountListGate = new Promise(resolve => { finishList = resolve; });
+  const refresh = namedButton("Refresh accounts");
+  await React.act(() => {
+    refresh.click();
+    refresh.click();
+  });
+  assert.ok(refresh.disabled);
+  await React.act(() => refresh.click());
+  assert.equal(accountListReads, beforeRefresh + 1);
+  await React.act(() => finishList());
+  assert.equal(refresh.disabled, false);
+  oldCli = true;
+  await React.act(() => refresh.click());
+  assert.ok(host.querySelector('[role="alert"]')?.textContent?.includes("choose Bundled keryx"));
+  assert.ok(namedButton("Connect account").disabled);
+  oldCli = false;
+  await React.act(() => refresh.click());
   await React.act(() => namedButton("Connect account").click());
   assert.ok(connectedNewAccount && host.textContent?.includes("@new-account"));
   await React.act(() => namedButton("Close Settings").click());
   await chooseAccount("me");
+  assert.equal(host.querySelector(".titlebar .project-github-account")?.textContent, "GitHub · @me");
+  assert.ok(host.querySelector('.titlebar-right button[aria-label="Activity"]'));
   await React.act(() => {
     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(composer, "Keep this unsent draft");
     composer.dispatchEvent(new Event("input", { bubbles:true }));
   });
   await go("Review");
+  assert.equal(host.querySelector('.titlebar-right button[aria-label="Activity"]'), null);
   assert.ok(host.textContent?.includes("Navigation proof"));
   assert.ok(composer.closest("[hidden]"));
   await React.act(() => namedButton("Settings").click());
@@ -118,6 +152,10 @@ try {
   assert.ok(projectSettings);
   await React.act(() => projectSettings.click());
   await chooseAccount("second");
+  assert.equal(host.querySelector(".titlebar .project-github-account")?.textContent, "GitHub · @second");
+  await React.act(() => namedButton("GitHub · @second").click());
+  await React.act(() => namedButton("Disconnect from project").click());
+  assert.equal(host.querySelector(".titlebar .project-github-account")?.textContent, "GitHub · Not connected");
 } finally {
   await React.act(() => root.unmount());
   clearMocks();

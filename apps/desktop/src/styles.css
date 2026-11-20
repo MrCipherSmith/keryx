@@ -37,15 +37,21 @@ button { font: inherit; }
 
 .titlebar {
   grid-column: 1 / -1;
-  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1fr); align-items: center; gap: var(--sp-3);
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(max-content, 1fr); align-items: center; gap: var(--sp-3);
   padding: 0 var(--sp-3) 0 var(--titlebar-inset);
   background: var(--bg-canvas); border-bottom: 1px solid var(--border);
 }
 .titlebar-left, .titlebar-right { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
 .titlebar-right { justify-content: flex-end; }
+.titlebar-session-controls { display: flex; align-items: center; gap: var(--sp-1); min-width: 0; }
+.titlebar-session-controls:empty { display: none; }
+.titlebar-session-controls .project-github-account { min-width: 0; max-width: 18rem; }
+.titlebar-session-controls .icon-btn, .project-switcher .icon { flex-shrink: 0; }
+.titlebar-activity { position: relative; }
+.titlebar-activity .tab-count { position: absolute; inset-block-start: -2px; inset-inline-end: -3px; pointer-events: none; }
 .titlebar-center { text-align: center; font-weight: 600; font-size: var(--fs-md); color: var(--fg); min-width: 0; display: flex; justify-content: center; }
 .project-switcher {
-  display: inline-flex; align-items: center; gap: 6px; height: 26px; max-width: 100%; padding: 0 var(--sp-2);
+  display: inline-flex; align-items: center; gap: 6px; height: 26px; min-width: 0; max-width: 100%; padding: 0 var(--sp-2);
   font-weight: 600; color: var(--fg); background: transparent; border: 1px solid transparent; border-radius: var(--r-md); cursor: default;
 }
 .project-switcher:hover, .project-switcher[aria-expanded="true"] { background: var(--bg-hover); border-color: var(--border); }
@@ -64,6 +70,9 @@ button { font: inherit; }
   font-size: var(--fs-sm); color: var(--fg-muted); background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--r-md); cursor: default;
 }
 .palette-btn:hover { color: var(--fg); border-color: var(--border-strong); }
+@media (max-width: 920px) {
+  .titlebar { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) max-content; }
+}
 
 .rail {
   display: flex; flex-direction: column; align-items: center; gap: 4px; padding: var(--sp-2) 0 var(--sp-3);
@@ -315,7 +324,6 @@ button { font: inherit; }
 .tool-kind-icon { color: var(--fg-muted); display: grid; }
 .tool-title { flex: 1; font-size: var(--fs-md); font-family: var(--mono); font-size: calc(12.5px * var(--text-scale)); }
 .tool-target { margin-left: var(--sp-2); color: var(--fg-muted); }
-.session-topbar { display: flex; align-items: center; height: 36px; padding: 0 var(--sp-2); flex: none; border-bottom: 1px solid var(--border); }
 .tool-dur { font-size: var(--fs-xs); color: var(--fg-subtle); font-variant-numeric: tabular-nums; flex: none; }
 .tool-chev { color: var(--fg-subtle); width: 13px; flex: none; }
 .tool-body { padding: var(--sp-2) var(--sp-3) var(--sp-3) 44px; display: grid; gap: var(--sp-2); background: var(--bg-canvas); border-top: 1px solid var(--border); }

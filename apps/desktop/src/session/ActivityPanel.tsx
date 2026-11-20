@@ -11,6 +11,7 @@ import { COMMAND_METHOD } from "../acp/commands";
 import { openStreamTab } from "../panels/streamTabs";
 import { taskOutputSource } from "./taskStream";
 import type { ProjectGitHubAccount } from "../platform/githubAccounts";
+import { ProjectGitHubAccountButton } from "../project/GitHubSettings";
 
 export type ActivityTab = "subagents" | "tasks" | "schedules" | "runs";
 
@@ -73,10 +74,7 @@ export function ActivityPanel({ sessionId, subagents, tasks, api, tab, onTab, su
       </div>
       {githubAccount ? (
         <div className="activity-account">
-          <button className="btn btn-ghost btn-sm" onClick={onProjectSettings} title="Open Project Settings">
-            <Icon name="user" size={13} />
-            <span className="truncate">GitHub · {githubAccount.login ? `@${githubAccount.login}` : githubAccount.configured ? "Not connected" : "Active account in gh"}</span>
-          </button>
+          <ProjectGitHubAccountButton account={githubAccount} onOpen={onProjectSettings} />
         </div>
       ) : null}
       <div className="activity-body">

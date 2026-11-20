@@ -7,7 +7,7 @@ import { invalidateRuleWork } from "./review-rules";
 import { dispatchReadyRules, type DispatchReviewRule } from "./review-rule-dispatch";
 import { listReviewCards } from "./board";
 import { boardGraphql, projectGithubConnection } from "./board-github";
-import { projectGithubBinding, saveProjectGithubBinding } from "./github-account-store";
+import { projectGithubBinding, saveProjectGithubBinding, verifyProjectGithubAccountIntent } from "./github-account-store";
 import { resolveWatcherCheckout } from "./watcher-project";
 import type { ReviewBoardSnapshot } from "./board-types";
 import { observedCards, watcherChanges, type WatchedCard } from "./watcher-events";
@@ -128,12 +128,15 @@ export function pauseWatcher(cwd: string, key: WatcherKey, order?: number): Watc
 }
 
 /** The binding change and invalidation of existing scheduled work share one transaction. */
-export function changeProjectGithubBinding(project: string, cwd: string, login: string | null): WatcherKey[] {
+export function changeProjectGithubBinding(project: string, cwd: string, login: string | null, order: number): WatcherKey[] {
   return access((db) => {
+    verifyProjectGithubAccountIntent(db, project, order);
     const previous = projectGithubBinding(project, db);
-    if (previous && previous.login?.toLowerCase() === login?.toLowerCase()) return [];
-    const order = nextOperation(db);
-    const keys = listConfiguredWatchers(cwd, db);
+    const selected = login?.toLowerCase();
+    if (previous && previous.login?.toLowerCase() === selected) return [];
+    // A matching legacy watcher has already verified this viewer and repository.
+    // Preserve its schedule and baseline when the same viewer is first made explicit.
+    const keys = listConfiguredWatchers(cwd, db).filter(key => previous !== null || key.viewer.toLowerCase() !== selected);
     for (const key of keys) pauseWatcherInTransaction(db, scope(cwd, key), order);
     saveProjectGithubBinding(db, project, login, order);
     return keys;
