@@ -9,6 +9,7 @@ const cwd = "/dev/project-navigation";
 let offline = false;
 const reads: string[] = [];
 let account: string | null = null;
+let connectedNewAccount = false;
 mockWindows("project-navigation");
 mockIPC(async (cmd, args) => {
   switch (cmd) {
@@ -17,9 +18,13 @@ mockIPC(async (cmd, args) => {
     case "projects_state": case "flows_list": return [];
     case "acp_start": return { keryxPath: "/fixture/keryx" };
     case "version_check": return { ok: true };
+    case "github_login": connectedNewAccount = true; return null;
     case "github_accounts": {
       const request = args as {action: string; cwd?: string; login?: string};
-      if (request.action === "list") return { accounts: [{ login: "me", active: true }, { login: "second", active: false }] };
+      if (request.action === "list") return { accounts: [
+        { login: "me", active: !connectedNewAccount }, { login: "second", active: false },
+        ...(connectedNewAccount ? [{ login: "new-account", active: true }] : []),
+      ] };
       assert.equal(request.cwd, cwd);
       if (request.action === "bind") account = request.login ?? null;
       return { eligible: true, configured: account !== null, login: account };
@@ -62,7 +67,7 @@ function namedButton(label: string) {
 async function chooseAccount(login: string) {
   const picker = host.querySelector<HTMLSelectElement>('[role="dialog"] select');
   assert.ok(picker);
-  assert.deepEqual([...picker.options].map(option => option.value), ["", "me", "second"]);
+  assert.deepEqual([...picker.options].map(option => option.value), ["", "me", "second", "new-account"]);
   await React.act(() => {
     picker.value = login;
     picker.dispatchEvent(new Event("change", { bubbles: true }));
@@ -79,6 +84,11 @@ try {
   const composer = host.querySelector<HTMLTextAreaElement>("textarea");
   assert.ok(composer && !composer.disabled, "ACP session composer is ready");
   assert.ok(host.textContent?.includes("Choose a GitHub account"));
+  await React.act(() => namedButton("Manage GitHub accounts").click());
+  assert.equal(host.querySelector('[role="tab"][aria-selected="true"]')?.textContent, "Integrations");
+  await React.act(() => namedButton("Connect account").click());
+  assert.ok(connectedNewAccount && host.textContent?.includes("@new-account"));
+  await React.act(() => namedButton("Close Settings").click());
   await chooseAccount("me");
   await React.act(() => {
     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(composer, "Keep this unsent draft");
