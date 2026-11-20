@@ -24,11 +24,11 @@ Version: 0.2.0
 | Группы сессий | `src/session/sessionGroups.ts:9` (Pinned), `groupSessions` `:45-60`; меток не получает; #1256 группы не меняет |
 | Вкладки боковой панели | `SIDE_TABS` — `src/panels/SidePanel.tsx:12-17`; тип и белый список ещё в `src/lib/prefs.ts:65-66` |
 | Git | `src-tauri/src/gitinfo.rs`: `git rev-parse` и `git status --porcelain=v2 --branch`, только счётчик `changed` (`:27`), тайм-аут 3 с, `GIT_OPTIONAL_LOCKS=0` |
-| Корень проекта для команд | main: только структура `PanelRoots` (`src-tauri/src/panels.rs:17`). Метод `require_project` — проверка, что `cwd` совпадает с зарегистрированным корнем окна, — появляется в #1254, и его новые команды в `gitinfo.rs` используют его |
+| Корень проекта для команд | `PanelRoots` (`src-tauri/src/panels.rs:17`) и `require_project` (`panels.rs:28`, слит в #1254): `cwd` должен совпадать с зарегистрированным корнем представления; его используют `git_info`, `git_repository` и `files.rs` (`project_files`, `project_file_read`) |
 | `confine` | `src-tauri/src/fs.rs:80-97` канонизирует путь, поэтому отказывает для файла, которого нет на диске |
 | Дифф | `src/components/unifiedDiff.ts` — разбор и статистика |
 | Вложения | main: только пики браузера (`src/panels/elementPicks.ts`, блок `untrusted`). #1254: `useChatAttachments` (`image`/`file`/`folder`, до 4 вложений по 5 МиБ), файлы во временном каталоге (`images.rs`, `ChatStore`), отправка путями в одном блоке `resource` `keryx-desktop:local-attachments` с `_meta.keryx.untrusted: true`; `promptCapabilities` Desktop не читает |
-| Попап композера | main: только `/`; #1254 переделывает его (группы, `matches`, `complete()`, клавиши), режима `@` нет |
+| Попап композера | `Composer.tsx` (#1254): группы, `matches`, `complete()`, клавиши; режим `@` добавлен этапом 4 (проп `searchFiles`, `@слово` у каретки, группа «Files») |
 | Недоверенный контент | блок с `_meta.keryx.untrusted` переводит весь ход под порог недоверенного контента (`src/acp/prompt-content.ts:22-30`): правки требуют подтверждения и в `auto`, подагенты блокируются |
 | Изображения в keryx | `promptCapabilities.image: false` (`src/acp/protocol.ts:498`), блок заменяется текстом (`prompt-content.ts:84-85`); `vision: true` объявляет только Gemini-адаптер. Нативный ввод изображений — flow 493 (in progress, не в main, контракт не проверен по коду; по черновику flow: `MessageImageRef` без байтов в сообщении, байты в хранилище сессии, `ProviderCapabilities.imageInput`) |
 | Использование контекста | `usage_update` — `reducer.ts:375-384`; метр только в `SessionInfoPanel.tsx:70-71, :144` |
@@ -62,7 +62,7 @@ Settings → Sessions получает блок «Attention» с переклю�
 | `git_changes` | `cwd` | `{ files: ChangedFile[], truncated: boolean }` | `PanelRoots::require_project`; `git status --porcelain=v2 -z --untracked-files=all`, тайм-аут 3 с, `GIT_OPTIONAL_LOCKS=0`, до 2000 записей |
 | `git_file_diff` | `cwd`, `path` | `FileDiff` | `require_project`; путь принимается, только если он есть в последнем ответе `git_changes` для этого `cwd` (§6.2); лимит 1 МиБ |
 | `project_files` | `cwd`, `query?` | `ProjectFile[]` | `require_project`; `git ls-files -co --exclude-standard -z`, до 20000 путей, не больше 200 результатов |
-| `project_file_read` | `cwd`, `path` | `FileContent` | `require_project`; `confine` (файл существует); текст до 1 МиБ; изображения — через `local_image` |
+| `project_file_read` | `cwd`, `path` | `FileContent` `{ path, text, binary, size }` | `require_project`; `confine` (файл существует, ссылка наружу отказывает); только обычные файлы; до 8 МиБ (`MAX_FILE_BYTES`), иначе ошибка; двоичный файл — `binary: true` без текста; изображения — через `local_image` |
 
 Права: `notification:default` в `capabilities/default.json`. Значок Dock — `AppHandle`/`Window::set_badge_count` из Rust.
 
