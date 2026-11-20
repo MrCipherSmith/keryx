@@ -80,6 +80,7 @@ import { authCommand } from "./commands/auth";
 import { retentionCommand } from "./commands/retention";
 import { remoteCommand } from "./commands/remote";
 import { forgettingCommand } from "./commands/forgetting";
+import { worktreeCommand } from "./commands/worktree";
 import { printTriggerHelp, triggerCommand } from "./commands/trigger";
 import { scheduleCommand } from "./commands/schedule";
 import { decisionsCommand, printDecisionsHelp } from "./commands/decisions";
@@ -192,6 +193,7 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   remote: remoteCommand,
   forgetting: forgettingCommand,
   trigger: triggerCommand,
+  worktree: worktreeCommand,
   schedule: scheduleCommand,
   governance: governanceCommand,
   decisions: decisionsCommand,
@@ -471,6 +473,17 @@ export const USAGE_BODY = `Usage:
   keryx learn promote <id>                      project accepted -> user candidate; TTY + typed confirm
   keryx learn graduate [--domain <d>] | graduate apply <proposal-id>
   keryx learn prune [--dry-run] [--json]
+  keryx worktree create <name> [--base <ref>] [--branch <b>] [--path <dir>] [--json]
+                                               git worktree add on a new branch, then prepare
+  keryx worktree prepare [--only env,deps,ports,indexes] [--json] [--force]
+                                               Ready this worktree: .env files, dependencies, ports, memory index
+  keryx worktree promote [--store memory,learning] [--dry-run] [--entry <id-or-path>]... [--json]
+                                               Carry uncommitted memory and accepted learning to the user area
+  keryx worktree env                            Print export lines for this worktree's ports
+  keryx worktree exec -- <command> [args...]    Run a command with this worktree's ports
+  keryx worktree status [--json]                Label, ports, dependencies, env file names, unpromoted entries
+  keryx worktree remove <name> [--keep-branch] [--force]
+                                               Free the ports and remove the worktree; refuses unpromoted or dirty without --force
   keryx --version
 
 Commands:
@@ -538,6 +551,7 @@ Commands:
   hooks     Keryx shell lifecycle hooks: list/validate/test, trust project hooks, enable/disable a registration
   bundle    Portable bundle export/import of skills, rules, agents, memory and hooks across scopes and harnesses
   learn     Self-learning loop: observe, extract, review, accept/reject, apply, promote, graduate, prune
+  worktree  Ready a linked git worktree (env files, dependencies, ports, memory index) and carry its findings out before removal
 `;
 
 /**

@@ -864,6 +864,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
   {
     kind: "cli",
+    name: "worktree",
+    group: "Managed work",
+    summary: "Ready a linked git worktree (env files, dependencies, ports, memory index) and carry its findings out before removal.",
+  },
+  {
+    kind: "cli",
     name: "commands",
     group: "Maintenance and diagnostics",
     summary: "Agent-callable command registry (intents, args, output, model usage).",

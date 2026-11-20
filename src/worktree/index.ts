@@ -1,0 +1,10 @@
+export { ensureCheckout, readCheckout, isMainCheckout, listLiveCheckoutIds, type Checkout } from "./checkout";
+export { loadWorktreeConfig, WorktreeConfigError, WORKTREE_CONFIG_PATH, type WorktreeConfig } from "./config";
+export { resolveWorktreeContext, type WorktreeContext } from "./context";
+export { createWorktree, DEFAULT_BASE, type CreateOptions, type CreateResult } from "./create";
+export { prepareWorktree, readPrepareState, PREPARE_STEPS, type PrepareOptions, type PrepareReport, type PrepareState, type PrepareStep } from "./prepare";
+export { allocatePorts, readWorktreeEnv, releasePorts } from "./ports";
+export { listUnpromoted, promoteWorktree, PROMOTE_STORES, type PromoteOptions, type PromoteReport, type PromoteStore, type Unpromoted } from "./promote";
+export { removeWorktree, WorktreeRemoveRefusal, type RemoveOptions, type RemoveResult } from "./remove";
+export { worktreeStatus, type WorktreeStatus } from "./status";
+export { execInWorktree, formatExports } from "./worktree-env";
