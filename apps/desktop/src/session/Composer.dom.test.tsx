@@ -271,6 +271,35 @@ test("a refused send keeps the files unsent, so unmounting discards them", async
   expect(discarded).toEqual([path]);
 });
 
+test("four pasted images are saved one at a time and a busy refusal is retried", async () => {
+  await act(() => root.render(null));
+  let active = 0;
+  let peak = 0;
+  let calls = 0;
+  await act(() => root.render(createElement(Composer, {
+    ...props("FOUR", createRef()),
+    saveImage: async () => {
+      calls += 1;
+      active += 1;
+      peak = Math.max(peak, active);
+      const mine = calls;
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 1));
+        if (mine === 2) throw "busy: Chat attachments are busy; try again"; // Tauri rejects with a bare string
+        return `/tmp/keryx-chat-images-four/${mine}.png`;
+      } finally {
+        active -= 1;
+      }
+    },
+    loadImage: async () => SHOT,
+  })));
+  await pasteImages(4);
+  expect(host.querySelectorAll(".attach-chip").length).toBe(4);
+  expect(peak).toBe(1);
+  expect(host.querySelector('[role="alert"]')).toBeNull();
+  await act(() => root.render(null));
+});
+
 test("pasting a screenshot saves it and sends an image-only draft", async () => {
   const saved: string[] = [];
   const sent: string[][] = [];

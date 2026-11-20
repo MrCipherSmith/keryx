@@ -105,6 +105,21 @@ test("a busy rejection is retried and then shows the image", async () => {
   await unmountAll();
 });
 
+test("a busy refusal as a plain string (Tauri) is retried and then shows the image", async () => {
+  const path = "/tmp/busy-string.png";
+  let calls = 0;
+  const load: Load = async (p) => {
+    calls++;
+    if (calls === 1) throw "busy: Chat attachments are busy; try again";
+    return urlFor(p);
+  };
+  await mount([path], load);
+  expect(await waitFor(() => host.querySelector("img.sent-image") !== null, 3000)).toBe(true);
+  expect(calls).toBe(2);
+  expect(host.textContent).not.toContain("Image no longer available");
+  await unmountAll();
+});
+
 test("a non-busy rejection shows 'Image no longer available'", async () => {
   let calls = 0;
   const load: Load = async () => { calls++; throw new Error("ENOENT: no such file"); };

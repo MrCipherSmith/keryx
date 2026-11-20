@@ -194,10 +194,11 @@ test("a Windows folder path from the picker is accepted and labelled by its last
 test("the textarea is a combobox whose popup attributes follow the open list", async () => {
   const m = mount();
   await act(() => m.render());
-  expect(area().getAttribute("role")).toBe("combobox");
-  expect(area().getAttribute("aria-expanded")).toBe("false");
+  expect(area().getAttribute("role")).toBeNull();
+  expect(area().getAttribute("aria-expanded")).toBeNull();
   expect(area().getAttribute("aria-controls")).toBeNull();
   await type("/");
+  expect(area().getAttribute("role")).toBe("combobox");
   expect(area().getAttribute("aria-expanded")).toBe("true");
   const list = document.getElementById(area().getAttribute("aria-controls") ?? "");
   expect(list?.getAttribute("role")).toBe("listbox");
@@ -205,7 +206,7 @@ test("the textarea is a combobox whose popup attributes follow the open list", a
   expect(active?.getAttribute("aria-selected")).toBe("true");
   expect(list?.contains(active ?? null)).toBe(true);
   await type("hello");
-  expect(area().getAttribute("aria-expanded")).toBe("false");
+  expect(area().getAttribute("role")).toBeNull();
   expect(area().getAttribute("aria-controls")).toBeNull();
 });
 

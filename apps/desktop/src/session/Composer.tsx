@@ -218,6 +218,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     if (ok) {
       setSlashSession(null);
       if (sentFiles.length > 0) onAttachmentsSent?.(sentFiles);
+      for (const p of sentFiles) sentPaths.current.delete(p);
       localDraft.remove(localDraft.items.map((item) => item.path));
       setDrafts((d) => draftOf(d, sessionId) === text ? withDraft(d, sessionId, "") : d);
     }
@@ -390,9 +391,9 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
         value={text}
         disabled={disabled}
         aria-label="Message keryx"
-        role="combobox"
-        aria-autocomplete="list"
-        aria-expanded={matches.length > 0}
+        role={matches.length > 0 ? "combobox" : undefined}
+        aria-autocomplete={matches.length > 0 ? "list" : undefined}
+        aria-expanded={matches.length > 0 ? true : undefined}
         aria-controls={matches.length > 0 ? listId : undefined}
         aria-activedescendant={matches.length > 0 ? `${listId}-opt-${active}` : undefined}
         placeholder={disabledReason ?? (busy ? "keryx is working. Enter queues your next message" : "Ask keryx, or type / for commands")}

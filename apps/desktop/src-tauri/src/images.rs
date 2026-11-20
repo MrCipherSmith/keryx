@@ -88,6 +88,10 @@ pub fn read_image(link: &str, root: Option<&Path>, extra_roots: &[PathBuf]) -> R
 
 /// Size-cap and read an already canonical, already authorized image file.
 fn read_checked(real: &Path, mime: &str) -> Result<String, String> {
+    // Decide from the path first: opening a FIFO or a device would block this worker for good.
+    if !std::fs::metadata(real).map_err(|e| e.to_string())?.is_file() {
+        return Err("Not an image file".into());
+    }
     let file = std::fs::File::open(real).map_err(|e| e.to_string())?;
     let meta = file.metadata().map_err(|e| e.to_string())?;
     if !meta.is_file() || meta.len() > MAX_BYTES {
@@ -99,6 +103,9 @@ fn read_checked(real: &Path, mime: &str) -> Result<String, String> {
     if bytes.len() as u64 > MAX_BYTES {
         return Err("The image is too large to show".into());
     }
+    if !signature_matches(mime, &bytes) {
+        return Err("Not an image file".into());
+    }
     Ok(format!("data:{mime};base64,{}", base64::engine::general_purpose::STANDARD.encode(bytes)))
 }
 
@@ -107,6 +114,17 @@ fn read_issued(disk_path: &Path) -> Result<String, String> {
     let real = disk_path.canonicalize().map_err(|_| "The image is not there".to_string())?;
     let mime = image_mime(&real).ok_or("Not an image file")?;
     read_checked(&real, mime)
+}
+
+/// Whether the bytes start like the image type the file name claims.
+fn signature_matches(mime: &str, bytes: &[u8]) -> bool {
+    match mime {
+        "image/png" => bytes.starts_with(b"\x89PNG\r\n\x1a\n"),
+        "image/jpeg" => bytes.starts_with(b"\xff\xd8\xff"),
+        "image/gif" => bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a"),
+        "image/webp" => bytes.starts_with(b"RIFF") && bytes.get(8..12) == Some(b"WEBP"),
+        _ => false,
+    }
 }
 
 const MAX_CHAT_IMAGE_BYTES: usize = 5 << 20;
@@ -121,6 +139,10 @@ struct IssuedAttachment {
     bytes: usize,
     deleting: bool,
     committed: bool,
+    /// Order of issue: when the store is full the oldest sent attachments go first.
+    seq: u64,
+    /// The project of the view that sent it (set on commit): only views of that project may preview it.
+    root: Option<PathBuf>,
 }
 
 #[derive(Default)]
@@ -134,6 +156,7 @@ struct ChatStore {
     issued: HashMap<String, IssuedAttachment>,
     /// Owners whose view was closed; later saves for them are refused.
     released: std::collections::HashSet<String>,
+    next_seq: u64,
 }
 
 #[derive(Default)]
@@ -198,12 +221,84 @@ impl ChatImages {
             return Err(STORAGE_UNAVAILABLE.into());
         }
         if store.files >= MAX_CHAT_STORAGE_FILES || bytes > MAX_CHAT_STORAGE_BYTES - store.bytes {
-            return Err("Temporary chat attachment storage is full. Sent attachments are kept until the app exits; drafts can be removed to free space.".into());
+            return Err("Temporary chat attachment storage is full. Remove drafts to free space; the oldest sent attachments are reclaimed automatically.".into());
         }
         store.files += 1;
         store.bytes += bytes;
         store.pending += 1;
         Ok(())
+    }
+
+    /// Reserve room for a save; when the store is full, delete the oldest sent attachments and try once more.
+    fn reserve_or_evict(&self, bytes: usize) -> Result<(), String> {
+        match self.reserve(bytes) {
+            Ok(()) => Ok(()),
+            Err(full) => {
+                self.evict_committed(bytes);
+                self.reserve(bytes).map_err(|_| full)
+            }
+        }
+    }
+
+    /// Free room for `bytes` by deleting the oldest sent (committed) attachments; their previews then read as gone.
+    fn evict_committed(&self, bytes: usize) {
+        let targets: Vec<(String, PathBuf)> = {
+            let Ok(mut store) = self.store.lock() else { return };
+            if store.closed {
+                return;
+            }
+            let mut sent: Vec<(u64, String)> = store
+                .issued
+                .iter()
+                .filter(|(_, entry)| entry.committed && !entry.deleting)
+                .map(|(path, entry)| (entry.seq, path.clone()))
+                .collect();
+            sent.sort();
+            let mut files = store.files;
+            let mut used = store.bytes;
+            let mut targets = Vec::new();
+            for (_, path) in sent {
+                if files < MAX_CHAT_STORAGE_FILES && bytes <= MAX_CHAT_STORAGE_BYTES - used {
+                    break;
+                }
+                if let Some(entry) = store.issued.get_mut(&path) {
+                    entry.deleting = true;
+                    files -= 1;
+                    used -= entry.bytes;
+                    targets.push((path.clone(), entry.disk_path.clone()));
+                }
+            }
+            store.pending += targets.len();
+            targets
+        };
+        if targets.is_empty() {
+            return;
+        }
+
+        let results: Vec<(String, bool)> = targets
+            .into_iter()
+            .map(|(path, disk_path)| {
+                let removed = match std::fs::remove_file(disk_path) {
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+                    result => result,
+                };
+                (path, removed.is_ok())
+            })
+            .collect();
+
+        let Ok(mut store) = self.store.lock() else { return };
+        store.pending -= results.len();
+        for (path, removed) in results {
+            if removed {
+                if let Some(entry) = store.issued.remove(&path) {
+                    store.files -= 1;
+                    store.bytes -= entry.bytes;
+                }
+            } else if let Some(entry) = store.issued.get_mut(&path) {
+                entry.deleting = false;
+            }
+        }
+        self.changed.notify_all();
     }
 
     fn save(&self, owner: &str, mime_type: &str, data: &str) -> Result<String, String> {
@@ -226,7 +321,7 @@ impl ChatImages {
     }
 
     fn save_bytes(&self, owner: &str, prefix: &str, suffix: &str, bytes: &[u8]) -> Result<String, String> {
-        self.reserve(bytes.len())?;
+        self.reserve_or_evict(bytes.len())?;
         let result = self
             .init_root(|| tempfile::Builder::new().prefix("keryx-chat-images-").tempdir())
             .map_err(|message| (message, true))
@@ -246,12 +341,16 @@ impl ChatImages {
                     return Err("The view was closed before the attachment was saved".into());
                 }
                 let path = disk_path.to_string_lossy().into_owned();
+                store.next_seq += 1;
+                let seq = store.next_seq;
                 store.issued.insert(path.clone(), IssuedAttachment {
                     owner: owner.to_owned(),
                     disk_path,
                     bytes: bytes.len(),
                     deleting: false,
                     committed: false,
+                    seq,
+                    root: None,
                 });
                 Ok(path)
             }
@@ -266,19 +365,23 @@ impl ChatImages {
         }
     }
 
-    /// The on-disk path of an attachment issued to `owner`, or any committed (sent) one (and not being deleted).
-    fn authorize(&self, owner: &str, path: &str) -> Option<PathBuf> {
+    /// The on-disk path of an attachment issued to `owner`, or a committed (sent) one of the same project
+    /// (`root`), and not being deleted.
+    fn authorize(&self, owner: &str, root: Option<&Path>, path: &str) -> Option<PathBuf> {
         let store = self.store.lock().ok()?;
         if store.closed {
             return None;
         }
         store.issued.get(path)
-            .filter(|entry| (entry.committed || entry.owner == owner) && !entry.deleting)
+            .filter(|entry| {
+                let same_project = entry.committed && root.is_some() && entry.root.as_deref() == root;
+                (entry.owner == owner || same_project) && !entry.deleting
+            })
             .map(|entry| entry.disk_path.clone())
     }
 
     /// Mark owned attachments as sent; all-or-nothing.
-    fn commit(&self, owner: &str, paths: &[String]) -> Result<(), String> {
+    fn commit(&self, owner: &str, root: Option<&Path>, paths: &[String]) -> Result<(), String> {
         let mut store = self.store.lock().map_err(|_| STORAGE_UNAVAILABLE)?;
         if store.closed {
             return Err(STORAGE_UNAVAILABLE.into());
@@ -292,6 +395,7 @@ impl ChatImages {
         for path in paths {
             if let Some(entry) = store.issued.get_mut(path) {
                 entry.committed = true;
+                entry.root = root.map(Path::to_path_buf);
             }
         }
         Ok(())
@@ -413,7 +517,7 @@ fn decode_attachment(data: &str) -> Result<Vec<u8>, String> {
 const MAX_CHAT_JOBS: usize = 3;
 static CHAT_JOBS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
-/// One of a few concurrent attachment jobs (saves and previews); returned on drop.
+/// One of a few concurrent attachment saves; returned on drop (previews have their own pool).
 struct ChatJob;
 
 impl ChatJob {
@@ -489,7 +593,10 @@ pub async fn discard_chat_attachment(app: AppHandle, view: Webview, path: String
 #[tauri::command]
 pub async fn commit_chat_attachments(app: AppHandle, view: Webview, paths: Vec<String>) -> Result<(), String> {
     let owner = view.label().to_owned();
-    tauri::async_runtime::spawn_blocking(move || app.state::<ChatImages>().commit(&owner, &paths))
+    tauri::async_runtime::spawn_blocking(move || {
+        let root = app.state::<PanelRoots>().get(&owner);
+        app.state::<ChatImages>().commit(&owner, root.as_deref(), &paths)
+    })
         .await
         .map_err(|e| e.to_string())?
 }
@@ -508,10 +615,10 @@ pub async fn local_image(app: AppHandle, view: Webview, path: String) -> Result<
     tauri::async_runtime::spawn_blocking(move || {
         let _job = job;
         // Attachment previews are authorized only through the issued registry.
-        if let Some(disk_path) = app.state::<ChatImages>().authorize(&owner, path.trim()) {
+        let root = app.state::<PanelRoots>().get(&owner);
+        if let Some(disk_path) = app.state::<ChatImages>().authorize(&owner, root.as_deref(), path.trim()) {
             return read_issued(&disk_path);
         }
-        let root = app.state::<PanelRoots>().get(&owner);
         let extra_roots = vec![screenshots_dir()];
         read_image(&path, root.as_deref(), &extra_roots)
     })
@@ -590,7 +697,7 @@ mod tests {
         let storage = ChatImages::default();
         let kept = storage.save_file("owner", "txt", "aGVsbG8=").unwrap();
         let draft = storage.save_file("owner", "txt", "aGVsbG8=").unwrap();
-        storage.commit("owner", &[kept.clone()]).unwrap();
+        storage.commit("owner", None, &[kept.clone()]).unwrap();
         storage.release_owner("owner");
         assert!(Path::new(&kept).is_file());
         assert!(!Path::new(&draft).exists());
@@ -613,7 +720,7 @@ mod tests {
         assert!(storage.save_file("owner", "txt", "").is_err());
         storage.release_owner("owner");
         assert!(!Path::new(&path).exists());
-        assert!(storage.authorize("owner", &path).is_none());
+        assert!(storage.authorize("owner", None, &path).is_none());
         // A released owner can no longer save (its view is gone); the budget it held is free for others.
         assert!(storage.save_file("owner", "txt", "aGVsbG8=").is_err());
         let again = storage.save_file("owner2", "txt", "aGVsbG8=").unwrap();
@@ -627,16 +734,16 @@ mod tests {
         let storage = ChatImages::default();
         let png = "iVBORw0KGgo=";
         let path = storage.save("owner", "image/png", png).unwrap();
-        assert!(storage.authorize("other", &path).is_none());
-        let disk = storage.authorize("owner", &path).unwrap();
+        assert!(storage.authorize("other", None, &path).is_none());
+        let disk = storage.authorize("owner", None, &path).unwrap();
         assert_eq!(read_issued(&disk).unwrap(), format!("data:image/png;base64,{png}"));
 
         let sibling = storage.root().unwrap().join("unissued.png");
         std::fs::write(&sibling, b"\x89PNG\r\n\x1a\n").unwrap();
-        assert!(storage.authorize("owner", sibling.to_str().unwrap()).is_none());
+        assert!(storage.authorize("owner", None, sibling.to_str().unwrap()).is_none());
 
-        assert!(storage.commit("other", &[path.clone()]).is_err());
-        assert!(storage.commit("owner", &[path.clone(), "missing".to_string()]).is_err());
+        assert!(storage.commit("other", None, &[path.clone()]).is_err());
+        assert!(storage.commit("owner", None, &[path.clone(), "missing".to_string()]).is_err());
         storage.release_owner("other");
         assert!(Path::new(&path).is_file());
         // The failed commit was all-or-nothing, so the draft is still released.
@@ -646,15 +753,67 @@ mod tests {
     }
 
     #[test]
-    fn committed_attachment_is_previewable_by_another_owner() {
+    fn a_sent_attachment_is_previewable_only_from_the_same_project() {
         let storage = ChatImages::default();
         let sent = storage.save_file("owner", "txt", "aGVsbG8=").unwrap();
         let draft = storage.save_file("owner", "txt", "aGVsbG8=").unwrap();
-        assert!(storage.authorize("other", &sent).is_none());
-        storage.commit("owner", &[sent.clone()]).unwrap();
-        assert!(storage.authorize("other", &sent).is_some());
-        assert!(storage.authorize("other", &draft).is_none());
-        assert!(storage.authorize("owner", &draft).is_some());
+        let project = Path::new("/projects/a");
+        assert!(storage.authorize("other", Some(project), &sent).is_none());
+        storage.commit("owner", Some(project), &[sent.clone()]).unwrap();
+        assert!(storage.authorize("other", Some(project), &sent).is_some());
+        assert!(storage.authorize("other", Some(Path::new("/projects/b")), &sent).is_none());
+        assert!(storage.authorize("other", None, &sent).is_none());
+        assert!(storage.authorize("other", Some(project), &draft).is_none());
+        assert!(storage.authorize("owner", None, &draft).is_some());
+    }
+
+    #[test]
+    fn a_full_store_evicts_the_oldest_sent_attachment() {
+        let storage = ChatImages::default();
+        {
+            let mut store = storage.store.lock().unwrap();
+            store.files = MAX_CHAT_STORAGE_FILES - 1;
+        }
+        let sent = storage.save_file("owner", "txt", "aGVsbG8=").unwrap();
+        storage.commit("owner", None, &[sent.clone()]).unwrap();
+        let next = storage.save_file("owner", "txt", "aGVsbG8=").unwrap();
+        assert!(!Path::new(&sent).exists());
+        assert!(Path::new(&next).is_file());
+    }
+
+    #[test]
+    fn drafts_are_never_evicted_to_make_room() {
+        let storage = ChatImages::default();
+        {
+            let mut store = storage.store.lock().unwrap();
+            store.files = MAX_CHAT_STORAGE_FILES - 1;
+        }
+        let draft = storage.save_file("owner", "txt", "aGVsbG8=").unwrap();
+        assert!(storage.save_file("owner", "txt", "aGVsbG8=").is_err());
+        assert!(Path::new(&draft).is_file());
+    }
+
+    #[test]
+    fn a_file_named_like_an_image_must_start_like_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("proj");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("notes.png"), b"just text").unwrap();
+        assert!(read_image("notes.png", Some(&root), &[]).unwrap_err().contains("Not an image"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_fifo_named_like_an_image_is_refused_without_blocking() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("proj");
+        std::fs::create_dir_all(&root).unwrap();
+        let fifo = root.join("pipe.png");
+        let made = std::process::Command::new("mkfifo").arg(&fifo).status().map(|s| s.success()).unwrap_or(false);
+        if !made {
+            return;
+        }
+        assert!(read_image("pipe.png", Some(&root), &[]).unwrap_err().contains("Not an image"));
     }
 
     #[test]
@@ -674,7 +833,7 @@ mod tests {
         std::fs::create_dir_all(root.join("shots")).unwrap();
         std::fs::write(root.join("shots/a.png"), b"\x89PNG\r\n\x1a\nxx").unwrap();
         std::fs::write(root.join("notes.txt"), b"secret").unwrap();
-        std::fs::write(dir.path().join("outside.png"), b"x").unwrap();
+        std::fs::write(dir.path().join("outside.png"), b"\x89PNG\r\n\x1a\nxx").unwrap();
 
         let url = read_image("shots/a.png", Some(&root), &[]).unwrap();
         assert!(url.starts_with("data:image/png;base64,"));

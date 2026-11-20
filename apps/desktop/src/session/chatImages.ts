@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import { BUSY_DELAYS, busyMessage, isBusy } from "../lib/busy";
 import { errMessage } from "../lib/format";
 
 export type SaveChatImage = (mimeType: string, data: string) => Promise<string>;
@@ -25,6 +26,21 @@ async function fileBase64(file: File): Promise<string> {
     };
     reader.readAsDataURL(file);
   });
+}
+
+const shown = (reason: unknown): string => busyMessage(reason) ?? errMessage(reason);
+
+/** The host admits only a few saves at once: wait and retry a busy refusal instead of losing the file. */
+async function withBusyRetry<T>(run: () => Promise<T>): Promise<T> {
+  for (let n = 0; ; n++) {
+    try {
+      return await run();
+    } catch (error) {
+      const delay = isBusy(error) ? BUSY_DELAYS[n] : undefined;
+      if (delay === undefined) throw error;
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
 }
 
 async function storeFile(file: File, options: { saveImage?: SaveChatImage; saveFile?: SaveChatFile; imageOnly: boolean }): Promise<ChatAttachment> {
@@ -74,15 +90,25 @@ export function useChatAttachments(sessionId: string | null, options: {
       const results = await load();
       const items = results.flatMap((r) => r.status === "fulfilled" ? [r.value] : []);
       const failed = results.find((r) => r.status === "rejected");
-      update((d) => ({ items: [...new Map([...d.items, ...items].map((item) => [item.path, item])).values()], error: failed ? errMessage(failed.reason) : d.error }));
+      update((d) => ({ items: [...new Map([...d.items, ...items].map((item) => [item.path, item])).values()], error: failed ? shown(failed.reason) : d.error }));
     } catch (error) {
-      update((d) => ({ ...d, pending: false, error: errMessage(error) }));
+      update((d) => ({ ...d, pending: false, error: shown(error) }));
     } finally {
       saving.current.delete(sessionId);
     }
   };
-  const addFiles = (files: readonly File[], imageOnly = false) => add(files.length, () =>
-    Promise.allSettled(files.map((file) => storeFile(file, { ...options, imageOnly }))));
+  // One at a time: a batch of four must not trip the host's cap of three concurrent saves.
+  const addFiles = (files: readonly File[], imageOnly = false) => add(files.length, async () => {
+    const results: PromiseSettledResult<ChatAttachment>[] = [];
+    for (const file of files) {
+      try {
+        results.push({ status: "fulfilled", value: await withBusyRetry(() => storeFile(file, { ...options, imageOnly })) });
+      } catch (reason) {
+        results.push({ status: "rejected", reason });
+      }
+    }
+    return results;
+  });
   const addFolder = () => add(1, async () => {
     const path = await options.pickFolder?.();
     if (!path) return [];

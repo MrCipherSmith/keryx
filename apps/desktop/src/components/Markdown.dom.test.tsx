@@ -157,7 +157,7 @@ test("the PR link menu closes on scroll only once its link has moved", async () 
   }
 });
 
-test("a PR link of another repository is not handled when a repository is configured", async () => {
+test("an explicit PR link of another repository opens like any other, whatever the project's remote is", async () => {
   const opened: string[] = [];
   await act(() => root.render(createElement(Markdown, {
     text: "[other PR](https://github.com/other/repo/pull/8)",
@@ -166,7 +166,7 @@ test("a PR link of another repository is not handled when a repository is config
   const link = host.querySelector<HTMLAnchorElement>(".md a");
   expect(link?.getAttribute("href")).toBe("https://github.com/other/repo/pull/8");
   await act(() => { link?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })); });
-  expect(opened).toEqual([]);
+  expect(opened).toEqual(["https://github.com/other/repo/pull/8"]);
 });
 
 test("hostile markup beside a PR reference never keeps an event-handler attribute", async () => {

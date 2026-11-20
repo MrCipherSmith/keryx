@@ -356,7 +356,7 @@ export const Markdown = memo(function Markdown({ text, className, prLinks }: { t
   const showPrMenu = (target: EventTarget) => {
     if (!(target instanceof Element) || !prLinks) return false;
     const anchor = target.closest<HTMLAnchorElement>("a");
-    const url = githubPrUrl(anchor?.getAttribute("href") ?? null, prLinks.repository);
+    const url = githubPrUrl(anchor?.getAttribute("href") ?? null);
     if (!anchor || !url) return false;
     const menu = { anchor, url };
     menuRef.current = menu;
@@ -367,7 +367,7 @@ export const Markdown = memo(function Markdown({ text, className, prLinks }: { t
   return <>
     <div ref={ref} tabIndex={-1} className={`md${className ? ` ${className}` : ""}`} onAuxClick={blockLinks}
       onClick={(e) => {
-        const url = githubPrUrl((e.target as HTMLElement).closest("a")?.getAttribute("href") ?? null, prLinks?.repository);
+        const url = githubPrUrl((e.target as HTMLElement).closest("a")?.getAttribute("href") ?? null);
         if (prLinks && url) {
           e.preventDefault();
           prLinks.openExternal(url);

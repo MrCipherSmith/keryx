@@ -549,6 +549,10 @@ interface ChatAttachment {
   mimeType?: string;
   deleting: boolean;
   committed: boolean;
+  /** Order of issue: when the store is full the oldest sent attachments go first. */
+  seq: number;
+  /** The project of the connection that sent it (set on commit): only that project's connections may preview it. */
+  root?: string;
 }
 
 const MAX_CHAT_PREVIEWS = 8;
@@ -559,6 +563,7 @@ let activeChatSaves = 0;
 const chatAttachments = new Map<string, ChatAttachment>();
 let chatAttachmentBytes = 0;
 let chatAttachmentCount = 0;
+let chatAttachmentSeq = 0;
 let chatImageRoot: Promise<string> | undefined;
 
 async function createChatImageRoot(): Promise<string> {
@@ -654,7 +659,10 @@ async function writeChatAttachmentUncapped(owner: ChatOwner, data: unknown, targ
   if (typeof data !== "string") throw new Error("Invalid attachment data");
   const size = decodedAttachmentSize(data);
   if (chatAttachmentCount >= CHAT_STORAGE_FILES || chatAttachmentBytes + size > CHAT_STORAGE_BYTES) {
-    throw new Error("Temporary chat attachment storage is full. Discard drafts; sent attachments are kept until the bridge exits, so restart the dev bridge to free them.");
+    await evictSentAttachments(size);
+  }
+  if (chatAttachmentCount >= CHAT_STORAGE_FILES || chatAttachmentBytes + size > CHAT_STORAGE_BYTES) {
+    throw new Error("Temporary chat attachment storage is full. Remove drafts to free space; the oldest sent attachments are reclaimed automatically.");
   }
   chatAttachmentCount++;
   chatAttachmentBytes += size;
@@ -675,7 +683,7 @@ async function writeChatAttachmentUncapped(owner: ChatOwner, data: unknown, targ
     // No await between this check and set(): the close handler cannot miss this entry. If the
     // connection closed during the save, throwing here makes the catch unlink the file and release quota.
     if (owner.closed) throw new Error("Connection closed before the attachment was saved");
-    chatAttachments.set(path, { owner, path, size, mimeType, deleting: false, committed: false });
+    chatAttachments.set(path, { owner, path, size, mimeType, deleting: false, committed: false, seq: ++chatAttachmentSeq });
     return path;
   } catch (error) {
     try {
@@ -708,7 +716,34 @@ async function discardChatAttachment(owner: ChatOwner, path: unknown): Promise<n
   return null;
 }
 
-function commitChatAttachments(owner: ChatOwner, paths: unknown): null {
+/** Free room for `size` bytes by deleting the oldest sent attachments; their previews then read as gone. */
+async function evictSentAttachments(size: number): Promise<void> {
+  const sent = [...chatAttachments.values()].filter((e) => e.committed && !e.deleting).sort((a, b) => a.seq - b.seq);
+  let count = chatAttachmentCount;
+  let bytes = chatAttachmentBytes;
+  const victims: ChatAttachment[] = [];
+  for (const entry of sent) {
+    if (count < CHAT_STORAGE_FILES && bytes + size <= CHAT_STORAGE_BYTES) break;
+    entry.deleting = true;
+    count--;
+    bytes -= entry.size;
+    victims.push(entry);
+  }
+  await Promise.all(
+    victims.map(async (entry) => {
+      try {
+        await removeChatFile(entry.path);
+      } catch {
+        entry.deleting = false; // a leftover stays charged until process exit
+        return;
+      }
+      chatAttachments.delete(entry.path);
+      releaseChatReservation(entry.size);
+    }),
+  );
+}
+
+function commitChatAttachments(owner: ChatOwner, paths: unknown, root: string | null): null {
   if (!Array.isArray(paths) || paths.some((p) => typeof p !== "string")) {
     throw new Error("Invalid attachment paths");
   }
@@ -720,7 +755,10 @@ function commitChatAttachments(owner: ChatOwner, paths: unknown): null {
     }
     entries.push(entry);
   }
-  for (const entry of entries) entry.committed = true;
+  for (const entry of entries) {
+    entry.committed = true;
+    entry.root = root ?? undefined;
+  }
   return null;
 }
 
@@ -840,11 +878,12 @@ async function handle(ws: ServerWebSocket<Conn>, cmd: string, args: Json): Promi
     case "discard_chat_attachment":
       return discardChatAttachment(ws.data.attachmentOwner, args.path);
     case "commit_chat_attachments":
-      return commitChatAttachments(ws.data.attachmentOwner, args.paths);
+      return commitChatAttachments(ws.data.attachmentOwner, args.paths, ws.data.root);
     case "local_image": {
       const entry = typeof args.path === "string" ? chatAttachments.get(args.path) : undefined;
-      // Committed (sent) attachments may be previewed from any connection; drafts stay owner-only.
-      if (!ws.data.root || !entry?.mimeType || entry.deleting || (!entry.committed && entry.owner !== ws.data.attachmentOwner)) {
+      // A draft is owner-only; a sent attachment may be previewed from any connection of the same project.
+      const sameProject = entry?.committed === true && entry.root !== undefined && entry.root === ws.data.root;
+      if (!ws.data.root || !entry?.mimeType || entry.deleting || (entry.owner !== ws.data.attachmentOwner && !sameProject)) {
         throw new Error("The chat image is no longer available");
       }
       if (activeChatPreviews >= MAX_CHAT_PREVIEWS) throw new Error("busy: Chat attachments are busy; try again");
@@ -1024,8 +1063,8 @@ Bun.serve<Conn>({
 });
 
 // Signals skip the "exit" event by default; exiting explicitly runs the chat image root cleanup.
-for (const signal of ["SIGINT", "SIGTERM"] as const) {
-  process.on(signal, () => process.exit(0));
+for (const [signal, code] of [["SIGINT", 130], ["SIGTERM", 143]] as const) {
+  process.on(signal, () => process.exit(code));
 }
 
 console.log(`[bridge] keryx desktop dev bridge on ws://127.0.0.1:${PORT}`);

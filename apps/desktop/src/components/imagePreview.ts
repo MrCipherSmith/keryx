@@ -2,6 +2,8 @@
 // under the link in the message, and a full-size preview on click. The host reads the file
 // (`local_image`, images inside the project only); nothing here opens a file or follows a URL.
 
+import { BUSY_DELAYS, isBusy } from "../lib/busy";
+
 const IMAGE = /\.(?:png|jpe?g|webp|gif)$/i;
 
 /** A link to a local image file: a relative path, an absolute path, or `file:///…`. Never a URL with a scheme or host. */
@@ -27,8 +29,6 @@ export function loadCached(href: string, load: (href: string) => Promise<string>
   }
   return p;
 }
-
-const BUSY_DELAYS = [300, 900, 2000, 4000];
 
 /** Put a thumbnail after every local-image link in `root` that has none yet. */
 export function decorateImageLinks(root: HTMLElement, load: (href: string) => Promise<string>): void {
@@ -56,13 +56,11 @@ export function decorateImageLinks(root: HTMLElement, load: (href: string) => Pr
           a.dataset.thumb = "1";
         })
         .catch((err: unknown) => {
-          if (!(err instanceof Error && /busy/i.test(err.message))) {
-            btn.remove();
-            return;
-          }
-          delete a.dataset.thumb;
-          const delay = BUSY_DELAYS[n];
+          const delay = isBusy(err) ? BUSY_DELAYS[n] : undefined;
           if (delay === undefined) {
+            // Terminal: a failed link, or one whose retries ran out, keeps a marker so the next
+            // re-decoration does not start the whole ladder again.
+            a.dataset.thumb = "failed";
             btn.remove();
             return;
           }

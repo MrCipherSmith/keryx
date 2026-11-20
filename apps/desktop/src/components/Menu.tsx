@@ -58,11 +58,19 @@ export function Menu({ anchor, items, onClose, placement = "below", closeOnScrol
       const wanted = above ? r.top - 4 - h : r.bottom + 4;
       setPos({ left, top: Math.max(margin, Math.min(wanted, vh - h - margin)) });
     }
+  }, [anchor, placement, width, items.length]);
+
+  // Focus the first (or checked) item once per opening: a changing item count must not take focus back.
+  useLayoutEffect(() => {
+    if (!anchor) return;
     const first =
       ref.current?.querySelector<HTMLElement>('[role="menuitemradio"][aria-checked="true"]') ??
       ref.current?.querySelector<HTMLElement>('[role^="menuitem"]:not([disabled])');
     first?.focus();
-  }, [anchor, placement, width, items.length]);
+  }, [anchor]);
+
+  const closeRef = useRef(onClose);
+  useLayoutEffect(() => { closeRef.current = onClose; });
 
   useLayoutEffect(() => {
     const onDown = (e: MouseEvent) => {
@@ -79,16 +87,16 @@ export function Menu({ anchor, items, onClose, placement = "below", closeOnScrol
     const start = anchor.getBoundingClientRect();
     const onScroll = () => {
       const r = anchor.getBoundingClientRect();
-      if (Math.abs(r.top - start.top) > 2 || Math.abs(r.left - start.left) > 2) onClose();
+      if (Math.abs(r.top - start.top) > 2 || Math.abs(r.left - start.left) > 2) closeRef.current();
     };
-    const onResize = () => onClose();
+    const onResize = () => closeRef.current();
     window.addEventListener("scroll", onScroll, { capture: true, passive: true });
     window.addEventListener("resize", onResize);
     return () => {
       window.removeEventListener("scroll", onScroll, { capture: true });
       window.removeEventListener("resize", onResize);
     };
-  }, [anchor, closeOnScroll, onClose]);
+  }, [anchor, closeOnScroll]);
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     const all = Array.from(ref.current?.querySelectorAll<HTMLElement>('[role^="menuitem"]:not([disabled])') ?? []);

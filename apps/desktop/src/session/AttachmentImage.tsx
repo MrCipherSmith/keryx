@@ -1,9 +1,9 @@
+import { BUSY_DELAYS, isBusy } from "../lib/busy";
 import { useEffect, useRef, useState } from "react";
 import { basename } from "../lib/format";
 import { localImage } from "../platform/commands";
 
 const LIMIT = 3;
-const BUSY_DELAYS = [300, 900, 2000, 4000];
 const RESOLVED_MAX = 8;
 let running = 0;
 interface Job { start: () => void; eager: boolean }
@@ -46,6 +46,7 @@ export function AttachmentImage({ path, alt, eager = false, load = localImage }:
   const height = useRef<number>();
   const [src, setSrc] = useState<string>();
   const [failed, setFailed] = useState(false);
+  const [busyGaveUp, setBusyGaveUp] = useState(false);
   const [inView, setInView] = useState(false);
   const visible = eager || inView;
   useEffect(() => {
@@ -61,6 +62,7 @@ export function AttachmentImage({ path, alt, eager = false, load = localImage }:
   }, [eager, node]);
   useEffect(() => {
     setFailed(false);
+    setBusyGaveUp(false);
     setSrc(undefined);
     height.current = undefined;
   }, [path, load]);
@@ -79,15 +81,16 @@ export function AttachmentImage({ path, alt, eager = false, load = localImage }:
       cancel = schedulePreview(async () => {
         try {
           const url = await load(path);
-          if (!active) return;
           remember(path, url);
+          if (!active) return;
           setSrc(url);
         } catch (err) {
           if (!active) return;
           const delay = BUSY_DELAYS[n];
-          if (err instanceof Error && /busy/i.test(err.message) && delay !== undefined) {
+          if (isBusy(err) && delay !== undefined) {
             timer = setTimeout(() => { if (active) attempt(n + 1); }, delay);
           } else {
+            setBusyGaveUp(isBusy(err));
             setFailed(true);
           }
         }
@@ -100,9 +103,9 @@ export function AttachmentImage({ path, alt, eager = false, load = localImage }:
   return (
     <span ref={setNode} className="sent-image-slot">
       {src && !failed ? (
-        <img className="sent-image" src={src} alt={alt} onLoad={(e) => { height.current = e.currentTarget.offsetHeight; }} onError={() => setFailed(true)} />
+        <img className="sent-image" src={src} alt={alt} onLoad={(e) => { height.current = e.currentTarget.offsetHeight; }} onError={() => { resolved.delete(path); setFailed(true); }} />
       ) : (
-        <span className="sent-image-label" style={{ display: "inline-block", minHeight: height.current ?? 96 }}>{failed ? "Image no longer available" : "Loading image…"} · {basename(path)}</span>
+        <span className="sent-image-label" style={failed ? undefined : { display: "inline-block", minHeight: height.current ?? 96 }}>{failed ? (busyGaveUp ? "Could not load the image (busy)" : "Image no longer available") : "Loading image…"} · {basename(path)}</span>
       )}
     </span>
   );
