@@ -315,9 +315,16 @@ the whole session, the latest turn and the last model call.
 
 ### Appearance
 
+Open **Settings** from the sidebar and use the **Appearance**, **Sessions**,
+**Integrations** and **Desktop** tabs. Close Settings with the top-right
+button or Escape to return to the project view you were using.
+
 Settings → Appearance sets the theme, the interface font (System, Rounded,
 Serif, Mono), the code font, the text size and the conversation width
 (Narrow, Wide, Full).
+
+Choose a light palette and a dark or black palette independently. **System**
+follows macOS appearance and applies the palette saved for the current mode.
 
 ### Flows board
 

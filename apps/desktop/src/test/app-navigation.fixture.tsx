@@ -13,7 +13,7 @@ let accountConfigured = false;
 let connectedNewAccount = false;
 let accountListReads = 0;
 let accountListGate: Promise<void> | undefined;
-let oldCli = false;
+let accountListError: string | undefined;
 mockWindows("project-navigation");
 mockIPC(async (cmd, args) => {
   switch (cmd) {
@@ -28,7 +28,7 @@ mockIPC(async (cmd, args) => {
       if (request.action === "list") {
         accountListReads++;
         await accountListGate;
-        if (oldCli) throw "Unknown command: accounts. Run `keryx review --help` for the list.";
+        if (accountListError) throw accountListError;
         return { accounts: [
           { login: "me", active: !connectedNewAccount }, { login: "second", active: false },
           ...(connectedNewAccount ? [{ login: "new-account", active: true }] : []),
@@ -111,11 +111,17 @@ try {
   assert.equal(accountListReads, beforeRefresh + 1);
   await React.act(() => finishList());
   assert.equal(refresh.disabled, false);
-  oldCli = true;
-  await React.act(() => refresh.click());
-  assert.ok(host.querySelector('[role="alert"]')?.textContent?.includes("choose Bundled keryx"));
-  assert.ok(namedButton("Connect account").disabled);
-  oldCli = false;
+  for (const message of [
+    "Unknown command: accounts. Run `keryx review --help` for the list.",
+    "unavailable: The selected Keryx CLI did not return a valid Review response. Check the CLI version in Settings.",
+    "unavailable: The selected Keryx CLI did not return a valid Review response.",
+  ]) {
+    accountListError = message;
+    await React.act(() => refresh.click());
+    assert.ok(host.querySelector('[role="alert"]')?.textContent?.includes("choose Bundled keryx"));
+    assert.ok(namedButton("Connect account").disabled);
+  }
+  accountListError = undefined;
   await React.act(() => refresh.click());
   await React.act(() => namedButton("Connect account").click());
   assert.ok(connectedNewAccount && host.textContent?.includes("@new-account"));

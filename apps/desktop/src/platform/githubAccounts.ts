@@ -23,7 +23,11 @@ async function requestAccounts<T>(args: Record<string, unknown>, isResponse: (va
   try {
     response = await invoke("github_accounts", args);
   } catch (failure) {
-    if (/unknown command:\s*(?:review|accounts)\b/i.test(errMessage(failure))) throw new Error(unsupported);
+    const message = errMessage(failure);
+    if (/^unknown command:\s*(?:review|accounts)\b/i.test(message) ||
+        message.startsWith("unavailable: The selected Keryx CLI did not return a valid Review response.")) {
+      throw new Error(unsupported);
+    }
     throw failure;
   }
   if (!isResponse(response)) throw new Error(unsupported);
