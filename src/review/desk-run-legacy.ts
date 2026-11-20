@@ -4,7 +4,9 @@ import { createHash } from "node:crypto";
 import { realpathSync } from "node:fs";
 import { artifactDirectories, readKnown } from "./project-artifacts";
 import path from "node:path";
-import { countFindings, type FindingCounts } from "./autonomous-summary";
+import { ingestedFindingCounts } from "./verdict";
+import { countFindings, knownFindingList, type FindingCounts } from "./autonomous-summary";
+import { validRunUsage, type ReviewRunUsage } from "./run-usage";
 import type { DeskRun, DeskRunKey } from "./desk-run-types";
 
 type Fields = Record<string, unknown>;
@@ -58,21 +60,24 @@ export function readExistingReviews(cwd: string, key: DeskRunKey): DeskRun[] {
     reason: string,
     report: string,
     findings: FindingCounts | undefined,
+    usage?: ReviewRunUsage,
+    prior?: DeskRun,
   ) {
     const baseSha = sha(target.base),
       headSha = sha(target.head);
-    const createdAt = stamp(data.createdAt ?? data.startedAt, fileTime);
+    const createdAt = stamp(data.createdAt ?? data.startedAt, prior?.createdAt ?? fileTime);
     found.set(id, {
       id: stableId(key, id),
       source: "existing",
+      ...(usage ? { usage } : {}),
       baseSha,
       headSha,
       state: "partial",
       phase,
       reason,
       createdAt,
-      startedAt: stamp(data.startedAt, "") || null,
-      finishedAt: stamp(data.finishedAt, "") || null,
+      startedAt: stamp(data.startedAt, prior?.startedAt ?? "") || null,
+      finishedAt: stamp(data.finishedAt, prior?.finishedAt ?? "") || null,
       result: {
         reviewed: baseSha && headSha ? { baseSha, headSha } : null,
         coverage: "unknown",
@@ -118,7 +123,8 @@ export function readExistingReviews(cwd: string, key: DeskRunKey): DeskRun[] {
         "Existing autonomous summary",
         reason + " Coverage was not verified by Desktop.",
         report,
-        known ? counts : undefined,
+        known && (data.findingsKnown === true || (data.findingsKnown === undefined && Object.values(counts).some(n => n > 0))) ? counts : undefined,
+        validRunUsage(data.usage) ? data.usage : undefined,
       );
     }
   }
@@ -135,7 +141,10 @@ export function readExistingReviews(cwd: string, key: DeskRunKey): DeskRun[] {
       continue;
     const data = item.data,
       id = "package:" + data.reviewId,
-      previous = found.get(id);
+      candidate = found.get(id),
+      target = object(data.target);
+    const previous = candidate && (!sha(target.head) || !candidate.headSha || sha(target.head) === candidate.headSha) &&
+      (!sha(target.base) || !candidate.baseSha || sha(target.base) === candidate.baseSha) ? candidate : undefined;
     const report =
       readKnown(path.join(directory, "report.md"), 256 * 1024, true)?.text ?? previous?.result?.report ?? "";
     const reason = report
@@ -146,17 +155,12 @@ export function readExistingReviews(cwd: string, key: DeskRunKey): DeskRun[] {
     if (file) {
       try {
         const rows: unknown = JSON.parse(file.text);
-        if (
-          Array.isArray(rows) &&
-          rows.every((row) => ["blocker", "major", "minor", "info"].includes(object(row).severity as string))
-        ) {
-          findings = countFindings(rows);
-        }
+        if (knownFindingList(rows)) findings = ingestedFindingCounts(rows);
       } catch {
         /* Incomplete legacy evidence leaves counts unknown. */
       }
     }
-    archive(data, object(data.target), id, item.time, "Existing review package", reason, report, findings);
+    archive(data, target, id, item.time, "Existing review package", reason, report, findings, previous?.usage, previous);
   }
   return [...found.values()];
 }

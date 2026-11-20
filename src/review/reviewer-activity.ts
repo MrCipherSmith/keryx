@@ -1,7 +1,7 @@
 // Project host events into a public session timeline. Tool arguments, outputs,
 // prompts and private reasoning never enter a checkpoint or a Desktop response.
 import type { DeskReviewerSession } from "./desk-run-types";
-import { sumCounts, usageCounts, validUsageCounts, type ReviewUsageCounts } from "./run-usage";
+import { UsageRanges, usageCounts, validUsageCounts } from "./run-usage";
 
 const maxActivity = 24;
 export function identifier(value: unknown): value is string {
@@ -26,7 +26,8 @@ export function assignedReviewerWave(reviewer: string, filename: string): number
 
 interface SessionRecord {
   session: DeskReviewerSession;
-  requests: Map<string, ReviewUsageCounts>;
+  requests: Map<string, number>;
+  usage: UsageRanges;
 }
 
 /** Each shell event is observed once by the existing incremental tail. */
@@ -41,16 +42,20 @@ export class ReviewerActivityRecorder {
       if (!record || event.participant !== "reviewer" || event.reviewer !== record.session.reviewer) return;
       if (identifier(event.provider)) record.session.provider = event.provider;
       if (identifier(event.model)) record.session.model = event.model;
-      if (event.type === "request_usage" && identifier(event.requestId) && validUsageCounts(event.usage)) {
-        const receipt = usageCounts(event.usage);
-        const replacement = record.requests.has(event.requestId);
-        record.requests.set(event.requestId, receipt);
-        if (replacement) {
-          let usage: ReviewUsageCounts | undefined;
-          for (const counts of record.requests.values()) usage = sumCounts(usage, counts);
-          if (usage) record.session.usage = usage;
-        } else record.session.usage = sumCounts(record.session.usage, receipt);
-      }
+      if (!identifier(event.requestId)) return;
+      const prior = record.requests.get(event.requestId);
+      if (event.type === "request_start" && prior !== undefined) return;
+      const receipt = event.type === "request_usage" && validUsageCounts(event.usage) ? event.usage : undefined;
+      if (event.type === "request_usage" && !receipt) return;
+      const index = prior ?? record.requests.size;
+      const counts = receipt ? usageCounts(receipt) : {};
+      const partial = event.partial === true || counts.inputTokens === undefined || counts.outputTokens === undefined;
+      record.requests.set(event.requestId, index);
+      record.usage.set(index, { first: index, counts, partial });
+      const total = record.usage.total!;
+      if (receipt) record.session.usage = total.counts;
+      if (total.partial) record.session.usagePartial = true;
+      else delete record.session.usagePartial;
       return;
     }
     if (event.type !== "reviewer_activity" || !reviewerName(event.reviewer) || !waveNumber(event.wave)) return;
@@ -71,7 +76,7 @@ export class ReviewerActivityRecorder {
       session.state = outcome;
       session.finishedAt = event.at;
     } else return;
-    if (!record) this.records.set(id, { session, requests: new Map() });
+    if (!record) this.records.set(id, { session, requests: new Map(), usage: new UsageRanges() });
     const activity = session.activity ??= [];
     activity.push({ at: event.at, label });
     if (activity.length > maxActivity) {

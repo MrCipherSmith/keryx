@@ -43,7 +43,7 @@ function ReviewerDialog({ session, error, loading, active, onClose, onRetry }: {
   </span>} footer={<>
     <div className="review-session-footer">
       <span className="review-wave">Wave {session.wave}</span>
-      <span>{counts.length ? "Tokens · " + counts.join(" / ") : "Tokens unreported"}</span>
+      <span>{counts.length ? (session.usagePartial ? "Partial tokens · " : "Tokens · ") + counts.join(" / ") : "Tokens unreported"}</span>
       <span title={[session.startedAt && "Started " + absoluteTime(session.startedAt), session.finishedAt && "Finished " + absoluteTime(session.finishedAt)].filter(Boolean).join(" · ")}>
         {duration != null ? `Elapsed ${duration}` : session.startedAt ? "Started " + absoluteTime(session.startedAt) : "Time unreported"}
       </span>

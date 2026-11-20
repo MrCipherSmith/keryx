@@ -1,16 +1,17 @@
 import { roleDispatchWaves } from "./estimate";
 import type { SliceManifest } from "./slice";
-// Called under the run-store transaction only after the worker and reviewer process group have exited.
-import { existsSync, lstatSync, openSync, readFileSync, readdirSync, readSync, closeSync, renameSync } from "node:fs";
+// Called after the worker and its reviewer process group have exited.
+import { existsSync, lstatSync, fstatSync, openSync, readFileSync, readdirSync, readSync, closeSync, renameSync } from "node:fs";
 import path from "node:path";
 import { validRunUsage, type ReviewRunUsage } from "./run-usage";
 import { isReviewerResult, parseReviewResult } from "./ledger";
 import { splitUsage } from "./dispatch-usage";
 import { createEventTail } from "./autonomous-progress";
 import type { RunProgress } from "./autonomous-run";
-import { countFindings, renderReport, validateSummary, type AutonomousSummary } from "./autonomous-summary";
+import { countFindings, knownFindingList, renderReport, validateSummary, type AutonomousSummary } from "./autonomous-summary";
 import type { CoverageReport } from "./coverage-complete";
 import type { ManagedReviewManifest } from "./types";
+import { computeVerdict, type InterimVerdict } from "./verdict";
 import type { DeskExecutionResult } from "./desk-run-executor";
 
 interface Request { repo: string; number: number; baseSha: string; headSha: string; cancelled?: boolean }
@@ -84,13 +85,29 @@ export function hasDesktopReviewerEvidence(dir: string, usage: ReviewRunUsage | 
   return plan.roster.length > 0 && plan.roster.every(role => roles.has(role) || routed.has(role));
 }
 
+/** A zero-finding local verdict needs complete coverage of the requested revision. */
+export function deskVerdictHeadline(evaluated: InterimVerdict, complete: boolean) {
+  return evaluated.source !== "none" && (evaluated.total || evaluated.held.length || complete) ? evaluated.headline : null;
+}
+
+export function missingVerdictCoverage(evaluated: InterimVerdict, ran: Set<string>, routed: Set<string>) {
+  return evaluated.unreadable.length > 0 || evaluated.pendingReviewers?.some(role => !routed.has(role) && (!evaluated.pendingAmbiguous || !ran.has(role)));
+}
+
 function preview(file: string): string {
   try {
     if (!lstatSync(file).isFile()) return "";
     const fd = openSync(file, "r");
     try {
-      const bytes = Buffer.alloc(64 * 1024);
-      return bytes.subarray(0, readSync(fd, bytes)).toString("utf8");
+      const size = fstatSync(fd).size;
+      const bytes = Buffer.alloc(Math.min(size, 64 * 1024));
+      let read = 0;
+      while (read < bytes.length) {
+        const count = readSync(fd, bytes, read, bytes.length - read, null);
+        if (!count) break;
+        read += count;
+      }
+      return bytes.subarray(0, read).toString("utf8") + (read < size ? `\n\nPreview truncated. Full report: ${file}` : "");
     } finally { closeSync(fd); }
   } catch { return ""; }
 }
@@ -101,7 +118,7 @@ function readablePackage(dir: string) {
   } catch { return false; }
 }
 
-export function recoverDeskExecution(runDir: string, request: Request): DeskExecutionResult | null {
+export async function recoverDeskExecution(runDir: string, request: Request): Promise<DeskExecutionResult | null> {
   const subject = `https://github.com/${request.repo}/pull/${request.number}`;
   const summaryFile = json<AutonomousSummary>(path.join(runDir, "run/summary.json"));
   const summary = summaryFile && validateSummary(summaryFile).length === 0 && summaryFile.target.ref === subject ? summaryFile : null;
@@ -114,16 +131,17 @@ export function recoverDeskExecution(runDir: string, request: Request): DeskExec
   }
   const stored = path.join(runDir, "package");
   const liveRoot = path.join(runDir, "checkout/.metaproject/reviews");
-  let pkg = readablePackage(stored) ? stored : "";
-  if (!pkg && existsSync(liveRoot)) {
+  if (!existsSync(stored)) {
     const id = summary?.package?.id ?? progress?.packageId;
-    // A previous round may have been imported. A name from this attempt's own
-    // progress/summary is the provenance that distinguishes it during recovery.
     if (id && /^[\w.-]+$/.test(id) && id !== "." && id !== "..") {
       const candidate = path.join(liveRoot, id);
-      if (readablePackage(candidate)) pkg = candidate;
+      if (readablePackage(candidate) && json<ManagedReviewManifest>(path.join(candidate, "manifest.json"))?.target?.ref === subject) {
+        try { renameSync(candidate, stored); }
+        catch (error) { if (!existsSync(stored)) throw error; } // Another reconciler can retain the same attempt first.
+      }
     }
   }
+  const pkg = readablePackage(stored) ? stored : "";
   const manifest = pkg ? json<ManagedReviewManifest>(path.join(pkg, "manifest.json")) : null;
   const found = manifest?.target?.ref === subject;
   if (!summary && !found && !usage) return null;
@@ -139,16 +157,20 @@ export function recoverDeskExecution(runDir: string, request: Request): DeskExec
     Array.isArray(required) && required.every(name => ran.has(name) || routed.has(name)) && !research?.dispatch?.skipped?.length;
   const matching = checkedBase === request.baseSha && checkedHead === request.headSha;
   const closed = found && manifest.status === "closed";
-  const complete = closed && matching && accounted && hasDesktopReviewerEvidence(pkg, usage, routed) && Array.isArray(items) && (!summary || summary.status === "complete");
+  const evaluated = found && matching ? await computeVerdict(pkg).catch(() => null) : null;
+  const complete = closed && matching && accounted && hasDesktopReviewerEvidence(pkg, usage, routed) && knownFindingList(items) &&
+    evaluated !== null && !missingVerdictCoverage(evaluated, ran, routed) && (!summary || summary.status === "complete");
   const coverage = complete ? "complete" : (entries.length && Array.isArray(items)) ? "partial" : "unknown";
-  const findings = Array.isArray(items) ? countFindings(items) : summary?.findings ?? countFindings(null);
+  const knownSource = evaluated && (evaluated.source === "raw reviewer results" || knownFindingList(items));
+  const findings = knownSource ? evaluated.counts : knownFindingList(items) ? countFindings(items) : summary?.findings ?? countFindings(null);
+  const findingsKnown = !!knownSource || knownFindingList(items) || summary?.findingsKnown === true ||
+    (summary?.findingsKnown === undefined && Object.values(findings).some(count => count > 0));
   const outcome = complete ? "complete" : request.cancelled ? "cancelled" : summary?.status === "budget" ? "budget" :
     summary?.status === "floor" ? "blocked" : "incomplete";
   const reason = complete ? "Recovered a closed review package for the requested revision." : request.cancelled ? "The review stopped after cancellation." :
     !matching && closed ? "The package did not confirm the requested base and head." :
     summary?.status !== "complete" && summary?.reason ? summary.reason : "Recovered the available evidence; the full round could not be verified.";
   const report = found ? preview(path.join(pkg, "report.md")) : "";
-  if (found && pkg !== stored && !existsSync(stored)) renameSync(pkg, stored);
-  return { outcome, checkedBase, checkedHead, coverage, findings, reason, verdict: null, ...(usage ? { usage } : {}),
+  return { outcome, checkedBase, checkedHead, coverage, findings, findingsKnown, reason, verdict: knownSource ? deskVerdictHeadline(evaluated, complete) : null, ...(usage ? { usage } : {}),
     report: report || (summary ? renderReport(summary) : null) };
 }

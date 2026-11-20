@@ -65,14 +65,14 @@ test("the project external policy applies to the provider before model work begi
   await expect(resolveDeskReviewModel(dir, dir, { DEEPSEEK_API_KEY: "fixture" })).rejects.toThrow("blocked");
 });
 
-test("a mismatched reviewer route is named before a model call, and only an approved project route overrides it", async () => {
+test("Desktop review selection honors only approved project Review settings and is independent of Subagents", async () => {
   const location = { cwd: dir, configDir: dir };
   saveShellConfig({ provider: "anthropic", model: "review-model", apiKeys: { ANTHROPIC_API_KEY: "fixture" } }, dir);
   await setRoutingCategory("user", location, "subagents", { mode: "model", target: { providerId: "openrouter", modelId: "different" } });
-  await setRoutingCategory("project", location, "subagents", { mode: "model", target: { providerId: "anthropic", modelId: "review-model" } });
-  await expect(resolveDeskReviewModel(dir, dir, {})).rejects.toThrow("Review requires anthropic/review-model, but Subagents is set to openrouter/different in user routing settings");
-  expect(approveProjectRouting(location).ok).toBe(true);
+  await setRoutingCategory("project", location, "review", { mode: "model", target: { providerId: "anthropic", modelId: "project-review-model" } });
   expect(await resolveDeskReviewModel(dir, dir, {})).toEqual({ provider: "anthropic", model: "review-model" });
+  expect(approveProjectRouting(location).ok).toBe(true);
+  expect(await resolveDeskReviewModel(dir, dir, {})).toEqual({ provider: "anthropic", model: "project-review-model" });
 });
 
 test("an external policy entry remains binding without a display reason", async () => {

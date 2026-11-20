@@ -1,6 +1,10 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
+// Each board PR has up to two independent people connections. Four parents keep
+// that page at eight parallel gh workers, with cursors within a connection still sequential.
+export const OVERFLOW_PARENTS = 4;
+
 const exec = promisify(execFile);
 const commandOptions = (cwd: string, env: NodeJS.ProcessEnv = process.env) => ({
   cwd, encoding: "utf8" as const, timeout: 18_000, maxBuffer: 8 * 1024 * 1024,

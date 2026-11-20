@@ -41,7 +41,7 @@ function* flowRefs(roots: string[], id?: string, wanted?: string) {
       const stamp = index && flowManifestStamp(file);
       const link = index?.lookup(directory, stamp);
       if (link !== undefined && link !== wanted) {
-        seen.add(directory);
+        if (link) seen.add(directory);
         continue;
       }
       const raw = readKnown(file, 1024 * 1024);
@@ -49,10 +49,12 @@ function* flowRefs(roots: string[], id?: string, wanted?: string) {
       let flow: FlowState;
       try { flow = JSON.parse(raw.text); } catch { continue; }
       if (typeof flow?.id !== "string" || !/^\d+$/.test(flow.id) || !directory.startsWith(flow.id + "-")) continue;
-      seen.add(directory);
       const target = parseProjectPr(flow.pr?.url);
       index?.record(directory, stamp, target ? target.repo + "#" + target.number : "");
-      if (target) yield { dir, directory, flow, target, root };
+      if (target) {
+        seen.add(directory);
+        yield { dir, directory, flow, target, root };
+      }
     }
     index?.save();
   }

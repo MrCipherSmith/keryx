@@ -117,6 +117,60 @@ describe("event tail", () => {
     writeFileSync(file, `garbage\n${JSON.stringify(call("bash", { command: "ls" }))}\n`);
     expect(createEventTail(file).poll().toolCalls).toBe(1);
   });
+
+  test("live receipt replacements match replay, including changed reviewer, currency and completeness", () => {
+    const file = path.join(tmp(), "events.ndjson");
+    const tail = createEventTail(file);
+    const reviewer = { participant: "reviewer", reviewer: "logic", provider: "vendor", model: "a" };
+    const other = { ...reviewer, reviewer: "style", model: "b", source: "external-runtime" as const };
+    const parent = { participant: "coordinator" };
+    const usd = { amount: 0.25, currency: "USD" };
+    const eur = { amount: 2, currency: "EUR" };
+    const measured = { inputTokens: 10, outputTokens: 2, cacheReadTokens: 0, cost: usd };
+    const events = [
+      { type: "usage", usage: { totalTokens: 99 } },
+      { type: "request_start", requestId: "1", ...reviewer },
+      { type: "request_start", requestId: "2", ...other },
+      { type: "request_usage", requestId: "2", ...other, usage: { ...measured, cost: eur } },
+      { type: "request_usage", requestId: "1", ...reviewer, partial: true, usage: { outputTokens: 1 } },
+      { type: "request_start", requestId: "2", ...parent },
+      { type: "request_usage", requestId: "1", ...reviewer, usage: measured },
+      { type: "request_usage", requestId: "3", ...parent, usage: { inputTokens: 3, outputTokens: 0, estimatedCost: usd } },
+      { type: "request_usage", requestId: "1", ...other, usage: { inputTokens: 3, outputTokens: 1, cost: eur } },
+      { type: "request_usage", requestId: "3", ...reviewer, usage: { inputTokens: 0, outputTokens: 0, cost: eur } },
+      { type: "request_usage", requestId: "2", ...parent, usage: { inputTokens: 1, outputTokens: 2, cost: eur } },
+      { type: "usage", usage: { totalTokens: 999 } },
+      { type: "turn_end", usage: { totalTokens: 9999 } },
+    ];
+    let replay = emptyProgress();
+    const snapshots = [];
+    for (const event of events) {
+      appendFileSync(file, `${JSON.stringify(event)}\n`);
+      replay = foldEvent(replay, event);
+      const { requests: _requests, ...expected } = replay;
+      const actual = tail.poll();
+      expect(actual).toEqual(expected);
+      snapshots.push({ actual, expected: structuredClone(expected) });
+    }
+    for (const { actual, expected } of snapshots) expect(actual).toEqual(expected);
+    expect(tail.poll().usage?.total.cost).toEqual({ amount: 6, currency: "EUR" });
+  });
+
+  test("single receipts over many live polls agree with one recovery replay", () => {
+    const file = path.join(tmp(), "events.ndjson");
+    const tail = createEventTail(file);
+    for (let index = 0; index < 1_024; index++) {
+      const request = { requestId: String(index), participant: "reviewer", reviewer: `reviewer-${index % 8}` };
+      const usage = { inputTokens: index, outputTokens: 1, estimatedCost: { amount: 0.125, currency: "USD" } };
+      appendFileSync(file, `${JSON.stringify({ type: "request_start", ...request })}\n`);
+      expect(tail.poll().usage?.partial).toBe(true);
+      appendFileSync(file, `${JSON.stringify({ type: "request_usage", ...request, usage })}\n`);
+      expect(tail.poll().usage?.partial).toBe(false);
+    }
+    expect(tail.poll()).toEqual(createEventTail(file).poll());
+    expect(tail.poll().usage?.total).toEqual({ inputTokens: 523_776, outputTokens: 1_024, totalTokens: 524_800,
+      estimatedCost: { amount: 128, currency: "USD" } });
+  });
 });
 
 test("attributes parallel provider requests, leaves an unreported retry partial and ignores aggregate echoes", () => {

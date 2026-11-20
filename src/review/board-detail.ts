@@ -1,7 +1,8 @@
 // Read-only, on-demand conversation and check data for a single pull request.
 // Each connection owns its cursor, including replies inside a long thread.
 import type { ReviewCheck, ReviewDetailSnapshot, ReviewMessage, ReviewThread, SubmittedReview } from "./board-detail-types";
-import { boardGraphql } from "./board-github";
+import { mapPool } from "../lib/map-pool";
+import { boardGraphql, OVERFLOW_PARENTS } from "./board-github";
 
 export type DetailQuery = (query: string, variables: Record<string, string | number>) => Promise<unknown>;
 
@@ -115,10 +116,19 @@ export async function readReviewBoardDetail(
     try {
       while (remainingBytes > 0) {
         const page = fields(cursor === undefined && firstPage !== undefined ? firstPage : await read(cursor));
+        const pending = new Map<string, { entry: T; node: Fields }>();
         for (const raw of rows(page.nodes)) {
           if (remainingBytes === 0) break;
-          const node = fields(raw);
-          const entry = parse(node);
+          let node: Fields;
+          let entry: T;
+          try {
+            node = fields(raw);
+            entry = parse(node);
+          } catch {
+            // Malformed local fields only affect this row. Already accepted siblings still receive their replies.
+            warnings.add(`Could not read all ${label}.`);
+            continue;
+          }
           const previous = entries.get(entry.id);
           const bytes = Buffer.byteLength(JSON.stringify(entry)) + 1;
           const replacedBytes = previous ? Buffer.byteLength(JSON.stringify(previous)) + 1 : 0;
@@ -129,7 +139,10 @@ export async function readReviewBoardDetail(
           }
           remainingBytes -= bytes - replacedBytes;
           entries.set(entry.id, entry);
-          if (hydrate) await hydrate(entry, node);
+          if (hydrate) pending.set(entry.id, { entry, node });
+        }
+        if (hydrate) {
+          await mapPool([...pending.values()], OVERFLOW_PARENTS, ({ entry, node }) => hydrate(entry, node), { stopOnError: true });
         }
         const info = fields(page.pageInfo);
         if (!flag(info, "hasNextPage")) break;

@@ -91,3 +91,45 @@ describe("readReviewBoardDetail", () => {
 });
 
 const messageShape = (id: string, own: boolean) => ({ id, own });
+
+test("thread overflow workers preserve source order, identity checks and independent reply cursors", async () => {
+  const threads = Array.from({length:30}, (_, i) => ({
+    id:"t"+i, path:"path"+i, line:i, isOutdated:false, isResolved:false,
+    comments:page([message("root"+i)], "first"),
+  }));
+  const initial = fixture();
+  const cursors = new Map<string,string[]>();
+  let active = 0, peak = 0, changeViewer = false;
+  const query: DetailQuery = async (doc, vars) => {
+    if (doc.includes("reviewThreads(")) return {viewer:{login:"viewer"},node:{reviewThreads:page(threads)}};
+    if (!doc.includes("on PullRequestReviewThread")) return initial(doc,vars);
+    const id = String(vars.id), cursor = String(vars.cursor);
+    cursors.set(id,[...(cursors.get(id) ?? []),cursor]);
+    peak = Math.max(peak, ++active);
+    await new Promise<void>(resolve => setImmediate(resolve));
+    if (id === "t0") await new Promise<void>(resolve => setImmediate(resolve));
+    active--;
+    return { viewer:{login:changeViewer && id === "t1" ? "other" : "viewer"}, node:{
+      comments:page([message(id + cursor)], cursor === "first" ? "last" : null),
+    }};
+  };
+  const result = await readReviewBoardDetail("org/repo", 1, ".", query);
+  expect(peak).toBeGreaterThan(1);
+  expect(peak).toBeLessThanOrEqual(4);
+  expect(result.threads.map(t => t.id)).toEqual(threads.map(t => t.id));
+  expect([...cursors.values()].every(chain => chain.join(",") === "first,last")).toBe(true);
+  for (const [i,thread] of result.threads.entries())
+    expect(thread.messages.map(m => m.id)).toEqual(["root"+i, thread.id+"first", thread.id+"last"]);
+  expect(result.warnings).toEqual([]);
+  changeViewer = true;
+  await expect(readReviewBoardDetail("org/repo", 1, ".", query)).rejects.toThrow("access:");
+});
+
+test("a malformed thread does not discard the inline messages on either side of it", async () => {
+  const read = fixture();
+  const thread = (id: string) => ({id, path:"path", line:1, isOutdated:false, isResolved:false, comments:page([message(id+"root")])});
+  const data = await readReviewBoardDetail("org/repo", 1, ".", (doc, vars) => doc.includes("reviewThreads(")
+    ? Promise.resolve({viewer:{login:"viewer"},node:{reviewThreads:page([thread("a"), {}, thread("b")])}}) : read(doc,vars));
+  expect(data.threads.map(t => t.messages.map(m => m.id))).toEqual([["aroot"],["broot"]]);
+  expect(data.warnings).toContain("Could not read all review threads.");
+});

@@ -50,7 +50,7 @@ test("another worktree sees the same active ID; a duplicate never removes a diff
   const otherWindow = new DeskRunStore(directory);
   try {
     otherWindow.atomic(() => otherWindow.request("/worktree-b", key, next));
-    otherWindow.atomic(() => otherWindow.request("/worktree-b", key, revision));
+    expect(otherWindow.atomic(() => otherWindow.request("/worktree-b", key, revision))).toBe(active.run.id);
     expect(store.active(key)?.run.id).toBe(active.run.id);
     expect(store.queued(key)?.run.headSha).toBe(next.headSha);
     expect(store.history(key).runs).toHaveLength(2);
@@ -90,21 +90,56 @@ test("cancellation and repeat retain history, and successful reuse compares both
   expect(store.history(key).runs).toHaveLength(3);
 
 });
-test("dead worker reconciles durable result and protects surviving child before permitting retry", () => {
+test("dead worker reconciles durable result and protects surviving child before permitting retry", async () => {
   const a = started(2_000_000_000);
+  a.run.reviewerProgress = { planned: 3, finished: 1, wave: 2, sessions: [
+    { id: "first", reviewer: "review-style", wave: 1, state: "completed" },
+    { id: "active", reviewer: "review-logic", wave: 2, state: "running" },
+    { id: "later", reviewer: "review-logic", wave: 3, state: "planned" },
+  ] };
+  store.save(a);
   const dir = store.directory(a.run.id);
   mkdirSync(dir, { recursive: true });
   writeFileSync(path.join(dir, "child.json"), JSON.stringify({ pid: process.pid }));
-  store.reconcile(key, () => null);
+  await store.reconcile(key, () => null);
   expect(store.active(key)?.run.id).toBe(a.run.id);
   rmSync(path.join(dir, "child.json"));
-  store.reconcile(key, () => finish);
+  await store.reconcile(key, () => finish);
   expect(store.active(key)).toBeUndefined();
   expect(store.history(key).runs[0]?.result?.verdict).toBe("REQUEST_CHANGES");
+  expect(store.history(key).runs[0]?.reviewerProgress).toMatchObject({ finished: 1, wave: 1, sessions: [
+    { state: "completed" }, { state: "unknown" }, { state: "unknown" },
+  ] });
 });
-test("interruption records a reason, while unstarted cancellation can never dispatch", () => {
+test("a late reconciler preserves a successor that started while its predecessor was being evaluated", async () => {
+  const old = started(2_000_000_000);
+  const delayed = Promise.withResolvers<DeskFinish>();
+  const slow = store.reconcile(key, () => delayed.promise);
+  await store.reconcile(key, () => finish);
+  store.request("/project", key, next);
+  const successor = store.queued(key)!;
+  successor.pid = process.pid;
+  successor.run.state = "running";
+  store.save(successor);
+  delayed.resolve({ ...finish, state: "failed" });
+  await slow;
+  expect(store.active(key)?.run.id).toBe(successor.run.id);
+  expect(store.byId(old.run.id)?.run.state).toBe("completed");
+});
+
+test("previously persisted terminal checkpoints display no live reviewer sessions", () => {
+  const attempt = started();
+  attempt.run.state = "failed";
+  attempt.run.reviewerProgress = { planned: 1, finished: 0, wave: 1, sessions: [
+    { id: "old", reviewer: "review-logic", state: "running", wave: 1 },
+  ] };
+  store.save(attempt);
+  expect(store.history(key).runs[0]?.reviewerProgress).toMatchObject({ finished: 0, wave: null, sessions: [{ state: "unknown" }] });
+});
+
+test("interruption records a reason, while unstarted cancellation can never dispatch", async () => {
   started(2_000_000_000);
-  store.reconcile(key, () => null);
+  await store.reconcile(key, () => null);
   expect(store.history(key).runs[0]?.state).toBe("failed");
   store.request("/project", key, next);
   store.cancel(key, store.queued(key)!.run.id);

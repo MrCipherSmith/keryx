@@ -25,6 +25,7 @@ import { approveProjectRouting, setRoutingCategory } from "../../routing/setting
 import { writeActiveReview } from "../../../review/active-review";
 import { splitUsage } from "../../../review/dispatch-usage";
 import { isEmptyOutput, parseReviewResult } from "../../../review/ledger";
+import { ReviewerActivity } from "./reviewer-activity";
 
 function stubProvider(text: string): ProviderPort {
   return {
@@ -987,6 +988,57 @@ test("an isolated reviewer reads the approved host project routing and verifies 
   expect(children).toBe(1);
 });
 
+test("only an unchanged prepared Desktop reviewer call resolves the host-authorized Review model", async () => {
+  const project = await mkdtemp(path.join(tmpdir(), "keryx-desk-routing-"));
+  routingRoots.push(project);
+  const checkout = path.join(project, "private-checkout");
+  const pkg = ".metaproject/reviews/test-round";
+  const location = { cwd: project, configDir: project };
+  const session = { providerId: "ollama", modelId: "session-review-model" };
+  await mkdir(path.join(checkout, pkg, "raw"), { recursive: true });
+  await writeFile(path.join(checkout, pkg, "manifest.json"), JSON.stringify({ status: "draft" }));
+  const request = {
+    task: "Inspect the prepared changes",
+    mode: "read_only",
+    label: "review-logic",
+    review_wave: { package: pkg, pass: "round" },
+    expected_model: { provider: session.providerId, model: session.modelId },
+    context_files: [],
+    save_result_to: `${pkg}/raw/review-logic-w1.txt`,
+  };
+  const writeQueue = (calls: unknown[]) =>
+    writeFile(path.join(checkout, pkg, "desktop-dispatch.json"), JSON.stringify({ calls }));
+  await writeQueue([request]);
+  expect(await writeActiveReview(checkout, { id: "test-round", dir: pkg })).toBe(true);
+  await setRoutingCategory("user", location, "review", { mode: "model", target: session });
+  await setRoutingCategory("user", location, "subagents", { mode: "model", target: { providerId: "other", modelId: "unconnected" } });
+  const used: string[] = [];
+  const deps = {
+    cwd: checkout, routingConfigDir: project,
+    getParentModel: () => session, getDetectedProviders: () => [{ name: "ollama" }],
+    makeProvider(_providerId: string, modelId: string) {
+      used.push(modelId);
+      return stubProvider("reviewed");
+    },
+  };
+  const desktop = createSpawnSubagentTool({ ...deps, routingProjectRoot: project });
+  const ordinary = createSpawnSubagentTool(deps);
+  expect((await ordinary.invoke(request)).output).toContain("candidate-unverified");
+  expect((await desktop.invoke({ ...request, task: "Run a different task" })).output).toContain("candidate-unverified");
+  expect((await desktop.invoke({ ...request, mode: "general" })).output).toContain("candidate-unverified");
+  expect(used).toEqual([]);
+  expect((await desktop.invoke(request)).status).toBe("Completed");
+  expect(used).toEqual([session.modelId]);
+
+  const changed = { ...request, expected_model: { ...request.expected_model, model: "different" } };
+  await writeQueue([changed]);
+  expect((await desktop.invoke(changed)).output).toContain("no longer matches the host-authorized Review model");
+  await writeQueue([request]);
+  await setRoutingCategory("user", location, "review", { mode: "model", target: { ...session, modelId: "updated-review-model" } });
+  expect((await desktop.invoke(request)).output).toContain("no longer matches the host-authorized Review model");
+  expect(used).toEqual([session.modelId]);
+});
+
 test("a malformed routing.config.json refuses the spawn with the reason, never routing around it", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "keryx-spawn-routing-"));
   routingRoots.push(root);
@@ -1266,6 +1318,30 @@ test("flow 460 (H): save_result_to carries the child's token use as a KERYX_USAG
   }
 });
 
+test("review activity names the host's final submission while redacting unregistered calls", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-review-submission-"));
+  routingRoots.push(root);
+  const raw = await recordReviewerPlan(root, [{ label: "review-logic", file: "review-logic-w1.txt" }]);
+  const events: ShellEvent[] = [];
+  const { provider } = scriptedChildProvider(round => round === 1
+    ? toolCalls({ id: "read", name: "get_cwd" })
+    : toolCalls(
+      { id: "unregistered", name: "model_generated_name" },
+      { id: "submission", name: "submit_result", input: JSON.stringify({ status: "partial", summary: "Reviewed", result: {} }) },
+    ));
+  const tool = createSpawnSubagentTool({
+    cwd: root,
+    onReviewerActivity: event => events.push(event),
+    configuredMaxToolCalls: 1,
+    getParentModel: () => ({ providerId: "ollama", modelId: "test" }),
+    makeProvider: () => provider,
+    getDetectedProviders: () => [{ name: "ollama" }],
+  });
+  expect((await tool.invoke({ task: "Review", save_result_to: `${raw}/review-logic-w1.txt` })).status).toBe("BudgetExhausted");
+  expect(events.filter(event => event.type === "reviewer_activity" && event.activity === "tool_end"))
+    .toMatchObject([{ tool: "get_cwd", ok: true }, { tool: "unknown_tool", ok: false }, { tool: "submit_result", ok: true }]);
+});
+
 async function recordReviewerPlan(root: string, calls: Array<{ label: string; file: string }>) {
   const pkg = ".metaproject/reviews/test-round";
   await mkdir(path.join(root, pkg, "raw"), { recursive: true });
@@ -1275,6 +1351,25 @@ async function recordReviewerPlan(root: string, calls: Array<{ label: string; fi
   expect(await writeActiveReview(root, { id: "test-round", dir: pkg })).toBe(true);
   return `${pkg}/raw`;
 }
+
+test("a late parent cancellation preserves the completed reviewer outcome", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-review-completed-"));
+  const events: ShellEvent[] = [];
+  try {
+    const label = "review-logic";
+    const file = `${label}-w1.txt`;
+    const raw = await recordReviewerPlan(root, [{ label, file }]);
+    const activity = new ReviewerActivity(event => events.push(event), () => new Date().toISOString());
+    await activity.start(root, path.join(root, raw, file));
+    activity.finish({ status: "Completed", output: "a saved result", isError: false }, true);
+    expect(events).toMatchObject([
+      { activity: "started", reviewer: label },
+      { activity: "finished", reviewer: label, outcome: "completed" },
+    ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 test("review dispatch telemetry links actual tool activity and usage across waves and retries", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "keryx-review-activity-"));

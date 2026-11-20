@@ -126,3 +126,14 @@ test("the Flow link index follows edits, deletions and newly linked manifests ac
   rmSync(dir, { recursive: true });
   expect((await readLinkedFlows(wt, key.repo, 42)).flows[0]?.documents["plan.md"]).toBe("worktree");
 });
+
+test("an unlinked primary Flow does not hide the current worktree's explicit PR link", async () => {
+  flow(project, "001", "", "primary plan before linking");
+  flow(wt, "001", url, "worktree plan after linking");
+  expect(await prForFlow(wt, "1")).toEqual({ repo: key.repo, number: key.number });
+  for (let pass = 0; pass < 2; pass++) {
+    const result = await readLinkedFlows(wt, key.repo, key.number);
+    expect(result.totalFlows).toBe(1);
+    expect(result.flows[0]).toMatchObject({ checkout: "worktree", documents: { "plan.md": "worktree plan after linking" } });
+  }
+});

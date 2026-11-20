@@ -56,6 +56,20 @@ test("historical summary, old package and missing evidence stay read-only and sc
           r.result?.verdict === null,
       ),
     ).toBe(true);
+    const usage = { total: { inputTokens: 15, outputTokens: 3, totalTokens: 18 }, coordinator: { inputTokens: 5 },
+      reviewers: [{ reviewer: "review-logic", inputTokens: 10, outputTokens: 3 }], partial: true };
+    const startedAt = "2025-01-01T00:00:00.000Z", finishedAt = "2025-01-01T00:01:00.000Z";
+    const linkedSummary = { target, package: { id: "managed" }, startedAt, finishedAt, usage };
+    write("data/review-autonomous/org-repo-pr7", "summary.json", linkedSummary);
+    write("reviews/managed", "findings.json", [{ id: "F-1", severity: "major", disposition: { state: "acted-on" } }]);
+    const merged = readExistingReviews(cwd, key).find(r => r.result?.report === "A historical finding");
+    expect(merged).toMatchObject({ startedAt, finishedAt, usage, state: "partial", result: { findingsKnown: true, findings: { major: 0 } } });
+    write("data/review-autonomous/org-repo-pr7", "summary.json", { ...linkedSummary, usage: { total: 12 } });
+    expect(readExistingReviews(cwd, key).find(r => r.id === merged?.id)?.usage).toBeUndefined();
+    write("data/review-autonomous/org-repo-pr7", "summary.json", { ...linkedSummary, target: { ...target, head: "b".repeat(40) } });
+    const distinct = readExistingReviews(cwd, key).find(r => r.id === merged?.id);
+    expect(distinct?.usage).toBeUndefined();
+    expect(distinct?.startedAt).toBeNull();
     expect(store.claimHistoryScan(cwd, key)).toBe(true);
     expect(store.claimHistoryScan(cwd, key)).toBe(false);
     store.atomic(() => store.recordExisting(cwd, key, results));

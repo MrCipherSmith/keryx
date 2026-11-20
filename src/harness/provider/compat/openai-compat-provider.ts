@@ -822,6 +822,9 @@ export class OpenAiCompatEngine implements ProviderPort {
       return;
     }
 
+    const openRouterCharge = URL.canParse(url) && new URL(url).origin === "https://openrouter.ai" &&
+      URL.canParse(response.url) && new URL(response.url).origin === "https://openrouter.ai";
+
     // Provider negatives: non-2xx -> typed, fail-closed error, no model_end.
     if (!response.ok) {
       // Read the body ONCE (flow 267) — `code` (for classification) and
@@ -1203,7 +1206,7 @@ export class OpenAiCompatEngine implements ProviderPort {
           const usage = asRecord(data.usage);
           // OpenRouter reports the account charge in USD-denominated credits.
           // Other compatible gateways do not define the unit of their cost field.
-          const charge = host === "openrouter.ai" ? asNumber(usage.cost) : undefined;
+          const charge = openRouterCharge ? asNumber(usage.cost) : undefined;
           const written = asNumber(asRecord(usage.prompt_tokens_details).cache_write_tokens);
           bodies.push({
             kind: "usage_update",

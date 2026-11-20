@@ -38,6 +38,18 @@ const alive = (pid: number) => {
   }
 };
 
+// A dead worker can leave its last session checkpoints in both current and older history rows.
+function finalizeReviewerProgress(run: DeskRun) {
+  const progress = run.reviewerProgress;
+  if (!progress || ["running", "cancelling", "queued"].includes(run.state)) return;
+  for (const session of progress.sessions) {
+    if (session.state === "running" || session.state === "planned") session.state = "unknown";
+  }
+  const finished = progress.sessions.filter(session => session.state !== "unknown");
+  progress.finished = finished.length;
+  progress.wave = finished.reduce<number | null>((wave, session) => Math.max(wave ?? 0, session.wave), null);
+}
+
 export class DeskRunStore {
   private readonly db: Database;
   constructor(readonly root = deskRunRoot(), readOnly = false) {
@@ -113,6 +125,7 @@ export class DeskRunStore {
       a.run.state !== "cancelling" &&
       (a.run.preflightAttempt ?? 1) < MAX_SCHEDULED_PREFLIGHT_ATTEMPTS;
     Object.assign(a.run, finish, { finishedAt: new Date().toISOString() });
+    finalizeReviewerProgress(a.run);
     if (!retryable) delete a.run.retryableBeforeSpend;
     a.pid = null;
     this.save(a);
@@ -173,6 +186,7 @@ export class DeskRunStore {
       throw new Error("access: This attempt is unavailable for the selected account and pull request.");
     const runs = rows.map((row) => {
       const run = JSON.parse(row.details) as DeskRun;
+      finalizeReviewerProgress(run);
       if (run.result) {
         run.result.report = row.report;
         if (id === undefined && row.bytes > 0 && !row.report) run.result.reportDeferred = true;
@@ -328,7 +342,7 @@ export class DeskRunStore {
   }
 
   /** Verify both owner and descendant liveness before freeing the single execution slot. */
-  reconcile(key: DeskRunKey, readFinish: (directory: string, attempt: Attempt) => DeskFinish | null) {
+  private orphan(key: DeskRunKey): Attempt | undefined {
     const a = this.active(key);
     if (!a || a.pid === null || alive(a.pid)) return;
     const directory = this.directory(a.run.id);
@@ -347,19 +361,28 @@ export class DeskRunStore {
     // A detached worker is a process-group leader on macOS/Linux. This also
     // covers a crash immediately after spawning its runner, before child.json.
     if (process.platform !== "win32" && alive(-a.pid)) return;
-    const finish = readFinish(directory, a);
-    if (finish) {
-      this.end(a, finish);
-      return;
-    }
-    const cancelled = a.run.state === "cancelling";
-    this.end(a, {
-      state: cancelled ? "cancelled" : "failed",
-      phase: "Interrupted",
-      reason: cancelled
-        ? "The review stopped after cancellation."
-        : "The review worker exited without a final result. Retry the review.",
-      result: null,
+    return a;
+  }
+
+  async reconcile(key: DeskRunKey, readFinish: (directory: string, attempt: Attempt) => DeskFinish | null | Promise<DeskFinish | null>) {
+    const orphan = this.orphan(key);
+    if (!orphan) return;
+    const finish = await readFinish(this.directory(orphan.run.id), orphan);
+    this.atomic(() => {
+      // Another reconciler may have finished the dead attempt and started its successor while we read its verdict.
+      const a = this.orphan(key);
+      if (!a || a.run.id !== orphan.run.id || a.pid !== orphan.pid) return;
+      const cancelled = a.run.state === "cancelling";
+      if (finish) {
+        this.end(a, cancelled && finish.state !== "completed" ? { ...finish, state: "cancelled", phase: "cancelled" } : finish);
+      } else {
+        this.end(a, {
+          state: cancelled ? "cancelled" : "failed",
+          phase: "Interrupted",
+          reason: cancelled ? "The review stopped after cancellation." : "The review worker exited without a final result. Retry the review.",
+          result: null,
+        });
+      }
     });
   }
 }

@@ -55,10 +55,6 @@ export async function resolveDeskReviewModel(cwd: string, configDir?: string, en
   if (external.value === "off" && externalBlockReason(provider, model, loadExternalProvidersConfig(configDir).config) !== undefined) {
     throw new Error("The selected review model is blocked by this project's external provider settings. Choose an allowed review model and retry.");
   }
-  const reviewer = routing.categories.subagents;
-  if (reviewer.mode === "model" && (reviewer.target.providerId !== provider || reviewer.target.modelId !== model)) {
-    throw new Error(`Review requires ${provider}/${model}, but Subagents is set to ${reviewer.target.providerId}/${reviewer.target.modelId} in ${routing.categorySources.subagents} routing settings. Align the Review and Subagents assignments for this project before retrying.`);
-  }
   makeDeskReviewProvider(provider, model, configDir, env);
   return { provider, model };
 }

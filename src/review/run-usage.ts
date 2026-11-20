@@ -71,6 +71,38 @@ export function sumCounts(a: ReviewUsageCounts | undefined, b: ReviewUsageCounts
   }
   return sum;
 }
+interface UsageRange {
+  first: number;
+  counts: ReviewUsageCounts;
+  partial: boolean;
+}
+
+/** Ordered subtotal tree. A receipt replacement changes one leaf and its ancestors. */
+export class UsageRanges {
+  private readonly levels = [new Map<number, UsageRange>()];
+
+  set(index: number, range: UsageRange | undefined): void {
+    for (let level = 0; ; level++) {
+      const nodes = this.levels[level] ?? (this.levels[level] = new Map());
+      if (range) nodes.set(index, range);
+      else nodes.delete(index);
+      if (index === 0 && level === this.levels.length - 1 && nodes.size <= 1) return;
+      index = Math.floor(index / 2);
+      const left = nodes.get(index * 2);
+      const right = nodes.get(index * 2 + 1);
+      range = left && right ? {
+        first: left.first,
+        counts: sumCounts(left.counts, right.counts),
+        partial: left.partial || right.partial,
+      } : left ?? right;
+    }
+  }
+
+  get total(): UsageRange | undefined {
+    return this.levels.at(-1)?.get(0);
+  }
+}
+
 export function sameReviewer(a: ReviewerUsage, b: ReviewerUsage): boolean {
   return a.reviewer === b.reviewer && a.provider === b.provider && a.model === b.model && a.source === b.source;
 }

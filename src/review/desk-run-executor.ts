@@ -12,12 +12,12 @@ import { shellQuote } from "../lib/shell-quote";
 import { writeFileAtomic } from "../lib/fs";
 import { runAutonomousReview, defaultSpawn, privateGitEnv, type SpawnChild, type RunProgress } from "./autonomous-run";
 import type { ReviewRunUsage } from "./run-usage";
-import { countFindings, renderReport, type AutonomousSummary, type FindingCounts } from "./autonomous-summary";
+import { countFindings, knownFindingList, renderReport, type AutonomousSummary, type FindingCounts } from "./autonomous-summary";
 import { computeVerdict, renderVerdict } from "./verdict";
 import { boardGh } from "./board-github";
 import type { ManagedReviewManifest } from "./types";
 import type { CoverageReport } from "./coverage-complete";
-import { desktopRoutedOut, hasDesktopReviewerEvidence, hasFullCoverage, recordedSha } from "./desk-run-executor-recovery";
+import { deskVerdictHeadline, missingVerdictCoverage, desktopRoutedOut, hasDesktopReviewerEvidence, hasFullCoverage, recordedSha } from "./desk-run-executor-recovery";
 import { DESK_REVIEW_PROJECT_ROOT, DESK_REVIEW_SHELL } from "./autonomous-profile";
 import { isReviewPackageDir } from "./package-location";
 export { recoverDeskExecution } from "./desk-run-executor-recovery";
@@ -49,6 +49,7 @@ export interface DeskExecutionResult {
   coverage: "complete" | "partial" | "unknown";
   verdict: string | null;
   findings: FindingCounts;
+  findingsKnown?: boolean;
   report: string | null;
 }
 
@@ -66,7 +67,7 @@ const exec = promisify(execFile);
 const fullSha = /^[0-9a-f]{40}$/;
 const EMPTY: DeskExecutionResult = {
   outcome: "incomplete", reason: "", checkedBase: null, checkedHead: null,
-  coverage: "unknown", verdict: null, findings: countFindings(null), report: null,
+  coverage: "unknown", verdict: null, findings: countFindings(null), findingsKnown: false, report: null,
 };
 async function revision({ repo, number, cwd }: DeskExecutionOptions): Promise<Revision> {
   return JSON.parse(await boardGh(cwd, ["pr", "view", `https://github.com/${repo}/pull/${number}`, "--json", "baseRefName,baseRefOid,headRefOid,state"]));
@@ -85,12 +86,12 @@ async function git(cwd: string, args: string[], signal: AbortSignal): Promise<st
   }
 }
 
-async function prepareCheckout(options: DeskExecutionOptions, checkout: string, ports: ExecutorPorts) {
+async function prepareCheckout(options: DeskExecutionOptions, checkout: string, ports: ExecutorPorts,
+  readRevision: () => Promise<Revision>) {
   const { cwd, repo, number, signal, baseSha, headSha } = options;
   if (!recordedSha(baseSha) || !recordedSha(headSha)) throw new Error("Invalid commit ID for the private review checkout.");
-  const readRevision = ports.revision ?? revision;
   const matchesRequest = (pr: Revision) => pr.state === "OPEN" && pr.baseRefOid === baseSha && pr.headRefOid === headSha;
-  const pull = await readRevision(options);
+  const pull = await readRevision();
   if (!matchesRequest(pull)) return false;
   await git(cwd, ["clone", "--no-checkout", "--no-tags", "--", cwd, checkout], signal);
   const run = (args: string[]) => git(checkout, args, signal);
@@ -106,7 +107,7 @@ async function prepareCheckout(options: DeskExecutionOptions, checkout: string, 
     // reachable from the fetched base branch, and recheck GitHub before keeping the older range.
     const containing = await run(["for-each-ref", "--contains", baseSha, "--format=%(refname)", baseRef]);
     if (!containing.split("\n").includes(baseRef)) return false;
-    const confirmed = await readRevision(options);
+    const confirmed = await readRevision();
     if (!matchesRequest(confirmed) || confirmed.baseRefName !== pull.baseRefName) return false;
   }
   // No PR file ever becomes an active policy, preload, smudge filter, or runnable project hook.
@@ -167,7 +168,7 @@ async function regularPackage(dir: string) {
 
 // Only expose known artifact names from a package created in this attempt.
 async function collectResult(options: DeskExecutionOptions, checkout: string, summary: AutonomousSummary): Promise<DeskExecutionResult> {
-  const result = { ...EMPTY, ...(summary.usage ? { usage: summary.usage } : {}), reason: summary.reason, report: renderReport(summary), findings: summary.findings };
+  const result = { ...EMPTY, ...(summary.usage ? { usage: summary.usage } : {}), reason: summary.reason, report: renderReport(summary), findings: summary.findings, findingsKnown: summary.findingsKnown ?? Object.values(summary.findings).some(n => n > 0) };
   const pkg = summary.package;
   const source = pkg && path.resolve(checkout, pkg.path);
   const dir = path.join(options.runDir, "package");
@@ -190,20 +191,23 @@ async function collectResult(options: DeskExecutionOptions, checkout: string, su
   if (ownsPackage && manifest) {
     const entries = Array.isArray(manifest.coverage) ? manifest.coverage : [];
     const evaluated = await computeVerdict(dir);
-    if (entries.length && evaluated.source !== "none") {
+    const known = evaluated.source === "raw reviewer results" || (evaluated.source === "ingested round" &&
+      knownFindingList(await readJson<unknown>(path.join(dir, "findings.json"))));
+    if (entries.length && known) {
       // An ingested zero-finding reviewer can have no raw result. A recorded run
       // accounts for it; a selected reviewer absent even from coverage is missing.
       const ran = new Set(entries.filter(entry => entry.status === "run").map(entry => entry.reviewer));
       const routed = desktopRoutedOut(dir);
-      const missing = evaluated.pendingReviewers?.some(reviewer => !routed.has(reviewer) && (!evaluated.pendingAmbiguous || !ran.has(reviewer)));
+      const missing = missingVerdictCoverage(evaluated, ran, routed);
       const fileReport = await readJson<CoverageReport>(path.join(dir, "coverage.json"));
-      const fullyCovered = !missing && !evaluated.unreadable.length && hasFullCoverage(entries.filter(entry => !routed.has(entry.reviewer)), fileReport) && hasDesktopReviewerEvidence(dir, summary.usage, routed);
+      const fullyCovered = !missing && hasFullCoverage(entries.filter(entry => !routed.has(entry.reviewer)), fileReport) && hasDesktopReviewerEvidence(dir, summary.usage, routed);
       coverage = matching && outcome === "complete" && fullyCovered ? "complete" : "partial";
     }
-    if (evaluated.source !== "none") {
+    if (known) {
+      result.findingsKnown = true;
       result.findings = evaluated.counts;
       // The intermediate headline "no findings" alone is not an approval.
-      if (evaluated.total || evaluated.held.length || coverage === "complete") verdict = evaluated.headline;
+      if (matching) verdict = deskVerdictHeadline(evaluated, coverage === "complete");
       result.report += "\n" + renderVerdict(evaluated, manifest.reviewId);
     }
     const file = path.join(dir, "report.md");
@@ -244,7 +248,15 @@ export async function executeDeskReview(options: DeskExecutionOptions, ports: Ex
   try {
     signal.throwIfAborted();
     options.onProgress({ phase: "Preparing isolated checkout", rounds: 0, tokens: 0 });
-    if (!await prepareCheckout(options, checkout, ports)) {
+    const readRevision = async () => {
+      try {
+        return await (ports.revision ?? revision)(options);
+      } catch (error) {
+        beforeSpawnFailure = retryablePreflight(error);
+        throw error;
+      }
+    };
+    if (!await prepareCheckout(options, checkout, ports, readRevision)) {
       result = { ...EMPTY, outcome: "blocked", reason: "The PR closed or its base/head changed. Refresh the card before starting another review." };
     } else {
       if (options.context) writeFileSync(path.join(checkout, PR_CONTEXT_FILE), JSON.stringify(options.context), { flag: "wx", mode: 0o600 });

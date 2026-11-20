@@ -57,6 +57,7 @@ export interface DeskReviewerSession {
   startedAt?: string;
   finishedAt?: string;
   usage?: ReviewUsageCounts;
+  usagePartial?: true;
   activity?: { at?: string; label: string }[];
   truncated?: boolean;
 }
@@ -90,4 +91,4 @@ export interface DeskRunSnapshot {
   version: 1;
   runs: DeskRun[]; // newest request first, including any queued revision
 }
-export type DeskFinish = Pick<DeskRun, "state" | "phase" | "reason" | "result" | "usage" | "retryableBeforeSpend">;
+export type DeskFinish = Pick<DeskRun, "state" | "phase" | "reason" | "result" | "usage" | "retryableBeforeSpend" | "reviewerProgress">;

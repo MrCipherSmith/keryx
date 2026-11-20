@@ -76,29 +76,35 @@ export function finishExecution(out: DeskExecutionResult): DeskFinish {
       verdict: out.verdict,
       coverage: out.coverage,
       findings: out.findings,
+      findingsKnown: out.findingsKnown ?? (out.coverage === "complete" || Object.values(out.findings).some(count => count > 0)),
       report: out.report ?? "",
     },
   };
 }
-function recoverFinish(directory: string, attempt: Attempt) {
+async function recoverFinish(directory: string, attempt: Attempt) {
+  let finish: DeskFinish | null = null;
   const file = path.join(directory, "execution-result.json");
   if (existsSync(file)) {
     try {
       const stored = JSON.parse(readFileSync(file, "utf8")) as DeskExecutionResult;
-      const finish = finishExecution(stored);
-      if (finish.state && typeof finish.reason === "string" && finish.result?.findings) return finish;
+      const checkpoint = finishExecution(stored);
+      if (checkpoint.state && typeof checkpoint.reason === "string" && checkpoint.result?.findings) finish = checkpoint;
     } catch {
       /* Reconstruct the attempt from its verified package below. */
     }
   }
-  const recovered = recoverDeskExecution(directory, {
-    repo: attempt.key.repo,
-    number: attempt.key.number,
-    baseSha: attempt.run.baseSha,
-    headSha: attempt.run.headSha,
-    cancelled: attempt.run.state === "cancelling",
-  });
-  return recovered ? finishExecution(recovered) : null;
+  if (!finish) {
+    const recovered = await recoverDeskExecution(directory, {
+      repo: attempt.key.repo, number: attempt.key.number, baseSha: attempt.run.baseSha, headSha: attempt.run.headSha,
+      cancelled: attempt.run.state === "cancelling",
+    });
+    if (recovered) finish = finishExecution(recovered);
+  }
+  if (finish) {
+    const roster = readDeskReviewerProgress(directory, attempt.key, { ...attempt.run, ...finish }, false);
+    if (roster) finish.reviewerProgress = roster;
+  }
+  return finish;
 }
 
 function spawnWorker(a: Attempt) {
@@ -120,7 +126,6 @@ function spawnWorker(a: Attempt) {
 /** Caller owns a write transaction. A worker must acquire that transaction
  * and match its pid before it can act, including after a launcher crash. */
 export function dispatchNext(store: DeskRunStore, key: DeskRunKey, launch = spawnWorker) {
-  store.reconcile(key, recoverFinish);
   if (store.active(key)) return;
   const a = store.queued(key);
   if (!a) return;
@@ -168,9 +173,9 @@ export async function scheduleDeskReview(
   await verifyScheduled(cwd, key, revision, schedule);
   const store = new DeskRunStore();
   try {
+    await store.reconcile(key, recoverFinish);
     return authorize(() =>
       store.atomic(() => {
-        store.reconcile(key, recoverFinish);
         const admission = store.requestAttempt(cwd, key, revision, schedule);
         dispatchNext(store, key);
         if (!admission) return null;
@@ -199,8 +204,8 @@ export async function requestDeskRun(
       const existing = readExistingReviews(cwd, key);
       store.atomic(() => store.recordExisting(cwd, key, existing));
     }
+    await store.reconcile(key, recoverFinish);
     const snapshot = store.atomic(() => {
-      store.reconcile(key, recoverFinish);
       if (input.action === "start") store.request(cwd, key, input.revision);
       if (input.action === "cancel") store.cancel(key, input.id);
       dispatchNext(store, key);

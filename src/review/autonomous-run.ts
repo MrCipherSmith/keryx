@@ -26,7 +26,7 @@ import { mergeRunUsage, type ReviewRunUsage } from "./run-usage";
 import { ReviewerActivityRecorder } from "./reviewer-activity";
 import type { DeskReviewerSession } from "./desk-run-types";
 import { createEventTail, type Progress } from "./autonomous-progress";
-import { countFindings, validateSummary, writeSummary, type AutonomousSummary } from "./autonomous-summary";
+import { countFindings, knownFindingList, validateSummary, writeSummary, type AutonomousSummary } from "./autonomous-summary";
 import { reviewsRoot } from "./package-location";
 import { ENV_REVIEW_SYSTEM } from "./review-system";
 import type { ManagedReviewManifest, ReviewPackageStatus } from "./types";
@@ -226,28 +226,41 @@ export function defaultSpawn(command?: { readonly execPath: string; readonly scr
     const argv = invocationArgv(resolveKeryxInvocation(script, execPath));
     const group = Boolean(childGuard) && process.platform !== "win32";
     const log = openSync(spec.logFile, "a");
-    // A detached Desktop reviewer must never start untracked if its worker
-    // dies between spawn and recording the reviewer PID. The shell is only an
-    // exec barrier; the program, paths and arguments remain separate argv.
+    // The detached coordinator and its watchdog share a process group. EOF on
+    // the worker's pipe stops that group even after the PID guard was released.
+    // Only the watchdog reads the pipe; the coordinator starts with no stdin.
     const start = group
-      ? ["/bin/sh", "-c", 'while [ ! -f "$1" ]; do kill -0 "$2" 2>/dev/null || exit 125; sleep 0.05; done; shift 2; exec "$@"',
-          "review-child", childGuard!, String(process.pid), ...argv, ...spec.argv]
+      ? ["/bin/sh", "-c", `
+          exec 3<&0
+          trap '' HUP INT TERM
+          (
+            while IFS= read -r lease; do :; done
+            kill -KILL 0
+          ) <&3 &
+          trap - HUP INT TERM
+          while [ ! -f "$1" ]; do sleep 0.05; done
+          shift
+          exec "$@" 3<&- </dev/null
+        `,
+          "review-child", childGuard!, ...argv, ...spec.argv]
       : [...argv, ...spec.argv];
     const child = nodeSpawn(start[0]!, start.slice(1), {
       cwd: spec.cwd,
       detached: group,
       env: { ...(childGuard ? privateGitEnv() : process.env), ...spec.env },
-      stdio: ["ignore", log, log],
+      stdio: [group ? "pipe" : "ignore", log, log],
     });
     closeSync(log);
+    // The worker never writes to the watchdog and owns the only write end.
+    child.stdin?.on("error", () => { /* The guarded process may exit before its worker. */ });
+    let closed = false;
     const exited = new Promise<number>((resolve) => {
       child.on("error", () => resolve(127));
       child.on("close", (code, signal) => {
-        if (group && child.pid) {
-          // The model shell has exited. A reviewer that ignored the shell's
-          // stop must not outlive its attempt or overlap the next round.
-          try { process.kill(-child.pid, "SIGKILL"); } catch { /* group already exited */ }
-        }
+        closed = true;
+        // Closing the lease lets the watchdog reap any remaining group
+        // members without signaling a process group ID after close.
+        child.stdin?.destroy();
         resolve(code ?? (signal === null ? 1 : 128));
       });
     });
@@ -255,6 +268,7 @@ export function defaultSpawn(command?: { readonly execPath: string; readonly scr
       pid: child.pid,
       exited,
       kill(signal = "SIGTERM") {
+        if (closed) return;
         if (group && child.pid) {
           try { process.kill(-child.pid, signal); }
           catch (error) { if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error; }
@@ -505,6 +519,7 @@ async function runLocked(options: AutonomousRunOptions, target: AutonomousTarget
     ...usageSnapshot(),
     package: found === undefined ? null : { id: found.id, status: found.status, path: path.relative(cwd, found.dir) },
     findings: countFindings(findings),
+    findingsKnown: knownFindingList(findings),
     floorRefusals: progress.floorRefusals.length,
     autoAnswers: {
       count: answers.length,

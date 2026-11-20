@@ -55,6 +55,7 @@ function observedSession(value: unknown, detailed: boolean): DeskReviewerSession
   if (isClock(value.startedAt)) session.startedAt = value.startedAt;
   if (isClock(value.finishedAt)) session.finishedAt = value.finishedAt;
   if (validUsageCounts(value.usage)) session.usage = usageCounts(value.usage);
+  if (value.usagePartial === true) session.usagePartial = true;
   if (detailed && Array.isArray(value.activity)) {
     session.activity = value.activity.slice(-24).flatMap(entry =>
       isRecord(entry) && isClock(entry.at) && typeof entry.label === "string" &&
@@ -81,7 +82,7 @@ export function readDeskReviewerProgress(directory: string, key: DeskRunKey, run
     }
   }
   const active = run.state === "running" || run.state === "cancelling";
-  if (!active) for (const session of sessions) if (session.state === "running") session.state = "unknown";
+  if (!active) for (const session of sessions) if (session.state === "running" || session.state === "planned") session.state = "unknown";
 
   // A prior round can be imported alongside this round. The runner's own
   // package pointer and the manifest's PR + immutable range identify the plan.
@@ -95,7 +96,11 @@ export function readDeskReviewerProgress(directory: string, key: DeskRunKey, run
         target.base !== run.baseSha || target.head !== run.headSha) continue;
     const calls = readObject(directory, [...parts, "desktop-dispatch.json"])?.calls;
     if (!Array.isArray(calls)) continue;
-    const byRoleWave = new Set(sessions.map(s => `${s.reviewer}:${s.wave}`));
+    const observed = new Map<string, DeskReviewerSession | null>();
+    for (const session of sessions) {
+      const pair = `${session.reviewer}:${session.wave}`;
+      observed.set(pair, observed.has(pair) ? null : session); // A raw file cannot identify which retry produced it.
+    }
     const queued = new Set<string>();
     let remaining = 4 * 1024 * 1024;
     for (const call of calls) {
@@ -107,11 +112,12 @@ export function readDeskReviewerProgress(directory: string, key: DeskRunKey, run
       const key = `${reviewer}:${wave}`;
       if (queued.has(key)) continue;
       queued.add(key);
-      if (byRoleWave.has(key)) continue;
-      const session: DeskReviewerSession = { id: key, reviewer, wave, state: active ? "planned" : "unknown" };
+      const checkpoint = observed.get(key);
+      if (checkpoint === null || (checkpoint && (active || isFinished(checkpoint)))) continue;
+      const session: DeskReviewerSession = checkpoint ?? { id: key, reviewer, wave, state: active ? "planned" : "unknown" };
       if (isRecord(call.expected_model)) {
-        if (identifier(call.expected_model.model)) session.model = call.expected_model.model;
-        if (identifier(call.expected_model.provider)) session.provider = call.expected_model.provider;
+        if (!session.model && identifier(call.expected_model.model)) session.model = call.expected_model.model;
+        if (!session.provider && identifier(call.expected_model.provider)) session.provider = call.expected_model.provider;
       }
       const raw = detailed || !active ? readEvidence(directory, [...parts, "raw", file], Math.min(remaining, 512 * 1024)) : undefined;
       if (raw) {
@@ -121,11 +127,18 @@ export function readDeskReviewerProgress(directory: string, key: DeskRunKey, run
         if (!incomplete && isReviewerResult(saved) && saved.reviewer === reviewer) {
           if (saved.status === "DONE" || saved.status === "DONE_WITH_CONCERNS") session.state = "completed";
           if (saved.status === "BLOCKED" || saved.status === "NEEDS_CONTEXT") session.state = "partial";
-          if (detailed) session.activity = [{ label: "Reviewer result saved" }];
+          if (detailed && isFinished(session)) {
+            const activity = session.activity ??= [];
+            activity.push({ label: "Reviewer result saved" });
+            if (activity.length > 24) { activity.shift(); session.truncated = true; }
+          }
         }
-        if (usage && !usage.reported) session.usage = usageCounts({ inputTokens: usage.tokens_in, outputTokens: usage.tokens_out });
+        if (!session.usage && usage && !usage.reported) {
+          session.usage = usageCounts({ inputTokens: usage.tokens_in, outputTokens: usage.tokens_out });
+          if (usage.partial || incomplete) session.usagePartial = true;
+        }
       }
-      sessions.push(session);
+      if (!checkpoint) sessions.push(session);
     }
     if (queued.size === calls.length) {
       // Old checkpoints could include auxiliary children saving outside the review package.

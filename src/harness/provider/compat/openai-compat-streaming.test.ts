@@ -229,15 +229,18 @@ describe("AC2 — opts.signal aborted mid-drain still yields exactly one cancell
 });
 
 test("only attaches the OpenRouter account charge from its own usage-bearing response", async () => {
-  for (const [baseUrl, expectedCost] of [
-    ["https://openrouter.ai/api", { amount: 0.003, currency: "USD" }],
-    ["https://example.org", undefined],
-    ["https://example.org/openrouter.ai", undefined],
+  for (const [baseUrl, responseUrl, expectedCost] of [
+    ["https://openrouter.ai/api", "https://openrouter.ai/api/v1/chat/completions", { amount: 0.003, currency: "USD" }],
+    ["http://openrouter.ai/api", "http://openrouter.ai/api/v1/chat/completions", undefined],
+    ["https://openrouter.ai/api", "https://example.org", undefined],
+    ["https://example.org", "https://example.org/chat/completions", undefined],
+    ["https://example.org/openrouter.ai", "https://example.org/openrouter.ai/chat/completions", undefined],
   ] as const) {
     const stream = controlledStream();
     stream.enqueue('data: {"choices":[],"usage":{"prompt_tokens":194,"completion_tokens":2,"total_tokens":196,"cost":0.003,"prompt_tokens_details":{"cached_tokens":90,"cache_write_tokens":10}}}\n\n');
     stream.enqueue('data: [DONE]\n\n');
     stream.close();
+    Object.defineProperty(stream.response, "url", { value: responseUrl });
     const port = new OpenAiCompatEngine({ grant: { ...grant, baseUrl }, fetch: fetchMockFor(stream.response) }, identity);
     const events = await collectEvents(port.stream(buildRequest("usage"), { attemptId: "receipt" }));
     const usage = events.find(event => event.kind === "usage_update")?.usage;

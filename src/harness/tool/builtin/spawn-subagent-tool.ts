@@ -22,7 +22,7 @@ import type { InteractiveTool, InteractiveToolContext } from "./interactive-tool
 import { builtinReadOnlyTools, confineToRoot } from "./interactive-tools";
 import { MAX_TIMER_DELAY_MS } from "./background-job-registry";
 import { makeKeryxRunner, builtinMetaprojectTools } from "./metaproject-tools";
-import { ReviewerActivity, type ReviewerActivityEvent } from "./reviewer-activity";
+import { matchesDesktopReviewerDispatch, ReviewerActivity, type ReviewerActivityEvent } from "./reviewer-activity";
 import { reviewerCallerId, withOrchestratorLog } from "../../../review/orchestrator-log";
 import { slateWriteSeedTool } from "./slate-tool";
 import { createMetaprojectAdapter } from "../metaproject-adapter";
@@ -1521,6 +1521,27 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "routing-invalid", task });
         return { status: "Error", output: `spawn_subagent refused: routing settings are invalid: ${error instanceof Error ? error.message : String(error)}`, isError: true };
       }
+      const reviewWave =
+        input.review_wave === undefined ? undefined : await resolveReviewWave(deps.cwd, input.review_wave);
+      const waveKey = reviewWave?.ok === true ? reviewWave.key : undefined;
+      // The Desktop host supplies routingProjectRoot at launch. A model's expected_model
+      // and review_wave fields alone never select another routing category.
+      const desktopReviewer = deps.routingProjectRoot !== undefined && waveKey !== undefined &&
+        await matchesDesktopReviewerDispatch(deps.cwd, saveTarget.abs, input);
+      const category = desktopReviewer ? "review" : "subagents";
+      const assignment = routingConfig.categories[category];
+      if (desktopReviewer) {
+        // The private plan identifies the work, but it cannot authorize a model.
+        // Require the exact coordinator model already approved by the host.
+        const expected = input.expected_model;
+        if (!expected || typeof expected !== "object" || Reflect.get(expected, "provider") !== session.providerId ||
+            Reflect.get(expected, "model") !== session.modelId ||
+            (assignment.mode !== "baseline" && (assignment.mode !== "model" ||
+              modelRefKey(assignment.target) !== modelRefKey(session)))) {
+          emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "model-mismatch", task });
+          return { status: "Denied", isError: true, output: "spawn_subagent: the Desktop review plan no longer matches the host-authorized Review model. Start a new review to apply routing changes." };
+        }
+      }
       const legacyTierMigrationNotice = input.model_tier !== undefined
         ? `ignored model_tier ${String(input.model_tier)} because model routing chooses the child's model; migrate the caller to model_class`
         : undefined;
@@ -1615,8 +1636,8 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         }
         let request: RoutingRequest = {
           requestId: `subagent:${workerId}:${randomUUID()}`,
-          category: "subagents",
-          origin: "subagent",
+          category,
+          origin: desktopReviewer ? "review" : "subagent",
           baseline: session,
           requirements: {
             capabilities: ["tools"],
@@ -1627,7 +1648,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
             ? { recommendation: { modelClass: input.model_class, source: "agent" } }
             : {}),
         };
-        if (routingConfig.categories.subagents.mode === "auto" && request.recommendation === undefined) {
+        if (assignment.mode === "auto" && request.recommendation === undefined) {
           const env = envWithSavedApiKeys(process.env, deps.routingConfigDir);
           const classified = await runProductionRoutingClassification({
             task,
@@ -1788,9 +1809,6 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       const rankHints = deps.getRankHints?.(session.providerId) ?? TIER_RANK_HINTS;
       const tierMap = buildTierMap(session, catalog, rankHints);
 
-      const reviewWave =
-        input.review_wave === undefined ? undefined : await resolveReviewWave(deps.cwd, input.review_wave);
-      const waveKey = reviewWave?.ok === true ? reviewWave.key : undefined;
       const ctx: SubagentContext = {
         ...(waveKey !== undefined ? { childScope: waveKey } : {}),
         parentRunId,
@@ -2343,11 +2361,11 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           });
           emitFleetEvent({ kind: "log", id: workerId, entry: { kind: "tool", text: name } });
         },
-        onToolResult: (name, result) => {
+        onToolResult: (name, result, hostTool) => {
           if (closed) {
             return;
           }
-          activity?.record({ activity: "tool_end", tool: publicToolName(name), ok: !result.isError });
+          activity?.record({ activity: "tool_end", tool: hostTool ?? publicToolName(name), ok: !result.isError });
           const preview = result.output.trim().slice(0, 400);
           emitFleetEvent({
             kind: "log",

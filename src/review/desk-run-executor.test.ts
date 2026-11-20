@@ -122,6 +122,7 @@ test("runs the orchestrator on pinned Git objects with trusted controls, leaving
   expect(JSON.parse(readFileSync(path.join(runDir, "run/summary.json"), "utf8")).usage).toEqual(result.usage);
   expect(inspected).toBe(true);
   expect(result).toMatchObject({ outcome: "complete", checkedBase: baseSha, checkedHead: headSha, coverage: "complete", findings: { major: 1 } });
+  expect(finishExecution(result).result?.findingsKnown).toBe(true);
   expect(result.report).toContain("Handle missing repository");
   expect(phases).toContain("review ingest");
   expect(git(cwd, "branch", "--show-current")).toBe("base");
@@ -195,6 +196,7 @@ test("a moved review ref after metadata read blocks the stale launch before a mo
   const result = await executeDeskReview(options(), { selectModel, remoteUrl: cwd, revision, spawn() { throw new Error("must not start"); } });
   expect(result.outcome).toBe("blocked");
   expect(result.checkedHead).toBeNull();
+  expect(finishExecution(result).result?.findingsKnown).toBe(false);
 });
 
 test("a legacy closed package missing the reviewed base remains incomplete with its report", async () => {
@@ -236,9 +238,31 @@ test("recovers durable closed package after a worker dies between finalizing the
   packageAt({ cwd: checkout } as ChildSpec, target, [{ reviewer: "review-logic", status: "run" }]);
   mkdirSync(path.join(runDir, "run"));
   writeFileSync(path.join(runDir, "run/progress.json"), JSON.stringify({ packageId: "pkg" }));
-  expect(recoverDeskExecution(runDir, options())).toMatchObject({ outcome: "complete", checkedBase: baseSha, checkedHead: headSha, findings: { major: 1 } });
+  expect(await recoverDeskExecution(runDir, options())).toMatchObject({ outcome: "complete", checkedBase: baseSha, checkedHead: headSha, findings: { major: 1 } });
   expect(existsSync(path.join(runDir, "package/report.md"))).toBe(true);
-  expect(recoverDeskExecution(runDir, { ...options(), headSha: baseSha })).toMatchObject({ outcome: "incomplete", verdict: null });
+  expect(await recoverDeskExecution(runDir, { ...options(), headSha: baseSha })).toMatchObject({ outcome: "incomplete", verdict: null });
+});
+
+test("recovery retains a long report and derives its local verdict from classified findings at the pinned revision", async () => {
+  const checkout = path.join(runDir, "checkout");
+  const pkg = path.join(checkout, ".metaproject/reviews/pkg");
+  const retained = path.join(runDir, "package");
+  packageAt({ cwd: checkout } as ChildSpec, { base: baseSha, head: headSha }, [{ reviewer: "review-logic", status: "run" }]);
+  const long = "long report section\n".repeat(8000) + "Full report ending";
+  writeFileSync(path.join(pkg, "report.md"), long);
+  writeFileSync(path.join(pkg, "findings.json"), JSON.stringify([{ id: "F-1", reviewer: "review-logic", severity: "major",
+    verification: { verdict: "refuted", method: "site-check", evidence: "Guard present" } }]));
+  mkdirSync(path.join(runDir, "run"));
+  writeFileSync(path.join(runDir, "run/progress.json"), JSON.stringify({ packageId: "pkg" }));
+  const recovered = await recoverDeskExecution(runDir, options());
+  expect(recovered).toMatchObject({ outcome: "complete", findingsKnown: true, findings: { major: 0 }, verdict: "no findings" });
+  expect(recovered?.report).toContain("Preview truncated. Full report: " + path.join(retained, "report.md"));
+  expect(recovered?.report).not.toContain("Full report ending");
+  expect(readFileSync(path.join(retained, "report.md"), "utf8")).toBe(long);
+  writeFileSync(path.join(retained, "findings.json"), "[]");
+  expect(await recoverDeskExecution(runDir, options())).toMatchObject({ findingsKnown: true, verdict: "no findings" });
+  writeFileSync(path.join(retained, "findings.json"), "[null]");
+  expect(await recoverDeskExecution(runDir, options())).toMatchObject({ outcome: "incomplete", findingsKnown: false, verdict: null });
 });
 
 test.skipIf(process.platform === "win32")("a real child process starts only after its PID guard is installed", async () => {
@@ -266,6 +290,80 @@ test.skipIf(process.platform === "win32")("a real child process starts only afte
     expect(existsSync(ready)).toBe(true);
   } finally { observer.close(); spawned.kill(); }
 });
+
+test.skipIf(process.platform === "win32").each([false, true])("a guarded coordinator stops when its worker disappears after launch (in grace period: %s)", async inGracePeriod => {
+  const entry = path.join(root, "coordinator.js");
+  const workerEntry = path.join(root, "worker.ts");
+  const ready = path.join(root, "coordinator-started");
+  const terminate = path.join(root, "terminate");
+  const signalled = path.join(root, "coordinator-signalled");
+  const guard = path.join(root, "child.json");
+  writeFileSync(entry, `
+    const { writeFileSync } = require("node:fs");
+    process.on("SIGTERM", () => writeFileSync(process.argv[3], "received"));
+    writeFileSync(process.argv[2], String(process.pid));
+    setTimeout(() => {}, 8000);
+  `);
+  writeFileSync(workerEntry, `
+    import { defaultSpawn } from ${JSON.stringify(path.resolve(import.meta.dir, "autonomous-run.ts"))};
+    import { existsSync, writeFileSync } from "node:fs";
+    const [root, entry, ready, guard, signalled, terminate] = process.argv.slice(2);
+    const child = defaultSpawn({ execPath: process.execPath, script: entry }, guard)({
+      cwd: root, argv: [ready, signalled], env: {}, logFile: root + "/child.log",
+      eventsFile: "", answersFile: "", runDir: root, stdin: "ignore",
+    });
+    const check = setInterval(() => {
+      if (!existsSync(terminate)) return;
+      clearInterval(check);
+      child.kill("SIGTERM");
+    }, 20);
+    check.unref();
+    writeFileSync(guard, JSON.stringify({ pid: child.pid }));
+    await child.exited;
+  `);
+  const worker = Bun.spawn([process.execPath, ...SAFE_BUN_SPAWN_ARGS, workerEntry, root, entry, ready, guard, signalled, terminate],
+    { cwd: root, stdin: "ignore", stdout: "ignore", stderr: "inherit" });
+  async function waitFor(predicate: () => boolean) {
+    const deadline = Date.now() + 4000;
+    while (!predicate()) {
+      if (Date.now() >= deadline) throw new Error("Timed out waiting for the fixture process state");
+      await Bun.sleep(20);
+    }
+  }
+  try {
+    await waitFor(() => existsSync(ready) && readFileSync(ready, "utf8").length > 0);
+    const pid = readFileSync(ready, "utf8");
+    expect(pid).toMatch(/^\d+$/);
+    const alive = () => {
+      const result = Bun.spawnSync(["ps", "-o", "stat=", "-p", pid], { stderr: "ignore" });
+      return result.exitCode === 0 && !result.stdout.toString().trimStart().startsWith("Z");
+    };
+    expect(alive()).toBe(true);
+    if (inGracePeriod) {
+      writeFileSync(terminate, "");
+      await waitFor(() => existsSync(signalled));
+      expect(alive()).toBe(true);
+    }
+    worker.kill("SIGKILL");
+    await worker.exited;
+    await waitFor(() => !alive());
+  } finally { worker.kill("SIGKILL"); await worker.exited; }
+}, 10_000);
+
+test.each(["unavailable: Temporary GitHub failure", "access: GitHub access revoked"])(
+  "classifies a checkout revision error before spending: %s",
+  async reason => {
+    let selected = false;
+    const result = await executeDeskReview(options(), {
+      remoteUrl: cwd,
+      revision: async () => { throw new Error(reason); },
+      selectModel() { selected = true; return selectModel(); },
+    });
+    expect(selected).toBe(false);
+    expect(result).toMatchObject({ outcome: "failed", reason });
+    expect(result.retryableBeforeSpend).toBe(reason.startsWith("unavailable:") ? true : undefined);
+  },
+);
 
 test("a scheduled run rechecks access after fetching objects and before the model process starts", async () => {
   let checked = false;
@@ -372,14 +470,15 @@ test("the default manual review can pass 250k tokens and finish", async () => {
   expect((await execution).outcome).toBe("complete");
 });
 
-test("an interrupted worker recovers measured requests even before it opened a package", () => {
+test("an interrupted worker recovers measured requests even before it opened a package", async () => {
   const run = path.join(runDir, "run");
   mkdirSync(run, { recursive: true });
   writeFileSync(path.join(run, "events.ndjson"), [
     { type: "request_usage", requestId: "co", participant: "coordinator", usage: { inputTokens: 70, outputTokens: 10 } },
     { type: "request_start", requestId: "ch", participant: "reviewer", reviewer: "review-style" },
   ].map(e => JSON.stringify(e)).join("\n") + "\n");
-  const recovered = recoverDeskExecution(runDir, { ...options(), cancelled: true });
+  const recovered = await recoverDeskExecution(runDir, { ...options(), cancelled: true });
+  expect(recovered?.findingsKnown).toBe(false);
   expect(recovered?.usage).toMatchObject({ partial: true, total: { totalTokens: 80 }, reviewers: [{ reviewer: "review-style" }] });
   expect(recovered?.outcome).toBe("cancelled");
 });

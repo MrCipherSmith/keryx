@@ -140,6 +140,15 @@ test("unavailable repository on a nested reviewers page invalidates the private 
   await expect(listReviewCards(repo, [repo], "open", queryFrom([page([withMore], end), { viewer: { login: "me" }, repository: null }]))).rejects.toThrow("access:");
 });
 
+test("revoking one PR during a concurrent overflow read with the same viewer invalidates the board", async () => {
+  const prs = [card(1),card(2)].map(pr => ({ ...pr, assignees: { ...pr.assignees, pageInfo: more } }));
+  await expect(listReviewCards(repo, [repo], "open", async <T>(doc: string, vars: Record<string,string|number>) => {
+    if (doc.includes("pullRequests(")) return page(prs,end) as T;
+    const pullRequest = vars.number === 2 ? null : { assignees: identities(["a"]) };
+    return {viewer:{login:"me"},repository:{id:"repo-id",pullRequest}} as T;
+  })).rejects.toThrow("access:");
+});
+
 test("CI rollup distinguishes red, green, pending, absent and unknown", async () => {
   const states = ["ERROR", "FAILURE", "SUCCESS", "EXPECTED", "PENDING", "new-value", null];
   const rows = states.map((state, i) => ({
@@ -241,4 +250,37 @@ test("a badge batch verifies every PR in one identity-scoped read before consult
     await expect(readBoardBadges("/fixture", key, requested, () => lookups++, queryFrom([denied]))).rejects.toThrow("access:");
   }
   expect(lookups).toBe(1);
+});
+
+test("independent PR overflows overlap within a bounded pool and retain card, cursor and person order", async () => {
+  const list = Array.from({length:30}, (_, i) => {
+    const pr = card(i+1);
+    return {...pr, assignees: {...pr.assignees,pageInfo:more}, reviewRequests: {...pr.reviewRequests,pageInfo:more}};
+  });
+  let active = 0, peak = 0;
+  const cursors = new Map<string,string[]>();
+  const out = await listReviewCards(repo, [repo], "open", async <T>(query: string, vars: Record<string,string|number>) => {
+    if (query.includes("pullRequests(")) return page(list, end) as T;
+    const assignees = query.includes("assignees(");
+    const field = assignees ? "assignees" : "reviewRequests";
+    const cursor = String(vars.cursor);
+    const parent = vars.number + "/" + field;
+    cursors.set(parent,[...(cursors.get(parent) ?? []),cursor]);
+    peak = Math.max(peak, ++active);
+    await new Promise<void>(resolve => setImmediate(resolve));
+    if (vars.number === 1) await new Promise<void>(resolve => setImmediate(resolve));
+    active--;
+    const name = parent + "/" + cursor;
+    const nodes = assignees ? [{login:name}] : [{requestedReviewer:{__typename:"User",login:name}}];
+    return {viewer:{login:"me"},repository:{id:"repo-id",pullRequest:{[field]:{
+      nodes, pageInfo:cursor === "next" ? {hasNextPage:true,endCursor:"last"} : end,
+    }}}} as T;
+  });
+  expect(peak).toBeGreaterThan(2);
+  expect(peak).toBeLessThanOrEqual(8);
+  expect(cursors.size).toBe(60);
+  expect([...cursors.values()].every(chain => chain.join(",") === "next,last")).toBe(true);
+  expect(out.cards.map(c => c.number)).toEqual(list.map(c => c.number));
+  expect(out.cards.every(c => c.assignees.at(-1) === c.number + "/assignees/last" && c.reviewers.at(-1) === c.number + "/reviewRequests/last")).toBe(true);
+  expect(out.warnings).toEqual([]);
 });

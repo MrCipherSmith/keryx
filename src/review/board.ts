@@ -1,3 +1,5 @@
+import { mapPool } from "../lib/map-pool";
+import { OVERFLOW_PARENTS } from "./board-github";
 import type { ReviewBoardSnapshot, ReviewBoardState, ReviewCard, ReviewCi } from "./board-types";
 
 import type { DeskRevision, DeskRunKey, DeskSchedule } from "./desk-run-types";
@@ -87,7 +89,7 @@ async function readPeople<T>(key: "assignees" | "reviewRequests", fields: string
     cursors.add(cursor);
     try {
       const more = await query<{ viewer: Person; repository: { id: string; pullRequest: Record<typeof key, Connection<T>> } | null }>(nextQuery, { ...params, cursor });
-      if (more.viewer?.login !== viewer || more.repository?.id !== repositoryId) {
+      if (more.viewer?.login !== viewer || more.repository?.id !== repositoryId || !more.repository.pullRequest) {
         throw new Error("access: GitHub account or repository changed. Refresh the board.");
       }
       page = more.repository.pullRequest[key];
@@ -124,10 +126,10 @@ export async function listReviewCards(repo: string, repositories: string[], stat
       repositoryId = result.repository.id;
       viewer = result.viewer.login;
       const canonical = result.repository.nameWithOwner;
-      for (const pr of prs.nodes) {
+      const pageCards = await mapPool(prs.nodes, OVERFLOW_PARENTS, async (pr): Promise<ReviewCard | null> => {
         if (!pr || !Number.isSafeInteger(pr.number) || !pr.title || !["OPEN", "MERGED", "CLOSED"].includes(pr.state)) {
           warnings.add("Some pull requests could not be read.");
-          continue;
+          return null;
         }
         const subject = { ...params, number: pr.number };
         const requestIds = new Map<string, string>();
@@ -141,14 +143,15 @@ export async function listReviewCards(repo: string, repositories: string[], stat
           readPeople("reviewRequests", reviewerFields, pr.reviewRequests, requestLabel, query, subject, viewer, repositoryId),
         ]);
         if (!assignees.complete || !reviewers.complete) warnings.add("Some assignees or requested reviewers could not be read.");
-        cards.set(pr.number, {
+        return {
           number: pr.number, title: pr.title, url: `https://github.com/${canonical}/pull/${pr.number}`,
           state: pr.state.toLowerCase() as ReviewCard["state"], draft: pr.isDraft, author: pr.author?.login ?? "",
           assignees: assignees.names, reviewers: reviewers.names, assigneesComplete: assignees.complete, reviewersComplete: reviewers.complete,
           ...(trackRequestIds ? { reviewRequestIds: Object.fromEntries(requestIds) } : {}),
           decision: pr.reviewDecision, ci: checkState(pr), headSha: pr.headRefOid, baseSha: pr.baseRefOid, updatedAt: pr.updatedAt,
-        });
-      }
+        };
+      }, { stopOnError: true });
+      for (const card of pageCards) if (card) cards.set(card.number, card);
       if (!prs.pageInfo.hasNextPage) break;
       cursor = prs.pageInfo.endCursor;
       if (!cursor || cursors.has(cursor)) throw new Error("unavailable: GitHub pagination stopped before the last page.");

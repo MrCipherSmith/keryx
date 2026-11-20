@@ -404,8 +404,8 @@ export interface AgentIO {
   onUsage?: (usage: NormalizedUsage) => void;
   /** A model tool call is about to run (raw JSON input string). */
   onToolCall?: (name: string, input: string) => void;
-  /** A tool finished; `result.isError` distinguishes failures. */
-  onToolResult?: (name: string, result: InteractiveToolResult) => void;
+  /** A tool finished; `hostTool` identifies the separately registered budget wrap-up tool. */
+  onToolResult?: (name: string, result: InteractiveToolResult, hostTool?: typeof SUBMIT_RESULT_TOOL_NAME) => void;
   /** Non-token system/error text. */
   onSystem?: (text: string) => void;
   /**
@@ -5388,7 +5388,8 @@ async function finishWithSubmitResult(
         error = `invalid ${SUBMIT_RESULT_TOOL_NAME} input: ${parsed.reason}`;
       }
     }
-    io.onToolResult?.(call.name, { output, isError: !accepted });
+    io.onToolResult?.(call.name, { output, isError: !accepted },
+      call.name === SUBMIT_RESULT_TOOL_NAME ? SUBMIT_RESULT_TOOL_NAME : undefined);
     // `parsed.reason` can echo the child's own input, so it is scrubbed like any tool result.
     history.push({ role: "tool", content: scrubControlNonce(output, nonce), provenance: "tool", toolCallId: call.id, ts: now() });
   }

@@ -71,6 +71,31 @@ test("uses saved results for legacy waves only within the verified revision and 
   expect(readDeskReviewerProgress(directory, key, { ...run, source: "existing" }, true)).toBeUndefined();
 });
 
+test("an unmeasured request keeps an interrupted reviewer's measured usage partial", () => {
+  const recorder = new ReviewerActivityRecorder();
+  const sessionId = randomUUID();
+  const reviewer = "review-logic";
+  const at = "2026-08-03T09:34:01.002Z";
+  const activity = { type: "reviewer_activity", reviewer, wave: 1, at, sessionId };
+  const request = { participant: "reviewer", sessionId, reviewer };
+  recorder.observe({ ...activity, activity: "started" });
+  recorder.observe({ ...request, type: "request_start", requestId: "one" });
+  recorder.observe({ ...request, type: "request_usage", requestId: "one", usage: { inputTokens: 8, outputTokens: 1 }, partial: true });
+  expect(recorder.sessions()[0]?.usagePartial).toBe(true);
+  recorder.observe({ ...request, type: "request_usage", requestId: "one", usage: { inputTokens: 9, outputTokens: 2 } });
+  expect(recorder.sessions()[0]?.usagePartial).toBeUndefined();
+  recorder.observe({ ...request, type: "request_start", requestId: "one" });
+  expect(recorder.sessions()[0]?.usagePartial).toBeUndefined();
+  recorder.observe({ ...request, type: "request_start", requestId: "two" });
+  recorder.observe({ ...activity, activity: "finished", outcome: "cancelled" });
+  save(["run", "progress.json"], { ref, reviewerSessions: recorder.sessions() });
+  const progress = readDeskReviewerProgress(directory, key, { ...run, state: "cancelled" }, true);
+  expect(progress?.sessions[0]).toMatchObject({
+    id: sessionId, state: "cancelled", usagePartial: true,
+    usage: { inputTokens: 9, outputTokens: 2, totalTokens: 11 },
+  });
+});
+
 test("preserves many simultaneous sessions and distinct retries without inventing an end time after interruption", () => {
   const sessions = Array.from({ length: 80 }, (_, i) => ({
     id: randomUUID(), reviewer: `review-${Math.floor(i / 2)}`, wave: 1, state: i % 2 ? "running" : "failed",
@@ -90,4 +115,20 @@ test("preserves many simultaneous sessions and distinct retries without inventin
   expect(result?.sessions[1]?.state).toBe("unknown");
   expect(result?.sessions[1]?.finishedAt).toBeUndefined();
   expect(readDeskReviewerProgress(directory, { ...key, number: 19 }, run, true)).toBeUndefined();
+});
+
+test("the saved result completes a uniquely observed session after interruption and leaves ambiguous retries unresolved", () => {
+  const call = { label: "review-logic", save_result_to: "raw/review-logic-w1.txt" };
+  save(["package", "manifest.json"], { target: { ref, base: baseSha, head: headSha } });
+  save(["package", "desktop-dispatch.json"], { calls: [call] });
+  save(["package", "raw", "review-logic-w1.txt"], 'REVIEW_RESULT:\n```json\n{"status":"DONE","reviewer":"review-logic","findings":[]}\n```');
+  const session = { id: randomUUID(), reviewer: call.label, wave: 1, state: "running", activity: [{ at: "2026-08-03T09:34:01.002Z", label: "Reviewer started" }] };
+  save(["run", "progress.json"], { ref, reviewerSessions: [session] });
+  const ended = { ...run, state: "partial" as const };
+  const single = readDeskReviewerProgress(directory, key, ended, true);
+  expect(single).toMatchObject({ finished: 1, sessions: [{ id: session.id, state: "completed",
+    activity: [{ label: "Reviewer started" }, { label: "Reviewer result saved" }] }] });
+  expect(single?.sessions[0]?.finishedAt).toBeUndefined();
+  save(["run", "progress.json"], { ref, reviewerSessions: [session, { ...session, id: randomUUID() }] });
+  expect(readDeskReviewerProgress(directory, key, ended, true)).toMatchObject({ finished: 0, sessions: [{ state: "unknown" }, { state: "unknown" }] });
 });

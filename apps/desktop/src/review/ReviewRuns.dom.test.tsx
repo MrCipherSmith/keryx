@@ -371,3 +371,18 @@ test("expanding a historical session recovers its recorded failure without assig
   expect(dialog.textContent).toContain("Tokens unreported");
   await click("Close");
 });
+
+test("interrupted reviewer dialog marks its recorded tokens partial", async () => {
+  await show(async () => ({ version: 1, runs: [{ ...complete,
+    reviewerProgress: { planned: 1, wave: 1, finished: 1, sessions: [{
+      id: "interrupted", reviewer: "review-logic", wave: 1, state: "cancelled",
+      usage: { inputTokens: 9, outputTokens: 2, totalTokens: 11 }, usagePartial: true,
+    }] } }] }), { ...pr, number: 94 });
+  await click("View review result");
+  const details = document.querySelector<HTMLDetailsElement>(".review-sessions")!;
+  await act(async () => { details.open = true; details.dispatchEvent(new Event("toggle")); });
+  const row = details.querySelector<HTMLButtonElement>('[aria-label="Open review-logic session, wave 1, Cancelled"]')!;
+  await act(async () => row.click());
+  expect(document.querySelector(".dialog")!.textContent).toContain("Partial tokens · 9 in / 2 out / 11 total");
+  await click("Close");
+});
