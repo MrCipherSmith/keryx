@@ -1,176 +1,209 @@
 # Спецификация · Рабочие панели и внимание
-Version: 0.1.1
+Version: 0.2.0
 
-Статус: draft, ничего не реализовано. Ссылки на код ниже описывают **текущее** состояние `origin/main` на 2026-11-21 (`b51319327`), от которого отталкивается работа.
+Статус: draft, ничего не реализовано. Ссылки на код описывают `origin/main` на 2026-11-21. Пакет опирается на два открытых PR: [#1254](https://github.com/MrCipherSmith/keryx/pull/1254) (вложения в чат, переделанный попап композера) и [#1256](https://github.com/MrCipherSmith/keryx/pull/1256) (draft, живые сессии ревью). Ссылки на строки файлов, которые эти PR меняют (`Composer.tsx`, `SessionView.tsx`, `images.rs`, `SessionSidebar.tsx`), обновляются после слияния этих PR; до этого они указывают на main.
 
 ## 1. Идентичность модуля
 
 - Приложение: `apps/desktop` (Tauri 2 + React), клиент `keryx acp --profile shell`.
-- Новые части: модуль внимания в веб-слое, две вкладки боковой панели (`changes`, `files`), индикатор контекста в композере, вложения-комментарии и вложения-изображения.
-- Изменения keryx: путь промпта ACP для изображений (§6.5). Остальное — только приложение.
+- Новые части: учёт внимания в Rust поверх всех окон и представлений проектов, группа «Needs attention» в списке сессий, две вкладки боковой панели (`changes`, `files`), индикатор контекста в композере, вложение-замечание к строке.
+- Изображения: этот пакет только подключает Desktop к нативному вводу изображений, который делает flow 493 в keryx; путь отправки файлом — из #1254.
 - Решения пакета (§9) получат номера после D-15 в [decisions.md](../keryx-desktop-client/decisions.md) при заморозке.
+- Строки интерфейса — по-английски, как остальной интерфейс приложения; в этом документе они даны в кавычках как есть.
 
 ## 2. Текущее состояние, на которое опираемся
 
 | Что | Где сейчас |
 |---|---|
-| Метки сессий `busy`, `waiting`, `running` | `SessionMark` — `src/session/reducer.ts:663`, сборка `sessionMarks` — `:751`; `waiting` из `src/session/dialogQueue.ts:54` |
-| Конец хода | `src/session/useAcpSession.ts:609-628` (busy → false в `finally` после `session/prompt`) |
-| Активность проекта на рельсе | `src/shell/projectRail.ts:73-81`, Rust `src-tauri/src/projects.rs:41` |
-| Группы сессий | `src/session/sessionGroups.ts:9` (Pinned), `groupSessions` `:45-60`; меток не получает |
-| Вкладки боковой панели | `SIDE_TABS` — `src/panels/SidePanel.tsx:12-17`; тип и белый список продублированы в `src/lib/prefs.ts:65-66` |
-| Git | `src-tauri/src/gitinfo.rs`: `git rev-parse` (распознать worktree) и `git status --porcelain=v2 --branch`, из списка файлов — только счётчик `changed` (`:27`), тайм-аут 3 с, `GIT_OPTIONAL_LOCKS=0` |
-| Дифф | `src/components/unifiedDiff.ts` — разбор и статистика, без комментариев |
-| Вложения композера | `ComposerAttachment` — `src/session/Composer.tsx:41`, чипы `:293-295` (текст про элементы страницы); хранилище пиков `src/panels/elementPicks.ts`; блок `picksBlock` `:118-122` (`resource`, `_meta.keryx.untrusted: true`); отправка `src/session/SessionView.tsx:162-171` |
-| Чтение файлов | `src-tauri/src/fs.rs` — только ACP-обработчик `fs/read_text_file` для агента: `confine` (`:80`), корень git (`:111`), лимит 8 МиБ. Команд для React нет |
-| Картинки проекта | `local_image` — `src-tauri/src/images.rs:91-97`, ограничен корнем панели и папкой скриншотов, 15 МиБ |
-| Подсветка | `src/components/highlight.ts` (highlight.js core + набор языков) |
-| Попап `/` | `Composer.tsx:125`, только команды |
-| Использование контекста | `usage_update` — `reducer.ts:375-384`, `Usage` `:99-108`; метр только в `SessionInfoPanel.tsx:70-71, :144` |
-| `/compact` | keryx: `src/acp/shell-commands.ts:42`, раннер `src/acp/shell-command-runners.ts:162`; во время хода отклоняется (`src/acp/server.ts:2130-2162`) |
-| Изображения в промпте | keryx: `promptCapabilities.image: false` — `src/acp/protocol.ts:498`; блок заменяется текстом — `src/acp/prompt-content.ts:84-85`; OpenAI-адаптер не сериализует изображения запроса (`src/harness/provider/openai/openai-provider.ts:451-453`); в Anthropic-адаптере поддержки не найдено |
-| Плагины Tauri | только `dialog` и `opener`; `capabilities/default.json` без уведомлений |
-| Настройки | `Prefs` — `src/lib/prefs.ts:40-63`; вкладки Settings — `src/shell/SettingsView.tsx:29-34` |
+| Окна и проекты | Каждое окно — «хост-окно» без своей веб-страницы; каждый проект в нём — отдельное дочернее представление `project-N` со своим `keryx acp` (`src-tauri/src/projects.rs:1-12`). Скрытые представления продолжают работать, до 6 в фоне (`MAX_BACKGROUND`, `projects.rs:26`). Один keryx держит до 8 сессий своего проекта |
+| Активность проекта в Rust | `project_activity` принимает только строку `idle`/`busy`/`action` на представление (`projects.rs:436-447`); `ProjectState` — `cwd`, `activity`, `visible` (`projects.rs:66-73`); `is_front`, `front_of` (`projects.rs:116-125`); снимок рассылается всем представлениям (`projects://state`) |
+| Активность в веб-слое | `App.tsx:213` считает активность только по своим сессиям и вызывает `project_activity` (`platform/projects.ts:22`) |
+| Метки сессий | `SessionMark` — `src/session/reducer.ts:663`, `sessionMarks` — `:751`; `waiting` из `src/session/dialogQueue.ts:54` (разрешения и `ask_user`) |
+| Конец хода | `src/session/useAcpSession.ts:609-628` |
+| Вопросы ревью | только в #1256: `DeskRun.pendingQuestions` (`src/review/desk-run-store.ts`), полоса доски «Needs attention» с причиной «Awaiting your answer»; на метки сессий чата не влияют |
+| Группы сессий | `src/session/sessionGroups.ts:9` (Pinned), `groupSessions` `:45-60`; меток не получает; #1256 группы не меняет |
+| Вкладки боковой панели | `SIDE_TABS` — `src/panels/SidePanel.tsx:12-17`; тип и белый список ещё в `src/lib/prefs.ts:65-66` |
+| Git | `src-tauri/src/gitinfo.rs`: `git rev-parse` и `git status --porcelain=v2 --branch`, только счётчик `changed` (`:27`), тайм-аут 3 с, `GIT_OPTIONAL_LOCKS=0` |
+| Корень проекта для команд | main: только структура `PanelRoots` (`src-tauri/src/panels.rs:17`). Метод `require_project` — проверка, что `cwd` совпадает с зарегистрированным корнем окна, — появляется в #1254, и его новые команды в `gitinfo.rs` используют его |
+| `confine` | `src-tauri/src/fs.rs:80-97` канонизирует путь, поэтому отказывает для файла, которого нет на диске |
+| Дифф | `src/components/unifiedDiff.ts` — разбор и статистика |
+| Вложения | main: только пики браузера (`src/panels/elementPicks.ts`, блок `untrusted`). #1254: `useChatAttachments` (`image`/`file`/`folder`, до 4 вложений по 5 МиБ), файлы во временном каталоге (`images.rs`, `ChatStore`), отправка путями в одном блоке `resource` `keryx-desktop:local-attachments` с `_meta.keryx.untrusted: true`; `promptCapabilities` Desktop не читает |
+| Попап композера | main: только `/`; #1254 переделывает его (группы, `matches`, `complete()`, клавиши), режима `@` нет |
+| Недоверенный контент | блок с `_meta.keryx.untrusted` переводит весь ход под порог недоверенного контента (`src/acp/prompt-content.ts:22-30`): правки требуют подтверждения и в `auto`, подагенты блокируются |
+| Изображения в keryx | `promptCapabilities.image: false` (`src/acp/protocol.ts:498`), блок заменяется текстом (`prompt-content.ts:84-85`); `vision: true` объявляет только Gemini-адаптер. Нативный ввод изображений — flow 493 (in progress, не в main, контракт не проверен по коду; по черновику flow: `MessageImageRef` без байтов в сообщении, байты в хранилище сессии, `ProviderCapabilities.imageInput`) |
+| Использование контекста | `usage_update` — `reducer.ts:375-384`; метр только в `SessionInfoPanel.tsx:70-71, :144` |
+| `/compact` | keryx: `src/acp/shell-commands.ts:42`; во время хода отклоняется (`src/acp/server.ts:2130-2162`) |
+| Плагины Tauri | `dialog`, `opener`; уведомлений нет |
 
 ## 3. Структура хранения
 
-Новых файлов на диске проекта нет. Вложения-изображения не пишутся в репозиторий.
-
 | Данные | Где |
 |---|---|
-| Настройки внимания | `Prefs.attention` в локальном хранилище веб-слоя (как остальные `Prefs`) |
-| Черновые замечания к строкам | в памяти окна, по `cwd` (как пики), очищаются после отправки |
-| Вставленные изображения | в памяти окна до отправки; при отправке — base64 в ACP-блоке, на диск не пишутся |
+| Настройки внимания | `Settings.attention` в `settings.json` (`src-tauri/src/settings.rs`): их читает Rust, который шлёт уведомления |
+| Состояние внимания | в памяти процесса Rust (`ProjectWindows`), не сохраняется |
+| Черновые замечания к строкам | вложения `line-comment` в черновике сессии (`useChatAttachments` из #1254) |
+| Изображения | см. §6.5: путь отправки файлом — временный каталог #1254; нативный ввод — хранилище сессии keryx (flow 493) |
 
 ## 4. Конфигурация
 
-```ts
-// src/lib/prefs.ts — расширение Prefs (planned)
-interface AttentionPrefs {
-  notify: boolean;       // системные уведомления, по умолчанию true
-  sound: boolean;        // звук, по умолчанию true
-  badge: boolean;        // счётчик в Dock, по умолчанию true
-}
-type SidePanelTab = "terminal" | "browser" | "activity" | "info" | "changes" | "files";
+```rust
+// src-tauri/src/settings.rs — расширение Settings (planned)
+struct AttentionSettings { notify: bool, sound: bool, badge: bool, review_questions: bool } // все true по умолчанию
 ```
 
-Settings → Sessions получает блок «Внимание» с тремя переключателями. Белый список вкладок обновляется в обоих местах (`SidePanel.tsx`, `prefs.ts`).
+Settings → Sessions получает блок «Attention» с переключателями «Notifications», «Sound», «Dock badge», «Count review questions». Белый список вкладок обновляется в `SidePanel.tsx` и `prefs.ts`.
 
 ## 5. Поверхность: команды Tauri (planned)
 
 | Команда | Вход | Выход | Ограничения |
 |---|---|---|---|
-| `git_changes` | `cwd` | `ChangedFile[]` | `git status --porcelain=v2 -z --untracked-files=all`, тайм-аут 3 с, `GIT_OPTIONAL_LOCKS=0`, до 2000 записей с флагом `truncated` |
-| `git_file_diff` | `cwd`, `path` | `FileDiff` | `git diff HEAD -- <path>` (для неотслеживаемых — против пустого), путь проходит `confine`, лимит 1 МиБ, двоичные — `binary: true` без текста |
-| `project_files` | `cwd`, `query?` | `ProjectFile[]` | `git ls-files -co --exclude-standard -z`, до 20000 путей, поиск по подстроке и началу сегментов на стороне Rust, не больше 200 результатов |
-| `project_file_read` | `cwd`, `path` | `FileContent` | тот же `confine`, что у `fs/read_text_file`; текст до 1 МиБ; изображения — через существующий `local_image` |
-| `attention_set` | `{ waiting: number }` | — | `Window::set_badge_count` (macOS), `None` при нуле |
-| `attention_notify` | `{ title, body, projectCwd, sessionId }` | — | `tauri-plugin-notification`; клик эмитит событие `attention:open` с проектом и сессией |
+| `attention_report` | `{ waiting: WaitingItem[], shownSessionId: string \| null, turnEnded?: TurnEnd }` от представления | — | заменяет набор ожиданий сессий этого представления; Rust добавляет вопросы ревью сам и пересчитывает всё (§6.1) |
+| `attention_open` | — | `{ projectCwd, sessionId } \| null` | самая свежая ожидающая сессия; запасной путь для клика (§6.1.3) |
+| `git_changes` | `cwd` | `{ files: ChangedFile[], truncated: boolean }` | `PanelRoots::require_project`; `git status --porcelain=v2 -z --untracked-files=all`, тайм-аут 3 с, `GIT_OPTIONAL_LOCKS=0`, до 2000 записей |
+| `git_file_diff` | `cwd`, `path` | `FileDiff` | `require_project`; путь принимается, только если он есть в последнем ответе `git_changes` для этого `cwd` (§6.2); лимит 1 МиБ |
+| `project_files` | `cwd`, `query?` | `ProjectFile[]` | `require_project`; `git ls-files -co --exclude-standard -z`, до 20000 путей, не больше 200 результатов |
+| `project_file_read` | `cwd`, `path` | `FileContent` | `require_project`; `confine` (файл существует); текст до 1 МиБ; изображения — через `local_image` |
 
-Права: в `capabilities/default.json` добавляется `notification:default`. Новые команды регистрируются в `src-tauri/src/lib.rs` рядом с `git_info`.
+Права: `notification:default` в `capabilities/default.json`. Значок Dock — `AppHandle`/`Window::set_badge_count` из Rust.
 
 ## 6. Контракты данных
 
-### 6.1 Состояние внимания
+### 6.1 Внимание
 
-Модуль `src/session/attention.ts` (planned) — чистая функция над метками всех сессий окна:
+#### 6.1.1 Отчёт представления
 
 ```ts
-interface AttentionInput {
-  marks: Record<string, { projectCwd: string; waiting: boolean; busy: boolean }>;
-  shown: { projectCwd: string; sessionId: string } | null;
-  focused: boolean;              // document.hasFocus() + событие focus/blur окна
-  notified: ReadonlySet<string>; // ключ "<sessionId>:<waitSeq>"
-}
-interface AttentionOutput {
-  waitingCount: number;          // для значка
-  notify: Array<{ sessionId: string; projectCwd: string; reason: "waiting" | "turn-ended" | "turn-failed" }>;
-}
+interface WaitingItem { sessionId: string; title: string; kind: "permission" | "ask_user"; since: string; seq: number } // вопросы ревью Rust добавляет сам как kind "review_question"
+interface TurnEnd { sessionId: string; title: string; outcome: "ended" | "failed" }
 ```
 
-Правила: уведомление о `waiting` — один раз на эпизод ожидания (`waitSeq` растёт при каждом новом ожидании). `turn-ended` — только если сессия не показана или окно не в фокусе. Звук играет веб-слой, если `sound` включён и сработало любое уведомление.
+Каждое представление проекта вызывает `attention_report` при изменении своих `sessionMarks` (из `useAcpSession`), при смене показанной сессии и в конце хода (`turnEnded`). `seq` растёт с каждым новым эпизодом ожидания сессии. `review_question` в отчёте представления не передаётся: вопросы ревью собирает сам Rust, один раз на проект, а не на представление. Источник — локальное хранилище запусков ревью из #1256 (`pendingQuestions`, `src/review/desk-run-store.ts`), без GitHub: доска Review в #1256 читается постранично с GitHub, и опрашивать её из каждого представления значило бы тратить лимит API. Rust раз в 60 с и сразу после ответа на вопрос выполняет локальный запрос ожидающих вопросов по каждому открытому проекту (planned: `keryx review runs --awaiting-answer --json`, если #1256 не даёт такого запроса). Запрос работает без сети и без входа в GitHub. До слияния #1256 и при выключенном `review_questions` вопросы ревью не учитываются.
+
+#### 6.1.2 Подсчёт в Rust
+
+`ProjectWindows` хранит отчёт каждого представления. По любому изменению:
+
+- **значок** = число различных `(view, sessionId)` с ожиданием по **всем проектам во всех хост-окнах**; 0 снимает значок;
+- **уведомление о `waiting`** — один раз на `(view, sessionId, seq)`, если не выполнено «пользователь это уже видит»: хост-окно представления в фокусе (`Window::is_focused`), представление спереди (`is_front`) и `shownSessionId` совпадает;
+- **уведомление о `turnEnded`** — по тому же условию «не видит»; `failed` — с пометкой «Turn failed»;
+- **звук** — при уведомлении, если `sound` включён; в фокусе на показанной сессии сигналов нет;
+- закрытое представление снимает свои ожидания (`release`/`remove_window` в `projects.rs`).
+
+Текст: заголовок «Needs attention» (для `turnEnded` — «Turn finished» / «Turn failed»), тело — проект и заголовок сессии, для `review_question` — «Awaiting your answer» и номер ревью. Формулировки совпадают с #1256.
+
+#### 6.1.3 Клик по уведомлению
+
+На macOS у `tauri-plugin-notification` нет обратного вызова клика с данными (обработчик действий — только для мобильных платформ). Порядок:
+
+1. **Spike S0** (первая задача этапа 1): проверить на собранном приложении, что приходит при клике.
+2. Если данных нет — **путь B**: собственный делегат `UNUserNotificationCenter` через `objc2` (уже используется в `webkit.rs`) с `projectCwd`/`sessionId` в `userInfo`; клик по любому уведомлению открывает его сессию.
+3. **Временная мера A** (только пока B не готов, не для выпуска): клик активирует приложение; Rust по активации в течение 10 с после последнего уведомления открывает самое свежее ожидание из `attention_open`. Деградация: клик по старому уведомлению или поздний клик ведёт не туда, а активация через Dock в эти 10 с тоже перенаправляет.
+
+Результат spike и выбранный путь записываются решением при заморозке (P6). R1 и AC1 требуют точного перехода, поэтому выпуск — с данными клика или с путём B.
+
+#### 6.1.4 Группа «Needs attention»
+
+`groupSessions(sessions, view, marks)` (параметр `view` сохраняется, `sessionGroups.ts:45`) получает метки и в виде Active ставит первой группу «Needs attention» со всеми сессиями проекта с `waiting` (порядок — по `since`), над «Pinned». Сессия в ней не показывается в своей обычной группе. Ответили — возвращается в свою (Pinned или дневную). Свёрнутость группы запоминается, как у остальных (по метке). В виде Archived группы нет: архивные сессии не держатся живыми. Подсказка метки сессии остаётся «Waiting for your answer». Построение на `SessionSidebar` после #1256 (его меню «⋯» и архив подагентов не меняются).
 
 ### 6.2 Изменённые файлы и дифф
 
 ```ts
 interface ChangedFile { path: string; status: "M" | "A" | "D" | "R" | "?"; origPath?: string; staged: boolean }
-interface FileDiff { path: string; binary: boolean; tooLarge: boolean; text?: string } // unified diff
+interface FileDiff { path: string; status: ChangedFile["status"]; binary: boolean; tooLarge: boolean; text?: string } // unified diff
 ```
 
-Рендер — `unifiedDiff.ts` + `highlight.ts`, нумерация строк новой версии. Список виртуализируется при числе файлов > 200.
+- Проверка пути: `git_file_diff` принимает только путь (или `origPath`), который вернул последний `git_changes` для этого `cwd`; дополнительно лексическая проверка — относительный, без `..`, без абсолютного префикса. Канонизация не нужна, поэтому удалённые и переименованные файлы работают.
+- Текст: `M`/`A`/`D`/`R` — `git diff HEAD -M -- <path> [<origPath>]` (у `D` — старая сторона из `HEAD`); `?` — дифф против пустого файла по содержимому через `confine`.
+- Рендер — `unifiedDiff.ts` + `highlight.ts`; у `D` нумерация старой стороны. Список виртуализируется при числе файлов > 200.
 
-### 6.3 Замечание к строке и блок отправки
+### 6.3 Замечание к строке
 
 ```ts
-interface LineComment { path: string; startLine: number; endLine: number; side: "new" | "old"; quote: string; text: string }
+interface LineComment { path: string; startLine: number; endLine: number; side: "new" | "old"; text: string }
 ```
 
-Отправка: один ACP-блок `resource` с `uri: "keryx-desktop:line-comments"`, `mimeType: "text/markdown"`, текстом-списком `path:start-end` и замечанием пользователя. Метка `_meta.keryx.untrusted` на блок **не ставится**: замечание пишет пользователь. Цитаты из рабочей копии идут в том же запросе отдельным блоком `resource` с `uri: "keryx-desktop:line-comment-quotes"` и `_meta.keryx.untrusted: true` (содержимое файла мог написать агент или третья сторона), каждая — блоком кода с путём и строками. Хранилище замечаний устроено как `elementPicks.ts`, но отдельным модулем. Чипы композера получают тип вложения, и подпись чипов перестаёт говорить только об элементах страницы.
+- Хранение: новый вид `line-comment` в `useChatAttachments` (#1254) рядом с `image`/`file`/`folder`; чип показывает `path:start-end` и начало текста.
+- Отправка: обычный текстовый блок сообщения пользователя (не `resource`, без `_meta.keryx.untrusted`):
+
+```text
+Line comments:
+- src/a.ts:12-14 (new): <текст замечания>
+- src/b.ts:40 (old): <текст замечания>
+```
+
+- Цитат из файлов нет: агент читает файл сам. Поэтому ход с замечаниями не попадает под порог недоверенного контента и в `auto` идёт без лишних подтверждений. Если в том же сообщении есть вложения-файлы #1254 (они `untrusted`), ход попадает под порог из-за них, как и сейчас.
 
 ### 6.4 Упоминание `@путь`
 
-Попап композера получает второй триггер: `@` в начале слова. Выбор вставляет `@<относительный путь>` текстом. keryx получает обычный текст и читает файл своими инструментами. Отдельного блока не требуется. Если keryx начнёт разворачивать `@` сам, приложение ничего не меняет.
+Второй режим попапа композера из #1254: ветка в `groups` для слова, начинающегося с `@`, источник `project_files` с запросом после `@`, тот же список, клавиши и `complete()`. Выбор вставляет `@<относительный путь>` текстом. keryx читает файл своими инструментами. Перетаскивание из вкладки «Files» вставляет тот же текст.
 
-### 6.5 Изображения (keryx + приложение)
+### 6.5 Изображения
 
-keryx (planned):
+Этот пакет не делает нативный ввод изображений в keryx: это flow 493 «shell image attachments» (в работе, ещё не в main; в [плане клиента](../keryx-desktop-client/implementation-plan.md) изображения идут после него): по черновику flow — `MessageImageRef`, байты в хранилище сессии, `ProviderCapabilities.imageInput` и проверка `vision` модели; контракт может измениться до его слияния. Desktop:
 
-1. `src/harness/provider/types.ts` — часть сообщения пользователя типа `image` (`mimeType`, `data` base64).
-2. Сериализация в адаптерах, где провайдер принимает изображения (Anthropic, OpenAI). Адаптер без поддержки возвращает ошибку `image_input_unsupported` с именем модели — не обрыв хода.
-3. `src/acp/prompt-content.ts` передаёт блок `image` в сообщение вместо текста-заглушки.
-4. `promptCapabilities.image` становится `true`, только когда шаги 1–3 есть.
+1. **По умолчанию — путь из #1254:** изображение уходит путём во временном файле в блоке `keryx-desktop:local-attachments` (`untrusted`); модель открывает его инструментом. Временный каталог удаляется при закрытии представления, поэтому при повторном открытии сессии в транскрипте остаётся только путь.
+2. **Нативно — когда keryx объявляет `promptCapabilities.image: true`** (появится с flow 493): Desktop отправляет изображение ACP-блоком `image` вместо пути. Байты хранит keryx в хранилище сессии; транскрипт при повторном открытии показывает изображение.
+3. Если модель сессии не принимает изображения, keryx отказывает с понятной ошибкой (поведение flow 493); Desktop показывает её в ленте и предлагает отправить путём (п. 1).
 
-Приложение: вставка (`paste` с `image/*`) и перетаскивание файла изображения добавляют вложение-изображение с миниатюрой. Лимиты: png, jpeg, gif, webp; до 5 МиБ на файл, до 4 на сообщение. Если `agentCapabilities.promptCapabilities.image !== true`, кнопка отправки неактивна с подсказкой «Этот keryx не принимает изображения — обновите keryx».
+Лимиты — как в #1254 (png, jpeg, gif, webp; до 4 вложений по 5 МиБ); при нативной отправке действуют ещё лимиты flow 493 (PNG/JPEG), остальные форматы идут путём.
 
 ### 6.6 Индикатор контекста
 
-Источник — `conv.usage` (`used`, `size`). Показывается, если `size > 0`. Пороги цвета совпадают с метром во вкладке Info (`SessionInfoPanel.tsx`): одна функция порогов на оба места. Подсказка: «Последний вызов: N из M токенов». Меню: «Сжать контекст» отправляет `/compact` через существующий путь команд и неактивно при `busy`. «Подробнее» открывает вкладку Info.
+Источник — `conv.usage` (`used`, `size`). Показывается, если `size > 0`. Пороги цвета — одна функция с метром вкладки Info. Подсказка: «Last call: N of M tokens». Меню: «Compact» отправляет `/compact` и неактивно во время хода; «Details» открывает вкладку Info.
 
 ## 7. Точки интеграции
 
 | С чем | Как |
 |---|---|
-| `useAcpSession` | Источник меток и событий конца хода для `attention.ts`; без новых ACP-методов |
-| Рельс проектов | Не меняется; значок Dock суммирует `waiting` по всем проектам окна |
-| `GitStatus` в футере | Клик по счётчику изменений открывает вкладку «Изменения» |
-| Агентские инструменты панели | Не меняются; агент не управляет новыми вкладками |
-| keryx ACP | Изображения — через `promptCapabilities`; совместимость со старым keryx обеспечивает проверка флага |
-| [Готовность worktree](../keryx-worktree-readiness/README.md) | Вкладка «Изменения» в worktree flow показывает изменения этого worktree; проверка конфликтов парного пакета показывается в деталях flow и в футере сессии (его спецификация §8), не во вкладке |
+| `useAcpSession` | источник ожиданий, показанной сессии и конца хода для `attention_report` |
+| `projects.rs` | учёт внимания, значок, уведомления, запасной путь клика |
+| #1256 | формулировки «Needs attention», «Awaiting your answer»; источник `review_question`; база `SessionSidebar` |
+| #1254 | `useChatAttachments` (+ вид `line-comment`), попап (+ режим `@`), путь отправки изображений, `PanelRoots::require_project` |
+| flow 493 | нативный ввод изображений и `promptCapabilities.image` |
+| `GitStatus` в футере | клик по счётчику изменений открывает вкладку «Changes» |
+| [Keryx Desktop App](../keryx-desktop-app/prd.md) | его R4 (уведомления, клик открывает нужный прогон) и R11 (дифф рабочей копии с выбором строк) написаны для оболочки над Hub. Этот пакет даёт то же нативному клиенту; общий контракт — `WaitingItem` и `LineComment`, если оболочка будет делаться |
+| [Готовность worktree](../keryx-worktree-readiness/README.md) | «Changes» в worktree показывает изменения этого worktree; проверка конфликтов — в деталях flow и в футере |
 
 ## 8. Критерии приёмки
 
 | AC | Проверка |
 |---|---|
-| AC1 | Окно не в фокусе, сессия запросила разрешение: одно уведомление, значок «1»; клик открывает проект и сессию. Повторная отрисовка того же ожидания второго уведомления не даёт |
-| AC2 | Окно в фокусе, показанная сессия закончила ход: уведомления нет. Непоказанная сессия закончила ход: уведомление `turn-ended` |
-| AC3 | Выключатели `notify`, `sound`, `badge` действуют независимо и переживают перезапуск |
-| AC4 | Ожидающая сессия первой в группе «Ждут вас»; после ответа возвращается в свою группу (Pinned или дневную); свёрнутость группы запоминается |
-| AC5 | `git_changes` на фикстуре с M/A/D/R/?/двоичным файлом возвращает все статусы; на 2001 файле — `truncated: true` |
-| AC6 | `git_file_diff` и `project_file_read` отказывают для `../x`, абсолютного пути вне корня и символической ссылки наружу |
-| AC7 | Два замечания в двух файлах уходят одним блоком `keryx-desktop:line-comments` без пометки `untrusted` и блоком цитат `keryx-desktop:line-comment-quotes` с пометкой `untrusted`; черновики очищаются после отправки и сохраняются, если отправка отклонена |
-| AC8 | `@` открывает список путей; ввод сужает список; Enter вставляет `@путь`; Esc закрывает; перетаскивание из дерева вставляет тот же текст |
-| AC9 | Индикатор контекста скрыт при `size = 0`; «Сжать» неактивна во время хода и выполняет `/compact` вне хода |
-| AC10 | keryx с `image: true` и моделью со зрением: скриншот доходит до модели. keryx с `image: false`: отправка картинки заблокирована с причиной. Модель без зрения: в ленте ошибка `image_input_unsupported`, ход не обрывается молча |
-| AC11 | Тесты: `cd apps/desktop && bun test src`, `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml`, `bun test src/acp`; `tsc` и `clippy` без ошибок |
+| AC1 | Два хост-окна, три проекта, приложение не в фокусе. Сессии в двух проектах запрашивают разрешение: два уведомления, значок «2». Клик по первому (старому) уведомлению через 2 минуты открывает его проект и сессию; затем клик по второму — его. Активация через Dock без клика по уведомлению никуда не переключает. Повторная отрисовка того же ожидания второго уведомления не даёт |
+| AC2 | Приложение в фокусе, показанная сессия закончила ход: уведомления нет. Сессия в скрытом представлении закончила ход: «Turn finished»; упала — «Turn failed» |
+| AC3 | Переключатели `notify`, `sound`, `badge`, `review_questions` действуют независимо и переживают перезапуск |
+| AC4 | Закрытие представления с ожидающей сессией уменьшает значок |
+| AC5 | Ожидающая сессия первой в группе «Needs attention»; после ответа возвращается в свою группу (Pinned или дневную); свёрнутость группы запоминается |
+| AC6 | После #1256: вопрос ревью в проекте, чьё представление скрыто и у которого доска Review не открыта, не позже чем через 60 с увеличивает значок и даёт уведомление «Awaiting your answer», в том числе без сети; опрос не обращается к GitHub; при выключенном `review_questions` — нет |
+| AC7 | `git_changes` на фикстуре с M/A/D/R/?/двоичным файлом возвращает все статусы; на 2001 файле — `truncated: true` |
+| AC8 | `git_file_diff` показывает удалённый файл (старая сторона) и переименованный; отказывает для пути, которого нет в `git_changes`, для `../x` и абсолютного пути; `project_file_read` отказывает для символической ссылки наружу |
+| AC9 | Два замечания в двух файлах уходят текстом «Line comments» без блока `untrusted`; ход без других вложений в `auto` правит файлы без запроса подтверждения; черновики очищаются после отправки и сохраняются, если отправка отклонена |
+| AC10 | `@` открывает список путей; ввод сужает; Enter вставляет `@путь`; Esc закрывает; перетаскивание из дерева вставляет тот же текст |
+| AC11 | Индикатор скрыт при `size = 0`; «Compact» неактивна во время хода и выполняет `/compact` вне хода |
+| AC12 | keryx без `image: true`: картинка уходит путём (#1254). keryx с `image: true` и моделью со зрением: блоком `image`, модель описывает картинку, после повторного открытия сессии картинка видна. Модель без зрения: ошибка в ленте и предложение отправить путём |
+| AC13 | `cd apps/desktop && bun test src`, `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml`; `tsc` и `clippy` без ошибок |
 
 ## 9. Решения к заморозке
 
 | # | Вопрос | Предложение |
 |---|---|---|
-| P1 | Звук по умолчанию | Включён; системный звук уведомления, без своих файлов |
+| P1 | Звук по умолчанию | Включён; системный звук уведомления |
 | P2 | Дифф против чего | Против `HEAD` рабочей копии; дифф ветки против базы — в парном пакете |
-| P3 | Редактор диффа | Собственный рендер на `unifiedDiff.ts`, без тяжёлых редакторов в бандле |
-| P4 | Пометка замечаний к строкам | Замечание без `untrusted`; цитаты — отдельным блоком с `untrusted` |
+| P3 | Редактор диффа | Собственный рендер на `unifiedDiff.ts` |
+| P4 | Замечания к строкам | Только путь, строки и текст пользователя; без цитат и без `untrusted` |
+| P5 | Хранение изображений | Не храним сами: путь — временный файл #1254 (после закрытия представления в транскрипте только путь); нативно — хранилище сессии keryx (flow 493) |
+| P6 | Клик по уведомлению | По итогам spike S0: данные клика, иначе путь B; временная мера A не выпускается |
+| P7 | Вопросы ревью в счётчике | Да, после #1256, с отдельным переключателем |
 
 ## 10. Требования ↔ разделы
 
 | R | Разделы |
 |---|---|
-| R1–R3 | §4, §5 (`attention_*`), §6.1 |
-| R4 | §6.1, §7 |
+| R1 | §5 (`attention_report`, `attention_open`), §6.1.1–6.1.3 |
+| R2 | §6.1.2 |
+| R3 | §3, §4, §6.1.2 |
+| R4 | §6.1.4 |
 | R5 | §5 (`git_changes`, `git_file_diff`), §6.2 |
 | R6 | §6.3 |
 | R7 | §5 (`project_files`, `project_file_read`), §6.4 |
 | R8 | §6.6 |
 | R9 | §6.5 |
-| P5 | Хранение картинок | Не на диске; только в сообщении |

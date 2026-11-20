@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.dev/schemas/checkout.schema.json",
+  "title": "Keryx checkout label (<worktree-git-dir>/keryx/checkout.json)",
+  "description": "Planned. A per-worktree label stored in the worktree's own git directory. checkoutId is random, never derived from a path, so a re-created worktree with the same name does not inherit records. It is a local label for ports and diagnostics, not an access identity.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "checkoutId",
+    "createdAt"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "checkoutId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "flowId": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}
