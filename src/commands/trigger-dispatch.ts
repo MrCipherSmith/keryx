@@ -862,7 +862,8 @@ async function dispatchLocked(
         existingBranch: await branchExists(projectRoot, branch),
         // No `indexes`: the dispatcher commits everything the run left in the tree, and a
         // derived index must never ride into that commit in a project that does not ignore it.
-        only: ["env", "deps", "ports"],
+        // No `env` either: an unattended run never gets the owner's git-ignored `.env*` files.
+        only: ["deps", "ports"],
       });
       preparedBy = created.prepare;
     } catch (error) {
@@ -884,6 +885,11 @@ async function dispatchLocked(
     // project configures a dependency directory; otherwise fall back to the main checkout's.
     const mainModules = path.join(projectRoot, "node_modules");
     const wtModules = path.join(worktree, "node_modules");
+    // A failed or timed-out dependency step may leave a partial directory in this fresh worktree;
+    // drop it so the cheap symlink fallback below applies.
+    if ((preparedBy?.errors ?? []).some((line) => line.startsWith("deps:"))) {
+      await rm(wtModules, { recursive: true, force: true }).catch(() => {});
+    }
     if (existsSync(mainModules) && !existsSync(wtModules)) {
       await symlink(mainModules, wtModules, "dir").catch(() => {});
     }

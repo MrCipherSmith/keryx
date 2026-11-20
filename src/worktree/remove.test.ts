@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { createMemoryService } from "../memory/service";
 import { resolveGitCommonDir } from "../lib/git-worktrees";
 import { createWorktree, type CreateResult } from "./create";
 import { createProjectFixture, everyPortFree, type ProjectFixture } from "./project-fixture";
 import { portsJournalPath } from "./ports";
+import { promoteWorktree } from "./promote";
 import { removeWorktree, WorktreeRemoveRefusal } from "./remove";
 import { fixtureGit } from "./test-support";
 
@@ -66,7 +67,7 @@ describe("remove", () => {
     expect(forced.portsReleased).toBe(true);
     expect(existsSync(created.path)).toBe(false);
     expect(journal()).not.toContain(created.prepare.checkoutId);
-    // -D only with --force: the branch had nothing unmerged, so it goes either way.
+    // The branch had nothing unmerged, so `-d` deletes it even after --force.
     expect(branches()).not.toContain("wt-unpromoted");
   });
 
@@ -92,6 +93,48 @@ describe("remove", () => {
     expect(result.branchDeleted).toBe(false);
     expect(result.branchKept).toContain("not fully merged");
     expect(branches()).toContain("wt-unmerged");
+  });
+
+  test("--force never deletes an unmerged branch: it stays and the tip SHA is reported", async () => {
+    const created = await create("wt-force-unmerged");
+    writeFileSync(path.join(created.path, "feature.txt"), "x\n");
+    fixtureGit(project.base, created.path, ["add", "feature.txt"]);
+    fixtureGit(project.base, created.path, ["commit", "-q", "-m", "feature"]);
+    const tip = fixtureGit(project.base, created.path, ["rev-parse", "HEAD"]).trim();
+
+    const result = await removeWorktree({ cwd: project.main, name: "wt-force-unmerged", force: true });
+    expect(existsSync(created.path)).toBe(false);
+    expect(result.branchDeleted).toBe(false);
+    expect(result.branchTip).toBe(tip);
+    expect(result.branchKept).toContain(tip);
+    expect(branches()).toContain("wt-force-unmerged");
+  });
+
+  test("a registered worktree whose directory is gone is removed, and its ports are released", async () => {
+    const created = await create("wt-gone");
+    expect(journal()).toContain(created.prepare.checkoutId);
+    rmSync(created.path, { recursive: true, force: true });
+
+    const result = await removeWorktree({ cwd: project.main, name: "wt-gone" });
+    expect(result.portsReleased).toBe(true);
+    expect(journal()).not.toContain(created.prepare.checkoutId);
+    expect(fixtureGit(project.base, project.main, ["worktree", "list", "--porcelain"])).not.toContain("wt-gone");
+  });
+
+  test("entries already promoted to the user area no longer block remove", async () => {
+    const created = await create("wt-promoted");
+    await createMemoryService().create({ cwd: created.path, type: "lesson", slug: "carried-out", title: "Carried out" });
+    const env = { KERYX_HOME: project.userHome };
+
+    const blocked = await removeWorktree({ cwd: project.main, name: "wt-promoted", env }).catch((cause: unknown) => cause);
+    expect(blocked).toBeInstanceOf(WorktreeRemoveRefusal);
+
+    const report = await promoteWorktree({ cwd: created.path, stores: ["memory"], interactive: true, env });
+    expect(report.promoted.memory).toHaveLength(1);
+    // The entry is still untracked in the worktree, but the user area now holds it: no --force needed.
+    const result = await removeWorktree({ cwd: project.main, name: "wt-promoted", env });
+    expect(existsSync(created.path)).toBe(false);
+    expect(result.portsReleased).toBe(true);
   });
 
   test("never removes the main checkout, an unknown name, or the worktree it runs in", async () => {

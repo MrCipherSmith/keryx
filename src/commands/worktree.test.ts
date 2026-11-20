@@ -74,6 +74,14 @@ describe("keryx worktree (CLI)", () => {
     expect(real.stderr).toContain("interactive terminal");
   });
 
+  test("promote --entry without a value is a usage error", () => {
+    for (const argv of [["--entry"], ["--entry="], ["--entry", "--dry-run"]]) {
+      const run = runCli(wt.path, "worktree", "promote", "--dry-run", ...argv);
+      expect(run.exitCode).toBe(1);
+      expect(run.stderr).toContain("--entry needs a value");
+    }
+  });
+
   test("--help prints usage without running anything", () => {
     const run = runCli(wt.path, "worktree", "remove", "--help");
     expect(run.exitCode).toBe(0);

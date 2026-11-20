@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { ensureCheckout } from "./checkout";
+import { ensureCheckout, listLiveCheckoutIdsSync } from "./checkout";
 import { allocatePorts, portsJournalPath, readWorktreeEnv, releasePorts } from "./ports";
 import { addWorktree, createFixture, fixtureGit, removeWorktree, type Fixture } from "./test-support";
 
@@ -93,6 +93,52 @@ describe("allocatePorts", () => {
       isPortFree: always,
     });
     expect(result.env).toEqual({ PORT: "47300", API_PORT: "47301" });
+  });
+
+  test("a name that moves to a new config order never takes another name's kept port", async () => {
+    fixture = createFixture();
+    const a = addWorktree(fixture, "wt-a");
+    await allocatePorts({ cwd: a, config: { ports: { second: { env: "SECOND_PORT", range: [47500, 47502] } } }, isPortFree: always });
+    const result = await allocatePorts({
+      cwd: a,
+      config: { ports: { first: { env: "FIRST_PORT", range: [47500, 47502] }, second: { env: "SECOND_PORT", range: [47500, 47502] } } },
+      isPortFree: always,
+    });
+    expect(result.ports.second).toBe(47500);
+    expect(result.ports.first).toBe(47501);
+  });
+
+  test("many worktrees allocating at once keep every journal record and distinct ports", async () => {
+    fixture = createFixture();
+    const trees = ["a", "b", "c", "d", "e", "f"].map((name) => addWorktree(fixture as Fixture, `wt-${name}`));
+    const results = await Promise.all(trees.map((cwd) => allocatePorts({ cwd, config, isPortFree: always })));
+    expect(new Set(results.map((entry) => entry.ports.web)).size).toBe(trees.length);
+    const ids = readFileSync(portsJournalPath(path.join(fixture.main, ".git")), "utf8")
+      .trim()
+      .split("\n")
+      .map((line) => (JSON.parse(line) as { checkoutId: string }).checkoutId);
+    expect(new Set(ids)).toEqual(new Set(results.map((entry) => entry.checkoutId)));
+  });
+
+  test("a worktree labelled after another allocation started keeps its record (live set read under the lock)", async () => {
+    fixture = createFixture();
+    const a = addWorktree(fixture, "wt-a");
+    const b = addWorktree(fixture, "wt-b");
+    const second = await allocatePorts({ cwd: b, config, isPortFree: always });
+    // `a` allocates after b's record exists; b's label was created long after nothing here pre-reads it.
+    await allocatePorts({ cwd: a, config, isPortFree: always });
+    const journalText = readFileSync(portsJournalPath(path.join(fixture.main, ".git")), "utf8");
+    expect(journalText).toContain(second.checkoutId);
+    expect(listLiveCheckoutIdsSync(path.join(fixture.main, ".git"))).toContain(second.checkoutId);
+  });
+
+  test("worktree.env is written through a temp file and leaves none behind", async () => {
+    fixture = createFixture();
+    const a = addWorktree(fixture, "wt-a");
+    await allocatePorts({ cwd: a, config, isPortFree: always });
+    const dir = path.join(fixture.main, ".git", "worktrees", "wt-a", "keryx");
+    expect(readdirSync(dir).filter((name) => name.endsWith(".tmp"))).toEqual([]);
+    expect(readFileSync(path.join(dir, "worktree.env"), "utf8")).toBe("PORT=47200\n");
   });
 
   test("an exhausted range fails with a clear error", async () => {

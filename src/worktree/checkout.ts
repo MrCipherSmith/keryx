@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { readdirSync, readFileSync } from "node:fs";
 import { link, mkdir, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { resolveGitCommonDir } from "../lib/git-worktrees";
@@ -42,7 +43,8 @@ function parseCheckout(text: string): Checkout | undefined {
   }
 }
 
-async function readCheckoutFile(gitDir: string): Promise<Checkout | undefined> {
+/** The label stored in the worktree git directory `gitDir`; `undefined` when absent or unreadable. */
+export async function readCheckoutFile(gitDir: string): Promise<Checkout | undefined> {
   try {
     return parseCheckout(await readFile(checkoutFileIn(gitDir), "utf8"));
   } catch {
@@ -114,6 +116,26 @@ export async function listLiveCheckoutIds(commonDir: string): Promise<string[]> 
   for (const name of names.sort()) {
     const checkout = await readCheckoutFile(path.join(commonDir, "worktrees", name));
     if (checkout !== undefined) ids.push(checkout.checkoutId);
+  }
+  return ids;
+}
+
+/** Synchronous twin of {@link listLiveCheckoutIds}, for use inside a file-lock section that must not yield. */
+export function listLiveCheckoutIdsSync(commonDir: string): string[] {
+  let names: string[];
+  try {
+    names = readdirSync(path.join(commonDir, "worktrees"));
+  } catch {
+    return [];
+  }
+  const ids: string[] = [];
+  for (const name of names.sort()) {
+    try {
+      const checkout = parseCheckout(readFileSync(checkoutFileIn(path.join(commonDir, "worktrees", name)), "utf8"));
+      if (checkout !== undefined) ids.push(checkout.checkoutId);
+    } catch {
+      // A worktree without a readable label holds no records.
+    }
   }
   return ids;
 }

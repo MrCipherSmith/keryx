@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { DependencyConfig } from "./config";
+import { relativePathProblem, type DependencyConfig } from "./config";
 import { gitDirOf } from "./git";
 import { keryxDirIn } from "./checkout";
 
@@ -24,21 +24,59 @@ export interface InstallResult {
   stderr?: string;
 }
 
-/** Runs one install command in `cwd`. Injected so tests never reach the network. */
-export type RunInstall = (command: string, cwd: string) => Promise<InstallResult>;
+/** Runs one install command in `cwd`. Injected so tests never reach the network. `timeoutMs` bounds the run. */
+export type RunInstall = (command: string, cwd: string, timeoutMs?: number) => Promise<InstallResult>;
+
+/** How long an install or a copy-on-write copy may run before it is killed (10 minutes). */
+export const DEFAULT_DEPS_TIMEOUT_MS = 600_000;
+
+/** The configured bound: `KERYX_WORKTREE_DEPS_TIMEOUT_MS` when it is a positive integer, else the default. */
+export function depsTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
+  const parsed = Number(env.KERYX_WORKTREE_DEPS_TIMEOUT_MS);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : DEFAULT_DEPS_TIMEOUT_MS;
+}
+
+/** Spawn `command`, killing its whole process group when `timeoutMs` passes. */
+async function runBounded(command: string[], cwd: string | undefined, timeoutMs: number, wantStderr: boolean): Promise<{ code: number; stderr: string; timedOut: boolean }> {
+  const proc = Bun.spawn(command, {
+    ...(cwd !== undefined && { cwd }),
+    stdout: "ignore",
+    stderr: wantStderr ? "pipe" : "ignore",
+    detached: true,
+  });
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    try {
+      process.kill(-proc.pid, "SIGKILL");
+    } catch {
+      proc.kill("SIGKILL");
+    }
+  }, timeoutMs);
+  try {
+    const [stderr, code] = await Promise.all([wantStderr ? new Response(proc.stderr as ReadableStream).text() : Promise.resolve(""), proc.exited]);
+    return { code, stderr, timedOut };
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 export interface PrepareDependencyInput {
   mainRoot: string;
   worktreeRoot: string;
   dependency: DependencyConfig;
   runInstall?: RunInstall;
+  /** Bound for the copy and the install; default {@link depsTimeoutMs}. */
+  timeoutMs?: number;
   now?: () => Date;
 }
 
-export const defaultRunInstall: RunInstall = async (command, cwd) => {
-  const proc = Bun.spawn(["sh", "-c", command], { cwd, stdout: "ignore", stderr: "pipe" });
-  const [stderr, code] = await Promise.all([new Response(proc.stderr).text(), proc.exited]);
-  return { code, stderr };
+export const defaultRunInstall: RunInstall = async (command, cwd, timeoutMs = depsTimeoutMs()) => {
+  const outcome = await runBounded(["sh", "-c", command], cwd, timeoutMs, true);
+  if (outcome.timedOut) {
+    return { code: 124, stderr: `timed out after ${Math.round(timeoutMs / 1000)}s and was killed` };
+  }
+  return { code: outcome.code, stderr: outcome.stderr };
 };
 
 /** sha256 over the lock files' contents, in the configured order. An absent file contributes a marker, so removing a lock changes the hash. */
@@ -65,12 +103,12 @@ function cowCopyCommand(source: string, destination: string): string[] | undefin
 }
 
 /** Copy-on-write copy; `false` when the platform or filesystem refuses (which is not an error). */
-async function tryCowCopy(source: string, destination: string): Promise<boolean> {
+async function tryCowCopy(source: string, destination: string, timeoutMs: number): Promise<boolean> {
   const command = cowCopyCommand(source, destination);
   if (command === undefined) return false;
   await mkdir(path.dirname(destination), { recursive: true });
-  const proc = Bun.spawn(command, { stdout: "ignore", stderr: "ignore" });
-  if ((await proc.exited) === 0) return true;
+  const outcome = await runBounded(command, undefined, timeoutMs, false);
+  if (outcome.code === 0 && !outcome.timedOut) return true;
   await rm(destination, { recursive: true, force: true });
   return false;
 }
@@ -108,6 +146,11 @@ async function writeDepsRecord(worktreeRoot: string, record: DepsRecord): Promis
 export async function prepareDependency(input: PrepareDependencyInput): Promise<DepsRecord> {
   const { mainRoot, worktreeRoot, dependency } = input;
   const runInstall = input.runInstall ?? defaultRunInstall;
+  for (const entry of [dependency.dir, ...dependency.lockfiles]) {
+    const problem = relativePathProblem(entry);
+    if (problem !== undefined) throw new Error(`unsafe dependency path "${entry}": ${problem}`);
+  }
+  const timeoutMs = input.timeoutMs ?? depsTimeoutMs();
   const at = (input.now?.() ?? new Date()).toISOString();
   const target = path.join(worktreeRoot, dependency.dir);
   const lockHash = await computeLockHash(worktreeRoot, dependency.lockfiles);
@@ -124,7 +167,7 @@ export async function prepareDependency(input: PrepareDependencyInput): Promise<
   const mainDir = path.join(mainRoot, dependency.dir);
   // An existing (stale) directory is not copied over: cp would nest into it.
   if (!present && (await isDirectory(mainDir))) {
-    cloned = await tryCowCopy(mainDir, target);
+    cloned = await tryCowCopy(mainDir, target, timeoutMs);
   }
   const needsInstall = !cloned || (await computeLockHash(mainRoot, dependency.lockfiles)) !== lockHash;
 
@@ -135,7 +178,7 @@ export async function prepareDependency(input: PrepareDependencyInput): Promise<
         return { dir: dependency.dir, lockHash, method: "skipped", at };
       }
     } else {
-      const outcome = await runInstall(dependency.install, worktreeRoot);
+      const outcome = await runInstall(dependency.install, worktreeRoot, timeoutMs);
       if (outcome.code !== 0) {
         const detail = outcome.stderr?.trim().split("\n").slice(-3).join(" ") ?? "";
         throw new Error(`install failed for ${dependency.dir} (exit ${outcome.code})${detail === "" ? "" : `: ${detail}`}`);

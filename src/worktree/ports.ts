@@ -5,11 +5,11 @@
 // port.
 
 import { readFileSync, writeFileSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { withFileLock } from "../lib/file-lock";
 import { resolveGitCommonDir } from "../lib/git-worktrees";
-import { ensureCheckout, keryxDirIn, listLiveCheckoutIds } from "./checkout";
+import { ensureCheckout, keryxDirIn, listLiveCheckoutIdsSync } from "./checkout";
 import type { WorktreeConfig } from "./config";
 import { gitDirOf } from "./git";
 
@@ -117,28 +117,37 @@ export async function allocatePorts(opts: AllocatePortsOptions): Promise<Allocat
     throw new Error("the main checkout has no ports: run this inside a linked worktree");
   }
   const [commonDir, gitDir] = await Promise.all([commonDirOf(opts.cwd), gitDirOf(opts.cwd)]);
-  const live = new Set(await listLiveCheckoutIds(commonDir));
   const isPortFree = opts.isPortFree ?? defaultIsPortFree;
   const journal = portsJournalPath(commonDir);
   const at = (opts.now?.() ?? new Date()).toISOString();
 
   const ports = lockedOrThrow(`${journal}.lock`, () => {
-    // Records of removed worktrees are released; drop them while we hold the lock.
+    // Records of removed worktrees are released. The live set is read here, under the lock:
+    // a worktree labelled after an earlier read must not have its record dropped.
+    const live = new Set(listLiveCheckoutIdsSync(commonDir));
     const records = readRecordsSync(journal).filter((record) => live.has(record.checkoutId));
     const held = new Set(records.filter((record) => record.checkoutId !== checkout.checkoutId).map((record) => record.port));
     const mine = new Map(records.filter((record) => record.checkoutId === checkout.checkoutId).map((record) => [record.name, record]));
     const next = records.filter((record) => record.checkoutId !== checkout.checkoutId);
     const result: Record<string, number> = {};
+    const used = new Set<number>();
 
+    // First keep every port this checkout already holds in range, so a name picking a
+    // new port can never take the port another of its names is about to keep.
     for (const [name, config] of Object.entries(opts.config.ports)) {
       const [lo, hi] = config.range;
       const existing = mine.get(name);
-      let port: number | undefined;
-      if (existing !== undefined && existing.port >= lo && existing.port <= hi && !held.has(existing.port)) {
-        port = existing.port;
-      } else {
+      if (existing !== undefined && existing.port >= lo && existing.port <= hi && !held.has(existing.port) && !used.has(existing.port)) {
+        result[name] = existing.port;
+        used.add(existing.port);
+      }
+    }
+    for (const [name, config] of Object.entries(opts.config.ports)) {
+      const [lo, hi] = config.range;
+      let port = result[name];
+      if (port === undefined) {
         for (let candidate = lo; candidate <= hi; candidate += 1) {
-          if (held.has(candidate) || Object.values(result).includes(candidate)) continue;
+          if (held.has(candidate) || used.has(candidate)) continue;
           if (isPortFree(candidate)) {
             port = candidate;
             break;
@@ -149,6 +158,8 @@ export async function allocatePorts(opts: AllocatePortsOptions): Promise<Allocat
         throw new Error(`no free port for "${name}" in range ${lo}-${hi}: every port is held or in use`);
       }
       result[name] = port;
+      used.add(port);
+      const existing = mine.get(name);
       next.push({ checkoutId: checkout.checkoutId, name, port, at: existing?.port === port ? existing.at : at });
     }
 
@@ -162,7 +173,10 @@ export async function allocatePorts(opts: AllocatePortsOptions): Promise<Allocat
     env[config.env] = String(ports[name]);
   }
   await mkdir(keryxDirIn(gitDir), { recursive: true });
-  await writeFile(worktreeEnvPath(gitDir), Object.entries(env).map(([key, value]) => `${key}=${value}\n`).join(""), "utf8");
+  const envFile = worktreeEnvPath(gitDir);
+  const temp = `${envFile}.${process.pid}.${Date.now()}.tmp`;
+  await writeFile(temp, Object.entries(env).map(([key, value]) => `${key}=${value}\n`).join(""), "utf8");
+  await rename(temp, envFile);
   return { checkoutId: checkout.checkoutId, ports, env };
 }
 

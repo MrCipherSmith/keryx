@@ -2,14 +2,15 @@
 // that were never carried out, refuse a dirty or unpromoted worktree without
 // `--force`, free its ports, and let git remove it.
 
-import { realpath } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { readdir, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { assertGitRevision } from "../lib/git-revision";
-import { readCheckout } from "./checkout";
+import { readCheckout, readCheckoutFile, type Checkout } from "./checkout";
 import { resolveWorktreeContext } from "./context";
 import { runGit } from "./git";
 import { releasePorts } from "./ports";
-import { listUnpromoted, type Unpromoted } from "./promote";
+import { hasUnsavedChanges, listUnpromoted, type Unpromoted } from "./promote";
 
 export interface RemoveOptions {
   cwd: string;
@@ -27,6 +28,8 @@ export interface RemoveResult {
   branchDeleted: boolean;
   /** Why the branch was left in place, when it was. */
   branchKept?: string;
+  /** The SHA the kept branch points at, so an unmerged tip is never lost silently. */
+  branchTip?: string;
   portsReleased: boolean;
 }
 
@@ -68,6 +71,19 @@ async function listWorktrees(cwd: string): Promise<ListedWorktree[]> {
   return found;
 }
 
+/** The label of a registered worktree whose directory is gone, found through its admin directory under `<common>/worktrees`. */
+async function readCheckoutOfMissing(commonDir: string, worktreePath: string): Promise<Checkout | undefined> {
+  const adminRoot = path.join(commonDir, "worktrees");
+  const names = await readdir(adminRoot).catch(() => [] as string[]);
+  for (const name of names) {
+    const pointer = await readFile(path.join(adminRoot, name, "gitdir"), "utf8").catch(() => "");
+    if (path.dirname(pointer.trim()) === worktreePath || path.dirname(pointer.trim()) === path.resolve(worktreePath)) {
+      return readCheckoutFile(path.join(adminRoot, name));
+    }
+  }
+  return undefined;
+}
+
 function describeUnpromoted(unpromoted: Unpromoted): string {
   const lines = [
     ...unpromoted.memory.map((entry) => `  memory   ${entry.path} (${entry.state})`),
@@ -105,24 +121,32 @@ export async function removeWorktree(opts: RemoveOptions): Promise<RemoveResult>
     throw new Error("refusing to remove the worktree this command runs in: run it from another checkout");
   }
 
-  const unpromoted = await listUnpromoted(targetRoot, opts);
-  if (!force && (unpromoted.memory.length > 0 || unpromoted.learning.length > 0)) {
-    throw new WorktreeRemoveRefusal(
-      "unpromoted",
-      `${path.basename(targetRoot)} holds entries that exist nowhere else:\n${describeUnpromoted(unpromoted)}\n` +
-        "Promote them (keryx worktree promote), commit them, or pass --force to discard them.",
-      unpromoted,
-    );
-  }
-  const dirty = await runGit(targetRoot, ["status", "--porcelain"]);
-  if (!force && (dirty.code !== 0 || dirty.stdout.trim().length > 0)) {
-    throw new WorktreeRemoveRefusal("dirty", `${path.basename(targetRoot)} has uncommitted changes; commit them or pass --force`);
+  // A registered worktree whose directory is gone has nothing left to promote or lose:
+  // skip the checks and let git forget it.
+  const missing = !existsSync(target.path);
+  if (!missing) {
+    const unpromoted = await listUnpromoted(targetRoot, opts);
+    if (!force && (unpromoted.memory.length > 0 || unpromoted.learning.length > 0)) {
+      throw new WorktreeRemoveRefusal(
+        "unpromoted",
+        `${path.basename(targetRoot)} holds entries that exist nowhere else:\n${describeUnpromoted(unpromoted)}\n` +
+          "Promote them (keryx worktree promote), commit them, or pass --force to discard them.",
+        unpromoted,
+      );
+    }
+    // Memory entries already carried to the user area do not count as work at risk.
+    const dirty = await hasUnsavedChanges(targetRoot, opts);
+    if (!force && dirty !== false) {
+      throw new WorktreeRemoveRefusal("dirty", `${path.basename(targetRoot)} has uncommitted changes; commit them or pass --force`);
+    }
   }
 
-  const checkout = await readCheckout(targetRoot);
-  const removed = await runGit(context.mainRoot, ["worktree", "remove", ...(force ? ["--force"] : []), "--", target.path]);
+  const checkout = missing ? await readCheckoutOfMissing(context.commonDir, target.path) : await readCheckout(targetRoot);
+  const removed = await runGit(context.mainRoot, ["worktree", "remove", "--force", "--", target.path]);
   if (removed.code !== 0) {
-    throw new Error(`git worktree remove failed: ${removed.stderr.trim() || removed.stdout.trim()}`);
+    if (!missing) throw new Error(`git worktree remove failed: ${removed.stderr.trim() || removed.stdout.trim()}`);
+    const pruned = await runGit(context.mainRoot, ["worktree", "prune"]);
+    if (pruned.code !== 0) throw new Error(`git worktree prune failed: ${pruned.stderr.trim() || pruned.stdout.trim()}`);
   }
 
   let portsReleased = false;
@@ -137,12 +161,16 @@ export async function removeWorktree(opts: RemoveOptions): Promise<RemoveResult>
     if (opts.keepBranch === true) {
       result.branchKept = "--keep-branch";
     } else {
-      // `-d` refuses an unmerged branch; only an explicit --force reaches `-D`.
-      const deleted = await runGit(context.mainRoot, ["branch", force ? "-D" : "-d", "--", assertGitRevision(target.branch)]);
+      // `-d` only, even with --force: --force discards the worktree, never unmerged commits.
+      const tip = await runGit(context.mainRoot, ["rev-parse", "--verify", "--quiet", "--end-of-options", `refs/heads/${target.branch}`]);
+      const deleted = await runGit(context.mainRoot, ["branch", "-d", "--", assertGitRevision(target.branch)]);
       if (deleted.code === 0) {
         result.branchDeleted = true;
       } else {
-        result.branchKept = deleted.stderr.trim().split("\n")[0] || "git could not delete the branch";
+        const reason = deleted.stderr.trim().split("\n")[0] || "git could not delete the branch";
+        const tipSha = tip.code === 0 ? tip.stdout.trim() : "";
+        result.branchKept = tipSha === "" ? reason : `${reason} (branch tip ${tipSha}; delete it with git branch -D ${target.branch} once you are sure)`;
+        if (tipSha !== "") result.branchTip = tipSha;
       }
     }
   }

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { copyEnvFiles } from "./env-files";
 import { addWorktree, createFixture, type Fixture } from "./test-support";
@@ -51,6 +51,34 @@ describe("copyEnvFiles (AC1)", () => {
     const result = await copyEnvFiles({ mainRoot: fixture.main, worktreeRoot: worktree, files: [".env.ignored", "../escape", "/abs"] });
     expect(result.copied).toEqual([]);
     expect(result.skipped.map((entry) => entry.file)).toEqual([".env.ignored", "../escape", "/abs"]);
+  });
+
+  test("skips dot-dot segments and .git paths, but copies a name containing '..'", async () => {
+    fixture = createFixture();
+    const worktree = addWorktree(fixture, "wt-a");
+    writeFileSync(path.join(fixture.main, ".gitignore"), ".env\n.env.ignored\nnode_modules\na..b.env\n");
+    writeFileSync(path.join(fixture.main, "a..b.env"), "X=1\n");
+    writeFileSync(path.join(worktree, ".gitignore"), ".env\n.env.ignored\nnode_modules\na..b.env\n");
+    const result = await copyEnvFiles({ mainRoot: fixture.main, worktreeRoot: worktree, files: [".", ".git/config", "a/../x", "a..b.env"] });
+    expect(result.copied).toEqual(["a..b.env"]);
+    expect(result.skipped.map((entry) => entry.file)).toEqual([".", ".git/config", "a/../x"]);
+  });
+
+  test("refuses to copy through a symlinked parent directory of the destination", async () => {
+    fixture = createFixture();
+    const worktree = addWorktree(fixture, "wt-a");
+    const outside = path.join(fixture.base, "outside");
+    mkdirSync(outside);
+    mkdirSync(path.join(fixture.main, "cfg"));
+    writeFileSync(path.join(fixture.main, "cfg", ".env"), "SECRET=1\n");
+    // `cfg/.env` must be ignored in the worktree for the copy to be attempted at all.
+    writeFileSync(path.join(worktree, ".gitignore"), ".env\ncfg/\n");
+    symlinkSync(outside, path.join(worktree, "cfg"), "dir");
+
+    const result = await copyEnvFiles({ mainRoot: fixture.main, worktreeRoot: worktree, files: ["cfg/.env"], force: true });
+    expect(result.copied).toEqual([]);
+    expect(result.skipped).toEqual([{ file: "cfg/.env", reason: expect.stringContaining("symlink") }]);
+    expect(existsSync(path.join(outside, ".env"))).toBe(false);
   });
 
   test("refuses to copy a checkout onto itself", async () => {

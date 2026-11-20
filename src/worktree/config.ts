@@ -113,15 +113,31 @@ function rejectUnknownKeys(record: Record<string, unknown>, allowed: readonly st
   }
 }
 
+/**
+ * Why `value` cannot name a path inside a checkout, or `undefined` when it can: it must be
+ * non-empty, relative, name something below the root (not `.`), never start in `.git`, and
+ * hold no `..` segment (`a..b.env` is a fine file name).
+ */
+export function relativePathProblem(value: string): string | undefined {
+  if (value.length === 0) return "must be a non-empty string";
+  if (value.startsWith("/") || path.isAbsolute(value) || /^[A-Za-z]:/.test(value)) {
+    return "must be relative to the checkout root, not absolute";
+  }
+  const segments = value.split(/[\\/]/);
+  if (segments.includes("..")) return 'must not contain a ".." segment';
+  const meaningful = segments.filter((segment) => segment !== "" && segment !== ".");
+  if (meaningful.length === 0) return "must name a path below the checkout root, not the root itself";
+  if ((meaningful[0] as string).toLowerCase() === ".git") return "must not point into .git";
+  return undefined;
+}
+
 function parseRelativePath(value: unknown, field: string): string {
-  if (typeof value !== "string" || value.length === 0) {
+  if (typeof value !== "string") {
     throw new WorktreeConfigError(field, "must be a non-empty string");
   }
-  if (value.startsWith("/") || path.isAbsolute(value) || /^[A-Za-z]:/.test(value)) {
-    throw new WorktreeConfigError(field, "must be relative to the checkout root, not absolute");
-  }
-  if (value.includes("..")) {
-    throw new WorktreeConfigError(field, 'must not contain ".."');
+  const problem = relativePathProblem(value);
+  if (problem !== undefined) {
+    throw new WorktreeConfigError(field, problem);
   }
   return value;
 }
@@ -161,6 +177,7 @@ function parsePorts(value: unknown): Record<string, PortConfig> {
     throw new WorktreeConfigError("ports", "must be an object");
   }
   const ports: Record<string, PortConfig> = {};
+  const envNames = new Set<string>();
   for (const [name, entry] of Object.entries(value)) {
     const field = `ports.${name}`;
     if (!/^[a-z][a-z0-9_-]{0,31}$/.test(name)) {
@@ -173,6 +190,10 @@ function parsePorts(value: unknown): Record<string, PortConfig> {
     if (typeof entry.env !== "string" || !/^[A-Z_][A-Z0-9_]*$/.test(entry.env)) {
       throw new WorktreeConfigError(`${field}.env`, "must be an environment variable name like PORT");
     }
+    if (envNames.has(entry.env)) {
+      throw new WorktreeConfigError(`${field}.env`, `environment variable ${entry.env} is already used by another port`);
+    }
+    envNames.add(entry.env);
     const range = entry.range;
     if (!Array.isArray(range) || range.length !== 2) {
       throw new WorktreeConfigError(`${field}.range`, "must be [low, high]");

@@ -3,8 +3,7 @@
 // are decided once and worded once.
 
 import { realpath } from "node:fs/promises";
-import path from "node:path";
-import { resolveGitCommonDir } from "../lib/git-worktrees";
+import { resolveGitCommonDir, resolveMainCheckoutRoot } from "../lib/git-worktrees";
 import { gitDirOf, runGit } from "./git";
 
 export interface WorktreeContext {
@@ -31,13 +30,18 @@ export async function resolveWorktreeContext(cwd: string): Promise<WorktreeConte
   if (topLevel.length === 0) {
     throw new Error(`not a git repository: ${cwd}`);
   }
-  const [commonDir, gitDir, root] = await Promise.all([resolveGitCommonDir(cwd), gitDirOf(cwd), canonical(topLevel)]);
-  if (commonDir === undefined) {
+  const [commonDir, mainRoot, gitDir, root] = await Promise.all([
+    resolveGitCommonDir(cwd),
+    resolveMainCheckoutRoot(cwd),
+    gitDirOf(cwd),
+    canonical(topLevel),
+  ]);
+  if (commonDir === undefined || mainRoot === undefined) {
     throw new Error(`not a git repository: ${cwd}`);
   }
   return {
     root,
-    mainRoot: path.dirname(commonDir),
+    mainRoot,
     commonDir,
     gitDir,
     isMain: (await canonical(gitDir)) === (await canonical(commonDir)),

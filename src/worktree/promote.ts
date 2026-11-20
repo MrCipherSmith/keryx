@@ -8,6 +8,7 @@
 // Without a terminal only `dryRun` works.
 
 import { lstatSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { withFileLock } from "../lib/file-lock";
 import { LearningPromoteError, promotePattern } from "../learning/promote";
@@ -70,6 +71,10 @@ function storeOptions(opts: { env?: NodeJS.ProcessEnv; homeDir?: string }): Stor
   };
 }
 
+function userMemoryRoot(root: string, opts: { env?: NodeJS.ProcessEnv; homeDir?: string }): string {
+  return memoryRootFor("user", root, opts.env ?? process.env, opts.homeDir);
+}
+
 /** `<folder>/<name>.md` under the memory root when `relative` (from the worktree root) is a typed memory entry. */
 function memoryEntryParts(relative: string): { folder: string; name: string } | undefined {
   const prefix = ".metaproject/memory/";
@@ -81,22 +86,69 @@ function memoryEntryParts(relative: string): { folder: string; name: string } | 
   return { folder, name };
 }
 
-async function unpromotedMemory(root: string): Promise<UnpromotedMemory[]> {
-  const status = await runGit(root, ["status", "--porcelain=v1", "-z", "--untracked-files=all", "--", ".metaproject/memory"]);
-  if (status.code !== 0) return [];
-  const found: UnpromotedMemory[] = [];
-  const tokens = status.stdout.split("\0");
+const PROMOTED_LINE = /\n?- Promoted from project .*, branch .* on \d{4}-\d{2}-\d{2}\.\n?$/;
+
+/** True when the user area already holds this entry: the same body, ignoring the trailing "Promoted from" line. */
+async function alreadyPromoted(root: string, userRoot: string, relative: string): Promise<boolean> {
+  const parts = memoryEntryParts(relative);
+  if (parts === undefined) return false;
+  try {
+    const [source, destination] = await Promise.all([
+      readFile(path.join(root, relative), "utf8"),
+      readFile(path.join(userRoot, parts.folder, parts.name), "utf8"),
+    ]);
+    return destination.replace(PROMOTED_LINE, "").trimEnd() === source.trimEnd();
+  } catch {
+    return false;
+  }
+}
+
+interface StatusEntry {
+  code: string;
+  file: string;
+}
+
+function parseStatus(stdout: string): StatusEntry[] {
+  const entries: StatusEntry[] = [];
+  const tokens = stdout.split("\0");
   for (let index = 0; index < tokens.length; index += 1) {
     const token = tokens[index] as string;
     if (token.length < 4) continue;
     const code = token.slice(0, 2);
-    const file = token.slice(3);
     // A rename or copy carries its source path as the next token.
     if (code[0] === "R" || code[0] === "C" || code[1] === "R" || code[1] === "C") index += 1;
+    entries.push({ code, file: token.slice(3) });
+  }
+  return entries;
+}
+
+async function unpromotedMemory(root: string, userRoot: string): Promise<UnpromotedMemory[]> {
+  const status = await runGit(root, ["status", "--porcelain=v1", "-z", "--untracked-files=all", "--", ".metaproject/memory"]);
+  if (status.code !== 0) return [];
+  const found: UnpromotedMemory[] = [];
+  for (const { code, file } of parseStatus(status.stdout)) {
     if (code.includes("D") || memoryEntryParts(file) === undefined) continue;
+    if (await alreadyPromoted(root, userRoot, file)) continue;
     found.push({ path: file, state: code === "??" ? "untracked" : "modified" });
   }
   return found.sort((a, b) => a.path.localeCompare(b.path));
+}
+
+/**
+ * Whether the worktree at `cwd` has uncommitted changes other than memory entries the
+ * user area already holds: those were carried out by `promote`, so they are not at risk.
+ * `undefined` when git cannot say.
+ */
+export async function hasUnsavedChanges(cwd: string, opts: { env?: NodeJS.ProcessEnv; homeDir?: string } = {}): Promise<boolean | undefined> {
+  const context = await resolveWorktreeContext(cwd);
+  const status = await runGit(context.root, ["status", "--porcelain=v1", "-z", "--untracked-files=all"]);
+  if (status.code !== 0) return undefined;
+  const userRoot = userMemoryRoot(context.root, opts);
+  for (const { file } of parseStatus(status.stdout)) {
+    if (memoryEntryParts(file) !== undefined && (await alreadyPromoted(context.root, userRoot, file))) continue;
+    return true;
+  }
+  return false;
 }
 
 async function unpromotedLearning(root: string, options: StoreEnvOptions): Promise<UnpromotedLearning[]> {
@@ -119,7 +171,7 @@ async function unpromotedLearning(root: string, options: StoreEnvOptions): Promi
 export async function listUnpromoted(cwd: string, opts: { env?: NodeJS.ProcessEnv; homeDir?: string } = {}): Promise<Unpromoted> {
   const context = await resolveWorktreeContext(cwd);
   return {
-    memory: await unpromotedMemory(context.root),
+    memory: await unpromotedMemory(context.root, userMemoryRoot(context.root, opts)),
     learning: await unpromotedLearning(context.root, storeOptions(opts)),
   };
 }
@@ -204,7 +256,7 @@ export async function promoteWorktree(opts: PromoteOptions): Promise<PromoteRepo
   const wanted = (id: string): boolean => opts.entries === undefined || opts.entries.length === 0 || opts.entries.includes(id);
 
   const candidates: Unpromoted = {
-    memory: stores.includes("memory") ? (await unpromotedMemory(context.root)).filter((entry) => wanted(entry.path)) : [],
+    memory: stores.includes("memory") ? (await unpromotedMemory(context.root, userMemoryRoot(context.root, opts))).filter((entry) => wanted(entry.path)) : [],
     learning: stores.includes("learning") ? (await unpromotedLearning(context.root, options)).filter((entry) => wanted(entry.id)) : [],
   };
   const report: PromoteReport = { dryRun, candidates, promoted: { memory: [], learning: [] }, skipped: [] };
@@ -214,7 +266,7 @@ export async function promoteWorktree(opts: PromoteOptions): Promise<PromoteRepo
     const branch = await runGit(context.root, ["branch", "--show-current"]);
     const copied = copyMemoryEntries({
       worktreeRoot: context.root,
-      userRoot: memoryRootFor("user", context.root, opts.env ?? process.env, opts.homeDir),
+      userRoot: userMemoryRoot(context.root, opts),
       entries: candidates.memory,
       project: path.basename(context.mainRoot),
       branch: branch.stdout.trim() || "(detached)",

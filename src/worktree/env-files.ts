@@ -1,5 +1,6 @@
 import { chmod, constants, copyFile, lstat, mkdir, realpath, unlink } from "node:fs/promises";
 import path from "node:path";
+import { relativePathProblem } from "./config";
 import { runGit } from "./git";
 
 export interface CopyEnvFilesInput {
@@ -21,7 +22,20 @@ export interface CopyEnvFilesResult {
 }
 
 function isUnsafeRelative(file: string): boolean {
-  return file.length === 0 || path.isAbsolute(file) || file.includes("..");
+  return relativePathProblem(file) !== undefined;
+}
+
+/** True when any existing directory between the worktree root and the destination's parent is a symlink. */
+async function parentIsSymlinked(worktreeRoot: string, destination: string): Promise<boolean> {
+  const segments = path.relative(worktreeRoot, path.dirname(destination)).split(path.sep).filter((segment) => segment.length > 0);
+  let current = worktreeRoot;
+  for (const segment of segments) {
+    current = path.join(current, segment);
+    const info = await lstat(current).catch(() => undefined);
+    if (info === undefined) return false;
+    if (info.isSymbolicLink()) return true;
+  }
+  return false;
 }
 
 /**
@@ -57,6 +71,13 @@ export async function copyEnvFiles(input: CopyEnvFilesInput): Promise<CopyEnvFil
     }
     if (!sourceStat.isFile()) {
       skip("not a regular file in the main checkout");
+      continue;
+    }
+
+    // Before anything is written (and before git is asked, which refuses to look past a link):
+    // a symlinked parent would send the copy outside the worktree.
+    if (await parentIsSymlinked(worktreeRoot, destination)) {
+      skip("a parent directory of the destination is a symlink");
       continue;
     }
 

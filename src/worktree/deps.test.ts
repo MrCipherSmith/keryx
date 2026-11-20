@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { computeLockHash, prepareDependency, readDepsRecords, type RunInstall } from "./deps";
+import { computeLockHash, defaultRunInstall, depsTimeoutMs, prepareDependency, readDepsRecords, type RunInstall } from "./deps";
 import { addWorktree, createFixture, type Fixture } from "./test-support";
 
 let fixture: Fixture | undefined;
@@ -30,6 +30,37 @@ function seedMain(root: string, lock: string): void {
   mkdirSync(path.join(root, "node_modules", "pkg"), { recursive: true });
   writeFileSync(path.join(root, "node_modules", "pkg", "index.js"), "module.exports = 1;\n");
 }
+
+describe("install timeout", () => {
+  test("defaultRunInstall kills a command that outlives its bound", async () => {
+    fixture = createFixture();
+    const started = Date.now();
+    const outcome = await defaultRunInstall("sleep 30", fixture.main, 300);
+    expect(outcome.code).not.toBe(0);
+    expect(outcome.stderr).toContain("timed out");
+    expect(Date.now() - started).toBeLessThan(10_000);
+  });
+
+  test("defaultRunInstall returns the exit code of a command that finishes in time", async () => {
+    fixture = createFixture();
+    expect((await defaultRunInstall("exit 3", fixture.main, 5000)).code).toBe(3);
+    expect((await defaultRunInstall("true", fixture.main, 5000)).code).toBe(0);
+  });
+
+  test("depsTimeoutMs reads the override and falls back to ten minutes", () => {
+    expect(depsTimeoutMs({})).toBe(600_000);
+    expect(depsTimeoutMs({ KERYX_WORKTREE_DEPS_TIMEOUT_MS: "1500" })).toBe(1500);
+    expect(depsTimeoutMs({ KERYX_WORKTREE_DEPS_TIMEOUT_MS: "nope" })).toBe(600_000);
+  });
+
+  test("prepareDependency refuses an unsafe dependency path", async () => {
+    fixture = createFixture();
+    const worktree = addWorktree(fixture, "wt-a");
+    await expect(
+      prepareDependency({ mainRoot: fixture.main, worktreeRoot: worktree, dependency: { dir: ".git", lockfiles: [] } }),
+    ).rejects.toThrow("unsafe dependency path");
+  });
+});
 
 describe("prepareDependency (AC2)", () => {
   test("clones from the main checkout when locks match, then skips on the second call", async () => {

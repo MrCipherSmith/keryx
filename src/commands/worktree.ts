@@ -166,7 +166,16 @@ async function runPromote(args: string[]): Promise<void> {
       throw new Error(`--store takes a comma-separated subset of ${PROMOTE_STORES.join(", ")}${unknown.length > 0 ? ` (got ${unknown.join(", ")})` : ""}`);
     }
   }
-  const entries = args.flatMap((argument, index) => (argument === "--entry" ? [args[index + 1] as string] : argument.startsWith("--entry=") ? [argument.slice("--entry=".length)] : []));
+  const entries: string[] = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const argument = args[index] as string;
+    if (argument !== "--entry" && !argument.startsWith("--entry=")) continue;
+    const value = argument === "--entry" ? args[index + 1] : argument.slice("--entry=".length);
+    if (value === undefined || value.length === 0 || (argument === "--entry" && value.startsWith("--"))) {
+      throw new Error("--entry needs a value: a learning id or a memory path (Usage: keryx worktree promote [--entry <id-or-path>]...)");
+    }
+    entries.push(value);
+  }
   const report = await promoteWorktree({
     cwd: process.cwd(),
     ...(stores !== undefined && { stores: stores as PromoteStore[] }),

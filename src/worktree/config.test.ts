@@ -95,6 +95,22 @@ describe("parseWorktreeConfig validation (AC11)", () => {
     );
   });
 
+  test("rejects '.', empty, .git-rooted and '..'-segment paths but allows '..' inside a name", () => {
+    expect(fieldOf(() => parseWorktreeConfig({ version: 1, envFiles: ["."] }))).toBe("envFiles[0]");
+    expect(fieldOf(() => parseWorktreeConfig({ version: 1, envFiles: ["./"] }))).toBe("envFiles[0]");
+    expect(fieldOf(() => parseWorktreeConfig({ version: 1, envFiles: [""] }))).toBe("envFiles[0]");
+    expect(fieldOf(() => parseWorktreeConfig({ version: 1, envFiles: [".git/config"] }))).toBe("envFiles[0]");
+    expect(fieldOf(() => parseWorktreeConfig({ version: 1, envFiles: ["./.git/hooks/x"] }))).toBe("envFiles[0]");
+    expect(fieldOf(() => parseWorktreeConfig({ version: 1, dependencies: [{ dir: ".git" }] }))).toBe("dependencies[0].dir");
+    expect(fieldOf(() => parseWorktreeConfig({ version: 1, envFiles: ["a/.."] }))).toBe("envFiles[0]");
+    expect(parseWorktreeConfig({ version: 1, envFiles: ["a..b.env", "sub/.gitignored.env"] }).envFiles).toEqual(["a..b.env", "sub/.gitignored.env"]);
+  });
+
+  test("rejects two ports sharing one environment variable", () => {
+    const ports = { web: { env: "PORT", range: [5200, 5201] }, api: { env: "PORT", range: [5300, 5301] } };
+    expect(fieldOf(() => parseWorktreeConfig({ version: 1, ports }))).toBe("ports.api.env");
+  });
+
   test("rejects a wrong version and unknown fields", () => {
     expect(fieldOf(() => parseWorktreeConfig({ version: 2 }))).toBe("version");
     expect(fieldOf(() => parseWorktreeConfig({ version: 1, extra: true }))).toBe("extra");

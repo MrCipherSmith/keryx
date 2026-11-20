@@ -108,8 +108,18 @@ describe("promote (AC5)", () => {
     expect(statusOf(project, project.main, true)).toBe(mainBefore);
   });
 
+  test("an entry the user area already holds with the same body is no longer listed as unpromoted", async () => {
+    expect((await listUnpromoted(wt.path, { env })).memory.map((entry) => entry.path)).toEqual(MEMORY_PATHS);
+    await promoteWorktree({ cwd: wt.path, stores: ["memory"], interactive: true, env, now: () => NOW });
+    expect((await listUnpromoted(wt.path, { env })).memory).toEqual([]);
+    const again = await promoteWorktree({ cwd: wt.path, stores: ["memory"], dryRun: true, interactive: false, env });
+    expect(again.candidates.memory).toEqual([]);
+  });
+
   test("an existing user entry is never overwritten", async () => {
     await promoteWorktree({ cwd: wt.path, stores: ["memory"], interactive: true, env, now: () => NOW });
+    // Editing the source after promotion makes it differ from the user copy: it is listed again, never overwritten.
+    for (const entry of MEMORY_PATHS) appendFileSync(path.join(wt.path, entry), "- changed after promotion\n");
     const again = await promoteWorktree({ cwd: wt.path, stores: ["memory"], interactive: true, env, now: () => NOW });
     expect(again.promoted.memory).toEqual([]);
     expect(again.skipped.map((item) => item.reason)).toEqual([
