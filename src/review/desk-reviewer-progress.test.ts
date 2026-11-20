@@ -197,6 +197,6 @@ test("coordinator activity shows public turn output and selected tool metadata",
   expect(coordinatorActivity(directory)).toEqual([
     { kind: "status", text: "Coordinator started" }, { kind: "tool", text: "Started read_file · plan.json" },
     { kind: "result", text: "read_file finished" }, { kind: "status", text: "review-layout · Wave 1 · partial" },
-    { kind: "message", text: "Checked the decision" },
+    { kind: "message", text: "Checked the decision", final: true },
   ]);
 });

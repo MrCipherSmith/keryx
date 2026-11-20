@@ -227,7 +227,7 @@ async function prepareRelatedPulls(options: DeskExecutionOptions, checkout: stri
       await mkdir(dir, { recursive: true, mode: 0o700 });
       await git(dir, ["init", "--bare", "--template="], signal);
       await git(dir, ["-c", "credential.helper=", "-c", "credential.https://github.com.helper=!gh auth git-credential",
-        "fetch", "--no-tags", "--no-recurse-submodules", "--depth=1", `https://github.com/${link.repo}.git`, head],
+        "fetch", "--no-tags", "--no-recurse-submodules", "--depth=1", "--end-of-options", `https://github.com/${link.repo}.git`, head],
       signal, auth.login ? auth.env.GH_TOKEN : undefined);
       if (await git(dir, ["rev-parse", "FETCH_HEAD"], signal) === head) return { ...link, head };
     } catch {
