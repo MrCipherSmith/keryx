@@ -56,7 +56,9 @@ jobs:
           bun scripts/ci-test-plan.ts "$TEST_PART" > artifacts/ac8/files.txt
           args=(--timeout 5000 --timings=artifacts/ac8/timings.json --update-timings)
           if [[ "$TEST_PART" != all ]]; then
-            args+=(--files-from=artifacts/ac8/files.txt)
+            # Bun 1.4.5 accepts exact paths as positional arguments.
+            mapfile -t files < artifacts/ac8/files.txt
+            args+=("${files[@]}")
           fi
           bun test "${args[@]}" </dev/null 2>&1 | tee artifacts/ac8/full.log
           bun scripts/ci-test-plan.ts "$TEST_PART" artifacts/ac8/timings.json

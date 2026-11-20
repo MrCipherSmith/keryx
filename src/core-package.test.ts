@@ -635,7 +635,8 @@ test("the gates package.json declares are the gates CI actually runs", () => {
 
   const partitionRuns = workflow.jobs["ac8-full-suite"]?.steps?.map((step) => step.run ?? "").join("\n") ?? "";
   expect(partitionRuns).toContain('bun scripts/ci-test-plan.ts "$TEST_PART"');
-  expect(partitionRuns).toContain("--files-from=artifacts/ac8/files.txt");
+  expect(partitionRuns).toContain("mapfile -t files < artifacts/ac8/files.txt");
+  expect(partitionRuns).toContain('args+=("${files[@]}")');
   const clientRuns = workflow.jobs["client-matrix"]?.steps?.map((step) => step.run ?? "").join("\n") ?? "";
   expect(clientRuns).toContain("bun run test:client:");
 });
