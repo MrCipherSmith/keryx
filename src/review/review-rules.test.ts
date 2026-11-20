@@ -314,7 +314,7 @@ test("saving an older editor cannot restore a deleted rule or overwrite a newer 
 for (const checkpoint of [true, false]) {
   test(`an unchanged authorized poll settles an orphaned scheduled run ${checkpoint ? "from the durable finish" : "as interrupted"} without resubmitting`, async () => {
     const { DeskRunStore } = await import("./desk-run-store");
-    const { mkdirSync, writeFileSync } = await import("node:fs");
+    const { mkdirSync, rmSync, writeFileSync } = await import("node:fs");
     const child = Bun.spawn([process.execPath, "-e", ""], { stdout: "ignore", stderr: "ignore" });
     await child.exited;
     const store = new DeskRunStore();
@@ -346,6 +346,16 @@ for (const checkpoint of [true, false]) {
       // An incomplete observation cannot authorize recovery either.
       await tick({...current,warnings:["Partial observation"]}, submit);
       expect(store.byId(runId)?.run.state).toBe("running");
+      if (checkpoint) {
+        const marker = join(store.directory(runId), "child.json");
+        writeFileSync(marker, "{");
+        const accepted = await tick({ ...current, cards: [...current.cards, card({ number: 99 })] }, submit);
+        expect(accepted.lastError).toContain("could not be recovered");
+        expect(accepted.events).toContainEqual(expect.objectContaining({ kind: "opened", number: 99 }));
+        expect(store.byId(runId)?.run.state).toBe("running");
+        rmSync(marker);
+      }
+      if (!checkpoint) action({ kind: "mode", number: current.cards[0]!.number, choice: { mode: "manual" } });
       await tick(current, submit);
       const ended = store.byId(runId)!.run;
       expect(ended.state).toBe(checkpoint ? "completed" : "failed");

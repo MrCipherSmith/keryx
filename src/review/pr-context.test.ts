@@ -149,6 +149,15 @@ test("Flow journal search finds a match across chunk boundaries beyond its displ
   expect(result.flows[0]?.documents["journal.md"]?.length).toBeLessThan(2000);
 });
 
+test("Flow journal search fills the excerpt beyond the block that ends with the match", async () => {
+  const dir = flow(project, "001", url, "plan");
+  const heading = "Accepted decision";
+  const next = "Use the existing event journal.";
+  writeFileSync(path.join(dir, "journal.md"), "x".repeat(64 * 1024 - heading.length) + heading + "\n" + next);
+  const result = await readLinkedFlows(wt, key.repo, key.number, heading);
+  expect(result.flows[0]?.documents["journal.md"]).toContain(heading + "\n" + next);
+});
+
 test("PR context prefers a refreshed local package to an earlier desktop import", async () => {
   const dir = path.join(project, ".metaproject/reviews/retained-review");
   mkdirSync(dir, { recursive: true });

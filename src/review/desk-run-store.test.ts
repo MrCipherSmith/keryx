@@ -121,6 +121,23 @@ test("dead worker reconciles durable result and protects surviving child before 
   ] });
 });
 
+test("orphan settlement preserves an unarchived review package after the last checkpoint", async () => {
+  const startedRun = started(2_000_000_000);
+  const checkout = path.join(store.directory(startedRun.run.id), "checkout");
+  const packagePath = path.join(checkout, ".metaproject", "reviews", "after-checkpoint");
+  mkdirSync(packagePath, { recursive: true });
+  const raw = path.join(packagePath, "report.md");
+  writeFileSync(raw, "Observed reviewer evidence");
+  let recoveryRead = false;
+  await store.reconcile(other, () => { recoveryRead = true; return null; });
+  expect(recoveryRead).toBe(false);
+  expect(store.byId(startedRun.run.id)?.run.state).toBe("running");
+  await store.reconcile(key, () => null);
+  expect(store.active(key)).toBeUndefined();
+  expect(store.byId(startedRun.run.id)?.run.state).toBe("failed");
+  expect(existsSync(raw)).toBe(true);
+});
+
 test.each(["queued", "already finished"] as const)(
   "a stale validation cannot replace a newer admission when it is %s",
   async state => {
@@ -202,10 +219,13 @@ test("previously persisted terminal checkpoints display no live reviewer session
   const attempt = started();
   attempt.run.state = "failed";
   attempt.run.reviewerProgress = { planned: 1, finished: 0, wave: 1, sessions: [
-    { id: "old", reviewer: "review-logic", state: "running", wave: 1 },
+    { id: "old", reviewer: "review-logic", state: "failed", wave: 1 },
+    { id: "retry", reviewer: "review-logic", state: "running", wave: 1 },
   ] };
   store.save(attempt);
-  expect(store.history(key).runs[0]?.reviewerProgress).toMatchObject({ finished: 0, wave: null, sessions: [{ state: "unknown" }] });
+  expect(store.history(key).runs[0]?.reviewerProgress).toMatchObject({
+    finished: 0, wave: null, sessions: [{ state: "failed" }, { state: "unknown" }],
+  });
 });
 
 test("interruption records a reason, while unstarted cancellation can never dispatch", async () => {
@@ -242,15 +262,41 @@ const scheduled = {
   budgetTokens: 900,
 };
 test("scheduled workers share four local slots and reuse an existing attempt at capacity", () => {
-  const keys = Array.from({ length: 5 }, (_, index) => ({ ...key, number: 100 + index }));
+  const keys = Array.from({ length: 6 }, (_, index) => ({ ...key, number: 100 + index }));
   const ids = keys.slice(0, 4).map((target, index) =>
     store.atomic(() => store.request("/project", target, revision, { ...scheduled, attemptKey: `event-${index}` })));
   expect(new Set(ids).size).toBe(4);
   expect(store.atomic(() => store.request("/project", keys[0]!, revision, scheduled))).toBe(ids[0]!);
+  const manualId = store.request("/project", keys[5]!, revision)!;
+  store.end(store.byId(manualId)!, finish);
+  expect(store.atomic(() => store.requestAttempt("/project", keys[5]!, revision, scheduled))).toEqual({
+    id: manualId,
+    reused: true,
+  });
   expect(() => store.atomic(() => store.request("/project", keys[4]!, revision, scheduled))).toThrow("watcher will try again");
   const first = store.byId(ids[0]!)!;
   store.atomic(() => store.end(first, { state: "cancelled", phase: "stop", reason: "fixture", result: null }));
   expect(store.atomic(() => store.request("/project", keys[4]!, revision, scheduled))).not.toBeNull();
+});
+
+test("dead scheduled owners do not reserve capacity even before their history is reconciled", () => {
+  for (let index = 0; index < 4; index++) {
+    const target = { ...key, number: 50 + index };
+    const id = store.request("/project", target, revision, scheduled)!;
+    const attempt = store.byId(id)!;
+    attempt.run.state = "running";
+    attempt.pid = index === 0 ? 2_000_000_000 : process.pid;
+    store.save(attempt);
+  }
+  expect(store.atomic(() => store.request("/project", key, revision, scheduled))).not.toBeNull();
+});
+
+test("manual admission reuses the exact latest completed revision when validation overlapped", () => {
+  const observed = store.latestAdmission(key);
+  const id = store.request("/project", key, revision)!;
+  store.end(store.byId(id)!, finish);
+  expect(store.atomic(() => store.requestManual("/project", key, revision, observed))).toBe(id);
+  expect(() => store.atomic(() => store.requestManual("/project", key, next, observed))).toThrow("stale:");
 });
 
 test("scheduled and manual requests share an attempt and a spent range needs explicit manual retry", () => {

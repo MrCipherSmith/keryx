@@ -8,12 +8,14 @@ import type { ReviewBoardSnapshot } from "./board-types";
 import { ensureKeryxConfigDir, keryxDataDir, readConfigFile } from "../lib/config-dir";
 import { processPresence, type ProcessIdentity } from "../lib/hub-machine/process-identity";
 import { DESK_RUN_SCOPE } from "./desk-run-types";
+import { summarizeReviewerAssignments } from "./reviewer-activity";
 import type { DeskFinish, DeskRevision, DeskRun, DeskRunKey, DeskRunSnapshot, DeskSchedule } from "./desk-run-types";
 
 export const deskRunRoot = () => path.join(keryxDataDir(), "desktop-review");
 export const MAX_SCHEDULED_PREFLIGHT_ATTEMPTS = 3;
 const maxScheduledWorkers = 4;
 const liveStates = "('running', 'cancelling')";
+const scheduledReservation = "state IN ('queued','running','cancelling') AND json_extract(details,'$.source')='scheduled'";
 type ScheduledLink = { project: string; runId: string };
 const linkedActiveRow = `FROM runs WHERE id=? AND repo=? AND pr=? AND viewer=?
   AND state IN ${liveStates} AND json_extract(details,'$.source')='scheduled'
@@ -60,9 +62,7 @@ function finalizeReviewerProgress(run: DeskRun) {
   for (const session of progress.sessions) {
     if (session.state === "running" || session.state === "planned") session.state = "unknown";
   }
-  const finished = progress.sessions.filter(session => session.state !== "unknown");
-  progress.finished = finished.length;
-  progress.wave = finished.reduce<number | null>((wave, session) => Math.max(wave ?? 0, session.wave), null);
+  Object.assign(progress, summarizeReviewerAssignments(progress.sessions));
 }
 
 export class DeskRunStore {
@@ -85,6 +85,7 @@ export class DeskRunStore {
       scanned INTEGER NOT NULL, PRIMARY KEY(cwd,repo,pr,viewer)
     );
     CREATE INDEX IF NOT EXISTS review_history ON runs(repo, viewer, pr);
+    CREATE INDEX IF NOT EXISTS active_scheduled ON runs(id) WHERE ${scheduledReservation};
     CREATE UNIQUE INDEX IF NOT EXISTS active_pr ON runs(repo, pr) WHERE state IN ${liveStates};
     CREATE UNIQUE INDEX IF NOT EXISTS next_pr_for_viewer ON runs(repo, pr, viewer) WHERE state='queued';`);
   }
@@ -135,11 +136,14 @@ export class DeskRunStore {
 
   /** Hold the dispatch transaction while comparing the admission journal. */
   requestManual(cwd: string, key: DeskRunKey, revision: DeskRevision, observedAdmission: string | null) {
-    if (this.latestAdmission(key) !== observedAdmission) {
+    const latest = this.latestAdmission(key);
+    if (latest !== observedAdmission) {
       const existing = [this.active(key), this.queued(key)].find(attempt => attempt &&
         attempt.key.viewer.toLowerCase() === key.viewer.toLowerCase() &&
         attempt.run.baseSha === revision.baseSha && attempt.run.headSha === revision.headSha);
       if (existing) return existing.run.id;
+      const previous = this.previousAttempt(key, revision);
+      if (previous?.id === latest && previous.state === "completed" && previous.complete) return previous.id;
       throw new Error("stale: Another review was requested during validation. Refresh the board and try again.");
     }
     return this.request(cwd, key, revision);
@@ -278,6 +282,44 @@ export class DeskRunStore {
     }
   }
 
+  private previousAttempt(key: DeskRunKey, revision: DeskRevision) {
+    return this.db
+      .query<
+        { id: string; state: string; complete: number; retryable: number | null; attempt: number | null },
+        [string, string, number, string, string, string]
+      >(
+        `SELECT id,state,json_extract(details,'$.retryableBeforeSpend') AS retryable,
+         json_extract(details,'$.preflightAttempt') AS attempt,
+         (json_extract(details,'$.scope')=? AND json_extract(details,'$.result.coverage')='complete'
+          AND json_extract(details,'$.result.reviewed.baseSha')=json_extract(details,'$.baseSha')
+          AND json_extract(details,'$.result.reviewed.headSha')=json_extract(details,'$.headSha')) AS complete
+       FROM runs WHERE repo=? AND pr=? AND viewer=? AND json_extract(details,'$.baseSha')=?
+         AND json_extract(details,'$.headSha')=? AND json_extract(details,'$.source') IN ('manual','scheduled')
+         AND NOT (state='skipped' AND coalesce(json_extract(details,'$.phase'),'')='Superseded'
+           AND json_extract(details,'$.startedAt') IS NULL AND json_extract(details,'$.result') IS NULL
+           AND json_extract(details,'$.usage') IS NULL)
+       ORDER BY rowid DESC LIMIT 1`,
+      )
+      .get(DESK_RUN_SCOPE, key.repositoryId, key.number, key.viewer, revision.baseSha, revision.headSha);
+  }
+
+  /** Check only local scheduler occupancy, without reading private review output. */
+  private scheduledCapacityReached(): boolean {
+    const runs = this.db.query<{ id: string; pid: number | null; workerIdentity: string | null }, []>(
+      `SELECT id, pid, json_extract(details,'$.workerIdentity') AS workerIdentity FROM runs
+       WHERE ${scheduledReservation}`,
+    );
+    let reserved = 0;
+    for (const row of runs.iterate()) {
+      try {
+        if (row.pid != null && !processMayRemain(row.pid, row.workerIdentity
+          ? JSON.parse(row.workerIdentity) as ProcessIdentity : undefined) && !this.childMayRemain(row.id)) continue;
+      } catch { /* Unknown process ownership still reserves a slot. */ }
+      if (++reserved === maxScheduledWorkers) return true;
+    }
+    return false;
+  }
+
   /** Called inside the dispatch transaction. An automatic request never queues behind,
    * or supersedes, a different revision: the watcher rechecks eligibility at its next poll. */
   request(cwd: string, key: DeskRunKey, revision: DeskRevision, schedule?: DeskSchedule): string | null {
@@ -299,12 +341,6 @@ export class DeskRunStore {
     if (active && match(active)) return { id: active.run.id, reused: true };
     if (queued && match(queued)) return { id: queued.run.id, reused: true };
     if (schedule && (active || queued)) return null;
-    if (schedule && this.db.query<unknown, [number]>(
-      `SELECT 1 FROM runs WHERE state IN ('queued','running','cancelling')
-       AND json_extract(details,'$.source')='scheduled' LIMIT 1 OFFSET ?`,
-    ).get(maxScheduledWorkers - 1)) {
-      throw new Error(`unavailable: ${maxScheduledWorkers} scheduled Review workers are already reserved. The watcher will try again on its next poll.`);
-    }
     if (queued) {
       this.end(queued, {
         state: "skipped",
@@ -313,24 +349,7 @@ export class DeskRunStore {
         result: null,
       });
     }
-    const previous = this.db
-      .query<
-        { id: string; state: string; complete: number; retryable: number | null; attempt: number | null },
-        [string, string, number, string, string, string]
-      >(
-        `SELECT id,state,json_extract(details,'$.retryableBeforeSpend') AS retryable,
-         json_extract(details,'$.preflightAttempt') AS attempt,
-         (json_extract(details,'$.scope')=? AND json_extract(details,'$.result.coverage')='complete'
-          AND json_extract(details,'$.result.reviewed.baseSha')=json_extract(details,'$.baseSha')
-          AND json_extract(details,'$.result.reviewed.headSha')=json_extract(details,'$.headSha')) AS complete
-       FROM runs WHERE repo=? AND pr=? AND viewer=? AND json_extract(details,'$.baseSha')=?
-         AND json_extract(details,'$.headSha')=? AND json_extract(details,'$.source') IN ('manual','scheduled')
-         AND NOT (state='skipped' AND coalesce(json_extract(details,'$.phase'),'')='Superseded'
-           AND json_extract(details,'$.startedAt') IS NULL AND json_extract(details,'$.result') IS NULL
-           AND json_extract(details,'$.usage') IS NULL)
-       ORDER BY rowid DESC LIMIT 1`,
-      )
-      .get(DESK_RUN_SCOPE, key.repositoryId, key.number, key.viewer, revision.baseSha, revision.headSha);
+    const previous = this.previousAttempt(key, revision);
     // Failures, cancellations and partial results may already have consumed budget.
     // Only an explicit manual request may buy another attempt for this same range.
     if (
@@ -338,6 +357,9 @@ export class DeskRunStore {
       ((schedule && !previous.retryable) || (previous.state === "completed" && previous.complete))
     ) {
       return { id: previous.id, reused: true };
+    }
+    if (schedule && this.scheduledCapacityReached()) {
+      throw new Error(`unavailable: ${maxScheduledWorkers} scheduled Review workers are already reserved. The watcher will try again on its next poll.`);
     }
     const run: DeskRun = {
       id: randomUUID(),
@@ -393,6 +415,16 @@ export class DeskRunStore {
     }
   }
 
+  liveScheduledLinks(key: Omit<DeskRunKey, "number">, project: string, links: { number: number; runId: string }[]) {
+    return this.db.query<{ number: number; runId: string }, [string, string, string, string]>(
+      `SELECT r.pr AS number,r.id AS runId FROM json_each(?) wanted
+        CROSS JOIN runs r WHERE r.id=json_extract(wanted.value,'$.runId')
+          AND r.pr=json_extract(wanted.value,'$.number') AND r.repo=? AND r.viewer=?
+          AND r.state IN ${liveStates} AND json_extract(r.details,'$.source')='scheduled'
+          AND json_extract(r.details,'$.schedule.project')=?`,
+    ).all(JSON.stringify(links), key.repositoryId, key.viewer, project);
+  }
+
   scheduledOwnerExited(key: DeskRunKey, link: ScheduledLink): boolean {
     // Liveness alone is sufficient to decide whether a missing-from-board PR needs a fresh access check.
     const row = this.db.query<{ pid: number | null; workerIdentity: string | null }, ReturnType<typeof linkParams>>(
@@ -414,16 +446,21 @@ export class DeskRunStore {
     } else {
       a = this.active(key);
     }
-    if (!a || a.pid === null || processMayRemain(a.pid, a.workerIdentity)) return;
-    const directory = this.directory(a.run.id);
-    const guard = path.join(directory, "child.json");
-    const marker = readConfigFile(guard);
-    if (!marker.ok && marker.reason !== "absent") throw new Error("Cannot inspect the Review worker process marker.");
-    if (marker.ok) {
-      const child = JSON.parse(marker.text) as { pid: number; identity?: ProcessIdentity };
-      if (Number.isSafeInteger(child.pid) && child.pid > 0 && processMayRemain(child.pid, child.identity)) return;
+    if (!a || a.key.viewer.toLowerCase() !== key.viewer.toLowerCase() ||
+        a.pid === null || processMayRemain(a.pid, a.workerIdentity)) return;
+    return this.childMayRemain(a.run.id) ? undefined : a;
+  }
+
+  private childMayRemain(id: string): boolean {
+    if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(id)) return true;
+    const marker = readConfigFile(path.join(this.directory(id), "child.json"));
+    if (!marker.ok) {
+      if (marker.reason === "absent") return false;
+      throw new Error("Cannot inspect the Review worker process marker.");
     }
-    return a;
+    const child = JSON.parse(marker.text) as { pid: number; identity?: ProcessIdentity };
+    if (!Number.isSafeInteger(child.pid) || child.pid <= 0) throw new Error("Invalid Review worker process marker.");
+    return processMayRemain(child.pid, child.identity);
   }
 
   async reconcile(key: DeskRunKey, readFinish: (directory: string, attempt: Attempt) => DeskFinish | null | Promise<DeskFinish | null>, link?: ScheduledLink) {
@@ -454,8 +491,9 @@ export class DeskRunStore {
       ownedDirectory = realpathSync(directory);
       if (ownedDirectory !== path.join(realpathSync(this.root), "attempts", orphan.run.id)) return;
     } catch { return; }
-    // Only the winning terminal transaction disposes of temporary files. The
-    // archived package and execution receipts stay in the attempt directory.
+    // A finished row alone does not prove the worker archived all the evidence it wrote.
+    const { checkoutIsDisposable } = await import("./desk-run-executor-recovery");
+    if (!await checkoutIsDisposable(ownedDirectory)) return;
     await Promise.allSettled([
       rm(path.join(ownedDirectory, "checkout"), { recursive: true, force: true }),
       rm(path.join(ownedDirectory, "child.json"), { force: true }),

@@ -27,8 +27,17 @@ test("reuses the admitted plan on 100 usage updates and revalidates changed assi
     write(path.join(live, "desktop-dispatch.json"), { calls });
     const publish = () => write(path.join(dir, "run/progress.json"), { ref, ...p });
     publish();
-    const checkpoint = createWorkerRoster(dir, key, run);
-    expect(checkpoint(p)?.planned).toBe(100);
+    const roster = createWorkerRoster(dir, key, run);
+    expect(roster.checkpoint(p)?.planned).toBe(100);
+    // If persistence throws, the next identical poll still carries the roster.
+    expect(roster.checkpoint(p)?.planned).toBe(100);
+    roster.persisted();
+    expect(roster.checkpoint(p)).toBeUndefined();
+    const checkpoint = (progress: typeof p) => {
+      const next = roster.checkpoint(progress);
+      roster.persisted();
+      return next;
+    };
     for (let i = 0; i < 100; i++) {
       session.usage = { inputTokens: i };
       if (i < 99) session.usagePartial = true;

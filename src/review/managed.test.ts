@@ -2119,6 +2119,54 @@ describe("ingest into an existing package defaults to its recorded head (flow 45
   });
 });
 
+describe("named PR packages keep one revision", () => {
+  const ref = "https://github.com/example/project/pull/19";
+  const base = "a".repeat(40), head = "b".repeat(40), otherHead = "c".repeat(40);
+  const options = () => ({
+    cwd: ROOT,
+    reviewId: "same-pr-package",
+    reportText: "# Round\n",
+    findings: [],
+  });
+
+  test("ingest outside a clone can reuse a verified remote head", async () => {
+    await fresh();
+    const target = { kind: "pr", ref, base, head } as const;
+    await createManagedReviewPackage({ ...options(), mode: "review-flow", target });
+    const ingest = (remote: string) => createManagedReviewPackage({
+      ...options(), mode: "ingest", target: { kind: "pr", ref }, resolveHead: async () => remote,
+    });
+    expect((await ingest(head)).manifest.target).toEqual(target);
+    await expect(ingest(otherHead)).rejects.toThrow("that commit is not in this checkout");
+  });
+
+  test("start cannot overwrite a revision another writer pinned under the same name", async () => {
+    await fresh();
+    const resolvingBase = Promise.withResolvers<void>();
+    const finishBase = Promise.withResolvers<void>();
+    const ingest = createManagedReviewPackage({
+      ...options(), mode: "ingest", target: { kind: "pr", ref, head },
+      inferPrBase: async () => {
+        resolvingBase.resolve();
+        await finishBase.promise;
+        return base;
+      },
+    });
+    await resolvingBase.promise;
+    const start = createManagedReviewPackage({
+      ...options(), mode: "review-flow", target: { kind: "pr", ref, base, head: otherHead },
+    });
+    finishBase.resolve();
+    const [winner, loser] = await Promise.allSettled([ingest, start]);
+    expect(winner.status).toBe("fulfilled");
+    expect(loser.status).toBe("rejected");
+    if (winner.status !== "fulfilled" || loser.status !== "rejected") throw new Error("Expected one pinned revision");
+    expect(String(loser.reason)).toContain("conflicts with the pinned PR package");
+    const manifest = JSON.parse(await readFile(path.join(ROOT, winner.value.path, "manifest.json"), "utf8"));
+    expect(manifest.target).toEqual({ kind: "pr", ref, base, head });
+  });
+});
+
 describe("flow 460 F: coverage reconciles with the dispatch record", () => {
   const research = (extra: Record<string, unknown> = {}) => ({
     version: 1, scopeReviewed: true, rawReconciled: true, obligations: [],

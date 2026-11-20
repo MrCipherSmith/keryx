@@ -13,15 +13,14 @@ export async function readBoardBadges(cwd: string, key: WatcherKey, requested: B
     throw new Error("configuration: Invalid badge revisions.");
   }
   const cards = requested.map(({ number, baseSha, headSha }) => ({ number, baseSha, headSha }));
-  const visible = await verifyVisiblePullNumbers(key, cards.map(card => card.number), read);
-  if (visible.size !== cards.length) throw new Error("access: Pull request access changed. Refresh Review.");
+  await verifyVisiblePullNumbers(key, cards.map(card => card.number), read, { requireAll: true });
   const snapshot: BadgeSnapshot = { version: 1, viewer: key.viewer, repositoryId: key.repositoryId, cards };
   attach(snapshot);
   return snapshot;
 }
 
 /** Authorize a set of PRs in one query per 100, including closed PRs that no longer appear on the open board. */
-export async function verifyVisiblePullNumbers(key: WatcherKey, numbers: number[], read: Query): Promise<Set<number>> {
+export async function verifyVisiblePullNumbers(key: WatcherKey, numbers: number[], read: Query, { requireAll = false } = {}): Promise<Set<number>> {
   if (numbers.some(n => !Number.isSafeInteger(n) || n < 1 || n > 2147483647)) throw new Error("configuration: Invalid PR number.");
   const [owner, name] = key.repo.split("/") as [string, string];
   const visible = new Set<number>();
@@ -36,6 +35,7 @@ export async function verifyVisiblePullNumbers(key: WatcherKey, numbers: number[
     for (const n of batch) {
       const pr = data.repository[`p${n}`];
       if (pr?.number === n) visible.add(n);
+      else if (requireAll) throw new Error("access: Pull request access changed. Refresh Review.");
     }
   }
   return visible;

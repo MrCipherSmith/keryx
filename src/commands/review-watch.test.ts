@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { readFile, mkdtemp, mkdir, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { readFile, mkdtemp, mkdir, readdir, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import { fixtureGitEnv } from "../review/test-git-fixture";
 import { tmpdir } from "node:os";
@@ -8,7 +8,7 @@ import { parseWatchArgs, requestWatch } from "./review-watch";
 import { pollWatcher } from "../review/watcher";
 import type { ReviewBoardSnapshot, ReviewCard } from "../review/board-types";
 import { reviewTool } from "../review/board-github";
-import { watcherLabel } from "../review/watch-launchd";
+import { verifyWatcherTimerTools, watcherLabel } from "../review/watch-launchd";
 import type { ScheduleHost } from "../trigger/install";
 
 const key = { repo: "org/repo", repositoryId: "R_test", viewer: "alice" };
@@ -16,9 +16,12 @@ let dir: string, project: string, host: ScheduleHost;
 let loaded: Set<string>, calls: string[], failBootstrap: boolean;
 const savedGhToken = process.env.GH_TOKEN, savedGithubToken = process.env.GITHUB_TOKEN;
 const ghToken = "test-only-login-one", githubToken = "test-only-login-two";
+const pins = ["KERYX_REVIEW_TOOLS_DIR", "KERYX_REVIEW_GIT_BIN", "KERYX_REVIEW_GH_BIN", "KERYX_REVIEW_RG_BIN"];
+const savedPins = new Map(pins.map(name => [name, process.env[name]]));
 const oldData = process.env.KERYX_DATA_DIR,
   oldPath = process.env.PATH;
 beforeEach(async () => {
+  for (const name of pins) delete process.env[name];
   dir = await realpath(await mkdtemp(path.join(tmpdir(), "review-watch-os-")));
   project = path.join(dir, "space & <project>");
   await mkdir(project);
@@ -56,6 +59,10 @@ beforeEach(async () => {
   };
 });
 afterEach(async () => {
+  for (const [name, value] of savedPins) {
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
+  }
   if (savedGhToken === undefined) delete process.env.GH_TOKEN;
   else process.env.GH_TOKEN = savedGhToken;
   if (savedGithubToken === undefined) delete process.env.GITHUB_TOKEN;
@@ -93,7 +100,11 @@ test("schedule is independent of Desktop, executable paths are pinned and concur
   for (const env of scheduledEnvs) {
     if (!env) throw Error("Expected the watcher environment");
     expect(env.HOME).toBeTruthy();
-    expect(env.PATH?.split(path.delimiter)).toContain(searchTools);
+    const toolDirectory = env.KERYX_REVIEW_TOOLS_DIR!;
+    expect(env.PATH?.split(path.delimiter)).toEqual([toolDirectory, "/usr/bin", "/bin", "/usr/sbin", "/sbin"]);
+    expect((await readdir(toolDirectory)).sort()).toEqual(["gh", "git", "rg"]);
+    expect(await realpath(path.join(toolDirectory, "rg"))).toBe(path.join(searchTools, "rg"));
+    await verifyWatcherTimerTools(env);
     expect(env.GH_TOKEN).toBeUndefined();
     expect(env.GITHUB_TOKEN).toBeUndefined();
     expect(Object.values(env)).not.toContain(ghToken);
@@ -134,19 +145,30 @@ test("install from a linked worktree keeps only verified external tool paths and
   expect(envs).toHaveLength(2);
   for (const env of envs) {
     const dirs = env.PATH!.split(path.delimiter);
-    for (const excluded of [mainTools, alias, linkedTools, mixed, trustedAlias]) expect(dirs).not.toContain(excluded);
-    expect(dirs).toContain(trusted);
+    for (const excluded of [mainTools, alias, linkedTools, mixed, trustedAlias, trusted]) expect(dirs).not.toContain(excluded);
     expect(env.KERYX_REVIEW_GIT_BIN).toBe(await realpath("/usr/bin/git"));
     expect(env.KERYX_REVIEW_GH_BIN).toBe(path.join(dir, "bin", "gh"));
-    expect(Bun.which("rg", { PATH: env.PATH! })).toBe(path.join(trusted, "rg"));
+    const rg = Bun.which("rg", { PATH: env.PATH! });
+    expect(rg).toBe(path.join(env.KERYX_REVIEW_TOOLS_DIR!, "rg"));
+    expect(await realpath(rg!)).toBe(path.join(trusted, "rg"));
   }
   const installed = envs[1]!;
   expect(reviewTool("gh", installed)).toBe(path.join(dir, "bin", "gh"));
   await rm(path.join(dir, "bin", "gh"));
   await symlink(path.join(linkedTools, "gh"), path.join(dir, "bin", "gh"));
-  expect(() => reviewTool("gh", installed)).toThrow("Enable the watcher again");
+  expect(() => reviewTool("gh", installed)).toThrow("Restore timer");
+  expect((await control("status")).installed).toBe(false);
   const contents = await readFile(plist(), "utf8");
   for (const excluded of [alias, linkedTools, mixed]) expect(contents).not.toContain(excluded);
+});
+
+test("an enabled timer does not make an unpinned command invocation eligible to poll", async () => {
+  await control("enable", 5);
+  expect((await control("status")).installed).toBe(true);
+  await requestWatch(project, { action: "tick", key, minutes: undefined }, host);
+  const status = await control("status");
+  expect(status.lastError).toContain("Restore timer");
+  expect(status.lastSuccessAt).toBeNull();
 });
 
 test("a loaded legacy timer requires repair before another scheduled GitHub read", async () => {
@@ -155,7 +177,7 @@ test("a loaded legacy timer requires repair before another scheduled GitHub read
   await writeFile(plist(), contents.replace("<key>KERYX_REVIEW_GIT_BIN</key>", "<key>legacy</key>"));
   expect((await control("status")).installed).toBe(false);
   await requestWatch(project, { action: "tick", key, minutes: undefined }, host);
-  expect((await control("status")).lastError).toContain("Enable the watcher again");
+  expect((await control("status")).lastError).toContain("Restore timer");
   await control("enable", 5);
   expect((await control("status")).installed).toBe(true);
 });
@@ -193,6 +215,25 @@ test("a local pause stops the timer while another request is still verifying Git
   } finally { release(); }
   await expect(enabling).rejects.toThrow("paused during verification");
   expect((await control("status")).installed).toBe(false);
+});
+
+test("pause fences an older enable during worktree verification", async () => {
+  await control("enable", 9);
+  const entered = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  const enabling = requestWatch(project, { key, action: "enable", minutes: 1 }, host, verify, async () => {
+    entered.resolve();
+    await release.promise;
+    return [project];
+  });
+  await entered.promise;
+  try {
+    expect((await control("pause")).state).toBe("paused");
+  } finally {
+    release.resolve();
+  }
+  await expect(enabling).rejects.toThrow("paused during verification");
+  expect(await control("status")).toMatchObject({ state: "paused", installed: false, intervalMinutes: 9 });
 });
 
 test("failed bootstrap is visible and recoverable, missing prerequisites do not install", async () => {

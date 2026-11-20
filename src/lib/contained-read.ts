@@ -45,12 +45,12 @@ export async function readContainedFile(
   let rootIdentity: DescriptorIdentity;
   let targetIdentity: DescriptorIdentity;
   try {
-    const rootStat = await lstat(ownerRoot);
+    const rootStat = await lstat(ownerRoot, { bigint: true });
     if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) throw new ContainedReadError("CONTAINED_READ_RACE", "contained source owner root changed");
     rootIdentity = rootStat;
     rootReal = await realpath(ownerRoot);
     targetReal = await realpath(candidatePath);
-    const targetStat = await stat(targetReal);
+    const targetStat = await stat(targetReal, { bigint: true });
     if (options.requireRegularFile !== false && !targetStat.isFile()) {
       throw new ContainedReadError("CONTAINED_READ_NOT_REGULAR", "contained source is not a regular file");
     }

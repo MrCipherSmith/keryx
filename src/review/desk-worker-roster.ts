@@ -23,11 +23,12 @@ function planVersion(root: string, packageId?: string) {
 export function createWorkerRoster(directory: string, key: DeskRunKey, run: DeskRun) {
   let signature: string | undefined;
   let cached: DeskReviewerProgress | undefined;
+  let pending = false;
   let byId = new Map<string, DeskReviewerSession>();
   const root = realpathSync(directory);
-  return (p: { packageId?: string; reviewerSessions?: DeskReviewerSession[] }) => {
+  const checkpoint = (p: { packageId?: string; reviewerSessions?: DeskReviewerSession[] }) => {
     const observed = p.reviewerSessions ?? [];
-    if (!p.packageId && !observed.length) return;
+    if (!p.packageId && !observed.length) return pending ? cached : undefined;
     const shape = observed.map(s => [s.id, s.reviewer, s.wave, s.state, s.model, s.provider, s.startedAt, s.finishedAt]);
     const versions = planVersion(root, p.packageId);
     const current = JSON.stringify([p.packageId, versions, shape]);
@@ -37,6 +38,7 @@ export function createWorkerRoster(directory: string, key: DeskRunKey, run: Desk
       signature = cached?.planned != null && versions.some(v => v?.every(Boolean)) &&
         JSON.stringify(versions) === JSON.stringify(planVersion(root, p.packageId)) ? current : undefined;
       byId = new Map(cached?.sessions.map(s => [s.id, s]));
+      pending = cached !== undefined;
       return cached;
     }
     // Only counters may have changed. Merge them into the sessions the plan reader admitted.
@@ -52,6 +54,8 @@ export function createWorkerRoster(directory: string, key: DeskRunKey, run: Desk
       else delete entry.usagePartial;
       changed = true;
     }
-    return changed ? cached : undefined;
+    pending ||= changed;
+    return pending ? cached : undefined;
   };
+  return { checkpoint, persisted: () => { pending = false; } };
 }

@@ -1,8 +1,9 @@
-import { writeFileAtomic } from "../lib/fs";
+import { isNotFound, writeFileAtomic } from "../lib/fs";
 import { roleDispatchWaves } from "./estimate";
 import type { SliceManifest } from "./slice";
 // Called after the worker and its reviewer process group have exited.
 import { existsSync, lstatSync, fstatSync, openSync, readFileSync, readdirSync, readSync, closeSync, renameSync } from "node:fs";
+import { lstat, readdir } from "node:fs/promises";
 import path from "node:path";
 import { validRunUsage, type ReviewRunUsage } from "./run-usage";
 import { isReviewerResult, parseReviewResult } from "./ledger";
@@ -17,7 +18,28 @@ import type { ManagedReviewManifest } from "./types";
 import { computeVerdict, type InterimVerdict } from "./verdict";
 import type { DeskExecutionResult } from "./desk-run-executor";
 
-interface Request { scope: string | undefined; repo: string; number: number; baseSha: string; headSha: string; cancelled?: boolean }
+interface Request {
+  scope: string | undefined;
+  repo: string;
+  number: number;
+  baseSha: string;
+  headSha: string;
+  cancelled?: boolean;
+  interruption?: Pick<DeskExecutionResult, "outcome" | "reason">;
+}
+
+export async function checkoutIsDisposable(directory: string): Promise<boolean> {
+  let candidate = directory;
+  try {
+    for (const part of ["checkout", ".metaproject", "reviews"]) {
+      candidate = path.join(candidate, part);
+      if (!(await lstat(candidate)).isDirectory()) return false;
+    }
+    return (await readdir(candidate)).length === 0;
+  } catch (error) {
+    return isNotFound(error);
+  }
+}
 
 export function recordedSha(value: unknown): string | null {
   return typeof value === "string" && /^[0-9a-f]{40}$/i.test(value) ? value : null;
@@ -39,11 +61,19 @@ function hasFullCoverage(entries: ManagedReviewManifest["coverage"], dir: string
     if (report?.schemaVersion !== 1 || report.tracked !== true || report.waived !== false || report.waiver !== undefined ||
         report.counts?.uncovered !== 0 || !Array.isArray(report.files) || report.files.length !== report.counts.inScope) return false;
     let covered = 0, omitted = 0;
+    const files = new Map<string, "A" | "B">();
     for (const entry of report.files) {
-      if (!entry || typeof entry.file !== "string" || !entry.file || (entry.scope !== "A" && entry.scope !== "B")) return false;
+      if (!entry || typeof entry.file !== "string" || !entry.file || files.has(entry.file) ||
+          (entry.scope !== "A" && entry.scope !== "B")) return false;
+      files.set(entry.file, entry.scope);
       if (entry.status === "covered") covered++;
       else if (entry.status === "omitted" && typeof entry.reason === "string" && entry.reason.trim()) omitted++;
       else return false;
+    }
+    const scopeFile = path.join(dir, "scope-files.json");
+    if (prepared && existsSync(scopeFile)) {
+      const scope = json<{ files?: string[] }>(scopeFile);
+      if (!Array.isArray(scope?.files) || !scope.files.every(name => files.get(name) === "A")) return false;
     }
     return covered === report.counts.covered && omitted === report.counts.omitted;
   } catch { return false; }
@@ -209,11 +239,12 @@ export async function recoverDeskExecution(runDir: string, request: Request): Pr
   const findings = knownSource ? evaluated.counts : knownFindingList(items) ? countFindings(items) : summary?.findings ?? countFindings(null);
   const findingsKnown = !!knownSource || knownFindingList(items) || summary?.findingsKnown === true ||
     (summary?.findingsKnown === undefined && Object.values(findings).some(count => count > 0));
-  const outcome = complete ? "complete" : request.cancelled ? "cancelled" : summary?.status === "budget" ? "budget" :
-    summary?.status === "floor" ? "blocked" : "incomplete";
-  const reason = complete ? "Recovered a closed review package for the requested revision." : request.cancelled ? "The review stopped after cancellation." :
+  const outcome = complete ? "complete" : request.interruption?.outcome ?? (request.cancelled ? "cancelled" : summary?.status === "budget" ? "budget" :
+    summary?.status === "floor" ? "blocked" : "incomplete");
+  const reason = complete ? "Recovered a closed review package for the requested revision." : request.interruption?.reason ??
+    (request.cancelled ? "The review stopped after cancellation." :
     !matching && closed ? "The package did not confirm the requested base and head." :
-    summary?.status !== "complete" && summary?.reason ? summary.reason : "Recovered the available evidence; the full round could not be verified.";
+    summary?.status !== "complete" && summary?.reason ? summary.reason : "Recovered the available evidence; the full round could not be verified.");
   const packageReport = found ? preview(path.join(pkg, "report.md")) : "";
   const result: DeskExecutionResult = { outcome, checkedBase, checkedHead, coverage, findings, findingsKnown, reason,
     verdict: knownSource ? deskVerdictHeadline(evaluated, complete) : null, ...(usage ? { usage } : {}), report: null };
@@ -221,8 +252,9 @@ export async function recoverDeskExecution(runDir: string, request: Request): Pr
   const saved = summary ? checkedDeskSummary(summary, result, retained) : null;
   const header = saved ? renderReport(saved) : packageReport ? `# Recovered review: ${subject}\n\n- Status: **${outcome}**\n- Why: ${reason}\n` : "";
   result.report = [header, packageReport].filter(Boolean).join("\n") || null;
-  // A dead worker can leave the runner's original complete header. Repair only its own pinned archive.
-  if (saved && result.report && summary?.status === "complete" && saved.status !== summary.status && retained &&
+  // Publish a retained package pointer and correct a premature complete header.
+  if (saved && result.report && retained &&
+      (saved.status !== summary?.status || saved.package?.path !== summary.package?.path) &&
       matching && summary.target.head === request.headSha && lstatSync(path.join(runDir, "run")).isDirectory()) {
     await saveDeskSummary(runDir, saved, result.report);
   }

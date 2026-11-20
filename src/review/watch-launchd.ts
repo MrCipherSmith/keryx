@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { constants } from "node:fs";
-import { access, lstat, realpath, rm, stat } from "node:fs/promises";
+import { access, lstat, mkdir, readdir, realpath, rm, stat, symlink } from "node:fs/promises";
 import path from "node:path";
 import { isNotFound, writeFileAtomic } from "../lib/fs";
 import { keryxDataDir, readConfigFile } from "../lib/config-dir";
@@ -62,20 +62,51 @@ export async function watcherInstalled(
   const { plist, label } = service(project, key, host);
   // A loaded job with a deleted plist still fires in this login session, but won't survive the next login.
   const contents = await ownedContents(plist, label);
-  return hasPinnedTools(contents) && (await programAvailable(loaded.program));
+  if (!contents || !await programAvailable(loaded.program)) return false;
+  try {
+    await verifyWatcherTimerTools(installedToolEnvironment(contents));
+    return true;
+  } catch { return false; }
 }
 
-function hasPinnedTools(contents: string | null) {
-  return !!contents?.includes("<key>KERYX_REVIEW_GIT_BIN</key>") && contents.includes("<key>KERYX_REVIEW_GH_BIN</key>");
+function installedToolEnvironment(contents: string): NodeJS.ProcessEnv {
+  const entities: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
+  const variables = /<key>(PATH|KERYX_REVIEW_(?:TOOLS_DIR|GH_BIN|GIT_BIN|RG_BIN))<\/key><string>([^<]*)<\/string>/g;
+  return Object.fromEntries(Array.from(contents.matchAll(variables), ([, key, value]) =>
+    [key, value!.replace(/&(amp|lt|gt|quot|apos);/g, (_, entity: string) => entities[entity]!)],
+  ));
 }
 
-/** A loaded pre-upgrade timer can outlive both Desktop and the plist on disk. */
-export async function verifyWatcherTimerTools(project: string, key: WatcherKey, host: ScheduleHost) {
-  if ((host.platform ?? process.platform) !== "darwin" || (process.env.KERYX_REVIEW_GIT_BIN && process.env.KERYX_REVIEW_GH_BIN)) return;
-  if (!await watcherLoaded(project, key, host)) return;
-  const { plist, label } = service(project, key, host);
-  if (!hasPinnedTools(await ownedContents(plist, label)))
-    throw new Error("configuration: Enable the watcher again to verify its executable paths.");
+const restoreTimer = "configuration: Select Restore timer in Desktop or enable the watcher again from the CLI to verify executable paths.";
+
+function expectedToolLinks(env: NodeJS.ProcessEnv) {
+  if (!env.KERYX_REVIEW_GH_BIN || !env.KERYX_REVIEW_GIT_BIN) throw new Error(restoreTimer);
+  const links = new Map([["gh", env.KERYX_REVIEW_GH_BIN], ["git", env.KERYX_REVIEW_GIT_BIN]]);
+  if (env.KERYX_REVIEW_RG_BIN) links.set("rg", env.KERYX_REVIEW_RG_BIN);
+  return links;
+}
+
+/** Validate the environment that will perform this tick, not a newer plist on disk. */
+export async function verifyWatcherTimerTools(env: NodeJS.ProcessEnv = process.env) {
+  const directory = env.KERYX_REVIEW_TOOLS_DIR;
+  const links = expectedToolLinks(env);
+  if (!directory || !path.isAbsolute(directory) || directory.includes(path.delimiter) ||
+      env.PATH !== [directory, ...systemDirs].join(path.delimiter)) throw new Error(restoreTimer);
+  try {
+    const info = await lstat(directory);
+    if (!info.isDirectory() || info.uid !== process.getuid?.() || (info.mode & 0o077) !== 0 ||
+        await realpath(directory) !== directory) throw new Error(restoreTimer);
+    const names = await readdir(directory);
+    if (names.length !== links.size || names.some(name => !links.has(name))) throw new Error(restoreTimer);
+    await Promise.all([...links].map(async ([name, target]) => {
+      const file = path.join(directory, name);
+      if (!path.isAbsolute(target) || !(await lstat(file)).isSymbolicLink() ||
+          await realpath(file) !== target || !(await stat(target)).isFile()) throw new Error(restoreTimer);
+      await access(file, constants.X_OK);
+    }));
+  } catch {
+    throw new Error(restoreTimer);
+  }
 }
 
 function marked(label: string) {
@@ -109,8 +140,6 @@ async function watcherToolsPath(checkouts: string[]) {
     return relative === ".." || relative.startsWith(".." + path.sep) || path.isAbsolute(relative);
   });
   const found = new Map<string, string>();
-  const dirs = new Set<string>();
-  const verifiedSystemDirs = new Set<string>();
   const inherited = (process.env.PATH ?? "").split(path.delimiter);
   for (const entry of new Set([...inherited, ...systemDirs])) {
     if (!path.isAbsolute(entry) || !outsideCheckouts(path.resolve(entry))) continue;
@@ -127,26 +156,45 @@ async function watcherToolsPath(checkouts: string[]) {
       // update could create the missing target after the timer was installed.
       const target = await realpath(file).catch(() => undefined);
       if (!target || !outsideCheckouts(target)) return null;
-      if (!(await stat(target)).isFile() || !Bun.which(tool, { PATH: dir })) return undefined;
+      if (!(await stat(target).catch(() => null))?.isFile() || !Bun.which(tool, { PATH: dir })) return undefined;
       return { tool, target };
     }));
     // Even a directory selected only for rg could shadow gh or git on the next tick.
     if (targets.includes(null)) continue;
-    if (systemDirs.includes(entry)) verifiedSystemDirs.add(dir);
     for (const item of targets) {
       if (!item || found.has(item.tool)) continue;
       found.set(item.tool, item.target);
-      dirs.add(dir);
     }
   }
   for (const tool of ["gh", "git"]) {
     if (!found.has(tool)) throw new Error(`configuration: Install ${tool} outside the project's worktrees before enabling the watcher.`);
   }
-  return {
-    PATH: [...new Set([...dirs, ...verifiedSystemDirs])].join(path.delimiter),
+  const configuration = path.resolve(keryxDataDir());
+  if (!outsideCheckouts(configuration)) throw new Error("configuration: Store Review timer tools outside the project's worktrees.");
+  const toolsRoot = path.join(configuration, "review-watch", "tools");
+  await mkdir(toolsRoot, { recursive: true, mode: 0o700 });
+  const canonical = await realpath(toolsRoot);
+  if (!outsideCheckouts(canonical) || canonical.includes(path.delimiter)) throw new Error(restoreTimer);
+  const hash = createHash("sha256").update(JSON.stringify([...found].sort())).digest("hex");
+  const directory = path.join(canonical, hash);
+  await mkdir(directory, { recursive: true, mode: 0o700 });
+  await Promise.all([...found].map(async ([name, target]) => {
+    try {
+      await symlink(target, path.join(directory, name));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    }
+  }));
+  const rg = found.get("rg");
+  const env = {
+    PATH: [directory, ...systemDirs].join(path.delimiter),
+    KERYX_REVIEW_TOOLS_DIR: directory,
     KERYX_REVIEW_GH_BIN: found.get("gh")!,
     KERYX_REVIEW_GIT_BIN: found.get("git")!,
+    ...(rg ? { KERYX_REVIEW_RG_BIN: rg } : {}),
   };
+  await verifyWatcherTimerTools(env);
+  return env;
 }
 
 export async function watcherProgram(checkouts: string[], host: ScheduleHost) {

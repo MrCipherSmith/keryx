@@ -179,20 +179,26 @@ export async function pollWatcher(
   if (!claimed) return readWatcher(cwd, key);
   let cards: WatchedCard[] | undefined;
   let failure: string | null = null;
+  let recoveryWarning: string | null = null;
   let links: ReturnType<typeof linkedReviewRuns> = [];
   try {
     if (beforeFetch) await beforeFetch();
     const board = await fetch(cwd, key);
     validateObservation(board, key);
-    links = access((db) => db.query("SELECT 1 FROM watchers WHERE id=? AND lease=? AND state='enabled'").get(id, token)
-      ? linkedReviewRuns(db, id) : []);
-    if (links.length) {
-      // This can read an on-disk verdict. Keep it outside both SQLite transactions and only
-      // after verifying this account. The commit below validates the lease again.
-      const { reconcileLinkedScheduledRuns } = await import("./desk-run-service");
-      await reconcileLinkedScheduledRuns(cwd, key, links, new Set(board.cards.map(card => card.number)));
-    }
     cards = observedCards(board.cards);
+    try {
+      links = access((db) => db.query("SELECT 1 FROM watchers WHERE id=? AND lease=? AND state='enabled'").get(id, token)
+        ? linkedReviewRuns(db, id) : []);
+      if (links.length) {
+        // Read a verdict outside the SQLite transaction and only after verifying this account.
+        const { reconcileLinkedScheduledRuns } = await import("./desk-run-service");
+        if (!await reconcileLinkedScheduledRuns(cwd, key, links, new Set(board.cards.map(card => card.number)))) {
+          recoveryWarning = "A scheduled review could not be recovered. The watcher will retry.";
+        }
+      }
+    } catch {
+      recoveryWarning = "Scheduled review history could not be recovered. The watcher will retry.";
+    }
   } catch (error) {
     failure =
       error instanceof Error && /^(unavailable|access|configuration):/.test(error.message)
@@ -215,12 +221,13 @@ export async function pollWatcher(
       observeRules(db, id, cards, changes, at, outcomes, links);
       if (changes.length) {
         const insert = db.prepare("INSERT INTO watcher_events (watcher,event) VALUES (?,?)");
-        for (const event of changes) insert.run(id, JSON.stringify(event));
+        for (const event of changes.slice(-historyLimit)) insert.run(id, JSON.stringify(event));
         db.run(`DELETE FROM watcher_events WHERE watcher=? AND id < (
           SELECT id FROM watcher_events WHERE watcher=? ORDER BY id DESC LIMIT 1 OFFSET ?)`,
         [id, id, historyLimit - 1]);
       }
-      db.run("UPDATE watchers SET lease=NULL,pid=NULL,lastError=NULL,lastSuccessAt=?,baseline=? WHERE id=?", [
+      db.run("UPDATE watchers SET lease=NULL,pid=NULL,lastError=?,lastSuccessAt=?,baseline=? WHERE id=?", [
+        recoveryWarning,
         at,
         JSON.stringify(cards),
         id,

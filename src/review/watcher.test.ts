@@ -90,6 +90,13 @@ test("temporary errors and incomplete snapshots retain baseline, resume discards
 test("stores only the newest 50 observed events per watcher", async () => {
   configureWatcher(cwd, key, 1);
   await tick(board());
+  const second = { ...key, viewer: "B" };
+  configureWatcher(cwd, second, 1);
+  const pollSecond = (cards: ReviewCard[]) => pollWatcher(cwd, second, {
+    fetch: async () => ({ ...board(...cards), viewer: second.viewer }),
+  });
+  await pollSecond([]);
+  await pollSecond([card({ number: 700 })]);
   const cards = Array.from({ length: 65 }, (_, index) => card({ number: index + 1 }));
   const snapshot = await tick(board(...cards));
   const count = watcherTransaction(db => db.query<{ count: number }, [string]>(
@@ -97,7 +104,9 @@ test("stores only the newest 50 observed events per watcher", async () => {
   ).get(watcherScope(cwd, key))?.count);
   expect(count).toBe(50);
   expect(snapshot.events).toHaveLength(50);
+  expect(snapshot.events.map(event => event.number)).toEqual(Array.from({ length: 50 }, (_, index) => 65 - index));
   expect(snapshot.events.every(event => event.kind === "opened")).toBe(true);
+  expect(readWatcher(cwd, second).events).toMatchObject([{ kind: "opened", number: 700 }]);
 });
 
 test("concurrent ticks skip an active poll; a pre-pause result cannot overwrite a resumed baseline", async () => {

@@ -20,7 +20,7 @@ export function reviewTool(name: "gh" | "git", env: NodeJS.ProcessEnv = process.
   try {
     if (candidate && realpathSync.native(candidate) === pin) return pin;
   } catch { /* The executable may have been replaced between lookup and resolution. */ }
-  throw new Error("configuration: A watcher executable moved. Enable the watcher again to verify its tools.");
+  throw new Error("configuration: A watcher executable moved. Select Restore timer in Desktop or enable the watcher again from the CLI.");
 }
 
 /** Extract only owner/name. Remotes may include credentials; never return or log their full URL. */

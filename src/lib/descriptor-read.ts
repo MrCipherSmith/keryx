@@ -7,7 +7,6 @@ type PosixLibrary = {
     openat: (directoryFd: number, name: Uint8Array, flags: number, mode: number) => number;
     close: (fd: number) => number;
   };
-  close(): void;
 };
 
 export type DescriptorReadCode =
@@ -27,7 +26,7 @@ export class DescriptorReadError extends Error {
   }
 }
 
-export type DescriptorIdentity = Pick<Stats, "dev" | "ino">;
+export type DescriptorIdentity = Pick<BigIntStats, "dev" | "ino">;
 export interface DescriptorReadOptions {
   maxBytes?: number;
   requireRegularFile?: boolean;
@@ -62,7 +61,6 @@ export function openDescriptorChain(
   const libc = loadPosixLibrary();
   if (!libc || !Number.isInteger(constants.O_DIRECTORY) || !Number.isInteger(constants.O_NOFOLLOW) ||
       (options.requireRegularFile && !Number.isInteger(constants.O_NONBLOCK))) {
-    libc?.close();
     throw new DescriptorReadError("unavailable", "safe descriptor source reads are unavailable on this platform");
   }
   const opened: number[] = [];
@@ -103,7 +101,6 @@ export function openDescriptorChain(
     throw new DescriptorReadError("open-failed", "safe descriptor source open failed");
   } finally {
     for (const fd of opened.reverse()) libc.symbols.close(fd);
-    libc.close();
   }
 }
 
@@ -135,13 +132,17 @@ export async function readDescriptorChainAsync(
   return readDescriptorChain(workspaceRoot, absolutePath, options);
 }
 
+let posixLibrary: PosixLibrary | undefined;
+
 function loadPosixLibrary(): PosixLibrary | undefined {
+  if (posixLibrary) return posixLibrary;
   for (const candidate of libcCandidates) {
     try {
-      return dlopen(candidate, {
+      posixLibrary = dlopen(candidate, {
         openat: { args: [FFIType.i32, FFIType.cstring, FFIType.i32, FFIType.i32], returns: FFIType.i32 },
         close: { args: [FFIType.i32], returns: FFIType.i32 },
       }) as unknown as PosixLibrary;
+      return posixLibrary;
     } catch { /* try the next known system libc path */ }
   }
   return undefined;
@@ -153,8 +154,8 @@ function openAt(libc: PosixLibrary, directoryFd: number, component: string, flag
   return fd;
 }
 
-function sameIdentity(left: DescriptorIdentity | Pick<BigIntStats, "dev" | "ino">, right: BigIntStats): boolean {
-  return BigInt(left.dev) === right.dev && BigInt(left.ino) === right.ino;
+function sameIdentity(left: DescriptorIdentity, right: DescriptorIdentity): boolean {
+  return left.dev === right.dev && left.ino === right.ino;
 }
 
 function readAll(fd: number, descriptor: Stats, maxBytes?: number): Buffer {

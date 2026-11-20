@@ -24,6 +24,20 @@ export function assignedReviewerWave(reviewer: string, filename: string): number
   return waveNumber(wave) ? wave : undefined;
 }
 
+export function finishedReviewerSession(session: DeskReviewerSession): boolean {
+  return ["completed", "partial", "failed", "cancelled"].includes(session.state);
+}
+
+/** Keep retry sessions in the timeline while counting only the latest per assignment. */
+export function summarizeReviewerAssignments(sessions: readonly DeskReviewerSession[]) {
+  const byAssignment = new Map(sessions.map(session => [`${session.reviewer}:${session.wave}`, session]));
+  const latest = [...byAssignment.values()];
+  const finished = latest.filter(finishedReviewerSession);
+  const running = latest.filter(session => session.state === "running");
+  const wave = (running.length ? running : finished).reduce<number | null>((last, session) => Math.max(last ?? 0, session.wave), null);
+  return { finished: finished.length, wave };
+}
+
 interface SessionRecord {
   session: DeskReviewerSession;
   requests: Map<string, number>;

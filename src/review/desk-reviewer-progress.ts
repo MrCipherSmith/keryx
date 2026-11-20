@@ -2,7 +2,7 @@
 import { closeSync, constants, fstatSync, lstatSync, openSync, readSync } from "node:fs";
 import path from "node:path";
 import type { DeskReviewerProgress, DeskReviewerSession, DeskRun, DeskRunKey } from "./desk-run-types";
-import { assignedReviewerWave, identifier, reviewerName, waveNumber } from "./reviewer-activity";
+import { assignedReviewerWave, finishedReviewerSession, identifier, reviewerName, summarizeReviewerAssignments, waveNumber } from "./reviewer-activity";
 import { isReviewerResult, parseReviewResult } from "./ledger";
 import { splitUsage } from "./dispatch-usage";
 import { usageCounts, validUsageCounts } from "./run-usage";
@@ -66,9 +66,6 @@ function observedSession(value: unknown, detailed: boolean): DeskReviewerSession
   return session;
 }
 
-function isFinished(session: DeskReviewerSession) {
-  return ["completed", "partial", "failed", "cancelled"].includes(session.state);
-}
 export function readDeskReviewerProgress(directory: string, key: DeskRunKey, run: DeskRun, detailed: boolean): DeskReviewerProgress | undefined {
   if (run.source === "existing" || !/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(run.id)) return;
   const ref = `https://github.com/${key.repo}/pull/${key.number}`.toLowerCase();
@@ -113,7 +110,7 @@ export function readDeskReviewerProgress(directory: string, key: DeskRunKey, run
       if (queued.has(key)) continue;
       queued.add(key);
       const checkpoint = observed.get(key);
-      if (checkpoint === null || (checkpoint && (active || isFinished(checkpoint)))) continue;
+      if (checkpoint === null || (checkpoint && (active || finishedReviewerSession(checkpoint)))) continue;
       const session: DeskReviewerSession = checkpoint ?? { id: key, reviewer, wave, state: active ? "planned" : "unknown" };
       if (isRecord(call.expected_model)) {
         if (!session.model && identifier(call.expected_model.model)) session.model = call.expected_model.model;
@@ -127,7 +124,7 @@ export function readDeskReviewerProgress(directory: string, key: DeskRunKey, run
         if (!incomplete && isReviewerResult(saved) && saved.reviewer === reviewer) {
           if (saved.status === "DONE" || saved.status === "DONE_WITH_CONCERNS") session.state = "completed";
           if (saved.status === "BLOCKED" || saved.status === "NEEDS_CONTEXT") session.state = "partial";
-          if (detailed && isFinished(session)) {
+          if (detailed && finishedReviewerSession(session)) {
             const activity = session.activity ??= [];
             activity.push({ label: "Reviewer result saved" });
             if (activity.length > 24) { activity.shift(); session.truncated = true; }
@@ -148,10 +145,5 @@ export function readDeskReviewerProgress(directory: string, key: DeskRunKey, run
     break;
   }
   if (!sessions.length) return;
-  const started = sessions.filter(s => s.state !== "planned" && s.state !== "unknown");
-  const running = started.filter(s => s.state === "running");
-  const wave = (running.length ? running : started).reduce<number | null>((w, s) => Math.max(w ?? 0, s.wave), null);
-  // A retry remains a distinct session while progress follows the latest execution of each assignment.
-  const assignments = new Map(sessions.map(session => [`${session.reviewer}:${session.wave}`, session]));
-  return { planned, finished: [...assignments.values()].filter(isFinished).length, wave, sessions };
+  return { planned, ...summarizeReviewerAssignments(sessions), sessions };
 }

@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { homedir } from "node:os";
 import { isAbsolute } from "node:path";
 import { promisify } from "node:util";
 import { resolveGitCommonDir } from "../lib/git-worktrees";
@@ -9,11 +10,19 @@ import { boardGraphql, reviewRepositories, reviewTool } from "./board-github";
 
 const exec = promisify(execFile);
 
+export function watcherDiscoveryEnvironment(): NodeJS.ProcessEnv {
+  return {
+    PATH: "/usr/bin:/bin",
+    HOME: homedir(),
+    XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME,
+  };
+}
+
 /** At installation the inherited PATH is still untrusted. macOS supplies Git at this absolute path. */
 export async function watcherWorktrees(cwd: string): Promise<string[]> {
   const { stdout } = await exec("/usr/bin/git", ["worktree", "list", "--porcelain", "-z"], {
-    cwd, env: { PATH: "/usr/bin:/bin" }, timeout: 5000, maxBuffer: 8 * 1024 * 1024,
-  }).catch(() => { throw new Error("configuration: Could not verify the project's worktrees with system Git."); });
+    cwd, env: watcherDiscoveryEnvironment(), timeout: 5000, maxBuffer: 8 * 1024 * 1024,
+  }).catch(error => { throw new Error("configuration: Could not verify the project's worktrees with system Git.", { cause: error }); });
   const roots: string[] = [];
   for (const record of stdout.split("\0\0")) {
     const first = record.split("\0", 1)[0];

@@ -44,18 +44,20 @@ export function findKnownExcerpt(file: string, query: string, limit: number): st
     const match = query.toLowerCase();
     const before = Math.min(180, limit / 4);
     let offset = 0, shown = "", discarded = false;
+    let start: number | undefined;
     while (offset < stat.size) {
       const bytes = readSync(fd, buffer, 0, Math.min(buffer.length, stat.size - offset), offset);
       if (!bytes) break;
       offset += bytes;
       shown += decoder.write(buffer.subarray(0, bytes));
       if (offset === stat.size) shown += decoder.end();
-      const index = shown.toLowerCase().indexOf(match);
-      if (index >= 0) {
-        const start = Math.max(0, index - before);
-        const end = start + limit;
-        return (discarded || start > 0 ? "… " : "") + shown.slice(start, end) +
-          (end < shown.length || offset < stat.size ? " …" : "");
+      if (start === undefined) {
+        const index = shown.toLowerCase().indexOf(match);
+        if (index >= 0) start = Math.max(0, index - before);
+      }
+      if (start !== undefined) {
+        if (shown.length >= start + limit) break;
+        continue;
       }
       const carry = 2 * match.length + before;
       if (shown.length > carry) {
@@ -63,7 +65,10 @@ export function findKnownExcerpt(file: string, query: string, limit: number): st
         discarded = true;
       }
     }
-    return "";
+    if (start === undefined) return "";
+    const end = start + limit;
+    return (discarded || start > 0 ? "… " : "") + shown.slice(start, end) +
+      (end < shown.length || offset < stat.size ? " …" : "");
   } catch {
     return "";
   } finally {

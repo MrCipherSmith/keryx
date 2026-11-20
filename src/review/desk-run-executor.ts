@@ -15,10 +15,10 @@ import { runAutonomousReview, defaultSpawn, privateGitEnv, type ChildHandle, typ
 import type { ReviewRunUsage } from "./run-usage";
 import { countFindings, knownFindingList, renderReport, type AutonomousSummary, type FindingCounts } from "./autonomous-summary";
 import { computeVerdict, renderVerdict } from "./verdict";
-import { boardGh } from "./board-github";
+import { boardGraphql, reviewTool } from "./board-github";
 import type { ManagedReviewManifest } from "./types";
 import { DESK_RUN_SCOPE } from "./desk-run-types";
-import { checkedDeskSummary, saveDeskSummary, deskVerdictHeadline, completeDeskCoverage, recordedSha, recoverDeskExecution } from "./desk-run-executor-recovery";
+import { checkoutIsDisposable, checkedDeskSummary, saveDeskSummary, deskVerdictHeadline, completeDeskCoverage, recordedSha, recoverDeskExecution } from "./desk-run-executor-recovery";
 import { DESK_REVIEW_PROJECT_ROOT, DESK_REVIEW_SHELL } from "./autonomous-profile";
 import { isReviewPackageDir } from "./package-location";
 export { recoverDeskExecution } from "./desk-run-executor-recovery";
@@ -54,7 +54,9 @@ export interface DeskExecutionResult {
   report: string | null;
 }
 
-interface Revision { baseRefName: string; baseRefOid: string; headRefOid: string; state: string }
+interface PullRevision { baseRefName: string; baseRefOid: string; headRefOid: string; state: string }
+interface ControlRef { name: string; oid: string }
+interface Revision extends PullRevision { defaultBranch?: ControlRef }
 export type DeskModelSelector = (cwd: string) => Promise<{ provider: string; model: string }> | { provider: string; model: string };
 
 interface ExecutorPorts {
@@ -71,12 +73,26 @@ const EMPTY: DeskExecutionResult = {
   coverage: "unknown", verdict: null, findings: countFindings(null), findingsKnown: false, report: null,
 };
 async function revision({ repo, number, cwd }: DeskExecutionOptions): Promise<Revision> {
-  return JSON.parse(await boardGh(cwd, ["pr", "view", `https://github.com/${repo}/pull/${number}`, "--json", "baseRefName,baseRefOid,headRefOid,state"]));
+  const [owner, name] = repo.split("/");
+  const data = await boardGraphql<{ repository?: {
+    pullRequest?: PullRevision | null;
+    defaultBranchRef?: { name: string; target?: { oid?: string } } | null;
+  } | null }>(cwd, `query($owner:String!,$name:String!,$number:Int!) {
+    repository(owner:$owner,name:$name) {
+      pullRequest(number:$number) { baseRefName baseRefOid headRefOid state }
+      defaultBranchRef { name target { oid } }
+    }
+  }`, { owner: owner!, name: name!, number });
+  const pull = data.repository?.pullRequest;
+  if (!pull) throw new Error("access: The selected pull request is no longer available.");
+  const branch = data.repository?.defaultBranchRef;
+  const oid = recordedSha(branch?.target?.oid);
+  return { ...pull, ...(branch && oid ? { defaultBranch: { name: branch.name, oid } } : {}) };
 }
 
 async function git(cwd: string, args: string[], signal: AbortSignal): Promise<string> {
   try {
-    const { stdout } = await exec("git", ["-c", "core.hooksPath=/dev/null", ...args], {
+    const { stdout } = await exec(reviewTool("git"), ["-c", "core.hooksPath=/dev/null", ...args], {
       cwd, signal, timeout: 120_000, maxBuffer: 8 * 1024 * 1024,
       env: { ...privateGitEnv(), GIT_TERMINAL_PROMPT: "0", GH_PROMPT_DISABLED: "1", GIT_NO_REPLACE_OBJECTS: "1" },
     });
@@ -87,14 +103,6 @@ async function git(cwd: string, args: string[], signal: AbortSignal): Promise<st
   }
 }
 
-async function localControlRevision(cwd: string, signal: AbortSignal): Promise<string | null> {
-  const [first, kind] = (await git(cwd, ["worktree", "list", "--porcelain", "-z"], signal)).split("\0");
-  if (!first?.startsWith("worktree ") || kind === "bare") return null;
-  const commit = await git(first.slice("worktree ".length), ["rev-parse", "--verify", ...revisionOperand("HEAD^{commit}")], signal)
-    .catch(() => { signal.throwIfAborted(); return ""; });
-  return recordedSha(commit);
-}
-
 async function prepareCheckout(options: DeskExecutionOptions, checkout: string, ports: ExecutorPorts,
   readRevision: () => Promise<Revision>) {
   const { cwd, repo, number, signal, baseSha, headSha } = options;
@@ -102,17 +110,15 @@ async function prepareCheckout(options: DeskExecutionOptions, checkout: string, 
   const matchesRequest = (pr: Revision) => pr.state === "OPEN" && pr.baseRefOid === baseSha && pr.headRefOid === headSha;
   const pull = await readRevision();
   if (!matchesRequest(pull)) return false;
-  // The live PR can select a comparison branch, never project policy. Pin the
-  // primary local checkout's committed controls before fetching either PR ref.
-  const controlsHead = await localControlRevision(cwd, signal);
   await git(cwd, ["clone", "--no-checkout", "--no-tags", "--", cwd, checkout], signal);
   const run = (args: string[]) => git(checkout, args, signal);
   const baseRef = `refs/remotes/origin/${pull.baseRefName}`;
   await run(["check-ref-format", baseRef]);
   await run(["remote", "set-url", "origin", ports.remoteUrl ?? `https://github.com/${repo}.git`]);
   await run(["remote", "set-url", "--push", "origin", "file:///dev/null"]);
-  await run(["-c", "credential.helper=", "-c", "credential.https://github.com.helper=!gh auth git-credential",
-    "fetch", "--no-tags", "origin", `+refs/heads/${pull.baseRefName}:${baseRef}`, `+refs/pull/${number}/head:refs/keryx/review-head`]);
+  const fetch = (...refs: string[]) => run(["-c", "credential.helper=", "-c", "credential.https://github.com.helper=!gh auth git-credential",
+    "fetch", "--no-tags", "origin", ...refs]);
+  await fetch(`+refs/heads/${pull.baseRefName}:${baseRef}`, `+refs/pull/${number}/head:refs/keryx/review-head`);
   if (await run(["rev-parse", "refs/keryx/review-head"]) !== headSha) return false;
   if (await run(["rev-parse", "--verify", ...revisionOperand(baseRef)]) !== baseSha) {
     // GitHub can retain this PR's base OID after its target branch advances. Accept only a commit
@@ -121,6 +127,19 @@ async function prepareCheckout(options: DeskExecutionOptions, checkout: string, 
     if (!containing.split("\n").includes(baseRef)) return false;
     const confirmed = await readRevision();
     if (!matchesRequest(confirmed) || confirmed.baseRefName !== pull.baseRefName) return false;
+  }
+  // Project controls come from GitHub's default branch. A locally checked-out PR
+  // and a PR-selected comparison branch remain inputs to the diff only.
+  let controlsHead: string | null = null;
+  const policy = pull.defaultBranch;
+  if (policy) {
+    const policyRef = policy.name === pull.baseRefName ? baseRef : "refs/keryx/review-controls";
+    if (policyRef !== baseRef) {
+      const source = `refs/heads/${policy.name}`;
+      await run(["check-ref-format", source]);
+      await fetch(`+${source}:${policyRef}`);
+    }
+    if (await run(["rev-parse", "--verify", ...revisionOperand(policyRef)]) === policy.oid) controlsHead = policy.oid;
   }
   // No PR file ever becomes an active policy, preload, smudge filter, or runnable project hook.
   // Source reads use the pinned Git objects. The index stays at head for existing range tools.
@@ -329,8 +348,11 @@ export async function executeDeskReview(options: DeskExecutionOptions, ports: Ex
       child.kill("SIGKILL");
       await child.exited.catch(() => undefined);
       try {
-        const recovered = await recoverDeskExecution(runDir, { ...options, scope: DESK_RUN_SCOPE, cancelled: signal.aborted });
-        if (recovered) result = { ...recovered, outcome: result.outcome, reason: result.reason };
+        const recovered = await recoverDeskExecution(runDir, {
+          ...options, scope: DESK_RUN_SCOPE, cancelled: signal.aborted, interruption: result,
+        });
+        if (recovered) result = recovered;
+        checkoutMayBeRemoved = await checkoutIsDisposable(runDir);
       } catch {
         checkoutMayBeRemoved = false; // Leave evidence available if it could not be archived.
       }

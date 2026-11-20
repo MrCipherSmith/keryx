@@ -2,7 +2,7 @@ import { homedir } from "node:os";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { withFileLock } from "../lib/fs";
-import { mainCheckout, parseWatcherKey, verifyIdentity, watcherWorktrees } from "../review/watcher-project";
+import { mainCheckout, parseWatcherKey, verifyIdentity, watcherDiscoveryEnvironment, watcherWorktrees } from "../review/watcher-project";
 import {
   configureWatcher,
   listConfiguredWatchers,
@@ -51,7 +51,7 @@ export function parseWatchArgs(args: string[]) {
 
 function publicStatus(s: WatcherSnapshot): WatcherSnapshot {
   return { ...s, historyAvailable: false, events: [],
-    lastError: s.lastError ? "The last scheduled poll failed. Reconnect to GitHub to inspect it." : null };
+    lastError: s.lastError ? "The last scheduled poll reported a problem. Reconnect to GitHub to inspect it." : null };
 }
 
 async function scopedStatus(
@@ -88,14 +88,14 @@ export async function requestWatch(
   request: ReturnType<typeof parseWatchArgs>,
   host: ScheduleHost = {},
   verify = verifyIdentity,
+  worktrees = watcherWorktrees,
 ): Promise<WatcherSnapshot> {
   const { action } = request;
   const installing = action === "enable" || action === "resume";
   if (installing && (host.platform ?? process.platform) !== "darwin")
     throw new Error("configuration: A local Review watcher requires macOS launchd.");
-  const checkouts = installing ? await watcherWorktrees(cwd) : undefined;
-  const systemEnv = (host.platform ?? process.platform) === "darwin" ? { PATH: "/usr/bin:/bin" } : undefined;
-  const project = checkouts?.[0] ?? await mainCheckout(cwd, systemEnv);
+  const systemEnv = (host.platform ?? process.platform) === "darwin" ? watcherDiscoveryEnvironment() : undefined;
+  const project = await mainCheckout(cwd, systemEnv);
   let key = request.key;
   if (!key) {
     const keys = listConfiguredWatchers(project);
@@ -107,7 +107,7 @@ export async function requestWatch(
   const target = key;
   if (action === "tick") {
     // All full baseline/history writes are owned and fenced by the poll service.
-    return publicStatus(await pollWatcher(project, target, { beforeFetch: () => verifyWatcherTimerTools(project, target, host) }));
+    return publicStatus(await pollWatcher(project, target, { beforeFetch: () => verifyWatcherTimerTools() }));
   }
   if (action === "status") {
     const snapshot = readWatcher(project, target);
@@ -126,7 +126,10 @@ export async function requestWatch(
   const generation = watcherPauseGeneration(project, target);
   if (action === "resume" && readWatcher(project, target).state === "disabled")
     throw new Error("configuration: Enable this watcher before resuming it.");
-  const program = await watcherProgram(checkouts!, host);
+  const checkouts = await worktrees(cwd);
+  if (checkouts[0] !== project)
+    throw new Error("configuration: The primary checkout changed during verification. Try again from Review.");
+  const program = await watcherProgram(checkouts, host);
   // The interactive credentials and the credentials launchd can use must both authorize this project.
   if (process.env.GH_TOKEN || process.env.GITHUB_TOKEN)
     await verify(project, target, { ...program.env, HOME: homedir(), GH_TOKEN: process.env.GH_TOKEN, GITHUB_TOKEN: process.env.GITHUB_TOKEN });

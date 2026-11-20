@@ -164,11 +164,8 @@ test.skipIf(process.platform === "win32")("a delayed GitHub response in one wind
   writeFileSync(path.join(bin, "gh"), `#!/bin/sh
 if [ "$WAIT_FOR_NEWER" = "1" ]; then
   : > "$FIXTURE/waiting"
-  n=0
   until [ -f "$FIXTURE/release" ]; do
-    if [ "$n" -ge 240 ]; then exit 75; fi
     sleep 0.05
-    n=$((n+1))
   done
 fi
 printf '{"data":{"viewer":{"login":"viewer"},"repository":{"id":"node","pullRequest":{"state":"OPEN","baseRefOid":"${base}","headRefOid":"%s"}}}}\\n' "$FIXTURE_HEAD"

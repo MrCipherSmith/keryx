@@ -49,7 +49,7 @@ export function updateWork(
 export function linkedReviewRuns(db: Database, scope: string) {
   return db.query<{ runId: string; number: number }, [string]>(
     `SELECT runId,number FROM review_rule_work WHERE watcher=?
-      AND state IN ('started','linked') AND valid=1 AND checked>=0 AND runId IS NOT NULL
+      AND state IN ('started','linked') AND checked>=0 AND runId IS NOT NULL
       GROUP BY runId,number ORDER BY MIN(checked),MIN(rowid) LIMIT 50`,
   ).all(scope);
 }
@@ -61,13 +61,14 @@ function refreshLinkedRuns(db: Database, scope: string, outcomes: typeof schedul
   const { retryable, terminal } = outcomes(linked.map((row) => row.runId));
   for (const { runId } of linked) {
     if (retryable.has(runId)) {
+      db.run("UPDATE review_rule_work SET checked=-1 WHERE watcher=? AND runId=? AND valid=0", [scope, runId]);
       db.run(
         `UPDATE review_rule_work SET state='waiting',runId=NULL,reason='Rechecking after preflight stopped before spending budget',at=?,checked=0
         WHERE watcher=? AND runId=? AND valid=1 AND state IN ('started','linked')`,
         [at, scope, runId],
       );
     } else {
-      db.run("UPDATE review_rule_work SET checked=? WHERE watcher=? AND runId=? AND valid=1", [
+      db.run("UPDATE review_rule_work SET checked=? WHERE watcher=? AND runId=?", [
         terminal.has(runId) ? -1 : Date.now(),
         scope,
         runId,

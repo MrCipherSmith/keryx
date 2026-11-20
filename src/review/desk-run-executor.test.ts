@@ -42,7 +42,8 @@ function options(controller = new AbortController()) {
 }
 
 const selectModel = () => ({ provider: "test-provider", model: "test-model" });
-const revision = async () => ({ baseRefName: "base", baseRefOid: baseSha, headRefOid: headSha, state: "OPEN" });
+const defaultBranch = () => ({ name: "base", oid: git(cwd, "rev-parse", "refs/heads/base") });
+const revision = async () => ({ baseRefName: "base", baseRefOid: baseSha, headRefOid: headSha, state: "OPEN", defaultBranch: defaultBranch() });
 
 function packageAt(spec: ChildSpec, target: Record<string, unknown>, coverage: unknown) {
   const dir = path.join(spec.cwd, ".metaproject/reviews/pkg");
@@ -173,7 +174,7 @@ test("an advancing remote base keeps the API-pinned range independent of the loc
   expect(result).toMatchObject({ outcome: "complete", checkedBase: baseSha, checkedHead: headSha });
 });
 
-test("an alternate PR target from a linked checkout cannot select Desktop's local review controls", async () => {
+test("an alternate PR target from a linked checkout cannot select Desktop's review controls", async () => {
   const linked = path.join(root, "linked");
   git(cwd, "worktree", "add", "--quiet", "-b", "alternate", linked, baseSha);
   writeFileSync(path.join(linked, skill), "alternate branch marker");
@@ -188,11 +189,13 @@ test("an alternate PR target from a linked checkout cannot select Desktop's loca
   git(linked, "commit", "-qm", "alternate comparison head");
   const targetHead = git(linked, "rev-parse", "HEAD");
   git(cwd, "update-ref", "refs/pull/12/head", targetHead);
+  git(cwd, "restore", "src.ts");
+  git(cwd, "switch", "--quiet", "pr");
 
   let inspected = false;
   const result = await executeDeskReview({ ...options(), cwd: linked, baseSha: targetBase, headSha: targetHead }, {
     selectModel, remoteUrl: cwd,
-    revision: async () => ({ baseRefName: "alternate", baseRefOid: targetBase, headRefOid: targetHead, state: "OPEN" }),
+    revision: async () => ({ baseRefName: "alternate", baseRefOid: targetBase, headRefOid: targetHead, state: "OPEN", defaultBranch: defaultBranch() }),
     spawn(spec) {
       expect(git(spec.cwd, "rev-parse", "HEAD")).toBe(targetHead);
       expect(git(spec.cwd, "show", targetBase + ":" + skill)).toBe("alternate branch marker");
@@ -209,7 +212,7 @@ test("an alternate PR target from a linked checkout cannot select Desktop's loca
   expect(result.outcome).toBe("incomplete");
 });
 
-test("installed review skills supply the coordinator when the committed local policy has none", async () => {
+test("installed review skills supply the coordinator when the default branch has none", async () => {
   git(cwd, "rm", skill);
   git(cwd, "commit", "-qm", "use installed review skills");
   let inspected = false;
@@ -288,7 +291,7 @@ test("cancellation stops the active orchestrator and records an explicit outcome
 
 test("a selected reviewer absent from coverage keeps the result partial, even with a closed package", async () => {
   const result = await executeDeskReview(options(), { selectModel, remoteUrl: cwd, revision, spawn(spec) {
-    packageAt(spec, { base: baseSha, head: headSha }, [{ reviewer: "review-logic", status: "run" }]);
+    observedPreparedPackage(spec);
     writeFileSync(path.join(spec.cwd, ".metaproject/reviews/pkg/research.json"), JSON.stringify({ dispatch: { selected: ["review-logic", "review-style"] } }));
     return { exited: Promise.resolve(0), kill() {} };
   } });
@@ -301,15 +304,19 @@ test("a selected reviewer absent from coverage keeps the result partial, even wi
   });
 });
 
-test.each(["missing", "truncated", "invalid", "waived", "oversized"])("prepared Desktop coverage fails closed for %s evidence in collection and recovery", async kind => {
+test.each(["missing", "truncated", "invalid", "duplicate", "waived", "oversized"])("prepared Desktop coverage fails closed for %s evidence in collection and recovery", async kind => {
   const result = await executeDeskReview(options(), { selectModel, remoteUrl: cwd, revision, spawn(spec) {
     preparedPackageAt(spec);
     const file = path.join(spec.cwd, ".metaproject/reviews/pkg/coverage.json");
     if (kind === "missing") rmSync(file);
     else if (kind === "truncated") writeFileSync(file, "{");
     else if (kind === "invalid") writeFileSync(file, JSON.stringify({ ...coveredFile, files: [{ file: "src.ts", status: "uncovered", scope: "A" }] }));
-    else if (kind === "waived") writeFileSync(file, JSON.stringify({ ...coveredFile, waived: true }));
-    else writeFileSync(file, JSON.stringify({ ...coveredFile, waived: true }) + " ".repeat(8 * 1024 * 1024));
+    else if (kind === "duplicate") {
+      writeFileSync(path.join(path.dirname(file), "scope-files.json"), JSON.stringify({ files: ["src.ts", "another.ts"] }));
+      writeFileSync(file, JSON.stringify({ ...coveredFile, counts: { ...coveredFile.counts, covered: 2, inScope: 2 },
+        files: [...coveredFile.files, coveredFile.files[0]] }));
+    } else if (kind === "waived") writeFileSync(file, JSON.stringify({ ...coveredFile, waived: true }));
+    else writeFileSync(file, JSON.stringify(coveredFile) + " ".repeat(8 * 1024 * 1024));
     writeFileSync(spec.eventsFile, JSON.stringify({ type: "request_usage", requestId: "review", participant: "reviewer",
       reviewer: "review-logic", usage: { inputTokens: 1, outputTokens: 1 } }) + "\n");
     return { exited: Promise.resolve(0), kill() {} };
@@ -535,6 +542,8 @@ test("preserves recovered package evidence after an exception in the guarded lau
     },
   });
   expect(out).toMatchObject({ outcome: "failed", reason: "Could not finish the launch transaction" });
+  expect(out.report).toContain("Status: **failed**");
+  expect(out.report).toContain("Could not finish the launch transaction");
   expect(killedAt).toEqual(["checkout present"]);
   expect(existsSync(path.join(runDir, "checkout"))).toBe(false);
   expect(readFileSync(path.join(runDir, "package", "report.md"), "utf8")).toContain("Handle missing repository");

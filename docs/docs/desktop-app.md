@@ -42,7 +42,7 @@ run when the verified GitHub account, PR, and base and head commits match.
 Manual reviews have a 30-minute time limit and
 unlimited tokens by default.
 
-The review uses committed controls from the project's primary local checkout, with installed review skills available as a fallback. The PR's base and head still determine the code comparison.
+The review uses committed controls from the GitHub repository's default branch. The installed review skills supply defaults when the selected branch has no review controls. The PR's base and head still determine the code comparison.
 
 During a run, the wave badge and progress line show how many reviewer assignments have finished. Before the plan is available, the indicator shows that the run is active. Open a reviewer to see its status, model when available and recorded activity. The session includes wave, timing and token usage. Older runs show the evidence saved with their review package.
 
@@ -59,7 +59,7 @@ records its result locally.
 
 From **Review**, open **PR watcher**, choose a polling interval and select **Enable watcher**. The default is five minutes. The first successful poll records which PRs are open, their revisions, requested reviewers and CI. The history shows the 50 latest changes with the time Keryx observed them.
 
-Sign in with `gh auth login` so the background process can read the repository after your shell exits. macOS runs the schedule while you are logged in and the Mac is awake. You can quit Keryx Desktop. After sleep or a failed poll, the watcher compares the next complete result with the last successful one. Open **PR watcher** to check the timer, last attempt and last success, or select **Pause watcher**. **Resume watcher** starts with a fresh baseline so changes that occurred during an explicit pause do not appear as new events.
+Sign in with `gh auth login` so the background process can read the repository after your shell exits. macOS runs the schedule while you are logged in and the Mac is awake. You can quit Keryx Desktop. If the timer needs repair after an upgrade or a local tool moves, open **PR watcher** and select **Restore timer**. After sleep or a failed poll, the watcher compares the next complete result with the last successful one. Open **PR watcher** to check the timer, last attempt and last success, or select **Pause watcher**. **Resume watcher** starts with a fresh baseline so changes that occurred during an explicit pause do not appear as new events.
 
 ### Set up automatic PR reviews
 
@@ -75,7 +75,7 @@ On a PR card, open **Automation**, select a mode and choose **Save mode**.
 | Auto · rule name | Use just this rule. Its trigger, reviewer and CI conditions still apply. |
 | Manual only | Skip scheduled reviews for this PR. You can start a review from the card at any time. |
 
-The Automation tab shows why a rule is waiting, started or skipped. Under **Keryx review**, a scheduled attempt records the rule and revision alongside its report. Matching triggers can share an attempt with another rule or with a manual start. The rule or manual action that starts an attempt sets its time and token limits. Later matches keep those limits. Keryx uses the token usage reported by the provider to decide when to stop. The watcher reserves up to four scheduled workers on this machine and rechecks eligible rules on its next poll when all four are occupied.
+The Automation tab shows why a rule is waiting, started or skipped. Under **Keryx review**, a scheduled attempt records the rule and revision alongside its report. Matching triggers can share an attempt with another rule or with a manual start. The rule or manual action that starts an attempt sets its time and token limits. Later matches keep those limits. Keryx uses the token usage reported by the provider to decide when to stop. The watcher reserves up to four scheduled workers per local Keryx data directory and rechecks eligible rules on its next poll when all four are occupied.
 
 ## Install
 

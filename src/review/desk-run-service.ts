@@ -119,16 +119,32 @@ export async function reconcileLinkedScheduledRuns(
     return verifyVisiblePullNumbers(key, numbers, (q, params) => boardGraphql(cwd, q, params));
   },
 ) {
-  if (!links.length || !existsSync(path.join(deskRunRoot(), "runs.sqlite"))) return;
+  if (!links.length || !existsSync(path.join(deskRunRoot(), "runs.sqlite"))) return true;
+  let recoveredAll = true;
   const store = new DeskRunStore();
   try {
-    const missing = links.filter(({number, runId}) => !visible.has(number) && store.scheduledOwnerExited({...key, number}, {project, runId}));
+    const candidates = store.liveScheduledLinks(key, project, links);
+    const missing = new Set<number>();
+    for (const { number, runId } of candidates) {
+      if (visible.has(number)) continue;
+      try {
+        if (store.scheduledOwnerExited({ ...key, number }, { project, runId })) missing.add(number);
+      } catch { recoveredAll = false; }
+    }
     // A completed or merged PR may have left the board. Read no artifacts until its permission is confirmed.
-    const additional = missing.length ? await verifyMissing([...new Set(missing.map(link => link.number))]) : new Set<number>();
-    for (const {number, runId} of links) {
-      if (visible.has(number) || additional.has(number)) await store.reconcile({...key, number}, recoverFinish, {project, runId});
+    let additional = new Set<number>();
+    if (missing.size) {
+      try { additional = await verifyMissing([...missing]); }
+      catch { recoveredAll = false; }
+    }
+    for (const { number, runId } of candidates) {
+      if (visible.has(number) || additional.has(number)) {
+        try { await store.reconcile({ ...key, number }, recoverFinish, { project, runId }); }
+        catch { recoveredAll = false; }
+      }
     }
   } finally { store.close(); }
+  return recoveredAll;
 }
 
 function spawnWorker(a: Attempt) {
@@ -330,7 +346,8 @@ export async function runDeskWorker(id: string, selectModel: DeskModelSelector) 
         onProgress: (p) => {
           // Board refreshes use the worker's compact checkpoint in SQLite,
           // including when Desktop is closed. Tool activity stays in the attempt.
-          progress(p.phase, p.usage, workerRoster(p));
+          progress(p.phase, p.usage, workerRoster.checkpoint(p));
+          workerRoster.persisted();
         },
       }, { selectModel });
       finish = finishExecution(out);
