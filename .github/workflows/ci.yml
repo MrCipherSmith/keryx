@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   # --- Execution Observability CI Protocol (ci-protocol.md) -----------------
   # Four jobs replace the former single `check`. The point is the baseline gate:
@@ -12,10 +16,11 @@ jobs:
   # been run independently on `main` and the two statuses classified, so a
   # pre-existing main defect is not misread as a PR regression.
 
-  # AC8 is a single full-suite run, in addition to the existing split gates.
-  # A clean checkout avoids nested foreign repositories; stdin is non-interactive.
+  # PRs partition the complete Bun suite into offline core shards and the
+  # remaining tests. On main, the serial suite also catches cross-file state
+  # leaks and checks the partition inventory against Bun's own discovery.
   ac8-full-suite:
-    name: ${{ matrix.shard == 0 && 'AC8 full suite (5000 ms, preload)' || format('AC8 trial shard {0}/4', matrix.shard) }}
+    name: ${{ matrix.part == 'all' && 'AC8 serial (main)' || matrix.part == 'remaining' && 'AC8 remaining tests' || format('Core tests ({0}/4, offline)', matrix.part) }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
     permissions:
@@ -23,7 +28,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1, 2, 3, 4]
+        part: ${{ fromJSON(github.event_name == 'pull_request' && '["1","2","3","4","remaining"]' || '["all"]') }}
     steps:
       - uses: actions/checkout@v4
 
@@ -40,31 +45,44 @@ jobs:
           sudo apt-get update || echo "apt-get update reported errors; the install below is the gate"
           sudo apt-get install -y ripgrep
 
-      - name: Run complete AC8 suite with configured preload
+      - name: Run AC8 partition with configured preload
         shell: bash
         env:
-          AC8_SHARD: ${{ matrix.shard }}
+          TEST_PART: ${{ matrix.part }}
         run: |
           set -o pipefail
           mkdir -p artifacts/ac8
           bun --version | tee artifacts/ac8/bun-version.txt
-          args=(--timeout 5000)
-          if [[ "$AC8_SHARD" != 0 ]]; then
-            args+=(--shard="$AC8_SHARD/4")
+          bun scripts/ci-test-plan.ts "$TEST_PART" > artifacts/ac8/files.txt
+          args=(--timeout 5000 --timings=artifacts/ac8/timings.json --update-timings)
+          if [[ "$TEST_PART" != all ]]; then
+            args+=(--files-from=artifacts/ac8/files.txt)
           fi
           bun test "${args[@]}" </dev/null 2>&1 | tee artifacts/ac8/full.log
+          bun scripts/ci-test-plan.ts "$TEST_PART" artifacts/ac8/timings.json
 
       - name: Preserve AC8 test log
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ac8-trial-${{ matrix.shard }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: ac8-${{ matrix.part }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: artifacts/ac8/
           if-no-files-found: warn
           retention-days: 14
 
-  typecheck-and-tests:
-    name: typecheck-and-tests
+  ac8-result:
+    name: AC8 full suite (5000 ms, preload)
+    needs: ac8-full-suite
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every AC8 leg to pass
+        env:
+          AC8_RESULT: ${{ needs.ac8-full-suite.result }}
+        run: test "$AC8_RESULT" = success
+
+  static-checks:
+    name: Lint and typecheck
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -102,23 +120,8 @@ jobs:
       - name: Confirm ripgrep is present
         run: rg --version
 
-      # `check:core`, not `check`. AFC-19 asks for the client to be gated by a
-      # SEPARATE matrix ("TUI/readline, streaming/cancel/resume проверяются
-      # отдельной матрицей") and for the core gate to be "полностью
-      # offline/model-free" (implementation-plan.md, "Выделение Shell"). One job
-      # running everything cannot report those two things separately, so this
-      # job now runs lint + both typechecks + `test:core`, and the
-      # `client-matrix` job below runs the client zone.
-      #
-      # The two together still run every test file in `src/`: that is asserted
-      # statically by `src/core-package.test.ts` ("the core gate and the client
-      # matrix between them run every test in src/"), which fails if a test file
-      # is matched by neither — the silent-coverage-loss this split would
-      # otherwise be free to introduce. It caught two real gaps the first time
-      # it ran. `bun run check` (everything, one command) is unchanged and is
-      # still what `release.yml` runs before publishing.
-      - name: Typecheck and core gate (offline, model-free)
-        run: bun run check:core
+      - name: Lint and check both TypeScript projects
+        run: bun run check:static
 
       # `wiki check-links` covers the wiki; nothing covered `docs/` or the root
       # Markdown until now — which is how a documentation pass could green-light
@@ -132,6 +135,18 @@ jobs:
 
       - name: Harness capability matrix drift gate (W5)
         run: bun ./src/cli.ts integrations matrix --check
+
+  typecheck-and-tests:
+    name: typecheck-and-tests
+    needs: [static-checks, ac8-full-suite]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require static checks and the test matrix to pass
+        env:
+          STATIC_RESULT: ${{ needs.static-checks.result }}
+          AC8_RESULT: ${{ needs.ac8-full-suite.result }}
+        run: test "$STATIC_RESULT" = success && test "$AC8_RESULT" = success
 
   client-matrix:
     # AFC-19's "отдельная матрица": the client surfaces the criterion names —

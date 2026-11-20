@@ -611,7 +611,7 @@ test("npm pack ships no test file — asked of npm, not of the manifest", () => 
 test("the gates package.json declares are the gates CI actually runs", () => {
   // Defect class this repository keeps recording: a capability that lives in a
   // helper nothing calls. A `test:client:*` script no CI leg names, or a
-  // `check:core` no job runs, would look exactly like a working gate — and the
+  // core test inventory no job runs, would look exactly like a working gate — and the
   // coverage assertion below would happily count its filters as covered while
   // nothing executed them. So the two enumerations are compared rather than
   // maintained in parallel and hoped about.
@@ -633,12 +633,11 @@ test("the gates package.json declares are the gates CI actually runs", () => {
   const chained = pkg.scripts["test:client"] ?? "";
   expect(declared.filter((leg) => !chained.includes(`test:client:${leg}`))).toEqual([]);
 
-  // And the core gate is wired: some job runs it.
-  const runs = Object.values(workflow.jobs).flatMap((job) =>
-    (job.steps ?? []).map((step) => step.run ?? ""),
-  );
-  expect(runs.some((run) => run.includes("bun run check:core"))).toBe(true);
-  expect(runs.some((run) => run.includes("bun run test:client:"))).toBe(true);
+  const partitionRuns = workflow.jobs["ac8-full-suite"]?.steps?.map((step) => step.run ?? "").join("\n") ?? "";
+  expect(partitionRuns).toContain('bun scripts/ci-test-plan.ts "$TEST_PART"');
+  expect(partitionRuns).toContain("--files-from=artifacts/ac8/files.txt");
+  const clientRuns = workflow.jobs["client-matrix"]?.steps?.map((step) => step.run ?? "").join("\n") ?? "";
+  expect(clientRuns).toContain("bun run test:client:");
 });
 
 test("a consumer reaches the ten doors and nothing else — the exports map, resolved", () => {
