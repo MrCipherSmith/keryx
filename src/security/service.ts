@@ -5,8 +5,8 @@ import {
   type OutputValidationResult,
 } from "./output-validation";
 import { readFile } from "node:fs/promises";
-import { pathExists } from "../lib/fs";
-import { loadSecurityConfig } from "./config";
+import { pathExists, withFileLock } from "../lib/fs";
+import { loadSecurityConfig, securityDataRoot } from "./config";
 import { runDetectorsAsync } from "./detect";
 import { randomBytes } from "node:crypto";
 import { getHmacKey, hmacHash } from "./redact";
@@ -237,23 +237,18 @@ async function runSelfProtection(
   cwd: string,
   config: SecurityConfig,
 ): Promise<{ findings: SecurityFinding[]; warnings: string[] }> {
-  const previous = await readState(cwd);
-  const selfProtection = evaluateSelfProtection(config, previous);
-  if (selfProtection.incidents.length > 0) {
-    await appendIncidents(cwd, selfProtection.incidents);
-  }
-  // A forced-closed posture (`config.configUnreadable`) is a derived, momentary
-  // fact about a config THIS run could not read -- not the operator's
-  // configured mode or policies (T39 F-008). Recording it as `previous` would
-  // make the NEXT comparison (a repair to the same mode, or a genuine change)
-  // read a synthetic value as if it were real, which can both fabricate a
-  // downgrade that never happened and mask one that did (T58-spec.md). Leave
-  // `previous` for the next run exactly as it is: the last config this loader
-  // could actually read.
-  if (!config.configUnreadable) {
-    await writeState(cwd, currentState(config));
-  }
-  return { findings: selfProtection.findings, warnings: selfProtection.warnings };
+  return withFileLock(path.join(securityDataRoot(cwd), "raw", "self-protection.lock"), async () => {
+    const previous = await readState(cwd);
+    const selfProtection = evaluateSelfProtection(config, previous);
+    if (selfProtection.incidents.length > 0) {
+      await appendIncidents(cwd, selfProtection.incidents);
+    }
+    // Preserve the last readable posture across a transient config read failure.
+    if (!config.configUnreadable) {
+      await writeState(cwd, currentState(config));
+    }
+    return { findings: selfProtection.findings, warnings: selfProtection.warnings };
+  });
 }
 
 // Core analysis: run detectors, resolve the decision, and apply self-protection.

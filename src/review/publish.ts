@@ -1,4 +1,4 @@
-// The only keryx path to GitHub for a review: it runs the readiness checklist, shows the body, and posts nothing a
+// Terminal publication of a managed review. It runs the readiness checklist, shows the body, and posts nothing a
 // failing checklist has not been allowed to post as a "Partial review".
 
 import { readFile } from "node:fs/promises";

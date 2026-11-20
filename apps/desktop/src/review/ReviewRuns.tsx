@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { DESK_RUN_SCOPE, type DeskRevision, type DeskRun, type DeskRunState } from "../../../../src/review/desk-run-types";
+import { DESK_RUN_SCOPE, type DeskRevision, type DeskRun, type DeskRunKey, type DeskRunState } from "../../../../src/review/desk-run-types";
 import { Spinner } from "../components/ui";
 import { absoluteTime, errMessage } from "../lib/format";
 import { DECISION_LABEL } from "./model";
@@ -9,6 +9,7 @@ import { ReviewProgress } from "./ReviewProgress";
 import { ReviewSessions, type LoadReviewAttempt, type ActivitySubscription } from "./ReviewSessions";
 import { ReviewUsage } from "./ReviewUsage";
 import { runLimits } from "./ReviewRuleInfo";
+import { ReviewPublishDialog, type reviewPublish } from "./ReviewPublishDialog";
 
 const STATE_LABEL: Record<DeskRunState, string> = {
   queued: "Queued", running: "In progress", cancelling: "Stopping", completed: "Completed",
@@ -66,13 +67,22 @@ function ReviewReport({ run, loadAttempt, onAccessLost }: { run: DeskRun } & Rep
   </details>;
 }
 
-function RunAttempt({ run, card, onCancel, working, loadAttempt, onAccessLost, activity }: ReportProps & {
+interface PublicationProps {
+  cwd: string;
+  target: DeskRunKey;
+  publishCommand?: typeof reviewPublish | undefined;
+}
+
+function RunAttempt({ run, card, onCancel, working, loadAttempt, onAccessLost, activity, cwd, target, publishCommand }: ReportProps & PublicationProps & {
   activity: ActivitySubscription; run: DeskRun; card: ReviewCard; working: boolean; onCancel: (id: string) => void;
 }) {
+  const [publishOpen, setPublishOpen] = useState(false);
   const active = runActive(run);
   const result = run.result;
   const recorded = result?.reviewed ?? run;
   const historic = !!((recorded.headSha && recorded.headSha !== card.headSha) || (recorded.baseSha && recorded.baseSha !== card.baseSha));
+  const canDraft = run.source !== "existing" && (run.state === "completed" || run.state === "partial") &&
+    result?.reviewed && /^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/[1-9]\d*\/?$/i.test(card.url);
   return <article className="desk-run" aria-label={'Review attempt ' + run.id}>
     <header className="desk-run-head">
       <strong className={active ? "review-live-state" : undefined}>{STATE_LABEL[run.state]}</strong>
@@ -107,22 +117,27 @@ function RunAttempt({ run, card, onCancel, working, loadAttempt, onAccessLost, a
     {run.usage ? <ReviewUsage usage={run.usage} /> : !active && <p className="review-detail-muted">Token usage was not recorded.</p>}
     {run.source !== "existing" || run.reviewerProgress ? <ReviewSessions run={run} activity={activity} loadAttempt={loadAttempt} onAccessLost={onAccessLost} /> : null}
     <ReviewReport run={run} loadAttempt={loadAttempt} onAccessLost={onAccessLost} />
+    {canDraft && <div className="review-publish-actions">
+      <button className="btn btn-sm" type="button" aria-haspopup="dialog" onClick={() => setPublishOpen(true)}>Publish to GitHub</button>
+      {publishOpen && <ReviewPublishDialog cwd={cwd} target={target} id={run.id} command={publishCommand}
+        onAccessLost={onAccessLost} onClose={() => setPublishOpen(false)} />}
+    </div>}
   </article>;
 }
 
-interface Props extends ReportProps {
+interface Props extends ReportProps, PublicationProps {
   activity: ActivitySubscription;
   card: ReviewCard; runs: DeskRun[]; error: string; working: boolean; loaded: boolean;
   onCancel: (id: string) => void; onRefresh: () => void;
 }
 
-export function ReviewRuns({ activity, card, runs, error, loaded, working, onCancel, onRefresh, loadAttempt, onAccessLost }: Props) {
+export function ReviewRuns({ activity, card, runs, error, loaded, working, onCancel, onRefresh, loadAttempt, onAccessLost, cwd, target, publishCommand }: Props) {
   return <section className="desk-runs" aria-label="Keryx review history">
     <header className="desk-run-head"><h3>Review history</h3><button className="btn btn-sm" disabled={working} onClick={onRefresh}>Refresh runs</button></header>
     <p className="review-detail-muted">GitHub review decision · {card.decision ? DECISION_LABEL[card.decision] : "No decision"}</p>
     {error && <p className="inline-banner tone-warn" role="alert">{error}</p>}
     {!loaded && !error && <Spinner label="Loading review history" />}
     {loaded && !runs.length && <p className="review-detail-muted">No Keryx reviews for this pull request yet.</p>}
-    {runs.map(run => <RunAttempt key={run.id} activity={activity} run={run} card={card} working={working} onCancel={onCancel} loadAttempt={loadAttempt} onAccessLost={onAccessLost} />)}
+    {runs.map(run => <RunAttempt key={run.id} activity={activity} run={run} card={card} working={working} onCancel={onCancel} loadAttempt={loadAttempt} onAccessLost={onAccessLost} cwd={cwd} target={target} publishCommand={publishCommand} />)}
   </section>;
 }

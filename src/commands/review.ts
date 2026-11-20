@@ -4,6 +4,7 @@ import { RULES_USAGE, runReviewRules } from "./review-rules";
 import { runReviewWatch, WATCH_USAGE } from "./review-watch";
 import { PR_CONTEXT_USAGE, runPrContext } from "./review-pr-context";
 import { DESK_USAGE, runReviewDesk } from "./review-desk-run";
+import { DESK_PUBLISH_USAGE, runReviewDeskPublish } from "./review-desk-publish";
 import { BOARD_USAGE, runReviewBoard } from "./review-board";
 import { reviewCompletionHostAnswer } from "./review-operator";
 import { spawn } from "node:child_process";
@@ -794,6 +795,10 @@ export async function reviewCommand(args: string[], seams?: ReviewCommandSeams):
     }
     if (command === "desk-run") {
       await runReviewDesk(args.slice(1));
+      return;
+    }
+    if (command === "desk-publish") {
+      await runReviewDeskPublish(args.slice(1));
       return;
     }
     if (command === "accounts") {
@@ -5335,6 +5340,7 @@ const REVIEW_SUBCOMMAND_HELP: ReadonlyMap<string, () => void> = new Map([
   ["watch", () => console.log(WATCH_USAGE)],
   ["pr-context", () => console.log(PR_CONTEXT_USAGE)],
   ["desk-run", () => console.log(DESK_USAGE)],
+  ["desk-publish", () => console.log(DESK_PUBLISH_USAGE)],
   ["agents", printReviewAgentHelp],
   ["start", printStartHelp],
   ["ingest", printIngestHelp],
@@ -5503,6 +5509,8 @@ Usage:
                         Manages the local macOS pull request watcher.
   ${DESK_USAGE}
                         Starts, inspects or cancels a local review of a pull request revision.
+  ${DESK_PUBLISH_USAGE}
+                        Previews, saves or submits a Desktop pull request review.
   ${PR_CONTEXT_USAGE}
                         Reads linked Flow evidence and review history for one pull request.
   keryx review agents serve --project <dir> [--runs-root <dir>] --provider <id> --model <id>

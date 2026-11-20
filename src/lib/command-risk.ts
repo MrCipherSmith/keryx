@@ -1557,20 +1557,16 @@ export function touchesChunkEstimateAnswer(raw: string): boolean {
 }
 
 /**
- * Flow 451: `keryx review publish` posts a review to GitHub under the operator's name, so it asks in every permission mode
+ * Publishing a GitHub review acts under the operator's name, so both publication routes ask in every permission mode
  * and no answer is remembered; the body is shown to the operator before they say yes. Parsed words, like the waiver, so a
  * split or escaped spelling and a `review` verb the shell assembles are seen too. Pure.
  */
 export function touchesReviewPublish(raw: string): boolean {
   return anySimpleCommand(joinContinuations(raw), (words) => {
-    const args = keryxArgs(words);
-    if (args === undefined) return false;
-    const lower = args.map((w) => w.toLowerCase());
-    if (lower[0] === "ctx" && lower[1] === "rg") return false;
-    const review = lower.indexOf("review");
-    if (review < 0) return false;
-    const rest = args.slice(review + 1);
-    return lower.slice(review + 1).includes("publish") || (rest[0] !== undefined && wordIsOpaque(rest[0]));
+    const [group, verb] = keryxArgs(words) ?? [];
+    if (group?.toLowerCase() !== "review" || verb === undefined) return false;
+    const subcommand = verb.toLowerCase();
+    return subcommand === "publish" || subcommand === "desk-publish" || wordIsOpaque(verb);
   });
 }
 

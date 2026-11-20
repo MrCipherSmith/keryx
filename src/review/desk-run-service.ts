@@ -10,7 +10,7 @@ import { resolveWatcherCheckout } from "./watcher-project";
 import { verifyScheduledSubject } from "./board";
 import { withScheduledPermission } from "./review-automation-guard";
 import { readExistingReviews } from "./desk-run-legacy";
-import { boardGraphql, projectGithubConnection, reviewRepositories, selectRepository } from "./board-github";
+import { boardGraphql, projectGithubConnection, reviewRepositories, selectRepository, type GithubConnection } from "./board-github";
 import { createWorkerRoster } from "./desk-worker-roster";
 import { readDeskReviewerProgress } from "./desk-reviewer-progress";
 import { DeskRunStore, deskRunRoot, type Attempt } from "./desk-run-store";
@@ -21,7 +21,7 @@ import { executeDeskReview, recoverDeskExecution, type DeskModelSelector, type D
 const query = `query($owner:String!, $name:String!, $number:Int!) {
   viewer { login } repository(owner:$owner,name:$name) { id pullRequest(number:$number) { title state baseRefOid headRefOid } }
 }`;
-export async function resolveDeskSubject(cwd: string, requested: string, number: number) {
+export async function resolveDeskSubject(cwd: string, requested: string, number: number, auth?: GithubConnection) {
   const repo = selectRepository(await reviewRepositories(cwd), requested);
   const [owner, name] = repo.split("/");
   const data = await boardGraphql<{
@@ -35,7 +35,7 @@ export async function resolveDeskSubject(cwd: string, requested: string, number:
         headRefOid: string;
       } | null;
     } | null;
-  }>(cwd, query, { owner: owner!, name: name!, number });
+  }>(cwd, query, { owner: owner!, name: name!, number }, auth);
   const pr = data.repository?.pullRequest;
   if (!data.viewer?.login || !data.repository?.id || !pr) {
     throw new Error("access: The pull request is unavailable to the current GitHub account.");
@@ -43,8 +43,8 @@ export async function resolveDeskSubject(cwd: string, requested: string, number:
   return { key: { repo, number, viewer: data.viewer.login, repositoryId: data.repository.id }, pr };
 }
 
-export async function verifyDeskSubject(cwd: string, key: DeskRunKey, revision?: DeskRevision) {
-  const { key: actual, pr } = await resolveDeskSubject(cwd, key.repo, key.number);
+export async function verifyDeskSubject(cwd: string, key: DeskRunKey, revision?: DeskRevision, auth?: GithubConnection) {
+  const { key: actual, pr } = await resolveDeskSubject(cwd, key.repo, key.number, auth);
   if (actual.viewer.toLowerCase() !== key.viewer.toLowerCase() || actual.repositoryId !== key.repositoryId) {
     throw new Error("access: GitHub account or repository changed. Refresh the board.");
   }

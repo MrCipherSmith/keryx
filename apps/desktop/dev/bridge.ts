@@ -15,14 +15,16 @@
 
 import { reviewBoardArgs } from "./reviewBoard";
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { basename, isAbsolute, join, resolve, sep } from "node:path";
 import type { ServerWebSocket, Subprocess } from "bun";
 
 import { reviewWatcherArgs, reviewRuleArgs } from "./reviewWatcher";
 import { reviewRunArgs } from "./reviewRun";
+import { parsePublicationRequest, publicationArgs } from "../../../src/commands/review-desk-publish";
 import { SAFE_BUN_SPAWN_ARGS } from "../../../src/lib/safe-exec";
 
 const runFile = promisify(execFile);
@@ -574,6 +576,44 @@ async function runReviewCli(root: string, argv: string[], readOnly: boolean): Pr
   }
 }
 
+let reviewTerminalBusy = false;
+
+async function submitReviewInTerminal(root: string, argv: string[]): Promise<unknown> {
+  if (process.stdin.isTTY !== true || process.stderr.isTTY !== true) {
+    throw new Error("permission: Run the browser dev bridge in an interactive terminal to confirm GitHub publication.");
+  }
+  if (reviewTerminalBusy) throw new Error("unavailable: Complete the pending review confirmation in the dev terminal.");
+  reviewTerminalBusy = true;
+  try {
+    const child = Bun.spawn([...KERYX_CMD, ...argv], {
+      cwd: root, stdin: "inherit", stdout: "pipe", stderr: "inherit",
+      signal: AbortSignal.timeout(150_000),
+    });
+    const [stdout, exitCode] = await Promise.all([new Response(child.stdout).text(), child.exited]);
+    if (exitCode !== 0) throw new Error("See the dev terminal for the Review publication result.");
+    return JSON.parse(stdout);
+  } finally {
+    reviewTerminalBusy = false;
+  }
+}
+
+async function runReviewPublication(root: string, target: unknown, request: unknown): Promise<unknown> {
+  const raw = JSON.stringify(request);
+  if (raw === undefined) throw new Error("configuration: Missing Review publication request.");
+  const { kind } = parsePublicationRequest(raw);
+  const dir = await mkdtemp(join(tmpdir(), "keryx-review-"));
+  try {
+    const file = join(dir, "request.json");
+    const argv = publicationArgs(target, file);
+    await writeFile(file, raw, { flag: "wx", mode: 0o600 });
+    return kind === "submit"
+      ? await submitReviewInTerminal(root, argv)
+      : await runReviewCli(root, argv, kind === "preview");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
 async function handle(ws: ServerWebSocket<Conn>, cmd: string, args: Json): Promise<unknown> {
   const cwd = typeof args.cwd === "string" ? args.cwd : "";
   switch (cmd) {
@@ -643,6 +683,10 @@ async function handle(ws: ServerWebSocket<Conn>, cmd: string, args: Json): Promi
     case "review_run": {
       const root = await projectCwd(ws.data, cwd);
       return runReviewCli(root, reviewRunArgs(args.target, args.action), (args.action as Json)?.kind === "status");
+    }
+    case "review_publish": {
+      const root = await projectCwd(ws.data, cwd);
+      return runReviewPublication(root, args.target, args.request);
     }
     case "flows_list":
       return flowsList(await projectCwd(ws.data, cwd));

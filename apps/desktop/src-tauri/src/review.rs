@@ -4,8 +4,9 @@ use serde::Deserialize;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 use serde_json::Value;
-use std::{ffi::OsStr, path::PathBuf, process::Command, time::Duration};
+use std::{ffi::OsStr, io::Write, path::PathBuf, process::{Command, Stdio}, time::Duration};
 use tauri::{AppHandle, Manager, Webview};
+use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
 use tauri_plugin_opener::OpenerExt;
 
 fn board_args(
@@ -97,10 +98,16 @@ impl Drop for ReadPermit<'_> {
 }
 
 fn run_reader(cmd: Command) -> Result<Value, String> {
-    let out = child::run_bounded(cmd, Duration::from_secs(150), 32 * 1024 * 1024)
+    run_reader_with_input(cmd, Stdio::null(), false)
+}
+
+fn run_reader_with_input(cmd: Command, input: Stdio, prompted: bool) -> Result<Value, String> {
+    let out = child::run_bounded_with_stdin(cmd, input, Duration::from_secs(150), 32 * 1024 * 1024)
         .map_err(|e| format!("unavailable: Could not run the Review reader: {e:?}"))?;
     if !out.status.success() {
+        // The CLI may have printed a confirmation prompt before failing.
         let reason = out.stderr.trim();
+        let reason = if prompted { reason.lines().next_back().unwrap_or_default() } else { reason };
         return Err(if reason.is_empty() {
             format!("unavailable: Review reader exited with {}", out.status)
         } else {
@@ -144,6 +151,17 @@ async fn invoke_review_at(
     app: AppHandle, args: Vec<String>, read_only: bool,
     root: impl FnOnce() -> Result<PathBuf, String> + Send + 'static,
 ) -> Result<Value, String> {
+    invoke_review_at_with(app, read_only, root, move |mut cmd| {
+        cmd.args(args);
+        run_reader(cmd)
+    }).await
+}
+
+async fn invoke_review_at_with(
+    app: AppHandle, read_only: bool,
+    root: impl FnOnce() -> Result<PathBuf, String> + Send + 'static,
+    run: impl FnOnce(Command) -> Result<Value, String> + Send + 'static,
+) -> Result<Value, String> {
     let permit = read_only.then(|| ReadPermit::acquire(&READERS)).transpose()?;
     tauri::async_runtime::spawn_blocking(move || {
         let _permit = permit;
@@ -161,8 +179,8 @@ async fn invoke_review_at(
             true,
         )?;
         let mut cmd = Command::new(reader.path);
-        cmd.current_dir(root).args(args).env_clear().envs(env);
-        run_reader(cmd)
+        cmd.current_dir(root).env_clear().envs(env);
+        run(cmd)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -300,6 +318,125 @@ pub async fn review_run(
 ) -> Result<Value, String> {
     let read_only = matches!(action, RunAction::Status { .. });
     invoke_review(app, view, cwd, run_args(target, action)?, read_only).await
+}
+
+const PUBLICATION_REQUEST_LIMIT: usize = 1024 * 1024;
+
+fn publication_args(target: &RunTarget) -> Result<Vec<String>, String> {
+    if target.number == 0 || target.number > i32::MAX as u32 {
+        return Err("configuration: Invalid pull request number.".into());
+    }
+    let fields = [
+        ("--repo", &target.repo),
+        ("--repository-id", &target.repository_id),
+        ("--viewer", &target.viewer),
+    ];
+    let mut args = vec!["review".into(), "desk-publish".into(), "--json".into()];
+    for (flag, value) in fields {
+        if value.is_empty()
+            || value.len() > 256
+            || value.starts_with('-')
+            || value.contains(char::is_whitespace)
+            || value.chars().any(char::is_control)
+        {
+            return Err("configuration: Invalid Review publication target.".into());
+        }
+        args.extend([flag.into(), value.clone()]);
+    }
+    args.extend(["--number".into(), target.number.to_string()]);
+    Ok(args)
+}
+
+fn publication_request_file(request: &str) -> Result<tempfile::NamedTempFile, String> {
+    if request.len() > PUBLICATION_REQUEST_LIMIT {
+        return Err("configuration: Review publication request is too large.".into());
+    }
+    // NamedTempFile creates an owner-only file on Unix and removes it on every return path.
+    let temp_error = |_| "unavailable: Could not stage the local Review publication request.".to_string();
+    let mut file = tempfile::NamedTempFile::new().map_err(temp_error)?;
+    file.write_all(request.as_bytes()).map_err(temp_error)?;
+    Ok(file)
+}
+
+#[cfg(unix)]
+fn publication_terminal() -> std::io::Result<(std::fs::File, Stdio)> {
+    use std::fs::File;
+    use std::os::fd::FromRawFd;
+    use std::ptr::null_mut;
+
+    let (mut master, mut slave) = (-1, -1);
+    // SAFETY: openpty initializes both file descriptors when it returns success.
+    if unsafe { libc::openpty(&mut master, &mut slave, null_mut(), null_mut(), null_mut()) } < 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    // SAFETY: descriptors are fresh and the File handles take exclusive ownership.
+    let (mut input, tty) = unsafe { (File::from_raw_fd(master), File::from_raw_fd(slave)) };
+    for fd in [master, slave] {
+        // SAFETY: both descriptors are open and owned here; no unrelated child needs them.
+        if unsafe { libc::fcntl(fd, libc::F_SETFD, libc::FD_CLOEXEC) } < 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+    }
+    input.write_all(b"publish
+")?;
+    // Keep the PTY master open while the child reads; JSON stdout and stderr stay separate.
+    Ok((input, tty.into()))
+}
+
+#[cfg(unix)]
+fn run_approved_publication(cmd: Command) -> Result<Value, String> {
+    let (_terminal, stdin) = publication_terminal()
+        .map_err(|_| "unavailable: Could not open a private terminal for Review publication.".to_string())?;
+    run_reader_with_input(cmd, stdin, true)
+}
+
+#[cfg(not(unix))]
+fn run_approved_publication(_cmd: Command) -> Result<Value, String> {
+    Err("unavailable: Publish this review from the CLI in your terminal.".into())
+}
+
+#[tauri::command]
+pub async fn review_publish(
+    app: AppHandle,
+    view: Webview,
+    cwd: String,
+    target: RunTarget,
+    request: Value,
+) -> Result<Value, String> {
+    let (read_only, submit) = match request["kind"].as_str() {
+        Some("preview") => (true, false),
+        Some("save") => (false, false),
+        Some("submit") => (false, true),
+        _ => return Err("configuration: Unknown Review publication operation.".into()),
+    };
+    let args = publication_args(&target)?;
+    let request = request.to_string();
+    if request.len() > PUBLICATION_REQUEST_LIMIT {
+        return Err("configuration: Review publication request is too large.".into());
+    }
+    let registered = app.state::<ProjectWindows>().cwd_for(view.label());
+    let window = view.window();
+    let view_label = view.label().to_string();
+    let app_for_confirmation = app.clone();
+    let project = cwd.clone();
+    invoke_review_at_with(app, read_only, move || review_project(registered.as_deref(), &cwd), move |mut cmd| {
+        if submit {
+            let confirmed = app_for_confirmation.dialog()
+                .message(format!("Publish the review for {} #{} on GitHub as @{}?", target.repo, target.number, target.viewer))
+                .title("Publish review to GitHub")
+                .parent(&window)
+                .buttons(MessageDialogButtons::OkCancelCustom("Publish review".into(), "Cancel".into()))
+                .blocking_show();
+            if !confirmed {
+                return Err("permission: Publication cancelled. No review was sent.".into());
+            }
+            let current = app_for_confirmation.state::<ProjectWindows>().cwd_for(&view_label);
+            review_project(current.as_deref(), &project)?;
+        }
+        let request_file = publication_request_file(&request)?;
+        cmd.args(args).arg("--request-file").arg(request_file.path());
+        if submit { run_approved_publication(cmd) } else { run_reader(cmd) }
+    }).await
 }
 
 #[derive(Deserialize)]
@@ -485,6 +622,39 @@ mod tests {
         let mut invalid = target();
         invalid.number = 0;
         assert!(run_args(invalid, RunAction::Status { id: None, activity_id: None }).is_err());
+    }
+
+    #[test]
+    fn publication_scopes_the_target_and_stages_a_bounded_request_file() {
+        let mut target = RunTarget {
+            repo: "org/r".into(), repository_id: "R_42".into(), viewer: "me".into(), number: 4,
+        };
+        assert_eq!(publication_args(&target).unwrap(), [
+            "review", "desk-publish", "--json", "--repo", "org/r", "--repository-id", "R_42",
+            "--viewer", "me", "--number", "4",
+        ]);
+        let request = serde_json::json!({"kind": "preview", "id": "a".repeat(48 * 1024)}).to_string();
+        let file = publication_request_file(&request).unwrap();
+        let path = file.path().to_owned();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), request);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(path.metadata().unwrap().permissions().mode() & 0o777, 0o600);
+        }
+        drop(file);
+        assert!(!path.exists());
+        assert!(publication_request_file(&"x".repeat(PUBLICATION_REQUEST_LIMIT + 1)).is_err());
+        target.repo = "--config".into();
+        assert!(publication_args(&target).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn private_publication_terminal_leaves_json_stdout_separate() {
+        let mut cmd = Command::new("/bin/sh");
+        cmd.args(["-c", "test -t 0 && read -r answer && test \"$answer\" = publish && printf '%s' '{\"version\":1}'"]);
+        assert_eq!(run_approved_publication(cmd).unwrap()["version"], 1);
     }
 
     #[test]
