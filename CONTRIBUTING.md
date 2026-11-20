@@ -45,6 +45,7 @@ bun ./src/cli.ts status
 | `bun run build`     | Bundle the CLI to `./dist`                    |
 | `bun run typecheck` | Type-check with `tsc --noEmit`                |
 | `bun test`          | Run the test suite                            |
+| `bun run check:static` | Run ESLint and both TypeScript checks      |
 | `bun run check`     | Full gate: `lint && typecheck && typecheck:scripts && test` |
 
 Run `bun run check` before opening a pull request. It is the same gate reviewers
@@ -59,6 +60,15 @@ change behavior, add or update the co-located test in the same module.
 
 Keep tests deterministic and offline — no network, no model backends in the
 default path — consistent with the core philosophy above.
+
+Pull request CI runs the root test suite in four offline core partitions and one
+partition for the remaining files. The core selection comes from `test:core` in
+`package.json`. Each job uploads its file list, Bun timings, and test log. The
+client, Desktop, and live-platform checks run separately.
+
+On `main`, AC8 runs the root suite sequentially with the normal Bun preload and
+compares Bun's completed file list with the planned inventory. Release checks
+also run the full sequential suite through `bun run check`.
 
 ## Branch and Pull Request Flow
 
