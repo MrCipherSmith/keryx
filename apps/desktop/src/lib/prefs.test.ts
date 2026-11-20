@@ -3,25 +3,32 @@ import { readFileSync } from "node:fs";
 import { CHAT_MIN, fitSidePanelWidth, PALETTES, parsePrefs } from "./prefs";
 
 describe("palette pref", () => {
-  test("defaults to default", () => {
-    expect(parsePrefs(null).palette).toBe("default");
-    expect(parsePrefs("{}").palette).toBe("default");
+  test("defaults both display modes independently", () => {
+    for (const stored of [null, "{}"]) {
+      expect(parsePrefs(stored).lightPalette).toBe("default");
+      expect(parsePrefs(stored).darkPalette).toBe("default");
+    }
   });
 
-  test("accepts each known theme", () => {
-    for (const p of PALETTES) expect(parsePrefs(JSON.stringify({ palette: p.id })).palette).toBe(p.id);
+  test("migrates each legacy dark or black palette to the dark choice", () => {
+    for (const palette of PALETTES.filter((p) => p.group !== "light")) {
+      const parsed = parsePrefs(JSON.stringify({ theme: "light", palette: palette.id }));
+      expect(parsed.theme).toBe("light");
+      expect(parsed.lightPalette).toBe("default");
+      expect(parsed.darkPalette).toBe(palette.id);
+    }
   });
 
-  test("rejects unknown or mistyped ids", () => {
-    expect(parsePrefs(JSON.stringify({ palette: "neon" })).palette).toBe("default");
-    expect(parsePrefs(JSON.stringify({ palette: 3 })).palette).toBe("default");
-    expect(parsePrefs(JSON.stringify({ palette: "__proto__" })).palette).toBe("default");
-  });
-
-  test("keeps the theme choice alongside a palette", () => {
-    const p = parsePrefs(JSON.stringify({ theme: "light", palette: "black-navy" }));
-    expect(p.theme).toBe("light");
-    expect(p.palette).toBe("black-navy");
+  test("keeps the saved light and dark choices and rejects cross-mode or unknown IDs", () => {
+    const light = PALETTES.find((p) => p.group === "light")!;
+    const dark = PALETTES.find((p) => p.group === "dark")!;
+    expect(parsePrefs(JSON.stringify({ lightPalette: light.id, darkPalette: dark.id }))).toMatchObject({
+      lightPalette: light.id, darkPalette: dark.id,
+    });
+    for (const id of ["neon", 3, "__proto__", dark.id]) {
+      expect(parsePrefs(JSON.stringify({ lightPalette: id })).lightPalette).toBe("default");
+    }
+    expect(parsePrefs(JSON.stringify({ darkPalette: light.id })).darkPalette).toBe("default");
   });
 
   test("five dark and five black themes, black canvases are #000", () => {
@@ -31,14 +38,16 @@ describe("palette pref", () => {
     for (const p of black) expect(p.canvas).toBe("#000000");
   });
 
-  test("themes.css defines every role for every theme", () => {
+  test("each mode has distinct palettes that define every color role", () => {
     const css = readFileSync(new URL("../styles/themes.css", import.meta.url), "utf8");
     const tokens = readFileSync(new URL("../styles/tokens.css", import.meta.url), "utf8");
     const darkBlock = tokens.split(':root[data-theme="dark"] {')[1]!.split("}")[0]!;
     const roles = [...darkBlock.matchAll(/(--[\w-]+):/g)].map((m) => m[1]!);
     expect(roles.length).toBeGreaterThan(30);
+    expect(PALETTES.filter((p) => p.group === "light").length).toBeGreaterThan(2);
     for (const p of PALETTES) {
-      const block = css.split(`:root[data-palette="${p.id}"][data-theme="dark"] {`)[1]!.split("}")[0]!;
+      const mode = p.group === "light" ? "light" : "dark";
+      const block = css.split(`:root[data-palette="${p.id}"][data-theme="${mode}"] {`)[1]!.split("}")[0]!;
       for (const role of roles) expect(block).toContain(`${role}:`);
       expect(block).toContain(`--bg-canvas: ${p.canvas};`);
       expect(block).toContain(`--accent: ${p.accent};`);

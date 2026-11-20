@@ -165,13 +165,13 @@ describe("parsing the recorded live transcript (AC3)", () => {
   test("the DONE agent_response step folds text_delta then usage, in that order", () => {
     expect(parseAntigravityEvents(lines[3] as string)).toEqual([
       { kind: "assistant_text", text: "\n" },
-      { kind: "usage", inputTokens: 13166, outputTokens: 31 },
+      { kind: "usage", inputTokens: 13166, outputTokens: 31, cacheReadTokens: 0 },
     ]);
   });
 
   test("result folds usage then child_finished carrying the response text, in that order", () => {
     expect(parseAntigravityEvents(lines[4] as string)).toEqual([
-      { kind: "usage", inputTokens: 13166, outputTokens: 31 },
+      { kind: "usage", inputTokens: 13166, outputTokens: 31, cacheReadTokens: 0 },
       { kind: "child_finished", text: "OK\n" },
     ]);
   });
@@ -189,7 +189,18 @@ describe("parsing the recorded live transcript (AC3)", () => {
     expect(started).toEqual({ kind: "child_started", sessionRef: "235ab503-43b5-4e17-8bde-52f903ccd7a7" });
 
     const usageEvents = events.filter((event) => event.kind === "usage");
-    expect(usageEvents.at(-1)).toEqual({ kind: "usage", inputTokens: 13166, outputTokens: 31 });
+    expect(usageEvents.at(-1)).toEqual({ kind: "usage", inputTokens: 13166, outputTokens: 31, cacheReadTokens: 0 });
+  });
+
+  test("cache reads remain a subset of input without inventing a count when absent", () => {
+    for (const cacheReadTokens of [6, undefined]) {
+      const usage = { input_tokens: 12, output_tokens: 3, cache_read_tokens: cacheReadTokens };
+      const line = JSON.stringify({ event: "result", result: { status: "SUCCESS", response: "ok", usage } });
+      expect(parseAntigravityEvents(line)[0]).toEqual({
+        kind: "usage", inputTokens: 12, outputTokens: 3,
+        ...(cacheReadTokens === undefined ? {} : { cacheReadTokens }),
+      });
+    }
   });
 
   test("an unknown event or step_type is not recognised, and does not appear as an event", () => {

@@ -1,3 +1,4 @@
+import { writeSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { makeProvider } from "../../harness/provider/make-provider";
 import { loadShellConfig } from "../../lib/shell-config";
@@ -5,6 +6,7 @@ import { providerByName } from "../providers";
 import { oauthEnvKeyFor } from "../../lib/oauth/grants";
 import type { ReviewAgentAdapterRequest } from "../../review/agents/types";
 import { createExternalBridgeClientFromEnv } from "../../review/agents/external-transport";
+import { reviewUsagePrefix } from "./keryx-general-usage";
 import { runKeryxExternalWorker } from "./keryx-general-worker";
 
 interface WorkerArgs { requestFile: string; configDir: string; provider: string; model: string }
@@ -81,6 +83,9 @@ export async function runKeryxExternalWorkerEntry(
     const { client } = createExternalBridgeClientFromEnv(env);
     const result = await runKeryxExternalWorker({
       request, provider, providerId: parsed.provider, modelId: parsed.model, bridge: client, signal: abort.signal,
+      observeRequest: (number, usage) => {
+        writeSync(1, `${reviewUsagePrefix}${JSON.stringify({ number, usage })}\n`);
+      },
     });
     process.stdout.write(`${JSON.stringify(result)}\n`);
   } finally {

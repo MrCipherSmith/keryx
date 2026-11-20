@@ -3,6 +3,7 @@ import { isTauri, listen } from "../platform/backend";
 import { basename } from "../lib/format";
 import { fitSidePanelWidth, getPrefs, MOD, setPrefs, usePrefs, type SidePanelTab } from "../lib/prefs";
 import { SidePanel } from "../panels/SidePanel";
+import { slotRef, useActivityRunning } from "../panels/sideSlots";
 import { ConsentDialog } from "../panels/ConsentDialog";
 import { overlayOpen } from "../components/ui";
 import { Icon, type IconName } from "../components/Icon";
@@ -11,7 +12,13 @@ import { Kbd } from "../components/ui";
 import { projectHue, projectInitials, type ProjectActivity } from "./projectRail";
 import type { LiveProject } from "../platform/projects";
 
-export type View = "session" | "flows" | "settings";
+export type View = "session" | "flows" | "review" | "settings";
+
+export const PROJECT_VIEWS = [
+  { id: "session", label: "Sessions", icon: "chat", shortcut: `${MOD}1` },
+  { id: "flows", label: "Flows", icon: "board", shortcut: `${MOD}2` },
+  { id: "review", label: "Review", icon: "pr", shortcut: `${MOD}3` },
+] as const;
 
 /**
  * With `titleBarStyle: "Overlay"` the web view runs under the traffic lights and
@@ -35,7 +42,9 @@ interface ShellProps {
   recents: string[];
   view: View;
   onView: (v: View) => void;
+  onProjectSettings?: () => void;
   title: ReactNode;
+  hasSession?: boolean;
   status: { tone: "ok" | "busy" | "warn" | "danger" | "idle"; label: string; detail?: string };
   flowsActive: number;
   /** The projects on the rail, in the user's order; `cwd` is one of them. */
@@ -124,7 +133,7 @@ export function AppShell(p: ShellProps) {
   const prefs = usePrefs();
   const windowWidth = useWindowWidth();
   useSidePanelShortcuts(p.onPalette);
-  const side = prefs.sidePanel !== null;
+  const side = prefs.sidePanel !== null && p.view !== "settings";
   const sidebar = prefs.sessionSidebar && windowWidth >= SIDEBAR_WINDOW_MIN ? prefs.sessionSidebarWidth : 0;
   const sideWidth = fitSidePanelWidth(prefs.sidePanelWidth, windowWidth, sidebar);
   return (
@@ -135,9 +144,21 @@ export function AppShell(p: ShellProps) {
       <TitleBar {...p} />
       <Rail {...p} />
       <main className="app-main" id="main">
-        {p.children}
+        {p.view !== "settings" && (
+          <nav className="project-views" aria-label={`Project views for ${basename(p.cwd)}`}>
+            {PROJECT_VIEWS.map(({ id, label, icon, shortcut }) => (
+              <button key={id} aria-current={p.view === id ? "page" : undefined}
+                title={`${label} (${shortcut})`} onClick={() => p.onView(id)}>
+                <Icon name={icon} size={15} />
+                {label}
+                {id === "flows" && p.flowsActive > 0 && <span className="sr-only">, {p.flowsActive} active flows</span>}
+              </button>
+            ))}
+          </nav>
+        )}
+        <div className="project-content">{p.children}</div>
       </main>
-      <SidePanel cwd={p.cwd} />
+      <SidePanel cwd={p.cwd} visible={p.view !== "settings"} />
       <ConsentDialog />
     </div>
   );
@@ -186,6 +207,18 @@ function InfoToggle({ show }: { show: boolean }) {
   );
 }
 
+function ActivityToggle() {
+  const { sidePanel } = usePrefs();
+  const running = useActivityRunning();
+  const on = sidePanel === "activity";
+  return <button type="button" className={`icon-btn titlebar-toggle titlebar-activity${on ? " is-on" : ""}`}
+    onClick={() => toggleSidePanel("activity", sidePanel)} aria-pressed={on} aria-label="Activity"
+    title={`${on ? "Hide" : "Show"} activity${running ? ` · ${running} running` : ""}`}>
+    <Icon name="checklist" size={15} />
+    {running > 0 && <span className="tab-count" aria-label={`${running} running`}>{running}</span>}
+  </button>;
+}
+
 function TitleBar(p: ShellProps) {
   const { cwd, recents, title, status, onOpenFolder, onSwitchProject, onNewWindow, onCloseProject, onPalette } = p;
   const [menu, setMenu] = useState(false);
@@ -193,6 +226,7 @@ function TitleBar(p: ShellProps) {
   const others = recents.filter((r) => r !== cwd).slice(0, 8);
   const items: MenuItem[] = [
     { kind: "header", id: "h-current", label: <span className="truncate" title={cwd}>{cwd}</span> },
+    ...(p.onProjectSettings ? [{ id: "project-settings", label: "Project Settings", icon: "settings" as const, onSelect: p.onProjectSettings }] : []),
     { id: "open", label: "Open Folder…", icon: "folderOpen", hint: `${MOD}O`, onSelect: onOpenFolder },
     { id: "newwin", label: "Open this folder in a new window", icon: "external", onSelect: () => onNewWindow(cwd) },
     ...(others.length
@@ -224,6 +258,7 @@ function TitleBar(p: ShellProps) {
           <Icon name="chevronDown" size={12} />
         </button>
         {menu ? <Menu anchor={btn.current} items={items} onClose={() => setMenu(false)} label="Project" width={320} /> : null}
+        {p.view === "session" && <div className="titlebar-session-controls" ref={slotRef("sessionControls")} />}
       </div>
       <div className="titlebar-center" data-tauri-drag-region>
         {title}
@@ -234,6 +269,7 @@ function TitleBar(p: ShellProps) {
           {status.label}
         </span>
         <InfoToggle show={p.view === "session"} />
+        {p.view === "session" && p.hasSession && <ActivityToggle />}
         <SideToggles />
         {p.actions}
         <button className="palette-btn" onClick={onPalette} title="Commands and sessions">
@@ -284,7 +320,7 @@ function ProjectButton({
         e.preventDefault();
         onMenu(e.currentTarget);
       }}
-      aria-current={current ? "page" : undefined}
+      aria-current={current || undefined}
       aria-label={`${name}${state ? `, ${state}` : ""}`}
       title={tip}
     >
@@ -295,7 +331,7 @@ function ProjectButton({
 }
 
 function Rail(p: ShellProps) {
-  const { view, onView, flowsActive, cwd, projects, activity, live, onSwitchProject, onOpenFolder, onNewWindow, onRemoveProject } = p;
+  const { view, onView, cwd, projects, activity, live, onSwitchProject, onOpenFolder, onNewWindow, onRemoveProject } = p;
   const [menu, setMenu] = useState<{ path: string; anchor: HTMLElement } | null>(null);
   const items: MenuItem[] = menu
     ? [
@@ -306,14 +342,14 @@ function Rail(p: ShellProps) {
       ]
     : [];
   return (
-    <nav className="rail" aria-label="Projects and views">
+    <nav className="rail" aria-label="Projects and settings">
       <div className="rail-projects" role="list" aria-label="Projects">
         {projects.map((path) => (
           <div role="listitem" key={path}>
             <ProjectButton
               path={path}
               current={path === cwd}
-              active={path === cwd && view === "session"}
+              active={path === cwd && view !== "settings"}
               activity={path === cwd ? activity : (live.find((l) => l.cwd === path)?.activity ?? "idle")}
               running={path !== cwd && live.some((l) => l.cwd === path)}
               onOpen={() => (path === cwd ? onView("session") : onSwitchProject(path))}
@@ -326,36 +362,12 @@ function Rail(p: ShellProps) {
         </button>
       </div>
       {menu ? <Menu anchor={menu.anchor} items={items} onClose={() => setMenu(null)} label="Project" width={300} /> : null}
-      <div className="rail-sep" />
-      <RailButton active={view === "flows"} onClick={() => onView("flows")} icon="board" label="Flows" shortcut={`${MOD}2`}>
-        {flowsActive > 0 ? <span className="sr-only">, {flowsActive} active flows</span> : null}
-      </RailButton>
       <div className="grow" />
-      <RailButton active={view === "settings"} onClick={() => onView("settings")} icon="settings" label="Settings" shortcut={`${MOD},`} />
+      <button className={`rail-btn${view === "settings" ? " is-active" : ""}`} onClick={() => onView("settings")}
+        aria-current={view === "settings" ? "page" : undefined} title={`Settings (${MOD},)`}>
+        <Icon name="settings" size={18} />
+        <span className="rail-label">Settings</span>
+      </button>
     </nav>
-  );
-}
-
-function RailButton({
-  active,
-  onClick,
-  icon,
-  label,
-  shortcut,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  icon: IconName;
-  label: string;
-  shortcut: string;
-  children?: ReactNode;
-}) {
-  return (
-    <button className={`rail-btn${active ? " is-active" : ""}`} onClick={onClick} aria-current={active ? "page" : undefined} title={`${label} (${shortcut})`}>
-      <Icon name={icon} size={18} />
-      <span className="rail-label">{label}</span>
-      {children}
-    </button>
   );
 }

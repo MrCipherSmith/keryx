@@ -32,6 +32,12 @@
     "category": "DeveloperTool",
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.png"],
     "externalBin": ["binaries/keryx"],
+    "resources": {
+      "../../../node_modules/web-tree-sitter/tree-sitter.wasm": "tree-sitter.wasm",
+      "../../../src/gdskills/contracts/": "review-contracts/",
+      "../../../src/gdskills/bundled/skills/": "review-skills/",
+      "../../../src/gdskills/bundled/rules/": "review-rules/"
+    },
     "macOS": {
       "minimumSystemVersion": "12.0",
       "hardenedRuntime": true,

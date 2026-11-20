@@ -92,19 +92,29 @@ fn read_checked(real: &Path, mime: &str) -> Result<String, String> {
     if !std::fs::metadata(real).map_err(|e| e.to_string())?.is_file() {
         return Err("Not an image file".into());
     }
-    let file = std::fs::File::open(real).map_err(|e| e.to_string())?;
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        // The path may change between metadata and open. Never wait on a pipe.
+        options.custom_flags(libc::O_NONBLOCK | libc::O_NOFOLLOW);
+    }
+    let file = options.open(real).map_err(|e| e.to_string())?;
     let meta = file.metadata().map_err(|e| e.to_string())?;
     if !meta.is_file() || meta.len() > MAX_BYTES {
         return Err("The image is too large to show".into());
     }
     use std::io::Read;
-    let mut bytes = Vec::new();
-    file.take(MAX_BYTES + 1).read_to_end(&mut bytes).map_err(|e| e.to_string())?;
-    if bytes.len() as u64 > MAX_BYTES {
-        return Err("The image is too large to show".into());
-    }
+    let mut bytes = Vec::with_capacity(12);
+    let mut reader = file.take(MAX_BYTES + 1);
+    (&mut reader).take(12).read_to_end(&mut bytes).map_err(|e| e.to_string())?;
     if !signature_matches(mime, &bytes) {
         return Err("Not an image file".into());
+    }
+    reader.read_to_end(&mut bytes).map_err(|e| e.to_string())?;
+    if bytes.len() as u64 > MAX_BYTES {
+        return Err("The image is too large to show".into());
     }
     Ok(format!("data:{mime};base64,{}", base64::engine::general_purpose::STANDARD.encode(bytes)))
 }
@@ -139,8 +149,6 @@ struct IssuedAttachment {
     bytes: usize,
     deleting: bool,
     committed: bool,
-    /// Order of issue: when the store is full the oldest sent attachments go first.
-    seq: u64,
     /// The project of the view that sent it (set on commit): only views of that project may preview it.
     root: Option<PathBuf>,
 }
@@ -156,7 +164,6 @@ struct ChatStore {
     issued: HashMap<String, IssuedAttachment>,
     /// Owners whose view was closed; later saves for them are refused.
     released: std::collections::HashSet<String>,
-    next_seq: u64,
 }
 
 #[derive(Default)]
@@ -221,84 +228,12 @@ impl ChatImages {
             return Err(STORAGE_UNAVAILABLE.into());
         }
         if store.files >= MAX_CHAT_STORAGE_FILES || bytes > MAX_CHAT_STORAGE_BYTES - store.bytes {
-            return Err("Temporary chat attachment storage is full. Remove drafts to free space; the oldest sent attachments are reclaimed automatically.".into());
+            return Err("Temporary chat attachment storage is full. Remove drafts to free space or restart the app. Sent attachments are not removed automatically.".into());
         }
         store.files += 1;
         store.bytes += bytes;
         store.pending += 1;
         Ok(())
-    }
-
-    /// Reserve room for a save; when the store is full, delete the oldest sent attachments and try once more.
-    fn reserve_or_evict(&self, bytes: usize) -> Result<(), String> {
-        match self.reserve(bytes) {
-            Ok(()) => Ok(()),
-            Err(full) => {
-                self.evict_committed(bytes);
-                self.reserve(bytes).map_err(|_| full)
-            }
-        }
-    }
-
-    /// Free room for `bytes` by deleting the oldest sent (committed) attachments; their previews then read as gone.
-    fn evict_committed(&self, bytes: usize) {
-        let targets: Vec<(String, PathBuf)> = {
-            let Ok(mut store) = self.store.lock() else { return };
-            if store.closed {
-                return;
-            }
-            let mut sent: Vec<(u64, String)> = store
-                .issued
-                .iter()
-                .filter(|(_, entry)| entry.committed && !entry.deleting)
-                .map(|(path, entry)| (entry.seq, path.clone()))
-                .collect();
-            sent.sort();
-            let mut files = store.files;
-            let mut used = store.bytes;
-            let mut targets = Vec::new();
-            for (_, path) in sent {
-                if files < MAX_CHAT_STORAGE_FILES && bytes <= MAX_CHAT_STORAGE_BYTES - used {
-                    break;
-                }
-                if let Some(entry) = store.issued.get_mut(&path) {
-                    entry.deleting = true;
-                    files -= 1;
-                    used -= entry.bytes;
-                    targets.push((path.clone(), entry.disk_path.clone()));
-                }
-            }
-            store.pending += targets.len();
-            targets
-        };
-        if targets.is_empty() {
-            return;
-        }
-
-        let results: Vec<(String, bool)> = targets
-            .into_iter()
-            .map(|(path, disk_path)| {
-                let removed = match std::fs::remove_file(disk_path) {
-                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-                    result => result,
-                };
-                (path, removed.is_ok())
-            })
-            .collect();
-
-        let Ok(mut store) = self.store.lock() else { return };
-        store.pending -= results.len();
-        for (path, removed) in results {
-            if removed {
-                if let Some(entry) = store.issued.remove(&path) {
-                    store.files -= 1;
-                    store.bytes -= entry.bytes;
-                }
-            } else if let Some(entry) = store.issued.get_mut(&path) {
-                entry.deleting = false;
-            }
-        }
-        self.changed.notify_all();
     }
 
     fn save(&self, owner: &str, mime_type: &str, data: &str) -> Result<String, String> {
@@ -321,7 +256,7 @@ impl ChatImages {
     }
 
     fn save_bytes(&self, owner: &str, prefix: &str, suffix: &str, bytes: &[u8]) -> Result<String, String> {
-        self.reserve_or_evict(bytes.len())?;
+        self.reserve(bytes.len())?;
         let result = self
             .init_root(|| tempfile::Builder::new().prefix("keryx-chat-images-").tempdir())
             .map_err(|message| (message, true))
@@ -341,15 +276,12 @@ impl ChatImages {
                     return Err("The view was closed before the attachment was saved".into());
                 }
                 let path = disk_path.to_string_lossy().into_owned();
-                store.next_seq += 1;
-                let seq = store.next_seq;
                 store.issued.insert(path.clone(), IssuedAttachment {
                     owner: owner.to_owned(),
                     disk_path,
                     bytes: bytes.len(),
                     deleting: false,
                     committed: false,
-                    seq,
                     root: None,
                 });
                 Ok(path)
@@ -386,14 +318,17 @@ impl ChatImages {
         if store.closed {
             return Err(STORAGE_UNAVAILABLE.into());
         }
-        let all_owned = paths.iter().all(|path| {
-            store.issued.get(path).is_some_and(|entry| entry.owner == owner && !entry.deleting)
+        let all_owned = !store.released.contains(owner) && paths.iter().all(|path| {
+            store.issued.get(path).is_some_and(|entry| {
+                entry.owner == owner && !entry.deleting && (!entry.committed || entry.root.as_deref() == root)
+            })
         });
         if !all_owned {
             return Err("Chat attachment is not available to this view".into());
         }
         for path in paths {
             if let Some(entry) = store.issued.get_mut(path) {
+                if entry.committed { continue; }
                 entry.committed = true;
                 entry.root = root.map(Path::to_path_buf);
             }
@@ -768,7 +703,7 @@ mod tests {
     }
 
     #[test]
-    fn a_full_store_evicts_the_oldest_sent_attachment() {
+    fn a_full_store_refuses_new_saves_without_removing_sent_attachments() {
         let storage = ChatImages::default();
         {
             let mut store = storage.store.lock().unwrap();
@@ -776,9 +711,10 @@ mod tests {
         }
         let sent = storage.save_file("owner", "txt", "aGVsbG8=").unwrap();
         storage.commit("owner", None, &[sent.clone()]).unwrap();
-        let next = storage.save_file("owner", "txt", "aGVsbG8=").unwrap();
-        assert!(!Path::new(&sent).exists());
-        assert!(Path::new(&next).is_file());
+        assert!(storage.save_file("other", "txt", "aGVsbG8=").unwrap_err().contains("storage is full"));
+        assert!(Path::new(&sent).is_file());
+        assert!(storage.authorize("other", None, &sent).is_none());
+        assert!(storage.commit("owner", Some(Path::new("/another")), &[sent]).is_err());
     }
 
     #[test]

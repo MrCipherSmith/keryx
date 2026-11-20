@@ -210,6 +210,11 @@ impl Inner {
 }
 
 impl ProjectWindows {
+    /// The project registered to the calling webview, including an idle session.
+    pub fn cwd_for(&self, view: &str) -> Option<String> {
+        self.inner.lock().unwrap().by_label.get(view).and_then(|entry| entry.cwd.clone())
+    }
+
     fn snapshot(&self) -> Vec<ProjectState> {
         self.inner.lock().unwrap().snapshot()
     }
@@ -255,18 +260,21 @@ fn build_host_window(app: &AppHandle, label: &str) -> Result<Window, String> {
 pub fn add_view(app: &AppHandle, window: &Window, cwd: Option<String>) -> Result<Webview, String> {
     let state = app.state::<ProjectWindows>();
     let n = state.next_view.fetch_add(1, Ordering::SeqCst) + 1;
+    let size = window.inner_size().map_err(|e| e.to_string())?;
     let label = format!("project-{n}");
     if let Some(cwd) = cwd {
+        let root = panels::project_dir(&cwd)?;
+        app.state::<panels::PanelRoots>().set(&label, root);
         app.state::<bridge::AppState>().set_pending_cwd(&label, cwd);
     }
     // Registered first: the page may call in before `add_child` returns.
     state.inner.lock().unwrap().add(&label, window.label());
     let builder = navigation_guarded(app, &label).auto_resize();
-    let size = window.inner_size().map_err(|e| e.to_string())?;
     match window.add_child(builder, PhysicalPosition::new(0, 0), size) {
         Ok(view) => Ok(view),
         Err(e) => {
             state.inner.lock().unwrap().remove(&label);
+            app.state::<panels::PanelRoots>().remove(&label);
             app.state::<bridge::AppState>().view_closed(&label);
             Err(format!("Could not open the project view: {e}"))
         }

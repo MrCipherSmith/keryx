@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { desktopResourceDirectory } from "../lib/self-invocation";
 
 export type ContractName =
   | "agent-event"
@@ -432,9 +433,9 @@ export async function validateContractFile(
  * through a real contract, and would then pass or fail for two reasons at once.
  * This is the seam that lets the keyword be pinned on its own.
  */
-export async function validateJson(value: unknown, schema: JsonSchema): Promise<ValidationError[]> {
+export async function validateJson(value: unknown, schema: JsonSchema, siblings?: ReadonlyMap<string, JsonSchema>): Promise<ValidationError[]> {
   const errors: ValidationError[] = [];
-  await validateValue(value, schema, "$", errors, schema, new Map());
+  await validateValue(value, schema, "$", errors, schema, new Map(siblings));
   return errors;
 }
 
@@ -457,6 +458,11 @@ export async function loadSchema(name: ContractName): Promise<JsonSchema> {
  * original `contracts/<fileName>` lookup.
  */
 export function contractPath(contract: ContractInfo): string {
+  if (desktopResources !== undefined) {
+    return contract.sourcePath
+      ? path.join(desktopResources, "review-skills", path.relative("src/gdskills/bundled/skills", contract.sourcePath))
+      : path.join(desktopResources, "review-contracts", contract.fileName);
+  }
   const here = path.dirname(fileURLToPath(import.meta.url));
   if (contract.sourcePath) {
     for (const root of [path.join(here, "..", ".."), path.join(here, ".."), here]) {
@@ -690,6 +696,10 @@ async function resolveRef(
     return schema;
   }
 
+  // Callers can bundle a schema together with its trusted sibling documents.
+  const bundled = schemaCache.get(ref);
+  if (bundled) return bundled;
+
   if (ref === "review-finding.schema.json") {
     const cached = schemaCache.get("review-finding");
     if (cached) {
@@ -713,11 +723,6 @@ async function resolveRef(
   // roots; `resolves every sibling ref` in `review-input-fix-round.test.ts`
   // fails if that stops being true.
   if (ref.endsWith(".schema.json") && !ref.includes("..") && !ref.includes("/")) {
-    const cached = schemaCache.get(ref);
-    if (cached) {
-      return cached;
-    }
-
     for (const dir of SCHEMA_ROOTS) {
       const candidate = path.join(dir, ref);
       if (existsSync(candidate)) {
@@ -731,8 +736,12 @@ async function resolveRef(
   throw new Error(`Unsupported schema ref: ${ref}`);
 }
 
+// Compiled Desktop runs inside the app bundle. Its own schemas remain authoritative even in a PR checkout.
+const desktopResources = desktopResourceDirectory();
+
 /** Directories that hold a resolvable `$ref` target, in precedence order. */
 const SCHEMA_ROOTS: string[] = [
+  ...(desktopResources ? [path.join(desktopResources, "review-contracts"), path.join(desktopResources, "review-skills/review/review-orchestrator")] : []),
   fileURLToPath(new URL("./contracts/", import.meta.url)),
   fileURLToPath(new URL("./bundled/skills/review/review-orchestrator/", import.meta.url)),
   // the packaged build runs from dist/, with the schemas under src/gdskills/ one level up

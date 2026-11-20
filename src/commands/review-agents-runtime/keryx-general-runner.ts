@@ -1,3 +1,5 @@
+import { readWorkerOutput } from "./keryx-general-usage";
+import { usageCounts, validUsageCounts } from "../../review/run-usage";
 import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -5,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { detectSandboxLauncher, wrapWithSandbox, type SandboxLauncherInfo, type SandboxProfile } from "../../harness/process/sandbox";
 import type { ExternalBridgeSocketServer } from "../../review/agents/external-transport";
 import type { ExternalGeneralRunner, ExternalGeneralStopEvidence } from "../../review/agents/external-adapter";
-import type { ReviewAgentAdapterRequest } from "../../review/agents/types";
+import type { ReviewAgentAdapterRequest, ReviewAgentRequestObservation } from "../../review/agents/types";
 
 const SAFE_INHERITED_ENV = [
   "PATH", "LANG", "LC_ALL", "LC_CTYPE", "TERM", "COLORTERM", "NO_COLOR",
@@ -25,6 +27,7 @@ export interface KeryxExternalProcessPort {
     readonly cwd: string;
     readonly env: Readonly<Record<string, string>>;
     readonly maxOutputBytes: number;
+    readonly observeRequest?: ReviewAgentRequestObservation | undefined;
   }) => KeryxExternalChild;
 }
 
@@ -52,7 +55,7 @@ function inside(parent: string, candidate: string): boolean {
   return candidate === parent || candidate.startsWith(`${parent}${path.sep}`);
 }
 
-async function boundedText(stream: ReadableStream<Uint8Array> | null, maxBytes: number): Promise<string> {
+async function boundedText(stream: ReadableStream<Uint8Array> | null, maxBytes: number, filter?: (chunk: string, eof?: boolean) => string): Promise<string> {
   if (stream === null) return "";
   const reader = stream.getReader();
   const decoder = new TextDecoder();
@@ -64,9 +67,11 @@ async function boundedText(stream: ReadableStream<Uint8Array> | null, maxBytes: 
       if (next.done) break;
       bytes += next.value.byteLength;
       if (bytes > maxBytes) throw new Error(`external Keryx output exceeded ${maxBytes} bytes`);
-      parts.push(decoder.decode(next.value, { stream: true }));
+      const chunk = decoder.decode(next.value, { stream: true });
+      parts.push(filter ? filter(chunk) : chunk);
     }
-    parts.push(decoder.decode());
+    const tail = decoder.decode();
+    parts.push(filter ? filter(tail, true) : tail);
     return parts.join("");
   } finally {
     reader.releaseLock();
@@ -85,13 +90,13 @@ export function createKeryxExternalProcessPort(): KeryxExternalProcessPort {
           if (!(error instanceof Error && "code" in error && error.code === "ESRCH")) throw error;
         }
       };
-      const read = (stream: ReadableStream<Uint8Array> | null): Promise<string> =>
-        boundedText(stream, input.maxOutputBytes).catch((error: unknown) => {
+      const read = (stream: ReadableStream<Uint8Array> | null, filter?: ReturnType<typeof readWorkerOutput>): Promise<string> =>
+        boundedText(stream, input.maxOutputBytes, filter).catch((error: unknown) => {
           terminateGroup("SIGKILL");
           throw error;
         });
       return {
-        stdout: read(child.stdout),
+        stdout: read(child.stdout, readWorkerOutput(input.observeRequest)),
         stderr: read(child.stderr),
         exited: child.exited,
         terminateGroup,
@@ -243,6 +248,7 @@ export async function createKeryxExternalGeneralRunner(
           cwd: runDir,
           env: wrapped.command.env,
           maxOutputBytes,
+          observeRequest: input.observeRequest,
         });
         const state: ActiveChild = { child, cancelled: false };
         active.set(dispatchId, state);
@@ -260,13 +266,16 @@ export async function createKeryxExternalGeneralRunner(
           if (exitCode !== 0) throw new Error(`external Keryx general exited with code ${exitCode}`);
           const parsed: unknown = JSON.parse(stdout);
           if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed) ||
-            Object.keys(parsed).sort().join(",") !== "content,metadata" ||
+            !["content,metadata", "content,metadata,usage"].includes(Object.keys(parsed).sort().join(",")) ||
             typeof Reflect.get(parsed, "content") !== "string" || (Reflect.get(parsed, "content") as string).trim() === "" ||
             typeof Reflect.get(parsed, "metadata") !== "object" || Reflect.get(parsed, "metadata") === null ||
             Reflect.get(Reflect.get(parsed, "metadata") as object, "harness") !== "keryx-dedicated-review-agents-worker") {
             throw new Error("dedicated external Keryx worker returned an invalid or empty result");
           }
+          const measured: unknown = Reflect.get(parsed, "usage");
+          if (measured !== undefined && !validUsageCounts(measured)) throw new Error("dedicated external Keryx worker returned invalid usage");
           return {
+            ...(measured && validUsageCounts(measured) ? { usage: { ...usageCounts(measured), ...(Reflect.get(measured, "partial") === true ? { partial: true } : {}) } } : {}),
             content: Reflect.get(parsed, "content"),
             metadata: { externalHarness: "keryx-dedicated-review-agents-worker", exitCode, containment: launcher.platform },
           };

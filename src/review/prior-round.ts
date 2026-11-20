@@ -240,6 +240,7 @@ function priorFindingsOf(findings: unknown, source: RoundSource): PriorFinding[]
       ...(text(raw.symbol) === undefined ? {} : { symbol: text(raw.symbol) }),
       problem: text(raw.problem) ?? text(raw.title) ?? "",
       status: findingStatus(raw),
+      finding: raw,
       ...(disposition === undefined ? {} : { disposition }),
       source,
     });

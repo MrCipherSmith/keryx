@@ -1,3 +1,5 @@
+import { CONTEXT_FILE_DENYLIST, SUBAGENT_CONTEXT_FILES_MAX_BYTES, SUBAGENT_CONTEXT_FILES_MAX_COUNT } from "../../../lib/subagent-context";
+export { SUBAGENT_CONTEXT_FILES_MAX_BYTES } from "../../../lib/subagent-context";
 // Interactive `spawn_subagent` tool — wires MAE `spawnSubagent` into the shell agent.
 //
 // The model proposes a bounded child task. The host:
@@ -20,12 +22,13 @@ import type { InteractiveTool, InteractiveToolContext } from "./interactive-tool
 import { builtinReadOnlyTools, confineToRoot } from "./interactive-tools";
 import { MAX_TIMER_DELAY_MS } from "./background-job-registry";
 import { makeKeryxRunner, builtinMetaprojectTools } from "./metaproject-tools";
+import { matchesDesktopReviewerDispatch, ReviewerActivity, type ReviewerActivityEvent } from "./reviewer-activity";
 import { reviewerCallerId, withOrchestratorLog } from "../../../review/orchestrator-log";
 import { slateWriteSeedTool } from "./slate-tool";
 import { createMetaprojectAdapter } from "../metaproject-adapter";
 import { RemainingBudgetLedger } from "../../child/ledger";
 import { DEFAULT_MAX_PASSES } from "../../../review/chunks-estimate";
-import { describeReviewWave, resolveReviewWave } from "../../../review/wave-key";
+import { describeReviewWave, resolveReviewWave, REVIEW_WAVE_MAX_CHILDREN } from "../../../review/wave-key";
 import { type DispatchUsage, NO_TEXT_PLACEHOLDER, formatOtherUsageLine, formatRecordLine, isEmptyBody, splitUsage } from "../../../review/dispatch-usage";
 import { spawnSubagent, foldChildSummary } from "../../child/orchestrate";
 import type { SubagentContext } from "../../child/orchestrate";
@@ -41,7 +44,7 @@ import {
   type RunAgentTurnResult,
 } from "../../../commands/agent";
 import type { ShellHookContext } from "../../../commands/agent-hooks";
-import type { NormalizedRequest, ProviderDescription, ProviderPort } from "../../provider/types";
+import type { NormalizedRequest, NormalizedUsage, ProviderDescription, ProviderPort } from "../../provider/types";
 import {
   readSlate,
   renderAnchorsBlock,
@@ -170,6 +173,7 @@ export type SubagentCompletionStatus =
  * always derived from `status`: `false` only for `"Completed"`.
  */
 export interface StructuredSubagentResult {
+  usage?: NormalizedUsage;
   status: SubagentCompletionStatus;
   output: string;
   isError: boolean;
@@ -223,13 +227,6 @@ function parseIntEnvVar(env: Record<string, string | undefined>, key: string): n
   const n = Number.parseInt(raw.trim(), 10);
   return Number.isFinite(n) ? n : undefined;
 }
-
-/** Total bytes of `context_files` the host will inline into one child's task. */
-export const SUBAGENT_CONTEXT_FILES_MAX_BYTES = 400_000;
-const SUBAGENT_CONTEXT_FILES_MAX_COUNT = 40;
-/** Credential files and VCS internals are never copied into a child prompt. */
-const CONTEXT_FILE_DENYLIST =
-  /(^|\/)(\.env[^/]*|\.npmrc|\.netrc|id_[^/]*|[^/]*\.(pem|key|p12|pfx)|\.git(\/.*)?)$/i;
 
 /**
  * Read `context_files` under `root` and render them as fenced blocks appended
@@ -461,7 +458,7 @@ export const SUBAGENT_TURN_MAX_CHILDREN = 32;
  * round), named by the dispatcher in `review_wave`; each wave counts its own 32, so a deep review is not stopped by
  * the turn's count.
  */
-export const SUBAGENT_WAVE_MAX_CHILDREN = 32;
+export const SUBAGENT_WAVE_MAX_CHILDREN = REVIEW_WAVE_MAX_CHILDREN;
 
 /** Waves one parent turn may open: the chunk plan's own pass bound, so waves x 32 stays finite. */
 export const SUBAGENT_TURN_MAX_WAVES = DEFAULT_MAX_PASSES;
@@ -682,6 +679,9 @@ export interface SpawnSubagentToolDeps {
   nativeOnly?: boolean;
   childTools?: (cwd: string) => InteractiveTool[];
   beforeAction?: NonNullable<AgentIO["beforeAction"]>;
+  observeExternal?: (reviewer: string, runtime: string) => (usage?: NormalizedUsage) => void;
+  onReviewerActivity?: (event: ReviewerActivityEvent) => void;
+  observeProvider?: (port: ProviderPort, reviewer: string, provider: string, model: string, sessionId?: string) => ProviderPort;
   onNativeTurn?: (turn: Promise<RunAgentTurnResult>) => void;
   /**
    * The PARENT's working directory. Parent-scoped on purpose: the routing
@@ -695,6 +695,8 @@ export interface SpawnSubagentToolDeps {
   cwd: string;
   /** Optional user-config directory override for isolated routing tests. */
   routingConfigDir?: string;
+  /** Host project whose approved routing and external provider policy govern an isolated Desktop checkout. */
+  routingProjectRoot?: string;
   /** Parent provider/model (inherited by child unless MAE resolves otherwise). */
   getParentModel: () => { providerId: string; modelId: string; baseUrl?: string };
   /** Build a ProviderPort for a resolved provider/model. */
@@ -1101,7 +1103,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
   };
   let childSeq = 0; // only for human labels when the model omits one
 
-  const tool: SpawnSubagentTool = {
+  const tool = {
     definition: {
       name: "spawn_subagent",
       description:
@@ -1229,6 +1231,12 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
               "Deprecated relative size (light|standard|deep). Accepted for compatibility but " +
               "ignored: model routing chooses the child's model. Use model_class instead.",
           },
+          expected_model: {
+            type: "object",
+            description: "Require the model already authorized by routing to match this provider/model, or stop before running the child. Cannot override routing.",
+            properties: { provider: { type: "string" }, model: { type: "string" } },
+            required: ["provider", "model"], additionalProperties: false,
+          },
           model_class: {
             type: "string",
             enum: [...MODEL_CLASSES],
@@ -1280,7 +1288,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       },
       risk: "delegate",
     },
-    invoke: async (input, toolCtx): Promise<StructuredSubagentResult> => {
+    invoke: async (input, toolCtx, activity?: ReviewerActivity): Promise<StructuredSubagentResult> => {
       // Every upsert of this dispatch names the call that spawned it, when the host gave one.
       const parentToolCallId = toolCtx?.toolCallId;
       const emitFleetEvent = (event: SpawnSubagentFleetEvent): void =>
@@ -1411,6 +1419,15 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
             : labelRaw
           : `sub-${childSeq}`;
 
+      // Unscoped usage-only observers predate Desktop plans and attribute saved results by filename.
+      const usageLabel = !activity && saveTarget.abs && path.basename(path.dirname(saveTarget.abs)) === "raw"
+        ? path.basename(saveTarget.abs, ".txt").replace(/-w[1-9]\d*$/, "") : "";
+      const fallbackReviewer = reviewerCallerId(usageLabel || labelRaw, workerId);
+      const measuredProvider = (provider: string, model: string, baseUrl?: string): ProviderPort => {
+        const port = deps.makeProvider(provider, model, baseUrl);
+        return deps.observeProvider?.(port, activity?.reviewer ?? fallbackReviewer, provider, model, activity?.sessionId) ?? port;
+      };
+
       // --- SubagentStart/SubagentStop helpers (flow 306 / W6, T6). No-ops
       // when `deps.hooks` is absent (D1: byte-identical). `fireSubagentStart`
       // returns the composed tightened outcome so a caller can decide whether
@@ -1498,11 +1515,32 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       }));
       let routingConfig: ReturnType<typeof loadRouting>;
       try {
-        routingConfig = loadRouting(deps.cwd, deps.routingConfigDir);
+        routingConfig = loadRouting(deps.routingProjectRoot ?? deps.cwd, deps.routingConfigDir);
       } catch (error) {
         // Malformed or unconvertible routing settings are surfaced, never routed around.
         emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "routing-invalid", task });
         return { status: "Error", output: `spawn_subagent refused: routing settings are invalid: ${error instanceof Error ? error.message : String(error)}`, isError: true };
+      }
+      const reviewWave =
+        input.review_wave === undefined ? undefined : await resolveReviewWave(deps.cwd, input.review_wave);
+      const waveKey = reviewWave?.ok === true ? reviewWave.key : undefined;
+      // The Desktop host supplies routingProjectRoot at launch. A model's expected_model
+      // and review_wave fields alone never select another routing category.
+      const desktopReviewer = deps.routingProjectRoot !== undefined && waveKey !== undefined &&
+        await matchesDesktopReviewerDispatch(deps.cwd, saveTarget.abs, input);
+      const category = desktopReviewer ? "review" : "subagents";
+      const assignment = routingConfig.categories[category];
+      if (desktopReviewer) {
+        // The private plan identifies the work, but it cannot authorize a model.
+        // Require the exact coordinator model already approved by the host.
+        const expected = input.expected_model;
+        if (!expected || typeof expected !== "object" || Reflect.get(expected, "provider") !== session.providerId ||
+            Reflect.get(expected, "model") !== session.modelId ||
+            (assignment.mode !== "baseline" && (assignment.mode !== "model" ||
+              modelRefKey(assignment.target) !== modelRefKey(session)))) {
+          emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "model-mismatch", task });
+          return { status: "Denied", isError: true, output: "spawn_subagent: the Desktop review plan no longer matches the host-authorized Review model. Start a new review to apply routing changes." };
+        }
       }
       const legacyTierMigrationNotice = input.model_tier !== undefined
         ? `ignored model_tier ${String(input.model_tier)} because model routing chooses the child's model; migrate the caller to model_class`
@@ -1550,7 +1588,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       if (!isExternalRuntimeRequest) {
         const observedAt = clock();
         const external = await resolveExternalSetting({
-          cwd: deps.cwd,
+          cwd: deps.routingProjectRoot ?? deps.cwd,
           ...(deps.routingConfigDir === undefined ? {} : { dir: deps.routingConfigDir }),
         });
         const { config: externalConfig } = loadExternalProvidersConfig(deps.routingConfigDir);
@@ -1598,8 +1636,8 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         }
         let request: RoutingRequest = {
           requestId: `subagent:${workerId}:${randomUUID()}`,
-          category: "subagents",
-          origin: "subagent",
+          category,
+          origin: desktopReviewer ? "review" : "subagent",
           baseline: session,
           requirements: {
             capabilities: ["tools"],
@@ -1610,7 +1648,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
             ? { recommendation: { modelClass: input.model_class, source: "agent" } }
             : {}),
         };
-        if (routingConfig.categories.subagents.mode === "auto" && request.recommendation === undefined) {
+        if (assignment.mode === "auto" && request.recommendation === undefined) {
           const env = envWithSavedApiKeys(process.env, deps.routingConfigDir);
           const classified = await runProductionRoutingClassification({
             task,
@@ -1631,7 +1669,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
               externalAllowed: externalPolicyAllowed,
               classifierAllowed: (providerId, modelId) => policyConnected(providerId, modelId)
                 && childAuthorized(providerId, modelId),
-              providerFactory: (providerId, modelId, options) => deps.makeProvider(providerId, modelId, options.baseUrl),
+              providerFactory: (providerId, modelId, options) => measuredProvider(providerId, modelId, options.baseUrl),
               ...(deps.routingConfigDir === undefined ? {} : { userConfigDir: deps.routingConfigDir }),
             },
           });
@@ -1722,7 +1760,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
             currentCredentialedProviders.add(target.providerId);
 
             const currentExternal = await resolveExternalSetting({
-              cwd: deps.cwd,
+              cwd: deps.routingProjectRoot ?? deps.cwd,
               ...(deps.routingConfigDir === undefined ? {} : { dir: deps.routingConfigDir }),
             });
             const { config: currentExternalConfig } = loadExternalProvidersConfig(deps.routingConfigDir);
@@ -1771,9 +1809,6 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       const rankHints = deps.getRankHints?.(session.providerId) ?? TIER_RANK_HINTS;
       const tierMap = buildTierMap(session, catalog, rankHints);
 
-      const reviewWave =
-        input.review_wave === undefined ? undefined : await resolveReviewWave(deps.cwd, input.review_wave);
-      const waveKey = reviewWave?.ok === true ? reviewWave.key : undefined;
       const ctx: SubagentContext = {
         ...(waveKey !== undefined ? { childScope: waveKey } : {}),
         parentRunId,
@@ -1795,12 +1830,23 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           tiers: tierMap,
         },
       };
+      let expectedModel: { providerId: string; modelId: string } | undefined;
+      if (input.expected_model !== undefined) {
+        const expected = input.expected_model;
+        if (!expected || typeof expected !== "object" || !("provider" in expected) || typeof expected.provider !== "string"
+          || !("model" in expected) || typeof expected.model !== "string" || (externalRuntime !== undefined && deps.runExternal !== undefined)) {
+          emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "model-mismatch", task });
+          return { status: "Denied", isError: true, output: "spawn_subagent: the review plan requires an exact native provider and model." };
+        }
+        expectedModel = { providerId: expected.provider, modelId: expected.model };
+      }
       const attemptId = idSeq();
       const branchId = idSeq();
       const reservationId = idSeq();
       const artifactHash = sha256(task);
       const spawned = spawnSubagent(
         {
+          ...(expectedModel ? { expectedModel } : {}),
           attempt: { attemptId, number: childSeq },
           branchId,
           budgetRequest: {
@@ -1832,7 +1878,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           kind: "upsert",
           label,
           status: "failed",
-          detail: "denied",
+          detail: spawned.kind ?? "denied",
           task,
         });
         return {
@@ -1849,6 +1895,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         provider: parent.providerId,
         model: parent.modelId,
       };
+      await activity?.start(deps.cwd, saveTarget.abs);
       const routingRecord = routingReceipt?.decision.status === "selected"
         ? `routing ${routingReceipt.decision.decisionId} → ${runModel.provider}/${runModel.model} ` +
           `[${routingReceipt.decision.assignmentSource}/${routingReceipt.decision.recommendationSource}]`
@@ -1901,7 +1948,10 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           };
         }
         try {
+          const finishUsage = deps.observeExternal?.(activity?.reviewer ?? fallbackReviewer, externalAgentId ?? "external");
           const external = await deps.runExternal({ runtime: externalRuntime, task, mode, workerId, label });
+          if (external.status === "Completed") activity?.observeResult(external.output);
+          finishUsage?.(external.usage);
           emitFleetEvent({
             kind: "upsert",
             id: workerId,
@@ -2110,7 +2160,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       let provider: ProviderPort;
       try {
         const providerBaseUrl = runModel.provider === parent.providerId ? parent.baseUrl : undefined;
-        provider = deps.makeProvider(runModel.provider, runModel.model, providerBaseUrl);
+        provider = measuredProvider(runModel.provider, runModel.model, providerBaseUrl);
         if (routingExecutionBudget !== undefined) {
           const decisionId = routingExecutionBudget.receipt.decision.decisionId;
           const routingTarget = routingExecutionBudget.target;
@@ -2263,6 +2313,9 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       // for its own deadline-vs-caller-cancellation signal (`lib/abort-compose.ts`).
       const internalAbort = new AbortController();
       const composed = composeAbortSignals(toolCtx?.signal, internalAbort.signal);
+      // A model can attempt any tool name. Only names actually registered by the host enter the session log.
+      const publicToolName = (name: string): string =>
+        /^[a-z][a-z0-9_]{0,63}$/.test(name) && tools.some(tool => tool.definition.name === name) ? name : "unknown_tool";
       const io: AgentIO = {
         ...(deps.beforeAction === undefined ? {} : { beforeAction: deps.beforeAction }),
         write: (s) => {
@@ -2296,6 +2349,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           if (closed) {
             return;
           }
+          activity?.record({ activity: "tool_start", tool: publicToolName(name) });
           emitFleetEvent({
             kind: "upsert",
             id: workerId,
@@ -2307,10 +2361,11 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           });
           emitFleetEvent({ kind: "log", id: workerId, entry: { kind: "tool", text: name } });
         },
-        onToolResult: (name, result) => {
+        onToolResult: (name, result, hostTool) => {
           if (closed) {
             return;
           }
+          activity?.record({ activity: "tool_end", tool: hostTool ?? publicToolName(name), ok: !result.isError });
           const preview = result.output.trim().slice(0, 400);
           emitFleetEvent({
             kind: "log",
@@ -2732,6 +2787,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         // Only a completed child with text is final: a stopped one, or one with no text, never replaces a complete result.
         const saveNote = recordSaveNote(await saveRecord(producedNoText ? "" : childText, { final: status === "Completed" && !producedNoText }), "full result", String(input.save_result_to));
         if (status === "Completed") {
+          activity?.observeResult(childText);
           return { status, isError, output: `${header}--- summary ---\n${boundSummary(folded.text)}${saveNote}` };
         }
         const statusLine = formatStoppedStatusLine(status, turnResult);
@@ -2794,6 +2850,17 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         throw cause;
       }
     },
-  };
-  return { ...tool, invoke: (input, toolCtx) => invokeWithBackstop(tool.invoke, input, toolCtx) };
+  } satisfies SpawnSubagentTool;
+  return { ...tool, async invoke(input, toolCtx) {
+    if (!deps.onReviewerActivity) return invokeWithBackstop(tool.invoke, input, toolCtx);
+    const activity = new ReviewerActivity(deps.onReviewerActivity, clock);
+    let result: StructuredSubagentResult | undefined;
+    try {
+      result = await invokeWithBackstop((args, ctx) => tool.invoke(args, ctx, activity), input, toolCtx);
+      return result;
+    } finally {
+      // The backstop can settle before an abandoned child. Close exactly once at the host boundary.
+      activity.finish(result, toolCtx?.signal?.aborted === true);
+    }
+  } };
 }

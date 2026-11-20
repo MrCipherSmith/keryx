@@ -1,12 +1,10 @@
-// Where the session view puts its Activity and Info content inside the window's side panel. The panel lives in
-// the app shell, the session state in the session view: the panel offers an element per tab, the view
-// portals into it (and reports how many runs are going, for the Activity tab's badge).
+// Portal targets for session controls in the title bar and session content in the side panel.
 
 import { useSyncExternalStore } from "react";
 
-export type SlotTab = "activity" | "info";
+type Slot = "activity" | "info" | "sessionControls";
 
-const slots: Record<SlotTab, HTMLElement | null> = { activity: null, info: null };
+const slots: Record<Slot, HTMLElement | null> = { activity: null, info: null, sessionControls: null };
 let running = 0;
 const subs = new Set<() => void>();
 const emit = () => subs.forEach((s) => s());
@@ -15,20 +13,21 @@ const subscribe = (cb: () => void) => {
   return () => void subs.delete(cb);
 };
 
-const refs: Record<SlotTab, (el: HTMLElement | null) => void> = {
+const refs: Record<Slot, (el: HTMLElement | null) => void> = {
   activity: (el) => setSlot("activity", el),
   info: (el) => setSlot("info", el),
+  sessionControls: (el) => setSlot("sessionControls", el),
 };
-function setSlot(tab: SlotTab, el: HTMLElement | null): void {
+function setSlot(tab: Slot, el: HTMLElement | null): void {
   if (slots[tab] === el) return;
   slots[tab] = el;
   emit();
 }
 
 /** A (stable) ref callback for the element that hosts `tab`'s content; null on unmount. */
-export const slotRef = (tab: SlotTab) => refs[tab];
+export const slotRef = (tab: Slot) => refs[tab];
 
-export const useSlot = (tab: SlotTab): HTMLElement | null => useSyncExternalStore(subscribe, () => slots[tab]);
+export const useSlot = (tab: Slot): HTMLElement | null => useSyncExternalStore(subscribe, () => slots[tab]);
 
 /** The session view's running subagents and tasks. */
 export function setActivityRunning(n: number): void {

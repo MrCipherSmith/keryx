@@ -11,7 +11,8 @@ import type { ReviewCoverageEntry } from "./types";
 export const COVERAGE_MD_MARK = "<!-- keryx: coverage.md written from the dispatch record (flow 460) -->";
 
 /** One `reviewer:` / `status:` entry of coverage.md, the layout {@link renderCoverageEntry} writes: each key starts its line. */
-const COVERAGE_ENTRY = /^[ \t]*reviewer:[ \t]*(\S+)[ \t]*\r?\n[ \t]*status:[ \t]*(\S+)/gm;
+const COVERAGE_ENTRY = /^[ \t]*reviewer:[ \t]*(\S+)[ \t]*\r?\n[ \t]*status:[ \t]*(\S+)(?:[ \t]*\r?\n[ \t]*reason:[ \t]*([^\r\n]*))?/gm;
+const legacyRoutedOut = "routed out: slice routing gave this role no slice, so it was not dispatched";
 
 /** One field as one line: line breaks and control characters become spaces, so a value can never start an entry of its own. */
 function oneLine(value: string): string {
@@ -41,6 +42,10 @@ ${coverage.map(renderCoverageEntry).join("\n\n")}
 }
 
 /** The reviewer and status of each entry of a coverage.md, in order. */
-export function parseCoverageEntries(text: string): Array<{ reviewer: string; status: string }> {
-  return [...text.matchAll(COVERAGE_ENTRY)].map((match) => ({ reviewer: match[1]!, status: match[2]! }));
+export function parseCoverageEntries(text: string, routedOut?: ReadonlySet<string>): Array<{ reviewer: string; status: string }> {
+  return [...text.matchAll(COVERAGE_ENTRY)].map((match) => {
+    const reviewer = match[1]!;
+    const status = match[2]!;
+    return { reviewer, status: status === "run" && routedOut?.has(reviewer) && match[3]?.trim() === legacyRoutedOut ? "skipped" : status };
+  });
 }

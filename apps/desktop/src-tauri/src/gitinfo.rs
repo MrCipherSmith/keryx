@@ -8,7 +8,8 @@ use serde::Serialize;
 use std::path::Path;
 use std::process::Command;
 use std::time::Duration;
-use tauri::State;
+use tauri::{State, Webview};
+use crate::panels::PanelRoots;
 
 const GIT_TIMEOUT: Duration = Duration::from_secs(3);
 /// A status listing far larger than this is cut; the counts it reports stay lower bounds.
@@ -97,9 +98,10 @@ fn read(dir: &Path, path_env: Option<&str>) -> Option<GitInfo> {
 
 /// The git state of `cwd`, or `null` outside a repository (or when git is slow or missing).
 #[tauri::command]
-pub async fn git_info(state: State<'_, AppState>, cwd: String) -> Result<Option<GitInfo>, String> {
+pub async fn git_info(state: State<'_, AppState>, roots: State<'_, PanelRoots>, view: Webview, cwd: String) -> Result<Option<GitInfo>, String> {
+    let root = roots.require_project(view.label(), &cwd)?;
     let path = state.environment().get("PATH").cloned();
-    tauri::async_runtime::spawn_blocking(move || read(Path::new(&cwd), path.as_deref()))
+    tauri::async_runtime::spawn_blocking(move || read(&root, path.as_deref()))
         .await
         .map_err(|e| e.to_string())
 }
@@ -150,14 +152,15 @@ impl Drop for LookupSlot {
 }
 
 #[tauri::command]
-pub async fn git_repository(state: State<'_, AppState>, cwd: String) -> Result<Option<String>, String> {
+pub async fn git_repository(state: State<'_, AppState>, roots: State<'_, PanelRoots>, view: Webview, cwd: String) -> Result<Option<String>, String> {
+    let root = roots.require_project(view.label(), &cwd)?;
     let path = state.environment().get("PATH").cloned();
     // Saturated: answer "unknown" rather than queue more Git children.
     let Some(slot) = LookupSlot::take() else { return Err("busy: too many repository lookups; try again".into()) };
     tauri::async_runtime::spawn_blocking(move || {
         let _slot = slot;
         let mut cmd = Command::new("git");
-        cmd.args(["config", "--get", "remote.origin.url"]).current_dir(cwd);
+        cmd.args(["config", "--local", "--get", "remote.origin.url"]).current_dir(root);
         if let Some(p) = path {
             cmd.env("PATH", p);
         }

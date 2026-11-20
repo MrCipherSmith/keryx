@@ -5,7 +5,7 @@ import type { GraphData } from "../gdgraph/types";
 import { shellQuote } from "../lib/shell-quote";
 import { collectEntries } from "../memory/store";
 import { relatedByNamingAndDirectory, TEST_FILE_RE, normalizePath } from "../testing/selection";
-import { collectPages, computeModuleKeyFiles } from "../wiki/collect";
+import { collectPages, computeModuleKeyFiles, WikiCollectionError } from "../wiki/collect";
 import { resolveDescribeSet } from "../wiki/describes";
 import { moduleNameFromProjectPath } from "../wiki/service";
 import { loadPackageGraph, packageGraphDir } from "./layers";
@@ -54,7 +54,7 @@ export interface LayersBlock {
   symbols: LayersBlockSymbol[];
   relatedTests: string[];
   wiki: Array<{ page: string; title: string }>;
-  memory: Array<{ path: string; title: string; status: string; module: string }>;
+  memory: Array<{ path: string; type: string; title: string; status: string; module: string }>;
   truncated: LayersBlockTruncation[];
   unavailable: LayersBlockUnavailable[];
 }
@@ -168,7 +168,8 @@ async function wikiFor(
   try {
     pages = await collectPages(projectRoot);
   } catch (error) {
-    return { items: [], unavailable: `the wiki could not be read — ${reasonOf(error)}` };
+    const location = error instanceof WikiCollectionError ? ` (${path.relative(projectRoot, error.dir)})` : "";
+    return { items: [], unavailable: `the wiki could not be read${location} — ${reasonOf(error)}` };
   }
   const knownPaths = new Set(graph.nodes.map((node) => node.path));
   const keyFilesIndex = computeModuleKeyFiles(graph);
@@ -203,7 +204,7 @@ function modulesOf(file: string): string[] {
 async function memoryFor(
   projectRoot: string,
   files: readonly string[],
-): Promise<Read<{ path: string; title: string; status: string; module: string }>> {
+): Promise<Read<{ path: string; type: string; title: string; status: string; module: string }>> {
   let entries;
   try {
     entries = await collectEntries(projectRoot);
@@ -212,13 +213,13 @@ async function memoryFor(
   }
   const modules = new Set(files.flatMap(modulesOf));
   const wanted = new Set(files);
-  const out: Array<{ path: string; title: string; status: string; module: string }> = [];
+  const out: Array<{ path: string; type: string; title: string; status: string; module: string }> = [];
   for (const entry of entries) {
     if (entry.status === "deprecated" || entry.status === "superseded") continue;
     const module = entry.scopes.module?.toLowerCase() ?? null;
     const byModule = module !== null && modules.has(module);
     const byFile = entry.scopes.files.some((file) => wanted.has(normalizePath(file)));
-    if (byModule || byFile) out.push({ path: entry.relativePath, title: entry.title, status: entry.status, module: module ?? "" });
+    if (byModule || byFile) out.push({ path: entry.relativePath, type: entry.type, title: entry.title, status: entry.status, module: module ?? "" });
   }
   return { items: out.sort((a, b) => a.path.localeCompare(b.path)), unavailable: null };
 }

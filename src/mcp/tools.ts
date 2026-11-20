@@ -842,7 +842,7 @@ export function buildToolRegistry(): ToolEntry[] {
       name: "flow.status",
       module: "flow",
       description:
-        "Read-only flow status: list all flows, or fetch one flow by id. Never mutates a flow.",
+        "Read-only flow status: list all flows, or fetch one flow by id. For related PR reviews and Flow evidence, run keryx review pr-context --flow ID or --pr URL in the project.",
       inputSchema: OBJECT_SCHEMA({
         id: { type: "string", description: "Flow id to fetch; omit to list all." },
       }),

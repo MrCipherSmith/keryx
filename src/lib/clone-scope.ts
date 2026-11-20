@@ -29,10 +29,11 @@ export async function gitCommonDir(cwd: string): Promise<string | null> {
   }
 }
 
-export async function gitToplevel(cwd: string): Promise<string | null> {
+export async function gitToplevel(cwd: string, env?: NodeJS.ProcessEnv): Promise<string | null> {
   try {
     const proc = Bun.spawn(["git", "rev-parse", "--show-toplevel"], {
       cwd,
+      ...(env === undefined ? {} : { env }),
       stdout: "pipe",
       stderr: "ignore",
     });

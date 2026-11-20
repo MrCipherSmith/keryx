@@ -650,6 +650,23 @@ describe("item 3 runs the coverage gate review complete runs (flow 460 AC1)", ()
 });
 
 describe("flow 460 F: coverage.md names what the dispatch record ran", () => {
+  test("accepts the legacy routed-out status only when coverage and the ledger agree", async () => {
+    writeResearch("repaired");
+    const file = path.join(pkg, "research.json");
+    const research = JSON.parse(readFileSync(file, "utf8"));
+    const reviewer = "review-style";
+    research.dispatch.runs.find((entry: { reviewer: string }) => entry.reviewer === reviewer).routedOut = true;
+    writeJson("research.json", research);
+    writeCoverageMd(Object.fromEntries(REVIEWERS.map(name => [name, "run"])));
+    const coverage = path.join(pkg, "coverage.md");
+    const current = readFileSync(coverage, "utf8");
+    const legacyReason = "routed out: slice routing gave this role no slice, so it was not dispatched";
+    const item = async () => (await computeReadiness(pkg)).items.find(entry => entry.id === "coverage-md")?.status;
+    expect(await item()).toBe("fail");
+    writeFileSync(coverage, current.replace(`reviewer: ${reviewer}\nstatus: run\nreason: x`, `reviewer: ${reviewer}\nstatus: run\nreason: ${legacyReason}`));
+    expect(await item()).toBe("pass");
+  });
+
   test("a coverage.md that lists a stand-in instead of the dispatched reviewers fails item 6, and listing them passes", async () => {
     writeResearch("repaired");
     writeCoverageMd({ "review-orchestrator": "run" });

@@ -15,6 +15,7 @@ pub mod panels;
 pub mod process;
 pub mod projects;
 pub mod pullrequest;
+pub mod review;
 pub mod pty;
 pub mod settings;
 pub mod shellenv;
@@ -118,6 +119,12 @@ pub fn run() {
             gitinfo::git_info,
             gitinfo::git_repository,
             pullrequest::pr_info,
+            review::github_accounts,
+            review::github_login,
+            review::review_board,
+            review::review_run,
+            review::review_watcher,
+            review::review_rules,
             panels::pty_open,
             panels::pty_open_run,
             panels::pty_attach,

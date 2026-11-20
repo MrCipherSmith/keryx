@@ -13,23 +13,27 @@
 // flows://changed. One WebSocket connection is one "window" with its own
 // keryx process. Development only: it listens on loopback and is never bundled.
 
+import { reviewBoardArgs } from "./reviewBoard";
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync, mkdirSync, writeFileSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
-import { randomUUID } from "node:crypto";
+import { homedir } from "node:os";
 import { rmSync } from "node:fs";
-import { mkdtemp, open, realpath, unlink } from "node:fs/promises";
+import { realpath } from "node:fs/promises";
 import { execFile } from "node:child_process";
-import { setImmediate as yieldToLoop } from "node:timers/promises";
 import { promisify } from "node:util";
 import { basename, isAbsolute, join, resolve, sep } from "node:path";
 import type { ServerWebSocket, Subprocess } from "bun";
+import { createChatAttachmentStore, type ChatOwner } from "./chatAttachments";
 import { githubRepositoryFromOrigin } from "../src/lib/githubPr";
 
+import { reviewWatcherArgs, reviewRuleArgs } from "./reviewWatcher";
+import { reviewRunArgs } from "./reviewRun";
+import { SAFE_BUN_SPAWN_ARGS } from "../../../src/lib/safe-exec";
+
+const runFile = promisify(execFile);
 const PORT = 1421;
 const REPO_ROOT = resolve(import.meta.dir, "../../..");
-const KERYX_CMD = (process.env.KERYX_DEV_CMD ?? `bun run ${join(REPO_ROOT, "src/cli.ts")}`)
-  .split(/\s+/)
-  .filter(Boolean);
+const KERYX_CMD = process.env.KERYX_DEV_CMD?.split(/\s+/).filter(Boolean)
+  ?? ["bun", ...SAFE_BUN_SPAWN_ARGS, join(REPO_ROOT, "src/cli.ts")];
 const MIN_KERYX_VERSION = readMinVersion();
 const SETTINGS_PATH = join(homedir(), ".keryx-desktop-dev", "settings.json");
 const MAX_FILE_BYTES = 16 * 1024 * 1024;
@@ -483,6 +487,13 @@ function acpStart(ws: ServerWebSocket<Conn>, cwd: string, noProfile: boolean) {
   const proc = Bun.spawn([...cmd, ...args], { cwd: root, stdin: "pipe", stdout: "pipe", stderr: "pipe" });
   const gen = conn.gen;
   conn.proc = proc;
+  if (conn.root !== null && conn.root !== root) {
+    const oldOwner = conn.attachmentOwner;
+    conn.attachmentOwner = { closed: false };
+    void chatStore.cleanupChatOwner(oldOwner).catch((error: unknown) => {
+      console.error("[bridge] could not clean up drafts on project switch", error);
+    });
+  }
   conn.root = root;
   for (const wake of conn.rootWaiters.splice(0)) wake();
   let stderrTail = "";
@@ -531,278 +542,9 @@ function acpStart(ws: ServerWebSocket<Conn>, cwd: string, noProfile: boolean) {
 
 // ---- temporary chat images ---------------------------------------------------
 
-const CHAT_IMAGE_BYTES = 5 * 1024 * 1024;
-const CHAT_STORAGE_BYTES = 256 * 1024 * 1024;
-const CHAT_STORAGE_FILES = 512;
-// 192 KiB of raw bytes corresponds to 256 KiB of base64, without split quanta.
-const RAW_CHUNK = 192 * 1024;
-const BASE64_CHUNK = 4 * (RAW_CHUNK / 3);
-
-interface ChatOwner {
-  closed: boolean;
-}
-
-interface ChatAttachment {
-  owner: ChatOwner;
-  path: string;
-  size: number;
-  mimeType?: string;
-  deleting: boolean;
-  committed: boolean;
-  /** Order of issue: when the store is full the oldest sent attachments go first. */
-  seq: number;
-  /** The project of the connection that sent it (set on commit): only that project's connections may preview it. */
-  root?: string;
-}
-
-const MAX_CHAT_PREVIEWS = 8;
-let activeChatPreviews = 0;
-const MAX_CHAT_SAVES = 3;
-let activeChatSaves = 0;
-
-const chatAttachments = new Map<string, ChatAttachment>();
-let chatAttachmentBytes = 0;
-let chatAttachmentCount = 0;
-let chatAttachmentSeq = 0;
-let chatImageRoot: Promise<string> | undefined;
-
-async function createChatImageRoot(): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), "keryx-chat-images-"));
-  process.once("exit", () => rmSync(dir, { recursive: true, force: true }));
-  return dir;
-}
-
-async function getChatImageRoot(): Promise<string> {
-  const pending = chatImageRoot ??= createChatImageRoot();
-  try {
-    return await pending;
-  } catch (error) {
-    if (chatImageRoot === pending) chatImageRoot = undefined;
-    throw error;
-  }
-}
-
-function decodedAttachmentSize(data: string): number {
-  if (data.length % 4 !== 0 || data.length > 4 * Math.ceil(CHAT_IMAGE_BYTES / 3)) {
-    throw new Error("Invalid or oversized attachment");
-  }
-  const padding = data.endsWith("==") ? 2 : data.endsWith("=") ? 1 : 0;
-  const size = data.length / 4 * 3 - padding;
-  if (size > CHAT_IMAGE_BYTES) throw new Error("Invalid or oversized attachment");
-  return size;
-}
-
-async function decodeChatAttachment(data: string, size: number): Promise<Buffer> {
-  const bytes = Buffer.allocUnsafe(size);
-  let offset = 0;
-  for (let start = 0; start < data.length; start += BASE64_CHUNK) {
-    const end = Math.min(start + BASE64_CHUNK, data.length);
-    const chunk = data.slice(start, end);
-    const decoded = Buffer.from(chunk, "base64");
-    if ((end < data.length && chunk.endsWith("=")) || decoded.toString("base64") !== chunk) {
-      throw new Error("Invalid attachment data");
-    }
-    decoded.copy(bytes, offset);
-    offset += decoded.length;
-    if (end < data.length) await yieldToLoop();
-  }
-  if (offset !== size) throw new Error("Invalid attachment data");
-  return bytes;
-}
-
-function chatImageExtension(mimeType: unknown, bytes: Buffer): string {
-  if (mimeType === "image/png" && bytes.subarray(0, 8).toString("hex") === "89504e470d0a1a0a") return "png";
-  if (mimeType === "image/jpeg" && bytes.subarray(0, 3).toString("hex") === "ffd8ff") return "jpg";
-  if (mimeType === "image/gif" && /^(GIF87a|GIF89a)$/.test(bytes.subarray(0, 6).toString())) return "gif";
-  if (mimeType === "image/webp" && bytes.subarray(0, 4).toString() === "RIFF" && bytes.subarray(8, 12).toString() === "WEBP") return "webp";
-  throw new Error("Unsupported or invalid pasted image");
-}
-
-type AttachmentTarget = { extension: string } | { mimeType: string };
-
-async function saveChatFile(owner: ChatOwner, { extension, data }: Json): Promise<string> {
-  if (typeof extension !== "string" || !extension || extension.length > 12 || /[^a-z0-9]/i.test(extension)) {
-    throw new Error("Invalid attachment extension");
-  }
-  return writeChatAttachment(owner, data, { extension });
-}
-
-async function saveChatImage(owner: ChatOwner, { mimeType, data }: Json): Promise<string> {
-  if (typeof mimeType !== "string") throw new Error("Unsupported pasted image");
-  return writeChatAttachment(owner, data, { mimeType });
-}
-
-function releaseChatReservation(size: number): void {
-  chatAttachmentCount--;
-  chatAttachmentBytes -= size;
-}
-
-async function removeChatFile(path: string): Promise<void> {
-  try {
-    await unlink(path);
-  } catch (error) {
-    if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
-  }
-}
-
-async function writeChatAttachment(owner: ChatOwner, data: unknown, target: AttachmentTarget): Promise<string> {
-  if (activeChatSaves >= MAX_CHAT_SAVES) throw new Error("busy: Chat attachments are busy; try again");
-  activeChatSaves++;
-  try {
-    return await writeChatAttachmentUncapped(owner, data, target);
-  } finally {
-    activeChatSaves--;
-  }
-}
-
-async function writeChatAttachmentUncapped(owner: ChatOwner, data: unknown, target: AttachmentTarget): Promise<string> {
-  if (typeof data !== "string") throw new Error("Invalid attachment data");
-  const size = decodedAttachmentSize(data);
-  if (chatAttachmentCount >= CHAT_STORAGE_FILES || chatAttachmentBytes + size > CHAT_STORAGE_BYTES) {
-    await evictSentAttachments(size);
-  }
-  if (chatAttachmentCount >= CHAT_STORAGE_FILES || chatAttachmentBytes + size > CHAT_STORAGE_BYTES) {
-    throw new Error("Temporary chat attachment storage is full. Remove drafts to free space; the oldest sent attachments are reclaimed automatically.");
-  }
-  chatAttachmentCount++;
-  chatAttachmentBytes += size;
-
-  let created: string | undefined;
-  try {
-    const bytes = await decodeChatAttachment(data, size);
-    const mimeType = "mimeType" in target ? target.mimeType : undefined;
-    const extension = "extension" in target ? target.extension : chatImageExtension(mimeType, bytes);
-    const path = join(await getChatImageRoot(), `${mimeType ? "image" : "file"}-${randomUUID()}.${extension}`);
-    const file = await open(path, "wx", 0o600);
-    created = path; // Never unlink a path if exclusive creation failed.
-    try {
-      await file.writeFile(bytes);
-    } finally {
-      await file.close();
-    }
-    // No await between this check and set(): the close handler cannot miss this entry. If the
-    // connection closed during the save, throwing here makes the catch unlink the file and release quota.
-    if (owner.closed) throw new Error("Connection closed before the attachment was saved");
-    chatAttachments.set(path, { owner, path, size, mimeType, deleting: false, committed: false, seq: ++chatAttachmentSeq });
-    return path;
-  } catch (error) {
-    try {
-      if (created) await removeChatFile(created);
-      releaseChatReservation(size);
-    } catch (cleanupError) {
-      // A possible leftover remains charged until process exit.
-      throw new Error("Could not save or clean up chat attachment", {
-        cause: new AggregateError([error, cleanupError]),
-      });
-    }
-    throw new Error("Could not save chat attachment", { cause: error });
-  }
-}
-
-async function discardChatAttachment(owner: ChatOwner, path: unknown): Promise<null> {
-  const entry = typeof path === "string" ? chatAttachments.get(path) : undefined;
-  if (!entry || entry.owner !== owner || entry.deleting) {
-    throw new Error("Chat attachment is not available to this connection");
-  }
-  entry.deleting = true;
-  try {
-    await removeChatFile(entry.path);
-  } catch (error) {
-    entry.deleting = false;
-    throw new Error("Could not discard chat attachment", { cause: error });
-  }
-  chatAttachments.delete(entry.path);
-  releaseChatReservation(entry.size);
-  return null;
-}
-
-/** Free room for `size` bytes by deleting the oldest sent attachments; their previews then read as gone. */
-async function evictSentAttachments(size: number): Promise<void> {
-  const sent = [...chatAttachments.values()].filter((e) => e.committed && !e.deleting).sort((a, b) => a.seq - b.seq);
-  let count = chatAttachmentCount;
-  let bytes = chatAttachmentBytes;
-  const victims: ChatAttachment[] = [];
-  for (const entry of sent) {
-    if (count < CHAT_STORAGE_FILES && bytes + size <= CHAT_STORAGE_BYTES) break;
-    entry.deleting = true;
-    count--;
-    bytes -= entry.size;
-    victims.push(entry);
-  }
-  await Promise.all(
-    victims.map(async (entry) => {
-      try {
-        await removeChatFile(entry.path);
-      } catch {
-        entry.deleting = false; // a leftover stays charged until process exit
-        return;
-      }
-      chatAttachments.delete(entry.path);
-      releaseChatReservation(entry.size);
-    }),
-  );
-}
-
-function commitChatAttachments(owner: ChatOwner, paths: unknown, root: string | null): null {
-  if (!Array.isArray(paths) || paths.some((p) => typeof p !== "string")) {
-    throw new Error("Invalid attachment paths");
-  }
-  const entries: ChatAttachment[] = [];
-  for (const path of paths as string[]) {
-    const entry = chatAttachments.get(path);
-    if (!entry || entry.owner !== owner || entry.deleting || owner.closed) {
-      throw new Error("Chat attachment is not available to this connection");
-    }
-    entries.push(entry);
-  }
-  for (const entry of entries) {
-    entry.committed = true;
-    entry.root = root ?? undefined;
-  }
-  return null;
-}
-
-/** Mark the connection closed and delete its uncommitted (draft) files, releasing their quota. */
-async function cleanupChatOwner(owner: ChatOwner): Promise<void> {
-  owner.closed = true;
-  const drafts = [...chatAttachments.values()].filter((e) => e.owner === owner && !e.committed && !e.deleting);
-  await Promise.all(
-    drafts.map(async (entry) => {
-      entry.deleting = true;
-      try {
-        await removeChatFile(entry.path);
-      } catch {
-        entry.deleting = false; // leftover stays charged until process exit
-        return;
-      }
-      chatAttachments.delete(entry.path);
-      releaseChatReservation(entry.size);
-    }),
-  );
-}
-
-async function previewChatImage(entry: ChatAttachment, mimeType: string): Promise<string> {
-  const file = await open(entry.path, "r");
-  const bytes = Buffer.allocUnsafe(entry.size + 1);
-  let size = 0;
-  try {
-    while (size < bytes.length) {
-      const { bytesRead } = await file.read(bytes, size, bytes.length - size, size);
-      if (bytesRead === 0) break;
-      size += bytesRead;
-    }
-  } finally {
-    await file.close();
-  }
-  if (size !== entry.size) throw new Error("The chat image has changed");
-  const chunks: string[] = [];
-  for (let start = 0; start < size; start += RAW_CHUNK) {
-    const end = Math.min(start + RAW_CHUNK, size);
-    chunks.push(bytes.toString("base64", start, end));
-    if (end < size) await yieldToLoop();
-  }
-  return `data:${mimeType};base64,${chunks.join("")}`;
-}
+const chatStore = createChatAttachmentStore({
+  onRoot(dir) { process.once("exit", () => rmSync(dir, { recursive: true, force: true })); },
+});
 
 const execGitFile = promisify(execFile);
 const MAX_GIT_REPOSITORY_CHILDREN = 4;
@@ -812,7 +554,7 @@ async function gitRepository(cwd: string): Promise<string | null> {
   if (gitRepositoryChildren >= MAX_GIT_REPOSITORY_CHILDREN) throw new Error("busy: too many repository lookups; try again");
   gitRepositoryChildren++;
   try {
-    const { stdout } = await execGitFile("git", ["config", "--get", "remote.origin.url"], {
+    const { stdout } = await execGitFile("git", ["config", "--local", "--get", "remote.origin.url"], {
       cwd,
       encoding: "utf8",
       timeout: 3000,
@@ -854,6 +596,26 @@ async function projectCwd(conn: Conn, cwd: string): Promise<string> {
   return conn.root;
 }
 
+let reviewReaders = 0;
+async function runReviewCli(root: string, argv: string[], readOnly: boolean): Promise<unknown> {
+  if (readOnly && reviewReaders >= 8) throw new Error("unavailable: Too many Review reads are running. Retry shortly.");
+  if (readOnly) reviewReaders++;
+  let stdout: string;
+  try {
+    ({ stdout } = await runFile(KERYX_CMD[0]!, [...KERYX_CMD.slice(1), ...argv], { cwd: root, timeout: 150_000, maxBuffer: 32 * 1024 * 1024 }));
+  } catch (error) {
+    const reason = (error as { stderr?: string }).stderr?.trim();
+    throw new Error(reason || "unavailable: Could not run the Review reader");
+  } finally {
+    if (readOnly) reviewReaders--;
+  }
+  try {
+    return JSON.parse(stdout);
+  } catch {
+    throw new Error("unavailable: The selected Keryx CLI did not return a valid Review response.");
+  }
+}
+
 async function handle(ws: ServerWebSocket<Conn>, cmd: string, args: Json): Promise<unknown> {
   const cwd = typeof args.cwd === "string" ? args.cwd : "";
   switch (cmd) {
@@ -871,28 +633,16 @@ async function handle(ws: ServerWebSocket<Conn>, cmd: string, args: Json): Promi
       return null;
     case "save_chat_file":
       if (!ws.data.root) throw new Error("Open a project before attaching files.");
-      return saveChatFile(ws.data.attachmentOwner, args);
+      return chatStore.saveChatFile(ws.data.attachmentOwner, args);
     case "save_chat_image":
       if (!ws.data.root) throw new Error("Open a project before pasting images.");
-      return saveChatImage(ws.data.attachmentOwner, args);
+      return chatStore.saveChatImage(ws.data.attachmentOwner, args);
     case "discard_chat_attachment":
-      return discardChatAttachment(ws.data.attachmentOwner, args.path);
+      return chatStore.discardChatAttachment(ws.data.attachmentOwner, args.path);
     case "commit_chat_attachments":
-      return commitChatAttachments(ws.data.attachmentOwner, args.paths, ws.data.root);
+      return chatStore.commitChatAttachments(ws.data.attachmentOwner, args.paths, ws.data.root);
     case "local_image": {
-      const entry = typeof args.path === "string" ? chatAttachments.get(args.path) : undefined;
-      // A draft is owner-only; a sent attachment may be previewed from any connection of the same project.
-      const sameProject = entry?.committed === true && entry.root !== undefined && entry.root === ws.data.root;
-      if (!ws.data.root || !entry?.mimeType || entry.deleting || (entry.owner !== ws.data.attachmentOwner && !sameProject)) {
-        throw new Error("The chat image is no longer available");
-      }
-      if (activeChatPreviews >= MAX_CHAT_PREVIEWS) throw new Error("busy: Chat attachments are busy; try again");
-      activeChatPreviews++;
-      try {
-        return await previewChatImage(entry, entry.mimeType);
-      } finally {
-        activeChatPreviews--;
-      }
+      return chatStore.localImage(ws.data.attachmentOwner, ws.data.root, args.path);
     }
     case "settings_get":
       return loadSettings();
@@ -913,6 +663,42 @@ async function handle(ws: ServerWebSocket<Conn>, cmd: string, args: Json): Promi
       return null;
     case "app_update_run":
       throw new Error("Browser dev mode runs no Keryx.app; use `keryx app update` in a terminal.");
+    case "github_accounts": {
+      const { action, login, skip = false } = args;
+      if (action === "list" && args.cwd === undefined && login === undefined && skip === false) {
+        return runReviewCli(homedir(), ["review", "accounts", "list", "--json"], true);
+      }
+      if (action === "project" && cwd && login === undefined && skip === false) {
+        return runReviewCli(await projectCwd(ws.data, cwd), ["review", "accounts", "project", "--json"], true);
+      }
+      if (action === "bind" && cwd) {
+        const argv = ["review", "accounts", "bind", "--json"];
+        if (skip === true && login === undefined) argv.push("--skip");
+        else if (skip === false && typeof login === "string" && /^[a-z0-9][a-z0-9_-]{0,99}$/i.test(login)) argv.push("--login", login);
+        else throw new Error("configuration: Invalid GitHub account request.");
+        return runReviewCli(await projectCwd(ws.data, cwd), argv, false);
+      }
+      throw new Error("configuration: Invalid GitHub account request.");
+    }
+    case "github_login":
+      throw new Error("In browser dev mode, run `gh auth login --hostname github.com --web` in a terminal, then refresh accounts.");
+    case "review_board": {
+      const root = await projectCwd(ws.data, cwd);
+      const argv = reviewBoardArgs(args);
+      return runReviewCli(root, argv, true);
+    }
+    case "review_rules": {
+      const root = await projectCwd(ws.data, cwd);
+      return runReviewCli(root, reviewRuleArgs(args.target, args.action), (args.action as Json)?.kind === "status");
+    }
+    case "review_watcher": {
+      const root = await projectCwd(ws.data, cwd);
+      return runReviewCli(root, reviewWatcherArgs(args.target, args.action), (args.action as Json)?.kind === "status");
+    }
+    case "review_run": {
+      const root = await projectCwd(ws.data, cwd);
+      return runReviewCli(root, reviewRunArgs(args.target, args.action), (args.action as Json)?.kind === "status");
+    }
     case "flows_list":
       return flowsList(await projectCwd(ws.data, cwd));
     case "flows_get":
@@ -1053,7 +839,7 @@ Bun.serve<Conn>({
       }
     },
     close(ws) {
-      void cleanupChatOwner(ws.data.attachmentOwner).catch((error) => {
+      void chatStore.cleanupChatOwner(ws.data.attachmentOwner).catch((error) => {
         console.error("[bridge] chat attachment cleanup failed", error);
       });
       stopProc(ws.data);
@@ -1062,8 +848,8 @@ Bun.serve<Conn>({
   },
 });
 
-// Signals skip the "exit" event by default; exiting explicitly runs the chat image root cleanup.
-for (const [signal, code] of [["SIGINT", 130], ["SIGTERM", 143]] as const) {
+// These signals skip the "exit" event by default; exiting explicitly runs the chat image root cleanup.
+for (const [signal, code] of [["SIGINT", 130], ["SIGTERM", 143], ["SIGHUP", 129]] as const) {
   process.on(signal, () => process.exit(code));
 }
 

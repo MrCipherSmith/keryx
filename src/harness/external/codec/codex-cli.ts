@@ -425,9 +425,9 @@ function parseCompletedItem(raw: unknown): readonly ExternalEvent[] {
  * Fold `turn.completed.usage`.
  *
  * codex 0.147.0 reports five fields — `input_tokens`, `cached_input_tokens`,
- * `cache_write_input_tokens`, `output_tokens`, `reasoning_output_tokens`. Only the
- * two totals are carried. `cached_input_tokens` is a SUBSET of `input_tokens` and
- * adding it would double count; `reasoning_output_tokens` is not documented as
+ * `cache_write_input_tokens`, `output_tokens`, `reasoning_output_tokens`. Cache
+ * counts are reported separately and never added to the provider input total.
+ * `reasoning_output_tokens` is not documented as
  * either a subset of or an addition to `output_tokens`, and over-reporting a
  * billing figure on a guess is worse than under-reporting it on a known fact.
  *
@@ -439,11 +439,15 @@ function parseUsage(raw: unknown): ExternalEvent | undefined {
   if (typeof raw !== "object" || raw === null) return undefined;
   const usage = raw as Record<string, unknown>;
   const inputTokens = asNumber(usage.input_tokens);
+  const cacheReadTokens = asNumber(usage.cached_input_tokens);
+  const cacheWriteTokens = asNumber(usage.cache_write_input_tokens);
   const outputTokens = asNumber(usage.output_tokens);
-  if (inputTokens === undefined && outputTokens === undefined) return undefined;
+  if (inputTokens === undefined && outputTokens === undefined && cacheReadTokens === undefined && cacheWriteTokens === undefined) return undefined;
   return {
     kind: "usage",
     ...(inputTokens === undefined ? {} : { inputTokens }),
+    ...(cacheReadTokens === undefined ? {} : { cacheReadTokens }),
+    ...(cacheWriteTokens === undefined ? {} : { cacheWriteTokens }),
     ...(outputTokens === undefined ? {} : { outputTokens }),
   };
 }

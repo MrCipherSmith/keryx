@@ -4,7 +4,7 @@
 // on their own); only the plan's own reading of their results lives here.
 
 import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { optionValue } from "../lib/args";
 import { writeFileAtomic } from "../lib/fs";
@@ -12,8 +12,11 @@ import { estimatePackage, planConfirmed, type RoundEstimate, CONFIRM_PLAN_TOOL }
 import { readPriorFindings, readRoundRecord, renderRoundLine, type RoundRecord } from "../review/round-record";
 import { isDeltaRound } from "../review/round-split";
 import type { SliceEntry, SliceManifest } from "../review/slice";
+import { DESK_REVIEW_SHELL } from "../review/autonomous-profile";
+import { collectDesktopPlanContext, prepareDesktopDispatch } from "./review-plan-desktop";
 import { REVIEW_HOSTS } from "../review/host-profile";
-import { packageReviewers, writeWaveDrivers } from "../review/wave-drivers";
+import { requiredSlices } from "../review/waves";
+import { writeWaveDrivers } from "../review/wave-drivers";
 
 export const PLAN_FILE = "plan.json";
 export const PLAN_FLAGS = ["--target", "--ref", "--head", "--host", "--memory-query", "--unattended", "--json", "--help", "-h"] as const;
@@ -45,6 +48,7 @@ export type ReviewPlan = {
   planKey: string;
   warnings: string[];
   next: string;
+  desktopDispatch?: string;
 };
 
 export function printPlanHelp(): void {
@@ -109,6 +113,7 @@ export function renderPlanSummary(plan: ReviewPlan): string {
     `estimate: ${plan.dispatches} dispatches, ${plan.minutes.min}-${plan.minutes.max} min${plan.overThreshold ? ` — over threshold (${plan.overReasons.join("; ")})` : ""}`,
     ...plan.warnings.map((warning) => `warning: ${warning}`),
     `next: ${plan.next}`,
+    ...(plan.desktopDispatch ? [`Read ${plan.desktopDispatch} with read_file and dispatch each calls entry verbatim with spawn_subagent. All payloads passed dispatch-check.`] : []),
     `written: ${path.join(plan.package, PLAN_FILE)}`,
   ];
   return lines.join("\n");
@@ -146,6 +151,10 @@ export async function runPlan(args: string[], deps: PlanDeps): Promise<void> {
   if (started.exitCode !== 0) fail("start", started);
   const packageDir = packagePathOf(started.stdout, cwd);
   if (packageDir === undefined || !existsSync(packageDir)) throw new Error("review plan: `review start` printed no package path; the plan stops here.");
+  const desktopMode = process.env[DESK_REVIEW_SHELL] === "1" && host === "keryx-shell" && kind === "pr" && head && base;
+  if (desktopMode) await rm(path.join(packageDir, "desktop-dispatch.json"), { force: true });
+  const desktopContext = desktopMode
+    ? await collectDesktopPlanContext(target, head, packageDir, deps.run) : undefined;
   const round: RoundRecord | undefined = readRoundRecord(packageDir);
   const delta = isDeltaRound(round) ? round : undefined;
   warnings.push(...(round?.warnings ?? []));
@@ -179,24 +188,38 @@ export async function runPlan(args: string[], deps: PlanDeps): Promise<void> {
   const sliced = await deps.run(["slice", "--package", packageDir, ...(baseRef === undefined || delta !== undefined ? [] : ["--ref", baseRef]), ...(head === undefined ? [] : ["--head", head]), ...(host === undefined ? [] : ["--host", host]), "--json"]);
   if (sliced.exitCode !== 0) fail("slice", sliced);
   const manifestPath = path.join(packageDir, "slices", "manifest.json");
-  const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as SliceManifest;
+  let manifest = JSON.parse(await readFile(manifestPath, "utf8")) as SliceManifest;
 
   // 5. required: the roster, fix-slice authors included.
   const required = await deps.run(["required", "--depth", "auto", "--scope", scopeFile, "--package", packageDir, "--json"]);
   if (required.exitCode !== 0) fail("required", required);
   let roster: string[];
   try {
-    const parsed = JSON.parse(required.stdout) as { required?: unknown };
+    const parsed = JSON.parse(required.stdout) as { required?: unknown; depth?: string; fixRoles?: string[] };
     roster = Array.isArray(parsed.required) ? parsed.required.filter((role): role is string => typeof role === "string") : [];
-  } catch {
-    throw new Error("review plan: `review required --json` printed no JSON; the plan stops here.");
+    if (parsed.depth === "light") {
+      // The mandatory light roster checks for missing coverage even when no test changed.
+      // Preserve the fix/second-look assignments when new slices can carry this additional pass.
+      const missing = roster.filter(role => !parsed.fixRoles?.includes(role) && requiredSlices(manifest, role).length === 0);
+      if (missing.length) {
+        const originals = manifest.slices.filter(slice => !slice.retryOf && slice.roles);
+        const newSlices = originals.filter(slice => slice.kind !== "fix" && slice.kind !== "second-look");
+        const eligible = new Set(newSlices.length ? newSlices : originals);
+        manifest = { ...manifest, slices: manifest.slices.map(slice => eligible.has(slice)
+          ? { ...slice, roles: [...new Set([...(slice.roles ?? []), ...missing])].sort() } : slice) };
+        await writeFileAtomic(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+      }
+    }
+  } catch (error) {
+    throw new Error("review plan: `review required --json` produced an invalid roster or its slice assignments could not be written.", { cause: error });
   }
 
   // 6. estimate: dispatches and minutes of both kinds.
   const estimate = await estimatePackage(packageDir);
   // `slice` wrote its drivers before `required` recorded the round's depth, so they were cut for the full roster. Write
   // them again now, for the roster the estimate counts: one driver per dispatch, so `review next` and plan.json agree.
-  const drivers = await writeWaveDrivers({ packageDir, manifest, sliceDir: path.dirname(manifestPath), reviewers: await packageReviewers(packageDir, manifest) });
+  const plannedRoles = estimate.perRole.map(entry => entry.role);
+  const drivers = await writeWaveDrivers({ packageDir, manifest, sliceDir: path.dirname(manifestPath), reviewers: plannedRoles });
   if (drivers.length !== estimate.dispatches) warnings.push(`${drivers.length} driver(s) written for ${estimate.dispatches} planned dispatch(es); re-run \`keryx review slice --package ${packageDir}\``);
   const confirmed = planConfirmed(packageDir, estimate);
   const byKind = slicesByKind(manifest);
@@ -217,7 +240,7 @@ export async function runPlan(args: string[], deps: PlanDeps): Promise<void> {
       line: round === undefined ? "round 1 — no round record" : renderRoundLine(round),
     },
     slices: byKind,
-    roster,
+    roster: desktopContext ? plannedRoles : roster,
     dispatches: estimate.dispatches,
     minutes: estimate.minutes,
     ...(estimate.split === undefined ? {} : { split: estimate.split }),
@@ -227,6 +250,11 @@ export async function runPlan(args: string[], deps: PlanDeps): Promise<void> {
     warnings,
     next: nextStepOf(estimate, confirmed),
   };
-  await writeFileAtomic(path.join(packageDir, PLAN_FILE), `${JSON.stringify(plan, null, 2)}\n`);
+  const planFile = path.join(packageDir, PLAN_FILE);
+  await writeFileAtomic(planFile, `${JSON.stringify(plan, null, 2)}\n`);
+  if (desktopContext && base && plan.next === "dispatch") {
+    plan.desktopDispatch = await prepareDesktopDispatch(cwd, plan, base, manifest, drivers, desktopContext, deps.run);
+    await writeFileAtomic(planFile, `${JSON.stringify(plan, null, 2)}\n`);
+  }
   console.log(args.includes("--json") ? JSON.stringify(plan, null, 2) : renderPlanSummary(plan));
 }

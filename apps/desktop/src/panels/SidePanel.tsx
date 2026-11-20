@@ -34,7 +34,7 @@ function useAgentReveal(): void {
 }
 
 /** The right side panel of a project window (D-13): Terminal, Browser, Activity and Info tabs. */
-export function SidePanel({ cwd }: { cwd: string }) {
+export function SidePanel({ cwd, visible = true }: { cwd: string; visible?: boolean }) {
   const prefs = usePrefs();
   useAgentReveal();
   const running = useActivityRunning();
@@ -65,7 +65,7 @@ export function SidePanel({ cwd }: { cwd: string }) {
   };
 
   return (
-    <aside ref={panel} className="side-panel" aria-label="Side panel">
+    <aside ref={panel} className="side-panel" aria-label="Side panel" hidden={!visible}>
       <div className="side-resize" onPointerDown={startResize} role="separator" aria-orientation="vertical" aria-label="Resize side panel" />
       <div className="side-head">
         <div className="side-switch" role="tablist" aria-label="Side panel">
@@ -98,7 +98,7 @@ export function SidePanel({ cwd }: { cwd: string }) {
           ) : null}
           {shown.has("browser") || tab === "browser" ? (
             <div className="side-pane" hidden={tab !== "browser"}>
-              <BrowserPanel cwd={cwd} visible={tab === "browser"} />
+              <BrowserPanel cwd={cwd} visible={visible && tab === "browser"} />
             </div>
           ) : null}
         </Suspense>

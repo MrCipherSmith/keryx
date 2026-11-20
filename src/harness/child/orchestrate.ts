@@ -76,6 +76,8 @@ export interface SpawnSubagentRequest {
   policyRequest: PolicyProfile;
   durableResultArtifact: SpawnChildRequest["durableResultArtifact"];
   modelRequest?: ChildModelRequest;
+  /** If supplied by a plan, admission must select this exact provider and model. */
+  expectedModel?: ModelSelection;
 }
 
 /** Result of {@link spawnSubagent}: the assembled child or a fail-closed denial. */
@@ -88,7 +90,7 @@ export type SpawnSubagentResult =
       provenance: Provenance;
       reservation: { reservationId: string; maxRuntimeMs: number; maxToolCalls?: number };
     }
-  | { ok: false; reason: string };
+  | { ok: false; reason: string; kind?: "model-mismatch" };
 
 /** The credentialed provider allowlist derived from a detection result (AC2). Pure. */
 export function allowedProvidersFromDetected(
@@ -147,6 +149,13 @@ export function spawnSubagent(
     return { ok: false, reason: spawned.reason };
   }
 
+  const runModel = childRunModel(spawned.extension);
+  if (request.expectedModel &&
+      (request.expectedModel.providerId !== (runModel?.provider ?? ctx.parentModel.providerId) ||
+       request.expectedModel.modelId !== (runModel?.model ?? ctx.parentModel.modelId))) {
+    return { ok: false, kind: "model-mismatch", reason: "the authorized child model does not match the review plan. Check project review and subagent routing." };
+  }
+
   // Commit the reservation to the single run-scoped authority AFTER a granted
   // spawn. Uses the same fail-closed subset check; a mismatch (should not happen
   // since spawnChild already granted against `ledger.remaining`) is surfaced, not
@@ -159,7 +168,7 @@ export function spawnSubagent(
   return {
     ok: true,
     extension: spawned.extension,
-    runModel: childRunModel(spawned.extension),
+    runModel,
     provenance: spawned.provenance,
     reservation: admitted.reservation,
   };

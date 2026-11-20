@@ -149,6 +149,8 @@ export type ExternalEvent =
       readonly kind: "usage";
       readonly inputTokens?: number;
       readonly outputTokens?: number;
+      readonly cacheReadTokens?: number;
+      readonly cacheWriteTokens?: number;
       readonly costUnits?: number;
     }
   | { readonly kind: "child_finished"; readonly text?: string }

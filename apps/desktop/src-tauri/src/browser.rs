@@ -621,7 +621,7 @@ pub fn pick(app: &AppHandle, tab: &BrowserTab) -> Result<serde_json::Value, Stri
 
 #[tauri::command]
 pub async fn browser_open(app: AppHandle, view: Webview, cwd: String, url: String) -> Result<BrowserTabInfo, String> {
-    app.state::<PanelRoots>().set(view.label(), crate::panels::project_dir(&cwd)?);
+    app.state::<PanelRoots>().require_project(view.label(), &cwd)?;
     let url = normalize_url(&url)?;
     if !page_allowed(&url, crate::navigation::dev_url(&app).as_ref()) {
         return Err(format!("The browser panel does not open {url}"));

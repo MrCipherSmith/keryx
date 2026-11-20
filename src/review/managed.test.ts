@@ -2119,6 +2119,69 @@ describe("ingest into an existing package defaults to its recorded head (flow 45
   });
 });
 
+describe("named PR packages keep one revision", () => {
+  const ref = "https://github.com/example/project/pull/19";
+  const base = "a".repeat(40), head = "b".repeat(40), otherHead = "c".repeat(40);
+  const options = () => ({
+    cwd: ROOT,
+    reviewId: "same-pr-package",
+    reportText: "# Round\n",
+    findings: [],
+  });
+
+  test("ingest outside a clone can reuse a verified remote head", async () => {
+    await fresh();
+    const target = { kind: "pr", ref, base, head } as const;
+    await createManagedReviewPackage({ ...options(), mode: "review-flow", target });
+    const ingest = (remote: string) => createManagedReviewPackage({
+      ...options(), mode: "ingest", target: { kind: "pr", ref }, resolveHead: async () => remote,
+    });
+    expect((await ingest(head)).manifest.target).toEqual(target);
+    await expect(ingest(otherHead)).rejects.toThrow("that commit is not in this checkout");
+    await expect(createManagedReviewPackage({
+      ...options(), mode: "review-flow", target: { kind: "branch", ref: "feature", head },
+    })).rejects.toThrow("conflicts with the pinned PR package");
+  });
+
+  test("a named review package can use a lock-shaped ID", async () => {
+    await fresh();
+    const target = { kind: "pr", ref, base, head } as const;
+    const separate = await createManagedReviewPackage({
+      ...options(), mode: "review-flow", target, reviewId: options().reviewId + ".write.lock",
+    });
+    const current = await createManagedReviewPackage({ ...options(), mode: "review-flow", target });
+    expect(current.path).not.toBe(separate.path);
+    const manifest = JSON.parse(await readFile(path.join(ROOT, separate.path, "manifest.json"), "utf8"));
+    expect(manifest.reviewId).toBe(options().reviewId + ".write.lock");
+  });
+
+  test("start cannot overwrite a revision another writer pinned under the same name", async () => {
+    await fresh();
+    const resolvingBase = Promise.withResolvers<void>();
+    const finishBase = Promise.withResolvers<void>();
+    const ingest = createManagedReviewPackage({
+      ...options(), mode: "ingest", target: { kind: "pr", ref, head },
+      inferPrBase: async () => {
+        resolvingBase.resolve();
+        await finishBase.promise;
+        return base;
+      },
+    });
+    await resolvingBase.promise;
+    const start = createManagedReviewPackage({
+      ...options(), mode: "review-flow", target: { kind: "pr", ref, base, head: otherHead },
+    });
+    finishBase.resolve();
+    const [winner, loser] = await Promise.allSettled([ingest, start]);
+    expect(winner.status).toBe("fulfilled");
+    expect(loser.status).toBe("rejected");
+    if (winner.status !== "fulfilled" || loser.status !== "rejected") throw new Error("Expected one pinned revision");
+    expect(String(loser.reason)).toContain("conflicts with the pinned PR package");
+    const manifest = JSON.parse(await readFile(path.join(ROOT, winner.value.path, "manifest.json"), "utf8"));
+    expect(manifest.target).toEqual({ kind: "pr", ref, base, head });
+  });
+});
+
 describe("flow 460 F: coverage reconciles with the dispatch record", () => {
   const research = (extra: Record<string, unknown> = {}) => ({
     version: 1, scopeReviewed: true, rawReconciled: true, obligations: [],
@@ -2155,7 +2218,7 @@ describe("flow 460 F: coverage reconciles with the dispatch record", () => {
     routed.dispatch.runs.push({ ...READY_DISPATCH.runs[0], reviewer: "review-architecture", executionId: "c", routedOut: true } as (typeof routed.dispatch.runs)[number]);
     const created = await ingest({ research: routed });
     const entry = created.manifest.coverage.find((item) => item.reviewer === "review-architecture");
-    expect(entry).toMatchObject({ status: "run" });
+    expect(entry).toMatchObject({ status: "skipped" });
     expect(entry?.reason).toContain("routed out");
     expect(entry?.reason).not.toContain("dispatched;");
     const md = await readFile(path.join(ROOT, created.path, "coverage.md"), "utf8");

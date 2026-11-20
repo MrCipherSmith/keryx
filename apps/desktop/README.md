@@ -11,6 +11,7 @@ Toolchain: Rust (rustup), Bun. The app is not part of the root workspace
 ## Dev loop
 
 ```sh
+bun install --frozen-lockfile  # from the repository root, for the CLI and its bundled parser
 cd apps/desktop
 bun install
 bun run tauri dev        # starts vite on :1420 and the native window
@@ -42,19 +43,20 @@ Open http://localhost:1420. The welcome screen lists this repository as a
 recent project (override with `KERYX_DEV_PROJECT=/path`); "Open Folder…" asks
 for a path in-app, since a browser has no folder picker.
 
-`dev/bridge.ts` is a Bun stand-in for the Rust core. It implements the same
-commands (`acp_start` / `acp_send` / `acp_stop`, `settings_*`,
-`version_check`, `flows_list` / `flows_get` / `flows_action` / `flows_watch`)
+`dev/bridge.ts` is a Bun stand-in for chat, temporary attachments, settings,
+Git status and flows. Native browser panels and multi-window commands are
+Tauri-only. The bridge implements the corresponding chat and flow commands
 and events (`acp://message`, `acp://exit`, `flows://changed`, polled every
 2 s), answers `fs/read_text_file` itself inside the project folder, and
 spawns keryx as:
 
 ```sh
-$KERYX_DEV_CMD acp --profile shell     # default: bun run <repo>/src/cli.ts
+$KERYX_DEV_CMD acp --profile shell     # default: bun --no-env-file --config=/dev/null <repo>/src/cli.ts
 ```
 
 Settings are kept in `~/.keryx-desktop-dev/settings.json`. The bridge listens
-on loopback and accepts only the Vite origin. The web view picks its host at
+on loopback and checks the Vite browser origin (not authentication against
+other local processes). The web view picks its host at
 runtime: Tauri when `window.__TAURI_INTERNALS__` exists, else (only in a Vite
 dev build) the bridge. Production builds do not contain the bridge client;
 `bun run build && grep -r 1421 dist` finds nothing.
@@ -67,8 +69,12 @@ dev build) the bridge. Production builds do not contain the bridge client;
    Check that a thumbnail appears and can be removed before sending.
 2. Paste it again and send it, with or without a caption. Check that the
    thumbnail appears in the transcript. The agent receives a local file path,
-   not a native image input for the model. The files are temporary; after
-   restarting the app the old previews may no longer be available.
+   not a native image input for the model. Attachments are stored unencrypted
+   in a private temporary folder. Sent previews are project-scoped and files
+   are retained until the app or dev bridge exits normally; after a crash,
+   files may remain in the system temporary folder. At quota, new saves are
+   refused rather than deleting files already sent. Remove drafts to free
+   space, or restart the app or bridge to clear the store.
 3. Under a sent text message, use **Copy message** and paste the result into a
    text editor. Use **Edit and resend** to open the editor, change the text, and
    choose **Send as new message**. The original message stays in the transcript.

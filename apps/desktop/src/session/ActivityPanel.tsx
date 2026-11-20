@@ -10,6 +10,8 @@ import { focusDelegateRun, isDelegateRunOpen, onDelegateChange } from "./delegat
 import { COMMAND_METHOD } from "../acp/commands";
 import { openStreamTab } from "../panels/streamTabs";
 import { taskOutputSource } from "./taskStream";
+import type { ProjectGitHubAccount } from "../platform/githubAccounts";
+import { ProjectGitHubAccountButton } from "../project/GitHubSettings";
 
 export type ActivityTab = "subagents" | "tasks" | "schedules" | "runs";
 
@@ -30,12 +32,14 @@ interface Props {
   onSubagent: (id: string | null) => void;
   /** Re-list the session's tasks. */
   onRefreshTasks: () => void;
+  githubAccount?: ProjectGitHubAccount;
+  onProjectSettings?: () => void;
   /** Output poll interval while a shown task runs. */
   pollMs?: number;
 }
 
 /** The Activity tab of the side panel: the session's subagents, background tasks, schedules and their runs. */
-export function ActivityPanel({ sessionId, subagents, tasks, api, tab, onTab, subagentId, onSubagent, onRefreshTasks, pollMs = 1000 }: Props) {
+export function ActivityPanel({ sessionId, subagents, tasks, api, tab, onTab, subagentId, onSubagent, onRefreshTasks, githubAccount, onProjectSettings, pollMs = 1000 }: Props) {
   const runningTasks = tasks.filter(isRunning).length;
   const runningAgents = runningSubagents(subagents);
   const hasTasks = supportsTasks(api.extensions);
@@ -68,6 +72,11 @@ export function ActivityPanel({ sessionId, subagents, tasks, api, tab, onTab, su
           ) : null}
         </div>
       </div>
+      {githubAccount ? (
+        <div className="activity-account">
+          <ProjectGitHubAccountButton account={githubAccount} onOpen={onProjectSettings} />
+        </div>
+      ) : null}
       <div className="activity-body">
         {tab === "tasks" && hasTasks ? (
           <TasksTab key={sessionId} sessionId={sessionId} tasks={tasks} api={api} onRefresh={onRefreshTasks} pollMs={pollMs} />

@@ -22,9 +22,9 @@ import path from "node:path";
 import { revisionOperand } from "./git-revision";
 
 /** Resolve `git rev-parse --git-common-dir`, absolute. `undefined` outside a git repo, or if `git` itself is unavailable. */
-export async function resolveGitCommonDir(cwd: string): Promise<string | undefined> {
+export async function resolveGitCommonDir(cwd: string, env?: NodeJS.ProcessEnv): Promise<string | undefined> {
   try {
-    const proc = Bun.spawn(["git", "rev-parse", "--git-common-dir"], { cwd, stdout: "pipe", stderr: "ignore" });
+    const proc = Bun.spawn(["git", "rev-parse", "--git-common-dir"], { cwd, ...(env && { env }), stdout: "pipe", stderr: "ignore" });
     const out = (await new Response(proc.stdout).text()).trim();
     if ((await proc.exited) !== 0 || out.length === 0) {
       return undefined;

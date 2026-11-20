@@ -13,6 +13,96 @@ background tasks; anything it does not draw yet still works in `keryx shell`.
 The design and its acceptance criteria are in
 `docs/requirements/keryx-desktop-client/`.
 
+## Set up GitHub for a project
+
+1. Open **Settings → Integrations**, then select **Connect account** under
+   **GitHub**. Follow the GitHub sign-in prompt. Repeat for each account you
+   want to use. **Refresh accounts** reloads the list from GitHub CLI.
+2. Open a project with a GitHub.com remote. Choose an account with access to
+   its repository when prompted. You can change the selection or disconnect
+   in **Project Settings** from the project menu.
+3. In **Sessions**, the main header displays the project account as
+   **GitHub · @login**. Select it to open **Project Settings**. The
+   **Activity** icon in the same header opens the side panel with subagents
+   and background tasks. The badge on the icon shows how many are running.
+
+The selection is local to the project and shared by its Git worktrees. Use
+different accounts for different projects without switching the active
+GitHub CLI account. Review and the PR watcher use the project selection.
+On a project with no saved selection, Review can still use the active
+`gh` account. Choosing **Disconnect from project** turns off that fallback.
+A GitHub login does not change the model provider or Git commit author.
+
+If Desktop reports that the selected CLI does not support GitHub accounts,
+choose **Settings → Desktop → Bundled keryx**, then retry.
+
+## Find a pull request in Review
+
+Select a project in the left sidebar, then choose **Review** in its **Sessions / Flows / Review** navigation. Switching sections preserves the session draft. **Settings** at the bottom of the sidebar opens app-wide preferences. Review starts
+with all open pull requests, including drafts and contributions from forks.
+When the project has several GitHub.com remotes, select the base repository
+whose pull requests you want to see.
+
+Search by number or title and combine author, assignee, requested reviewer
+(person or team), review decision, PR state and CI. For example, select your
+team under requested reviewers and **CI passed** to find PRs ready for your
+team to inspect. Board and list use the same filters. Use the state filter
+to include merged or closed PRs.
+
+Open a card to read discussion, submitted reviews, inline replies and checks
+for its head commit. Follow a link to continue the conversation on GitHub.
+Use **Refresh** to read the latest data. The view identifies partial results
+and shows the time of the last successful read when an update fails.
+
+### Run a review from a card
+
+Open a PR and choose **Start review** to review the base and head commits recorded when
+the card was fetched. The Keryx review panel shows the current phase, the revision and
+the reason the run stopped. You can return to the card later, cancel an
+active review or retry an interrupted one. Windows and worktrees share an active
+run when the verified GitHub account, PR, and base and head commits match.
+Manual reviews have a 30-minute time limit and
+unlimited tokens by default.
+
+The review uses committed controls from the GitHub repository's default branch. The installed review skills supply defaults when the selected branch has no review controls. The PR's base and head still determine the code comparison.
+
+During a run, the wave badge and progress line show how many reviewer assignments have finished. Before the plan is available, the indicator shows that the run is active. Open a reviewer to see its status, model when available and recorded activity. The session includes wave, timing and token usage. Older runs show the evidence saved with their review package.
+
+Open a past run to inspect its coverage, findings and report. **Token usage**
+shows input, output and total tokens for the orchestrator, each reviewer and
+the whole run. Providers can also report cache tokens and cost. A cost calculated
+from configured rates appears under **Estimated cost**. Partial totals
+cover only the available measurements. A dash means the value was unreported. After the PR
+changes, its earlier report remains attached to the revision it covered.
+The GitHub review decision still comes from GitHub. A manual Keryx review
+records its result locally.
+
+### Watch PRs while Desktop is closed
+
+From **Review**, open **PR watcher**, choose a polling interval and select **Enable watcher**. The default is five minutes. The first successful poll records which PRs are open, their revisions, requested reviewers and CI. The history shows the 50 latest changes with the time Keryx observed them.
+
+Connect your account in **Settings → Integrations** so the background process can read the repository after your shell exits. macOS runs the schedule while you are logged in and the Mac is awake. You can quit Keryx Desktop. If the timer needs repair after an upgrade or a local tool moves, open **PR watcher** and select **Restore timer**. After sleep or a failed poll, the watcher compares the next complete result with the last successful one. Open **PR watcher** to check the timer, last attempt and last success, or select **Pause watcher**. **Resume watcher** starts with a fresh baseline so changes that occurred during an explicit pause do not appear as new events.
+
+Keeping the same GitHub account preserves an existing schedule. Changing
+accounts or disconnecting pauses the previous watcher and clears its pending
+automatic reviews. Enable the watcher under the new account when ready.
+
+### Set up automatic PR reviews
+
+Open **Review → Review rules → New rule** and choose **Review requested or re-requested** or **New head commit**. You can restrict a rule to a PR author, assignee or requested reviewer. For a team, enter its GitHub slug, such as `my-org/frontend`. **Wait for passing CI** holds the request until checks pass on the current revision. Read the preview and set a time limit. Leave **Token limit (optional)** blank for unlimited tokens, or enter a positive whole number to cap each review. Save the rule.
+
+Enable **PR watcher** to run the rules on its local schedule. Use a Keryx model provider signed in for noninteractive use by the local CLI. The timer can use stored credentials after Desktop exits. Credentials available only in an interactive terminal are outside its environment. The next complete poll establishes a baseline when you enable or edit a rule. Changes already present at that poll are skipped. A temporary connection error leaves pending work in place until the watcher can verify the repository again.
+
+On a PR card, open **Automation**, select a mode and choose **Save mode**.
+
+| Mode | What happens |
+|---|---|
+| Use project rules | Apply enabled rules that match this PR. This is the default. |
+| Auto · rule name | Use just this rule. Its trigger, reviewer and CI conditions still apply. |
+| Manual only | Skip scheduled reviews for this PR. You can start a review from the card at any time. |
+
+The Automation tab shows why a rule is waiting, started or skipped. Under **Keryx review**, a scheduled attempt records the rule and revision alongside its report. Matching triggers can share an attempt with another rule or with a manual start. The rule or manual action that starts an attempt sets its time and token limits. Later matches keep those limits. Keryx uses the token usage reported by the provider to decide when to stop. The watcher reserves up to four scheduled workers per local Keryx data directory and rechecks eligible rules on its next poll when all four are occupied.
+
 ## Install
 
 Requirements: macOS 12 or newer (the release is a universal build for Apple
@@ -93,7 +183,7 @@ signing and notarization switch on once the `APPLE_*` secrets exist.
 
 ### Which keryx the app runs
 
-**Settings → keryx** has four sources:
+**Settings → Desktop → Which keryx to run** has four sources:
 
 | Source | What runs |
 |---|---|
@@ -225,9 +315,16 @@ the whole session, the latest turn and the last model call.
 
 ### Appearance
 
+Open **Settings** from the sidebar and use the **Appearance**, **Sessions**,
+**Integrations** and **Desktop** tabs. Close Settings with the top-right
+button or Escape to return to the project view you were using.
+
 Settings → Appearance sets the theme, the interface font (System, Rounded,
 Serif, Mono), the code font, the text size and the conversation width
 (Narrow, Wide, Full).
+
+Choose a light palette and a dark or black palette independently. **System**
+follows macOS appearance and applies the palette saved for the current mode.
 
 ### Flows board
 
@@ -265,7 +362,7 @@ when the window gets focus.
 | Keys | Action |
 |---|---|
 | ⌘K | Command palette: commands, sessions, views |
-| ⌘1 / ⌘2 | Session / Flows |
+| ⌘1 / ⌘2 / ⌘3 | Sessions / Flows / Review in the current project |
 | ⌘, | Settings |
 | ⌘N | New session |
 | ⌘O | Open folder |

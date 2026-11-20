@@ -1,0 +1,54 @@
+import { expect, test } from "bun:test";
+import type { ReviewCard } from "./types";
+import { EMPTY_FILTERS, filterReviews, reviewLane, stateQuery } from "./model";
+
+const pr: ReviewCard = {
+  number: 42, title: "Use project settings", url: "https://github.com/example/project/pull/42", state: "open", draft: false,
+  author: "ann", assignees: ["lee"], reviewers: ["example/team"], decision: "CHANGES_REQUESTED", ci: "passed",
+  updatedAt: "2026-10-01T00:00:00Z", headSha: "head", baseSha: "base",
+};
+
+test("combines independent roles with AND, selected values with OR and searches titles and numbers", () => {
+  const filters = { ...EMPTY_FILTERS, author: ["me", "ann"], assignee: ["lee"], reviewer: ["example/team"], decision: ["CHANGES_REQUESTED"], ci: ["passed"] };
+  expect(filterReviews([pr], filters, "#42")).toEqual([pr]);
+  expect(filterReviews([pr], filters, "PROJECT")).toEqual([pr]);
+  expect(filterReviews([pr], { ...filters, assignee: ["ann"] }, "")).toEqual([]);
+  expect(filterReviews([pr], { ...filters, reviewer: ["lee"] }, "")).toEqual([]);
+});
+
+test("empty role filters match genuinely empty assignments/requests, unknown CI is separate from no checks", () => {
+  const missing: ReviewCard = { ...pr, assignees: [], reviewers: [], decision: null, ci: "unknown" };
+  const empty = { ...EMPTY_FILTERS, assignee: [":none"], reviewer: [":none"] };
+  expect(filterReviews([pr, missing], empty, "")).toEqual([missing]);
+  expect(filterReviews([missing], { ...empty, ci: ["none"] }, "")).toEqual([]);
+  expect(filterReviews([{ ...missing, assigneesComplete: false }], empty, "")).toEqual([]);
+  expect(filterReviews([{ ...missing, reviewersComplete: false }], empty, "")).toEqual([]);
+});
+
+test("mixed PR-state selections load full history, then select exact states", () => {
+  const mixed = { ...EMPTY_FILTERS, state: ["merged", "draft"] };
+  expect(stateQuery(mixed.state)).toBe("all");
+  expect(stateQuery(EMPTY_FILTERS.state)).toBe("open");
+  expect(stateQuery(["closed"])).toBe("closed");
+  const draft = { ...pr, draft: true };
+  expect(filterReviews([pr, draft], mixed, "")).toEqual([draft]);
+});
+
+test("closed wins over requests, and a failing check requests attention independently of GitHub review decision", () => {
+  expect(reviewLane({ ...pr, state: "merged" })).toBe("done");
+  expect(reviewLane({ ...pr, decision: null, reviewers: [], ci: "failed" })).toBe("attention");
+  expect(reviewLane({ ...pr, decision: null, reviewers: [], ci: "none" })).toBe("open");
+});
+
+test("a branch rule requiring approval does not imply a request to a reviewer", () => {
+  const required = { ...pr, decision: "REVIEW_REQUIRED" as const, reviewers: [] };
+  expect(reviewLane(required)).toBe("open");
+  expect(reviewLane({ ...required, reviewers: ["org/team"] })).toBe("attention");
+});
+
+test("active Keryx runs precede GitHub attention and available results bring an open PR back to attention", () => {
+  const card = { ...pr, decision: null, reviewers: [], ci: "passed" as const };
+  expect(reviewLane({ ...card, localReview: { active: true, ready: true } })).toBe("review");
+  expect(reviewLane({ ...card, localReview: { active: false, ready: true } })).toBe("attention");
+  expect(reviewLane({ ...card, state: "merged", localReview: { active: true, ready: true } })).toBe("done");
+});

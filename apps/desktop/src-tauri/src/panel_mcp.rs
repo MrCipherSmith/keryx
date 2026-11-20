@@ -471,7 +471,7 @@ fn browser_tool(app: &AppHandle, window: &str, name: &str, params: &Value) -> Re
 /// project root for agent terminal tabs and the browser store.
 #[tauri::command]
 pub fn panel_mcp_entry(app: AppHandle, view: Webview, cwd: String) -> Result<McpEntry, String> {
-    app.state::<PanelRoots>().set(view.label(), panels::project_dir(&cwd)?);
+    app.state::<PanelRoots>().require_project(view.label(), &cwd)?;
     let socket = socket(&app)?;
     let token = app.state::<PanelMcp>().token_for(view.label());
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
