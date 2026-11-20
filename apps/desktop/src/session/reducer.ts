@@ -18,7 +18,7 @@ import { applySubagentEvent, isActiveSubagent, mergeArchivedSubagents, replaySpa
 import { isLegacySystemText, isSystemMeta, parseSystemNote } from "./systemNote";
 
 export type Item =
-  | { kind: "user"; id: number; text: string; messageId?: string | null }
+  | { kind: "user"; id: number; text: string; messageId?: string | null; context?: import("./userPrompt").UserPromptContext; failed?: boolean }
   | { kind: "agent"; id: number; text: string; messageId?: string | null }
   | { kind: "thought"; id: number; text: string; messageId?: string | null }
   | {
@@ -477,7 +477,9 @@ export const initialState: WindowState = {
 export type Action =
   /** Session updates coalesced into one render, each routed to the session it names. */
   | { t: "updates"; updates: readonly RoutedUpdate[] }
-  | { t: "userSent"; sessionId: string; text: string }
+  | { t: "userSent"; sessionId: string; text: string; context?: import("./userPrompt").UserPromptContext; replaces?: number }
+  /** session/prompt was rejected: flags the optimistic user item (`itemId`, default the last user item) as failed. */
+  | { t: "userSendFailed"; sessionId: string; itemId?: number }
   | { t: "notice"; sessionId: string; level: "info" | "warn" | "error"; text: string }
   | { t: "busy"; sessionId: string; busy: boolean }
   /** A command card; with `replaceId` it takes the place of that card (a view acting on itself). */
@@ -562,7 +564,31 @@ export function reducer(state: WindowState, a: Action): WindowState {
     case "updates":
       return routeUpdates(state, a.updates);
     case "userSent":
-      return withConv(state, a.sessionId, (c) => ({ ...c, parentTurn: c.parentTurn + 1, nextId: c.nextId + 1, items: [...c.items, { kind: "user", id: c.nextId, text: a.text }] }));
+      // A "not sent" flag clears only when this send delivers that message again: an edit that names it (`replaces`),
+      // or the same text sent again from the composer. An unrelated later message leaves it.
+      return withConv(state, a.sessionId, (c) => ({
+        ...c,
+        parentTurn: c.parentTurn + 1,
+        nextId: c.nextId + 1,
+        items: [
+          ...c.items.map((i) => {
+            if (i.kind !== "user" || !i.failed) return i;
+            if (a.replaces !== undefined ? i.id !== a.replaces : i.text !== a.text) return i;
+            const { failed: _failed, ...rest } = i;
+            return rest;
+          }),
+          { kind: "user", id: c.nextId, text: a.text, ...(a.context ? { context: a.context } : {}) },
+        ],
+      }));
+    case "userSendFailed":
+      return withConv(state, a.sessionId, (c) => {
+        const at = a.itemId !== undefined
+          ? c.items.findIndex((i) => i.kind === "user" && i.id === a.itemId)
+          : c.items.map((i) => i.kind).lastIndexOf("user");
+        // Only a prompt nothing answered is "not sent": once agent output follows it, the turn did start.
+        if (at < 0 || c.items.slice(at + 1).some((i) => i.kind !== "user")) return c;
+        return { ...c, items: c.items.map((i, n) => (n === at && i.kind === "user" ? { ...i, failed: true } : i)) };
+      });
     case "notice":
       return withConv(state, a.sessionId, (c) => ({
         ...c,

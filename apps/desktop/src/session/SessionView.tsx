@@ -1,8 +1,9 @@
 import { forwardRef, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { lookupWithRetry } from "../lib/repoLookup";
 import { BrandMark } from "../components/BrandMark";
 import { createPortal } from "react-dom";
 import type { PlanEntry } from "../acp/types";
-import { formatTokens } from "../lib/format";
+import { errMessage, formatTokens } from "../lib/format";
 import { setPrefs, usePrefs, MOD, SESSION_SIDEBAR_MIN } from "../lib/prefs";
 import { Icon } from "../components/Icon";
 import { useToast } from "../components/Toasts";
@@ -18,6 +19,13 @@ import { SessionInfoPanel } from "./SessionInfoPanel";
 import { SessionSidebar } from "./SessionSidebar";
 import { SubagentArchive } from "./SubagentArchive";
 import { Transcript } from "./Transcript";
+import type { LocalAttachment } from "./chatImages";
+import { userPromptContext, type UserPromptContext } from "./userPrompt";
+import { findCommand } from "../acp/commands";
+import { commitChatAttachments, discardChatAttachment, gitRepository, openExternal, pickFolder, saveChatFile, saveChatImage } from "../platform/commands";
+import { isTauri } from "../platform/backend";
+import { browserOpen } from "../platform/panels";
+import type { PrLinks } from "../components/prLinks";
 import { lostText, type QueuedPrompt, type Usage } from "./reducer";
 import { desktopReviewRequest, resolveMode, resolveModel, type UiActions } from "./commandRunner";
 import { modelOption, type useAcpSession } from "./useAcpSession";
@@ -163,19 +171,57 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
   };
   const run = (line: string, opts: { display?: string; replaceId?: number } = {}) => s.runCommand(line, ui, opts);
   const toast = useToast();
+  const [repo, setRepo] = useState<{ cwd: string; name: string | null } | null>(null);
+  // Only a real answer is remembered: a rejection (for example "busy") is retried with jitter and, if it never
+  // succeeds, the repository simply stays unknown rather than being cached as "no GitHub remote".
+  useEffect(() => lookupWithRetry(() => gitRepository(cwd), (name) => setRepo({ cwd, name })), [cwd]);
+  const prLinks = useMemo<PrLinks>(() => ({
+    repository: repo?.cwd === cwd ? repo.name ?? undefined : undefined,
+    openExternal: (url) => void openExternal(url).catch((e) =>
+      toast({ level: "error", title: "Could not open pull request", body: errMessage(e) })),
+    openInternal: isTauri() ? (url) => void browserOpen(cwd, url).then(
+      () => setPrefs({ sidePanel: "browser" }),
+      (e) => toast({ level: "error", title: "Could not open Keryx Browser", body: errMessage(e) }),
+    ) : undefined,
+  }), [cwd, repo, toast]);
   // Page elements picked in the browser panel go out with the next message (not with a command line).
   const picks = useSyncExternalStore(onPicksChange, () => picksOf(cwd));
   const attachments = useMemo(() => picks.map((p) => ({ key: p.key, label: pickLabel(p), title: `${p.selector}\n${p.url}` })), [picks]);
-  const send = async (text: string) => {
-    if (text.startsWith("/") || picks.length === 0 || desktopReviewRequest(text)) return run(text);
+  const send = async (text: string, imagePaths: readonly string[], local: readonly LocalAttachment[]) => {
+    const hasLocal = imagePaths.length > 0 || local.length > 0;
+    // An unrecognized slash line never sends and never clears staged page picks.
+    const reviewRequest = desktopReviewRequest(text);
+    if ((text.startsWith("/") || reviewRequest) && !hasLocal) return run(text);
+    const command = findCommand(state.commands, text);
+    if ((command || reviewRequest) && hasLocal) {
+      toast({ level: "info", title: "Commands cannot carry attachments", body: "Remove the attachments or send a normal chat message." });
+      return false;
+    }
+    if (!picks.length && !hasLocal) return run(text);
     // The picks travel as their own block, marked untrusted, never as the user's text. While a turn
     // runs this returns false and the draft and picks stay for the next send.
     const sent = picks;
-    const ok = s.sendPrompt(text, undefined, [picksBlock(sent)]);
-    if (ok) clearPicks(cwd, sent);
-    else if (state.busy) toast({ level: "info", title: "Picked elements wait for this turn", body: "Send again when keryx finishes; your message and picks are kept." });
+    const context = userPromptContext(imagePaths, local, sent.length ? { count: sent.length, block: picksBlock(sent) } : undefined);
+    const ok = s.sendPrompt(text, undefined, context, true);
+    if (ok && sent.length) clearPicks(cwd, sent);
+    else if (!ok && state.busy) toast({ level: "info", title: "Attachments wait for this turn", body: "Send again when keryx finishes; your draft is kept." });
     return ok;
   };
+
+  const sendPrompt = s.sendPrompt;
+  const editMessage = useCallback(
+    (text: string, context?: UserPromptContext, replaces?: number) => {
+      const ok = sendPrompt(text, undefined, context, true, replaces);
+      if (!ok) toast({ level: "error", title: "Could not send the edited message" });
+      else {
+        // After the row's own focus handling has run (it returns focus to its Edit button), the composer takes it.
+        const composer = composerRef && typeof composerRef !== "function" ? composerRef : null;
+        requestAnimationFrame(() => composer?.current?.focus());
+      }
+      return ok;
+    },
+    [sendPrompt, toast, composerRef],
+  );
 
   const empty = (
     <div className="session-empty">
@@ -370,6 +416,8 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
           busy={state.busy}
           reviewActivity={reviewActivity}
           onRunCommand={(line, o) => run(line, o)}
+          prLinks={prLinks}
+          onEditMessage={disabledReason === null && !state.busy ? editMessage : undefined}
           subagents={state.subagents}
           onShowSubagent={showSubagent}
           replaying={state.replaying || (state.sessionId === null && state.opening)}
@@ -389,6 +437,12 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
             model={modelOption(state.configOptions)}
             sendKey={prefs.sendKey}
             onSend={send}
+            saveImage={saveChatImage}
+            saveFile={saveChatFile}
+            discardFile={discardChatAttachment}
+            onAttachmentsSent={(paths) => void commitChatAttachments([...paths]).catch(() =>
+              toast({ level: "error", title: "Attachments may not be kept", body: "Sent files could not be saved for later; previews may disappear after you close this window." }))}
+            pickAttachmentFolder={() => pickFolder("Add folder to message")}
             attachments={attachments}
             onRemoveAttachment={(key) => removePick(cwd, key)}
             onStop={s.cancel}

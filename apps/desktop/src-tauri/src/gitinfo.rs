@@ -8,7 +8,8 @@ use serde::Serialize;
 use std::path::Path;
 use std::process::Command;
 use std::time::Duration;
-use tauri::State;
+use tauri::{State, Webview};
+use crate::panels::PanelRoots;
 
 const GIT_TIMEOUT: Duration = Duration::from_secs(3);
 /// A status listing far larger than this is cut; the counts it reports stay lower bounds.
@@ -97,16 +98,90 @@ fn read(dir: &Path, path_env: Option<&str>) -> Option<GitInfo> {
 
 /// The git state of `cwd`, or `null` outside a repository (or when git is slow or missing).
 #[tauri::command]
-pub async fn git_info(state: State<'_, AppState>, cwd: String) -> Result<Option<GitInfo>, String> {
+pub async fn git_info(state: State<'_, AppState>, roots: State<'_, PanelRoots>, view: Webview, cwd: String) -> Result<Option<GitInfo>, String> {
+    let root = roots.require_project(view.label(), &cwd)?;
     let path = state.environment().get("PATH").cloned();
-    tauri::async_runtime::spawn_blocking(move || read(Path::new(&cwd), path.as_deref()))
+    tauri::async_runtime::spawn_blocking(move || read(&root, path.as_deref()))
         .await
         .map_err(|e| e.to_string())
+}
+
+fn github_repository_from_origin(origin: &str) -> Option<String> {
+    let raw = origin.trim();
+    let repo = ["https://github.com/", "git@github.com:", "ssh://git@github.com/"]
+        .iter().find_map(|prefix| {
+            raw.get(..prefix.len())?.eq_ignore_ascii_case(prefix).then(|| &raw[prefix.len()..])
+        })?;
+    let repo = repo.strip_suffix('/').unwrap_or(repo);
+    let suffix_start = repo.len().saturating_sub(".git".len());
+    let repo = match repo.get(suffix_start..) {
+        Some(suffix) if suffix.eq_ignore_ascii_case(".git") => &repo[..suffix_start],
+        _ => repo,
+    };
+    let (owner, name) = repo.split_once('/')?;
+    if !owner.as_bytes().first().is_some_and(u8::is_ascii_alphanumeric)
+        || !owner.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
+        || name.is_empty() || matches!(name, "." | "..")
+        || !name.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.' | b'-'))
+    {
+        return None;
+    }
+    Some(repo.to_string())
+}
+
+const MAX_REPOSITORY_LOOKUPS: usize = 4;
+static REPOSITORY_LOOKUPS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// Holds one of the few repository-lookup slots; the slot is returned on drop.
+struct LookupSlot;
+
+impl LookupSlot {
+    fn take() -> Option<Self> {
+        if crate::slots::try_take(&REPOSITORY_LOOKUPS, MAX_REPOSITORY_LOOKUPS) {
+            Some(Self)
+        } else {
+            None
+        }
+    }
+}
+
+impl Drop for LookupSlot {
+    fn drop(&mut self) {
+        REPOSITORY_LOOKUPS.fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
+    }
+}
+
+#[tauri::command]
+pub async fn git_repository(state: State<'_, AppState>, roots: State<'_, PanelRoots>, view: Webview, cwd: String) -> Result<Option<String>, String> {
+    let root = roots.require_project(view.label(), &cwd)?;
+    let path = state.environment().get("PATH").cloned();
+    // Saturated: answer "unknown" rather than queue more Git children.
+    let Some(slot) = LookupSlot::take() else { return Err("busy: too many repository lookups; try again".into()) };
+    tauri::async_runtime::spawn_blocking(move || {
+        let _slot = slot;
+        let mut cmd = Command::new("git");
+        cmd.args(["config", "--local", "--get", "remote.origin.url"]).current_dir(root);
+        if let Some(p) = path {
+            cmd.env("PATH", p);
+        }
+        let out = child::run_bounded(cmd, GIT_TIMEOUT, 16 * 1024).ok()?;
+        out.status.success().then(|| github_repository_from_origin(&out.stdout)).flatten()
+    })
+    .await
+    .map_err(|e| e.to_string())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn github_origin_uses_only_the_github_repository_path() {
+        assert_eq!(github_repository_from_origin(" HTTPS://GitHub.COM/Example/Project.GiT/ ").as_deref(), Some("Example/Project"));
+        assert_eq!(github_repository_from_origin("git@github.com:org/repo.git").as_deref(), Some("org/repo"));
+        assert!(github_repository_from_origin("https://github.com.evil.test/org/repo").is_none());
+        assert!(github_repository_from_origin("https://github.com/org/..").is_none());
+    }
 
     #[test]
     fn branch_upstream_counts_and_changes() {

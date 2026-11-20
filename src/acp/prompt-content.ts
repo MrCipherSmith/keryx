@@ -62,6 +62,7 @@ export function renderAcpPrompt(blocks: readonly unknown[]): RenderedAcpPrompt {
     }
     switch (block.type) {
       case "text":
+        if (block.text === "") break;
         parts.push(block.text);
         trusted.push(block.text);
         break;

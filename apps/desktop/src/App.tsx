@@ -81,7 +81,10 @@ export function App() {
           <SettingsView onBack={() => setWelcomeSettings(false)} integrations={<GitHubIntegrations />} />
         </div>
       ) : (
-        <Welcome onOpen={setCwd} onSettings={() => setWelcomeSettings(true)} />
+        <Welcome onOpen={async (folder) => {
+          if (isTauri()) await projectSwitch(folder);
+          else setCwd(folder);
+        }} onSettings={() => setWelcomeSettings(true)} />
       )}
       <UpdateBanner />
       {prompt ? (

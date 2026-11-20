@@ -1,9 +1,11 @@
-import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, useEffect, useId, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { AvailableCommand, ConfigOption, ConfigSelectGroup, ConfigSelectOption, SessionModeState } from "../acp/types";
 import { MOD } from "../lib/prefs";
+import { AttachmentImage } from "./AttachmentImage";
 import { Icon, type IconName } from "../components/Icon";
 import { Menu, type MenuItem } from "../components/Menu";
 import { flattenGroups, groupCommands } from "../acp/commands";
+import { useChatAttachments, type LocalAttachment, type SaveChatFile, type SaveChatImage } from "./chatImages";
 import { adoptNoSessionDraft, draftOf, withDraft, type Drafts } from "./drafts";
 
 export interface ComposerHandle {
@@ -27,7 +29,14 @@ interface Props {
    * Everything the user submits: a command line, plain text, or text for the queue while a turn runs.
    * True when it was handled; the draft is cleared only then (a refused command keeps it).
    */
-  onSend: (text: string) => boolean | Promise<boolean>;
+  onSend: (text: string, imagePaths: readonly string[], localAttachments: readonly LocalAttachment[]) => boolean | Promise<boolean>;
+  saveImage?: SaveChatImage;
+  saveFile?: SaveChatFile;
+  discardFile?: (path: string) => Promise<void>;
+  /** Called with the saved file/image paths that went out with a message the host accepted; the host now owns them. */
+  onAttachmentsSent?: (paths: readonly string[]) => void;
+  loadImage?: (path: string) => Promise<string>;
+  pickAttachmentFolder?: () => Promise<string | null>;
   onStop: () => void;
   onMode: (id: string) => void;
   onModel: (configId: string, value: string) => void;
@@ -85,7 +94,7 @@ export function modelChoices(option: ConfigOption | undefined): ConfigSelectOpti
 }
 
 export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
-  { sessionId, busy, disabledReason, commands, modes, model, sendKey, onSend, onStop, onMode, onModel, onProviders, attachments = [], onRemoveAttachment },
+  { sessionId, busy, disabledReason, commands, modes, model, sendKey, onSend, saveImage, saveFile, discardFile, onAttachmentsSent, loadImage, pickAttachmentFolder, onStop, onMode, onModel, onProviders, attachments = [], onRemoveAttachment },
   ref,
 ) {
   const [drafts, setDrafts] = useState<Drafts>({});
@@ -93,11 +102,15 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   useLayoutEffect(() => setDrafts((d) => adoptNoSessionDraft(d, sessionId)), [sessionId]);
   const text = draftOf(drafts, sessionId);
   const setText = (t: string) => setDrafts((d) => withDraft(d, sessionId, t));
-  const textRef = useRef(text);
-  textRef.current = text;
   const [sel, setSel] = useState(0);
+  const listId = useId();
   const [dismissed, setDismissed] = useState(false);
-  const [menu, setMenu] = useState<"mode" | "provider" | "model" | null>(null);
+  const [slashSession, setSlashSession] = useState<string | null>(null);
+  useLayoutEffect(() => setSlashSession(null), [sessionId]);
+  const showAllCommands = sessionId !== null && slashSession === sessionId;
+  const [menu, setMenu] = useState<"add" | "mode" | "provider" | "model" | null>(null);
+  const addBtn = useRef<HTMLButtonElement>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
   const area = useRef<HTMLTextAreaElement>(null);
   const modeBtn = useRef<HTMLButtonElement>(null);
   const modelBtn = useRef<HTMLButtonElement>(null);
@@ -105,6 +118,36 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   // The model each provider last ran in this window; picking that provider again returns to it.
   const lastModel = useRef(new Map<string, string>());
   const disabled = disabledReason !== null;
+  const localDraft = useChatAttachments(sessionId, { saveImage, saveFile, discardFile, pickFolder: pickAttachmentFolder });
+  const hasAttachments = attachments.length > 0 || localDraft.items.length > 0;
+  // Saved copies the user never sent are deleted when the draft goes away (unmount or switch to another session).
+  const latestItems = useRef(localDraft.items);
+  const sentPaths = useRef(new Set<string>());
+  const discardRef = useRef(discardFile);
+  // Incremented every time a draft is dropped (session switch, unmount): a send that began earlier and is refused
+  // afterwards compares it, so A -> B -> A is told apart from "never left A".
+  const draftGen = useRef(0);
+  const dropDraft = localDraft.drop;
+  // Refs are written after commit, never during render. Effect cleanups of a session switch run before this one,
+  // so at cleanup time `latestItems` still holds the old session's items.
+  useEffect(() => {
+    latestItems.current = localDraft.items;
+    discardRef.current = discardFile;
+  });
+  useEffect(() => {
+    if (!sessionId) return;
+    return () => {
+      draftGen.current += 1;
+      const items = latestItems.current;
+      for (const item of items) {
+        const sent = sentPaths.current.has(item.path);
+        sentPaths.current.delete(item.path);
+        if (item.kind === "folder" || sent) continue;
+        void discardRef.current?.(item.path)?.catch(() => {});
+      }
+      dropDraft(sessionId);
+    };
+  }, [sessionId, dropDraft]);
 
   useImperativeHandle(ref, () => ({
     focus: () => area.current?.focus(),
@@ -122,15 +165,18 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
 
   // `/` opens the palette over every advertised command, grouped; a space ends the name and closes it.
   const groups = useMemo(() => {
+    if (disabled || menu === "add") return [];
+    if (showAllCommands) return groupCommands(commands, "");
     if (dismissed || !text.startsWith("/") || /\s/.test(text)) return [];
     return groupCommands(commands, text.slice(1));
-  }, [text, commands, dismissed]);
+  }, [text, commands, dismissed, disabled, menu, showAllCommands]);
   const matches = useMemo(() => flattenGroups(groups), [groups]);
+  const active = Math.min(sel, matches.length - 1);
 
   useEffect(() => setSel(0), [text]);
   useEffect(() => {
-    document.getElementById(`slash-opt-${sel}`)?.scrollIntoView?.({ block: "nearest" });
-  }, [sel, matches]);
+    document.getElementById(`${listId}-opt-${active}`)?.scrollIntoView?.({ block: "nearest" });
+  }, [active, matches, listId]);
   // Grow with the text up to COMPOSER_MAX_PX. Re-fit when the column's width changes too: a narrow moment (a side
   // panel opening, a drag) wraps the text, and a height measured then must not outlive it.
   useLayoutEffect(() => {
@@ -152,7 +198,9 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   }, [disabled]);
 
   const complete = (c: AvailableCommand) => {
-    setText(`/${c.name} `);
+    const suffix = showAllCommands ? (text.startsWith("/") ? text.match(/\s[\s\S]*/)?.[0] ?? " " : ` ${text}`) : " ";
+    setText(`/${c.name}${suffix}`);
+    setSlashSession(null);
     setDismissed(false);
     area.current?.focus();
   };
@@ -160,9 +208,34 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   const send = async () => {
     // A command line is trimmed; other text keeps a leading space, which is what makes "/x" text for the model.
     const t = text.startsWith("/") ? text.trim() : text.replace(/^[\r\n]+/, "").trimEnd();
-    if ((!t.trim() && attachments.length === 0) || disabled) return;
-    const ok = await onSend(t);
-    if (ok && textRef.current === text) setText("");
+    if ((!t.trim() && !hasAttachments) || disabled) return;
+    if (localDraft.isSaving()) {
+      localDraft.warn("Wait for the attachments to finish, then send again.");
+      return;
+    }
+    const images = localDraft.items.flatMap((item) => item.kind === "image" ? [item.path] : []);
+    const local = localDraft.items.filter((item) => item.kind !== "image");
+    const sentFiles = localDraft.items.filter((item) => item.kind !== "folder").map((item) => item.path);
+    for (const p of sentFiles) sentPaths.current.add(p);
+    const gen = draftGen.current;
+    let ok = false;
+    try {
+      ok = await onSend(t, images, local);
+    } finally {
+      if (!ok) {
+        for (const p of sentFiles) sentPaths.current.delete(p);
+        // The draft is gone (the session was switched or the view closed while this send was pending), so nothing
+        // else will discard these files.
+        if (draftGen.current !== gen) for (const p of sentFiles) void discardRef.current?.(p)?.catch(() => {});
+      }
+    }
+    if (ok) {
+      setSlashSession(null);
+      if (sentFiles.length > 0) onAttachmentsSent?.(sentFiles);
+      for (const p of sentFiles) sentPaths.current.delete(p);
+      localDraft.remove(localDraft.items.map((item) => item.path));
+      setDrafts((d) => draftOf(d, sessionId) === text ? withDraft(d, sessionId, "") : d);
+    }
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -170,17 +243,17 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     if (matches.length > 0) {
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        setSel((s) => (s + 1) % matches.length);
+        setSel((s) => (Math.min(s, matches.length - 1) + 1) % matches.length);
         return;
       }
       if (e.key === "ArrowUp") {
         e.preventDefault();
-        setSel((s) => (s - 1 + matches.length) % matches.length);
+        setSel((s) => (Math.min(s, matches.length - 1) - 1 + matches.length) % matches.length);
         return;
       }
-      const chosen = matches[sel];
+      const chosen = matches[active];
       const exact = matches.some((c) => `/${c.name}` === text);
-      if (chosen && (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey && !exact))) {
+      if (chosen && (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey && (showAllCommands || !exact)))) {
         e.preventDefault();
         complete(chosen);
         return;
@@ -188,6 +261,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
       if (e.key === "Escape") {
         e.preventDefault();
         e.stopPropagation();
+        setSlashSession(null);
         setDismissed(true);
         return;
       }
@@ -259,7 +333,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   return (
     <div className={`composer${disabled ? " is-disabled" : ""}${busy ? " is-busy" : ""}`}>
       {matches.length > 0 ? (
-        <ul className="slash-pop" role="listbox" aria-label="Slash commands">
+        <ul id={listId} className="slash-pop" role="listbox" aria-label="Slash commands">
           {groups.map((g) => (
             <li key={g.group} role="presentation" className="slash-group-wrap">
               <div className="slash-group">{g.group}</div>
@@ -269,15 +343,15 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
                   return (
                     <li
                       key={c.name}
-                      id={`slash-opt-${i}`}
+                      id={`${listId}-opt-${i}`}
                       role="option"
-                      aria-selected={i === sel}
-                      className={i === sel ? "is-sel" : ""}
+                      aria-selected={i === active}
+                      className={i === active ? "is-sel" : ""}
                       onMouseDown={(e) => {
                         e.preventDefault();
                         complete(c);
                       }}
-                      onMouseMove={() => i !== sel && setSel(i)}
+                      onMouseMove={() => i !== active && setSel(i)}
                     >
                       <span className="slash-name">/{c.name}</span>
                       {c.input?.hint ? <span className="slash-hint">{c.input.hint}</span> : null}
@@ -305,20 +379,66 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
           ))}
         </ul>
       ) : null}
+      {localDraft.items.length > 0 ? (
+        <ul className="composer-attachments" aria-label="Local attachments">
+          {localDraft.items.map((item, i) => (
+            <li className={`attach-chip${item.kind === "image" ? " image-chip" : ""}`} key={item.path}
+              title={item.kind === "image" ? undefined : item.path}>
+              {item.kind === "image" ? <AttachmentImage path={item.path} alt={`Attached image ${i + 1}`} eager load={loadImage} /> : <>
+                <Icon name={item.kind === "folder" ? "folder" : "file"} size={12} />
+                <span className="truncate">{item.label}</span>
+              </>}
+              <button type="button" className="icon-btn icon-btn-sm" disabled={localDraft.pending} onClick={() => void localDraft.discard(item)}
+                aria-label={`Remove ${item.kind === "image" ? `image ${i + 1}` : item.label}`} title="Remove attachment"><Icon name="x" size={12} /></button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {localDraft.pending || localDraft.error ? (
+        <div className="composer-image-status" role={localDraft.error ? "alert" : "status"}>
+          {localDraft.error ?? "Adding attachments…"}
+        </div>
+      ) : null}
       <textarea
         ref={area}
         rows={1}
         value={text}
         disabled={disabled}
         aria-label="Message keryx"
-        placeholder={disabledReason ?? (busy ? "keryx is working. Enter queues your next message" : "Ask keryx, or type / for commands")}
+        role={matches.length > 0 ? "combobox" : undefined}
+        aria-autocomplete={matches.length > 0 ? "list" : undefined}
+        aria-expanded={matches.length > 0 ? true : undefined}
+        aria-controls={matches.length > 0 ? listId : undefined}
+        aria-activedescendant={matches.length > 0 ? `${listId}-opt-${active}` : undefined}
+        placeholder={disabledReason ?? (busy ? `keryx is working. ${sendKey === "enter" ? "Enter" : `${MOD}Return`} queues your next message` : "Ask keryx, or type / for commands")}
         onChange={(e) => {
           setText(e.target.value);
+          setSlashSession(null);
           setDismissed(false);
+        }}
+        onPaste={(e) => {
+          if (!saveImage || disabled || !sessionId) return;
+          const files = Array.from(e.clipboardData.files).filter((file) => file.type.startsWith("image/"));
+          if (!files.length) return;
+          if (!e.clipboardData.getData("text/plain")) e.preventDefault();
+          void localDraft.addFiles(files, true);
         }}
         onKeyDown={onKeyDown}
       />
+      <input key={sessionId} ref={fileInput} type="file" multiple hidden
+        aria-label="Choose files or images" accept={saveFile ? undefined : "image/*"}
+        onChange={(e) => {
+          const files = Array.from(e.currentTarget.files ?? []);
+          e.currentTarget.value = "";
+          if (!disabled) void localDraft.addFiles(files);
+          area.current?.focus();
+        }} />
       <div className="composer-bar">
+        <button type="button" ref={addBtn} className="icon-btn composer-add" aria-label="Add to message"
+          title="Add attachments or slash commands" aria-haspopup="menu" aria-expanded={menu === "add"}
+          disabled={disabled} onClick={() => setMenu(menu === "add" ? null : "add")}>
+          <Icon name="plus" size={18} />
+        </button>
         {modes && modes.availableModes.length > 0 ? (
           <button
             ref={modeBtn}
@@ -372,11 +492,24 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
             <Icon name="stop" size={12} strokeWidth={0} className="filled" />
           </button>
         ) : (
-          <button className="send-btn" onClick={() => void send()} disabled={disabled || (!text.trim() && attachments.length === 0)} title="Send" aria-label="Send">
+          <button className="send-btn" onClick={() => void send()} disabled={disabled || localDraft.pending || (!text.trim() && !hasAttachments)} title="Send" aria-label="Send">
             <Icon name="arrowUp" size={16} strokeWidth={2.25} />
           </button>
         )}
       </div>
+      {menu === "add" && !disabled ? (
+        <Menu anchor={addBtn.current} placement="above" label="Add to message" width={240}
+          onClose={() => { setMenu(null); addBtn.current?.focus(); }}
+          items={[
+            { id: "files", label: "Add files or images", icon: "file", disabled: (!saveFile && !saveImage) || localDraft.pending,
+              onSelect: () => fileInput.current?.click() },
+            { id: "folder", label: "Add folder", icon: "folder", disabled: !pickAttachmentFolder || localDraft.pending,
+              onSelect: () => void localDraft.addFolder() },
+            { kind: "separator", id: "commands-separator" },
+            { id: "commands", label: "Slash commands", icon: "command", disabled: !sessionId || commands.length === 0,
+              onSelect: () => { setSel(0); setSlashSession(sessionId); area.current?.focus(); } },
+          ]} />
+      ) : null}
       {menu === "mode" ? (
         <Menu
           anchor={modeBtn.current}

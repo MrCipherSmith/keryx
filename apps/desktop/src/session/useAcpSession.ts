@@ -14,6 +14,7 @@ import {
 } from "../acp/providers";
 import { acpStart, acpTransport, acpStop, listenBridge, versionCheck } from "../platform/commands";
 import { isTauri } from "../platform/backend";
+import { buildUserPrompt, type UserPromptContext } from "./userPrompt";
 import { onPtyExit, panelMcpServers, ptyOpenRun } from "../platform/panels";
 import { closeTerminalTab, onTabClosed, showTerminalTab } from "../panels/panelBus";
 import { notifyDelegateChange, setDelegateApi } from "./delegateBus";
@@ -627,19 +628,18 @@ export function useAcpSession(cwd: string) {
 
   /** Starts a turn in the shown session; returns true only when the prompt was accepted (the caller may then clear its draft). */
   const sendPrompt = useCallback(
-    (text: string, target?: string, extra: readonly object[] = []): boolean => {
+    (text: string, target?: string, context?: UserPromptContext, literal = false, replaces?: number): boolean => {
+      const extra = context?.blocks ?? [];
       const l = live.current;
       const client = l.client;
       const sessionId = target ?? l.reg.shown;
       if (!client || !l.initialized || !sessionId || !l.reg.held.has(sessionId) || l.reg.turns.has(sessionId) || (!text.trim() && extra.length === 0)) return false;
-      // Extra blocks (picked page elements) are shown as a count, not as their page-sourced text.
-      const shown = extra.length ? `${text}${text.trim() ? "\n\n" : ""}_(${extra.length === 1 ? "picked page elements attached" : `${extra.length} attachments`})_` : text;
-      dispatch({ t: "userSent", sessionId, text: shown });
+      dispatch({ t: "userSent", sessionId, text, context, ...(replaces !== undefined ? { replaces } : {}) });
       dispatch({ t: "busy", sessionId, busy: true });
       const turn = { client } as Turn;
       turn.done = (async () => {
         try {
-          const prompt = [...(text.trim() ? [{ type: "text", text }] : []), ...extra];
+          const prompt = buildUserPrompt(text, extra, literal);
           const r = await client.request<{ stopReason?: string }>("session/prompt", { sessionId, prompt });
           if (l.client !== client) return;
           const notice = (level: "info" | "warn", t: string) => dispatch({ t: "notice", sessionId, level, text: t });
@@ -648,7 +648,10 @@ export function useAcpSession(cwd: string) {
           else if (r?.stopReason === "refusal") notice("warn", "The model refused to continue.");
           else if (r?.stopReason === "cancelled") notice("info", "Stopped.");
         } catch (e) {
-          if (l.client === client) dispatch({ t: "notice", sessionId, level: "error", text: errMessage(e) });
+          if (l.client === client) {
+            dispatch({ t: "userSendFailed", sessionId });
+            dispatch({ t: "notice", sessionId, level: "error", text: errMessage(e) });
+          }
         } finally {
           if (l.reg.turns.get(sessionId) === turn) l.reg.turns.delete(sessionId);
           if (l.client === client) {

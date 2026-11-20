@@ -21,15 +21,22 @@ interface Props {
   anchor: HTMLElement | null;
   items: MenuItem[];
   onClose: () => void;
-  /** Open upward (composer chips sit at the bottom of the window). */
-  placement?: "below" | "above";
+  /**
+   * Where the menu opens relative to the anchor:
+   * - "below" (default): under the anchor.
+   * - "above": bottom-anchored, opens upward (composer chips sit at the bottom of the window).
+   * - "auto": measures the menu and flips to the side that fits, clamped to the viewport.
+   */
+  placement?: "below" | "above" | "auto";
+  /** Close when any scroll (or a window resize) moves the anchor more than 2px away from where the menu opened. */
+  closeOnScroll?: boolean;
   label: string;
   width?: number;
   footer?: ReactNode;
 }
 
 /** A keyboard-navigable popover menu anchored to a button. */
-export function Menu({ anchor, items, onClose, placement = "below", label, width = 280, footer }: Props) {
+export function Menu({ anchor, items, onClose, placement = "below", closeOnScroll = false, label, width = 280, footer }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top?: number; bottom?: number }>({ left: -9999, top: -9999 });
   useEscape(onClose);
@@ -38,22 +45,76 @@ export function Menu({ anchor, items, onClose, placement = "below", label, width
     if (!anchor) return;
     const r = anchor.getBoundingClientRect();
     const left = Math.max(8, Math.min(r.left, window.innerWidth - width - 8));
-    setPos(placement === "below" ? { left, top: r.bottom + 4 } : { left, bottom: window.innerHeight - r.top + 4 });
+    if (placement === "below") setPos({ left, top: r.bottom + 4 });
+    else if (placement === "above") setPos({ left, bottom: window.innerHeight - r.top + 4 });
+    else {
+      // auto: the menu is mounted off-screen first, so its real height is known here.
+      const margin = 8;
+      const vh = window.innerHeight;
+      const h = ref.current?.offsetHeight ?? 0;
+      const spaceBelow = vh - r.bottom - 4 - margin;
+      const spaceAbove = r.top - 4 - margin;
+      const above = h > spaceBelow && spaceAbove > spaceBelow;
+      const wanted = above ? r.top - 4 - h : r.bottom + 4;
+      setPos({ left, top: Math.max(margin, Math.min(wanted, vh - h - margin)) });
+    }
+  }, [anchor, placement, width, items.length]);
+
+  // Focus the first (or checked) item once per opening: a changing item count must not take focus back.
+  useLayoutEffect(() => {
+    if (!anchor) return;
     const first =
       ref.current?.querySelector<HTMLElement>('[role="menuitemradio"][aria-checked="true"]') ??
       ref.current?.querySelector<HTMLElement>('[role^="menuitem"]:not([disabled])');
     first?.focus();
-  }, [anchor, placement, width]);
+  }, [anchor]);
+
+  const closeRef = useRef(onClose);
+  useLayoutEffect(() => { closeRef.current = onClose; });
+
+  // Focus is given back to the anchor when the menu goes away while focus is still inside it (Escape, a selection);
+  // a click elsewhere or Tab sets this false first, so focus then stays where the user sent it.
+  const inside = useRef(false);
+  useLayoutEffect(() => {
+    if (!anchor) return;
+    return () => {
+      if (inside.current) anchor.focus();
+    };
+  }, [anchor]);
 
   useLayoutEffect(() => {
     const onDown = (e: MouseEvent) => {
       const t = e.target as Node;
       if (ref.current?.contains(t) || anchor?.contains(t)) return;
-      onClose();
+      inside.current = false;
+      closeRef.current();
     };
     window.addEventListener("mousedown", onDown, true);
     return () => window.removeEventListener("mousedown", onDown, true);
-  }, [anchor, onClose]);
+  }, [anchor]);
+
+  useLayoutEffect(() => {
+    if (!anchor || !closeOnScroll) return;
+    const start = anchor.getBoundingClientRect();
+    // One layout read per frame, not one per scroll event (a streaming transcript scrolls continuously).
+    let frame = 0;
+    const check = () => {
+      frame = 0;
+      const r = anchor.getBoundingClientRect();
+      if (Math.abs(r.top - start.top) > 2 || Math.abs(r.left - start.left) > 2) closeRef.current();
+    };
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(check);
+    };
+    const onResize = () => closeRef.current();
+    window.addEventListener("scroll", onScroll, { capture: true, passive: true });
+    window.addEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("scroll", onScroll, { capture: true });
+      window.removeEventListener("resize", onResize);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [anchor, closeOnScroll]);
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     const all = Array.from(ref.current?.querySelectorAll<HTMLElement>('[role^="menuitem"]:not([disabled])') ?? []);
@@ -65,12 +126,15 @@ export function Menu({ anchor, items, onClose, placement = "below", label, width
       e.preventDefault();
       all[(i - 1 + all.length) % all.length]?.focus();
     } else if (e.key === "Tab") {
+      inside.current = false;
       onClose();
     }
   };
 
   return (
-    <div ref={ref} className="menu" role="menu" aria-label={label} style={{ ...pos, width }} onKeyDown={onKeyDown}>
+    <div ref={ref} className="menu" role="menu" aria-label={label} style={{ ...pos, width }} onKeyDown={onKeyDown}
+      onFocus={() => { inside.current = true; }}
+      onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) inside.current = false; }}>
       {items.map((it) => {
         if (it.kind === "separator") return <div key={it.id} className="menu-sep" role="separator" />;
         if (it.kind === "header") return <div key={it.id} className="menu-header">{it.label}</div>;

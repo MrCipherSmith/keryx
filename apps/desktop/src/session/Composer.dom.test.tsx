@@ -1,3 +1,4 @@
+import { savingDone, waitFor } from "./testWait";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import type { Root } from "react-dom/client";
 import { registerDom, unregisterDom } from "../test/dom";
@@ -131,6 +132,260 @@ test("a long provider or model label carries its full text in the title and trun
 });
 
 // ---- attachments (page elements picked in the browser panel) -----------------------------------------
+
+const SHOT = "data:image/png;base64,iVBORw0KGgo=";
+
+async function pasteImages(count: number) {
+  const event = new Event("paste", { bubbles: true, cancelable: true });
+  const files = Array.from({ length: count }, (_, i) => new File([Uint8Array.of(137, 80, 78, 71, 13, 10, 26, 10, i)], `shot${i}.png`, { type: "image/png" }));
+  Object.defineProperty(event, "clipboardData", { value: { files, getData: () => "" } });
+  await act(async () => { host.querySelector("textarea")?.dispatchEvent(event); });
+  await waitFor(() => savingDone(host), act);
+}
+
+test("a rejected saveImage shows an alert and adds no chip", async () => {
+  await act(() => root.render(null));
+  await act(() => root.render(createElement(Composer, {
+    ...props("REJ", createRef()),
+    saveImage: async () => { throw new Error("disk full"); },
+    loadImage: async () => SHOT,
+  })));
+  await pasteImages(1);
+  expect(host.querySelector('[role="alert"]')?.textContent).toContain("disk full");
+  expect(host.querySelector(".attach-chip")).toBeNull();
+});
+
+test("in a mixed batch the successful images are kept and the failure is reported", async () => {
+  await act(() => root.render(null));
+  let n = 0;
+  await act(() => root.render(createElement(Composer, {
+    ...props("MIX", createRef()),
+    saveImage: async () => { n += 1; if (n === 2) throw new Error("disk full"); return `/tmp/keryx-chat-images-mix/ok${n}.png`; },
+    loadImage: async () => SHOT,
+  })));
+  await pasteImages(3);
+  expect(host.querySelectorAll(".attach-chip").length).toBe(2);
+  expect(host.querySelector('[role="alert"]')?.textContent).toContain("disk full");
+});
+
+test("unmounting with an unsent attachment discards its saved copy", async () => {
+  await act(() => root.render(null));
+  const discarded: string[] = [];
+  const path = "/tmp/keryx-chat-images-unm/a.png";
+  await act(() => root.render(createElement(Composer, {
+    ...props("UNM", createRef()),
+    saveImage: async () => path,
+    discardFile: async (p: string) => { discarded.push(p); },
+    loadImage: async () => SHOT,
+  })));
+  await pasteImages(1);
+  expect(host.querySelectorAll(".attach-chip").length).toBe(1);
+  expect(discarded).toEqual([]);
+  await act(() => root.render(null));
+  expect(discarded).toEqual([path]);
+});
+
+test("switching session discards the previous session's unsent attachment", async () => {
+  await act(() => root.render(null));
+  const discarded: string[] = [];
+  const path = "/tmp/keryx-chat-images-sw/a.png";
+  const base = { saveImage: async () => path, discardFile: async (p: string) => { discarded.push(p); }, loadImage: async () => SHOT };
+  await act(() => root.render(createElement(Composer, { ...props("SW1", createRef()), ...base })));
+  await pasteImages(1);
+  await act(() => root.render(createElement(Composer, { ...props("SW2", createRef()), ...base })));
+  expect(discarded).toEqual([path]);
+  await act(() => root.render(null));
+});
+
+test("after a successful send, unmounting does not discard the sent attachment", async () => {
+  await act(() => root.render(null));
+  const discarded: string[] = [];
+  const reported: string[][] = [];
+  const path = "/tmp/keryx-chat-images-snt/a.png";
+  await act(() => root.render(createElement(Composer, {
+    ...props("SNT", createRef()),
+    saveImage: async () => path,
+    discardFile: async (p: string) => { discarded.push(p); },
+    loadImage: async () => SHOT,
+    onSend: () => true,
+    onAttachmentsSent: (paths: readonly string[]) => { reported.push([...paths]); },
+  })));
+  await pasteImages(1);
+  await act(async () => { host.querySelector<HTMLButtonElement>('[aria-label="Send"]')?.click(); });
+  expect(reported).toEqual([[path]]);
+  expect(host.querySelector(".attach-chip")).toBeNull();
+  await act(() => root.render(null));
+  expect(discarded).toEqual([]);
+});
+
+test("switching A→B→A drops A's chips together with its discarded files", async () => {
+  await act(() => root.render(null));
+  const discarded: string[] = [];
+  const path = "/tmp/keryx-chat-images-aba/a.png";
+  const base = { saveImage: async () => path, discardFile: async (p: string) => { discarded.push(p); }, loadImage: async () => SHOT };
+  await act(() => root.render(createElement(Composer, { ...props("ABA1", createRef()), ...base })));
+  await pasteImages(1);
+  expect(host.querySelectorAll(".attach-chip").length).toBe(1);
+  await act(() => root.render(createElement(Composer, { ...props("ABA2", createRef()), ...base })));
+  expect(discarded).toEqual([path]);
+  await act(() => root.render(createElement(Composer, { ...props("ABA1", createRef()), ...base })));
+  expect(host.querySelectorAll(".attach-chip").length).toBe(0);
+  expect(discarded).toEqual([path]);
+  await act(() => root.render(null));
+});
+
+test("unmounting while onSend is still pending does not discard the files being sent", async () => {
+  await act(() => root.render(null));
+  const discarded: string[] = [];
+  let release: (ok: boolean) => void = () => {};
+  const path = "/tmp/keryx-chat-images-pnd/a.png";
+  await act(() => root.render(createElement(Composer, {
+    ...props("PND", createRef()),
+    saveImage: async () => path,
+    discardFile: async (p: string) => { discarded.push(p); },
+    loadImage: async () => SHOT,
+    onSend: () => new Promise<boolean>((resolve) => { release = resolve; }),
+  })));
+  await pasteImages(1);
+  await act(async () => { host.querySelector<HTMLButtonElement>('[aria-label="Send"]')?.click(); });
+  await act(() => root.render(null));
+  await act(async () => { release(true); });
+  expect(discarded).toEqual([]);
+});
+
+test("a refused send keeps the files unsent, so unmounting discards them", async () => {
+  await act(() => root.render(null));
+  const discarded: string[] = [];
+  const path = "/tmp/keryx-chat-images-ref/a.png";
+  await act(() => root.render(createElement(Composer, {
+    ...props("REF", createRef()),
+    saveImage: async () => path,
+    discardFile: async (p: string) => { discarded.push(p); },
+    loadImage: async () => SHOT,
+    onSend: () => false,
+  })));
+  await pasteImages(1);
+  await act(async () => { host.querySelector<HTMLButtonElement>('[aria-label="Send"]')?.click(); });
+  expect(host.querySelectorAll(".attach-chip").length).toBe(1);
+  await act(() => root.render(null));
+  expect(discarded).toEqual([path]);
+});
+
+test("a send refused after the session was switched away discards its files", async () => {
+  await act(() => root.render(null));
+  const discarded: string[] = [];
+  let release: (ok: boolean) => void = () => {};
+  const path = "/tmp/keryx-chat-images-late/a.png";
+  const base = {
+    saveImage: async () => path,
+    discardFile: async (p: string) => { discarded.push(p); },
+    loadImage: async () => SHOT,
+    onSend: () => new Promise<boolean>((resolve) => { release = resolve; }),
+  };
+  await act(() => root.render(createElement(Composer, { ...props("LATE1", createRef()), ...base })));
+  await pasteImages(1);
+  await act(async () => { host.querySelector<HTMLButtonElement>('[aria-label="Send"]')?.click(); });
+  await act(() => root.render(createElement(Composer, { ...props("LATE2", createRef()), ...base })));
+  expect(discarded).toEqual([]);
+  await act(async () => { release(false); });
+  expect(discarded).toEqual([path]);
+  await act(() => root.render(null));
+});
+
+test("a save that finishes after the draft was dropped is discarded, not kept", async () => {
+  await act(() => root.render(null));
+  const discarded: string[] = [];
+  let release: (path: string) => void = () => {};
+  await act(() => root.render(createElement(Composer, {
+    ...props("DROP", createRef()),
+    saveImage: () => new Promise<string>((resolve) => { release = resolve; }),
+    discardFile: async (p: string) => { discarded.push(p); },
+    loadImage: async () => SHOT,
+  })));
+  const event = new Event("paste", { bubbles: true, cancelable: true });
+  const file = new File([Uint8Array.of(137, 80, 78, 71, 13, 10, 26, 10)], "late.png", { type: "image/png" });
+  Object.defineProperty(event, "clipboardData", { value: { files: [file], getData: () => "" } });
+  await act(async () => { host.querySelector("textarea")?.dispatchEvent(event); });
+  await new Promise((r) => setTimeout(r, 30));
+  await act(() => root.render(null));
+  await act(async () => { release("/tmp/keryx-chat-images-drop/late.png"); });
+  await new Promise((r) => setTimeout(r, 20));
+  expect(discarded).toEqual(["/tmp/keryx-chat-images-drop/late.png"]);
+});
+
+test("sending while attachments are still saving says so instead of doing nothing", async () => {
+  await act(() => root.render(null));
+  const ref = createRef<import("./Composer").ComposerHandle>();
+  let release: (path: string) => void = () => {};
+  await act(() => root.render(createElement(Composer, {
+    ...props("WAIT", ref),
+    saveImage: () => new Promise<string>((resolve) => { release = resolve; }),
+    loadImage: async () => SHOT,
+  })));
+  await act(async () => ref.current!.setText("hello"));
+  const event = new Event("paste", { bubbles: true, cancelable: true });
+  const file = new File([Uint8Array.of(137, 80, 78, 71, 13, 10, 26, 10)], "slow.png", { type: "image/png" });
+  Object.defineProperty(event, "clipboardData", { value: { files: [file], getData: () => "" } });
+  await act(async () => { host.querySelector("textarea")?.dispatchEvent(event); });
+  await new Promise((r) => setTimeout(r, 30));
+  await act(async () => { host.querySelector("textarea")?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true })); });
+  expect(host.querySelector('[role="alert"]')?.textContent).toContain("Wait for the attachments");
+  await act(async () => { release("/tmp/keryx-chat-images-wait/slow.png"); });
+  await waitFor(() => savingDone(host), act);
+  await act(() => root.render(null));
+});
+
+test("four pasted images are saved one at a time and a busy refusal is retried", async () => {
+  await act(() => root.render(null));
+  let active = 0;
+  let peak = 0;
+  let calls = 0;
+  await act(() => root.render(createElement(Composer, {
+    ...props("FOUR", createRef()),
+    saveImage: async () => {
+      calls += 1;
+      active += 1;
+      peak = Math.max(peak, active);
+      const mine = calls;
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 1));
+        if (mine === 2) throw "busy: Chat attachments are busy; try again"; // Tauri rejects with a bare string
+        return `/tmp/keryx-chat-images-four/${mine}.png`;
+      } finally {
+        active -= 1;
+      }
+    },
+    loadImage: async () => SHOT,
+  })));
+  await pasteImages(4);
+  expect(host.querySelectorAll(".attach-chip").length).toBe(4);
+  expect(peak).toBe(1);
+  expect(host.querySelector('[role="alert"]')).toBeNull();
+  await act(() => root.render(null));
+});
+
+test("pasting a screenshot saves it and sends an image-only draft", async () => {
+  const saved: string[] = [];
+  const sent: string[][] = [];
+  const path = "/tmp/keryx-chat-images-123/photo.png";
+  await act(() => root.render(createElement(Composer, {
+    ...props("IMG", createRef()),
+    saveImage: async (mime: string, data: string) => { saved.push(mime, data); return path; },
+    loadImage: async () => "data:image/png;base64,iVBORw0KGgo=",
+    onSend: (text: string, paths: readonly string[]) => { sent.push([text, ...paths]); return true; },
+  })));
+  const event = new Event("paste", { bubbles: true, cancelable: true });
+  const file = new File([Uint8Array.of(137, 80, 78, 71, 13, 10, 26, 10)], "Clipboard.png", { type: "image/png" });
+  Object.defineProperty(event, "clipboardData", { value: { files: [file], getData: () => "" } });
+  await act(async () => { host.querySelector("textarea")?.dispatchEvent(event); });
+  await waitFor(() => savingDone(host), act);
+  expect(event.defaultPrevented).toBe(true);
+  expect(saved).toEqual(["image/png", "iVBORw0KGgo="]);
+  expect(host.querySelector(".attach-chip img")?.getAttribute("src")).toBe("data:image/png;base64,iVBORw0KGgo=");
+  await act(() => host.querySelector<HTMLButtonElement>('[aria-label="Send"]')?.click());
+  expect(sent).toEqual([["", path]]);
+  expect(host.querySelector(".attach-chip img")).toBeNull();
+});
 
 test("attached elements show as removable chips and can be sent without text", async () => {
   const ref = createRef<import("./Composer").ComposerHandle>();
