@@ -5,6 +5,16 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.41] - 2026-11-20
+
+**Keryx Desktop 0.2.4** requires Keryx 0.4.41 or newer.
+
+### Added
+
+- Open **Review** in a Desktop project to see its GitHub pull requests in a board or list. Filter by author, assignee, requested reviewer, review decision and CI. Each PR links to its discussion, checks and associated Keryx Flow when available.
+- Start a review from a PR card, follow its waves and open an individual reviewer's session. The report shows the reviewed revision, findings, and recorded input and output tokens per reviewer and for the run. Provider-reported charges retain their original currency. Rules can set an optional token limit for each run.
+- Enable the macOS watcher from Review to check for changes on a schedule, including after quitting Desktop. Rules can start a review after a push or review request and wait for green CI. Each card can follow project rules, run automatically or stay manual. **Refresh** updates the board on demand.
+
 ## [0.4.40] - 2026-11-20
 
 ### Added

@@ -1,6 +1,6 @@
 [package]
 name = "keryx-desktop"
-version = "0.2.3"
+version = "0.2.4"
 description = "Keryx desktop client"
 edition = "2021"
 rust-version = "1.77"
