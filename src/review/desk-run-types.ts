@@ -1,7 +1,9 @@
 // Portable Desktop review protocol. Times are ISO 8601 and revisions are full Git object IDs.
 import type { ReviewRunUsage, ReviewUsageCounts } from "./run-usage";
 
-export const DESK_RUN_SCOPE = "review-autonomous/fixed-pr/v1";
+export const LEGACY_DESK_RUN_SCOPE = "review-autonomous/fixed-pr/v1";
+// Host-owned attempt contract: completion requires the prepared queue, reviewer receipts and file coverage.
+export const DESK_RUN_SCOPE = "review-autonomous/fixed-pr/v2";
 export interface DeskRunKey {
   repo: string;
   repositoryId: string;

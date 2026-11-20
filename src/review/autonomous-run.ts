@@ -286,14 +286,16 @@ export async function runAutonomousReview(options: AutonomousRunOptions): Promis
   const runDir = options.out === undefined ? autonomousRunDir(options.cwd, target) : path.resolve(options.cwd, options.out);
   mkdirSync(runDir, { recursive: true });
   const release = acquireLock(runDir);
+  let stopChild: (() => Promise<void>) | undefined;
   try {
-    return await runLocked(options, target, runDir);
+    return await runLocked(options, target, runDir, stop => { stopChild = stop; });
   } finally {
-    release();
+    try { await stopChild?.(); } finally { release(); }
   }
 }
 
-async function runLocked(options: AutonomousRunOptions, target: AutonomousTarget, runDir: string): Promise<AutonomousRunResult> {
+async function runLocked(options: AutonomousRunOptions, target: AutonomousTarget, runDir: string,
+  ownChild: (stop: () => Promise<void>) => void): Promise<AutonomousRunResult> {
   const { cwd } = options;
   const head = await (options.resolveHead ?? resolveHeadWithGh)(target, cwd);
   const stateFile = path.join(runDir, "run.json");
@@ -365,6 +367,16 @@ async function runLocked(options: AutonomousRunOptions, target: AutonomousTarget
       exitCode = 1;
     },
   );
+  const terminate = async (): Promise<void> => {
+    if (exitCode !== undefined) return;
+    child.kill("SIGTERM");
+    await Promise.race([child.exited.catch(() => undefined), sleep(killGraceMs)]);
+    if (exitCode === undefined) {
+      child.kill("SIGKILL");
+      await child.exited.catch(() => undefined);
+    }
+  };
+  ownChild(terminate);
 
   const recorder = options.fixedBase ? new ReviewerActivityRecorder() : undefined;
   const tail = createEventTail(eventsFile, recorder && ((event) => recorder.observe(event)));
@@ -410,22 +422,17 @@ async function runLocked(options: AutonomousRunOptions, target: AutonomousTarget
     };
     const json = JSON.stringify(snapshot);
     if (json === lastProgressJson) return;
-    lastProgressJson = json;
     try {
       writeJson(path.join(runDir, "progress.json"), { ...snapshot, updatedAt: new Date().toISOString() });
     } catch {
       // progress is an observation
     }
-    options.onProgress?.(snapshot);
-  };
-
-  const terminate = async (): Promise<void> => {
-    if (exitCode !== undefined) return;
-    child.kill("SIGTERM");
-    await Promise.race([child.exited.catch(() => undefined), sleep(killGraceMs)]);
-    if (exitCode === undefined) {
-      child.kill("SIGKILL");
-      await Promise.race([child.exited.catch(() => undefined), sleep(2000)]);
+    try {
+      options.onProgress?.(snapshot);
+      lastProgressJson = json;
+    } catch {
+      // A busy downstream checkpoint must not unwind the child monitor.
+      // Without advancing the published cursor the next poll retries it.
     }
   };
 

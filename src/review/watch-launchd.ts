@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { constants } from "node:fs";
-import { access, lstat, rm } from "node:fs/promises";
+import { access, lstat, realpath, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { isNotFound, writeFileAtomic } from "../lib/fs";
 import { keryxDataDir, readConfigFile } from "../lib/config-dir";
@@ -61,7 +61,21 @@ export async function watcherInstalled(
   if (!loaded) return false;
   const { plist, label } = service(project, key, host);
   // A loaded job with a deleted plist still fires in this login session, but won't survive the next login.
-  return (await ownedContents(plist, label)) !== null && (await programAvailable(loaded.program));
+  const contents = await ownedContents(plist, label);
+  return hasPinnedTools(contents) && (await programAvailable(loaded.program));
+}
+
+function hasPinnedTools(contents: string | null) {
+  return !!contents?.includes("<key>KERYX_REVIEW_GIT_BIN</key>") && contents.includes("<key>KERYX_REVIEW_GH_BIN</key>");
+}
+
+/** A loaded pre-upgrade timer can outlive both Desktop and the plist on disk. */
+export async function verifyWatcherTimerTools(project: string, key: WatcherKey, host: ScheduleHost) {
+  if ((host.platform ?? process.platform) !== "darwin" || (process.env.KERYX_REVIEW_GIT_BIN && process.env.KERYX_REVIEW_GH_BIN)) return;
+  if (!await watcherLoaded(project, key, host)) return;
+  const { plist, label } = service(project, key, host);
+  if (!hasPinnedTools(await ownedContents(plist, label)))
+    throw new Error("configuration: Enable the watcher again to verify its executable paths.");
 }
 
 function marked(label: string) {
@@ -86,37 +100,64 @@ async function ownedContents(plist: string, label: string) {
   return contents;
 }
 
-export async function watcherProgram(project: string, host: ScheduleHost) {
+const systemDirs = ["/usr/bin", "/bin", "/usr/sbin", "/sbin"];
+const watcherTools = ["gh", "git", "rg"] as const;
+
+async function watcherToolsPath(checkouts: string[]) {
+  const outsideCheckouts = (candidate: string) => checkouts.every(root => {
+    const relative = path.relative(root, candidate);
+    return relative === ".." || relative.startsWith(".." + path.sep) || path.isAbsolute(relative);
+  });
+  const found = new Map<string, string>();
+  const dirs = new Set<string>();
+  const verifiedSystemDirs = new Set<string>();
+  const inherited = (process.env.PATH ?? "").split(path.delimiter);
+  for (const entry of new Set([...inherited, ...systemDirs])) {
+    if (!path.isAbsolute(entry) || !outsideCheckouts(path.resolve(entry))) continue;
+    const dir = await realpath(entry).catch(() => undefined);
+    if (!dir || !outsideCheckouts(dir)) continue;
+    const targets = await Promise.all(watcherTools.map(async tool => {
+      const file = path.join(dir, tool);
+      try {
+        await lstat(file);
+      } catch (error) {
+        return isNotFound(error) ? undefined : null;
+      }
+      // A dangling link also disqualifies the directory: a later checkout
+      // update could create the missing target after the timer was installed.
+      const target = await realpath(file).catch(() => undefined);
+      if (!target || !outsideCheckouts(target)) return null;
+      if (!(await stat(target)).isFile() || !Bun.which(tool, { PATH: dir })) return undefined;
+      return { tool, target };
+    }));
+    // Even a directory selected only for rg could shadow gh or git on the next tick.
+    if (targets.includes(null)) continue;
+    if (systemDirs.includes(entry)) verifiedSystemDirs.add(dir);
+    for (const item of targets) {
+      if (!item || found.has(item.tool)) continue;
+      found.set(item.tool, item.target);
+      dirs.add(dir);
+    }
+  }
+  for (const tool of ["gh", "git"]) {
+    if (!found.has(tool)) throw new Error(`configuration: Install ${tool} outside the project's worktrees before enabling the watcher.`);
+  }
+  return {
+    PATH: [...new Set([...dirs, ...verifiedSystemDirs])].join(path.delimiter),
+    KERYX_REVIEW_GH_BIN: found.get("gh")!,
+    KERYX_REVIEW_GIT_BIN: found.get("git")!,
+  };
+}
+
+export async function watcherProgram(checkouts: string[], host: ScheduleHost) {
   const invocation = host.invocation ?? resolveKeryxInvocation();
   if (invocation.execPath.includes("/AppTranslocation/")) {
     throw new Error("configuration: Move Keryx to Applications and reopen it before enabling a watcher.");
   }
   await access(invocation.execPath, constants.X_OK);
   if (invocation.scriptPath) await access(invocation.scriptPath, constants.R_OK);
-  await access(project, constants.X_OK);
-
-  // launchd has no login-shell PATH. Pin the directories for the tools we checked,
-  // leaving out relative paths and project-local executables.
-  const dirs = (process.env.PATH ?? "")
-    .split(path.delimiter)
-    .filter((p) => path.isAbsolute(p) && p !== project && !p.startsWith(project + path.sep));
-  const find = (file: string) => {
-    const executable = Bun.which(file, { PATH: dirs.join(path.delimiter) || "/usr/bin:/bin" });
-    if (!executable) throw new Error(`configuration: Install ${file} on PATH before enabling the watcher.`);
-    return path.dirname(executable);
-  };
-  const toolDirs = [find("gh"), find("git")];
   const env: Record<string, string> = {
-    PATH: [
-      ...new Set([
-        ...dirs.filter((dir) => toolDirs.includes(dir)),
-        ...toolDirs,
-        "/usr/bin",
-        "/bin",
-        "/usr/sbin",
-        "/sbin",
-      ]),
-    ].join(":"),
+    ...await watcherToolsPath(checkouts),
     KERYX_DATA_DIR: path.resolve(keryxDataDir()),
     GH_PROMPT_DISABLED: "1",
     GH_NO_UPDATE_NOTIFIER: "1",

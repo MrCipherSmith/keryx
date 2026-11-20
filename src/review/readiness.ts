@@ -322,7 +322,7 @@ function coverageMdCheck(ctx: Context): Verdict {
   const runs = dispatchRuns(ctx.research);
   const unfinished = new Set(runs.filter((run) => run.status !== "complete" || run.routedOut === true).map((run) => run.reviewer));
   if (raw === undefined) return bad("coverage.md is missing", `re-run keryx review ingest <input> for this package: it writes coverage.md`);
-  const entries = parseCoverageEntries(raw);
+  const entries = parseCoverageEntries(raw, new Set(runs.filter(run => run.routedOut === true).map(run => run.reviewer)));
   const claimed = entries.filter((entry) => entry.status === "run").map((entry) => entry.reviewer);
   const lying = claimed.filter((name) => unfinished.has(name));
   // Flow 460 F: a reviewer the dispatch record ran must be listed too; coverage.md that names a stand-in omits it. Only

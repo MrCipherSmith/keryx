@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { readProcessIdentity } from "../lib/hub-machine/process-identity";
 import { DeskRunStore, scheduledRunOutcomes } from "./desk-run-store";
 import type { DeskFinish } from "./desk-run-types";
 
@@ -99,18 +100,88 @@ test("dead worker reconciles durable result and protects surviving child before 
   ] };
   store.save(a);
   const dir = store.directory(a.run.id);
-  mkdirSync(dir, { recursive: true });
+  mkdirSync(path.join(dir, "checkout", ".git"), { recursive: true });
+  mkdirSync(path.join(dir, "package"));
+  writeFileSync(path.join(dir, "package", "report.md"), "Archived review");
+  writeFileSync(path.join(dir, "execution-result.json"), "{}");
   writeFileSync(path.join(dir, "child.json"), JSON.stringify({ pid: process.pid }));
   await store.reconcile(key, () => null);
   expect(store.active(key)?.run.id).toBe(a.run.id);
-  rmSync(path.join(dir, "child.json"));
+  expect(existsSync(path.join(dir, "checkout", ".git"))).toBe(true);
+  writeFileSync(path.join(dir, "child.json"), JSON.stringify({ pid: 2_000_000_000 }));
   await store.reconcile(key, () => finish);
   expect(store.active(key)).toBeUndefined();
+  expect(existsSync(path.join(dir, "checkout"))).toBe(false);
+  expect(existsSync(path.join(dir, "child.json"))).toBe(false);
+  expect(existsSync(path.join(dir, "package", "report.md"))).toBe(true);
+  expect(existsSync(path.join(dir, "execution-result.json"))).toBe(true);
   expect(store.history(key).runs[0]?.result?.verdict).toBe("REQUEST_CHANGES");
   expect(store.history(key).runs[0]?.reviewerProgress).toMatchObject({ finished: 1, wave: 1, sessions: [
     { state: "completed" }, { state: "unknown" }, { state: "unknown" },
   ] });
 });
+
+test.each(["queued", "already finished"] as const)(
+  "a stale validation cannot replace a newer admission when it is %s",
+  async state => {
+    const active = started();
+    const late = { ...next, headSha: "d".repeat(40) };
+    const release = Promise.withResolvers<void>();
+    const secondWindow = new DeskRunStore(directory);
+    try {
+      const beforeValidation = store.latestAdmission(key);
+      const firstWindow = release.promise.then(() =>
+        store.atomic(() => store.requestManual("/first-window", key, next, beforeValidation)));
+      const latest = secondWindow.atomic(() =>
+        secondWindow.requestManual("/other-worktree", key, late, secondWindow.latestAdmission(key)));
+      expect(latest).toBeString();
+      const queued = secondWindow.queued(key)!;
+      if (state === "already finished") {
+        secondWindow.atomic(() => {
+          secondWindow.end(active, finish);
+          secondWindow.end(queued, finish);
+        });
+      }
+      release.resolve();
+      await expect(firstWindow).rejects.toThrow("Another review was requested during validation");
+      expect(store.latestAdmission(key)).toBe(latest);
+      expect(store.byId(queued.run.id)?.run.state).toBe(state === "queued" ? "queued" : "completed");
+      if (state === "queued") {
+        expect(store.atomic(() => store.requestManual("/first-window", key, late, beforeValidation))).toBe(latest);
+      }
+    } finally { secondWindow.close(); }
+  },
+);
+
+test.skipIf(process.platform === "win32")("a different process instance cannot hold a dead worker or child slot", async () => {
+  const unrelated = Bun.spawn(["/bin/sleep", "30"], { stdin: "ignore", stdout: "ignore", stderr: "ignore" });
+  try {
+    const live = readProcessIdentity(unrelated.pid)!;
+    const old = { ...live, pgid: unrelated.pid, startedAt: live.startedAt + ":previous-instance" };
+    const id = store.request("/project", key, revision, scheduled)!;
+    const a = store.byId(id)!;
+    a.run.state = "running";
+    a.pid = unrelated.pid;
+    a.workerIdentity = live;
+    store.save(a);
+    const link = { runId: id, project: "/project" };
+    expect(store.scheduledOwnerExited(key, link)).toBe(false);
+    await store.reconcile(key, () => finish, link);
+    expect(store.active(key)?.run.id).toBe(id);
+    expect(store.history(key).runs[0]).not.toHaveProperty("workerIdentity");
+
+    a.workerIdentity = old;
+    store.save(a);
+    const dir = store.directory(id);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(path.join(dir, "child.json"), JSON.stringify({ pid: unrelated.pid, identity: old }));
+    expect(store.scheduledOwnerExited(key, link)).toBe(true);
+    await store.reconcile(key, () => finish, link);
+    expect(store.byId(id)?.run.state).toBe("completed");
+    expect(readProcessIdentity(unrelated.pid)).toEqual(live);
+  } finally { unrelated.kill(); await unrelated.exited; }
+});
+
 test("a late reconciler preserves a successor that started while its predecessor was being evaluated", async () => {
   const old = started(2_000_000_000);
   const delayed = Promise.withResolvers<DeskFinish>();
@@ -170,6 +241,18 @@ const scheduled = {
   budgetMinutes: 3,
   budgetTokens: 900,
 };
+test("scheduled workers share four local slots and reuse an existing attempt at capacity", () => {
+  const keys = Array.from({ length: 5 }, (_, index) => ({ ...key, number: 100 + index }));
+  const ids = keys.slice(0, 4).map((target, index) =>
+    store.atomic(() => store.request("/project", target, revision, { ...scheduled, attemptKey: `event-${index}` })));
+  expect(new Set(ids).size).toBe(4);
+  expect(store.atomic(() => store.request("/project", keys[0]!, revision, scheduled))).toBe(ids[0]!);
+  expect(() => store.atomic(() => store.request("/project", keys[4]!, revision, scheduled))).toThrow("watcher will try again");
+  const first = store.byId(ids[0]!)!;
+  store.atomic(() => store.end(first, { state: "cancelled", phase: "stop", reason: "fixture", result: null }));
+  expect(store.atomic(() => store.request("/project", keys[4]!, revision, scheduled))).not.toBeNull();
+});
+
 test("scheduled and manual requests share an attempt and a spent range needs explicit manual retry", () => {
   const id = store.request("/project", key, revision, scheduled);
   expect(store.request("/other-worktree", key, revision)).toBe(id);
@@ -178,6 +261,18 @@ test("scheduled and manual requests share an attempt and a spent range needs exp
   store.end(attempt, { state: "budget", phase: "budget", reason: "limit", result: null });
   expect(store.request("/project", key, revision, { ...scheduled, attemptKey: "another-event" })).toBe(id);
   expect(store.request("/project", key, revision)).not.toBe(id);
+});
+
+test("a previously superseded revision with no spend can be scheduled if it returns", () => {
+  const active = started();
+  const displaced = store.request("/project", key, next)!;
+  const latest = store.request("/project", key, { ...next, headSha: "e".repeat(40) })!;
+  expect(store.byId(displaced)?.run).toMatchObject({ state: "skipped", phase: "Superseded", startedAt: null });
+  store.end(active, { state: "completed", phase: "Complete", reason: "test", result: finish.result });
+  store.cancel(key, latest);
+  const later = store.requestAttempt("/project", key, next, scheduled);
+  expect(later).toMatchObject({ reused: false });
+  expect(later?.id).not.toBe(displaced);
 });
 
 test("a scheduled range never displaces pending manual work or queues without fresh authorization", () => {

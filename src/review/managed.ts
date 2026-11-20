@@ -5,6 +5,7 @@ import { validateCompletionHost } from "./completion-host";
 import { isAutonomousEnv, readRunProfile } from "./run-profile";
 import type { HostQuestion } from "./types";
 import { type CoverageWaiver, recordCoverageWaiver } from "./coverage-complete";
+import { withoutGitDiscoveryOverrides } from "../lib/git-env";
 import { revisionOperand } from "../lib/git-revision";
 import { flagMissingCitations } from "./rebuttal-citation";
 import { completeHeadGate, isPrBound, type PrLookup } from "./complete-head-gate";
@@ -71,6 +72,7 @@ import { computeChunkPass } from "./chunks";
 import { packageEstimateLine, upsertEstimateLine } from "./estimate-actual";
 import { describePassFinding, injectablePassFindings, missingWarning, passNotInRound, upsertMissingSection } from "./chunk-findings";
 import { flowReviewsRoot, readManifestHead, reviewsRoot } from "./package-location";
+import { parseProjectPr } from "./pr-context";
 import { PREMISES_FILE, PREMISES_SUPERSEDED_FILE, carriedPremiseHolds, mergePremises, parsePremiseClaimSets, previousFindingsUnreadable, renderPremiseMarkdown } from "./premise";
 import { promoteParentExecutions } from "./verify-run";
 import { withOperatorDecisionsLock } from "./operator-decisions";
@@ -199,18 +201,51 @@ async function recordedPackageHead(packageDir: string): Promise<string | undefin
 }
 
 /** Re-ingesting a report into a pinned PR package adds evidence to that same revision. */
-async function ingestTarget(input: ManagedReviewInput, packageDir: string, head: string | null): Promise<ManagedReviewTarget> {
+async function ingestTarget(input: ManagedReviewIngestInput, packageDir: string, head: string | null): Promise<ManagedReviewTarget> {
   const requested = targetWithHead(input.target, head);
   if (input.mode !== "ingest" || !input.reviewId) return requested;
   const file = path.join(packageDir, "manifest.json");
-  if (!await pathExists(file)) return requested;
-  const prior = (JSON.parse(await readFile(file, "utf8")) as ManagedReviewManifest).target;
-  if (prior?.kind !== "pr" || !prior.base || prior.head !== head) return requested;
-  if (prior.ref !== requested.ref || (requested.kind !== "report" && requested.kind !== prior.kind)
-      || (requested.base !== undefined && requested.base !== prior.base)) {
-    throw new Error("The report target conflicts with the pinned PR package. Ingest the same PR, base and head, or start a separate round.");
+  const prior = await pathExists(file) ? (JSON.parse(await readFile(file, "utf8")) as ManagedReviewManifest).target : undefined;
+  if (prior?.kind === "pr" && prior.base && prior.head) {
+    if (!samePrRef(prior.ref, requested.ref) || (requested.kind !== "report" && requested.kind !== prior.kind)
+        || head === null || !await sameRecordedCommit(input.cwd, prior.head, head)
+        || (requested.base !== undefined && !await sameRecordedCommit(input.cwd, prior.base, requested.base))) {
+      throw new Error("The report target conflicts with the pinned PR package. Ingest the same PR, base and head, or start a separate round.");
+    }
+    return prior;
   }
-  return { ...requested, ...prior };
+  const prBase = await input.inferPrBase?.(requested.ref);
+  if (prBase === undefined) return requested;
+  return requested.base === undefined
+    ? { ...requested, base: prBase }
+    : requested.base === prBase ? requested : { ...requested, prBase };
+}
+
+function samePrRef(left: string, right: string): boolean {
+  if (left === right) return true;
+  const a = parseProjectPr(left);
+  const b = parseProjectPr(right);
+  return a !== undefined && b !== undefined && a.repo === b.repo && a.number === b.number;
+}
+
+async function sameRecordedCommit(cwd: string, recorded: string, supplied: string): Promise<boolean> {
+  if (recorded === supplied) return true;
+  const [expected, actual] = await Promise.all([resolveRecordedCommit(cwd, recorded), resolveRecordedCommit(cwd, supplied)]);
+  return expected !== null && expected === actual;
+}
+
+async function resolveRecordedCommit(cwd: string, ref: string): Promise<string | null> {
+  try {
+    const proc = Bun.spawn(["git", "rev-parse", "--verify", "--quiet", ...revisionOperand(`${ref}^{commit}`)], {
+      cwd, stdin: "ignore", stdout: "pipe", stderr: "ignore", timeout: 5000, killSignal: "SIGKILL",
+      env: { ...withoutGitDiscoveryOverrides(process.env), GIT_NO_REPLACE_OBJECTS: "1" },
+    });
+    const [output, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+    const commit = output.trim();
+    return code === 0 && /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(commit) ? commit : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Whether `sha` names a commit in the repository at `cwd`. */
@@ -266,6 +301,8 @@ export type ManagedReviewIngestInput = ManagedReviewInput & {
   research?: unknown;
   /** The set scope B was dispatched over. See {@link screenScopeBFindings}. */
   blastRadius?: BlastRadiusScreenInput | undefined;
+  /** Live base lookup for a named ingest that has no pinned PR target yet. */
+  inferPrBase?: (ref: string) => Promise<string | undefined>;
 };
 
 /**
@@ -349,7 +386,8 @@ export async function createManagedReviewPackage(
   // Resolved HERE rather than beside `buildManifest`, because the locator needs
   // it: a round is a claim about a commit, and its findings are located at that
   // commit rather than against whatever the tree currently holds.
-  const head = await resolveTargetHead(input, packageDir);
+  const target = await ingestTarget(input, packageDir, await resolveTargetHead(input, packageDir));
+  const head = target.head ?? null;
 
   // The line becomes a derived fact here, BEFORE anything downstream reads it:
   // the verifier cites a finding, the cap reports one by site, `scope.md` lists
@@ -514,7 +552,7 @@ export async function createManagedReviewPackage(
   });
   const manifest = buildManifest({
     input,
-    target: await ingestTarget(input, packageDir, head),
+    target,
     reviewId,
     packageDir,
     flowMatch,
@@ -3126,7 +3164,7 @@ async function allocatePackage(
 }
 
 function matchesTarget(flow: FlowState, dir: string, kind: string, ref: string): boolean {
-  if (kind === "pr" && flow.pr.url === ref) {
+  if (kind === "pr" && flow.pr.url && samePrRef(flow.pr.url, ref)) {
     return true;
   }
   if (kind === "issue" && flow.source.ref === ref) {
@@ -3140,7 +3178,7 @@ function matchesTarget(flow: FlowState, dir: string, kind: string, ref: string):
 }
 
 function matchReason(flow: FlowState, dir: string, kind: string, ref: string): FlowMatchResult["reason"] {
-  if (kind === "pr" && flow.pr.url === ref) {
+  if (kind === "pr" && flow.pr.url && samePrRef(flow.pr.url, ref)) {
     return "pr-url";
   }
   if (kind === "issue" && flow.source.ref === ref) {

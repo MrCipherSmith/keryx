@@ -71,6 +71,25 @@ test("uses saved results for legacy waves only within the verified revision and 
   expect(readDeskReviewerProgress(directory, key, { ...run, source: "existing" }, true)).toBeUndefined();
 });
 
+test("retry sessions do not enlarge the assignment plan or finish an active retry", () => {
+  const reviewer = "review-logic";
+  const pair = { reviewer, wave: 1 };
+  const calls = [1, 2].map(wave => ({ label: reviewer, save_result_to: `raw/${reviewer}-w${wave}.txt` }));
+  save(["package", "manifest.json"], { target: { ref, base: baseSha, head: headSha } });
+  save(["package", "desktop-dispatch.json"], { calls });
+  const sessions = [
+    { ...pair, id: randomUUID(), state: "failed" },
+    { ...pair, id: randomUUID(), state: "running" },
+  ];
+  save(["run", "progress.json"], { ref, reviewerSessions: sessions });
+  expect(readDeskReviewerProgress(directory, key, run, true)).toMatchObject({
+    planned: 2, finished: 0, sessions: [{ state: "failed" }, { state: "running" }, { state: "planned" }],
+  });
+  sessions[1]!.state = "completed";
+  save(["run", "progress.json"], { ref, reviewerSessions: sessions });
+  expect(readDeskReviewerProgress(directory, key, run, false)).toMatchObject({ planned: 2, finished: 1 });
+});
+
 test("an unmeasured request keeps an interrupted reviewer's measured usage partial", () => {
   const recorder = new ReviewerActivityRecorder();
   const sessionId = randomUUID();
@@ -109,8 +128,8 @@ test("preserves many simultaneous sessions and distinct retries without inventin
     label: s.reviewer, save_result_to: `raw/${s.reviewer}-w1.txt`,
   })) });
   const result = readDeskReviewerProgress(directory, key, { ...run, state: "partial" }, true);
-  expect(result?.planned).toBe(80);
-  expect(result?.finished).toBe(40);
+  expect(result?.planned).toBe(40);
+  expect(result?.finished).toBe(0);
   expect(new Set(result?.sessions.map(s => s.id)).size).toBe(80);
   expect(result?.sessions[1]?.state).toBe("unknown");
   expect(result?.sessions[1]?.finishedAt).toBeUndefined();

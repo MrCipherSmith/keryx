@@ -1183,7 +1183,10 @@ async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: R
     throw new Error("--prior and --no-prior-round contradict each other: give one.");
   }
   const cwd = process.cwd();
-  const head = await resolveCreateHead(args, targetKind, targetRef, cwd);
+  const reviewId = optionValue(args, "--review-id");
+  const namedPrIngest = mode === "ingest" && targetKind === "pr" && reviewId !== undefined;
+  const head = namedPrIngest && optionValue(args, "--head") === undefined
+    ? undefined : await resolveCreateHead(args, targetKind, targetRef, cwd);
   // A PR round started without --head records the checkout's commit (resolveTargetHead). When that is not the pull
   // request's head the plan is cut over the wrong commit, so it is refused here instead of at the completion gate.
   if (mode === "review-flow" && targetKind === "pr" && optionValue(args, "--head") === undefined) {
@@ -1196,7 +1199,8 @@ async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: R
   // measured against that branch (review F-004); beside a --base, the PR's base is kept as `prBase`, which the recheck
   // also measures, so a --base the starter chose cannot narrow the diff (SEC-001).
   const givenBase = optionValue(args, "--base")?.trim() || undefined;
-  const prBase = targetKind === "pr" ? await (createSeams.prBase ?? ghPrBase)(targetRef) : undefined;
+  const lookupPrBase = createSeams.prBase ?? ghPrBase;
+  const prBase = targetKind === "pr" && !namedPrIngest ? await lookupPrBase(targetRef) : undefined;
   const base = givenBase ?? prBase;
   const keptPrBase = givenBase !== undefined && prBase !== undefined && prBase !== givenBase ? prBase : undefined;
   const input: ManagedReviewIngestInput = {
@@ -1204,7 +1208,11 @@ async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: R
     mode,
     target: { kind: targetKind, ref: targetRef, ...(base === undefined ? {} : { base }), ...(keptPrBase === undefined ? {} : { prBase: keptPrBase }), ...(head === undefined ? {} : { head }) },
     flowId: optionValue(args, "--flow"),
-    reviewId: optionValue(args, "--review-id"),
+    reviewId,
+    ...(namedPrIngest ? {
+      inferPrBase: lookupPrBase,
+      resolveHead: async () => await resolveGitHead(cwd) ?? await resolveCreateHead(args, targetKind, targetRef, cwd) ?? null,
+    } : {}),
     ...(args.includes(AUTOMATIC_REVIEW_FLAG) ? { automatic: true } : {}),
     memoryQuery: optionValue(args, "--memory-query")?.trim() || undefined,
     reviewers,

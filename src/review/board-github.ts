@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { realpathSync } from "node:fs";
 
 // Each board PR has up to two independent people connections. Four parents keep
 // that page at eight parallel gh workers, with cursors within a connection still sequential.
@@ -10,6 +11,17 @@ const commandOptions = (cwd: string, env: NodeJS.ProcessEnv = process.env) => ({
   cwd, encoding: "utf8" as const, timeout: 18_000, maxBuffer: 8 * 1024 * 1024,
   env: { ...env, GH_PROMPT_DISABLED: "1", GH_NO_UPDATE_NOTIFIER: "1", GIT_TERMINAL_PROMPT: "0" },
 });
+
+/** A launchd pin must still match the command on its installed PATH. */
+export function reviewTool(name: "gh" | "git", env: NodeJS.ProcessEnv = process.env): string {
+  const pin = env[name === "gh" ? "KERYX_REVIEW_GH_BIN" : "KERYX_REVIEW_GIT_BIN"];
+  if (!pin) return name;
+  const candidate = Bun.which(name, { PATH: env.PATH ?? "" });
+  try {
+    if (candidate && realpathSync.native(candidate) === pin) return pin;
+  } catch { /* The executable may have been replaced between lookup and resolution. */ }
+  throw new Error("configuration: A watcher executable moved. Enable the watcher again to verify its tools.");
+}
 
 /** Extract only owner/name. Remotes may include credentials; never return or log their full URL. */
 function githubRemote(raw: string): string | undefined {
@@ -46,9 +58,10 @@ export function selectRepository(repositories: string[], requested?: string): st
   return selected;
 }
 
-export async function reviewRepositories(cwd: string): Promise<string[]> {
+export async function reviewRepositories(cwd: string, env?: NodeJS.ProcessEnv): Promise<string[]> {
+  const git = reviewTool("git", env);
   try {
-    const { stdout } = await exec("git", ["remote", "-v"], commandOptions(cwd));
+    const { stdout } = await exec(git, ["remote", "-v"], commandOptions(cwd, env));
     return configuredRepositories(stdout);
   } catch {
     throw new Error("configuration: Open a Git project with a GitHub.com remote.");
@@ -66,8 +79,9 @@ function githubFailure(diagnostic: string): Error {
 }
 
 export async function boardGh(cwd: string, args: string[], env?: NodeJS.ProcessEnv, timeout = 18_000): Promise<string> {
+  const gh = reviewTool("gh", env);
   try {
-    return (await exec("gh", args, { ...commandOptions(cwd, env), timeout })).stdout;
+    return (await exec(gh, args, { ...commandOptions(cwd, env), timeout })).stdout;
   } catch (error) {
     const failure = error as { code?: unknown; stderr?: string; stdout?: string };
     if (failure.code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER") throw new Error("unavailable: GitHub page exceeds the reader output limit.", { cause: error });

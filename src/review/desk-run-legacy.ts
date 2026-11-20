@@ -1,7 +1,8 @@
 // Project artifacts that predate Desktop have no authenticated attempt record.
 // Bind to an explicit GitHub repository and PR; preserve unknown provenance.
 import { createHash } from "node:crypto";
-import { realpathSync } from "node:fs";
+import { readdirSync, realpathSync } from "node:fs";
+import { manifestStamp, openReviewLinkIndex } from "./flow-link-index";
 import { artifactDirectories, readKnown } from "./project-artifacts";
 import path from "node:path";
 import { ingestedFindingCounts } from "./verdict";
@@ -40,15 +41,17 @@ function stableId(key: DeskRunKey, name: string) {
 export function readExistingReviews(cwd: string, key: DeskRunKey): DeskRun[] {
   const meta = path.join(realpathSync(cwd), ".metaproject");
   const url = `https://github.com/${key.repo}/pull/${key.number}`.toLowerCase();
-  function belongs(target: Fields) {
+  function targetUrl(target: Fields): string {
     const ref = typeof target.ref === "string" ? target.ref.replace(/\/$/, "").toLowerCase() : "";
+    if (/^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/[1-9]\d*$/.test(ref)) return ref;
+    return /^#?[1-9]\d*$/.test(ref) && typeof target.repository === "string"
+      ? `https://github.com/${target.repository.toLowerCase()}/pull/${ref.replace(/^#/, "")}` : "";
+  }
+  function belongs(target: Fields) {
     const repo = typeof target.repository === "string" ? target.repository.toLowerCase() : null;
     if (repo && repo !== key.repo.toLowerCase()) return false;
     if (target.number !== undefined && target.number !== key.number) return false;
-    return (
-      ref === url ||
-      (repo === key.repo.toLowerCase() && (ref === String(key.number) || ref === "#" + key.number))
-    );
+    return targetUrl(target) === url;
   }
   const found = new Map<string, DeskRun>();
   function archive(
@@ -89,8 +92,13 @@ export function readExistingReviews(cwd: string, key: DeskRunKey): DeskRun[] {
     });
   }
   const runDir = path.join(meta, "data", "review-autonomous", key.repo.replace("/", "-") + "-pr" + key.number);
-  const summary = json(path.join(runDir, "summary.json"));
-  if (summary) {
+  let archived: string[] = [];
+  try {
+    if (realpathSync(runDir) === runDir) archived = readdirSync(runDir).filter(name => /^summary\.(?:[a-f0-9]{8}|previous)\.json$/.test(name));
+  } catch { /* No autonomous summary directory. */ }
+  for (const name of [...archived, "summary.json"]) {
+    const summary = json(path.join(runDir, name));
+    if (!summary) continue;
     const data = summary.data,
       target = object(data.target);
     if (
@@ -104,10 +112,10 @@ export function readExistingReviews(cwd: string, key: DeskRunKey): DeskRun[] {
       const id =
         typeof pkg.id === "string" && pkg.id
           ? "package:" + pkg.id
-          : "summary:" + String(data.startedAt ?? summary.time);
+          : "summary:" + String(data.startedAt ?? (name === "summary.json" ? summary.time : name));
       const reason =
         typeof data.reason === "string" ? data.reason.slice(0, 4096) : "Autonomous summary available.";
-      const report = readKnown(path.join(runDir, "report.md"), 256 * 1024, true)?.text ?? reason;
+      const report = name === "summary.json" ? readKnown(path.join(runDir, "report.md"), 256 * 1024, true)?.text ?? reason : reason;
       const counts = countFindings(null);
       const known = (Object.keys(counts) as (keyof FindingCounts)[]).every((severity) => {
         const n = object(data.findings)[severity];
@@ -128,10 +136,17 @@ export function readExistingReviews(cwd: string, key: DeskRunKey): DeskRun[] {
       );
     }
   }
+  const links = openReviewLinkIndex(meta, "package-links");
   let count = 0;
   for (const directory of packages(meta)) {
     if (++count > 4096) break;
-    const item = json(path.join(directory, "manifest.json"));
+    const fileName = path.join(directory, "manifest.json");
+    const relative = path.relative(meta, directory);
+    const stamp = manifestStamp(fileName);
+    const link = links.lookup(relative, stamp);
+    if (link !== undefined && link !== url) continue;
+    const item = json(fileName);
+    if (item) links.record(relative, stamp, targetUrl(object(item.data.target)));
     if (
       !item ||
       !belongs(object(item.data.target)) ||
@@ -162,5 +177,6 @@ export function readExistingReviews(cwd: string, key: DeskRunKey): DeskRun[] {
     }
     archive(data, target, id, item.time, "Existing review package", reason, report, findings, previous?.usage, previous);
   }
+  links.save();
   return [...found.values()];
 }

@@ -2,7 +2,7 @@ import type { scheduledRunOutcomes } from "./desk-run-store";
 import type { Database } from "bun:sqlite";
 import { randomUUID } from "node:crypto";
 import { watcherTransaction as access, watcherScope as scope } from "./watcher-db";
-import { observeRules } from "./review-rule-queue";
+import { linkedReviewRuns, observeRules } from "./review-rule-queue";
 import { invalidateRuleWork } from "./review-rules";
 import { dispatchReadyRules, type DispatchReviewRule } from "./review-rule-dispatch";
 import { listReviewCards } from "./board";
@@ -22,6 +22,7 @@ type State = Pick<
   "state" | "intervalMinutes" | "lastAttemptAt" | "lastSuccessAt" | "lastError"
 >;
 type Row = State & { baseline: string | null; lease: string | null; pid: number | null };
+const historyLimit = 50;
 
 function snapshot(db: Database, id: string): WatcherSnapshot {
   const state = db
@@ -36,10 +37,10 @@ function snapshot(db: Database, id: string): WatcherSnapshot {
     lastError: null,
   };
   const rows = db
-    .query<{ event: string }, [string]>(
-      "SELECT event FROM watcher_events WHERE watcher=? ORDER BY id DESC LIMIT 50",
+    .query<{ event: string }, [string, number]>(
+      "SELECT event FROM watcher_events WHERE watcher=? ORDER BY id DESC LIMIT ?",
     )
-    .all(id);
+    .all(id, historyLimit);
   return {
     version: 1,
     installed: false,
@@ -150,12 +151,14 @@ export async function pollWatcher(
   key: WatcherKey,
   {
     fetch = fetchOpenCards,
+    beforeFetch,
     dispatch,
     outcomes,
   }: {
     dispatch?: DispatchReviewRule;
     outcomes?: typeof scheduledRunOutcomes;
     fetch?: (cwd: string, key: WatcherKey) => Promise<ReviewBoardSnapshot>;
+    beforeFetch?: () => Promise<void>;
   } = {},
 ): Promise<WatcherSnapshot> {
   const id = scope(cwd, key),
@@ -176,9 +179,19 @@ export async function pollWatcher(
   if (!claimed) return readWatcher(cwd, key);
   let cards: WatchedCard[] | undefined;
   let failure: string | null = null;
+  let links: ReturnType<typeof linkedReviewRuns> = [];
   try {
+    await beforeFetch?.();
     const board = await fetch(cwd, key);
     validateObservation(board, key);
+    links = access((db) => db.query("SELECT 1 FROM watchers WHERE id=? AND lease=? AND state='enabled'").get(id, token)
+      ? linkedReviewRuns(db, id) : []);
+    if (links.length) {
+      // This can read an on-disk verdict. Keep it outside both SQLite transactions and only
+      // after verifying this account. The commit below validates the lease again.
+      const { reconcileLinkedScheduledRuns } = await import("./desk-run-service");
+      await reconcileLinkedScheduledRuns(cwd, key, links, new Set(board.cards.map(card => card.number)));
+    }
     cards = observedCards(board.cards);
   } catch (error) {
     failure =
@@ -199,10 +212,13 @@ export async function pollWatcher(
       const at = new Date().toISOString();
       const changes =
         row.baseline === null ? [] : watcherChanges(JSON.parse(row.baseline) as WatchedCard[], cards, at);
-      observeRules(db, id, cards, changes, at, outcomes);
+      observeRules(db, id, cards, changes, at, outcomes, links);
       if (changes.length) {
         const insert = db.prepare("INSERT INTO watcher_events (watcher,event) VALUES (?,?)");
         for (const event of changes) insert.run(id, JSON.stringify(event));
+        db.run(`DELETE FROM watcher_events WHERE watcher=? AND id < (
+          SELECT id FROM watcher_events WHERE watcher=? ORDER BY id DESC LIMIT 1 OFFSET ?)`,
+        [id, id, historyLimit - 1]);
       }
       db.run("UPDATE watchers SET lease=NULL,pid=NULL,lastError=NULL,lastSuccessAt=?,baseline=? WHERE id=?", [
         at,

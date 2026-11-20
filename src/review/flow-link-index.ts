@@ -4,8 +4,8 @@ import path from "node:path";
 import { ensureKeryxSubdir, keryxDataDir, readConfigFile, writeOwnerOnlyFileAtomic } from "../lib/config-dir";
 
 // Cache only the link on a regular manifest. Matching manifests and their evidence are always read from disk.
-export function openFlowLinkIndex(root: string) {
-  const namespace = ["desktop-review", "flow-links"];
+export function openReviewLinkIndex(root: string, kind: "flow-links" | "package-links") {
+  const namespace = ["desktop-review", kind];
   const dataDir = keryxDataDir();
   const name = createHash("sha256").update(root).digest("hex") + ".json";
   const file = path.join(dataDir, ...namespace, name);
@@ -40,10 +40,10 @@ export function openFlowLinkIndex(root: string) {
   };
 }
 
-export function flowManifestStamp(file: string): string | undefined {
+export function manifestStamp(file: string): string | undefined {
   try {
     const stat = lstatSync(file, { bigint: true });
     if (stat.isFile()) return [stat.dev, stat.ino, stat.size, stat.ctimeNs, stat.mtimeNs].join(":");
-  } catch { /* A Flow may be removed while the board is reading it. */ }
+  } catch { /* A project artifact may be removed while the board is reading it. */ }
   return undefined;
 }

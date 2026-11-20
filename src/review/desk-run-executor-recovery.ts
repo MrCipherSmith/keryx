@@ -1,3 +1,4 @@
+import { writeFileAtomic } from "../lib/fs";
 import { roleDispatchWaves } from "./estimate";
 import type { SliceManifest } from "./slice";
 // Called after the worker and its reviewer process group have exited.
@@ -9,20 +10,57 @@ import { splitUsage } from "./dispatch-usage";
 import { createEventTail } from "./autonomous-progress";
 import type { RunProgress } from "./autonomous-run";
 import { countFindings, knownFindingList, renderReport, validateSummary, type AutonomousSummary } from "./autonomous-summary";
-import type { CoverageReport } from "./coverage-complete";
+import { COVERAGE_FILE, type CoverageReport } from "./coverage-complete";
+import { LEGACY_DESK_RUN_SCOPE } from "./desk-run-types";
+import { exitCodeFor } from "./autonomous-profile";
 import type { ManagedReviewManifest } from "./types";
 import { computeVerdict, type InterimVerdict } from "./verdict";
 import type { DeskExecutionResult } from "./desk-run-executor";
 
-interface Request { repo: string; number: number; baseSha: string; headSha: string; cancelled?: boolean }
+interface Request { scope: string | undefined; repo: string; number: number; baseSha: string; headSha: string; cancelled?: boolean }
 
 export function recordedSha(value: unknown): string | null {
   return typeof value === "string" && /^[0-9a-f]{40}$/i.test(value) ? value : null;
 }
 
-export function hasFullCoverage(entries: ManagedReviewManifest["coverage"], fileReport: CoverageReport | null) {
-  const roster = entries.some(entry => entry.reviewer && entry.reviewer !== "review-orchestrator") && entries.every(entry => entry.status === "run");
-  return roster && (!fileReport || (fileReport.tracked === true && fileReport.counts?.uncovered === 0 && !fileReport.waived));
+function hasFullCoverage(entries: ManagedReviewManifest["coverage"], dir: string, prepared: boolean): boolean {
+  if (!entries.some(e => e?.reviewer && e.reviewer !== "review-orchestrator") || !entries.every(e => e?.status === "run")) return false;
+  const file = path.join(dir, COVERAGE_FILE);
+  try {
+    if (!lstatSync(file, { throwIfNoEntry: false })) {
+      // Packages predating prepared Desktop dispatch may have only the manifest roster.
+      if (prepared || lstatSync(path.join(dir, "desktop-dispatch.json"), { throwIfNoEntry: false })) return false;
+      const planFile = path.join(dir, "plan.json");
+      if (!lstatSync(planFile, { throwIfNoEntry: false })) return true;
+      const plan = json<{ desktopDispatch?: unknown }>(planFile);
+      return !!plan && typeof plan === "object" && !Array.isArray(plan) && plan.desktopDispatch === undefined;
+    }
+    const report = json<CoverageReport>(file);
+    if (report?.schemaVersion !== 1 || report.tracked !== true || report.waived !== false || report.waiver !== undefined ||
+        report.counts?.uncovered !== 0 || !Array.isArray(report.files) || report.files.length !== report.counts.inScope) return false;
+    let covered = 0, omitted = 0;
+    for (const entry of report.files) {
+      if (!entry || typeof entry.file !== "string" || !entry.file || (entry.scope !== "A" && entry.scope !== "B")) return false;
+      if (entry.status === "covered") covered++;
+      else if (entry.status === "omitted" && typeof entry.reason === "string" && entry.reason.trim()) omitted++;
+      else return false;
+    }
+    return covered === report.counts.covered && omitted === report.counts.omitted;
+  } catch { return false; }
+}
+
+export function checkedDeskSummary(summary: AutonomousSummary,
+  result: Pick<DeskExecutionResult, "outcome" | "reason" | "findings" | "findingsKnown">, retained: boolean): AutonomousSummary {
+  const status = result.outcome === "complete" ? "complete" : summary.status === "complete" ? "incomplete" : summary.status;
+  return { ...summary, status, exitCode: exitCodeFor(status), reason: result.reason, findings: result.findings,
+    ...(result.findingsKnown !== undefined ? { findingsKnown: result.findingsKnown } : {}),
+    package: retained && summary.package ? { ...summary.package, path: "../package" } : summary.package };
+}
+
+/** Publish the report first: until the summary is committed, recovery can retry the publication. */
+export async function saveDeskSummary(runDir: string, summary: AutonomousSummary, report: string) {
+  await writeFileAtomic(path.join(runDir, "run/report.md"), report, { mode: 0o600 });
+  await writeFileAtomic(path.join(runDir, "run/summary.json"), JSON.stringify(summary), { mode: 0o600 });
 }
 
 function json<T>(file: string): T | null {
@@ -48,12 +86,16 @@ export function desktopRoutedOut(dir: string): Set<string> {
 
 /** A new Desktop plan has one saved result per wave and host-observed participation per reviewer.
  * A ledger note explaining a skipped role is useful evidence of the skip, never a reviewer result. */
-export function hasDesktopReviewerEvidence(dir: string, usage: ReviewRunUsage | undefined, routed = desktopRoutedOut(dir)): boolean {
-  const plan = json<{ desktopDispatch?: string; roster?: string[]; dispatches?: number }>(path.join(dir, "plan.json"));
+export function hasDesktopReviewerEvidence(dir: string, usage: ReviewRunUsage | undefined, routed = desktopRoutedOut(dir), prepared = true): boolean {
+  const planFile = path.join(dir, "plan.json");
+  const plan = json<{ desktopDispatch?: string; roster?: string[]; dispatches?: number }>(planFile);
   const queueFile = path.join(dir, "desktop-dispatch.json");
-  if (!plan?.desktopDispatch && !existsSync(queueFile)) return true; // packages created before prepared dispatch
+  if (!prepared && !existsSync(queueFile)) {
+    if (!existsSync(planFile)) return true; // Legacy completion with no plan format.
+    if (plan && typeof plan === "object" && !Array.isArray(plan) && plan.desktopDispatch === undefined) return true;
+  }
   const queue = json<{ blocked?: unknown[]; calls: Array<{ label: string; save_result_to: string }> }>(queueFile);
-  if (!Array.isArray(plan?.roster) || !Array.isArray(queue?.calls) || !!queue.blocked?.length || !queue.calls.length || plan.dispatches !== queue.calls.length) return false;
+  if ((prepared && typeof plan?.desktopDispatch !== "string") || !Array.isArray(plan?.roster) || !Array.isArray(queue?.calls) || !!queue.blocked?.length || !queue.calls.length || plan.dispatches !== queue.calls.length) return false;
   const sliceFile = path.join(dir, "slices/manifest.json");
   const expected = new Set<string>();
   if (existsSync(sliceFile)) {
@@ -90,8 +132,15 @@ export function deskVerdictHeadline(evaluated: InterimVerdict, complete: boolean
   return evaluated.source !== "none" && (evaluated.total || evaluated.held.length || complete) ? evaluated.headline : null;
 }
 
-export function missingVerdictCoverage(evaluated: InterimVerdict, ran: Set<string>, routed: Set<string>) {
-  return evaluated.unreadable.length > 0 || evaluated.pendingReviewers?.some(role => !routed.has(role) && (!evaluated.pendingAmbiguous || !ran.has(role)));
+export function completeDeskCoverage(dir: string, entries: ManagedReviewManifest["coverage"], usage: ReviewRunUsage | undefined,
+  evaluated: InterimVerdict, prepared: boolean) {
+  const routed = desktopRoutedOut(dir);
+  const ran = new Set(entries.filter(entry => entry?.status === "run").map(entry => entry.reviewer));
+  if (evaluated.unreadable.length || evaluated.pendingReviewers?.some(role => !routed.has(role) && (!evaluated.pendingAmbiguous || !ran.has(role)))) return false;
+  const research = json<{ dispatch?: { selected?: string[]; skipped?: unknown[] } }>(path.join(dir, "research.json"));
+  const required = research?.dispatch?.selected ?? [];
+  return Array.isArray(required) && required.every(role => ran.has(role) || routed.has(role)) && !research?.dispatch?.skipped?.length &&
+    hasFullCoverage(entries.filter(entry => !routed.has(entry?.reviewer)), dir, prepared) && hasDesktopReviewerEvidence(dir, usage, routed, prepared);
 }
 
 function preview(file: string): string {
@@ -149,17 +198,12 @@ export async function recoverDeskExecution(runDir: string, request: Request): Pr
   const checkedHead = found ? recordedSha(manifest.target.head) : null;
   const items = found ? json<unknown>(path.join(pkg, "findings.json")) : null;
   const entries = found && Array.isArray(manifest.coverage) ? manifest.coverage : [];
-  const research = found ? json<{ dispatch?: { selected?: string[]; skipped?: unknown[] } }>(path.join(pkg, "research.json")) : null;
-  const required = research?.dispatch?.selected ?? [];
-  const ran = new Set(entries.filter(entry => entry?.status === "run").map(entry => entry.reviewer));
-  const routed = found ? desktopRoutedOut(pkg) : new Set<string>();
-  const accounted = hasFullCoverage(entries.filter(entry => !routed.has(entry.reviewer)), found ? json<CoverageReport>(path.join(pkg, "coverage.json")) : null) &&
-    Array.isArray(required) && required.every(name => ran.has(name) || routed.has(name)) && !research?.dispatch?.skipped?.length;
+  const prepared = request.scope !== undefined && request.scope !== LEGACY_DESK_RUN_SCOPE;
   const matching = checkedBase === request.baseSha && checkedHead === request.headSha;
   const closed = found && manifest.status === "closed";
   const evaluated = found && matching ? await computeVerdict(pkg).catch(() => null) : null;
-  const complete = closed && matching && accounted && hasDesktopReviewerEvidence(pkg, usage, routed) && knownFindingList(items) &&
-    evaluated !== null && !missingVerdictCoverage(evaluated, ran, routed) && (!summary || summary.status === "complete");
+  const complete = closed && matching && knownFindingList(items) && evaluated !== null && (!summary || summary.status === "complete") &&
+    completeDeskCoverage(pkg, entries, usage, evaluated, prepared);
   const coverage = complete ? "complete" : (entries.length && Array.isArray(items)) ? "partial" : "unknown";
   const knownSource = evaluated && (evaluated.source === "raw reviewer results" || knownFindingList(items));
   const findings = knownSource ? evaluated.counts : knownFindingList(items) ? countFindings(items) : summary?.findings ?? countFindings(null);
@@ -170,7 +214,17 @@ export async function recoverDeskExecution(runDir: string, request: Request): Pr
   const reason = complete ? "Recovered a closed review package for the requested revision." : request.cancelled ? "The review stopped after cancellation." :
     !matching && closed ? "The package did not confirm the requested base and head." :
     summary?.status !== "complete" && summary?.reason ? summary.reason : "Recovered the available evidence; the full round could not be verified.";
-  const report = found ? preview(path.join(pkg, "report.md")) : "";
-  return { outcome, checkedBase, checkedHead, coverage, findings, findingsKnown, reason, verdict: knownSource ? deskVerdictHeadline(evaluated, complete) : null, ...(usage ? { usage } : {}),
-    report: report || (summary ? renderReport(summary) : null) };
+  const packageReport = found ? preview(path.join(pkg, "report.md")) : "";
+  const result: DeskExecutionResult = { outcome, checkedBase, checkedHead, coverage, findings, findingsKnown, reason,
+    verdict: knownSource ? deskVerdictHeadline(evaluated, complete) : null, ...(usage ? { usage } : {}), report: null };
+  const retained = !!found && summary?.package?.id === manifest.reviewId;
+  const saved = summary ? checkedDeskSummary(summary, result, retained) : null;
+  const header = saved ? renderReport(saved) : packageReport ? `# Recovered review: ${subject}\n\n- Status: **${outcome}**\n- Why: ${reason}\n` : "";
+  result.report = [header, packageReport].filter(Boolean).join("\n") || null;
+  // A dead worker can leave the runner's original complete header. Repair only its own pinned archive.
+  if (saved && result.report && summary?.status === "complete" && saved.status !== summary.status && retained &&
+      matching && summary.target.head === request.headSha && lstatSync(path.join(runDir, "run")).isDirectory()) {
+    await saveDeskSummary(runDir, saved, result.report);
+  }
+  return result;
 }

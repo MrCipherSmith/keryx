@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ReviewBoardSnapshot, ReviewCard } from "./board-types";
+import { watcherScope, watcherTransaction } from "./watcher-db";
 import { configureWatcher, listConfiguredWatchers, pauseWatcher, pollWatcher, readWatcher } from "./watcher";
 
 const key = { repo: "team/shop", repositoryId: "R_test", viewer: "A" };
@@ -84,6 +85,19 @@ test("temporary errors and incomplete snapshots retain baseline, resume discards
   configureWatcher(cwd, key, 3);
   expect((await tick(board())).events).toHaveLength(1);
   expect(readWatcher(cwd, key).lastError).toBeNull();
+});
+
+test("stores only the newest 50 observed events per watcher", async () => {
+  configureWatcher(cwd, key, 1);
+  await tick(board());
+  const cards = Array.from({ length: 65 }, (_, index) => card({ number: index + 1 }));
+  const snapshot = await tick(board(...cards));
+  const count = watcherTransaction(db => db.query<{ count: number }, [string]>(
+    "SELECT count(*) AS count FROM watcher_events WHERE watcher=?",
+  ).get(watcherScope(cwd, key))?.count);
+  expect(count).toBe(50);
+  expect(snapshot.events).toHaveLength(50);
+  expect(snapshot.events.every(event => event.kind === "opened")).toBe(true);
 });
 
 test("concurrent ticks skip an active poll; a pre-pause result cannot overwrite a resumed baseline", async () => {

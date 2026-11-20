@@ -1,10 +1,13 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { readFile, mkdtemp, mkdir, realpath, rm, writeFile } from "node:fs/promises";
+import { readFile, mkdtemp, mkdir, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { fixtureGitEnv } from "../review/test-git-fixture";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { parseWatchArgs, requestWatch } from "./review-watch";
 import { pollWatcher } from "../review/watcher";
 import type { ReviewBoardSnapshot, ReviewCard } from "../review/board-types";
+import { reviewTool } from "../review/board-github";
 import { watcherLabel } from "../review/watch-launchd";
 import type { ScheduleHost } from "../trigger/install";
 
@@ -19,6 +22,7 @@ beforeEach(async () => {
   dir = await realpath(await mkdtemp(path.join(tmpdir(), "review-watch-os-")));
   project = path.join(dir, "space & <project>");
   await mkdir(project);
+  execFileSync("/usr/bin/git", ["init", "-q", project], { env: fixtureGitEnv() });
   const tools = path.join(dir, "bin");
   await mkdir(tools);
   await writeFile(path.join(tools, "gh"), "#!/bin/sh\nexit 1\n", { mode: 0o700 });
@@ -68,6 +72,10 @@ const control = (action: "enable" | "status" | "pause" | "resume", mins?: number
 const plist = () => path.join(host.launchAgentsDir!, watcherLabel(project, key) + ".plist");
 
 test("schedule is independent of Desktop, executable paths are pinned and concurrent enables install once", async () => {
+  const searchTools = path.join(dir, "search-tools");
+  await mkdir(searchTools);
+  await writeFile(path.join(searchTools, "rg"), "#!/bin/sh\nexit 0\n", { mode: 0o700 });
+  process.env.PATH = searchTools + path.delimiter + process.env.PATH;
   const verifiedEnvs: (NodeJS.ProcessEnv | undefined)[] = [];
   const enable = () => requestWatch(project, { key, action: "enable", minutes: 7 }, host, async (_cwd, _key, env) => {
     verifiedEnvs.push(env);
@@ -79,11 +87,13 @@ test("schedule is independent of Desktop, executable paths are pinned and concur
   expect(contents).toContain("<key>RunAtLoad</key><true/>");
   expect(contents).toContain("<string>tick</string>");
   expect(contents).toContain("&amp; &lt;project&gt;");
-  expect(verifiedEnvs.filter(env => !env)).toHaveLength(2);
-  const scheduledEnvs = verifiedEnvs.filter(env => env !== undefined);
+  expect(verifiedEnvs.filter(env => env?.GH_TOKEN === ghToken && env.GITHUB_TOKEN === githubToken)).toHaveLength(2);
+  const scheduledEnvs = verifiedEnvs.filter(env => env && !env.GH_TOKEN && !env.GITHUB_TOKEN);
   expect(scheduledEnvs).toHaveLength(2);
   for (const env of scheduledEnvs) {
+    if (!env) throw Error("Expected the watcher environment");
     expect(env.HOME).toBeTruthy();
+    expect(env.PATH?.split(path.delimiter)).toContain(searchTools);
     expect(env.GH_TOKEN).toBeUndefined();
     expect(env.GITHUB_TOKEN).toBeUndefined();
     expect(Object.values(env)).not.toContain(ghToken);
@@ -94,6 +104,59 @@ test("schedule is independent of Desktop, executable paths are pinned and concur
   await control("enable", 12);
   expect(await readFile(plist(), "utf8")).toContain("<integer>720</integer>");
   expect(loaded.size).toBe(1);
+  expect((await control("status")).installed).toBe(true);
+});
+
+test("install from a linked worktree keeps only verified external tool paths and canonical executable targets", async () => {
+  const linked = path.join(dir, "linked checkout");
+  const git = (...args: string[]) => execFileSync("/usr/bin/git", ["-c", "core.hooksPath=/dev/null", "-C", project, ...args], { env: fixtureGitEnv() });
+  git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgSign=false", "commit", "--allow-empty", "-qm", "base");
+  git("worktree", "add", "-q", "--detach", linked);
+
+  const mainTools = path.join(project, "bin"), linkedTools = path.join(linked, "bin");
+  const mixed = path.join(dir, "mixed"), alias = path.join(dir, "alias"), trusted = path.join(dir, "trusted");
+  for (const location of [mainTools, linkedTools, mixed, trusted]) await mkdir(location);
+  // Mode permits inspection as a candidate; none of these markers contains runnable code.
+  for (const file of [path.join(mainTools, "git"), path.join(linkedTools, "gh"), path.join(mixed, "rg"), path.join(trusted, "rg")]) {
+    await writeFile(file, "", { mode: 0o700 });
+  }
+  await symlink(mainTools, alias);
+  await symlink(path.join(linkedTools, "gh"), path.join(mixed, "gh"));
+  const trustedAlias = path.join(dir, "trusted-alias");
+  await symlink(trusted, trustedAlias);
+  process.env.PATH = [alias, linkedTools, mixed, trustedAlias, path.join(dir, "bin"), "/usr/bin", "/bin"].join(path.delimiter);
+  const envs: NodeJS.ProcessEnv[] = [];
+  const result = await requestWatch(linked, { action: "enable", key, minutes: 5 }, host, async (_project, _key, env) => {
+    expect(_project).toBe(project);
+    envs.push(env!);
+  });
+  expect(result.installed).toBe(true);
+  expect(envs).toHaveLength(2);
+  for (const env of envs) {
+    const dirs = env.PATH!.split(path.delimiter);
+    for (const excluded of [mainTools, alias, linkedTools, mixed, trustedAlias]) expect(dirs).not.toContain(excluded);
+    expect(dirs).toContain(trusted);
+    expect(env.KERYX_REVIEW_GIT_BIN).toBe(await realpath("/usr/bin/git"));
+    expect(env.KERYX_REVIEW_GH_BIN).toBe(path.join(dir, "bin", "gh"));
+    expect(Bun.which("rg", { PATH: env.PATH! })).toBe(path.join(trusted, "rg"));
+  }
+  const installed = envs[1]!;
+  expect(reviewTool("gh", installed)).toBe(path.join(dir, "bin", "gh"));
+  await rm(path.join(dir, "bin", "gh"));
+  await symlink(path.join(linkedTools, "gh"), path.join(dir, "bin", "gh"));
+  expect(() => reviewTool("gh", installed)).toThrow("Enable the watcher again");
+  const contents = await readFile(plist(), "utf8");
+  for (const excluded of [alias, linkedTools, mixed]) expect(contents).not.toContain(excluded);
+});
+
+test("a loaded legacy timer requires repair before another scheduled GitHub read", async () => {
+  await control("enable", 5);
+  const contents = await readFile(plist(), "utf8");
+  await writeFile(plist(), contents.replace("<key>KERYX_REVIEW_GIT_BIN</key>", "<key>legacy</key>"));
+  expect((await control("status")).installed).toBe(false);
+  await requestWatch(project, { action: "tick", key, minutes: undefined }, host);
+  expect((await control("status")).lastError).toContain("Enable the watcher again");
+  await control("enable", 5);
   expect((await control("status")).installed).toBe(true);
 });
 

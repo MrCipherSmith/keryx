@@ -46,15 +46,17 @@ export function updateWork(
   );
 }
 
-/** Only an explicit zero-spend refusal from the runner permits another automatic attempt. */
-function refreshLinkedRuns(db: Database, scope: string, outcomes: typeof scheduledRunOutcomes, at: string) {
-  const linked = db
-    .query<{ runId: string }, [string]>(
-      `SELECT runId FROM review_rule_work WHERE watcher=?
+export function linkedReviewRuns(db: Database, scope: string) {
+  return db.query<{ runId: string; number: number }, [string]>(
+    `SELECT runId,number FROM review_rule_work WHERE watcher=?
       AND state IN ('started','linked') AND valid=1 AND checked>=0 AND runId IS NOT NULL
-      GROUP BY runId ORDER BY MIN(checked),MIN(rowid) LIMIT 50`,
-    )
-    .all(scope);
+      GROUP BY runId,number ORDER BY MIN(checked),MIN(rowid) LIMIT 50`,
+  ).all(scope);
+}
+
+/** Only an explicit zero-spend refusal from the runner permits another automatic attempt. */
+function refreshLinkedRuns(db: Database, scope: string, outcomes: typeof scheduledRunOutcomes, at: string,
+  linked: ReturnType<typeof linkedReviewRuns>) {
   if (!linked.length) return;
   const { retryable, terminal } = outcomes(linked.map((row) => row.runId));
   for (const { runId } of linked) {
@@ -82,8 +84,9 @@ export function observeRules(
   events: WatcherEvent[],
   at: string,
   outcomes: typeof scheduledRunOutcomes = scheduledRunOutcomes,
+  linked = linkedReviewRuns(db, scope),
 ) {
-  refreshLinkedRuns(db, scope, outcomes, at);
+  refreshLinkedRuns(db, scope, outcomes, at, linked);
   const rules = new Map<string, ReviewRule>();
   for (const row of ruleRows(db, scope)) {
     const rule = JSON.parse(row.rule) as ReviewRule;

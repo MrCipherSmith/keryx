@@ -2,7 +2,7 @@ import { homedir } from "node:os";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { withFileLock } from "../lib/fs";
-import { mainCheckout, parseWatcherKey, verifyIdentity } from "../review/watcher-project";
+import { mainCheckout, parseWatcherKey, verifyIdentity, watcherWorktrees } from "../review/watcher-project";
 import {
   configureWatcher,
   listConfiguredWatchers,
@@ -15,6 +15,7 @@ import { DEFAULT_WATCHER_MINUTES, type WatcherKey, type WatcherSnapshot } from "
 import {
   reconcileWatcherTimer,
   watcherInstalled,
+  verifyWatcherTimerTools,
   watcherLabel,
   watcherProgram,
 } from "../review/watch-launchd";
@@ -88,8 +89,13 @@ export async function requestWatch(
   host: ScheduleHost = {},
   verify = verifyIdentity,
 ): Promise<WatcherSnapshot> {
-  const project = await mainCheckout(cwd);
   const { action } = request;
+  const installing = action === "enable" || action === "resume";
+  if (installing && (host.platform ?? process.platform) !== "darwin")
+    throw new Error("configuration: A local Review watcher requires macOS launchd.");
+  const checkouts = installing ? await watcherWorktrees(cwd) : undefined;
+  const systemEnv = (host.platform ?? process.platform) === "darwin" ? { PATH: "/usr/bin:/bin" } : undefined;
+  const project = checkouts?.[0] ?? await mainCheckout(cwd, systemEnv);
   let key = request.key;
   if (!key) {
     const keys = listConfiguredWatchers(project);
@@ -101,7 +107,7 @@ export async function requestWatch(
   const target = key;
   if (action === "tick") {
     // All full baseline/history writes are owned and fenced by the poll service.
-    return publicStatus(await pollWatcher(project, target));
+    return publicStatus(await pollWatcher(project, target, { beforeFetch: () => verifyWatcherTimerTools(project, target, host) }));
   }
   if (action === "status") {
     const snapshot = readWatcher(project, target);
@@ -117,14 +123,13 @@ export async function requestWatch(
     }, { timeoutMs: 45_000 });
     return scopedStatus(project, request.key, paused, verify);
   }
-  if ((host.platform ?? process.platform) !== "darwin")
-    throw new Error("configuration: A local Review watcher requires macOS launchd.");
   const generation = watcherPauseGeneration(project, target);
   if (action === "resume" && readWatcher(project, target).state === "disabled")
     throw new Error("configuration: Enable this watcher before resuming it.");
-  const program = await watcherProgram(project, host);
+  const program = await watcherProgram(checkouts!, host);
   // The interactive credentials and the credentials launchd can use must both authorize this project.
-  if (process.env.GH_TOKEN || process.env.GITHUB_TOKEN) await verify(project, target);
+  if (process.env.GH_TOKEN || process.env.GITHUB_TOKEN)
+    await verify(project, target, { ...program.env, HOME: homedir(), GH_TOKEN: process.env.GH_TOKEN, GITHUB_TOKEN: process.env.GITHUB_TOKEN });
   await verify(project, target, { ...program.env, HOME: homedir() });
   return withFileLock(lock, async () => {
     if (generation !== watcherPauseGeneration(project, target))

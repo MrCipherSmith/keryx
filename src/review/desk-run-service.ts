@@ -4,12 +4,16 @@ import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { SAFE_BUN_SPAWN_ARGS } from "../lib/safe-exec";
 import { isCompiledBinaryEntry } from "../lib/self-invocation";
+import { readProcessIdentity } from "../lib/hub-machine/process-identity";
+import { verifyVisiblePullNumbers } from "./board-badge-read";
+import { resolveWatcherCheckout } from "./watcher-project";
 import { verifyScheduledSubject } from "./board";
 import { withScheduledPermission } from "./review-automation-guard";
 import { readExistingReviews } from "./desk-run-legacy";
 import { boardGraphql, reviewRepositories, selectRepository } from "./board-github";
+import { createWorkerRoster } from "./desk-worker-roster";
 import { readDeskReviewerProgress } from "./desk-reviewer-progress";
-import { DeskRunStore, type Attempt } from "./desk-run-store";
+import { DeskRunStore, deskRunRoot, type Attempt } from "./desk-run-store";
 import { DESK_RUN_SCOPE } from "./desk-run-types";
 import type { DeskFinish, DeskRevision, DeskRunKey, DeskRunSnapshot, DeskSchedule, DeskRun } from "./desk-run-types";
 import { executeDeskReview, recoverDeskExecution, type DeskModelSelector, type DeskExecutionResult } from "./desk-run-executor";
@@ -96,7 +100,7 @@ async function recoverFinish(directory: string, attempt: Attempt) {
   if (!finish) {
     const recovered = await recoverDeskExecution(directory, {
       repo: attempt.key.repo, number: attempt.key.number, baseSha: attempt.run.baseSha, headSha: attempt.run.headSha,
-      cancelled: attempt.run.state === "cancelling",
+      cancelled: attempt.run.state === "cancelling", scope: attempt.run.scope,
     });
     if (recovered) finish = finishExecution(recovered);
   }
@@ -105,6 +109,26 @@ async function recoverFinish(directory: string, attempt: Attempt) {
     if (roster) finish.reviewerProgress = roster;
   }
   return finish;
+}
+
+/** Recover terminal bookkeeping only; a watcher check must never claim the execution slot or spawn a worker. */
+export async function reconcileLinkedScheduledRuns(
+  project: string, key: Omit<DeskRunKey, "number">, links: {number: number; runId: string}[], visible: ReadonlySet<number>,
+  verifyMissing = async (numbers: number[]) => {
+    const cwd = await resolveWatcherCheckout(project, key.repo);
+    return verifyVisiblePullNumbers(key, numbers, (q, params) => boardGraphql(cwd, q, params));
+  },
+) {
+  if (!links.length || !existsSync(path.join(deskRunRoot(), "runs.sqlite"))) return;
+  const store = new DeskRunStore();
+  try {
+    const missing = links.filter(({number, runId}) => !visible.has(number) && store.scheduledOwnerExited({...key, number}, {project, runId}));
+    // A completed or merged PR may have left the board. Read no artifacts until its permission is confirmed.
+    const additional = missing.length ? await verifyMissing([...new Set(missing.map(link => link.number))]) : new Set<number>();
+    for (const {number, runId} of links) {
+      if (visible.has(number) || additional.has(number)) await store.reconcile({...key, number}, recoverFinish, {project, runId});
+    }
+  } finally { store.close(); }
 }
 
 function spawnWorker(a: Attempt) {
@@ -131,7 +155,9 @@ export function dispatchNext(store: DeskRunStore, key: DeskRunKey, launch = spaw
   if (!a) return;
   try {
     a.pid = launch(a);
+    a.workerIdentity = readProcessIdentity(a.pid) ?? undefined;
     Object.assign(a.run, {
+      scope: DESK_RUN_SCOPE,
       state: "running",
       phase: "Preparing",
       reason: "Validating the requested revision.",
@@ -197,20 +223,21 @@ export async function requestDeskRun(
   key: DeskRunKey,
   input: DeskAction,
 ): Promise<DeskRunSnapshot> {
-  await verifyDeskSubject(cwd, key, input.action === "start" ? input.revision : undefined);
   const store = new DeskRunStore();
   try {
+    const observedAdmission = input.action === "start" ? store.latestAdmission(key) : null;
+    await verifyDeskSubject(cwd, key, input.action === "start" ? input.revision : undefined);
     if (input.action === "status" && !input.id && store.atomic(() => store.claimHistoryScan(cwd, key))) {
       const existing = readExistingReviews(cwd, key);
       store.atomic(() => store.recordExisting(cwd, key, existing));
     }
     await store.reconcile(key, recoverFinish);
-    const snapshot = store.atomic(() => {
-      if (input.action === "start") store.request(cwd, key, input.revision);
+    store.atomic(() => {
+      if (input.action === "start") store.requestManual(cwd, key, input.revision, observedAdmission);
       if (input.action === "cancel") store.cancel(key, input.id);
       dispatchNext(store, key);
-      return store.history(key, input.action === "status" ? input.id : undefined);
     });
+    const snapshot = store.history(key, input.action === "status" ? input.id : undefined);
     for (const run of snapshot.runs) {
       const detailed = input.action === "status" && (input.id === run.id || input.activityId === run.id);
       if (detailed || (!run.reviewerProgress && (run.state === "running" || run.state === "cancelling"))) {
@@ -236,7 +263,6 @@ export async function runDeskWorker(id: string, selectModel: DeskModelSelector) 
     const { cwd, key, run } = attempt;
     const schedule = run.source === "scheduled" ? run.schedule : undefined;
     const runDir = store.directory(id);
-    let rosterSignature = "";
     const progress = (phase: string, usage?: DeskRun["usage"], reviewers?: DeskRun["reviewerProgress"]) =>
       store.atomic(() => {
         const a = store.byId(id);
@@ -281,6 +307,7 @@ export async function runDeskWorker(id: string, selectModel: DeskModelSelector) 
             item.result?.coverage === "complete",
         );
       const context = await collectPrContext(cwd, key, pr, store);
+      const workerRoster = createWorkerRoster(runDir, key, run);
       const out = await executeDeskReview({
         context,
         cwd,
@@ -292,21 +319,18 @@ export async function runDeskWorker(id: string, selectModel: DeskModelSelector) 
         ...(schedule ? {
           budgetMinutes: schedule.budgetMinutes,
           budgetTokens: schedule.budgetTokens,
-          verifyBeforeExecution: () => verifyScheduled(cwd, key, run, schedule),
           authorizeSpawn: <T>(commit: () => T) => withScheduledPermission(schedule.project, key, run, schedule, commit),
         } : {}),
+        verifyBeforeExecution: async () => {
+          if (schedule) await verifyScheduled(cwd, key, run, schedule);
+          else await verifyDeskSubject(cwd, key, run);
+        },
         runDir,
         signal: controller.signal,
         onProgress: (p) => {
           // Board refreshes use the worker's compact checkpoint in SQLite,
           // including when Desktop is closed. Tool activity stays in the attempt.
-          const signature = JSON.stringify([p.packageId, p.reviewerSessions?.map(s => [s.id, s.state, s.usage?.totalTokens])]);
-          let reviewers: DeskRun["reviewerProgress"];
-          if (signature !== rosterSignature && (p.packageId || p.reviewerSessions?.length)) {
-            reviewers = readDeskReviewerProgress(runDir, key, run, false);
-            if (reviewers?.planned != null) rosterSignature = signature;
-          }
-          progress(p.phase, p.usage, reviewers);
+          progress(p.phase, p.usage, workerRoster(p));
         },
       }, { selectModel });
       finish = finishExecution(out);

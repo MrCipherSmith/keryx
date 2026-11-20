@@ -4,20 +4,43 @@ import { promisify } from "node:util";
 import { resolveGitCommonDir } from "../lib/git-worktrees";
 import type { WatcherKey } from "./watcher-types";
 import { realpath } from "node:fs/promises";
-import { boardGraphql, reviewRepositories } from "./board-github";
+import { isNotFound } from "../lib/fs";
+import { boardGraphql, reviewRepositories, reviewTool } from "./board-github";
 
 const exec = promisify(execFile);
 
+/** At installation the inherited PATH is still untrusted. macOS supplies Git at this absolute path. */
+export async function watcherWorktrees(cwd: string): Promise<string[]> {
+  const { stdout } = await exec("/usr/bin/git", ["worktree", "list", "--porcelain", "-z"], {
+    cwd, env: { PATH: "/usr/bin:/bin" }, timeout: 5000, maxBuffer: 8 * 1024 * 1024,
+  }).catch(() => { throw new Error("configuration: Could not verify the project's worktrees with system Git."); });
+  const roots: string[] = [];
+  for (const record of stdout.split("\0\0")) {
+    const first = record.split("\0", 1)[0];
+    if (!first?.startsWith("worktree ")) continue;
+    const location = first.slice("worktree ".length);
+    if (!isAbsolute(location)) throw new Error("configuration: Git returned an invalid worktree path.");
+    try {
+      roots.push(await realpath(location));
+    } catch (error) {
+      // A removed worktree cannot contribute a PATH entry.
+      if (!roots.length || !isNotFound(error)) throw error;
+    }
+  }
+  if (!roots.length) throw new Error("configuration: Could not determine the primary checkout.");
+  return roots;
+}
+
 /** A worktree-scoped remote can live outside the primary checkout that owns the schedule. */
-export async function resolveWatcherCheckout(projectRoot: string, repo: string): Promise<string> {
+export async function resolveWatcherCheckout(projectRoot: string, repo: string, env?: NodeJS.ProcessEnv): Promise<string> {
   const matches = async (cwd: string) =>
-    (await reviewRepositories(cwd)).some((candidate) => candidate.toLowerCase() === repo.toLowerCase());
+    (await reviewRepositories(cwd, env)).some((candidate) => candidate.toLowerCase() === repo.toLowerCase());
   if (await matches(projectRoot)) return projectRoot;
-  const projectGit = await resolveGitCommonDir(projectRoot);
+  const projectGit = await resolveGitCommonDir(projectRoot, env);
   let worktrees: string;
   try {
-    const { stdout } = await exec("git", ["worktree", "list", "--porcelain", "-z"], {
-      cwd: projectRoot,
+    const { stdout } = await exec(reviewTool("git", env), ["worktree", "list", "--porcelain", "-z"], {
+      cwd: projectRoot, env,
       timeout: 10_000,
       encoding: "utf8",
       maxBuffer: 2 * 1024 * 1024,
@@ -40,7 +63,7 @@ export async function resolveWatcherCheckout(projectRoot: string, repo: string):
       cwd === projectRoot ||
       !isAbsolute(cwd) ||
       !projectGit ||
-      (await resolveGitCommonDir(cwd)) !== projectGit
+      (await resolveGitCommonDir(cwd, env)) !== projectGit
     )
       continue;
     try {
@@ -56,7 +79,7 @@ export async function resolveWatcherCheckout(projectRoot: string, repo: string):
 
 export async function mainCheckout(cwd: string, env?: NodeJS.ProcessEnv) {
   try {
-    const { stdout } = await exec("git", ["worktree", "list", "--porcelain", "-z"], {
+    const { stdout } = await exec(reviewTool("git", env), ["worktree", "list", "--porcelain", "-z"], {
       cwd,
       env,
       timeout: 5000,
@@ -71,7 +94,7 @@ export async function mainCheckout(cwd: string, env?: NodeJS.ProcessEnv) {
 }
 
 export async function verifyIdentity(project: string, key: WatcherKey, env?: NodeJS.ProcessEnv) {
-  const cwd = await resolveWatcherCheckout(project, key.repo);
+  const cwd = await resolveWatcherCheckout(project, key.repo, env);
   const [owner, name] = key.repo.split("/");
   const data = await boardGraphql<{ viewer?: { login: string }; repository?: { id: string } }>(
     cwd,

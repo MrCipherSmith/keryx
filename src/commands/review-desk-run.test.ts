@@ -1,8 +1,10 @@
 import { expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, watch, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { devNull, tmpdir } from "node:os";
 import path from "node:path";
+import { SAFE_BUN_SPAWN_ARGS } from "../lib/safe-exec";
+import { privateGitEnv } from "../review/autonomous-run";
 import { DeskRunStore } from "../review/desk-run-store";
 import type { DeskRunSnapshot } from "../review/desk-run-types";
 
@@ -111,6 +113,7 @@ echo '{"data":{"viewer":{"login":"viewer"},"repository":{"id":"node","pullReques
   }
   try {
     const first = await call(project, "start", ["--base", base, "--head", head]);
+    expect(first.runs[0]!.scope).toBe("review-autonomous/fixed-pr/v2");
     const id = first.runs[0]!.id;
     await waitForChange(root, () => existsSync(path.join(root, "checking")), "the worker to enter revision verification");
     const second = await call(worktree, "start", ["--base", base, "--head", head]);
@@ -141,6 +144,72 @@ echo '{"data":{"viewer":{"login":"viewer"},"repository":{"id":"node","pullReques
     ).rejects.toThrow("access:");
   } finally {
     writeFileSync(gate, "");
+    rmSync(root, { recursive: true, force: true });
+  }
+}, 30_000);
+
+test.skipIf(process.platform === "win32")("a delayed GitHub response in one window cannot displace a newer queued revision", async () => {
+  const root = mkdtempSync(path.join(tmpdir(), "keryx-desk-admission-"));
+  const bin = path.join(root, "bin"), project = path.join(root, "project");
+  const data = path.join(root, "data"), gate = path.join(root, "release");
+  const key = { repo: "fixture/repo", repositoryId: "node", viewer: "viewer", number: 7 };
+  const oldHead = "c".repeat(40), newHead = "d".repeat(40);
+  mkdirSync(project);
+  mkdirSync(bin);
+  const git = (...args: string[]) => execFileSync("git", args, {
+    cwd: project, env: { ...privateGitEnv(), GIT_CONFIG_GLOBAL: devNull, GIT_CONFIG_NOSYSTEM: "1" }, stdio: "ignore",
+  });
+  git("init", "-q");
+  git("remote", "add", "origin", "https://github.com/fixture/repo.git");
+  writeFileSync(path.join(bin, "gh"), `#!/bin/sh
+if [ "$WAIT_FOR_NEWER" = "1" ]; then
+  : > "$FIXTURE/waiting"
+  n=0
+  until [ -f "$FIXTURE/release" ]; do
+    if [ "$n" -ge 240 ]; then exit 75; fi
+    sleep 0.05
+    n=$((n+1))
+  done
+fi
+printf '{"data":{"viewer":{"login":"viewer"},"repository":{"id":"node","pullRequest":{"state":"OPEN","baseRefOid":"${base}","headRefOid":"%s"}}}}\\n' "$FIXTURE_HEAD"
+`, { mode: 0o700 });
+  const store = new DeskRunStore(path.join(data, "desktop-review"));
+  async function startWindow(revision: string, waits: boolean) {
+    const child = Bun.spawn([
+      process.execPath, ...SAFE_BUN_SPAWN_ARGS, cli, "review", "desk-run", "start", "--json", "--repo", key.repo,
+      "--viewer", key.viewer, "--repository-id", key.repositoryId, "--number", "7", "--base", base, "--head", revision,
+    ], { cwd: project, env: {
+      HOME: root, XDG_DATA_HOME: root, KERYX_DATA_DIR: data, FIXTURE: root, FIXTURE_HEAD: revision,
+      WAIT_FOR_NEWER: waits ? "1" : "0", PATH: bin + path.delimiter + process.env.PATH,
+    }, stdout: "pipe", stderr: "pipe" });
+    const [stdout, stderr, exit] = await Promise.all([
+      new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited,
+    ]);
+    return { stdout, stderr, exit };
+  }
+  let first: ReturnType<typeof startWindow> | undefined;
+  try {
+    // Occupy the execution slot without launching a provider.
+    store.request(project, key, { baseSha: base, headSha: head });
+    const active = store.queued(key)!;
+    active.pid = process.pid;
+    active.run.state = "running";
+    store.save(active);
+    first = startWindow(oldHead, true);
+    await waitForChange(root, () => existsSync(path.join(root, "waiting")), "the older window to validate");
+    const newer = await startWindow(newHead, false);
+    expect(newer.exit, newer.stderr).toBe(0);
+    const admitted = store.queued(key)!;
+    expect(admitted.run.headSha).toBe(newHead);
+    writeFileSync(gate, "");
+    const older = await first;
+    expect(older.exit).not.toBe(0);
+    expect(older.stderr).toContain("Another review was requested during validation");
+    expect(store.queued(key)?.run.id).toBe(admitted.run.id);
+  } finally {
+    writeFileSync(gate, "");
+    await first;
+    store.close();
     rmSync(root, { recursive: true, force: true });
   }
 }, 30_000);

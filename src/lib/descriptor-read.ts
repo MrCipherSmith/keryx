@@ -1,11 +1,10 @@
-import { constants, fstatSync, lstatSync, statSync, type Stats } from "node:fs";
+import { closeSync, constants, fstatSync, lstatSync, readSync, type BigIntStats, type Stats } from "node:fs";
 import path from "node:path";
-import { dlopen, FFIType, ptr } from "bun:ffi";
+import { dlopen, FFIType } from "bun:ffi";
 
 type PosixLibrary = {
   symbols: {
     openat: (directoryFd: number, name: Uint8Array, flags: number, mode: number) => number;
-    read: (fd: number, buffer: ReturnType<typeof ptr>, length: number) => bigint;
     close: (fd: number) => number;
   };
   close(): void;
@@ -46,27 +45,29 @@ const libcCandidates = process.platform === "darwin"
     : [];
 const READ_CHUNK_BYTES = 64 * 1024;
 
-/** Open and read a canonical path through an O_NOFOLLOW descriptor chain. */
-export function readDescriptorChain(
+/** Caller owns the returned descriptor; each component is opened relative to its pinned parent. */
+export function openDescriptorChain(
   workspaceRoot: string,
   absolutePath: string,
-  options: Omit<DescriptorReadOptions, "beforeOpen" | "backend"> = {},
-): Buffer {
+  options: Omit<DescriptorReadOptions, "beforeOpen" | "backend"> & { directory?: boolean } = {},
+): number {
   const relativePath = path.relative(workspaceRoot, absolutePath);
   const components = relativePath.split(path.sep);
-  if (!relativePath || path.isAbsolute(relativePath) || components.some((component) => !component || component === "." || component === "..")) {
+  if (!relativePath || path.isAbsolute(relativePath) || components.some((component) => !component || component.includes("\0") || component === "." || component === "..")) {
     throw new DescriptorReadError("invalid-path", "safe source path is not workspace-relative");
   }
   if (options.maxBytes !== undefined && (!Number.isSafeInteger(options.maxBytes) || options.maxBytes < 0)) {
     throw new DescriptorReadError("too-large", "safe source byte limit is invalid");
   }
   const libc = loadPosixLibrary();
-  if (!libc || !Number.isInteger(constants.O_DIRECTORY) || !Number.isInteger(constants.O_NOFOLLOW)) {
+  if (!libc || !Number.isInteger(constants.O_DIRECTORY) || !Number.isInteger(constants.O_NOFOLLOW) ||
+      (options.requireRegularFile && !Number.isInteger(constants.O_NONBLOCK))) {
+    libc?.close();
     throw new DescriptorReadError("unavailable", "safe descriptor source reads are unavailable on this platform");
   }
   const opened: number[] = [];
   try {
-    const rootStat = lstatSync(workspaceRoot);
+    const rootStat = lstatSync(workspaceRoot, { bigint: true });
     if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) {
       throw new DescriptorReadError("race", "safe source owner root changed");
     }
@@ -75,7 +76,7 @@ export function readDescriptorChain(
     }
     const parent = openAt(libc, atFdcwd, workspaceRoot, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
     opened.push(parent);
-    if (!sameIdentity(rootStat, fstatSync(parent))) {
+    if (!sameIdentity(rootStat, fstatSync(parent, { bigint: true }))) {
       throw new DescriptorReadError("race", "safe source owner root changed");
     }
     let directoryFd = parent;
@@ -85,20 +86,40 @@ export function readDescriptorChain(
     }
     const name = components.at(-1);
     if (!name) throw new DescriptorReadError("invalid-path", "safe source path has no final component");
-    const expected = options.expectedTargetIdentity ?? statSync(absolutePath);
-    const finalFlags = constants.O_RDONLY | constants.O_NOFOLLOW | (options.requireRegularFile ? (constants.O_NONBLOCK ?? 0) : 0);
+    const target = lstatSync(absolutePath, { bigint: true });
+    if (options.requireRegularFile && !target.isFile()) throw new DescriptorReadError("not-regular", "safe source is not a regular file");
+    const expected = options.expectedTargetIdentity ?? target;
+    const finalFlags = constants.O_RDONLY | constants.O_NOFOLLOW |
+      (options.directory ? constants.O_DIRECTORY : 0) | (options.requireRegularFile ? constants.O_NONBLOCK : 0);
     const file = openAt(libc, directoryFd, name, finalFlags);
     opened.push(file);
-    const actual = fstatSync(file);
+    const actual = fstatSync(file, { bigint: true });
     if (!sameIdentity(expected, actual)) throw new DescriptorReadError("race", "safe source target changed");
     if (options.requireRegularFile && !actual.isFile()) throw new DescriptorReadError("not-regular", "safe source is not a regular file");
-    return readAll(libc, file, actual, options.maxBytes);
+    opened.pop(); // Transfer the verified leaf to the caller; ancestors are closed below.
+    return file;
   } catch (error) {
     if (error instanceof DescriptorReadError) throw error;
     throw new DescriptorReadError("open-failed", "safe descriptor source open failed");
   } finally {
     for (const fd of opened.reverse()) libc.symbols.close(fd);
     libc.close();
+  }
+}
+
+export function readDescriptorChain(
+  workspaceRoot: string,
+  absolutePath: string,
+  options: Omit<DescriptorReadOptions, "beforeOpen" | "backend"> = {},
+): Buffer {
+  const fd = openDescriptorChain(workspaceRoot, absolutePath, options);
+  try {
+    return readAll(fd, fstatSync(fd), options.maxBytes);
+  } catch (error) {
+    if (error instanceof DescriptorReadError) throw error;
+    throw new DescriptorReadError("read-failed", "safe descriptor source read failed");
+  } finally {
+    closeSync(fd);
   }
 }
 
@@ -119,7 +140,6 @@ function loadPosixLibrary(): PosixLibrary | undefined {
     try {
       return dlopen(candidate, {
         openat: { args: [FFIType.i32, FFIType.cstring, FFIType.i32, FFIType.i32], returns: FFIType.i32 },
-        read: { args: [FFIType.i32, FFIType.ptr, FFIType.u64], returns: FFIType.i64 },
         close: { args: [FFIType.i32], returns: FFIType.i32 },
       }) as unknown as PosixLibrary;
     } catch { /* try the next known system libc path */ }
@@ -133,11 +153,11 @@ function openAt(libc: PosixLibrary, directoryFd: number, component: string, flag
   return fd;
 }
 
-function sameIdentity(left: DescriptorIdentity, right: DescriptorIdentity): boolean {
-  return left.dev === right.dev && left.ino === right.ino;
+function sameIdentity(left: DescriptorIdentity | Pick<BigIntStats, "dev" | "ino">, right: BigIntStats): boolean {
+  return BigInt(left.dev) === right.dev && BigInt(left.ino) === right.ino;
 }
 
-function readAll(libc: PosixLibrary, fd: number, descriptor: Stats, maxBytes?: number): Buffer {
+function readAll(fd: number, descriptor: Stats, maxBytes?: number): Buffer {
   if (maxBytes !== undefined && descriptor.size > maxBytes) throw new DescriptorReadError("too-large", "safe source exceeds the byte limit");
   const chunks: Buffer[] = [];
   let total = 0;
@@ -150,11 +170,10 @@ function readAll(libc: PosixLibrary, fd: number, descriptor: Stats, maxBytes?: n
       return Buffer.concat(chunks);
     }
     const chunk = Buffer.allocUnsafe(Math.min(READ_CHUNK_BYTES, remaining));
-    const read = libc.symbols.read(fd, ptr(chunk), chunk.length);
-    if (read < 0n) throw new DescriptorReadError("read-failed", "safe descriptor source read failed");
-    if (read === 0n) return Buffer.concat(chunks);
-    const length = Number(read);
-    if (!Number.isSafeInteger(length) || length > chunk.length) throw new DescriptorReadError("read-failed", "safe descriptor source read returned an invalid length");
+    let length: number;
+    try { length = readSync(fd, chunk, 0, chunk.length, null); }
+    catch { throw new DescriptorReadError("read-failed", "safe descriptor source read failed"); }
+    if (!length) return Buffer.concat(chunks);
     total += length;
     chunks.push(chunk.subarray(0, length));
   }

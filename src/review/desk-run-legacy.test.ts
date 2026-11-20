@@ -1,9 +1,36 @@
-import { expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import * as artifacts from "./project-artifacts";
 import { readExistingReviews } from "./desk-run-legacy";
 import { DeskRunStore } from "./desk-run-store";
+
+let data: string, originalData: string | undefined;
+beforeEach(() => {
+  originalData = process.env.KERYX_DATA_DIR;
+  data = mkdtempSync(path.join(tmpdir(), "desk-history-index-"));
+  process.env.KERYX_DATA_DIR = data;
+});
+afterEach(() => {
+  if (originalData === undefined) delete process.env.KERYX_DATA_DIR;
+  else process.env.KERYX_DATA_DIR = originalData;
+  rmSync(data, { recursive: true, force: true });
+});
+
+test("archived summaries keep their own revision and never take the latest report", () => {
+  const dir = path.join(data, ".metaproject/data/review-autonomous/org-repo-pr7");
+  mkdirSync(dir, { recursive: true });
+  const key = { repo: "org/repo", repositoryId: "node", number: 7, viewer: "viewer" };
+  const target = { kind: "pr", ref: "https://github.com/org/repo/pull/7", repository: key.repo, number: 7 };
+  writeFileSync(path.join(dir, "summary.aaaaaaaa.json"), JSON.stringify({ target: { ...target, head: "a".repeat(40) }, reason: "Previous run" }));
+  writeFileSync(path.join(dir, "summary.json"), JSON.stringify({ target: { ...target, head: "b".repeat(40) }, reason: "Latest run" }));
+  writeFileSync(path.join(dir, "report.md"), "Latest revision report");
+  const reports = readExistingReviews(data, key);
+  expect(reports).toHaveLength(2);
+  expect(reports.find(run => run.headSha === "a".repeat(40))?.result?.report).toBe("Previous run");
+  expect(reports.find(run => run.headSha === "b".repeat(40))?.result?.report).toBe("Latest revision report");
+});
 
 test("historical summary, old package and missing evidence stay read-only and scoped", () => {
   const cwd = mkdtempSync(path.join(tmpdir(), "keryx-legacy-review-"));
@@ -82,4 +109,29 @@ test("historical summary, old package and missing evidence stay read-only and sc
     store.close();
     rmSync(cwd, { recursive: true, force: true });
   }
+});
+
+test("opening another PR only reopens its matching manifests and detects a reassigned package", () => {
+  const cwd = mkdtempSync(path.join(tmpdir(), "desk-history-links-"));
+  const key = { repo: "org/repo", repositoryId: "repo", number: 1, viewer: "test" };
+  const write = (i: number, number: number) => {
+    const id = "review-" + i, dir = path.join(cwd, ".metaproject", "reviews", id);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(path.join(dir, "manifest.json"), JSON.stringify({ reviewId: id, target: { ref: "#" + number, repository: key.repo } }));
+  };
+  const reads = spyOn(artifacts, "readKnown");
+  const manifests = () => reads.mock.calls.filter(([file]) => path.basename(file) === "manifest.json").length;
+  try {
+    for (let i = 1; i <= 25; i++) write(i, i);
+    expect(readExistingReviews(cwd, key)).toHaveLength(1);
+    expect(manifests()).toBe(25);
+    reads.mockClear();
+    expect(readExistingReviews(cwd, { ...key, number: 2 })).toHaveLength(1);
+    expect(manifests()).toBe(1);
+    write(3, 2);
+    reads.mockClear();
+    expect(readExistingReviews(cwd, { ...key, number: 2 })).toHaveLength(2);
+    expect(manifests()).toBe(2);
+    expect(readExistingReviews(cwd, { ...key, number: 3 })).toHaveLength(0);
+  } finally { reads.mockRestore(); rmSync(cwd, { recursive: true, force: true }); }
 });

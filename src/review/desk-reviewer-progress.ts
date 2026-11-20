@@ -143,7 +143,7 @@ export function readDeskReviewerProgress(directory: string, key: DeskRunKey, run
     if (queued.size === calls.length) {
       // Old checkpoints could include auxiliary children saving outside the review package.
       sessions = sessions.filter(session => queued.has(`${session.reviewer}:${session.wave}`));
-      planned = sessions.length; // Includes observed retries of real assignments.
+      planned = queued.size;
     }
     break;
   }
@@ -151,5 +151,7 @@ export function readDeskReviewerProgress(directory: string, key: DeskRunKey, run
   const started = sessions.filter(s => s.state !== "planned" && s.state !== "unknown");
   const running = started.filter(s => s.state === "running");
   const wave = (running.length ? running : started).reduce<number | null>((w, s) => Math.max(w ?? 0, s.wave), null);
-  return { planned, finished: sessions.filter(isFinished).length, wave, sessions };
+  // A retry remains a distinct session while progress follows the latest execution of each assignment.
+  const assignments = new Map(sessions.map(session => [`${session.reviewer}:${session.wave}`, session]));
+  return { planned, finished: [...assignments.values()].filter(isFinished).length, wave, sessions };
 }

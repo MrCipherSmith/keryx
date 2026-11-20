@@ -310,3 +310,85 @@ test("saving an older editor cannot restore a deleted rule or overwrite a newer 
   expect(() => apply({ kind: "save", rule: changed, expected: changed })).toThrow("conflict");
   expect(apply({ kind: "status" }).rules).toEqual([]);
 });
+
+for (const checkpoint of [true, false]) {
+  test(`an unchanged authorized poll settles an orphaned scheduled run ${checkpoint ? "from the durable finish" : "as interrupted"} without resubmitting`, async () => {
+    const { DeskRunStore } = await import("./desk-run-store");
+    const { mkdirSync, writeFileSync } = await import("node:fs");
+    const child = Bun.spawn([process.execPath, "-e", ""], { stdout: "ignore", stderr: "ignore" });
+    await child.exited;
+    const store = new DeskRunStore();
+    let runId = "", submissions = 0;
+    const current = board(requested());
+    const submit: DispatchReviewRule = async (_cwd, target, revision, schedule, authorize) => authorize(() => {
+      submissions++;
+      const recorded = store.requestAttempt(project, target, revision, schedule)!;
+      runId = recorded.id;
+      const attempt = store.byId(runId)!;
+      attempt.pid = child.pid;
+      attempt.run.state = "running";
+      store.save(attempt);
+      const directory = store.directory(runId);
+      mkdirSync(directory, {recursive:true});
+      if (checkpoint) writeFileSync(join(directory,"execution-result.json"), JSON.stringify({
+        outcome:"complete", coverage:"complete", verdict:"APPROVE", findings:{blocker:0,major:0,minor:0,info:0},
+        checkedBase:revision.baseSha, checkedHead:revision.headSha, reason:"Stored final verdict", report:"Fixture result",
+      }));
+      return {id:runId,source:"scheduled",state:"running",reused:false};
+    });
+    try {
+      action({ kind: "save", rule: rule({requireGreen:false}) });
+      await tick(board(card()), submit);
+      await tick(current, submit);
+      expect(store.byId(runId)?.run.state).toBe("running");
+      expect((await tick({...current,viewer:"changed"}, submit)).lastError).toContain("access:");
+      expect(store.byId(runId)?.run.state).toBe("running");
+      // An incomplete observation cannot authorize recovery either.
+      await tick({...current,warnings:["Partial observation"]}, submit);
+      expect(store.byId(runId)?.run.state).toBe("running");
+      await tick(current, submit);
+      const ended = store.byId(runId)!.run;
+      expect(ended.state).toBe(checkpoint ? "completed" : "failed");
+      if (checkpoint) expect(ended.result?.verdict).toBe("APPROVE");
+      else expect(ended.phase).toBe("Interrupted");
+      expect(ended.retryableBeforeSpend).not.toBe(true);
+      await tick(current, submit);
+      expect(submissions).toBe(1);
+      expect(status().activity[0]?.runId).toBe(runId);
+    } finally { store.close(); }
+  });
+}
+
+test("watcher orphan recovery refuses links to another project, viewer, repository, PR, or attempt", async () => {
+  const { DeskRunStore } = await import("./desk-run-store");
+  const { reconcileLinkedScheduledRuns } = await import("./desk-run-service");
+  const store = new DeskRunStore();
+  const child = Bun.spawn([process.execPath, "-e", ""], {stdout:"ignore",stderr:"ignore"});
+  await child.exited;
+  try {
+    action({kind:"save",rule:rule({requireGreen:false})});
+    await tick(board(card()));
+    let id = "", number = 0;
+    await tick(board(requested()), async (_cwd, target, revision, schedule, authorize) => authorize(() => {
+      number = target.number;
+      id = store.requestAttempt(project,target,revision,schedule)!.id;
+      const a = store.byId(id)!;
+      a.pid = child.pid; a.run.state = "running"; store.save(a);
+      return {id,source:"scheduled",state:"running",reused:false};
+    }));
+    const links = [{number,runId:id}];
+    const visible = new Set([number, number+1]);
+    await reconcileLinkedScheduledRuns(project+"/elsewhere", key, links, visible);
+    await reconcileLinkedScheduledRuns(project, {...key,viewer:"other"}, links, visible);
+    await reconcileLinkedScheduledRuns(project, {...key,repositoryId:"other"}, links, visible);
+    await reconcileLinkedScheduledRuns(project, key, [{number:number+1,runId:id}], visible);
+    await reconcileLinkedScheduledRuns(project, key, [{number,runId:"other"}], visible);
+    expect(store.byId(id)?.run.state).toBe("running");
+    const checked: number[][] = [];
+    await reconcileLinkedScheduledRuns(project, key, links, new Set(), async numbers => { checked.push(numbers); return new Set(); });
+    expect(store.byId(id)?.run.state).toBe("running");
+    await reconcileLinkedScheduledRuns(project, key, links, new Set(), async numbers => { checked.push(numbers); return new Set(numbers); });
+    expect(checked).toEqual([[number],[number]]);
+    expect(store.byId(id)?.run.state).toBe("failed");
+  } finally { store.close(); }
+});

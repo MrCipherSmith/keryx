@@ -7,10 +7,10 @@ import { withoutGitDiscoveryOverrides } from "../lib/git-env";
 import type { LinkedFlowContext } from "./board-detail-types";
 import type { FlowState } from "../flow/types";
 import { readExistingReviews } from "./desk-run-legacy";
-import { artifactDirectories, readKnown } from "./project-artifacts";
+import { artifactDirectories, findKnownExcerpt, readKnown } from "./project-artifacts";
 import { DeskRunStore, deskRunRoot } from "./desk-run-store";
 import type { DeskRun, DeskRunKey } from "./desk-run-types";
-import { flowManifestStamp, openFlowLinkIndex } from "./flow-link-index";
+import { manifestStamp, openReviewLinkIndex } from "./flow-link-index";
 import { mainCheckout } from "./watcher-project";
 
 export const PR_CONTEXT_FILE = ".keryx-review-context.json";
@@ -33,12 +33,12 @@ async function projectRoots(cwd: string) {
 function* flowRefs(roots: string[], id?: string, wanted?: string) {
   const seen = new Set<string>();
   for (const root of roots) {
-    const index = wanted ? openFlowLinkIndex(root) : undefined;
+    const index = wanted ? openReviewLinkIndex(root, "flow-links") : undefined;
     for (const dir of artifactDirectories(flowsRoot(root))) {
       const directory = path.basename(dir);
       if (seen.has(directory) || !/^\d+-/.test(directory) || (id && !directory.startsWith(id + "-"))) continue;
       const file = path.join(dir, "flow.json");
-      const stamp = index && flowManifestStamp(file);
+      const stamp = index && manifestStamp(file);
       const link = index?.lookup(directory, stamp);
       if (link !== undefined && link !== wanted) {
         if (link) seen.add(directory);
@@ -82,14 +82,31 @@ function excerpt(text: unknown, limit: number, search?: string, latest = false):
   return (from ? "… " : "") + text.slice(from, from + limit) + (from + limit < text.length ? " …" : "");
 }
 
-function flowEvidence(flow: FlowState) {
-  const notes = Object.entries(flow.acConfirmed ?? {}).flatMap(([ac, value]) =>
-    typeof value?.note === "string" ? [ac + ": " + value.note] : []);
+function* flowEvidenceLines(flow: FlowState) {
+  for (const [ac, value] of Object.entries(flow.acConfirmed ?? {})) {
+    if (typeof value?.note === "string") yield ac.slice(0, 120) + ": " + value.note;
+  }
   for (const t of Array.isArray(flow.tasks) ? flow.tasks : []) {
     if (!t || !Array.isArray(t.evidenceRefs)) continue;
-    for (const ref of t.evidenceRefs) if (typeof ref === "string") notes.push(t.id + ": " + ref);
+    const prefix = typeof t.id === "string" ? t.id.slice(0, 120) + ": " : "";
+    for (const ref of t.evidenceRefs) if (typeof ref === "string") yield prefix + ref;
   }
-  return notes.join("\n");
+}
+
+function flowEvidence(flow: FlowState, limit: number, search?: string) {
+  let rendered = "";
+  for (const line of flowEvidenceLines(flow)) {
+    if (search) {
+      const match = excerpt(line, limit, search);
+      if (match) return match;
+    } else {
+      const next = (rendered ? "\n" : "") + line;
+      const remaining = limit - rendered.length;
+      if (next.length > remaining) return rendered + next.slice(0, remaining) + " …";
+      rendered += next;
+    }
+  }
+  return rendered;
 }
 
 export async function readLinkedFlows(cwd: string, repo: string, number: number, search?: string) {
@@ -106,8 +123,9 @@ function linkedFlows(roots: string[], repo: string, number: number, search?: str
     const documents: Record<string, string> = {};
     for (const name of docs) {
       const latest = name === "journal.md" && !search;
-      const file = readKnown(path.join(dir, name), 512 * 1024, latest ? "tail" : true);
-      const value = excerpt(file?.text, 1800, search, latest);
+      const file = path.join(dir, name);
+      const value = search ? findKnownExcerpt(file, search, 1800)
+        : excerpt(readKnown(file, 512 * 1024, latest ? "tail" : true)?.text, 1800, undefined, latest);
       if (value) documents[name] = value;
     }
     const tasks = (Array.isArray(flow.tasks) ? flow.tasks : [])
@@ -115,7 +133,7 @@ function linkedFlows(roots: string[], repo: string, number: number, search?: str
       .map(task => [task.id, task.status, task.title, task.dispositionReason].filter(Boolean).join(" · "));
     const status = excerpt(tasks.join("\n"), 1800, search);
     if (status) documents["task-status"] = status;
-    const evidence = excerpt(flowEvidence(flow), 1800, search);
+    const evidence = flowEvidence(flow, 1800, search);
     if (evidence) documents["evidence"] = evidence;
     if (search && !Object.keys(documents).length && !excerpt(flow.title, 240, search)) continue;
     flows.push({
@@ -139,15 +157,23 @@ export async function collectPrContext(cwd: string, key: DeskRunKey, pr: PrInfo,
     const store = existingStore ?? owned;
     const history = new Map<string, DeskRun>();
     for (const run of store?.history(key).runs ?? []) history.set(run.id, run);
+    const imports = new Set<string>();
     for (const root of roots) {
-      for (const run of readExistingReviews(root, key)) if (!history.has(run.id)) history.set(run.id, run);
+      for (const run of readExistingReviews(root, key)) {
+        const saved = history.get(run.id);
+        if (!imports.has(run.id) && (!saved || saved.source === "existing")) {
+          history.set(run.id, run);
+          imports.add(run.id);
+        }
+      }
     }
     const newest = [...history.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     const summaries = [];
     for (const run of newest) {
-      const result = run.result?.reportDeferred ? store?.history(key, run.id).runs[0]?.result : run.result;
+      const result = run.result?.reportDeferred && !search ? store?.history(key, run.id).runs[0]?.result : run.result;
       const reason = excerpt(run.reason, 320, search);
-      const report = excerpt(result?.report, 2200, search);
+      const fullReport = search && result?.reportDeferred ? store?.reportForSearch(key, run.id) : undefined;
+      const report = excerpt(fullReport ?? result?.report, 2200, search);
       if (search && !reason && !report && ![run.id, run.state, run.baseSha, run.headSha, result?.verdict]
         .some(value => excerpt(value, 100, search))) continue;
       summaries.push({

@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, realpathSync, renameSync, rmSync, symlinkSync, 
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { DeskRunStore } from "./desk-run-store";
+import { readExistingReviews } from "./desk-run-legacy";
 import { collectPrContext, parseProjectPr, prForFlow, readLinkedFlows } from "./pr-context";
 import { fixtureGitEnv, isolateGitDiscovery } from "./test-git-fixture";
 
@@ -105,7 +106,7 @@ test("a standalone review can search previous reports, with reviewed SHA separat
   const attempt = store.queued(key)!;
   store.end(attempt, { state: "completed", phase: "complete", reason: "", result: {
     reviewed: earlier, verdict: "REQUEST_CHANGES", coverage: "complete",
-    findings: { blocker: 0, major: 1, minor: 0, info: 0 }, report: "start ".repeat(25_000) + "Verify migration order",
+    findings: { blocker: 0, major: 1, minor: 0, info: 0 }, report: "start ".repeat(95_000) + "Verify migration order",
   } });
   const result = await collectPrContext(wt, key, pr, store, "migration");
   expect(result.pr.headSha).toBe(pr.headRefOid);
@@ -136,4 +137,41 @@ test("an unlinked primary Flow does not hide the current worktree's explicit PR 
     expect(result.totalFlows).toBe(1);
     expect(result.flows[0]).toMatchObject({ checkout: "worktree", documents: { "plan.md": "worktree plan after linking" } });
   }
+});
+
+test("Flow journal search finds a match across chunk boundaries beyond its display preview", async () => {
+  const dir = flow(project, "001", url, "plan");
+  const sentence = "Подтверждённый результат";
+  const marker = "a".repeat(10 * 64 * 1024 - 3);
+  writeFileSync(path.join(dir, "journal.md"), marker + sentence);
+  const result = await readLinkedFlows(wt, key.repo, key.number, "подтверждённый");
+  expect(result.flows[0]?.documents["journal.md"]).toContain(sentence);
+  expect(result.flows[0]?.documents["journal.md"]?.length).toBeLessThan(2000);
+});
+
+test("PR context prefers a refreshed local package to an earlier desktop import", async () => {
+  const dir = path.join(project, ".metaproject/reviews/retained-review");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(path.join(dir, "manifest.json"), JSON.stringify({
+    reviewId: "retained-review", target: { ref: url, base: pr.baseRefOid, head: pr.headRefOid },
+  }));
+  const file = path.join(dir, "report.md");
+  writeFileSync(file, "Original report");
+  store.recordExisting(project, key, readExistingReviews(project, key));
+  writeFileSync(file, "Corrected report with follow-up");
+  const result = await collectPrContext(wt, key, pr, store, "follow-up");
+  expect(result.history).toHaveLength(1);
+  expect(result.history[0]?.report).toBe("Corrected report with follow-up");
+});
+
+test("the evidence preview stays bounded while search reaches later references", async () => {
+  const dir = flow(project, "001", url, "plan");
+  writeFileSync(path.join(dir, "flow.json"), JSON.stringify({
+    id: "001", title: "Reviewed Flow", pr: { url },
+    tasks: [{ id: "Task " + "x".repeat(8000), evidenceRefs: [...Array(40).fill("Earlier reference"), "Later reference"] }],
+  }));
+  const history = await readLinkedFlows(wt, key.repo, key.number);
+  expect(history.flows[0]?.documents.evidence?.length).toBeLessThan(1810);
+  const match = await readLinkedFlows(wt, key.repo, key.number, "later reference");
+  expect(match.flows[0]?.documents.evidence).toContain("Later reference");
 });

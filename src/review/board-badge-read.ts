@@ -12,10 +12,21 @@ export async function readBoardBadges(cwd: string, key: WatcherKey, requested: B
       || !/^[a-f0-9]{40}$/.test(c.baseSha) || !/^[a-f0-9]{40}$/.test(c.headSha))) {
     throw new Error("configuration: Invalid badge revisions.");
   }
-  const [owner, name] = key.repo.split("/") as [string, string];
   const cards = requested.map(({ number, baseSha, headSha }) => ({ number, baseSha, headSha }));
-  for (let i = 0; i < cards.length; i += 100) {
-    const batch = cards.slice(i, i + 100).map(c => c.number);
+  const visible = await verifyVisiblePullNumbers(key, cards.map(card => card.number), read);
+  if (visible.size !== cards.length) throw new Error("access: Pull request access changed. Refresh Review.");
+  const snapshot: BadgeSnapshot = { version: 1, viewer: key.viewer, repositoryId: key.repositoryId, cards };
+  attach(snapshot);
+  return snapshot;
+}
+
+/** Authorize a set of PRs in one query per 100, including closed PRs that no longer appear on the open board. */
+export async function verifyVisiblePullNumbers(key: WatcherKey, numbers: number[], read: Query): Promise<Set<number>> {
+  if (numbers.some(n => !Number.isSafeInteger(n) || n < 1 || n > 2147483647)) throw new Error("configuration: Invalid PR number.");
+  const [owner, name] = key.repo.split("/") as [string, string];
+  const visible = new Set<number>();
+  for (let i = 0; i < numbers.length; i += 100) {
+    const batch = numbers.slice(i, i + 100);
     const selection = batch.map(n => `p${n}:pullRequest(number:${n}) { number }`).join("\n");
     type PR = { number: number };
     const data = await read<{viewer?: {login?: string}; repository?: {id: string} & Record<`p${number}`, PR | null>}>(
@@ -24,10 +35,8 @@ export async function readBoardBadges(cwd: string, key: WatcherKey, requested: B
       throw new Error("access: GitHub account or repository changed. Refresh Review.");
     for (const n of batch) {
       const pr = data.repository[`p${n}`];
-      if (pr?.number !== n) throw new Error("access: Pull request access changed. Refresh Review.");
+      if (pr?.number === n) visible.add(n);
     }
   }
-  const snapshot: BadgeSnapshot = { version: 1, viewer: key.viewer, repositoryId: key.repositoryId, cards };
-  attach(snapshot);
-  return snapshot;
+  return visible;
 }

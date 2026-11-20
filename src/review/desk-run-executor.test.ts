@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, watch, writeF
 import { devNull, tmpdir } from "node:os";
 import path from "node:path";
 import { hasDesktopReviewerEvidence } from "./desk-run-executor-recovery";
+import { DESK_RUN_SCOPE, LEGACY_DESK_RUN_SCOPE } from "./desk-run-types";
 import { finishExecution } from "./desk-run-service";
 import { executeDeskReview, recoverDeskExecution } from "./desk-run-executor";
 import { SAFE_BUN_SPAWN_ARGS } from "../lib/safe-exec";
@@ -23,6 +24,7 @@ beforeEach(() => {
   git(cwd, "init", "--quiet", "-b", "base");
   git(cwd, "config", "user.name", "Fixture"); git(cwd, "config", "user.email", "fixture@example.invalid");
   writeFileSync(path.join(cwd, skill), "trusted skill");
+  writeFileSync(path.join(cwd, "routing.config.json"), '{"policyMarker":"local"}');
   writeFileSync(path.join(cwd, "src.ts"), "before"); git(cwd, "add", "."); git(cwd, "commit", "-qm", "base");
   baseSha = git(cwd, "rev-parse", "HEAD");
   git(cwd, "switch", "--quiet", "-c", "pr");
@@ -36,7 +38,7 @@ beforeEach(() => {
 afterEach(() => rmSync(root, { recursive: true, force: true }));
 
 function options(controller = new AbortController()) {
-  return { cwd, runDir, repo: "example/project", number: 12, headSha, baseSha, signal: controller.signal, onProgress: () => {} };
+  return { cwd, runDir, scope: DESK_RUN_SCOPE, repo: "example/project", number: 12, headSha, baseSha, signal: controller.signal, onProgress: () => {} };
 }
 
 const selectModel = () => ({ provider: "test-provider", model: "test-model" });
@@ -67,9 +69,12 @@ test("fixture commands read the selected temporary repository when the caller po
   }
 });
 
-function preparedPackageAt(spec: ChildSpec) {
+const coveredFile = { schemaVersion: 1, tracked: true, waived: false, counts: { inScope: 1, covered: 1, omitted: 0, uncovered: 0 },
+  files: [{ file: "src.ts", status: "covered", scope: "A", by: "slice-01" }], omissions: [], omissionReasons: {} };
+
+function preparedPackageAt(spec: ChildSpec, base = baseSha) {
   const role = "review-logic", pkg = ".metaproject/reviews/pkg", dir = path.join(spec.cwd, pkg);
-  packageAt(spec, { base: baseSha, head: headSha }, [{ reviewer: role, status: "run" }]);
+  packageAt(spec, { base, head: headSha }, [{ reviewer: role, status: "run" }]);
   mkdirSync(path.join(dir, "slices"));
   mkdirSync(path.join(dir, "raw"));
   const file = `raw/${role}-w1.txt`;
@@ -77,9 +82,15 @@ function preparedPackageAt(spec: ChildSpec) {
   writeFileSync(path.join(dir, "desktop-dispatch.json"), JSON.stringify({ calls: [{ label: role, save_result_to: `${pkg}/${file}` }], routedOut: [] }));
   writeFileSync(path.join(dir, "slices/manifest.json"), JSON.stringify({ schemaVersion: 1, maxBytes: 100, waveBytes: 100,
     slices: [{ id: "slice-01", bytes: 10, files: ["src.ts"], roles: [role], depth: "light" }] }));
-  writeFileSync(path.join(dir, "coverage.json"), JSON.stringify({ tracked: true, counts: { uncovered: 0 } }));
+  writeFileSync(path.join(dir, "coverage.json"), JSON.stringify(coveredFile));
   const findings = JSON.parse(readFileSync(path.join(dir, "findings.json"), "utf8"));
   writeFileSync(path.join(dir, file), "STATUS: DONE\nREVIEW_RESULT:\n" + JSON.stringify({ reviewer: role, status: "DONE", slices: ["slice-01"], findings }));
+}
+
+function observedPreparedPackage(spec: ChildSpec, base = baseSha) {
+  preparedPackageAt(spec, base);
+  writeFileSync(spec.eventsFile, JSON.stringify({ type: "request_usage", requestId: "review", participant: "reviewer",
+    reviewer: "review-logic", usage: { inputTokens: 1, outputTokens: 1 } }) + "\n", { flag: "a" });
 }
 
 test("runs the orchestrator on pinned Git objects with trusted controls, leaving the working branch untouched and retaining the package", async () => {
@@ -101,6 +112,7 @@ test("runs the orchestrator on pinned Git objects with trusted controls, leaving
         { cwd: spec.cwd, env: fixtureGitEnv(), encoding: "utf8", timeout: 30_000 });
       expect(JSON.stringify(JSON.parse(scope))).toContain("src.ts");
       expect(readFileSync(path.join(spec.cwd, skill), "utf8")).toBe("trusted skill");
+      expect(readFileSync(path.join(spec.cwd, "routing.config.json"), "utf8")).toBe('{"policyMarker":"local"}');
       expect(existsSync(path.join(spec.cwd, "bunfig.toml"))).toBe(false);
       expect(spec.argv.join(" ")).toContain(`keryx review plan --target https://github.com/example/project/pull/12 --ref ${baseSha} --head ${headSha} --host keryx-shell`);
       expect(spec.argv.join(" ")).not.toContain(" --unattended");
@@ -142,7 +154,7 @@ test("a closed prepared Desktop package without a reviewer participation receipt
   expect(result).toMatchObject({ outcome: "incomplete", coverage: "partial", checkedBase: baseSha, checkedHead: headSha });
 });
 
-test("an advancing remote base keeps the API-pinned range and loads controls from that exact base", async () => {
+test("an advancing remote base keeps the API-pinned range independent of the local controls", async () => {
   writeFileSync(path.join(cwd, skill), "newer branch instructions");
   git(cwd, "add", skill);
   git(cwd, "commit", "-qm", "advance base branch");
@@ -150,15 +162,67 @@ test("an advancing remote base keeps the API-pinned range and loads controls fro
   const result = await executeDeskReview(options(), { selectModel, remoteUrl: cwd,
     revision: async () => { reads++; return revision(); },
     spawn(spec) {
-      expect(readFileSync(path.join(spec.cwd, skill), "utf8")).toBe("trusted skill");
+      expect(readFileSync(path.join(spec.cwd, skill), "utf8")).toBe("newer branch instructions");
       expect(git(spec.cwd, "rev-parse", "HEAD")).toBe(headSha);
       expect(spec.argv.at(-1)).toContain(`--ref ${baseSha} --head ${headSha}`);
-      packageAt(spec, { base: baseSha, head: headSha }, [{ reviewer: "review-logic", status: "run" }]);
+      observedPreparedPackage(spec);
       return { exited: Promise.resolve(0), kill() {} };
     },
   });
   expect(reads).toBe(2);
   expect(result).toMatchObject({ outcome: "complete", checkedBase: baseSha, checkedHead: headSha });
+});
+
+test("an alternate PR target from a linked checkout cannot select Desktop's local review controls", async () => {
+  const linked = path.join(root, "linked");
+  git(cwd, "worktree", "add", "--quiet", "-b", "alternate", linked, baseSha);
+  writeFileSync(path.join(linked, skill), "alternate branch marker");
+  writeFileSync(path.join(linked, "routing.config.json"), '{"policyMarker":"alternate"}');
+  writeFileSync(path.join(linked, "bunfig.toml"), "alternate config marker");
+  git(linked, "add", ".");
+  git(linked, "commit", "-qm", "alternate comparison base");
+  const targetBase = git(linked, "rev-parse", "HEAD");
+  git(linked, "switch", "--quiet", "-c", "alternate-head");
+  writeFileSync(path.join(linked, "src.ts"), "alternate comparison head");
+  git(linked, "add", "src.ts");
+  git(linked, "commit", "-qm", "alternate comparison head");
+  const targetHead = git(linked, "rev-parse", "HEAD");
+  git(cwd, "update-ref", "refs/pull/12/head", targetHead);
+
+  let inspected = false;
+  const result = await executeDeskReview({ ...options(), cwd: linked, baseSha: targetBase, headSha: targetHead }, {
+    selectModel, remoteUrl: cwd,
+    revision: async () => ({ baseRefName: "alternate", baseRefOid: targetBase, headRefOid: targetHead, state: "OPEN" }),
+    spawn(spec) {
+      expect(git(spec.cwd, "rev-parse", "HEAD")).toBe(targetHead);
+      expect(git(spec.cwd, "show", targetBase + ":" + skill)).toBe("alternate branch marker");
+      expect(git(spec.cwd, "show", targetHead + ":src.ts")).toBe("alternate comparison head");
+      expect(spec.argv.at(-1)).toContain(`--ref ${targetBase} --head ${targetHead}`);
+      expect(readFileSync(path.join(spec.cwd, skill), "utf8")).toBe("trusted skill");
+      expect(readFileSync(path.join(spec.cwd, "routing.config.json"), "utf8")).toBe('{"policyMarker":"local"}');
+      expect(existsSync(path.join(spec.cwd, "bunfig.toml"))).toBe(false);
+      inspected = true;
+      return { exited: Promise.resolve(2), kill() {} };
+    },
+  });
+  expect(inspected).toBe(true);
+  expect(result.outcome).toBe("incomplete");
+});
+
+test("installed review skills supply the coordinator when the committed local policy has none", async () => {
+  git(cwd, "rm", skill);
+  git(cwd, "commit", "-qm", "use installed review skills");
+  let inspected = false;
+  await executeDeskReview(options(), { selectModel, remoteUrl: cwd, revision,
+    spawn(spec) {
+      expect(readFileSync(path.join(spec.cwd, skill), "utf8")).toContain("name: review-orchestrator");
+      expect(readFileSync(path.join(spec.cwd, "routing.config.json"), "utf8")).toBe('{"policyMarker":"local"}');
+      expect(spec.argv.at(-1)).toContain(`--ref ${baseSha} --head ${headSha}`);
+      inspected = true;
+      return { exited: Promise.resolve(2), kill() {} };
+    },
+  });
+  expect(inspected).toBe(true);
 });
 
 test("an unrelated replacement of the base branch blocks a pinned base still present in the clone", async () => {
@@ -184,7 +248,7 @@ test("a changed GitHub base after fetch blocks the old card and accepts the refr
   expect(result.outcome).toBe("blocked");
   const fresh = await executeDeskReview({ ...options(), baseSha: updated, runDir: path.join(root, "next") }, {
     selectModel, remoteUrl: cwd, revision: readUpdated, spawn(spec) {
-      packageAt(spec, { base: updated, head: headSha }, [{ reviewer: "review-logic", status: "run" }]);
+      observedPreparedPackage(spec, updated);
       return { exited: Promise.resolve(0), kill() {} };
     },
   });
@@ -229,21 +293,75 @@ test("a selected reviewer absent from coverage keeps the result partial, even wi
     return { exited: Promise.resolve(0), kill() {} };
   } });
   expect(result).toMatchObject({ outcome: "incomplete", checkedBase: baseSha, checkedHead: headSha, coverage: "partial" });
+  expect(result.report).toContain("Status: **incomplete** (exit 2)");
+  expect(result.report).toContain(result.reason);
+  expect(readFileSync(path.join(runDir, "run/report.md"), "utf8")).toBe(result.report!);
+  expect(JSON.parse(readFileSync(path.join(runDir, "run/summary.json"), "utf8"))).toMatchObject({
+    status: "incomplete", exitCode: 2, reason: result.reason, package: { status: "closed", path: "../package" },
+  });
+});
+
+test.each(["missing", "truncated", "invalid", "waived", "oversized"])("prepared Desktop coverage fails closed for %s evidence in collection and recovery", async kind => {
+  const result = await executeDeskReview(options(), { selectModel, remoteUrl: cwd, revision, spawn(spec) {
+    preparedPackageAt(spec);
+    const file = path.join(spec.cwd, ".metaproject/reviews/pkg/coverage.json");
+    if (kind === "missing") rmSync(file);
+    else if (kind === "truncated") writeFileSync(file, "{");
+    else if (kind === "invalid") writeFileSync(file, JSON.stringify({ ...coveredFile, files: [{ file: "src.ts", status: "uncovered", scope: "A" }] }));
+    else if (kind === "waived") writeFileSync(file, JSON.stringify({ ...coveredFile, waived: true }));
+    else writeFileSync(file, JSON.stringify({ ...coveredFile, waived: true }) + " ".repeat(8 * 1024 * 1024));
+    writeFileSync(spec.eventsFile, JSON.stringify({ type: "request_usage", requestId: "review", participant: "reviewer",
+      reviewer: "review-logic", usage: { inputTokens: 1, outputTokens: 1 } }) + "\n");
+    return { exited: Promise.resolve(0), kill() {} };
+  } });
+  expect(result).toMatchObject({ outcome: "incomplete", coverage: "partial" });
+  // Simulate interruption after the original runner recorded the package closure but before Desktop reconciled it.
+  const summaryFile = path.join(runDir, "run/summary.json");
+  const summary = JSON.parse(readFileSync(summaryFile, "utf8"));
+  writeFileSync(summaryFile, JSON.stringify({ ...summary, status: "complete", exitCode: 0, reason: "The package closed." }));
+  const recovered = await recoverDeskExecution(runDir, options());
+  expect(recovered).toMatchObject({ outcome: "incomplete", coverage: "partial" });
+  expect(recovered?.report).toContain("Status: **incomplete** (exit 2)");
+  expect(JSON.parse(readFileSync(summaryFile, "utf8"))).toMatchObject({ status: "incomplete", exitCode: 2, reason: recovered?.reason });
+  expect(readFileSync(path.join(runDir, "run/report.md"), "utf8")).toBe(recovered!.report!);
+});
+
+test("the host attempt requires prepared evidence even if the planner exited before publishing its queue", async () => {
+  const result = await executeDeskReview(options(), { selectModel, remoteUrl: cwd, revision, spawn(spec) {
+    packageAt(spec, { base: baseSha, head: headSha }, [{ reviewer: "review-logic", status: "run" }]);
+    const dir = path.join(spec.cwd, ".metaproject/reviews/pkg");
+    writeFileSync(path.join(dir, "coverage.json"), JSON.stringify(coveredFile));
+    writeFileSync(path.join(dir, "plan.json"), JSON.stringify({ v: 1, next: "dispatch", roster: ["review-logic"], dispatches: 1 }));
+    return { exited: Promise.resolve(0), kill() {} };
+  } });
+  expect(result).toMatchObject({ outcome: "incomplete", coverage: "partial" });
+  const file = path.join(runDir, "run/summary.json");
+  const summary = JSON.parse(readFileSync(file, "utf8"));
+  writeFileSync(file, JSON.stringify({ ...summary, status: "complete", exitCode: 0 }));
+  expect(await recoverDeskExecution(runDir, { ...options(), scope: LEGACY_DESK_RUN_SCOPE })).toMatchObject({ outcome: "complete" });
+  expect(await recoverDeskExecution(runDir, options())).toMatchObject({ outcome: "incomplete", coverage: "partial" });
 });
 
 test("recovers durable closed package after a worker dies between finalizing the round and committing the UI result", async () => {
   const { recoverDeskExecution } = await import("./desk-run-executor");
   const target = { base: baseSha, head: headSha };
+  const legacy = { ...options(), scope: LEGACY_DESK_RUN_SCOPE };
   const checkout = path.join(runDir, "checkout");
   packageAt({ cwd: checkout } as ChildSpec, target, [{ reviewer: "review-logic", status: "run" }]);
   mkdirSync(path.join(runDir, "run"));
   writeFileSync(path.join(runDir, "run/progress.json"), JSON.stringify({ packageId: "pkg" }));
-  expect(await recoverDeskExecution(runDir, options())).toMatchObject({ outcome: "complete", checkedBase: baseSha, checkedHead: headSha, findings: { major: 1 } });
+  expect(await recoverDeskExecution(runDir, legacy)).toMatchObject({ outcome: "complete", checkedBase: baseSha, checkedHead: headSha, findings: { major: 1 } });
   expect(existsSync(path.join(runDir, "package/report.md"))).toBe(true);
-  expect(await recoverDeskExecution(runDir, { ...options(), headSha: baseSha })).toMatchObject({ outcome: "incomplete", verdict: null });
+  const mismatched = await recoverDeskExecution(runDir, { ...legacy, headSha: baseSha });
+  expect(mismatched).toMatchObject({ outcome: "incomplete", verdict: null });
+  expect(mismatched?.report).toContain("Status: **incomplete**");
+  // An older package may lack coverage.json; a present invalid file still fails closed.
+  writeFileSync(path.join(runDir, "package/coverage.json"), "null");
+  expect(await recoverDeskExecution(runDir, legacy)).toMatchObject({ outcome: "incomplete", coverage: "partial" });
 });
 
 test("recovery retains a long report and derives its local verdict from classified findings at the pinned revision", async () => {
+  const legacy = { ...options(), scope: LEGACY_DESK_RUN_SCOPE };
   const checkout = path.join(runDir, "checkout");
   const pkg = path.join(checkout, ".metaproject/reviews/pkg");
   const retained = path.join(runDir, "package");
@@ -254,15 +372,15 @@ test("recovery retains a long report and derives its local verdict from classifi
     verification: { verdict: "refuted", method: "site-check", evidence: "Guard present" } }]));
   mkdirSync(path.join(runDir, "run"));
   writeFileSync(path.join(runDir, "run/progress.json"), JSON.stringify({ packageId: "pkg" }));
-  const recovered = await recoverDeskExecution(runDir, options());
+  const recovered = await recoverDeskExecution(runDir, legacy);
   expect(recovered).toMatchObject({ outcome: "complete", findingsKnown: true, findings: { major: 0 }, verdict: "no findings" });
   expect(recovered?.report).toContain("Preview truncated. Full report: " + path.join(retained, "report.md"));
   expect(recovered?.report).not.toContain("Full report ending");
   expect(readFileSync(path.join(retained, "report.md"), "utf8")).toBe(long);
   writeFileSync(path.join(retained, "findings.json"), "[]");
-  expect(await recoverDeskExecution(runDir, options())).toMatchObject({ findingsKnown: true, verdict: "no findings" });
+  expect(await recoverDeskExecution(runDir, legacy)).toMatchObject({ findingsKnown: true, verdict: "no findings" });
   writeFileSync(path.join(retained, "findings.json"), "[null]");
-  expect(await recoverDeskExecution(runDir, options())).toMatchObject({ outcome: "incomplete", findingsKnown: false, verdict: null });
+  expect(await recoverDeskExecution(runDir, legacy)).toMatchObject({ outcome: "incomplete", findingsKnown: false, verdict: null });
 });
 
 test.skipIf(process.platform === "win32")("a real child process starts only after its PID guard is installed", async () => {
@@ -396,6 +514,32 @@ test("a scheduled run rechecks access after fetching objects and before the mode
   });
 });
 
+test("preserves recovered package evidence after an exception in the guarded launch", async () => {
+  const stop = Promise.withResolvers<number>();
+  const killedAt: string[] = [];
+  const out = await executeDeskReview({
+    ...options(),
+    authorizeSpawn(start) {
+      start();
+      throw new Error("Could not finish the launch transaction");
+    },
+  }, {
+    selectModel, remoteUrl: cwd, revision,
+    spawn(spec) {
+      packageAt(spec, { base: baseSha, head: headSha }, []);
+      writeFileSync(path.join(spec.runDir, "progress.json"), JSON.stringify({ packageId: "pkg" }));
+      return { exited: stop.promise, kill() {
+        killedAt.push(existsSync(spec.cwd) ? "checkout present" : "checkout removed");
+        stop.resolve(128);
+      } };
+    },
+  });
+  expect(out).toMatchObject({ outcome: "failed", reason: "Could not finish the launch transaction" });
+  expect(killedAt).toEqual(["checkout present"]);
+  expect(existsSync(path.join(runDir, "checkout"))).toBe(false);
+  expect(readFileSync(path.join(runDir, "package", "report.md"), "utf8")).toContain("Handle missing repository");
+});
+
 test("the scheduled token budget reaches the autonomous executor", async () => {
   const result = await executeDeskReview(
     { ...options(), budgetTokens: 9, budgetMinutes: 1 },
@@ -462,7 +606,7 @@ test("the default manual review can pass 250k tokens and finish", async () => {
     writeFileSync(spec.eventsFile, JSON.stringify({ type: "usage", usage: { totalTokens: 300000 } }) + "\n");
     await Promise.race([usageSeen.promise, endedEarly]);
     expect(killed).toBe(false);
-    packageAt(spec, { base: baseSha, head: headSha }, [{ reviewer: "review-logic", status: "run" }]);
+    observedPreparedPackage(spec);
   } finally {
     exit.resolve(0);
     await execution;

@@ -1,21 +1,31 @@
 import { Database } from "bun:sqlite";
 import { randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
+import { rm } from "node:fs/promises";
 import path from "node:path";
 import { localBadge, type BadgeCard } from "./board-badges";
 import type { ReviewBoardSnapshot } from "./board-types";
 import { ensureKeryxConfigDir, keryxDataDir, readConfigFile } from "../lib/config-dir";
+import { processPresence, type ProcessIdentity } from "../lib/hub-machine/process-identity";
 import { DESK_RUN_SCOPE } from "./desk-run-types";
 import type { DeskFinish, DeskRevision, DeskRun, DeskRunKey, DeskRunSnapshot, DeskSchedule } from "./desk-run-types";
 
 export const deskRunRoot = () => path.join(keryxDataDir(), "desktop-review");
 export const MAX_SCHEDULED_PREFLIGHT_ATTEMPTS = 3;
+const maxScheduledWorkers = 4;
 const liveStates = "('running', 'cancelling')";
+type ScheduledLink = { project: string; runId: string };
+const linkedActiveRow = `FROM runs WHERE id=? AND repo=? AND pr=? AND viewer=?
+  AND state IN ${liveStates} AND json_extract(details,'$.source')='scheduled'
+  AND json_extract(details,'$.schedule.project')=?`;
+const linkParams = (key: DeskRunKey, link: ScheduledLink): [string, string, number, string, string] =>
+  [link.runId, key.repositoryId, key.number, key.viewer, link.project];
 export interface Attempt {
   key: DeskRunKey;
   cwd: string;
   run: DeskRun;
   pid: number | null;
+  workerIdentity?: ProcessIdentity | undefined;
 }
 interface Row {
   request: string;
@@ -23,12 +33,10 @@ interface Row {
   pid: number | null;
   cwd: string;
 }
-const decode = (row: Row): Attempt => ({
-  key: JSON.parse(row.request) as DeskRunKey,
-  run: JSON.parse(row.details) as DeskRun,
-  pid: row.pid,
-  cwd: row.cwd,
-});
+const decode = (row: Row): Attempt => {
+  const { workerIdentity, ...run } = JSON.parse(row.details) as DeskRun & { workerIdentity?: ProcessIdentity };
+  return { key: JSON.parse(row.request) as DeskRunKey, run, pid: row.pid, cwd: row.cwd, workerIdentity };
+};
 const alive = (pid: number) => {
   try {
     process.kill(pid, 0);
@@ -37,6 +45,13 @@ const alive = (pid: number) => {
     return (error as NodeJS.ErrnoException).code === "EPERM";
   }
 };
+function processMayRemain(pid: number, identity?: ProcessIdentity): boolean {
+  if (identity?.pid === pid && Number.isSafeInteger(identity.pgid) && identity.pgid > 0 &&
+      typeof identity.startedAt === "string" && identity.startedAt) return processPresence(identity) !== "absent";
+  // Checkpoints from prior versions and platforms without identity support
+  // retain the conservative numeric check.
+  return alive(pid) || (process.platform !== "win32" && alive(-pid));
+}
 
 // A dead worker can leave its last session checkpoints in both current and older history rows.
 function finalizeReviewerProgress(run: DeskRun) {
@@ -109,11 +124,32 @@ export class DeskRunStore {
     return row ? decode(row) : undefined;
   }
 
+  latestAdmission(key: DeskRunKey): string | null {
+    // The last admitted attempt remains in the journal when its queue slot
+    // empties. Comparing only the queued ID would miss that transition.
+    return this.db.query<{ id: string }, [string, number, string]>(
+      `SELECT id FROM runs WHERE repo=? AND pr=? AND viewer=?
+       AND json_extract(details,'$.source') IN ('manual','scheduled') ORDER BY rowid DESC LIMIT 1`,
+    ).get(key.repositoryId, key.number, key.viewer)?.id ?? null;
+  }
+
+  /** Hold the dispatch transaction while comparing the admission journal. */
+  requestManual(cwd: string, key: DeskRunKey, revision: DeskRevision, observedAdmission: string | null) {
+    if (this.latestAdmission(key) !== observedAdmission) {
+      const existing = [this.active(key), this.queued(key)].find(attempt => attempt &&
+        attempt.key.viewer.toLowerCase() === key.viewer.toLowerCase() &&
+        attempt.run.baseSha === revision.baseSha && attempt.run.headSha === revision.headSha);
+      if (existing) return existing.run.id;
+      throw new Error("stale: Another review was requested during validation. Refresh the board and try again.");
+    }
+    return this.request(cwd, key, revision);
+  }
+
   save(a: Attempt) {
     this.db.run("UPDATE runs SET state=?, pid=?, details=? WHERE id=?", [
       a.run.state,
       a.pid,
-      JSON.stringify(a.run),
+      JSON.stringify({ ...a.run, workerIdentity: a.workerIdentity }),
       a.run.id,
     ]);
   }
@@ -128,6 +164,7 @@ export class DeskRunStore {
     finalizeReviewerProgress(a.run);
     if (!retryable) delete a.run.retryableBeforeSpend;
     a.pid = null;
+    delete a.workerIdentity;
     this.save(a);
   }
 
@@ -162,6 +199,12 @@ export class DeskRunStore {
     }
   }
 
+  reportForSearch(key: DeskRunKey, id: string): string | undefined {
+    return this.db.query<{ report: string | null }, [string, number, string, string]>(
+      "SELECT json_extract(details,'$.result.report') AS report FROM runs WHERE repo=? AND pr=? AND viewer=? AND id=?",
+    ).get(key.repositoryId, key.number, key.viewer, id)?.report ?? undefined;
+  }
+
   history(key: DeskRunKey, id?: string): DeskRunSnapshot {
     // Keep periodic IPC responses bounded. The database retains full reports.
     // Return small recent reports inline and load the rest by attempt id.
@@ -170,7 +213,7 @@ export class DeskRunStore {
     type Item = { details: string; bytes: number; chars: number; report: string };
     const selected = id === undefined ? "" : " AND id=?";
     const sql = `WITH scoped AS (
-        SELECT rowid AS seq,json_extract(details,'$.createdAt') AS created, json_remove(details,'$.result.report') AS metadata,
+        SELECT rowid AS seq,json_extract(details,'$.createdAt') AS created, json_remove(details,'$.result.report','$.workerIdentity') AS metadata,
           coalesce(json_extract(details,'$.result.report'),'') AS report
         FROM runs WHERE repo=? AND pr=? AND viewer=?${selected}
       ), measured AS (
@@ -256,6 +299,12 @@ export class DeskRunStore {
     if (active && match(active)) return { id: active.run.id, reused: true };
     if (queued && match(queued)) return { id: queued.run.id, reused: true };
     if (schedule && (active || queued)) return null;
+    if (schedule && this.db.query<unknown, [number]>(
+      `SELECT 1 FROM runs WHERE state IN ('queued','running','cancelling')
+       AND json_extract(details,'$.source')='scheduled' LIMIT 1 OFFSET ?`,
+    ).get(maxScheduledWorkers - 1)) {
+      throw new Error(`unavailable: ${maxScheduledWorkers} scheduled Review workers are already reserved. The watcher will try again on its next poll.`);
+    }
     if (queued) {
       this.end(queued, {
         state: "skipped",
@@ -276,6 +325,9 @@ export class DeskRunStore {
           AND json_extract(details,'$.result.reviewed.headSha')=json_extract(details,'$.headSha')) AS complete
        FROM runs WHERE repo=? AND pr=? AND viewer=? AND json_extract(details,'$.baseSha')=?
          AND json_extract(details,'$.headSha')=? AND json_extract(details,'$.source') IN ('manual','scheduled')
+         AND NOT (state='skipped' AND coalesce(json_extract(details,'$.phase'),'')='Superseded'
+           AND json_extract(details,'$.startedAt') IS NULL AND json_extract(details,'$.result') IS NULL
+           AND json_extract(details,'$.usage') IS NULL)
        ORDER BY rowid DESC LIMIT 1`,
       )
       .get(DESK_RUN_SCOPE, key.repositoryId, key.number, key.viewer, revision.baseSha, revision.headSha);
@@ -341,36 +393,47 @@ export class DeskRunStore {
     }
   }
 
+  scheduledOwnerExited(key: DeskRunKey, link: ScheduledLink): boolean {
+    // Liveness alone is sufficient to decide whether a missing-from-board PR needs a fresh access check.
+    const row = this.db.query<{ pid: number | null; workerIdentity: string | null }, ReturnType<typeof linkParams>>(
+      `SELECT pid,json_extract(details,'$.workerIdentity') AS workerIdentity ${linkedActiveRow}`,
+    ).get(...linkParams(key, link));
+    return row?.pid != null && !processMayRemain(row.pid, row.workerIdentity ? JSON.parse(row.workerIdentity) as ProcessIdentity : undefined);
+  }
+
   /** Verify both owner and descendant liveness before freeing the single execution slot. */
-  private orphan(key: DeskRunKey): Attempt | undefined {
-    const a = this.active(key);
-    if (!a || a.pid === null || alive(a.pid)) return;
+  private orphan(key: DeskRunKey, link?: ScheduledLink): Attempt | undefined {
+    let a: Attempt | undefined;
+    if (link) {
+      // A linked PR can now be occupied by another user, project, or a manual successor.
+      // Constrain the row before reading process markers or any private recovery artifacts.
+      const row = this.db.query<Row, ReturnType<typeof linkParams>>(
+        `SELECT request,details,pid,cwd ${linkedActiveRow}`,
+      ).get(...linkParams(key, link));
+      a = row ? decode(row) : undefined;
+    } else {
+      a = this.active(key);
+    }
+    if (!a || a.pid === null || processMayRemain(a.pid, a.workerIdentity)) return;
     const directory = this.directory(a.run.id);
     const guard = path.join(directory, "child.json");
     const marker = readConfigFile(guard);
     if (!marker.ok && marker.reason !== "absent") throw new Error("Cannot inspect the Review worker process marker.");
     if (marker.ok) {
-      const child = JSON.parse(marker.text) as { pid: number };
-      if (
-        Number.isSafeInteger(child.pid) &&
-        child.pid > 0 &&
-        (alive(child.pid) || (process.platform !== "win32" && alive(-child.pid)))
-      )
-        return;
+      const child = JSON.parse(marker.text) as { pid: number; identity?: ProcessIdentity };
+      if (Number.isSafeInteger(child.pid) && child.pid > 0 && processMayRemain(child.pid, child.identity)) return;
     }
-    // A detached worker is a process-group leader on macOS/Linux. This also
-    // covers a crash immediately after spawning its runner, before child.json.
-    if (process.platform !== "win32" && alive(-a.pid)) return;
     return a;
   }
 
-  async reconcile(key: DeskRunKey, readFinish: (directory: string, attempt: Attempt) => DeskFinish | null | Promise<DeskFinish | null>) {
-    const orphan = this.orphan(key);
+  async reconcile(key: DeskRunKey, readFinish: (directory: string, attempt: Attempt) => DeskFinish | null | Promise<DeskFinish | null>, link?: ScheduledLink) {
+    const orphan = this.orphan(key, link);
     if (!orphan) return;
-    const finish = await readFinish(this.directory(orphan.run.id), orphan);
-    this.atomic(() => {
+    const directory = this.directory(orphan.run.id);
+    const finish = await readFinish(directory, orphan);
+    const committed = this.atomic(() => {
       // Another reconciler may have finished the dead attempt and started its successor while we read its verdict.
-      const a = this.orphan(key);
+      const a = this.orphan(key, link);
       if (!a || a.run.id !== orphan.run.id || a.pid !== orphan.pid) return;
       const cancelled = a.run.state === "cancelling";
       if (finish) {
@@ -383,7 +446,20 @@ export class DeskRunStore {
           result: null,
         });
       }
+      return true;
     });
+    if (!committed || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(orphan.run.id)) return;
+    let ownedDirectory: string;
+    try {
+      ownedDirectory = realpathSync(directory);
+      if (ownedDirectory !== path.join(realpathSync(this.root), "attempts", orphan.run.id)) return;
+    } catch { return; }
+    // Only the winning terminal transaction disposes of temporary files. The
+    // archived package and execution receipts stay in the attempt directory.
+    await Promise.allSettled([
+      rm(path.join(ownedDirectory, "checkout"), { recursive: true, force: true }),
+      rm(path.join(ownedDirectory, "child.json"), { force: true }),
+    ]);
   }
 }
 

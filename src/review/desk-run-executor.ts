@@ -7,17 +7,18 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { invocationArgv, resolveKeryxInvocation } from "../trigger/schedule";
 import { isCompiledBinaryEntry } from "../lib/self-invocation";
+import { readProcessIdentity } from "../lib/hub-machine/process-identity";
 import { revisionOperand } from "../lib/git-revision";
 import { shellQuote } from "../lib/shell-quote";
 import { writeFileAtomic } from "../lib/fs";
-import { runAutonomousReview, defaultSpawn, privateGitEnv, type SpawnChild, type RunProgress } from "./autonomous-run";
+import { runAutonomousReview, defaultSpawn, privateGitEnv, type ChildHandle, type SpawnChild, type RunProgress } from "./autonomous-run";
 import type { ReviewRunUsage } from "./run-usage";
 import { countFindings, knownFindingList, renderReport, type AutonomousSummary, type FindingCounts } from "./autonomous-summary";
 import { computeVerdict, renderVerdict } from "./verdict";
 import { boardGh } from "./board-github";
 import type { ManagedReviewManifest } from "./types";
-import type { CoverageReport } from "./coverage-complete";
-import { deskVerdictHeadline, missingVerdictCoverage, desktopRoutedOut, hasDesktopReviewerEvidence, hasFullCoverage, recordedSha } from "./desk-run-executor-recovery";
+import { DESK_RUN_SCOPE } from "./desk-run-types";
+import { checkedDeskSummary, saveDeskSummary, deskVerdictHeadline, completeDeskCoverage, recordedSha, recoverDeskExecution } from "./desk-run-executor-recovery";
 import { DESK_REVIEW_PROJECT_ROOT, DESK_REVIEW_SHELL } from "./autonomous-profile";
 import { isReviewPackageDir } from "./package-location";
 export { recoverDeskExecution } from "./desk-run-executor-recovery";
@@ -86,6 +87,14 @@ async function git(cwd: string, args: string[], signal: AbortSignal): Promise<st
   }
 }
 
+async function localControlRevision(cwd: string, signal: AbortSignal): Promise<string | null> {
+  const [first, kind] = (await git(cwd, ["worktree", "list", "--porcelain", "-z"], signal)).split("\0");
+  if (!first?.startsWith("worktree ") || kind === "bare") return null;
+  const commit = await git(first.slice("worktree ".length), ["rev-parse", "--verify", ...revisionOperand("HEAD^{commit}")], signal)
+    .catch(() => { signal.throwIfAborted(); return ""; });
+  return recordedSha(commit);
+}
+
 async function prepareCheckout(options: DeskExecutionOptions, checkout: string, ports: ExecutorPorts,
   readRevision: () => Promise<Revision>) {
   const { cwd, repo, number, signal, baseSha, headSha } = options;
@@ -93,6 +102,9 @@ async function prepareCheckout(options: DeskExecutionOptions, checkout: string, 
   const matchesRequest = (pr: Revision) => pr.state === "OPEN" && pr.baseRefOid === baseSha && pr.headRefOid === headSha;
   const pull = await readRevision();
   if (!matchesRequest(pull)) return false;
+  // The live PR can select a comparison branch, never project policy. Pin the
+  // primary local checkout's committed controls before fetching either PR ref.
+  const controlsHead = await localControlRevision(cwd, signal);
   await git(cwd, ["clone", "--no-checkout", "--no-tags", "--", cwd, checkout], signal);
   const run = (args: string[]) => git(checkout, args, signal);
   const baseRef = `refs/remotes/origin/${pull.baseRefName}`;
@@ -103,7 +115,7 @@ async function prepareCheckout(options: DeskExecutionOptions, checkout: string, 
     "fetch", "--no-tags", "origin", `+refs/heads/${pull.baseRefName}:${baseRef}`, `+refs/pull/${number}/head:refs/keryx/review-head`]);
   if (await run(["rev-parse", "refs/keryx/review-head"]) !== headSha) return false;
   if (await run(["rev-parse", "--verify", ...revisionOperand(baseRef)]) !== baseSha) {
-    // GitHub can retain this PR's base OID after its target branch advances. Trust only a commit
+    // GitHub can retain this PR's base OID after its target branch advances. Accept only a commit
     // reachable from the fetched base branch, and recheck GitHub before keeping the older range.
     const containing = await run(["for-each-ref", "--contains", baseSha, "--format=%(refname)", baseRef]);
     if (!containing.split("\n").includes(baseRef)) return false;
@@ -114,13 +126,16 @@ async function prepareCheckout(options: DeskExecutionOptions, checkout: string, 
   // Source reads use the pinned Git objects. The index stays at head for existing range tools.
   await run(["config", "core.hooksPath", "/dev/null"]);
   await run(["sparse-checkout", "set", "--no-cone", "!/*"]);
-  await run(["checkout", "--detach", baseSha]);
-  const controls = [".metaproject/rules", ".metaproject/skills", ".metaproject/project-skills",
-    ".metaproject/index.md", ".metaproject/metaproject.json", "AGENTS.md", "CLAUDE.md", ".metaproject/routing.md", ".metaproject/modules", ".metaproject/wiki/index.md", ".metaproject/data/testing/context.md"];
-  const configFiles = (await run(["ls-tree", "--name-only", "-z", baseSha + ":.metaproject"]).catch(() => ""))
-    .split("\0").filter(file => /^[\w.-]+\.config\.json$/.test(file)).map(file => ".metaproject/" + file);
-  const paths = (await run(["ls-tree", "--name-only", "-z", baseSha, "--", ...controls, ...configFiles])).split("\0").filter(Boolean);
-  if (paths.length) await run(["restore", "--source", baseSha, "--ignore-skip-worktree-bits", "--worktree", "--", ...paths]);
+  if (controlsHead) {
+    await run(["checkout", "--detach", controlsHead]);
+    const controls = [".metaproject/rules", ".metaproject/skills", ".metaproject/project-skills",
+      ".metaproject/index.md", ".metaproject/metaproject.json", "AGENTS.md", "CLAUDE.md", "routing.config.json",
+      ".metaproject/routing.md", ".metaproject/modules", ".metaproject/wiki/index.md", ".metaproject/data/testing/context.md"];
+    const configFiles = (await run(["ls-tree", "--name-only", "-z", controlsHead + ":.metaproject"]).catch(() => ""))
+      .split("\0").filter(file => /^[\w.-]+\.config\.json$/.test(file)).map(file => ".metaproject/" + file);
+    const paths = (await run(["ls-tree", "--name-only", "-z", controlsHead, "--", ...controls, ...configFiles])).split("\0").filter(Boolean);
+    if (paths.length) await run(["restore", "--source", controlsHead, "--ignore-skip-worktree-bits", "--worktree", "--", ...paths]);
+  }
   const root = path.join(checkout, ".metaproject");
   const skill = path.join(root, "skills/gdskills/review/review-orchestrator/SKILL.md");
   if (!existsSync(skill)) {
@@ -168,40 +183,29 @@ async function regularPackage(dir: string) {
 
 // Only expose known artifact names from a package created in this attempt.
 async function collectResult(options: DeskExecutionOptions, checkout: string, summary: AutonomousSummary): Promise<DeskExecutionResult> {
-  const result = { ...EMPTY, ...(summary.usage ? { usage: summary.usage } : {}), reason: summary.reason, report: renderReport(summary), findings: summary.findings, findingsKnown: summary.findingsKnown ?? Object.values(summary.findings).some(n => n > 0) };
+  const result = { ...EMPTY, ...(summary.usage ? { usage: summary.usage } : {}), reason: summary.reason, report: "", findings: summary.findings, findingsKnown: summary.findingsKnown ?? Object.values(summary.findings).some(n => n > 0) };
   const pkg = summary.package;
   const source = pkg && path.resolve(checkout, pkg.path);
   const dir = path.join(options.runDir, "package");
   const root = path.join(checkout, ".metaproject", "reviews");
   const ownsPackage = source && path.dirname(source) === root && isReviewPackageDir(source, checkout) && await regularPackage(source);
-  if (ownsPackage && pkg) {
-    await rename(source, dir);
-    const saved = { ...summary, package: { ...pkg, path: "../package" } };
-    result.report = renderReport(saved);
-    await writeFileAtomic(path.join(options.runDir, "run/summary.json"), JSON.stringify(saved), { mode: 0o600 });
-    await writeFileAtomic(path.join(options.runDir, "run/report.md"), result.report, { mode: 0o600 });
-  }
+  if (ownsPackage) await rename(source, dir);
   const manifest = ownsPackage ? await readJson<ManagedReviewManifest>(path.join(dir, "manifest.json")) : null;
   const checkedBase = recordedSha(manifest?.target?.base);
   const checkedHead = recordedSha(manifest?.target?.head);
-  const matching = checkedBase === options.baseSha && checkedHead === options.headSha;
+  const matching = checkedBase === options.baseSha && checkedHead === options.headSha &&
+    manifest?.target.ref === `https://github.com/${options.repo}/pull/${options.number}`;
   let outcome: DeskExecutionResult["outcome"] = summary.status === "floor" ? "blocked" : summary.status === "stalled" ? "incomplete" : summary.status;
   let coverage: DeskExecutionResult["coverage"] = "unknown";
   let verdict: string | null = null;
   if (ownsPackage && manifest) {
     const entries = Array.isArray(manifest.coverage) ? manifest.coverage : [];
     const evaluated = await computeVerdict(dir);
-    const known = evaluated.source === "raw reviewer results" || (evaluated.source === "ingested round" &&
-      knownFindingList(await readJson<unknown>(path.join(dir, "findings.json"))));
+    const ingested = knownFindingList(await readJson<unknown>(path.join(dir, "findings.json")));
+    const known = evaluated.source === "raw reviewer results" || (evaluated.source === "ingested round" && ingested);
     if (entries.length && known) {
-      // An ingested zero-finding reviewer can have no raw result. A recorded run
-      // accounts for it; a selected reviewer absent even from coverage is missing.
-      const ran = new Set(entries.filter(entry => entry.status === "run").map(entry => entry.reviewer));
-      const routed = desktopRoutedOut(dir);
-      const missing = missingVerdictCoverage(evaluated, ran, routed);
-      const fileReport = await readJson<CoverageReport>(path.join(dir, "coverage.json"));
-      const fullyCovered = !missing && hasFullCoverage(entries.filter(entry => !routed.has(entry.reviewer)), fileReport) && hasDesktopReviewerEvidence(dir, summary.usage, routed);
-      coverage = matching && outcome === "complete" && fullyCovered ? "complete" : "partial";
+      coverage = matching && manifest.status === "closed" && outcome === "complete" && ingested &&
+        completeDeskCoverage(dir, entries, summary.usage, evaluated, true) ? "complete" : "partial";
     }
     if (known) {
       result.findingsKnown = true;
@@ -226,6 +230,9 @@ async function collectResult(options: DeskExecutionOptions, checkout: string, su
     outcome = "cancelled";
     result.reason = "Stopped by the operator.";
   }
+  const saved = checkedDeskSummary(summary, { ...result, outcome }, !!ownsPackage);
+  result.report = renderReport(saved) + result.report;
+  await saveDeskSummary(options.runDir, saved, result.report);
   return { ...result, outcome, coverage, checkedBase, checkedHead, verdict };
 }
 
@@ -244,6 +251,8 @@ export async function executeDeskReview(options: DeskExecutionOptions, ports: Ex
   await mkdir(runDir, { recursive: true, mode: 0o700 });
   let result: DeskExecutionResult;
   let beforeSpawnFailure = false;
+  const launch: { child?: ChildHandle } = {};
+  let checkoutMayBeRemoved = true;
   const subject = `https://github.com/${options.repo}/pull/${options.number}`;
   try {
     signal.throwIfAborted();
@@ -291,10 +300,11 @@ export async function executeDeskReview(options: DeskExecutionOptions, ports: Ex
             // Commit the PID guard inside the policy fence: this is when the reviewer
             // shell is released to spend budget, even if its parent crashes next.
             attempted = true;
-            const child = spawn({ ...spec, env: { ...spec.env, PATH: searchPath, KERYX_UNATTENDED: "1", [DESK_REVIEW_SHELL]: "1", [DESK_REVIEW_PROJECT_ROOT]: path.resolve(options.cwd) } });
+            const child = launch.child = spawn({ ...spec, env: { ...spec.env, PATH: searchPath, KERYX_UNATTENDED: "1", [DESK_REVIEW_SHELL]: "1", [DESK_REVIEW_PROJECT_ROOT]: path.resolve(options.cwd) } });
             if (child.pid) {
               try {
-                writeFileSync(childFile + ".tmp", JSON.stringify({ pid: child.pid }), { mode: 0o600 });
+                const identity = readProcessIdentity(child.pid);
+                writeFileSync(childFile + ".tmp", JSON.stringify({ pid: child.pid, identity }), { mode: 0o600 });
                 renameSync(childFile + ".tmp", childFile);
               } catch (error) { child.kill("SIGKILL"); throw error; }
             }
@@ -312,10 +322,26 @@ export async function executeDeskReview(options: DeskExecutionOptions, ports: Ex
     }
   } catch (error) {
     result = { ...EMPTY, ...(beforeSpawnFailure && !signal.aborted ? { retryableBeforeSpend: true } : {}), outcome: signal.aborted ? "cancelled" : error instanceof Error && error.message.startsWith("stale:") ? "blocked" : "failed", reason: signal.aborted ? "Stopped by the operator." : error instanceof Error ? error.message : "Review execution failed." };
+    const child = launch.child;
+    if (child) {
+      // The runner normally reaps the child. Keep ownership here too in case
+      // the guarded launch failed before handing its handle to the runner.
+      child.kill("SIGKILL");
+      await child.exited.catch(() => undefined);
+      try {
+        const recovered = await recoverDeskExecution(runDir, { ...options, scope: DESK_RUN_SCOPE, cancelled: signal.aborted });
+        if (recovered) result = { ...recovered, outcome: result.outcome, reason: result.reason };
+      } catch {
+        checkoutMayBeRemoved = false; // Leave evidence available if it could not be archived.
+      }
+    }
   }
   await writeFileAtomic(path.join(runDir, "execution-result.json"), JSON.stringify(result), { mode: 0o600 });
   // The committed outcome remains authoritative even if a filesystem refuses
   // best-effort disposal of this attempt's temporary checkout.
-  await Promise.allSettled([rm(checkout, { recursive: true, force: true }), rm(path.join(runDir, "child.json"), { force: true })]);
+  await Promise.allSettled([
+    ...(checkoutMayBeRemoved ? [rm(checkout, { recursive: true, force: true })] : []),
+    rm(path.join(runDir, "child.json"), { force: true }),
+  ]);
   return result;
 }
