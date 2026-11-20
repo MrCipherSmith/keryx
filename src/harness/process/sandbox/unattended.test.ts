@@ -311,14 +311,14 @@ describe.skipIf(!liveAvailable)("AC13 (live): what a command inside the unattend
       const found = runInside(
         "command -v find >/dev/null || exit 1; find / \\( -path /proc -o -path /sys -o -path /usr -o -path /dev -o -path /nix/store -o -path /snap \\) -prune -o -type s -print -quit 2>/dev/null; echo end",
         false,
-        75_000,
+        180_000,
       );
       expect(found).toEqual({ code: 0, out: "end\n" });
       expect(runInside("ls -A /run")).toEqual({ code: 0, out: "" });
     },
-    // Ubuntu runners can need more than 20 seconds for the host filesystem
-    // walk. Let the subprocess deadline report a hang before Bun's deadline.
-    90_000,
+    // The full walk has exceeded 75 seconds on GitHub-hosted Ubuntu. Give the
+    // subprocess room to finish and let its deadline report a hang before Bun's.
+    195_000,
   );
 
   test.each([

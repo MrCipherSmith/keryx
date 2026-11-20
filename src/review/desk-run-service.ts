@@ -1,3 +1,4 @@
+import { deskOptionsKey, parseDeskReviewOptions, type DeskReviewOptions } from "./desk-run-options";
 import { collectPrContext } from "./pr-context";
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
@@ -10,18 +11,20 @@ import { resolveWatcherCheckout } from "./watcher-project";
 import { verifyScheduledSubject } from "./board";
 import { withScheduledPermission } from "./review-automation-guard";
 import { readExistingReviews } from "./desk-run-legacy";
-import { boardGraphql, projectGithubConnection, reviewRepositories, selectRepository } from "./board-github";
+import { boardGraphql, projectGithubConnection, reviewRepositories, selectRepository, type GithubConnection } from "./board-github";
 import { createWorkerRoster } from "./desk-worker-roster";
+import { coordinatorActivity } from "./desk-coordinator";
 import { readDeskReviewerProgress } from "./desk-reviewer-progress";
 import { DeskRunStore, deskRunRoot, type Attempt } from "./desk-run-store";
 import { DESK_RUN_SCOPE } from "./desk-run-types";
 import type { DeskFinish, DeskRevision, DeskRunKey, DeskRunSnapshot, DeskSchedule, DeskRun } from "./desk-run-types";
 import { executeDeskReview, recoverDeskExecution, type DeskModelSelector, type DeskExecutionResult } from "./desk-run-executor";
+import { applyDeskLifecycle, type DeskLifecycleAction } from "./desk-run-lifecycle";
 
 const query = `query($owner:String!, $name:String!, $number:Int!) {
   viewer { login } repository(owner:$owner,name:$name) { id pullRequest(number:$number) { title state baseRefOid headRefOid } }
 }`;
-export async function resolveDeskSubject(cwd: string, requested: string, number: number) {
+export async function resolveDeskSubject(cwd: string, requested: string, number: number, auth?: GithubConnection) {
   const repo = selectRepository(await reviewRepositories(cwd), requested);
   const [owner, name] = repo.split("/");
   const data = await boardGraphql<{
@@ -35,7 +38,7 @@ export async function resolveDeskSubject(cwd: string, requested: string, number:
         headRefOid: string;
       } | null;
     } | null;
-  }>(cwd, query, { owner: owner!, name: name!, number });
+  }>(cwd, query, { owner: owner!, name: name!, number }, auth);
   const pr = data.repository?.pullRequest;
   if (!data.viewer?.login || !data.repository?.id || !pr) {
     throw new Error("access: The pull request is unavailable to the current GitHub account.");
@@ -43,8 +46,8 @@ export async function resolveDeskSubject(cwd: string, requested: string, number:
   return { key: { repo, number, viewer: data.viewer.login, repositoryId: data.repository.id }, pr };
 }
 
-export async function verifyDeskSubject(cwd: string, key: DeskRunKey, revision?: DeskRevision) {
-  const { key: actual, pr } = await resolveDeskSubject(cwd, key.repo, key.number);
+export async function verifyDeskSubject(cwd: string, key: DeskRunKey, revision?: DeskRevision, auth?: GithubConnection) {
+  const { key: actual, pr } = await resolveDeskSubject(cwd, key.repo, key.number, auth);
   if (actual.viewer.toLowerCase() !== key.viewer.toLowerCase() || actual.repositoryId !== key.repositoryId) {
     throw new Error("access: GitHub account or repository changed. Refresh the board.");
   }
@@ -234,8 +237,10 @@ export async function scheduleDeskReview(
 }
 
 export type DeskAction =
+  | DeskLifecycleAction
   | { action: "status"; id?: string; activityId?: string }
-  | { action: "start"; revision: DeskRevision }
+  | { action: "answer"; id: string; questionId: string; answer: string }
+  | { action: "start"; revision: DeskRevision; options?: DeskReviewOptions }
   | { action: "cancel"; id: string };
 export async function requestDeskRun(
   cwd: string,
@@ -251,20 +256,38 @@ export async function requestDeskRun(
       store.atomic(() => store.recordExisting(cwd, key, existing));
     }
     await store.reconcile(key, recoverFinish);
+    if (input.action === "readiness" || input.action === "decide") {
+      const completion = await applyDeskLifecycle(store, cwd, key, input, async () => {
+        const pr = await verifyDeskSubject(cwd, key);
+        return { exists: true, state: pr.state, headSha: pr.headRefOid };
+      });
+      return { ...store.history(key), ...(completion ? { completion } : {}) };
+    }
+    let startedRunId: string | null = null;
     store.atomic(() => {
-      if (input.action === "start") store.requestManual(cwd, key, input.revision, observedAdmission);
+      if (input.action === "start") startedRunId = store.requestManual(cwd, key, input.revision, observedAdmission, input.options && parseDeskReviewOptions(input.options));
+      if (input.action === "answer") store.answerQuestion(key, input.id, input.questionId, input.answer);
       if (input.action === "cancel") store.cancel(key, input.id);
       dispatchNext(store, key);
     });
     const snapshot = store.history(key, input.action === "status" ? input.id : undefined);
     for (const run of snapshot.runs) {
-      const detailed = input.action === "status" && (input.id === run.id || input.activityId === run.id);
+      const detailed = (input.action === "status" && (input.id === run.id || input.activityId === run.id)) ||
+        (input.action === "answer" && input.id === run.id);
+      if (run.source === "manual" && run.state === "running") {
+        const pending = store.pendingQuestions(run.id);
+        if (pending[0]) {
+          run.pendingQuestions = pending;
+          run.pendingQuestion = pending[0];
+        }
+      }
+      if (detailed && run.source !== "existing") run.coordinatorActivity = coordinatorActivity(store.directory(run.id));
       if (detailed || (!run.reviewerProgress && (run.state === "running" || run.state === "cancelling"))) {
         const progress = readDeskReviewerProgress(store.directory(run.id), key, run, detailed);
         if (progress) run.reviewerProgress = progress;
       }
     }
-    return snapshot;
+    return startedRunId ? { ...snapshot, startedRunId } : snapshot;
   } finally {
     store.close();
   }
@@ -321,14 +344,15 @@ export async function runDeskWorker(id: string, selectModel: DeskModelSelector) 
         .runs.find(
           (item) =>
             item.source !== "existing" &&
-            item.scope === DESK_RUN_SCOPE &&
+            item.scope === DESK_RUN_SCOPE && deskOptionsKey(item.options) === deskOptionsKey(run.options) &&
             item.state === "completed" &&
             item.result?.coverage === "complete",
         );
-      const context = await collectPrContext(cwd, key, pr, store);
+      const context = await collectPrContext(cwd, key, pr, store, undefined, run.options?.flowId);
       const workerRoster = createWorkerRoster(runDir, key, run);
       const out = await executeDeskReview({
         context,
+        ...(run.options ? { options: run.options, budgetTokens: run.options.maxTokens ?? null } : {}),
         cwd,
         repo: key.repo,
         number: key.number,
@@ -345,6 +369,7 @@ export async function runDeskWorker(id: string, selectModel: DeskModelSelector) 
           if (schedule) await verifyScheduled(cwd, key, run, schedule);
           else await verifyDeskSubject(cwd, key, run);
         },
+        ...(run.source === "manual" && run.options?.mode !== "auto" ? { operatorRunId: id, isWaitingForOperator: () => store.hasPendingQuestion(id) } : {}),
         runDir,
         signal: controller.signal,
         onProgress: (p) => {

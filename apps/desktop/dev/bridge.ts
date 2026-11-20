@@ -15,11 +15,11 @@
 
 import { reviewBoardArgs } from "./reviewBoard";
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync, mkdirSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { rmSync } from "node:fs";
-import { realpath } from "node:fs/promises";
+import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { homedir, tmpdir } from "node:os";
 import { basename, isAbsolute, join, resolve, sep } from "node:path";
 import type { ServerWebSocket, Subprocess } from "bun";
 import { createChatAttachmentStore, type ChatOwner } from "./chatAttachments";
@@ -27,6 +27,7 @@ import { githubRepositoryFromOrigin } from "../src/lib/githubPr";
 
 import { reviewWatcherArgs, reviewRuleArgs } from "./reviewWatcher";
 import { reviewRunArgs } from "./reviewRun";
+import { parsePublicationRequest, publicationArgs } from "../../../src/commands/review-desk-publish";
 import { SAFE_BUN_SPAWN_ARGS } from "../../../src/lib/safe-exec";
 
 const runFile = promisify(execFile);
@@ -602,7 +603,9 @@ async function runReviewCli(root: string, argv: string[], readOnly: boolean): Pr
   if (readOnly) reviewReaders++;
   let stdout: string;
   try {
-    ({ stdout } = await runFile(KERYX_CMD[0]!, [...KERYX_CMD.slice(1), ...argv], { cwd: root, timeout: 150_000, maxBuffer: 32 * 1024 * 1024 }));
+    const desktopDecision = argv[0] === "review" && argv[1] === "desk-run" && argv[2] === "decide";
+    ({ stdout } = await runFile(KERYX_CMD[0]!, [...KERYX_CMD.slice(1), ...argv], { cwd: root, timeout: 150_000, maxBuffer: 32 * 1024 * 1024,
+      ...(desktopDecision && { env: { ...process.env, KERYX_DESKTOP_REVIEW_ACTION: "1" } }) }));
   } catch (error) {
     const reason = (error as { stderr?: string }).stderr?.trim();
     throw new Error(reason || "unavailable: Could not run the Review reader");
@@ -613,6 +616,44 @@ async function runReviewCli(root: string, argv: string[], readOnly: boolean): Pr
     return JSON.parse(stdout);
   } catch {
     throw new Error("unavailable: The selected Keryx CLI did not return a valid Review response.");
+  }
+}
+
+let reviewTerminalBusy = false;
+
+async function submitReviewInTerminal(root: string, argv: string[]): Promise<unknown> {
+  if (process.stdin.isTTY !== true || process.stderr.isTTY !== true) {
+    throw new Error("permission: Run the browser dev bridge in an interactive terminal to confirm GitHub publication.");
+  }
+  if (reviewTerminalBusy) throw new Error("unavailable: Complete the pending review confirmation in the dev terminal.");
+  reviewTerminalBusy = true;
+  try {
+    const child = Bun.spawn([...KERYX_CMD, ...argv], {
+      cwd: root, stdin: "inherit", stdout: "pipe", stderr: "inherit",
+      signal: AbortSignal.timeout(150_000),
+    });
+    const [stdout, exitCode] = await Promise.all([new Response(child.stdout).text(), child.exited]);
+    if (exitCode !== 0) throw new Error("See the dev terminal for the Review publication result.");
+    return JSON.parse(stdout);
+  } finally {
+    reviewTerminalBusy = false;
+  }
+}
+
+async function runReviewPublication(root: string, target: unknown, request: unknown): Promise<unknown> {
+  const raw = JSON.stringify(request);
+  if (raw === undefined) throw new Error("configuration: Missing Review publication request.");
+  const { kind } = parsePublicationRequest(raw);
+  const dir = await mkdtemp(join(tmpdir(), "keryx-review-"));
+  try {
+    const file = join(dir, "request.json");
+    const argv = publicationArgs(target, file);
+    await writeFile(file, raw, { flag: "wx", mode: 0o600 });
+    return kind === "submit"
+      ? await submitReviewInTerminal(root, argv)
+      : await runReviewCli(root, argv, kind === "preview");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
   }
 }
 
@@ -697,7 +738,12 @@ async function handle(ws: ServerWebSocket<Conn>, cmd: string, args: Json): Promi
     }
     case "review_run": {
       const root = await projectCwd(ws.data, cwd);
-      return runReviewCli(root, reviewRunArgs(args.target, args.action), (args.action as Json)?.kind === "status");
+      const argv = reviewRunArgs(args.target, args.action);
+      return runReviewCli(root, argv, argv[2] === "status" || argv[2] === "readiness");
+    }
+    case "review_publish": {
+      const root = await projectCwd(ws.data, cwd);
+      return runReviewPublication(root, args.target, args.request);
     }
     case "flows_list":
       return flowsList(await projectCwd(ws.data, cwd));

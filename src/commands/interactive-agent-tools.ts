@@ -43,6 +43,8 @@ export type InteractiveAgentToolsInput = {
   metaprojectPort: MetaprojectPort;
   searchController: SearchProviderController;
   spawnTool: InteractiveTool;
+  /** Read-only pinned source reader supplied by the isolated Desktop review host. */
+  reviewSource?: InteractiveTool;
   /**
    * SLATE-3a (flow 161, AC5): a LAZY getter for the running session's Slate
    * dir, threaded down into `slate_read`/`slate_write_seed`. Lazy, not a
@@ -287,6 +289,7 @@ export function buildInteractiveAgentTools(input: InteractiveAgentToolsInput): I
           ...(input.mcp.redact === undefined ? {} : { redact: input.mcp.redact }),
         })),
     input.spawnTool,
+    ...(input.reviewSource ? [input.reviewSource] : []),
   ];
   const denied = input.denyTools ?? [];
   // Checked against the FULL set, before the project filter: `--deny-tools graph_find`

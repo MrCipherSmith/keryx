@@ -49,6 +49,8 @@ export interface InteractiveToolResult {
  * says "stop waiting", never "stop the work".
  */
 export interface InteractiveToolContext {
+  /** Native reviewer only: the operator owns this wait, independently of tool permission or approval. */
+  onReviewerWait?: (waiting: boolean) => void;
   /** Aborted when the operator interrupts the turn this call belongs to. */
   signal?: AbortSignal;
   /**
@@ -134,7 +136,7 @@ interface ReadPart {
  * `nextLine` is set when the file continues past what was returned; the text is
  * cut at the last whole line so the continuation starts cleanly.
  */
-async function readFromLine(
+export async function readFromLine(
   stream: ReadableStream<Uint8Array>,
   startLine: number,
   cap: number,
@@ -196,7 +198,7 @@ async function readFromLine(
  * paging notice when the source continues. `source` names what was read in the
  * notice ("a 4096-byte file", "the file").
  */
-function readPartResult(part: ReadPart, startLine: number, source: string): InteractiveToolResult {
+export function readPartResult(part: ReadPart, startLine: number, source: string): InteractiveToolResult {
   if (part.nextLine === undefined) {
     return { output: part.text, isError: false };
   }

@@ -5,7 +5,7 @@ import { MOD, setPrefs, usePrefs } from "../lib/prefs";
 import { Icon } from "../components/Icon";
 import { Menu, type MenuItem } from "../components/Menu";
 import { Dialog, Spinner } from "../components/ui";
-import { runningSubagents, statusLabel, type Subagent } from "./activity";
+import { partitionSubagents, runningSubagents, statusLabel, type Subagent } from "./activity";
 import { lostText, type SessionMark } from "./reducer";
 
 const NO_KIDS: readonly Subagent[] = [];
@@ -25,6 +25,7 @@ interface Props {
   onLoad: (id: string) => void;
   /** Show a session (if not shown) and open the Activity panel on one of its subagents. */
   onShowSubagent: (sessionId: string, subagentId: string) => void;
+  onOpenArchive: (sessionId: string, title: string) => void;
   onCollapse: () => void;
   /** Starts dragging the docked sidebar's right edge; absent where it floats. */
   onResizeStart?: (e: React.PointerEvent) => void;
@@ -96,6 +97,7 @@ export const SessionSidebar = memo(function SessionSidebar({
   onNew,
   onLoad,
   onShowSubagent,
+  onOpenArchive,
   onCollapse,
   onResizeStart,
   onSetFlags,
@@ -151,12 +153,26 @@ export const SessionSidebar = memo(function SessionSidebar({
   const menuSession = menu
     ? sessions.find((s) => s.sessionId === menu.id)
     : undefined;
+  const openArchiveItem = (id: string, title: string): MenuItem => ({
+    id: "subagents", label: "Subagent archive", icon: "history", onSelect: () => {
+      menu?.anchor.focus();
+      onOpenArchive(id, title);
+    },
+  });
+  const moreButton = (id: string, title: string) => <button className="icon-btn session-more"
+    aria-label={`More for ${title}`} aria-haspopup="menu" aria-expanded={menu?.id === id} title="More" disabled={!ready}
+    onClick={event => setMenu(menu?.id === id ? null : { id, anchor: event.currentTarget })}>
+    <Icon name="more" size={14} />
+  </button>;
   const menuItems = (s: SessionInfo): MenuItem[] => {
     const flags = sessionFlags(s);
     const archived = flags.archivedAt !== undefined;
     const pinned = flags.pinnedAt !== undefined;
     const busy = marks[s.sessionId]?.busy === true;
+    const archiveItem = openArchiveItem(s.sessionId, titleOf(s, marks[s.sessionId]));
+    if (!canOrganize) return [archiveItem];
     return [
+      archiveItem,
       ...(archived
         ? []
         : [
@@ -256,7 +272,7 @@ export const SessionSidebar = memo(function SessionSidebar({
           ? unlisted.map(([sid, mark]) => {
               const current = sid === currentId;
               return (
-                <li key={sid}>
+                <li key={sid} className={menu?.id === sid ? "session-row is-menu" : "session-row"}>
                   <button
                     className={`session-item${current ? " is-current" : ""}${mark.held ? "" : " is-released"}`}
                     aria-current={current ? "true" : undefined}
@@ -269,6 +285,7 @@ export const SessionSidebar = memo(function SessionSidebar({
                     <Mark mark={mark} loading={loading.has(sid)} />
                     <span className="session-item-time">now</span>
                   </button>
+                  {moreButton(sid, mark.title?.trim() || "New session")}
                 </li>
               );
             })
@@ -299,7 +316,7 @@ export const SessionSidebar = memo(function SessionSidebar({
                     const current = s.sessionId === currentId;
                     const mark = marks[s.sessionId];
                     const menuOpen = menu?.id === s.sessionId;
-                    const kids = mark?.held === false ? NO_KIDS : (mark?.subagents ?? NO_KIDS);
+                    const kids = mark?.held && mark.subagents.length ? partitionSubagents(mark.subagents).current : NO_KIDS;
                     const open = subagentsOpen(s.sessionId, kids);
                     return (
                       <li key={s.sessionId} className="session-node">
@@ -336,28 +353,7 @@ export const SessionSidebar = memo(function SessionSidebar({
                             {kids.length} {kids.length === 1 ? "agent" : "agents"}
                           </button>
                         ) : null}
-                        {canOrganize ? (
-                          <button
-                            className="icon-btn session-more"
-                            aria-label={`More for ${titleOf(s, mark)}`}
-                            aria-haspopup="menu"
-                            aria-expanded={menuOpen}
-                            title="More"
-                            disabled={!ready}
-                            onClick={(e) =>
-                              setMenu(
-                                menuOpen
-                                  ? null
-                                  : {
-                                      id: s.sessionId,
-                                      anchor: e.currentTarget,
-                                    },
-                              )
-                            }
-                          >
-                            <Icon name="more" size={14} />
-                          </button>
-                        ) : null}
+                        {moreButton(s.sessionId, titleOf(s, mark))}
                       </div>
                       {kids.length > 0 && open ? (
                         <ul
@@ -417,10 +413,10 @@ export const SessionSidebar = memo(function SessionSidebar({
           <li className="sidebar-empty">No session matches “{q}”.</li>
         ) : null}
       </ul>
-      {menu && menuSession ? (
+      {menu && (menuSession || marks[menu.id]) ? (
         <Menu
           anchor={menu.anchor}
-          items={menuItems(menuSession)}
+          items={menuSession ? menuItems(menuSession) : [openArchiveItem(menu.id, marks[menu.id]?.title?.trim() || "New session")]}
           onClose={() => setMenu(null)}
           label="Session actions"
           width={220}

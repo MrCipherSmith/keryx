@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { PREPARE_REVIEW_METHOD, type ReviewDraftHints } from "../../../../src/acp/review-draft";
 import { AcpClient, RpcError } from "../acp/client";
 import { hasCommandExtension } from "../acp/commands";
 import {
@@ -11,7 +12,7 @@ import {
   toTasks,
   type LoginChallenge,
 } from "../acp/providers";
-import { acpStart, acpTransport, acpStop, listenBridge, setWindowTitle, versionCheck } from "../platform/commands";
+import { acpStart, acpTransport, acpStop, listenBridge, versionCheck } from "../platform/commands";
 import { isTauri } from "../platform/backend";
 import { buildUserPrompt, type UserPromptContext } from "./userPrompt";
 import { onPtyExit, panelMcpServers, ptyOpenRun } from "../platform/panels";
@@ -41,15 +42,21 @@ import {
   type SessionUpdate,
 } from "../acp/types";
 import { initialState, pendingQueueSend, reducer, sessionMarks, shownView, type Action, type RoutedUpdate } from "./reducer";
-import { runCommandLine, type RunOptions, type UiActions } from "./commandRunner";
+import { desktopReviewCommands, runCommandLine, type RunOptions, type UiActions } from "./commandRunner";
 import { DialogQueue, type PendingAsk, type PendingPermission } from "./dialogQueue";
+import { readSubagentHistory, subagentHistoryWriter } from "./subagentHistory";
 import { SessionRegistry } from "./sessionRegistry";
 import { answerAgentRequest } from "./agentRequests";
-import { basename } from "../lib/format";
 import { retentionDays } from "../lib/retention";
 import { idleSessions, pickStartSession } from "./startup";
 
 export type { PendingAsk, PendingPermission } from "./dialogQueue";
+
+export interface ReviewDraftRequest extends ReviewDraftHints {
+  prompt?: string;
+  sessionId: string;
+  nonce: string;
+}
 
 export type Fatal =
   | { kind: "incompatible"; found: string; required: string }
@@ -103,12 +110,30 @@ interface Live {
  */
 export function useAcpSession(cwd: string) {
   const [win, rawDispatch] = useReducer(reducer, initialState);
+  const archiveWriter = useMemo(() => subagentHistoryWriter(cwd), [cwd]);
+  useEffect(() => {
+    for (const [sid, conv] of Object.entries(win.convs)) archiveWriter.track(sid, conv.subagents);
+  }, [archiveWriter, win.convs]);
+  useEffect(() => {
+    window.addEventListener("pagehide", archiveWriter.flush);
+    return () => { window.removeEventListener("pagehide", archiveWriter.flush); archiveWriter.flush(); };
+  }, [archiveWriter]);
   const winRef = useRef(win);
   winRef.current = win;
   const [dialogVersion, setDialogVersion] = useState(0);
   const dialogsRef = useRef<DialogQueue | null>(null);
   if (!dialogsRef.current) dialogsRef.current = new DialogQueue(() => setDialogVersion((v) => v + 1));
   const dialogs = dialogsRef.current;
+  const [reviewDrafts, setReviewDrafts] = useState<ReviewDraftRequest[]>([]);
+  const prepareReview = useCallback((sessionId: string, hints: ReviewDraftHints, prompt?: string) => {
+    const request = { ...hints, sessionId, nonce: crypto.randomUUID(), prompt };
+    setReviewDrafts(previous => previous.some(draft =>
+      draft.sessionId === sessionId && draft.target === hints.target && draft.flowId === hints.flowId)
+      ? previous : [...previous, request]);
+  }, []);
+  const dismissReviewDraftRequest = useCallback((nonce: string) => {
+    setReviewDrafts(previous => previous.filter(draft => draft.nonce !== nonce));
+  }, []);
   const [fatal, setFatal] = useState<Fatal | null>(null);
   /** The incompatible-keryx dialog was put away; `fatal` itself stays, so the window keeps saying so. */
   const [fatalHidden, setFatalHidden] = useState(false);
@@ -150,7 +175,7 @@ export function useAcpSession(cwd: string) {
   const dispatch = useCallback(
     (a: Action) => {
       flushUpdates();
-      rawDispatch(a);
+      rawDispatch(a.t === "subagent" ? { ...a, at: Date.now() } : a);
     },
     [flushUpdates],
   );
@@ -304,6 +329,7 @@ export function useAcpSession(cwd: string) {
       const sid = (params as { sessionId?: unknown } | null)?.sessionId;
       if (typeof sid !== "string" || !live.current.reg.release(sid)) return;
       dialogs.dropSession(sid);
+      setReviewDrafts(previous => previous.filter(draft => draft.sessionId !== sid));
       dispatch({ t: "released", sessionId: sid });
     },
     [dialogs, dispatch],
@@ -329,10 +355,13 @@ export function useAcpSession(cwd: string) {
       l.reg.beginLoad(sessionId);
       dispatch({ t: "loadStart", sessionId });
       try {
-        const r = await client.request<LoadSessionResult>("session/load", { sessionId, cwd, mcpServers: await panelMcpServers(cwd) });
+        const [r, archive] = await Promise.all([
+          client.request<LoadSessionResult>("session/load", { sessionId, cwd, mcpServers: await panelMcpServers(cwd) }),
+          readSubagentHistory(cwd, sessionId),
+        ]);
         if (l.gen !== gen) return false;
         const show = l.reg.loadDone(sessionId);
-        dispatch({ t: "loadDone", sessionId, modes: r?.modes, configOptions: r?.configOptions, show });
+        dispatch({ t: "loadDone", sessionId, archive, modes: r?.modes, configOptions: r?.configOptions, show });
         return true;
       } catch (e) {
         if (l.gen !== gen) return false;
@@ -418,6 +447,7 @@ export function useAcpSession(cwd: string) {
       l.extensions = [];
       setExtensions([]);
       l.reg.reset();
+      setReviewDrafts([]);
       setFatal(null);
       setFatalHidden(false);
       dispatch({ t: "connectionReset" });
@@ -475,7 +505,8 @@ export function useAcpSession(cwd: string) {
           if (c && typeof c.userCode === "string") for (const f of challengeListeners.current) f(c);
         }
       };
-      client.onRequest = (method, params) => answerAgentRequest(method, params, l.reg, dialogs);
+      client.onRequest = (method, params) => answerAgentRequest(method, params, l.reg, dialogs,
+        l.gen === gen && l.extensions.includes(PREPARE_REVIEW_METHOD) ? prepareReview : undefined);
       client.onReplyFailed = (method, error) => {
         if (l.gen === gen) dispatch({ t: "banner", level: "error", text: `Could not send keryx the answer to ${method}: ${error}` });
       };
@@ -494,6 +525,7 @@ export function useAcpSession(cwd: string) {
             dialogs.dropAll();
             const initialized = l.initialized;
             l.reg.reset();
+            setReviewDrafts([]);
             dispatch({ t: "connectionReset" });
             const usageError =
               info.code === 2 || /usage|unknown (value|option|profile)|unrecognized|invalid (value|profile)|--profile/i.test(info.stderrTail);
@@ -515,7 +547,7 @@ export function useAcpSession(cwd: string) {
             fs: { readTextFile: true, writeTextFile: false },
             terminal: false,
             // `terminal`: /delegate runs the vendor CLI in the side panel's terminal (D-14); only the app has one.
-            _meta: { keryx: { askUser: true, ...(isTauri() ? { terminal: true } : {}) } },
+            _meta: { keryx: { askUser: true, prepareReview: true, ...(isTauri() ? { terminal: true } : {}) } },
           },
           clientInfo: { name: "keryx-desktop", title: "Keryx", version: "0.2.4" },
         });
@@ -549,7 +581,7 @@ export function useAcpSession(cwd: string) {
         dispatch({ t: "phase", phase: "exited", exit: { code: null, stderrTail: errMessage(e) } });
       }
     },
-    [cwd, dialogs, dispatch, handleUpdate, handleReleased, finishStart, refreshTasks],
+    [cwd, dialogs, dispatch, handleUpdate, handleReleased, finishStart, refreshTasks, prepareReview],
   );
   connectRef.current = connect;
 
@@ -577,7 +609,9 @@ export function useAcpSession(cwd: string) {
     return () => window.clearInterval(timer);
   }, [archiveIdle]);
 
-  const state = useMemo(() => shownView(win), [win]);
+  const shown = useMemo(() => shownView(win), [win]);
+  const commands = useMemo(() => desktopReviewCommands(shown.commands), [shown.commands]);
+  const state = useMemo(() => ({ ...shown, commands }), [shown, commands]);
   const shownDialogs = useMemo(
     () => dialogs.forSession(win.shownId),
     // dialogVersion changes whenever the queue does
@@ -589,11 +623,6 @@ export function useAcpSession(cwd: string) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [win, dialogs, dialogVersion],
   );
-
-  useEffect(() => {
-    const title = state.title && state.title.trim() ? state.title : "New session";
-    void setWindowTitle(`${title} — ${basename(cwd)}`);
-  }, [state.title, cwd]);
 
   // ---- user actions -------------------------------------------------------
 
@@ -807,13 +836,14 @@ export function useAcpSession(cwd: string) {
           interrupt: cancel,
           applyEffects,
           openTerminal,
+          prepareReview,
           ui,
           trackCommand: (target) => l.reg.beginCommand(target),
         },
         opts,
       );
     },
-    [dispatch, sendPrompt, newSession, cancel, applyEffects, openTerminal],
+    [dispatch, sendPrompt, newSession, cancel, applyEffects, openTerminal, prepareReview],
   );
 
   /** Archive/unarchive or pin/unpin a stored session. Errors show as a banner. */
@@ -850,8 +880,10 @@ export function useAcpSession(cwd: string) {
       if (l.client !== client) return true;
       l.reg.release(sessionId);
       dialogs.dropSession(sessionId);
+      setReviewDrafts(previous => previous.filter(draft => draft.sessionId !== sessionId));
       const wasShown = l.reg.shown === sessionId;
       if (wasShown) l.reg.shown = null;
+      archiveWriter.remove(sessionId);
       dispatch({ t: "removed", sessionId });
       if (wasShown) {
         const next = [...l.reg.held].pop();
@@ -861,7 +893,7 @@ export function useAcpSession(cwd: string) {
       void refreshSessions();
       return true;
     },
-    [cwd, dialogs, dispatch, loadSession, newSession, refreshSessions],
+    [archiveWriter, cwd, dialogs, dispatch, loadSession, newSession, refreshSessions],
   );
 
   /** A new keryx process; the shown session is reloaded (a new one when that fails). */
@@ -890,6 +922,8 @@ export function useAcpSession(cwd: string) {
   return {
     state,
     /** The shown session's dialogs; other sessions keep theirs queued. */
+    reviewDraftRequest: reviewDrafts.find(request => request.sessionId === win.shownId) ?? null,
+    dismissReviewDraftRequest,
     permissions: shownDialogs.permissions,
     asks: shownDialogs.asks,
     /** Busy / waiting / held marks for every session the window has. */

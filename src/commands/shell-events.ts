@@ -79,7 +79,11 @@ export function serializeShellEvent(event: ShellEvent, fieldLimit: number = FIEL
   let redacted: ShellEvent;
   switch (event.type) {
     case "reviewer_activity":
-      redacted = { ...event, reviewer: safe(event.reviewer) };
+      redacted = { ...event, reviewer: safe(event.reviewer),
+        ...((event.activity === "message" || event.activity === "answer") ? { text: safe(event.text) } : {}),
+        ...(event.activity === "tool_start" && event.file ? { file: safe(event.file) } : {}),
+        ...(event.activity === "finished" && event.finalOutput ? { finalOutput: safe(event.finalOutput) } : {}),
+        ...(event.activity === "finished" && event.reason ? { reason: safe(event.reason) } : {}) };
       break;
     case "request_start":
     case "request_usage":

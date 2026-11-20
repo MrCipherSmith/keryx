@@ -55,13 +55,18 @@ function attentionReason(c: ReviewCard): string | null {
 
 export function reviewLane(c: ReviewCard): Lane {
   if (c.state !== "open") return "done";
+  if (c.localReview?.awaitingAnswer) return "attention";
   if (c.localReview?.active) return "review";
   return attentionReason(c) ? "attention" : "open";
 }
 
 export function laneReason(c: ReviewCard) {
   if (c.state !== "open") return STATE_LABEL[c.state];
+  if (c.localReview?.awaitingAnswer) return "Awaiting your answer";
+  if (c.localReview?.runState === "queued") return "Keryx review queued";
+  if (c.localReview?.runState === "cancelling") return "Stopping Keryx review";
   if (c.localReview?.active) return "Keryx review in progress";
+  if (c.localReview?.runState === "partial") return "Partial review · incomplete coverage";
   const attention = attentionReason(c);
   if (attention) return attention;
   if (c.decision) return DECISION_LABEL[c.decision];

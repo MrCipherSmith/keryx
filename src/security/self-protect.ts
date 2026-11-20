@@ -1,6 +1,6 @@
 import path from "node:path";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { pathExists } from "../lib/fs";
+import { readFile } from "node:fs/promises";
+import { pathExists, writeFileAtomic } from "../lib/fs";
 import { securityDataRoot, verifyConfigChecksum } from "./config";
 import type {
   IncidentEntry,
@@ -211,6 +211,5 @@ export async function readState(cwd: string): Promise<SecurityState | null> {
  */
 export async function writeState(cwd: string, state: SecurityState): Promise<void> {
   const file = stateFile(cwd);
-  await mkdir(path.dirname(file), { recursive: true });
-  await writeFile(file, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+  await writeFileAtomic(file, `${JSON.stringify(state, null, 2)}\n`);
 }

@@ -37,21 +37,22 @@ button { font: inherit; }
 
 .titlebar {
   grid-column: 1 / -1;
-  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(max-content, 1fr); align-items: center; gap: var(--sp-3);
+  display: grid; grid-template-columns: minmax(0, 1fr) max-content; align-items: center; gap: var(--sp-3);
   padding: 0 var(--sp-3) 0 var(--titlebar-inset);
   background: var(--bg-canvas); border-bottom: 1px solid var(--border);
 }
 .titlebar-left, .titlebar-right { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
 .titlebar-right { justify-content: flex-end; }
+.titlebar-title { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Tauri checks the hit element itself when starting a drag. */
+.titlebar-title > * { pointer-events: none; }
 .titlebar-session-controls { display: flex; align-items: center; gap: var(--sp-1); min-width: 0; }
 .titlebar-session-controls:empty { display: none; }
-.titlebar-session-controls .project-github-account { min-width: 0; max-width: 18rem; }
 .titlebar-session-controls .icon-btn, .project-switcher .icon { flex-shrink: 0; }
 .titlebar-activity { position: relative; }
 .titlebar-activity .tab-count { position: absolute; inset-block-start: -2px; inset-inline-end: -3px; pointer-events: none; }
-.titlebar-center { text-align: center; font-weight: 600; font-size: var(--fs-md); color: var(--fg); min-width: 0; display: flex; justify-content: center; }
 .project-switcher {
-  display: inline-flex; align-items: center; gap: 6px; height: 26px; min-width: 0; max-width: 100%; padding: 0 var(--sp-2);
+  display: inline-flex; align-items: center; gap: 6px; height: 26px; max-width: min(17rem, 48%); min-width: 0; padding: 0 var(--sp-2);
   font-weight: 600; color: var(--fg); background: transparent; border: 1px solid transparent; border-radius: var(--r-md); cursor: default;
 }
 .project-switcher:hover, .project-switcher[aria-expanded="true"] { background: var(--bg-hover); border-color: var(--border); }
@@ -130,6 +131,10 @@ button { font: inherit; }
 .project-views button:hover { color: var(--fg); background: var(--bg-hover); }
 .project-views button[aria-current="page"] { color: var(--accent-text); border-bottom-color: var(--accent); }
 .project-views button:focus-visible { outline: 2px solid var(--focus); outline-offset: -3px; }
+.review-tab-dot {
+  width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: var(--info);
+}
+.review-tab-dot[data-indicator="attention"] { background: var(--warn); }
 .project-content { flex: 1; min-height: 0; min-width: 0; position: relative; }
 .view { height: 100%; min-height: 0; }
 
@@ -495,6 +500,10 @@ button { font: inherit; }
 .usage-footer { display: flex; align-items: center; gap: var(--sp-3); min-height: 24px; padding: 4px 4px 0; font-size: var(--fs-xs); color: var(--fg-subtle); font-variant-numeric: tabular-nums; }
 .usage-ctx { display: inline-flex; align-items: center; gap: 6px; }
 .git-status { display: inline-flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+.usage-footer .project-github-account {
+  height: auto; min-width: 0; max-width: 26ch; padding: 0; border: 0; font-size: inherit; color: var(--fg-muted);
+}
+.usage-footer .project-github-account:hover { color: var(--fg); text-decoration: underline; background: none; }
 .git-status .icon { flex: none; }
 .git-branch, .git-pr, .git-threads, .git-changes { display: inline-flex; align-items: center; gap: 3px; min-width: 0; }
 .git-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 22ch; }

@@ -124,6 +124,7 @@ pub fn run() {
             review::github_login,
             review::review_board,
             review::review_run,
+            review::review_publish,
             review::review_watcher,
             review::review_rules,
             panels::pty_open,

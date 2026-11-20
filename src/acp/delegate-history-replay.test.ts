@@ -94,3 +94,19 @@ test("replay: a delegate note is sent as text + _meta.keryx.delegateResult; no e
   expect(kept[2]?.content).toContain(`<delegate-result-${NONCE}>`);
   expect(kept[2]?.injected).toBe(true);
 });
+
+test("a replayed native child keeps its parent turn, recorded date and failure status", async () => {
+  const h = harness();
+  const ts = "2026-01-02T03:04:05.000Z";
+  const session = stored(h, [
+    { role: "user", content: "first" }, { role: "user", content: "second" }, note("ext:1", 1),
+    { role: "user", content: "harness follow-through", provenance: "harness" },
+    { role: "assistant", ts, content: "", toolCalls: [{ id: "native", name: "spawn_subagent", arguments: "{}" }] },
+    { role: "tool", toolCallId: "native", content: "status: Interrupted", isError: true },
+  ]);
+  await h.initialize();
+  const id = h.request("session/load", { sessionId: session.summary.id, cwd: h.projectDir, mcpServers: [] });
+  expect((await h.waitFor(frame => frame.id === id)).error).toBeUndefined();
+  const frames = h.frames.map(f => f.params?.update).filter(update => update && "toolCallId" in update && update.toolCallId === "native");
+  expect(frames).toMatchObject([{ _meta: { keryx: { parentTurn: 2, recordedAt: ts } } }, { status: "failed" }]);
+});

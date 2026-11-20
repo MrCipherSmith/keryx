@@ -54,9 +54,13 @@ pub fn read_capped(mut r: impl Read + Send + 'static, cap: usize) -> mpsc::Recei
 
 /// Run `cmd` (its stdio is set here) and wait at most `timeout`. Each output
 /// stream keeps at most `cap` bytes.
-pub fn run_bounded(mut cmd: Command, timeout: Duration, cap: usize) -> Result<Output, RunError> {
+pub fn run_bounded(cmd: Command, timeout: Duration, cap: usize) -> Result<Output, RunError> {
+    run_bounded_with_stdin(cmd, Stdio::null(), timeout, cap)
+}
+
+pub fn run_bounded_with_stdin(mut cmd: Command, stdin: Stdio, timeout: Duration, cap: usize) -> Result<Output, RunError> {
     let mut child = cmd
-        .stdin(Stdio::null())
+        .stdin(stdin)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()

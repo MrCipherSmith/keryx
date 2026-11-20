@@ -20,3 +20,18 @@ test("the webview cannot supply the worker operation or replace an argument with
   expect(() => reviewRunArgs(target, { kind: "cancel", id: "--json" })).toThrow();
   expect(() => reviewRunArgs({ ...target, number: 0 }, { kind: "status" })).toThrow();
 });
+
+test("answers bind to one question and preserve spaces and leading dashes", () => {
+  const op = { kind: "answer", id: "run", questionId: "q", answer: "--continue with this" };
+  expect(reviewRunArgs(target, op).slice(-5)).toEqual(["--id", "run", "--question-id", "q", "--answer=--continue with this"]);
+  for (const answer of ["", " ", "x".repeat(2001), "a\0b"]) {
+    expect(() => reviewRunArgs(target, { ...op, answer })).toThrow();
+  }
+});
+
+test("a launch configuration travels as one JSON argument", () => {
+  const options = { mode: "auto", adaptive: true, modelPools: { strong: [{ provider: "anthropic", model: "opus" }] } };
+  const action = { kind: "start", baseSha: "a".repeat(40), headSha: "b".repeat(40), options };
+  expect(reviewRunArgs(target, action).at(-1)).toBe("--options=" + JSON.stringify(options));
+  expect(() => reviewRunArgs(target, { ...action, options: [] })).toThrow();
+});

@@ -14,9 +14,6 @@
 // Journaling itself never gets in the way of the question: every journaling step is
 // in a try/catch that leaves a note and falls back to the plain question. Only the
 // host's own `ask` can throw, exactly as without the journal.
-//
-// The types are structural copies of the harness' `AskUserFn`, because the core
-// zone cannot import the client zone; they are assignable both ways.
 
 import type { Arm } from "./arms";
 import { answerDecision, openDecision, recordReason } from "./journal";
@@ -24,42 +21,9 @@ import type { FlowContext } from "./context";
 import { DECISION_SOURCES } from "./sources";
 import type { OpenResult } from "./types";
 
-export interface AskOption {
-  id: string;
-  label: string;
-  description: string;
-  recommended?: boolean;
-  /**
-   * Whether the host starts with this option highlighted. Set only by the journal: true for the recommended
-   * option in arm A, false on every option in arms B, C and D (no option starts highlighted). Absent when the
-   * question was not journaled; a host then falls back to preselecting the recommended option.
-   */
-  preselected?: boolean;
-}
+import { ASK_USER_CANCEL as CANCEL_ANSWER, type AskUserFn as AskFn, type AskUserOption as AskOption, type AskUserRequest as AskRequest } from "../lib/ask-user-contract";
 
-export interface AskRequest {
-  question: string;
-  options: AskOption[];
-  /** One sentence on why the recommended option is recommended. Recorded in the journal; never shown before the answer. */
-  recommendationReason?: string;
-  allowFreeform?: boolean;
-  /** The irreversible action this question decides (release, delete, push, publish, deploy, ...). Any tag keeps the question out of blind mode. */
-  action?: string;
-  /** True when the question decides an irreversible action. Keeps it out of blind mode. */
-  irreversible?: boolean;
-  /** The surface that asked (see `DECISION_SOURCES`); recorded as `source`. Wins over `JournalAskDeps.source`. */
-  source?: string;
-}
-
-/**
- * Flow 401: what a host answers with. A plain string is what it always was (an option id, or typed
- * freeform text that is no option's id). The two objects are the operator's own words said outright:
- * `own` is their own answer (never an option, even when the words equal an option id), `option` is a
- * picked option with a typed reason attached.
- */
-export type AskAnswer = string | { kind: "option"; choice: string; reason?: string } | { kind: "own"; text: string };
-
-export type AskFn = (request: AskRequest) => Promise<AskAnswer>;
+export { ASK_USER_CANCEL as CANCEL_ANSWER, type AskUserAnswer as AskAnswer, type AskUserFn as AskFn, type AskUserOption as AskOption, type AskUserRequest as AskRequest } from "../lib/ask-user-contract";
 
 export interface JournalAskDeps {
   cwd: string;
@@ -89,7 +53,6 @@ export interface JournalAskDeps {
   now?: (() => Date) | undefined;
 }
 
-export const CANCEL_ANSWER = "__cancel__";
 const SKIP_REASON = "skip";
 const LATER_REASON = "later";
 

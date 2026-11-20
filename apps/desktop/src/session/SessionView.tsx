@@ -1,5 +1,5 @@
+import { forwardRef, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { lookupWithRetry } from "../lib/repoLookup";
-import { forwardRef, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { BrandMark } from "../components/BrandMark";
 import { createPortal } from "react-dom";
 import type { PlanEntry } from "../acp/types";
@@ -17,6 +17,7 @@ import { clearPicks, onPicksChange, pickLabel, picksBlock, picksOf, removePick }
 import { GitStatus } from "./GitStatus";
 import { SessionInfoPanel } from "./SessionInfoPanel";
 import { SessionSidebar } from "./SessionSidebar";
+import { SubagentArchive } from "./SubagentArchive";
 import { Transcript } from "./Transcript";
 import type { LocalAttachment } from "./chatImages";
 import { userPromptContext, type UserPromptContext } from "./userPrompt";
@@ -26,9 +27,10 @@ import { isTauri } from "../platform/backend";
 import { browserOpen } from "../platform/panels";
 import type { PrLinks } from "../components/prLinks";
 import { lostText, type QueuedPrompt, type Usage } from "./reducer";
-import { resolveMode, resolveModel, type UiActions } from "./commandRunner";
+import { desktopReviewRequest, resolveMode, resolveModel, type UiActions } from "./commandRunner";
 import { modelOption, type useAcpSession } from "./useAcpSession";
 import type { ProjectGitHubAccount } from "../platform/githubAccounts";
+import { reviewSessionTitle, type SessionReviewLink } from "../review/sessionReview";
 import { ProjectGitHubAccountButton } from "../project/GitHubSettings";
 
 type Session = ReturnType<typeof useAcpSession>;
@@ -42,6 +44,8 @@ interface Props {
   githubAccount?: ProjectGitHubAccount;
   onProjectSettings?: () => void;
   narrow: boolean;
+  reviewActivity?: ReactNode;
+  reviewLinks?: readonly SessionReviewLink[];
   /** Open the Providers dialog (`/connect`, `/search-provider`). */
   onProviders: (name: string, args: string) => void;
 }
@@ -52,8 +56,9 @@ const SUGGESTIONS = [
   { icon: "search" as const, text: "Find TODO and FIXME comments and group them by area." },
 ];
 
-export const SessionView = forwardRef<ComposerHandle, Props>(function SessionView({ s, cwd, projectName, onGoFlows, onGoSettings, githubAccount, onProjectSettings, narrow, onProviders }, composerRef) {
+export const SessionView = forwardRef<ComposerHandle, Props>(function SessionView({ s, cwd, projectName, onGoFlows, onGoSettings, githubAccount, onProjectSettings, narrow, onProviders, reviewActivity, reviewLinks }, composerRef) {
   const { state } = s;
+  const reviewBySession = useMemo(() => new Map((reviewLinks ?? []).map(link => [link.sessionId, link])), [reviewLinks]);
   const prefs = usePrefs();
   const sidebarOpen = prefs.sessionSidebar && !narrow;
   // The sidebar floats over the conversation when it is not docked: opened by the Sessions button
@@ -185,10 +190,11 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
   const send = async (text: string, imagePaths: readonly string[], local: readonly LocalAttachment[]) => {
     const hasLocal = imagePaths.length > 0 || local.length > 0;
     // An unrecognized slash line never sends and never clears staged page picks.
-    if (text.startsWith("/") && !hasLocal) return run(text);
+    const reviewRequest = desktopReviewRequest(text);
+    if ((text.startsWith("/") || reviewRequest) && !hasLocal) return run(text);
     const command = findCommand(state.commands, text);
-    if (command && hasLocal) {
-      toast({ level: "info", title: "Slash commands cannot carry attachments", body: "Remove the attachments or send a normal chat message." });
+    if ((command || reviewRequest) && hasLocal) {
+      toast({ level: "info", title: "Commands cannot carry attachments", body: "Remove the attachments or send a normal chat message." });
       return false;
     }
     if (!picks.length && !hasLocal) return run(text);
@@ -267,10 +273,26 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
     target.addEventListener("pointerup", up);
   }, [prefs.sessionSidebarWidth]);
 
+  const showSessions = useRef<HTMLButtonElement>(null);
+  const [archive, setArchive] = useState<{ cwd: string; id: string; title: string } | null>(null);
+  useEffect(() => setArchive(null), [cwd]);
+  function openArchive(id: string, title: string) {
+    // Its row disappears with the floating sidebar. Give the dialog a mounted focus return target.
+    if (!sidebarOpen) showSessions.current?.focus();
+    setArchive({ cwd, id, title });
+    setNarrowSidebar(false);
+    if (!s.marks[id]?.held) void s.loadSession(id);
+  }
   const sidebar = (
     <SessionSidebar
-      sessions={state.sessions}
-      marks={s.marks}
+      sessions={state.sessions.map(session => {
+        const title = reviewSessionTitle(session.title, reviewBySession.get(session.sessionId));
+        return title === session.title ? session : { ...session, title };
+      })}
+      marks={Object.fromEntries(Object.entries(s.marks).map(([sessionId, mark]) => {
+        const title = reviewSessionTitle(mark.title, reviewBySession.get(sessionId)) ?? mark.title;
+        return [sessionId, title === mark.title ? mark : { ...mark, title }];
+      }))}
       loadingIds={state.loadingIds}
       currentId={state.sessionId}
       ready={state.phase === "ready" && !incompatible}
@@ -280,6 +302,7 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
         setNarrowSidebar(false);
         void s.loadSession(id);
       }}
+      onOpenArchive={openArchive}
       onShowSubagent={(sessionId, id) => {
         setNarrowSidebar(false);
         if (sessionId === state.sessionId) showSubagent(id);
@@ -299,6 +322,9 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
     <div
       className={`session-view${sidebarOpen ? " with-sidebar" : ""}${narrow ? " is-narrow" : ""}`}
       style={{ "--sidebar-w": `${prefs.sessionSidebarWidth}px` } as React.CSSProperties}>
+      {archive?.cwd === cwd && <SubagentArchive key={archive.id} title={archive.title}
+        subagents={s.marks[archive.id]?.subagents ?? []} loading={state.loadingIds.includes(archive.id)}
+        unavailable={!s.marks[archive.id]?.held} onRetry={() => void s.loadSession(archive.id)} onClose={() => setArchive(null)} />}
       {sidebarOpen ? sidebar : null}
       {!sidebarOpen && floating === null ? (
         <div className="sidebar-hover-zone" aria-hidden="true" onMouseEnter={() => setFloating("hover")} />
@@ -319,13 +345,13 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
             <button
               className="icon-btn titlebar-toggle"
               onClick={() => (narrow ? setNarrowSidebar(true) : (setFloating(null), setPrefs({ sessionSidebar: true })))}
+              ref={showSessions}
               aria-label="Show sessions"
               title="Show sessions"
             >
               <Icon name="list" size={15} />
             </button>
           ) : null}
-          {githubAccount && <ProjectGitHubAccountButton account={githubAccount} onOpen={onProjectSettings} />}
         </>, sessionControls)}
 
         {state.banners.length > 0 ? (
@@ -388,6 +414,7 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
           key={state.sessionId ?? ""}
           items={state.items}
           busy={state.busy}
+          reviewActivity={reviewActivity}
           onRunCommand={(line, o) => run(line, o)}
           prLinks={prLinks}
           onEditMessage={disabledReason === null && !state.busy ? editMessage : undefined}
@@ -423,7 +450,7 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
             onModel={(c, v) => void s.setModel(c, v)}
             onProviders={() => onProviders("connect", "")}
           />
-          <UsageFooter usage={state.usage} version={state.agentVersion} cwd={cwd} busy={state.busy} />
+          <UsageFooter githubAccount={githubAccount} onAccountClick={onProjectSettings} usage={state.usage} version={state.agentVersion} cwd={cwd} busy={state.busy} />
         </div>
       </section>
       {ask ? (
@@ -549,37 +576,30 @@ function pairText(p: { inputTokens: number; outputTokens: number }): string {
   return `${formatTokens(p.inputTokens)} in · ${formatTokens(p.outputTokens)} out`;
 }
 
-function UsageFooter({ usage, version, cwd, busy }: { usage: Usage | null; version: string | null; cwd: string; busy: boolean }) {
-  const parts = useMemo(() => {
-    if (!usage) return null;
-    const ctx = usage.size > 0 ? Math.min(100, Math.round((usage.used / usage.size) * 100)) : null;
-    return { ctx };
-  }, [usage]);
-  if (!usage || !parts) return (
-      <div className="usage-footer">
-        <GitStatus cwd={cwd} busy={busy} />
-        <span className="grow" />
-        {version ? <span>keryx {version}</span> : null}
-      </div>
-    );
-  const turnTitle = usage.turn ? `This turn: ${pairText(usage.turn)}` : undefined;
+function UsageFooter({ usage, version, cwd, busy, githubAccount, onAccountClick }: {
+  usage: Usage | null; version: string | null; cwd: string; busy: boolean;
+  githubAccount?: ProjectGitHubAccount; onAccountClick?: () => void;
+}) {
+  const ctx = usage && usage.size > 0 ? Math.min(100, Math.round((usage.used / usage.size) * 100)) : null;
+  const turnTitle = usage?.turn ? `This turn: ${pairText(usage.turn)}` : undefined;
   return (
     <div className="usage-footer">
-      {parts.ctx !== null ? (
+      {usage && ctx !== null ? (
         <span className="usage-ctx" title={`Last model call used ${formatTokens(usage.used)} of a ${formatTokens(usage.size)} token context window`}>
           <span className="usage-meter" aria-hidden>
-            <span style={{ width: `${parts.ctx}%` }} />
+            <span style={{ width: `${ctx}%` }} />
           </span>
-          {parts.ctx}% context
+          {ctx}% context
         </span>
       ) : null}
-      {usage.session ? <span title={turnTitle}>Session {pairText(usage.session)}</span> : <span title={turnTitle}>{formatTokens(usage.used)} tokens last call</span>}
-      {usage.cost ? (
+      {usage && (usage.session ? <span title={turnTitle}>Session {pairText(usage.session)}</span> : <span title={turnTitle}>{formatTokens(usage.used)} tokens last call</span>)}
+      {usage?.cost ? (
         <span>
           {usage.cost.amount.toFixed(4)} {usage.cost.currency}
         </span>
       ) : null}
       <GitStatus cwd={cwd} busy={busy} />
+      {githubAccount && <ProjectGitHubAccountButton account={githubAccount} onOpen={onAccountClick} />}
       <span className="grow" />
       {version ? <span>keryx {version}</span> : null}
     </div>

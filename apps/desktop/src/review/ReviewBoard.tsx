@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Icon } from "../components/Icon";
 import { EmptyState, overlayOpen, Spinner } from "../components/ui";
 import { absoluteTime, errMessage } from "../lib/format";
@@ -7,24 +7,28 @@ import { fetchReviewBadges, fetchReviewBoard, fetchReviewRepositories, type fetc
 import { withRunBackoff } from "./runPolling";
 import { localBadge, type LocalBadge } from "../../../../src/review/board-badges";
 import { sameRange, type RunObserver } from "./useReviewRuns";
-import { reviewRun } from "../platform/reviewRuns";
-import type { reviewWatcher } from "../platform/reviewWatcher";
+import { reviewRun, subscribeSessionReview } from "../platform/reviewRuns";
+import type { reviewWatcher, ReviewWatcherKey } from "../platform/reviewWatcher";
 import { ProjectReviewRules } from "./ProjectReviewRules";
 import type { reviewRules } from "../platform/reviewRules";
 import { ReviewWatcher } from "./ReviewWatcher";
-import { ReviewDetail } from "./ReviewDetail";
+import { ReviewDetail, type ReviewIntent } from "./ReviewDetail";
 import { readReplies, subscribeReviewReads } from "./reviewReadState";
 import type { ReviewDetailSnapshot } from "./ReviewDetailTypes";
 import { mentionsViewer } from "../../../../src/review/board-addressed-replies";
 import { ReviewFilters, filterSummary } from "./ReviewFilters";
 import { ReviewResults } from "./ReviewResults";
-import { EMPTY_FILTERS, filterReviews, stateQuery } from "./model";
+import { readReviewFilters, reviewFilterKey, saveReviewFilters } from "./reviewFilterStorage";
+import { EMPTY_FILTERS, filterReviews, stateQuery, type Filters } from "./model";
 import type { ReviewBoardSnapshot, ReviewBoardState, ReviewCard } from "./types";
+
+export type ReviewTabIndicator = "attention" | "watching" | null;
 
 interface Props {
   cwd: string;
   expectedViewer?: string;
   active?: boolean;
+  onIndicatorChange?: (indicator: ReviewTabIndicator, viewer?: string) => void;
   flows: FlowCard[];
   onOpenFlow: (dir: string) => void;
   load?: typeof fetchReviewBoard;
@@ -45,40 +49,41 @@ interface ReadState {
 
 function badgesEqual(a: LocalBadge | undefined, b: LocalBadge | undefined) {
   return !!a?.active === !!b?.active && !!a?.ready === !!b?.ready && a?.progress?.wave === b?.progress?.wave
+    && a?.awaitingAnswer === b?.awaitingAnswer && a?.lastActivityAt === b?.lastActivityAt
+    && a?.runState === b?.runState && a?.progress?.completed === b?.progress?.completed
     && a?.progress?.finished === b?.progress?.finished && a?.progress?.planned === b?.progress?.planned;
 }
 
 export function ReviewBoard(props: Props) {
-  return <ProjectBoard key={props.cwd} {...props} />;
-}
-
-interface BoardCache {
-  snapshots: Map<ReviewBoardState, ReviewBoardSnapshot>;
-  identity: string;
-  filters: typeof EMPTY_FILTERS;
+  return <ProjectBoard key={JSON.stringify([props.cwd, props.expectedViewer?.toLowerCase()])} {...props} />;
 }
 
 function ProjectBoard(props: Props) {
   const [repo, setRepo] = useState<string>();
-  const cache = useMemo<BoardCache>(() => ({ snapshots: new Map(), identity: "", filters: EMPTY_FILTERS }), [repo]);
-  if (props.active === false) return null;
-  return <RepositoryBoard cache={cache} key={JSON.stringify([props.cwd, repo])} {...props} repo={repo} selectRepo={setRepo} />;
+  return <RepositoryBoard key={JSON.stringify([props.cwd, repo])} {...props} repo={repo} selectRepo={setRepo} />;
 }
 
-function RepositoryBoard({ cwd, expectedViewer, flows, onOpenFlow, loadDetail, watcherCommand, rulesCommand, runCommand = reviewRun, loadBadges = fetchReviewBadges, load = fetchReviewBoard, listRepositories = fetchReviewRepositories, repo, selectRepo, cache }: Props & {
-  cache: BoardCache;
+function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, expectedViewer, flows, onOpenFlow, loadDetail, watcherCommand, rulesCommand, runCommand = reviewRun, loadBadges = fetchReviewBadges, load = fetchReviewBoard, listRepositories = fetchReviewRepositories, repo, selectRepo }: Props & {
   repo?: string;
   selectRepo: (repo?: string) => void;
 }) {
-  const [filters, setFilters] = useState(cache.filters);
+  const [attentionPrs, setAttentionPrs] = useState<ReadonlySet<number>>(() => new Set());
+  const [watchingTarget, setWatchingTarget] = useState<ReviewWatcherKey | null>(null);
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const snapshots = useRef(new Map<ReviewBoardState, ReviewBoardSnapshot>());
   const [query, setQuery] = useState("");
   const [filtering, setFiltering] = useState(false);
+  const [dismissedWarning, setDismissedWarning] = useState("");
+  const warningId = useId();
+  const warningToggle = useRef<HTMLButtonElement>(null);
   const [view, setView] = useState<"board" | "list">("board");
-  const [selected, setSelected] = useState<number | null>(null);
+  const [selected, setSelected] = useState<{ number: number; reviewIntent?: ReviewIntent } | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const refresh = useCallback(() => setAttempt(n => n + 1), []);
   const [alternatives, setAlternatives] = useState<string[]>([]);
   const search = useRef<HTMLInputElement>(null);
-  const identity = useRef(cache.identity);
+  const identity = useRef("");
+  const filterKey = useRef<string>();
   const sequence = useRef(0);
   // A delayed GitHub refresh can carry older local run badges than a just-finished launch.
   const pendingBadges = useRef<Map<number, Pick<ReviewCard, "baseSha" | "headSha" | "localReview">> | null>(null);
@@ -88,9 +93,8 @@ function RepositoryBoard({ cwd, expectedViewer, flows, onOpenFlow, loadDetail, w
   const q = useDeferredValue(query);
 
   useEffect(() => {
-    cache.filters = filters;
-    if (read.snapshot) cache.snapshots.set(read.scope, read.snapshot);
-  }, [cache, filters, read]);
+    if (read.snapshot) snapshots.current.set(read.scope, read.snapshot);
+  }, [read]);
 
   const clearPrivateView = useCallback((resetState = false) => {
     restoreFocus.current = !!document.activeElement?.closest('.review-board [role="dialog"]');
@@ -115,6 +119,12 @@ function RepositoryBoard({ cwd, expectedViewer, flows, onOpenFlow, loadDetail, w
       return { ...old, snapshot: { ...board, cards: board.cards.map(c => c === card ? updated : c) } };
     });
   }, []);
+
+  useEffect(() => subscribeSessionReview((project, key, snapshot) => {
+    if (project !== cwd) return;
+    const started = snapshot.runs.find(run => run.id === snapshot.startedRunId);
+    if (started) updateRunSummary(key, started, snapshot);
+  }), [cwd, updateRunSummary]);
 
   const noteDiscussion = useCallback((detail: ReviewDetailSnapshot) => {
     const ids = new Set<string>();
@@ -142,12 +152,14 @@ function RepositoryBoard({ cwd, expectedViewer, flows, onOpenFlow, loadDetail, w
     // A list request started before a denied detail request cannot restore its private snapshot.
     sequence.current++;
     identity.current = "";
-    cache.snapshots.clear();
-    cache.identity = "";
+    filterKey.current = undefined;
+    snapshots.current.clear();
+    setAttentionPrs(new Set());
+    setWatchingTarget(null);
     pendingBadges.current = null;
     clearPrivateView();
     setRead((old) => ({ ...old, error: message, snapshot: null, loading: false }));
-  }, [cache, clearPrivateView]);
+  }, [clearPrivateView]);
 
   useEffect(() => {
     const request = ++sequence.current;
@@ -161,7 +173,7 @@ function RepositoryBoard({ cwd, expectedViewer, flows, onOpenFlow, loadDetail, w
       if (request !== sequence.current) return;
       const nextIdentity = JSON.stringify([snapshot.repositoryId, snapshot.viewer]);
       if (identity.current && identity.current !== nextIdentity) {
-        cache.snapshots.clear();
+        snapshots.current.clear();
         clearPrivateView(true);
       } else if (badges.size) {
         snapshot = { ...snapshot, cards: snapshot.cards.map(card => {
@@ -169,23 +181,53 @@ function RepositoryBoard({ cwd, expectedViewer, flows, onOpenFlow, loadDetail, w
           return update && sameRange(card, update) ? { ...card, localReview: update.localReview } : card;
         }) };
       }
+      // Closed/merged-only views can retire known requests, but cannot replace the open snapshot.
+      const replaceAttention = identity.current !== nextIdentity || scope === "open" || scope === "all";
+      setAttentionPrs(previous => {
+        const next = new Set(replaceAttention ? [] : previous);
+        for (const card of snapshot.cards) {
+          if (card.state === "open" && (card.reviewers.length > 0 || card.decision === "CHANGES_REQUESTED")) next.add(card.number);
+          else next.delete(card.number);
+        }
+        return next;
+      });
+      const nextFilterKey = reviewFilterKey(cwd, snapshot.repositoryId, snapshot.viewer);
+      if (filterKey.current !== nextFilterKey) {
+        filterKey.current = nextFilterKey;
+        setFilters(readReviewFilters(nextFilterKey));
+      }
       pendingBadges.current = null;
-      setSelected(number => snapshot.cards.some(c => c.number === number) ? number : null);
-      cache.identity = nextIdentity;
+      setSelected(current => current && snapshot.cards.some(c => c.number === current.number) ? current : null);
+      if (!snapshot.warnings.length) setDismissedWarning("");
       identity.current = nextIdentity;
-      setRead({ scope, snapshot, error: "", loading: false });
+      setRead(old => {
+        const previous = old.snapshot;
+        if (previous?.repositoryId === snapshot.repositoryId && previous.viewer === snapshot.viewer) {
+          // A card-only refresh has no discussion bodies. Carry known replies for unchanged PRs.
+          const replies = new Map(previous.cards.filter(c => c.addressedReplyIds?.length).map(c => [c.number, c]));
+          if (replies.size) {
+            const cards = snapshot.cards.map(c => {
+              const prior = replies.get(c.number);
+              return !c.addressedReplyIds && prior?.addressedReplyIds && sameRange(prior, c) && prior.updatedAt === c.updatedAt
+                ? { ...c, addressedReplyIds: prior.addressedReplyIds } : c;
+            });
+            return { scope, snapshot: { ...snapshot, cards }, error: "", loading: false };
+          }
+        }
+        return { scope, snapshot, error: "", loading: false };
+      });
     }).catch((cause: unknown) => {
       if (request !== sequence.current) return;
       pendingBadges.current = null;
       const message = errMessage(cause);
       if (/^unavailable:/i.test(message)) {
-        setRead((old) => ({ scope, snapshot: (old.scope === scope ? old.snapshot : null) ?? cache.snapshots.get(scope) ?? null, error: message, loading: false }));
+        setRead((old) => ({ scope, snapshot: (old.scope === scope ? old.snapshot : null) ?? snapshots.current.get(scope) ?? null, error: message, loading: false }));
       } else {
         accessLost(message);
       }
     });
     return () => { sequence.current++; controller.abort(); };
-  }, [cwd, expectedViewer, scope, repo, attempt, load, clearPrivateView, accessLost, cache]);
+  }, [cwd, expectedViewer, scope, repo, attempt, load, clearPrivateView, accessLost]);
 
   useEffect(() => {
     if (restoreFocus.current && !overlayOpen()) search.current?.focus();
@@ -193,6 +235,11 @@ function RepositoryBoard({ cwd, expectedViewer, flows, onOpenFlow, loadDetail, w
   }, [read]);
 
   useEffect(() => {
+    if (!tabActive) {
+      setSelected(null);
+      setFiltering(false);
+      return;
+    }
     const focusSearch = (e: KeyboardEvent) => {
       if (!overlayOpen() && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") {
         e.preventDefault();
@@ -201,11 +248,11 @@ function RepositoryBoard({ cwd, expectedViewer, flows, onOpenFlow, loadDetail, w
     };
     window.addEventListener("keydown", focusSearch);
     return () => window.removeEventListener("keydown", focusSearch);
-  }, []);
+  }, [tabActive]);
 
   const snapshot = read.scope === scope ? read.snapshot : null;
   useEffect(() => {
-    if (!snapshot || selected !== null) return;
+    if (!tabActive || !snapshot || selected !== null) return;
     const { repo, repositoryId, viewer } = snapshot;
     const active = snapshot.cards.filter(c => c.state === "open" && c.localReview?.active);
     if (!active.length) return;
@@ -241,7 +288,7 @@ function RepositoryBoard({ cwd, expectedViewer, flows, onOpenFlow, loadDetail, w
     }
     let timer = window.setTimeout(poll, 6000);
     return () => { cancelled = true; window.clearTimeout(timer); };
-  }, [accessLost, cwd, loadBadges, runCommand, selected, snapshot]);
+  }, [accessLost, cwd, loadBadges, runCommand, selected, snapshot, tabActive]);
   const needRepositories = read.scope === scope && !!read.error && !snapshot;
   useEffect(() => {
     if (!needRepositories) return;
@@ -267,18 +314,36 @@ function RepositoryBoard({ cwd, expectedViewer, flows, onOpenFlow, loadDetail, w
     });
   }, [snapshot, filters, q, receiptVersion]);
   const active = filterSummary(filters);
-  const card = selected === null ? null : snapshot?.cards.find((c) => c.number === selected);
+  const card = selected === null ? null : snapshot?.cards.find((c) => c.number === selected.number);
   const error = read.scope === scope ? read.error : "";
   const loading = read.scope !== scope || read.loading;
+  const warningKey = snapshot?.warnings.length
+    ? JSON.stringify([snapshot.repositoryId, snapshot.viewer, [...snapshot.warnings].sort()]) : "";
+  const showWarning = !!warningKey && warningKey !== dismissedWarning;
   const watcherRepo = snapshot?.repo;
   const watcherRepoId = snapshot?.repositoryId;
   const watcherViewer = snapshot?.viewer;
   const watcherTarget = useMemo(() => watcherRepo && watcherRepoId && watcherViewer
     ? { repo: watcherRepo, repositoryId: watcherRepoId, viewer: watcherViewer } : null, [watcherRepo, watcherRepoId, watcherViewer]);
-  const refresh = () => setAttempt((n) => n + 1);
-  const reset = () => { setFilters(EMPTY_FILTERS); setQuery(""); };
+  const indicator: ReviewTabIndicator = attentionPrs.size ? "attention" :
+    watchingTarget && watcherTarget && watchingTarget.repositoryId === watcherTarget.repositoryId &&
+    watchingTarget.viewer === watcherTarget.viewer ? "watching" : null;
+  useEffect(() => { onIndicatorChange?.(indicator, viewer); }, [indicator, viewer, onIndicatorChange]);
+  useEffect(() => () => onIndicatorChange?.(null), [onIndicatorChange]);
 
-  return <section className="flows review-board" aria-label="Review">
+  function applyFilters(next: Filters) {
+    setFilters(next);
+    if (filterKey.current) saveReviewFilters(filterKey.current, next);
+  }
+  const reset = () => { applyFilters(EMPTY_FILTERS); setQuery(""); };
+
+  const openDetails = useCallback((number: number) => setSelected({ number }), []);
+  const openReview = useCallback((card: ReviewCard) => {
+    const kind = card.localReview?.awaitingAnswer ? "answer" : card.localReview?.active || card.localReview?.runState ? "view" : "start";
+    setSelected({ number: card.number, reviewIntent: { kind, baseSha: card.baseSha, headSha: card.headSha } });
+  }, []);
+
+  return <section className="flows review-board" hidden={!tabActive} aria-label="Review">
     <div className="flows-toolbar">
       <div className="flows-heading"><h1>Review</h1>{snapshot && <span className="count-label">
         {visible.length} {visible.length === 1 ? "pull request" : "pull requests"}
@@ -287,12 +352,12 @@ function RepositoryBoard({ cwd, expectedViewer, flows, onOpenFlow, loadDetail, w
         <input ref={search} type="search" aria-label="Search pull requests" placeholder="Search by title or #number"
           value={query} onChange={(e) => setQuery(e.target.value)} />
       </label>
-      <button className="btn btn-sm" onClick={() => setFiltering(true)} aria-haspopup="dialog">
+      <button className="btn btn-sm" disabled={!filterKey.current} onClick={() => setFiltering(true)} aria-haspopup="dialog">
         <Icon name="checklist" size={14} /> Filters{active.length ? ' (' + active.length + ')' : ''}
       </button>
       <div className="grow" />
-      {watcherTarget && <ProjectReviewRules key={"rules-" + JSON.stringify(watcherTarget)} cwd={cwd} target={watcherTarget} command={rulesCommand} onAccessLost={accessLost} />}
-      <ReviewWatcher key={JSON.stringify(watcherTarget)} cwd={cwd} target={watcherTarget} command={watcherCommand} onAccessLost={accessLost} />
+      {tabActive && watcherTarget && <ProjectReviewRules key={"rules-" + JSON.stringify(watcherTarget)} cwd={cwd} target={watcherTarget} command={rulesCommand} onAccessLost={accessLost} />}
+      <ReviewWatcher key={JSON.stringify(watcherTarget)} cwd={cwd} target={watcherTarget} command={watcherCommand} active={tabActive} onPollCompleted={refresh} onWatchingChange={setWatchingTarget} onAccessLost={accessLost} />
       <div className="segmented" role="group" aria-label="Review view">
         {(["board", "list"] as const).map((mode) => <button key={mode} aria-pressed={view === mode}
           onClick={() => setView(mode)}><Icon name={mode} size={14} /> {mode === "board" ? "Board" : "List"}</button>)}
@@ -309,7 +374,11 @@ function RepositoryBoard({ cwd, expectedViewer, flows, onOpenFlow, loadDetail, w
           : <strong>{snapshot.repo}</strong>}
         <span>Signed in as {snapshot.viewer}</span>
         <span className="grow" />
-        <span>{error ? "Last available snapshot" : snapshot.warnings.length ? "Partial snapshot" : "Synced"} <time dateTime={snapshot.fetchedAt}>{absoluteTime(snapshot.fetchedAt)}</time></span>
+        <span>{error ? "Last available snapshot" : warningKey ? "Partial snapshot" : "Synced"} <time dateTime={snapshot.fetchedAt}>{absoluteTime(snapshot.fetchedAt)}</time></span>
+        {warningKey && <button ref={warningToggle} className="icon-btn" aria-label="Sync details" title="Sync details"
+          aria-expanded={showWarning} aria-controls={warningId} onClick={() => setDismissedWarning(showWarning ? warningKey : "")}>
+          <Icon name="info" size={15} />
+        </button>}
       </>}
       {needRepositories && alternatives.length > 0 && <select className="select-compact" aria-label="Base repository"
         value={repo ?? ""} onChange={(e) => selectRepo(e.target.value)}>
@@ -318,29 +387,35 @@ function RepositoryBoard({ cwd, expectedViewer, flows, onOpenFlow, loadDetail, w
       </select>}
       {!snapshot && repo && <><strong>{repo}</strong><button className="link-btn" onClick={() => selectRepo()}>Use default repository</button></>}
       {active.length > 0 && <div className="review-active-filters">
+        <button className="icon-btn" aria-label="Clear filters" title="Clear filters" onClick={() => applyFilters(EMPTY_FILTERS)}>
+          <Icon name="clearFilters" size={16} />
+        </button>
         {active.map((label) => <span key={label}>{label}</span>)}
-        <button className="link-btn" onClick={() => setFilters(EMPTY_FILTERS)}>Clear filters</button>
       </div>}
     </div>}
     {error && <div className="inline-banner tone-warn" role="alert">
       <Icon name="alert" size={15} /><span>{error.replace(/^(access|configuration|unavailable):\s*/i, "")}</span>
       <button className="btn btn-sm" onClick={refresh}>Try again</button>
     </div>}
-    {!!snapshot?.warnings.length && <div className="inline-banner tone-warn" role="status">
+    {showWarning && snapshot && <div id={warningId} className="inline-banner tone-warn" role="status">
       <Icon name="alert" size={15} /><div><strong>Partial sync</strong>{snapshot.warnings.map((w) => <div key={w}>{w}</div>)}</div>
+      <button className="icon-btn review-dismiss-warning" aria-label="Hide sync details" title="Hide sync details"
+        onClick={() => { setDismissedWarning(warningKey); warningToggle.current?.focus(); }}>
+        <Icon name="x" size={15} />
+      </button>
     </div>}
     {!snapshot && loading && <div className="review-loading" role="status"><Spinner /> Loading pull requests…</div>}
-    {snapshot && (visible.length ? <ReviewResults view={view} cards={visible} onOpen={setSelected} /> :
+    {tabActive && snapshot && (visible.length ? <ReviewResults view={view} cards={visible} onOpen={openDetails} onReview={openReview} /> :
       <EmptyState icon={q || active.length ? "search" : "pr"}
         title={q || active.length ? "No matching pull requests" : snapshot.warnings.length ? "No pull requests in the available data" : "No open pull requests"}
         actions={q || active.length ? <button className="btn" onClick={reset}>Reset search and filters</button> : undefined}>
         {q || active.length ? "Try another title, number, or filter." : undefined}
       </EmptyState>)}
-    {filtering && <ReviewFilters cards={snapshot?.cards ?? []} filters={filters} onClose={() => setFiltering(false)}
-      onApply={(next) => { setFilters(next); setFiltering(false); setSelected(null); }} />}
-    {card && snapshot && <ReviewDetail key={JSON.stringify([snapshot.repositoryId, snapshot.viewer, card.number])}
-      cwd={cwd} repo={snapshot.repo} repositoryId={snapshot.repositoryId} viewer={snapshot.viewer} card={card}
-      flow={flows.find((flow) => flow.prUrl?.replace(/\/$/, "").toLowerCase() === card.url.toLowerCase())}
+    {tabActive && filtering && <ReviewFilters cards={snapshot?.cards ?? []} filters={filters} onClose={() => setFiltering(false)}
+      onApply={(next) => { applyFilters(next); setFiltering(false); setSelected(null); }} />}
+    {tabActive && card && snapshot && <ReviewDetail key={JSON.stringify([snapshot.repositoryId, snapshot.viewer, card.number])}
+      cwd={cwd} repo={snapshot.repo} repositoryId={snapshot.repositoryId} viewer={snapshot.viewer} card={card} reviewIntent={selected?.reviewIntent}
+      projectFlows={flows} flow={flows.find((flow) => flow.prUrl?.replace(/\/$/, "").toLowerCase() === card.url.toLowerCase())}
       load={loadDetail} rulesCommand={rulesCommand} runCommand={runCommand} onRunSnapshot={updateRunSummary} onDiscussionLoaded={noteDiscussion} onRefreshBoard={refresh} onAccessLost={accessLost} onOpenFlow={onOpenFlow} onClose={() => setSelected(null)} />}
   </section>;
 }

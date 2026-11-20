@@ -77,6 +77,32 @@ changes, its earlier report remains attached to the revision it covered.
 The GitHub review decision still comes from GitHub. A manual Keryx review
 records its result locally.
 
+### Publish a review to GitHub
+
+Open a finished Keryx review with a recorded pull request revision and choose
+**Publish to GitHub**. The dialog shows the project GitHub account and a
+formatted preview of the general comment and a separate preview of each inline
+comment with its file and line. Choose whether to include inline
+comments, a general comment, the Keryx review format, and a project template
+when available. To define a project template, add
+`.metaproject/review-publish-template.md` with one `{{review}}` placeholder
+where the generated comment should appear.
+
+The review suggests a verdict based on its findings and coverage. You can
+change it or choose **Use recommendation** to keep updating the verdict as the
+findings change. **Approve with suggestions** sends a GitHub approval with the
+selected review text. An incomplete review can be sent as a comment or request
+changes. When the report gives you options for a finding, select the answer you
+want to include with that finding. Other questions let you keep or dismiss the
+finding and highlight the recommended action.
+
+**Save locally** preserves the draft and its selected answers for the next time
+you open this review.
+Choose **Submit review** and confirm in the Desktop prompt to write to GitHub.
+Keryx rechecks the GitHub account,
+repository, and reviewed revision before submitting. If the PR has moved or
+closed, you can still save the draft locally.
+
 ### Watch PRs while Desktop is closed
 
 From **Review**, open **PR watcher**, choose a polling interval and select **Enable watcher**. The default is five minutes. The first successful poll records which PRs are open, their revisions, requested reviewers and CI. The history shows the 50 latest changes with the time Keryx observed them.

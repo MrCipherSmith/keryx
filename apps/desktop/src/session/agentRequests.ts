@@ -1,6 +1,7 @@
 // keryx's requests to the window (session/request_permission, _keryx/ask_user): which become a dialog.
 // No React; the hook supplies the registry and the queue.
 
+import { parseReviewDraft, PREPARE_REVIEW_METHOD, type ReviewDraftHints } from "../../../../src/acp/review-draft";
 import { RpcError } from "../acp/client";
 import type { AskUserRequest, AskUserResult, PermissionOutcome, PermissionRequest } from "../acp/types";
 import type { DialogQueue } from "./dialogQueue";
@@ -17,7 +18,17 @@ export async function answerAgentRequest(
   params: unknown,
   reg: Pick<SessionRegistry, "admit">,
   dialogs: Pick<DialogQueue, "permission" | "ask">,
+  prepareReview?: (sessionId: string, hints: ReviewDraftHints) => void,
 ): Promise<unknown> {
+  if (method === PREPARE_REVIEW_METHOD && prepareReview) {
+    const sid = reg.admit(params);
+    if (!sid) return { prepared: false };
+    const { sessionId: _owner, ...fields } = params as Record<string, unknown>;
+    const parsed = parseReviewDraft(fields);
+    if (!parsed.ok) throw new RpcError(-32602, parsed.message);
+    prepareReview(sid, parsed.hints);
+    return { prepared: true };
+  }
   if (method === "session/request_permission") {
     const sid = reg.admit(params);
     if (!sid) return { outcome: CANCELLED };

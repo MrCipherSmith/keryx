@@ -28,6 +28,7 @@ import { packageParityWarnings } from "./parity";
 import { dispatchRuns, packageCoverageErrors, researchErrors, type DispatchRun } from "./research";
 import { asRecord as record } from "./record";
 import { COVERAGE_MD_MARK, parseCoverageEntries } from "./coverage-md";
+import { SCOPE_DROP_REASONS } from "./scope";
 import { FINDING_DISPOSITION_STATES, cardPressFields, type CardPress, type ConfirmedVia, type ManagedReviewManifest, type ReadinessWaiver } from "./types";
 
 export const READINESS_ITEMS = [
@@ -39,7 +40,7 @@ export const READINESS_ITEMS = [
   { number: 6, id: "coverage-md", title: "coverage.md states the ingest status of each reviewer truthfully" },
   { number: 7, id: "head", title: "the report's head matches the PR head" },
   { number: 8, id: "report-names", title: "pending mutation candidates and parity warnings are named in the report" },
-  { number: 9, id: "pr-files", title: "the changed-file count equals the PR's own file list" },
+  { number: 9, id: "pr-files", title: "the scope and recorded pre-filter omissions account for the PR's file list" },
   { number: 10, id: "memory-outside-stage", title: "the orchestrator read memory only in its own memory stage" },
   { number: 11, id: "premise-decisions", title: "every held finding has an operator decision" },
   { number: 12, id: "quotes-located", title: "every open finding's quote is placed in its file, or the finding is answered" },
@@ -362,25 +363,64 @@ async function reportNamesCheck(ctx: Context): Promise<Verdict> {
   return bad(warnings.slice(0, 2).join("; "), "add the lines named above to report.md (keryx review parity prints them)");
 }
 
+/** A diff scope lists a fully filtered path only in drops, even if it took several block drops to remove it. */
+async function scopePrefilterCoversMissing(dir: string, scope: readonly string[], missing: readonly string[]): Promise<boolean> {
+  const artifact = record(await readJson<unknown>(path.join(dir, "scope.json")));
+  const counts = record(artifact?.counts);
+  if (artifact?.schemaVersion !== 1 || artifact.mode !== "diff" || !Array.isArray(artifact.files) ||
+      !Array.isArray(artifact.regions) || !Array.isArray(artifact.drops) || counts?.filesRetained !== scope.length ||
+      counts.filesDropped !== missing.length || counts.filesSeen !== scope.length + missing.length) return false;
+
+  const retained = new Set(scope);
+  const matchesRetained = (paths: Set<unknown>): boolean =>
+    paths.size === retained.size && [...paths].every((file) => text(file) && retained.has(file));
+  if (!matchesRetained(new Set(artifact.files)) ||
+      !matchesRetained(new Set(artifact.regions.map((region: unknown) => record(region)?.path)))) return false;
+
+  const filtered = new Set<string>();
+  let blocksDropped = 0;
+  let changedLinesDropped = 0;
+  for (const row of artifact.drops) {
+    const drop = record(row);
+    if (!text(drop?.path) || !SCOPE_DROP_REASONS.some((reason) => reason === drop.reason) || !text(drop.detail)) return false;
+    const block = drop.reason === "comment-only" || drop.reason === "whitespace-only";
+    if (drop.granularity !== (block ? "block" : "file") || (!block && retained.has(drop.path))) return false;
+    if (typeof drop.changedLines !== "number" || !Number.isSafeInteger(drop.changedLines) || drop.changedLines < Number(block)) return false;
+    blocksDropped += Number(block);
+    changedLinesDropped += drop.changedLines;
+    if (!retained.has(drop.path)) filtered.add(drop.path);
+  }
+  return counts.blocksDropped === blocksDropped && counts.changedLinesDropped === changedLinesDropped &&
+    filtered.size === missing.length && missing.every((file) => filtered.has(file));
+}
+
 async function prFilesCheck(ctx: Context, options: ReadinessOptions): Promise<Verdict> {
   if (!isPrBound(ctx.manifest.target)) return ok("not a pull-request package");
-  const scope = (await packageScopeFiles(ctx.dir)) ?? [];
+  const recordedScope = await packageScopeFiles(ctx.dir);
+  const scope = recordedScope ?? [];
   const blast = await readJson<{ changedFiles?: unknown }>(path.join(ctx.dir, "blast-radius.json"));
-  const recounted = Array.isArray(blast?.changedFiles) ? blast!.changedFiles.length : undefined;
-  if (recounted !== undefined && scope.length > 0 && recounted > RECOUNT_RATIO * scope.length) {
+  const recounted = Array.isArray(blast?.changedFiles) ? blast.changedFiles : undefined;
+  let list: string[] | null;
+  try { list = await options.prFiles?.(ctx.manifest.target.ref) ?? null; } catch { list = null; }
+  const have = new Set(scope);
+  const prFiles = new Set(list ?? []);
+  const missing = [...prFiles].filter((file) => !have.has(file));
+  const extra = scope.filter((file) => !prFiles.has(file));
+  const filtered = recordedScope !== undefined && missing.length > 0 && extra.length === 0 &&
+    await scopePrefilterCoversMissing(ctx.dir, recordedScope, missing);
+
+  const recountMatchesPr = filtered && recounted?.length === prFiles.size &&
+    new Set(recounted).size === prFiles.size && recounted.every((file: unknown) => text(file) && prFiles.has(file));
+  if (recounted !== undefined && scope.length > 0 && recounted.length > RECOUNT_RATIO * scope.length && !recountMatchesPr) {
     return bad(
-      `blast-radius.json was computed for ${recounted} changed file(s) but the package scope holds ${scope.length}: more than ${RECOUNT_RATIO}x, which a recount against the wrong base produces`,
+      `blast-radius.json was computed for ${recounted.length} changed file(s) but the package scope holds ${scope.length}: more than ${RECOUNT_RATIO}x, which a recount against the wrong base produces`,
       `restore the recorded scope and recount from the PR's own file list: keryx review blast-radius --package ${ctx.arg} --changed <the PR's files, comma-separated>`,
     );
   }
   if (options.prFiles === undefined) return ok(`${scope.length} changed file(s) in scope; the PR's own file list was not read`);
-  let list: string[] | null;
-  try { list = await options.prFiles(ctx.manifest.target.ref); } catch { list = null; }
   if (list === null) return ok(`${scope.length} changed file(s) in scope; the PR's own file list could not be read`);
-  const have = new Set(scope);
-  const missing = list.filter((file) => !have.has(file));
-  const extra = scope.filter((file) => !list!.includes(file));
   if (missing.length === 0 && extra.length === 0) return ok(`${scope.length} changed file(s), equal to the PR's file list`);
+  if (filtered) return ok(`${scope.length} changed file(s) in scope and ${missing.length} intentionally filtered (${some(missing)}), equal to the PR's file list`);
   return bad(`the package scope holds ${scope.length} file(s), the PR lists ${list.length}${missing.length > 0 ? `; not in scope: ${some(missing)}` : ""}${extra.length > 0 ? `; not in the PR: ${some(extra)}` : ""}`, `re-cut the scope from the PR's file list: keryx review start --pr ${ctx.manifest.target.ref}`);
 }
 

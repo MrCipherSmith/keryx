@@ -15,16 +15,20 @@ import { runAutonomousReview, defaultSpawn, privateGitEnv, type ChildHandle, typ
 import type { ReviewRunUsage } from "./run-usage";
 import { countFindings, knownFindingList, renderReport, type AutonomousSummary, type FindingCounts } from "./autonomous-summary";
 import { computeVerdict, renderVerdict } from "./verdict";
-import { boardGraphql, projectGithubConnection, reviewTool, verifyGithubBindingUnchanged, type GithubConnection } from "./board-github";
+import { boardGh, boardGraphql, projectGithubConnection, reviewTool, verifyGithubBindingUnchanged, type GithubConnection } from "./board-github";
 import { withoutGithubCredentials } from "./github-cli";
 import type { ManagedReviewManifest } from "./types";
+import { DESK_OPTIONS_ENV, deskOptionsKey, type DeskReviewOptions } from "./desk-run-options";
 import { DESK_RUN_SCOPE } from "./desk-run-types";
 import { checkoutIsDisposable, checkedDeskSummary, saveDeskSummary, deskVerdictHeadline, completeDeskCoverage, recordedSha, recoverDeskExecution } from "./desk-run-executor-recovery";
-import { DESK_REVIEW_PROJECT_ROOT, DESK_REVIEW_SHELL } from "./autonomous-profile";
+import { DESK_REVIEW_HEAD, DESK_REVIEW_PROJECT_ROOT, DESK_REVIEW_SHELL, exitCodeFor } from "./autonomous-profile";
 import { isReviewPackageDir } from "./package-location";
+import { DESK_RELATED_PRS, linkedReviewPulls, relatedPullGitDir, type RelatedReviewPull } from "./desk-related-prs";
+import { finishAutoDesktopReview } from "./desk-auto-finalize";
 export { recoverDeskExecution } from "./desk-run-executor-recovery";
 
 interface DeskExecutionOptions {
+  options?: DeskReviewOptions;
   context?: Awaited<ReturnType<typeof collectPrContext>>;
   cwd: string;
   repo: string;
@@ -34,6 +38,8 @@ interface DeskExecutionOptions {
   headSha: string;
   runDir: string;
   previousRunDir?: string | undefined;
+  operatorRunId?: string;
+  isWaitingForOperator?: () => boolean;
   signal: AbortSignal;
   budgetMinutes?: number;
   budgetTokens?: number | null;
@@ -56,7 +62,7 @@ export interface DeskExecutionResult {
   report: string | null;
 }
 
-interface PullRevision { baseRefName: string; baseRefOid: string; headRefOid: string; state: string }
+interface PullRevision { baseRefName: string; baseRefOid: string; headRefOid: string; state: string; body?: string }
 interface ControlRef { name: string; oid: string }
 interface Revision extends PullRevision { defaultBranch?: ControlRef }
 export type DeskModelSelector = (cwd: string) => Promise<{ provider: string; model: string }> | { provider: string; model: string };
@@ -82,7 +88,7 @@ async function revision({ repo, number, cwd, viewer }: DeskExecutionOptions, aut
   } | null }>(cwd, `query($owner:String!,$name:String!,$number:Int!) {
     viewer { login }
     repository(owner:$owner,name:$name) {
-      pullRequest(number:$number) { baseRefName baseRefOid headRefOid state }
+      pullRequest(number:$number) { baseRefName baseRefOid headRefOid state body }
       defaultBranchRef { name target { oid } }
     }
   }`, { owner: owner!, name: name!, number }, auth);
@@ -123,8 +129,7 @@ async function prepareCheckout(options: DeskExecutionOptions, checkout: string, 
   await run(["check-ref-format", baseRef]);
   await run(["remote", "set-url", "origin", ports.remoteUrl ?? `https://github.com/${repo}.git`]);
   await run(["remote", "set-url", "--push", "origin", "file:///dev/null"]);
-  const fetch = (...refs: string[]) => git(checkout, ["-c", "credential.helper=",
-    "-c", "credential.https://github.com.helper=!gh auth git-credential",
+  const fetch = (...refs: string[]) => git(checkout, ["-c", "credential.helper=", "-c", "credential.https://github.com.helper=!gh auth git-credential",
     "fetch", "--no-tags", "origin", ...refs], signal, githubToken);
   await fetch(`+refs/heads/${pull.baseRefName}:${baseRef}`, `+refs/pull/${number}/head:refs/keryx/review-head`);
   if (await run(["rev-parse", "refs/keryx/review-head"]) !== headSha) return false;
@@ -200,7 +205,36 @@ async function prepareCheckout(options: DeskExecutionOptions, checkout: string, 
   // index only, so a submitted .gitattributes cannot select a checkout filter.
   await run(["update-ref", "--no-deref", "HEAD", headSha]);
   await run(["read-tree", headSha]);
-  return true;
+  return pull;
+}
+
+async function prepareRelatedPulls(options: DeskExecutionOptions, checkout: string, body: string, auth: GithubConnection): Promise<RelatedReviewPull[]> {
+  const links = linkedReviewPulls(body, options);
+  if (links.length === 0) return [];
+  options.onProgress({ phase: "Collecting linked pull request sources", rounds: 0, tokens: 0 });
+  return Promise.all(links.map(async link => {
+    const { signal } = options;
+    const dir = relatedPullGitDir(checkout, link);
+    try {
+      signal.throwIfAborted();
+      const response = await boardGh(options.cwd, ["api", "--hostname", "github.com", "--method", "GET",
+        `repos/${link.repo}/pulls/${link.number}`], auth, 15000);
+      const pull = JSON.parse(response) as { number?: number; base?: { repo?: { full_name?: string } }; head?: { sha?: string } };
+      const head = recordedSha(pull.head?.sha);
+      if (pull.number !== link.number || pull.base?.repo?.full_name?.toLowerCase() !== link.repo || !head) {
+        return { ...link, unavailable: true };
+      }
+      await mkdir(dir, { recursive: true, mode: 0o700 });
+      await git(dir, ["init", "--bare", "--template="], signal);
+      await git(dir, ["-c", "credential.helper=", "-c", "credential.https://github.com.helper=!gh auth git-credential",
+        "fetch", "--no-tags", "--no-recurse-submodules", "--depth=1", "--end-of-options", `https://github.com/${link.repo}.git`, head],
+      signal, auth.login ? auth.env.GH_TOKEN : undefined);
+      if (await git(dir, ["rev-parse", "FETCH_HEAD"], signal) === head) return { ...link, head };
+    } catch {
+      signal.throwIfAborted();
+    }
+    return { ...link, unavailable: true };
+  }));
 }
 
 async function readJson<T>(file: string): Promise<T | null> {
@@ -318,6 +352,12 @@ export async function executeDeskReview(options: DeskExecutionOptions, ports: Ex
       result = { ...EMPTY, outcome: "blocked", reason: "The PR closed or its base/head changed. Refresh the card before starting another review." };
     } else {
       if (options.context) writeFileSync(path.join(checkout, PR_CONTEXT_FILE), JSON.stringify(options.context), { flag: "wx", mode: 0o600 });
+      const related = options.options?.mode === "auto" && typeof prepared.body === "string"
+        ? await prepareRelatedPulls(options, checkout, prepared.body, auth) : [];
+      if (related.length) {
+        await mkdir(runnerDir, { recursive: true, mode: 0o700 });
+        await writeFileAtomic(path.join(runnerDir, "related-pulls.json"), JSON.stringify(related), { mode: 0o600 });
+      }
       const previous = options.previousRunDir && path.join(options.previousRunDir, "package");
       if (previous) {
         const manifest = await readJson<ManagedReviewManifest>(path.join(previous, "manifest.json"));
@@ -340,8 +380,11 @@ export async function executeDeskReview(options: DeskExecutionOptions, ports: Ex
       signal.throwIfAborted();
       const execution = await runAutonomousReview({
         ...selection,
+        ...(options.options ? { deskOptions: options.options } : {}),
+        ...(options.operatorRunId ? { operatorRunId: options.operatorRunId } : {}),
+        ...(options.isWaitingForOperator ? { isWaitingForOperator: options.isWaitingForOperator } : {}),
         cwd: checkout, ref: subject, fixedBase: options.baseSha, out: runnerDir, signal,
-        resolveHead: async () => options.headSha, budgetMinutes: options.budgetMinutes ?? 30, budgetTokens: options.budgetTokens ?? undefined,
+        resolveHead: async () => options.headSha, budgetMinutes: options.budgetMinutes ?? 30, budgetTokens: options.options?.maxTokens ?? options.budgetTokens ?? undefined,
         onProgress: options.onProgress,
         spawn(spec) {
           let attempted = false;
@@ -349,7 +392,7 @@ export async function executeDeskReview(options: DeskExecutionOptions, ports: Ex
             // Commit the PID guard inside the policy fence: this is when the reviewer
             // shell is released to spend budget, even if its parent crashes next.
             attempted = true;
-            const child = launch.child = spawn({ ...spec, env: { ...spec.env, PATH: searchPath, KERYX_UNATTENDED: "1", [DESK_REVIEW_SHELL]: "1", [DESK_REVIEW_PROJECT_ROOT]: path.resolve(options.cwd) } });
+            const child = launch.child = spawn({ ...spec, env: { ...spec.env, PATH: searchPath, KERYX_UNATTENDED: "1", [DESK_REVIEW_SHELL]: "1", [DESK_REVIEW_HEAD]: options.headSha, [DESK_RELATED_PRS]: JSON.stringify(related), [DESK_OPTIONS_ENV]: deskOptionsKey(options.options), [DESK_REVIEW_PROJECT_ROOT]: path.resolve(options.cwd) } });
             if (child.pid) {
               try {
                 const identity = readProcessIdentity(child.pid);
@@ -369,7 +412,53 @@ export async function executeDeskReview(options: DeskExecutionOptions, ports: Ex
           }
         },
       });
-      result = await collectResult(options, checkout, execution.summary);
+      let summary = execution.summary;
+      const packageDir = summary.package && path.resolve(checkout, summary.package.path);
+      if (!ports.spawn && options.options?.mode === "auto" && !signal.aborted && summary.status === "incomplete" &&
+          summary.floorRefusals === 0 && packageDir && path.dirname(packageDir) === path.join(checkout, ".metaproject", "reviews") &&
+          isReviewPackageDir(packageDir, checkout) && await regularPackage(packageDir)) {
+        const [bin, ...argv] = invocationArgv(resolveKeryxInvocation());
+        const finalizationLog: string[] = [];
+        const finished = await finishAutoDesktopReview({
+          checkout, dir: packageDir, runnerDir, base: options.baseSha, head: options.headSha, ref: subject, summary, signal,
+          async run(args) {
+            options.onProgress({ phase: args[0] === "ingest" ? "Recording reviewer findings" : "Reconciling reviewer observations",
+              rounds: summary.rounds, tokens: summary.tokens, ...(summary.usage ? { usage: summary.usage } : {}) });
+            try {
+              await exec(bin!, [...argv, "review", ...args], {
+                cwd: checkout, timeout: 45_000, maxBuffer: 2 * 1024 * 1024, signal,
+                env: { ...privateGitEnv(), PATH: searchPath, KERYX_UNATTENDED: "1", KERYX_TOOL_CALL: "1",
+                  ...(auth.login ? { GH_TOKEN: auth.env.GH_TOKEN } : {}) },
+              });
+              return true;
+            } catch (failure) {
+              finalizationLog.push(`${args[0]} exited with ${(failure as { code?: unknown }).code ?? "an error"}`);
+              signal.throwIfAborted();
+              return false;
+            }
+          },
+          prLookup: async () => {
+            const latest = await readRevision();
+            return { exists: true, state: latest.state, headSha: latest.headRefOid };
+          },
+          prFiles: async () => {
+            const latest = await readRevision();
+            if (latest.state !== "OPEN" || latest.headRefOid !== options.headSha || latest.baseRefOid !== options.baseSha)
+              throw new Error("The pull request revision changed before automatic completion.");
+            const raw = await boardGh(options.cwd, ["pr", "view", subject, "--json", "files"], auth);
+            const data = JSON.parse(raw) as { files?: { path: string }[] };
+            return Array.isArray(data.files) ? data.files.map(file => file.path) : null;
+          },
+        }).catch(failure => {
+          finalizationLog.push(failure instanceof Error ? failure.message : "Automatic reconciliation failed.");
+          return false;
+        });
+        if (finalizationLog.length) await writeFileAtomic(path.join(runnerDir, "auto-finalize.log"), finalizationLog.join("\n") + "\n", { mode: 0o600 });
+        if (finished && summary.package) summary = { ...summary, status: "complete", exitCode: exitCodeFor("complete"),
+          phase: "Completed automatically", reason: "The Desktop worker reconciled the review and passed the completion checks.",
+          rounds: Math.max(1, summary.rounds), package: { ...summary.package, status: "closed" } };
+      }
+      result = await collectResult(options, checkout, summary);
     }
   } catch (error) {
     result = { ...EMPTY, ...(beforeSpawnFailure && !signal.aborted ? { retryableBeforeSpend: true } : {}), outcome: signal.aborted ? "cancelled" : error instanceof Error && error.message.startsWith("stale:") ? "blocked" : "failed", reason: signal.aborted ? "Stopped by the operator." : error instanceof Error ? error.message : "Review execution failed." };

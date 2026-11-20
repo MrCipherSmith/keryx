@@ -1,11 +1,18 @@
 // Read-only Review board protocol shared by the CLI and the Desktop hosts.
-import type { DeskReviewerProgress } from "./desk-run-types";
+import type { DeskReviewerProgress, DeskRunState } from "./desk-run-types";
 
 export type ReviewBoardState = "open" | "closed" | "merged" | "all";
 export type ReviewCi = "passed" | "failed" | "pending" | "none" | "unknown";
 
 export interface ReviewCard {
-  localReview?: { active: boolean; ready: boolean; progress?: Pick<DeskReviewerProgress, "wave" | "planned" | "finished"> | undefined };
+  localReview?: {
+    active: boolean;
+    ready: boolean;
+    awaitingAnswer?: true;
+    lastActivityAt?: string;
+    runState?: DeskRunState | "other-revision";
+    progress?: Omit<DeskReviewerProgress, "sessions"> | undefined;
+  };
   /** GitHub message node IDs addressed to this snapshot’s viewer. */
   addressedReplyIds?: string[];
   number: number;

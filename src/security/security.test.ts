@@ -45,6 +45,16 @@ async function writeConfig(config: SecurityConfig): Promise<void> {
   await writeFile(configPath(root), `${JSON.stringify(config, null, 2)}\n`, "utf8");
 }
 
+test("overlapping checks record a shared posture transition only once", async () => {
+  await writeState(root, { mode: "enforced", policies: {} });
+  await writeConfig(mergeSecurityConfig({ mode: "advisory" }));
+  const service = createSecurityService(root);
+  await Promise.all(Array.from({ length: 6 }, () =>
+    service.check({ content: "Review summary", source: "generated", target: "external" })));
+  expect((await listIncidents(root)).filter(incident => incident.type === "mode-downgrade")).toHaveLength(1);
+  expect((await readState(root))?.mode).toBe("advisory");
+});
+
 // Scenario 1: a secret is detected and never persisted raw.
 test("AWS key → critical secret block; no raw key or hash in artifacts; hash is HMAC", async () => {
   const content = `config:\n  aws_key = ${AWS_KEY}\n`;

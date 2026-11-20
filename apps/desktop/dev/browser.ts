@@ -2,7 +2,7 @@
 // (http://localhost:1420) together; stopping this stops both.
 
 const children = [
-  Bun.spawn(["bun", "run", `${import.meta.dir}/bridge.ts`], { stdout: "inherit", stderr: "inherit", env: process.env }),
+  Bun.spawn(["bun", "run", `${import.meta.dir}/bridge.ts`], { stdin: "inherit", stdout: "inherit", stderr: "inherit", env: process.env }),
   Bun.spawn([`${import.meta.dir}/../node_modules/.bin/vite`], { cwd: `${import.meta.dir}/..`, stdout: "inherit", stderr: "inherit", env: process.env }),
 ];
 
