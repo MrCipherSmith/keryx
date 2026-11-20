@@ -108,8 +108,20 @@ button { font: inherit; }
 }
 .rail-dot-busy { background: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
 .rail-dot-action { background: var(--warn); }
-.rail-sep { width: 28px; height: 1px; margin: 4px 0; background: var(--border); flex: none; }
-.app-main { min-width: 0; min-height: 0; background: var(--bg-surface); position: relative; }
+.app-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg-surface); position: relative; }
+.project-views {
+  display: flex; flex: none; align-items: stretch; gap: var(--sp-1); padding: 0 var(--sp-3);
+  overflow-x: auto; border-bottom: 1px solid var(--border);
+}
+.project-views button {
+  display: inline-flex; align-items: center; flex: none; gap: 6px; padding: var(--sp-2);
+  border: 0; border-bottom: 2px solid transparent; background: transparent;
+  color: var(--fg-muted); font-size: var(--fs-sm); font-weight: 600; cursor: default;
+}
+.project-views button:hover { color: var(--fg); background: var(--bg-hover); }
+.project-views button[aria-current="page"] { color: var(--accent-text); border-bottom-color: var(--accent); }
+.project-views button:focus-visible { outline: 2px solid var(--focus); outline-offset: -3px; }
+.project-content { flex: 1; min-height: 0; min-width: 0; position: relative; }
 .view { height: 100%; min-height: 0; }
 
 /* ---------------- menu & palette ---------------- */

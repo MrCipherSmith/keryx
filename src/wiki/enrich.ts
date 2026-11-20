@@ -9,6 +9,8 @@
 // FAIL-CLOSED without credentials. Provider/model default from shell auth.json
 // (not a hard-coded anthropic-only path). Progress via onPage + stderr.
 
+import { mapPool } from "../lib/map-pool";
+export { mapPool } from "../lib/map-pool";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -798,27 +800,6 @@ export function setFrontmatterStatus(markdown: string, status: string): string {
 function extractFrontmatterStatus(markdown: string): string {
   const bodyMatch = /\nStatus:\s*(\S+)/i.exec(markdown) ?? /^Status:\s*(\S+)/im.exec(markdown);
   return bodyMatch?.[1] ?? "draft";
-}
-
-/** Run async work over items with a concurrency cap (page swarm primitive). */
-export async function mapPool<T, R>(
-  items: readonly T[],
-  concurrency: number,
-  worker: (item: T, index: number) => Promise<R>,
-): Promise<R[]> {
-  const results: R[] = new Array(items.length);
-  let next = 0;
-  const workers = Array.from({ length: Math.max(1, Math.min(concurrency, items.length || 1)) }, async () => {
-    while (true) {
-      const i = next++;
-      if (i >= items.length) {
-        return;
-      }
-      results[i] = await worker(items[i]!, i);
-    }
-  });
-  await Promise.all(workers);
-  return results;
 }
 
 /** Default stderr progress printer (CLI). */

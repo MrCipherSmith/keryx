@@ -210,6 +210,11 @@ impl Inner {
 }
 
 impl ProjectWindows {
+    /// The project registered to the calling webview, including an idle session.
+    pub fn cwd_for(&self, view: &str) -> Option<String> {
+        self.inner.lock().unwrap().by_label.get(view).and_then(|entry| entry.cwd.clone())
+    }
+
     fn snapshot(&self) -> Vec<ProjectState> {
         self.inner.lock().unwrap().snapshot()
     }

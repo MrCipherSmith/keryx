@@ -11,6 +11,7 @@ type Flows = ReturnType<typeof useFlows>;
 
 interface Props {
   cwd: string;
+  initialOpenDir?: string | null;
   flows: Flows;
   /** Sessions already linked to a flow package, newest first. */
   linkedSessions: (dir: string) => LinkedSession[];
@@ -22,7 +23,7 @@ const LANE_CAP = 30;
 const DONE_CAP = 20;
 const LIST_CAP = 150;
 
-export function FlowsBoard({ cwd, flows, linkedSessions, onWorkOn }: Props) {
+export function FlowsBoard({ cwd, initialOpenDir = null, flows, linkedSessions, onWorkOn }: Props) {
   const [query, setQuery] = useState("");
   const [owner, setOwner] = useState<string>("");
   const [view, setView] = useState<"board" | "list">(() => {
@@ -32,7 +33,7 @@ export function FlowsBoard({ cwd, flows, linkedSessions, onWorkOn }: Props) {
       return "board";
     }
   });
-  const [openDir, setOpenDir] = useState<string | null>(null);
+  const [openDir, setOpenDir] = useState<string | null>(initialOpenDir);
   const search = useRef<HTMLInputElement>(null);
   const q = useDeferredValue(query);
 

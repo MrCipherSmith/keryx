@@ -312,6 +312,7 @@ function toStructuredResult(outcome: ExternalChildOutcome): StructuredSubagentRe
     output: outcome.output,
     isError: outcome.isError,
     ...(outcome.partial === undefined ? {} : { partial: outcome.partial }),
+    ...(outcome.usage ? { usage: outcome.usage } : {}),
   };
 }
 

@@ -1,3 +1,9 @@
+import { deskReviewRoutingRoot } from "../review/autonomous-profile";
+import { RULES_USAGE, runReviewRules } from "./review-rules";
+import { runReviewWatch, WATCH_USAGE } from "./review-watch";
+import { PR_CONTEXT_USAGE, runPrContext } from "./review-pr-context";
+import { DESK_USAGE, runReviewDesk } from "./review-desk-run";
+import { BOARD_USAGE, runReviewBoard } from "./review-board";
 import { reviewCompletionHostAnswer } from "./review-operator";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -593,6 +599,7 @@ const TIER_FLAGS = [
   "--forced-strategy-change",
   "--findings",
   "--diff-lines",
+  "--input-tokens",
   "--verifier",
   "--security",
   "--premise",
@@ -653,6 +660,7 @@ function rejectReviewFlags(args: readonly string[], allowed: readonly string[], 
 
 /** Test seam: whether a person is at a terminal. Default: stdin and stdout are both TTYs. */
 export interface ReviewCommandSeams {
+  tierCatalog?: typeof tierCatalog;
   isTerminal?: () => boolean;
   /** Test seam: reads a PR's state and head for `complete`. Default: the GitHub tracker adapter. */
   prLookup?: PrLookup;
@@ -771,6 +779,26 @@ export async function reviewCommand(args: string[], seams?: ReviewCommandSeams):
   }
 
   try {
+    if (command === "rules") {
+    await runReviewRules(args.slice(1));
+    return;
+  }
+  if (command === "watch") {
+      await runReviewWatch(args.slice(1));
+      return;
+    }
+    if (command === "pr-context") {
+      await runPrContext(args.slice(1));
+      return;
+    }
+    if (command === "desk-run") {
+      await runReviewDesk(args.slice(1));
+      return;
+    }
+    if (command === "board") {
+      await runReviewBoard(args.slice(1));
+      return;
+    }
     if (command === "attach") {
       await runCreate("attach-review", args.slice(1), seams);
       return;
@@ -840,7 +868,7 @@ export async function reviewCommand(args: string[], seams?: ReviewCommandSeams):
       return;
     }
     if (command === "tier") {
-      await runTier(args.slice(1));
+      await runTier(args.slice(1), seams?.tierCatalog);
       return;
     }
     if (command === "comments") {
@@ -964,7 +992,11 @@ export async function reviewCommand(args: string[], seams?: ReviewCommandSeams):
       return;
     }
     if (command === "plan") {
-      await runPlan(args.slice(1), { rejectUnknownFlags: rejectReviewFlags, run: (stepArgs) => captureReviewStep(stepArgs, seams) });
+      // All tier lookups in this plan share one session and provider catalogue.
+      let catalog: ReturnType<typeof tierCatalog> | undefined;
+      const planSeams = { ...seams, tierCatalog: (flags: string[], session: SessionModelContext) =>
+        catalog ??= (seams?.tierCatalog ?? tierCatalog)(flags, session) };
+      await runPlan(args.slice(1), { rejectUnknownFlags: rejectReviewFlags, run: (stepArgs) => captureReviewStep(stepArgs, planSeams) });
       return;
     }
     if (command === "plan-eval") {
@@ -1151,7 +1183,10 @@ async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: R
     throw new Error("--prior and --no-prior-round contradict each other: give one.");
   }
   const cwd = process.cwd();
-  const head = await resolveCreateHead(args, targetKind, targetRef, cwd);
+  const reviewId = optionValue(args, "--review-id");
+  const namedPrIngest = mode === "ingest" && targetKind === "pr" && reviewId !== undefined;
+  const head = namedPrIngest && optionValue(args, "--head") === undefined
+    ? undefined : await resolveCreateHead(args, targetKind, targetRef, cwd);
   // A PR round started without --head records the checkout's commit (resolveTargetHead). When that is not the pull
   // request's head the plan is cut over the wrong commit, so it is refused here instead of at the completion gate.
   if (mode === "review-flow" && targetKind === "pr" && optionValue(args, "--head") === undefined) {
@@ -1164,7 +1199,8 @@ async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: R
   // measured against that branch (review F-004); beside a --base, the PR's base is kept as `prBase`, which the recheck
   // also measures, so a --base the starter chose cannot narrow the diff (SEC-001).
   const givenBase = optionValue(args, "--base")?.trim() || undefined;
-  const prBase = targetKind === "pr" ? await (createSeams.prBase ?? ghPrBase)(targetRef) : undefined;
+  const lookupPrBase = createSeams.prBase ?? ghPrBase;
+  const prBase = targetKind === "pr" && !namedPrIngest ? await lookupPrBase(targetRef) : undefined;
   const base = givenBase ?? prBase;
   const keptPrBase = givenBase !== undefined && prBase !== undefined && prBase !== givenBase ? prBase : undefined;
   const input: ManagedReviewIngestInput = {
@@ -1172,7 +1208,11 @@ async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: R
     mode,
     target: { kind: targetKind, ref: targetRef, ...(base === undefined ? {} : { base }), ...(keptPrBase === undefined ? {} : { prBase: keptPrBase }), ...(head === undefined ? {} : { head }) },
     flowId: optionValue(args, "--flow"),
-    reviewId: optionValue(args, "--review-id"),
+    reviewId,
+    ...(namedPrIngest ? {
+      inferPrBase: lookupPrBase,
+      resolveHead: async () => await resolveGitHead(cwd) ?? await resolveCreateHead(args, targetKind, targetRef, cwd) ?? null,
+    } : {}),
     ...(args.includes(AUTOMATIC_REVIEW_FLAG) ? { automatic: true } : {}),
     memoryQuery: optionValue(args, "--memory-query")?.trim() || undefined,
     reviewers,
@@ -1792,7 +1832,7 @@ async function applyReviewRoutingCategory(
   };
 }
 
-async function runTier(args: string[]): Promise<void> {
+async function runTier(args: string[], discover = tierCatalog): Promise<void> {
   if (args.includes("--help") || args.includes("-h")) {
     printTierHelp();
     return;
@@ -1800,22 +1840,23 @@ async function runTier(args: string[]): Promise<void> {
   rejectReviewFlags(args, TIER_FLAGS, "tier");
   const signals = tierSignalsFromArgs(args);
   const { session, source } = sessionModelFromArgs(args);
-  const catalog = await tierCatalog(args, session);
-  const settings = readRoutingSettings({ cwd: process.cwd() });
+  const catalog = await discover(args, session);
+  const routingRoot = deskReviewRoutingRoot() ?? process.cwd();
+  const settings = readRoutingSettings({ cwd: routingRoot });
   const routingConfig = normalizeRoutingConfig(settings.layers, ROUTING_NORMALIZATION);
   // The tier is a reporting field: only the routing receipt below selects the
   // dispatch provider/model, so the tier never ranks candidates itself.
   const tierDecision = decideDispatchModel(session, signals, []);
   const { decision, routed, routingRefused, notices: routeNotices, routing } = await applyReviewRoutingCategory(
     tierDecision,
-    process.cwd(),
+    routingRoot,
     catalog,
     session,
     routingConfig,
     JSON.stringify({ category: "review", signals }),
     {
       capabilities: ["tools"],
-      inputTokensRequired: Math.max(2_048, (signals.diffLines ?? 128) * 32),
+      inputTokensRequired: Math.max(2_048, parseNonNegativeInteger(optionValue(args, "--input-tokens"), "--input-tokens") ?? (signals.diffLines ?? 128) * 32),
       outputTokensReserved: 4_096,
     },
   );
@@ -5165,7 +5206,7 @@ function printTierHelp(): void {
   console.log(`keryx review tier — usage:
 
   keryx review tier [--scope <scope>] [--fix-attempt <n>] [--forced-strategy-change]
-                    [--findings <n>] [--diff-lines <n>]
+                    [--findings <n>] [--diff-lines <n>] [--input-tokens <estimated context tokens>]
                     [--verifier ${VERIFICATION_METHODS.join("|")}] [--security] [--premise]
                     [--session-provider <id>] [--session-model <id>]
                     [--from-shell-config] [--catalog <file|->] [--json]
@@ -5283,6 +5324,11 @@ run-scoped bridge grant and cannot combine it with the root environment.
  * subcommand, mutating or not; a subcommand with no entry gets the group help.
  */
 const REVIEW_SUBCOMMAND_HELP: ReadonlyMap<string, () => void> = new Map([
+  ["board", () => console.log(BOARD_USAGE)],
+  ["rules", () => console.log(RULES_USAGE)],
+  ["watch", () => console.log(WATCH_USAGE)],
+  ["pr-context", () => console.log(PR_CONTEXT_USAGE)],
+  ["desk-run", () => console.log(DESK_USAGE)],
   ["agents", printReviewAgentHelp],
   ["start", printStartHelp],
   ["ingest", printIngestHelp],
@@ -5442,6 +5488,15 @@ function reviewHelpText(): string {
   return `keryx review
 
 Usage:
+  ${BOARD_USAGE}
+                        Reads pull requests and discussions of a connected GitHub repository.
+  ${WATCH_USAGE}
+  ${RULES_USAGE}
+                        Manages the local macOS pull request watcher.
+  ${DESK_USAGE}
+                        Starts, inspects or cancels a local review of a pull request revision.
+  ${PR_CONTEXT_USAGE}
+                        Reads linked Flow evidence and review history for one pull request.
   keryx review agents serve --project <dir> [--runs-root <dir>] --provider <id> --model <id>
                         --config-dir <dir> --cost-mode cost-unknown --permission-mode trust
   keryx review agents <start|plan|capabilities|status|spawn|wait|cancel|result> --run-dir <dir> ...
@@ -5606,7 +5661,7 @@ Usage:
   keryx review budget [--spent <usd>] [--ceiling <usd>]
                       [--reviewers a,b] [--parallel <n>] [--outstanding <n>] [--full]
   keryx review tier [--scope <scope>] [--fix-attempt <n>] [--forced-strategy-change]
-                    [--findings <n>] [--diff-lines <n>]
+                    [--findings <n>] [--diff-lines <n>] [--input-tokens <estimated context tokens>]
                     [--verifier ${VERIFICATION_METHODS.join("|")}] [--security] [--premise]
                     [--session-provider <id>] [--session-model <id>]
                     [--catalog <file|->] [--json]

@@ -3,6 +3,7 @@
 import { mkdirSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { AUTONOMOUS_EXIT, AUTONOMOUS_PROFILE_ID, AUTONOMOUS_STATUSES, type AutonomousStatus } from "./autonomous-profile";
+import { validRunUsage, type ReviewRunUsage, type ReviewUsageCounts } from "./run-usage";
 import { REVIEW_PACKAGE_STATUSES, type ReviewPackageStatus } from "./types";
 
 export interface FindingCounts {
@@ -28,13 +29,19 @@ export interface AutonomousSummary {
   readonly attempts: number;
   readonly rounds: number;
   readonly tokens: number;
+  readonly usage?: ReviewRunUsage;
   readonly package: { readonly id: string; readonly status: ReviewPackageStatus; readonly path: string } | null;
   readonly findings: FindingCounts;
+  readonly findingsKnown?: boolean;
   readonly floorRefusals: number;
   readonly autoAnswers: {
     readonly count: number;
     readonly last?: { readonly question: string; readonly answer: string; readonly basis: string };
   };
+}
+
+export function knownFindingList(value: unknown): value is Array<{ severity: keyof FindingCounts }> {
+  return Array.isArray(value) && value.every(row => isRecord(row) && typeof row.severity === "string" && ["blocker", "major", "minor", "info"].includes(row.severity));
 }
 
 export function countFindings(findings: unknown): FindingCounts {
@@ -58,6 +65,8 @@ const isText = (value: unknown): boolean => typeof value === "string" && value.l
 export function validateSummary(value: unknown): string[] {
   if (!isRecord(value)) return ["summary: must be an object"];
   const problems: string[] = [];
+  if (value.findingsKnown !== undefined && typeof value.findingsKnown !== "boolean") problems.push("findingsKnown: must be boolean");
+  if (value.usage !== undefined && !validRunUsage(value.usage)) problems.push("usage: invalid provider accounting");
   if (value["schemaVersion"] !== 1) problems.push("schemaVersion: must be 1");
   if (value["profile"] !== AUTONOMOUS_PROFILE_ID) problems.push(`profile: must be ${AUTONOMOUS_PROFILE_ID}`);
   const status = value["status"];
@@ -102,10 +111,21 @@ export function renderReport(summary: AutonomousSummary): string {
     `- Started ${summary.startedAt}, finished ${summary.finishedAt} (${summary.durationSeconds} s, attempt ${summary.attempts})`,
     `- Rounds: ${summary.rounds}, tokens: ${summary.tokens}`,
     `- Package: ${summary.package === null ? "none opened" : `${summary.package.id} (${summary.package.status}) at ${summary.package.path}`}`,
-    `- Findings: ${findings.blocker} blocker, ${findings.major} major, ${findings.minor} minor, ${findings.info} info`,
+    summary.findingsKnown === false ? "- Findings: unrecorded" : `- Findings: ${findings.blocker} blocker, ${findings.major} major, ${findings.minor} minor, ${findings.info} info`,
     `- Refusals at a floor: ${summary.floorRefusals}`,
     `- Questions answered automatically: ${summary.autoAnswers.count}`,
   ];
+  if (summary.usage) {
+    const usage = summary.usage;
+    const format = (counts: ReviewUsageCounts): string => {
+      const price = counts.cost ? `${counts.cost.amount} ${counts.cost.currency}`
+        : counts.estimatedCost ? `~${counts.estimatedCost.amount} ${counts.estimatedCost.currency} (estimated)` : "unknown";
+      return `input ${counts.inputTokens ?? "?"}, output ${counts.outputTokens ?? "?"}, total ${counts.totalTokens ?? "?"}, cache read/write ${counts.cacheReadTokens ?? "?"}/${counts.cacheWriteTokens ?? "?"}, cost ${price}`;
+    };
+    lines.push("", `## Token usage${usage.partial ? " (partial)" : ""}`, "", `- Total: ${format(usage.total)}`,
+      `- Coordinator: ${format(usage.coordinator)}`);
+    for (const row of usage.reviewers) lines.push(`- ${row.reviewer}${row.partial ? " (partial)" : ""}${row.source ? " (external runtime)" : ""}${row.model ? ` (${row.provider ?? "?"}/${row.model})` : ""}: ${format(row)}`);
+  }
   if (summary.autoAnswers.last !== undefined) {
     const last = summary.autoAnswers.last;
     lines.push(`- Last automatic answer: "${last.question}" -> ${last.answer} (${last.basis})`);

@@ -402,7 +402,7 @@ describe("parseLine against the captured success transcript", () => {
     expect(events).toHaveLength(2);
     // Cache reads are folded into inputTokens: the raw `input_tokens: 2` beside
     // `cache_read_input_tokens: 5118` would under-report the run 2500-fold.
-    expect(events[0]).toEqual({ kind: "usage", inputTokens: 5120, outputTokens: 4, costUnits: 0.003257 });
+    expect(events[0]).toEqual({ kind: "usage", inputTokens: 5120, cacheReadTokens: 5118, cacheWriteTokens: 0, outputTokens: 4, costUnits: 0.003257 });
     expect(isTerminalEvent(events[1] as ExternalEvent)).toBe(true);
   });
 
@@ -427,6 +427,8 @@ describe("parseLine against the captured resume transcript", () => {
     expect(events.find((event) => event.kind === "usage")).toEqual({
       kind: "usage",
       inputTokens: 5135,
+      cacheReadTokens: 2800,
+      cacheWriteTokens: 2333,
       outputTokens: 4,
       costUnits: 0.02484,
     });

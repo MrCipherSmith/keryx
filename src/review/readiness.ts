@@ -1,3 +1,4 @@
+import { LIGHT_FIXED_REVIEWERS } from "./coverage";
 import { withCompletionLock } from "./completion-lock";
 import type { CompletionWriter } from "./completion-write";
 import { hostQuestionFields, type HostQuestion } from "./types";
@@ -213,7 +214,9 @@ async function reviewersCheck(ctx: Context): Promise<Verdict> {
   const runs = dispatchRuns(ctx.research);
   const selected = Array.isArray(dispatch.selected) ? dispatch.selected.filter(text) : [];
   const ran = new Set(runs.map((run) => run.reviewer));
-  const unfinished = runs.filter((run) => run.status !== "complete" || run.scopeComplete === false).map((run) => run.reviewer);
+  // An optional role that received no slice is a skip. A fixed light-round obligation still needs a real review.
+  const unfinished = runs.filter((run) => run.status !== "complete" || run.scopeComplete === false
+    || (run.routedOut === true && dispatch.depth === "light" && selected.includes(run.reviewer) && LIGHT_FIXED_REVIEWERS.includes(run.reviewer))).map((run) => run.reviewer);
   const unplanned = selected.filter((name) => !ran.has(name));
   const lost = await runsMissingResultFile(ctx.dir, runs);
   const gate = problems.length === 0 ? await coverageGateOf(ctx, dispatch) : { errors: [], note: "" };
@@ -317,9 +320,9 @@ function ledgerCheck(ctx: Context): Verdict {
 function coverageMdCheck(ctx: Context): Verdict {
   const raw = ctx.coverageMd;
   const runs = dispatchRuns(ctx.research);
-  const unfinished = new Set(runs.filter((run) => run.status !== "complete").map((run) => run.reviewer));
+  const unfinished = new Set(runs.filter((run) => run.status !== "complete" || run.routedOut === true).map((run) => run.reviewer));
   if (raw === undefined) return bad("coverage.md is missing", `re-run keryx review ingest <input> for this package: it writes coverage.md`);
-  const entries = parseCoverageEntries(raw);
+  const entries = parseCoverageEntries(raw, new Set(runs.filter(run => run.routedOut === true).map(run => run.reviewer)));
   const claimed = entries.filter((entry) => entry.status === "run").map((entry) => entry.reviewer);
   const lying = claimed.filter((name) => unfinished.has(name));
   // Flow 460 F: a reviewer the dispatch record ran must be listed too; coverage.md that names a stand-in omits it. Only

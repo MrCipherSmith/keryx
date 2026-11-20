@@ -6,6 +6,7 @@ import "./styles/themes.css";
 import "./styles.css";
 import "./styles/components.css";
 import "./styles/flows.css";
+import "./styles/review.css";
 import "./styles/activity.css";
 import "./styles/delegate.css";
 import "./styles/feed.css";

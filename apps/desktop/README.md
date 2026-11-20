@@ -11,6 +11,7 @@ Toolchain: Rust (rustup), Bun. The app is not part of the root workspace
 ## Dev loop
 
 ```sh
+bun install --frozen-lockfile  # from the repository root, for the CLI and its bundled parser
 cd apps/desktop
 bun install
 bun run tauri dev        # starts vite on :1420 and the native window
@@ -50,7 +51,7 @@ and events (`acp://message`, `acp://exit`, `flows://changed`, polled every
 spawns keryx as:
 
 ```sh
-$KERYX_DEV_CMD acp --profile shell     # default: bun run <repo>/src/cli.ts
+$KERYX_DEV_CMD acp --profile shell     # default: bun --no-env-file --config=/dev/null <repo>/src/cli.ts
 ```
 
 Settings are kept in `~/.keryx-desktop-dev/settings.json`. The bridge listens

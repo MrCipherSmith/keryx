@@ -213,6 +213,8 @@ const ALLOWED: Readonly<Record<string, readonly [sites: number, reason: string]>
   "review/bot/run.ts": [1, "baseSha is the PR's base sha from the API"],
   "review/ci-triage.ts": [1, "operand is <sha>:<path> of a CI-reported commit"],
   "review/conform-pr-port.ts": [1, "gh, not git; the PR number is numeric"],
+  "review/desk-reviewer-progress.ts": [1, "checkout is a directory name in a list of path components"],
+  "review/desk-run-executor.ts": [6, "prepareCheckout validates both commit IDs as 40 hex digits; fetch refspecs and the checked base ref have fixed prefixes, and restore paths follow --"],
   "review/managed.ts": [1, "operand is <sha>:<path> of a recorded commit"],
   "review/worktree-provenance.ts": [1, "every argv is a fixed array at its call site (HEAD, rev-parse, diff, ls-files); no operand comes from a person"],
   "rewind/restore.ts": [2, "operands are tree ids the snapshot recorded; the native preview's is 40-hex checked first and again by safeShadowArguments"],

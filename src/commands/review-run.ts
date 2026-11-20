@@ -62,7 +62,7 @@ function positive(args: string[], name: string, integer: boolean): number | unde
     return undefined;
   }
   const value = Number(raw);
-  if (!Number.isFinite(value) || value <= 0 || (integer && !Number.isInteger(value))) {
+  if (!Number.isFinite(value) || value <= 0 || (integer && !Number.isSafeInteger(value))) {
     throw new Error(`${name} must be a positive ${integer ? "whole " : ""}number, got "${raw}"`);
   }
   return value;

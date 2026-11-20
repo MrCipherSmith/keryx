@@ -20,6 +20,7 @@ import { readyResearchFixture } from "../review/research.test-helpers";
 import { replaceRoutingLayer } from "../harness/routing/settings";
 import type { RoutingConfigLayer } from "../harness/routing/config";
 import { setModelProfileField } from "../harness/routing/model-profile";
+import { privateGitEnv } from "../review/autonomous-run";
 
 const ORIGINAL_CWD = process.cwd();
 let ROOT = "";
@@ -105,6 +106,75 @@ async function ingest(reviewId: string, extra: string[] = []): Promise<string> {
 async function findingsOf(packageDir: string): Promise<StructuredReviewFinding[]> {
   return JSON.parse(await readFile(path.join(packageDir, "findings.json"), "utf8")) as StructuredReviewFinding[];
 }
+
+test("named PR ingest keeps the pinned subject and range, accepting only equivalent refs", async () => {
+  async function git(...args: string[]): Promise<string> {
+    const proc = Bun.spawn(["git", "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgSign=false", ...args], {
+      cwd: ROOT, stdout: "pipe", stderr: "pipe",
+      env: { ...privateGitEnv(), GIT_AUTHOR_NAME: "Fixture", GIT_AUTHOR_EMAIL: "fixture@example.invalid",
+        GIT_COMMITTER_NAME: "Fixture", GIT_COMMITTER_EMAIL: "fixture@example.invalid" },
+    });
+    const [out, err, code] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited]);
+    if (code !== 0) throw new Error(err);
+    return out.trim();
+  }
+
+  await git("init", "-q");
+  await git("commit", "--allow-empty", "-qm", "base");
+  const base = await git("rev-parse", "HEAD");
+  await git("update-ref", "refs/remotes/origin/main", base);
+  await git("commit", "--allow-empty", "-qm", "head");
+  const head = await git("rev-parse", "HEAD");
+  const url = "https://github.com/example/repo/pull/17", id = "pinned-pr";
+  const manifestFile = path.join(ROOT, ".metaproject", "reviews", id, "manifest.json");
+  const readTarget = async () => JSON.parse(await readFile(manifestFile, "utf8")).target;
+  await writeFile(path.join(ROOT, "report.md"), reportWith([]), "utf8");
+  await reviewCommand(["start", "--target", "pr", "--target-ref", url, "--review-id", id,
+    "--head", head, "--base", base, "--no-prior-round", "--graph-timeout", "0"], { prBase: async () => "origin/main" });
+  expect(process.exitCode).toBe(0);
+  const pinned = { kind: "pr", ref: url, base, head, prBase: "origin/main" };
+  expect(await readTarget()).toEqual(pinned);
+
+  let lookups = 0;
+  const prBase = async () => { lookups++; return "origin/new-base"; };
+  const ingestPr = (ref: string, ...extra: string[]) => reviewCommand([
+    "ingest", "--target", "pr", "--target-ref", ref, "--review-id", id, "--report", "report.md",
+    "--graph-timeout", "0", ...extra,
+  ], { prBase });
+  await ingestPr(url);
+  expect(process.exitCode).toBe(0);
+  expect(await readTarget()).toEqual(pinned);
+  await ingestPr("https://github.com/Example/Repo/pull/17/", "--base", "origin/main", "--head", head.slice(0, 12));
+  expect(process.exitCode).toBe(0);
+  expect(await readTarget()).toEqual(pinned);
+
+  for (const [ref, ...extra] of [
+    ["https://github.com/example/other/pull/17"],
+    [url, "--base", head],
+    [url, "--head", base],
+  ]) {
+    process.exitCode = 0;
+    errors.length = 0;
+    await ingestPr(ref!, ...extra);
+    expect(process.exitCode).toBe(1);
+    expect(errors.join("\n")).toContain("conflicts with the pinned PR package");
+    expect(await readTarget()).toEqual(pinned);
+  }
+  expect(lookups).toBe(0);
+
+  process.exitCode = 0;
+  const fresh = "new-pr-report";
+  await reviewCommand(["ingest", "--target", "pr", "--target-ref", url, "--review-id", fresh, "--report", "report.md",
+    "--graph-timeout", "0"], { prBase: async (ref) => {
+      lookups++;
+      expect(ref).toBe(url);
+      return "origin/main";
+    } });
+  expect(process.exitCode).toBe(0);
+  expect(lookups).toBe(1);
+  expect(JSON.parse(await readFile(path.join(ROOT, ".metaproject", "reviews", fresh, "manifest.json"), "utf8")).target)
+    .toEqual({ kind: "pr", ref: url, base: "origin/main", head });
+});
 
 // ---------------------------------------------------------------------------
 // Unknown flags

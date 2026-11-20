@@ -1905,7 +1905,7 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
     description:
       "List Task Manager flows with their status and task progress (`keryx flow list`). Input: { id?: string } " +
       "to filter to one flow. Use this instead of `shell_exec`'ing `keryx flow list`/`keryx flow status` — same " +
-      "data, no non-read budget cost.",
+      "data, no non-read budget cost. For the linked PR and review history, use keryx review pr-context --flow ID. To find related Flows from a PR, use keryx review pr-context --pr URL.",
     inputSchema: {
       type: "object",
       properties: { id: { type: "string" } },

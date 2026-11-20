@@ -228,9 +228,10 @@
               "partially-fixed",
               "wont-fix",
               "disputed",
-              "deferred"
+              "deferred",
+              "unreported"
             ],
-            "description": "What the fix round claimed. A claim, not a verified state — verifying it is the reviewer's job."
+            "description": "What the fix round claimed, or unreported when no claim was recorded. A claim, not a verified state — verifying it is the reviewer's job."
           },
           "claimed_evidence": {
             "type": [

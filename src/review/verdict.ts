@@ -291,9 +291,7 @@ export async function premiseRecords(packageDir: string, options: VerdictOptions
   return { records: loose.map((entry) => entry.record), decisions, ingested: useRound };
 }
 
-export async function computeVerdict(packageDir: string, options: VerdictOptions = {}): Promise<InterimVerdict> {
-  const rawDir = options.rawDir ?? path.join(packageDir, "raw");
-  const { loose, raws, useRound, verifierClaims, premisedFindings, decisions } = await verdictRecords(packageDir, rawDir);
+function tallyVerdictFindings(loose: readonly Loose[], decisions: readonly PremiseQuestionDecision[]) {
   const counts: Record<Severity, number> = { blocker: 0, major: 0, minor: 0, info: 0 };
   const open: VerdictFinding[] = [];
   const minors: VerdictFinding[] = [];
@@ -318,6 +316,19 @@ export async function computeVerdict(packageDir: string, options: VerdictOptions
   minors.sort((a, b) => a.id.localeCompare(b.id));
   held.sort((a, b) => a.id.localeCompare(b.id));
   open.sort((a, b) => SEVERITIES.indexOf(a.severity) - SEVERITIES.indexOf(b.severity) || a.id.localeCompare(b.id));
+
+  return { counts, open, minors, held, verified, unverified, refuted, dismissed, resolved };
+}
+
+/** Historical imports classify only the normalized records they have read from the project artifact. */
+export function ingestedFindingCounts(records: readonly Record<string, unknown>[]) {
+  return tallyVerdictFindings(records.map((record, index) => ({ record, index, fallbackReviewer: "review-orchestrator" })), []).counts;
+}
+
+export async function computeVerdict(packageDir: string, options: VerdictOptions = {}): Promise<InterimVerdict> {
+  const rawDir = options.rawDir ?? path.join(packageDir, "raw");
+  const { loose, raws, useRound, verifierClaims, premisedFindings, decisions } = await verdictRecords(packageDir, rawDir);
+  const { counts, open, minors, held, verified, unverified, refuted, dismissed, resolved } = tallyVerdictFindings(loose, decisions);
 
   const reported = new Set<string>(raws.results.map((result) => result.reviewer));
   if (useRound) for (const entry of loose) reported.add(text(entry.record.reviewer) ?? "review-orchestrator");

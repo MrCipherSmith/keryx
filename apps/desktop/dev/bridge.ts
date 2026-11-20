@@ -13,16 +13,23 @@
 // flows://changed. One WebSocket connection is one "window" with its own
 // keryx process. Development only: it listens on loopback and is never bundled.
 
+import { reviewBoardArgs } from "./reviewBoard";
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync, mkdirSync, writeFileSync } from "node:fs";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { homedir } from "node:os";
 import { basename, isAbsolute, join, resolve, sep } from "node:path";
 import type { ServerWebSocket, Subprocess } from "bun";
 
+import { reviewWatcherArgs, reviewRuleArgs } from "./reviewWatcher";
+import { reviewRunArgs } from "./reviewRun";
+import { SAFE_BUN_SPAWN_ARGS } from "../../../src/lib/safe-exec";
+
+const runFile = promisify(execFile);
 const PORT = 1421;
 const REPO_ROOT = resolve(import.meta.dir, "../../..");
-const KERYX_CMD = (process.env.KERYX_DEV_CMD ?? `bun run ${join(REPO_ROOT, "src/cli.ts")}`)
-  .split(/\s+/)
-  .filter(Boolean);
+const KERYX_CMD = process.env.KERYX_DEV_CMD?.split(/\s+/).filter(Boolean)
+  ?? ["bun", ...SAFE_BUN_SPAWN_ARGS, join(REPO_ROOT, "src/cli.ts")];
 const MIN_KERYX_VERSION = readMinVersion();
 const SETTINGS_PATH = join(homedir(), ".keryx-desktop-dev", "settings.json");
 const MAX_FILE_BYTES = 16 * 1024 * 1024;
@@ -547,6 +554,26 @@ async function projectCwd(conn: Conn, cwd: string): Promise<string> {
   return conn.root;
 }
 
+let reviewReaders = 0;
+async function runReviewCli(root: string, argv: string[], readOnly: boolean): Promise<unknown> {
+  if (readOnly && reviewReaders >= 8) throw new Error("unavailable: Too many Review reads are running. Retry shortly.");
+  if (readOnly) reviewReaders++;
+  let stdout: string;
+  try {
+    ({ stdout } = await runFile(KERYX_CMD[0]!, [...KERYX_CMD.slice(1), ...argv], { cwd: root, timeout: 150_000, maxBuffer: 32 * 1024 * 1024 }));
+  } catch (error) {
+    const reason = (error as { stderr?: string }).stderr?.trim();
+    throw new Error(reason || "unavailable: Could not run the Review reader");
+  } finally {
+    if (readOnly) reviewReaders--;
+  }
+  try {
+    return JSON.parse(stdout);
+  } catch {
+    throw new Error("unavailable: The selected Keryx CLI did not return a valid Review response.");
+  }
+}
+
 async function handle(ws: ServerWebSocket<Conn>, cmd: string, args: Json): Promise<unknown> {
   const cwd = typeof args.cwd === "string" ? args.cwd : "";
   switch (cmd) {
@@ -581,6 +608,23 @@ async function handle(ws: ServerWebSocket<Conn>, cmd: string, args: Json): Promi
       return null;
     case "app_update_run":
       throw new Error("Browser dev mode runs no Keryx.app; use `keryx app update` in a terminal.");
+    case "review_board": {
+      const root = await projectCwd(ws.data, cwd);
+      const argv = reviewBoardArgs(args);
+      return runReviewCli(root, argv, true);
+    }
+    case "review_rules": {
+      const root = await projectCwd(ws.data, cwd);
+      return runReviewCli(root, reviewRuleArgs(args.target, args.action), (args.action as Json)?.kind === "status");
+    }
+    case "review_watcher": {
+      const root = await projectCwd(ws.data, cwd);
+      return runReviewCli(root, reviewWatcherArgs(args.target, args.action), (args.action as Json)?.kind === "status");
+    }
+    case "review_run": {
+      const root = await projectCwd(ws.data, cwd);
+      return runReviewCli(root, reviewRunArgs(args.target, args.action), (args.action as Json)?.kind === "status");
+    }
     case "flows_list":
       return flowsList(await projectCwd(ws.data, cwd));
     case "flows_get":

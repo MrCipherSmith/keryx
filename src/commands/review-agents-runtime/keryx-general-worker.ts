@@ -1,9 +1,10 @@
+import { sumCounts, usageCounts, type ReviewUsageCounts } from "../../review/run-usage";
 import { AGENT_CONDUCT_PROMPT_BLOCK } from "../../lib/agent-conduct";
 import { randomUUID } from "node:crypto";
 import { runAgentTurn, type AgentIO } from "../agent";
 import type { InteractiveTool } from "../../harness/tool/builtin/interactive-tools";
 import type { NormalizedMessage, ProviderPort } from "../../harness/provider/types";
-import type { ReviewAgentAdapterRequest, ReviewAgentSpawnInput } from "../../review/agents/types";
+import type { ReviewAgentAdapterRequest, ReviewAgentRequestObservation, ReviewAgentSpawnInput } from "../../review/agents/types";
 import type { ExternalBridgeRequest, ExternalBridgeResponse } from "../../review/agents/external-adapter";
 
 export const KERYX_EXTERNAL_BRIDGE_TOOL_NAMES = [
@@ -30,9 +31,11 @@ export interface KeryxExternalWorkerInput {
   readonly signal: AbortSignal;
   readonly maxOutputTokens?: number;
   readonly id?: () => string;
+  readonly observeRequest?: ReviewAgentRequestObservation;
 }
 
 export interface KeryxExternalWorkerResult {
+  readonly usage?: ReviewUsageCounts & { partial?: boolean };
   readonly content: string;
   readonly metadata: {
     readonly harness: "keryx-dedicated-review-agents-worker";
@@ -140,15 +143,29 @@ export async function runKeryxExternalWorker(input: KeryxExternalWorkerInput): P
   const allowed = new Set<string>(KERYX_EXTERNAL_BRIDGE_TOOL_NAMES);
   let lastAttemptEnded = false;
   let lastAttemptFailed = false;
+  let measured: ReviewUsageCounts | undefined;
+  let partial = false;
+  let requestNumber = 0;
   const monitoredProvider: ProviderPort = {
     ...input.provider,
     describe: () => input.provider.describe(),
     stream: (request, options) => (async function* () {
       lastAttemptEnded = false;
       lastAttemptFailed = false;
+      const number = ++requestNumber;
+      input.observeRequest?.(number);
+      let receipt: ReviewUsageCounts | undefined;
       for await (const event of input.provider.stream(request, options)) {
+        if (event.kind === "usage_update" && event.usage) {
+          receipt = usageCounts(event.usage);
+          input.observeRequest?.(number, receipt);
+        }
         if (event.kind === "provider_error") lastAttemptFailed = true;
-        if (event.kind === "model_end") lastAttemptEnded = true;
+        if (event.kind === "model_end") {
+          lastAttemptEnded = true;
+          measured = sumCounts(measured, receipt ?? {});
+          if (receipt?.inputTokens === undefined || receipt.outputTokens === undefined) partial = true;
+        }
         yield event;
       }
     })(),
@@ -178,6 +195,7 @@ export async function runKeryxExternalWorker(input: KeryxExternalWorkerInput): P
   if (content.length === 0) throw new Error("dedicated external general returned no result");
   return {
     content,
+    ...(measured && Object.keys(measured).length ? { usage: { ...measured, ...(partial ? { partial: true } : {}) } } : {}),
     metadata: { harness: "keryx-dedicated-review-agents-worker", toolNames: KERYX_EXTERNAL_BRIDGE_TOOL_NAMES },
   };
 }

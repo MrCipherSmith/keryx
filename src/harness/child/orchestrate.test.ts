@@ -154,6 +154,18 @@ describe("spawnSubagent — shared ledger authority (AC3)", () => {
     expect(ctx.ledger.remaining.maxRuntimeMs).toBe(5_000);
   });
 
+  test("a planned-model mismatch leaves the last wave slot and runtime budget available to a matching retry", () => {
+    const ledger = new RemainingBudgetLedger({ maxRuntimeMs: 10_000, maxToolCalls: 5 }, { maxScopeChildren: 1 });
+    const ctx = makeCtx({ ledger, childScope: "only-wave" });
+    const mismatch = spawnSubagent(makeRequest({ expectedModel: { providerId: "ollama", modelId: "different" } }), ctx, makeDeps());
+    expect(mismatch.ok).toBe(false);
+    expect(ledger.scopeChildCount("only-wave")).toBe(0);
+    expect(ledger.remaining.maxRuntimeMs).toBe(10_000);
+    expect(spawnSubagent(makeRequest({ expectedModel: ctx.parentModel }), ctx, makeDeps()).ok).toBe(true);
+    expect(ledger.scopeChildCount("only-wave")).toBe(1);
+    expect(spawnSubagent(makeRequest({ expectedModel: ctx.parentModel }), ctx, makeDeps()).ok).toBe(false);
+  });
+
   test("maxChildren cap denies once reached", () => {
     const ctx = makeCtx({
       ledger: new RemainingBudgetLedger({ maxRuntimeMs: 1_000_000, maxToolCalls: 1_000 }),

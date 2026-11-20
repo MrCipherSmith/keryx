@@ -79,6 +79,8 @@ export type PriorFinding = {
   status: string;
   disposition?: string | undefined;
   source: RoundSource;
+  /** Original finding, when available from the previous review, for a scoped fix dispatch. */
+  finding?: Record<string, unknown>;
 };
 
 /** sha256 hex of a quote, whitespace-normalised so a re-indented line hashes the same. */

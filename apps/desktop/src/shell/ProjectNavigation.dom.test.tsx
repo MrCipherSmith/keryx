@@ -1,0 +1,73 @@
+import { afterAll, beforeAll, expect, test } from "bun:test";
+import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import type { Root } from "react-dom/client";
+import { registerDom, unregisterDom } from "../test/dom";
+import type { View } from "./AppShell";
+
+let root: Root;
+let host: HTMLElement;
+let React: typeof import("react");
+let AppShell: typeof import("./AppShell").AppShell;
+
+beforeAll(async () => {
+  registerDom();
+  React = await import("react");
+  AppShell = (await import("./AppShell")).AppShell;
+  host = document.createElement("div");
+  document.body.append(host);
+  root = (await import("react-dom/client")).createRoot(host);
+});
+
+afterAll(async () => {
+  await React.act(() => root.unmount());
+  await unregisterDom();
+});
+
+test("the current project owns Sessions, Flows and Review while Settings stays global", async () => {
+  function ProjectWindow() {
+    const [cwd, switchProject] = React.useState("/dev/alpha");
+    const [view, onView] = React.useState<View>("session");
+    const noop = () => {};
+    return (
+      <AppShell cwd={cwd} projects={["/dev/alpha", "/dev/beta"]} view={view} onView={onView}
+        title={view} status={{ tone: "ok", label: "Ready" }} flowsActive={2} activity="idle"
+        recents={[]} live={[]} onRemoveProject={noop} onOpenFolder={noop} onSwitchProject={switchProject}
+        onNewWindow={noop} onCloseProject={noop} onPalette={noop}>
+        <span>{view}</span>
+      </AppShell>
+    );
+  }
+  await React.act(() => root.render(<ProjectWindow />));
+  const global = host.querySelector('nav[aria-label="Projects and settings"]')!;
+  const project = () => host.querySelector("main nav")!;
+  const button = (nav: Element, name: string) => Array.from(nav.querySelectorAll("button")).find((b) => b.textContent?.trim() === name)!;
+  const click = (b: HTMLButtonElement) => React.act(() => b.click());
+
+  expect(project().getAttribute("aria-label")).toBe("Project views for alpha");
+  expect(project().querySelectorAll("button")).toHaveLength(3);
+  const globalButtons = [...global.querySelectorAll("button")];
+  for (const section of ["Review", "Flows"]) {
+    expect(globalButtons.some(b => b.getAttribute("aria-label") === section || b.textContent?.trim().startsWith(section))).toBe(false);
+  }
+  for (const section of ["Review", "Flows", "Sessions"]) {
+    const target = Array.from(project().querySelectorAll("button")).find((b) => b.textContent?.startsWith(section))!;
+    await click(target);
+    expect(target.getAttribute("aria-current")).toBe("page");
+    expect(global.querySelector('[aria-label="alpha"]')!.classList.contains("is-active")).toBe(true);
+  }
+  await click(button(global, "Settings"));
+  expect(project()).toBeNull();
+  expect(button(global, "Settings").getAttribute("aria-current")).toBe("page");
+  await click(global.querySelector<HTMLButtonElement>('[aria-label="alpha"]')!);
+  expect(button(project(), "Sessions").getAttribute("aria-current")).toBe("page");
+  await click(global.querySelector<HTMLButtonElement>('[aria-label="beta"]')!);
+  expect(project().getAttribute("aria-label")).toBe("Project views for beta");
+  expect(global.querySelector('[aria-label="beta"]')!.getAttribute("aria-current")).toBe("true");
+});
+
+
+test("App preserves an unsent draft and the last Review snapshot across project tabs", () => {
+  const fixture = fileURLToPath(new URL("../test/app-navigation.fixture.tsx", import.meta.url));
+  execFileSync(process.execPath, [fixture], { timeout: 8000, stdio: "pipe" });
+});

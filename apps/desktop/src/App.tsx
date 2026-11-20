@@ -13,11 +13,12 @@ import {
 import { applyTheme, setPrefs, MOD } from "./lib/prefs";
 import { basename } from "./lib/format";
 import { Dialog, overlayOpen } from "./components/ui";
-import { AppShell, type View } from "./shell/AppShell";
+import { AppShell, PROJECT_VIEWS, type View } from "./shell/AppShell";
 import { CommandPalette, type PaletteItem } from "./shell/CommandPalette";
 import { SettingsView } from "./shell/SettingsView";
 import { Welcome } from "./shell/Welcome";
 import { UpdateBanner } from "./shell/UpdateBanner";
+import { ReviewBoard } from "./review/ReviewBoard";
 import { FlowsBoard } from "./flows/FlowsBoard";
 import type { LinkedSession } from "./flows/FlowDetail";
 import { sessionFlags } from "./acp/types";
@@ -144,6 +145,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
   const providers = useProvidersDialog();
   const providersApi = useMemo<ProvidersApi>(() => ({ request: s.rpc, extensions: s.extensions, onChallenge: s.onLoginChallenge }), [s.rpc, s.extensions, s.onLoginChallenge]);
   const [view, setView] = useState<View>("session");
+  const [linkedFlow, setLinkedFlow] = useState<string | null>(null);
   const [palette, setPalette] = useState<string | null>(null);
   const [enrich, setEnrich] = useState(false);
   const runProject = useProjectRunner(cwd, s.keryxPath);
@@ -202,6 +204,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
   );
 
   const go = useCallback((v: View) => {
+    setLinkedFlow(null);
     setView(v);
     if (v === "session") requestAnimationFrame(() => composer.current?.focus());
   }, []);
@@ -258,6 +261,9 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       } else if (k === "2") {
         e.preventDefault();
         go("flows");
+      } else if (k === "3") {
+        e.preventDefault();
+        go("review");
       } else if (k === ",") {
         e.preventDefault();
         go("settings");
@@ -290,8 +296,9 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
 
   const paletteItems = useMemo<PaletteItem[]>(() => {
     const items: PaletteItem[] = [
-      { id: "v-session", group: "Go to", label: "Session", icon: "chat", hint: `${MOD}1`, run: () => go("session") },
-      { id: "v-flows", group: "Go to", label: "Flows", icon: "board", hint: `${MOD}2`, run: () => go("flows") },
+      ...PROJECT_VIEWS.map(({ id, label, icon, shortcut }) => ({
+        id: `v-${id}`, group: basename(cwd), label: `Go to ${label}`, icon, hint: shortcut, run: () => go(id),
+      })),
       { id: "v-settings", group: "Go to", label: "Settings", icon: "settings", hint: `${MOD},`, run: () => go("settings") },
       {
         id: "a-new",
@@ -357,7 +364,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       <span className="truncate">{state.title?.trim() || "New session"}</span>
     ) : (
       <span className="truncate">
-        {basename(cwd)} · {view === "flows" ? "Flows" : "Settings"}
+        {view === "settings" ? "Settings" : `${basename(cwd)} · ${view === "flows" ? "Flows" : "Review"}`}
       </span>
     );
 
@@ -390,9 +397,15 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       </div>
       {view === "flows" ? (
         <div className="view">
-          <FlowsBoard cwd={cwd} flows={flows} linkedSessions={linkedSessions} onWorkOn={(c, target) => void workOn(c, target)} />
+          <FlowsBoard initialOpenDir={linkedFlow} cwd={cwd} flows={flows} linkedSessions={linkedSessions} onWorkOn={(c, target) => void workOn(c, target)} />
         </div>
       ) : null}
+      <div className="view" hidden={view !== "review"}>
+        <ReviewBoard active={view === "review"} cwd={cwd} flows={flows.cards} onOpenFlow={(dir) => {
+          setLinkedFlow(dir);
+          setView("flows");
+        }} />
+      </div>
       {view === "settings" ? (
         <div className="view">
           <SettingsView agentVersion={state.agentVersion} />

@@ -117,4 +117,107 @@ describe("event tail", () => {
     writeFileSync(file, `garbage\n${JSON.stringify(call("bash", { command: "ls" }))}\n`);
     expect(createEventTail(file).poll().toolCalls).toBe(1);
   });
+
+  test("live receipt replacements match replay, including changed reviewer, currency and completeness", () => {
+    const file = path.join(tmp(), "events.ndjson");
+    const tail = createEventTail(file);
+    const reviewer = { participant: "reviewer", reviewer: "logic", provider: "vendor", model: "a" };
+    const other = { ...reviewer, reviewer: "style", model: "b", source: "external-runtime" as const };
+    const parent = { participant: "coordinator" };
+    const usd = { amount: 0.25, currency: "USD" };
+    const eur = { amount: 2, currency: "EUR" };
+    const measured = { inputTokens: 10, outputTokens: 2, cacheReadTokens: 0, cost: usd };
+    const events = [
+      { type: "usage", usage: { totalTokens: 99 } },
+      { type: "request_start", requestId: "1", ...reviewer },
+      { type: "request_start", requestId: "2", ...other },
+      { type: "request_usage", requestId: "2", ...other, usage: { ...measured, cost: eur } },
+      { type: "request_usage", requestId: "1", ...reviewer, partial: true, usage: { outputTokens: 1 } },
+      { type: "request_start", requestId: "2", ...parent },
+      { type: "request_usage", requestId: "1", ...reviewer, usage: measured },
+      { type: "request_usage", requestId: "3", ...parent, usage: { inputTokens: 3, outputTokens: 0, estimatedCost: usd } },
+      { type: "request_usage", requestId: "1", ...other, usage: { inputTokens: 3, outputTokens: 1, cost: eur } },
+      { type: "request_usage", requestId: "3", ...reviewer, usage: { inputTokens: 0, outputTokens: 0, cost: eur } },
+      { type: "request_usage", requestId: "2", ...parent, usage: { inputTokens: 1, outputTokens: 2, cost: eur } },
+      { type: "usage", usage: { totalTokens: 999 } },
+      { type: "turn_end", usage: { totalTokens: 9999 } },
+    ];
+    let replay = emptyProgress();
+    const snapshots = [];
+    for (const event of events) {
+      appendFileSync(file, `${JSON.stringify(event)}\n`);
+      replay = foldEvent(replay, event);
+      const { requests: _requests, ...expected } = replay;
+      const actual = tail.poll();
+      expect(actual).toEqual(expected);
+      snapshots.push({ actual, expected: structuredClone(expected) });
+    }
+    for (const { actual, expected } of snapshots) expect(actual).toEqual(expected);
+    expect(tail.poll().usage?.total.cost).toEqual({ amount: 6, currency: "EUR" });
+  });
+
+  test("single receipts over many live polls agree with one recovery replay", () => {
+    const file = path.join(tmp(), "events.ndjson");
+    const tail = createEventTail(file);
+    for (let index = 0; index < 1_024; index++) {
+      const request = { requestId: String(index), participant: "reviewer", reviewer: `reviewer-${index % 8}` };
+      const usage = { inputTokens: index, outputTokens: 1, estimatedCost: { amount: 0.125, currency: "USD" } };
+      appendFileSync(file, `${JSON.stringify({ type: "request_start", ...request })}\n`);
+      expect(tail.poll().usage?.partial).toBe(true);
+      appendFileSync(file, `${JSON.stringify({ type: "request_usage", ...request, usage })}\n`);
+      expect(tail.poll().usage?.partial).toBe(false);
+    }
+    expect(tail.poll()).toEqual(createEventTail(file).poll());
+    expect(tail.poll().usage?.total).toEqual({ inputTokens: 523_776, outputTokens: 1_024, totalTokens: 524_800,
+      estimatedCost: { amount: 128, currency: "USD" } });
+  });
+});
+
+test("attributes parallel provider requests, leaves an unreported retry partial and ignores aggregate echoes", () => {
+  const parent = { participant: "coordinator" as const, provider: "openai-codex", model: "configured" };
+  const child = { participant: "reviewer" as const, reviewer: "review-logic", provider: "openrouter", model: "review-model" };
+  const rootUsage = { inputTokens: 100, outputTokens: 10, cacheReadTokens: 90, totalTokens: 110 };
+  const childUsage = { inputTokens: 20, outputTokens: 0, cacheWriteTokens: 5, cost: { amount: 0.003, currency: "USD" } };
+  const started = [
+    { type: "request_start", requestId: "1", ...parent },
+    { type: "request_start", requestId: "2", ...child },
+  ].reduce(foldEvent, emptyProgress());
+  const childFinished = foldEvent(started, { type: "request_usage", requestId: "2", ...child, usage: childUsage });
+  const reviewer = { inputTokens: 20, outputTokens: 0, cacheWriteTokens: 5, totalTokens: 20,
+    cost: childUsage.cost, reviewer: "review-logic", provider: "openrouter", model: "review-model" };
+  expect(childFinished.tokens).toBe(20);
+  expect(childFinished.usage).toMatchObject({ coordinator: {}, reviewers: [reviewer], partial: true });
+  expect(childFinished.usage?.reviewers[0]?.partial).toBeUndefined();
+  const bothFinished = foldEvent(childFinished, { type: "request_usage", requestId: "1", ...parent, usage: rootUsage });
+  expect(bothFinished.tokens).toBe(130);
+  expect(bothFinished.usage).toMatchObject({ coordinator: rootUsage, reviewers: [reviewer], partial: false });
+  const state = [
+    { type: "usage", usage: rootUsage },
+    { type: "request_start", requestId: "3", ...child },
+    { type: "turn_end", usage: rootUsage },
+  ].reduce(foldEvent, bothFinished);
+  expect(state.tokens).toBe(130);
+  expect(state.usage).toEqual({
+    total: { inputTokens: 120, outputTokens: 10, totalTokens: 130, cacheReadTokens: 90, cacheWriteTokens: 5, reportedCosts: [childUsage.cost] },
+    coordinator: rootUsage,
+    reviewers: [{ partial: true, inputTokens: 20, outputTokens: 0, cacheWriteTokens: 5, totalTokens: 20, reportedCosts: [childUsage.cost], reviewer: "review-logic", provider: "openrouter", model: "review-model" }],
+    partial: true,
+  });
+});
+
+test("adds confirmed charges once, preserves a reported zero and withholds sums across currencies", () => {
+  const receipt = (requestId: string, reviewer: string, amount: number, currency: string) => ({
+    type: "request_usage", requestId, participant: "reviewer", reviewer, provider: "vendor", model: "m",
+    usage: { inputTokens: 10, outputTokens: 2, cost: { amount, currency } },
+  });
+  const free = receipt("a", "review-style", 0, "USD");
+  const billed = receipt("b", "review-logic", 0.025, "USD");
+  const complete = [free, billed, billed].reduce(foldEvent, emptyProgress()).usage;
+  expect(complete?.total).toEqual({ inputTokens: 20, outputTokens: 4, totalTokens: 24, cost: { amount: 0.025, currency: "USD" } });
+  expect(complete?.reviewers[0]?.cost).toEqual({ amount: 0, currency: "USD" });
+  expect(complete?.partial).toBe(false);
+  const mixed = [free, receipt("b", "review-logic", 2, "EUR")].reduce(foldEvent, emptyProgress()).usage;
+  expect(mixed?.total.cost).toBeUndefined();
+  expect(mixed?.total.reportedCosts).toEqual([{ amount: 0, currency: "USD" }, { amount: 2, currency: "EUR" }]);
+  expect(mixed?.reviewers[1]?.cost).toEqual({ amount: 2, currency: "EUR" });
 });

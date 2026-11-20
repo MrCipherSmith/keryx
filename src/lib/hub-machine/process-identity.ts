@@ -26,10 +26,12 @@ function linuxIdentity(pid: number): ProcessIdentity | null {
 }
 /** Elsewhere (macOS/BSD): ps in a fixed C locale and UTC, so the start time never depends on the caller's environment. */
 function psIdentity(pid: number): ProcessIdentity | null {
-    const result = Bun.spawnSync(['ps', '-o', 'pgid=,lstart=', '-p', String(pid)], { env: { PATH: process.env.PATH ?? '/usr/bin:/bin', LC_ALL: 'C', TZ: 'UTC' }, stdout: 'pipe', stderr: 'ignore' });
-    if (result.exitCode !== 0) return null;
-    const match = /^\s*(\d+)\s+(\S.*\S)\s*$/.exec(Buffer.from(result.stdout).toString('utf8'));
-    return match && positive(Number(match[1])) ? { pid, pgid: Number(match[1]), startedAt: `lstart:${match[2]!.replace(/\s+/g, ' ')}` } : null;
+    try {
+        const result = Bun.spawnSync(['/bin/ps', '-o', 'pgid=,lstart=', '-p', String(pid)], { env: { LC_ALL: 'C', TZ: 'UTC' }, stdout: 'pipe', stderr: 'ignore', timeout: 1500 });
+        if (result.exitCode !== 0) return null;
+        const match = /^\s*(\d+)\s+(\S.*\S)\s*$/.exec(Buffer.from(result.stdout).toString('utf8'));
+        return match && positive(Number(match[1])) ? { pid, pgid: Number(match[1]), startedAt: `lstart:${match[2]!.replace(/\s+/g, ' ')}` } : null;
+    } catch { return null; }
 }
 /** Reads the identity of a live process, or null when it no longer exists or cannot be read. */
 export function readProcessIdentity(pid: number): ProcessIdentity | null {

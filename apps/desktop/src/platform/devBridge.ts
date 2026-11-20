@@ -11,8 +11,9 @@ type EventFrame = { event: string; payload: unknown };
 export function createDevBridge(): Backend {
   let socket: WebSocket | null = null;
   let opening: Promise<WebSocket> | null = null;
+  let connecting: WebSocket | null = null;
   let nextId = 1;
-  const pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
+  const pending = new Map<number, { socket: WebSocket; resolve: (v: unknown) => void; reject: (e: Error) => void }>();
   const listeners = new Map<string, Set<(payload: unknown) => void>>();
 
   const open = (): Promise<WebSocket> => {
@@ -20,19 +21,31 @@ export function createDevBridge(): Backend {
     if (opening) return opening;
     opening = new Promise<WebSocket>((resolve, reject) => {
       const ws = new WebSocket(BRIDGE_URL);
+      connecting = ws;
       ws.onopen = () => {
+        connecting = null;
         socket = ws;
         opening = null;
         resolve(ws);
       };
       ws.onerror = () => {
-        opening = null;
-        reject(new Error(`The dev bridge is not running on ${BRIDGE_URL}. Start it with \`bun run dev:browser\`.`));
+        if (connecting === ws) { connecting = null; opening = null; }
+        reject(new Error(`unavailable: The dev bridge is not running on ${BRIDGE_URL}. Start it with \`bun run dev:browser\`.`));
       };
       ws.onclose = () => {
+        for (const [id, p] of pending) {
+          if (p.socket === ws) {
+            pending.delete(id);
+            p.reject(new Error("unavailable: The dev bridge connection closed."));
+          }
+        }
+        if (socket !== ws) {
+          if (connecting === ws) { connecting = null; opening = null; }
+          // A close before onopen must settle the outstanding connection promise as well.
+          reject(new Error("unavailable: The dev bridge connection closed before opening."));
+          return;
+        }
         socket = null;
-        for (const [, p] of pending) p.reject(new Error("The dev bridge connection closed."));
-        pending.clear();
         // The keryx process lived on that connection: report it as exited.
         for (const h of listeners.get("acp://exit") ?? []) h({ code: null, stderrTail: "dev bridge disconnected" });
       };
@@ -62,9 +75,16 @@ export function createDevBridge(): Backend {
     async invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
       const ws = await open();
       const id = nextId++;
+      const frame = JSON.stringify({ id, cmd: command, args: args ?? {} });
       return new Promise<T>((resolve, reject) => {
-        pending.set(id, { resolve: resolve as (v: unknown) => void, reject });
-        ws.send(JSON.stringify({ id, cmd: command, args: args ?? {} }));
+        pending.set(id, { socket: ws, resolve: resolve as (v: unknown) => void, reject });
+        try {
+          if (ws.readyState !== WebSocket.OPEN) throw new Error();
+          ws.send(frame);
+        } catch {
+          pending.delete(id);
+          reject(new Error("unavailable: The dev bridge connection closed."));
+        }
       });
     },
     async listen<T>(event: string, handler: (payload: T) => void) {

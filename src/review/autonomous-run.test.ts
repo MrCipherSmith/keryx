@@ -510,6 +510,48 @@ describe("progress file", () => {
     expect(during).toMatchObject({ state: "running", phase: "review start" });
     expect(JSON.parse(readFileSync(path.join(run.runDir, "progress.json"), "utf8"))).toMatchObject({ state: "complete", exitCode: 0 });
   });
+
+  test("retries a busy checkpoint without stopping the reviewer or discarding its package", async () => {
+    const retry = Promise.withResolvers<void>();
+    const checkpoints: unknown[] = [];
+    const signals: string[] = [];
+    const run = await runAutonomousReview(options(scripted(async () => {
+      await retry.promise;
+      writePackage("rv-1", "closed");
+      return 0;
+    }, undefined, signals), { onProgress(event) {
+      if (event.state !== "running") return;
+      checkpoints.push(event);
+      if (checkpoints.length === 1) throw new Error("database is busy");
+      retry.resolve();
+    } }));
+    expect(checkpoints.length).toBeGreaterThanOrEqual(2);
+    expect(checkpoints[1]).toEqual(checkpoints[0]);
+    expect(signals).toEqual([]);
+    expect(run.summary.package).toMatchObject({ id: "rv-1", status: "closed" });
+  });
+
+  test("awaits the owned child before releasing the run lock after a monitor error", async () => {
+    const exit = Promise.withResolvers<number>();
+    const requested = Promise.withResolvers<string>();
+    const run = runAutonomousReview(options(() => {
+      writePackage("rv-1", "draft");
+      writeFileSync(path.join(cwd, ".metaproject/reviews/rv-1/manifest.json"), JSON.stringify({
+        target: { ref: REF }, updatedAt: { toString: null, valueOf: null },
+      }));
+      return { exited: exit.promise, kill: signal => requested.resolve(signal ?? "SIGTERM") };
+    }, { killGraceMs: 1_000 }));
+    const failure = run.then(() => null, (error: unknown) => error);
+    try {
+      const settled = await Promise.race([requested.promise, failure.then(() => "exited without cleanup")]);
+      expect(settled).toBe("SIGTERM");
+      const concurrent = runAutonomousReview(options(scripted(() => 0)));
+      await expect(concurrent).rejects.toBeInstanceOf(AutonomousRunLockedError);
+    } finally {
+      exit.resolve(128);
+    }
+    expect(await failure).toBeInstanceOf(TypeError);
+  });
 });
 
 describe("the pull request head reaches the child", () => {
