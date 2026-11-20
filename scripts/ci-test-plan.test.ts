@@ -46,7 +46,11 @@ test("CI requires the reported test files to match the complete plan", () => {
 
   expect(() => verifyTestInventory(planned, {
     version: 1,
-    files: { "./src/cli.test.ts": 5, "src/extra.test.ts": 12 },
-  }, "1")).toThrow("Missing: src/auth.test.ts. Extra: src/extra.test.ts.");
+    files: { "./src/cli.test.ts": 5 },
+  }, "1")).toThrow("Missing: src/auth.test.ts.");
+  expect(() => verifyTestInventory(planned, {
+    version: 1,
+    files: { "./src/cli.test.ts": 5, "src/auth.test.ts": 12, "src/extra.test.ts": 12 },
+  }, "1")).toThrow("Extra: src/extra.test.ts.");
   expect(() => verifyTestInventory(planned, { version: 1, files: [] }, "1")).toThrow("Unexpected Bun timings format");
 });
