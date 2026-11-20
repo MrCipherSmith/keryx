@@ -85,6 +85,58 @@ async function key(k: string, init: KeyboardEventInit = {}) {
 const options = () => Array.from(host.querySelectorAll<HTMLElement>('[role="option"]'));
 const names = () => options().map((o) => o.querySelector(".slash-name")!.textContent);
 
+const plus = () => host.querySelector<HTMLButtonElement>('[aria-label="Add to message"]');
+const menuItem = (label: string) => Array.from(host.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
+  .find((item) => item.textContent?.trim() === label);
+
+test("the plus menu offers files, folders and slash commands without erasing the draft", async () => {
+  const m = mount({ pickAttachmentFolder: async () => null, saveFile: async () => "/tmp/files/notes.txt" });
+  await act(() => m.render());
+  await type("keep this draft");
+  await act(() => plus()?.click());
+  expect(menuItem("Add files or images")?.disabled).toBe(false);
+  expect(menuItem("Add folder")?.disabled).toBe(false);
+  await act(() => menuItem("Slash commands")?.click());
+  expect(names()).toContain("/tasks");
+  expect(area().value).toBe("keep this draft");
+  await key("Escape");
+  expect(options()).toHaveLength(0);
+});
+
+test("a folder chosen from the plus menu is attached and sent without a caption", async () => {
+  const sent: unknown[] = [];
+  const m = mount({ pickAttachmentFolder: async () => "/project/folder", onSend: (...args) => { sent.push(args); return true; } });
+  await act(() => m.render({ sessionId: "folder-picker" }));
+  await act(() => plus()?.click());
+  await act(async () => menuItem("Add folder")?.click());
+  expect(host.querySelector('[aria-label="Remove folder"]')?.tagName).toBe("BUTTON");
+  await key("Enter");
+  expect(sent).toEqual([["", [], [{ kind: "folder", label: "folder", path: "/project/folder" }]]]);
+});
+
+test("choosing a file from the plus menu saves it and sends its path", async () => {
+  const stored: string[][] = [];
+  const sent: unknown[] = [];
+  const path = "/tmp/keryx-chat-images-test/file-123.txt";
+  const m = mount({
+    saveFile: async (extension, data) => { stored.push([extension, data]); return path; },
+    onSend: (...args) => { sent.push(args); return true; },
+  });
+  await act(() => m.render({ sessionId: "file-picker" }));
+  await act(() => plus()?.click());
+  const input = host.querySelector<HTMLInputElement>('input[type="file"]');
+  const opened: string[] = [];
+  input?.addEventListener("click", () => { opened.push("opened"); });
+  await act(() => menuItem("Add files or images")?.click());
+  expect(opened).toEqual(["opened"]);
+  Object.defineProperty(input, "files", { value: [new File(["hello"], "notes.TXT", { type: "text/plain" })] });
+  await act(async () => { input?.dispatchEvent(new Event("change", { bubbles: true })); });
+  expect(stored).toEqual([["txt", "aGVsbG8="]]);
+  expect(host.querySelector('[aria-label="Remove notes.TXT"]')?.tagName).toBe("BUTTON");
+  await key("Enter");
+  expect(sent).toEqual([["", [], [{ kind: "file", label: "notes.TXT", path }]]]);
+});
+
 test("typing / lists every command grouped, uncapped, with hint and description", async () => {
   const m = mount();
   await act(() => m.render());

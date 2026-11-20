@@ -8,6 +8,8 @@ import { DelegateResultCard } from "./DelegateResultCard";
 import { blockText } from "./reducer";
 import { ContentBlockView } from "./ContentBlockView";
 import { Markdown } from "../components/Markdown";
+import type { PrLinks } from "../components/prLinks";
+import { UserMessage } from "./UserMessage";
 import { Icon, type IconName } from "../components/Icon";
 import { Spinner } from "../components/ui";
 import { argLabel, hasRestArgs, primaryInput, quoteArgv, restArgs, visibleProse, visibleText } from "./toolInput";
@@ -306,6 +308,8 @@ interface Props {
   items: Item[];
   /** Runs a command line a card's view sends; returns when its result is shown. */
   onRunCommand?: (line: string, opts: { display?: string; replaceId: number }) => void | Promise<unknown>;
+  onEditMessage?: (text: string) => boolean;
+  prLinks?: PrLinks;
   busy: boolean;
   replaying: boolean;
   empty: ReactNode;
@@ -314,7 +318,7 @@ interface Props {
   onShowSubagent?: (id: string) => void;
 }
 
-export function Transcript({ items, busy, replaying, empty, onRunCommand, subagents, onShowSubagent }: Props) {
+export function Transcript({ items, busy, replaying, empty, onRunCommand, onEditMessage, prLinks, subagents, onShowSubagent }: Props) {
   const spawned = useMemo(() => {
     const m = new Map<string, string>();
     for (const a of subagents ?? []) if (a.parentToolCallId && !m.has(a.parentToolCallId)) m.set(a.parentToolCallId, a.id);
@@ -395,16 +399,12 @@ export function Transcript({ items, busy, replaying, empty, onRunCommand, subage
             const isLast = i === blocks.length - 1;
             switch (b.type) {
               case "user":
-                return (
-                  <div key={b.item.id} className="turn-user">
-                    <div className="user-msg">{b.item.text}</div>
-                  </div>
-                );
+                return <UserMessage key={b.item.id} message={b.item.text} onEdit={onEditMessage} />;
               case "agent":
                 return (
                   <div key={b.item.id} className={`turn-agent${b.first ? " turn-start" : ""}`}>
                     {b.first ? <AgentLabel /> : null}
-                    <Markdown text={b.item.text} className={isLast && streamingAgent ? "is-streaming" : undefined} />
+                    <Markdown text={b.item.text} prLinks={prLinks} className={isLast && streamingAgent ? "is-streaming" : undefined} />
                   </div>
                 );
               case "thought":

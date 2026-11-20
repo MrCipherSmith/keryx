@@ -7,7 +7,9 @@
 
 use crate::panels::PanelRoots;
 use base64::Engine as _;
+use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use tauri::{AppHandle, Manager, Url, Webview};
 
 pub const MAX_BYTES: u64 = 15 << 20;
@@ -88,10 +90,94 @@ pub fn read_image(link: &str, root: Option<&Path>, extra_roots: &[PathBuf]) -> R
     Ok(format!("data:{mime};base64,{}", base64::engine::general_purpose::STANDARD.encode(bytes)))
 }
 
+const MAX_CHAT_IMAGE_BYTES: usize = 5 << 20;
+const MAX_CHAT_STORAGE_BYTES: usize = 256 << 20;
+
+#[derive(Default)]
+pub struct ChatImages(Mutex<Option<(tempfile::TempDir, usize)>>);
+
+impl ChatImages {
+    fn root(&self) -> Option<PathBuf> {
+        let store = self.0.lock().ok()?;
+        Some(store.as_ref()?.0.path().to_path_buf())
+    }
+
+    pub fn clear(&self) {
+        if let Ok(mut store) = self.0.lock() {
+            store.take();
+        }
+    }
+
+    fn save(&self, mime_type: &str, data: &str) -> Result<String, String> {
+        let bytes = decode_attachment(data)?;
+        let suffix = match (mime_type, bytes.as_slice()) {
+            ("image/png", b) if b.starts_with(b"\x89PNG\r\n\x1a\n") => ".png",
+            ("image/jpeg", b) if b.starts_with(b"\xff\xd8\xff") => ".jpg",
+            ("image/gif", b) if b.starts_with(b"GIF87a") || b.starts_with(b"GIF89a") => ".gif",
+            ("image/webp", b) if b.starts_with(b"RIFF") && b.get(8..12) == Some(b"WEBP") => ".webp",
+            _ => return Err("Unsupported or invalid pasted image".into()),
+        };
+        self.save_bytes("image-", suffix, &bytes)
+    }
+
+    fn save_file(&self, extension: &str, data: &str) -> Result<String, String> {
+        if extension.is_empty() || extension.len() > 12 || !extension.bytes().all(|b| b.is_ascii_alphanumeric()) {
+            return Err("Invalid attachment extension".into());
+        }
+        self.save_bytes("file-", &format!(".{extension}"), &decode_attachment(data)?)
+    }
+
+    fn save_bytes(&self, prefix: &str, suffix: &str, bytes: &[u8]) -> Result<String, String> {
+        let mut store = self.0.lock().map_err(|_| "Chat attachment storage is unavailable")?;
+        if store.is_none() {
+            let dir = tempfile::Builder::new().prefix("keryx-chat-images-").tempdir().map_err(|e| e.to_string())?;
+            *store = Some((dir, 0));
+        }
+        let (dir, total) = store.as_mut().ok_or("Chat image storage is unavailable")?;
+        if *total + bytes.len() > MAX_CHAT_STORAGE_BYTES {
+            return Err("Temporary chat image storage is full. Restart Keryx to clear it.".into());
+        }
+        let mut file = tempfile::Builder::new().prefix(prefix).suffix(suffix)
+            .tempfile_in(dir.path()).map_err(|e| e.to_string())?;
+        file.write_all(bytes).map_err(|e| e.to_string())?;
+        let (_, path) = file.keep().map_err(|e| e.error.to_string())?;
+        *total += bytes.len();
+        Ok(path.to_string_lossy().into_owned())
+    }
+}
+
+fn decode_attachment(data: &str) -> Result<Vec<u8>, String> {
+    if data.len() > 4 * MAX_CHAT_IMAGE_BYTES.div_ceil(3) {
+        return Err("Attachment exceeds 5 MiB".into());
+    }
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(data).map_err(|_| "Invalid attachment data")?;
+    if bytes.len() > MAX_CHAT_IMAGE_BYTES {
+        return Err("Attachment exceeds 5 MiB".into());
+    }
+    Ok(bytes)
+}
+
+#[tauri::command]
+pub async fn save_chat_file(app: AppHandle, extension: String, data: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || app.state::<ChatImages>().save_file(&extension, &data))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn save_chat_image(app: AppHandle, mime_type: String, data: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || app.state::<ChatImages>().save(&mime_type, &data))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 #[tauri::command]
 pub async fn local_image(app: AppHandle, view: Webview, path: String) -> Result<String, String> {
     let root = app.state::<PanelRoots>().get(view.label());
-    tauri::async_runtime::spawn_blocking(move || read_image(&path, root.as_deref(), &[screenshots_dir()]))
+    let mut extra_roots = vec![screenshots_dir()];
+    extra_roots.extend(app.state::<ChatImages>().root());
+    tauri::async_runtime::spawn_blocking(move || read_image(&path, root.as_deref(), &extra_roots))
         .await
         .map_err(|e| e.to_string())?
 }
@@ -99,6 +185,33 @@ pub async fn local_image(app: AppHandle, view: Webview, path: String) -> Result<
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn chat_images_are_validated_and_removed_with_the_store() {
+        let storage = ChatImages::default();
+        let png = "iVBORw0KGgo=";
+        assert!(storage.save("image/jpeg", png).is_err());
+        assert!(storage.root().is_none());
+        let first = storage.save("image/png", png).unwrap();
+        let second = storage.save("image/png", png).unwrap();
+        assert_ne!(first, second);
+        let root = storage.root().unwrap();
+        assert!(Path::new(&first).starts_with(&root));
+        assert_eq!(read_image(&first, None, &[root]).unwrap(), format!("data:image/png;base64,{png}"));
+        storage.clear();
+        assert!(!Path::new(&first).exists());
+    }
+
+    #[test]
+    fn regular_chat_files_are_private_and_have_safe_extensions() {
+        let storage = ChatImages::default();
+        assert!(storage.save_file("../txt", "aGVsbG8=").is_err());
+        let path = PathBuf::from(storage.save_file("txt", "aGVsbG8=").unwrap());
+        assert_eq!(path.extension().and_then(|e| e.to_str()), Some("txt"));
+        assert_eq!(std::fs::read(&path).unwrap(), b"hello");
+        storage.clear();
+        assert!(!path.exists());
+    }
 
     #[test]
     fn links_become_paths() {

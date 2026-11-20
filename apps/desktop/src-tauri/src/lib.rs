@@ -38,6 +38,7 @@ pub fn run() {
         .manage(flows::watch::FlowWatchers::default())
         .manage(pty::PtyManager::default())
         .manage(panels::PanelRoots::default())
+        .manage(images::ChatImages::default())
         .manage(browser::Browsers::default())
         .manage(chromium::engine::Engines::default())
         .manage(chromium::consent::Consents::default())
@@ -115,6 +116,7 @@ pub fn run() {
             flows::flows_action,
             flows::flows_watch,
             gitinfo::git_info,
+            gitinfo::git_repository,
             pullrequest::pr_info,
             panels::pty_open,
             panels::pty_open_run,
@@ -137,6 +139,8 @@ pub fn run() {
             browser::browser_frame,
             browser::browser_input,
             images::local_image,
+            images::save_chat_image,
+            images::save_chat_file,
             chromium::consent::browser_consent_answer,
             chromium::cookies::cookie_profiles,
             chromium::cookies::cookie_scan,
@@ -154,6 +158,7 @@ pub fn run() {
             chromium::engine::close_all(handle);
             let _ = std::fs::remove_file(std::env::temp_dir().join(format!("keryx-panels-{}.sock", std::process::id())));
             handle.state::<bridge::AppState>().stop_all();
+            handle.state::<images::ChatImages>().clear();
         }
     });
 }

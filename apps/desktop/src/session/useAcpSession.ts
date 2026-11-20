@@ -516,7 +516,7 @@ export function useAcpSession(cwd: string) {
             // `terminal`: /delegate runs the vendor CLI in the side panel's terminal (D-14); only the app has one.
             _meta: { keryx: { askUser: true, ...(isTauri() ? { terminal: true } : {}) } },
           },
-          clientInfo: { name: "keryx-desktop", title: "Keryx", version: "0.2.3" },
+          clientInfo: { name: "keryx-desktop", title: "Keryx", version: "0.2.4" },
         });
         if (l.gen !== gen) return;
         l.initialized = true;
@@ -598,14 +598,14 @@ export function useAcpSession(cwd: string) {
 
   /** Starts a turn in the shown session; returns true only when the prompt was accepted (the caller may then clear its draft). */
   const sendPrompt = useCallback(
-    (text: string, target?: string, extra: readonly object[] = []): boolean => {
+    (text: string, target?: string, extra: readonly object[] = [], display?: string): boolean => {
       const l = live.current;
       const client = l.client;
       const sessionId = target ?? l.reg.shown;
       if (!client || !l.initialized || !sessionId || !l.reg.held.has(sessionId) || l.reg.turns.has(sessionId) || (!text.trim() && extra.length === 0)) return false;
       // Extra blocks (picked page elements) are shown as a count, not as their page-sourced text.
       const shown = extra.length ? `${text}${text.trim() ? "\n\n" : ""}_(${extra.length === 1 ? "picked page elements attached" : `${extra.length} attachments`})_` : text;
-      dispatch({ t: "userSent", sessionId, text: shown });
+      dispatch({ t: "userSent", sessionId, text: display ?? shown });
       dispatch({ t: "busy", sessionId, busy: true });
       const turn = { client } as Turn;
       turn.done = (async () => {

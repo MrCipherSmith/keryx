@@ -65,6 +65,33 @@ test("an image block shows as a picture; an svg one as a label", async () => {
   expect(host.querySelector(".feed-chip.is-muted")?.textContent).toBe("image (image/svg+xml) not shown");
 });
 
+test("copy uses the original text and editing sends without changing history", async () => {
+  const sent: string[] = [];
+  const copied: string[] = [];
+  const original = Object.getOwnPropertyDescriptor(navigator.clipboard, "writeText");
+  Object.defineProperty(navigator.clipboard, "writeText", { configurable: true, value: async (text: string) => { copied.push(text); } });
+  await act(() => root.render(createElement(Transcript, {
+    items: [{ kind: "user", id: 1, text: "original message" }],
+    busy: false,
+    replaying: false,
+    empty: null,
+    onEditMessage: (text: string) => { sent.push(text); return true; },
+  })));
+  const actions = host.querySelector(".user-msg + .user-msg-actions");
+  try {
+    await act(async () => actions?.querySelector<HTMLButtonElement>('[aria-label="Copy message"]')?.click());
+    expect(copied).toEqual(["original message"]);
+  } finally {
+    if (original) Object.defineProperty(navigator.clipboard, "writeText", original);
+    else Reflect.deleteProperty(navigator.clipboard, "writeText");
+  }
+  await act(() => actions?.querySelector<HTMLButtonElement>('[aria-label="Edit message"]')?.click());
+  expect(host.querySelector("textarea")?.value).toBe("original message");
+  await act(() => host.querySelector<HTMLButtonElement>('button[type="submit"]')?.click());
+  expect(sent).toEqual(["original message"]);
+  expect(host.querySelector(".user-msg")?.textContent).toBe("original message");
+});
+
 test("a tool's output is shown once, and a diff it printed is coloured", async () => {
   const out = "@@ -1 +1 @@\n-a\n+b";
   await show([

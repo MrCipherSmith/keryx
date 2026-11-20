@@ -104,9 +104,49 @@ pub async fn git_info(state: State<'_, AppState>, cwd: String) -> Result<Option<
         .map_err(|e| e.to_string())
 }
 
+fn github_repository_from_origin(origin: &str) -> Option<String> {
+    let raw = origin.trim();
+    let repo = ["https://github.com/", "git@github.com:", "ssh://git@github.com/"]
+        .iter().find_map(|prefix| raw.strip_prefix(*prefix))?;
+    let repo = repo.strip_suffix('/').unwrap_or(repo);
+    let repo = repo.strip_suffix(".git").unwrap_or(repo);
+    let (owner, name) = repo.split_once('/')?;
+    if !owner.as_bytes().first().is_some_and(u8::is_ascii_alphanumeric)
+        || !owner.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
+        || name.is_empty() || matches!(name, "." | "..")
+        || !name.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.' | b'-'))
+    {
+        return None;
+    }
+    Some(repo.to_string())
+}
+
+#[tauri::command]
+pub async fn git_repository(state: State<'_, AppState>, cwd: String) -> Result<Option<String>, String> {
+    let path = state.environment().get("PATH").cloned();
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut cmd = Command::new("git");
+        cmd.args(["config", "--get", "remote.origin.url"]).current_dir(cwd);
+        if let Some(p) = path {
+            cmd.env("PATH", p);
+        }
+        let out = child::run_bounded(cmd, GIT_TIMEOUT, 16 * 1024).ok()?;
+        out.status.success().then(|| github_repository_from_origin(&out.stdout)).flatten()
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn github_origin_uses_only_the_github_repository_path() {
+        assert_eq!(github_repository_from_origin("git@github.com:org/repo.git").as_deref(), Some("org/repo"));
+        assert!(github_repository_from_origin("https://github.com.evil.test/org/repo").is_none());
+        assert!(github_repository_from_origin("https://github.com/org/..").is_none());
+    }
 
     #[test]
     fn branch_upstream_counts_and_changes() {

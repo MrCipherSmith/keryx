@@ -2,7 +2,7 @@ import { forwardRef, useCallback, useEffect, useMemo, useRef, useState, useSyncE
 import { BrandMark } from "../components/BrandMark";
 import { createPortal } from "react-dom";
 import type { PlanEntry } from "../acp/types";
-import { formatTokens } from "../lib/format";
+import { errMessage, formatTokens } from "../lib/format";
 import { setPrefs, usePrefs, MOD, SESSION_SIDEBAR_MIN } from "../lib/prefs";
 import { Icon } from "../components/Icon";
 import { useToast } from "../components/Toasts";
@@ -17,6 +17,11 @@ import { GitStatus } from "./GitStatus";
 import { SessionInfoPanel } from "./SessionInfoPanel";
 import { SessionSidebar } from "./SessionSidebar";
 import { Transcript } from "./Transcript";
+import { withImagePaths, withLocalAttachments, type LocalAttachment } from "./chatImages";
+import { gitRepository, openExternal, pickFolder, saveChatFile, saveChatImage } from "../platform/commands";
+import { isTauri } from "../platform/backend";
+import { browserOpen } from "../platform/panels";
+import type { PrLinks } from "../components/prLinks";
 import { lostText, type QueuedPrompt, type Usage } from "./reducer";
 import { resolveMode, resolveModel, type UiActions } from "./commandRunner";
 import { modelOption, type useAcpSession } from "./useAcpSession";
@@ -153,17 +158,41 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
   };
   const run = (line: string, opts: { display?: string; replaceId?: number } = {}) => s.runCommand(line, ui, opts);
   const toast = useToast();
+  const [repo, setRepo] = useState<{ cwd: string; name: string | null } | null>(null);
+  useEffect(() => {
+    let active = true;
+    void gitRepository(cwd).then(
+      (name) => { if (active) setRepo({ cwd, name }); },
+      () => { if (active) setRepo({ cwd, name: null }); },
+    );
+    return () => { active = false; };
+  }, [cwd, ready]);
+  const prLinks = useMemo<PrLinks>(() => ({
+    repository: repo?.cwd === cwd ? repo.name ?? undefined : undefined,
+    openExternal: (url) => void openExternal(url).catch((e) =>
+      toast({ level: "error", title: "Could not open pull request", body: errMessage(e) })),
+    openInternal: isTauri() ? (url) => void browserOpen(cwd, url).then(
+      () => setPrefs({ sidePanel: "browser" }),
+      (e) => toast({ level: "error", title: "Could not open Keryx Browser", body: errMessage(e) }),
+    ) : undefined,
+  }), [cwd, repo, toast]);
   // Page elements picked in the browser panel go out with the next message (not with a command line).
   const picks = useSyncExternalStore(onPicksChange, () => picksOf(cwd));
   const attachments = useMemo(() => picks.map((p) => ({ key: p.key, label: pickLabel(p), title: `${p.selector}\n${p.url}` })), [picks]);
-  const send = async (text: string) => {
-    if (text.startsWith("/") || picks.length === 0) return run(text);
+  const send = async (text: string, imagePaths: readonly string[], local: readonly LocalAttachment[]) => {
+    const hasLocal = imagePaths.length > 0 || local.length > 0;
+    if (text.startsWith("/") && hasLocal) {
+      toast({ level: "info", title: "Slash commands cannot carry attachments", body: "Remove the attachments or send a normal chat message." });
+      return false;
+    }
+    if (text.startsWith("/") || (!picks.length && !hasLocal)) return run(text);
     // The picks travel as their own block, marked untrusted, never as the user's text. While a turn
     // runs this returns false and the draft and picks stay for the next send.
     const sent = picks;
-    const ok = s.sendPrompt(text, undefined, [picksBlock(sent)]);
-    if (ok) clearPicks(cwd, sent);
-    else if (state.busy) toast({ level: "info", title: "Picked elements wait for this turn", body: "Send again when keryx finishes; your message and picks are kept." });
+    const prompt = withImagePaths(withLocalAttachments(text, local), imagePaths);
+    const ok = s.sendPrompt(prompt, undefined, sent.length ? [picksBlock(sent)] : [], hasLocal ? prompt : undefined);
+    if (ok && sent.length) clearPicks(cwd, sent);
+    else if (!ok && state.busy) toast({ level: "info", title: "Attachments wait for this turn", body: "Send again when keryx finishes; your draft is kept." });
     return ok;
   };
 
@@ -350,6 +379,12 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
           items={state.items}
           busy={state.busy}
           onRunCommand={(line, o) => run(line, o)}
+          prLinks={prLinks}
+          onEditMessage={disabledReason === null && !state.busy ? (text) => {
+            const ok = s.sendPrompt(text);
+            if (!ok) toast({ level: "error", title: "Could not send the edited message" });
+            return ok;
+          } : undefined}
           subagents={state.subagents}
           onShowSubagent={showSubagent}
           replaying={state.replaying || (state.sessionId === null && state.opening)}
@@ -369,6 +404,9 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
             model={modelOption(state.configOptions)}
             sendKey={prefs.sendKey}
             onSend={send}
+            saveImage={saveChatImage}
+            saveFile={saveChatFile}
+            pickAttachmentFolder={() => pickFolder("Add folder to message")}
             attachments={attachments}
             onRemoveAttachment={(key) => removePick(cwd, key)}
             onStop={s.cancel}

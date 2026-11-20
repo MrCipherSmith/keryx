@@ -1,6 +1,6 @@
 [package]
 name = "keryx-desktop"
-version = "0.2.3"
+version = "0.2.4"
 description = "Keryx desktop client"
 edition = "2021"
 rust-version = "1.77"
@@ -28,6 +28,7 @@ pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
 hmac = "0.12"
 sha1 = "0.10"
 zeroize = "1"
+tempfile = "3"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
@@ -40,9 +41,6 @@ block2 = "0.6"
 objc2-foundation = { version = "0.3", features = ["NSString", "NSDictionary", "NSError", "NSData", "NSProcessInfo", "NSObject", "NSGeometry"] }
 objc2-app-kit = { version = "0.3", features = ["NSImage", "NSImageRep", "NSBitmapImageRep", "NSResponder", "NSView", "NSWindow"] }
 objc2-web-kit = { version = "0.3", features = ["WKWebView", "WKContentWorld", "WKFrameInfo", "WKSnapshotConfiguration", "WKNavigation", "block2", "objc2-app-kit", "objc2-core-foundation"] }
-
-[dev-dependencies]
-tempfile = "3"
 
 [profile.release]
 panic = "abort"

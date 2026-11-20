@@ -61,6 +61,18 @@ dev build) the bridge. Production builds do not contain the bridge client;
 
 `bun run dev:bridge` runs the bridge alone (for example next to `bun run dev`).
 
+## Chat smoke test
+
+1. Open a project and paste a screenshot into the message box with `⌘V`.
+   Check that a thumbnail appears and can be removed before sending.
+2. Paste it again and send it, with or without a caption. Check that the
+   thumbnail appears in the transcript. The agent receives a local file path,
+   not a native image input for the model. The files are temporary; after
+   restarting the app the old previews may no longer be available.
+3. Under a sent text message, use **Copy message** and paste the result into a
+   text editor. Use **Edit and resend** to open the editor, change the text, and
+   choose **Send as new message**. The original message stays in the transcript.
+
 ## Pointing the app at a development keryx
 
 Settings has three sources: bundled, `PATH`, custom. For a dev build choose

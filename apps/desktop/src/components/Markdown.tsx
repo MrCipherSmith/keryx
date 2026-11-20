@@ -1,6 +1,9 @@
 import DOMPurify from "dompurify";
 import { marked } from "marked";
-import { memo, useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Menu } from "./Menu";
+import { decoratePrReferences, type PrLinks } from "./prLinks";
+import { githubPrUrl } from "../lib/githubPr";
 import { codeBlockCopyText, revealCodeBlock } from "./codeBlock";
 import { highlightToHtml } from "./highlight";
 import { diffLines, diffStats, looksLikeUnifiedDiff } from "./unifiedDiff";
@@ -63,7 +66,7 @@ export function renderInline(src: string): string {
   return DOMPurify.sanitize(html, SANITIZE) as string;
 }
 
-/** Never navigate the app's web view away; links are inert (the model's links are untrusted), and get no context menu ("Open Link"). */
+/** Prevent native WebView navigation; only explicitly handled links can open a browser. */
 function blockLinks(e: React.MouseEvent<HTMLElement>) {
   if ((e.target as HTMLElement).closest("a")) e.preventDefault();
 }
@@ -179,12 +182,9 @@ function decorateCodeBlocks(html: string): string {
 }
 
 /** The final rendering: what every finished message shows. */
-function renderFinal(src: string): string {
-  return decorateCodeBlocks(renderMarkdown(src));
+function renderFinal(src: string, repository?: string): string {
+  return decorateCodeBlocks(decoratePrReferences(renderMarkdown(src), repository));
 }
-
-/** A run of streamed blocks, rendered exactly as the final pass renders them (chrome included). */
-const renderTokens: RenderTokens = (tokens) => decorateCodeBlocks(sanitize(marked.parser(tokens)));
 
 /** What the message element currently shows. */
 interface View {
@@ -238,10 +238,15 @@ function showFinal(el: HTMLElement, v: View, html: string): void {
 /** A message whose text has not changed for this long is final: render it whole, in one pass. */
 const SETTLE_MS = 250;
 
-export const Markdown = memo(function Markdown({ text, className }: { text: string; className?: string }) {
+export const Markdown = memo(function Markdown({ text, className, prLinks }: { text: string; className?: string; prLinks?: PrLinks }) {
   const ref = useRef<HTMLDivElement>(null);
+  const [prMenu, setPrMenu] = useState<{ anchor: HTMLAnchorElement; url: string } | null>(null);
+  const repository = prLinks?.repository;
+  const renderTokens = useMemo<RenderTokens>(() => (tokens) =>
+    decorateCodeBlocks(decoratePrReferences(sanitize(marked.parser(tokens)), repository)), [repository]);
   const r = useRef({
     renderedText: null as string | null,
+    repository,
     latest: text,
     // Kept across a settle: the text usually keeps growing from where it was.
     cache: emptyCache(),
@@ -257,9 +262,15 @@ export const Markdown = memo(function Markdown({ text, className }: { text: stri
     const el = ref.current;
     if (!el) return;
     st.latest = text;
-    if (st.renderedText === null) {
+    if (st.renderedText === null || st.repository !== repository) {
+      if (st.raf) cancelAnimationFrame(st.raf);
+      window.clearTimeout(st.settle);
+      st.raf = 0;
+      st.settle = 0;
+      st.repository = repository;
+      st.cache = emptyCache();
       st.renderedText = text;
-      showFinal(el, st.view, renderFinal(text));
+      showFinal(el, st.view, renderFinal(text, repository));
       return;
     }
     if (text === st.renderedText) return;
@@ -279,14 +290,14 @@ export const Markdown = memo(function Markdown({ text, className }: { text: stri
       if (st.raf) cancelAnimationFrame(st.raf);
       st.raf = 0;
       st.renderedText = st.latest;
-      const final = renderFinal(st.latest);
+      const final = renderFinal(st.latest, repository);
       // When the streamed view already reads exactly like the one-shot rendering, keep its nodes: a
       // pause must not replace the message under the user's selection.
       const frame = renderStreaming(st.latest, st.cache, renderTokens);
       if (st.view.mode === "stream" && frame.blocks.join("") + frame.tail === final) showFrame(el, st.view, frame);
       else showFinal(el, st.view, final);
     }, SETTLE_MS);
-  }, [text]);
+  }, [text, repository, renderTokens]);
 
   // Local-image links get thumbnails, also as the message streams in (throttled to a frame).
   useEffect(() => {
@@ -319,7 +330,40 @@ export const Markdown = memo(function Markdown({ text, className }: { text: stri
     [],
   );
 
-  return <div ref={ref} className={`md${className ? ` ${className}` : ""}`} onClick={onClick} onAuxClick={blockLinks} onContextMenu={blockLinks} />;
+  const showPrMenu = (target: EventTarget) => {
+    if (!(target instanceof Element) || !prLinks) return false;
+    const anchor = target.closest<HTMLAnchorElement>("a");
+    const url = githubPrUrl(anchor?.getAttribute("href") ?? null);
+    if (!anchor || !url) return false;
+    setPrMenu({ anchor, url });
+    return true;
+  };
+
+  const closePrMenu = () => {
+    setPrMenu(null);
+    prMenu?.anchor.focus();
+  };
+
+  return <>
+    <div ref={ref} className={`md${className ? ` ${className}` : ""}`} onAuxClick={blockLinks}
+      onClick={(e) => {
+        const url = githubPrUrl((e.target as HTMLElement).closest("a")?.getAttribute("href") ?? null);
+        if (prLinks && url) {
+          e.preventDefault();
+          prLinks.openExternal(url);
+        } else onClick(e);
+      }}
+      onContextMenu={(e) => { if (showPrMenu(e.target)) e.preventDefault(); else blockLinks(e); }}
+      onKeyDown={(e) => {
+        if ((e.key === "ContextMenu" || (e.key === "F10" && e.shiftKey)) && showPrMenu(e.target)) e.preventDefault();
+      }} />
+    {prMenu && prLinks ? <Menu anchor={prMenu.anchor} label="Pull request link" width={255} onClose={closePrMenu} items={[
+      { id: "system", icon: "external", label: "Open in default browser", onSelect: () => prLinks.openExternal(prMenu.url) },
+      { id: "internal", icon: "globe", label: "Open in Keryx Browser", disabled: !prLinks.openInternal,
+        description: prLinks.openInternal ? undefined : "Available in the native app",
+        onSelect: () => prLinks.openInternal?.(prMenu.url) },
+    ]} /> : null}
+  </>;
 });
 
 export const InlineMarkdown = memo(function InlineMarkdown({ text }: { text: string }) {

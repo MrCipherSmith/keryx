@@ -132,6 +132,27 @@ test("a long provider or model label carries its full text in the title and trun
 
 // ---- attachments (page elements picked in the browser panel) -----------------------------------------
 
+test("pasting a screenshot saves it and sends an image-only draft", async () => {
+  const saved: string[] = [];
+  const sent: string[][] = [];
+  const path = "/tmp/keryx-chat-images-123/photo.png";
+  await act(() => root.render(createElement(Composer, {
+    ...props("IMG", createRef()),
+    saveImage: async (mime: string, data: string) => { saved.push(mime, data); return path; },
+    onSend: (text: string, paths: readonly string[]) => { sent.push([text, ...paths]); return true; },
+  })));
+  const event = new Event("paste", { bubbles: true, cancelable: true });
+  const file = new File([Uint8Array.of(137, 80, 78, 71, 13, 10, 26, 10)], "Clipboard.png", { type: "image/png" });
+  Object.defineProperty(event, "clipboardData", { value: { files: [file], getData: () => "" } });
+  await act(async () => { host.querySelector("textarea")?.dispatchEvent(event); });
+  expect(event.defaultPrevented).toBe(true);
+  expect(saved).toEqual(["image/png", "iVBORw0KGgo="]);
+  expect(host.querySelector(".attach-chip img")?.getAttribute("src")).toBe("data:image/png;base64,iVBORw0KGgo=");
+  await act(() => host.querySelector<HTMLButtonElement>('[aria-label="Send"]')?.click());
+  expect(sent).toEqual([["", path]]);
+  expect(host.querySelector(".attach-chip img")).toBeNull();
+});
+
 test("attached elements show as removable chips and can be sent without text", async () => {
   const ref = createRef<import("./Composer").ComposerHandle>();
   const sent: string[] = [];

@@ -25,6 +25,51 @@ afterAll(async () => {
   await unregisterDom();
 });
 
+test("PR references open externally on click and offer the internal browser on right-click", async () => {
+  const opened: string[][] = [];
+  await act(() => root.render(createElement(Markdown, {
+    text: "Published in PR #9130. `PR #12` is code. [other PR](https://github.com/other/repo/pull/8).",
+    prLinks: {
+      repository: "example/project",
+      openExternal: (url: string) => { opened.push(["external", url]); },
+      openInternal: (url: string) => { opened.push(["internal", url]); },
+    },
+  })));
+  const links = Array.from(host.querySelectorAll<HTMLAnchorElement>(".md a"));
+  expect(links.map((a) => [a.textContent, a.getAttribute("href")])).toEqual([
+    ["PR #9130", "https://github.com/example/project/pull/9130"],
+    ["other PR", "https://github.com/other/repo/pull/8"],
+  ]);
+  const link = links[0];
+  await act(() => link?.click());
+  expect(opened).toEqual([["external", "https://github.com/example/project/pull/9130"]]);
+  const menu = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+  await act(() => { link?.dispatchEvent(menu); });
+  expect(menu.defaultPrevented).toBe(true);
+  const internal = Array.from(host.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
+    .find((b) => b.textContent?.includes("Open in Keryx Browser"));
+  await act(() => internal?.click());
+  expect(opened.at(-1)).toEqual(["internal", "https://github.com/example/project/pull/9130"]);
+});
+
+test("without a repository only explicit GitHub PR links can open", async () => {
+  const opened: string[] = [];
+  await act(() => root.render(createElement(Markdown, {
+    text: "Bare PR #5. [real PR](https://github.com/owner/repo/pull/6) and [other](https://github.com.example/owner/repo/pull/7).",
+    prLinks: { openExternal: (url: string) => { opened.push(url); } },
+  })));
+  const md = host.querySelector(".md");
+  expect(md?.textContent).toContain("Bare PR #5.");
+  const links = Array.from(md?.querySelectorAll<HTMLAnchorElement>("a") ?? []);
+  expect(links.map((a) => a.textContent)).toEqual(["real PR", "other"]);
+  for (const link of links) {
+    const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+    await act(() => { link.dispatchEvent(click); });
+    expect(click.defaultPrevented).toBe(true);
+  }
+  expect(opened).toEqual(["https://github.com/owner/repo/pull/6"]);
+});
+
 test("a rendered code block shows the escape marker and Copy writes the raw text", async () => {
   const raw = "let a = 1;‮ // evil";
   const written: string[] = [];

@@ -14,9 +14,13 @@
 // keryx process. Development only: it listens on loopback and is never bundled.
 
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync, mkdirSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
+import { randomUUID } from "node:crypto";
+import { rmSync } from "node:fs";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { basename, isAbsolute, join, resolve, sep } from "node:path";
 import type { ServerWebSocket, Subprocess } from "bun";
+import { githubRepositoryFromOrigin } from "../src/lib/githubPr";
 
 const PORT = 1421;
 const REPO_ROOT = resolve(import.meta.dir, "../../..");
@@ -521,6 +525,54 @@ function acpStart(ws: ServerWebSocket<Conn>, cwd: string, noProfile: boolean) {
   };
 }
 
+// ---- temporary chat images ---------------------------------------------------
+
+const CHAT_IMAGE_BYTES = 5 * 1024 * 1024;
+const CHAT_STORAGE_BYTES = 256 * 1024 * 1024;
+const chatImages = new Map<string, string>();
+let chatImageBytes = 0;
+let chatImageRoot: Promise<string> | undefined;
+
+function decodeChatAttachment(data: unknown): Buffer {
+  if (typeof data !== "string" || data.length > 4 * Math.ceil(CHAT_IMAGE_BYTES / 3)) throw new Error("Invalid or oversized attachment");
+  const bytes = Buffer.from(data, "base64");
+  if (bytes.length > CHAT_IMAGE_BYTES || bytes.toString("base64") !== data) throw new Error("Invalid or oversized attachment");
+  return bytes;
+}
+
+async function saveChatFile({ extension, data }: Json): Promise<string> {
+  if (typeof extension !== "string" || !/^[a-z0-9]{1,12}$/i.test(extension)) throw new Error("Invalid attachment extension");
+  return writeChatAttachment(decodeChatAttachment(data), { prefix: "file", extension });
+}
+
+async function saveChatImage({ mimeType, data }: Json): Promise<string> {
+  const bytes = decodeChatAttachment(data);
+  const ext = mimeType === "image/png" && bytes.subarray(0, 8).toString("hex") === "89504e470d0a1a0a" ? "png"
+    : mimeType === "image/jpeg" && bytes.subarray(0, 3).toString("hex") === "ffd8ff" ? "jpg"
+    : mimeType === "image/gif" && /^(GIF87a|GIF89a)$/.test(bytes.subarray(0, 6).toString()) ? "gif"
+    : mimeType === "image/webp" && bytes.subarray(0, 4).toString() === "RIFF" && bytes.subarray(8, 12).toString() === "WEBP" ? "webp" : null;
+  if (!ext || typeof mimeType !== "string") throw new Error("Unsupported or invalid pasted image");
+  return writeChatAttachment(bytes, { prefix: "image", extension: ext, mimeType });
+}
+
+async function writeChatAttachment(bytes: Buffer, target: { prefix: "file" | "image"; extension: string; mimeType?: string }): Promise<string> {
+  if (chatImageBytes + bytes.length > CHAT_STORAGE_BYTES) throw new Error("Temporary chat image storage is full. Restart the dev bridge to clear it.");
+  chatImageBytes += bytes.length;
+  try {
+    const root = await (chatImageRoot ??= mkdtemp(join(tmpdir(), "keryx-chat-images-")).then((dir) => {
+      process.once("exit", () => rmSync(dir, { recursive: true, force: true }));
+      return dir;
+    }));
+    const path = join(root, `${target.prefix}-${randomUUID()}.${target.extension}`);
+    await writeFile(path, bytes, { flag: "wx", mode: 0o600 });
+    if (target.mimeType) chatImages.set(path, target.mimeType);
+    return path;
+  } catch (error) {
+    chatImageBytes -= bytes.length;
+    throw new Error("Could not save chat attachment", { cause: error });
+  }
+}
+
 // ---- dispatch ----------------------------------------------------------------
 
 /**
@@ -562,6 +614,18 @@ async function handle(ws: ServerWebSocket<Conn>, cmd: string, args: Json): Promi
     case "acp_stop":
       stopProc(ws.data);
       return null;
+    case "save_chat_file":
+      if (!ws.data.root) throw new Error("Open a project before attaching files.");
+      return saveChatFile(args);
+    case "save_chat_image":
+      if (!ws.data.root) throw new Error("Open a project before pasting images.");
+      return saveChatImage(args);
+    case "local_image": {
+      const path = typeof args.path === "string" ? args.path : "";
+      const mime = chatImages.get(path);
+      if (!ws.data.root || !mime) throw new Error("The chat image is no longer available");
+      return `data:${mime};base64,${(await readFile(path)).toString("base64")}`;
+    }
     case "settings_get":
       return loadSettings();
     case "settings_set": {
@@ -593,6 +657,11 @@ async function handle(ws: ServerWebSocket<Conn>, cmd: string, args: Json): Promi
       w.sockets.add(ws);
       watched.set(root, w);
       return null;
+    }
+    case "git_repository": {
+      const root = await projectCwd(ws.data, cwd);
+      const result = Bun.spawnSync(["git", "config", "--get", "remote.origin.url"], { cwd: root, timeout: 3000, stderr: "ignore" });
+      return result.exitCode === 0 ? githubRepositoryFromOrigin(result.stdout.toString()) : null;
     }
     case "git_info": {
       // Same parse as src-tauri/src/gitinfo.rs, for the browser dev mode.
