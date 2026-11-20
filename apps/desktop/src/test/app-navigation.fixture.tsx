@@ -166,7 +166,7 @@ try {
   await React.act(() => namedButton("Settings").click());
   assert.equal(host.querySelector('main .project-views'), null);
   await React.act(() => namedButton("Close Settings").click());
-  assert.equal(host.querySelector('main nav button[aria-current="page"]')?.textContent?.trim(), "Review");
+  assert.equal(host.querySelector('main nav button[aria-current="page"] .review-tab-dot')?.getAttribute("data-indicator"), "attention");
   await go("Flows");
   assert.equal(reviewDot(), "attention", "Flows keeps the project notice");
   offline = true;
