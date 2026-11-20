@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { configureWatcher, pollWatcher } from "./watcher";
 import { resolveWatcherCheckout } from "./watcher-project";
+import { fixtureGitEnv, isolateGitDiscovery } from "./test-git-fixture";
 
 test("scheduled polls find a remote configured only in a linked checkout, then preserve state when it disappears", async () => {
   const root = mkdtempSync(join(tmpdir(), "watch-project-"));
@@ -13,6 +14,7 @@ test("scheduled polls find a remote configured only in a linked checkout, then p
   const key = { repo: "team/reviews", repositoryId: "R_test", viewer: "fixture" };
   const previousDir = process.env.KERYX_DATA_DIR,
     previousPath = process.env.PATH;
+  const restore = isolateGitDiscovery();
   const git = (cwd: string, ...args: string[]) =>
     execFileSync(
       "git",
@@ -27,7 +29,7 @@ test("scheduled polls find a remote configured only in a linked checkout, then p
         "commit.gpgSign=false",
         ...args,
       ],
-      { cwd, stdio: "pipe" },
+      { cwd, stdio: "pipe", env: fixtureGitEnv() },
     );
   try {
     mkdirSync(main);
@@ -65,6 +67,7 @@ test("scheduled polls find a remote configured only in a linked checkout, then p
     expect(missing.lastError).toContain("connected");
     expect(missing.events).toEqual([]);
   } finally {
+    restore();
     if (previousDir === undefined) delete process.env.KERYX_DATA_DIR;
     else process.env.KERYX_DATA_DIR = previousDir;
     if (previousPath === undefined) delete process.env.PATH;

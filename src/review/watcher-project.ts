@@ -54,10 +54,11 @@ export async function resolveWatcherCheckout(projectRoot: string, repo: string):
   );
 }
 
-export async function mainCheckout(cwd: string) {
+export async function mainCheckout(cwd: string, env?: NodeJS.ProcessEnv) {
   try {
     const { stdout } = await exec("git", ["worktree", "list", "--porcelain", "-z"], {
       cwd,
+      env,
       timeout: 5000,
       maxBuffer: 8 * 1024 * 1024,
     });

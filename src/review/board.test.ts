@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { runReviewBoard } from "../commands/review-board";
 import { listReviewCards, verifyScheduledSubject } from "./board";
 import { configuredRepositories, selectRepository } from "./board-github";
+import { fixtureGitEnv, isolateGitDiscovery } from "./test-git-fixture";
 
 const repo = "org/base";
 const end = { hasNextPage: false, endCursor: null };
@@ -36,17 +37,20 @@ test("selects origin or an explicitly connected base repo, excludes push URLs an
 test("--repositories reads configured Git remotes even before any remote or gh access is available", async () => {
   const cwd = await mkdtemp(join(tmpdir(), "review-remotes-"));
   const log = spyOn(console, "log").mockImplementation(() => {});
+  const restore = isolateGitDiscovery();
   try {
-    execFileSync("git", ["init", "--quiet"], { cwd });
+    const env = fixtureGitEnv();
+    execFileSync("git", ["init", "--quiet"], { cwd, env });
     await runReviewBoard(["--json", "--repositories"], cwd);
     expect(log).toHaveBeenLastCalledWith("[]");
-    execFileSync("git", ["remote", "add", "origin", "https://github.com/org/base.git"], { cwd });
+    execFileSync("git", ["remote", "add", "origin", "https://github.com/org/base.git"], { cwd, env });
     await runReviewBoard(["--json", "--repositories"], cwd);
     expect(log).toHaveBeenLastCalledWith(JSON.stringify([repo]));
     for (const [flag, value] of [["--state", "open"], ["--repo", repo], ["--number", "1"]] as const) {
       await expect(runReviewBoard(["--json", "--repositories", flag, value], cwd)).rejects.toThrow("--repositories");
     }
   } finally {
+    restore();
     log.mockRestore();
     await rm(cwd, { recursive: true, force: true });
   }
@@ -55,13 +59,14 @@ test("--repositories reads configured Git remotes even before any remote or gh a
 test("Desktop can decode a large Review board from the CLI stdout pipe", async () => {
   const cwd = await mkdtemp(join(tmpdir(), "review-pipe-"));
   try {
-    execFileSync("git", ["init", "--quiet"], { cwd });
-    execFileSync("git", ["remote", "add", "origin", "https://github.com/org/base.git"], { cwd });
+    const env = fixtureGitEnv();
+    execFileSync("git", ["init", "--quiet"], { cwd, env });
+    execFileSync("git", ["remote", "add", "origin", "https://github.com/org/base.git"], { cwd, env });
     const rows = Array.from({ length: 50 }, (_, i) => ({ ...card(i + 1), title: "ревью ✓".repeat(3_000) }));
     await writeFile(join(cwd, "response.json"), JSON.stringify({ data: page(rows, end) }));
     await writeFile(join(cwd, "gh"), '#!/bin/sh\nexec cat "$PWD/response.json"\n', { mode: 0o700 });
     const cli = Bun.spawn([process.execPath, join(import.meta.dir, "../cli.ts"), "review", "board", "--json"], {
-      cwd, stdout: "pipe", stderr: "pipe", env: { ...process.env, PATH: cwd + ":" + process.env.PATH },
+      cwd, stdout: "pipe", stderr: "pipe", env: { ...env, PATH: cwd + ":" + env.PATH },
     });
     const [status, output] = await Promise.all([cli.exited, new Response(cli.stdout).text()]);
     expect(status).toBe(0);
@@ -72,8 +77,15 @@ test("Desktop can decode a large Review board from the CLI stdout pipe", async (
 });
 
 test("lists all pages once and maps assignments, team requests and current-head CI", async () => {
-  const results = [page([card(1)], more), page([card(1), card(2)], end)];
-  const list = await listReviewCards(repo, [repo], "all", queryFrom(results));
+  const requests: Record<string, string | number>[] = [];
+  const list = await listReviewCards(repo, [repo], "all", async <T>(query: string, vars: Record<string, string | number>) => {
+    requests.push(vars);
+    if (!query.includes("pullRequests(")) throw new Error("Unexpected GraphQL operation.");
+    if (vars.cursor === undefined) return page([card(1)], more) as T;
+    if (vars.cursor === more.endCursor) return page([card(1), card(2)], end) as T;
+    throw new Error("Unexpected pull request cursor.");
+  });
+  expect(requests).toEqual([{ owner: "org", name: "base" }, { owner: "org", name: "base", cursor: "next" }]);
   expect(list.cards.map((pr) => pr.number)).toEqual([1, 2]);
   expect(list.cards[0]).toMatchObject({ assignees: ["assigned"], reviewers: ["org/platform"], ci: "passed", draft: true });
   expect(list.warnings).toEqual([]);
@@ -91,8 +103,25 @@ test("reported access loss on a later page is fatal", async () => {
 });
 
 test("a nested page completes the filter values", async () => {
-  const pr = { ...card(7), assignees: { nodes: [], pageInfo: more } };
-  const result = await listReviewCards(repo, [repo], "open", queryFrom([page([pr], end), { viewer: { login: "me" }, repository: { id: "repo-id", pullRequest: { assignees: identities(["last"]) } } }]));
+  const nestedMore = { hasNextPage: true, endCursor: "assignees-next" };
+  const pr = { ...card(7), assignees: { nodes: [], pageInfo: nestedMore } };
+  const requests: Record<string, string | number>[] = [];
+  const result = await listReviewCards(repo, [repo], "open", async <T>(query: string, vars: Record<string, string | number>) => {
+    requests.push(vars);
+    if (query.includes("pullRequests(") && vars.cursor === undefined) return page([pr], more) as T;
+    if (query.includes("pullRequests(") && vars.cursor === more.endCursor) return page([card(8)], end) as T;
+    if (query.includes("pullRequest(") && query.includes("assignees(") &&
+        vars.number === 7 && vars.cursor === nestedMore.endCursor) {
+      return { viewer: { login: "me" }, repository: { id: "repo-id", pullRequest: { assignees: identities(["last"]) } } } as T;
+    }
+    throw new Error("Unexpected GraphQL operation, cursor or PR number.");
+  });
+  expect(requests).toEqual([
+    { owner: "org", name: "base" },
+    { owner: "org", name: "base", number: 7, cursor: "assignees-next" },
+    { owner: "org", name: "base", cursor: "next" },
+  ]);
+  expect(result.cards.map(pr => pr.number)).toEqual([7, 8]);
   expect(result.cards[0]?.assignees).toEqual(["last"]);
   expect(result.warnings).toEqual([]);
 });

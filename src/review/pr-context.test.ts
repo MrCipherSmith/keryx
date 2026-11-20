@@ -5,13 +5,16 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { DeskRunStore } from "./desk-run-store";
 import { collectPrContext, parseProjectPr, prForFlow, readLinkedFlows } from "./pr-context";
+import { fixtureGitEnv, isolateGitDiscovery } from "./test-git-fixture";
 
 const url = "https://github.com/example/project/pull/42";
 const key = { repo: "example/project", viewer: "alice", repositoryId: "repo1", number: 42 };
 const pr = { title: "feature", state: "OPEN", baseRefOid: "a".repeat(40), headRefOid: "b".repeat(40) };
 let project: string, wt: string, store: DeskRunStore;
 let previousDataDir: string | undefined;
-const git = (...cmd: string[]) => execFileSync("git", ["-c", "core.hooksPath=/dev/null", "-C", project, ...cmd], { stdio: "ignore" });
+const git = (...cmd: string[]) => execFileSync("git", ["-c", "core.hooksPath=/dev/null", "-C", project, ...cmd], {
+  stdio: "ignore", env: fixtureGitEnv(),
+});
 
 beforeEach(() => {
   project = realpathSync(mkdtempSync(path.join(tmpdir(), "pr-context-")));
@@ -52,6 +55,25 @@ test("links by exact repo and PR across the primary and current checkout, with c
   expect(data.flows[1]?.checkout).toBe("worktree");
   const matches = await readLinkedFlows(wt, key.repo, 42, "persistence");
   expect(Object.keys(matches.flows[0]!.documents)).toEqual(["evidence"]);
+});
+
+test("reads PR context from the requested checkout rather than an inherited Git directory", async () => {
+  const other = path.join(project, "unrelated-repo");
+  execFileSync("git", ["init", "-q", other], { env: fixtureGitEnv() });
+  flow(other, "001", url, "unrelated project evidence");
+  flow(project, "001", url, "requested project evidence");
+  flow(wt, "002", url, "requested worktree evidence");
+  const restore = isolateGitDiscovery();
+  try {
+    process.env.GIT_DIR = path.join(other, ".git");
+    process.env.GIT_WORK_TREE = other;
+    const result = await readLinkedFlows(wt, key.repo, key.number);
+    expect(result.flows.map(item => item.documents["plan.md"])).toEqual([
+      "requested project evidence", "requested worktree evidence",
+    ]);
+  } finally {
+    restore();
+  }
 });
 test("standalone PR context retains the fixed target and only the authenticated viewer's run history", async () => {
   store.request(wt, key, { headSha: pr.headRefOid, baseSha: pr.baseRefOid });

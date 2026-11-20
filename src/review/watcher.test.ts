@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, mock, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -146,11 +146,9 @@ test("after app restart, a dead poll process does not hold the lease until the n
 });
 
 test("polling and pausing an unconfigured watcher leave it disabled", async () => {
-  await pollWatcher(cwd, key, {
-    fetch: async () => {
-      throw new Error("unexpected network access");
-    },
-  });
+  const fetch = mock(async () => board(card()));
+  expect((await pollWatcher(cwd, key, { fetch })).state).toBe("disabled");
+  expect(fetch).not.toHaveBeenCalled();
   expect(pauseWatcher(cwd, key).state).toBe("disabled");
   expect(listConfiguredWatchers(cwd)).toEqual([]);
   for (const interval of [0, 0.5, 1441])

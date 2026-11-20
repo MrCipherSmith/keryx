@@ -124,16 +124,24 @@ test("attributes parallel provider requests, leaves an unreported retry partial 
   const child = { participant: "reviewer" as const, reviewer: "review-logic", provider: "openrouter", model: "review-model" };
   const rootUsage = { inputTokens: 100, outputTokens: 10, cacheReadTokens: 90, totalTokens: 110 };
   const childUsage = { inputTokens: 20, outputTokens: 0, cacheWriteTokens: 5, cost: { amount: 0.003, currency: "USD" } };
-  const events = [
+  const started = [
     { type: "request_start", requestId: "1", ...parent },
-    { type: "request_usage", requestId: "1", ...parent, usage: rootUsage },
-    { type: "usage", usage: rootUsage },
     { type: "request_start", requestId: "2", ...child },
-    { type: "request_usage", requestId: "2", ...child, usage: childUsage },
+  ].reduce(foldEvent, emptyProgress());
+  const childFinished = foldEvent(started, { type: "request_usage", requestId: "2", ...child, usage: childUsage });
+  const reviewer = { inputTokens: 20, outputTokens: 0, cacheWriteTokens: 5, totalTokens: 20,
+    cost: childUsage.cost, reviewer: "review-logic", provider: "openrouter", model: "review-model" };
+  expect(childFinished.tokens).toBe(20);
+  expect(childFinished.usage).toMatchObject({ coordinator: {}, reviewers: [reviewer], partial: true });
+  expect(childFinished.usage?.reviewers[0]?.partial).toBeUndefined();
+  const bothFinished = foldEvent(childFinished, { type: "request_usage", requestId: "1", ...parent, usage: rootUsage });
+  expect(bothFinished.tokens).toBe(130);
+  expect(bothFinished.usage).toMatchObject({ coordinator: rootUsage, reviewers: [reviewer], partial: false });
+  const state = [
+    { type: "usage", usage: rootUsage },
     { type: "request_start", requestId: "3", ...child },
     { type: "turn_end", usage: rootUsage },
-  ];
-  const state = events.reduce(foldEvent, emptyProgress());
+  ].reduce(foldEvent, bothFinished);
   expect(state.tokens).toBe(130);
   expect(state.usage).toEqual({
     total: { inputTokens: 120, outputTokens: 10, totalTokens: 130, cacheReadTokens: 90, cacheWriteTokens: 5, reportedCosts: [childUsage.cost] },

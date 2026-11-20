@@ -135,11 +135,18 @@ test("request withdrawal and close remove pending items; repeated request acquir
   action({ kind: "save", rule: rule() });
   await tick(board(card()));
   await tick(board(requested()));
+  expect(status().activity).toMatchObject([{ state: "waiting" }]);
   await tick(board(card({ ci: "passed" })));
-  expect(status().activity[0]?.state).toBe("skipped");
+  const [withdrawn] = status().activity;
+  expect(withdrawn).toMatchObject({ state: "skipped", reason: "Team checks: Rule conditions no longer match" });
   await tick(board(requested()));
+  expect(status().activity).toEqual([
+    expect.objectContaining({ state: "waiting", headSha: "sha-1" }), withdrawn,
+  ]);
   await tick(board());
-  expect(status().activity.every((a) => a.state === "skipped")).toBe(true);
+  expect(status().activity).toEqual([
+    expect.objectContaining({ state: "skipped", headSha: "sha-1", reason: "Team checks: PR is no longer open" }), withdrawn,
+  ]);
 });
 
 test("pause, manual mode or deleting a rule fences enqueue after policy changed during preflight", async () => {

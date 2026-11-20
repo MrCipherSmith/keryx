@@ -1,15 +1,17 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, watch, writeFileSync } from "node:fs";
+import { devNull, tmpdir } from "node:os";
 import path from "node:path";
 import { hasDesktopReviewerEvidence } from "./desk-run-executor-recovery";
 import { finishExecution } from "./desk-run-service";
 import { executeDeskReview, recoverDeskExecution } from "./desk-run-executor";
 import { SAFE_BUN_SPAWN_ARGS } from "../lib/safe-exec";
-import type { ChildSpec } from "./autonomous-run";
+import { privateGitEnv, type ChildSpec } from "./autonomous-run";
 
-const git = (cwd: string, ...args: string[]) => execFileSync("git", ["-c", "core.hooksPath=/dev/null", ...args], { cwd, encoding: "utf8" }).trim();
+const fixtureGitEnv = () => ({ ...privateGitEnv(), GIT_CONFIG_GLOBAL: devNull, GIT_CONFIG_NOSYSTEM: "1" });
+const git = (cwd: string, ...args: string[]) => execFileSync("git", ["-c", "core.hooksPath=/dev/null", ...args],
+  { cwd, env: fixtureGitEnv(), encoding: "utf8" }).trim();
 let root: string, cwd: string, runDir: string, baseSha: string, headSha: string;
 const skill = ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md";
 
@@ -48,6 +50,38 @@ function packageAt(spec: ChildSpec, target: Record<string, unknown>, coverage: u
   writeFileSync(path.join(dir, "report.md"), "## Findings\nHandle missing repository");
 }
 
+test("fixture commands read the selected temporary repository when the caller points Git at a different one", () => {
+  const other = path.join(root, "other-repo");
+  mkdirSync(other);
+  git(other, "init", "--quiet", "-b", "other");
+  const savedDir = process.env.GIT_DIR, savedTree = process.env.GIT_WORK_TREE;
+  try {
+    process.env.GIT_DIR = path.join(other, ".git");
+    process.env.GIT_WORK_TREE = other;
+    expect(git(cwd, "branch", "--show-current")).toBe("base");
+    expect(git(cwd, "rev-parse", "HEAD")).toBe(baseSha);
+    expect(git(other, "branch", "--show-current")).toBe("other");
+  } finally {
+    if (savedDir === undefined) delete process.env.GIT_DIR; else process.env.GIT_DIR = savedDir;
+    if (savedTree === undefined) delete process.env.GIT_WORK_TREE; else process.env.GIT_WORK_TREE = savedTree;
+  }
+});
+
+function preparedPackageAt(spec: ChildSpec) {
+  const role = "review-logic", pkg = ".metaproject/reviews/pkg", dir = path.join(spec.cwd, pkg);
+  packageAt(spec, { base: baseSha, head: headSha }, [{ reviewer: role, status: "run" }]);
+  mkdirSync(path.join(dir, "slices"));
+  mkdirSync(path.join(dir, "raw"));
+  const file = `raw/${role}-w1.txt`;
+  writeFileSync(path.join(dir, "plan.json"), JSON.stringify({ desktopDispatch: `${pkg}/desktop-dispatch.json`, roster: [role], dispatches: 1 }));
+  writeFileSync(path.join(dir, "desktop-dispatch.json"), JSON.stringify({ calls: [{ label: role, save_result_to: `${pkg}/${file}` }], routedOut: [] }));
+  writeFileSync(path.join(dir, "slices/manifest.json"), JSON.stringify({ schemaVersion: 1, maxBytes: 100, waveBytes: 100,
+    slices: [{ id: "slice-01", bytes: 10, files: ["src.ts"], roles: [role], depth: "light" }] }));
+  writeFileSync(path.join(dir, "coverage.json"), JSON.stringify({ tracked: true, counts: { uncovered: 0 } }));
+  const findings = JSON.parse(readFileSync(path.join(dir, "findings.json"), "utf8"));
+  writeFileSync(path.join(dir, file), "STATUS: DONE\nREVIEW_RESULT:\n" + JSON.stringify({ reviewer: role, status: "DONE", slices: ["slice-01"], findings }));
+}
+
 test("runs the orchestrator on pinned Git objects with trusted controls, leaving the working branch untouched and retaining the package", async () => {
   const phases: string[] = [];
   const context = { version: 1 as const, pr: { url: "https://github.com/example/project/pull/12", title: "linked PR", state: "OPEN", baseSha, headSha }, flows: [], totalFlows: 0, history: [], totalRuns: 0 };
@@ -64,14 +98,14 @@ test("runs the orchestrator on pinned Git objects with trusted controls, leaving
       expect(git(spec.cwd, "rev-parse", "HEAD")).toBe(headSha);
       expect(git(spec.cwd, "show", headSha + ":src.ts")).toBe("review me");
       const scope = execFileSync(process.execPath, [...SAFE_BUN_SPAWN_ARGS, path.resolve(import.meta.dir, "../cli.ts"), "review", "scope", "--ref", baseSha, "--json"],
-        { cwd: spec.cwd, encoding: "utf8", timeout: 30_000 });
+        { cwd: spec.cwd, env: fixtureGitEnv(), encoding: "utf8", timeout: 30_000 });
       expect(JSON.stringify(JSON.parse(scope))).toContain("src.ts");
       expect(readFileSync(path.join(spec.cwd, skill), "utf8")).toBe("trusted skill");
       expect(existsSync(path.join(spec.cwd, "bunfig.toml"))).toBe(false);
       expect(spec.argv.join(" ")).toContain(`keryx review plan --target https://github.com/example/project/pull/12 --ref ${baseSha} --head ${headSha} --host keryx-shell`);
       expect(spec.argv.join(" ")).not.toContain(" --unattended");
       expect(spec.argv.join(" ")).not.toContain("Open one more round");
-      packageAt(spec, { base: baseSha, head: headSha }, [{ reviewer: "review-logic", status: "run" }]);
+      preparedPackageAt(spec);
       writeFileSync(spec.eventsFile, [
         { type: "tool_call", name: "bash", input: JSON.stringify({ command: "keryx review ingest" }) },
         { type: "request_usage", requestId: "co", participant: "coordinator", usage: { inputTokens: 70, outputTokens: 10 } },
@@ -95,6 +129,16 @@ test("runs the orchestrator on pinned Git objects with trusted controls, leaving
   expect(existsSync(path.join(runDir, "checkout"))).toBe(false);
   expect(existsSync(path.join(runDir, "package", "report.md"))).toBe(true);
   expect(JSON.parse(readFileSync(path.join(runDir, "execution-result.json"), "utf8"))).toEqual(result);
+});
+
+test("a closed prepared Desktop package without a reviewer participation receipt retains partial coverage", async () => {
+  const result = await executeDeskReview(options(), { selectModel, remoteUrl: cwd, revision, spawn(spec) {
+    preparedPackageAt(spec);
+    writeFileSync(spec.eventsFile, JSON.stringify({ type: "request_usage", requestId: "co", participant: "coordinator",
+      usage: { inputTokens: 70, outputTokens: 10 } }) + "\n");
+    return { exited: Promise.resolve(0), kill() {} };
+  } });
+  expect(result).toMatchObject({ outcome: "incomplete", coverage: "partial", checkedBase: baseSha, checkedHead: headSha });
 });
 
 test("an advancing remote base keeps the API-pinned range and loads controls from that exact base", async () => {
@@ -203,16 +247,24 @@ test.skipIf(process.platform === "win32")("a real child process starts only afte
   const ready = path.join(root, "started");
   const guard = path.join(root, "child.json");
   writeFileSync(entry, 'require("node:fs").writeFileSync(process.argv[2],"started")');
+  // The guard loop invokes sleep only after observing that the PID file is absent.
+  const bin = path.join(root, "bin");
+  mkdirSync(bin);
+  const waiting = path.join(root, "guard-waiting");
+  writeFileSync(path.join(bin, "sleep"), '#!/bin/sh\n: > "$TEST_GUARD_WAITING"\nexec /bin/sleep "$@"\n', { mode: 0o755 });
+  const reached = Promise.withResolvers<void>();
+  const observer = watch(root, () => { if (existsSync(waiting)) reached.resolve(); });
+  observer.on("error", reached.reject);
   const spawned = defaultSpawn({ execPath: process.execPath, script: entry }, guard)({
-    cwd: root, argv: [ready], env: {}, logFile: path.join(root, "child.log"), eventsFile: "", answersFile: "", runDir: root, stdin: "ignore",
+    cwd: root, argv: [ready], env: { PATH: bin + path.delimiter + process.env.PATH, TEST_GUARD_WAITING: waiting }, logFile: path.join(root, "child.log"), eventsFile: "", answersFile: "", runDir: root, stdin: "ignore",
   });
   try {
-    await Bun.sleep(100);
+    await Promise.race([reached.promise, spawned.exited.then(() => { throw new Error("child exited before the PID guard was observed"); })]);
     expect(existsSync(ready)).toBe(false);
     writeFileSync(guard, JSON.stringify({ pid: spawned.pid }));
     expect(await spawned.exited).toBe(0);
     expect(existsSync(ready)).toBe(true);
-  } finally { spawned.kill(); }
+  } finally { observer.close(); spawned.kill(); }
 });
 
 test("a scheduled run rechecks access after fetching objects and before the model process starts", async () => {
@@ -291,21 +343,33 @@ test("CI regressing during checkout is explicitly known not to have spent a sche
 });
 
 test("the default manual review can pass 250k tokens and finish", async () => {
-  const result = await executeDeskReview(options(), {
+  const initialPoll = Promise.withResolvers<ChildSpec>();
+  const usageSeen = Promise.withResolvers<void>();
+  const exit = Promise.withResolvers<number>();
+  let child: ChildSpec | undefined;
+  let killed = false;
+  const execution = executeDeskReview({ ...options(), onProgress(progress) {
+    if (child && progress.tokens === 0) initialPoll.resolve(child);
+    if (progress.tokens === 300000) usageSeen.resolve();
+  } }, {
     selectModel, remoteUrl: cwd, revision,
     spawn(spec) {
-      writeFileSync(spec.eventsFile, JSON.stringify({ type: "usage", usage: { totalTokens: 300000 } }) + "\n");
-      let finish!: (code: number) => void;
-      const exited = new Promise<number>(resolve => { finish = resolve; });
-      // Leave usage visible through a real executor poll before closing the package.
-      const timer = setTimeout(() => {
-        packageAt(spec, { base: baseSha, head: headSha }, [{ reviewer: "review-logic", status: "run" }]);
-        finish(0);
-      }, 1800);
-      return { exited, kill() { clearTimeout(timer); finish(128); } };
+      child = spec;
+      return { exited: exit.promise, kill() { killed = true; exit.resolve(128); } };
     },
   });
-  expect(result.outcome).toBe("complete");
+  const endedEarly = execution.then(result => { throw new Error(`Executor exited before the controlled poll: ${result.reason}`); });
+  try {
+    const spec = await Promise.race([initialPoll.promise, endedEarly]);
+    writeFileSync(spec.eventsFile, JSON.stringify({ type: "usage", usage: { totalTokens: 300000 } }) + "\n");
+    await Promise.race([usageSeen.promise, endedEarly]);
+    expect(killed).toBe(false);
+    packageAt(spec, { base: baseSha, head: headSha }, [{ reviewer: "review-logic", status: "run" }]);
+  } finally {
+    exit.resolve(0);
+    await execution;
+  }
+  expect((await execution).outcome).toBe("complete");
 });
 
 test("an interrupted worker recovers measured requests even before it opened a package", () => {

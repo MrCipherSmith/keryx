@@ -3,6 +3,7 @@ import { existsSync, realpathSync } from "node:fs";
 import path from "node:path";
 import { flowsRoot } from "../flow/store";
 import { gitToplevel } from "../lib/clone-scope";
+import { withoutGitDiscoveryOverrides } from "../lib/git-env";
 import type { LinkedFlowContext } from "./board-detail-types";
 import type { FlowState } from "../flow/types";
 import { readExistingReviews } from "./desk-run-legacy";
@@ -25,7 +26,8 @@ export function parseProjectPr(value: unknown) {
 }
 
 async function projectRoots(cwd: string) {
-  const [primary, current] = await Promise.all([mainCheckout(cwd), gitToplevel(cwd)]);
+  const env = withoutGitDiscoveryOverrides(process.env);
+  const [primary, current] = await Promise.all([mainCheckout(cwd, env), gitToplevel(cwd, env)]);
   return [...new Set([primary, realpathSync(current ?? cwd)])];
 }
 function* flowRefs(roots: string[], id?: string, wanted?: string) {

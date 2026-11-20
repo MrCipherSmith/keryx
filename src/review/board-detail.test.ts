@@ -10,15 +10,17 @@ function page(nodes: unknown[], endCursor: string | null = null) {
   return { nodes, pageInfo: { hasNextPage: endCursor !== null, endCursor } };
 }
 
+const checks = () => ({ statusCheckRollup: { contexts: page([
+  { __typename: "CheckRun", id: "check", name: "Build", status: "COMPLETED", conclusion: "FAILURE", detailsUrl: "https://ci.example/run" },
+]) } });
+
 function fixture(failComments = false): DetailQuery {
   return async (query, vars) => {
     if (query.includes("query ReviewDetailIdentity")) return { viewer: { login: "viewer" }, repository: {
       id: "repo-id", pullRequest: { id: "pr-id", headRefOid: "abc", commits: { nodes: [{ commit: { id: "commit-id", oid: "abc" } }] } },
     } };
     if (query.includes("on PullRequestReviewThread")) return { viewer: { login: "viewer" }, node: { comments: page([message("reply", true)]) } };
-    if (query.includes("on Commit")) return { viewer: { login: "viewer" }, node: { statusCheckRollup: { contexts: page([
-      { __typename: "CheckRun", id: "check", name: "Build", status: "COMPLETED", conclusion: "FAILURE", detailsUrl: "https://ci.example/run" },
-    ]) } } };
+    if (query.includes("on Commit")) return { viewer: { login: "viewer" }, node: checks() };
     if (query.includes("reviewThreads(")) return { viewer: { login: "viewer" }, node: { reviewThreads: page([
       { id: "thread", path: "main.ts", line: 3, isOutdated: false, isResolved: true, comments: page([message("root")], "next") },
     ]) } };
@@ -66,10 +68,13 @@ describe("readReviewBoardDetail", () => {
     expect(pages.comments + pages.replies).toBeLessThan(16);
     expect(Buffer.byteLength(JSON.stringify(detail)) + 1).toBeLessThan(32 * 1024 * 1024);
   });
-  test("revoked access or a changed viewer invalidates all previously fetched detail", async () => {
+  test.each([
+    ["revoked access with the same viewer", { viewer: { login: "viewer" }, node: null }],
+    ["a changed viewer with a valid checks node", { viewer: { login: "other" }, node: checks() }],
+  ] as const)("%s invalidates pull request detail", async (_scenario, checksPage) => {
     const read = fixture();
     const switched: DetailQuery = (query, vars) => query.includes("on Commit")
-      ? Promise.resolve({ viewer: { login: "other" }, node: null }) : read(query, vars);
+      ? Promise.resolve(checksPage) : read(query, vars);
     await expect(readReviewBoardDetail("org/repo", 1, ".", switched)).rejects.toThrow("access:");
   });
 
