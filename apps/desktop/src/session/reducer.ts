@@ -18,7 +18,7 @@ import { applySubagentEvent, MAX_SUBAGENT_RESULT_CHARS, runningSubagents, type S
 import { isLegacySystemText, isSystemMeta, parseSystemNote } from "./systemNote";
 
 export type Item =
-  | { kind: "user"; id: number; text: string; messageId?: string | null; context?: import("./userPrompt").UserPromptContext }
+  | { kind: "user"; id: number; text: string; messageId?: string | null; context?: import("./userPrompt").UserPromptContext; failed?: boolean }
   | { kind: "agent"; id: number; text: string; messageId?: string | null }
   | { kind: "thought"; id: number; text: string; messageId?: string | null }
   | {
@@ -453,6 +453,8 @@ export type Action =
   /** Session updates coalesced into one render, each routed to the session it names. */
   | { t: "updates"; updates: readonly RoutedUpdate[] }
   | { t: "userSent"; sessionId: string; text: string; context?: import("./userPrompt").UserPromptContext }
+  /** session/prompt was rejected: flags the optimistic user item (`itemId`, default the last user item) as failed. */
+  | { t: "userSendFailed"; sessionId: string; itemId?: number }
   | { t: "notice"; sessionId: string; level: "info" | "warn" | "error"; text: string }
   | { t: "busy"; sessionId: string; busy: boolean }
   /** A command card; with `replaceId` it takes the place of that card (a view acting on itself). */
@@ -531,6 +533,14 @@ export function reducer(state: WindowState, a: Action): WindowState {
       return routeUpdates(state, a.updates);
     case "userSent":
       return withConv(state, a.sessionId, (c) => ({ ...c, nextId: c.nextId + 1, items: [...c.items, { kind: "user", id: c.nextId, text: a.text, ...(a.context ? { context: a.context } : {}) }] }));
+    case "userSendFailed":
+      return withConv(state, a.sessionId, (c) => {
+        const at = a.itemId !== undefined
+          ? c.items.findIndex((i) => i.kind === "user" && i.id === a.itemId)
+          : c.items.map((i) => i.kind).lastIndexOf("user");
+        if (at < 0) return c;
+        return { ...c, items: c.items.map((i, n) => (n === at && i.kind === "user" ? { ...i, failed: true } : i)) };
+      });
     case "notice":
       return withConv(state, a.sessionId, (c) => ({
         ...c,

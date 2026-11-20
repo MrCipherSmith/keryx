@@ -433,7 +433,7 @@ setInterval(() => {
 // ---- ACP process per connection --------------------------------------------
 
 interface Conn {
-  attachmentOwner: symbol;
+  attachmentOwner: ChatOwner;
   proc: Subprocess<"pipe", "pipe", "pipe"> | null;
   root: string | null;
   gen: number;
@@ -538,13 +538,21 @@ const CHAT_STORAGE_FILES = 512;
 const RAW_CHUNK = 192 * 1024;
 const BASE64_CHUNK = 4 * (RAW_CHUNK / 3);
 
+interface ChatOwner {
+  closed: boolean;
+}
+
 interface ChatAttachment {
-  owner: symbol;
+  owner: ChatOwner;
   path: string;
   size: number;
   mimeType?: string;
   deleting: boolean;
+  committed: boolean;
 }
+
+const MAX_CHAT_PREVIEWS = 3;
+let activeChatPreviews = 0;
 
 const chatAttachments = new Map<string, ChatAttachment>();
 let chatAttachmentBytes = 0;
@@ -605,14 +613,14 @@ function chatImageExtension(mimeType: unknown, bytes: Buffer): string {
 
 type AttachmentTarget = { extension: string } | { mimeType: string };
 
-async function saveChatFile(owner: symbol, { extension, data }: Json): Promise<string> {
+async function saveChatFile(owner: ChatOwner, { extension, data }: Json): Promise<string> {
   if (typeof extension !== "string" || !extension || extension.length > 12 || /[^a-z0-9]/i.test(extension)) {
     throw new Error("Invalid attachment extension");
   }
   return writeChatAttachment(owner, data, { extension });
 }
 
-async function saveChatImage(owner: symbol, { mimeType, data }: Json): Promise<string> {
+async function saveChatImage(owner: ChatOwner, { mimeType, data }: Json): Promise<string> {
   if (typeof mimeType !== "string") throw new Error("Unsupported pasted image");
   return writeChatAttachment(owner, data, { mimeType });
 }
@@ -630,7 +638,7 @@ async function removeChatFile(path: string): Promise<void> {
   }
 }
 
-async function writeChatAttachment(owner: symbol, data: unknown, target: AttachmentTarget): Promise<string> {
+async function writeChatAttachment(owner: ChatOwner, data: unknown, target: AttachmentTarget): Promise<string> {
   if (typeof data !== "string") throw new Error("Invalid attachment data");
   const size = decodedAttachmentSize(data);
   if (chatAttachmentCount >= CHAT_STORAGE_FILES || chatAttachmentBytes + size > CHAT_STORAGE_BYTES) {
@@ -652,7 +660,10 @@ async function writeChatAttachment(owner: symbol, data: unknown, target: Attachm
     } finally {
       await file.close();
     }
-    chatAttachments.set(path, { owner, path, size, mimeType, deleting: false });
+    // No await between this check and set(): the close handler cannot miss this entry. If the
+    // connection closed during the save, throwing here makes the catch unlink the file and release quota.
+    if (owner.closed) throw new Error("Connection closed before the attachment was saved");
+    chatAttachments.set(path, { owner, path, size, mimeType, deleting: false, committed: false });
     return path;
   } catch (error) {
     try {
@@ -668,7 +679,7 @@ async function writeChatAttachment(owner: symbol, data: unknown, target: Attachm
   }
 }
 
-async function discardChatAttachment(owner: symbol, path: unknown): Promise<null> {
+async function discardChatAttachment(owner: ChatOwner, path: unknown): Promise<null> {
   const entry = typeof path === "string" ? chatAttachments.get(path) : undefined;
   if (!entry || entry.owner !== owner || entry.deleting) {
     throw new Error("Chat attachment is not available to this connection");
@@ -683,6 +694,41 @@ async function discardChatAttachment(owner: symbol, path: unknown): Promise<null
   chatAttachments.delete(entry.path);
   releaseChatReservation(entry.size);
   return null;
+}
+
+function commitChatAttachments(owner: ChatOwner, paths: unknown): null {
+  if (!Array.isArray(paths) || paths.some((p) => typeof p !== "string")) {
+    throw new Error("Invalid attachment paths");
+  }
+  const entries: ChatAttachment[] = [];
+  for (const path of paths as string[]) {
+    const entry = chatAttachments.get(path);
+    if (!entry || entry.owner !== owner || entry.deleting || owner.closed) {
+      throw new Error("Chat attachment is not available to this connection");
+    }
+    entries.push(entry);
+  }
+  for (const entry of entries) entry.committed = true;
+  return null;
+}
+
+/** Mark the connection closed and delete its uncommitted (draft) files, releasing their quota. */
+async function cleanupChatOwner(owner: ChatOwner): Promise<void> {
+  owner.closed = true;
+  const drafts = [...chatAttachments.values()].filter((e) => e.owner === owner && !e.committed && !e.deleting);
+  await Promise.all(
+    drafts.map(async (entry) => {
+      entry.deleting = true;
+      try {
+        await removeChatFile(entry.path);
+      } catch {
+        entry.deleting = false; // leftover stays charged until process exit
+        return;
+      }
+      chatAttachments.delete(entry.path);
+      releaseChatReservation(entry.size);
+    }),
+  );
 }
 
 async function previewChatImage(entry: ChatAttachment, mimeType: string): Promise<string> {
@@ -781,12 +827,20 @@ async function handle(ws: ServerWebSocket<Conn>, cmd: string, args: Json): Promi
       return saveChatImage(ws.data.attachmentOwner, args);
     case "discard_chat_attachment":
       return discardChatAttachment(ws.data.attachmentOwner, args.path);
+    case "commit_chat_attachments":
+      return commitChatAttachments(ws.data.attachmentOwner, args.paths);
     case "local_image": {
       const entry = typeof args.path === "string" ? chatAttachments.get(args.path) : undefined;
-      if (!ws.data.root || !entry?.mimeType || entry.deleting) {
+      if (!ws.data.root || !entry?.mimeType || entry.deleting || entry.owner !== ws.data.attachmentOwner) {
         throw new Error("The chat image is no longer available");
       }
-      return previewChatImage(entry, entry.mimeType);
+      if (activeChatPreviews >= MAX_CHAT_PREVIEWS) throw new Error("Chat attachments are busy; try again");
+      activeChatPreviews++;
+      try {
+        return await previewChatImage(entry, entry.mimeType);
+      } finally {
+        activeChatPreviews--;
+      }
     }
     case "settings_get":
       return loadSettings();
@@ -925,7 +979,7 @@ Bun.serve<Conn>({
     if (!/^http:\/\/(localhost|127\.0\.0\.1):1420$/.test(origin)) {
       return new Response("forbidden origin", { status: 403 });
     }
-    if (server.upgrade(req, { data: { proc: null, root: null, gen: 0, rootWaiters: [], attachmentOwner: Symbol() } })) return undefined;
+    if (server.upgrade(req, { data: { proc: null, root: null, gen: 0, rootWaiters: [], attachmentOwner: { closed: false } } })) return undefined;
     return new Response("keryx desktop dev bridge", { status: 426 });
   },
   websocket: {
@@ -945,6 +999,9 @@ Bun.serve<Conn>({
       }
     },
     close(ws) {
+      void cleanupChatOwner(ws.data.attachmentOwner).catch((error) => {
+        console.error("[bridge] chat attachment cleanup failed", error);
+      });
       stopProc(ws.data);
       for (const w of watched.values()) w.sockets.delete(ws);
     },

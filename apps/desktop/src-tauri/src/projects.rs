@@ -345,6 +345,8 @@ fn move_view(app: &AppHandle, view: &Webview, window: &Window) -> Result<(), Str
 fn release(app: &AppHandle, label: &str, close_tabs: bool) {
     // Never wait out the stop grace period here.
     app.state::<bridge::AppState>().view_closed(label);
+    // Unsent chat attachments of a closed view go with it; sent ones stay until the app exits.
+    crate::images::release_view(app, label);
     app.state::<flows::watch::FlowWatchers>().stop_window(label);
     app.state::<pty::PtyManager>().close_window(label);
     app.state::<panels::PanelRoots>().remove(label);

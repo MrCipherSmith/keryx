@@ -18,9 +18,9 @@ import { SessionInfoPanel } from "./SessionInfoPanel";
 import { SessionSidebar } from "./SessionSidebar";
 import { Transcript } from "./Transcript";
 import type { LocalAttachment } from "./chatImages";
-import { userPromptContext } from "./userPrompt";
+import { userPromptContext, type UserPromptContext } from "./userPrompt";
 import { findCommand } from "../acp/commands";
-import { discardChatAttachment, gitRepository, openExternal, pickFolder, saveChatFile, saveChatImage } from "../platform/commands";
+import { commitChatAttachments, discardChatAttachment, gitRepository, openExternal, pickFolder, saveChatFile, saveChatImage } from "../platform/commands";
 import { isTauri } from "../platform/backend";
 import { browserOpen } from "../platform/panels";
 import type { PrLinks } from "../components/prLinks";
@@ -168,7 +168,7 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
       () => { if (active) setRepo({ cwd, name: null }); },
     );
     return () => { active = false; };
-  }, [cwd, ready]);
+  }, [cwd]);
   const prLinks = useMemo<PrLinks>(() => ({
     repository: repo?.cwd === cwd ? repo.name ?? undefined : undefined,
     openExternal: (url) => void openExternal(url).catch((e) =>
@@ -183,6 +183,8 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
   const attachments = useMemo(() => picks.map((p) => ({ key: p.key, label: pickLabel(p), title: `${p.selector}\n${p.url}` })), [picks]);
   const send = async (text: string, imagePaths: readonly string[], local: readonly LocalAttachment[]) => {
     const hasLocal = imagePaths.length > 0 || local.length > 0;
+    // An unrecognized slash line never sends and never clears staged page picks.
+    if (text.startsWith("/") && !hasLocal) return run(text);
     const command = findCommand(state.commands, text);
     if (command && hasLocal) {
       toast({ level: "info", title: "Slash commands cannot carry attachments", body: "Remove the attachments or send a normal chat message." });
@@ -198,6 +200,16 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
     else if (!ok && state.busy) toast({ level: "info", title: "Attachments wait for this turn", body: "Send again when keryx finishes; your draft is kept." });
     return ok;
   };
+
+  const sendPrompt = s.sendPrompt;
+  const editMessage = useCallback(
+    (text: string, context?: UserPromptContext) => {
+      const ok = sendPrompt(text, undefined, context, true);
+      if (!ok) toast({ level: "error", title: "Could not send the edited message" });
+      return ok;
+    },
+    [sendPrompt, toast],
+  );
 
   const empty = (
     <div className="session-empty">
@@ -383,11 +395,7 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
           busy={state.busy}
           onRunCommand={(line, o) => run(line, o)}
           prLinks={prLinks}
-          onEditMessage={disabledReason === null && !state.busy ? (text, context) => {
-            const ok = s.sendPrompt(text, undefined, context, true);
-            if (!ok) toast({ level: "error", title: "Could not send the edited message" });
-            return ok;
-          } : undefined}
+          onEditMessage={disabledReason === null && !state.busy ? editMessage : undefined}
           subagents={state.subagents}
           onShowSubagent={showSubagent}
           replaying={state.replaying || (state.sessionId === null && state.opening)}
@@ -410,6 +418,7 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
             saveImage={saveChatImage}
             saveFile={saveChatFile}
             discardFile={discardChatAttachment}
+            onAttachmentsSent={(paths) => void commitChatAttachments([...paths]).catch(() => {})}
             pickAttachmentFolder={() => pickFolder("Add folder to message")}
             attachments={attachments}
             onRemoveAttachment={(key) => removePick(cwd, key)}

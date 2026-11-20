@@ -83,4 +83,32 @@ describe("renderAcpPromptContent", () => {
   test("empty prompt renders as an empty string", () => {
     expect(renderAcpPromptContent([])).toBe("");
   });
+
+  test("an empty text block is skipped: no leading blank lines in text or trustedText", () => {
+    const out = renderAcpPrompt([
+      { type: "text", text: "" },
+      { type: "text", text: "/help" },
+    ]);
+    expect(out.text).toBe("/help");
+    expect(out.trustedText).toBe("/help");
+  });
+
+  test("a prompt of only empty text blocks renders as an empty string", () => {
+    const out = renderAcpPrompt([
+      { type: "text", text: "" },
+      { type: "text", text: "" },
+    ]);
+    expect(out.text).toBe("");
+    expect(out.trustedText).toBe("");
+  });
+
+  test("non-empty text blocks are still joined with a blank line in text and trustedText", () => {
+    const out = renderAcpPrompt([
+      { type: "text", text: "a" },
+      { type: "text", text: "" },
+      { type: "text", text: "b" },
+    ]);
+    expect(out.text).toBe("a\n\nb");
+    expect(out.trustedText).toBe("a\n\nb");
+  });
 });

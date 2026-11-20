@@ -108,6 +108,52 @@ test("resend keeps exact indentation and the original attachment blocks", async 
   expect(sent).toEqual([[" /help", context]]);
 });
 
+test("copy of a picked-elements-only message copies the count, never page data", async () => {
+  const copied: string[] = [];
+  const original = Object.getOwnPropertyDescriptor(navigator.clipboard, "writeText");
+  Object.defineProperty(navigator.clipboard, "writeText", { configurable: true, value: async (text: string) => { copied.push(text); } });
+  try {
+    for (const [id, count] of [[11, 1], [12, 2]] as const) {
+      const context = {
+        images: [], local: [], pickedCount: count,
+        blocks: [{ type: "resource", resource: { uri: "keryx-desktop:picked-elements", text: "page data" } }],
+      };
+      await show([{ kind: "user", id, text: "", context }]);
+      await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Copy message"]')?.click());
+    }
+  } finally {
+    if (original) Object.defineProperty(navigator.clipboard, "writeText", original);
+    else Reflect.deleteProperty(navigator.clipboard, "writeText");
+  }
+  expect(copied).toEqual(["1 picked page element", "2 picked page elements"]);
+});
+
+test("focus returns to the Edit button after a successful resend", async () => {
+  await act(() => root.render(createElement(Transcript, {
+    items: [{ kind: "user", id: 21, text: "hello" }],
+    busy: false, replaying: false, empty: null,
+    onEditMessage: () => true,
+  })));
+  await act(() => host.querySelector<HTMLButtonElement>('[aria-label="Edit message"]')?.click());
+  expect(host.querySelector("textarea")).not.toBeNull();
+  await act(() => host.querySelector<HTMLButtonElement>('button[type="submit"]')?.click());
+  expect(host.querySelector("textarea")).toBeNull();
+  const edit = host.querySelector<HTMLButtonElement>('[aria-label="Edit message"]');
+  expect(edit).not.toBeNull();
+  expect(document.activeElement).toBe(edit);
+});
+
+test("a flattened replay shows an inline note and cannot be edited", async () => {
+  const text = "[external content abc-1 from keryx-desktop:picked-elements:\npage data";
+  await act(() => root.render(createElement(Transcript, {
+    items: [{ kind: "user", id: 31, text }],
+    busy: false, replaying: false, empty: null,
+    onEditMessage: () => true,
+  })));
+  expect(host.querySelector(".user-msg-note")?.textContent).toBe("Cannot resend: the saved history does not keep the original attachments. Send a new message with fresh attachments.");
+  expect(host.querySelector<HTMLButtonElement>('[aria-label="Edit message"]')?.disabled).toBe(true);
+});
+
 test("a literal image marker in message text is not treated as an attachment", async () => {
   const text = "Example\n\n[Local image attachments (use local tools to inspect):]\n/tmp/keryx-chat-images-test/example.png";
   await show([{ kind: "user", id: 1, text }]);

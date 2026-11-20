@@ -149,6 +149,7 @@ test("choosing a file from the plus menu saves it and sends its path", async () 
   expect(opened).toEqual(["opened"]);
   Object.defineProperty(input, "files", { value: [new File(["hello"], "notes.TXT", { type: "text/plain" })] });
   await act(async () => { input?.dispatchEvent(new Event("change", { bubbles: true })); });
+  await act(async () => { await new Promise((r) => setTimeout(r, 40)); });
   expect(stored).toEqual([["txt", "aGVsbG8="]]);
   expect(host.querySelector('[aria-label="Remove notes.TXT"]')?.tagName).toBe("BUTTON");
   await key("Enter");
@@ -164,7 +165,10 @@ test("discard releases unsent files but sending retains stored attachments", asy
   const input = host.querySelector<HTMLInputElement>('input[type="file"]');
   if (!input) throw new Error("File input is missing");
   Object.defineProperty(input, "files", { value: [new File(["draft"], "draft.txt", { type: "text/plain" })] });
-  const select = () => act(async () => { input.dispatchEvent(new Event("change", { bubbles: true })); });
+  const select = async () => {
+    await act(async () => { input.dispatchEvent(new Event("change", { bubbles: true })); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 40)); });
+  };
   await select();
   await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Remove draft.txt"]')?.click());
   expect(discarded).toEqual(["/tmp/file-1.txt"]);

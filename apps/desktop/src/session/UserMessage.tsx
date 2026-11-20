@@ -7,8 +7,9 @@ import { replayHasFlattenedContext, type UserPromptContext } from "./userPrompt"
 
 const NO_IMAGES: readonly string[] = [];
 
-export const UserMessage = memo(function UserMessage({ message: text, context, onEdit }: {
+export const UserMessage = memo(function UserMessage({ message: text, context, onEdit, failed }: {
   message: string;
+  failed?: boolean;
   context?: UserPromptContext;
   onEdit?: (text: string, context?: UserPromptContext) => boolean;
 }) {
@@ -27,7 +28,8 @@ export const UserMessage = memo(function UserMessage({ message: text, context, o
   const cancel = () => { returnFocus.current = true; setDraft(null); };
   const toast = useToast();
   const copy = async () => {
-    const ok = await copyText(text || [...paths, ...(context?.local.map((item) => item.path) ?? [])].join("\n"));
+    const pickedLabel = context?.pickedCount ? `${context.pickedCount} picked page ${context.pickedCount === 1 ? "element" : "elements"}` : "";
+    const ok = await copyText(text || [...paths, ...(context?.local.map((item) => item.path) ?? [])].join("\n") || pickedLabel);
     toast({ level: ok ? "ok" : "error", title: ok ? "Message copied" : "Could not copy message" });
   };
   return (
@@ -39,7 +41,7 @@ export const UserMessage = memo(function UserMessage({ message: text, context, o
         {draft === null ? text : (
           <form className="user-msg-edit" onSubmit={(e) => {
             e.preventDefault();
-            if ((draft.trim() || hasContext) && (context ? onEdit?.(draft, context) : onEdit?.(draft))) setDraft(null);
+            if ((draft.trim() || hasContext) && (context ? onEdit?.(draft, context) : onEdit?.(draft))) { returnFocus.current = true; setDraft(null); }
           }}>
             <textarea aria-label="Edit sent message" autoFocus rows={3} value={draft} onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Escape" && !e.nativeEvent.isComposing) { e.stopPropagation(); cancel(); } }} />
@@ -58,6 +60,8 @@ export const UserMessage = memo(function UserMessage({ message: text, context, o
             onClick={() => void copy()}><Icon name="copy" size={14} /></button>
         </div>
       ) : null}
+      {unavailable ? <div className="user-msg-note" role="note">Cannot resend: the saved history does not keep the original attachments. Send a new message with fresh attachments.</div> : null}
+      {failed ? <div className="user-msg-note is-failed" role="note">Not sent — edit to retry</div> : null}
     </div>
   );
 });

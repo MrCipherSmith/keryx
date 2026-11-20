@@ -619,7 +619,10 @@ export function useAcpSession(cwd: string) {
           else if (r?.stopReason === "refusal") notice("warn", "The model refused to continue.");
           else if (r?.stopReason === "cancelled") notice("info", "Stopped.");
         } catch (e) {
-          if (l.client === client) dispatch({ t: "notice", sessionId, level: "error", text: errMessage(e) });
+          if (l.client === client) {
+            dispatch({ t: "userSendFailed", sessionId });
+            dispatch({ t: "notice", sessionId, level: "error", text: errMessage(e) });
+          }
         } finally {
           if (l.reg.turns.get(sessionId) === turn) l.reg.turns.delete(sessionId);
           if (l.client === client) {

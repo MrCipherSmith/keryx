@@ -69,6 +69,34 @@ test("repository changes preserve unchanged links and close menus anchored on re
   expect(host.querySelector(".md a")?.getAttribute("href")).toBe("https://github.com/example/new/pull/9130");
 });
 
+test("soft-wrapped and inline-formatted PR references become links", async () => {
+  const text = "See PR\n#1254 and **PR** #77, but `PR #5` stays code.";
+  await act(() => root.render(createElement(Markdown, { text, prLinks: { repository: "example/project", openExternal: () => {} } })));
+  const hrefs = Array.from(host.querySelectorAll<HTMLAnchorElement>(".md a")).map((a) => a.getAttribute("href"));
+  expect(new Set(hrefs)).toEqual(new Set(["https://github.com/example/project/pull/1254", "https://github.com/example/project/pull/77"]));
+  expect(host.querySelector(".md code")?.querySelector("a")).toBeNull();
+});
+
+test("the PR link menu opens above a link at the bottom edge and stays on screen", async () => {
+  const original = Element.prototype.getBoundingClientRect;
+  const viewport = window.innerHeight;
+  const rect = (top: number, height: number) => ({ top, bottom: top + height, left: 10, right: 110, width: 100, height, x: 10, y: top, toJSON: () => ({}) }) as DOMRect;
+  Element.prototype.getBoundingClientRect = function (this: Element) {
+    return this.classList.contains("menu") ? rect(0, 70) : this.tagName === "A" ? rect(viewport - 5, 14) : original.call(this);
+  };
+  try {
+    await act(() => root.render(createElement(Markdown, { text: "See PR #1254", prLinks: { repository: "example/project", openExternal: () => {}, openInternal: () => {} } })));
+    await act(() => { host.querySelector(".md a")?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true })); });
+    const menu = host.querySelector<HTMLElement>('[role="menu"]');
+    expect(menu).not.toBeNull();
+    const top = parseFloat(menu?.style.top ?? "NaN");
+    expect(top < viewport - 5).toBe(true);
+    expect(top + 70 <= viewport).toBe(true);
+  } finally {
+    Element.prototype.getBoundingClientRect = original;
+  }
+});
+
 test("without a repository only explicit GitHub PR links can open", async () => {
   const opened: string[] = [];
   await act(() => root.render(createElement(Markdown, {

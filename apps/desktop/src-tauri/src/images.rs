@@ -83,12 +83,24 @@ pub fn read_image(link: &str, root: Option<&Path>, extra_roots: &[PathBuf]) -> R
     if !inside(&real, &roots) {
         return Err("Only images inside the project are shown".into());
     }
-    let meta = std::fs::metadata(&real).map_err(|e| e.to_string())?;
+    read_checked(&real, mime)
+}
+
+/// Size-cap and read an already canonical, already authorized image file.
+fn read_checked(real: &Path, mime: &str) -> Result<String, String> {
+    let meta = std::fs::metadata(real).map_err(|e| e.to_string())?;
     if !meta.is_file() || meta.len() > MAX_BYTES {
         return Err("The image is too large to show".into());
     }
-    let bytes = std::fs::read(&real).map_err(|e| e.to_string())?;
+    let bytes = std::fs::read(real).map_err(|e| e.to_string())?;
     Ok(format!("data:{mime};base64,{}", base64::engine::general_purpose::STANDARD.encode(bytes)))
+}
+
+/// Read an attachment that the registry already issued to the caller (image check and size cap kept).
+fn read_issued(disk_path: &Path) -> Result<String, String> {
+    let real = disk_path.canonicalize().map_err(|_| "The image is not there".to_string())?;
+    let mime = image_mime(&real).ok_or("Not an image file")?;
+    read_checked(&real, mime)
 }
 
 const MAX_CHAT_IMAGE_BYTES: usize = 5 << 20;
@@ -102,6 +114,7 @@ struct IssuedAttachment {
     disk_path: PathBuf,
     bytes: usize,
     deleting: bool,
+    committed: bool,
 }
 
 #[derive(Default)]
@@ -221,6 +234,7 @@ impl ChatImages {
                     disk_path,
                     bytes: bytes.len(),
                     deleting: false,
+                    committed: false,
                 });
                 Ok(path)
             }
@@ -233,6 +247,84 @@ impl ChatImages {
                 Err(message)
             }
         }
+    }
+
+    /// The on-disk path of an attachment issued to `owner` (and not being deleted).
+    fn authorize(&self, owner: &str, path: &str) -> Option<PathBuf> {
+        let store = self.store.lock().ok()?;
+        if store.closed {
+            return None;
+        }
+        store.issued.get(path)
+            .filter(|entry| entry.owner == owner && !entry.deleting)
+            .map(|entry| entry.disk_path.clone())
+    }
+
+    /// Mark owned attachments as sent; all-or-nothing.
+    fn commit(&self, owner: &str, paths: &[String]) -> Result<(), String> {
+        let mut store = self.store.lock().map_err(|_| STORAGE_UNAVAILABLE)?;
+        if store.closed {
+            return Err(STORAGE_UNAVAILABLE.into());
+        }
+        let all_owned = paths.iter().all(|path| {
+            store.issued.get(path).is_some_and(|entry| entry.owner == owner && !entry.deleting)
+        });
+        if !all_owned {
+            return Err("Chat attachment is not available to this view".into());
+        }
+        for path in paths {
+            if let Some(entry) = store.issued.get_mut(path) {
+                entry.committed = true;
+            }
+        }
+        Ok(())
+    }
+
+    /// Delete this owner's uncommitted attachments and give their budgets back.
+    fn release_owner(&self, owner: &str) {
+        let targets: Vec<(String, PathBuf)> = {
+            let Ok(mut store) = self.store.lock() else { return };
+            if store.closed {
+                return;
+            }
+            let mut targets = Vec::new();
+            for (path, entry) in store.issued.iter_mut() {
+                if entry.owner == owner && !entry.committed && !entry.deleting {
+                    entry.deleting = true;
+                    targets.push((path.clone(), entry.disk_path.clone()));
+                }
+            }
+            store.pending += targets.len();
+            targets
+        };
+        if targets.is_empty() {
+            return;
+        }
+
+        let results: Vec<(String, bool)> = targets
+            .into_iter()
+            .map(|(path, disk_path)| {
+                let removed = match std::fs::remove_file(disk_path) {
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+                    result => result,
+                };
+                (path, removed.is_ok())
+            })
+            .collect();
+
+        let Ok(mut store) = self.store.lock() else { return };
+        store.pending -= results.len();
+        for (path, removed) in results {
+            if removed {
+                if let Some(entry) = store.issued.remove(&path) {
+                    store.files -= 1;
+                    store.bytes -= entry.bytes;
+                }
+            } else if let Some(entry) = store.issued.get_mut(&path) {
+                entry.deleting = false;
+            }
+        }
+        self.changed.notify_all();
     }
 
     fn discard(&self, owner: &str, path: &str) -> Result<(), String> {
@@ -300,10 +392,36 @@ fn decode_attachment(data: &str) -> Result<Vec<u8>, String> {
     Ok(bytes)
 }
 
+const MAX_CHAT_JOBS: usize = 3;
+static CHAT_JOBS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// One of a few concurrent attachment jobs (saves and previews); returned on drop.
+struct ChatJob;
+
+impl ChatJob {
+    fn take() -> Result<Self, String> {
+        use std::sync::atomic::Ordering;
+        CHAT_JOBS
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| (n < MAX_CHAT_JOBS).then_some(n + 1))
+            .map(|_| Self)
+            .map_err(|_| "Chat attachments are busy; try again".to_string())
+    }
+}
+
+impl Drop for ChatJob {
+    fn drop(&mut self) {
+        CHAT_JOBS.fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
+    }
+}
+
 #[tauri::command]
 pub async fn save_chat_file(app: AppHandle, view: Webview, extension: String, data: String) -> Result<String, String> {
     let owner = view.label().to_owned();
-    tauri::async_runtime::spawn_blocking(move || app.state::<ChatImages>().save_file(&owner, &extension, &data))
+    let job = ChatJob::take()?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let _job = job;
+        app.state::<ChatImages>().save_file(&owner, &extension, &data)
+    })
         .await
         .map_err(|e| e.to_string())?
 }
@@ -311,7 +429,11 @@ pub async fn save_chat_file(app: AppHandle, view: Webview, extension: String, da
 #[tauri::command]
 pub async fn save_chat_image(app: AppHandle, view: Webview, mime_type: String, data: String) -> Result<String, String> {
     let owner = view.label().to_owned();
-    tauri::async_runtime::spawn_blocking(move || app.state::<ChatImages>().save(&owner, &mime_type, &data))
+    let job = ChatJob::take()?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let _job = job;
+        app.state::<ChatImages>().save(&owner, &mime_type, &data)
+    })
         .await
         .map_err(|e| e.to_string())?
 }
@@ -325,12 +447,30 @@ pub async fn discard_chat_attachment(app: AppHandle, view: Webview, path: String
 }
 
 #[tauri::command]
+pub async fn commit_chat_attachments(app: AppHandle, view: Webview, paths: Vec<String>) -> Result<(), String> {
+    let owner = view.label().to_owned();
+    tauri::async_runtime::spawn_blocking(move || app.state::<ChatImages>().commit(&owner, &paths))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// Drop a closed view's uncommitted attachments.
+pub fn release_view(app: &AppHandle, label: &str) {
+    app.state::<ChatImages>().release_owner(label);
+}
+
+#[tauri::command]
 pub async fn local_image(app: AppHandle, view: Webview, path: String) -> Result<String, String> {
     let owner = view.label().to_owned();
+    let job = ChatJob::take()?;
     tauri::async_runtime::spawn_blocking(move || {
+        let _job = job;
+        // Attachment previews are authorized only through the issued registry.
+        if let Some(disk_path) = app.state::<ChatImages>().authorize(&owner, path.trim()) {
+            return read_issued(&disk_path);
+        }
         let root = app.state::<PanelRoots>().get(&owner);
-        let mut extra_roots = vec![screenshots_dir()];
-        extra_roots.extend(app.state::<ChatImages>().root());
+        let extra_roots = vec![screenshots_dir()];
         read_image(&path, root.as_deref(), &extra_roots)
     })
     .await
@@ -401,6 +541,62 @@ mod tests {
         let replacement = storage.save_file("owner", "txt", "aGVsbG8=").unwrap();
         assert!(Path::new(&replacement).is_file());
         assert!(storage.save_file("owner", "txt", "").is_err());
+    }
+
+    #[test]
+    fn commit_protects_from_release_owner() {
+        let storage = ChatImages::default();
+        let kept = storage.save_file("owner", "txt", "aGVsbG8=").unwrap();
+        let draft = storage.save_file("owner", "txt", "aGVsbG8=").unwrap();
+        storage.commit("owner", &[kept.clone()]).unwrap();
+        storage.release_owner("owner");
+        assert!(Path::new(&kept).is_file());
+        assert!(!Path::new(&draft).exists());
+        let store = storage.store.lock().unwrap();
+        assert_eq!(store.files, 1);
+        assert_eq!(store.bytes, 5);
+        assert!(store.issued.contains_key(&kept));
+        assert!(!store.issued.contains_key(&draft));
+    }
+
+    #[test]
+    fn release_owner_removes_drafts_and_frees_budget() {
+        let storage = ChatImages::default();
+        {
+            let mut store = storage.store.lock().unwrap();
+            store.files = MAX_CHAT_STORAGE_FILES - 1;
+            store.bytes = MAX_CHAT_STORAGE_BYTES - 5;
+        }
+        let path = storage.save_file("owner", "txt", "aGVsbG8=").unwrap();
+        assert!(storage.save_file("owner", "txt", "").is_err());
+        storage.release_owner("owner");
+        assert!(!Path::new(&path).exists());
+        assert!(storage.authorize("owner", &path).is_none());
+        let again = storage.save_file("owner", "txt", "aGVsbG8=").unwrap();
+        assert!(Path::new(&again).is_file());
+    }
+
+    #[test]
+    fn another_owner_cannot_authorize_or_commit() {
+        let storage = ChatImages::default();
+        let png = "iVBORw0KGgo=";
+        let path = storage.save("owner", "image/png", png).unwrap();
+        assert!(storage.authorize("other", &path).is_none());
+        let disk = storage.authorize("owner", &path).unwrap();
+        assert_eq!(read_issued(&disk).unwrap(), format!("data:image/png;base64,{png}"));
+
+        let sibling = storage.root().unwrap().join("unissued.png");
+        std::fs::write(&sibling, b"\x89PNG\r\n\x1a\n").unwrap();
+        assert!(storage.authorize("owner", sibling.to_str().unwrap()).is_none());
+
+        assert!(storage.commit("other", &[path.clone()]).is_err());
+        assert!(storage.commit("owner", &[path.clone(), "missing".to_string()]).is_err());
+        storage.release_owner("other");
+        assert!(Path::new(&path).is_file());
+        // The failed commit was all-or-nothing, so the draft is still released.
+        storage.release_owner("owner");
+        assert!(!Path::new(&path).exists());
+        assert!(sibling.is_file());
     }
 
     #[test]

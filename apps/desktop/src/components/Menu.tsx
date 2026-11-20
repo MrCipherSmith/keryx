@@ -22,14 +22,16 @@ interface Props {
   items: MenuItem[];
   onClose: () => void;
   /** Open upward (composer chips sit at the bottom of the window). */
-  placement?: "below" | "above";
+  placement?: "below" | "above" | "auto";
+  /** Close when the anchor's nearest scrollable ancestor scrolls (the anchor moves away from the menu). */
+  closeOnScroll?: boolean;
   label: string;
   width?: number;
   footer?: ReactNode;
 }
 
 /** A keyboard-navigable popover menu anchored to a button. */
-export function Menu({ anchor, items, onClose, placement = "below", label, width = 280, footer }: Props) {
+export function Menu({ anchor, items, onClose, placement = "below", closeOnScroll = false, label, width = 280, footer }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top?: number; bottom?: number }>({ left: -9999, top: -9999 });
   useEscape(onClose);
@@ -38,7 +40,19 @@ export function Menu({ anchor, items, onClose, placement = "below", label, width
     if (!anchor) return;
     const r = anchor.getBoundingClientRect();
     const left = Math.max(8, Math.min(r.left, window.innerWidth - width - 8));
-    setPos(placement === "below" ? { left, top: r.bottom + 4 } : { left, bottom: window.innerHeight - r.top + 4 });
+    if (placement === "below") setPos({ left, top: r.bottom + 4 });
+    else if (placement === "above") setPos({ left, bottom: window.innerHeight - r.top + 4 });
+    else {
+      // auto: the menu is mounted off-screen first, so its real height is known here.
+      const margin = 8;
+      const vh = window.innerHeight;
+      const h = ref.current?.getBoundingClientRect().height ?? 0;
+      const spaceBelow = vh - r.bottom - 4 - margin;
+      const spaceAbove = r.top - 4 - margin;
+      const above = h > spaceBelow && spaceAbove > spaceBelow;
+      const wanted = above ? r.top - 4 - h : r.bottom + 4;
+      setPos({ left, top: Math.max(margin, Math.min(wanted, vh - h - margin)) });
+    }
     const first =
       ref.current?.querySelector<HTMLElement>('[role="menuitemradio"][aria-checked="true"]') ??
       ref.current?.querySelector<HTMLElement>('[role^="menuitem"]:not([disabled])');
@@ -54,6 +68,20 @@ export function Menu({ anchor, items, onClose, placement = "below", label, width
     window.addEventListener("mousedown", onDown, true);
     return () => window.removeEventListener("mousedown", onDown, true);
   }, [anchor, onClose]);
+
+  useLayoutEffect(() => {
+    if (!anchor || !closeOnScroll) return;
+    let scroller: HTMLElement | null = anchor.parentElement;
+    while (scroller) {
+      const s = getComputedStyle(scroller);
+      if (/(auto|scroll|overlay)/.test(`${s.overflowY} ${s.overflow}`)) break;
+      scroller = scroller.parentElement;
+    }
+    const target: HTMLElement | Window = scroller ?? window;
+    const onScroll = () => onClose();
+    target.addEventListener("scroll", onScroll, { passive: true });
+    return () => target.removeEventListener("scroll", onScroll);
+  }, [anchor, closeOnScroll, onClose]);
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     const all = Array.from(ref.current?.querySelectorAll<HTMLElement>('[role^="menuitem"]:not([disabled])') ?? []);

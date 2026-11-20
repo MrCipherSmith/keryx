@@ -258,6 +258,8 @@ button { font: inherit; }
 .sent-images:not(:last-child) { margin-bottom: var(--sp-2); }
 .sent-image { display: block; max-width: 100%; max-height: 180px; object-fit: contain; border-radius: var(--r-md); }
 .sent-image-label { font-size: var(--fs-sm); color: var(--fg-muted); }
+.user-msg-note { max-width: 85%; font-size: var(--fs-sm); color: var(--fg-muted); text-align: right; }
+.user-msg-note.is-failed { color: var(--danger); }
 .user-msg {
   max-width: 85%; padding: 9px 14px; background: var(--bg-sunken); border: 1px solid var(--border);
   border-radius: var(--r-xl) var(--r-xl) var(--r-sm) var(--r-xl); white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.55;

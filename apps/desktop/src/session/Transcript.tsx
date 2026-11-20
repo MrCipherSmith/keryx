@@ -400,7 +400,7 @@ export function Transcript({ items, busy, replaying, empty, onRunCommand, onEdit
             const isLast = i === blocks.length - 1;
             switch (b.type) {
               case "user":
-                return <UserMessage key={b.item.id} message={b.item.text} context={b.item.context} onEdit={onEditMessage} />;
+                return <UserMessage key={b.item.id} message={b.item.text} context={b.item.context} failed={b.item.failed} onEdit={onEditMessage} />;
               case "agent":
                 return (
                   <div key={b.item.id} className={`turn-agent${b.first ? " turn-start" : ""}`}>

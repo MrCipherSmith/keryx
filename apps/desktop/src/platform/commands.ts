@@ -115,6 +115,7 @@ export const localImage = (path: string) => invoke<string>("local_image", { path
 export const saveChatImage = (mimeType: string, data: string) => invoke<string>("save_chat_image", { mimeType, data });
 export const saveChatFile = (extension: string, data: string) => invoke<string>("save_chat_file", { extension, data });
 export const discardChatAttachment = (path: string) => invoke<void>("discard_chat_attachment", { path });
+export const commitChatAttachments = (paths: string[]) => invoke<void>("commit_chat_attachments", { paths });
 
 export async function openExternal(url: string): Promise<void> {
   if (!/^https?:\/\//i.test(url)) throw new Error("Only http and https links can be opened.");

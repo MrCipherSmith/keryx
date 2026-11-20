@@ -13,11 +13,18 @@ const IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp
 
 async function fileBase64(file: File): Promise<string> {
   if (file.size > MAX_BYTES) throw new Error("Each attachment must be at most 5 MiB.");
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  const chunkSize = 8192;
-  let binary = "";
-  for (let i = 0; i < bytes.length; i += chunkSize) binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
-  return btoa(binary);
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error ?? new Error("Could not read the attachment."));
+    reader.onabort = () => reject(new Error("Reading the attachment was aborted."));
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : "";
+      const prefix = /^data:[^,]*;base64,/.exec(result);
+      if (!prefix) { reject(new Error("Could not read the attachment.")); return; }
+      resolve(result.slice(prefix[0].length));
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 async function storeFile(file: File, options: { saveImage?: SaveChatImage; saveFile?: SaveChatFile; imageOnly: boolean }): Promise<ChatAttachment> {

@@ -377,7 +377,7 @@ export const Markdown = memo(function Markdown({ text, className, prLinks }: { t
       onKeyDown={(e) => {
         if ((e.key === "ContextMenu" || (e.key === "F10" && e.shiftKey)) && showPrMenu(e.target)) e.preventDefault();
       }} />
-    {prMenu && prLinks ? <Menu anchor={prMenu.anchor} label="Pull request link" width={255} onClose={closePrMenu} items={[
+    {prMenu && prLinks ? <Menu anchor={prMenu.anchor} label="Pull request link" width={255} placement="auto" closeOnScroll onClose={closePrMenu} items={[
       { id: "system", icon: "external", label: "Open in default browser", onSelect: () => { if (ref.current?.contains(prMenu.anchor)) prLinks.openExternal(prMenu.url); } },
       { id: "internal", icon: "globe", label: "Open in Keryx Browser", disabled: !prLinks.openInternal,
         description: prLinks.openInternal ? undefined : "Available in the native app",

@@ -142,6 +142,7 @@ pub fn run() {
             images::save_chat_image,
             images::save_chat_file,
             images::discard_chat_attachment,
+            images::commit_chat_attachments,
             chromium::consent::browser_consent_answer,
             chromium::cookies::cookie_profiles,
             chromium::cookies::cookie_scan,

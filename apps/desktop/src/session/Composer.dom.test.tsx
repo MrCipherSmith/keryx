@@ -132,6 +132,91 @@ test("a long provider or model label carries its full text in the title and trun
 
 // ---- attachments (page elements picked in the browser panel) -----------------------------------------
 
+const SHOT = "data:image/png;base64,iVBORw0KGgo=";
+
+async function pasteImages(count: number) {
+  const event = new Event("paste", { bubbles: true, cancelable: true });
+  const files = Array.from({ length: count }, (_, i) => new File([Uint8Array.of(137, 80, 78, 71, 13, 10, 26, 10, i)], `shot${i}.png`, { type: "image/png" }));
+  Object.defineProperty(event, "clipboardData", { value: { files, getData: () => "" } });
+  await act(async () => { host.querySelector("textarea")?.dispatchEvent(event); });
+  await act(async () => { await new Promise((r) => setTimeout(r, 40)); });
+}
+
+test("a rejected saveImage shows an alert and adds no chip", async () => {
+  await act(() => root.render(null));
+  await act(() => root.render(createElement(Composer, {
+    ...props("REJ", createRef()),
+    saveImage: async () => { throw new Error("disk full"); },
+    loadImage: async () => SHOT,
+  })));
+  await pasteImages(1);
+  expect(host.querySelector('[role="alert"]')?.textContent).toContain("disk full");
+  expect(host.querySelector(".attach-chip")).toBeNull();
+});
+
+test("in a mixed batch the successful images are kept and the failure is reported", async () => {
+  await act(() => root.render(null));
+  let n = 0;
+  await act(() => root.render(createElement(Composer, {
+    ...props("MIX", createRef()),
+    saveImage: async () => { n += 1; if (n === 2) throw new Error("disk full"); return `/tmp/keryx-chat-images-mix/ok${n}.png`; },
+    loadImage: async () => SHOT,
+  })));
+  await pasteImages(3);
+  expect(host.querySelectorAll(".attach-chip").length).toBe(2);
+  expect(host.querySelector('[role="alert"]')?.textContent).toContain("disk full");
+});
+
+test("unmounting with an unsent attachment discards its saved copy", async () => {
+  await act(() => root.render(null));
+  const discarded: string[] = [];
+  const path = "/tmp/keryx-chat-images-unm/a.png";
+  await act(() => root.render(createElement(Composer, {
+    ...props("UNM", createRef()),
+    saveImage: async () => path,
+    discardFile: async (p: string) => { discarded.push(p); },
+    loadImage: async () => SHOT,
+  })));
+  await pasteImages(1);
+  expect(host.querySelectorAll(".attach-chip").length).toBe(1);
+  expect(discarded).toEqual([]);
+  await act(() => root.render(null));
+  expect(discarded).toEqual([path]);
+});
+
+test("switching session discards the previous session's unsent attachment", async () => {
+  await act(() => root.render(null));
+  const discarded: string[] = [];
+  const path = "/tmp/keryx-chat-images-sw/a.png";
+  const base = { saveImage: async () => path, discardFile: async (p: string) => { discarded.push(p); }, loadImage: async () => SHOT };
+  await act(() => root.render(createElement(Composer, { ...props("SW1", createRef()), ...base })));
+  await pasteImages(1);
+  await act(() => root.render(createElement(Composer, { ...props("SW2", createRef()), ...base })));
+  expect(discarded).toEqual([path]);
+  await act(() => root.render(null));
+});
+
+test("after a successful send, unmounting does not discard the sent attachment", async () => {
+  await act(() => root.render(null));
+  const discarded: string[] = [];
+  const reported: string[][] = [];
+  const path = "/tmp/keryx-chat-images-snt/a.png";
+  await act(() => root.render(createElement(Composer, {
+    ...props("SNT", createRef()),
+    saveImage: async () => path,
+    discardFile: async (p: string) => { discarded.push(p); },
+    loadImage: async () => SHOT,
+    onSend: () => true,
+    onAttachmentsSent: (paths: readonly string[]) => { reported.push([...paths]); },
+  })));
+  await pasteImages(1);
+  await act(async () => { host.querySelector<HTMLButtonElement>('[aria-label="Send"]')?.click(); });
+  expect(reported).toEqual([[path]]);
+  expect(host.querySelector(".attach-chip")).toBeNull();
+  await act(() => root.render(null));
+  expect(discarded).toEqual([]);
+});
+
 test("pasting a screenshot saves it and sends an image-only draft", async () => {
   const saved: string[] = [];
   const sent: string[][] = [];
@@ -146,6 +231,7 @@ test("pasting a screenshot saves it and sends an image-only draft", async () => 
   const file = new File([Uint8Array.of(137, 80, 78, 71, 13, 10, 26, 10)], "Clipboard.png", { type: "image/png" });
   Object.defineProperty(event, "clipboardData", { value: { files: [file], getData: () => "" } });
   await act(async () => { host.querySelector("textarea")?.dispatchEvent(event); });
+  await act(async () => { await new Promise((r) => setTimeout(r, 40)); });
   expect(event.defaultPrevented).toBe(true);
   expect(saved).toEqual(["image/png", "iVBORw0KGgo="]);
   expect(host.querySelector(".attach-chip img")?.getAttribute("src")).toBe("data:image/png;base64,iVBORw0KGgo=");

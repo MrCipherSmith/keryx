@@ -33,6 +33,8 @@ interface Props {
   saveImage?: SaveChatImage;
   saveFile?: SaveChatFile;
   discardFile?: (path: string) => Promise<void>;
+  /** Called with the saved file/image paths that went out with a message the host accepted; the host now owns them. */
+  onAttachmentsSent?: (paths: readonly string[]) => void;
   loadImage?: (path: string) => Promise<string>;
   pickAttachmentFolder?: () => Promise<string | null>;
   onStop: () => void;
@@ -92,7 +94,7 @@ function modelChoices(option: ConfigOption | undefined): ConfigSelectOption[] {
 }
 
 export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
-  { sessionId, busy, disabledReason, commands, modes, model, sendKey, onSend, saveImage, saveFile, discardFile, loadImage, pickAttachmentFolder, onStop, onMode, onModel, onProviders, attachments = [], onRemoveAttachment },
+  { sessionId, busy, disabledReason, commands, modes, model, sendKey, onSend, saveImage, saveFile, discardFile, onAttachmentsSent, loadImage, pickAttachmentFolder, onStop, onMode, onModel, onProviders, attachments = [], onRemoveAttachment },
   ref,
 ) {
   const [drafts, setDrafts] = useState<Drafts>({});
@@ -117,6 +119,23 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   const disabled = disabledReason !== null;
   const localDraft = useChatAttachments(sessionId, { saveImage, saveFile, discardFile, pickFolder: pickAttachmentFolder });
   const hasAttachments = attachments.length > 0 || localDraft.items.length > 0;
+  // Saved copies the user never sent are deleted when the draft goes away (unmount or switch to another session).
+  const draftItems = useRef(new Map<string, typeof localDraft.items>());
+  const sentPaths = useRef(new Set<string>());
+  const discardRef = useRef(discardFile);
+  discardRef.current = discardFile;
+  if (sessionId) draftItems.current.set(sessionId, localDraft.items);
+  useEffect(() => {
+    if (!sessionId) return;
+    return () => {
+      const items = draftItems.current.get(sessionId) ?? [];
+      draftItems.current.delete(sessionId);
+      for (const item of items) {
+        if (item.kind === "folder" || sentPaths.current.has(item.path)) continue;
+        void discardRef.current?.(item.path)?.catch(() => {});
+      }
+    };
+  }, [sessionId]);
 
   useImperativeHandle(ref, () => ({
     focus: () => area.current?.focus(),
@@ -182,6 +201,9 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     const ok = await onSend(t, images, local);
     if (ok) {
       setSlashSession(null);
+      const sentFiles = localDraft.items.filter((item) => item.kind !== "folder").map((item) => item.path);
+      for (const p of sentFiles) sentPaths.current.add(p);
+      if (sentFiles.length > 0) onAttachmentsSent?.(sentFiles);
       localDraft.remove(localDraft.items.map((item) => item.path));
       setDrafts((d) => draftOf(d, sessionId) === text ? withDraft(d, sessionId, "") : d);
     }
@@ -282,7 +304,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   return (
     <div className={`composer${disabled ? " is-disabled" : ""}${busy ? " is-busy" : ""}`}>
       {matches.length > 0 ? (
-        <ul className="slash-pop" role="listbox" aria-label="Slash commands">
+        <ul id="slash-listbox" className="slash-pop" role="listbox" aria-label="Slash commands">
           {groups.map((g) => (
             <li key={g.group} role="presentation" className="slash-group-wrap">
               <div className="slash-group">{g.group}</div>
@@ -354,6 +376,12 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
         value={text}
         disabled={disabled}
         aria-label="Message keryx"
+        role={matches.length > 0 ? "combobox" : undefined}
+        aria-autocomplete={matches.length > 0 ? "list" : undefined}
+        aria-haspopup={matches.length > 0 ? "listbox" : undefined}
+        aria-expanded={matches.length > 0 ? true : undefined}
+        aria-controls={matches.length > 0 ? "slash-listbox" : undefined}
+        aria-activedescendant={matches.length > 0 ? `slash-opt-${sel}` : undefined}
         placeholder={disabledReason ?? (busy ? "keryx is working. Enter queues your next message" : "Ask keryx, or type / for commands")}
         onChange={(e) => {
           setText(e.target.value);

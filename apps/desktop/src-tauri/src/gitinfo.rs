@@ -127,10 +127,35 @@ fn github_repository_from_origin(origin: &str) -> Option<String> {
     Some(repo.to_string())
 }
 
+const MAX_REPOSITORY_LOOKUPS: usize = 4;
+static REPOSITORY_LOOKUPS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// Holds one of the few repository-lookup slots; the slot is returned on drop.
+struct LookupSlot;
+
+impl LookupSlot {
+    fn take() -> Option<Self> {
+        use std::sync::atomic::Ordering;
+        REPOSITORY_LOOKUPS
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| (n < MAX_REPOSITORY_LOOKUPS).then_some(n + 1))
+            .ok()
+            .map(|_| Self)
+    }
+}
+
+impl Drop for LookupSlot {
+    fn drop(&mut self) {
+        REPOSITORY_LOOKUPS.fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
+    }
+}
+
 #[tauri::command]
 pub async fn git_repository(state: State<'_, AppState>, cwd: String) -> Result<Option<String>, String> {
     let path = state.environment().get("PATH").cloned();
+    // Saturated: answer "unknown" rather than queue more Git children.
+    let Some(slot) = LookupSlot::take() else { return Ok(None) };
     tauri::async_runtime::spawn_blocking(move || {
+        let _slot = slot;
         let mut cmd = Command::new("git");
         cmd.args(["config", "--get", "remote.origin.url"]).current_dir(cwd);
         if let Some(p) = path {
