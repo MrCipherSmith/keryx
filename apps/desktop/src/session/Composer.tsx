@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, useEffect, useId, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { AvailableCommand, ConfigOption, ConfigSelectGroup, ConfigSelectOption, SessionModeState } from "../acp/types";
 import { MOD } from "../lib/prefs";
 import { AttachmentImage } from "./AttachmentImage";
@@ -103,6 +103,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   const text = draftOf(drafts, sessionId);
   const setText = (t: string) => setDrafts((d) => withDraft(d, sessionId, t));
   const [sel, setSel] = useState(0);
+  const listId = useId();
   const [dismissed, setDismissed] = useState(false);
   const [slashSession, setSlashSession] = useState<string | null>(null);
   useLayoutEffect(() => setSlashSession(null), [sessionId]);
@@ -120,22 +121,29 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   const localDraft = useChatAttachments(sessionId, { saveImage, saveFile, discardFile, pickFolder: pickAttachmentFolder });
   const hasAttachments = attachments.length > 0 || localDraft.items.length > 0;
   // Saved copies the user never sent are deleted when the draft goes away (unmount or switch to another session).
-  const draftItems = useRef(new Map<string, typeof localDraft.items>());
+  const latestItems = useRef(localDraft.items);
   const sentPaths = useRef(new Set<string>());
   const discardRef = useRef(discardFile);
-  discardRef.current = discardFile;
-  if (sessionId) draftItems.current.set(sessionId, localDraft.items);
+  const dropDraft = localDraft.drop;
+  // Refs are written after commit, never during render. Effect cleanups of a session switch run before this one,
+  // so at cleanup time `latestItems` still holds the old session's items.
+  useEffect(() => {
+    latestItems.current = localDraft.items;
+    discardRef.current = discardFile;
+  });
   useEffect(() => {
     if (!sessionId) return;
     return () => {
-      const items = draftItems.current.get(sessionId) ?? [];
-      draftItems.current.delete(sessionId);
+      const items = latestItems.current;
       for (const item of items) {
-        if (item.kind === "folder" || sentPaths.current.has(item.path)) continue;
+        const sent = sentPaths.current.has(item.path);
+        sentPaths.current.delete(item.path);
+        if (item.kind === "folder" || sent) continue;
         void discardRef.current?.(item.path)?.catch(() => {});
       }
+      dropDraft(sessionId);
     };
-  }, [sessionId]);
+  }, [sessionId, dropDraft]);
 
   useImperativeHandle(ref, () => ({
     focus: () => area.current?.focus(),
@@ -159,11 +167,12 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     return groupCommands(commands, text.slice(1));
   }, [text, commands, dismissed, disabled, menu, showAllCommands]);
   const matches = useMemo(() => flattenGroups(groups), [groups]);
+  const active = Math.min(sel, matches.length - 1);
 
   useEffect(() => setSel(0), [text]);
   useEffect(() => {
-    document.getElementById(`slash-opt-${sel}`)?.scrollIntoView?.({ block: "nearest" });
-  }, [sel, matches]);
+    document.getElementById(`${listId}-opt-${active}`)?.scrollIntoView?.({ block: "nearest" });
+  }, [active, matches, listId]);
   // Grow with the text up to COMPOSER_MAX_PX. Re-fit when the column's width changes too: a narrow moment (a side
   // panel opening, a drag) wraps the text, and a height measured then must not outlive it.
   useLayoutEffect(() => {
@@ -198,11 +207,16 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     if ((!t.trim() && !hasAttachments) || disabled || localDraft.isSaving()) return;
     const images = localDraft.items.flatMap((item) => item.kind === "image" ? [item.path] : []);
     const local = localDraft.items.filter((item) => item.kind !== "image");
-    const ok = await onSend(t, images, local);
+    const sentFiles = localDraft.items.filter((item) => item.kind !== "folder").map((item) => item.path);
+    for (const p of sentFiles) sentPaths.current.add(p);
+    let ok = false;
+    try {
+      ok = await onSend(t, images, local);
+    } finally {
+      if (!ok) for (const p of sentFiles) sentPaths.current.delete(p);
+    }
     if (ok) {
       setSlashSession(null);
-      const sentFiles = localDraft.items.filter((item) => item.kind !== "folder").map((item) => item.path);
-      for (const p of sentFiles) sentPaths.current.add(p);
       if (sentFiles.length > 0) onAttachmentsSent?.(sentFiles);
       localDraft.remove(localDraft.items.map((item) => item.path));
       setDrafts((d) => draftOf(d, sessionId) === text ? withDraft(d, sessionId, "") : d);
@@ -214,15 +228,15 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     if (matches.length > 0) {
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        setSel((s) => (s + 1) % matches.length);
+        setSel((s) => (Math.min(s, matches.length - 1) + 1) % matches.length);
         return;
       }
       if (e.key === "ArrowUp") {
         e.preventDefault();
-        setSel((s) => (s - 1 + matches.length) % matches.length);
+        setSel((s) => (Math.min(s, matches.length - 1) - 1 + matches.length) % matches.length);
         return;
       }
-      const chosen = matches[sel];
+      const chosen = matches[active];
       const exact = matches.some((c) => `/${c.name}` === text);
       if (chosen && (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey && (showAllCommands || !exact)))) {
         e.preventDefault();
@@ -304,7 +318,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   return (
     <div className={`composer${disabled ? " is-disabled" : ""}${busy ? " is-busy" : ""}`}>
       {matches.length > 0 ? (
-        <ul id="slash-listbox" className="slash-pop" role="listbox" aria-label="Slash commands">
+        <ul id={listId} className="slash-pop" role="listbox" aria-label="Slash commands">
           {groups.map((g) => (
             <li key={g.group} role="presentation" className="slash-group-wrap">
               <div className="slash-group">{g.group}</div>
@@ -314,15 +328,15 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
                   return (
                     <li
                       key={c.name}
-                      id={`slash-opt-${i}`}
+                      id={`${listId}-opt-${i}`}
                       role="option"
-                      aria-selected={i === sel}
-                      className={i === sel ? "is-sel" : ""}
+                      aria-selected={i === active}
+                      className={i === active ? "is-sel" : ""}
                       onMouseDown={(e) => {
                         e.preventDefault();
                         complete(c);
                       }}
-                      onMouseMove={() => i !== sel && setSel(i)}
+                      onMouseMove={() => i !== active && setSel(i)}
                     >
                       <span className="slash-name">/{c.name}</span>
                       {c.input?.hint ? <span className="slash-hint">{c.input.hint}</span> : null}
@@ -376,12 +390,11 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
         value={text}
         disabled={disabled}
         aria-label="Message keryx"
-        role={matches.length > 0 ? "combobox" : undefined}
-        aria-autocomplete={matches.length > 0 ? "list" : undefined}
-        aria-haspopup={matches.length > 0 ? "listbox" : undefined}
-        aria-expanded={matches.length > 0 ? true : undefined}
-        aria-controls={matches.length > 0 ? "slash-listbox" : undefined}
-        aria-activedescendant={matches.length > 0 ? `slash-opt-${sel}` : undefined}
+        role="combobox"
+        aria-autocomplete="list"
+        aria-expanded={matches.length > 0}
+        aria-controls={matches.length > 0 ? listId : undefined}
+        aria-activedescendant={matches.length > 0 ? `${listId}-opt-${active}` : undefined}
         placeholder={disabledReason ?? (busy ? "keryx is working. Enter queues your next message" : "Ask keryx, or type / for commands")}
         onChange={(e) => {
           setText(e.target.value);

@@ -31,5 +31,5 @@ export function buildUserPrompt(text: string, extra: readonly object[], literal 
 
 // Older ACP replays flatten resource blocks to annotated text. Do not resend that text as operator instructions.
 export function replayHasFlattenedContext(text: string): boolean {
-  return /(?:^|\n)\[external content [\w-]+ from keryx-desktop:(?:picked-elements|local-attachments):/.test(text);
+  return /(?:^|\n)\[external content [\w-]+ from [^\s:]+:/.test(text);
 }

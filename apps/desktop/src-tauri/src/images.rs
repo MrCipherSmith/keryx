@@ -88,11 +88,17 @@ pub fn read_image(link: &str, root: Option<&Path>, extra_roots: &[PathBuf]) -> R
 
 /// Size-cap and read an already canonical, already authorized image file.
 fn read_checked(real: &Path, mime: &str) -> Result<String, String> {
-    let meta = std::fs::metadata(real).map_err(|e| e.to_string())?;
+    let file = std::fs::File::open(real).map_err(|e| e.to_string())?;
+    let meta = file.metadata().map_err(|e| e.to_string())?;
     if !meta.is_file() || meta.len() > MAX_BYTES {
         return Err("The image is too large to show".into());
     }
-    let bytes = std::fs::read(real).map_err(|e| e.to_string())?;
+    use std::io::Read;
+    let mut bytes = Vec::new();
+    file.take(MAX_BYTES + 1).read_to_end(&mut bytes).map_err(|e| e.to_string())?;
+    if bytes.len() as u64 > MAX_BYTES {
+        return Err("The image is too large to show".into());
+    }
     Ok(format!("data:{mime};base64,{}", base64::engine::general_purpose::STANDARD.encode(bytes)))
 }
 
@@ -126,6 +132,8 @@ struct ChatStore {
     files: usize,
     bytes: usize,
     issued: HashMap<String, IssuedAttachment>,
+    /// Owners whose view was closed; later saves for them are refused.
+    released: std::collections::HashSet<String>,
 }
 
 #[derive(Default)]
@@ -135,6 +143,7 @@ pub struct ChatImages {
 }
 
 impl ChatImages {
+    #[cfg(test)]
     fn root(&self) -> Option<PathBuf> {
         let store = self.store.lock().ok()?;
         Some(store.dir.as_ref()?.path().to_path_buf())
@@ -189,7 +198,7 @@ impl ChatImages {
             return Err(STORAGE_UNAVAILABLE.into());
         }
         if store.files >= MAX_CHAT_STORAGE_FILES || bytes > MAX_CHAT_STORAGE_BYTES - store.bytes {
-            return Err("Temporary chat attachment storage is full. Discard drafts or restart Keryx.".into());
+            return Err("Temporary chat attachment storage is full. Sent attachments are kept until the app exits; drafts can be removed to free space.".into());
         }
         store.files += 1;
         store.bytes += bytes;
@@ -228,6 +237,14 @@ impl ChatImages {
         self.changed.notify_all();
         match result {
             Ok(disk_path) => {
+                if store.released.contains(owner) {
+                    // The owner's view closed while this save was in flight: undo it.
+                    if std::fs::remove_file(&disk_path).is_ok() {
+                        store.files -= 1;
+                        store.bytes -= bytes.len();
+                    }
+                    return Err("The view was closed before the attachment was saved".into());
+                }
                 let path = disk_path.to_string_lossy().into_owned();
                 store.issued.insert(path.clone(), IssuedAttachment {
                     owner: owner.to_owned(),
@@ -249,14 +266,14 @@ impl ChatImages {
         }
     }
 
-    /// The on-disk path of an attachment issued to `owner` (and not being deleted).
+    /// The on-disk path of an attachment issued to `owner`, or any committed (sent) one (and not being deleted).
     fn authorize(&self, owner: &str, path: &str) -> Option<PathBuf> {
         let store = self.store.lock().ok()?;
         if store.closed {
             return None;
         }
         store.issued.get(path)
-            .filter(|entry| entry.owner == owner && !entry.deleting)
+            .filter(|entry| (entry.committed || entry.owner == owner) && !entry.deleting)
             .map(|entry| entry.disk_path.clone())
     }
 
@@ -287,6 +304,7 @@ impl ChatImages {
             if store.closed {
                 return;
             }
+            store.released.insert(owner.to_owned());
             let mut targets = Vec::new();
             for (path, entry) in store.issued.iter_mut() {
                 if entry.owner == owner && !entry.committed && !entry.deleting {
@@ -404,13 +422,35 @@ impl ChatJob {
         CHAT_JOBS
             .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| (n < MAX_CHAT_JOBS).then_some(n + 1))
             .map(|_| Self)
-            .map_err(|_| "Chat attachments are busy; try again".to_string())
+            .map_err(|_| "busy: Chat attachments are busy; try again".to_string())
     }
 }
 
 impl Drop for ChatJob {
     fn drop(&mut self) {
         CHAT_JOBS.fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
+    }
+}
+
+const MAX_CHAT_PREVIEW_JOBS: usize = 8;
+static CHAT_PREVIEW_JOBS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// One of a few concurrent preview reads; returned on drop.
+struct PreviewJob;
+
+impl PreviewJob {
+    fn take() -> Result<Self, String> {
+        use std::sync::atomic::Ordering;
+        CHAT_PREVIEW_JOBS
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| (n < MAX_CHAT_PREVIEW_JOBS).then_some(n + 1))
+            .map(|_| Self)
+            .map_err(|_| "busy: Chat attachments are busy; try again".to_string())
+    }
+}
+
+impl Drop for PreviewJob {
+    fn drop(&mut self) {
+        CHAT_PREVIEW_JOBS.fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
     }
 }
 
@@ -456,13 +496,15 @@ pub async fn commit_chat_attachments(app: AppHandle, view: Webview, paths: Vec<S
 
 /// Drop a closed view's uncommitted attachments.
 pub fn release_view(app: &AppHandle, label: &str) {
-    app.state::<ChatImages>().release_owner(label);
+    let app = app.clone();
+    let label = label.to_owned();
+    tauri::async_runtime::spawn_blocking(move || app.state::<ChatImages>().release_owner(&label));
 }
 
 #[tauri::command]
 pub async fn local_image(app: AppHandle, view: Webview, path: String) -> Result<String, String> {
     let owner = view.label().to_owned();
-    let job = ChatJob::take()?;
+    let job = PreviewJob::take()?;
     tauri::async_runtime::spawn_blocking(move || {
         let _job = job;
         // Attachment previews are authorized only through the issued registry.
@@ -572,8 +614,12 @@ mod tests {
         storage.release_owner("owner");
         assert!(!Path::new(&path).exists());
         assert!(storage.authorize("owner", &path).is_none());
-        let again = storage.save_file("owner", "txt", "aGVsbG8=").unwrap();
+        // A released owner can no longer save (its view is gone); the budget it held is free for others.
+        assert!(storage.save_file("owner", "txt", "aGVsbG8=").is_err());
+        let again = storage.save_file("owner2", "txt", "aGVsbG8=").unwrap();
         assert!(Path::new(&again).is_file());
+        let store = storage.store.lock().unwrap();
+        assert_eq!(store.files, MAX_CHAT_STORAGE_FILES);
     }
 
     #[test]
@@ -597,6 +643,18 @@ mod tests {
         storage.release_owner("owner");
         assert!(!Path::new(&path).exists());
         assert!(sibling.is_file());
+    }
+
+    #[test]
+    fn committed_attachment_is_previewable_by_another_owner() {
+        let storage = ChatImages::default();
+        let sent = storage.save_file("owner", "txt", "aGVsbG8=").unwrap();
+        let draft = storage.save_file("owner", "txt", "aGVsbG8=").unwrap();
+        assert!(storage.authorize("other", &sent).is_none());
+        storage.commit("owner", &[sent.clone()]).unwrap();
+        assert!(storage.authorize("other", &sent).is_some());
+        assert!(storage.authorize("other", &draft).is_none());
+        assert!(storage.authorize("owner", &draft).is_some());
     }
 
     #[test]

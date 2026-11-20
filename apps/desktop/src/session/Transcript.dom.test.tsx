@@ -154,6 +154,53 @@ test("a flattened replay shows an inline note and cannot be edited", async () =>
   expect(host.querySelector<HTMLButtonElement>('[aria-label="Edit message"]')?.disabled).toBe(true);
 });
 
+test("a failed message shows an alert note that goes away while the editor is open", async () => {
+  await act(() => root.render(createElement(Transcript, {
+    items: [{ kind: "user", id: 41, text: "hello", failed: true } as Item],
+    busy: false, replaying: false, empty: null,
+    onEditMessage: () => true,
+  })));
+  const alert = host.querySelector('[role="alert"]');
+  expect(alert?.textContent).toBe("Not sent — edit to retry");
+  await act(() => host.querySelector<HTMLButtonElement>('[aria-label="Edit message"]')?.click());
+  expect(host.querySelector("textarea")).not.toBeNull();
+  expect(host.querySelector('[role="alert"]')).toBeNull();
+  expect(host.textContent).not.toContain("Not sent");
+});
+
+test("Escape in the editor returns focus to the Edit button", async () => {
+  await act(() => root.render(createElement(Transcript, {
+    items: [{ kind: "user", id: 51, text: "hello" }],
+    busy: false, replaying: false, empty: null,
+    onEditMessage: () => true,
+  })));
+  await act(() => host.querySelector<HTMLButtonElement>('[aria-label="Edit message"]')?.click());
+  const area = host.querySelector<HTMLTextAreaElement>("textarea");
+  expect(area).not.toBeNull();
+  await act(() => { area?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })); });
+  expect(host.querySelector("textarea")).toBeNull();
+  const edit = host.querySelector<HTMLButtonElement>('[aria-label="Edit message"]');
+  expect(edit).not.toBeNull();
+  expect(document.activeElement).toBe(edit);
+});
+
+test("the unavailable note is linked to the disabled Edit button by aria-describedby", async () => {
+  const text = "[external content abc-1 from keryx-desktop:picked-elements:\npage data";
+  await act(() => root.render(createElement(Transcript, {
+    items: [{ kind: "user", id: 61, text }],
+    busy: false, replaying: false, empty: null,
+    onEditMessage: () => true,
+  })));
+  const edit = host.querySelector<HTMLButtonElement>('[aria-label="Edit message"]');
+  expect(edit?.disabled).toBe(true);
+  const id = edit?.getAttribute("aria-describedby");
+  expect(Boolean(id)).toBe(true);
+  const note = document.getElementById(id ?? "");
+  expect(note).not.toBeNull();
+  expect(note).toBe(host.querySelector(".user-msg-note"));
+  expect(note?.getAttribute("role")).toBe("note");
+});
+
 test("a literal image marker in message text is not treated as an attachment", async () => {
   const text = "Example\n\n[Local image attachments (use local tools to inspect):]\n/tmp/keryx-chat-images-test/example.png";
   await show([{ kind: "user", id: 1, text }]);

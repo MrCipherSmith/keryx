@@ -153,7 +153,7 @@ impl Drop for LookupSlot {
 pub async fn git_repository(state: State<'_, AppState>, cwd: String) -> Result<Option<String>, String> {
     let path = state.environment().get("PATH").cloned();
     // Saturated: answer "unknown" rather than queue more Git children.
-    let Some(slot) = LookupSlot::take() else { return Ok(None) };
+    let Some(slot) = LookupSlot::take() else { return Err("busy: too many repository lookups; try again".into()) };
     tauri::async_runtime::spawn_blocking(move || {
         let _slot = slot;
         let mut cmd = Command::new("git");

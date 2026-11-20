@@ -13,12 +13,23 @@ export function githubRepositoryFromOrigin(origin: string): string | null {
   return repo && isGithubRepository(repo) ? repo : null;
 }
 
-export function githubPrUrl(href: string | null): string | null {
+/**
+ * Validate a GitHub pull-request link and return its canonical form (query and hash dropped).
+ * With `repository`, only PRs of that owner/repo (case-insensitive) are accepted and the URL is rebuilt from it.
+ */
+export function githubPrUrl(href: string | null, repository?: string): string | null {
   if (!href || !/^https:\/\/github\.com\//i.test(href)) return null;
   try {
     const url = new URL(href);
-    const match = /^\/([^/]+\/[^/]+)\/pull\/[1-9]\d{0,11}(?:\/(?:files|commits|checks|conversation)\/?)?\/?$/.exec(url.pathname);
-    return url.origin === "https://github.com" && match?.[1] && isGithubRepository(match[1]) ? url.href : null;
+    const match = /^\/([^/]+\/[^/]+)\/pull\/([1-9]\d{0,11})(?:\/(?:files|commits|checks|conversation)\/?)?\/?$/.exec(url.pathname);
+    const repo = match?.[1];
+    const number = match?.[2];
+    if (url.origin !== "https://github.com" || !repo || !number || !isGithubRepository(repo)) return null;
+    if (repository !== undefined) {
+      if (!isGithubRepository(repository) || repo.toLowerCase() !== repository.toLowerCase()) return null;
+      return `https://github.com/${repository}/pull/${number}`;
+    }
+    return `${url.origin}${url.pathname}`;
   } catch {
     return null;
   }

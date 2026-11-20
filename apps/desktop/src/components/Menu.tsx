@@ -21,9 +21,14 @@ interface Props {
   anchor: HTMLElement | null;
   items: MenuItem[];
   onClose: () => void;
-  /** Open upward (composer chips sit at the bottom of the window). */
+  /**
+   * Where the menu opens relative to the anchor:
+   * - "below" (default): under the anchor.
+   * - "above": bottom-anchored, opens upward (composer chips sit at the bottom of the window).
+   * - "auto": measures the menu and flips to the side that fits, clamped to the viewport.
+   */
   placement?: "below" | "above" | "auto";
-  /** Close when the anchor's nearest scrollable ancestor scrolls (the anchor moves away from the menu). */
+  /** Close when any scroll (or a window resize) moves the anchor more than 2px away from where the menu opened. */
   closeOnScroll?: boolean;
   label: string;
   width?: number;
@@ -46,7 +51,7 @@ export function Menu({ anchor, items, onClose, placement = "below", closeOnScrol
       // auto: the menu is mounted off-screen first, so its real height is known here.
       const margin = 8;
       const vh = window.innerHeight;
-      const h = ref.current?.getBoundingClientRect().height ?? 0;
+      const h = ref.current?.offsetHeight ?? 0;
       const spaceBelow = vh - r.bottom - 4 - margin;
       const spaceAbove = r.top - 4 - margin;
       const above = h > spaceBelow && spaceAbove > spaceBelow;
@@ -57,7 +62,7 @@ export function Menu({ anchor, items, onClose, placement = "below", closeOnScrol
       ref.current?.querySelector<HTMLElement>('[role="menuitemradio"][aria-checked="true"]') ??
       ref.current?.querySelector<HTMLElement>('[role^="menuitem"]:not([disabled])');
     first?.focus();
-  }, [anchor, placement, width]);
+  }, [anchor, placement, width, items.length]);
 
   useLayoutEffect(() => {
     const onDown = (e: MouseEvent) => {
@@ -71,16 +76,18 @@ export function Menu({ anchor, items, onClose, placement = "below", closeOnScrol
 
   useLayoutEffect(() => {
     if (!anchor || !closeOnScroll) return;
-    let scroller: HTMLElement | null = anchor.parentElement;
-    while (scroller) {
-      const s = getComputedStyle(scroller);
-      if (/(auto|scroll|overlay)/.test(`${s.overflowY} ${s.overflow}`)) break;
-      scroller = scroller.parentElement;
-    }
-    const target: HTMLElement | Window = scroller ?? window;
-    const onScroll = () => onClose();
-    target.addEventListener("scroll", onScroll, { passive: true });
-    return () => target.removeEventListener("scroll", onScroll);
+    const start = anchor.getBoundingClientRect();
+    const onScroll = () => {
+      const r = anchor.getBoundingClientRect();
+      if (Math.abs(r.top - start.top) > 2 || Math.abs(r.left - start.left) > 2) onClose();
+    };
+    const onResize = () => onClose();
+    window.addEventListener("scroll", onScroll, { capture: true, passive: true });
+    window.addEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("scroll", onScroll, { capture: true });
+      window.removeEventListener("resize", onResize);
+    };
   }, [anchor, closeOnScroll, onClose]);
 
   const onKeyDown = (e: React.KeyboardEvent) => {

@@ -163,11 +163,26 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
   const [repo, setRepo] = useState<{ cwd: string; name: string | null } | null>(null);
   useEffect(() => {
     let active = true;
-    void gitRepository(cwd).then(
-      (name) => { if (active) setRepo({ cwd, name }); },
-      () => { if (active) setRepo({ cwd, name: null }); },
-    );
-    return () => { active = false; };
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    // A rejection (for example "busy" while the bridge is saturated) is retryable; only a successful answer,
+    // or running out of retries, is remembered.
+    const delays = [400, 1200, 3000];
+    const attempt = (n: number) => {
+      void gitRepository(cwd).then(
+        (name) => { if (active) setRepo({ cwd, name }); },
+        () => {
+          if (!active) return;
+          const delay = delays[n];
+          if (delay === undefined) { setRepo({ cwd, name: null }); return; }
+          timer = setTimeout(() => attempt(n + 1), delay);
+        },
+      );
+    };
+    attempt(0);
+    return () => {
+      active = false;
+      if (timer !== undefined) clearTimeout(timer);
+    };
   }, [cwd]);
   const prLinks = useMemo<PrLinks>(() => ({
     repository: repo?.cwd === cwd ? repo.name ?? undefined : undefined,
@@ -190,7 +205,7 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
       toast({ level: "info", title: "Slash commands cannot carry attachments", body: "Remove the attachments or send a normal chat message." });
       return false;
     }
-    if (command || (!picks.length && !hasLocal)) return run(text);
+    if (!picks.length && !hasLocal) return run(text);
     // The picks travel as their own block, marked untrusted, never as the user's text. While a turn
     // runs this returns false and the draft and picks stay for the next send.
     const sent = picks;
@@ -206,9 +221,14 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
     (text: string, context?: UserPromptContext) => {
       const ok = sendPrompt(text, undefined, context, true);
       if (!ok) toast({ level: "error", title: "Could not send the edited message" });
+      else {
+        // After the row's own focus handling has run (it returns focus to its Edit button), the composer takes it.
+        const composer = composerRef && typeof composerRef !== "function" ? composerRef : null;
+        requestAnimationFrame(() => composer?.current?.focus());
+      }
       return ok;
     },
-    [sendPrompt, toast],
+    [sendPrompt, toast, composerRef],
   );
 
   const empty = (
@@ -418,7 +438,8 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
             saveImage={saveChatImage}
             saveFile={saveChatFile}
             discardFile={discardChatAttachment}
-            onAttachmentsSent={(paths) => void commitChatAttachments([...paths]).catch(() => {})}
+            onAttachmentsSent={(paths) => void commitChatAttachments([...paths]).catch(() =>
+              toast({ level: "error", title: "Attachments may not be kept", body: "Sent files could not be saved for later; previews may disappear after you close this window." }))}
             pickAttachmentFolder={() => pickFolder("Add folder to message")}
             attachments={attachments}
             onRemoveAttachment={(key) => removePick(cwd, key)}

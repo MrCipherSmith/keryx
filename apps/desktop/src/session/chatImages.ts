@@ -1,5 +1,5 @@
-import { useRef, useState } from "react";
-import { basename, errMessage } from "../lib/format";
+import { useCallback, useRef, useState } from "react";
+import { errMessage } from "../lib/format";
 
 export type SaveChatImage = (mimeType: string, data: string) => Promise<string>;
 export type SaveChatFile = (extension: string, data: string) => Promise<string>;
@@ -48,6 +48,13 @@ export function useChatAttachments(sessionId: string | null, options: {
   const [drafts, setDrafts] = useState<Record<string, AttachmentDraft>>({});
   const saving = useRef(new Set<string>());
   const draft = (sessionId && drafts[sessionId]) || EMPTY;
+  /** Forget a session's chips without touching the saved files (the caller discards those). */
+  const drop = useCallback((id: string) => setDrafts((all) => {
+    if (!(id in all)) return all;
+    const rest = { ...all };
+    delete rest[id];
+    return rest;
+  }), []);
   const update = (change: (current: AttachmentDraft) => AttachmentDraft) => {
     if (sessionId) setDrafts((all) => ({ ...all, [sessionId]: change(all[sessionId] ?? EMPTY) }));
   };
@@ -79,8 +86,8 @@ export function useChatAttachments(sessionId: string | null, options: {
   const addFolder = () => add(1, async () => {
     const path = await options.pickFolder?.();
     if (!path) return [];
-    if (!path.startsWith("/") || /[\x00-\x1f\x7f]/.test(path)) throw new Error("Choose an absolute local folder path.");
-    const value: LocalAttachment = { kind: "folder", path, label: basename(path.replace(/\/+$/, "")) || path };
+    if (!(path.startsWith("/") || /^[A-Za-z]:[\\/]/.test(path) || /^\\\\[^\\]+\\[^\\]+/.test(path)) || /[\x00-\x1f\x7f]/.test(path)) throw new Error("Choose an absolute local folder path.");
+    const value: LocalAttachment = { kind: "folder", path, label: path.split(/[\\/]/).filter(Boolean).pop() || path };
     return [{ status: "fulfilled", value }];
   });
   const remove = (paths: readonly string[]) => update((d) => ({ ...d, error: undefined, items: d.items.filter((item) => !paths.includes(item.path)) }));
@@ -99,5 +106,5 @@ export function useChatAttachments(sessionId: string | null, options: {
       update((d) => ({ ...d, pending: false }));
     }
   };
-  return { ...draft, addFiles, addFolder, remove, discard, isSaving: () => !!sessionId && saving.current.has(sessionId) };
+  return { ...draft, addFiles, addFolder, remove, discard, drop, isSaving: () => !!sessionId && saving.current.has(sessionId) };
 }

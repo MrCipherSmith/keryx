@@ -551,8 +551,10 @@ interface ChatAttachment {
   committed: boolean;
 }
 
-const MAX_CHAT_PREVIEWS = 3;
+const MAX_CHAT_PREVIEWS = 8;
 let activeChatPreviews = 0;
+const MAX_CHAT_SAVES = 3;
+let activeChatSaves = 0;
 
 const chatAttachments = new Map<string, ChatAttachment>();
 let chatAttachmentBytes = 0;
@@ -639,10 +641,20 @@ async function removeChatFile(path: string): Promise<void> {
 }
 
 async function writeChatAttachment(owner: ChatOwner, data: unknown, target: AttachmentTarget): Promise<string> {
+  if (activeChatSaves >= MAX_CHAT_SAVES) throw new Error("busy: Chat attachments are busy; try again");
+  activeChatSaves++;
+  try {
+    return await writeChatAttachmentUncapped(owner, data, target);
+  } finally {
+    activeChatSaves--;
+  }
+}
+
+async function writeChatAttachmentUncapped(owner: ChatOwner, data: unknown, target: AttachmentTarget): Promise<string> {
   if (typeof data !== "string") throw new Error("Invalid attachment data");
   const size = decodedAttachmentSize(data);
   if (chatAttachmentCount >= CHAT_STORAGE_FILES || chatAttachmentBytes + size > CHAT_STORAGE_BYTES) {
-    throw new Error("Temporary chat attachment storage is full. Discard drafts or restart the dev bridge.");
+    throw new Error("Temporary chat attachment storage is full. Discard drafts; sent attachments are kept until the bridge exits, so restart the dev bridge to free them.");
   }
   chatAttachmentCount++;
   chatAttachmentBytes += size;
@@ -759,7 +771,7 @@ const MAX_GIT_REPOSITORY_CHILDREN = 4;
 let gitRepositoryChildren = 0;
 
 async function gitRepository(cwd: string): Promise<string | null> {
-  if (gitRepositoryChildren >= MAX_GIT_REPOSITORY_CHILDREN) return null;
+  if (gitRepositoryChildren >= MAX_GIT_REPOSITORY_CHILDREN) throw new Error("busy: too many repository lookups; try again");
   gitRepositoryChildren++;
   try {
     const { stdout } = await execGitFile("git", ["config", "--get", "remote.origin.url"], {
@@ -831,10 +843,11 @@ async function handle(ws: ServerWebSocket<Conn>, cmd: string, args: Json): Promi
       return commitChatAttachments(ws.data.attachmentOwner, args.paths);
     case "local_image": {
       const entry = typeof args.path === "string" ? chatAttachments.get(args.path) : undefined;
-      if (!ws.data.root || !entry?.mimeType || entry.deleting || entry.owner !== ws.data.attachmentOwner) {
+      // Committed (sent) attachments may be previewed from any connection; drafts stay owner-only.
+      if (!ws.data.root || !entry?.mimeType || entry.deleting || (!entry.committed && entry.owner !== ws.data.attachmentOwner)) {
         throw new Error("The chat image is no longer available");
       }
-      if (activeChatPreviews >= MAX_CHAT_PREVIEWS) throw new Error("Chat attachments are busy; try again");
+      if (activeChatPreviews >= MAX_CHAT_PREVIEWS) throw new Error("busy: Chat attachments are busy; try again");
       activeChatPreviews++;
       try {
         return await previewChatImage(entry, entry.mimeType);
@@ -983,6 +996,8 @@ Bun.serve<Conn>({
     return new Response("keryx desktop dev bridge", { status: 426 });
   },
   websocket: {
+    // 5 MiB attachment as base64 (~6.7 MiB) plus JSON overhead fits comfortably.
+    maxPayloadLength: 12 * 1024 * 1024,
     async message(ws, raw) {
       let msg: { id?: number; cmd?: string; args?: Json };
       try {
@@ -1007,6 +1022,11 @@ Bun.serve<Conn>({
     },
   },
 });
+
+// Signals skip the "exit" event by default; exiting explicitly runs the chat image root cleanup.
+for (const signal of ["SIGINT", "SIGTERM"] as const) {
+  process.on(signal, () => process.exit(0));
+}
 
 console.log(`[bridge] keryx desktop dev bridge on ws://127.0.0.1:${PORT}`);
 console.log(`[bridge] keryx command: ${KERYX_CMD.join(" ")}`);

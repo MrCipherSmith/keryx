@@ -28,11 +28,15 @@ export function loadCached(href: string, load: (href: string) => Promise<string>
   return p;
 }
 
+const BUSY_DELAYS = [300, 900, 2000, 4000];
+
 /** Put a thumbnail after every local-image link in `root` that has none yet. */
 export function decorateImageLinks(root: HTMLElement, load: (href: string) => Promise<string>): void {
   for (const a of Array.from(root.querySelectorAll<HTMLAnchorElement>("a[href]"))) {
     const href = a.getAttribute("href") ?? "";
     if (a.dataset.thumb || !isLocalImageLink(href)) continue;
+    // A thumbnail still waiting on a busy retry sits right after the link: do not add a second one.
+    if (a.nextElementSibling?.classList.contains("md-thumb")) continue;
     a.dataset.thumb = "1";
     const btn = document.createElement("button");
     btn.type = "button";
@@ -44,12 +48,31 @@ export function decorateImageLinks(root: HTMLElement, load: (href: string) => Pr
     img.alt = a.textContent?.trim() || "Image";
     btn.append(img);
     a.after(btn);
-    loadCached(href, load)
-      .then((src) => {
-        img.src = src;
-        btn.hidden = false;
-      })
-      .catch(() => btn.remove());
+    const attempt = (n: number): void => {
+      loadCached(href, load)
+        .then((src) => {
+          img.src = src;
+          btn.hidden = false;
+          a.dataset.thumb = "1";
+        })
+        .catch((err: unknown) => {
+          if (!(err instanceof Error && /busy/i.test(err.message))) {
+            btn.remove();
+            return;
+          }
+          delete a.dataset.thumb;
+          const delay = BUSY_DELAYS[n];
+          if (delay === undefined) {
+            btn.remove();
+            return;
+          }
+          setTimeout(() => {
+            if (btn.isConnected && a.isConnected) attempt(n + 1);
+            else btn.remove();
+          }, delay);
+        });
+    };
+    attempt(0);
   }
 }
 

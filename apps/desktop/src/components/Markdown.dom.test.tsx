@@ -73,12 +73,24 @@ test("soft-wrapped and inline-formatted PR references become links", async () =>
   const text = "See PR\n#1254 and **PR** #77, but `PR #5` stays code.";
   await act(() => root.render(createElement(Markdown, { text, prLinks: { repository: "example/project", openExternal: () => {} } })));
   const hrefs = Array.from(host.querySelectorAll<HTMLAnchorElement>(".md a")).map((a) => a.getAttribute("href"));
-  expect(new Set(hrefs)).toEqual(new Set(["https://github.com/example/project/pull/1254", "https://github.com/example/project/pull/77"]));
+  expect(hrefs).toEqual([
+    "https://github.com/example/project/pull/1254",
+    "https://github.com/example/project/pull/77",
+    "https://github.com/example/project/pull/77",
+  ]);
+  const anchors = Array.from(host.querySelectorAll<HTMLAnchorElement>(".md a"));
+  expect(anchors.length).toBe(3);
+  expect(anchors[1]?.getAttribute("aria-hidden")).toBeNull();
+  expect(anchors[1]?.getAttribute("tabindex")).not.toBe("-1");
+  expect(anchors[2]?.getAttribute("tabindex")).toBe("-1");
+  expect(anchors[2]?.getAttribute("aria-hidden")).toBe("true");
   expect(host.querySelector(".md code")?.querySelector("a")).toBeNull();
 });
 
 test("the PR link menu opens above a link at the bottom edge and stays on screen", async () => {
   const original = Element.prototype.getBoundingClientRect;
+  const offsetDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetHeight");
+  Object.defineProperty(HTMLElement.prototype, "offsetHeight", { configurable: true, get(this: HTMLElement) { return this.classList.contains("menu") ? 70 : 0; } });
   const viewport = window.innerHeight;
   const rect = (top: number, height: number) => ({ top, bottom: top + height, left: 10, right: 110, width: 100, height, x: 10, y: top, toJSON: () => ({}) }) as DOMRect;
   Element.prototype.getBoundingClientRect = function (this: Element) {
@@ -90,11 +102,81 @@ test("the PR link menu opens above a link at the bottom edge and stays on screen
     const menu = host.querySelector<HTMLElement>('[role="menu"]');
     expect(menu).not.toBeNull();
     const top = parseFloat(menu?.style.top ?? "NaN");
-    expect(top < viewport - 5).toBe(true);
-    expect(top + 70 <= viewport).toBe(true);
+    expect(top >= 8).toBe(true);
+    expect(top + 70 <= viewport - 8).toBe(true);
+    expect(top + 70 <= viewport - 5 - 4).toBe(true);
+  } finally {
+    Element.prototype.getBoundingClientRect = original;
+    if (offsetDescriptor) Object.defineProperty(HTMLElement.prototype, "offsetHeight", offsetDescriptor);
+    else Reflect.deleteProperty(HTMLElement.prototype, "offsetHeight");
+  }
+});
+
+test("the PR link menu opens below a link at the top edge", async () => {
+  await act(() => root.render(null));
+  const original = Element.prototype.getBoundingClientRect;
+  const offsetDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetHeight");
+  Object.defineProperty(HTMLElement.prototype, "offsetHeight", { configurable: true, get(this: HTMLElement) { return this.classList.contains("menu") ? 70 : 0; } });
+  const rect = (top: number, height: number) => ({ top, bottom: top + height, left: 10, right: 110, width: 100, height, x: 10, y: top, toJSON: () => ({}) }) as DOMRect;
+  Element.prototype.getBoundingClientRect = function (this: Element) {
+    return this.classList.contains("menu") ? rect(0, 70) : this.tagName === "A" ? rect(5, 14) : original.call(this);
+  };
+  try {
+    await act(() => root.render(createElement(Markdown, { text: "See PR #1254", prLinks: { repository: "example/project", openExternal: () => {}, openInternal: () => {} } })));
+    await act(() => { host.querySelector(".md a")?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true })); });
+    const menu = host.querySelector<HTMLElement>('[role="menu"]');
+    expect(menu).not.toBeNull();
+    const top = parseFloat(menu?.style.top ?? "NaN");
+    expect(top >= 5 + 14 + 4).toBe(true);
+  } finally {
+    Element.prototype.getBoundingClientRect = original;
+    if (offsetDescriptor) Object.defineProperty(HTMLElement.prototype, "offsetHeight", offsetDescriptor);
+    else Reflect.deleteProperty(HTMLElement.prototype, "offsetHeight");
+  }
+});
+
+test("the PR link menu closes on scroll only once its link has moved", async () => {
+  await act(() => root.render(null));
+  const original = Element.prototype.getBoundingClientRect;
+  let linkTop = 100;
+  const rect = (top: number, height: number) => ({ top, bottom: top + height, left: 10, right: 110, width: 100, height, x: 10, y: top, toJSON: () => ({}) }) as DOMRect;
+  Element.prototype.getBoundingClientRect = function (this: Element) {
+    return this.tagName === "A" ? rect(linkTop, 14) : original.call(this);
+  };
+  try {
+    await act(() => root.render(createElement(Markdown, { text: "See PR #1254", prLinks: { repository: "example/project", openExternal: () => {}, openInternal: () => {} } })));
+    await act(() => { host.querySelector(".md a")?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true })); });
+    expect(host.querySelector('[role="menu"]')).not.toBeNull();
+    await act(() => { window.dispatchEvent(new Event("scroll")); });
+    expect(host.querySelector('[role="menu"]')).not.toBeNull();
+    linkTop = 120;
+    await act(() => { window.dispatchEvent(new Event("scroll")); });
+    expect(host.querySelector('[role="menu"]')).toBeNull();
   } finally {
     Element.prototype.getBoundingClientRect = original;
   }
+});
+
+test("a PR link of another repository is not handled when a repository is configured", async () => {
+  const opened: string[] = [];
+  await act(() => root.render(createElement(Markdown, {
+    text: "[other PR](https://github.com/other/repo/pull/8)",
+    prLinks: { repository: "example/project", openExternal: (url: string) => { opened.push(url); }, openInternal: (url: string) => { opened.push(url); } },
+  })));
+  const link = host.querySelector<HTMLAnchorElement>(".md a");
+  expect(link?.getAttribute("href")).toBe("https://github.com/other/repo/pull/8");
+  await act(() => { link?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })); });
+  expect(opened).toEqual([]);
+});
+
+test("hostile markup beside a PR reference never keeps an event-handler attribute", async () => {
+  await act(() => root.render(createElement(Markdown, {
+    text: "<svg><style><img src=x onerror=alert(1)> PR #1",
+    prLinks: { repository: "example/project", openExternal: () => {} },
+  })));
+  expect(host.querySelector("[onerror]")).toBeNull();
+  const attrs = Array.from(host.querySelectorAll("*")).flatMap((el) => el.getAttributeNames());
+  expect(attrs.some((name) => name.toLowerCase().startsWith("on"))).toBe(false);
 });
 
 test("without a repository only explicit GitHub PR links can open", async () => {

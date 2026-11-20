@@ -222,6 +222,44 @@ describe("window: sidebar marks", () => {
   });
 });
 
+describe("userSendFailed", () => {
+  const userOf = (s: WindowState, n = 0) => s.convs.s1!.items.filter((i) => i.kind === "user")[n] as Extract<Item, { kind: "user" }>;
+
+  test("flags the last user item", () => {
+    const s = run(twoHeld, { t: "userSent", sessionId: "s1", text: "a" }, { t: "userSendFailed", sessionId: "s1" });
+    expect(userOf(s).failed).toBeTrue();
+  });
+
+  test("is skipped when agent output follows the user item", () => {
+    const s = run(
+      twoHeld,
+      { t: "userSent", sessionId: "s1", text: "a" },
+      { t: "updates", updates: [routed("s1", chunk("reply"))] },
+      { t: "userSendFailed", sessionId: "s1" },
+    );
+    expect(userOf(s).failed).toBeUndefined();
+  });
+
+  test("is cleared by the next successful userSent", () => {
+    const s = run(
+      twoHeld,
+      { t: "userSent", sessionId: "s1", text: "a" },
+      { t: "userSendFailed", sessionId: "s1" },
+      { t: "userSent", sessionId: "s1", text: "b" },
+    );
+    expect(userOf(s, 0).failed).toBeUndefined();
+    expect(userOf(s, 1).failed).toBeUndefined();
+  });
+
+  test("an itemId flags that item; a missing item changes nothing", () => {
+    const sent = run(twoHeld, { t: "userSent", sessionId: "s1", text: "a" });
+    const id = userOf(sent).id;
+    expect(userOf(run(sent, { t: "userSendFailed", sessionId: "s1", itemId: id })).failed).toBeTrue();
+    expect(run(sent, { t: "userSendFailed", sessionId: "s1", itemId: 999 })).toBe(sent);
+    expect(run(twoHeld, { t: "userSendFailed", sessionId: "s1" })).toBe(twoHeld);
+  });
+});
+
 describe("replay: delegate notes kept in the history (spec 3.9.5a)", () => {
   const note = (runId: string, turn: number, text: string) =>
     u({ sessionUpdate: "user_message_chunk", content: { type: "text", text }, _meta: { keryx: { delegateResult: { runId, agentId: "claude-cli", turn, text } } } });
