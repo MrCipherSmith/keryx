@@ -43,6 +43,7 @@ interface ShellProps {
   recents: string[];
   view: View;
   onView: (v: View) => void;
+  onProjectSettings?: () => void;
   title: ReactNode;
   hasSession?: boolean;
   status: { tone: "ok" | "busy" | "warn" | "danger" | "idle"; label: string; detail?: string };
@@ -233,6 +234,7 @@ function TitleBar(p: ShellProps) {
   const others = recents.filter((r) => r !== cwd).slice(0, 8);
   const items: MenuItem[] = [
     { kind: "header", id: "h-current", label: <span className="truncate" title={cwd}>{cwd}</span> },
+    ...(p.onProjectSettings ? [{ id: "project-settings", label: "Project Settings", icon: "settings" as const, onSelect: p.onProjectSettings }] : []),
     { id: "open", label: "Open Folder…", icon: "folderOpen", hint: `${MOD}O`, onSelect: onOpenFolder },
     { id: "newwin", label: "Open this folder in a new window", icon: "external", onSelect: () => onNewWindow(cwd) },
     ...(others.length

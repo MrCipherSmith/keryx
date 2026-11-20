@@ -13,7 +13,6 @@ import {
 import { applyTheme, setPrefs, MOD } from "./lib/prefs";
 import { basename, errMessage } from "./lib/format";
 import { Dialog, EmptyState, overlayOpen } from "./components/ui";
-import { Icon } from "./components/Icon";
 import { AppShell, PROJECT_VIEWS, type View } from "./shell/AppShell";
 import { CommandPalette, type PaletteItem } from "./shell/CommandPalette";
 import { SettingsView } from "./shell/SettingsView";
@@ -483,6 +482,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       recents={recents}
       view={view}
       onView={go}
+      onProjectSettings={openProjectSettings}
       title={view === "session" ? <span className="truncate">{sessionTitle}</span> : title}
       hasSession={state.sessionId !== null}
       status={status}
@@ -497,12 +497,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       onNewWindow={(p) => void windowOpenProject(p)}
       onCloseProject={onCloseProject}
       onPalette={() => setPalette("")}
-      actions={<>
-        <button className="icon-btn" aria-label="Project Settings" title="Project Settings" onClick={openProjectSettings}>
-          <Icon name="settings" size={15} />
-        </button>
-        <ProjectMenu run={runProject} onEnrich={() => setEnrich(true)} />
-      </>}
+      actions={<ProjectMenu run={runProject} onEnrich={() => setEnrich(true)} />}
     >
       {/* The session view stays mounted so the transcript and draft survive view switches. */}
       <div className="view" hidden={view !== "session"}>
