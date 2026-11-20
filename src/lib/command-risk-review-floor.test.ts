@@ -154,6 +154,7 @@ describe("readiness waiver and review publish floors (flow 451)", () => {
   test("`keryx review publish` asks in every mode, in any spelling the shell resolves", () => {
     for (const command of [
       "keryx review publish pr7932-r1 --yes",
+      `keryx review desk-publish --json --request '{"kind":"submit"}'`,
       "keryx review publish pr7932-r1 --partial --yes --event COMMENT",
       "keryx review pub''lish pr7932-r1 --yes",
       "env X=1 keryx review publish pr7932-r1 --yes",

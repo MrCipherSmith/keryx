@@ -8,6 +8,7 @@ import { reviewRun } from "../platform/reviewRuns";
 import { PullRequestAutomation } from "./PullRequestAutomation";
 import type { reviewRules } from "../platform/reviewRules";
 import { launchAction, ReviewRuns } from "./ReviewRuns";
+import type { reviewPublish } from "./ReviewPublishDialog";
 import { useReviewRuns, type RunObserver } from "./useReviewRuns";
 import { fetchReviewDetail } from "../platform/review";
 import type { ReviewDetailSnapshot, ReviewMessage } from "./ReviewDetailTypes";
@@ -27,6 +28,7 @@ interface Props {
   onAccessLost?: (reason: string) => void;
   load?: typeof fetchReviewDetail;
   runCommand?: typeof reviewRun;
+  publishCommand?: typeof reviewPublish;
   onRunSnapshot?: RunObserver;
   rulesCommand?: typeof reviewRules;
   onRefreshBoard?: () => void;
@@ -111,7 +113,7 @@ export function ReviewDetail(props: Props) {
   return <ReviewDetailSheet key={JSON.stringify([props.cwd, props.repo, props.repositoryId, props.viewer, props.card.number])} {...props} />;
 }
 
-function ReviewDetailSheet({ cwd, repo, repositoryId, viewer, card, flow, onOpenFlow, onClose, onAccessLost, load = fetchReviewDetail, runCommand = reviewRun, onRunSnapshot, onRefreshBoard, rulesCommand, onDiscussionLoaded }: Props) {
+function ReviewDetailSheet({ cwd, repo, repositoryId, viewer, card, flow, onOpenFlow, onClose, onAccessLost, load = fetchReviewDetail, runCommand = reviewRun, publishCommand, onRunSnapshot, onRefreshBoard, rulesCommand, onDiscussionLoaded }: Props) {
   const [data, setData] = useState<ReviewDetailSnapshot | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(true);
@@ -193,7 +195,7 @@ function ReviewDetailSheet({ cwd, repo, repositoryId, viewer, card, flow, onOpen
         <span>The PR revision changed. Refresh the board to load the latest range.</span>
         {onRefreshBoard && <button className="btn btn-sm" onClick={onRefreshBoard}>Refresh board</button>}
       </div>}
-      {tab === "automation" ? <PullRequestAutomation cwd={cwd} target={rulesTarget} number={card.number} open={card.state === "open"} command={rulesCommand} onAccessLost={onAccessLost} /> : tab === "review" ? <ReviewRuns card={card} {...local} loadAttempt={loadAttempt} onAccessLost={onAccessLost}
+      {tab === "automation" ? <PullRequestAutomation cwd={cwd} target={rulesTarget} number={card.number} open={card.state === "open"} command={rulesCommand} onAccessLost={onAccessLost} /> : tab === "review" ? <ReviewRuns cwd={cwd} target={subject} publishCommand={publishCommand} card={card} {...local} loadAttempt={loadAttempt} onAccessLost={onAccessLost}
         onCancel={id => void local.request({ kind: "cancel", id })}
         onRefresh={() => void local.request({ kind: "status" })} /> : <>
       {busy && <Spinner label="Loading PR details" />}

@@ -23,6 +23,7 @@ import type { ServerWebSocket, Subprocess } from "bun";
 
 import { reviewWatcherArgs, reviewRuleArgs } from "./reviewWatcher";
 import { reviewRunArgs } from "./reviewRun";
+import { publicationArgs } from "../../../src/commands/review-desk-publish";
 import { SAFE_BUN_SPAWN_ARGS } from "../../../src/lib/safe-exec";
 
 const runFile = promisify(execFile);
@@ -643,6 +644,11 @@ async function handle(ws: ServerWebSocket<Conn>, cmd: string, args: Json): Promi
     case "review_run": {
       const root = await projectCwd(ws.data, cwd);
       return runReviewCli(root, reviewRunArgs(args.target, args.action), (args.action as Json)?.kind === "status");
+    }
+    case "review_publish": {
+      const root = await projectCwd(ws.data, cwd);
+      const { args: argv, readOnly } = publicationArgs(args.target, args.request);
+      return runReviewCli(root, argv, readOnly);
     }
     case "flows_list":
       return flowsList(await projectCwd(ws.data, cwd));

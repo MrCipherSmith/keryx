@@ -5,6 +5,7 @@ import { DESK_RUN_SCOPE, type DeskRun, type DeskRunSnapshot } from "../../../../
 import type { ReviewRunAction, reviewRun } from "../platform/reviewRuns";
 import { registerDom, unregisterDom } from "../test/dom";
 import type { ReviewDetail } from "./ReviewDetail";
+import type { PublicationRequest, PublicationSettings, PublicationState } from "../../../../src/review/desk-publication-types";
 import type { ReviewCard } from "./types";
 
 let root: Root;
@@ -204,17 +205,17 @@ test("a closed result from an earlier review scope stays readable and allows a n
   expect(requests.at(-1)).toEqual({ kind: "start", baseSha: pr.baseSha, headSha: pr.headSha });
 });
 
-test("Tab wraps after the final report disclosure and Shift+Tab returns to it", async () => {
+test("Tab wraps after the publish action and Shift+Tab returns to it", async () => {
   await show(async () => ({ version: 1, runs: [complete] }), { ...pr, number: 105 });
   await click("View review result");
-  const report = document.querySelector<HTMLElement>(".desk-run-report summary")!;
+  const publish = btn("Publish to GitHub");
   const close = document.querySelector<HTMLButtonElement>('[aria-label="Close details"]')!;
   const tab = (shiftKey: boolean) => document.activeElement!.dispatchEvent(
     new KeyboardEvent("keydown", { key: "Tab", shiftKey, bubbles: true, cancelable: true }),
   );
   close.focus();
   expect(tab(true)).toBe(false);
-  expect(document.activeElement).toBe(report);
+  expect(document.activeElement).toBe(publish);
   expect(tab(false)).toBe(false);
   expect(document.activeElement).toBe(close);
 });
@@ -385,4 +386,89 @@ test("interrupted reviewer dialog marks its recorded tokens partial", async () =
   await act(async () => row.click());
   expect(document.querySelector(".dialog")!.textContent).toContain("Partial tokens · 9 in / 2 out / 11 total");
   await click("Close");
+});
+
+test("previews a GitHub draft, collects finding answers and only publishes the confirmed settings on submit", async () => {
+  const actions: PublicationRequest[] = [];
+  let refuseSubmission = true;
+  const defaults: PublicationSettings = { inline: true, general: true, keryxTemplate: true, overlay: false, verdict: "changes", answers: {} };
+  const questions: PublicationState["questions"] = [
+    { id: "first", text: "Keep the owner finding?", recommendation: "uphold", options: ["Include the ownership finding", "Omit it as out of scope"] },
+    { id: "second", text: "Keep the unrelated case?", recommendation: "dismiss" },
+  ];
+  await show(async () => ({ version: 1, runs: [complete] }), pr, {
+    publishCommand: async (cwd, subject, request) => {
+      expect(cwd).toBe("/project");
+      expect(subject).toEqual({ repo: "owner/repo", viewer: "tester", repositoryId: "node", number: 42 });
+      expect(request.id).toBe(complete.id);
+      actions.push(request);
+      if (request.kind === "submit" && refuseSubmission) {
+        refuseSubmission = false;
+        throw new Error("permission: GitHub refused the review. Check the project's account and its permission to submit reviews.");
+      }
+      const settings = request.settings ?? defaults;
+      return {
+        version: 1, settings, questions, overlayAvailable: true,
+        body: "Draft lead-in\n\n## Formatted draft\n\n<script>alert(1)</script>\n\n[Ignore link](https://example.invalid)\n\n![Remote image](https://example.invalid/image.png)\n\n<img src='https://example.invalid/raw.png'>",
+        inlineCount: settings.inline ? 1 : 0, canSubmit: true, digest: String(actions.length),
+        ...(request.kind === "save" ? { savedAt: time } : {}),
+        ...(request.kind === "submit" ? { publishedUrl: pr.url + "#pullrequestreview-17" } : {}),
+      };
+    },
+  });
+  await click("View review result");
+  await click("Publish to GitHub");
+  const dialog = document.querySelector<HTMLElement>(".dialog")!;
+  expect(dialog.querySelector(".review-publish-markdown h2")?.textContent).toBe("Formatted draft");
+  expect(Array.from(dialog.querySelectorAll(".review-publish-markdown :is(script, img, a[href])"), node => node.outerHTML)).toEqual([]);
+  expect(dialog.querySelector(".review-publish-markdown a")?.textContent).toBe("Ignore link");
+  expect(btn("Submit review").disabled).toBe(true);
+  expect(dialog.textContent).toContain("Question 1 of 2");
+  expect(dialog.textContent).toContain("Recommended");
+  expect(dialog.textContent).toContain("Include the ownership finding");
+  const field = (name: string) => [...dialog.querySelectorAll<HTMLLabelElement>("label")].find(label => label.textContent?.trim().startsWith(name))!.querySelector<HTMLInputElement>("input")!;
+  expect(field("Request changes").checked).toBe(true);
+  await act(async () => field("Project overlay").click());
+  await act(async () => field("Approve with suggestions").click());
+  await act(async () => field("Keep finding").click());
+  await click("Next question");
+  expect(dialog.textContent).toContain("Question 2 of 2");
+  await act(async () => field("Dismiss finding").click());
+  expect(actions.every(action => action.kind === "preview")).toBe(true);
+  await click("Save locally");
+  expect(actions.at(-1)).toMatchObject({ kind: "save", settings: { verdict: "suggestions", overlay: true, answers: { first: "uphold", second: "dismiss" } } });
+  expect(dialog.textContent).toContain("Last saved locally");
+  const digest = String(actions.length);
+  await click("Submit review");
+  expect(actions.at(-1)).toMatchObject({ kind: "submit", digest });
+  expect(dialog.querySelector('[role="alert"]')?.textContent).toContain("permission to submit reviews");
+  expect(field("Approve with suggestions").checked).toBe(true);
+  expect(field("Dismiss finding").checked).toBe(true);
+  await click("Submit review");
+  expect(actions.at(-1)).toMatchObject({ kind: "submit", digest });
+  expect(dialog.textContent).toContain("Review published on GitHub.");
+  await click("Close");
+});
+
+test("switching pull requests drops a late publication preview and sends no writes", async () => {
+  let finish!: (state: PublicationState) => void;
+  const actions: PublicationRequest[] = [];
+  const review: typeof reviewRun = async () => ({ version: 1, runs: [complete] });
+  await show(review, pr, {
+    publishCommand: async (_cwd, _target, request) => {
+      actions.push(request);
+      return new Promise(resolve => { finish = resolve; });
+    },
+  });
+  await click("View review result");
+  await click("Publish to GitHub");
+  expect(btn("Submit review").disabled).toBe(true);
+  await show(review, { ...pr, number: 43, url: "https://github.com/owner/repo/pull/43" });
+  await act(async () => finish({
+    version: 1, settings: { inline: false, general: true, keryxTemplate: true, overlay: false, verdict: "comment", answers: {} },
+    body: "Prior preview", inlineCount: 0, questions: [], overlayAvailable: false, canSubmit: true, digest: "draft",
+  }));
+  expect(document.querySelector(".review-publish")).toBeNull();
+  expect(document.body.textContent).not.toContain("Prior preview");
+  expect(actions.map(action => action.kind)).toEqual(["preview"]);
 });

@@ -302,6 +302,56 @@ pub async fn review_run(
     invoke_review(app, view, cwd, run_args(target, action)?, read_only).await
 }
 
+fn publication_args(target: RunTarget, action: Value) -> Result<(Vec<String>, bool), String> {
+    let read_only = match action["kind"].as_str() {
+        Some("preview") => true,
+        Some("save" | "submit") => false,
+        _ => return Err("configuration: Unknown Review publication operation.".into()),
+    };
+    let request = action.to_string();
+    if request.len() > 32 * 1024 {
+        return Err("configuration: Review publication request is too large.".into());
+    }
+    if target.number == 0 || target.number > i32::MAX as u32 {
+        return Err("configuration: Invalid pull request number.".into());
+    }
+    let fields = [
+        ("--repo", target.repo),
+        ("--repository-id", target.repository_id),
+        ("--viewer", target.viewer),
+    ];
+    let mut args = vec!["review".into(), "desk-publish".into(), "--json".into()];
+    for (flag, value) in fields {
+        if value.is_empty()
+            || value.len() > 256
+            || value.starts_with('-')
+            || value.contains(char::is_whitespace)
+        {
+            return Err("configuration: Invalid Review publication target.".into());
+        }
+        args.extend([flag.into(), value]);
+    }
+    args.extend([
+        "--number".into(),
+        target.number.to_string(),
+        "--request".into(),
+        request,
+    ]);
+    Ok((args, read_only))
+}
+
+#[tauri::command]
+pub async fn review_publish(
+    app: AppHandle,
+    view: Webview,
+    cwd: String,
+    target: RunTarget,
+    request: Value,
+) -> Result<Value, String> {
+    let (args, read_only) = publication_args(target, request)?;
+    invoke_review(app, view, cwd, args, read_only).await
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct WatcherTarget {
@@ -485,6 +535,29 @@ mod tests {
         let mut invalid = target();
         invalid.number = 0;
         assert!(run_args(invalid, RunAction::Status { id: None, activity_id: None }).is_err());
+    }
+
+    #[test]
+    fn publication_only_forwards_scoped_operations() {
+        let target = || RunTarget {
+            repo: "org/r".into(), repository_id: "R_42".into(), viewer: "me".into(), number: 4,
+        };
+        let request = serde_json::json!({"kind": "preview", "id": "01234567-89ab-cdef-0123-456789abcdef"});
+        let (args, read_only) = publication_args(target(), request.clone()).unwrap();
+        assert!(read_only);
+        assert_eq!(&args[..12], [
+            "review", "desk-publish", "--json", "--repo", "org/r", "--repository-id", "R_42",
+            "--viewer", "me", "--number", "4", "--request",
+        ]);
+        assert_eq!(serde_json::from_str::<Value>(&args[12]).unwrap(), request);
+        for kind in ["save", "submit"] {
+            assert!(!publication_args(target(), serde_json::json!({"kind": kind})).unwrap().1);
+        }
+        assert!(publication_args(target(), serde_json::json!({"kind": "worker"})).is_err());
+        assert!(publication_args(target(), serde_json::json!({"kind": "preview", "id": "a".repeat(32768)})).is_err());
+        let mut invalid = target();
+        invalid.repo = "--config".into();
+        assert!(publication_args(invalid, request).is_err());
     }
 
     #[test]
