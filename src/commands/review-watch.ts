@@ -2,6 +2,8 @@ import { homedir } from "node:os";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { withFileLock } from "../lib/fs";
+import { reviewGitCommonDir } from "../review/board-github";
+import { projectGithubBinding } from "../review/github-account-store";
 import { mainCheckout, parseWatcherKey, verifyIdentity, watcherDiscoveryEnvironment, watcherWorktrees } from "../review/watcher-project";
 import {
   beginWatcherOperation,
@@ -133,15 +135,20 @@ export async function requestWatch(
   if (checkouts[0] !== project)
     throw new Error("configuration: The primary checkout changed during verification. Try again from Review.");
   const program = await watcherProgram(checkouts, host);
-  // The interactive credentials and the credentials launchd can use must both authorize this project.
-  if (process.env.GH_TOKEN || process.env.GITHUB_TOKEN)
+  const commonDir = await reviewGitCommonDir(project, { ...program.env, HOME: homedir() });
+  if (!commonDir) throw new Error("configuration: Could not verify the project's Git directory.");
+  const binding = projectGithubBinding(commonDir);
+  if (binding && binding.login?.toLowerCase() !== target.viewer.toLowerCase())
+    throw new Error("access: The project's GitHub account changed. Refresh Review.");
+  // An unbound request may be using an interactive token as well as the saved launchd account.
+  if (!binding && (process.env.GH_TOKEN || process.env.GITHUB_TOKEN))
     await verify(project, target, { ...program.env, HOME: homedir(), GH_TOKEN: process.env.GH_TOKEN, GITHUB_TOKEN: process.env.GITHUB_TOKEN });
   await verify(project, target, { ...program.env, HOME: homedir() });
   return withFileLock(lock, async () => {
     if (watcherPauseGeneration(project, target) > order)
       throw new Error("configuration: The watcher was paused during verification. Resume it to continue.");
     const minutes = request.minutes ?? readWatcher(project, target).intervalMinutes;
-    configureWatcher(project, target, minutes);
+    configureWatcher(project, target, minutes, { project: commonDir, order });
     const installed = await reconcileWatcherTimer(project, target, host, { minutes, program });
     return { ...readWatcher(project, target), installed };
   }, { timeoutMs: 45_000 });

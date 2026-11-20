@@ -1,4 +1,5 @@
 import { deskReviewRoutingRoot } from "../review/autonomous-profile";
+import { ACCOUNTS_USAGE, runReviewAccounts } from "./review-accounts";
 import { RULES_USAGE, runReviewRules } from "./review-rules";
 import { runReviewWatch, WATCH_USAGE } from "./review-watch";
 import { PR_CONTEXT_USAGE, runPrContext } from "./review-pr-context";
@@ -793,6 +794,10 @@ export async function reviewCommand(args: string[], seams?: ReviewCommandSeams):
     }
     if (command === "desk-run") {
       await runReviewDesk(args.slice(1));
+      return;
+    }
+    if (command === "accounts") {
+      await runReviewAccounts(args.slice(1));
       return;
     }
     if (command === "board") {
@@ -5324,6 +5329,7 @@ run-scoped bridge grant and cannot combine it with the root environment.
  * subcommand, mutating or not; a subcommand with no entry gets the group help.
  */
 const REVIEW_SUBCOMMAND_HELP: ReadonlyMap<string, () => void> = new Map([
+  ["accounts", () => console.log(ACCOUNTS_USAGE)],
   ["board", () => console.log(BOARD_USAGE)],
   ["rules", () => console.log(RULES_USAGE)],
   ["watch", () => console.log(WATCH_USAGE)],
@@ -5488,6 +5494,8 @@ function reviewHelpText(): string {
   return `keryx review
 
 Usage:
+  ${ACCOUNTS_USAGE}
+                        Chooses the local project GitHub account.
   ${BOARD_USAGE}
                         Reads pull requests and discussions of a connected GitHub repository.
   ${WATCH_USAGE}

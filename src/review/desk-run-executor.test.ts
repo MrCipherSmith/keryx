@@ -9,6 +9,8 @@ import { finishExecution } from "./desk-run-service";
 import { executeDeskReview, recoverDeskExecution } from "./desk-run-executor";
 import { SAFE_BUN_SPAWN_ARGS } from "../lib/safe-exec";
 import { privateGitEnv, type ChildSpec } from "./autonomous-run";
+import { reviewGitCommonDir } from "./board-github";
+import { changeProjectGithubBinding } from "./watcher";
 
 const fixtureGitEnv = () => ({ ...privateGitEnv(), GIT_CONFIG_GLOBAL: devNull, GIT_CONFIG_NOSYSTEM: "1" });
 const git = (cwd: string, ...args: string[]) => execFileSync("git", ["-c", "core.hooksPath=/dev/null", ...args],
@@ -143,6 +145,41 @@ test("runs the orchestrator on pinned Git objects with trusted controls, leaving
   expect(existsSync(path.join(runDir, "checkout"))).toBe(false);
   expect(existsSync(path.join(runDir, "package", "report.md"))).toBe(true);
   expect(JSON.parse(readFileSync(path.join(runDir, "execution-result.json"), "utf8"))).toEqual(result);
+});
+
+test("a named credential is injected only into the private fetch and a concurrent disconnect prevents launch", async () => {
+  const pathBefore = process.env.PATH, dataBefore = process.env.KERYX_DATA_DIR;
+  try {
+    process.env.PATH = root + path.delimiter + pathBefore;
+    process.env.KERYX_DATA_DIR = path.join(root, "data");
+    writeFileSync(path.join(root, "gh"), '#!/bin/sh\nset -eu\ntest "$*" = "auth token --hostname github.com --user fixture"\nprintf "%s\\n" fixture-selected-credential\n', { mode: 0o700 });
+    const probe = path.join(root, "fetch-observed");
+    writeFileSync(path.join(root, "git"), `#!/bin/sh
+set -eu
+case " $* " in
+  *" fetch "*) test "${'$'}{GH_TOKEN:-}" = fixture-selected-credential; touch "${probe}" ;;
+  *) test "${'$'}{GH_TOKEN:-}" != fixture-selected-credential ;;
+esac
+exec /usr/bin/git "$@"
+`, { mode: 0o700 });
+    const project = (await reviewGitCommonDir(cwd))!;
+    changeProjectGithubBinding(project, cwd, "fixture");
+    let launches = 0;
+    const result = await executeDeskReview({
+      ...options(), viewer: "fixture",
+      verifyBeforeExecution: async () => { changeProjectGithubBinding(project, cwd, null); },
+    }, {
+      selectModel, remoteUrl: cwd, revision,
+      spawn() { launches++; return { exited: Promise.resolve(0), kill() {} }; },
+    });
+    expect(existsSync(probe)).toBe(true);
+    expect(launches).toBe(0);
+    expect(result).toMatchObject({ outcome: "failed", reason: expect.stringContaining("account changed") });
+    expect(JSON.stringify(result)).not.toContain("fixture-selected-credential");
+  } finally {
+    if (pathBefore === undefined) delete process.env.PATH; else process.env.PATH = pathBefore;
+    if (dataBefore === undefined) delete process.env.KERYX_DATA_DIR; else process.env.KERYX_DATA_DIR = dataBefore;
+  }
 });
 
 test("a closed prepared Desktop package without a reviewer participation receipt retains partial coverage", async () => {

@@ -10,7 +10,7 @@ import { resolveWatcherCheckout } from "./watcher-project";
 import { verifyScheduledSubject } from "./board";
 import { withScheduledPermission } from "./review-automation-guard";
 import { readExistingReviews } from "./desk-run-legacy";
-import { boardGraphql, reviewRepositories, selectRepository } from "./board-github";
+import { boardGraphql, projectGithubConnection, reviewRepositories, selectRepository } from "./board-github";
 import { createWorkerRoster } from "./desk-worker-roster";
 import { readDeskReviewerProgress } from "./desk-reviewer-progress";
 import { DeskRunStore, deskRunRoot, type Attempt } from "./desk-run-store";
@@ -116,7 +116,8 @@ export async function reconcileLinkedScheduledRuns(
   project: string, key: Omit<DeskRunKey, "number">, links: {number: number; runId: string}[], visible: ReadonlySet<number>,
   verifyMissing = async (numbers: number[]) => {
     const cwd = await resolveWatcherCheckout(project, key.repo);
-    return verifyVisiblePullNumbers(key, numbers, (q, params) => boardGraphql(cwd, q, params));
+    const auth = await projectGithubConnection(cwd, process.env, key.viewer);
+    return verifyVisiblePullNumbers(key, numbers, (q, params) => boardGraphql(cwd, q, params, auth));
   },
 ) {
   if (!links.length || !existsSync(path.join(deskRunRoot(), "runs.sqlite"))) return true;
@@ -193,7 +194,8 @@ export function dispatchNext(store: DeskRunStore, key: DeskRunKey, launch = spaw
 
 async function verifyScheduled(cwd: string, key: DeskRunKey, revision: DeskRevision, rule: DeskSchedule) {
   selectRepository(await reviewRepositories(cwd), key.repo);
-  await verifyScheduledSubject(key, revision, rule, (q, params) => boardGraphql(cwd, q, params));
+  const auth = await projectGithubConnection(cwd, process.env, key.viewer);
+  await verifyScheduledSubject(key, revision, rule, (q, params) => boardGraphql(cwd, q, params, auth));
 }
 
 /** The watcher holds its policy transaction only during the synchronous dispatch decision.
@@ -330,6 +332,7 @@ export async function runDeskWorker(id: string, selectModel: DeskModelSelector) 
         cwd,
         repo: key.repo,
         number: key.number,
+        viewer: key.viewer,
         baseSha: run.baseSha,
         headSha: run.headSha,
         ...(previous ? { previousRunDir: store.directory(previous.id) } : {}),

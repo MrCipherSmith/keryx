@@ -1,3 +1,4 @@
+import { withoutGithubCredentials } from "./github-cli";
 // The autonomous review runner: `keryx review run --autonomous`.
 //
 // It starts `keryx shell --print` in the review-autonomous profile as a child with no stdin and
@@ -247,7 +248,7 @@ export function defaultSpawn(command?: { readonly execPath: string; readonly scr
     const child = nodeSpawn(start[0]!, start.slice(1), {
       cwd: spec.cwd,
       detached: group,
-      env: { ...(childGuard ? privateGitEnv() : process.env), ...spec.env },
+      env: childGuard ? withoutGithubCredentials({ ...privateGitEnv(), ...spec.env }) : { ...process.env, ...spec.env },
       stdio: [group ? "pipe" : "ignore", log, log],
     });
     closeSync(log);

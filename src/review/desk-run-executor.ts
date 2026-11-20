@@ -15,7 +15,8 @@ import { runAutonomousReview, defaultSpawn, privateGitEnv, type ChildHandle, typ
 import type { ReviewRunUsage } from "./run-usage";
 import { countFindings, knownFindingList, renderReport, type AutonomousSummary, type FindingCounts } from "./autonomous-summary";
 import { computeVerdict, renderVerdict } from "./verdict";
-import { boardGraphql, reviewTool } from "./board-github";
+import { boardGraphql, projectGithubConnection, reviewTool, verifyGithubBindingUnchanged, type GithubConnection } from "./board-github";
+import { withoutGithubCredentials } from "./github-cli";
 import type { ManagedReviewManifest } from "./types";
 import { DESK_RUN_SCOPE } from "./desk-run-types";
 import { checkoutIsDisposable, checkedDeskSummary, saveDeskSummary, deskVerdictHeadline, completeDeskCoverage, recordedSha, recoverDeskExecution } from "./desk-run-executor-recovery";
@@ -28,6 +29,7 @@ interface DeskExecutionOptions {
   cwd: string;
   repo: string;
   number: number;
+  viewer?: string;
   baseSha: string;
   headSha: string;
   runDir: string;
@@ -72,17 +74,20 @@ const EMPTY: DeskExecutionResult = {
   outcome: "incomplete", reason: "", checkedBase: null, checkedHead: null,
   coverage: "unknown", verdict: null, findings: countFindings(null), findingsKnown: false, report: null,
 };
-async function revision({ repo, number, cwd }: DeskExecutionOptions): Promise<Revision> {
+async function revision({ repo, number, cwd, viewer }: DeskExecutionOptions, auth: GithubConnection): Promise<Revision> {
   const [owner, name] = repo.split("/");
-  const data = await boardGraphql<{ repository?: {
+  const data = await boardGraphql<{ viewer?: { login?: string }; repository?: {
     pullRequest?: PullRevision | null;
     defaultBranchRef?: { name: string; target?: { oid?: string } } | null;
   } | null }>(cwd, `query($owner:String!,$name:String!,$number:Int!) {
+    viewer { login }
     repository(owner:$owner,name:$name) {
       pullRequest(number:$number) { baseRefName baseRefOid headRefOid state }
       defaultBranchRef { name target { oid } }
     }
-  }`, { owner: owner!, name: name!, number });
+  }`, { owner: owner!, name: name!, number }, auth);
+  if (viewer && data.viewer?.login?.toLowerCase() !== viewer.toLowerCase())
+    throw new Error("access: The project's GitHub account changed. Refresh Review.");
   const pull = data.repository?.pullRequest;
   if (!pull) throw new Error("access: The selected pull request is no longer available.");
   const branch = data.repository?.defaultBranchRef;
@@ -90,11 +95,13 @@ async function revision({ repo, number, cwd }: DeskExecutionOptions): Promise<Re
   return { ...pull, ...(branch && oid ? { defaultBranch: { name: branch.name, oid } } : {}) };
 }
 
-async function git(cwd: string, args: string[], signal: AbortSignal): Promise<string> {
+async function git(cwd: string, args: string[], signal: AbortSignal, githubToken?: string): Promise<string> {
+  let env = privateGitEnv();
+  if (githubToken) env = { ...withoutGithubCredentials(env), GH_TOKEN: githubToken, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" };
   try {
     const { stdout } = await exec(reviewTool("git"), ["-c", "core.hooksPath=/dev/null", ...args], {
       cwd, signal, timeout: 120_000, maxBuffer: 8 * 1024 * 1024,
-      env: { ...privateGitEnv(), GIT_TERMINAL_PROMPT: "0", GH_PROMPT_DISABLED: "1", GIT_NO_REPLACE_OBJECTS: "1" },
+      env: { ...env, GIT_TERMINAL_PROMPT: "0", GH_PROMPT_DISABLED: "1", GIT_NO_REPLACE_OBJECTS: "1" },
     });
     return stdout.trimEnd();
   } catch {
@@ -104,7 +111,7 @@ async function git(cwd: string, args: string[], signal: AbortSignal): Promise<st
 }
 
 async function prepareCheckout(options: DeskExecutionOptions, checkout: string, ports: ExecutorPorts,
-  readRevision: () => Promise<Revision>) {
+  readRevision: () => Promise<Revision>, githubToken?: string) {
   const { cwd, repo, number, signal, baseSha, headSha } = options;
   if (!recordedSha(baseSha) || !recordedSha(headSha)) throw new Error("Invalid commit ID for the private review checkout.");
   const matchesRequest = (pr: Revision) => pr.state === "OPEN" && pr.baseRefOid === baseSha && pr.headRefOid === headSha;
@@ -116,8 +123,9 @@ async function prepareCheckout(options: DeskExecutionOptions, checkout: string, 
   await run(["check-ref-format", baseRef]);
   await run(["remote", "set-url", "origin", ports.remoteUrl ?? `https://github.com/${repo}.git`]);
   await run(["remote", "set-url", "--push", "origin", "file:///dev/null"]);
-  const fetch = (...refs: string[]) => run(["-c", "credential.helper=", "-c", "credential.https://github.com.helper=!gh auth git-credential",
-    "fetch", "--no-tags", "origin", ...refs]);
+  const fetch = (...refs: string[]) => git(checkout, ["-c", "credential.helper=",
+    "-c", "credential.https://github.com.helper=!gh auth git-credential",
+    "fetch", "--no-tags", "origin", ...refs], signal, githubToken);
   await fetch(`+refs/heads/${pull.baseRefName}:${baseRef}`, `+refs/pull/${number}/head:refs/keryx/review-head`);
   if (await run(["rev-parse", "refs/keryx/review-head"]) !== headSha) return false;
   if (await run(["rev-parse", "--verify", ...revisionOperand(baseRef)]) !== baseSha) {
@@ -292,15 +300,17 @@ export async function executeDeskReview(options: DeskExecutionOptions, ports: Ex
   try {
     signal.throwIfAborted();
     options.onProgress({ phase: "Preparing isolated checkout", rounds: 0, tokens: 0 });
+    // Capture the credential once so revision reads and private fetch cannot use different accounts.
+    const auth = await projectGithubConnection(options.cwd, process.env, options.viewer);
     const readRevision = async () => {
       try {
-        return await (ports.revision ?? revision)(options);
+        return await (ports.revision ? ports.revision(options) : revision(options, auth));
       } catch (error) {
         beforeSpawnFailure = retryablePreflight(error);
         throw error;
       }
     };
-    const prepared = await prepareCheckout(options, checkout, ports, readRevision).catch(error => {
+    const prepared = await prepareCheckout(options, checkout, ports, readRevision, auth.login ? auth.env.GH_TOKEN : undefined).catch(error => {
       beforeSpawnFailure = retryablePreflight(error);
       throw error;
     });
@@ -350,7 +360,9 @@ export async function executeDeskReview(options: DeskExecutionOptions, ports: Ex
             return child;
           };
           try {
-            return options.authorizeSpawn ? options.authorizeSpawn(start) : start();
+            if (options.authorizeSpawn) return options.authorizeSpawn(start);
+            verifyGithubBindingUnchanged(auth);
+            return start();
           } catch (error) {
             beforeSpawnFailure = !attempted && retryablePreflight(error);
             throw error;
