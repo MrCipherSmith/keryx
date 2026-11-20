@@ -5,7 +5,7 @@ import { Icon } from "../components/Icon";
 import { Dialog, Spinner } from "../components/ui";
 import { errMessage } from "../lib/format";
 import type { FlowCard } from "../platform/commands";
-import type { ReviewBoardSnapshot } from "./types";
+import type { ReviewBoardSnapshot, ReviewCard } from "./types";
 import "./ReviewLaunchDialog.css";
 
 export interface ReviewLaunchModel {
@@ -17,15 +17,16 @@ export interface ReviewLaunchTargetResult {
   snapshot: ReviewBoardSnapshot;
   selectedNumber?: number;
 }
-export interface ReviewLaunchDialogProps {
-  flows: FlowCard[];
+export type ReviewLaunchDialogProps = {
+  flows: readonly FlowCard[];
   defaultFlow?: string;
-  initialTarget?: string;
-  loadTargets: (hint?: string, signal?: AbortSignal) => Promise<ReviewLaunchTargetResult>;
   models: readonly ReviewLaunchModel[];
   onApply: (key: DeskRunKey, revision: DeskRevision, options: DeskReviewOptions) => Promise<void>;
   onClose: () => void;
-}
+} & (
+  | { initialTarget?: string; loadTargets: (hint?: string, signal?: AbortSignal) => Promise<ReviewLaunchTargetResult>; fixedTarget?: never }
+  | { initialTarget?: never; loadTargets?: never; fixedTarget: Omit<DeskRunKey, "number"> & { card: ReviewCard } }
+);
 
 const tierLabels = { strong: "Strong", middle: "Middle", light: "Light" };
 const maxLimit = Number.MAX_SAFE_INTEGER;
@@ -170,7 +171,7 @@ function ModelPools({ models, pools, onChange }: {
   </fieldset>;
 }
 
-export function ReviewLaunchDialog({ flows, defaultFlow, initialTarget, loadTargets, models, onApply, onClose }: ReviewLaunchDialogProps) {
+export function ReviewLaunchDialog({ flows, defaultFlow, initialTarget, loadTargets, fixedTarget, models, onApply, onClose }: ReviewLaunchDialogProps) {
   const [hint, setHint] = useState(initialTarget ?? "");
   const [lookup, setLookup] = useState<{ hint: string } | null>(() => ({ hint: initialTarget ?? "" }));
   const [target, setTarget] = useState<ReviewLaunchTargetResult | null>(null);
@@ -178,6 +179,7 @@ export function ReviewLaunchDialog({ flows, defaultFlow, initialTarget, loadTarg
   const [readError, setReadError] = useState("");
   const [applyError, setApplyError] = useState("");
   const [mode, setMode] = useState<DeskReviewOptions["mode"]>("auto");
+  const [orchestrator, setOrchestrator] = useState(true);
   const [adaptive, setAdaptive] = useState(true);
   const [draftLimits, setDraftLimits] = useState({ maxWaves: "0", maxParallel: String(DEFAULT_REVIEW_PARALLEL), maxTokens: "0" });
   const [chosenFlow, setChosenFlow] = useState<string>();
@@ -192,7 +194,7 @@ export function ReviewLaunchDialog({ flows, defaultFlow, initialTarget, loadTarg
     setReadError("");
     setApplyError("");
     setNumber("");
-    if (!lookup) return;
+    if (!lookup || !loadTargets) return;
     const controller = new AbortController();
     void loadTargets(lookup.hint.trim() || undefined, controller.signal).then(result => {
       if (controller.signal.aborted) return;
@@ -205,25 +207,29 @@ export function ReviewLaunchDialog({ flows, defaultFlow, initialTarget, loadTarg
     return () => controller.abort();
   }, [lookup, loadTargets]);
   const snapshot = target?.snapshot;
+  const subject = fixedTarget ?? snapshot;
   const cards = useMemo(() => snapshot?.cards.filter(card => card.state === "open") ?? [], [snapshot]);
-  const card = cards.find(candidate => String(candidate.number) === number);
+  const card = fixedTarget?.card ?? cards.find(candidate => String(candidate.number) === number);
   const eligibleFlows = flows.filter(flow => flow.idValid);
   const linked = card && eligibleFlows.find(flow => flow.prUrl?.replace(/\/$/, "").toLowerCase() === card.url.replace(/\/$/, "").toLowerCase());
   const flow = chosenFlow ?? defaultFlow ?? linked?.id ?? "";
   const flowValid = !flow || eligibleFlows.some(candidate => candidate.id === flow);
   const modelKeys = useMemo(() => new Set(models.map(modelKey)), [models]);
-  const modelsValid = DESK_REVIEW_POOLS.every(tier => pools[tier].every(model => modelKeys.has(modelKey(model))));
-  const limitFields = limits.map(field => ({ ...field, ...limitHelp(draftLimits[field.key], field) }));
+  const modelsValid = !orchestrator || DESK_REVIEW_POOLS.every(tier => pools[tier].every(model => modelKeys.has(modelKey(model))));
+  const limitFields = limits.filter(field => orchestrator || field.key === "maxTokens")
+    .map(field => ({ ...field, ...limitHelp(draftLimits[field.key], field) }));
   const valid = flowValid && modelsValid && !limitFields.some(field => field.invalid);
   async function apply() {
-    if (applyingRef.current || !card || !snapshot || !valid || !card.headSha || !card.baseSha) return;
+    if (applyingRef.current || !card || !subject || !valid || card.state !== "open" || !card.headSha || !card.baseSha) return;
     applyingRef.current = true;
     setApplying(true);
     setApplyError("");
     try {
-      await onApply({ repo: snapshot.repo, repositoryId: snapshot.repositoryId, viewer: snapshot.viewer, number: card.number },
+      await onApply({ repo: subject.repo, repositoryId: subject.repositoryId, viewer: subject.viewer, number: card.number },
         { baseSha: card.baseSha, headSha: card.headSha }, {
-          mode, adaptive, modelPools: pools, ...(flow && { flowId: flow }),
+          mode, ...(orchestrator ? { adaptive, modelPools: pools } : {
+            orchestrator: false, adaptive: false, modelPools: { strong: [], middle: [], light: [] },
+          }), ...(flow && { flowId: flow }),
           ...Object.fromEntries(limitFields.filter(field => field.number > 0).map(field => [field.key, field.number])),
         });
       if (live.current) onClose();
@@ -244,11 +250,12 @@ export function ReviewLaunchDialog({ flows, defaultFlow, initialTarget, loadTarg
   }
   return <div className="review-launch-overlay"><Dialog title="Run review" icon="pr" width={680} onClose={applying ? null : onClose} footer={<>
     <button type="button" className="btn btn-sm" disabled={applying} onClick={onClose}>Cancel</button>
-    <button type="button" className="btn btn-sm btn-primary" disabled={applying || !valid || !card?.baseSha || !card?.headSha}
+    <button type="button" className="btn btn-sm btn-primary" disabled={applying || !valid || card?.state !== "open" || !card?.baseSha || !card?.headSha}
       onClick={() => void apply()}>{applying ? "Starting review…" : "Apply"}</button>
   </>}>
     <fieldset className="review-launch-body" disabled={applying}>
       <section className="review-launch-section">
+        {fixedTarget ? <p className="field-hint">{fixedTarget.repo} #{fixedTarget.card.number} · {fixedTarget.card.title}</p> : <>
         <label htmlFor={id + "-target"}>Find pull request</label>
         <form className="review-launch-find" onSubmit={e => { e.preventDefault(); findTarget(); }}>
           <input id={id + "-target"} className="text-input" value={hint} data-autofocus placeholder="GitHub pull request URL or #number"
@@ -267,6 +274,7 @@ export function ReviewLaunchDialog({ flows, defaultFlow, initialTarget, loadTarg
             {cards.map(c => <option key={c.number} value={c.number}>#{c.number} · {c.title}</option>)}
           </select> : <p className="field-hint">No open pull requests found.</p>}
         </>}
+        </>}
         <label>Associated Flow
           <select className="select-compact" value={flow} onChange={e => setChosenFlow(e.currentTarget.value)}>
             <option value="">Standalone review</option>
@@ -283,8 +291,11 @@ export function ReviewLaunchDialog({ flows, defaultFlow, initialTarget, loadTarg
               onClick={() => setMode(value)}>{value === "auto" ? "Auto" : "Manual"}</button>)}
           </div>
         </div>
-        <label className="review-launch-adaptive"><input type="checkbox" checked={adaptive}
-          onChange={e => setAdaptive(e.currentTarget.checked)} /> Adaptive model selection</label>
+        <label className="review-launch-adaptive"><input type="checkbox" checked={orchestrator}
+          aria-describedby={id + "-workflow"} onChange={e => setOrchestrator(e.currentTarget.checked)} /> Review orchestrator</label>
+        <small className="field-hint" id={id + "-workflow"}>Turn off to run one reviewer without reviewer waves.</small>
+        {orchestrator && <label className="review-launch-adaptive"><input type="checkbox" checked={adaptive}
+          onChange={e => setAdaptive(e.currentTarget.checked)} /> Adaptive model selection</label>}
         <div className="review-launch-limits">{limitFields.map(({ key, label, initial, invalid, message }) =>
           <label key={key}>{label}
             <input className="text-input" type="text" inputMode="numeric" value={draftLimits[key]} placeholder={String(initial)}
@@ -293,7 +304,7 @@ export function ReviewLaunchDialog({ flows, defaultFlow, initialTarget, loadTarg
             <small id={id + key} className={invalid ? "review-launch-invalid" : undefined}>{message}</small>
           </label>)}</div>
       </section>
-      <ModelPools models={models} pools={pools} onChange={setPools} />
+      {orchestrator && <ModelPools models={models} pools={pools} onChange={setPools} />}
       {!modelsValid && <p role="alert" className="inline-banner tone-warn">A selected model is no longer available. Remove it to continue.</p>}
       {card && (!card.baseSha || !card.headSha) && <p role="alert" className="inline-banner tone-warn">The PR revision is unavailable. Find the pull request again.</p>}
       {applyError && <p className="inline-banner tone-warn" role="alert">{applyError}</p>}

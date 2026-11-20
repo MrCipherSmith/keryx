@@ -99,7 +99,7 @@ test("limits, editable linked flow and provider/model pairs are scoped to the se
   expect(flowSelector().value).toBe("51");
   await choose(flowSelector(), "");
   await click(btn("Manual"));
-  await click(document.querySelector("input[type=checkbox]")!);
+  await click(limit("Adaptive model selection"));
   await changeText(limit("Max waves"), "-1");
   expect(btn("Apply").disabled).toBe(true);
   await changeText(limit("Max waves"), "3");
@@ -115,6 +115,24 @@ test("limits, editable linked flow and provider/model pairs are scoped to the se
   await click(btn("Apply"));
   expect(calls[0]?.[2]).toEqual({ mode: "manual", adaptive: false, maxWaves: 3, maxParallel: 15, maxTokens: 120000,
     modelPools: { strong: [{ provider: "second", model: "large" }], middle: [], light: [{ provider: "first", model: "large" }] } });
+});
+
+test("the board launch defaults to orchestration and can apply a single-reviewer run", async () => {
+  const calls: unknown[][] = [];
+  await render({
+    models, flows: [], fixedTarget: { repo: board.repo, repositoryId: board.repositoryId, viewer: board.viewer, card: board.cards[0]! },
+    onApply: async (...values) => { calls.push(values); }, onClose() {},
+  });
+  expect(limit("Review orchestrator").checked).toBe(true);
+  await changeText(limit("Max waves"), "-1");
+  expect(btn("Apply").disabled).toBe(true);
+  await click(limit("Review orchestrator"));
+  expect(addModel("Strong")).toBeNull();
+  expect(document.body.textContent).not.toContain("Parallel reviewers");
+  await changeText(limit("Token limit"), "1000");
+  await click(btn("Apply"));
+  expect(calls[0]?.[2]).toEqual({ mode: "auto", orchestrator: false, adaptive: false, maxTokens: 1000,
+    modelPools: { strong: [], middle: [], light: [] } });
 });
 
 test("editing the target invalidates it immediately and an obsolete result cannot replace the newer PR", async () => {

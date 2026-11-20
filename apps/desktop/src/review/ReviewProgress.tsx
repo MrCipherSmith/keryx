@@ -17,10 +17,16 @@ export function pendingManualQuestion(run: DeskRun) {
   return pendingManualQuestions(run)[0];
 }
 
+export function singleReviewerFinished(run: DeskRun) {
+  return run.options?.orchestrator === false && run.state === "partial" &&
+    run.result?.coverage === "partial" && run.result.findingsKnown === true;
+}
+
 export function runStatusLabel(run: DeskRun) {
   if (run.decision?.action === "archive") return "Archived";
   if (run.closure === "closed") return "Closed as incomplete";
   if (run.closure === "completed") return run.result?.coverage === "complete" ? "Completed" : "Completed by operator";
+  if (singleReviewerFinished(run)) return "Single reviewer finished";
   return pendingManualQuestion(run) ? "Awaiting your answer" : RUN_STATE_LABEL[run.state];
 }
 

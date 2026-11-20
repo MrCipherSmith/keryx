@@ -50,10 +50,10 @@
 .desk-run-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--sp-1) var(--sp-3); font-size: var(--fs-sm); }
 .desk-run-facts dt { color: var(--fg-muted); }
 .desk-run-facts dd { margin: 0; overflow-wrap: anywhere; }
-.desk-run-reason, .desk-run-report pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.desk-run-reason { white-space: pre-wrap; overflow-wrap: anywhere; }
 .desk-run-report { margin-top: var(--sp-3); border-top: 1px solid var(--border); padding-top: var(--sp-2); }
 .desk-run-report summary { cursor: pointer; color: var(--accent-text); }
-.desk-run-report pre { font-size: var(--fs-sm); line-height: var(--lh); }
+.desk-run-report .md { margin-block-start: var(--sp-2); overflow-wrap: anywhere; }
 
 .review-usage { margin: var(--sp-3) 0; }
 .review-usage > summary { cursor: pointer; padding-block: var(--sp-1); font-weight: 600; }

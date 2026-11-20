@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { PublicationAnswer, PublicationRequest, PublicationSettings, PublicationState } from "../../../../src/review/desk-publication-types";
 import type { DeskRunKey } from "../../../../src/review/desk-run-types";
-import { renderMarkdown } from "../components/Markdown";
 import { Dialog, Spinner } from "../components/ui";
 import { absoluteTime, errMessage } from "../lib/format";
 import { invoke, isTauri } from "../platform/backend";
 import { openExternal } from "../platform/commands";
+import { ReviewReportMarkdown } from "./ReviewReportMarkdown";
 
 export function reviewPublish(cwd: string, target: DeskRunKey, request: PublicationRequest) {
   return invoke<PublicationState>("review_publish", { cwd, target, request });
@@ -31,16 +31,7 @@ function choicesFor(question: PublicationState["questions"][number]): ReadonlyAr
 }
 
 function Preview({ text, label = "Review comment preview" }: { text: string; label?: string }) {
-  const html = useMemo(() => {
-    const fragment = document.createElement("template");
-    fragment.innerHTML = renderMarkdown(text);
-    // Keep the preview inert even when the app's Markdown renderer recognizes linked images.
-    for (const element of fragment.content.querySelectorAll("script, img, source, video, audio, iframe, object, embed")) element.remove();
-    for (const link of fragment.content.querySelectorAll("a")) link.removeAttribute("href");
-    return fragment.innerHTML;
-  }, [text]);
-  return text.trim() ? <div className="md review-publish-markdown" tabIndex={0} aria-label={label}
-    dangerouslySetInnerHTML={{ __html: html }} /> : <p>No general comment in this draft.</p>;
+  return text.trim() ? <ReviewReportMarkdown text={text} label={label} className="review-publish-markdown" /> : <p>No general comment in this draft.</p>;
 }
 
 export function ReviewPublishDialog({ cwd, target, id, command = reviewPublish, onAccessLost, onClose }: {
@@ -176,10 +167,7 @@ export function ReviewPublishDialog({ cwd, target, id, command = reviewPublish, 
               onChange={e => update({ general: e.currentTarget.checked })} /> General comment</label>
             <label><input type="checkbox" checked={settings.inline}
               onChange={e => update({ inline: e.currentTarget.checked })} /> Inline comments</label>
-            <label><input type="checkbox" checked={settings.keryxTemplate}
-              onChange={e => update({ keryxTemplate: e.currentTarget.checked })} /> Keryx template</label>
-            {draft.overlayAvailable && <label><input type="checkbox" checked={settings.overlay}
-              onChange={e => update({ overlay: e.currentTarget.checked })} /> Project overlay</label>}
+            {draft.overlayAvailable && <small className="review-detail-muted">Project overlay applied</small>}
             {draft.overlayWarning && <small className="review-detail-muted" role="status">{draft.overlayWarning}</small>}
           </fieldset>
           <fieldset disabled={writing}>

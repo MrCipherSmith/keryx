@@ -4880,6 +4880,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       let resetSubagentBudget: (() => void) | undefined;
       const reviewerRoutingRoot = deskReviewRoutingRoot();
       const reviewOptions = deskReviewOptions();
+      const soloReview = reviewOptions?.orchestrator === false;
       const reviewHead = reviewerRoutingRoot ? process.env[DESK_REVIEW_HEAD] : undefined;
       // Only an operator-specified pool can need non-session candidates. Discover them
       // with the normal credentialed adapter; the names in a pool do not prove availability.
@@ -4933,7 +4934,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           getSessionDir: () => slateSessionBox.current?.dir,
           jobRegistry,
           mcp: mcpRuntime,
-          ...(readlineReviewAgentHost === undefined ? {} : { reviewAgents: { tools: readlineReviewAgentHost.tools({
+          ...(soloReview || readlineReviewAgentHost === undefined ? {} : { reviewAgents: { tools: readlineReviewAgentHost.tools({
             provider: agentProvider, providerId: provider, modelId: model, io: () => readlineReviewIo,
             ...(meter ? {
               providerForReviewer: (reviewer: string) => observeReviewProvider(port, meter, { participant: "reviewer", reviewer }, provider, model, configDir),
@@ -4941,7 +4942,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
             } : {}),
             authorizeReviewAgentAction: ({ signal }) => readlineReviewAgentOpen && signal?.aborted !== true && busBox.current?.leaseView().held() !== true,
           }) } }),
-          ...(flags.denyTools !== undefined ? { denyTools: flags.denyTools } : {}),
+          denyTools: [...flags.denyTools ?? [], ...(soloReview ? ["spawn_subagent"] : [])],
           // review r1 F2 (AC9): NO `bus` option here. `busBox` (declared
           // above) is always still empty at THIS point — the join itself
           // happens later, inside `runAgentRepl` — and `buildInteractiveAgentTools`

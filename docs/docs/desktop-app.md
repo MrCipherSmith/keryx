@@ -57,7 +57,8 @@ and shows the time of the last successful read when an update fails.
 ### Run a review from a card
 
 Open a PR and choose **Start review** to review the base and head commits recorded when
-the card was fetched. The Keryx review panel shows the current phase, the revision and
+the card was fetched. **Review orchestrator** is on by default. Turn it off to run
+one source reviewer with single-reviewer coverage. The Keryx review panel shows the current phase, the revision and
 the reason the run stopped. You can return to the card later, cancel an
 active review or retry an interrupted one. Windows and worktrees share an active
 run when the verified GitHub account, PR, and base and head commits match.
@@ -68,7 +69,7 @@ The review uses committed controls from the GitHub repository's default branch. 
 
 During a run, the wave badge and progress line show how many reviewer assignments have finished. Before the plan is available, the indicator shows that the run is active. Open a reviewer to see its status, model when available and recorded activity. The session includes wave, timing and token usage. Older runs show the evidence saved with their review package.
 
-Open a past run to inspect its coverage, findings and report. **Token usage**
+Open a past run to inspect its coverage, findings and formatted report. **Token usage**
 shows input, output and total tokens for the orchestrator, each reviewer and
 the whole run. Providers can also report cache tokens and cost. A cost calculated
 from configured rates appears under **Estimated cost**. Partial totals
@@ -83,8 +84,9 @@ Open a finished Keryx review with a recorded pull request revision and choose
 **Publish to GitHub**. The dialog shows the project GitHub account and a
 formatted preview of the general comment and a separate preview of each inline
 comment with its file and line. Choose whether to include inline
-comments, a general comment, the Keryx review format, and a project template
-when available. To define a project template, add
+comments and findings in the general comment. Desktop formats both the local
+report and the publication using the Keryx review template and applies the project overlay automatically
+when available. To define a project overlay, add
 `.metaproject/review-publish-template.md` with one `{{review}}` placeholder
 where the generated comment should appear.
 
