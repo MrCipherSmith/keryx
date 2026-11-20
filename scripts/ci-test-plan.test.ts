@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { CORE_SHARDS, coreTestFilters, testFilesForPart } from "./ci-test-plan";
+import { CORE_SHARDS, coreTestFilters, testFilesForPart, verifyTestInventory } from "./ci-test-plan";
 
 test("CI partitions cover every selected test file exactly once", () => {
   const files = [
@@ -35,4 +35,18 @@ test("CI refuses unsupported core filter syntax and unknown partitions", () => {
   expect(() => coreTestFilters("bun test")).toThrow("plain Bun path filters");
   expect(() => coreTestFilters("bun test --timeout 5000")).toThrow("plain Bun path filters");
   expect(() => testFilesForPart([], [], [], "5")).toThrow("Unknown CI test partition");
+});
+
+test("CI requires the reported test files to match the complete plan", () => {
+  const planned = ["src/cli.test.ts", "src/auth.test.ts"];
+  expect(verifyTestInventory(planned, {
+    version: 1,
+    files: { "./src/cli.test.ts": 5, "src/auth.test.ts": 12 },
+  }, "1")).toBe(2);
+
+  expect(() => verifyTestInventory(planned, {
+    version: 1,
+    files: { "./src/cli.test.ts": 5, "src/extra.test.ts": 12 },
+  }, "1")).toThrow("Missing: src/auth.test.ts. Extra: src/extra.test.ts.");
+  expect(() => verifyTestInventory(planned, { version: 1, files: [] }, "1")).toThrow("Unexpected Bun timings format");
 });

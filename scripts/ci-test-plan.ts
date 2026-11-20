@@ -59,21 +59,29 @@ function readInventory(part: string): string[] {
   return selected;
 }
 
+export function verifyTestInventory(expected: string[], report: unknown, part: string): number {
+  if (report === null || typeof report !== "object" || !("version" in report) || report.version !== 1 ||
+    !("files" in report) || report.files === null || typeof report.files !== "object" || Array.isArray(report.files)) {
+    throw new Error("Unexpected Bun timings format.");
+  }
+  const actual = new Set(Object.keys(report.files).map((file) => file.replace(/^\.\//u, "")));
+  const planned = new Set(expected);
+  const missing = expected.filter((file) => !actual.has(file));
+  const extra = [...actual].filter((file) => !planned.has(file));
+  if (missing.length || extra.length) {
+    throw new Error(`Bun test inventory differs for ${part}. Missing: ${missing.join(", ")}. Extra: ${extra.join(", ")}.`);
+  }
+  return actual.size;
+}
+
 if (import.meta.main) {
   const [part = "", timings] = process.argv.slice(2);
   const expected = readInventory(part);
   if (!timings) {
     console.log(expected.map((file) => `./${file}`).join("\n"));
   } else {
-    const report = JSON.parse(readFileSync(timings, "utf8")) as { version: number; files: Record<string, number> };
-    if (report.version !== 1 || !report.files) throw new Error("Unexpected Bun timings format.");
-    const actual = new Set(Object.keys(report.files).map((file) => file.replace(/^\.\//u, "")));
-    const planned = new Set(expected);
-    const missing = expected.filter((file) => !actual.has(file));
-    const extra = [...actual].filter((file) => !planned.has(file));
-    if (missing.length || extra.length) {
-      throw new Error(`Bun test inventory differs for ${part}. Missing: ${missing.join(", ")}. Extra: ${extra.join(", ")}.`);
-    }
-    console.log(`Verified ${actual.size} test files for ${part}.`);
+    const report: unknown = JSON.parse(readFileSync(timings, "utf8"));
+    const verified = verifyTestInventory(expected, report, part);
+    console.log(`Verified ${verified} test files for ${part}.`);
   }
 }
