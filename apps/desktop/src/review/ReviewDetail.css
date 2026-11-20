@@ -89,7 +89,13 @@
 .review-publish fieldset { margin: 0; min-width: 0; border: 1px solid var(--border); border-radius: var(--r-md); padding: var(--sp-2) var(--sp-3); }
 .review-publish legend { color: var(--fg); font-weight: 600; overflow-wrap: anywhere; }
 .review-publish fieldset label { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--sp-1) var(--sp-2); padding-block: var(--sp-1); }
-.review-publish-questions, .review-publish-preview { display: grid; gap: var(--sp-2); }
+.review-publish-choice { flex: 1 1 0; min-width: 0; overflow-wrap: anywhere; }
+.review-publish-questions, .review-publish-preview { display: grid; min-width: 0; gap: var(--sp-2); }
+.review-publish-preview-header > button { margin-inline-start: auto; }
 .review-publish-navigation, .review-publish-footer { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
 .review-publish-footer { margin-inline-start: auto; justify-content: flex-end; }
 .review-publish-markdown { min-height: 3rem; max-height: min(24rem, 45vh); overflow: auto; overscroll-behavior: contain; overflow-wrap: anywhere; background: var(--bg-sunken); border: 1px solid var(--border); border-radius: var(--r-md); padding: var(--sp-3); }
+.review-publish-inline { min-width: 0; border: 1px solid var(--border); border-radius: var(--r-md); padding: var(--sp-2) var(--sp-3); }
+.review-publish-inline summary { cursor: pointer; }
+.review-publish-inline ol { display: grid; gap: var(--sp-3); max-height: min(24rem, 45vh); overflow: auto; overscroll-behavior: contain; padding-inline-start: var(--sp-4); }
+.review-publish-inline code { overflow-wrap: anywhere; }

@@ -7,7 +7,7 @@ import { parseDiffHunks, type ReviewComment } from "./bot/post";
 import { screenCommentBody } from "./bot/redaction";
 import { verifyDeskSubject } from "./desk-run-service";
 import { DeskRunStore } from "./desk-run-store";
-import type { PublicationAnswer, PublicationOptionId, PublicationRequest, PublicationSettings, PublicationState } from "./desk-publication-types";
+import { PUBLICATION_REQUEST_LIMIT, type PublicationAnswer, type PublicationOptionId, type PublicationRequest, type PublicationSettings, type PublicationState } from "./desk-publication-types";
 import type { DeskRunKey } from "./desk-run-types";
 import { namedGithubEnvironment, reviewCommandOptions, reviewTool } from "./github-cli";
 import { callGitHub, createGhPort, parseGhJson, renderRoundBlock } from "./pr-comments";
@@ -26,9 +26,15 @@ const eventFor: Record<PublicationSettings["verdict"], ReviewEvent> = {
   approve: "APPROVE", suggestions: "APPROVE", changes: "REQUEST_CHANGES", comment: "COMMENT",
 };
 type Finding = { id: string; severity: VerdictFinding["severity"]; problem: string; file: string | null; line: number | null; impact: string; suggested_fix: string; selectedAnswer?: string };
-type Draft = { settings: PublicationSettings; body: string; comments: ReviewComment[]; savedAt: string };
+type Draft = { settings: PublicationSettings; savedAt: string };
 type Receipt = { url?: string };
 type Prepared = { state: PublicationState; comments: ReviewComment[]; publicationBody: string };
+type Subject = Awaited<ReturnType<typeof verifyDeskSubject>>;
+type PreviewCache = { key: string; expires: number; subject: Subject; placements?: [string, number[]][] };
+const draftLimit = 3 * PUBLICATION_REQUEST_LIMIT;
+const previewCacheLimit = 2 * PUBLICATION_REQUEST_LIMIT;
+const previewCacheFile = "publication-preview-cache.json";
+const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const object = (v: unknown): Record<string, unknown> | undefined =>
   v && typeof v === "object" && !Array.isArray(v) ? v as Record<string, unknown> : undefined;
 const text = (v: unknown) => typeof v === "string" ? v.trim() : "";
@@ -48,6 +54,31 @@ async function scopedFile(root: string, relative: string, limit: number): Promis
 async function json<T>(root: string, relative: string, limit: number): Promise<T | undefined> {
   const content = await scopedFile(root, relative, limit);
   return content === undefined ? undefined : JSON.parse(content) as T;
+}
+
+async function projectOverlay(cwd: string): Promise<{ overlay?: string; overlayWarning?: string }> {
+  try {
+    const overlay = await scopedFile(cwd, overlayPath, 8192);
+    if (overlay?.split(placeholder).length === 2) return { overlay };
+    return overlay === undefined ? {} : { overlayWarning: "The project template must contain one {{review}} placeholder." };
+  } catch {
+    return { overlayWarning: "The project template could not be read. The standard draft is available." };
+  }
+}
+
+async function previewSubject(cwd: string, directory: string, key: DeskRunKey, auth: GithubConnection,
+  request: PublicationRequest, revision: { baseSha: string; headSha: string }): Promise<PreviewCache> {
+  const cacheKey = hash([cwd, key, revision, auth.binding, auth.env.GH_TOKEN, auth.env.GITHUB_TOKEN]);
+  const cached = request.kind === "preview" && !request.refresh
+    ? await json<PreviewCache>(directory, previewCacheFile, previewCacheLimit).catch(() => undefined) : undefined;
+  const previous = cached?.key === cacheKey && cached.expires > Date.now() && cached.subject ? cached : undefined;
+  // An unbound project can switch its effective gh account without a Keryx binding update.
+  if (auth.login && previous) return previous;
+  const subject = await verifyDeskSubject(cwd, key, undefined, auth);
+  if (previous && previous.subject.baseRefOid === subject.baseRefOid && previous.subject.headRefOid === subject.headRefOid) {
+    return { ...previous, subject };
+  }
+  return { key: cacheKey, expires: Date.now() + 15_000, subject };
 }
 
 function findingOf(entry: VerdictFinding, raw: Record<string, unknown> | undefined): Finding {
@@ -93,9 +124,9 @@ async function findPreviousPublication(cwd: string, key: DeskRunKey, auth: Githu
 
 async function prepare(input: {
   cwd: string; directory: string; run: NonNullable<ReturnType<DeskRunStore["byId"]>>["run"];
-  key: DeskRunKey; auth: GithubConnection; request: PublicationRequest; current: boolean;
+  key: DeskRunKey; auth: GithubConnection; request: PublicationRequest; current: boolean; cache: PreviewCache;
 }): Promise<Prepared> {
-  const { cwd, directory, run, key, auth, request, current } = input;
+  const { cwd, directory, run, key, auth, request, current, cache } = input;
   const packageDir = path.join(directory, "package");
   const target = `https://github.com/${key.repo}/pull/${key.number}`;
   const manifest = await json<ManagedReviewManifest>(directory, "package/manifest.json", 2 * 1024 * 1024);
@@ -103,13 +134,12 @@ async function prepare(input: {
       manifest.target.base !== run.baseSha || manifest.target.head !== run.headSha) {
     throw new Error("configuration: This review has no matching local package to publish.");
   }
-  const [recorded, verdict, draft, receipt, overlayFile, readiness] = await Promise.all([
+  const [recorded, verdict, draft, receipt, { overlay, overlayWarning }, readiness] = await Promise.all([
     premiseRecords(packageDir), computeVerdict(packageDir),
-    json<Draft>(directory, "publication-draft.json", 3 * 1024 * 1024),
+    json<Draft>(directory, "publication-draft.json", draftLimit),
     json<Receipt>(directory, "publication-receipt.json", 4096),
-    scopedFile(cwd, overlayPath, 8192), computeReadiness(packageDir),
+    projectOverlay(cwd), computeReadiness(packageDir),
   ]);
-  const overlay = overlayFile?.split(placeholder).length === 2 ? overlayFile : undefined;
   const recordFor = (entry: VerdictFinding) => recorded.records.find(row =>
     row.id === entry.id && (!row.reviewer || row.reviewer === entry.reviewer));
   const questionId = (entry: VerdictFinding) => text(recordFor(entry)?.global_id) || entry.id;
@@ -154,18 +184,31 @@ async function prepare(input: {
     item.id !== "premise-decisions" || !answered ||
     recorded.records.some(row => premiseHoldState(row, recorded.decisions) === "awaiting" && !Object.hasOwn(answers, text(row.global_id ?? row.id))));
   const complete = run.result?.coverage === "complete" && failing.length === 0;
+  const verdictOverride = saved?.verdictOverride === undefined ? saved?.verdict ?? null : saved.verdictOverride;
   const settings: PublicationSettings = {
     inline: saved?.inline ?? false, general: saved?.general ?? true, keryxTemplate: saved?.keryxTemplate ?? true,
-    overlay: !!overlay && saved?.overlay === true, verdict: saved?.verdict ?? recommendation(complete, findings), answers,
+    overlay: !!overlay && saved?.overlay === true, verdict: verdictOverride ?? recommendation(complete, findings), verdictOverride, answers,
   };
+  const largestAnswers = Object.fromEntries(questions.map(question => [question.id, question.options?.[0]?.id ?? "dismiss"]));
+  const answerLimitExceeded = Buffer.byteLength(JSON.stringify({
+    kind: "submit", id: request.id, settings: { ...settings, answers: largestAnswers }, digest: "0".repeat(64),
+  })) > PUBLICATION_REQUEST_LIMIT;
   const comments: ReviewComment[] = [];
   const inBody: Finding[] = [];
   let inlineUnavailable = false;
   if (settings.inline && current && findings.some(finding => finding.file && finding.line)) {
     try {
-      const diff = await boardGh(cwd, ["api", "--hostname", "github.com", "-H", "Accept: application/vnd.github.v3.diff",
-        `repos/${key.repo}/pulls/${key.number}`], auth);
-      const hunks = parseDiffHunks(diff);
+      let hunks: Map<string, Set<number>>;
+      if (Array.isArray(cache.placements) && cache.placements.every(entry =>
+        Array.isArray(entry) && typeof entry[0] === "string" && Array.isArray(entry[1]))) {
+        hunks = new Map(cache.placements.map(([file, lines]) => [file, new Set(lines)]));
+      }
+      else {
+        const diff = await boardGh(cwd, ["api", "--hostname", "github.com", "-H", "Accept: application/vnd.github.v3.diff",
+          `repos/${key.repo}/pulls/${key.number}`], auth);
+        hunks = parseDiffHunks(diff);
+        if (request.kind === "preview") cache.placements = [...hunks].map(([file, lines]) => [file, [...lines]]);
+      }
       for (const finding of findings) {
         if (finding.file && finding.line && hunks.get(finding.file)?.has(finding.line)) {
           comments.push({ path: finding.file, line: finding.line, side: "RIGHT",
@@ -178,6 +221,12 @@ async function prepare(input: {
       inBody.push(...findings);
     }
   } else inBody.push(...findings);
+  if (request.kind === "preview") {
+    const encoded = JSON.stringify(cache);
+    if (Buffer.byteLength(encoded) <= previewCacheLimit) {
+      await writeFileAtomic(path.join(directory, previewCacheFile), encoded, { mode: 0o600 }).catch(() => undefined);
+    }
+  }
   const reviewLabels = { approve: "Approved", suggestions: "Approved with suggestions", changes: "Changes requested", comment: "Review comments" };
   const header = `Reviewed \`${run.headSha.slice(0, 12)}\` against \`${run.baseSha.slice(0, 12)}\`.`;
   const status = !complete
@@ -199,30 +248,31 @@ async function prepare(input: {
   const marker = `<!-- keryx-desktop-review ${request.id} -->`;
   body += `\n\n${marker}`;
   const publishedUrl = receipt && (receipt.url ?? await findPreviousPublication(cwd, key, auth, marker));
-  const digest = createHash("sha256").update(JSON.stringify([request.id, key, run.headSha, settings, body, comments, questions])).digest("hex");
+  const digest = hash([request.id, key, run.headSha, settings, body, comments, questions]);
   const approval = eventFor[settings.verdict] === "APPROVE";
   const blockedReason = publishedUrl ? "This review has already been published."
     : receipt ? "A previous submission has an unknown result. Check the pull request before sending another review."
     : !current ? "The pull request is closed or its revision moved. You can still save this draft locally."
+    : answerLimitExceeded ? "This review has too many answers to submit together. Split the review into smaller runs."
     : !answered ? "Answer each finding question before publishing."
     : approval && !complete ? "A partial review cannot approve. Select Comment only or Request changes."
     : inlineUnavailable ? "The pull request diff is unavailable. Retry or turn off inline comments."
-    : comments.length > 100 || body.length > PUBLISHED_BODY_LIMIT ? "This draft exceeds the GitHub review size limit."
+    : comments.length > 100 || body.length > PUBLISHED_BODY_LIMIT || comments.some(comment => comment.body.length > PUBLISHED_BODY_LIMIT)
+      ? "This draft exceeds the GitHub review size limit. Change what is included or split the review."
     : !settings.general && !comments.length ? "Enable General comment or select inline comments that are on the diff." : undefined;
-  return { state: { version: 1, settings, body: visibleBody, inlineCount: comments.length, questions, overlayAvailable: !!overlay,
+  return { state: { version: 1, settings, body: visibleBody, inlineCount: comments.length, inlineComments: comments,
+    questions: answerLimitExceeded ? [] : questions, overlayAvailable: !!overlay,
     canSubmit: !blockedReason, digest, ...(blockedReason ? { blockedReason } : {}),
+    ...(overlayWarning ? { overlayWarning } : {}),
     ...(draft ? { savedAt: draft.savedAt } : {}), ...(publishedUrl ? { publishedUrl } : {}) }, comments, publicationBody: body };
 }
 
-export async function requestDeskPublication(cwd: string, key: DeskRunKey, request: PublicationRequest): Promise<PublicationState> {
+export async function requestDeskPublication(cwd: string, key: DeskRunKey, request: PublicationRequest,
+  confirmSubmit?: (state: PublicationState) => Promise<void>): Promise<PublicationState> {
   if (!uuid.test(request.id) || !/^[\w-]+\/[\w.-]+$/.test(key.repo) || !Number.isSafeInteger(key.number) || key.number < 1) {
     throw new Error("configuration: Invalid review publication target.");
   }
   const connection = await projectGithubConnection(cwd, process.env, key.viewer);
-  // Pin the credential used by the send too, even when the project's viewer was discovered through gh's default account.
-  const auth: GithubConnection = connection.login ? connection : {
-    ...connection, login: key.viewer, env: await namedGithubEnvironment(cwd, key.viewer, connection.env),
-  };
   const store = new DeskRunStore(undefined, true);
   const directory = store.directory(request.id);
   const attempt = (() => {
@@ -238,41 +288,56 @@ export async function requestDeskPublication(cwd: string, key: DeskRunKey, reque
       run.result.reviewed.baseSha !== run.baseSha || run.result.reviewed.headSha !== run.headSha) {
     throw new Error("access: A verified local review for this account and pull request was not found.");
   }
-  const pr = await verifyDeskSubject(cwd, key, undefined, auth);
+  const cache = await previewSubject(cwd, directory, key, connection, request, run);
+  const pr = cache.subject;
   const current = pr.state === "OPEN" && pr.baseRefOid === run.baseSha && pr.headRefOid === run.headSha;
-  const render = () => prepare({ cwd, directory, run, key, auth, request, current });
+  const render = () => prepare({ cwd, directory, run, key, auth: connection, request, current, cache });
   if (request.kind === "preview") {
     const { state } = await render();
-    verifyGithubBindingUnchanged(auth);
+    verifyGithubBindingUnchanged(connection);
     return state;
   }
   return withFileLock(path.join(directory, "publication.lock"), async () => {
     const { state, comments, publicationBody } = await render();
     const savedAt = new Date().toISOString();
-    const draft: Draft = { settings: state.settings, body: state.body, comments, savedAt };
-    const save = () => writeFileAtomic(path.join(directory, "publication-draft.json"), JSON.stringify(draft), { mode: 0o600 });
+    const draft: Draft = { settings: state.settings, savedAt };
+    const encoded = JSON.stringify(draft);
+    if (Buffer.byteLength(encoded) > draftLimit) throw new Error("configuration: The review settings are too large to save. Split the review.");
+    const save = () => writeFileAtomic(path.join(directory, "publication-draft.json"), encoded, { mode: 0o600 });
     if (request.kind === "save") {
-      verifyGithubBindingUnchanged(auth);
+      verifyGithubBindingUnchanged(connection);
       await save();
       return { ...state, savedAt };
     }
     if (request.digest !== state.digest) throw new Error("stale: The review preview changed. Refresh it before submitting.");
     if (!state.canSubmit) throw new Error(`configuration: ${state.blockedReason}`);
+    if (!confirmSubmit) throw new Error("permission: Confirm the exact review before publishing.");
     const outbound = { event: eventFor[state.settings.verdict], body: publicationBody, comments, commit_id: run.headSha };
-    const screen = await Promise.all([outbound.body, ...comments.map(comment => comment.body)].map(body => screenCommentBody(cwd, body)));
-    if (screen.some(result => !result.ok)) throw new Error("configuration: The security output check withheld this draft. Review the selected content before submitting.");
-    await verifyDeskSubject(cwd, key, run, auth);
+    for (const body of [outbound.body, ...comments.map(comment => comment.body)]) {
+      if (!(await screenCommentBody(cwd, body)).ok) {
+        throw new Error("configuration: The security output check withheld this draft. Review the selected content before submitting.");
+      }
+    }
+    await confirmSubmit(state);
+    await verifyDeskSubject(cwd, key, run, connection);
+    // Pin only after independently verifying the active viewer with the default connection.
+    const auth: GithubConnection = connection.login ? connection : {
+      ...connection, login: key.viewer, env: await namedGithubEnvironment(cwd, key.viewer, connection.env),
+    };
+    if (auth !== connection) await verifyDeskSubject(cwd, key, run, auth);
     await save();
     const receiptPath = path.join(directory, "publication-receipt.json");
     // Persist the intent before the network call. A lost response must not cause a duplicate review.
     await writeFileAtomic(receiptPath, "{}", { mode: 0o600 });
     const options = reviewCommandOptions(cwd, auth.env);
     let rejected: number | undefined;
+    let postStarted = false;
     const port = createGhPort(async (argv, stdin) => {
       const proc = withCurrentGithubBinding(auth, () => Bun.spawn([reviewTool("gh", auth.env), "api", "--hostname", "github.com", ...argv.slice(2)], {
         cwd, env: options.env, stdin: stdin === undefined ? "ignore" : new TextEncoder().encode(stdin),
         stdout: "pipe", stderr: "pipe", signal: AbortSignal.timeout(options.timeout),
       }));
+      postStarted = true;
       const [stdout, stderr, exitCode] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited]);
       if (exitCode !== 0) {
         const status = /\(HTTP (400|401|403|404|422)\)/.exec(stderr)?.[1];
@@ -284,13 +349,15 @@ export async function requestDeskPublication(cwd: string, key: DeskRunKey, reque
     try {
       posted = await callGitHub(port, { method: "POST", path: `repos/${key.repo}/pulls/${key.number}/reviews`, body: outbound });
     } catch (error) {
-      if (rejected !== undefined || (error instanceof Error && error.message.startsWith("access:"))) {
+      if (rejected !== undefined || !postStarted) {
         await unlink(receiptPath);
         // eslint-disable-next-line preserve-caught-error -- GitHub errors can contain private review bodies.
         if (rejected === 422) throw new Error("configuration: GitHub rejected this review. Check the verdict and inline comments. Authors cannot approve their own pull requests.");
         // eslint-disable-next-line preserve-caught-error -- GitHub errors can contain private review bodies.
         if (rejected !== undefined) throw new Error("permission: GitHub refused the review. Check the project's account and its permission to submit reviews.");
-        throw error;
+        if (error instanceof Error && /^(access|configuration):/.test(error.message)) throw error;
+        // eslint-disable-next-line preserve-caught-error -- Subprocess errors can include private arguments.
+        throw new Error("unavailable: GitHub CLI could not start. Retry when it is available.");
       }
       // eslint-disable-next-line preserve-caught-error -- GitHub subprocess errors may contain private response bodies.
       throw new Error("unavailable: Submission could not be confirmed. Check the pull request before sending another review.");

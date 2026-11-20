@@ -1563,15 +1563,10 @@ export function touchesChunkEstimateAnswer(raw: string): boolean {
  */
 export function touchesReviewPublish(raw: string): boolean {
   return anySimpleCommand(joinContinuations(raw), (words) => {
-    const args = keryxArgs(words);
-    if (args === undefined) return false;
-    const lower = args.map((w) => w.toLowerCase());
-    if (lower[0] === "ctx" && lower[1] === "rg") return false;
-    const review = lower.indexOf("review");
-    if (review < 0) return false;
-    const rest = args.slice(review + 1);
-    return lower.slice(review + 1).some(word => word === "publish" || word === "desk-publish")
-      || (rest[0] !== undefined && wordIsOpaque(rest[0]));
+    const [group, verb] = keryxArgs(words) ?? [];
+    if (group?.toLowerCase() !== "review" || verb === undefined) return false;
+    const subcommand = verb.toLowerCase();
+    return subcommand === "publish" || subcommand === "desk-publish" || wordIsOpaque(verb);
   });
 }
 

@@ -392,11 +392,13 @@ test("previews a GitHub draft, collects finding answers and only publishes the c
   const actions: PublicationRequest[] = [];
   let refuseSubmission = true;
   let saved: PublicationSettings | undefined;
-  const defaults: PublicationSettings = { inline: true, general: true, keryxTemplate: true, overlay: false, verdict: "changes", answers: {} };
+  const firstOption = `option:${"a".repeat(64)}` as const;
+  const secondOption = `option:${"b".repeat(64)}` as const;
+  const defaults: PublicationSettings = { inline: true, general: true, keryxTemplate: true, overlay: false, verdict: "changes", verdictOverride: null, answers: {} };
   const questions: PublicationState["questions"] = [
-    { id: "first", text: "Keep the owner finding?", recommendation: "option:first", options: [
-      { id: "option:first", label: "Include the ownership finding" },
-      { id: "option:second", label: "Omit it as out of scope" },
+    { id: "first", text: "Keep the owner finding?", options: [
+      { id: firstOption, label: "Include the ownership finding" },
+      { id: secondOption, label: "Omit it as out of scope" },
     ] },
     { id: "second", text: "Keep the unrelated case?", recommendation: "dismiss" },
   ];
@@ -415,7 +417,9 @@ test("previews a GitHub draft, collects finding answers and only publishes the c
       return {
         version: 1, settings, questions, overlayAvailable: true,
         body: "Draft lead-in\n\n## Formatted draft\n\n<script>alert(1)</script>\n\n[Ignore link](https://example.invalid)\n\n![Remote image](https://example.invalid/image.png)\n\n<img src='https://example.invalid/raw.png'>",
-        inlineCount: settings.inline ? 1 : 0, canSubmit: true, digest: String(actions.length),
+        inlineCount: settings.inline ? 1 : 0, canSubmit: true, digest: actions.length.toString(16).padStart(64, "0"),
+        inlineComments: settings.inline ? [{ path: "src/owner.ts", line: 73,
+          body: "**Inline body**\n\n[Inert link](https://example.invalid)\n\n![Inert image](https://example.invalid/inline.png)" }] : [],
         ...(saved ? { savedAt: time } : {}),
         ...(request.kind === "submit" ? { publishedUrl: pr.url + "#pullrequestreview-17" } : {}),
       };
@@ -431,19 +435,31 @@ test("previews a GitHub draft, collects finding answers and only publishes the c
   expect(dialog.textContent).toContain("Question 1 of 2");
   const label = (name: string) => [...dialog.querySelectorAll<HTMLLabelElement>("label")].find(label => label.textContent?.trim().startsWith(name));
   const field = (name: string) => label(name)!.querySelector<HTMLInputElement>("input")!;
-  expect(label("Include the ownership finding")?.textContent).toContain("Recommended");
+  expect(dialog.textContent).toContain("The report has no recommendation.");
+  expect(label("Include the ownership finding")?.textContent).not.toContain("Recommended");
   expect(label("Keep finding")).toBeUndefined();
-  expect(field("Request changes").checked).toBe(true);
+  expect(field("Use recommendation").checked).toBe(true);
+  expect(label("Use recommendation")?.textContent).toContain("Request changes");
+  const inline = dialog.querySelector<HTMLDetailsElement>(".review-publish-inline")!;
+  expect(inline.open).toBe(false);
+  await act(async () => { inline.open = true; inline.dispatchEvent(new Event("toggle")); });
+  expect(inline.textContent).toContain("src/owner.ts:73");
+  expect(inline.querySelector("strong")?.textContent).toBe("Inline body");
+  expect(inline.querySelector("img, a[href]")).toBeNull();
+  await act(async () => field("General comment").click());
+  expect(field("General comment").checked).toBe(false);
+  expect(inline.textContent).toContain("src/owner.ts:73");
   await act(async () => field("Project overlay").click());
   await act(async () => field("Approve with suggestions").click());
   await act(async () => field("Omit it as out of scope").click());
   await click("Next question");
   expect(dialog.textContent).toContain("Question 2 of 2");
+  expect(label("Dismiss finding")?.textContent).toContain("Recommended");
   await act(async () => field("Dismiss finding").click());
   expect(actions.every(action => action.kind === "preview")).toBe(true);
   await click("Save locally");
-  const answers = { first: "option:second", second: "dismiss" };
-  expect(actions.at(-1)).toMatchObject({ kind: "save", settings: { verdict: "suggestions", overlay: true, answers } });
+  const answers = { first: secondOption, second: "dismiss" };
+  expect(actions.at(-1)).toMatchObject({ kind: "save", settings: { verdict: "suggestions", verdictOverride: "suggestions", overlay: true, answers } });
   expect(dialog.textContent).toContain("Last saved locally");
   await click("Close");
   await click("Publish to GitHub");
@@ -451,7 +467,7 @@ test("previews a GitHub draft, collects finding answers and only publishes the c
   expect(field("Omit it as out of scope").checked).toBe(true);
   await click("Next question");
   expect(field("Dismiss finding").checked).toBe(true);
-  const digest = String(actions.length);
+  const digest = actions.length.toString(16).padStart(64, "0");
   await click("Submit review");
   expect(actions.at(-1)).toMatchObject({ kind: "submit", digest, settings: { answers } });
   expect(dialog.querySelector('[role="alert"]')?.textContent).toContain("permission to submit reviews");
@@ -460,6 +476,90 @@ test("previews a GitHub draft, collects finding answers and only publishes the c
   await click("Submit review");
   expect(actions.at(-1)).toMatchObject({ kind: "submit", digest, settings: { answers } });
   expect(dialog.textContent).toContain("Review published on GitHub.");
+  await click("Close");
+});
+
+test("updates automatic verdicts and only enables submission after the latest coalesced preview", async () => {
+  const requests: PublicationRequest[] = [];
+  const waiters: (() => void)[] = [];
+  let holdPreviews = true;
+  let refuseRefresh = false;
+  const openReview: typeof reviewRun = async () => ({ version: 1, runs: [complete] });
+  const defaults: PublicationSettings = { inline: true, general: true, keryxTemplate: true, overlay: false,
+    verdict: "comment", verdictOverride: null, answers: {} };
+  await show(openReview, { ...pr, number: 45 }, {
+    publishCommand: async (_cwd, _subject, request) => {
+      const index = requests.push(request);
+      const settings = request.settings ?? defaults;
+      if (request.kind === "preview" && request.refresh && refuseRefresh) {
+        refuseRefresh = false;
+        throw new Error("Could not refresh the review.");
+      }
+      if (request.kind === "preview" && request.settings && holdPreviews) {
+        await new Promise<void>(resolve => { waiters.push(resolve); });
+      }
+      return {
+        version: 1, settings: { ...settings, verdict: settings.verdictOverride ??
+          (settings.answers.held === "uphold" ? "changes" : "comment") },
+        body: `Preview ${index}`, inlineCount: 0, overlayAvailable: false,
+        canSubmit: settings.general || settings.inline, digest: index.toString(16).padStart(64, "0"),
+        questions: [{ id: "held", text: "Include the finding?", recommendation: "uphold" }],
+      };
+    },
+  });
+  await click("View review result");
+  await click("Publish to GitHub");
+  expect(requests[0]).toMatchObject({ kind: "preview", refresh: true });
+  const dialog = document.querySelector<HTMLElement>(".dialog")!;
+  const input = (name: string) => [...dialog.querySelectorAll("label")]
+    .find(node => node.textContent?.trim().startsWith(name))!.querySelector("input")!;
+  expect(dialog.textContent).toContain("Comment only recommended");
+  await act(async () => input("Keep finding").click());
+  await act(async () => input("Keryx template").click());
+  await act(async () => input("Inline comments").click());
+  expect(requests).toHaveLength(2);
+  expect(input("Keryx template").checked).toBe(false);
+  expect(input("Inline comments").checked).toBe(false);
+  expect(btn("Save locally").disabled).toBe(true);
+  expect(btn("Submit review").disabled).toBe(true);
+  await act(async () => waiters.shift()!());
+  expect(requests).toHaveLength(3);
+  expect(requests[2]).toMatchObject({ kind: "preview", settings: { keryxTemplate: false, inline: false,
+    verdictOverride: null, answers: { held: "uphold" } } });
+  expect(dialog.textContent).not.toContain("Preview 2");
+  expect(btn("Submit review").disabled).toBe(true);
+  await act(async () => waiters.shift()!());
+  expect(dialog.textContent).toContain("Request changes recommended");
+  expect(btn("Submit review").disabled).toBe(false);
+  holdPreviews = false;
+
+  await act(async () => input("Comment only").click());
+  expect(requests.at(-1)).toMatchObject({ settings: { verdictOverride: "comment" } });
+  expect(input("Comment only").checked).toBe(true);
+  await act(async () => input("Use recommendation").click());
+  expect(requests.at(-1)).toMatchObject({ settings: { verdictOverride: null } });
+  expect(dialog.textContent).toContain("Request changes recommended");
+  refuseRefresh = true;
+  await click("Refresh preview");
+  expect(dialog.querySelector("[role=alert]")?.textContent).toContain("Could not refresh the review.");
+  expect(btn("Submit review").disabled).toBe(true);
+  await click("Refresh preview");
+  expect(requests.at(-1)).toMatchObject({ kind: "preview", refresh: true, settings: { verdictOverride: null, verdict: "changes" } });
+  await click("Submit review");
+  expect(requests.at(-1)).toMatchObject({ kind: "submit", digest: "7".padStart(64, "0"),
+    settings: { verdictOverride: null, verdict: "changes", answers: { held: "uphold" } } });
+  await click("Close");
+});
+
+test("suggests a supported executable when the selected CLI lacks review publishing", async () => {
+  await show(async () => ({ version: 1, runs: [complete] }), { ...pr, number: 46 }, {
+    publishCommand: async () => { throw new Error("Unknown review command: desk-publish"); },
+  });
+  await click("View review result");
+  await click("Publish to GitHub");
+  expect(document.querySelector(".dialog [role=alert]")?.textContent).toContain("Settings → Desktop");
+  expect(document.querySelector(".dialog [role=alert]")?.textContent).toContain("Bundled");
+  expect(btn("Submit review").disabled).toBe(true);
   await click("Close");
 });
 

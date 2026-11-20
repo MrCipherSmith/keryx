@@ -13,6 +13,7 @@ import { CALLER_UNATTRIBUTED, recordLogStart, recordOrchestratorCall } from "./o
 import { downgradedPremise, heldFinding, premiseAnswer } from "./premise-fixtures";
 import { commitFiles, git, initRepo } from "./git-fixture.test-helpers";
 import { packageCoverageErrors } from "./research";
+import { buildReviewScope } from "./scope";
 import { COVERAGE_MD_MARK } from "./coverage-md";
 import { READINESS_ITEMS, computeReadiness, failingItems, memoryLogNote, partialHeader, readinessDepthLines, readinessItemId, readinessLine, readinessRefusal, renderReadiness, waiveReadiness } from "./readiness";
 
@@ -309,6 +310,51 @@ describe("item 9: a recount against the wrong base (AC7)", () => {
     expect(item?.evidence).toContain("src/other.ts");
     const equal = await computeReadiness(pkg, { prFiles: async () => CHANGED });
     expect(equal.items.find((entry) => entry.id === "pr-files")?.status).toBe("pass");
+  });
+
+  const code = "diff --git a/src/a.ts b/src/a.ts\n--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1 +1 @@\n-const value = 1;\n+const value = 2;\n";
+  const comments = "diff --git a/src/comments.ts b/src/comments.ts\n--- a/src/comments.ts\n+++ b/src/comments.ts\n@@ -1 +1 @@\n-// first old\n+// first new\n@@ -10 +10 @@\n-// second old\n+// second new\n";
+  const lock = "diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml\n--- a/pnpm-lock.yaml\n+++ b/pnpm-lock.yaml\n@@ -1 +1 @@\n-lockfileVersion: 1\n+lockfileVersion: 2\n";
+  const diff = code + comments + comments.replaceAll("src/comments.ts", "src/more-comments.ts") + lock;
+  const remoteFiles = ["src/a.ts", "src/comments.ts", "src/more-comments.ts", "pnpm-lock.yaml"];
+
+  test("the PR inventory includes paths explicitly dropped by the scope pre-filter", async () => {
+    const scope = buildReviewScope(diff);
+    expect(scope.files).toEqual(["src/a.ts"]);
+    expect(scope.drops.filter((drop) => drop.path === "src/comments.ts").map((drop) => drop.reason)).toEqual(["comment-only", "comment-only"]);
+    expect(scope.drops.find((drop) => drop.path === "pnpm-lock.yaml")?.granularity).toBe("file");
+    writeJson("scope-files.json", { files: scope.files, changedLines: scope.counts.changedLinesRetained });
+    writeJson("scope.json", scope);
+    writeBlastRadius(remoteFiles, []);
+
+    const report = await computeReadiness(pkg, { prFiles: async () => remoteFiles });
+    const item = report.items.find((entry) => entry.id === "pr-files");
+    expect(item?.status).toBe("pass");
+    expect(item?.evidence).toContain("3 intentionally filtered");
+
+    writeBlastRadius([...remoteFiles.slice(0, 3), "src/wrong-base.ts"], []);
+    const wrongBase = await computeReadiness(pkg, { prFiles: async () => remoteFiles });
+    expect(wrongBase.items.find((entry) => entry.id === "pr-files")?.evidence).toContain("wrong base");
+  });
+
+  test("the pre-filter does not account for truly absent files or unreconciled retained regions", async () => {
+    const scope = buildReviewScope(code + comments + lock);
+    const smallerPr = remoteFiles.filter((file) => file !== "src/more-comments.ts");
+    writeJson("scope-files.json", { files: scope.files });
+    writeJson("scope.json", scope);
+    writeBlastRadius(smallerPr, []);
+
+    const missing = await computeReadiness(pkg, { prFiles: async () => [...smallerPr, "src/missing.ts"] });
+    expect(missing.items.find((entry) => entry.id === "pr-files")?.status).toBe("fail");
+    expect(missing.items.find((entry) => entry.id === "pr-files")?.evidence).toContain("src/missing.ts");
+
+    writeJson("scope.json", { ...scope, drops: scope.drops.slice(1) });
+    const incompleteDrops = await computeReadiness(pkg, { prFiles: async () => smallerPr });
+    expect(incompleteDrops.items.find((entry) => entry.id === "pr-files")?.status).toBe("fail");
+
+    writeJson("scope.json", { ...scope, regions: [...scope.regions, { ...scope.regions[0], path: "src/comments.ts" }] });
+    const retained = await computeReadiness(pkg, { prFiles: async () => smallerPr });
+    expect(retained.items.find((entry) => entry.id === "pr-files")?.status).toBe("fail");
   });
 });
 

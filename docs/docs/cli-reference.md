@@ -5191,8 +5191,11 @@ Load a deferred report with `status --id UUID`. A retry creates a fresh attempt 
 `keryx review desk-publish --json --repo owner/name --repository-id ID --viewer LOGIN --number N --request <JSON>`
 prepares the publication form for a local review attempt. Use `kind: preview` with
 the attempt UUID to read the draft, or `kind: save` with settings to keep the draft
-locally. Submitting requires the settings and digest of the exact preview. Desktop
-checks the pull request revision and the selected GitHub account before submitting.
+locally. Use `--request-file <path>` for a request supplied in a local JSON file.
+Submitting requires the settings and digest of the exact preview. Direct
+submission from the CLI also requires explicit confirmation in an interactive
+terminal. Keryx checks the pull request revision and the effective GitHub
+account before submitting.
 
 Agents can read the same project context that a manual or scheduled reviewer receives in its private checkout.
 

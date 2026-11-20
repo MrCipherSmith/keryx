@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -8,20 +8,22 @@ import { isolateGitDiscovery } from "./test-git-fixture";
 
 const key = { repo: "example/project", repositoryId: "fixture-repo-id", viewer: "fixture-reviewer", number: 7 };
 const revision = { baseSha: "a".repeat(40), headSha: "b".repeat(40) };
-const envNames = ["KERYX_CONFIG_DIR", "KERYX_DATA_DIR", "PATH", "FIXTURE_BODY", "FIXTURE_PR", "FIXTURE_DIFF"] as const;
+const envNames = ["KERYX_CONFIG_DIR", "KERYX_DATA_DIR", "PATH", "GH_TOKEN", "GITHUB_TOKEN",
+  "FIXTURE_BODY", "FIXTURE_PR", "FIXTURE_NAMED_PR", "FIXTURE_DIFF", "FIXTURE_DIFF_READS"] as const;
 let saved: Partial<Record<(typeof envNames)[number], string | undefined>>;
 let restoreGit: () => void;
 let root: string;
 let project: string;
 let directory: string;
 let id: string;
+const confirmFixture = async () => {};
 
 function json(file: string, value: unknown) {
   writeFileSync(file, JSON.stringify(value));
 }
 
-function setHead(headRefOid: string) {
-  json(path.join(root, "pr.json"), { data: { viewer: { login: key.viewer }, repository: { id: key.repositoryId,
+function setHead(headRefOid: string, viewer = key.viewer) {
+  json(path.join(root, "pr.json"), { data: { viewer: { login: viewer }, repository: { id: key.repositoryId,
     pullRequest: { state: "OPEN", baseRefOid: revision.baseSha, headRefOid } } } });
 }
 
@@ -44,6 +46,10 @@ beforeEach(() => {
   process.env.FIXTURE_BODY = path.join(root, "post.json");
   process.env.FIXTURE_PR = path.join(root, "pr.json");
   process.env.FIXTURE_DIFF = path.join(root, "diff.txt");
+  process.env.FIXTURE_DIFF_READS = path.join(root, "diff-reads");
+  delete process.env.GH_TOKEN;
+  delete process.env.GITHUB_TOKEN;
+  delete process.env.FIXTURE_NAMED_PR;
   setHead(revision.headSha);
   writeFileSync(process.env.FIXTURE_DIFF, "diff --git a/src/a.ts b/src/a.ts\n--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1 +1 @@\n-old\n+new\n");
   const gh = path.join(root, "gh");
@@ -51,8 +57,8 @@ beforeEach(() => {
     "#!/bin/sh",
     'case "$1:$4" in',
     "  auth:*) printf 'fixture-value-only\\n' ;;",
-    '  api:graphql) cat "$FIXTURE_PR" ;;',
-    '  api:-H) cat "$FIXTURE_DIFF" ;;',
+    '  api:graphql) if [ -n "$GH_TOKEN" ] && [ -n "$FIXTURE_NAMED_PR" ]; then cat "$FIXTURE_NAMED_PR"; else cat "$FIXTURE_PR"; fi ;;',
+    '  api:-H) printf x >> "$FIXTURE_DIFF_READS"; cat "$FIXTURE_DIFF" ;;',
     '  api:--method) cat > "$FIXTURE_BODY"; printf \'{"id":23}\\n\' ;;',
     "  *) exit 1 ;;",
     "esac",
@@ -115,7 +121,8 @@ test("draft questions, template and saved settings are local until one explicit 
   expect(existsSync(process.env.FIXTURE_BODY!)).toBe(false);
   expect((await requestDeskPublication(project, key, { kind: "preview", id })).settings).toEqual(draft.settings);
   await expect(requestDeskPublication(project, key, { kind: "submit", id, settings: draft.settings, digest: "0".repeat(64) })).rejects.toThrow("preview changed");
-  const published = await requestDeskPublication(project, key, { kind: "submit", id, settings: draft.settings, digest: draft.digest });
+  const published = await requestDeskPublication(project, key,
+    { kind: "submit", id, settings: draft.settings, digest: draft.digest }, confirmFixture);
   expect(published.publishedUrl).toBe("https://github.com/example/project/pull/7#pullrequestreview-23");
   expect(JSON.parse(readFileSync(process.env.FIXTURE_BODY!, "utf8"))).toMatchObject({
     event: "REQUEST_CHANGES", commit_id: revision.headSha, comments: [{ path: "src/a.ts", line: 1, side: "RIGHT" }],
@@ -125,15 +132,97 @@ test("draft questions, template and saved settings are local until one explicit 
 
 test("partial approval and a moved revision cannot send a review", async () => {
   const preview = await requestDeskPublication(project, key, { kind: "preview", id });
-  const settings = { ...preview.settings, verdict: "suggestions" as const, answers: { "fixture#F-002": "uphold" as const } };
+  const settings = { ...preview.settings, verdictOverride: "suggestions" as const, answers: { "fixture#F-002": "uphold" as const } };
   const approval = await requestDeskPublication(project, key, { kind: "preview", id, settings });
   expect(approval.body).toContain("A label is ambiguous");
   expect(approval.blockedReason).toContain("cannot approve");
+  await expect(requestDeskPublication(project, key, { kind: "submit", id, settings: approval.settings, digest: approval.digest }))
+    .rejects.toThrow("cannot approve");
   setHead("c".repeat(40));
-  const stale = await requestDeskPublication(project, key, { kind: "save", id, settings: { ...settings, verdict: "comment" } });
+  const stale = await requestDeskPublication(project, key, { kind: "save", id, settings: { ...settings, verdictOverride: "comment" } });
   expect(stale.savedAt).toBeDefined();
   expect(stale.blockedReason).toContain("revision moved");
+  await expect(requestDeskPublication(project, key, { kind: "submit", id, settings: stale.settings, digest: stale.digest }))
+    .rejects.toThrow("revision moved");
   expect(existsSync(process.env.FIXTURE_BODY!)).toBe(false);
+});
+
+test("editing answers recomputes an automatic verdict and preserves only an explicit override", async () => {
+  const findingsFile = path.join(directory, "package", "findings.json");
+  const [, held] = JSON.parse(readFileSync(findingsFile, "utf8"));
+  json(findingsFile, [{ ...held, severity: "major" }]);
+  const preview = await requestDeskPublication(project, key, { kind: "preview", id });
+  expect(preview.settings.verdict).toBe("comment");
+  const settings = { ...preview.settings, answers: { "fixture#F-002": "uphold" as const } };
+  const automatic = await requestDeskPublication(project, key, { kind: "save", id, settings });
+  expect(automatic.settings.verdict).toBe("changes");
+  expect((await requestDeskPublication(project, key, { kind: "preview", id })).settings.verdictOverride).toBeNull();
+  await requestDeskPublication(project, key, { kind: "save", id, settings: { ...settings, verdictOverride: "comment" } });
+  expect((await requestDeskPublication(project, key, { kind: "preview", id })).settings.verdict).toBe("comment");
+});
+
+test("local answers reopen without storing rendered GitHub content", async () => {
+  const findingsFile = path.join(directory, "package", "findings.json");
+  const [, held] = JSON.parse(readFileSync(findingsFile, "utf8"));
+  json(findingsFile, Array.from({ length: 105 }, (_, index) =>
+    ({ ...held, id: `F-${index}`, global_id: `fixture#F-${index}` })));
+  const preview = await requestDeskPublication(project, key, { kind: "preview", id });
+  expect(preview.questions).toHaveLength(105);
+  const answers = Object.fromEntries(preview.questions.map(question => [question.id, "dismiss" as const]));
+  await requestDeskPublication(project, key, { kind: "save", id, settings: { ...preview.settings, answers } });
+  const savedDraft = JSON.parse(readFileSync(path.join(directory, "publication-draft.json"), "utf8"));
+  expect(Object.keys(savedDraft).sort()).toEqual(["savedAt", "settings"]);
+  expect((await requestDeskPublication(project, key, { kind: "preview", id })).settings.answers).toEqual(answers);
+});
+
+test("inline edits reuse placement in preview and explicit refresh rereads the diff", async () => {
+  const preview = await requestDeskPublication(project, key, { kind: "preview", id });
+  const settings = { ...preview.settings, inline: true };
+  const inline = await requestDeskPublication(project, key, { kind: "preview", id, settings });
+  expect(inline.inlineComments).toMatchObject([{ path: "src/a.ts", line: 1, body: expect.stringContaining("Open rows") }]);
+  await requestDeskPublication(project, key, { kind: "preview", id, settings: { ...settings, general: false } });
+  expect(readFileSync(process.env.FIXTURE_DIFF_READS!, "utf8")).toBe("x");
+  await requestDeskPublication(project, key, { kind: "preview", id, settings, refresh: true });
+  expect(readFileSync(process.env.FIXTURE_DIFF_READS!, "utf8")).toBe("xx");
+});
+
+test("a changed effective account or declined confirmation never reaches the write", async () => {
+  const preview = await requestDeskPublication(project, key, { kind: "preview", id });
+  const settings = { ...preview.settings, answers: { "fixture#F-002": "dismiss" as const } };
+  const reviewed = await requestDeskPublication(project, key, { kind: "preview", id, settings });
+  const submit = { kind: "submit" as const, id, settings: reviewed.settings, digest: reviewed.digest };
+  await expect(requestDeskPublication(project, key, submit)).rejects.toThrow("Confirm the exact review");
+  await expect(requestDeskPublication(project, key, submit, async () => { throw new Error("Declined fixture"); }))
+    .rejects.toThrow("Declined fixture");
+  process.env.FIXTURE_NAMED_PR = path.join(root, "named-pr.json");
+  writeFileSync(process.env.FIXTURE_NAMED_PR, readFileSync(process.env.FIXTURE_PR!));
+  setHead(revision.headSha, "new-fixture-reviewer");
+  await expect(requestDeskPublication(project, key, submit)).rejects.toThrow("account or repository changed");
+  expect(existsSync(process.env.FIXTURE_BODY!)).toBe(false);
+  expect(existsSync(path.join(directory, "publication-receipt.json"))).toBe(false);
+});
+
+test("a known CLI startup failure leaves the submission retryable", async () => {
+  const preview = await requestDeskPublication(project, key, { kind: "preview", id });
+  const settings = { ...preview.settings, answers: { "fixture#F-002": "dismiss" as const } };
+  const confirmed = await requestDeskPublication(project, key, { kind: "preview", id, settings });
+  const submit = { kind: "submit" as const, id, settings: confirmed.settings, digest: confirmed.digest };
+  const realSpawn = Bun.spawn;
+  const spawn = spyOn(Bun, "spawn").mockImplementation(((...args: unknown[]) => {
+    const command = args[0];
+    if (Array.isArray(command) && command[1] === "api" && command.includes("POST")) {
+      throw new Error("Fixture process did not start");
+    }
+    return Reflect.apply(realSpawn, Bun, args);
+  }) as typeof Bun.spawn);
+  try {
+    await expect(requestDeskPublication(project, key, submit, confirmFixture)).rejects.toThrow("could not start");
+    expect(existsSync(path.join(directory, "publication-receipt.json"))).toBe(false);
+    expect(existsSync(process.env.FIXTURE_BODY!)).toBe(false);
+  } finally {
+    spawn.mockRestore();
+  }
+  expect((await requestDeskPublication(project, key, submit, confirmFixture)).publishedUrl).toContain("#pullrequestreview-23");
 });
 
 test("a concrete report option is saved by identity and published with the finding", async () => {
@@ -171,6 +260,7 @@ test("a concrete report option is saved by identity and published with the findi
   const reopened = await requestDeskPublication(project, key, { kind: "preview", id });
   expect(reopened.settings.answers[question.id]).toBe(selected.id);
   expect(reopened.canSubmit).toBe(true);
-  await requestDeskPublication(project, key, { kind: "submit", id, settings: reopened.settings, digest: reopened.digest });
+  await requestDeskPublication(project, key,
+    { kind: "submit", id, settings: reopened.settings, digest: reopened.digest }, confirmFixture);
   expect(JSON.parse(readFileSync(process.env.FIXTURE_BODY!, "utf8")).body).toContain(`**Selected answer:** ${selected.label}`);
 });

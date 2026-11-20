@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { touchesChunkEstimateAnswer, touchesCoverageWaiver, touchesHumanConfirmation, touchesOperatorDecision, touchesReviewPublish } from "./command-risk";
+import { isTrustRoutineCommand } from "./trust-routine-command";
 
 function deepBashC(command: string, levels: number): string {
   let out = command;
@@ -164,6 +165,12 @@ describe("readiness waiver and review publish floors (flow 451)", () => {
       expect(touchesReviewPublish(command)).toBe(true);
       expect(touchesHumanConfirmation(command)).toBe(true);
     }
+  });
+
+  test("a read-only review scope can use desk-publish as the name of a Git ref", () => {
+    const command = "keryx review scope --ref desk-publish";
+    expect(touchesReviewPublish(command)).toBe(false);
+    expect(isTrustRoutineCommand(command)).toBe(true);
   });
 
   test("other review commands and prose that mentions publishing do not ask", () => {

@@ -19,6 +19,8 @@ const verdicts: ReadonlyArray<{ value: PublicationSettings["verdict"]; label: st
   { value: "comment", label: "Comment only" },
 ];
 
+const unsupportedCli = "The selected Keryx CLI does not support review publishing. Update it or select Bundled in Settings → Desktop.";
+
 const findingActions = [
   { id: "uphold", label: "Keep finding" },
   { id: "dismiss", label: "Dismiss finding" },
@@ -28,7 +30,7 @@ function choicesFor(question: PublicationState["questions"][number]): ReadonlyAr
   return question.options?.length ? question.options : findingActions;
 }
 
-function Preview({ text }: { text: string }) {
+function Preview({ text, label = "Review comment preview" }: { text: string; label?: string }) {
   const html = useMemo(() => {
     const fragment = document.createElement("template");
     fragment.innerHTML = renderMarkdown(text);
@@ -37,7 +39,7 @@ function Preview({ text }: { text: string }) {
     for (const link of fragment.content.querySelectorAll("a")) link.removeAttribute("href");
     return fragment.innerHTML;
   }, [text]);
-  return text.trim() ? <div className="md review-publish-markdown" tabIndex={0} aria-label="Review comment preview"
+  return text.trim() ? <div className="md review-publish-markdown" tabIndex={0} aria-label={label}
     dangerouslySetInnerHTML={{ __html: html }} /> : <p>No general comment in this draft.</p>;
 }
 
@@ -54,55 +56,94 @@ export function ReviewPublishDialog({ cwd, target, id, command = reviewPublish, 
   const [pending, setPending] = useState<PublicationRequest["kind"] | null>("preview");
   const [previewStale, setPreviewStale] = useState(false);
   const [questionIndex, setQuestionIndex] = useState(0);
+  const [inlineOpen, setInlineOpen] = useState(false);
   const [error, setError] = useState("");
+  const currentSettings = useRef<PublicationSettings>();
   const requestNumber = useRef(0);
-  const activeRequest = useRef(false);
+  const activeRequest = useRef<PublicationRequest["kind"] | null>(null);
+  const queuedPreview = useRef<Extract<PublicationRequest, { kind: "preview" }>>();
   const verdictName = useId();
   const answerName = useId();
 
-  const send = useCallback(async (request: PublicationRequest) => {
-    if (activeRequest.current) return;
-    activeRequest.current = true;
+  const send = useCallback(async (initialRequest: PublicationRequest) => {
+    if (activeRequest.current) {
+      if (activeRequest.current === "preview" && initialRequest.kind === "preview") queuedPreview.current = initialRequest;
+      return;
+    }
     const number = ++requestNumber.current;
-    setPending(request.kind);
-    setError("");
+    let request: PublicationRequest | undefined = initialRequest;
     try {
-      const result = await command(cwd, target, request);
-      if (number !== requestNumber.current) return;
-      if (result?.version !== 1) throw new Error("This Keryx CLI does not support review publishing. Check the CLI version in Settings.");
-      setDraft(result);
-      setSettings(result.settings);
-      setPreviewStale(false);
-    } catch (cause) {
-      if (number !== requestNumber.current) return;
-      const message = errMessage(cause);
-      setError(message);
-      if (/^(stale|unavailable):/i.test(message)) setPreviewStale(true);
-      if (/^access:/i.test(message)) onAccessLost?.(message);
+      while (request) {
+        activeRequest.current = request.kind;
+        setPending(request.kind);
+        setError("");
+        try {
+          const result = await command(cwd, target, request);
+          if (number !== requestNumber.current) return;
+          if (result?.version !== 1) throw new Error(unsupportedCli);
+          if (!queuedPreview.current) {
+            currentSettings.current = result.settings;
+            setDraft(result);
+            setSettings(result.settings);
+            setPreviewStale(false);
+          }
+        } catch (cause) {
+          if (number !== requestNumber.current) return;
+          const reason = errMessage(cause);
+          if (/^access:/i.test(reason)) {
+            queuedPreview.current = undefined;
+            setPreviewStale(true);
+            onAccessLost?.(reason);
+          }
+          if (!queuedPreview.current) {
+            setError(/\bunknown review command:\s*desk-publish\b/i.test(reason) ? unsupportedCli : reason);
+            if (/^(stale|unavailable):/i.test(reason)) setPreviewStale(true);
+          }
+        }
+        request = queuedPreview.current;
+        queuedPreview.current = undefined;
+      }
     } finally {
       if (number === requestNumber.current) {
-        activeRequest.current = false;
+        activeRequest.current = null;
         setPending(null);
       }
     }
   }, [command, cwd, onAccessLost, target]);
 
   useEffect(() => {
-    void send({ kind: "preview", id });
+    currentSettings.current = undefined;
+    setDraft(undefined);
+    setSettings(undefined);
+    setQuestionIndex(0);
+    setInlineOpen(false);
+    setPreviewStale(true);
+    void send({ kind: "preview", id, refresh: true });
     return () => {
       requestNumber.current++;
-      activeRequest.current = false;
+      activeRequest.current = null;
+      queuedPreview.current = undefined;
     };
   }, [send, id]);
 
-  function update(options: PublicationSettings) {
-    if (activeRequest.current) return;
+  function update(changes: Partial<PublicationSettings>) {
+    const current = currentSettings.current;
+    if (!current || (activeRequest.current && activeRequest.current !== "preview")) return;
+    const options = { ...current, verdictOverride: current.verdictOverride ?? null, ...changes };
+    currentSettings.current = options;
     setSettings(options);
     setPreviewStale(true);
     void send({ kind: "preview", id, settings: options });
   }
 
+  function refreshPreview() {
+    const latest = currentSettings.current;
+    setPreviewStale(true);
+    void send({ kind: "preview", id, refresh: true, ...(latest && { settings: latest }) });
+  }
+
   const busy = pending !== null;
+  const writing = pending === "save" || pending === "submit";
   const posted = Boolean(draft?.publishedUrl);
   const questions = draft?.questions ?? [];
   const question = questions[Math.min(questionIndex, questions.length - 1)];
@@ -110,9 +151,9 @@ export function ReviewPublishDialog({ cwd, target, id, command = reviewPublish, 
   const canUsePreview = !!draft && !!settings && !busy && !previewStale && !posted;
 
   return createPortal(<Dialog title="Publish to GitHub" width={780} focusRoot
-    onClose={busy && pending !== "preview" ? null : onClose} footer={
+    onClose={writing ? null : onClose} footer={
       <div className="review-publish-footer">
-        <button type="button" className="btn" disabled={busy && pending !== "preview"} onClick={onClose}>Close</button>
+        <button type="button" className="btn" disabled={writing} onClick={onClose}>Close</button>
         {!posted && <>
           <button type="button" className="btn" disabled={!canUsePreview}
             onClick={() => { if (canUsePreview) void send({ kind: "save", id, settings }); }}>Save locally</button>
@@ -121,30 +162,37 @@ export function ReviewPublishDialog({ cwd, target, id, command = reviewPublish, 
         </>}
       </div>
     }>
-    <div className="review-publish" aria-busy={busy}>
+    <div className="review-publish" aria-busy={writing}>
       <p className="review-detail-meta">{target.repo} #{target.number} · @{target.viewer}</p>
       {error && <div className="inline-banner tone-warn" role="alert">
         <span>{error}</span>
-        <button type="button" className="btn btn-sm" disabled={busy} onClick={() => void send({ kind: "preview", id, ...(settings && { settings }) })}>Refresh preview</button>
+        {!draft && <button type="button" className="btn btn-sm" disabled={busy} onClick={refreshPreview}>Refresh preview</button>}
       </div>}
       {settings && draft && !posted && <>
         <div className="review-publish-settings">
-          <fieldset disabled={busy}>
+          <fieldset disabled={writing}>
             <legend>Include in the review</legend>
             <label><input type="checkbox" checked={settings.general}
-              onChange={e => update({ ...settings, general: e.currentTarget.checked })} /> General comment</label>
+              onChange={e => update({ general: e.currentTarget.checked })} /> General comment</label>
             <label><input type="checkbox" checked={settings.inline}
-              onChange={e => update({ ...settings, inline: e.currentTarget.checked })} /> Inline comments</label>
+              onChange={e => update({ inline: e.currentTarget.checked })} /> Inline comments</label>
             <label><input type="checkbox" checked={settings.keryxTemplate}
-              onChange={e => update({ ...settings, keryxTemplate: e.currentTarget.checked })} /> Keryx template</label>
+              onChange={e => update({ keryxTemplate: e.currentTarget.checked })} /> Keryx template</label>
             {draft.overlayAvailable && <label><input type="checkbox" checked={settings.overlay}
-              onChange={e => update({ ...settings, overlay: e.currentTarget.checked })} /> Project overlay</label>}
+              onChange={e => update({ overlay: e.currentTarget.checked })} /> Project overlay</label>}
+            {draft.overlayWarning && <small className="review-detail-muted" role="status">{draft.overlayWarning}</small>}
           </fieldset>
-          <fieldset disabled={busy}>
+          <fieldset disabled={writing}>
             <legend>Review verdict</legend>
+            <label><input type="radio" name={verdictName} value="recommended" checked={settings.verdictOverride == null}
+              onChange={() => update({ verdictOverride: null })} />
+              <span>Use recommendation{settings.verdictOverride == null && <>
+                <br /><small>{verdicts.find(option => option.value === settings.verdict)?.label} recommended</small>
+              </>}</span>
+            </label>
             {verdicts.map(({ value, label }) => <label key={value}>
-              <input type="radio" name={verdictName} value={value} checked={settings.verdict === value}
-                onChange={() => update({ ...settings, verdict: value })} /> {label}
+              <input type="radio" name={verdictName} value={value} checked={settings.verdictOverride === value}
+                onChange={() => update({ verdict: value, verdictOverride: value })} /> {label}
             </label>)}
           </fieldset>
         </div>
@@ -153,14 +201,15 @@ export function ReviewPublishDialog({ cwd, target, id, command = reviewPublish, 
             <strong>Question {Math.min(questionIndex + 1, questions.length)} of {questions.length}</strong>
             {!!unanswered && <span>{unanswered} unanswered</span>}
           </div>
-          <fieldset disabled={busy}>
+          <fieldset disabled={writing}>
             <legend>{question.text}</legend>
             {!question.recommendation && <small className="review-detail-muted">The report has no recommendation.</small>}
             {choicesFor(question).map(choice => <label key={choice.id}>
               <input type="radio" name={answerName} value={choice.id} checked={settings.answers[question.id] === choice.id}
-                onChange={() => update({ ...settings, answers: { ...settings.answers, [question.id]: choice.id } })} />
-              {choice.label}
-              {choice.id === question.recommendation && <span className="badge">Recommended</span>}
+                onChange={() => update({ answers: { ...currentSettings.current?.answers, [question.id]: choice.id } })} />
+              <span className="review-publish-choice">{choice.label}
+                {choice.id === question.recommendation && <> <span className="badge">Recommended</span></>}
+              </span>
             </label>)}
           </fieldset>
           <div className="review-publish-navigation">
@@ -171,9 +220,23 @@ export function ReviewPublishDialog({ cwd, target, id, command = reviewPublish, 
           </div>
         </section>}
       </>}
-      {draft && <section className="review-publish-preview" aria-label="Draft preview">
-        <div className="review-detail-meta"><strong>General comment preview</strong><span>{draft.inlineCount} inline comments</span></div>
+      {draft && <section className="review-publish-preview" aria-label="Draft preview" aria-busy={pending === "preview"}>
+        <div className="review-detail-meta review-publish-preview-header">
+          <strong>General comment preview</strong><span>{draft.inlineCount} inline comments</span>
+          {!posted && <button type="button" className="btn btn-sm" disabled={busy} onClick={refreshPreview}>Refresh preview</button>}
+        </div>
         <Preview text={draft.body} />
+        {!!draft.inlineComments?.length && <details className="review-publish-inline"
+          onToggle={event => setInlineOpen(event.currentTarget.open)}>
+          <summary>Preview inline comments</summary>
+          {inlineOpen && <ol>{draft.inlineComments.map((comment, index) => {
+            const location = `${comment.path}:${comment.line}`;
+            return <li key={`${location}:${index}`}>
+              <code>{location}</code>
+              <Preview text={comment.body} label={`Inline comment at ${location}`} />
+            </li>;
+          })}</ol>}
+        </details>}
       </section>}
       {pending !== null && <p className="review-detail-meta"><Spinner />{
         pending === "preview" ? "Updating preview…" : pending === "save" ? "Saving draft locally…" : "Submitting review…"
