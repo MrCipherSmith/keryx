@@ -52,6 +52,23 @@ test("PR references open externally on click and offer the internal browser on r
   expect(opened.at(-1)).toEqual(["internal", "https://github.com/example/project/pull/9130"]);
 });
 
+test("repository changes preserve unchanged links and close menus anchored on replaced links", async () => {
+  const props = (repository: string) => ({ repository, openExternal: () => {} });
+  const text = "[Explicit](https://github.com/example/proj/pull/1).";
+  await act(() => root.render(createElement(Markdown, { text, prLinks: props("example/old") })));
+  const explicit = host.querySelector(".md a");
+  await act(() => root.render(createElement(Markdown, { text, prLinks: props("example/new") })));
+  expect(host.querySelector(".md a")).toBe(explicit);
+  const bare = "Published in PR #9130.";
+  await act(() => root.render(createElement(Markdown, { key: "bare", text: bare, prLinks: props("example/old") })));
+  const anchor = host.querySelector(".md a");
+  await act(() => { anchor?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true })); });
+  expect(host.querySelector('[role="menu"]')).not.toBeNull();
+  await act(() => root.render(createElement(Markdown, { key: "bare", text: bare, prLinks: props("example/new") })));
+  expect(host.querySelector('[role="menu"]')).toBeNull();
+  expect(host.querySelector(".md a")?.getAttribute("href")).toBe("https://github.com/example/new/pull/9130");
+});
+
 test("without a repository only explicit GitHub PR links can open", async () => {
   const opened: string[] = [];
   await act(() => root.render(createElement(Markdown, {

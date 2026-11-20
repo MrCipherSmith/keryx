@@ -17,8 +17,10 @@ import { GitStatus } from "./GitStatus";
 import { SessionInfoPanel } from "./SessionInfoPanel";
 import { SessionSidebar } from "./SessionSidebar";
 import { Transcript } from "./Transcript";
-import { withImagePaths, withLocalAttachments, type LocalAttachment } from "./chatImages";
-import { gitRepository, openExternal, pickFolder, saveChatFile, saveChatImage } from "../platform/commands";
+import type { LocalAttachment } from "./chatImages";
+import { userPromptContext } from "./userPrompt";
+import { findCommand } from "../acp/commands";
+import { discardChatAttachment, gitRepository, openExternal, pickFolder, saveChatFile, saveChatImage } from "../platform/commands";
 import { isTauri } from "../platform/backend";
 import { browserOpen } from "../platform/panels";
 import type { PrLinks } from "../components/prLinks";
@@ -181,16 +183,17 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
   const attachments = useMemo(() => picks.map((p) => ({ key: p.key, label: pickLabel(p), title: `${p.selector}\n${p.url}` })), [picks]);
   const send = async (text: string, imagePaths: readonly string[], local: readonly LocalAttachment[]) => {
     const hasLocal = imagePaths.length > 0 || local.length > 0;
-    if (text.startsWith("/") && hasLocal) {
+    const command = findCommand(state.commands, text);
+    if (command && hasLocal) {
       toast({ level: "info", title: "Slash commands cannot carry attachments", body: "Remove the attachments or send a normal chat message." });
       return false;
     }
-    if (text.startsWith("/") || (!picks.length && !hasLocal)) return run(text);
+    if (command || (!picks.length && !hasLocal)) return run(text);
     // The picks travel as their own block, marked untrusted, never as the user's text. While a turn
     // runs this returns false and the draft and picks stay for the next send.
     const sent = picks;
-    const prompt = withImagePaths(withLocalAttachments(text, local), imagePaths);
-    const ok = s.sendPrompt(prompt, undefined, sent.length ? [picksBlock(sent)] : [], hasLocal ? prompt : undefined);
+    const context = userPromptContext(imagePaths, local, sent.length ? { count: sent.length, block: picksBlock(sent) } : undefined);
+    const ok = s.sendPrompt(text, undefined, context, true);
     if (ok && sent.length) clearPicks(cwd, sent);
     else if (!ok && state.busy) toast({ level: "info", title: "Attachments wait for this turn", body: "Send again when keryx finishes; your draft is kept." });
     return ok;
@@ -380,8 +383,8 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
           busy={state.busy}
           onRunCommand={(line, o) => run(line, o)}
           prLinks={prLinks}
-          onEditMessage={disabledReason === null && !state.busy ? (text) => {
-            const ok = s.sendPrompt(text);
+          onEditMessage={disabledReason === null && !state.busy ? (text, context) => {
+            const ok = s.sendPrompt(text, undefined, context, true);
             if (!ok) toast({ level: "error", title: "Could not send the edited message" });
             return ok;
           } : undefined}
@@ -406,6 +409,7 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
             onSend={send}
             saveImage={saveChatImage}
             saveFile={saveChatFile}
+            discardFile={discardChatAttachment}
             pickAttachmentFolder={() => pickFolder("Add folder to message")}
             attachments={attachments}
             onRemoveAttachment={(key) => removePick(cwd, key)}

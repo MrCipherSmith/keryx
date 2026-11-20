@@ -1,6 +1,6 @@
 import DOMPurify from "dompurify";
 import { marked } from "marked";
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Menu } from "./Menu";
 import { decoratePrReferences, type PrLinks } from "./prLinks";
 import { githubPrUrl } from "../lib/githubPr";
@@ -189,6 +189,8 @@ function renderFinal(src: string, repository?: string): string {
 /** What the message element currently shows. */
 interface View {
   mode: "final" | "stream";
+  finalHtml?: string;
+  completed?: readonly string[];
   epoch: number;
   /** Streamed blocks already in the element. */
   blocksShown: number;
@@ -206,10 +208,12 @@ function fragment(html: string): DocumentFragment {
 
 /** Append the newly completed blocks and swap only the tail; rebuild when the cache started over. */
 function showFrame(el: HTMLElement, v: View, f: StreamFrame): void {
-  if (v.mode !== "stream" || v.epoch !== f.epoch || f.blocks.length < v.blocksShown) {
+  if (v.mode === "final" && v.finalHtml === f.blocks.join("") + f.tail) return;
+  if (v.mode !== "stream" || v.completed !== f.blocks || v.epoch !== f.epoch || f.blocks.length < v.blocksShown) {
     el.replaceChildren();
     v.mode = "stream";
     v.epoch = f.epoch;
+    v.completed = f.blocks;
     v.blocksShown = 0;
     v.tail = [];
     v.tailHtml = "";
@@ -229,8 +233,12 @@ function showFrame(el: HTMLElement, v: View, f: StreamFrame): void {
 }
 
 function showFinal(el: HTMLElement, v: View, html: string): void {
+  const shown = v.mode === "final" ? v.finalHtml : (v.completed?.slice(0, v.blocksShown).join("") ?? "") + v.tailHtml;
+  if (shown === html) return;
   el.innerHTML = html;
   v.mode = "final";
+  v.finalHtml = html;
+  v.completed = undefined;
   v.tail = [];
   v.tailHtml = "";
 }
@@ -241,6 +249,18 @@ const SETTLE_MS = 250;
 export const Markdown = memo(function Markdown({ text, className, prLinks }: { text: string; className?: string; prLinks?: PrLinks }) {
   const ref = useRef<HTMLDivElement>(null);
   const [prMenu, setPrMenu] = useState<{ anchor: HTMLAnchorElement; url: string } | null>(null);
+  const menuRef = useRef(prMenu);
+  const closePrMenu = useCallback(() => {
+    const menu = menuRef.current;
+    if (!menu) return;
+    menuRef.current = null;
+    setPrMenu(null);
+    const el = ref.current;
+    if (el?.isConnected) (el.contains(menu.anchor) ? menu.anchor : el).focus({ preventScroll: true });
+  }, []);
+  const closeDetachedMenu = useCallback(() => {
+    if (menuRef.current && !ref.current?.contains(menuRef.current.anchor)) closePrMenu();
+  }, [closePrMenu]);
   const repository = prLinks?.repository;
   const renderTokens = useMemo<RenderTokens>(() => (tokens) =>
     decorateCodeBlocks(decoratePrReferences(sanitize(marked.parser(tokens)), repository)), [repository]);
@@ -271,6 +291,7 @@ export const Markdown = memo(function Markdown({ text, className, prLinks }: { t
       st.cache = emptyCache();
       st.renderedText = text;
       showFinal(el, st.view, renderFinal(text, repository));
+      closeDetachedMenu();
       return;
     }
     if (text === st.renderedText) return;
@@ -280,6 +301,7 @@ export const Markdown = memo(function Markdown({ text, className, prLinks }: { t
         st.raf = 0;
         st.renderedText = st.latest;
         showFrame(el, st.view, renderStreaming(st.latest, st.cache, renderTokens));
+        closeDetachedMenu();
       });
     }
     window.clearTimeout(st.settle);
@@ -296,8 +318,9 @@ export const Markdown = memo(function Markdown({ text, className, prLinks }: { t
       const frame = renderStreaming(st.latest, st.cache, renderTokens);
       if (st.view.mode === "stream" && frame.blocks.join("") + frame.tail === final) showFrame(el, st.view, frame);
       else showFinal(el, st.view, final);
+      closeDetachedMenu();
     }, SETTLE_MS);
-  }, [text, repository, renderTokens]);
+  }, [text, repository, renderTokens, closeDetachedMenu]);
 
   // Local-image links get thumbnails, also as the message streams in (throttled to a frame).
   useEffect(() => {
@@ -335,17 +358,14 @@ export const Markdown = memo(function Markdown({ text, className, prLinks }: { t
     const anchor = target.closest<HTMLAnchorElement>("a");
     const url = githubPrUrl(anchor?.getAttribute("href") ?? null);
     if (!anchor || !url) return false;
-    setPrMenu({ anchor, url });
+    const menu = { anchor, url };
+    menuRef.current = menu;
+    setPrMenu(menu);
     return true;
   };
 
-  const closePrMenu = () => {
-    setPrMenu(null);
-    prMenu?.anchor.focus();
-  };
-
   return <>
-    <div ref={ref} className={`md${className ? ` ${className}` : ""}`} onAuxClick={blockLinks}
+    <div ref={ref} tabIndex={-1} className={`md${className ? ` ${className}` : ""}`} onAuxClick={blockLinks}
       onClick={(e) => {
         const url = githubPrUrl((e.target as HTMLElement).closest("a")?.getAttribute("href") ?? null);
         if (prLinks && url) {
@@ -358,10 +378,10 @@ export const Markdown = memo(function Markdown({ text, className, prLinks }: { t
         if ((e.key === "ContextMenu" || (e.key === "F10" && e.shiftKey)) && showPrMenu(e.target)) e.preventDefault();
       }} />
     {prMenu && prLinks ? <Menu anchor={prMenu.anchor} label="Pull request link" width={255} onClose={closePrMenu} items={[
-      { id: "system", icon: "external", label: "Open in default browser", onSelect: () => prLinks.openExternal(prMenu.url) },
+      { id: "system", icon: "external", label: "Open in default browser", onSelect: () => { if (ref.current?.contains(prMenu.anchor)) prLinks.openExternal(prMenu.url); } },
       { id: "internal", icon: "globe", label: "Open in Keryx Browser", disabled: !prLinks.openInternal,
         description: prLinks.openInternal ? undefined : "Available in the native app",
-        onSelect: () => prLinks.openInternal?.(prMenu.url) },
+        onSelect: () => { if (ref.current?.contains(prMenu.anchor)) prLinks.openInternal?.(prMenu.url); } },
     ]} /> : null}
   </>;
 });

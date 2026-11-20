@@ -103,6 +103,24 @@ test("the plus menu offers files, folders and slash commands without erasing the
   expect(options()).toHaveLength(0);
 });
 
+test("the explicit slash picker preserves arguments and closes across sessions", async () => {
+  const m = mount({ sessionId: "slash-first" });
+  await act(() => m.render());
+  await type("/tasks  kill t9\nmore");
+  await act(() => plus()?.click());
+  await act(() => menuItem("Slash commands")?.click());
+  await key("ArrowUp");
+  await key("Tab");
+  expect(area().value).toBe("/compact  kill t9\nmore");
+  await act(() => plus()?.click());
+  await act(() => menuItem("Slash commands")?.click());
+  expect(options().length).toBeGreaterThan(0);
+  await act(() => m.render({ sessionId: "slash-second" }));
+  await act(() => m.render());
+  expect(options()).toHaveLength(0);
+  expect(area().value).toBe("/compact  kill t9\nmore");
+});
+
 test("a folder chosen from the plus menu is attached and sent without a caption", async () => {
   const sent: unknown[] = [];
   const m = mount({ pickAttachmentFolder: async () => "/project/folder", onSend: (...args) => { sent.push(args); return true; } });
@@ -135,6 +153,26 @@ test("choosing a file from the plus menu saves it and sends its path", async () 
   expect(host.querySelector('[aria-label="Remove notes.TXT"]')?.tagName).toBe("BUTTON");
   await key("Enter");
   expect(sent).toEqual([["", [], [{ kind: "file", label: "notes.TXT", path }]]]);
+});
+
+test("discard releases unsent files but sending retains stored attachments", async () => {
+  const discarded: string[] = [];
+  let stored = 0;
+  const m = mount({ sessionId: "discard-draft", saveFile: async () => `/tmp/file-${++stored}.txt`,
+    discardFile: async (path) => { discarded.push(path); } });
+  await act(() => m.render());
+  const input = host.querySelector<HTMLInputElement>('input[type="file"]');
+  if (!input) throw new Error("File input is missing");
+  Object.defineProperty(input, "files", { value: [new File(["draft"], "draft.txt", { type: "text/plain" })] });
+  const select = () => act(async () => { input.dispatchEvent(new Event("change", { bubbles: true })); });
+  await select();
+  await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Remove draft.txt"]')?.click());
+  expect(discarded).toEqual(["/tmp/file-1.txt"]);
+  expect(host.querySelector('[aria-label="Remove draft.txt"]')).toBeNull();
+  await select();
+  await key("Enter");
+  expect(m.sent).toEqual([""]);
+  expect(discarded).toEqual(["/tmp/file-1.txt"]);
 });
 
 test("typing / lists every command grouped, uncapped, with hint and description", async () => {

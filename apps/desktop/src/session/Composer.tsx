@@ -1,6 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { AvailableCommand, ConfigOption, ConfigSelectGroup, ConfigSelectOption, SessionModeState } from "../acp/types";
 import { MOD } from "../lib/prefs";
+import { AttachmentImage } from "./AttachmentImage";
 import { Icon, type IconName } from "../components/Icon";
 import { Menu, type MenuItem } from "../components/Menu";
 import { flattenGroups, groupCommands } from "../acp/commands";
@@ -31,6 +32,8 @@ interface Props {
   onSend: (text: string, imagePaths: readonly string[], localAttachments: readonly LocalAttachment[]) => boolean | Promise<boolean>;
   saveImage?: SaveChatImage;
   saveFile?: SaveChatFile;
+  discardFile?: (path: string) => Promise<void>;
+  loadImage?: (path: string) => Promise<string>;
   pickAttachmentFolder?: () => Promise<string | null>;
   onStop: () => void;
   onMode: (id: string) => void;
@@ -89,7 +92,7 @@ function modelChoices(option: ConfigOption | undefined): ConfigSelectOption[] {
 }
 
 export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
-  { sessionId, busy, disabledReason, commands, modes, model, sendKey, onSend, saveImage, saveFile, pickAttachmentFolder, onStop, onMode, onModel, onProviders, attachments = [], onRemoveAttachment },
+  { sessionId, busy, disabledReason, commands, modes, model, sendKey, onSend, saveImage, saveFile, discardFile, loadImage, pickAttachmentFolder, onStop, onMode, onModel, onProviders, attachments = [], onRemoveAttachment },
   ref,
 ) {
   const [drafts, setDrafts] = useState<Drafts>({});
@@ -100,6 +103,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   const [sel, setSel] = useState(0);
   const [dismissed, setDismissed] = useState(false);
   const [slashSession, setSlashSession] = useState<string | null>(null);
+  useLayoutEffect(() => setSlashSession(null), [sessionId]);
   const showAllCommands = sessionId !== null && slashSession === sessionId;
   const [menu, setMenu] = useState<"add" | "mode" | "provider" | "model" | null>(null);
   const addBtn = useRef<HTMLButtonElement>(null);
@@ -111,7 +115,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   // The model each provider last ran in this window; picking that provider again returns to it.
   const lastModel = useRef(new Map<string, string>());
   const disabled = disabledReason !== null;
-  const localDraft = useChatAttachments(sessionId, { saveImage, saveFile, pickFolder: pickAttachmentFolder });
+  const localDraft = useChatAttachments(sessionId, { saveImage, saveFile, discardFile, pickFolder: pickAttachmentFolder });
   const hasAttachments = attachments.length > 0 || localDraft.items.length > 0;
 
   useImperativeHandle(ref, () => ({
@@ -162,8 +166,8 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   }, [disabled]);
 
   const complete = (c: AvailableCommand) => {
-    const args = showAllCommands && !text.startsWith("/") ? text : "";
-    setText(`/${c.name} ${args}`);
+    const suffix = showAllCommands ? (text.startsWith("/") ? text.match(/\s[\s\S]*/)?.[0] ?? " " : ` ${text}`) : " ";
+    setText(`/${c.name}${suffix}`);
     setSlashSession(null);
     setDismissed(false);
     area.current?.focus();
@@ -329,11 +333,11 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
           {localDraft.items.map((item, i) => (
             <li className={`attach-chip${item.kind === "image" ? " image-chip" : ""}`} key={item.path}
               title={item.kind === "image" ? undefined : item.path}>
-              {item.kind === "image" ? <img src={item.src} alt={`Attached image ${i + 1}`} /> : <>
+              {item.kind === "image" ? <AttachmentImage path={item.path} alt={`Attached image ${i + 1}`} eager load={loadImage} /> : <>
                 <Icon name={item.kind === "folder" ? "folder" : "file"} size={12} />
                 <span className="truncate">{item.label}</span>
               </>}
-              <button type="button" className="icon-btn icon-btn-sm" onClick={() => localDraft.remove([item.path])}
+              <button type="button" className="icon-btn icon-btn-sm" disabled={localDraft.pending} onClick={() => void localDraft.discard(item)}
                 aria-label={`Remove ${item.kind === "image" ? `image ${i + 1}` : item.label}`} title="Remove attachment"><Icon name="x" size={12} /></button>
             </li>
           ))}

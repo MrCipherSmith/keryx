@@ -10,6 +10,7 @@ import { ContentBlockView } from "./ContentBlockView";
 import { Markdown } from "../components/Markdown";
 import type { PrLinks } from "../components/prLinks";
 import { UserMessage } from "./UserMessage";
+import type { UserPromptContext } from "./userPrompt";
 import { Icon, type IconName } from "../components/Icon";
 import { Spinner } from "../components/ui";
 import { argLabel, hasRestArgs, primaryInput, quoteArgv, restArgs, visibleProse, visibleText } from "./toolInput";
@@ -308,7 +309,7 @@ interface Props {
   items: Item[];
   /** Runs a command line a card's view sends; returns when its result is shown. */
   onRunCommand?: (line: string, opts: { display?: string; replaceId: number }) => void | Promise<unknown>;
-  onEditMessage?: (text: string) => boolean;
+  onEditMessage?: (text: string, context?: UserPromptContext) => boolean;
   prLinks?: PrLinks;
   busy: boolean;
   replaying: boolean;
@@ -399,7 +400,7 @@ export function Transcript({ items, busy, replaying, empty, onRunCommand, onEdit
             const isLast = i === blocks.length - 1;
             switch (b.type) {
               case "user":
-                return <UserMessage key={b.item.id} message={b.item.text} onEdit={onEditMessage} />;
+                return <UserMessage key={b.item.id} message={b.item.text} context={b.item.context} onEdit={onEditMessage} />;
               case "agent":
                 return (
                   <div key={b.item.id} className={`turn-agent${b.first ? " turn-start" : ""}`}>

@@ -92,6 +92,28 @@ test("copy uses the original text and editing sends without changing history", a
   expect(host.querySelector(".user-msg")?.textContent).toBe("original message");
 });
 
+test("resend keeps exact indentation and the original attachment blocks", async () => {
+  const context = {
+    images: [], local: [], pickedCount: 1,
+    blocks: [{ type: "resource", resource: { uri: "keryx-desktop:picked-elements", text: "page data" } }],
+  };
+  const sent: unknown[] = [];
+  await act(() => root.render(createElement(Transcript, {
+    items: [{ kind: "user", id: 1, text: " /help", context }],
+    busy: false, replaying: false, empty: null,
+    onEditMessage: (...args: unknown[]) => { sent.push(args); return true; },
+  })));
+  await act(() => host.querySelector<HTMLButtonElement>('[aria-label="Edit message"]')?.click());
+  await act(() => host.querySelector<HTMLButtonElement>('button[type="submit"]')?.click());
+  expect(sent).toEqual([[" /help", context]]);
+});
+
+test("a literal image marker in message text is not treated as an attachment", async () => {
+  const text = "Example\n\n[Local image attachments (use local tools to inspect):]\n/tmp/keryx-chat-images-test/example.png";
+  await show([{ kind: "user", id: 1, text }]);
+  expect(host.querySelector(".user-msg")?.textContent).toBe(text);
+});
+
 test("a tool's output is shown once, and a diff it printed is coloured", async () => {
   const out = "@@ -1 +1 @@\n-a\n+b";
   await show([

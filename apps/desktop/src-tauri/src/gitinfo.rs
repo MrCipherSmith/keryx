@@ -107,9 +107,15 @@ pub async fn git_info(state: State<'_, AppState>, cwd: String) -> Result<Option<
 fn github_repository_from_origin(origin: &str) -> Option<String> {
     let raw = origin.trim();
     let repo = ["https://github.com/", "git@github.com:", "ssh://git@github.com/"]
-        .iter().find_map(|prefix| raw.strip_prefix(*prefix))?;
+        .iter().find_map(|prefix| {
+            raw.get(..prefix.len())?.eq_ignore_ascii_case(prefix).then(|| &raw[prefix.len()..])
+        })?;
     let repo = repo.strip_suffix('/').unwrap_or(repo);
-    let repo = repo.strip_suffix(".git").unwrap_or(repo);
+    let suffix_start = repo.len().saturating_sub(".git".len());
+    let repo = match repo.get(suffix_start..) {
+        Some(suffix) if suffix.eq_ignore_ascii_case(".git") => &repo[..suffix_start],
+        _ => repo,
+    };
     let (owner, name) = repo.split_once('/')?;
     if !owner.as_bytes().first().is_some_and(u8::is_ascii_alphanumeric)
         || !owner.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
@@ -143,6 +149,7 @@ mod tests {
 
     #[test]
     fn github_origin_uses_only_the_github_repository_path() {
+        assert_eq!(github_repository_from_origin(" HTTPS://GitHub.COM/Example/Project.GiT/ ").as_deref(), Some("Example/Project"));
         assert_eq!(github_repository_from_origin("git@github.com:org/repo.git").as_deref(), Some("org/repo"));
         assert!(github_repository_from_origin("https://github.com.evil.test/org/repo").is_none());
         assert!(github_repository_from_origin("https://github.com/org/..").is_none());

@@ -17,7 +17,10 @@ import { existsSync, readdirSync, readFileSync, realpathSync, statSync, mkdirSyn
 import { homedir, tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
 import { rmSync } from "node:fs";
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, open, realpath, unlink } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { setImmediate as yieldToLoop } from "node:timers/promises";
+import { promisify } from "node:util";
 import { basename, isAbsolute, join, resolve, sep } from "node:path";
 import type { ServerWebSocket, Subprocess } from "bun";
 import { githubRepositoryFromOrigin } from "../src/lib/githubPr";
@@ -430,6 +433,7 @@ setInterval(() => {
 // ---- ACP process per connection --------------------------------------------
 
 interface Conn {
+  attachmentOwner: symbol;
   proc: Subprocess<"pipe", "pipe", "pipe"> | null;
   root: string | null;
   gen: number;
@@ -529,47 +533,202 @@ function acpStart(ws: ServerWebSocket<Conn>, cwd: string, noProfile: boolean) {
 
 const CHAT_IMAGE_BYTES = 5 * 1024 * 1024;
 const CHAT_STORAGE_BYTES = 256 * 1024 * 1024;
-const chatImages = new Map<string, string>();
-let chatImageBytes = 0;
+const CHAT_STORAGE_FILES = 512;
+// 192 KiB of raw bytes corresponds to 256 KiB of base64, without split quanta.
+const RAW_CHUNK = 192 * 1024;
+const BASE64_CHUNK = 4 * (RAW_CHUNK / 3);
+
+interface ChatAttachment {
+  owner: symbol;
+  path: string;
+  size: number;
+  mimeType?: string;
+  deleting: boolean;
+}
+
+const chatAttachments = new Map<string, ChatAttachment>();
+let chatAttachmentBytes = 0;
+let chatAttachmentCount = 0;
 let chatImageRoot: Promise<string> | undefined;
 
-function decodeChatAttachment(data: unknown): Buffer {
-  if (typeof data !== "string" || data.length > 4 * Math.ceil(CHAT_IMAGE_BYTES / 3)) throw new Error("Invalid or oversized attachment");
-  const bytes = Buffer.from(data, "base64");
-  if (bytes.length > CHAT_IMAGE_BYTES || bytes.toString("base64") !== data) throw new Error("Invalid or oversized attachment");
+async function createChatImageRoot(): Promise<string> {
+  const dir = await mkdtemp(join(tmpdir(), "keryx-chat-images-"));
+  process.once("exit", () => rmSync(dir, { recursive: true, force: true }));
+  return dir;
+}
+
+async function getChatImageRoot(): Promise<string> {
+  const pending = chatImageRoot ??= createChatImageRoot();
+  try {
+    return await pending;
+  } catch (error) {
+    if (chatImageRoot === pending) chatImageRoot = undefined;
+    throw error;
+  }
+}
+
+function decodedAttachmentSize(data: string): number {
+  if (data.length % 4 !== 0 || data.length > 4 * Math.ceil(CHAT_IMAGE_BYTES / 3)) {
+    throw new Error("Invalid or oversized attachment");
+  }
+  const padding = data.endsWith("==") ? 2 : data.endsWith("=") ? 1 : 0;
+  const size = data.length / 4 * 3 - padding;
+  if (size > CHAT_IMAGE_BYTES) throw new Error("Invalid or oversized attachment");
+  return size;
+}
+
+async function decodeChatAttachment(data: string, size: number): Promise<Buffer> {
+  const bytes = Buffer.allocUnsafe(size);
+  let offset = 0;
+  for (let start = 0; start < data.length; start += BASE64_CHUNK) {
+    const end = Math.min(start + BASE64_CHUNK, data.length);
+    const chunk = data.slice(start, end);
+    const decoded = Buffer.from(chunk, "base64");
+    if ((end < data.length && chunk.endsWith("=")) || decoded.toString("base64") !== chunk) {
+      throw new Error("Invalid attachment data");
+    }
+    decoded.copy(bytes, offset);
+    offset += decoded.length;
+    if (end < data.length) await yieldToLoop();
+  }
+  if (offset !== size) throw new Error("Invalid attachment data");
   return bytes;
 }
 
-async function saveChatFile({ extension, data }: Json): Promise<string> {
-  if (typeof extension !== "string" || !/^[a-z0-9]{1,12}$/i.test(extension)) throw new Error("Invalid attachment extension");
-  return writeChatAttachment(decodeChatAttachment(data), { prefix: "file", extension });
+function chatImageExtension(mimeType: unknown, bytes: Buffer): string {
+  if (mimeType === "image/png" && bytes.subarray(0, 8).toString("hex") === "89504e470d0a1a0a") return "png";
+  if (mimeType === "image/jpeg" && bytes.subarray(0, 3).toString("hex") === "ffd8ff") return "jpg";
+  if (mimeType === "image/gif" && /^(GIF87a|GIF89a)$/.test(bytes.subarray(0, 6).toString())) return "gif";
+  if (mimeType === "image/webp" && bytes.subarray(0, 4).toString() === "RIFF" && bytes.subarray(8, 12).toString() === "WEBP") return "webp";
+  throw new Error("Unsupported or invalid pasted image");
 }
 
-async function saveChatImage({ mimeType, data }: Json): Promise<string> {
-  const bytes = decodeChatAttachment(data);
-  const ext = mimeType === "image/png" && bytes.subarray(0, 8).toString("hex") === "89504e470d0a1a0a" ? "png"
-    : mimeType === "image/jpeg" && bytes.subarray(0, 3).toString("hex") === "ffd8ff" ? "jpg"
-    : mimeType === "image/gif" && /^(GIF87a|GIF89a)$/.test(bytes.subarray(0, 6).toString()) ? "gif"
-    : mimeType === "image/webp" && bytes.subarray(0, 4).toString() === "RIFF" && bytes.subarray(8, 12).toString() === "WEBP" ? "webp" : null;
-  if (!ext || typeof mimeType !== "string") throw new Error("Unsupported or invalid pasted image");
-  return writeChatAttachment(bytes, { prefix: "image", extension: ext, mimeType });
+type AttachmentTarget = { extension: string } | { mimeType: string };
+
+async function saveChatFile(owner: symbol, { extension, data }: Json): Promise<string> {
+  if (typeof extension !== "string" || !extension || extension.length > 12 || /[^a-z0-9]/i.test(extension)) {
+    throw new Error("Invalid attachment extension");
+  }
+  return writeChatAttachment(owner, data, { extension });
 }
 
-async function writeChatAttachment(bytes: Buffer, target: { prefix: "file" | "image"; extension: string; mimeType?: string }): Promise<string> {
-  if (chatImageBytes + bytes.length > CHAT_STORAGE_BYTES) throw new Error("Temporary chat image storage is full. Restart the dev bridge to clear it.");
-  chatImageBytes += bytes.length;
+async function saveChatImage(owner: symbol, { mimeType, data }: Json): Promise<string> {
+  if (typeof mimeType !== "string") throw new Error("Unsupported pasted image");
+  return writeChatAttachment(owner, data, { mimeType });
+}
+
+function releaseChatReservation(size: number): void {
+  chatAttachmentCount--;
+  chatAttachmentBytes -= size;
+}
+
+async function removeChatFile(path: string): Promise<void> {
   try {
-    const root = await (chatImageRoot ??= mkdtemp(join(tmpdir(), "keryx-chat-images-")).then((dir) => {
-      process.once("exit", () => rmSync(dir, { recursive: true, force: true }));
-      return dir;
-    }));
-    const path = join(root, `${target.prefix}-${randomUUID()}.${target.extension}`);
-    await writeFile(path, bytes, { flag: "wx", mode: 0o600 });
-    if (target.mimeType) chatImages.set(path, target.mimeType);
+    await unlink(path);
+  } catch (error) {
+    if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
+  }
+}
+
+async function writeChatAttachment(owner: symbol, data: unknown, target: AttachmentTarget): Promise<string> {
+  if (typeof data !== "string") throw new Error("Invalid attachment data");
+  const size = decodedAttachmentSize(data);
+  if (chatAttachmentCount >= CHAT_STORAGE_FILES || chatAttachmentBytes + size > CHAT_STORAGE_BYTES) {
+    throw new Error("Temporary chat attachment storage is full. Discard drafts or restart the dev bridge.");
+  }
+  chatAttachmentCount++;
+  chatAttachmentBytes += size;
+
+  let created: string | undefined;
+  try {
+    const bytes = await decodeChatAttachment(data, size);
+    const mimeType = "mimeType" in target ? target.mimeType : undefined;
+    const extension = "extension" in target ? target.extension : chatImageExtension(mimeType, bytes);
+    const path = join(await getChatImageRoot(), `${mimeType ? "image" : "file"}-${randomUUID()}.${extension}`);
+    const file = await open(path, "wx", 0o600);
+    created = path; // Never unlink a path if exclusive creation failed.
+    try {
+      await file.writeFile(bytes);
+    } finally {
+      await file.close();
+    }
+    chatAttachments.set(path, { owner, path, size, mimeType, deleting: false });
     return path;
   } catch (error) {
-    chatImageBytes -= bytes.length;
+    try {
+      if (created) await removeChatFile(created);
+      releaseChatReservation(size);
+    } catch (cleanupError) {
+      // A possible leftover remains charged until process exit.
+      throw new Error("Could not save or clean up chat attachment", {
+        cause: new AggregateError([error, cleanupError]),
+      });
+    }
     throw new Error("Could not save chat attachment", { cause: error });
+  }
+}
+
+async function discardChatAttachment(owner: symbol, path: unknown): Promise<null> {
+  const entry = typeof path === "string" ? chatAttachments.get(path) : undefined;
+  if (!entry || entry.owner !== owner || entry.deleting) {
+    throw new Error("Chat attachment is not available to this connection");
+  }
+  entry.deleting = true;
+  try {
+    await removeChatFile(entry.path);
+  } catch (error) {
+    entry.deleting = false;
+    throw new Error("Could not discard chat attachment", { cause: error });
+  }
+  chatAttachments.delete(entry.path);
+  releaseChatReservation(entry.size);
+  return null;
+}
+
+async function previewChatImage(entry: ChatAttachment, mimeType: string): Promise<string> {
+  const file = await open(entry.path, "r");
+  const bytes = Buffer.allocUnsafe(entry.size + 1);
+  let size = 0;
+  try {
+    while (size < bytes.length) {
+      const { bytesRead } = await file.read(bytes, size, bytes.length - size, size);
+      if (bytesRead === 0) break;
+      size += bytesRead;
+    }
+  } finally {
+    await file.close();
+  }
+  if (size !== entry.size) throw new Error("The chat image has changed");
+  const chunks: string[] = [];
+  for (let start = 0; start < size; start += RAW_CHUNK) {
+    const end = Math.min(start + RAW_CHUNK, size);
+    chunks.push(bytes.toString("base64", start, end));
+    if (end < size) await yieldToLoop();
+  }
+  return `data:${mimeType};base64,${chunks.join("")}`;
+}
+
+const execGitFile = promisify(execFile);
+const MAX_GIT_REPOSITORY_CHILDREN = 4;
+let gitRepositoryChildren = 0;
+
+async function gitRepository(cwd: string): Promise<string | null> {
+  if (gitRepositoryChildren >= MAX_GIT_REPOSITORY_CHILDREN) return null;
+  gitRepositoryChildren++;
+  try {
+    const { stdout } = await execGitFile("git", ["config", "--get", "remote.origin.url"], {
+      cwd,
+      encoding: "utf8",
+      timeout: 3000,
+      maxBuffer: 16 * 1024,
+      killSignal: "SIGKILL",
+    });
+    return githubRepositoryFromOrigin(stdout);
+  } catch {
+    // Match native behavior when git is missing, times out, or has no usable origin.
+    return null;
+  } finally {
+    gitRepositoryChildren--;
   }
 }
 
@@ -591,7 +750,7 @@ async function projectCwd(conn: Conn, cwd: string): Promise<string> {
   }
   let real: string;
   try {
-    real = realpathSync(cwd);
+    real = await realpath(cwd);
   } catch {
     throw new Error(`The project folder is not available (${cwd})`);
   }
@@ -616,15 +775,18 @@ async function handle(ws: ServerWebSocket<Conn>, cmd: string, args: Json): Promi
       return null;
     case "save_chat_file":
       if (!ws.data.root) throw new Error("Open a project before attaching files.");
-      return saveChatFile(args);
+      return saveChatFile(ws.data.attachmentOwner, args);
     case "save_chat_image":
       if (!ws.data.root) throw new Error("Open a project before pasting images.");
-      return saveChatImage(args);
+      return saveChatImage(ws.data.attachmentOwner, args);
+    case "discard_chat_attachment":
+      return discardChatAttachment(ws.data.attachmentOwner, args.path);
     case "local_image": {
-      const path = typeof args.path === "string" ? args.path : "";
-      const mime = chatImages.get(path);
-      if (!ws.data.root || !mime) throw new Error("The chat image is no longer available");
-      return `data:${mime};base64,${(await readFile(path)).toString("base64")}`;
+      const entry = typeof args.path === "string" ? chatAttachments.get(args.path) : undefined;
+      if (!ws.data.root || !entry?.mimeType || entry.deleting) {
+        throw new Error("The chat image is no longer available");
+      }
+      return previewChatImage(entry, entry.mimeType);
     }
     case "settings_get":
       return loadSettings();
@@ -658,11 +820,8 @@ async function handle(ws: ServerWebSocket<Conn>, cmd: string, args: Json): Promi
       watched.set(root, w);
       return null;
     }
-    case "git_repository": {
-      const root = await projectCwd(ws.data, cwd);
-      const result = Bun.spawnSync(["git", "config", "--get", "remote.origin.url"], { cwd: root, timeout: 3000, stderr: "ignore" });
-      return result.exitCode === 0 ? githubRepositoryFromOrigin(result.stdout.toString()) : null;
-    }
+    case "git_repository":
+      return gitRepository(await projectCwd(ws.data, cwd));
     case "git_info": {
       // Same parse as src-tauri/src/gitinfo.rs, for the browser dev mode.
       const r = Bun.spawnSync(["git", "status", "--porcelain=v2", "--branch"], { cwd: await projectCwd(ws.data, cwd), env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" } });
@@ -766,7 +925,7 @@ Bun.serve<Conn>({
     if (!/^http:\/\/(localhost|127\.0\.0\.1):1420$/.test(origin)) {
       return new Response("forbidden origin", { status: 403 });
     }
-    if (server.upgrade(req, { data: { proc: null, root: null, gen: 0, rootWaiters: [] } })) return undefined;
+    if (server.upgrade(req, { data: { proc: null, root: null, gen: 0, rootWaiters: [], attachmentOwner: Symbol() } })) return undefined;
     return new Response("keryx desktop dev bridge", { status: 426 });
   },
   websocket: {

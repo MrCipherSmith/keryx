@@ -4,7 +4,7 @@ import { basename, errMessage } from "../lib/format";
 export type SaveChatImage = (mimeType: string, data: string) => Promise<string>;
 export type SaveChatFile = (extension: string, data: string) => Promise<string>;
 export interface LocalAttachment { kind: "file" | "folder"; label: string; path: string }
-type ChatAttachment = LocalAttachment | { kind: "image"; path: string; src: string };
+type ChatAttachment = LocalAttachment | { kind: "image"; path: string };
 interface AttachmentDraft { items: readonly ChatAttachment[]; error?: string; pending?: boolean }
 const EMPTY: AttachmentDraft = { items: [] };
 const MAX_IMAGES = 4;
@@ -24,7 +24,7 @@ async function storeFile(file: File, options: { saveImage?: SaveChatImage; saveF
   if (options.saveImage && IMAGE_TYPES.has(file.type)) {
     const data = await fileBase64(file);
     const path = await options.saveImage(file.type, data);
-    return { kind: "image", path, src: `data:${file.type};base64,${data}` };
+    return { kind: "image", path };
   }
   if (options.imageOnly || !options.saveFile) throw new Error("Paste a PNG, JPEG, GIF, or WebP image.");
   const extension = /\.([a-z0-9]{1,12})$/i.exec(file.name)?.[1]?.toLowerCase() ?? "bin";
@@ -36,6 +36,7 @@ export function useChatAttachments(sessionId: string | null, options: {
   saveImage?: SaveChatImage;
   saveFile?: SaveChatFile;
   pickFolder?: () => Promise<string | null>;
+  discardFile?: (path: string) => Promise<void>;
 }) {
   const [drafts, setDrafts] = useState<Record<string, AttachmentDraft>>({});
   const saving = useRef(new Set<string>());
@@ -76,26 +77,20 @@ export function useChatAttachments(sessionId: string | null, options: {
     return [{ status: "fulfilled", value }];
   });
   const remove = (paths: readonly string[]) => update((d) => ({ ...d, error: undefined, items: d.items.filter((item) => !paths.includes(item.path)) }));
-  return { ...draft, addFiles, addFolder, remove, isSaving: () => !!sessionId && saving.current.has(sessionId) };
-}
-
-// ACP is text-only: keryx receives local paths, and Desktop renders the suffix as attachments.
-const IMAGE_HEADER = "[Local image attachments (use local tools to inspect):]";
-
-export function withImagePaths(text: string, paths: readonly string[]): string {
-  return paths.length ? [text, `${IMAGE_HEADER}\n${paths.join("\n")}`].filter(Boolean).join("\n\n") : text;
-}
-
-export function splitImagePaths(text: string): { text: string; paths: string[] } {
-  const at = text.lastIndexOf(IMAGE_HEADER);
-  if (at < 0 || (at > 0 && text.slice(at - 2, at) !== "\n\n")) return { text, paths: [] };
-  const paths = text.slice(at + IMAGE_HEADER.length).trim().split("\n");
-  return paths.length <= MAX_IMAGES && paths.every((p) => /^\/(?:[^\r\n]*\/)?keryx-chat-images-[\w.-]+\/[\w.-]+\.(png|jpg|gif|webp)$/.test(p))
-    ? { text: text.slice(0, at).trimEnd(), paths } : { text, paths: [] };
-}
-
-export function withLocalAttachments(text: string, attachments: readonly LocalAttachment[]): string {
-  if (!attachments.length) return text;
-  const lines = attachments.map(({ kind, label, path }) => `${kind === "folder" ? "Folder" : "File"} ${JSON.stringify(label)}: ${JSON.stringify(path)}`);
-  return [text, `[Local attachments (use local tools to inspect):]\n${lines.join("\n")}`].filter(Boolean).join("\n\n");
+  const discard = async (item: ChatAttachment) => {
+    if (!sessionId || saving.current.has(sessionId)) return;
+    if (item.kind === "folder" || !options.discardFile) { remove([item.path]); return; }
+    saving.current.add(sessionId);
+    update((d) => ({ ...d, pending: true, error: undefined }));
+    try {
+      await options.discardFile(item.path);
+      remove([item.path]);
+    } catch (error) {
+      update((d) => ({ ...d, error: errMessage(error) }));
+    } finally {
+      saving.current.delete(sessionId);
+      update((d) => ({ ...d, pending: false }));
+    }
+  };
+  return { ...draft, addFiles, addFolder, remove, discard, isSaving: () => !!sessionId && saving.current.has(sessionId) };
 }

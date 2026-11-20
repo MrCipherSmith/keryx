@@ -9,7 +9,8 @@ use crate::panels::PanelRoots;
 use base64::Engine as _;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::collections::HashMap;
+use std::sync::{Condvar, Mutex};
 use tauri::{AppHandle, Manager, Url, Webview};
 
 pub const MAX_BYTES: u64 = 15 << 20;
@@ -93,22 +94,97 @@ pub fn read_image(link: &str, root: Option<&Path>, extra_roots: &[PathBuf]) -> R
 const MAX_CHAT_IMAGE_BYTES: usize = 5 << 20;
 const MAX_CHAT_STORAGE_BYTES: usize = 256 << 20;
 
+const MAX_CHAT_STORAGE_FILES: usize = 512;
+const STORAGE_UNAVAILABLE: &str = "Chat attachment storage is unavailable";
+
+struct IssuedAttachment {
+    owner: String,
+    disk_path: PathBuf,
+    bytes: usize,
+    deleting: bool,
+}
+
 #[derive(Default)]
-pub struct ChatImages(Mutex<Option<(tempfile::TempDir, usize)>>);
+struct ChatStore {
+    dir: Option<tempfile::TempDir>,
+    initializing: bool,
+    closed: bool,
+    pending: usize,
+    files: usize,
+    bytes: usize,
+    issued: HashMap<String, IssuedAttachment>,
+}
+
+#[derive(Default)]
+pub struct ChatImages {
+    store: Mutex<ChatStore>,
+    changed: Condvar,
+}
 
 impl ChatImages {
     fn root(&self) -> Option<PathBuf> {
-        let store = self.0.lock().ok()?;
-        Some(store.as_ref()?.0.path().to_path_buf())
+        let store = self.store.lock().ok()?;
+        Some(store.dir.as_ref()?.path().to_path_buf())
+    }
+
+    fn init_root(
+        &self,
+        create: impl FnOnce() -> std::io::Result<tempfile::TempDir>,
+    ) -> Result<PathBuf, String> {
+        let mut store = self.store.lock().map_err(|_| STORAGE_UNAVAILABLE)?;
+        loop {
+            if let Some(dir) = &store.dir {
+                return Ok(dir.path().to_path_buf());
+            }
+            if !store.initializing {
+                store.initializing = true;
+                break;
+            }
+            store = self.changed.wait(store).map_err(|_| STORAGE_UNAVAILABLE)?;
+        }
+        drop(store);
+
+        let created = create();
+        let mut store = self.store.lock().map_err(|_| STORAGE_UNAVAILABLE)?;
+        store.initializing = false;
+        self.changed.notify_all();
+        let dir = created.map_err(|e| format!("Could not initialize chat attachments: {e}"))?;
+        let path = dir.path().to_path_buf();
+        store.dir = Some(dir);
+        Ok(path)
     }
 
     pub fn clear(&self) {
-        if let Ok(mut store) = self.0.lock() {
-            store.take();
+        let Ok(mut store) = self.store.lock() else { return };
+        store.closed = true;
+        while store.pending != 0 || store.initializing {
+            let Ok(next) = self.changed.wait(store) else { return };
+            store = next;
         }
+        let dir = store.dir.take();
+        store.issued.clear();
+        store.files = 0;
+        store.bytes = 0;
+        drop(store);
+        // TempDir performs recursive filesystem cleanup on drop.
+        drop(dir);
     }
 
-    fn save(&self, mime_type: &str, data: &str) -> Result<String, String> {
+    fn reserve(&self, bytes: usize) -> Result<(), String> {
+        let mut store = self.store.lock().map_err(|_| STORAGE_UNAVAILABLE)?;
+        if store.closed {
+            return Err(STORAGE_UNAVAILABLE.into());
+        }
+        if store.files >= MAX_CHAT_STORAGE_FILES || bytes > MAX_CHAT_STORAGE_BYTES - store.bytes {
+            return Err("Temporary chat attachment storage is full. Discard drafts or restart Keryx.".into());
+        }
+        store.files += 1;
+        store.bytes += bytes;
+        store.pending += 1;
+        Ok(())
+    }
+
+    fn save(&self, owner: &str, mime_type: &str, data: &str) -> Result<String, String> {
         let bytes = decode_attachment(data)?;
         let suffix = match (mime_type, bytes.as_slice()) {
             ("image/png", b) if b.starts_with(b"\x89PNG\r\n\x1a\n") => ".png",
@@ -117,33 +193,99 @@ impl ChatImages {
             ("image/webp", b) if b.starts_with(b"RIFF") && b.get(8..12) == Some(b"WEBP") => ".webp",
             _ => return Err("Unsupported or invalid pasted image".into()),
         };
-        self.save_bytes("image-", suffix, &bytes)
+        self.save_bytes(owner, "image-", suffix, &bytes)
     }
 
-    fn save_file(&self, extension: &str, data: &str) -> Result<String, String> {
+    fn save_file(&self, owner: &str, extension: &str, data: &str) -> Result<String, String> {
         if extension.is_empty() || extension.len() > 12 || !extension.bytes().all(|b| b.is_ascii_alphanumeric()) {
             return Err("Invalid attachment extension".into());
         }
-        self.save_bytes("file-", &format!(".{extension}"), &decode_attachment(data)?)
+        self.save_bytes(owner, "file-", &format!(".{extension}"), &decode_attachment(data)?)
     }
 
-    fn save_bytes(&self, prefix: &str, suffix: &str, bytes: &[u8]) -> Result<String, String> {
-        let mut store = self.0.lock().map_err(|_| "Chat attachment storage is unavailable")?;
-        if store.is_none() {
-            let dir = tempfile::Builder::new().prefix("keryx-chat-images-").tempdir().map_err(|e| e.to_string())?;
-            *store = Some((dir, 0));
+    fn save_bytes(&self, owner: &str, prefix: &str, suffix: &str, bytes: &[u8]) -> Result<String, String> {
+        self.reserve(bytes.len())?;
+        let result = self
+            .init_root(|| tempfile::Builder::new().prefix("keryx-chat-images-").tempdir())
+            .map_err(|message| (message, true))
+            .and_then(|root| write_attachment(&root, prefix, suffix, bytes));
+
+        let mut store = self.store.lock().map_err(|_| STORAGE_UNAVAILABLE)?;
+        store.pending -= 1;
+        self.changed.notify_all();
+        match result {
+            Ok(disk_path) => {
+                let path = disk_path.to_string_lossy().into_owned();
+                store.issued.insert(path.clone(), IssuedAttachment {
+                    owner: owner.to_owned(),
+                    disk_path,
+                    bytes: bytes.len(),
+                    deleting: false,
+                });
+                Ok(path)
+            }
+            Err((message, removed)) => {
+                // If cleanup failed, the leftover still counts until exit.
+                if removed {
+                    store.files -= 1;
+                    store.bytes -= bytes.len();
+                }
+                Err(message)
+            }
         }
-        let (dir, total) = store.as_mut().ok_or("Chat image storage is unavailable")?;
-        if *total + bytes.len() > MAX_CHAT_STORAGE_BYTES {
-            return Err("Temporary chat image storage is full. Restart Keryx to clear it.".into());
-        }
-        let mut file = tempfile::Builder::new().prefix(prefix).suffix(suffix)
-            .tempfile_in(dir.path()).map_err(|e| e.to_string())?;
-        file.write_all(bytes).map_err(|e| e.to_string())?;
-        let (_, path) = file.keep().map_err(|e| e.error.to_string())?;
-        *total += bytes.len();
-        Ok(path.to_string_lossy().into_owned())
     }
+
+    fn discard(&self, owner: &str, path: &str) -> Result<(), String> {
+        let disk_path = {
+            let mut store = self.store.lock().map_err(|_| STORAGE_UNAVAILABLE)?;
+            if store.closed {
+                return Err(STORAGE_UNAVAILABLE.into());
+            }
+            let entry = store.issued.get_mut(path)
+                .filter(|entry| entry.owner == owner && !entry.deleting)
+                .ok_or("Chat attachment is not available to this view")?;
+            entry.deleting = true;
+            let disk_path = entry.disk_path.clone();
+            store.pending += 1;
+            disk_path
+        };
+
+        let removed = match std::fs::remove_file(disk_path) {
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            result => result,
+        };
+
+        let mut store = self.store.lock().map_err(|_| STORAGE_UNAVAILABLE)?;
+        store.pending -= 1;
+        self.changed.notify_all();
+        if let Err(e) = removed {
+            if let Some(entry) = store.issued.get_mut(path) {
+                entry.deleting = false;
+            }
+            return Err(format!("Could not discard chat attachment: {e}"));
+        }
+        if let Some(entry) = store.issued.remove(path) {
+            store.files -= 1;
+            store.bytes -= entry.bytes;
+        }
+        Ok(())
+    }
+}
+
+// The error flag says whether it is safe to release the reservation.
+fn write_attachment(root: &Path, prefix: &str, suffix: &str, bytes: &[u8]) -> Result<PathBuf, (String, bool)> {
+    let cleanup = |file: tempfile::NamedTempFile, error: std::io::Error| {
+        (format!("Could not write chat attachment: {error}"), file.close().is_ok())
+    };
+    let mut file = tempfile::Builder::new().prefix(prefix).suffix(suffix)
+        .tempfile_in(root)
+        .map_err(|e| (format!("Could not create chat attachment: {e}"), true))?;
+    if let Err(e) = file.write_all(bytes) {
+        return Err(cleanup(file, e));
+    }
+    let (file, path) = file.keep().map_err(|e| cleanup(e.file, e.error))?;
+    drop(file);
+    Ok(path)
 }
 
 fn decode_attachment(data: &str) -> Result<Vec<u8>, String> {
@@ -159,27 +301,40 @@ fn decode_attachment(data: &str) -> Result<Vec<u8>, String> {
 }
 
 #[tauri::command]
-pub async fn save_chat_file(app: AppHandle, extension: String, data: String) -> Result<String, String> {
-    tauri::async_runtime::spawn_blocking(move || app.state::<ChatImages>().save_file(&extension, &data))
+pub async fn save_chat_file(app: AppHandle, view: Webview, extension: String, data: String) -> Result<String, String> {
+    let owner = view.label().to_owned();
+    tauri::async_runtime::spawn_blocking(move || app.state::<ChatImages>().save_file(&owner, &extension, &data))
         .await
         .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub async fn save_chat_image(app: AppHandle, mime_type: String, data: String) -> Result<String, String> {
-    tauri::async_runtime::spawn_blocking(move || app.state::<ChatImages>().save(&mime_type, &data))
+pub async fn save_chat_image(app: AppHandle, view: Webview, mime_type: String, data: String) -> Result<String, String> {
+    let owner = view.label().to_owned();
+    tauri::async_runtime::spawn_blocking(move || app.state::<ChatImages>().save(&owner, &mime_type, &data))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn discard_chat_attachment(app: AppHandle, view: Webview, path: String) -> Result<(), String> {
+    let owner = view.label().to_owned();
+    tauri::async_runtime::spawn_blocking(move || app.state::<ChatImages>().discard(&owner, &path))
         .await
         .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
 pub async fn local_image(app: AppHandle, view: Webview, path: String) -> Result<String, String> {
-    let root = app.state::<PanelRoots>().get(view.label());
-    let mut extra_roots = vec![screenshots_dir()];
-    extra_roots.extend(app.state::<ChatImages>().root());
-    tauri::async_runtime::spawn_blocking(move || read_image(&path, root.as_deref(), &extra_roots))
-        .await
-        .map_err(|e| e.to_string())?
+    let owner = view.label().to_owned();
+    tauri::async_runtime::spawn_blocking(move || {
+        let root = app.state::<PanelRoots>().get(&owner);
+        let mut extra_roots = vec![screenshots_dir()];
+        extra_roots.extend(app.state::<ChatImages>().root());
+        read_image(&path, root.as_deref(), &extra_roots)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[cfg(test)]
@@ -190,10 +345,10 @@ mod tests {
     fn chat_images_are_validated_and_removed_with_the_store() {
         let storage = ChatImages::default();
         let png = "iVBORw0KGgo=";
-        assert!(storage.save("image/jpeg", png).is_err());
+        assert!(storage.save("view", "image/jpeg", png).is_err());
         assert!(storage.root().is_none());
-        let first = storage.save("image/png", png).unwrap();
-        let second = storage.save("image/png", png).unwrap();
+        let first = storage.save("view", "image/png", png).unwrap();
+        let second = storage.save("view", "image/png", png).unwrap();
         assert_ne!(first, second);
         let root = storage.root().unwrap();
         assert!(Path::new(&first).starts_with(&root));
@@ -205,12 +360,47 @@ mod tests {
     #[test]
     fn regular_chat_files_are_private_and_have_safe_extensions() {
         let storage = ChatImages::default();
-        assert!(storage.save_file("../txt", "aGVsbG8=").is_err());
-        let path = PathBuf::from(storage.save_file("txt", "aGVsbG8=").unwrap());
+        assert!(storage.save_file("view", "../txt", "aGVsbG8=").is_err());
+        let path = PathBuf::from(storage.save_file("view", "txt", "aGVsbG8=").unwrap());
         assert_eq!(path.extension().and_then(|e| e.to_str()), Some("txt"));
         assert_eq!(std::fs::read(&path).unwrap(), b"hello");
         storage.clear();
         assert!(!path.exists());
+    }
+
+    #[test]
+    fn temporary_root_initialization_can_retry_after_failure() {
+        let storage = ChatImages::default();
+        assert!(storage.init_root(|| Err(std::io::Error::other("injected failure"))).is_err());
+        assert!(storage.root().is_none());
+        let path = storage.save_file("view", "txt", "").unwrap();
+        assert!(Path::new(&path).is_file());
+    }
+
+    #[test]
+    fn discard_requires_an_owned_issued_path_and_reclaims_both_budgets() {
+        let storage = ChatImages::default();
+        {
+            let mut store = storage.store.lock().unwrap();
+            store.files = MAX_CHAT_STORAGE_FILES - 1;
+            store.bytes = MAX_CHAT_STORAGE_BYTES - 5;
+        }
+        let path = storage.save_file("owner", "txt", "aGVsbG8=").unwrap();
+        assert!(storage.save_file("owner", "txt", "").is_err());
+
+        let unissued = storage.root().unwrap().join("unissued.txt");
+        std::fs::write(&unissued, b"keep").unwrap();
+        assert!(storage.discard("owner", unissued.to_str().unwrap()).is_err());
+        assert!(storage.discard("other", &path).is_err());
+        assert!(Path::new(&path).is_file());
+        assert!(unissued.is_file());
+
+        storage.discard("owner", &path).unwrap();
+        assert!(!Path::new(&path).exists());
+        assert!(storage.discard("owner", &path).is_err());
+        let replacement = storage.save_file("owner", "txt", "aGVsbG8=").unwrap();
+        assert!(Path::new(&replacement).is_file());
+        assert!(storage.save_file("owner", "txt", "").is_err());
     }
 
     #[test]

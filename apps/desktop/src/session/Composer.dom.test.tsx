@@ -139,6 +139,7 @@ test("pasting a screenshot saves it and sends an image-only draft", async () => 
   await act(() => root.render(createElement(Composer, {
     ...props("IMG", createRef()),
     saveImage: async (mime: string, data: string) => { saved.push(mime, data); return path; },
+    loadImage: async () => "data:image/png;base64,iVBORw0KGgo=",
     onSend: (text: string, paths: readonly string[]) => { sent.push([text, ...paths]); return true; },
   })));
   const event = new Event("paste", { bubbles: true, cancelable: true });
