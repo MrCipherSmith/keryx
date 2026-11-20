@@ -30,7 +30,7 @@ describe("loadCiTriageList", () => {
     const dir = await mkdtemp(path.join(tmpdir(), "keryx-ci-source-"));
     try {
       const { spawn, calls } = recordingSpawn(() => ({ stdout: "", stderr: "", exitCode: 0 }));
-      const result = await loadCiTriageList(dir, spawn);
+      const result = await loadCiTriageList(dir, spawn, { env: {}, dir });
       expect(result.items).toEqual([]);
       expect(result.note).toContain("not enabled");
       expect(calls).toHaveLength(0);
@@ -130,7 +130,7 @@ describe("runCiTriageForItem", () => {
         fetchCalled = true;
         return new Response("{}");
       }) as unknown as typeof fetch;
-      const result = await runCiTriageForItem(dir, item, spawn, fetchFn);
+      const result = await runCiTriageForItem(dir, item, spawn, fetchFn, undefined, { env: {}, dir });
       expect(result.ok).toBe(false);
       expect(calls).toHaveLength(0);
       expect(fetchCalled).toBe(false);
@@ -141,8 +141,6 @@ describe("runCiTriageForItem", () => {
 
   test("opted in, no credential: refused, no gh call and no fetch call", async () => {
     const dir = await withEnabledProject();
-    const prevKey = process.env.OPENROUTER_API_KEY;
-    delete process.env.OPENROUTER_API_KEY;
     try {
       const { spawn, calls } = recordingSpawn(() => ({ stdout: "", stderr: "", exitCode: 0 }));
       let fetchCalled = false;
@@ -150,21 +148,18 @@ describe("runCiTriageForItem", () => {
         fetchCalled = true;
         return new Response("{}");
       }) as unknown as typeof fetch;
-      const result = await runCiTriageForItem(dir, item, spawn, fetchFn);
+      const result = await runCiTriageForItem(dir, item, spawn, fetchFn, undefined, { env: {}, dir });
       expect(result.ok).toBe(false);
       expect((result as { reason: string }).reason).toContain("OPENROUTER_API_KEY");
       expect(calls).toHaveLength(0);
       expect(fetchCalled).toBe(false);
     } finally {
-      if (prevKey !== undefined) process.env.OPENROUTER_API_KEY = prevKey;
       await rm(dir, { recursive: true, force: true });
     }
   });
 
   test("opted in and credentialed: fetches the log, calls Jev once, returns the verdict", async () => {
     const dir = await withEnabledProject();
-    const prevKey = process.env.OPENROUTER_API_KEY;
-    process.env.OPENROUTER_API_KEY = "sk-or-test";
     try {
       const { spawn, calls } = recordingSpawn((argv) => {
         if (argv.includes("--log-failed")) {
@@ -196,7 +191,7 @@ describe("runCiTriageForItem", () => {
           { status: 200, headers: { "content-type": "application/json" } },
         );
       }) as unknown as typeof fetch;
-      const result = await runCiTriageForItem(dir, item, spawn, fetchFn);
+      const result = await runCiTriageForItem(dir, item, spawn, fetchFn, undefined, { env: { OPENROUTER_API_KEY: "sk-or-test" }, dir });
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.verdict.top).toBe("flaky");
@@ -205,16 +200,12 @@ describe("runCiTriageForItem", () => {
       expect(fetchCalls).toBe(1);
       expect(calls.some((argv) => argv.includes("rerun") || argv.includes("cancel"))).toBe(false);
     } finally {
-      if (prevKey !== undefined) process.env.OPENROUTER_API_KEY = prevKey;
-      else delete process.env.OPENROUTER_API_KEY;
       await rm(dir, { recursive: true, force: true });
     }
   });
 
   test("flow 306 review items 1/3: an aborted signal maps to {ok:false, timedOut:true}, not a generic error", async () => {
     const dir = await withEnabledProject();
-    const prevKey = process.env.OPENROUTER_API_KEY;
-    process.env.OPENROUTER_API_KEY = "sk-or-test";
     try {
       const { spawn } = recordingSpawn((argv) => {
         if (argv.includes("--log-failed")) return { stdout: "typecheck-and-tests\tstep\tboom\n", stderr: "", exitCode: 0 };
@@ -245,7 +236,7 @@ describe("runCiTriageForItem", () => {
         });
       }) as unknown as typeof fetch;
       const controller = new AbortController();
-      const call = runCiTriageForItem(dir, item, spawn, fetchFn, controller.signal);
+      const call = runCiTriageForItem(dir, item, spawn, fetchFn, controller.signal, { env: { OPENROUTER_API_KEY: "sk-or-test" }, dir });
       controller.abort();
       const result = await call;
       expect(result.ok).toBe(false);
@@ -253,16 +244,12 @@ describe("runCiTriageForItem", () => {
         expect(result.timedOut).toBe(true);
       }
     } finally {
-      if (prevKey !== undefined) process.env.OPENROUTER_API_KEY = prevKey;
-      else delete process.env.OPENROUTER_API_KEY;
       await rm(dir, { recursive: true, force: true });
     }
   });
 
   test("a non-timeout error (e.g. a malformed response) is NOT reported as timedOut", async () => {
     const dir = await withEnabledProject();
-    const prevKey = process.env.OPENROUTER_API_KEY;
-    process.env.OPENROUTER_API_KEY = "sk-or-test";
     try {
       const { spawn } = recordingSpawn((argv) => {
         if (argv.includes("--log-failed")) return { stdout: "typecheck-and-tests\tstep\tboom\n", stderr: "", exitCode: 0 };
@@ -282,14 +269,12 @@ describe("runCiTriageForItem", () => {
         return { stdout: "", stderr: "not found", exitCode: 1 };
       });
       const fetchFn = (async () => new Response("{not json", { status: 200 })) as unknown as typeof fetch;
-      const result = await runCiTriageForItem(dir, item, spawn, fetchFn);
+      const result = await runCiTriageForItem(dir, item, spawn, fetchFn, undefined, { env: { OPENROUTER_API_KEY: "sk-or-test" }, dir });
       expect(result.ok).toBe(false);
       if (!result.ok) {
         expect(result.timedOut).toBeUndefined();
       }
     } finally {
-      if (prevKey !== undefined) process.env.OPENROUTER_API_KEY = prevKey;
-      else delete process.env.OPENROUTER_API_KEY;
       await rm(dir, { recursive: true, force: true });
     }
   });
