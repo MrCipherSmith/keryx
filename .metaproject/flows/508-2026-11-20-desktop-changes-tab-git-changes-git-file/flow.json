@@ -1,0 +1,124 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "508",
+  "slug": "desktop-changes-tab-git-changes-git-file",
+  "title": "Desktop Changes tab: git_changes, git_file_diff, line comments",
+  "status": "in-progress",
+  "createdAt": "2026-11-20T23:21:47.717Z",
+  "updatedAt": "2026-11-20T23:22:16.655Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:8d248a07191c964b7def9e8ecd6785c9281f96cc41979bd9e6d97747e2648c39",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-11-20T23:21:47.717Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-11-20T23:22:16.353Z",
+      "event": "frozen",
+      "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-11-20T23:22:16.655Z",
+      "event": "started"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml gitinfo"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml gitinfo"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bun test src"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "cd apps/desktop && bunx tsc --noEmit"
+    },
+    "AC5": {
+      "kind": "judged"
+    }
+  }
+}
