@@ -14,7 +14,7 @@ function planVersion(root: string, packageId?: string) {
     const candidate = path.join(root, dir);
     try {
       if (realpathSync(candidate) !== candidate) return null;
-      return [manifestStamp(path.join(candidate, "manifest.json")), manifestStamp(path.join(candidate, "desktop-dispatch.json"))];
+      return ["manifest.json", "desktop-dispatch.json", "plan.json"].map(file => manifestStamp(path.join(candidate, file)));
     } catch { return null; }
   });
 }
@@ -35,7 +35,7 @@ export function createWorkerRoster(directory: string, key: DeskRunKey, run: Desk
     if (!cached || current !== signature) {
       cached = readDeskReviewerProgress(root, key, run, false);
       // An unprepared plan or a file changed during this read must be checked again.
-      signature = cached?.planned != null && versions.some(v => v?.every(Boolean)) &&
+      signature = cached?.planned != null && versions.some(v => v?.[0] && (v[1] || v[2])) &&
         JSON.stringify(versions) === JSON.stringify(planVersion(root, p.packageId)) ? current : undefined;
       byId = new Map(cached?.sessions.map(s => [s.id, s]));
       pending = cached !== undefined;

@@ -97,6 +97,7 @@ const TOOL_KIND_BY_NAME: Readonly<Record<string, AcpToolKind>> = {
   workspace_create: "edit",
   workspace_propose: "edit",
   ask_user: "think",
+  prepare_review: "think",
   slate_read: "read",
   slate_write_seed: "edit",
   slate_note: "edit",

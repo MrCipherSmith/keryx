@@ -26,6 +26,8 @@ import { writeActiveReview } from "../../../review/active-review";
 import { splitUsage } from "../../../review/dispatch-usage";
 import { isEmptyOutput, parseReviewResult } from "../../../review/ledger";
 import { ReviewerActivity } from "./reviewer-activity";
+import { DeskRunStore } from "../../../review/desk-run-store";
+import { desktopReviewerQuestion } from "../../../review/desk-reviewer-question";
 
 function stubProvider(text: string): ProviderPort {
   return {
@@ -1030,13 +1032,67 @@ test("only an unchanged prepared Desktop reviewer call resolves the host-authori
   expect((await desktop.invoke(request)).status).toBe("Completed");
   expect(used).toEqual([session.modelId]);
 
+  const fixed = createSpawnSubagentTool({ ...deps, routingProjectRoot: project, preparedReviewOnly: true });
+  const ref = { assignment: request.save_result_to };
+  expect(fixed.definition.inputSchema.required).toEqual(["assignment"]);
+  for (const invalid of [request, { ...ref, mode: "general" }, { assignment: "../outside" }]) {
+    expect((await fixed.invoke(invalid)).status).toBe("Denied");
+  }
+  // Go through the coordinator's real permission gate, as the Desktop shell does.
+  // Calling invoke() directly does not verify the prepared schema carries its delegate risk.
+  const parent = scriptedChildProvider(round => round === 1
+    ? toolCalls({ id: "reviewer", name: "spawn_subagent", input: JSON.stringify(ref) })
+    : textRound("finished"));
+  const results: string[] = [];
+  let seq = 0;
+  await runAgentTurn(
+    { write: () => {}, permissionMode: () => "trust", onToolResult: (_name, result) => results.push(result.output) },
+    { cwd: checkout, unattended: true, provider: parent.provider, providerId: session.providerId,
+      modelId: session.modelId, tools: [fixed], systemInstruction: "Review the prepared assignment.", idSeq: () => `desk-${++seq}` },
+    [], "Dispatch the reviewer",
+  );
+  expect(results.join("\n")).toContain("reviewed");
+  expect(used).toEqual([session.modelId, session.modelId]);
+
+  const poolModel = { provider: "anthropic", model: "fixture-reviewer" };
+  const { setModelProfileField } = await import("../../routing/model-profile");
+  const observedAt = new Date().toISOString();
+  await setModelProfileField(poolModel.provider, poolModel.model, { field: "contextLength", value: 100_000 }, project);
+  const selections: Array<{ provider: string; model: string }> = [];
+  const unavailableModel = { provider: poolModel.provider, model: "not-in-live-catalog" };
+  const scoped = createSpawnSubagentTool({
+    ...deps, preparedReviewOnly: true, routingProjectRoot: project,
+    deskOptions: { mode: "manual", adaptive: false, maxWaves: 1, modelPools: { strong: [], middle: [unavailableModel, poolModel], light: [] } },
+    getDetectedProviders: () => [{ name: "ollama" }, { name: poolModel.provider, models: [poolModel.model], observedAt }],
+    describeProvider: () => {
+      const description = stubProvider("").describe();
+      return { ...description, capabilities: { ...description.capabilities, toolCalls: true } };
+    },
+    makeProvider(provider, model) {
+      selections.push({ provider, model });
+      return stubProvider("reviewed on selected provider");
+    },
+  });
+  const selected = { ...request, expected_model: poolModel };
+  await writeQueue([selected]);
+  expect((await scoped.invoke(ref)).output).toContain("reviewed on selected provider");
+  expect(selections).toEqual([poolModel]);
+  await writeQueue([{ ...selected, expected_model: unavailableModel }]);
+  expect((await scoped.invoke(ref)).output).toContain("reviewed on selected provider");
+  expect(selections).toEqual([poolModel, poolModel]);
+  const later = { ...selected, save_result_to: selected.save_result_to.replace("-w1", "-w2") };
+  await writeQueue([later]);
+  expect((await scoped.invoke({ assignment: later.save_result_to })).output).toContain("wave limit");
+  expect(selections).toEqual([poolModel, poolModel]);
+
   const changed = { ...request, expected_model: { ...request.expected_model, model: "different" } };
   await writeQueue([changed]);
   expect((await desktop.invoke(changed)).output).toContain("no longer matches the host-authorized Review model");
   await writeQueue([request]);
   await setRoutingCategory("user", location, "review", { mode: "model", target: { ...session, modelId: "updated-review-model" } });
   expect((await desktop.invoke(request)).output).toContain("no longer matches the host-authorized Review model");
-  expect(used).toEqual([session.modelId]);
+  expect((await fixed.invoke(ref)).status).toBe("Denied");
+  expect(used).toEqual([session.modelId, session.modelId]);
 });
 
 test("a malformed routing.config.json refuses the spawn with the reason, never routing around it", async () => {
@@ -1338,6 +1394,8 @@ test("review activity names the host's final submission while redacting unregist
     getDetectedProviders: () => [{ name: "ollama" }],
   });
   expect((await tool.invoke({ task: "Review", save_result_to: `${raw}/review-logic-w1.txt` })).status).toBe("BudgetExhausted");
+  expect(events.at(-1)).toMatchObject({ activity: "finished", outcome: "partial", finalOutput: "Reviewed",
+    reason: "The reviewer reached its execution budget." });
   expect(events.filter(event => event.type === "reviewer_activity" && event.activity === "tool_end"))
     .toMatchObject([{ tool: "get_cwd", ok: true }, { tool: "unknown_tool", ok: false }, { tool: "submit_result", ok: true }]);
 });
@@ -1386,24 +1444,26 @@ test("review dispatch telemetry links actual tool activity and usage across wave
         observeReviewProvider(port, sink, { participant: "reviewer", reviewer, ...(sessionId && { sessionId }) }, provider, model, root),
       getParentModel: () => ({ providerId: "ollama", modelId: "test" }),
       makeProvider: () => scriptedChildProvider(i => i === 1
-        ? toolCalls({ id: "1", name: "get_cwd", input: '{"private":"SECRET_ARGUMENT"}' },
+        ? [{ kind: "reasoning_delta", text: "SECRET_REASONING" }, { kind: "text_delta", text: "Inspecting the assigned changes" },
+          ...toolCalls({ id: "1", name: "get_cwd", input: '{"private":"SECRET_ARGUMENT"}' },
           { id: "2", name: "SECRET_MODEL_GENERATED_NAME" }, { id: "3", name: "private_unregistered_name" },
-          { id: "4", name: "get_cwd", input: "{}" })
+          { id: "4", name: "get_cwd", input: "{}" })]
         : [{ kind: "text_delta", text: answer }, { kind: "usage_update", usage: { exact: true, inputTokens: 12, outputTokens: 3 } }, { kind: "model_end" }]).provider,
       getDetectedProviders: () => [{ name: "ollama" }],
     });
     for (const [wave, status] of [[1, "DONE"], [2, "BLOCKED"], [2, "NEEDS_CONTEXT"]] as const) {
-      answer = `STATUS: ${status}\n\`\`\`REVIEW_RESULT\n${JSON.stringify({ status, reviewer: "review-logic", slices: ["slice-01"], findings: [], summary: "SECRET_ANSWER" })}\n\`\`\``;
+      answer = `STATUS: ${status}\n\`\`\`REVIEW_RESULT\n${JSON.stringify({ status, reviewer: "review-logic", slices: ["slice-01"], findings: [], summary: "Reviewed the assigned slice", needs_context: ["Need the PR-head fixture"], reasoning: "SECRET_REASONING" })}\n\`\`\``;
       const offset = events.length;
       await tool.invoke({ task: "SECRET_TASK", save_result_to: `${raw}/review-logic-w${wave}.txt` });
       const batch = events.slice(offset);
       const activity = batch.filter(event => event.type === "reviewer_activity");
       expect(activity).toMatchObject([
-        { activity: "started" }, { activity: "tool_start", tool: "get_cwd" },
+        { activity: "started" }, { activity: "message", text: "Inspecting the assigned changes" }, { activity: "tool_start", tool: "get_cwd" },
         { activity: "tool_end", tool: "get_cwd", ok: false }, { activity: "tool_start", tool: "unknown_tool" },
         { activity: "tool_end", tool: "unknown_tool", ok: false }, { activity: "tool_start", tool: "unknown_tool" },
         { activity: "tool_end", tool: "unknown_tool", ok: false }, { activity: "tool_start", tool: "get_cwd" },
-        { activity: "tool_end", tool: "get_cwd", ok: true }, { activity: "finished", outcome: status === "DONE" ? "completed" : "partial" },
+        { activity: "tool_end", tool: "get_cwd", ok: true }, { activity: "finished", outcome: status === "DONE" ? "completed" : "partial",
+          finalOutput: "Reviewed the assigned slice", ...(status === "DONE" ? {} : { reason: "Need the PR-head fixture" }) },
       ]);
       const sessionId = activity[0]!.sessionId;
       for (const event of activity) {
@@ -1781,3 +1841,98 @@ test("AC6: one turn opens at most 25 waves; the 26th is refused", async () => {
     await rm(root, { recursive: true, force: true });
   }
 }, 120_000);
+
+test("manual reviewer waits without spending a request, consumes the operator's context in the same session and saves its revised result", async () => {
+  const data = await mkdtemp(path.join(tmpdir(), "keryx-reviewer-context-"));
+  const prior = process.env.KERYX_DATA_DIR, priorWatchdog = process.env.KERYX_SPAWN_CALL_WATCHDOG_MS;
+  process.env.KERYX_DATA_DIR = data;
+  process.env.KERYX_SPAWN_CALL_WATCHDOG_MS = "200";
+  const store = new DeskRunStore();
+  const key = { repo: "fixture/repo", repositoryId: "repo-id", viewer: "operator", number: 5 };
+  const controller = new AbortController();
+  let pending: ReturnType<typeof runAgentTurn> | undefined;
+  try {
+    const id = store.request(data, key, { baseSha: "a".repeat(40), headSha: "b".repeat(40) });
+    if (!id) throw new Error("Expected a new manual run");
+    const attempt = store.byId(id)!;
+    attempt.run.state = "running";
+    store.save(attempt);
+    const dir = store.directory(id), cwd = path.join(dir, "checkout");
+    await mkdir(path.join(dir, "run"), { recursive: true });
+    const raw = await recordReviewerPlan(cwd, [{ label: "review-layout", file: "review-layout-w1.txt" }]);
+    const save = raw + "/review-layout-w1.txt";
+    const env = { KERYX_DESK_REVIEW_SHELL: "1", KERYX_DESK_OPERATOR_RUN: id, KERYX_AUTONOMOUS_ANSWERS_FILE: path.join(dir, "run/answers.ndjson") };
+    expect(desktopReviewerQuestion(cwd, { ...env, KERYX_DESK_OPERATOR_RUN: "" })).toBeUndefined();
+    const ask = desktopReviewerQuestion(cwd, env);
+    if (!ask) throw new Error("Expected the manual Desktop question host");
+    const report = (status: string) => JSON.stringify({ status, reviewer: "review-layout", summary: status === "DONE" ? "Rechecked measurements" : "Need responsive verification",
+      needs_context: status === "DONE" ? [] : ["What was the measured width?"], findings: [] });
+    const { provider, requests } = scriptedChildProvider(i => textRound(report(i === 1 ? "NEEDS_CONTEXT" : "DONE")));
+    const events: ShellEvent[] = [];
+    const tool = createSpawnSubagentTool({ cwd, askReviewerContext: ask, onReviewerActivity: e => events.push(e),
+      makeProvider: () => provider, getParentModel: () => ({ providerId: "ollama", modelId: "test" }), getDetectedProviders: () => [{ name: "ollama" }] });
+    const parent = scriptedChildProvider(i => i === 1 ? toolCalls({ id: "delegate", name: "spawn_subagent",
+      input: JSON.stringify({ task: "Inspect the fixture", timeout_ms: 200, save_result_to: save }) }) : textRound("Review finished"));
+    const outputs: string[] = [];
+    let sequence = 0;
+    pending = runAgentTurn({ write: () => {}, permissionMode: () => "trust", onToolResult: (_name, r) => outputs.push(r.output) },
+      { cwd, unattended: true, provider: parent.provider, providerId: "ollama", modelId: "test", tools: [tool],
+        systemInstruction: "Review the assignment.", idSeq: () => "call-" + ++sequence }, [], "Run the reviewer", { signal: controller.signal });
+    let question;
+    for (let i = 0; i < 100 && !question; i++) {
+      await Bun.sleep(20);
+      question = store.pendingQuestions(id)[0];
+    }
+    if (!question) throw new Error("Expected a reviewer question");
+    expect(question).toMatchObject({ reviewer: "review-layout", wave: 1, question: "What was the measured width?" });
+    expect(events[0]).toMatchObject({ sessionId: question.reviewerSessionId });
+    await Bun.sleep(250);
+    expect(requests).toHaveLength(1);
+    expect(existsSync(path.join(cwd, save))).toBe(false);
+    store.atomic(() => store.answerQuestion(key, id, question.id, "320px at the narrowest viewport"));
+    await pending;
+    expect(outputs.join("\n")).toContain("Rechecked measurements");
+    expect(requests).toHaveLength(2);
+    expect(requests[1]!.messages).toContainEqual(expect.objectContaining({ role: "user", content: expect.stringContaining("320px at the narrowest viewport") }));
+    expect(requests[1]!.messages).toContainEqual(expect.objectContaining({ role: "assistant", content: expect.stringContaining("What was the measured width?") }));
+    expect(parseReviewResult(await readFile(path.join(cwd, save), "utf8"))).toMatchObject({ status: "DONE", summary: "Rechecked measurements" });
+    expect(store.pendingQuestions(id)).toHaveLength(0);
+    expect(events.filter(e => e.type === "reviewer_activity" && e.activity === "answer")).toMatchObject([{ sessionId: question.reviewerSessionId, text: "320px at the narrowest viewport" }]);
+    expect(events.at(-1)).toMatchObject({ sessionId: question.reviewerSessionId, outcome: "completed" });
+  } finally {
+    controller.abort();
+    await pending;
+    store.close();
+    if (priorWatchdog === undefined) delete process.env.KERYX_SPAWN_CALL_WATCHDOG_MS;
+    else process.env.KERYX_SPAWN_CALL_WATCHDOG_MS = priorWatchdog;
+    if (prior === undefined) delete process.env.KERYX_DATA_DIR;
+    else process.env.KERYX_DATA_DIR = prior;
+    await rm(data, { recursive: true, force: true });
+  }
+});
+
+test("a declined, repeated or cancelled request keeps its reviewer and never starts another unapproved turn", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-partial-review-"));
+  try {
+    const reviewer = "review-logic";
+    const raw = await recordReviewerPlan(root, [1, 2, 3].map(wave => ({ label: reviewer, file: reviewer + "-w" + wave + ".txt" })));
+    const payload = JSON.stringify({ reviewer, status: "NEEDS_CONTEXT", needs_context: ["Where is the source?"], summary: "Source missing." });
+    for (const [index, mode] of (["decline", "repeat", "cancel"] as const).entries()) {
+      const { provider, requests } = scriptedChildProvider(() => textRound(payload));
+      const events: ShellEvent[] = [], controller = new AbortController();
+      let asked = 0;
+      const tool = createSpawnSubagentTool({ cwd: root, onReviewerActivity: event => events.push(event),
+        askReviewerContext: async (_question, _session, signal) => {
+          asked++;
+          if (mode === "cancel") { controller.abort(); expect(signal.aborted).toBe(true); return undefined; }
+          return mode === "decline" ? null : "Please check the repository again";
+        },
+        getParentModel: () => ({ providerId: "ollama", modelId: "test" }), getDetectedProviders: () => [{ name: "ollama" }], makeProvider: () => provider,
+      });
+      await tool.invoke({ task: "Review fixture", save_result_to: raw + "/" + reviewer + "-w" + (index + 1) + ".txt" }, { signal: controller.signal });
+      expect(asked).toBe(1);
+      expect(requests).toHaveLength(mode === "repeat" ? 2 : 1);
+      expect(events.at(-1)).toMatchObject({ outcome: mode === "cancel" ? "cancelled" : "partial" });
+    }
+  } finally { await rm(root, { recursive: true, force: true }); }
+});

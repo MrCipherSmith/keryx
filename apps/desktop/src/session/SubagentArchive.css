@@ -1,0 +1,24 @@
+.subagent-archive .overlay { padding: clamp(8px, 2vw, 24px); }
+.subagent-archive .dialog { min-width: 0; max-width: calc(100vw - clamp(16px, 4vw, 48px)); }
+.subagent-archive .dialog-head h2 { min-width: 0; }
+.archive-parent { display: block; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-sm); font-weight: 400; color: var(--fg-muted); }
+.archive-panes { display: grid; grid-template-columns: minmax(0, 30%) minmax(0, 1fr); height: min(60vh, 36rem); border: 1px solid var(--border); border-radius: var(--r-md); overflow: hidden; }
+.archive-index { min-width: 0; min-height: 0; display: flex; flex-direction: column; padding: var(--sp-2); border-inline-end: 1px solid var(--border); background: var(--bg-canvas); }
+.archive-search { display: flex; align-items: center; gap: var(--sp-1); padding: var(--sp-1) var(--sp-2); border: 1px solid var(--border); border-radius: var(--r-md); color: var(--fg-muted); }
+.archive-search:focus-within { outline: 2px solid var(--focus); }
+.archive-search input { min-width: 0; width: 100%; border: 0; outline: 0; background: transparent; color: var(--fg); font: inherit; }
+.archive-list { list-style: none; margin: var(--sp-2) 0 0; padding: 0; overflow: auto; }
+.archive-row { display: grid; gap: 2px; width: 100%; text-align: start; border: 0; border-radius: var(--r-md); background: transparent; color: var(--fg); padding: var(--sp-2); }
+.archive-row:hover { background: var(--bg-hover); }
+.archive-row[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-text); }
+.archive-row:focus-visible { outline-offset: -2px; }
+.archive-label { overflow-wrap: anywhere; font-weight: 550; }
+.archive-row-meta { display: flex; align-items: center; gap: 5px; }
+.archive-row-meta, .archive-row time, .archive-empty { color: var(--fg-muted); font-size: var(--fs-sm); }
+.archive-transcript { min-width: 0; overflow: auto; overflow-wrap: anywhere; padding: var(--sp-3); }
+.archive-transcript .subagent-detail, .archive-transcript .subagent-log { grid-template-columns: minmax(0, 1fr); }
+.archive-transcript pre { max-width: 100%; overflow: auto; }
+@media (max-width: 580px) {
+  .archive-panes { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 38%) minmax(0, 1fr); }
+  .archive-index { border-inline-end: 0; border-bottom: 1px solid var(--border); }
+}

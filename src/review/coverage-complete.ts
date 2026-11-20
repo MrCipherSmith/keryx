@@ -189,9 +189,14 @@ export async function computeCoverage(packageDir: string, options: ComputeCovera
   return { schemaVersion: 1, tracked, counts, omissionReasons, files, omissions, ...(waiver === undefined ? {} : { waiver }), waived };
 }
 
-export async function writeCoverage(packageDir: string): Promise<CoverageReport> {
+export async function writeCoverage(
+  packageDir: string,
+  { write = writeFileAtomic, onlyTracked = false }: { write?: CompletionWriter; onlyTracked?: boolean } = {},
+): Promise<CoverageReport> {
   const report = await computeCoverage(packageDir);
-  await writeFileAtomic(path.join(packageDir, COVERAGE_FILE), `${JSON.stringify(report, null, 2)}\n`);
+  if (!onlyTracked || report.tracked) {
+    await write(path.join(packageDir, COVERAGE_FILE), `${JSON.stringify(report, null, 2)}\n`);
+  }
   return report;
 }
 

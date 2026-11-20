@@ -1,3 +1,7 @@
+import type { DeskReviewOptions } from "../../../review/desk-run-options";
+import { DESK_REVIEW_HEAD } from "../../../review/autonomous-profile";
+import { reviewSourceTool } from "./read-review-source";
+import { assignedReviewerWave } from "../../../review/reviewer-activity";
 import { CONTEXT_FILE_DENYLIST, SUBAGENT_CONTEXT_FILES_MAX_BYTES, SUBAGENT_CONTEXT_FILES_MAX_COUNT } from "../../../lib/subagent-context";
 export { SUBAGENT_CONTEXT_FILES_MAX_BYTES } from "../../../lib/subagent-context";
 // Interactive `spawn_subagent` tool — wires MAE `spawnSubagent` into the shell agent.
@@ -22,7 +26,8 @@ import type { InteractiveTool, InteractiveToolContext } from "./interactive-tool
 import { builtinReadOnlyTools, confineToRoot } from "./interactive-tools";
 import { MAX_TIMER_DELAY_MS } from "./background-job-registry";
 import { makeKeryxRunner, builtinMetaprojectTools } from "./metaproject-tools";
-import { matchesDesktopReviewerDispatch, ReviewerActivity, type ReviewerActivityEvent } from "./reviewer-activity";
+import { matchesDesktopReviewerDispatch, preparedDesktopReviewer, ReviewerActivity, reviewerDeadline, type ReviewerActivityEvent } from "./reviewer-activity";
+import type { AskReviewerContext } from "../../../review/desk-reviewer-question";
 import { reviewerCallerId, withOrchestratorLog } from "../../../review/orchestrator-log";
 import { slateWriteSeedTool } from "./slate-tool";
 import { createMetaprojectAdapter } from "../metaproject-adapter";
@@ -565,22 +570,20 @@ export async function invokeWithBackstop(
   input: Record<string, unknown>,
   ctx: InteractiveToolContext | undefined,
   capMs: number = resolveSubagentHardCapMs(input),
+  activity?: ReviewerActivity,
 ): Promise<StructuredSubagentResult> {
   if (capMs <= 0) return invoke(input, ctx);
   const cap = new AbortController();
   const composed = composeAbortSignals(ctx?.signal, cap.signal);
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const expired = new Promise<"expired">((resolve) => {
-    timer = setTimeout(() => resolve("expired"), Math.min(capMs, MAX_TIMER_DELAY_MS));
-  });
+  const deadline = reviewerDeadline(capMs, activity);
   tracePhase(`spawn backstop armed ${capMs}ms`);
   callDiagnostics.event("backstop.armed", `${capMs}ms`);
   const run = invoke(input, { ...ctx, signal: composed.signal });
   try {
-    const outcome = await Promise.race([run, expired]);
-    tracePhase(`spawn backstop ${outcome === "expired" ? "expired" : "settled"}`);
-    if (outcome === "expired") callDiagnostics.event("backstop.expired", `${capMs}ms`);
-    if (outcome !== "expired") return outcome;
+    const outcome = await Promise.race([run, deadline.expired]);
+    tracePhase(`spawn backstop ${outcome === "timeout" ? "expired" : "settled"}`);
+    if (outcome === "timeout") callDiagnostics.event("backstop.expired", `${capMs}ms`);
+    if (outcome !== "timeout") return outcome;
     cap.abort();
     void run.catch(() => {
       // abandoned call; its result is ignored once the backstop has answered
@@ -594,7 +597,7 @@ export async function invokeWithBackstop(
       isError: true,
     };
   } finally {
-    if (timer !== undefined) clearTimeout(timer);
+    deadline.dispose();
     composed.dispose();
   }
 }
@@ -680,6 +683,7 @@ export interface SpawnSubagentToolDeps {
   childTools?: (cwd: string) => InteractiveTool[];
   beforeAction?: NonNullable<AgentIO["beforeAction"]>;
   observeExternal?: (reviewer: string, runtime: string) => (usage?: NormalizedUsage) => void;
+  askReviewerContext?: AskReviewerContext;
   onReviewerActivity?: (event: ReviewerActivityEvent) => void;
   observeProvider?: (port: ProviderPort, reviewer: string, provider: string, model: string, sessionId?: string) => ProviderPort;
   onNativeTurn?: (turn: Promise<RunAgentTurnResult>) => void;
@@ -697,6 +701,10 @@ export interface SpawnSubagentToolDeps {
   routingConfigDir?: string;
   /** Host project whose approved routing and external provider policy govern an isolated Desktop checkout. */
   routingProjectRoot?: string;
+  /** Immutable operator options supplied by the Desktop worker, never by tool input. */
+  deskOptions?: DeskReviewOptions;
+  /** Isolated Desktop workers dispatch only assignments from their active review plan. */
+  preparedReviewOnly?: boolean;
   /** Parent provider/model (inherited by child unless MAE resolves otherwise). */
   getParentModel: () => { providerId: string; modelId: string; baseUrl?: string };
   /** Build a ProviderPort for a resolved provider/model. */
@@ -1528,16 +1536,35 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       // and review_wave fields alone never select another routing category.
       const desktopReviewer = deps.routingProjectRoot !== undefined && waveKey !== undefined &&
         await matchesDesktopReviewerDispatch(deps.cwd, saveTarget.abs, input);
+      if (deps.preparedReviewOnly && !desktopReviewer) {
+        return { status: "Denied", isError: true, output: "The prepared reviewer assignment changed or its review wave is no longer active. Refresh the plan." };
+      }
       const category = desktopReviewer ? "review" : "subagents";
       const assignment = routingConfig.categories[category];
+      let deskOverride: ModelRef | undefined;
+      let deskAlternatives: ModelRef[] = [];
       if (desktopReviewer) {
-        // The private plan identifies the work, but it cannot authorize a model.
-        // Require the exact coordinator model already approved by the host.
         const expected = input.expected_model;
-        if (!expected || typeof expected !== "object" || Reflect.get(expected, "provider") !== session.providerId ||
-            Reflect.get(expected, "model") !== session.modelId ||
-            (assignment.mode !== "baseline" && (assignment.mode !== "model" ||
-              modelRefKey(assignment.target) !== modelRefKey(session)))) {
+        const options = deps.deskOptions;
+        if (options?.maxWaves !== undefined) {
+          const wave = typeof input.label === "string" && saveTarget.abs ? assignedReviewerWave(input.label, path.basename(saveTarget.abs)) : undefined;
+          if (!wave || wave > options.maxWaves) return { status: "Denied", isError: true, output: "This assignment exceeds the Desktop review wave limit." };
+        }
+        // A prepared assignment must use the coordinator's approved route or an exact
+        // member of the operator's per-run pools. Routing still verifies policy and live capability.
+        const provider = expected && typeof expected === "object" ? Reflect.get(expected, "provider") : undefined;
+        const model = expected && typeof expected === "object" ? Reflect.get(expected, "model") : undefined;
+        const pools = options && Object.values(options.modelPools).filter(pool =>
+          pool.some(candidate => candidate.provider === provider && candidate.model === model),
+        );
+        const configured = pools?.[0]?.find(candidate => candidate.provider === provider && candidate.model === model);
+        if (configured) {
+          deskOverride = { providerId: configured.provider, modelId: configured.model };
+          deskAlternatives = (pools?.[0] ?? []).filter(candidate => candidate !== configured &&
+            pools?.every(pool => pool.some(item => item.provider === candidate.provider && item.model === candidate.model)))
+            .map(candidate => ({ providerId: candidate.provider, modelId: candidate.model }));
+        } else if (provider !== session.providerId || model !== session.modelId ||
+            (assignment.mode !== "baseline" && (assignment.mode !== "model" || modelRefKey(assignment.target) !== modelRefKey(session)))) {
           emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "model-mismatch", task });
           return { status: "Denied", isError: true, output: "spawn_subagent: the Desktop review plan no longer matches the host-authorized Review model. Start a new review to apply routing changes." };
         }
@@ -1638,6 +1665,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           requestId: `subagent:${workerId}:${randomUUID()}`,
           category,
           origin: desktopReviewer ? "review" : "subagent",
+          ...(deskOverride ? { userOverride: { mode: "model", target: deskOverride } } : {}),
           baseline: session,
           requirements: {
             capabilities: ["tools"],
@@ -1648,7 +1676,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
             ? { recommendation: { modelClass: input.model_class, source: "agent" } }
             : {}),
         };
-        if (assignment.mode === "auto" && request.recommendation === undefined) {
+        if (!deskOverride && assignment.mode === "auto" && request.recommendation === undefined) {
           const env = envWithSavedApiKeys(process.env, deps.routingConfigDir);
           const classified = await runProductionRoutingClassification({
             task,
@@ -1705,8 +1733,8 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
             observedLatencyMs: () => null,
           },
         });
-        routingReceipt = resolveRoutingForRuntime({
-          request,
+        const route = (routedRequest: RoutingRequest) => resolveRoutingForRuntime({
+          request: routedRequest,
           snapshot,
           config: routingConfig,
           journal: {
@@ -1715,6 +1743,13 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
             kind: "dispatch",
           },
         });
+        routingReceipt = route(request);
+        for (const candidate of deskAlternatives) {
+          if (routingReceipt.decision.status !== "blocked" ||
+              !["candidate-unverified", "context-insufficient", "model-unavailable", "credentials-missing"].includes(routingReceipt.decision.reason)) break;
+          routingReceipt = route({ ...request, requestId: `subagent:${workerId}:${randomUUID()}`,
+            userOverride: { mode: "model", target: candidate } });
+        }
         const decision = routingReceipt.decision;
         if (decision.status !== "selected") {
           const reason = decision.status === "blocked" ? decision.reason : decision.status;
@@ -1838,7 +1873,8 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "model-mismatch", task });
           return { status: "Denied", isError: true, output: "spawn_subagent: the review plan requires an exact native provider and model." };
         }
-        expectedModel = { providerId: expected.provider, modelId: expected.model };
+        expectedModel = deskOverride && routingReceipt?.decision.status === "selected"
+          ? routingReceipt.decision.selection : { providerId: expected.provider, modelId: expected.model };
       }
       const attemptId = idSeq();
       const branchId = idSeq();
@@ -2043,6 +2079,8 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       let tools: InteractiveTool[];
       try {
         tools = buildTools();
+        const head = process.env[DESK_REVIEW_HEAD];
+        if (desktopReviewer && head && cwd === deps.cwd) tools = [...tools, reviewSourceTool(cwd, head)];
       } catch (cause) {
         emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "tools-unavailable", task });
         await fireSubagentStop("Error").catch(() => {
@@ -2251,7 +2289,11 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
               const childRunId = idSeq();
               return { runtime: deps.hooks!.forChild({ sessionId: workerId, runId: childRunId }), sessionId: workerId, runId: childRunId };
             })();
+      const askContext = deps.askReviewerContext;
       const childDeps: AgentDeps = {
+        ...(activity && askContext ? {
+          requestReviewerContext: (reply: string) => activity.requestContext(reply, askContext, composed.signal),
+        } : {}),
         provider,
         providerId: runModel.provider,
         modelId: runModel.model,
@@ -2337,6 +2379,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           if (closed) {
             return;
           }
+          activity?.message(text);
           emitFleetEvent({ kind: "log", id: workerId, entry: { kind: "text", text } });
         },
         onReasoning: (text) => {
@@ -2345,11 +2388,11 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           }
           emitFleetEvent({ kind: "log", id: workerId, entry: { kind: "reasoning", text } });
         },
-        onToolCall: (name) => {
+        onToolCall: (name, input) => {
           if (closed) {
             return;
           }
-          activity?.record({ activity: "tool_start", tool: publicToolName(name) });
+          activity?.toolStart(publicToolName(name), input);
           emitFleetEvent({
             kind: "upsert",
             id: workerId,
@@ -2402,7 +2445,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       const releaseBudget = (): void => {
         if (childBudgetFinalized) return;
         ledger.release(spawned.reservation.reservationId, {
-          maxRuntimeMs: Math.round(performance.now() - startedAt),
+          maxRuntimeMs: Math.max(0, Math.round(performance.now() - startedAt - (activity?.operatorWaitMs ?? 0))),
         });
         childBudgetFinalized = true;
       };
@@ -2637,15 +2680,12 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         // or any `io.on*` callback.
         let turnResult: RunAgentTurnResult | undefined;
         if (deadlineMs > 0) {
-          let timer: ReturnType<typeof setTimeout> | undefined;
-          const expired = new Promise<"timeout">((resolve) => {
-            timer = setTimeout(() => resolve("timeout"), Math.min(deadlineMs, MAX_TIMER_DELAY_MS));
-          });
+          const deadline = reviewerDeadline(deadlineMs, activity);
           let outcome: "done" | "timeout";
           try {
-            outcome = await Promise.race([turn.then(() => "done" as const), expired]);
+            outcome = await Promise.race([turn.then(() => "done" as const), deadline.expired]);
           } finally {
-            if (timer !== undefined) clearTimeout(timer);
+            deadline.dispose();
           }
           if (outcome === "timeout") {
             closed = true;
@@ -2786,6 +2826,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           (legacyTierMigrationNotice === undefined ? "" : `migration: ${legacyTierMigrationNotice}\n`);
         // Only a completed child with text is final: a stopped one, or one with no text, never replaces a complete result.
         const saveNote = recordSaveNote(await saveRecord(producedNoText ? "" : childText, { final: status === "Completed" && !producedNoText }), "full result", String(input.save_result_to));
+        if (turnResult?.submittedResult) activity?.submissionSummary(turnResult.submittedResult.summary);
         if (status === "Completed") {
           activity?.observeResult(childText);
           return { status, isError, output: `${header}--- summary ---\n${boundSummary(folded.text)}${saveNote}` };
@@ -2851,15 +2892,29 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       }
     },
   } satisfies SpawnSubagentTool;
-  return { ...tool, async invoke(input, toolCtx) {
+  const definition = deps.preparedReviewOnly ? {
+    ...tool.definition,
+    description: "Run a prepared reviewer. Pass only the save_result_to path from an entry in the active Desktop review queue as assignment.",
+    inputSchema: {
+      type: "object" as const, properties: { assignment: { type: "string" } }, required: ["assignment"], additionalProperties: false,
+    },
+  } : tool.definition;
+  return { ...tool, definition, async invoke(input, toolCtx) {
+    if (deps.preparedReviewOnly) {
+      const prepared = await preparedDesktopReviewer(deps.cwd, input);
+      if (!prepared) return { status: "Denied", isError: true, output: "Choose one assignment from the active Desktop reviewer queue. Pass only its save_result_to path." };
+      input = prepared;
+    }
     if (!deps.onReviewerActivity) return invokeWithBackstop(tool.invoke, input, toolCtx);
     const activity = new ReviewerActivity(deps.onReviewerActivity, clock);
+    const unsubscribe = toolCtx?.onReviewerWait ? activity.onWait(toolCtx.onReviewerWait) : undefined;
     let result: StructuredSubagentResult | undefined;
     try {
-      result = await invokeWithBackstop((args, ctx) => tool.invoke(args, ctx, activity), input, toolCtx);
+      result = await invokeWithBackstop((args, ctx) => tool.invoke(args, ctx, activity), input, toolCtx, resolveSubagentHardCapMs(input), activity);
       return result;
     } finally {
       // The backstop can settle before an abandoned child. Close exactly once at the host boundary.
+      unsubscribe?.();
       activity.finish(result, toolCtx?.signal?.aborted === true);
     }
   } };

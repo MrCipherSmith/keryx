@@ -1,4 +1,6 @@
 // Portable Desktop review protocol. Times are ISO 8601 and revisions are full Git object IDs.
+import type { DeskReviewOptions } from "./desk-run-options";
+export type { DeskReviewOptions } from "./desk-run-options";
 import type { ReviewRunUsage, ReviewUsageCounts } from "./run-usage";
 
 export const LEGACY_DESK_RUN_SCOPE = "review-autonomous/fixed-pr/v1";
@@ -60,20 +62,55 @@ export interface DeskReviewerSession {
   finishedAt?: string;
   usage?: ReviewUsageCounts;
   usagePartial?: true;
-  activity?: { at?: string; label: string }[];
+  activity?: { at?: string; label: string; kind?: "message" | "answer" | "tool" | "result" | "error" | "status" }[];
+  finalOutput?: string;
+  needsContext?: true;
+  outcomeReason?: string;
   truncated?: boolean;
 }
 export interface DeskReviewerProgress {
   /** Null until a dispatch plan is recorded. */
   planned: number | null;
   finished: number;
+  /** Successful wave assignments, counting the latest retry once. Absent in legacy checkpoints. */
+  completed?: number;
   wave: number | null;
   sessions: DeskReviewerSession[];
 }
+export interface DeskQuestionReviewer {
+  reviewerSessionId: string;
+  reviewer?: string;
+  wave?: number;
+}
+export interface DeskQuestion extends Partial<DeskQuestionReviewer> {
+  id: string;
+  question: string;
+  options: { id: string; label: string; description: string; recommended?: boolean }[];
+  allowFreeform: boolean;
+}
+export interface CoordinatorEvent {
+  kind: "message" | "tool" | "result" | "error" | "answer" | "status";
+  text: string;
+  final?: true;
+}
+export const DESK_REVIEW_ACTIONS = ["complete", "close", "archive", "restore", "delete"] as const;
+export type DeskReviewAction = typeof DESK_REVIEW_ACTIONS[number];
+export type DeskReviewDecision = { action: DeskReviewAction; reason: string; at: string };
+export type DeskReviewCheck = { id: string; title: string; evidence: string; canWaive: boolean };
 export interface DeskRun extends DeskRevision {
+  decision?: DeskReviewDecision;
+  closure?: "completed" | "closed";
+  /** Public events are projected on demand for the selected attempt. */
+  coordinatorActivity?: CoordinatorEvent[];
+  /** Compatibility projection: coordinator first, otherwise the first pending reviewer question. */
+  pendingQuestion?: DeskQuestion;
+  pendingQuestions?: DeskQuestion[];
+  /** Most recent write to this attempt’s coordinator transcript. */
+  lastActivityAt?: string;
   id: string;
   source: "manual" | "scheduled" | "existing";
   schedule?: DeskSchedule;
+  options?: DeskReviewOptions;
   /** Counts automatic dispatches of this range, including confirmed pre-spend failures. */
   preflightAttempt?: number;
   usage?: ReviewRunUsage;
@@ -90,6 +127,8 @@ export interface DeskRun extends DeskRevision {
   result: DeskResult | null;
 }
 export interface DeskRunSnapshot {
+  completion?: { checks: DeskReviewCheck[] };
+  startedRunId?: string;
   version: 1;
   runs: DeskRun[]; // newest request first, including any queued revision
 }

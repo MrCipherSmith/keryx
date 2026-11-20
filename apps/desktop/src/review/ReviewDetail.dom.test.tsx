@@ -104,3 +104,58 @@ test("an authenticated detail exposes primary-checkout Flow evidence and an agen
   expect(document.querySelector(".review-flow-context code")?.textContent).toBe("keryx review pr-context --pr https://github.com/org/repo/pull/5");
   expect(document.body.textContent).not.toContain("copy rows");
 });
+
+test("Discussion formats Markdown and groups inline replies without exposing session actions", async () => {
+  const data = detail(6);
+  const body = [
+    "**Release notes**", "", "> Check these", "", "- One", "- Two", "",
+    "\u0060\u0060\u0060sh", "echo hello", "\u0060\u0060\u0060", "",
+    "[Guide](https://example.com/docs) [Local](file:///tmp/preview.png)",
+  ].join("\n");
+  await show(6, async () => ({ ...data, comments: [{ ...data.comments[0]!, body }] }));
+  const article = document.querySelector(".discussion-conversation .discussion-markdown")!;
+  expect(article.querySelector("strong")?.textContent).toBe("Release notes");
+  expect(article.querySelector("blockquote")?.textContent).toContain("Check these");
+  expect(article.querySelectorAll("li")).toHaveLength(2);
+  expect(article.querySelector("pre code")?.textContent).toContain("echo hello");
+  expect(article.querySelector("a")?.getAttribute("href")).toBe("https://example.com/docs");
+  expect(article.querySelector('a[href^="file:"], button, img')).toBeNull();
+  expect(document.querySelectorAll(".review-detail-thread .review-detail-message")).toHaveLength(2);
+});
+
+test("PR, discussion and check links open the project browser and reveal it after success", async () => {
+  const { getPrefs, setPrefs } = await import("../lib/prefs");
+  const urls: string[] = [];
+  let closed = 0;
+  const before = getPrefs().sidePanel;
+  try {
+    const number = 7;
+    const data = detail(number);
+    const openBrowser = async (cwd: string, url: string) => {
+      expect(cwd).toBe("/browser-project");
+      urls.push(url);
+      return { id: 5, active: true, loading: false, title: "Page", url };
+    };
+    const load = async () => ({ ...data, comments: [{ ...data.comments[0]!, body: "[Guide](https://example.com/docs)" }],
+      checks: [{ id: "build", name: "Build Linux", status: "FAILURE", url: "https://example.com/job" }] });
+    const onClose = () => { closed++; root.render(null); };
+    const openSheet = () => act(async () => root.render(createElement(ReviewDetail, {
+      cwd: "/browser-project", repo: "org/repo", repositoryId: "repo-node", viewer: "me", card: card(number),
+      load, openBrowser, onClose, runCommand: async () => ({version: 1 as const, runs: []}),
+    })));
+    const follow = async (selector: string) => act(async () => { document.querySelector<HTMLAnchorElement>(selector)!.click(); });
+    await openSheet();
+    const prLink = document.querySelector<HTMLAnchorElement>(".review-pr-link")!;
+    expect(prLink.getAttribute("aria-label")).toBe("Open pull request");
+    expect(prLink.previousElementSibling?.getAttribute("aria-label")).toBe("Refresh details");
+    await follow(".review-pr-link");
+    expect(getPrefs().sidePanel).toBe("browser");
+    await openSheet(); await follow(".discussion-markdown a");
+    await openSheet(); await follow(".discussion-byline a");
+    await openSheet(); await act(async () => button("Checks").click());
+    expect(document.querySelector(".review-checks .check-tone-danger")).not.toBeNull();
+    await follow(".review-check-name a");
+    expect(closed).toBe(4);
+    expect(urls).toEqual([card(number).url, "https://example.com/docs", "https://example.com/comment", "https://example.com/job"]);
+  } finally { setPrefs({ sidePanel: before }); }
+});

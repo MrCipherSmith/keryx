@@ -1,6 +1,6 @@
 import { expect, spyOn, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runReviewBoard } from "../commands/review-board";
@@ -56,7 +56,7 @@ test("--repositories reads configured Git remotes even before any remote or gh a
   }
 });
 
-test("Desktop can decode a large Review board from the CLI stdout pipe", async () => {
+test("Desktop decodes a large card-only page without fetching notifications, discussions or check details", async () => {
   const cwd = await mkdtemp(join(tmpdir(), "review-pipe-"));
   try {
     const env = fixtureGitEnv();
@@ -64,12 +64,16 @@ test("Desktop can decode a large Review board from the CLI stdout pipe", async (
     execFileSync("git", ["remote", "add", "origin", "https://github.com/org/base.git"], { cwd, env });
     const rows = Array.from({ length: 50 }, (_, i) => ({ ...card(i + 1), title: "ревью ✓".repeat(3_000) }));
     await writeFile(join(cwd, "response.json"), JSON.stringify({ data: page(rows, end) }));
-    await writeFile(join(cwd, "gh"), '#!/bin/sh\nexec cat "$PWD/response.json"\n', { mode: 0o700 });
-    const cli = Bun.spawn([process.execPath, join(import.meta.dir, "../cli.ts"), "review", "board", "--json"], {
+    await writeFile(join(cwd, "gh"), '#!/bin/sh\nprintf "%s\\n" "$@" >> "$PWD/github-requests"\nexec cat "$PWD/response.json"\n', { mode: 0o700 });
+    const cli = Bun.spawn([process.execPath, join(import.meta.dir, "../cli.ts"), "review", "board", "--json", "--page", "--cards-only"], {
       cwd, stdout: "pipe", stderr: "pipe", env: { ...env, PATH: cwd + ":" + env.PATH },
     });
     const [status, output] = await Promise.all([cli.exited, new Response(cli.stdout).text()]);
     expect(status).toBe(0);
+    const requests = await readFile(join(cwd, "github-requests"), "utf8");
+    expect(requests).toContain("pullRequests(");
+    expect(requests.match(/\bgraphql\b/g)).toHaveLength(1);
+    expect(requests).not.toMatch(/notifications|\bbody\b|comments|reviewThreads|CheckRun|detailsUrl|StatusContext/);
     expect(JSON.parse(output).cards.map((item: { title: string }) => item.title)).toEqual(rows.map(item => item.title));
   } finally {
     await rm(cwd, { recursive: true, force: true });

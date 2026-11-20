@@ -562,7 +562,9 @@ async function runReviewCli(root: string, argv: string[], readOnly: boolean): Pr
   if (readOnly) reviewReaders++;
   let stdout: string;
   try {
-    ({ stdout } = await runFile(KERYX_CMD[0]!, [...KERYX_CMD.slice(1), ...argv], { cwd: root, timeout: 150_000, maxBuffer: 32 * 1024 * 1024 }));
+    const desktopDecision = argv[0] === "review" && argv[1] === "desk-run" && argv[2] === "decide";
+    ({ stdout } = await runFile(KERYX_CMD[0]!, [...KERYX_CMD.slice(1), ...argv], { cwd: root, timeout: 150_000, maxBuffer: 32 * 1024 * 1024,
+      ...(desktopDecision && { env: { ...process.env, KERYX_DESKTOP_REVIEW_ACTION: "1" } }) }));
   } catch (error) {
     const reason = (error as { stderr?: string }).stderr?.trim();
     throw new Error(reason || "unavailable: Could not run the Review reader");
@@ -682,7 +684,8 @@ async function handle(ws: ServerWebSocket<Conn>, cmd: string, args: Json): Promi
     }
     case "review_run": {
       const root = await projectCwd(ws.data, cwd);
-      return runReviewCli(root, reviewRunArgs(args.target, args.action), (args.action as Json)?.kind === "status");
+      const argv = reviewRunArgs(args.target, args.action);
+      return runReviewCli(root, argv, argv[2] === "status" || argv[2] === "readiness");
     }
     case "review_publish": {
       const root = await projectCwd(ws.data, cwd);

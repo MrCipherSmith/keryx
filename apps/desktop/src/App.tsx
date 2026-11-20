@@ -10,15 +10,21 @@ import {
   windowInitialCwd,
   windowOpenProject,
 } from "./platform/commands";
-import { applyTheme, setPrefs, watchSystemAppearance, MOD } from "./lib/prefs";
+import { applyTheme, setPrefs, MOD } from "./lib/prefs";
 import { basename, errMessage } from "./lib/format";
 import { Dialog, EmptyState, overlayOpen } from "./components/ui";
+import { Icon } from "./components/Icon";
 import { AppShell, PROJECT_VIEWS, type View } from "./shell/AppShell";
 import { CommandPalette, type PaletteItem } from "./shell/CommandPalette";
 import { SettingsView } from "./shell/SettingsView";
 import { Welcome } from "./shell/Welcome";
 import { UpdateBanner } from "./shell/UpdateBanner";
-import { ReviewBoard } from "./review/ReviewBoard";
+import { ReviewBoard, type ReviewTabIndicator } from "./review/ReviewBoard";
+import { ReviewLaunchDialog } from "./review/ReviewLaunchDialog";
+import { SessionReviewActivity } from "./review/SessionReviewActivity";
+import { loadSessionReviewTargets, readSessionReviewLinks, rememberSessionReview, reviewFlowId, reviewSessionTitle } from "./review/sessionReview";
+import { publishSessionReview, reviewRun } from "./platform/reviewRuns";
+import { modelChoices, providerOf } from "./session/Composer";
 import { FlowsBoard } from "./flows/FlowsBoard";
 import type { LinkedSession } from "./flows/FlowDetail";
 import { sessionFlags } from "./acp/types";
@@ -29,7 +35,7 @@ import { AskUserDialog, FatalDialog, PermissionDialog } from "./session/Approval
 import type { ComposerHandle } from "./session/Composer";
 import { ProvidersDialog, useProvidersDialog, type ProvidersApi } from "./session/ProvidersDialog";
 import { SessionView } from "./session/SessionView";
-import { useAcpSession } from "./session/useAcpSession";
+import { modelOption, useAcpSession } from "./session/useAcpSession";
 import { ProjectMenu } from "./project/ProjectMenu";
 import { GitHubIntegrations, ProjectGitHubSettings } from "./project/GitHubSettings";
 import { getProjectGitHubAccount, type ProjectGitHubAccount } from "./platform/githubAccounts";
@@ -47,15 +53,11 @@ export function App() {
 
   useEffect(() => {
     applyTheme();
-    const stopAppearance = watchSystemAppearance();
     void windowInitialCwd()
       .then((c) => setCwd(c ?? null))
       .catch(() => setCwd(null));
     if (!isTauri()) setFolderPrompter((title) => new Promise((resolve) => setPrompt({ title, resolve })));
-    return () => {
-      stopAppearance();
-      setFolderPrompter(null);
-    };
+    return () => setFolderPrompter(null);
   }, []);
 
   useEffect(() => {
@@ -156,6 +158,11 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
   const settingsProjectReturn = useRef(false);
   const [settingsTab, setSettingsTab] = useState<"appearance" | "integrations">("appearance");
   const [githubAccount, setGitHubAccount] = useState<ProjectGitHubAccount | null>(null);
+  const reviewViewer = githubAccount?.login ?? undefined;
+  const [reviewNotice, setReviewNotice] = useState<{ binding?: string; viewer?: string; indicator: ReviewTabIndicator }>();
+  const updateReviewNotice = useCallback((indicator: ReviewTabIndicator, viewer?: string) => {
+    setReviewNotice({ binding: reviewViewer, viewer, indicator });
+  }, [reviewViewer]);
   const [githubAccountError, setGitHubAccountError] = useState("");
   const [projectSettings, setProjectSettings] = useState(false);
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
@@ -278,7 +285,6 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       openSettings();
       return;
     }
-    settingsProjectReturn.current = false;
     setLinkedFlow(null);
     setView(v);
     if (v === "session") requestAnimationFrame(() => composer.current?.focus());
@@ -375,7 +381,6 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
         id: `v-${id}`, group: basename(cwd), label: `Go to ${label}`, icon, hint: shortcut, run: () => go(id),
       })),
       { id: "v-settings", group: "Go to", label: "Settings", icon: "settings", hint: `${MOD},`, run: () => go("settings") },
-      { id: "v-project-settings", group: basename(cwd), label: "Project Settings", icon: "settings", run: openProjectSettings },
       {
         id: "a-new",
         group: "Session",
@@ -432,7 +437,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       { id: "t-dark", group: "Appearance", label: "Theme: Dark", icon: "moon", run: () => setPrefs({ theme: "dark" }) },
     );
     return items;
-  }, [go, s, state.busy, state.phase, state.modes, state.commands, state.sessions, state.sessionId, recents, cwd, openFolder, switchProject, fillComposer, runProject, openProjectSettings]);
+  }, [go, s, state.busy, state.phase, state.modes, state.commands, state.sessions, state.sessionId, recents, cwd, openFolder, switchProject, fillComposer, runProject]);
 
   // The title bar names the project and the view; the page below keeps only its own toolbar.
   const title =
@@ -451,16 +456,38 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
     && view !== "settings" && !s.fatal && !topAsk && !topPermission && !providers.request && !enrich && palette === null;
   const reviewDisconnected = githubAccount?.configured && !githubAccount.login;
 
+  const currentNotice = !reviewDisconnected && reviewNotice?.binding === reviewViewer ? reviewNotice : undefined;
+  const [reviewLinks, setReviewLinks] = useState(() => readSessionReviewLinks(cwd));
+  const draftReview = s.reviewDraftRequest;
+  const sessionFlow = state.sessions.find(session => session.sessionId === state.sessionId);
+  const flowId = reviewFlowId(flows.cards, sessionFlow && sessionFlags(sessionFlow).flow, draftReview?.flowId);
+  const viewer = reviewViewer ?? currentNotice?.viewer;
+  const sessionReviews = useMemo(() => reviewLinks.filter(link => link.sessionId === state.sessionId &&
+    (!viewer || viewer.toLowerCase() === link.key.viewer.toLowerCase())), [reviewLinks, state.sessionId, viewer]);
+  const sessionTitle = reviewSessionTitle(state.title?.trim(), sessionReviews.at(-1)) || "New session";
+  useEffect(() => { void setWindowTitle(`${sessionTitle} — ${basename(cwd)}`); }, [sessionTitle, cwd]);
+  const loadReviewTargets = useCallback((hint?: string, signal?: AbortSignal) => {
+    if (reviewDisconnected) return Promise.reject(new Error("Choose the project's GitHub account in Project Settings."));
+    return loadSessionReviewTargets(cwd, reviewViewer, hint, signal);
+  }, [cwd, reviewViewer, reviewDisconnected]);
+  const reviewModels = useMemo(() => modelChoices(modelOption(state.configOptions)).flatMap(option => {
+    const provider = providerOf(option);
+    const model = provider ? option.value.slice(provider.length + 1) : "";
+    return provider && model ? [{ provider, model, label: option.name }] : [];
+  }), [state.configOptions]);
+
+
   return (
     <AppShell
       cwd={cwd}
       recents={recents}
       view={view}
       onView={go}
-      title={title}
+      title={view === "session" ? <span className="truncate">{sessionTitle}</span> : title}
       hasSession={state.sessionId !== null}
       status={status}
       flowsActive={flowsActive}
+      reviewIndicator={currentNotice?.indicator}
       projects={projects}
       activity={activity}
       live={live}
@@ -469,13 +496,19 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       onSwitchProject={switchProject}
       onNewWindow={(p) => void windowOpenProject(p)}
       onCloseProject={onCloseProject}
-      onProjectSettings={openProjectSettings}
       onPalette={() => setPalette("")}
-      actions={<ProjectMenu run={runProject} onEnrich={() => setEnrich(true)} />}
+      actions={<>
+        <button className="icon-btn" aria-label="Project Settings" title="Project Settings" onClick={openProjectSettings}>
+          <Icon name="settings" size={15} />
+        </button>
+        <ProjectMenu run={runProject} onEnrich={() => setEnrich(true)} />
+      </>}
     >
       {/* The session view stays mounted so the transcript and draft survive view switches. */}
       <div className="view" hidden={view !== "session"}>
         <SessionView ref={composer} s={s} cwd={cwd} projectName={basename(cwd)} onGoFlows={() => go("flows")} onGoSettings={() => go("settings")} narrow={narrow} onProviders={providers.openProviders}
+          reviewLinks={reviewLinks}
+          reviewActivity={!reviewDisconnected && sessionReviews.length ? <SessionReviewActivity cwd={cwd} links={sessionReviews} visible={view === "session"} /> : undefined}
           githubAccount={githubAccount?.eligible ? githubAccount : undefined} onProjectSettings={openProjectSettings} />
       </div>
       {workView === "flows" ? (
@@ -489,7 +522,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
             <button className="btn" onClick={openProjectSettings}>Choose an account</button>
           </EmptyState>
         ) : (
-          <ReviewBoard key={githubAccount?.login ?? "active-gh"} expectedViewer={githubAccount?.login ?? undefined} active={workView === "review"} cwd={cwd} flows={flows.cards} onOpenFlow={(dir) => {
+          <ReviewBoard key={reviewViewer ?? "active-gh"} expectedViewer={reviewViewer} onIndicatorChange={updateReviewNotice} active={workView === "review"} cwd={cwd} flows={flows.cards} onOpenFlow={(dir) => {
             setLinkedFlow(dir);
             setView("flows");
           }} />
@@ -500,6 +533,19 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
           <SettingsView agentVersion={state.agentVersion} onBack={closeSettings} initialTab={settingsTab} integrations={<GitHubIntegrations />} />
         </div>
       ) : null}
+
+      {view === "session" && draftReview && !topPermission && !topAsk && !providers.request && !projectSettings && !offerGitHub &&
+        <ReviewLaunchDialog key={JSON.stringify([draftReview.nonce, reviewViewer])} flows={flows.cards} defaultFlow={flowId}
+          initialTarget={draftReview.target} models={reviewModels} loadTargets={loadReviewTargets}
+          onApply={async (key, revision, options) => {
+            const result = await reviewRun(cwd, key, { kind: "start", ...revision, options });
+            const id = result.startedRunId;
+            if (!id || !result.runs.some(run => run.id === id)) throw new Error("The selected Keryx CLI did not confirm the new review attempt.");
+            setReviewLinks(rememberSessionReview(cwd, { id, sessionId: draftReview.sessionId, key, revision,
+              ...(draftReview.prompt && { prompt: draftReview.prompt }) }));
+            publishSessionReview(cwd, key, result);
+          }}
+          onClose={() => s.dismissReviewDraftRequest(draftReview.nonce)} />}
 
       {projectSettings || offerGitHub ? (
         <ProjectGitHubSettings cwd={cwd} account={githubAccount} accountError={githubAccountError} onRetryAccount={() => void refreshGitHubAccount()}

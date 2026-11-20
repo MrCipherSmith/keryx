@@ -47,6 +47,7 @@ import { buildSessionSpawnDeps, type SessionSpawnDepsInput } from "../commands/s
 import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import { acpAwareReadFileTool, type AcpFsReader } from "./capability-tools";
+import { prepareReviewTool, type RequestReviewDraft } from "./prepare-review";
 import type { AcpClientCapabilities } from "./protocol";
 
 /**
@@ -65,6 +66,7 @@ export interface AcpShellRosterInput {
   readonly getSessionDir: () => string | undefined;
   /** Present only when the client advertised `_meta.keryx.askUser`; absent → `ask_user` is denied. */
   readonly askUser?: AskUserFn;
+  readonly requestReviewDraft?: RequestReviewDraft;
   /** keryx's configured servers merged with the client's, or none at all. */
   readonly mcp?: McpToolBinding;
   /** The root's adapter, shared by every build for that root; `createMetaprojectAdapter(root)` when absent. */
@@ -96,6 +98,7 @@ export function buildAcpShellSessionTools(input: AcpShellRosterInput): Interacti
     ...(input.mcp !== undefined ? { mcp: input.mcp } : {}),
     denyTools: acpShellDeniedTools(input.askUser !== undefined),
   });
+  if (input.requestReviewDraft) tools.push(prepareReviewTool(input.requestReviewDraft));
   return tools.map((tool) =>
     tool.definition.name === "read_file"
       ? acpAwareReadFileTool(tool, root, input.clientCapabilities, input.readViaClient)

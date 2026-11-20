@@ -74,13 +74,13 @@ function modelName(option: ConfigOption): string {
 }
 
 /** The provider a model option belongs to: keryx writes `<provider>/<model>` and describes it with the provider id. */
-function providerOf(o: ConfigSelectOption): string {
+export function providerOf(o: ConfigSelectOption): string {
   if (o.description && o.value.startsWith(`${o.description}/`)) return o.description;
   const i = o.value.indexOf("/");
   return i > 0 ? o.value.slice(0, i) : "";
 }
 
-function modelChoices(option: ConfigOption | undefined): ConfigSelectOption[] {
+export function modelChoices(option: ConfigOption | undefined): ConfigSelectOption[] {
   return (option?.options ?? []).flatMap((o) => (isGroup(o) ? o.options : [o]));
 }
 

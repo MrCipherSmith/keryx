@@ -1,4 +1,5 @@
-import type { DeskRunKey, DeskRunSnapshot } from "../../../../src/review/desk-run-types";
+import type { DeskReviewAction, DeskRunKey, DeskRunSnapshot } from "../../../../src/review/desk-run-types";
+import type { DeskReviewOptions } from "../../../../src/review/desk-run-options";
 import { invoke } from "./backend";
 
 import { ReviewReadLane } from "./reviewReadLane";
@@ -8,13 +9,18 @@ let mutationVersion = 0;
 
 export type ReviewRunAction =
   | { kind: "status"; id?: string; activityId?: string }
-  | { kind: "start"; baseSha: string; headSha: string }
-  | { kind: "cancel"; id: string };
+  | { kind: "start"; baseSha: string; headSha: string; options?: DeskReviewOptions }
+  | { kind: "cancel"; id: string }
+  | { kind: "readiness"; id: string }
+  | { kind: "decide"; id: string; decision: DeskReviewAction; reason: string; waive?: string[] }
+  | { kind: "answer"; id: string; questionId: string; answer: string };
 
 export async function reviewRun(cwd: string, key: DeskRunKey, action: ReviewRunAction): Promise<DeskRunSnapshot> {
   const call = () => invoke<DeskRunSnapshot>("review_run", { cwd, target: key, action });
   let result: DeskRunSnapshot;
-  if (action.kind !== "status") {
+  if (action.kind === "readiness") {
+    result = await call();
+  } else if (action.kind !== "status") {
     mutationVersion++;
     try { result = await call(); } finally { mutationVersion++; }
   } else if (action.id) {
@@ -27,4 +33,16 @@ export async function reviewRun(cwd: string, key: DeskRunKey, action: ReviewRunA
     throw new Error("configuration: Check that your selected Keryx CLI supports Desktop review runs.");
   }
   return result;
+}
+
+type ReviewRunListener = (cwd: string, key: DeskRunKey, snapshot: DeskRunSnapshot) => void;
+const launchListeners = new Set<ReviewRunListener>();
+
+export function publishSessionReview(cwd: string, key: DeskRunKey, snapshot: DeskRunSnapshot) {
+  for (const listener of launchListeners) listener(cwd, key, snapshot);
+}
+
+export function subscribeSessionReview(listener: ReviewRunListener) {
+  launchListeners.add(listener);
+  return () => { launchListeners.delete(listener); };
 }

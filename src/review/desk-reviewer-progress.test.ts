@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { coordinatorActivity } from "./desk-coordinator";
 import { createEventTail } from "./autonomous-progress";
 import { readDeskReviewerProgress } from "./desk-reviewer-progress";
 import { ReviewerActivityRecorder } from "./reviewer-activity";
@@ -57,12 +58,12 @@ test("uses saved results for legacy waves only within the verified revision and 
     expected_model: { provider: "openai-codex", model: "gpt-model" } }));
   save(["package", "manifest.json"], { target: { ref, base: baseSha, head: headSha } });
   save(["package", "desktop-dispatch.json"], { calls });
-  const raw = 'REVIEW_RESULT:\n```json\n{"status":"DONE","reviewer":"review-logic","summary":"PRIVATE"}\n```\nKERYX_USAGE {"by":"host","tokens_in":7,"tokens_out":4}\n';
+  const raw = 'REVIEW_RESULT:\n```json\n{"status":"DONE","reviewer":"review-logic","summary":"Inspected the assignment","reasoning":"PRIVATE"}\n```\nKERYX_USAGE {"by":"host","tokens_in":7,"tokens_out":4}\n';
   save(["package", "raw", "review-logic-w1.txt"], raw);
   symlinkSync(path.join(directory, "package/raw/review-logic-w1.txt"), path.join(directory, "package/raw/review-logic-w2.txt"));
   const result = readDeskReviewerProgress(directory, key, { ...run, state: "partial" }, true);
   expect(result).toMatchObject({ planned: 2, finished: 1, wave: 1, sessions: [
-    { state: "completed", wave: 1, usage: { totalTokens: 11 }, activity: [{ label: "Reviewer result saved" }] },
+    { state: "completed", wave: 1, finalOutput: "Inspected the assignment", usage: { totalTokens: 11 }, activity: [{ label: "Reviewer result saved" }] },
     { state: "unknown", wave: 2 },
   ] });
   expect(result?.sessions[0]?.finishedAt).toBeUndefined();
@@ -150,4 +151,52 @@ test("the saved result completes a uniquely observed session after interruption 
   expect(single?.sessions[0]?.finishedAt).toBeUndefined();
   save(["run", "progress.json"], { ref, reviewerSessions: [session, { ...session, id: randomUUID() }] });
   expect(readDeskReviewerProgress(directory, key, ended, true)).toMatchObject({ finished: 0, sessions: [{ state: "unknown" }, { state: "unknown" }] });
+});
+
+test("the pinned plan sets the total before dispatch and keeps blocked and later-wave assignments in that total", () => {
+  const target = { ref, base: baseSha, head: headSha };
+  save(["package", "manifest.json"], { target });
+  save(["package", "plan.json"], { target, dispatches: 3 });
+  expect(readDeskReviewerProgress(directory, key, run, false)).toMatchObject({ planned: 3, completed: 0 });
+  const call = (wave: number) => ({ label: "review-logic", save_result_to: `raw/review-logic-w${wave}.txt` });
+  save(["package", "desktop-dispatch.json"], { calls: [call(1), call(2)], blocked: [{ reviewer: "review-style" }] });
+  const session = (wave: number, state: string) => ({ id: randomUUID(), reviewer: "review-logic", wave, state });
+  const first = session(1, "completed");
+  save(["run", "progress.json"], { ref, reviewerSessions: [first, session(2, "failed")] });
+  expect(readDeskReviewerProgress(directory, key, run, false)).toMatchObject({ planned: 3, completed: 1, finished: 2 });
+  save(["run", "progress.json"], { ref, reviewerSessions: [first, session(2, "failed"), session(2, "completed")] });
+  expect(readDeskReviewerProgress(directory, key, run, false)).toMatchObject({ planned: 3, completed: 2, finished: 2 });
+});
+
+test("details recover a finished reviewer's public result and context request while the coordinator is still running", () => {
+  const reviewer = "review-layout", file = "review-layout-w1.txt";
+  save(["package", "manifest.json"], { target: { ref, base: baseSha, head: headSha } });
+  save(["package", "desktop-dispatch.json"], { calls: [{ label: reviewer, save_result_to: "raw/" + file }] });
+  const session = { id: randomUUID(), reviewer, wave: 1, state: "partial" as const };
+  save(["run", "progress.json"], { ref, reviewerSessions: [session] });
+  save(["package", "raw", file], JSON.stringify({ reviewer, status: "NEEDS_CONTEXT",
+    summary: "Reviewed the controls", needs_context: [{ question: "Provide viewport measurements", private: "PRIVATE" }, { debug: "PRIVATE" }],
+    findings: [{ severity: "minor", problem: "Text overlaps", quote: "PRIVATE" }], reasoning: "PRIVATE" }));
+  const detail = readDeskReviewerProgress(directory, key, run, true);
+  expect(detail?.sessions[0]).toMatchObject({ ...session, outcomeReason: "Provide viewport measurements",
+    finalOutput: "Reviewed the controls\n\nminor: Text overlaps" });
+  expect(JSON.stringify(detail)).not.toContain("PRIVATE");
+  expect(readDeskReviewerProgress(directory, key, run, false)?.sessions[0]).toEqual(session);
+});
+
+test("coordinator activity shows public turn output and selected tool metadata", () => {
+  const rows = [
+    { type: "turn_start", prompt: "PRIVATE" },
+    { type: "tool_call", name: "read_file", input: JSON.stringify({ path: "/PRIVATE/plan.json", ignored: "PRIVATE" }) },
+    { type: "tool_result", name: "read_file", output: "PRIVATE" },
+    { type: "reasoning", text: "PRIVATE" },
+    { type: "reviewer_activity", activity: "finished", reviewer: "review-layout", wave: 1, outcome: "partial", extra: "PRIVATE" },
+    { type: "assistant", text: "Checked the decision" }, { type: "turn_end", text: "Checked the decision" },
+  ];
+  save(["run", "events.ndjson"], rows.map(row => JSON.stringify(row)).join("\n") + "\n");
+  expect(coordinatorActivity(directory)).toEqual([
+    { kind: "status", text: "Coordinator started" }, { kind: "tool", text: "Started read_file · plan.json" },
+    { kind: "result", text: "read_file finished" }, { kind: "status", text: "review-layout · Wave 1 · partial" },
+    { kind: "message", text: "Checked the decision" },
+  ]);
 });

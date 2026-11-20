@@ -3,7 +3,7 @@
 // floor (irreversible, action-tagged, untrusted-content) keeps a human in the loop even there.
 
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtemp } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { runAgentTurn, toolCallHash } from "./agent";
@@ -14,6 +14,9 @@ import { readSlate, writeSlate } from "../session/slate";
 import type { SlateSessionRef } from "../session/slate-lifecycle";
 import { createAskUserTool, type AskUserFn } from "../harness/tool/builtin/ask-user-tool";
 import type { InteractiveTool, InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
+import { journaledAskUser } from "../tui/ask-user-bridge";
+import { DeskRunStore } from "../review/desk-run-store";
+import { coordinatorActivity } from "../review/desk-coordinator";
 import { ENV_AUTONOMOUS_ANSWERS_FILE } from "../review/autonomous-answers";
 import {
   ENV_REVIEW_SYSTEM,
@@ -531,4 +534,62 @@ test("an approver answering no after the turn was aborted remembers nothing", as
   await run("ask", [toolCall("s1", "shell_exec", CREDENTIALS), TEXT_DONE], [shellTool], {}, true, { requestApproval, signal: controller.signal });
   expect(reviewAutoMayAnswer(PERMISSION_QUESTION)).toBe(true);
   expect(operatorDenied(toolCallHash("shell_exec", JSON.stringify(CREDENTIALS)))).toBe(false);
+});
+
+
+test("a manual Desktop review resumes the same provider turn with its operator's answer", async () => {
+  const data = await mkdtemp(path.join(tmpdir(), "keryx-desktop-dialog-"));
+  const vars = ["KERYX_DATA_DIR", "KERYX_DESK_REVIEW_SHELL", "KERYX_DESK_OPERATOR_RUN"] as const;
+  const old = Object.fromEntries(vars.map(name => [name, process.env[name]]));
+  process.env.KERYX_DATA_DIR = data;
+  const store = new DeskRunStore();
+  const key = { repo: "fixture/repo", repositoryId: "repo-id", viewer: "operator", number: 12 };
+  const id = store.request(data, key, { baseSha: "a".repeat(40), headSha: "b".repeat(40) });
+  if (!id) throw new Error("Expected a new manual attempt");
+  const attempt = store.byId(id)!;
+  attempt.run.state = "running";
+  attempt.pid = process.pid;
+  store.save(attempt);
+  const dir = store.directory(id), cwd = path.join(dir, "checkout");
+  await mkdir(cwd, { recursive: true });
+  await mkdir(path.join(dir, "run"));
+  await writeFile(path.join(dir, "run/events.ndjson"), [
+    { type: "reasoning", text: "private reasoning" },
+    { type: "tool_call", name: "read_file", input: "private arguments" },
+    { type: "tool_result", name: "read_file", output: "private contents" },
+    { type: "assistant", text: "Checking the selected range" },
+  ].map(it => JSON.stringify(it)).join("\n") + "\n");
+  process.env.KERYX_DESK_REVIEW_SHELL = "1";
+  process.env.KERYX_DESK_OPERATOR_RUN = id;
+  process.env[ENV_AUTONOMOUS_ANSWERS_FILE] = path.join(dir, "run/answers.ndjson");
+  const turn = run("trust", [toolCall("q1", "ask_user", { ...question, allow_freeform: true }), TEXT_DONE],
+    [createAskUserTool(journaledAskUser(cwd))], { cwd, unattended: true }, false, { review: new AutomaticReviewRun(cwd) });
+  try {
+    let pending = store.pendingQuestion(id);
+    for (let i = 0; !pending && i < 100; i++) {
+      await Bun.sleep(20);
+      pending = store.pendingQuestion(id);
+    }
+    expect(pending?.question).toBe(question.question);
+    expect(() => store.answerQuestion({ ...key, viewer: "other" }, id, pending!.id, "1")).toThrow("stale");
+    expect(() => store.answerQuestion({ ...key, number: 99 }, id, pending!.id, "1")).toThrow("stale");
+    store.atomic(() => store.answerQuestion(key, id, pending!.id, "1"));
+    expect(() => store.answerQuestion(key, id, pending!.id, "2")).toThrow("stale");
+    const result = await turn;
+    expect(result.results[0]?.output).toContain("OWN answer (none of the offered options): 1");
+    expect(store.pendingQuestion(id)).toBeUndefined();
+    expect(coordinatorActivity(dir)).toEqual([
+      { kind: "tool", text: "Started read_file" }, { kind: "result", text: "read_file finished" },
+      { kind: "message", text: "Checking the selected range" }, { kind: "message", text: question.question },
+      { kind: "answer", text: "1" },
+    ]);
+  } finally {
+    store.cancel(key, id);
+    await turn;
+    store.close();
+    for (const name of vars) {
+      if (old[name] === undefined) delete process.env[name]; else process.env[name] = old[name];
+    }
+    await rm(data, { recursive: true, force: true });
+  }
 });

@@ -8,6 +8,15 @@ const { emit } = await import("@tauri-apps/api/event");
 const cwd = "/dev/project-navigation";
 let offline = false;
 const reads: string[] = [];
+const starts: unknown[] = [];
+const calls: string[] = [];
+const runId = "e968ba9b-c8a3-438f-a5c8-93625e427905";
+const prUrl = "https://github.com/org/project/pull/12";
+const run = {
+  id: runId, source: "manual", state: "running", phase: "Dispatching reviewers", reason: "",
+  baseSha: "b".repeat(40), headSha: "a".repeat(40), createdAt: "2026-11-20T00:00:00Z",
+  startedAt: "2026-11-20T00:00:01Z", finishedAt: null, result: null, coordinatorActivity: [{ kind: "status", text: "Wave 1 started" }],
+};
 let account: string | null = null;
 let accountConfigured = false;
 let connectedNewAccount = false;
@@ -19,7 +28,9 @@ mockIPC(async (cmd, args) => {
   switch (cmd) {
     case "window_initial_cwd": return cwd;
     case "settings_get": return { recentProjects: [] };
-    case "projects_state": case "flows_list": return [];
+    case "projects_state": return [];
+    case "flows_list": return [{ id: "505", idValid: true, dir: "505-review", title: "Review flow", prUrl }];
+    case "pr_info": return { url: prUrl, number: 12 };
     case "acp_start": return { keryxPath: "/fixture/keryx" };
     case "version_check": return { ok: true };
     case "github_login": connectedNewAccount = true; return null;
@@ -43,6 +54,7 @@ mockIPC(async (cmd, args) => {
     }
     case "acp_send": {
       const { method, id } = JSON.parse(String((args as {message:string}).message));
+      calls.push(method);
       const result = method === "initialize" ? { agentInfo: { version: "1.0.0" }, _meta: { keryx: { profile: "shell", liveSessions: true } } }
         : method === "session/new" ? { sessionId: "nav-session" } : { sessions: [] };
       await emit("acp://message", JSON.stringify({ jsonrpc: "2.0", id, result }));
@@ -52,7 +64,16 @@ mockIPC(async (cmd, args) => {
       reads.push(String((args as {cwd:string}).cwd));
       if (offline) throw new Error("unavailable: connection lost");
       return { version: 1, repo:"org/project", repositories:["org/project"], repositoryId:"RID", viewer:account ?? "me", fetchedAt:"2026-11-19T00:00:00Z",
-        warnings: [], cards: [{ number:12,title:"Navigation proof",state:"open",draft:false,author:"author",assignees:[],reviewers:[],decision:null,ci:"passed",headSha:"h",baseSha:"b",updatedAt:"2026-11-19T00:00:00Z" }] };
+        warnings: [], cards: [{ number:12,title:"Navigation proof",url:prUrl,state:"open",draft:false,author:"author",assignees:[],reviewers:["me"],decision:null,ci:"passed",headSha:run.headSha,baseSha:run.baseSha,updatedAt:"2026-11-19T00:00:00Z" }] };
+    case "review_run": {
+      const { action, target } = args as { action: { kind: string; activityId?: string }; target: { number: number } };
+      assert.equal(target.number, 12);
+      if (action.kind === "start") {
+        starts.push(action);
+        return { version: 1, runs: [run], startedRunId: runId };
+      }
+      return { version: 1, runs: action.activityId === runId ? [run] : [] };
+    }
     case "review_watcher": return { version: 1, state:"disabled", events:[] };
     default: return null;
   }
@@ -101,50 +122,54 @@ try {
   const beforeRefresh = accountListReads;
   let finishList!: () => void;
   accountListGate = new Promise(resolve => { finishList = resolve; });
-  const refresh = namedButton("Refresh accounts");
+  const refreshAccounts = namedButton("Refresh accounts");
   await React.act(() => {
-    refresh.click();
-    refresh.click();
+    refreshAccounts.click();
+    refreshAccounts.click();
   });
-  assert.ok(refresh.disabled);
-  await React.act(() => refresh.click());
+  assert.ok(refreshAccounts.disabled);
+  await React.act(() => refreshAccounts.click());
   assert.equal(accountListReads, beforeRefresh + 1);
   await React.act(() => finishList());
-  assert.equal(refresh.disabled, false);
+  assert.equal(refreshAccounts.disabled, false);
   for (const message of [
     "Unknown command: accounts. Run `keryx review --help` for the list.",
     "unavailable: The selected Keryx CLI did not return a valid Review response. Check the CLI version in Settings.",
     "unavailable: The selected Keryx CLI did not return a valid Review response.",
   ]) {
     accountListError = message;
-    await React.act(() => refresh.click());
+    await React.act(() => refreshAccounts.click());
     assert.ok(host.querySelector('[role="alert"]')?.textContent?.includes("choose Bundled keryx"));
     assert.ok(namedButton("Connect account").disabled);
   }
   accountListError = undefined;
-  await React.act(() => refresh.click());
+  await React.act(() => refreshAccounts.click());
   await React.act(() => namedButton("Connect account").click());
   assert.ok(connectedNewAccount && host.textContent?.includes("@new-account"));
   await React.act(() => namedButton("Close Settings").click());
   await chooseAccount("me");
-  assert.equal(host.querySelector(".titlebar .project-github-account")?.textContent, "GitHub · @me");
+  assert.equal(host.querySelector(".usage-footer .project-github-account")?.textContent, "GitHub · @me");
   assert.ok(host.querySelector('.titlebar-right button[aria-label="Activity"]'));
   await React.act(() => {
     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(composer, "Keep this unsent draft");
     composer.dispatchEvent(new Event("input", { bubbles:true }));
   });
+  assert.deepEqual(reads, [cwd]);
+  const reviewDot = () => host.querySelector("nav .review-tab-dot")?.getAttribute("data-indicator");
+  assert.equal(reviewDot(), "attention", "Review requests reach the navigation on Sessions");
   await go("Review");
   assert.equal(host.querySelector('.titlebar-right button[aria-label="Activity"]'), null);
   assert.ok(host.textContent?.includes("Navigation proof"));
   assert.ok(composer.closest("[hidden]"));
-  await React.act(() => namedButton("Settings").click());
-  assert.equal(host.querySelector('main .project-views'), null);
-  await React.act(() => namedButton("Close Settings").click());
-  assert.equal(host.querySelector('main nav button[aria-current="page"]')?.textContent, "Review");
-  assert.deepEqual(reads, [cwd]);
   await go("Flows");
+  assert.equal(reviewDot(), "attention", "Flows keeps the project notice");
   offline = true;
   await go("Review");
+  assert.deepEqual(reads, [cwd]);
+  assert.ok(host.textContent?.includes("Navigation proof"));
+  const refresh = host.querySelector<HTMLButtonElement>('button[aria-label="Refresh pull requests"]');
+  assert.ok(refresh && !refresh.disabled);
+  await React.act(() => refresh.click());
   assert.ok(host.textContent?.includes("Last available snapshot"));
   assert.ok(host.textContent?.includes("Navigation proof"));
   assert.deepEqual(reads, [cwd, cwd]);
@@ -153,15 +178,37 @@ try {
   assert.ok(current && !current.disabled);
   assert.equal(current.closest("[hidden]"), null);
   assert.equal(current.value, "Keep this unsent draft");
+  offline = false;
+  await React.act(() => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(current, `Запусти адаптивное ревью ${prUrl} с review-orchestrator`);
+    current.dispatchEvent(new Event("input", { bubbles:true }));
+  });
+  const send = host.querySelector<HTMLButtonElement>('button[aria-label="Send"]')!;
+  await React.act(() => send.click());
+  const dialog = host.querySelector('[role="dialog"]')!;
+  assert.ok(dialog?.textContent?.includes("Run review"));
+  assert.equal(dialog.querySelector<HTMLSelectElement>('select[aria-label="Pull request"]')!.value, "12");
+  assert.equal(starts.length, 0, "Preparing a review never starts the detached worker");
+  const apply = [...dialog.querySelectorAll("button")].find(button => button.textContent === "Apply");
+  assert.ok(apply && !apply.disabled);
+  await React.act(() => apply.click());
+  assert.deepEqual(starts, [{ kind: "start", baseSha: run.baseSha, headSha: run.headSha,
+    options: { mode: "auto", adaptive: true, maxParallel: 10, modelPools: { strong: [], middle: [], light: [] }, flowId: "505" } }]);
+  assert.match(host.textContent ?? "", /\[Review #12\] Wave 1 started/);
+  assert.ok(!current.disabled, "The originating composer remains editable");
+  assert.ok(!calls.includes("session/prompt"), "Review status is not submitted as a prompt");
+  await go("Review");
+  assert.match(host.textContent ?? "", /Keryx review in progress/);
+  await go("Sessions");
   await React.act(() => host.querySelector<HTMLButtonElement>(".project-switcher")!.click());
   const projectSettings = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(item => item.textContent?.trim() === "Project Settings");
   assert.ok(projectSettings);
   await React.act(() => projectSettings.click());
   await chooseAccount("second");
-  assert.equal(host.querySelector(".titlebar .project-github-account")?.textContent, "GitHub · @second");
+  assert.equal(host.querySelector(".usage-footer .project-github-account")?.textContent, "GitHub · @second");
   await React.act(() => namedButton("GitHub · @second").click());
   await React.act(() => namedButton("Disconnect from project").click());
-  assert.equal(host.querySelector(".titlebar .project-github-account")?.textContent, "GitHub · Not connected");
+  assert.equal(host.querySelector(".usage-footer .project-github-account")?.textContent, "GitHub · Not connected");
 } finally {
   await React.act(() => root.unmount());
   clearMocks();

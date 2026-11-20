@@ -11,6 +11,7 @@ import { Menu, type MenuItem } from "../components/Menu";
 import { Kbd } from "../components/ui";
 import { projectHue, projectInitials, type ProjectActivity } from "./projectRail";
 import type { LiveProject } from "../platform/projects";
+import type { ReviewTabIndicator } from "../review/ReviewBoard";
 
 export type View = "session" | "flows" | "review" | "settings";
 
@@ -42,11 +43,11 @@ interface ShellProps {
   recents: string[];
   view: View;
   onView: (v: View) => void;
-  onProjectSettings?: () => void;
   title: ReactNode;
   hasSession?: boolean;
   status: { tone: "ok" | "busy" | "warn" | "danger" | "idle"; label: string; detail?: string };
   flowsActive: number;
+  reviewIndicator?: ReviewTabIndicator;
   /** The projects on the rail, in the user's order; `cwd` is one of them. */
   projects: string[];
   /** This window's project's live state. */
@@ -136,6 +137,8 @@ export function AppShell(p: ShellProps) {
   const side = prefs.sidePanel !== null && p.view !== "settings";
   const sidebar = prefs.sessionSidebar && windowWidth >= SIDEBAR_WINDOW_MIN ? prefs.sessionSidebarWidth : 0;
   const sideWidth = fitSidePanelWidth(prefs.sidePanelWidth, windowWidth, sidebar);
+  const reviewNotice = p.reviewIndicator === "attention" ? "Review or changes requested" :
+    p.reviewIndicator === "watching" ? "PR watcher is on" : "";
   return (
     <div
       className={`app-shell${overlay ? " titlebar-overlay" : ""}${side ? " with-side" : ""}`}
@@ -148,9 +151,13 @@ export function AppShell(p: ShellProps) {
           <nav className="project-views" aria-label={`Project views for ${basename(p.cwd)}`}>
             {PROJECT_VIEWS.map(({ id, label, icon, shortcut }) => (
               <button key={id} aria-current={p.view === id ? "page" : undefined}
-                title={`${label} (${shortcut})`} onClick={() => p.onView(id)}>
+                title={`${label} (${shortcut})${id === "review" && reviewNotice ? " · " + reviewNotice : ""}`} onClick={() => p.onView(id)}>
                 <Icon name={icon} size={15} />
                 {label}
+                {id === "review" && reviewNotice && <>
+                  <span className="review-tab-dot" data-indicator={p.reviewIndicator} aria-hidden="true" />
+                  <span className="sr-only">, {reviewNotice}</span>
+                </>}
                 {id === "flows" && p.flowsActive > 0 && <span className="sr-only">, {p.flowsActive} active flows</span>}
               </button>
             ))}
@@ -226,7 +233,6 @@ function TitleBar(p: ShellProps) {
   const others = recents.filter((r) => r !== cwd).slice(0, 8);
   const items: MenuItem[] = [
     { kind: "header", id: "h-current", label: <span className="truncate" title={cwd}>{cwd}</span> },
-    ...(p.onProjectSettings ? [{ id: "project-settings", label: "Project Settings", icon: "settings" as const, onSelect: p.onProjectSettings }] : []),
     { id: "open", label: "Open Folder…", icon: "folderOpen", hint: `${MOD}O`, onSelect: onOpenFolder },
     { id: "newwin", label: "Open this folder in a new window", icon: "external", onSelect: () => onNewWindow(cwd) },
     ...(others.length
@@ -258,25 +264,23 @@ function TitleBar(p: ShellProps) {
           <Icon name="chevronDown" size={12} />
         </button>
         {menu ? <Menu anchor={btn.current} items={items} onClose={() => setMenu(false)} label="Project" width={320} /> : null}
+        <div className="titlebar-title" data-tauri-drag-region>{title}</div>
         {p.view === "session" && <div className="titlebar-session-controls" ref={slotRef("sessionControls")} />}
       </div>
-      <div className="titlebar-center" data-tauri-drag-region>
-        {title}
-      </div>
       <div className="titlebar-right" data-tauri-drag-region>
-        <span className={`conn conn-${status.tone}`} title={status.detail ?? status.label} role="status">
-          <span className="conn-dot" />
-          {status.label}
-        </span>
         <InfoToggle show={p.view === "session"} />
         {p.view === "session" && p.hasSession && <ActivityToggle />}
         <SideToggles />
         {p.actions}
-        <button className="palette-btn" onClick={onPalette} title="Commands and sessions">
+        <button className="palette-btn" onClick={onPalette} aria-label="Commands and sessions" title="Commands and sessions">
           <Icon name="search" size={13} />
           <span>Commands</span>
           <Kbd>{MOD}K</Kbd>
         </button>
+        <span className={`conn conn-${status.tone}`} title={status.detail ?? status.label} role="status">
+          <span className="conn-dot" />
+          {status.label}
+        </span>
       </div>
     </header>
   );

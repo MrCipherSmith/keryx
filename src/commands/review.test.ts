@@ -1051,6 +1051,26 @@ test("`review tier --json` prints the model block a dispatch document carries", 
   expect(JSON.parse(logs.join("\n")).routing.decision.status).toBe("blocked");
 });
 
+test("native Desktop tier tries the ordered pool and records a verified per-run model", async () => {
+  const env = {
+    KERYX_DESK_REVIEW_SHELL: "1", KERYX_DESK_REVIEW_PROJECT_ROOT: ROOT,
+    KERYX_DESK_REVIEW_OPTIONS: JSON.stringify({ mode: "manual", adaptive: false, modelPools: { light: [], strong: [], middle: [
+      { provider: "ollama", model: "missing" }, { provider: "ollama", model: "llama3.2" },
+    ] } }),
+  };
+  const saved = Object.fromEntries(Object.keys(env).map(key => [key, process.env[key]]));
+  try {
+    Object.assign(process.env, env);
+    await tierRouted("--desk-tier", "standard", "--json");
+    expect(modelBlock()).toMatchObject({ model: "llama3.2", provider: "ollama", tier: "standard", tier_reasons: ["desktop:fixed"] });
+  } finally {
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
 test("the routing review category is the canonical selection, not the relative tier", async () => {
   await configureUserRouting({
     schemaVersion: 2,

@@ -8,7 +8,7 @@ import { ASK_USER_NO_HOST, type AskUserFn } from "../harness/tool/builtin/ask-us
 import { CANCEL_ANSWER, journalAsk, resolveFlowContext, type JournalAskDeps } from "../decisions/service";
 import { reviewAutoActive, reviewAutoMayAnswer } from "../review/review-system";
 import { askFloor } from "../review/arbiter-floor";
-import { ENV_AUTONOMOUS_ANSWERS_FILE, answerAutonomously } from "../review/autonomous-answers";
+import { ENV_AUTONOMOUS_ANSWERS_FILE, answerAutonomously, desktopQuestionRun } from "../review/autonomous-answers";
 import { consultArbiter, installQuestionArbiter } from "../commands/review-arbiter-install";
 
 let host: AskUserFn | undefined;
@@ -62,6 +62,11 @@ export function journaledAskUser(cwd: string): AskUserFn {
   return async (request) => {
     const autonomousFile = process.env[ENV_AUTONOMOUS_ANSWERS_FILE];
     if (autonomousFile !== undefined && autonomousFile.length > 0) {
+      const runId = desktopQuestionRun(cwd);
+      if (runId && askFloor(request) === undefined) {
+        const { askDesktopOperator } = await import("../review/desk-questions");
+        return askDesktopOperator(runId, request);
+      }
       installQuestionArbiter(cwd);
       return answerAutonomously(request, { file: autonomousFile });
     }
