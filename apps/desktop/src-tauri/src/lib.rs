@@ -19,6 +19,7 @@ pub mod review;
 pub mod pty;
 pub mod settings;
 pub mod shellenv;
+mod slots;
 pub mod version;
 pub mod webkit;
 

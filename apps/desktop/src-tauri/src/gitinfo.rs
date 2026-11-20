@@ -137,11 +137,11 @@ struct LookupSlot;
 
 impl LookupSlot {
     fn take() -> Option<Self> {
-        use std::sync::atomic::Ordering;
-        REPOSITORY_LOOKUPS
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| (n < MAX_REPOSITORY_LOOKUPS).then_some(n + 1))
-            .ok()
-            .map(|_| Self)
+        if crate::slots::try_take(&REPOSITORY_LOOKUPS, MAX_REPOSITORY_LOOKUPS) {
+            Some(Self)
+        } else {
+            None
+        }
     }
 }
 

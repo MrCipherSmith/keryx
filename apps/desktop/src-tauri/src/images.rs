@@ -457,11 +457,11 @@ struct ChatJob;
 
 impl ChatJob {
     fn take() -> Result<Self, String> {
-        use std::sync::atomic::Ordering;
-        CHAT_JOBS
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| (n < MAX_CHAT_JOBS).then_some(n + 1))
-            .map(|_| Self)
-            .map_err(|_| "busy: Chat attachments are busy; try again".to_string())
+        if crate::slots::try_take(&CHAT_JOBS, MAX_CHAT_JOBS) {
+            Ok(Self)
+        } else {
+            Err("busy: Chat attachments are busy; try again".into())
+        }
     }
 }
 
@@ -479,11 +479,11 @@ struct PreviewJob;
 
 impl PreviewJob {
     fn take() -> Result<Self, String> {
-        use std::sync::atomic::Ordering;
-        CHAT_PREVIEW_JOBS
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| (n < MAX_CHAT_PREVIEW_JOBS).then_some(n + 1))
-            .map(|_| Self)
-            .map_err(|_| "busy: Chat attachments are busy; try again".to_string())
+        if crate::slots::try_take(&CHAT_PREVIEW_JOBS, MAX_CHAT_PREVIEW_JOBS) {
+            Ok(Self)
+        } else {
+            Err("busy: Chat attachments are busy; try again".into())
+        }
     }
 }
 
@@ -632,7 +632,7 @@ mod tests {
         let storage = ChatImages::default();
         let kept = storage.save_file("owner", "txt", "aGVsbG8=").unwrap();
         let draft = storage.save_file("owner", "txt", "aGVsbG8=").unwrap();
-        storage.commit("owner", None, &[kept.clone()]).unwrap();
+        storage.commit("owner", None, std::slice::from_ref(&kept)).unwrap();
         storage.release_owner("owner");
         assert!(Path::new(&kept).is_file());
         assert!(!Path::new(&draft).exists());
@@ -677,7 +677,7 @@ mod tests {
         std::fs::write(&sibling, b"\x89PNG\r\n\x1a\n").unwrap();
         assert!(storage.authorize("owner", None, sibling.to_str().unwrap()).is_none());
 
-        assert!(storage.commit("other", None, &[path.clone()]).is_err());
+        assert!(storage.commit("other", None, std::slice::from_ref(&path)).is_err());
         assert!(storage.commit("owner", None, &[path.clone(), "missing".to_string()]).is_err());
         storage.release_owner("other");
         assert!(Path::new(&path).is_file());
@@ -694,7 +694,7 @@ mod tests {
         let draft = storage.save_file("owner", "txt", "aGVsbG8=").unwrap();
         let project = Path::new("/projects/a");
         assert!(storage.authorize("other", Some(project), &sent).is_none());
-        storage.commit("owner", Some(project), &[sent.clone()]).unwrap();
+        storage.commit("owner", Some(project), std::slice::from_ref(&sent)).unwrap();
         assert!(storage.authorize("other", Some(project), &sent).is_some());
         assert!(storage.authorize("other", Some(Path::new("/projects/b")), &sent).is_none());
         assert!(storage.authorize("other", None, &sent).is_none());
@@ -710,7 +710,7 @@ mod tests {
             store.files = MAX_CHAT_STORAGE_FILES - 1;
         }
         let sent = storage.save_file("owner", "txt", "aGVsbG8=").unwrap();
-        storage.commit("owner", None, &[sent.clone()]).unwrap();
+        storage.commit("owner", None, std::slice::from_ref(&sent)).unwrap();
         assert!(storage.save_file("other", "txt", "aGVsbG8=").unwrap_err().contains("storage is full"));
         assert!(Path::new(&sent).is_file());
         assert!(storage.authorize("other", None, &sent).is_none());
