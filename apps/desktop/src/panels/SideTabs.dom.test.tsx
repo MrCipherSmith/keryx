@@ -116,7 +116,7 @@ async function mount(over: { subagents?: Subagent[]; items?: Item[] } = {}) {
 test("one panel holds the Terminal, Browser, Activity and Info tabs", async () => {
   await mount();
   await setTab("terminal");
-  expect(Array.from(document.querySelectorAll('.side-switch [role="tab"]')).map((b) => b.textContent!.trim())).toEqual(["Terminal", "Browser", "Activity", "Info"]);
+  expect(Array.from(document.querySelectorAll('.side-switch [role="tab"]')).map((b) => b.textContent!.trim())).toEqual(["Terminal", "Browser", "Activity", "Info", "Files"]);
   expect(document.querySelectorAll(".activity-panel")).toHaveLength(0);
 });
 

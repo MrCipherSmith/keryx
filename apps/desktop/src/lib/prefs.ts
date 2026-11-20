@@ -62,8 +62,8 @@ export interface Prefs {
   subagentTree: Record<string, boolean>;
 }
 
-export type SidePanelTab = "terminal" | "browser" | "activity" | "info";
-const SIDE_TABS: readonly string[] = ["terminal", "browser", "activity", "info"];
+export type SidePanelTab = "terminal" | "browser" | "activity" | "info" | "files";
+const SIDE_TABS: readonly string[] = ["terminal", "browser", "activity", "info", "files"];
 export const SIDE_PANEL_MIN = 320;
 export const SIDE_PANEL_MAX = 1200;
 /** The narrowest the chat column gets while the side panel is open. */

@@ -8,12 +8,14 @@ import { slotRef, useActivityRunning } from "./sideSlots";
 
 const TerminalPanel = lazy(() => import("./TerminalPanel").then((m) => ({ default: m.TerminalPanel })));
 const BrowserPanel = lazy(() => import("./BrowserPanel").then((m) => ({ default: m.BrowserPanel })));
+const FilesPanel = lazy(() => import("./FilesPanel").then((m) => ({ default: m.FilesPanel })));
 
 export const SIDE_TABS: Array<{ id: SidePanelTab; label: string; icon: IconName }> = [
   { id: "terminal", label: "Terminal", icon: "terminal" },
   { id: "browser", label: "Browser", icon: "globe" },
   { id: "activity", label: "Activity", icon: "checklist" },
   { id: "info", label: "Info", icon: "info" },
+  { id: "files", label: "Files", icon: "folder" },
 ];
 
 /** The agent used a panel tool: show that tab of the panel, even when the panel is closed. */
@@ -99,6 +101,11 @@ export function SidePanel({ cwd, visible = true }: { cwd: string; visible?: bool
           {shown.has("browser") || tab === "browser" ? (
             <div className="side-pane" hidden={tab !== "browser"}>
               <BrowserPanel cwd={cwd} visible={visible && tab === "browser"} />
+            </div>
+          ) : null}
+          {shown.has("files") || tab === "files" ? (
+            <div className="side-pane" hidden={tab !== "files"}>
+              <FilesPanel cwd={cwd} visible={visible && tab === "files"} />
             </div>
           ) : null}
         </Suspense>

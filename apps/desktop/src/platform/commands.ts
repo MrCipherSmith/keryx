@@ -263,6 +263,23 @@ export interface GitInfo {
 /** `null` outside a git checkout, or when git is missing or slow. */
 export const gitInfo = (cwd: string) => invoke<GitInfo | null>("git_info", { cwd });
 
+/** The project's file paths (relative, `/`-separated); with a query, up to 200 ranked matches. */
+export interface ProjectFiles {
+  files: string[];
+  truncated: boolean;
+}
+
+/** One project file as the Files tab shows it: `text` is null for a binary file. */
+export interface ProjectFileContent {
+  path: string;
+  text: string | null;
+  binary: boolean;
+  size: number;
+}
+
+export const projectFiles = (cwd: string, query?: string) => invoke<ProjectFiles>("project_files", { cwd, query });
+export const projectFileRead = (cwd: string, path: string) => invoke<ProjectFileContent>("project_file_read", { cwd, path });
+
 /** The current checkout's GitHub origin, as owner/repo; null when unknown. */
 export const gitRepository = (cwd: string) => invoke<string | null>("git_repository", { cwd });
 
