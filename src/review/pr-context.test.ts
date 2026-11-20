@@ -184,3 +184,14 @@ test("the evidence preview stays bounded while search reaches later references",
   const match = await readLinkedFlows(wt, key.repo, key.number, "later reference");
   expect(match.flows[0]?.documents.evidence).toContain("Later reference");
 });
+
+test("the explicit launch Flow can be unlinked, narrows evidence and must belong to the project", async () => {
+  flow(project, "001", url, "implicitly linked");
+  flow(project, "008", "", "explicitly selected");
+  const result = await collectPrContext(wt, key, pr, store, undefined, "008");
+  expect(result.selectedFlowId).toBe("008");
+  expect(result.flows.map(f => f.documents["plan.md"])).toEqual(["explicitly selected"]);
+  await expect(collectPrContext(wt, key, pr, store, undefined, "404")).rejects.toThrow("Selected Flow");
+  flow(wt, "008", url, "linked locally");
+  expect(await prForFlow(wt, "8")).toEqual({ repo: key.repo, number: key.number });
+});

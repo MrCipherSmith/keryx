@@ -14,7 +14,7 @@ import type {
   ToolKind,
 } from "../acp/types";
 import type { TaskInfo } from "../acp/providers";
-import { applySubagentEvent, MAX_SUBAGENT_RESULT_CHARS, runningSubagents, type Subagent } from "./activity";
+import { applySubagentEvent, isActiveSubagent, mergeArchivedSubagents, replaySpawn, MAX_SUBAGENT_RESULT_CHARS, runningSubagents, type Subagent } from "./activity";
 import { isLegacySystemText, isSystemMeta, parseSystemNote } from "./systemNote";
 
 export type Item =
@@ -35,6 +35,7 @@ export type Item =
       /** ms timestamps from the client clock, for a derived duration. */
       startedAt: number;
       endedAt: number | null;
+      spawnBirth?: { turn: number; startedAt?: number };
     }
   | {
       kind: "notice";
@@ -131,7 +132,9 @@ export interface ConvState {
   held: boolean;
   /** Why it is not held: keryx's idle cap released it, or the connection was lost. Null while held. */
   lostReason: LostReason | null;
-  /** Subagents of this session, kept until a new session (not cleared per turn). Not persisted: empty after session/load. */
+  /** Number of operator prompts observed in this parent. */
+  parentTurn: number;
+  /** Children of the parent, including previous turns. */
   subagents: readonly Subagent[];
   /** Background tasks, as last listed by keryx. */
   tasks: readonly TaskInfo[];
@@ -166,6 +169,7 @@ export function newConv(
     queue: [],
     held: true,
     lostReason: null,
+    parentTurn: 0,
     subagents: NO_SUBAGENTS,
     tasks: NO_TASKS,
   };
@@ -251,6 +255,17 @@ function upsertTool(d: ConvState, u: ToolCallFields, isNew: boolean, at: number)
     startedAt: prev?.startedAt ?? at,
     endedAt: prev?.endedAt ?? null,
   };
+  if (next.title === "spawn_subagent") {
+    next.spawnBirth = prev?.spawnBirth ?? { turn: d.parentTurn, startedAt: d.replaying ? replayDate(u._meta) : at };
+    const child = replaySpawn(next, next.spawnBirth.turn, next.spawnBirth.startedAt);
+    if (child) {
+      const observed = d.subagents.find(row => row.id === child.id);
+      if (!observed) d.subagents = [...d.subagents, child];
+      else if (child.entries.length && !observed.entries.some(e => e.kind === "result" && e.text === child.entries[0]!.text)) {
+        d.subagents = d.subagents.map(row => row.id === child.id ? { ...row, entries: [...row.entries, ...child.entries].slice(-200) } : row);
+      }
+    }
+  }
   // A replayed call has no real timing; leave its duration unknown.
   if (!d.replaying && next.endedAt === null && (next.status === "completed" || next.status === "failed")) next.endedAt = at;
   if (prev) {
@@ -271,14 +286,21 @@ function delegateNoteOf(meta: unknown): { runId: string; agentId: string; turn: 
 
 /**
  * A replayed delegate note: the "returned" card, and the run as a finished subagent, so the sidebar's
- * "N agents" and Activity still show it after a reload. Subagents are not persisted by keryx; the run is
- * rebuilt from its notes (the last turn wins). No terminal exists any more, so the entry has no tab.
+ * Activity list can restore the public return even without a local child-event cache.
  */
-function replayDelegateNote(d: ConvState, n: { runId: string; agentId: string; turn: number; text: string }): boolean {
+function replayDate(meta: unknown): number | undefined {
+  const value = (meta as { keryx?: { recordedAt?: unknown } } | null)?.keryx?.recordedAt;
+  const ms = typeof value === "string" ? Date.parse(value) : NaN;
+  return Number.isFinite(ms) ? ms : undefined;
+}
+
+function replayDelegateNote(d: ConvState, n: { runId: string; agentId: string; turn: number; text: string }, startedAt?: number): boolean {
   d.items.push({ kind: "delegate", id: d.nextId, runId: n.runId, agentId: n.agentId, turn: n.turn, text: n.text });
   d.nextId += 1;
   const restored: Subagent = {
     id: n.runId,
+    turn: d.parentTurn,
+    startedAt,
     label: n.agentId,
     status: "done",
     detail: "from history",
@@ -287,7 +309,7 @@ function replayDelegateNote(d: ConvState, n: { runId: string; agentId: string; t
     entries: [{ kind: "result", text: n.text.slice(0, MAX_SUBAGENT_RESULT_CHARS) }],
   };
   const at = d.subagents.findIndex((a) => a.id === n.runId);
-  d.subagents = at < 0 ? [...d.subagents, restored] : d.subagents.map((a, i) => (i === at ? { ...a, ...restored } : a));
+  d.subagents = at < 0 ? [...d.subagents, restored] : d.subagents.map((a, i) => (i === at ? { ...a, entries: restored.entries } : a));
   return true;
 }
 
@@ -332,7 +354,10 @@ function applyUpdate(d: ConvState, u: SessionUpdate, at: number): boolean {
       if (!d.replaying) return false; // live user text is added locally on send
       const c = u as ChunkUpdate;
       const note = delegateNoteOf((u as { _meta?: unknown })._meta);
-      if (note) return replayDelegateNote(d, note);
+      const parentTurn = (c._meta as { keryx?: { parentTurn?: number } } | undefined)?.keryx?.parentTurn;
+      if (typeof parentTurn === "number" && Number.isSafeInteger(parentTurn) && parentTurn >= 0) d.parentTurn = parentTurn;
+      else if (!note && d.items.at(-1)?.kind !== "user") d.parentTurn++;
+      if (note) return replayDelegateNote(d, note, replayDate(c._meta));
       if (MEDIA_BLOCKS.has(c.content?.type)) return pushBlock(d, "user", c.content);
       return appendChunk(d, "user", blockText(c.content), c.messageId);
     }
@@ -466,14 +491,14 @@ export type Action =
   /** Make entry `index` the next one sent. */
   | { t: "queueFront"; sessionId: string; index: number }
   /** A `_keryx/subagent` fleet event for the session it names. */
-  | { t: "subagent"; sessionId: string; event: unknown }
+  | { t: "subagent"; sessionId: string; event: unknown; at?: number }
   /** The session's task list, as `_keryx/tasks/list` returned it. */
   | { t: "tasks"; sessionId: string; tasks: readonly TaskInfo[] }
   | { t: "config"; sessionId: string; configOptions: ConfigOption[] }
   | { t: "creating"; delta: 1 | -1 }
   | { t: "created"; sessionId: string; modes?: SessionModeState | null; configOptions?: ConfigOption[] | null; show: boolean }
   | { t: "loadStart"; sessionId: string }
-  | { t: "loadDone"; sessionId: string; modes?: SessionModeState | null; configOptions?: ConfigOption[] | null; show: boolean }
+  | { t: "loadDone"; sessionId: string; archive?: readonly Subagent[]; modes?: SessionModeState | null; configOptions?: ConfigOption[] | null; show: boolean }
   | { t: "loadFailed"; sessionId: string }
   /** Show a session the window already has: local, no request. */
   | { t: "show"; sessionId: string }
@@ -525,12 +550,19 @@ function routeUpdates(state: WindowState, updates: readonly RoutedUpdate[]): Win
   return convs === state.convs && loading === state.loading ? state : { ...state, convs, loading };
 }
 
+/** Detached children have no verified live runtime in this connection. */
+function releaseConversation(c: ConvState, reason: LostReason): ConvState {
+  if (!c.held && !c.busy) return c;
+  return { ...c, held: false, busy: false, lostReason: c.held ? reason : c.lostReason,
+    subagents: c.subagents.map(row => isActiveSubagent(row) ? { ...row, status: "unknown" } : row) };
+}
+
 export function reducer(state: WindowState, a: Action): WindowState {
   switch (a.t) {
     case "updates":
       return routeUpdates(state, a.updates);
     case "userSent":
-      return withConv(state, a.sessionId, (c) => ({ ...c, nextId: c.nextId + 1, items: [...c.items, { kind: "user", id: c.nextId, text: a.text }] }));
+      return withConv(state, a.sessionId, (c) => ({ ...c, parentTurn: c.parentTurn + 1, nextId: c.nextId + 1, items: [...c.items, { kind: "user", id: c.nextId, text: a.text }] }));
     case "notice":
       return withConv(state, a.sessionId, (c) => ({
         ...c,
@@ -566,7 +598,7 @@ export function reducer(state: WindowState, a: Action): WindowState {
       });
     case "subagent":
       return withConv(state, a.sessionId, (c) => {
-        const next = applySubagentEvent(c.subagents, a.event);
+        const next = applySubagentEvent(c.subagents, a.event, { startedAt: a.at, turn: c.parentTurn });
         return next === c.subagents ? c : { ...c, subagents: next };
       });
     case "tasks":
@@ -593,7 +625,8 @@ export function reducer(state: WindowState, a: Action): WindowState {
         lostReason: null,
         // A reload (after /compact or /rewind) keeps what the window itself holds.
         queue: state.convs[a.sessionId]?.queue ?? [],
-        // Tasks live in keryx and survive a replay; subagents are not persisted, so they start empty.
+        subagents: mergeArchivedSubagents(loaded.subagents, state.convs[a.sessionId]?.subagents ?? a.archive ?? []),
+        parentTurn: Math.max(loaded.parentTurn, state.convs[a.sessionId]?.parentTurn ?? 0, ...(a.archive ?? []).map(row => row.turn ?? 0)),
         tasks: state.convs[a.sessionId]?.tasks ?? [],
         modes: a.modes ?? loaded.modes,
         configOptions: a.configOptions ?? loaded.configOptions,
@@ -611,10 +644,10 @@ export function reducer(state: WindowState, a: Action): WindowState {
     case "show":
       return state.convs[a.sessionId] && state.shownId !== a.sessionId ? { ...state, shownId: a.sessionId } : state;
     case "released":
-      return withConv(state, a.sessionId, (c) => (c.held || c.busy ? { ...c, held: false, busy: false, lostReason: c.held ? "idle-cap" : c.lostReason } : c));
+      return withConv(state, a.sessionId, (c) => releaseConversation(c, "idle-cap"));
     case "connectionReset": {
       const convs: Record<string, ConvState> = {};
-      for (const [sid, c] of Object.entries(state.convs)) convs[sid] = c.held || c.busy ? { ...c, held: false, busy: false, lostReason: c.held ? "connection" : c.lostReason } : c;
+      for (const [sid, c] of Object.entries(state.convs)) convs[sid] = releaseConversation(c, "connection");
       return { ...state, convs, loading: {}, creating: 0 };
     }
     case "banner":
@@ -669,7 +702,7 @@ export interface SessionMark {
   title: string | null;
   /** Running subagents plus running tasks. */
   running: number;
-  /** The session's subagents (native and external); empty unless the session is held. */
+  /** Observed native and external children of the held session. */
   subagents: readonly Subagent[];
 }
 

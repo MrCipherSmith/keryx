@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import type { ReviewRule, ReviewRuleAction, ReviewRuleSnapshot } from "../../../../src/review/review-rule-types";
 import type { reviewRules } from "../platform/reviewRules";
 import type { reviewWatcher, ReviewWatcherAction, ReviewWatcherSnapshot } from "../platform/reviewWatcher";
@@ -6,6 +6,8 @@ import type { reviewRun } from "../platform/reviewRuns";
 import type { Root } from "react-dom/client";
 import type { fetchReviewBoard, fetchReviewDetail, fetchReviewRepositories } from "../platform/review";
 import { registerDom, unregisterDom } from "../test/dom";
+import { readReviewFilters, reviewFilterKey, saveReviewFilters } from "./reviewFilterStorage";
+import { EMPTY_FILTERS } from "./model";
 import type { ReviewBoardSnapshot, ReviewCard } from "./types";
 
 let root: Root;
@@ -25,6 +27,8 @@ beforeAll(async () => {
   document.body.append(host);
   root = (await import("react-dom/client")).createRoot(host);
 });
+
+beforeEach(() => { localStorage.clear(); });
 
 afterAll(async () => {
   await act(() => root.unmount());
@@ -103,6 +107,29 @@ test("refresh failure preserves last available snapshot, access loss hides its c
   expect(host.textContent).not.toContain("Signed in as ann");
   expect(host.textContent).toContain("Sign in with gh");
   expect(host.textContent).not.toContain("No open pull requests");
+});
+
+test("partial sync can be dismissed, reopened, and shown again for a new issue", async () => {
+  let warnings = ["Some replies unavailable"];
+  await render(async () => snapshot([pr], warnings));
+  await click(button("Hide sync details"));
+  expect(document.activeElement).toBe(button("Sync details"));
+  expect(button("Sync details").getAttribute("aria-expanded")).toBe("false");
+  await click(button("Refresh pull requests"));
+  expect(host.textContent).not.toContain(warnings[0]!);
+  await click(button("Sync details"));
+  expect(host.textContent).toContain(warnings[0]!);
+  await click(button("Hide sync details"));
+  warnings = ["Some checks unavailable"];
+  await click(button("Refresh pull requests"));
+  expect(host.textContent).toContain(warnings[0]!);
+  await click(button("Hide sync details"));
+  warnings = [];
+  await click(button("Refresh pull requests"));
+  expect(host.textContent).toContain("Synced");
+  warnings = ["Some checks unavailable"];
+  await click(button("Refresh pull requests"));
+  expect(host.textContent).toContain(warnings[0]!);
 });
 
 test("a pending retry keeps the previously failed snapshot labeled stale until success", async () => {
@@ -213,7 +240,7 @@ test("a board refresh started before a local launch preserves the live lane afte
   const runCommand: typeof reviewRun = async (_cwd, _key, action) => {
     if (action.kind !== "status") await new Promise<void>(resolve => { finishLaunch = resolve; });
     return { version: 1, runs: action.kind === "status" ? [] : [{
-    id: "1", state: "running", phase: "Reading", reviewerProgress: { wave: 3, planned: 4, finished: 2, sessions: [] }, baseSha: pr.baseSha, headSha: pr.headSha, source: "manual", reason: "",
+    id: "1", state: "running", phase: "Reading", reviewerProgress: { wave: 3, planned: 4, finished: 2, completed: 2, sessions: [] }, baseSha: pr.baseSha, headSha: pr.headSha, source: "manual", reason: "",
     createdAt: pr.updatedAt, startedAt: pr.updatedAt, finishedAt: null, result: null,
   }] }; };
   await render(load, "/project", ++renderKey, undefined, loadDetail, runCommand);
@@ -226,9 +253,9 @@ test("a board refresh started before a local launch preserves the live lane afte
   const tile = host.querySelector('section[aria-label="In review"] .review-card')!;
   expect(tile.textContent).toContain(pr.title);
   expect(tile.textContent).toContain("Wave 3");
-  expect(tile.querySelector('[role="progressbar"]')?.getAttribute("aria-valuenow")).toBe("2");
+  expect(tile.querySelector('[role="progressbar"]')?.getAttribute("aria-valuenow")).toBe("50");
   await click(button("List"));
-  expect(host.querySelector("tbody")?.textContent).toContain("2 of 4 reviewers finished");
+  expect(host.querySelector("tbody")?.textContent).toContain("2 of 4 assignments completed");
 });
 
 test("Review controls the schedule for the base repository and displays persisted PR activity", async () => {
@@ -459,17 +486,22 @@ test("a rules dialog pending for a previous account cannot expose that account's
   expect(host.textContent).not.toContain("Previous account secret rule");
 });
 
-test("project tabs restore the selected repository and last snapshot after a disconnect, and evict on denied access", async () => {
+test("project tabs reuse prefetched cards until refresh and evict them on denied access", async () => {
   const key = ++renderKey;
   let problem = "";
+  let reads = 0;
   const load: typeof fetchReviewBoard = async (_cwd, _state, repo) => {
+    reads++;
     if (problem) throw new Error(problem);
     return { ...snapshot([{ ...pr, title: repo === "org/upstream" ? "Upstream card" : "Fork card" }]), repo: repo ?? "org/fork", repositories: ["org/fork","org/upstream"] };
   };
   const show = (active: boolean) => act(async () => root.render(createElement(ReviewBoard, {
     key, cwd: "/project", flows: [], onOpenFlow: () => {}, active, load, watcherCommand: watcherDisabled, listRepositories: async () => [],
   })));
+  await show(false);
+  expect(reads).toBe(1);
   await show(true);
+  expect(reads).toBe(1);
   const select = host.querySelector<HTMLSelectElement>('select[aria-label="Base repository"]')!;
   await act(async () => { select.value = "org/upstream"; select.dispatchEvent(new Event("change", {bubbles: true})); });
   expect(host.textContent).toContain("Upstream card");
@@ -478,6 +510,9 @@ test("project tabs restore the selected repository and last snapshot after a dis
   problem = "unavailable: The dev bridge connection closed.";
   await show(true);
   expect(host.textContent).toContain("Upstream card");
+  expect(reads).toBe(2);
+  await click(button("Refresh pull requests"));
+  expect(reads).toBe(3);
   expect(host.textContent).toContain("Last available snapshot");
   expect(host.textContent).not.toContain("Fork card");
   problem = "access: Grant revoked";
@@ -486,6 +521,31 @@ test("project tabs restore the selected repository and last snapshot after a dis
   problem = "unavailable: offline";
   await show(true);
   expect(host.textContent).not.toContain("Upstream card");
+});
+
+test("successful watcher ticks refresh cached cards in the background once per tick", async () => {
+  const key = ++renderKey;
+  let reads = 0;
+  let state: ReviewWatcherSnapshot = { ...watcherOff, state: "enabled", installed: true };
+  const watch = async () => state;
+  const load = async () => snapshot([{ ...pr, title: "Card revision " + ++reads }]);
+  const show = (active: boolean) => act(async () => root.render(createElement(ReviewBoard, {
+    key, cwd: "/project", flows: [], onOpenFlow() {}, active, load, watcherCommand: watch,
+  })));
+  const readStatus = () => act(async () => { window.dispatchEvent(new Event("focus")); });
+  await show(false);
+  expect(reads).toBe(1);
+  state = { ...state, lastSuccessAt: "2026-11-20T12:00:00Z" };
+  await readStatus();
+  await readStatus();
+  expect(reads).toBe(2);
+  await show(true);
+  expect(host.textContent).toContain("Card revision 2");
+  state = { ...state, state: "paused", lastSuccessAt: "2026-11-20T12:05:00Z" };
+  await readStatus();
+  expect(reads).toBe(2);
+  await click(button("Refresh pull requests"));
+  expect(host.textContent).toContain("Card revision 3");
 });
 
 test("a missing author has a named filter and consistent reason in board and list", async () => {
@@ -585,7 +645,7 @@ test("one board tick updates every active PR from scoped badges and access denia
         expect(subjects.map(c => c.number)).toEqual([101,102]);
         return {version:1, ...key, cards:[
           {...subjects[0]!,localReview:{active:false,ready:true}},
-          {...subjects[1]!,localReview:{active:true,ready:false,progress:{wave:2,planned:5,finished:3}}},
+          {...subjects[1]!,localReview:{active:true,ready:false,progress:{wave:2,planned:5,finished:3,completed:3}}},
         ]};
       },
     })); });
@@ -599,4 +659,224 @@ test("one board tick updates every active PR from scoped badges and access denia
     expect(host.textContent).toContain("Repository access revoked");
     expect(host.textContent).not.toContain(pr.title);
   } finally { clock.setTimeout = schedule; }
+});
+
+test("board and list expose GitHub state and pending requests separately and run the clicked revision", async () => {
+  const other = { ...pr, number: 105, decision: "CHANGES_REQUESTED" as const, headSha: "other-head" };
+  const starts: number[] = [];
+  const run: typeof reviewRun = async (_cwd, target, action) => {
+    if (action.kind === "start") {
+      expect(target.viewer).toBe("ann");
+      expect(target.repositoryId).toBe("repo1");
+      expect(action.headSha).toBe(other.headSha);
+      starts.push(target.number);
+    }
+    return { version: 1, runs: [] };
+  };
+  await render(async () => snapshot([pr, other]), "/project", ++renderKey, undefined, async (_cwd, _repo, number) => ({
+    version: 1, viewer: "ann", repositoryId: "repo1", number, headSha: other.headSha,
+    fetchedAt: pr.updatedAt, comments: [], reviews: [], threads: [], checks: [], warnings: [],
+  }), run);
+  for (const mode of ["Board", "List"]) {
+    await click(button(mode));
+    const tags = [...host.querySelectorAll(".review-tags")].find(node => node.textContent?.includes("Changes requested"));
+    expect(Array.from(tags!.children, child => child.textContent)).toEqual(["Open", "Changes requested", "Review requested"]);
+    await click(button("Run review for #105"));
+    expect(button("Keryx review").getAttribute("aria-pressed")).toBe("true");
+    expect(starts).toHaveLength(mode === "Board" ? 1 : 2);
+    await click(button("Close details"));
+  }
+  expect(starts).toEqual([105, 105]);
+});
+
+test("opening a running review from its badge action only reads the run", async () => {
+  const calls: string[] = [];
+  await render(async () => snapshot([{ ...pr, localReview: { active: true, ready: false } }]), "/project", ++renderKey,
+    undefined, async () => ({ version: 1, viewer: "ann", repositoryId: "repo1", number: pr.number,
+      headSha: pr.headSha, fetchedAt: pr.updatedAt, comments: [], reviews: [], threads: [], checks: [], warnings: [] }),
+    async (_cwd, _key, action) => { calls.push(action.kind); return { version: 1, runs: [] }; });
+  await click(button("View review for #101"));
+  expect(button("Keryx review").getAttribute("aria-pressed")).toBe("true");
+  expect(calls).toEqual(["status"]);
+});
+
+test("applied filters survive cold board mounts within the verified project, repository and account", async () => {
+  let viewer = "ann", repositoryId = "repo1";
+  const scopes: string[] = [];
+  const load: typeof fetchReviewBoard = async (_cwd, state) => {
+    scopes.push(state);
+    return { ...snapshot([pr, { ...pr, state: "merged", number: 303 }, { ...pr, number: 304, state: "merged", author: "bob" }]), viewer, repositoryId };
+  };
+  await render(load);
+  await click(button("Filters"));
+  await click(option("Author", "lee"));
+  await click(option("PR state", "Open"));
+  await click(option("PR state", "Draft"));
+  await click(option("PR state", "Merged"));
+  await click(button("Apply filters"));
+  expect(scopes).toEqual(["open", "merged"]);
+
+  scopes.length = 0;
+  viewer = "ANN";
+  await render(load);
+  expect(scopes).toEqual(["open", "merged"]);
+  expect([...host.querySelectorAll(".review-card .flow-id")].map(el => el.textContent)).toEqual(["#303"]);
+  await click(button("Filters (2)"));
+  await click(option("Author", "bob"));
+  await click(button("Cancel"));
+
+  viewer = "colleague";
+  await render(load);
+  expect(host.querySelector(".review-active-filters")).toBeNull();
+  expect(host.querySelector(".review-card .flow-id")?.textContent).toBe("#101");
+  viewer = "ann";
+  repositoryId = "repo2";
+  await render(load);
+  expect(host.querySelector(".review-active-filters")).toBeNull();
+  repositoryId = "repo1";
+  await render(load, "/second-project");
+  expect(host.querySelector(".review-active-filters")).toBeNull();
+
+  await render(load);
+  expect(host.querySelector(".review-active-filters")?.textContent).toContain("Author · lee");
+  expect(host.querySelectorAll(".review-card")).toHaveLength(1);
+  await click(button("Clear filters"));
+  await render(load);
+  expect(host.querySelector(".review-active-filters")).toBeNull();
+  expect(host.querySelector(".review-card .flow-id")?.textContent).toBe("#101");
+});
+
+test("saved filters reject malformed data and unsupported versions and tolerate unavailable browser storage", () => {
+  const key = reviewFilterKey("/project", "R", "ann");
+  for (const value of ["broken", "null", '{"version":1,"filters":[]}', '{"version":2,"filters":{"author":["lee"]}}',
+    '{"version":1,"filters":{"state":["future"]}}', '{"version":1,"filters":{"assignee":"lee"}}']) {
+    localStorage.setItem(key, value);
+    expect(readReviewFilters(key)).toEqual(EMPTY_FILTERS);
+  }
+  localStorage.setItem(key, JSON.stringify({ version: 1, filters: { author: ["lee", "lee"], ci: ["failed"] } }));
+  expect(readReviewFilters(key)).toEqual({ ...EMPTY_FILTERS, author: ["lee"], ci: ["failed"] });
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, "localStorage")!;
+  try {
+    Object.defineProperty(globalThis, "localStorage", { configurable: true, get() { throw new Error("Storage unavailable"); } });
+    expect(readReviewFilters(key)).toEqual(EMPTY_FILTERS);
+    expect(() => saveReviewFilters(key, { ...EMPTY_FILTERS, author: ["lee"] })).not.toThrow();
+  } finally { Object.defineProperty(globalThis, "localStorage", descriptor); }
+});
+
+test("filter editing waits for the first verified snapshot before restoring saved settings", async () => {
+  const key = reviewFilterKey("/waiting", "repo1", "ann");
+  saveReviewFilters(key, { ...EMPTY_FILTERS, author: ["lee"] });
+  let resolve!: (value: ReviewBoardSnapshot) => void;
+  await render(() => new Promise(r => { resolve = r; }), "/waiting");
+  const filters = button("Filters");
+  expect(filters.disabled).toBe(true);
+  await click(filters);
+  expect(host.querySelector('[role="dialog"]')).toBeNull();
+  expect(host.textContent).not.toContain("Author · lee");
+
+  await act(async () => resolve(snapshot([pr])));
+  expect(host.textContent).toContain("Author · lee");
+  const restored = button("Filters (1)");
+  expect(restored.disabled).toBe(false);
+  await click(restored);
+  expect(option("Author", "lee").checked).toBe(true);
+  await click(button("Cancel"));
+});
+
+test("a coordinator question moves the PR to Needs attention and opens the pinned session from either view", async () => {
+  const pending = { ...pr, localReview: { active: true, ready: false, runState: "running" as const, awaitingAnswer: true as const } };
+  const actions: string[] = [];
+  const command: typeof reviewRun = async (_cwd, _key, action) => {
+    actions.push(action.kind);
+    return { version: 1, runs: [{
+      id: "test-run", headSha: pr.headSha, baseSha: pr.baseSha, source: "manual", state: "running", phase: "Review",
+      createdAt: pr.updatedAt, startedAt: pr.updatedAt, finishedAt: null, reason: "", result: null,
+      pendingQuestion: { id: "scope", question: "Which scope?", options: [], allowFreeform: true },
+    }] };
+  };
+  const detail: typeof fetchReviewDetail = async () => ({
+    version: 1, viewer: "ann", repositoryId: "repo1", number: pr.number, headSha: pr.headSha,
+    fetchedAt: pr.updatedAt, comments: [], reviews: [], threads: [], checks: [], warnings: [],
+  });
+  for (const mode of ["Board", "List"]) {
+    await render(async () => snapshot([pending]), "/project", ++renderKey, undefined, detail, command);
+    await click(button(mode));
+    if (mode === "Board") expect(host.querySelector('[aria-label="Needs attention"]')?.textContent).toContain("Awaiting your answer");
+    else expect(host.querySelector("tbody")?.textContent).toContain("Awaiting your answer");
+    await click(button("Answer question for #" + pr.number));
+    expect(document.querySelector(".review-question")?.textContent).toContain("Which scope?");
+  }
+  expect(actions).not.toContain("start");
+});
+
+test("Review tab signal follows unfiltered open requests and background watcher refreshes without extra reads", async () => {
+  const key = ++renderKey;
+  const seen: import("./ReviewBoard").ReviewTabIndicator[] = [];
+  const notify = (value: import("./ReviewBoard").ReviewTabIndicator) => seen.push(value);
+  const neutral: ReviewCard = { ...pr, reviewers: [], decision: "REVIEW_REQUIRED" };
+  let cards = [neutral];
+  let reads = 0;
+  let failure = "";
+  const load: typeof fetchReviewBoard = async () => {
+    reads++;
+    if (failure) throw Error(failure);
+    return snapshot(cards);
+  };
+  let status: ReviewWatcherSnapshot = { ...watcherOff, state: "enabled", installed: true };
+  const watch = async () => status;
+  const show = (active: boolean, cwd = "/project", expectedViewer = "ann") => act(async () => root.render(createElement(ReviewBoard, {
+    key, active, cwd, expectedViewer, flows: [], onOpenFlow() {}, load, watcherCommand: watch, onIndicatorChange: notify,
+    listRepositories: async () => [],
+  })));
+  await show(false);
+  expect(seen.at(-1)).toBe("watching");
+  expect(reads).toBe(1);
+  cards = [pr, { ...neutral, number: 999, author: "bob", title: "Unrequested PR" }];
+  status = { ...status, lastSuccessAt: "2026-11-20T12:03:00Z" };
+  await act(async () => { window.dispatchEvent(new Event("focus")); });
+  expect(seen.at(-1)).toBe("attention");
+  expect(reads).toBe(2);
+  await show(true);
+  await click(button("Filters"));
+  await click(option("Author", "bob"));
+  await click(button("Apply filters"));
+  expect(host.querySelector(".review-card .flow-id")?.textContent).toBe("#999");
+  expect(seen.at(-1)).toBe("attention");
+  cards = [{ ...neutral, decision: "CHANGES_REQUESTED" }];
+  await click(button("Refresh pull requests"));
+  expect(seen.at(-1)).toBe("attention");
+  cards = [{ ...pr, state: "merged" }, { ...neutral, state: "closed", decision: "CHANGES_REQUESTED" }];
+  await click(button("Refresh pull requests"));
+  expect(seen.at(-1)).toBe("watching");
+  status = { ...status, state: "paused" };
+  await act(async () => { window.dispatchEvent(new Event("focus")); });
+  expect(seen.at(-1)).toBeNull();
+  cards = [pr];
+  await click(button("Refresh pull requests"));
+  expect(seen.at(-1)).toBe("attention");
+  failure = "access: Account is unavailable";
+  await click(button("Refresh pull requests"));
+  expect(seen.at(-1)).toBeNull();
+  await show(false, "/other-project", "colleague");
+  expect(seen.at(-1)).toBeNull();
+});
+
+test("a historical filter retains known open requests and removes them when their PR is observed as merged", async () => {
+  let merged = 102;
+  const indicators: import("./ReviewBoard").ReviewTabIndicator[] = [];
+  const load: typeof fetchReviewBoard = async (_cwd, scope) => snapshot(scope === "merged"
+    ? [{ ...pr, number: merged, state: "merged" }]
+    : [pr]);
+  await act(async () => root.render(createElement(ReviewBoard, {
+    key: ++renderKey, cwd: "/history-test", flows: [], onOpenFlow() {}, load, watcherCommand: watcherDisabled,
+    onIndicatorChange: indicator => indicators.push(indicator),
+  })));
+  expect(indicators.at(-1)).toBe("attention");
+  await click(button("Filters"));
+  await click(option("PR state", "Open")); await click(option("PR state", "Draft")); await click(option("PR state", "Merged"));
+  await click(button("Apply filters"));
+  expect(indicators.at(-1)).toBe("attention");
+  merged = pr.number;
+  await click(button("Refresh pull requests"));
+  expect(indicators.at(-1)).toBeNull();
 });

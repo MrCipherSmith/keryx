@@ -9,7 +9,7 @@ import { packWaves, waveBytesOf } from "./slice";
 
 /** The wave of a package's own round, before or beside any chunk pass. */
 export const REVIEW_WAVE_ROUND = "round";
-export const REVIEW_WAVE_MAX_CHILDREN = 32;
+export { REVIEW_WAVE_MAX_CHILDREN } from "./wave-limits";
 
 export type ReviewWaveResolution =
 	| { ok: true; key: string }

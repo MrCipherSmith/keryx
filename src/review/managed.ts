@@ -5,7 +5,7 @@ import { completionWriter, type CompletionWriter } from "./completion-write";
 import { validateCompletionHost } from "./completion-host";
 import { isAutonomousEnv, readRunProfile } from "./run-profile";
 import type { HostQuestion } from "./types";
-import { type CoverageWaiver, recordCoverageWaiver } from "./coverage-complete";
+import { type CoverageWaiver, recordCoverageWaiver, writeCoverage } from "./coverage-complete";
 import { withoutGitDiscoveryOverrides } from "../lib/git-env";
 import { revisionOperand } from "../lib/git-revision";
 import { flagMissingCitations } from "./rebuttal-citation";
@@ -1210,6 +1210,7 @@ async function completeManagedReviewLocked(
     if (!validation.valid) {
       throw new Error(`Invalid managed review manifest: ${validation.errors.map((item) => `${item.path} ${item.message}`).join("; ")}`);
     }
+    await writeCoverage(packageDir, { write: writeCompletion, onlyTracked: true });
     await writeCompletion(manifestPath, `${JSON.stringify(updated, null, 2)}\n`);
     // Before the round is recorded as finished, because the registry hashes the package.
     estimateLine = await packageEstimateLine(packageDir, { open: false });

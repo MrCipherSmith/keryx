@@ -4,7 +4,7 @@ import { Icon } from "../components/Icon";
 import { absoluteTime, errMessage } from "../lib/format";
 import { reviewWatcher, type ReviewWatcherAction, type ReviewWatcherKey, type ReviewWatcherSnapshot } from "../platform/reviewWatcher";
 
-type Props = { cwd: string; target: ReviewWatcherKey | null; command?: typeof reviewWatcher; onAccessLost?: ((reason: string) => void) | undefined };
+type Props = { cwd: string; target: ReviewWatcherKey | null; command?: typeof reviewWatcher; active?: boolean; onPollCompleted?: () => void; onWatchingChange?: (target: ReviewWatcherKey | null) => void; onAccessLost?: ((reason: string) => void) | undefined };
 
 function watcherState(snapshot: ReviewWatcherSnapshot | null, error: string) {
   if (error) return "Status unavailable";
@@ -20,7 +20,7 @@ function Timestamp({ value }: { value: string | null }) {
   return value ? <time dateTime={value}>{absoluteTime(value)}</time> : <>Never</>;
 }
 
-export function ReviewWatcher({ cwd, target, command = reviewWatcher, onAccessLost }: Props) {
+export function ReviewWatcher({ cwd, target, command = reviewWatcher, active = true, onPollCompleted, onWatchingChange, onAccessLost }: Props) {
   const [open, setOpen] = useState(false);
   const [snapshot, setSnapshot] = useState<ReviewWatcherSnapshot | null>(null);
   const [readError, setReadError] = useState("");
@@ -29,6 +29,9 @@ export function ReviewWatcher({ cwd, target, command = reviewWatcher, onAccessLo
   const [working, setWorking] = useState(false);
   const pending = useRef<ReviewWatcherAction["kind"] | null>(null);
   const sequence = useRef(0);
+  const previousPoll = useRef<string | null | undefined>(undefined);
+
+  useEffect(() => { if (!active) setOpen(false); }, [active]);
 
   const request = useCallback(async (action: ReviewWatcherAction) => {
     const mutation = action.kind !== "status";
@@ -39,6 +42,11 @@ export function ReviewWatcher({ cwd, target, command = reviewWatcher, onAccessLo
     try {
       const result = await command(cwd, target, action);
       if (sequence.current !== id) return;
+      const last = previousPoll.current;
+      previousPoll.current = result.lastSuccessAt;
+      if (target && result.state === "enabled" && result.installed && result.lastSuccessAt && last !== undefined && last !== result.lastSuccessAt) {
+        onPollCompleted?.();
+      }
       setSnapshot(result);
       setReadError("");
       if (mutation) setDraftMinutes(null);
@@ -54,7 +62,7 @@ export function ReviewWatcher({ cwd, target, command = reviewWatcher, onAccessLo
     } finally {
       if (sequence.current === id) { pending.current = null; setWorking(false); }
     }
-  }, [command, cwd, target, onAccessLost]);
+  }, [command, cwd, target, onAccessLost, onPollCompleted]);
 
   useEffect(() => {
     void request({ kind: "status" });
@@ -81,11 +89,15 @@ export function ReviewWatcher({ cwd, target, command = reviewWatcher, onAccessLo
   const canConfigure = !!target && !!snapshot;
   const applyInterval = () => void request({ kind: "enable", intervalMinutes: value });
   const running = snapshot?.state === "enabled";
+  const watching = running && snapshot.installed;
+  useEffect(() => {
+    onWatchingChange?.(watching ? target : null);
+  }, [onWatchingChange, watching, target]);
   return <>
     <button className="btn btn-sm" aria-haspopup="dialog" aria-label={'PR watcher · ' + label} onClick={() => {
       setOpen(true); void request({ kind: "status" });
     }}><Icon name="clock" size={14} /> PR watcher <span className="watcher-indicator">{label}</span></button>
-    {open && <Dialog title="PR watcher" icon="clock" width={500} onClose={() => setOpen(false)} focusRoot
+    {active && open && <Dialog title="PR watcher" icon="clock" width={500} onClose={() => setOpen(false)} focusRoot
       footer={<button className="btn" onClick={() => setOpen(false)}>Close</button>}>
       <div className="review-watcher">
         <p>{target ? <><strong>{target.repo}</strong> · {target.viewer}</> : "Local schedule for this project"}</p>

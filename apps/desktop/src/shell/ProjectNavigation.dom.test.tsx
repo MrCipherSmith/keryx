@@ -39,6 +39,13 @@ test("the current project owns Sessions, Flows and Review while Settings stays g
     );
   }
   await React.act(() => root.render(<ProjectWindow />));
+  const left = host.querySelector(".titlebar-left")!;
+  expect(left.querySelector(".project-switcher")?.nextElementSibling?.textContent).toBe("session");
+  expect(left.querySelector(".titlebar-title")?.hasAttribute("data-tauri-drag-region")).toBe(true);
+  const status = host.querySelector('.titlebar-right > [role="status"]')!;
+  expect(status.textContent).toBe("Ready");
+  expect(status.previousElementSibling?.getAttribute("aria-label")).toBe("Commands and sessions");
+  expect(status.nextElementSibling).toBeNull();
   const global = host.querySelector('nav[aria-label="Projects and settings"]')!;
   const project = () => host.querySelector("main nav")!;
   const button = (nav: Element, name: string) => Array.from(nav.querySelectorAll("button")).find((b) => b.textContent?.trim() === name)!;
@@ -67,7 +74,7 @@ test("the current project owns Sessions, Flows and Review while Settings stays g
 });
 
 
-test("App preserves project context across settings and binds accounts on open and from Project Settings", () => {
+test("App preserves tab state and starts a background review from the originating session", () => {
   const fixture = fileURLToPath(new URL("../test/app-navigation.fixture.tsx", import.meta.url));
   execFileSync(process.execPath, [fixture], { timeout: 8000, stdio: "pipe" });
 });

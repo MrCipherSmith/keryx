@@ -309,12 +309,13 @@ interface Props {
   busy: boolean;
   replaying: boolean;
   empty: ReactNode;
+  reviewActivity?: ReactNode;
   /** The session's subagents: a tool card whose call spawned one links to it. */
   subagents?: readonly Subagent[];
   onShowSubagent?: (id: string) => void;
 }
 
-export function Transcript({ items, busy, replaying, empty, onRunCommand, subagents, onShowSubagent }: Props) {
+export function Transcript({ items, busy, replaying, empty, reviewActivity, onRunCommand, subagents, onShowSubagent }: Props) {
   const spawned = useMemo(() => {
     const m = new Map<string, string>();
     for (const a of subagents ?? []) if (a.parentToolCallId && !m.has(a.parentToolCallId)) m.set(a.parentToolCallId, a.id);
@@ -390,7 +391,7 @@ export function Transcript({ items, busy, replaying, empty, onRunCommand, subage
               <Spinner /> Loading session…
             </div>
           ) : null}
-          {items.length === 0 && !replaying ? empty : null}
+          {items.length === 0 && !reviewActivity && !replaying ? empty : null}
           {blocks.map((b, i) => {
             const isLast = i === blocks.length - 1;
             switch (b.type) {
@@ -448,6 +449,7 @@ export function Transcript({ items, busy, replaying, empty, onRunCommand, subage
                 return <NoticeRow key={b.item.id} item={b.item} />;
             }
           })}
+          {reviewActivity}
           {busy && !streamingAgent && !streamingThought ? (
             <div className="working" role="status">
               <span className="working-dots" aria-hidden>

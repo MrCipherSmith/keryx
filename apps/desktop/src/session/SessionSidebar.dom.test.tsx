@@ -40,7 +40,7 @@ interface Calls {
   trash: string[];
 }
 
-async function render(calls: Calls, trashResult = true, extra: { marks?: Record<string, SessionMark>; onShowSubagent?: (sid: string, id: string) => void } = {}) {
+async function render(calls: Calls, trashResult = true, extra: { marks?: Record<string, SessionMark>; onShowSubagent?: (sid: string, id: string) => void; onOpenArchive?: (sid: string, title: string) => void } = {}) {
   await act(() =>
     root.render(
       createElement(SessionSidebar, {
@@ -51,6 +51,7 @@ async function render(calls: Calls, trashResult = true, extra: { marks?: Record<
         ready: true,
         canOrganize: true,
         onNew: () => {},
+        onOpenArchive: extra.onOpenArchive ?? (() => {}),
         onShowSubagent: extra.onShowSubagent ?? (() => {}),
         onLoad: () => {},
         onCollapse: () => {},
@@ -202,4 +203,53 @@ test("the children list is indented with a thin guide line and smaller text; the
   expect(twist().textContent).toBe("1 agent");
   expect(twist().querySelector(".session-agents-dot")).toBeNull();
   expect(twist().getAttribute("aria-controls")).toBe("subagents-a");
+});
+
+test("earlier finished children leave the session tree and its menu opens the archive for that parent", async () => {
+  const opened: Array<[string, string]> = [];
+  const { setPrefs } = await import("../lib/prefs");
+  await act(async () => setPrefs({ subagentTree: { b: true } }));
+  await render({ flags: [], trash: [] }, true, {
+    marks: { b: mark([sub("Old reviewer", { turn: 1 }), sub("Current reviewer", { turn: 2 })]) },
+    onOpenArchive: (id, title) => opened.push([id, title]),
+  });
+  expect(children()).toEqual(["Current reviewer"]);
+  await menuAction("Beta", "Subagent archive");
+  expect(opened).toEqual([["b", "Beta"]]);
+});
+
+test("the archive filters names, selects the matching session log, and preserves the selection through live updates", async () => {
+  const Archive = (await import("./SubagentArchive")).SubagentArchive;
+  const agents = [
+    sub("one", { turn: 1, label: "Review logic", startedAt: 100, entries: [{ kind: "result", text: "Archived logic result" }] }),
+    sub("two", { turn: 2, label: "Review style", startedAt: 300, entries: [{ kind: "text", text: "Current style comment" }] }),
+    sub("live", { turn: 1, label: "Architecture", startedAt: 20, status: "running", entries: [{ kind: "tool", text: "Reading schema" }] }),
+  ];
+  const draw = async (items: Subagent[], parent = "alpha") => act(async () => root.render(createElement(Archive, {
+    key: parent, title: parent, subagents: items, loading: false, unavailable: false, onClose() {}, onRetry() {},
+  })));
+  const rows = () => Array.from(document.querySelectorAll<HTMLButtonElement>(".archive-row"));
+  const log = () => document.querySelector('.archive-transcript')!.textContent;
+  await draw(agents);
+  expect(rows().map(b => b.querySelector(".archive-label")!.textContent)).toEqual(["Architecture", "Review style", "Review logic"]);
+  expect(rows()[2]!.textContent).toContain("Archived");
+  expect(log()).toContain("Reading schema");
+  await act(async () => rows()[2]!.click());
+  expect(log()).toContain("Archived logic result");
+  const search = document.querySelector<HTMLInputElement>('[aria-label="Filter subagents by name"]')!;
+  const filter = (name: string) => act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(search, name);
+    search.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await filter("REVIEW");
+  expect(rows()).toHaveLength(2);
+  await draw([...agents, sub("third", { status: "running", turn: 3, label: "Review live", startedAt: 500 })]);
+  expect(log()).toContain("Archived logic result");
+  await filter("No such reviewer");
+  expect(rows()).toHaveLength(0);
+  expect(log()).toBe("");
+  await draw([sub("beta", { label: "Beta helper", entries: [{ kind: "system", text: "Beta history" }] })], "beta");
+  expect(rows()).toHaveLength(1);
+  expect(log()).toContain("Beta history");
+  expect(document.body.textContent).not.toContain("Archived logic result");
 });

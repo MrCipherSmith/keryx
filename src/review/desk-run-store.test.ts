@@ -5,6 +5,7 @@ import path from "node:path";
 import { readProcessIdentity } from "../lib/hub-machine/process-identity";
 import { DeskRunStore, scheduledRunOutcomes } from "./desk-run-store";
 import type { DeskFinish } from "./desk-run-types";
+import { applyDeskLifecycle } from "./desk-run-lifecycle";
 
 const key = {
   repo: "org/repo",
@@ -390,7 +391,7 @@ test("board reads compact progress for this account's active range", () => {
   });
   const current = board(key.viewer, revision.headSha), changed = board(key.viewer, next.headSha), colleague = board(other.viewer, revision.headSha);
   for (const snapshot of [current, changed, colleague]) store.attachBadges(snapshot);
-  expect(current.cards[0]?.localReview).toEqual({ active: true, ready: false, progress: { planned: 4, finished: 2, wave: 1 } });
+  expect(current.cards[0]?.localReview).toEqual({ active: true, ready: false, runState: "running", progress: { planned: 4, finished: 2, wave: 1 } });
   expect(changed.cards[0]?.localReview?.progress).toBeUndefined();
   expect(colleague.cards[0]?.localReview).toBeUndefined();
 });
@@ -405,10 +406,195 @@ test("a multi-chunk scoped badge query agrees with history on ready, stale and q
   rows.push({number:key.number, ...revision});
   store.attachBadges({ ...key, cards:rows });
   expect(rows.at(-1)?.localReview).toEqual(localBadge(timeline, revision));
-  expect(rows.at(-1)?.localReview).toEqual({active:true,ready:true});
+  expect(rows.at(-1)?.localReview).toEqual({active:true,ready:true,runState:"other-revision"});
   expect(rows.slice(0,202).every(c => c.localReview === undefined)).toBe(true);
   const changed = [{number:key.number, ...next}] as import("./board-badges").BadgeCard[];
   store.attachBadges({ ...key, cards:changed });
   expect(changed[0]?.localReview).toEqual(localBadge(timeline, next));
-  expect(changed[0]?.localReview).toEqual({active:true,ready:false});
+  expect(changed[0]?.localReview).toEqual({active:true,ready:false,runState:"queued"});
+});
+
+test("terminal board progress uses the latest matching attempt and restores legacy successful assignments without counting retries twice", async () => {
+  const { localBadge } = await import("./board-badges");
+  const a = started();
+  a.run.reviewerProgress = { planned: 3, wave: 2, finished: 2, sessions: [
+    { id: "old", reviewer: "review-logic", wave: 1, state: "failed" },
+    { id: "retried", reviewer: "review-logic", wave: 1, state: "completed" },
+    { id: "stopped", reviewer: "review-logic", wave: 2, state: "cancelled" },
+    { id: "later", reviewer: "review-logic", wave: 3, state: "planned" },
+  ] };
+  store.end(a, { state: "partial", phase: "Stopped", reason: "", result: null });
+  const badge = () => {
+    const cards: import("./board-badges").BadgeCard[] = [{ number: key.number, ...revision }];
+    store.attachBadges({ ...key, cards });
+    expect(cards[0]!.localReview).toEqual(localBadge(store.history(key).runs, revision));
+    return cards[0]!.localReview;
+  };
+  expect(badge()).toMatchObject({ runState: "partial", progress: { planned: 3, completed: 1, finished: 2 } });
+  const retry = started();
+  store.end(retry, finish);
+  expect(badge()).toMatchObject({ active: false, ready: true, runState: "completed" });
+});
+
+test("a new queued revision shows its own starting state while an earlier revision is still running", () => {
+  started();
+  store.request("/fixture", key, next);
+  const cards: import("./board-badges").BadgeCard[] = [{ number: key.number, ...next }];
+  store.attachBadges({ ...key, cards });
+  expect(cards[0]?.localReview).toMatchObject({ active: true, runState: "queued" });
+});
+
+test("question and activity badges follow the account, pinned range, answer and cancellation", () => {
+  const { run } = started();
+  const badge = (viewer = key.viewer, range = revision) => {
+    const cards: import("./board-badges").BadgeCard[] = [{ number: key.number, ...range }];
+    store.attachBadges({ ...key, viewer, cards });
+    return cards[0]?.localReview;
+  };
+  expect(badge()?.lastActivityAt).toBeUndefined();
+  const logDir = path.join(store.directory(run.id), "run");
+  mkdirSync(logDir, { recursive: true });
+  writeFileSync(path.join(logDir, "events.ndjson"), "{}\n");
+  const at = store.history(key).runs[0]?.lastActivityAt;
+  expect(at).toBeString();
+  const ask = { id: "q", question: "Which scope?", options: [], allowFreeform: true };
+  store.openQuestion(run.id, ask);
+  expect(badge()).toMatchObject({ awaitingAnswer: true, lastActivityAt: at });
+  expect(JSON.stringify(badge())).not.toContain(ask.question);
+  expect(badge(key.viewer, next)).toEqual({ active: true, ready: false, runState: "other-revision" });
+  expect(badge(other.viewer)).toBeUndefined();
+  store.answerQuestion(key, run.id, ask.id, "Diff");
+  expect(badge()?.awaitingAnswer).toBeUndefined();
+  store.openQuestion(run.id, { ...ask, id: "q2" });
+  store.cancel(key, run.id);
+  expect(badge()).toEqual({ active: true, ready: false, runState: "cancelling" });
+});
+
+test("a legacy read-only store without review_questions still provides board progress", async () => {
+  const { Database } = await import("bun:sqlite");
+  started();
+  const db = new Database(path.join(directory, "runs.sqlite"));
+  db.run("DROP TABLE review_questions");
+  db.close();
+  const old = new DeskRunStore(directory, true);
+  try {
+    const cards: import("./board-badges").BadgeCard[] = [{ number: key.number, ...revision }];
+    old.attachBadges({ ...key, cards });
+    expect(cards[0]?.localReview).toEqual({ active: true, ready: false, runState: "running" });
+  } finally { old.close(); }
+});
+
+test("concurrent reviewer questions retain separate replies and interoperate with a running pre-upgrade coordinator", async () => {
+  const { Database } = await import("bun:sqlite");
+  const { run } = started();
+  const legacy = new Database(path.join(directory, "runs.sqlite"));
+  // Emulate the coordinator connection already open when a new Desktop upgrades the DB.
+  legacy.exec("DROP TRIGGER clear_stopped_reviewer_questions; DROP TABLE reviewer_questions");
+  const coordinator = { id: "c", question: "Choose review scope", options: [], allowFreeform: true };
+  legacy.run("INSERT INTO review_questions (run_id,question_id,question) VALUES (?,?,?)", [run.id, coordinator.id, JSON.stringify(coordinator)]);
+  const updated = new DeskRunStore(directory);
+  try {
+    const alpha = { ...coordinator, id: "a", reviewerSessionId: "first", reviewer: "review-alpha", wave: 2 };
+    const beta = { ...coordinator, id: "b", reviewerSessionId: "second", reviewer: "review-beta", wave: 2 };
+    updated.openQuestion(run.id, alpha);
+    updated.openQuestion(run.id, beta);
+    expect(updated.pendingQuestions(run.id)).toEqual([coordinator, alpha, beta]);
+    expect(updated.pendingQuestion(run.id)).toEqual(coordinator);
+    expect(() => updated.openQuestion(run.id, { ...beta, id: alpha.id })).toThrow("stale");
+    expect(() => updated.answerQuestion(other, run.id, beta.id, "leak")).toThrow("stale");
+    updated.answerQuestion(key, run.id, beta.id, "beta reply");
+    expect(updated.questionAnswer(run.id, beta.id)).toBe("beta reply");
+    expect(updated.questionAnswer(run.id, alpha.id)).toBeNull();
+    expect(() => updated.answerQuestion(key, run.id, beta.id, "changed")).toThrow("stale");
+    updated.clearQuestion(run.id, beta.id);
+    expect(updated.pendingQuestions(run.id)).toEqual([coordinator, alpha]);
+    updated.answerQuestion(key, run.id, coordinator.id, "diff");
+    expect(legacy.query("SELECT answer FROM review_questions WHERE run_id=? AND question_id=?").get(run.id, coordinator.id)).toEqual({answer:"diff"});
+    legacy.run("DELETE FROM review_questions WHERE run_id=?", [run.id]);
+    expect(updated.pendingQuestion(run.id)).toEqual(alpha);
+    const cards: import("./board-badges").BadgeCard[] = [{ number: key.number, ...revision }];
+    updated.attachBadges({ ...key, cards });
+    expect(cards[0]?.localReview?.awaitingAnswer).toBe(true);
+    expect(updated.hasPendingQuestion(run.id)).toBe(true);
+    // The old worker can stop without knowing about the new table.
+    legacy.run("UPDATE runs SET state='cancelled' WHERE id=?", [run.id]);
+    expect(updated.pendingQuestions(run.id)).toEqual([]);
+    expect(updated.questionAnswer(run.id, alpha.id)).toBeUndefined();
+    expect(legacy.query("SELECT 1 FROM reviewer_questions WHERE run_id=?").get(run.id)).toBeNull();
+    expect(() => updated.answerQuestion(key, run.id, alpha.id, "late")).toThrow("stale");
+  } finally {
+    updated.close();
+    legacy.close();
+  }
+});
+
+test("aborting a reviewer waiting for its operator leaves the other live session intact", async () => {
+  const { ASK_USER_CANCEL } = await import("../harness/tool/builtin/ask-user-tool");
+  const { askDesktopOperator } = await import("./desk-questions");
+  const { run } = started();
+  const controller = new AbortController();
+  const question = { question: "Which files?", allowFreeform: true, options: [] };
+  const response = askDesktopOperator(run.id, question, { reviewerSessionId: "session-a", reviewer: "review-alpha", wave: 1 },
+    controller.signal, new DeskRunStore(directory));
+  const otherResponse = askDesktopOperator(run.id, question, { reviewerSessionId: "session-b", reviewer: "review-beta", wave: 2 },
+    undefined, new DeskRunStore(directory));
+  try {
+    const [first, second] = store.pendingQuestions(run.id);
+    expect(first?.reviewerSessionId).toBe("session-a");
+    expect(second?.reviewerSessionId).toBe("session-b");
+    controller.abort();
+    expect(await response).toBe(ASK_USER_CANCEL);
+    expect(store.pendingQuestions(run.id)).toEqual([second!]);
+    store.answerQuestion(key, run.id, second!.id, "Only the diff");
+    expect(await otherResponse).toEqual({ kind: "own", text: "Only the diff" });
+    expect(store.hasPendingQuestion(run.id)).toBe(false);
+  } finally {
+    controller.abort();
+    store.cancel(key, run.id);
+    await Promise.allSettled([response, otherResponse]);
+  }
+});
+
+test("same revision reuses only the matching settings before and after completion", () => {
+  const manual = { modelPools: { strong: [], middle: [], light: [] }, adaptive: true, mode: "manual" } as const;
+  const options = { ...manual, modelPools: { strong: [], middle: [], light: [] } };
+  const first = store.requestManual("/a", key, revision, null, options);
+  expect(first).toBeString();
+  expect(store.requestManual("/b", key, revision, null, options)).toBe(first);
+  store.end(store.queued(key)!, finish);
+  expect(store.requestManual("/b", key, revision, store.latestAdmission(key), options)).toBe(first);
+  const different = { ...options, maxWaves: 1 };
+  const second = store.requestManual("/a", key, revision, store.latestAdmission(key), different);
+  expect(second).not.toBe(first);
+  expect(store.requestManual("/a", key, revision, store.latestAdmission(key), options)).toBe(first);
+  expect(store.queued(key)?.run.id).toBe(second!);
+  expect(store.queued(key)?.run.options).toEqual(different);
+  expect(store.request("/a", key, revision, scheduled)).toBe(second);
+  store.end(store.queued(key)!, finish);
+  expect(store.request("/a", key, revision, scheduled)).toBe(second);
+});
+
+test("operator decisions preserve partial evidence until explicit deletion", async () => {
+  const attempt = started();
+  const id = attempt.run.id;
+  const decide = (action: "close" | "archive" | "restore" | "delete", subject = key) =>
+    applyDeskLifecycle(store, "/project", subject, { action: "decide", id, decision: action, reason: "Operator recorded an outcome" }, undefined);
+  await expect(decide("delete")).rejects.toThrow("Stop the running review");
+  store.end(attempt, { ...finish, state: "partial", result: { ...finish.result!, coverage: "partial" } });
+  mkdirSync(store.directory(id), { recursive: true });
+  const artifact = path.join(store.directory(id), "report.md");
+  writeFileSync(artifact, "Review evidence");
+  await expect(decide("delete", other)).rejects.toThrow("unavailable");
+  await decide("close");
+  expect(store.history(key).runs[0]?.closure).toBe("closed");
+  expect(store.history(key).runs[0]?.result?.coverage).toBe("partial");
+  await decide("archive");
+  expect(store.history(key).runs[0]?.decision?.action).toBe("archive");
+  expect(existsSync(artifact)).toBe(true);
+  await decide("restore");
+  expect(store.history(key).runs[0]?.closure).toBe("closed");
+  await decide("delete");
+  expect(store.history(key).runs).toEqual([]);
+  expect(store.byId(id)?.run.decision?.action).toBe("delete");
+  expect(existsSync(artifact)).toBe(false);
 });

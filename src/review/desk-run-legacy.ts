@@ -38,7 +38,7 @@ function stableId(key: DeskRunKey, name: string) {
     .slice(0, 32);
   return digest.replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, "$1-$2-$3-$4-$5");
 }
-export function readExistingReviews(cwd: string, key: DeskRunKey): DeskRun[] {
+export function readExistingReviews(cwd: string, key: DeskRunKey, locate?: (id: string, directory: string) => void): DeskRun[] {
   const meta = path.join(realpathSync(cwd), ".metaproject");
   const url = `https://github.com/${key.repo}/pull/${key.number}`.toLowerCase();
   function targetUrl(target: Fields): string {
@@ -158,6 +158,7 @@ export function readExistingReviews(cwd: string, key: DeskRunKey): DeskRun[] {
       id = "package:" + data.reviewId,
       candidate = found.get(id),
       target = object(data.target);
+    locate?.(stableId(key, id), directory);
     const previous = candidate && (!sha(target.head) || !candidate.headSha || sha(target.head) === candidate.headSha) &&
       (!sha(target.base) || !candidate.baseSha || sha(target.base) === candidate.baseSha) ? candidate : undefined;
     const report =

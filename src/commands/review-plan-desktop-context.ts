@@ -8,23 +8,19 @@ import { isUtf8 } from "node:buffer";
 import { promisify } from "node:util";
 import { writeFileAtomic } from "../lib/fs";
 import { revisionOperand } from "../lib/git-revision";
-import { CONTEXT_FILE_DENYLIST, SUBAGENT_CONTEXT_FILES_MAX_BYTES, SUBAGENT_CONTEXT_FILES_MAX_COUNT } from "../lib/subagent-context";
+import { SUBAGENT_CONTEXT_FILES_MAX_BYTES, SUBAGENT_CONTEXT_FILES_MAX_COUNT } from "../lib/subagent-context";
+import { readPinnedReviewSource, safeSourcePath } from "../review/pinned-source";
 import type { SliceManifest } from "../review/slice";
 import type { BlastRadius } from "../review/blast-radius";
 
 const exec = promisify(execFile);
 const pinnedHead = /^[0-9a-f]{40}$/i;
-const safeSourcePath = (file: string) =>
-  !!file && !file.includes("\\") && !file.includes(":") && ![...file].some(char => char.charCodeAt(0) < 32) &&
-  !path.isAbsolute(file) && !file.split("/").some(segment => !segment || segment === "." || segment === "..") &&
-  !CONTEXT_FILE_DENYLIST.test(file);
 
 type SourceAttachment = { path: string; attachment: string; bytes: number };
 
 /** Assigned files supplement mandatory diff slices. The bound is per dispatch, not per repository. */
 export function createPinnedSourceInput(cwd: string, dir: string, head: string | null) {
   const saved = new Map<string, SourceAttachment>();
-  const env = { ...process.env, GIT_NO_LAZY_FETCH: "1", GIT_NO_REPLACE_OBJECTS: "1" };
   return async (files: string[], diffAttachments: string[], diffBytes: number) => {
     const sources: SourceAttachment[] = [];
     const omissions: string[] = [];
@@ -39,20 +35,16 @@ export function createPinnedSourceInput(cwd: string, dir: string, head: string |
       let source = saved.get(file);
       if (!source) {
         if (!head || !pinnedHead.test(head)) { omit("review head is unavailable"); continue; }
-        let body: Buffer;
+        let body: Awaited<ReturnType<typeof readPinnedReviewSource>>;
         try {
-          // A symlink is stored as a Git blob too. Only regular file modes belong in source evidence.
-          const { stdout: entry } = await exec("git", ["--literal-pathspecs", "ls-tree", "--full-tree", "-z", ...revisionOperand(head), "--", file],
-            { cwd, env, maxBuffer: Buffer.byteLength(file) + 80 });
-          const blob = /^100(?:644|755) blob ([0-9a-f]{40})\t/.exec(entry)?.[1];
-          if (!blob) { omit("no regular file at review head"); continue; }
-          ({ stdout: body } = await exec("git", ["cat-file", "blob", ...revisionOperand(blob)], { cwd, env, encoding: "buffer", maxBuffer: available }));
+          body = await readPinnedReviewSource(cwd, head, file, available);
         } catch (error) {
           omit((error as NodeJS.ErrnoException).code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER"
             ? "does not fit the attachment budget" : "could not be read at review head");
           continue;
         }
-        if (body.includes(0) || !isUtf8(body)) { omit("not UTF-8 source text"); continue; }
+        if (!body) { omit("no regular file at review head"); continue; }
+        if (body === "binary") { omit("not UTF-8 source text"); continue; }
         // The source path names data, never an output location. Hashing also keeps paths that differ
         // only by case distinct on the default macOS filesystem.
         const output = path.join(dir, "pinned-sources", createHash("sha256").update(file).digest("hex") + ".txt");

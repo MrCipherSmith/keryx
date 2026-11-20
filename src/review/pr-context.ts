@@ -30,7 +30,7 @@ async function projectRoots(cwd: string) {
   const [primary, current] = await Promise.all([mainCheckout(cwd, env), gitToplevel(cwd, env)]);
   return [...new Set([primary, realpathSync(current ?? cwd)])];
 }
-function* flowRefs(roots: string[], id?: string, wanted?: string) {
+function* flowRefs(roots: string[], id?: string, wanted?: string, allowUnlinked = false) {
   const seen = new Set<string>();
   for (const root of roots) {
     const index = wanted ? openReviewLinkIndex(root, "flow-links") : undefined;
@@ -51,7 +51,7 @@ function* flowRefs(roots: string[], id?: string, wanted?: string) {
       if (typeof flow?.id !== "string" || !/^\d+$/.test(flow.id) || !directory.startsWith(flow.id + "-")) continue;
       const target = parseProjectPr(flow.pr?.url);
       index?.record(directory, stamp, target ? target.repo + "#" + target.number : "");
-      if (target) {
+      if (target || allowUnlinked) {
         seen.add(directory);
         yield { dir, directory, flow, target, root };
       }
@@ -62,7 +62,7 @@ function* flowRefs(roots: string[], id?: string, wanted?: string) {
 
 export async function prForFlow(cwd: string, id: string) {
   if (!/^\d+$/.test(id)) throw new Error("configuration: Expected a numeric Flow ID.");
-  const targets = [...flowRefs(await projectRoots(cwd), id.padStart(3, "0"))].map(item => item.target);
+  const targets = [...flowRefs(await projectRoots(cwd), id.padStart(3, "0"))].flatMap(item => item.target ? [item.target] : []);
   const first = targets[0];
   if (!first) throw new Error("configuration: This Flow has no linked GitHub pull request.");
   if (targets.some(t => t.repo !== first.repo || t.number !== first.number)) {
@@ -113,11 +113,11 @@ export async function readLinkedFlows(cwd: string, repo: string, number: number,
   return linkedFlows(await projectRoots(cwd), repo, number, search);
 }
 
-function linkedFlows(roots: string[], repo: string, number: number, search?: string) {
+function linkedFlows(roots: string[], repo: string, number: number, search?: string, selectedId?: string) {
   let totalFlows = 0;
   const flows: LinkedFlowContext[] = [];
-  for (const { dir, directory, flow, target, root } of flowRefs(roots, undefined, repo.toLowerCase() + "#" + number)) {
-    if (target.number !== number || target.repo !== repo.toLowerCase()) continue;
+  for (const { dir, directory, flow, target, root } of flowRefs(roots, selectedId, selectedId ? undefined : repo.toLowerCase() + "#" + number, selectedId !== undefined)) {
+    if (!selectedId && (target?.number !== number || target.repo !== repo.toLowerCase())) continue;
     totalFlows++;
     if (flows.length >= maxFlows) continue;
     const documents: Record<string, string> = {};
@@ -141,14 +141,15 @@ function linkedFlows(roots: string[], repo: string, number: number, search?: str
       directory, checkout: root === roots[0] ? "primary" : "worktree", documents,
     });
   }
+  if (selectedId && totalFlows !== 1) throw new Error("configuration: Selected Flow is missing or ambiguous in this project.");
   return { flows, totalFlows };
 }
 
 type PrInfo = { title: string; state: string; baseRefOid: string; headRefOid: string };
 /** Caller must have verified repo, viewer and PR against GitHub before reading local evidence. */
-export async function collectPrContext(cwd: string, key: DeskRunKey, pr: PrInfo, existingStore?: DeskRunStore, search?: string) {
+export async function collectPrContext(cwd: string, key: DeskRunKey, pr: PrInfo, existingStore?: DeskRunStore, search?: string, selectedId?: string) {
   const roots = await projectRoots(cwd);
-  const linked = linkedFlows(roots, key.repo, key.number, search);
+  const linked = linkedFlows(roots, key.repo, key.number, search, selectedId);
   let owned: DeskRunStore | undefined;
   try {
     if (!existingStore && existsSync(path.join(deskRunRoot(), "runs.sqlite"))) {
@@ -188,7 +189,7 @@ export async function collectPrContext(cwd: string, key: DeskRunKey, pr: PrInfo,
       version: 1 as const,
       pr: { url: `https://github.com/${key.repo}/pull/${key.number}`, title: excerpt(pr.title, 240),
         state: pr.state, baseSha: pr.baseRefOid, headSha: pr.headRefOid },
-      ...linked, totalRuns: history.size, history: summaries,
+      ...linked, ...(selectedId ? { selectedFlowId: selectedId } : {}), totalRuns: history.size, history: summaries,
     };
   } finally { owned?.close(); }
 }

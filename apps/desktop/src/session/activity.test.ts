@@ -79,10 +79,10 @@ describe("subagents and tasks in the window reducer", () => {
     expect(s.convs.s1!.subagents).toHaveLength(1);
   });
 
-  test("session/load starts empty (subagents are not persisted) but keeps the tasks keryx still runs", () => {
+  test("session/load of an already held parent retains the observed child and its running tasks", () => {
     const tasks = [toTask({ jobId: "t1", command: "sleep 9", status: "running", startedAt: "2026-11-17T10:00:00Z" })!];
     const s = run(two, ev("s1", upsert("a")), { t: "tasks", sessionId: "s1", tasks }, { t: "loadStart", sessionId: "s1" }, { t: "loadDone", sessionId: "s1", show: true });
-    expect(s.convs.s1!.subagents).toEqual([]);
+    expect(s.convs.s1!.subagents).toMatchObject([{ id: "a", status: "running" }]);
     expect(s.convs.s1!.tasks).toEqual(tasks);
   });
 

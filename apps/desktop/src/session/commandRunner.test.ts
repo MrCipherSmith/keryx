@@ -413,3 +413,53 @@ describe("/delegate opens a terminal (openTerminal effect)", () => {
     expect(opened).toHaveLength(0);
   });
 });
+
+test("Desktop /review opens configuration for this session with or without a target, even while busy", async () => {
+  const drafts: unknown[] = [];
+  const r = rig({ busy: true, prepareReview: (id, hints) => drafts.push({ id, ...hints }) });
+  for (const command of ["/review", "/review #23", "/review https://github.com/acme/project/pull/45/"]) {
+    expect(await runCommandLine(command, r.deps)).toBe(true);
+  }
+  expect(drafts).toEqual([{ id: "s1" }, { id: "s1", target: "#23" }, { id: "s1", target: "https://github.com/acme/project/pull/45" }]);
+  expect(await runCommandLine("/review https://example.org/pull/42", r.deps)).toBe(false);
+  expect(drafts).toHaveLength(3);
+  expect(r.sent).toEqual([]);
+  expect(r.started).toEqual([]);
+  expect(r.calls).toEqual([]);
+});
+
+test("direct Desktop review launch requests open configuration before the chat turn", async () => {
+  const drafts: unknown[] = [];
+  const r = rig({ busy: true, prepareReview: (sessionId, hints) => drafts.push({ sessionId, ...hints }) });
+  for (const line of [
+    "Запусти адаптивное ревью https://github.com/acme/project/pull/9108 с review-orchestrator",
+    "Запусти фоновое ревью этого PR в Keryx",
+    "Run an adaptive review for #12 using review-orchestrator.",
+  ]) expect(await runCommandLine(line, r.deps)).toBe(true);
+  expect(drafts).toEqual([
+    { sessionId: "s1", target: "https://github.com/acme/project/pull/9108" },
+    { sessionId: "s1" },
+    { sessionId: "s1", target: "#12" },
+  ]);
+  expect(r.sent).toEqual([]);
+  expect(r.calls).toEqual([]);
+  expect(r.win().convs.s1?.queue).toEqual([]);
+});
+
+test("questions, mixed work, and direct inline reviews remain ordinary prompts", async () => {
+  const drafts: unknown[] = [];
+  const r = rig({ prepareReview: (_sessionId, hints) => drafts.push(hints) });
+  const lines = [
+    "Как запустить адаптивное ревью #12 с review-orchestrator?",
+    "Запусти ревью #12 и исправь замечания",
+    "Запусти ревью #12 прямо в этой сессии",
+    "Сделай ревью этого кода",
+    "> Запусти адаптивное ревью #12",
+  ];
+  for (const line of lines) expect(await runCommandLine(line, r.deps)).toBe(true);
+  expect(drafts).toEqual([]);
+  expect(r.sent).toEqual(lines);
+  const otherHost = rig();
+  await runCommandLine("Запусти адаптивное ревью #12", otherHost.deps);
+  expect(otherHost.sent).toEqual(["Запусти адаптивное ревью #12"]);
+});

@@ -65,7 +65,7 @@ fn board_read_args(pr_state: Option<&str>, repo: Option<&str>, number: Option<u3
     let mut args = board_args(pr_state, repo, number, repositories_only)?;
     if paged {
         if pr_state.is_none() { return Err("configuration: Select a board state to page".into()); }
-        args.push("--page".into());
+        args.extend(["--page".into(), "--cards-only".into()]);
     }
     if let Some(value) = cursor {
         if !paged || value.is_empty() || value.len() > 4096 { return Err("configuration: Invalid board cursor".into()); }
@@ -152,7 +152,13 @@ async fn invoke_review_at(
     root: impl FnOnce() -> Result<PathBuf, String> + Send + 'static,
 ) -> Result<Value, String> {
     invoke_review_at_with(app, read_only, root, move |mut cmd| {
+        let desktop_decision = args.first().map(String::as_str) == Some("review")
+            && args.get(1).map(String::as_str) == Some("desk-run")
+            && args.get(2).map(String::as_str) == Some("decide");
         cmd.args(args);
+        if desktop_decision {
+            cmd.env("KERYX_DESKTOP_REVIEW_ACTION", "1");
+        }
         run_reader(cmd)
     }).await
 }
@@ -277,20 +283,58 @@ pub enum RunAction {
         base_sha: String,
         #[serde(rename = "headSha")]
         head_sha: String,
+        options: Option<Value>,
     },
     Cancel { id: String },
+    Answer { id: String, #[serde(rename = "questionId")] question_id: String, answer: String },
+    Readiness { id: String },
+    Decide { id: String, decision: String, reason: String, waive: Option<Vec<String>> },
 }
 
 fn run_args(target: RunTarget, action: RunAction) -> Result<Vec<String>, String> {
     if target.number == 0 {
         return Err("configuration: Invalid pull request number".into());
     }
+    let mut payload_arg = None;
+    let mut waiver_arg = None;
     let (operation, extra) = match action {
         RunAction::Status { id: Some(_), activity_id: Some(_) } => return Err("Choose one Review attempt scope.".into()),
         RunAction::Status { id, activity_id } => ("status", id.into_iter().map(|id| ("--id", id))
             .chain(activity_id.into_iter().map(|id| ("--activity-id", id))).collect()),
-        RunAction::Start { base_sha, head_sha } => ("start", vec![("--base", base_sha), ("--head", head_sha)]),
+        RunAction::Start { base_sha, head_sha, options } => {
+            if let Some(options) = options {
+                let json = options.to_string();
+                if !options.is_object() || json.len() > 8192 {
+                    return Err("configuration: Invalid review settings.".into());
+                }
+                payload_arg = Some(format!("--options={json}"));
+            }
+            ("start", vec![("--base", base_sha), ("--head", head_sha)])
+        },
         RunAction::Cancel { id } => ("cancel", vec![("--id", id)]),
+        RunAction::Readiness { id } => ("readiness", vec![("--id", id)]),
+        RunAction::Decide { id, decision, reason, waive } => {
+            if !matches!(decision.as_str(), "complete" | "close" | "archive" | "restore" | "delete")
+                || reason.trim().is_empty() || reason.encode_utf16().count() > 2000 || reason.contains('\0') {
+                return Err("configuration: Invalid review decision or reason.".into());
+            }
+            if let Some(items) = waive {
+                if decision != "complete" || items.len() > 12 || items.is_empty() || items.iter().any(|item|
+                    item.is_empty() || item.len() > 40 || !item.bytes().all(|b| b.is_ascii_lowercase() || b == b'-')) {
+                    return Err("configuration: Invalid review check selection.".into());
+                }
+                waiver_arg = Some(format!("--waive={}", items.join(",")));
+            }
+            payload_arg = Some(format!("--reason={reason}"));
+            ("decide", vec![("--id", id), ("--decision", decision)])
+        },
+        RunAction::Answer { id, question_id, answer } => {
+            if answer.trim().is_empty() || answer.encode_utf16().count() > 2000 || answer.contains('\0') {
+                return Err("configuration: Invalid review answer.".into());
+            }
+            payload_arg = Some(format!("--answer={answer}"));
+            ("answer", vec![("--id", id), ("--question-id", question_id)])
+        }
     };
     let mut args = vec!["review".into(), "desk-run".into(), operation.into(), "--json".into()];
     let fields = [
@@ -305,6 +349,8 @@ fn run_args(target: RunTarget, action: RunAction) -> Result<Vec<String>, String>
         }
         args.extend([flag.into(), value]);
     }
+    args.extend(payload_arg);
+    args.extend(waiver_arg);
     Ok(args)
 }
 
@@ -316,7 +362,7 @@ pub async fn review_run(
     target: RunTarget,
     action: RunAction,
 ) -> Result<Value, String> {
-    let read_only = matches!(action, RunAction::Status { .. });
+    let read_only = matches!(action, RunAction::Status { .. } | RunAction::Readiness { .. });
     invoke_review(app, view, cwd, run_args(target, action)?, read_only).await
 }
 
@@ -593,7 +639,7 @@ mod tests {
         assert_eq!(board_read_args(None, Some("org/repo"), None, false, false, None, Some(target)).unwrap(),
             ["review","board","--json","--repo","org/repo","--viewer","me","--repository-id","R","--badge-revisions",&r]);
         assert_eq!(board_read_args(Some("open"),None,None,false,true,Some("-abc"),None).unwrap(),
-            ["review","board","--json","--state","open","--page","--cursor=-abc"]);
+            ["review","board","--json","--state","open","--page","--cards-only","--cursor=-abc"]);
         assert!(board_read_args(None,Some("org/repo"),Some(1),false,true,None,None).is_err());
     }
 
@@ -613,12 +659,23 @@ mod tests {
         let target = || RunTarget {
             repo: "org/r".into(), repository_id: "R_42".into(), viewer: "me".into(), number: 4,
         };
-        let start = RunAction::Start { base_sha: "b".repeat(40), head_sha: "c".repeat(40) };
+        let start = RunAction::Start { base_sha: "b".repeat(40), head_sha: "c".repeat(40), options: None };
         let args = run_args(target(), start).unwrap();
         assert_eq!(&args[..5], ["review", "desk-run", "start", "--json", "--repo"]);
         assert_eq!(&args[12..], ["--base", &"b".repeat(40), "--head", &"c".repeat(40)]);
+        let configured = RunAction::Start {
+            base_sha: "a".repeat(40),
+            head_sha: "b".repeat(40),
+            options: Some(serde_json::json!({ "mode": "auto", "adaptive": true })),
+        };
+        let args = run_args(target(), configured).unwrap();
+        let payload = args.last().unwrap().strip_prefix("--options=").unwrap();
+        let decoded: Value = serde_json::from_str(payload).unwrap();
+        assert_eq!(decoded["mode"], "auto");
         assert!(serde_json::from_str::<RunAction>(r#"{"kind":"worker"}"#).is_err());
         assert!(run_args(target(), RunAction::Cancel { id: "--worker".into() }).is_err());
+        let answer = RunAction::Answer { id: "run".into(), question_id: "q".into(), answer: "--continue with this".into() };
+        assert_eq!(&run_args(target(), answer).unwrap()[12..], ["--id", "run", "--question-id", "q", "--answer=--continue with this"]);
         let mut invalid = target();
         invalid.number = 0;
         assert!(run_args(invalid, RunAction::Status { id: None, activity_id: None }).is_err());

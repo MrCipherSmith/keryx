@@ -13,6 +13,7 @@ const PATHS = {
   refresh: "M20 11a8 8 0 0 0-14.8-4M4 4v4h4M4 13a8 8 0 0 0 14.8 4M20 20v-4h-4",
   list: "M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01",
   x: "M18 6 6 18M6 6l12 12",
+  clearFilters: "M3 4h15l-6 7v6l-3 2v-8zM16 15l5 5m0-5-5 5",
   chevronRight: "m9 6 6 6-6 6",
   chevronDown: "m6 9 6 6 6-6",
   chevronUp: "m6 15 6-6 6 6",

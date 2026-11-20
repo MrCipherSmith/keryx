@@ -102,3 +102,20 @@ describe("a permission request that arrives during a command", () => {
     expect(await p).toEqual({ outcome: "cancelled" });
   });
 });
+
+test("a typed review request is validated, admitted to its originating session and cannot execute a start", async () => {
+  const { reg, dialogs } = rig();
+  reg.held.add("s2");
+  reg.showLocal("s2");
+  reg.beginCommand("s1");
+  const opened: unknown[] = [];
+  const prepare = (sessionId: string, hints: object) => opened.push({ sessionId, ...hints });
+  const send = (params: unknown) => answerAgentRequest("_keryx/prepare_review", params, reg, dialogs, prepare);
+  expect(await send({ sessionId: "s2", target: "7" })).toEqual({ prepared: false });
+  const refusal = (params: unknown) => send(params).catch((error: Error) => error.message);
+  expect(await refusal({ sessionId: "s1", target: "7", start: true })).toContain("Only target and flowId");
+  expect(await refusal({ sessionId: "s1", target: "https://evil.invalid/pr" })).toContain("pull request number");
+  expect(await refusal({ sessionId: "s1", flowId: "../other" })).toContain("numeric Flow ID");
+  expect(await send({ sessionId: "s1", target: "7", flowId: "505" })).toEqual({ prepared: true });
+  expect(opened).toEqual([{ sessionId: "s1", target: "#7", flowId: "505" }]);
+});

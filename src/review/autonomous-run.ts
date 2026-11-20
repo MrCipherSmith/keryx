@@ -54,10 +54,13 @@ export interface ChildHandle {
 export type SpawnChild = (spec: ChildSpec) => ChildHandle;
 
 export interface AutonomousRunOptions {
+  readonly deskOptions?: import("./desk-run-options").DeskReviewOptions;
   readonly cwd: string;
   readonly ref: string;
   /** Immutable PR base for a Desktop attempt. The detached checkout supplies the fixed head. */
   readonly fixedBase?: string;
+  readonly operatorRunId?: string;
+  readonly isWaitingForOperator?: () => boolean;
   /** Flow 457: an already parsed target (a local range); default: `ref` parsed as a pull request URL. */
   readonly target?: AutonomousTarget | undefined;
   readonly budgetMinutes?: number | undefined;
@@ -338,12 +341,12 @@ async function runLocked(options: AutonomousRunOptions, target: AutonomousTarget
 
   const spec: ChildSpec = {
     argv: buildAutonomousShellArgv({
-      prompt: buildAutonomousPrompt({ fixedBase: options.fixedBase, ref: target.ref, resumePackage, head, scopeFile: autonomousScopeFile(runDir, cwd), ...(target.kind === "range" ? { base: target.base } : {}) }),
+      prompt: buildAutonomousPrompt({ ...(options.deskOptions ? { deskOptions: options.deskOptions } : {}), desktopOperator: !!options.operatorRunId, fixedBase: options.fixedBase, ref: target.ref, resumePackage, head, scopeFile: autonomousScopeFile(runDir, cwd), ...(target.kind === "range" ? { base: target.base } : {}) }),
       eventsFile,
       provider: options.provider,
       model: options.model,
     }),
-    env: { [ENV_REVIEW_SYSTEM]: AUTONOMOUS_PROFILE.reviewSystem, [ENV_AUTONOMOUS_ANSWERS_FILE]: answersFile, [ENV_ARBITER_LOG]: arbiterLog },
+    env: { KERYX_DESK_OPERATOR_RUN: options.operatorRunId ?? "", [ENV_REVIEW_SYSTEM]: AUTONOMOUS_PROFILE.reviewSystem, [ENV_AUTONOMOUS_ANSWERS_FILE]: answersFile, [ENV_ARBITER_LOG]: arbiterLog },
     cwd,
     runDir,
     eventsFile,
@@ -389,6 +392,7 @@ async function runLocked(options: AutonomousRunOptions, target: AutonomousTarget
   let budgetReason: string | undefined;
   let budgetHitAt = 0;
   let lastProgressJson = "";
+  let awaitingOperator = false;
 
   const currentPackage = (): FoundPackage | undefined => {
     const all = listPackages(cwd, target);
@@ -411,7 +415,7 @@ async function runLocked(options: AutonomousRunOptions, target: AutonomousTarget
       ...(reviewerSessions?.length ? { reviewerSessions } : {}),
       state: stateName,
       ref: target.ref,
-      phase: progress.phase,
+      phase: awaitingOperator && stateName === "running" ? "Awaiting your answer" : progress.phase,
       rounds: state.rounds + progress.rounds,
       tokens: state.tokens + progress.tokens,
       ...usageSnapshot(),
@@ -443,7 +447,12 @@ async function runLocked(options: AutonomousRunOptions, target: AutonomousTarget
     progress = tail.poll();
     const seen = tail.bytesSeen() + fileSize(answersFile);
     const now = Date.now();
-    if (seen !== lastSeen) {
+    // A reviewer can wait inside spawn_subagent while other reviewers continue using tools.
+    if (options.isWaitingForOperator) {
+      try { awaitingOperator = options.isWaitingForOperator(); }
+      catch { /* A busy Desktop store retries on the next poll. The wall-clock budget stays in force. */ }
+    } else awaitingOperator = false;
+    if (awaitingOperator || seen !== lastSeen) {
       lastSeen = seen;
       lastGrowth = now;
     }

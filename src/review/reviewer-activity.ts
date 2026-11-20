@@ -1,6 +1,7 @@
 // Project host events into a public session timeline. Tool arguments, outputs,
 // prompts and private reasoning never enter a checkpoint or a Desktop response.
 import type { DeskReviewerSession } from "./desk-run-types";
+import { publicReviewText } from "./desk-public-text";
 import { UsageRanges, usageCounts, validUsageCounts } from "./run-usage";
 
 const maxActivity = 24;
@@ -35,7 +36,7 @@ export function summarizeReviewerAssignments(sessions: readonly DeskReviewerSess
   const finished = latest.filter(finishedReviewerSession);
   const running = latest.filter(session => session.state === "running");
   const wave = (running.length ? running : finished).reduce<number | null>((last, session) => Math.max(last ?? 0, session.wave), null);
-  return { finished: finished.length, wave };
+  return { finished: finished.length, completed: latest.filter(session => session.state === "completed").length, wave };
 }
 
 interface SessionRecord {
@@ -77,22 +78,31 @@ export class ReviewerActivityRecorder {
     const session: DeskReviewerSession = record?.session ?? { id, reviewer: event.reviewer, wave: event.wave, state: "unknown" };
     if (session.reviewer !== event.reviewer || session.wave !== event.wave || session.finishedAt) return;
     let label: string;
+    let kind: NonNullable<DeskReviewerSession["activity"]>[number]["kind"] = "status";
     if (event.activity === "started" && !session.startedAt) {
       label = "Reviewer started";
       session.startedAt = event.at;
       session.state = "running";
+    } else if ((event.activity === "message" || event.activity === "answer") && typeof event.text === "string" && event.text.trim()) {
+      label = publicReviewText(event.text, 1200);
+      kind = event.activity;
     } else if ((event.activity === "tool_start" || event.activity === "tool_end") && reviewerName(event.tool)) {
-      label = event.activity === "tool_start" ? `Started ${event.tool}` : `${event.tool} ${event.ok === false ? "failed" : "finished"}`;
+      const file = event.tool === "read_file" && typeof event.file === "string" && /^[\w.-]{1,96}$/.test(event.file) ? publicReviewText(event.file, 96) : undefined;
+      label = event.activity === "tool_start" ? `Started ${event.tool}${file ? " · " + file : ""}` : `${event.tool} ${event.ok === false ? "failed" : "finished"}`;
+      kind = event.activity === "tool_start" ? "tool" : event.ok === false ? "error" : "result";
     } else if (event.activity === "finished") {
       const outcome = event.outcome;
       if (outcome !== "completed" && outcome !== "partial" && outcome !== "failed" && outcome !== "cancelled") return;
       label = `Reviewer ${outcome}`;
       session.state = outcome;
       session.finishedAt = event.at;
+      if (outcome === "partial" && event.needsContext === true) session.needsContext = true;
+      if (typeof event.finalOutput === "string" && event.finalOutput.trim()) session.finalOutput = publicReviewText(event.finalOutput, 4800);
+      if (typeof event.reason === "string" && event.reason.trim()) session.outcomeReason = publicReviewText(event.reason, 1800);
     } else return;
     if (!record) this.records.set(id, { session, requests: new Map(), usage: new UsageRanges() });
     const activity = session.activity ??= [];
-    activity.push({ at: event.at, label });
+    activity.push({ at: event.at, label, kind });
     if (activity.length > maxActivity) {
       activity.shift();
       session.truncated = true;
