@@ -152,7 +152,7 @@ async fn invoke_review_at(
     root: impl FnOnce() -> Result<PathBuf, String> + Send + 'static,
 ) -> Result<Value, String> {
     invoke_review_at_with(app, read_only, root, move |mut cmd| {
-        let desktop_decision = args.get(0).map(String::as_str) == Some("review")
+        let desktop_decision = args.first().map(String::as_str) == Some("review")
             && args.get(1).map(String::as_str) == Some("desk-run")
             && args.get(2).map(String::as_str) == Some("decide");
         cmd.args(args);
