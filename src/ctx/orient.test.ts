@@ -9,7 +9,9 @@ import {
   uncommittedCodeCount,
   wikiContext,
 } from "./orient";
+import { realpathSync } from "node:fs";
 import { recordProvenance } from "../sync/provenance";
+import { addWorktree, createFixture } from "../worktree/test-support";
 
 async function withProject(
   files: Record<string, string>,
@@ -370,6 +372,22 @@ test("buildOrientation still emits for a manifest-less project that has a built 
   });
 });
 
+test("buildOrientation names the worktree root and index inside a linked worktree only (spec 5.3)", async () => {
+  const fixture = createFixture();
+  try {
+    const worktree = addWorktree(fixture, "wt-orient");
+    for (const root of [fixture.main, worktree]) {
+      await mkdir(path.join(root, ".metaproject", "data", "gdgraph", "artifacts"), { recursive: true });
+      await writeFile(path.join(root, ".metaproject", "data", "gdgraph", "artifacts", "summary.md"), SUMMARY, "utf8");
+    }
+    const inWorktree = await buildOrientation(worktree);
+    expect(inWorktree).toContain(`Worktree root: ${realpathSync(worktree)}`);
+    expect(inWorktree).toContain(`Metaproject index: ${path.join(realpathSync(worktree), ".metaproject", "index.md")}`);
+    expect(await buildOrientation(fixture.main)).not.toContain("Worktree root:");
+  } finally {
+    fixture.cleanup();
+  }
+});
 
 test("orientation shares one status per invocation, without branch or cross-call cache", async () => {
   await gitProject(async (root) => {

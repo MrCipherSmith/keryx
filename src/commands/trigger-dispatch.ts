@@ -45,6 +45,8 @@ import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { existsSync, realpathSync, statSync } from "node:fs";
 import { mkdir, rm, symlink } from "node:fs/promises";
+import { worktreeAgentBlock } from "../worktree/agent-lines";
+import { createWorktree } from "../worktree/create";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -847,12 +849,22 @@ async function dispatchLocked(
     if (!recovery.ok) {
       return { ...refusal(runId, flow, "worktree-conflict", recovery.reason, task), cost: costNow() };
     }
+    let preparedBy: Awaited<ReturnType<typeof createWorktree>>["prepare"] | undefined;
     try {
-      if (await branchExists(projectRoot, branch)) {
-        await git(projectRoot, ["worktree", "add", "--quiet", worktree, branch]);
-      } else {
-        await git(projectRoot, ["worktree", "add", "--quiet", "-b", branch, worktree, "HEAD"]);
-      }
+      // Created and prepared through `src/worktree` (spec §8): an existing branch is
+      // reused as before, a new one starts from HEAD (not `origin/main`).
+      const created = await createWorktree({
+        cwd: projectRoot,
+        name: path.basename(worktree),
+        branch,
+        path: worktree,
+        base: "HEAD",
+        existingBranch: await branchExists(projectRoot, branch),
+        // No `indexes`: the dispatcher commits everything the run left in the tree, and a
+        // derived index must never ride into that commit in a project that does not ignore it.
+        only: ["env", "deps", "ports"],
+      });
+      preparedBy = created.prepare;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return {
@@ -866,7 +878,10 @@ async function dispatchLocked(
     await mkdir(scratchHome, { recursive: true });
     const recoveredNote = recovery.recovered !== undefined ? `; recovered a stale worktree at ${recovery.recovered}` : "";
     const startTip = await git(worktree, ["rev-parse", "HEAD"]);
-    // A JS project's health gate needs its dependencies; a fresh worktree has none.
+    // A failed prepare step never stops the run (the worktree is usable); name it for the operator.
+    for (const line of preparedBy?.errors ?? []) console.error(`worktree prepare: ${line}`);
+    // A JS project's health gate needs its dependencies. `prepare` provides them when the
+    // project configures a dependency directory; otherwise fall back to the main checkout's.
     const mainModules = path.join(projectRoot, "node_modules");
     const wtModules = path.join(worktree, "node_modules");
     if (existsSync(mainModules) && !existsSync(wtModules)) {
@@ -976,7 +991,9 @@ async function dispatchLocked(
         },
       };
       const history: NormalizedMessage[] = [];
-      const result = await runAgentTurn(io, agentDeps, history, taskPrompt, {
+      // Spec 5.3: the agent starts knowing its absolute worktree root and index path.
+      const worktreeBlock = await worktreeAgentBlock(worktree);
+      const result = await runAgentTurn(io, agentDeps, history, worktreeBlock.length === 0 ? taskPrompt : `${taskPrompt}\n\n${worktreeBlock}`, {
         signal: controller.signal,
         automaticReview: false,
       });

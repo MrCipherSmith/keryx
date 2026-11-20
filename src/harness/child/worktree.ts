@@ -108,6 +108,26 @@ export interface WorktreePort {
   merge(worktreeId: string, into: string): Promise<WorktreeMergeResult>;
 }
 
+export interface ProvisionOptions {
+  /** Builds the derived indexes inside a fresh worktree (spec 5.3). Defaults to `keryx worktree prepare --only indexes`. */
+  readonly prepareIndexes?: (worktreePath: string) => Promise<void>;
+}
+
+/**
+ * Derived indexes (the memory index) are not in git, so a fresh worktree has none.
+ * Best-effort by design: a path that is not a linked worktree (a clone, a test
+ * fake) or a failing index build must never fail the provisioning. The child's
+ * starting context gets the worktree root and index lines from `worktreeAgentLines`.
+ */
+async function prepareIndexesBestEffort(worktreePath: string): Promise<void> {
+  try {
+    const { prepareWorktree } = await import("../../worktree/prepare");
+    await prepareWorktree({ cwd: worktreePath, only: ["indexes"] });
+  } catch {
+    // see above
+  }
+}
+
 /**
  * Create a worktree for every `worktree`-mode assignment, in a stable order
  * (sorted by `taskId`), returning a map of `worktreeId -> path`. Shared-mode
@@ -124,6 +144,7 @@ export interface WorktreePort {
 export async function provisionWorktrees(
   assignments: readonly WorktreeAssignment[],
   port: WorktreePort,
+  options: ProvisionOptions = {},
 ): Promise<Map<string, string>> {
   const paths = new Map<string, string>();
   const ordered = [...assignments]
@@ -135,6 +156,7 @@ export async function provisionWorktrees(
       const created = await port.create(assignment.worktreeId);
       createdIds.push(created.worktreeId);
       paths.set(created.worktreeId, created.path);
+      await (options.prepareIndexes ?? prepareIndexesBestEffort)(created.path);
     }
     return paths;
   } catch (cause) {

@@ -11,7 +11,7 @@ import { prepareWorktree, type PrepareOptions, type PrepareReport } from "./prep
 
 export const DEFAULT_BASE = "origin/main";
 
-export interface CreateOptions extends Omit<PrepareOptions, "cwd" | "only"> {
+export interface CreateOptions extends Omit<PrepareOptions, "cwd"> {
   cwd: string;
   name: string;
   /** Start point of the new branch; default `origin/main`. */
@@ -20,6 +20,8 @@ export interface CreateOptions extends Omit<PrepareOptions, "cwd" | "only"> {
   branch?: string;
   /** Where to put the worktree; default `<main-root>/.claude/worktrees/<name>`. */
   path?: string;
+  /** Check out the already existing local `branch` instead of creating it from `base` (`base` is then ignored). */
+  existingBranch?: boolean;
 }
 
 export interface CreateResult {
@@ -51,16 +53,27 @@ export async function createWorktree(opts: CreateOptions): Promise<CreateResult>
   validateName(opts.name);
   const context = await resolveWorktreeContext(opts.cwd);
   const branch = opts.branch ?? opts.name;
-  const base = assertGitRevision(opts.base ?? DEFAULT_BASE);
+  const base = assertGitRevision(opts.existingBranch === true ? branch : (opts.base ?? DEFAULT_BASE));
   await validateBranch(context.root, branch);
 
   const target = path.resolve(opts.path ?? path.join(context.mainRoot, ".claude", "worktrees", opts.name));
-  const resolved = await runGit(context.root, ["rev-parse", "--verify", "--quiet", "--end-of-options", `${base}^{commit}`]);
+  const resolved = await runGit(context.root, [
+    "rev-parse",
+    "--verify",
+    "--quiet",
+    "--end-of-options",
+    opts.existingBranch === true ? `refs/heads/${branch}` : `${base}^{commit}`,
+  ]);
   if (resolved.code !== 0) {
-    throw new Error(`base ref not found: ${base} (pass --base <ref>)`);
+    throw new Error(opts.existingBranch === true ? `branch not found: ${branch}` : `base ref not found: ${base} (pass --base <ref>)`);
   }
 
-  const added = await runGit(context.root, ["worktree", "add", "--no-track", "-b", branch, "--", target, base]);
+  const added = await runGit(
+    context.root,
+    opts.existingBranch === true
+      ? ["worktree", "add", "--quiet", "--", target, branch]
+      : ["worktree", "add", "--no-track", "-b", branch, "--", target, base],
+  );
   if (added.code !== 0) {
     throw new Error(`git worktree add failed: ${added.stderr.trim() || added.stdout.trim()}`);
   }
@@ -68,6 +81,7 @@ export async function createWorktree(opts: CreateOptions): Promise<CreateResult>
 
   const prepare = await prepareWorktree({
     cwd: created,
+    ...(opts.only !== undefined && { only: opts.only }),
     ...(opts.force !== undefined && { force: opts.force }),
     ...(opts.runInstall !== undefined && { runInstall: opts.runInstall }),
     ...(opts.isPortFree !== undefined && { isPortFree: opts.isPortFree }),

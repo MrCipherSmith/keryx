@@ -3,6 +3,7 @@ import { pathExists } from "../lib/fs";
 import { offersIndexTools } from "../lib/metaproject-state";
 import { readFile } from "node:fs/promises";
 import { omissionNote } from "./lines";
+import { worktreeAgentLines } from "../worktree/agent-lines";
 import { checkGraphStaleness, gitStatusPorcelain, STALE_NOTE, UNKNOWN_NOTE } from "../gdgraph/staleness";
 
 // Orientation context for the Metaproject bootstrap + graph/wiki enforcement
@@ -312,14 +313,17 @@ export async function buildOrientation(cwd: string): Promise<string> {
   if (!offersIndexTools(cwd)) {
     return "";
   }
-  const [metaprojectIndex, graph, wiki] = await Promise.all([
+  const [metaprojectIndex, graph, wiki, worktreeLines] = await Promise.all([
     metaprojectIndexContext(cwd),
     graphContext(cwd),
     wikiContext(cwd),
+    worktreeAgentLines(cwd),
   ]);
   return [
     "# keryx orientation — consult before broad search / deep reads",
     "",
+    // Linked worktree only (spec 5.3): the absolute root and the index to read first.
+    ...(worktreeLines !== undefined ? [...worktreeLines, ""] : []),
     ...(metaprojectIndex.length > 0 ? [metaprojectIndex, ""] : []),
     graph,
     "",

@@ -6,6 +6,7 @@ import { prepareWorktree, readPrepareState } from "./prepare";
 import { createProjectFixture, everyPortFree, statusOf, type ProjectFixture } from "./project-fixture";
 import { gitDirOf } from "./git";
 import { worktreeStatus } from "./status";
+import { fixtureGit } from "./test-support";
 
 let project: ProjectFixture;
 
@@ -24,6 +25,29 @@ function create(name: string) {
     isPortFree: everyPortFree,
   });
 }
+
+describe("create onto an existing branch", () => {
+  test("checks the branch out, prepares only the requested steps, and refuses a missing branch", async () => {
+    fixtureGit(project.base, project.main, ["branch", "existing-branch"]);
+    const created = await createWorktree({
+      cwd: project.main,
+      name: "wt-existing",
+      branch: "existing-branch",
+      existingBranch: true,
+      path: path.join(project.base, "wt-existing"),
+      only: ["env"],
+      isPortFree: everyPortFree,
+    });
+    expect(created.branch).toBe("existing-branch");
+    expect(created.prepare.steps).toEqual(["env"]);
+    expect(created.prepare.ports).toBeUndefined();
+    expect(fixtureGit(project.base, created.path, ["branch", "--show-current"]).trim()).toBe("existing-branch");
+
+    await expect(
+      createWorktree({ cwd: project.main, name: "wt-nope", branch: "no-such-branch", existingBranch: true, path: path.join(project.base, "wt-nope") }),
+    ).rejects.toThrow("branch not found");
+  });
+});
 
 describe("create + prepare (AC4)", () => {
   test("leaves the worktree clean and the main checkout untouched", async () => {
