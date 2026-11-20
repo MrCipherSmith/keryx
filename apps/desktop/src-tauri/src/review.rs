@@ -417,7 +417,9 @@ mod tests {
         let project = tempfile::tempdir().unwrap();
         let other = tempfile::tempdir().unwrap();
         let cwd = project.path().to_str().unwrap();
-        assert_eq!(review_project(Some(cwd), cwd).unwrap(), project.path());
+        // A temporary directory may be reached through an alias on macOS.
+        let canonical = project.path().canonicalize().unwrap();
+        assert_eq!(review_project(Some(cwd), cwd).unwrap(), canonical);
         assert!(review_project(Some(cwd), other.path().to_str().unwrap()).is_err());
         assert!(review_project(None, cwd).is_err());
     }
