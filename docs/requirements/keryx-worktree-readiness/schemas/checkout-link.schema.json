@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.dev/schemas/checkout-link.schema.json",
+  "title": "Keryx checkout link record (<git-common-dir>/keryx/checkouts/<checkoutKey>.json)",
+  "description": "Planned. The explicit link from one linked worktree to its home checkout. Paths are resolution inputs, not identity.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "checkoutKey",
+    "worktree",
+    "home",
+    "createdAt"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "checkoutKey": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{16}$"
+    },
+    "worktree": {
+      "type": "string",
+      "pattern": "^/"
+    },
+    "home": {
+      "type": "string",
+      "pattern": "^/"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "flowId": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

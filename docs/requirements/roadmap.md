@@ -1,5 +1,5 @@
 # Requirements Roadmap
-Version: 0.29.34
+Version: 0.29.35
 
 ## Status
 
@@ -14,6 +14,8 @@ carrying the measurement that found it and the reason it was not done then.
 > **Changelog**
 >
 > - [Desktop Review v1 implementation](keryx-desktop-review/live-acceptance.md) — the project board, manual review, local watcher and automatic rules are implemented. The acceptance record identifies the live macOS and GitHub scenarios, controlled events and remaining field checks.
+>
+> - **0.29.35** — [Keryx Desktop: рабочие панели и внимание](keryx-desktop-workspace-panels/README.md) и [Готовность worktree](keryx-worktree-readiness/README.md). Draft requirements: notifications and a Dock badge for waiting sessions, Changes and Files side tabs with line comments and `@path`, a context meter with compact, image prompt input; worktree preparation (env files, copy-on-write dependencies, ports), an owner-created link from a worktree to its home metaproject (home read-only, writes local, `promote` to publish), a merge-conflict preview, and baseline and flaky test handling. Nothing implemented.
 >
 > - **0.29.34** — [Keryx Desktop Review v1](keryx-desktop-review/README.md). Draft requirements and delivery plan for the project PR board, manual review runs, a local watcher, and rule-based dispatch through review-orchestrator. Implementation planned.
 >
@@ -737,6 +739,8 @@ carrying the measurement that found it and the reason it was not done then.
 
 | Package | Status | Summary |
 |---|---|---|
+| [Keryx Desktop: рабочие панели и внимание](keryx-desktop-workspace-panels/README.md) | draft — not implemented | Notifications, Dock badge and a Waiting group for sessions that wait for the user; Changes tab with line comments sent to the agent; Files tab with `@path` mentions; context meter with compact; image prompt input (needs keryx `promptCapabilities.image`). |
+| [Готовность worktree](keryx-worktree-readiness/README.md) | draft — not implemented | `keryx worktree create/prepare/link/promote/check` (planned): env files, copy-on-write dependencies and per-worktree ports; owner-created link to the home checkout with read-only home stores, local writes and explicit `promote`, compatible with SAC RP-08; merge-tree conflict and overlap preview; base-commit test baseline and flaky retry. |
 | [Keryx Learn Probe](keryx-learn-probe/README.md) | implemented — merged in PR #1072 | Falsification step for the W3 self-learning loop: `keryx learn probe <id>` runs one task in two isolated worktrees (base vs base+pattern, read-only tools), scores the paired delta with a Newcombe interval, and appends one `sourceType: "probe"` evidence item only on `improved`/`regressed`. Every other outcome is either `indistinguishable` (no evidence) or one of six named `unmeasurable` reasons. No automatic acceptance, no judge, no scheduling; a real run needs a TTY and `--max-usd`. |
 | [Keryx Agent-first Core](keryx-agent-first-core/README.md) | spec ready — proposed contracts; runtime not implemented | Независимое от модели ядро и отдельный optional Shell; 49 решений, содержательная wiki по секциям, source provenance, atomic expectedVersion, lifecycle/graph/ctx trust, SDK/batch и независимая методика измерений. Короткий gate уже частично реализован; остальные target guarantees не заявлены выполненными. |
 | [Keryx Memory Reliability](keryx-memory-reliability/README.md) | implemented and verified (PR #261) | P0–P6 implementation and evidence are complete: side-effect-free recall, explicit ignored reports, accepted/current bounded automatic influence, lifecycle transitions, unified guarded atomic writes, coherent temporal/catalog/config semantics, documentation, migration guidance, and full verification. Renumbered flows 135–141 are complete and linked to PR #261. |
