@@ -2039,7 +2039,7 @@ dependencies = [
 
 [[package]]
 name = "keryx-desktop"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "aes",
  "base64 0.21.7",
