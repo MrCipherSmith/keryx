@@ -1,14 +1,19 @@
 import { useCallback, useRef, useState } from "react";
 import { busyDelay, busyMessage, isBusy } from "../lib/busy";
 import { errMessage } from "../lib/format";
+import type { LineComment } from "./lineComments";
 
 export type SaveChatImage = (mimeType: string, data: string) => Promise<string>;
 export type SaveChatFile = (extension: string, data: string) => Promise<string>;
 export interface LocalAttachment { kind: "file" | "folder"; label: string; path: string }
-type ChatAttachment = LocalAttachment | { kind: "image"; path: string };
+/** A remark on a changed line: kept in the draft like a chip, but it is not a saved file (`path` is only its key). */
+export interface LineCommentAttachment { kind: "line-comment"; path: string; comment: LineComment }
+export type ChatAttachment = LocalAttachment | { kind: "image"; path: string } | LineCommentAttachment;
 interface AttachmentDraft { items: readonly ChatAttachment[]; error?: string; pending?: boolean }
 const EMPTY: AttachmentDraft = { items: [] };
 const MAX_IMAGES = 4;
+const MAX_COMMENTS = 50;
+let commentSeq = 0;
 const MAX_BYTES = 5 * 1024 * 1024;
 const IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
 
@@ -87,7 +92,7 @@ export function useChatAttachments(sessionId: string | null, options: {
       update((d) => ({ ...d, error: "Wait for the previous attachment to finish, then try again." }));
       return;
     }
-    if (count + draft.items.length > MAX_IMAGES) {
+    if (count + draft.items.filter((item) => item.kind !== "line-comment").length > MAX_IMAGES) {
       update((d) => ({ ...d, error: `Up to ${MAX_IMAGES} attachments per message.` }));
       return;
     }
@@ -100,7 +105,7 @@ export function useChatAttachments(sessionId: string | null, options: {
       const items = results.flatMap((r) => r.status === "fulfilled" ? [r.value] : []);
       if (!alive()) {
         // The draft was dropped while this ran (session switched, view closed): nothing will ever show or discard these.
-        for (const item of items) if (item.kind !== "folder") void options.discardFile?.(item.path)?.catch(() => {});
+        for (const item of items) if (item.kind !== "folder" && item.kind !== "line-comment") void options.discardFile?.(item.path)?.catch(() => {});
         return;
       }
       const failed = results.find((r) => r.status === "rejected");
@@ -140,7 +145,7 @@ export function useChatAttachments(sessionId: string | null, options: {
   const remove = (paths: readonly string[]) => update((d) => ({ ...d, error: undefined, items: d.items.filter((item) => !paths.includes(item.path)) }));
   const discard = async (item: ChatAttachment) => {
     if (!sessionId || saving.current.has(sessionId)) return;
-    if (item.kind === "folder" || !options.discardFile) { remove([item.path]); return; }
+    if (item.kind === "folder" || item.kind === "line-comment" || !options.discardFile) { remove([item.path]); return; }
     saving.current.add(sessionId);
     update((d) => ({ ...d, pending: true, error: undefined }));
     try {
@@ -153,7 +158,18 @@ export function useChatAttachments(sessionId: string | null, options: {
       update((d) => ({ ...d, pending: false }));
     }
   };
+  /** Add a remark on a changed line. It needs no save, so it works while a file is being saved. */
+  const addLineComment = (comment: LineComment): boolean => {
+    if (!sessionId) return false;
+    if (draft.items.filter((item) => item.kind === "line-comment").length >= MAX_COMMENTS) {
+      update((d) => ({ ...d, error: `Up to ${MAX_COMMENTS} line comments per message.` }));
+      return false;
+    }
+    const item: LineCommentAttachment = { kind: "line-comment", path: `line-comment:${++commentSeq}`, comment };
+    update((d) => ({ ...d, items: [...d.items, item] }));
+    return true;
+  };
   /** A notice in the composer's status line (for example "wait for the attachments"). */
   const warn = (message: string) => update((d) => ({ ...d, error: message }));
-  return { ...draft, addFiles, addFolder, remove, discard, drop, warn, isSaving: () => !!sessionId && saving.current.has(sessionId) };
+  return { ...draft, addFiles, addFolder, addLineComment, remove, discard, drop, warn, isSaving: () => !!sessionId && saving.current.has(sessionId) };
 }

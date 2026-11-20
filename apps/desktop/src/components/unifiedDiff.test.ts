@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { diffLines, diffStats, looksLikeUnifiedDiff } from "./unifiedDiff";
+import { diffLines, diffStats, looksLikeUnifiedDiff, numberedDiffLines } from "./unifiedDiff";
 
 const GIT_DIFF = [
   "diff --git a/src/x.ts b/src/x.ts",
@@ -40,5 +40,36 @@ describe("looksLikeUnifiedDiff", () => {
     expect(looksLikeUnifiedDiff("- item one\n- item two\n+ plus")).toBe(false);
     expect(looksLikeUnifiedDiff("the hunk header looks like @@ -1 +1 @@ in docs")).toBe(false);
     expect(looksLikeUnifiedDiff("@@ -1 +1 @@\nnot a diff line\n")).toBe(false);
+  });
+});
+
+describe("numberedDiffLines", () => {
+  test("counts old and new lines from each hunk header for a modified file", () => {
+    const numbered = numberedDiffLines(
+      ["diff --git a/x.ts b/x.ts", "--- a/x.ts", "+++ b/x.ts", "@@ -3,3 +3,4 @@", " keep", "-gone", "+new one", "+new two", " tail", "@@ -20 +21 @@", "-old", "+new"].join("\n"),
+    );
+    const pick = (i: number) => [numbered[i]!.kind, numbered[i]!.oldNo, numbered[i]!.newNo];
+    expect(pick(0)).toEqual(["meta", undefined, undefined]);
+    expect(pick(3)).toEqual(["hunk", undefined, undefined]);
+    expect(pick(4)).toEqual(["ctx", 3, 3]);
+    expect(pick(5)).toEqual(["del", 4, undefined]);
+    expect(pick(6)).toEqual(["add", undefined, 4]);
+    expect(pick(7)).toEqual(["add", undefined, 5]);
+    expect(pick(8)).toEqual(["ctx", 5, 6]);
+    expect(pick(10)).toEqual(["del", 20, undefined]);
+    expect(pick(11)).toEqual(["add", undefined, 21]);
+  });
+
+  test("a deleted file carries old-side numbers only", () => {
+    const numbered = numberedDiffLines(["--- a/gone.ts", "+++ /dev/null", "@@ -1,3 +0,0 @@", "-one", "-two", "-three"].join("\n"));
+    const body = numbered.filter((l) => l.kind === "del");
+    expect(body.map((l) => l.oldNo)).toEqual([1, 2, 3]);
+    expect(body.every((l) => l.newNo === undefined)).toBe(true);
+  });
+
+  test("an added file carries new-side numbers only", () => {
+    const body = numberedDiffLines(["@@ -0,0 +1,2 @@", "+a", "+b"].join("\n")).filter((l) => l.kind === "add");
+    expect(body.map((l) => l.newNo)).toEqual([1, 2]);
+    expect(body.every((l) => l.oldNo === undefined)).toBe(true);
   });
 });

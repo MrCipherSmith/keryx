@@ -1,5 +1,6 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { Icon } from "../components/Icon";
+import { setPrefs } from "../lib/prefs";
 import { gitInfo, openExternal, prInfo, type GitInfo, type PrInfo } from "../platform/commands";
 import { CHANGES_REQUESTED_TITLE, ciTitle, prTitle, samePr, threadsTitle } from "./gitPrText";
 
@@ -54,6 +55,22 @@ function useGitStatus(cwd: string, busy: boolean): { git: GitInfo | null; pr: Pr
   return { git, pr };
 }
 
+/** The changed-files counter: opens the side panel on the Changes tab. */
+export function ChangedFilesButton({ count }: { count: number }) {
+  return (
+    <button
+      type="button"
+      className="git-dirty"
+      title="Show the changed files"
+      aria-label={`${count} changed file${count === 1 ? "" : "s"}: open the Changes tab`}
+      onClick={() => setPrefs({ sidePanel: "changes" })}
+    >
+      <Icon name="pencil" size={12} />
+      {count}
+    </button>
+  );
+}
+
 /** Branch, worktree, PR link, CI dot and review marks, in the composer footer. Renders nothing outside git. */
 export const GitStatus = memo(function GitStatus({ cwd, busy }: { cwd: string; busy: boolean }) {
   const { git, pr } = useGitStatus(cwd, busy);
@@ -67,6 +84,7 @@ export const GitStatus = memo(function GitStatus({ cwd, busy }: { cwd: string; b
         <span className="git-name">{name}</span>
         {git.worktree ? <span className="git-worktree">{git.worktree}</span> : null}
       </span>
+      {git.changed > 0 ? <ChangedFilesButton count={git.changed} /> : null}
       {pr ? (
         <>
           <button type="button" className="git-pr" title={prTitle(pr)} onClick={() => void openExternal(pr.url).catch(() => {})}>

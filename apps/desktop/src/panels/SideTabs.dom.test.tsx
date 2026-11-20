@@ -5,7 +5,7 @@ import type { PtyTab } from "../platform/panels";
 import type { Subagent } from "../session/activity";
 import type { Item } from "../session/reducer";
 
-// One right-hand panel with Terminal, Browser, Activity and Info tabs. The host side is replaced as in
+// One right-hand panel with Terminal, Browser, Changes, Activity and Info tabs. The host side is replaced as in
 // SidePanels.dom.test.tsx (bun's module mocks hold for the whole run, so every export is stubbed).
 const tab = (id: number): PtyTab => ({ id, title: "zsh", owner: "user", cwd: "/p", running: true, exitCode: null });
 mock.module("../platform/panels", () => ({
@@ -113,10 +113,10 @@ async function mount(over: { subagents?: Subagent[]; items?: Item[] } = {}) {
   );
 }
 
-test("one panel holds the Terminal, Browser, Activity and Info tabs", async () => {
+test("one panel holds the Terminal, Browser, Changes, Activity and Info tabs", async () => {
   await mount();
   await setTab("terminal");
-  expect(Array.from(document.querySelectorAll('.side-switch [role="tab"]')).map((b) => b.textContent!.trim())).toEqual(["Terminal", "Browser", "Activity", "Info"]);
+  expect(Array.from(document.querySelectorAll('.side-switch [role="tab"]')).map((b) => b.textContent!.trim())).toEqual(["Terminal", "Browser", "Changes", "Activity", "Info"]);
   expect(document.querySelectorAll(".activity-panel")).toHaveLength(0);
 });
 

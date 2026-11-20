@@ -23,6 +23,42 @@
 .side-slot:empty::before { content: "Open a session to see this."; }
 .side-slot > .info-panel { width: auto; flex: 1; border-left: 0; }
 
+/* Changes tab: the changed files, then the selected file's diff with line-number gutters. */
+.changes-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: auto; }
+.changes-head { display: flex; align-items: center; gap: var(--sp-2); padding: 6px var(--sp-3); font-size: var(--fs-sm); color: var(--fg-muted); border-bottom: 1px solid var(--border); flex: none; }
+.changes-note { display: flex; align-items: center; gap: 6px; padding: 8px var(--sp-3); font-size: var(--fs-sm); color: var(--fg-muted); }
+.changes-error { color: var(--danger); }
+.changes-files { list-style: none; margin: 0; padding: 4px 0; max-height: 35%; overflow: auto; flex: none; border-bottom: 1px solid var(--border); }
+.changes-file { display: flex; align-items: center; gap: 8px; width: 100%; padding: 3px var(--sp-3); border: 0; background: none; color: var(--fg); font-size: var(--fs-sm); text-align: left; cursor: default; }
+.changes-file:hover { background: var(--bg-sunken); }
+.changes-file.is-active { background: var(--bg-selected); }
+.changes-status { flex: none; width: 14px; font: 600 var(--fs-xs) var(--mono); text-align: center; color: var(--fg-muted); }
+.changes-status-M { color: var(--accent); }
+.changes-status-A, .changes-status-U { color: var(--ok); }
+.changes-status-D { color: var(--danger); }
+.changes-path { flex: 1; min-width: 0; }
+.changes-orig { color: var(--fg-subtle); }
+.changes-staged { flex: none; font-size: var(--fs-xs); color: var(--fg-muted); background: var(--bg-sunken); border-radius: var(--r-pill); padding: 0 6px; }
+.changes-more { margin: 6px var(--sp-3); align-self: flex-start; }
+.changes-diff { display: flex; flex-direction: column; min-height: 0; }
+.changes-diff-head { padding: 6px var(--sp-3); font: 600 var(--fs-sm) var(--mono); border-bottom: 1px solid var(--border); }
+.changes-lines { font: calc(12px * var(--text-scale))/1.5 var(--mono); color: var(--code-fg); padding: 4px 0; overflow-x: auto; }
+.changes-line { display: flex; min-width: max-content; }
+.changes-gutter { flex: none; width: 4ch; padding: 0 6px 0 0; border: 0; background: none; font: inherit; text-align: right; color: var(--fg-subtle); user-select: none; }
+.changes-gutter.is-pickable { cursor: pointer; }
+.changes-gutter.is-pickable:hover { color: var(--accent); text-decoration: underline; }
+.changes-code { flex: 1; white-space: pre; padding: 0 var(--sp-3) 0 4px; }
+.changes-sign { display: inline-block; width: 1.5ch; color: var(--fg-subtle); }
+.changes-add { background: color-mix(in srgb, var(--ok) 13%, transparent); }
+.changes-del { background: color-mix(in srgb, var(--danger) 13%, transparent); }
+.changes-hunk { color: var(--accent); background: var(--accent-soft); }
+.changes-meta { color: var(--fg-subtle); }
+.changes-line.is-selected { box-shadow: inset 2px 0 0 var(--accent); background: var(--accent-soft); }
+.changes-comment { display: flex; flex-direction: column; gap: 6px; padding: 8px var(--sp-3); background: var(--bg-surface); border-block: 1px solid var(--border); font-family: var(--font, inherit); }
+.changes-comment-label { display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-sm); color: var(--fg-muted); }
+.changes-comment textarea { resize: vertical; font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-md); padding: 4px 6px; }
+.changes-comment-actions { display: flex; justify-content: flex-end; gap: 6px; }
+
 .panel-tabs { display: flex; align-items: center; gap: 2px; padding: 4px var(--sp-2); border-bottom: 1px solid var(--border); overflow-x: auto; flex: none; }
 .panel-tab { display: inline-flex; align-items: center; gap: 2px; max-width: 180px; padding-right: 2px; border-radius: var(--r-md); color: var(--fg-muted); }
 .panel-tab.is-active { background: var(--bg-selected); color: var(--fg); }
