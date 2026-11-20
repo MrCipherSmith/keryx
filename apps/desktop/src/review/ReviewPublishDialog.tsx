@@ -5,7 +5,7 @@ import type { DeskRunKey } from "../../../../src/review/desk-run-types";
 import { renderMarkdown } from "../components/Markdown";
 import { Dialog, Spinner } from "../components/ui";
 import { absoluteTime, errMessage } from "../lib/format";
-import { invoke } from "../platform/backend";
+import { invoke, isTauri } from "../platform/backend";
 import { openExternal } from "../platform/commands";
 
 export function reviewPublish(cwd: string, target: DeskRunKey, request: PublicationRequest) {
@@ -226,7 +226,7 @@ export function ReviewPublishDialog({ cwd, target, id, command = reviewPublish, 
           {!posted && <button type="button" className="btn btn-sm" disabled={busy} onClick={refreshPreview}>Refresh preview</button>}
         </div>
         <Preview text={draft.body} />
-        {!!draft.inlineComments?.length && <details className="review-publish-inline"
+        {!!draft.inlineComments?.length && <details className="review-publish-inline" open={inlineOpen}
           onToggle={event => setInlineOpen(event.currentTarget.open)}>
           <summary>Preview inline comments</summary>
           {inlineOpen && <ol>{draft.inlineComments.map((comment, index) => {
@@ -239,7 +239,8 @@ export function ReviewPublishDialog({ cwd, target, id, command = reviewPublish, 
         </details>}
       </section>}
       {pending !== null && <p className="review-detail-meta"><Spinner />{
-        pending === "preview" ? "Updating preview…" : pending === "save" ? "Saving draft locally…" : "Submitting review…"
+        pending === "preview" ? "Updating preview…" : pending === "save" ? "Saving draft locally…"
+          : import.meta.env?.DEV && !isTauri() ? "Confirm publication in the dev server terminal." : "Submitting review…"
       }</p>}
       {!busy && !error && !posted && draft?.blockedReason && <p className="review-detail-muted" role="status">{draft.blockedReason}</p>}
       {!posted && !previewStale && draft?.savedAt && <p className="review-detail-muted" role="status">Last saved locally · {absoluteTime(draft.savedAt)}</p>}

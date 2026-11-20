@@ -446,9 +446,15 @@ test("previews a GitHub draft, collects finding answers and only publishes the c
   expect(inline.textContent).toContain("src/owner.ts:73");
   expect(inline.querySelector("strong")?.textContent).toBe("Inline body");
   expect(inline.querySelector("img, a[href]")).toBeNull();
+  await act(async () => field("Inline comments").click());
+  expect(dialog.querySelector(".review-publish-inline")).toBeNull();
+  await act(async () => field("Inline comments").click());
+  const restoredInline = dialog.querySelector<HTMLDetailsElement>(".review-publish-inline")!;
+  expect(restoredInline.open).toBe(true);
+  expect(restoredInline.textContent).toContain("src/owner.ts:73");
   await act(async () => field("General comment").click());
   expect(field("General comment").checked).toBe(false);
-  expect(inline.textContent).toContain("src/owner.ts:73");
+  expect(restoredInline.textContent).toContain("src/owner.ts:73");
   await act(async () => field("Project overlay").click());
   await act(async () => field("Approve with suggestions").click());
   await act(async () => field("Omit it as out of scope").click());
