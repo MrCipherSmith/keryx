@@ -2,9 +2,11 @@
 use crate::{bridge::AppState, child, locator, panels::project_dir, projects::ProjectWindows, settings};
 use serde::Deserialize;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Mutex;
 use serde_json::Value;
 use std::{ffi::OsStr, path::PathBuf, process::Command, time::Duration};
 use tauri::{AppHandle, Manager, Webview};
+use tauri_plugin_opener::OpenerExt;
 
 fn board_args(
     pr_state: Option<&str>,
@@ -135,10 +137,17 @@ fn review_project(registered: Option<&str>, requested: &str) -> Result<PathBuf, 
 
 async fn invoke_review(app: AppHandle, view: Webview, cwd: String, args: Vec<String>, read_only: bool) -> Result<Value, String> {
     let registered = app.state::<ProjectWindows>().cwd_for(view.label());
+    invoke_review_at(app, args, read_only, move || review_project(registered.as_deref(), &cwd)).await
+}
+
+async fn invoke_review_at(
+    app: AppHandle, args: Vec<String>, read_only: bool,
+    root: impl FnOnce() -> Result<PathBuf, String> + Send + 'static,
+) -> Result<Value, String> {
     let permit = read_only.then(|| ReadPermit::acquire(&READERS)).transpose()?;
     tauri::async_runtime::spawn_blocking(move || {
         let _permit = permit;
-        let root = review_project(registered.as_deref(), &cwd)?;
+        let root = root()?;
         let state = app.state::<AppState>();
         let env = state.environment();
         let prefs = settings::load_settings(&app);
@@ -157,6 +166,79 @@ async fn invoke_review(app: AppHandle, view: Webview, cwd: String, args: Vec<Str
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+fn github_accounts_args(action: &str, login: Option<&str>, skip: bool) -> Result<Vec<String>, String> {
+    let mut args = vec!["review".into(), "accounts".into(), action.into(), "--json".into()];
+    match (action, login, skip) {
+        ("list" | "project", None, false) => {}
+        ("bind", None, true) => args.push("--skip".into()),
+        ("bind", Some(login), false)
+            if login.len() <= 100
+                && login.as_bytes().first().is_some_and(u8::is_ascii_alphanumeric)
+                && login.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_') =>
+        {
+            args.extend(["--login".into(), login.into()]);
+        }
+        _ => return Err("configuration: Invalid GitHub account request.".into()),
+    }
+    Ok(args)
+}
+
+#[tauri::command]
+pub async fn github_accounts(
+    app: AppHandle, view: Webview, action: String, cwd: Option<String>, login: Option<String>, skip: Option<bool>,
+) -> Result<Value, String> {
+    let args = github_accounts_args(&action, login.as_deref(), skip.unwrap_or(false))?;
+    if action == "list" && cwd.is_none() {
+        let context = app.clone();
+        return invoke_review_at(app, args, true, move || {
+            context.path().home_dir().map_err(|_| "configuration: Could not locate the home directory.".into())
+        }).await;
+    }
+    if action == "list" {
+        return Err("configuration: List GitHub accounts without a project folder.".into());
+    }
+    let cwd = cwd.ok_or("configuration: Open a project to select its GitHub account.")?;
+    invoke_review(app, view, cwd, args, action == "project").await
+}
+
+// Use a system-installed executable, a neutral cwd and a fixed URL. Both the
+// logged-in gh account and clipboard live outside the invoking project.
+static GITHUB_LOGIN: Mutex<()> = Mutex::new(());
+const GITHUB_LOGIN_URL: &str = "https://github.com/login/device";
+const GITHUB_LOGIN_ARGS: &[&str] =
+    &["auth", "login", "--hostname", "github.com", "--web", "--clipboard", "--skip-ssh-key"];
+
+#[tauri::command]
+pub async fn github_login(app: AppHandle) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let _permit = GITHUB_LOGIN.try_lock()
+            .map_err(|_| "A GitHub sign-in is already in progress.".to_string())?;
+        let gh = ["/opt/homebrew/bin/gh", "/usr/local/bin/gh", "/usr/bin/gh"].iter()
+            .filter_map(|entry| std::fs::canonicalize(entry).ok())
+            .find(|path| path.is_file())
+            .ok_or("Could not find GitHub CLI in a standard system location. Install gh or sign in from a terminal and refresh.")?;
+        let home = app.path().home_dir().map_err(|_| "Could not locate the home directory.")?;
+        let state = app.state::<AppState>();
+        let env = state.environment();
+        let mut cmd = Command::new(gh);
+        cmd.current_dir(&home).args(GITHUB_LOGIN_ARGS).env_clear()
+            .env("HOME", &home).env("PATH", "/usr/bin:/bin")
+            .env("GH_PROMPT_DISABLED", "1").env("GH_NO_UPDATE_NOTIFIER", "1");
+        for key in ["GH_CONFIG_DIR", "XDG_CONFIG_HOME", "HTTPS_PROXY", "https_proxy", "NO_PROXY", "no_proxy", "SSL_CERT_FILE", "SSL_CERT_DIR"] {
+            if let Some(value) = env.get(key) {
+                cmd.env(key, value);
+            }
+        }
+        app.opener().open_url(GITHUB_LOGIN_URL, None::<&str>)
+            .map_err(|_| "Could not open GitHub in the browser.")?;
+        match child::run_bounded(cmd, Duration::from_secs(300), 4096) {
+            Ok(out) if out.status.success() => Ok(()),
+            Err(child::RunError::Timeout) => Err("GitHub sign-in timed out. Add the account again.".into()),
+            _ => Err("Could not sign in with GitHub CLI. Check gh or sign in from a terminal and refresh.".into()),
+        }
+    }).await.map_err(|_| "Could not start GitHub sign-in.".to_string())?
 }
 
 #[derive(Deserialize)]
@@ -311,6 +393,24 @@ pub async fn review_watcher(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn github_account_commands_only_accept_scoped_argv() {
+        assert_eq!(github_accounts_args("list", None, false).unwrap(),
+            ["review", "accounts", "list", "--json"]);
+        assert_eq!(github_accounts_args("project", None, false).unwrap(),
+            ["review", "accounts", "project", "--json"]);
+        assert_eq!(github_accounts_args("bind", Some("work-user"), false).unwrap(),
+            ["review", "accounts", "bind", "--json", "--login", "work-user"]);
+        assert_eq!(github_accounts_args("bind", None, true).unwrap(),
+            ["review", "accounts", "bind", "--json", "--skip"]);
+        for login in ["", "--force", "two words", "user\nname"] {
+            assert!(github_accounts_args("bind", Some(login), false).is_err());
+        }
+        assert!(github_accounts_args("bind", Some("user"), true).is_err());
+        assert!(github_accounts_args("list", Some("user"), false).is_err());
+        assert!(github_accounts_args("login", None, false).is_err());
+    }
 
     #[test]
     fn review_commands_resolve_only_the_registered_project() {

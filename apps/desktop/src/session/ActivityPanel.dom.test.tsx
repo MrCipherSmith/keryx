@@ -3,6 +3,7 @@ import type { Root } from "react-dom/client";
 import type { TaskInfo } from "../acp/providers";
 import type { Subagent } from "./activity";
 import type { Item } from "./reducer";
+import type { ProjectGitHubAccount } from "../platform/githubAccounts";
 import { registerDom, unregisterDom } from "../test/dom";
 
 let root: Root;
@@ -74,6 +75,8 @@ interface PanelOver {
   onRefreshTasks?: () => void;
   extensions?: string[];
   onTab?: (t: "subagents" | "tasks" | "schedules" | "runs") => void;
+  githubAccount?: ProjectGitHubAccount;
+  onProjectSettings?: () => void;
 }
 async function renderPanel(o: PanelOver = {}) {
   const panelApi = o.extensions ? { ...api, extensions: o.extensions } : api;
@@ -89,11 +92,24 @@ async function renderPanel(o: PanelOver = {}) {
       subagentId: sel,
       onSubagent: setSel,
       onRefreshTasks: o.onRefreshTasks ?? (() => {}),
+      githubAccount: o.githubAccount,
+      onProjectSettings: o.onProjectSettings,
       pollMs: 10,
     });
   }
   await act(() => root.render(React.createElement(Panel)));
 }
+
+test("shows the selected project GitHub account and opens Project Settings", async () => {
+  let opened = 0;
+  const onProjectSettings = () => { opened++; };
+  await renderPanel({ githubAccount: { eligible: true, configured: true, login: "work-user" }, onProjectSettings });
+  await click(button("GitHub · @work-user"));
+  expect(opened).toBe(1);
+  await renderPanel({ githubAccount: { eligible: true, configured: true, login: "personal-user" }, onProjectSettings });
+  expect(host.textContent).not.toContain("@work-user");
+  expect(host.textContent).toContain("@personal-user");
+});
 
 test("a task row shows command, status, phase, elapsed and the exit code", async () => {
   await renderPanel({ tasks: [task(), task({ id: "t2", command: "make", status: "failed", phase: "background", endedAt: Date.now(), exitCode: 2 })] });

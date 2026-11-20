@@ -79,9 +79,19 @@ export async function collectBoardPages(readPage: (cursor: string | null, repo?:
   return { ...header, nextCursor: null, cards: [...cards.values()], warnings: [...warnings] };
 }
 
-export function fetchReviewBoard(cwd: string, state: ReviewBoardState, repo?: string, signal?: AbortSignal): Promise<ReviewBoardSnapshot> {
-  return collectBoardPages((cursor, canonicalRepo) => boards.read(JSON.stringify([cwd, state, canonicalRepo, cursor]),
-    () => invoke("review_board", { cwd, prState: state, repo: canonicalRepo, paged: true, cursor })), repo, signal);
+function verifyProjectViewer(viewer: string, expectedViewer?: string): void {
+  if (expectedViewer && viewer.toLowerCase() !== expectedViewer.toLowerCase()) {
+    throw new Error("access: GitHub account changed. Open Project Settings to check the connection.");
+  }
+}
+
+export function fetchReviewBoard(cwd: string, state: ReviewBoardState, repo?: string, signal?: AbortSignal, expectedViewer?: string): Promise<ReviewBoardSnapshot> {
+  return collectBoardPages(async (cursor, canonicalRepo) => {
+    const page = await boards.read(JSON.stringify([cwd, expectedViewer, state, canonicalRepo, cursor]),
+      () => invoke("review_board", { cwd, prState: state, repo: canonicalRepo, paged: true, cursor }));
+    if (page?.viewer) verifyProjectViewer(page.viewer, expectedViewer);
+    return page;
+  }, repo, signal);
 }
 
 export async function fetchReviewBadges(cwd: string, key: Omit<DeskRunKey, "number">, cards: BadgeCard[]): Promise<BadgeSnapshot> {
@@ -97,9 +107,10 @@ export async function fetchReviewBadges(cwd: string, key: Omit<DeskRunKey, "numb
   return combined;
 }
 
-export async function fetchReviewDetail(cwd: string, repo: string, number: number): Promise<ReviewDetailSnapshot> {
-  const result = await details.read(JSON.stringify([cwd, repo, number]),
+export async function fetchReviewDetail(cwd: string, repo: string, number: number, expectedViewer?: string): Promise<ReviewDetailSnapshot> {
+  const result = await details.read(JSON.stringify([cwd, expectedViewer, repo, number]),
     () => invoke("review_board", { cwd, repo, number }));
   assertProtocol(result);
+  verifyProjectViewer(result.viewer, expectedViewer);
   return result;
 }

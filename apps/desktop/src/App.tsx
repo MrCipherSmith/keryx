@@ -10,9 +10,9 @@ import {
   windowInitialCwd,
   windowOpenProject,
 } from "./platform/commands";
-import { applyTheme, setPrefs, MOD } from "./lib/prefs";
-import { basename } from "./lib/format";
-import { Dialog, overlayOpen } from "./components/ui";
+import { applyTheme, setPrefs, watchSystemAppearance, MOD } from "./lib/prefs";
+import { basename, errMessage } from "./lib/format";
+import { Dialog, EmptyState, overlayOpen } from "./components/ui";
 import { AppShell, PROJECT_VIEWS, type View } from "./shell/AppShell";
 import { CommandPalette, type PaletteItem } from "./shell/CommandPalette";
 import { SettingsView } from "./shell/SettingsView";
@@ -31,6 +31,8 @@ import { ProvidersDialog, useProvidersDialog, type ProvidersApi } from "./sessio
 import { SessionView } from "./session/SessionView";
 import { useAcpSession } from "./session/useAcpSession";
 import { ProjectMenu } from "./project/ProjectMenu";
+import { GitHubIntegrations, ProjectGitHubSettings } from "./project/GitHubSettings";
+import { getProjectGitHubAccount, type ProjectGitHubAccount } from "./platform/githubAccounts";
 import { PROJECT_COMMANDS } from "./project/projectCommands";
 import { useProjectRunner } from "./project/useProjectRunner";
 import { providersLister, WikiEnrichDialog } from "./project/WikiEnrichDialog";
@@ -45,17 +47,21 @@ export function App() {
 
   useEffect(() => {
     applyTheme();
+    const stopAppearance = watchSystemAppearance();
     void windowInitialCwd()
       .then((c) => setCwd(c ?? null))
       .catch(() => setCwd(null));
     if (!isTauri()) setFolderPrompter((title) => new Promise((resolve) => setPrompt({ title, resolve })));
-    return () => setFolderPrompter(null);
+    return () => {
+      stopAppearance();
+      setFolderPrompter(null);
+    };
   }, []);
 
   useEffect(() => {
     if (cwd === null) void setWindowTitle("Keryx");
     if (cwd) void settingsAddRecent(cwd).catch(() => {});
-    if (cwd !== undefined) void projectRegister(cwd).catch(() => {});
+    if (cwd === null) void projectRegister(null).catch(() => {});
     if (!isTauri() && cwd !== undefined) {
       const url = cwd ? `?cwd=${encodeURIComponent(cwd)}` : window.location.pathname;
       window.history.replaceState(null, "", url);
@@ -71,7 +77,7 @@ export function App() {
       ) : welcomeSettings ? (
         <div className="standalone">
           <div className="welcome-drag" data-tauri-drag-region />
-          <SettingsView onBack={() => setWelcomeSettings(false)} />
+          <SettingsView onBack={() => setWelcomeSettings(false)} integrations={<GitHubIntegrations />} />
         </div>
       ) : (
         <Welcome onOpen={setCwd} onSettings={() => setWelcomeSettings(true)} />
@@ -145,6 +151,16 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
   const providers = useProvidersDialog();
   const providersApi = useMemo<ProvidersApi>(() => ({ request: s.rpc, extensions: s.extensions, onChallenge: s.onLoginChallenge }), [s.rpc, s.extensions, s.onLoginChallenge]);
   const [view, setView] = useState<View>("session");
+  const settingsReturn = useRef<Exclude<View, "settings">>("session");
+  const settingsFocus = useRef<HTMLElement | null>(null);
+  const settingsProjectReturn = useRef(false);
+  const [settingsTab, setSettingsTab] = useState<"appearance" | "integrations">("appearance");
+  const [githubAccount, setGitHubAccount] = useState<ProjectGitHubAccount | null>(null);
+  const [githubAccountError, setGitHubAccountError] = useState("");
+  const [projectSettings, setProjectSettings] = useState(false);
+  const [onboardingDismissed, setOnboardingDismissed] = useState(false);
+  const accountRevision = useRef(0);
+  const registration = useRef<Promise<void> | null>(null);
   const [linkedFlow, setLinkedFlow] = useState<string | null>(null);
   const [palette, setPalette] = useState<string | null>(null);
   const [enrich, setEnrich] = useState(false);
@@ -156,6 +172,33 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
   paletteOpen.current = palette !== null;
   const narrow = useNarrow(1000);
   const { state } = s;
+
+  const refreshGitHubAccount = useCallback(async () => {
+    const revision = ++accountRevision.current;
+    try {
+      registration.current ??= projectRegister(cwd).catch((failure: unknown) => {
+        registration.current = null;
+        throw failure;
+      });
+      await registration.current;
+      const account = await getProjectGitHubAccount(cwd);
+      if (revision !== accountRevision.current) return;
+      setGitHubAccount(account);
+      setGitHubAccountError("");
+    } catch (failure) {
+      if (revision === accountRevision.current) setGitHubAccountError(errMessage(failure));
+    }
+  }, [cwd]);
+
+  useEffect(() => {
+    const refresh = () => void refreshGitHubAccount();
+    refresh();
+    window.addEventListener("focus", refresh);
+    return () => {
+      accountRevision.current += 1;
+      window.removeEventListener("focus", refresh);
+    };
+  }, [refreshGitHubAccount]);
 
   const [projects, setProjects] = useState<string[]>(() => railProjects(cwd, []));
   useEffect(() => {
@@ -203,11 +246,43 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
     [cwd, onOpenProject, s],
   );
 
+  const openSettings = useCallback((tab: "appearance" | "integrations" = "appearance") => {
+    if (view !== "settings") {
+      settingsReturn.current = view;
+      settingsFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    }
+    setSettingsTab(tab);
+    setView("settings");
+  }, [view]);
+
+  const closeSettings = useCallback(() => {
+    setView(settingsReturn.current);
+    if (settingsProjectReturn.current) {
+      settingsProjectReturn.current = false;
+      setProjectSettings(true);
+      return;
+    }
+    requestAnimationFrame(() => {
+      if (settingsFocus.current?.isConnected) settingsFocus.current.focus();
+      else if (settingsReturn.current === "session") composer.current?.focus();
+    });
+  }, []);
+
+  const openProjectSettings = useCallback(() => {
+    setProjectSettings(true);
+    void refreshGitHubAccount();
+  }, [refreshGitHubAccount]);
+
   const go = useCallback((v: View) => {
+    if (v === "settings") {
+      openSettings();
+      return;
+    }
+    settingsProjectReturn.current = false;
     setLinkedFlow(null);
     setView(v);
     if (v === "session") requestAnimationFrame(() => composer.current?.focus());
-  }, []);
+  }, [openSettings]);
 
   const openFolder = useCallback(async () => {
     const picked = await pickFolder();
@@ -300,6 +375,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
         id: `v-${id}`, group: basename(cwd), label: `Go to ${label}`, icon, hint: shortcut, run: () => go(id),
       })),
       { id: "v-settings", group: "Go to", label: "Settings", icon: "settings", hint: `${MOD},`, run: () => go("settings") },
+      { id: "v-project-settings", group: basename(cwd), label: "Project Settings", icon: "settings", run: openProjectSettings },
       {
         id: "a-new",
         group: "Session",
@@ -356,7 +432,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       { id: "t-dark", group: "Appearance", label: "Theme: Dark", icon: "moon", run: () => setPrefs({ theme: "dark" }) },
     );
     return items;
-  }, [go, s, state.busy, state.phase, state.modes, state.commands, state.sessions, state.sessionId, recents, cwd, openFolder, switchProject, fillComposer, runProject]);
+  }, [go, s, state.busy, state.phase, state.modes, state.commands, state.sessions, state.sessionId, recents, cwd, openFolder, switchProject, fillComposer, runProject, openProjectSettings]);
 
   // The title bar names the project and the view; the page below keeps only its own toolbar.
   const title =
@@ -370,6 +446,10 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
 
   const topPermission = s.permissions[0];
   const topAsk = s.asks[0];
+  const workView = view === "settings" ? settingsReturn.current : view;
+  const offerGitHub = githubAccount?.eligible && !githubAccount.configured && !onboardingDismissed
+    && view !== "settings" && !s.fatal && !topAsk && !topPermission && !providers.request && !enrich && palette === null;
+  const reviewDisconnected = githubAccount?.configured && !githubAccount.login;
 
   return (
     <AppShell
@@ -388,28 +468,56 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       onSwitchProject={switchProject}
       onNewWindow={(p) => void windowOpenProject(p)}
       onCloseProject={onCloseProject}
+      onProjectSettings={openProjectSettings}
       onPalette={() => setPalette("")}
       actions={<ProjectMenu run={runProject} onEnrich={() => setEnrich(true)} />}
     >
       {/* The session view stays mounted so the transcript and draft survive view switches. */}
       <div className="view" hidden={view !== "session"}>
-        <SessionView ref={composer} s={s} cwd={cwd} projectName={basename(cwd)} onGoFlows={() => go("flows")} onGoSettings={() => go("settings")} narrow={narrow} onProviders={providers.openProviders} />
+        <SessionView ref={composer} s={s} cwd={cwd} projectName={basename(cwd)} onGoFlows={() => go("flows")} onGoSettings={() => go("settings")} narrow={narrow} onProviders={providers.openProviders}
+          githubAccount={githubAccount?.eligible ? githubAccount : undefined} onProjectSettings={openProjectSettings} />
       </div>
-      {view === "flows" ? (
-        <div className="view">
+      {workView === "flows" ? (
+        <div className="view" hidden={view !== "flows"}>
           <FlowsBoard initialOpenDir={linkedFlow} cwd={cwd} flows={flows} linkedSessions={linkedSessions} onWorkOn={(c, target) => void workOn(c, target)} />
         </div>
       ) : null}
       <div className="view" hidden={view !== "review"}>
-        <ReviewBoard active={view === "review"} cwd={cwd} flows={flows.cards} onOpenFlow={(dir) => {
-          setLinkedFlow(dir);
-          setView("flows");
-        }} />
+        {reviewDisconnected ? (
+          <EmptyState title="GitHub is not connected" icon="pr">
+            <button className="btn" onClick={openProjectSettings}>Choose an account</button>
+          </EmptyState>
+        ) : (
+          <ReviewBoard key={githubAccount?.login ?? "active-gh"} expectedViewer={githubAccount?.login ?? undefined} active={workView === "review"} cwd={cwd} flows={flows.cards} onOpenFlow={(dir) => {
+            setLinkedFlow(dir);
+            setView("flows");
+          }} />
+        )}
       </div>
       {view === "settings" ? (
         <div className="view">
-          <SettingsView agentVersion={state.agentVersion} />
+          <SettingsView agentVersion={state.agentVersion} onBack={closeSettings} initialTab={settingsTab} integrations={<GitHubIntegrations />} />
         </div>
+      ) : null}
+
+      {projectSettings || offerGitHub ? (
+        <ProjectGitHubSettings cwd={cwd} account={githubAccount} accountError={githubAccountError} onRetryAccount={() => void refreshGitHubAccount()}
+          onboarding={!projectSettings}
+          onSaved={(account) => {
+            accountRevision.current += 1;
+            setGitHubAccount(account);
+            setGitHubAccountError("");
+            setProjectSettings(false);
+          }}
+          onClose={() => {
+            setOnboardingDismissed(true);
+            setProjectSettings(false);
+          }}
+          onIntegrations={() => {
+            settingsProjectReturn.current = projectSettings;
+            setProjectSettings(false);
+            openSettings("integrations");
+          }} />
       ) : null}
 
       {providers.request ? <ProvidersDialog request={providers.request} api={providersApi} onClose={providers.close} /> : null}

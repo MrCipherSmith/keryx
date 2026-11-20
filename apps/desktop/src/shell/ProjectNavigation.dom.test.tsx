@@ -67,7 +67,7 @@ test("the current project owns Sessions, Flows and Review while Settings stays g
 });
 
 
-test("App preserves an unsent draft and the last Review snapshot across project tabs", () => {
+test("App preserves project context across settings and binds accounts on open and from Project Settings", () => {
   const fixture = fileURLToPath(new URL("../test/app-navigation.fixture.tsx", import.meta.url));
   execFileSync(process.execPath, [fixture], { timeout: 8000, stdio: "pipe" });
 });

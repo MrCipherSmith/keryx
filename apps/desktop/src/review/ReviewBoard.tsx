@@ -23,6 +23,7 @@ import type { ReviewBoardSnapshot, ReviewBoardState, ReviewCard } from "./types"
 
 interface Props {
   cwd: string;
+  expectedViewer?: string;
   active?: boolean;
   flows: FlowCard[];
   onOpenFlow: (dir: string) => void;
@@ -64,7 +65,7 @@ function ProjectBoard(props: Props) {
   return <RepositoryBoard cache={cache} key={JSON.stringify([props.cwd, repo])} {...props} repo={repo} selectRepo={setRepo} />;
 }
 
-function RepositoryBoard({ cwd, flows, onOpenFlow, loadDetail, watcherCommand, rulesCommand, runCommand = reviewRun, loadBadges = fetchReviewBadges, load = fetchReviewBoard, listRepositories = fetchReviewRepositories, repo, selectRepo, cache }: Props & {
+function RepositoryBoard({ cwd, expectedViewer, flows, onOpenFlow, loadDetail, watcherCommand, rulesCommand, runCommand = reviewRun, loadBadges = fetchReviewBadges, load = fetchReviewBoard, listRepositories = fetchReviewRepositories, repo, selectRepo, cache }: Props & {
   cache: BoardCache;
   repo?: string;
   selectRepo: (repo?: string) => void;
@@ -156,7 +157,7 @@ function RepositoryBoard({ cwd, flows, onOpenFlow, loadDetail, watcherCommand, r
       ? { ...old, loading: true }
       : { scope, snapshot: null, error: "", loading: true });
     const controller = new AbortController();
-    void load(cwd, scope, repo, controller.signal).then((snapshot) => {
+    void load(cwd, scope, repo, controller.signal, expectedViewer).then((snapshot) => {
       if (request !== sequence.current) return;
       const nextIdentity = JSON.stringify([snapshot.repositoryId, snapshot.viewer]);
       if (identity.current && identity.current !== nextIdentity) {
@@ -184,7 +185,7 @@ function RepositoryBoard({ cwd, flows, onOpenFlow, loadDetail, watcherCommand, r
       }
     });
     return () => { sequence.current++; controller.abort(); };
-  }, [cwd, scope, repo, attempt, load, clearPrivateView, accessLost, cache]);
+  }, [cwd, expectedViewer, scope, repo, attempt, load, clearPrivateView, accessLost, cache]);
 
   useEffect(() => {
     if (restoreFocus.current && !overlayOpen()) search.current?.focus();

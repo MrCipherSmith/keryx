@@ -608,6 +608,25 @@ async function handle(ws: ServerWebSocket<Conn>, cmd: string, args: Json): Promi
       return null;
     case "app_update_run":
       throw new Error("Browser dev mode runs no Keryx.app; use `keryx app update` in a terminal.");
+    case "github_accounts": {
+      const { action, login, skip = false } = args;
+      if (action === "list" && args.cwd === undefined && login === undefined && skip === false) {
+        return runReviewCli(homedir(), ["review", "accounts", "list", "--json"], true);
+      }
+      if (action === "project" && cwd && login === undefined && skip === false) {
+        return runReviewCli(await projectCwd(ws.data, cwd), ["review", "accounts", "project", "--json"], true);
+      }
+      if (action === "bind" && cwd) {
+        const argv = ["review", "accounts", "bind", "--json"];
+        if (skip === true && login === undefined) argv.push("--skip");
+        else if (skip === false && typeof login === "string" && /^[a-z0-9][a-z0-9_-]{0,99}$/i.test(login)) argv.push("--login", login);
+        else throw new Error("configuration: Invalid GitHub account request.");
+        return runReviewCli(await projectCwd(ws.data, cwd), argv, false);
+      }
+      throw new Error("configuration: Invalid GitHub account request.");
+    }
+    case "github_login":
+      throw new Error("In browser dev mode, run `gh auth login --hostname github.com --web` in a terminal, then refresh accounts.");
     case "review_board": {
       const root = await projectCwd(ws.data, cwd);
       const argv = reviewBoardArgs(args);

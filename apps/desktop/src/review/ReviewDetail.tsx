@@ -134,7 +134,7 @@ function ReviewDetailSheet({ cwd, repo, repositoryId, viewer, card, flow, onOpen
     let live = true;
     setBusy(true);
     setError("");
-    void load(cwd, repo, card.number).then(detail => {
+    void load(cwd, repo, card.number, viewer).then(detail => {
       if (!live) return;
       if (detail.viewer !== viewer || detail.number !== card.number || detail.repositoryId !== repositoryId) {
         throw new Error("access: The GitHub account or pull request changed. Refresh the board.");

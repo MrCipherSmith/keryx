@@ -20,6 +20,7 @@ import { Transcript } from "./Transcript";
 import { lostText, type QueuedPrompt, type Usage } from "./reducer";
 import { resolveMode, resolveModel, type UiActions } from "./commandRunner";
 import { modelOption, type useAcpSession } from "./useAcpSession";
+import type { ProjectGitHubAccount } from "../platform/githubAccounts";
 
 type Session = ReturnType<typeof useAcpSession>;
 
@@ -29,6 +30,8 @@ interface Props {
   projectName: string;
   onGoFlows: () => void;
   onGoSettings: () => void;
+  githubAccount?: ProjectGitHubAccount;
+  onProjectSettings?: () => void;
   narrow: boolean;
   /** Open the Providers dialog (`/connect`, `/search-provider`). */
   onProviders: (name: string, args: string) => void;
@@ -40,7 +43,7 @@ const SUGGESTIONS = [
   { icon: "search" as const, text: "Find TODO and FIXME comments and group them by area." },
 ];
 
-export const SessionView = forwardRef<ComposerHandle, Props>(function SessionView({ s, cwd, projectName, onGoFlows, onGoSettings, narrow, onProviders }, composerRef) {
+export const SessionView = forwardRef<ComposerHandle, Props>(function SessionView({ s, cwd, projectName, onGoFlows, onGoSettings, githubAccount, onProjectSettings, narrow, onProviders }, composerRef) {
   const { state } = s;
   const prefs = usePrefs();
   const sidebarOpen = prefs.sessionSidebar && !narrow;
@@ -411,6 +414,8 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
               subagentId={activity.subagentId}
               onSubagent={(subagentId) => setActivity((a) => ({ ...a, subagentId }))}
               onRefreshTasks={refreshTasks}
+              githubAccount={githubAccount}
+              onProjectSettings={onProjectSettings}
             />,
             activitySlot,
           )

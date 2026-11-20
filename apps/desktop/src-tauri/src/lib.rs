@@ -117,6 +117,8 @@ pub fn run() {
             flows::flows_watch,
             gitinfo::git_info,
             pullrequest::pr_info,
+            review::github_accounts,
+            review::github_login,
             review::review_board,
             review::review_run,
             review::review_watcher,

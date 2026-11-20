@@ -41,6 +41,7 @@ interface ShellProps {
   recents: string[];
   view: View;
   onView: (v: View) => void;
+  onProjectSettings?: () => void;
   title: ReactNode;
   status: { tone: "ok" | "busy" | "warn" | "danger" | "idle"; label: string; detail?: string };
   flowsActive: number;
@@ -130,7 +131,7 @@ export function AppShell(p: ShellProps) {
   const prefs = usePrefs();
   const windowWidth = useWindowWidth();
   useSidePanelShortcuts(p.onPalette);
-  const side = prefs.sidePanel !== null;
+  const side = prefs.sidePanel !== null && p.view !== "settings";
   const sidebar = prefs.sessionSidebar && windowWidth >= SIDEBAR_WINDOW_MIN ? prefs.sessionSidebarWidth : 0;
   const sideWidth = fitSidePanelWidth(prefs.sidePanelWidth, windowWidth, sidebar);
   return (
@@ -155,7 +156,7 @@ export function AppShell(p: ShellProps) {
         )}
         <div className="project-content">{p.children}</div>
       </main>
-      <SidePanel cwd={p.cwd} />
+      <SidePanel cwd={p.cwd} visible={p.view !== "settings"} />
       <ConsentDialog />
     </div>
   );
@@ -211,6 +212,7 @@ function TitleBar(p: ShellProps) {
   const others = recents.filter((r) => r !== cwd).slice(0, 8);
   const items: MenuItem[] = [
     { kind: "header", id: "h-current", label: <span className="truncate" title={cwd}>{cwd}</span> },
+    ...(p.onProjectSettings ? [{ id: "project-settings", label: "Project Settings", icon: "settings" as const, onSelect: p.onProjectSettings }] : []),
     { id: "open", label: "Open Folder…", icon: "folderOpen", hint: `${MOD}O`, onSelect: onOpenFolder },
     { id: "newwin", label: "Open this folder in a new window", icon: "external", onSelect: () => onNewWindow(cwd) },
     ...(others.length
