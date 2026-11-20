@@ -369,6 +369,9 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
             onMode={(id) => void s.setMode(id)}
             onModel={(c, v) => void s.setModel(c, v)}
             onProviders={() => onProviders("connect", "")}
+            usage={state.usage}
+            onCompact={() => void run("/compact")}
+            onDetails={() => setPrefs({ sidePanel: "info" })}
           />
           <UsageFooter usage={state.usage} version={state.agentVersion} cwd={cwd} busy={state.busy} />
         </div>

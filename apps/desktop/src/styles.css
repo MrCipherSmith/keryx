@@ -429,6 +429,18 @@ button { font: inherit; }
 .chip-btn:disabled { opacity: 0.5; }
 .chip-btn.mode-trust { color: var(--warn); background: var(--warn-soft); }
 .chip-btn.mode-auto { color: var(--danger); background: var(--danger-soft); }
+.context-meter {
+  display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 8px; flex: none;
+  font-size: var(--fs-sm); font-weight: 500; color: var(--fg-muted); background: var(--bg-sunken);
+  border: 1px solid transparent; border-radius: var(--r-pill); cursor: default;
+}
+.context-meter:hover, .context-meter[aria-expanded="true"] { color: var(--fg); border-color: var(--border-strong); }
+.context-meter-bar { width: 28px; height: 4px; border-radius: var(--r-pill); background: var(--bg-hover); overflow: hidden; }
+.context-meter-bar > span { display: block; height: 100%; background: var(--accent); }
+.context-meter.is-warn { color: var(--warn); }
+.context-meter.is-warn .context-meter-bar > span, .context-meter.is-high .context-meter-bar > span { background: var(--warn); }
+.context-meter.is-high { color: var(--danger); }
+.context-meter.is-high .context-meter-bar > span { background: var(--danger); }
 .chip-model { max-width: 150px; min-width: 0; }
 .composer-hint { flex: 0 1 auto; min-width: 0; font-size: var(--fs-xs); color: var(--fg-subtle); white-space: nowrap; }
 /* The hint gives way first when the column is narrow (a side panel open); the chips then truncate, then the row wraps. */
