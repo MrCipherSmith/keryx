@@ -62,6 +62,33 @@ export function looksLikeUnifiedDiff(text: string): boolean {
   return lines.slice(hunk).every((l) => l === "" || /^[-+ @\\]/.test(l));
 }
 
+export interface NumberedDiffLine extends DiffLine {
+  /** Line number in the old file; absent for added lines and for headers. */
+  oldNo?: number;
+  /** Line number in the new file; absent for removed lines and for headers. */
+  newNo?: number;
+}
+
+const HUNK_START = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/;
+
+/** `diffLines` with the old and new line number of each line, counted from the hunk headers. */
+export function numberedDiffLines(text: string): NumberedDiffLine[] {
+  let oldNo = 0;
+  let newNo = 0;
+  return diffLines(text).map((line): NumberedDiffLine => {
+    if (line.kind === "hunk") {
+      const m = HUNK_START.exec(line.text);
+      oldNo = m ? Number(m[1]) : 0;
+      newNo = m ? Number(m[2]) : 0;
+      return line;
+    }
+    if (line.kind === "add") return { ...line, newNo: newNo++ };
+    if (line.kind === "del") return { ...line, oldNo: oldNo++ };
+    if (line.kind === "ctx" && oldNo > 0 && newNo > 0) return { ...line, oldNo: oldNo++, newNo: newNo++ };
+    return line;
+  });
+}
+
 export function diffStats(lines: readonly DiffLine[]): { added: number; removed: number } {
   let added = 0;
   let removed = 0;
