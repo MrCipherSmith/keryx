@@ -37,7 +37,7 @@ interface Props {
   onAttachmentsSent?: (paths: readonly string[]) => void;
   loadImage?: (path: string) => Promise<string>;
   pickAttachmentFolder?: () => Promise<string | null>;
-  /** Ranked project-relative paths for an `@` mention query (already capped by the host). Without it `@` does nothing. */
+  /** Ranked project-relative paths for an `@` mention query (the caller caps the list; a bare `@` is a query too). Without it `@` does nothing. */
   searchFiles?: (query: string) => Promise<string[]>;
   onStop: () => void;
   onMode: (id: string) => void;
@@ -176,7 +176,8 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
 
   // `@word` ending at the caret (at the start or after whitespace) opens a file picker over the same popup.
   const [caret, setCaret] = useState(0);
-  const [files, setFiles] = useState<string[]>([]);
+  // Results are tagged with the query they answer, so a stale list is never shown or selectable.
+  const [found, setFound] = useState<{ query: string; files: string[] } | null>(null);
   const pendingCaret = useRef<number | null>(null);
   const searchRef = useRef(searchFiles);
   useEffect(() => {
@@ -191,7 +192,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   const mentionQuery = mention ? mention.query : null;
   useEffect(() => {
     if (mentionQuery === null) {
-      setFiles((f) => (f.length ? [] : f));
+      setFound((f) => (f ? null : f));
       return;
     }
     let stale = false;
@@ -199,8 +200,8 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
       const search = searchRef.current;
       if (!search) return;
       search(mentionQuery).then(
-        (r) => { if (!stale) setFiles(r); },
-        () => { if (!stale) setFiles([]); },
+        (r) => { if (!stale) setFound({ query: mentionQuery, files: r }); },
+        () => { if (!stale) setFound(null); },
       );
     }, 120);
     return () => {
@@ -208,7 +209,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
       clearTimeout(timer);
     };
   }, [mentionQuery]);
-  const mentionFiles = mention && commandMatches.length === 0 ? files : [];
+  const mentionFiles = mention && commandMatches.length === 0 && found?.query === mention.query ? found.files : [];
   const matches: ReadonlyArray<AvailableCommand | string> = mentionFiles.length > 0 ? mentionFiles : commandMatches;
   const active = Math.min(sel, matches.length - 1);
 

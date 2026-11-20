@@ -203,3 +203,27 @@ test("slash mode is unaffected and Enter sends when there are no matches", async
   await key("Enter");
   expect(sent).toEqual(["hello"]);
 });
+
+test("options answering an older query are hidden and not selectable during the debounce", async () => {
+  respond = async (q) => FILES.filter((f) => f.includes(q));
+  await mount();
+  await type("@spec");
+  await settle();
+  expect(labels()).toEqual(["@src/spec.ts", "@docs/spec.md"]);
+  await type("@spec.m");
+  expect(options()).toHaveLength(0);
+  await key("Tab");
+  expect(area().value).toBe("@spec.m");
+  sent.length = 0;
+  await key("Enter");
+  expect(sent).toEqual(["@spec.m"]);
+});
+
+test("a bare @ renders the list searchFiles returns as given", async () => {
+  const many = Array.from({ length: 200 }, (_, i) => `f/file${i}.ts`);
+  respond = async () => many;
+  await mount();
+  await type("@");
+  await settle();
+  expect(labels()).toEqual(many.map((p) => `@${p}`));
+});

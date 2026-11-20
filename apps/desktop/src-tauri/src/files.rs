@@ -12,6 +12,7 @@ use serde::Serialize;
 use std::io::Read;
 use std::path::Path;
 use std::process::Command;
+use std::time::Instant;
 use tauri::{State, Webview};
 
 /// Most paths one listing returns; beyond this `truncated` is set.
@@ -61,15 +62,27 @@ fn git_files(root: &Path, path_env: Option<&str>) -> Option<(Vec<String>, bool)>
     } else if !tail.is_empty() {
         parts.push(tail);
     }
-    let files = parts.into_iter().filter(|p| !p.is_empty()).map(str::to_string).collect();
+    // Keep regular files only, matching the fallback walk: index entries deleted
+    // in the worktree, submodule gitlinks/dirs and symlinks (even to files) are
+    // dropped, since the walk never lists them either.
+    let files = parts
+        .into_iter()
+        .filter(|p| !p.is_empty())
+        .filter(|p| std::fs::symlink_metadata(root.join(p)).map(|m| m.is_file()).unwrap_or(false))
+        .map(str::to_string)
+        .collect();
     Some((files, cut))
 }
 
 /// Bounded walk for a folder that is not a git checkout. Symlinks are never followed.
-fn walk_files(root: &Path) -> (Vec<String>, bool) {
+/// Stops at the entry cap or the wall-clock `deadline`, reporting either as truncated.
+fn walk_files(root: &Path, deadline: Instant) -> (Vec<String>, bool) {
     let mut files = Vec::new();
     let mut stack = vec![(root.to_path_buf(), String::new())];
     while let Some((dir, prefix)) = stack.pop() {
+        if Instant::now() >= deadline {
+            return (files, true);
+        }
         let Ok(entries) = std::fs::read_dir(&dir) else { continue };
         for entry in entries.flatten() {
             let Ok(kind) = entry.file_type() else { continue };
@@ -130,7 +143,8 @@ pub fn filter_paths(paths: &[String], query: Option<&str>) -> Vec<String> {
 }
 
 pub fn list_files(root: &Path, path_env: Option<&str>, query: Option<&str>) -> ProjectFiles {
-    let (mut files, cut) = git_files(root, path_env).unwrap_or_else(|| walk_files(root));
+    let (mut files, cut) = git_files(root, path_env)
+        .unwrap_or_else(|| walk_files(root, Instant::now() + GIT_TIMEOUT));
     let mut truncated = cut;
     files.sort();
     if files.len() > MAX_PATHS {
@@ -145,6 +159,9 @@ pub fn read_file(root: &Path, path: &str) -> Result<FileContent, String> {
     let meta = std::fs::metadata(&resolved).map_err(|e| format!("Could not read {path}: {e}"))?;
     if meta.is_dir() {
         return Err(format!("{path} is a folder"));
+    }
+    if !meta.is_file() {
+        return Err(format!("{path} is not a regular file"));
     }
     let size = meta.len();
     if size > MAX_FILE_BYTES {
@@ -331,6 +348,55 @@ mod tests {
         let big = fs::File::create(root.join("big.dat")).unwrap();
         big.set_len(MAX_FILE_BYTES + 1).unwrap();
         assert!(read_file(&root, "big.dat").unwrap_err().contains("too large"));
+    }
+
+    #[test]
+    fn git_listing_drops_deleted_symlinked_and_submodule_entries() {
+        let (_d, root) = canon_dir();
+        git(&root, &["init", "-q"]);
+        git(&root, &["config", "user.email", "t@t.invalid"]);
+        git(&root, &["config", "user.name", "t"]);
+        write(&root, "keep.txt", "k");
+        write(&root, "gone.txt", "g");
+        write(&root, "sub/inner.txt", "i");
+        git(&root, &["add", "."]);
+        fs::remove_file(root.join("gone.txt")).unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink("keep.txt", root.join("ln.txt")).unwrap();
+        // A gitlink entry (submodule) staged without a checkout.
+        git(
+            &root,
+            &["update-index", "--add", "--cacheinfo", "160000,1111111111111111111111111111111111111111,mod"],
+        );
+        fs::create_dir_all(root.join("mod")).unwrap();
+        let out = list_files(&root, None, None);
+        assert!(out.files.contains(&"keep.txt".to_string()));
+        assert!(out.files.contains(&"sub/inner.txt".to_string()));
+        assert!(!out.files.contains(&"gone.txt".to_string()));
+        assert!(!out.files.contains(&"ln.txt".to_string()));
+        assert!(!out.files.contains(&"mod".to_string()));
+    }
+
+    #[test]
+    fn walk_stops_at_an_elapsed_deadline_and_reports_truncated() {
+        let (_d, root) = canon_dir();
+        write(&root, "a.txt", "1");
+        let (files, truncated) = walk_files(&root, Instant::now());
+        assert!(truncated);
+        assert!(files.is_empty());
+        let (files, truncated) = walk_files(&root, Instant::now() + GIT_TIMEOUT);
+        assert!(!truncated);
+        assert_eq!(files, strings(&["a.txt"]));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn read_refuses_a_fifo_without_hanging() {
+        let (_d, root) = canon_dir();
+        let status = Command::new("mkfifo").arg(root.join("pipe")).status().unwrap();
+        assert!(status.success());
+        let err = read_file(&root, "pipe").unwrap_err();
+        assert!(err.contains("not a regular file"), "{err}");
     }
 
     #[test]

@@ -443,7 +443,7 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
             onAttachmentsSent={(paths) => void commitChatAttachments([...paths]).catch(() =>
               toast({ level: "error", title: "Attachments may not be kept", body: "Sent files could not be saved for later; previews may disappear after you close this window." }))}
             pickAttachmentFolder={() => pickFolder("Add folder to message")}
-            searchFiles={(q) => projectFiles(cwd, q).then((r) => r.files)}
+            searchFiles={(q) => projectFiles(cwd, q).then((r) => r.files.slice(0, 200))}
             attachments={attachments}
             onRemoveAttachment={(key) => removePick(cwd, key)}
             onStop={s.cancel}
