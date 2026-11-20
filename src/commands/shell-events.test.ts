@@ -1,8 +1,55 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { clip, createFileEventSink, FIELD_LIMIT, serializeShellEvent } from "./shell-events";
+import { setModelProfileField } from "../harness/routing/model-profile";
+import type { ProviderPort } from "../harness/provider/types";
+import { clip, createFileEventSink, FIELD_LIMIT, observeReviewProvider, serializeShellEvent, type ShellEvent } from "./shell-events";
+
+test("review estimates reuse the observed model's price and preserve provider-reported currency", async () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "keryx-review-pricing-"));
+  const providerId = "openai";
+  const modelId = "review-pricing-fixture";
+  const tokens = { inputTokens: 1_000_000, outputTokens: 1_000_000 };
+  const reported = { amount: 0, currency: "EUR" } as const;
+  const events: ShellEvent[] = [];
+  const setPrice = (value: number) => setModelProfileField(providerId, modelId, { field: "priceInputPerMillion", value }, directory);
+  const port: ProviderPort = {
+    describe() { throw new Error("this test only streams usage"); },
+    async *stream(_request, { attemptId }) {
+      yield { kind: "usage_update", usage: tokens, attemptId, sequence: 1 };
+      await setPrice(9);
+      yield { kind: "usage_update", usage: tokens, attemptId, sequence: 2 };
+      yield { kind: "usage_update", usage: { ...tokens, cost: reported }, attemptId, sequence: 3 };
+    },
+  };
+  try {
+    await setPrice(2);
+    await setModelProfileField(providerId, modelId, { field: "priceOutputPerMillion", value: 3 }, directory);
+    const observe = () => observeReviewProvider(port, { emit: event => events.push(event) }, { participant: "coordinator" }, providerId, modelId, directory);
+    const read = async (observed: ProviderPort, attemptId: string) => {
+      const request = {
+        providerId, modelId, systemInstruction: "", messages: [], stream: true,
+        budget: { maxOutputTokens: 10, runReservation: 100 }, requestId: attemptId, parentRunId: "review",
+      };
+      for await (const _event of observed.stream(request, { attemptId })) {
+        // Exhaust the measured stream.
+      }
+    };
+    await read(observe(), "first");
+    await read(observe(), "second");
+    expect(events.flatMap(event => event.type === "request_usage" ? [event.usage] : [])).toEqual([
+      { ...tokens, estimatedCost: { amount: 5, currency: "USD" } },
+      { ...tokens, estimatedCost: { amount: 5, currency: "USD" } },
+      { ...tokens, cost: reported },
+      { ...tokens, estimatedCost: { amount: 12, currency: "USD" } },
+      { ...tokens, estimatedCost: { amount: 12, currency: "USD" } },
+      { ...tokens, cost: reported },
+    ]);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
 
 describe("serializeShellEvent", () => {
   test("one NDJSON object per line", () => {

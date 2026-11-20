@@ -15,7 +15,7 @@ import { randomUUID } from "node:crypto";
 import type { ReviewerActivityEvent } from "../harness/tool/builtin/reviewer-activity";
 import type { NormalizedUsage, ProviderPort } from "../harness/provider/types";
 import type { ReviewUsageCounts } from "../review/run-usage";
-import { estimateTurnCostUsd } from "../harness/routing/turn-cost";
+import { estimateTaskCostUsd, readTurnCostProfile } from "../harness/routing/turn-cost";
 import { appendFileSync } from "node:fs";
 // Through the security facade, not `security/redact`: reaching past a facade
 // reaches everything behind it, and the import policy counts that as a bypass
@@ -148,6 +148,9 @@ export function createFileEventSink(
 /** Instrument the actual stream (including retries). An interrupted request leaves a start without a receipt. */
 export function observeReviewProvider(port: ProviderPort, sink: ShellEventSink, owner: RequestOwner,
   provider: string, model: string, userConfigDir: string): ProviderPort {
+  // The observer is tied to this provider and model. Snapshot pricing on the
+  // first estimate, including unknown pricing, for the lifetime of the observer.
+  let pricing: { profile: ReturnType<typeof readTurnCostProfile> } | undefined;
   return {
     describe: () => port.describe(),
     async *stream(request, opts) {
@@ -157,9 +160,11 @@ export function observeReviewProvider(port: ProviderPort, sink: ShellEventSink, 
         if (event.kind === "usage_update" && event.usage !== undefined) {
           const u = event.usage;
           // A Codex subscription does not bill its account at an API model's token price.
-          const usd = provider !== "openai-codex" && !u.cost && u.inputTokens !== undefined && u.outputTokens !== undefined
-            ? estimateTurnCostUsd({ providerId: provider, modelId: model, userConfigDir, ...u, inputTokens: u.inputTokens, outputTokens: u.outputTokens })
-            : undefined;
+          let usd: number | undefined;
+          if (provider !== "openai-codex" && !u.cost && u.inputTokens !== undefined && u.outputTokens !== undefined) {
+            pricing ??= { profile: readTurnCostProfile(provider, model, userConfigDir) };
+            usd = estimateTaskCostUsd(pricing.profile, provider, u.inputTokens, u.outputTokens, u.cacheReadTokens, u.cacheWriteTokens);
+          }
           sink.emit({ type: "request_usage", ...identity, usage: { ...u,
             ...(usd !== undefined && Number.isFinite(usd) && usd >= 0 ? { estimatedCost: { amount: usd, currency: "USD" } } : {}) } });
         }

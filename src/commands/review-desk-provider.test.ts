@@ -3,7 +3,8 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { approveProjectRouting, setRoutingCategory } from "../harness/routing/settings";
+import { ROUTING_SCHEMA_VERSION } from "../harness/routing/config";
+import { approveProjectRouting, replaceRoutingLayer, setRoutingCategory } from "../harness/routing/settings";
 import { externalProvidersConfigPath } from "../lib/external-providers";
 import { writeProjectExternalSetting } from "../lib/external-switch";
 import { saveShellConfig } from "../lib/shell-config";
@@ -45,6 +46,17 @@ test("no saved selection uses one credentialed provider and refuses an ambiguous
   expect((await resolveDeskReviewModel(dir, dir, { OPENAI_API_KEY: "fixture" })).provider).toBe("openai");
   await expect(resolveDeskReviewModel(dir, dir, { OPENAI_API_KEY: "fixture", ANTHROPIC_API_KEY: "fixture" })).rejects.toThrow("Choose a connected provider");
   await expect(resolveDeskReviewModel(dir, dir, {})).rejects.toThrow("Choose a connected provider");
+});
+
+test("a uniquely inferred baseline satisfies session-only but a separate assignment needs a saved session", async () => {
+  const location = { cwd: dir, configDir: dir };
+  await replaceRoutingLayer("user", location, {
+    schemaVersion: ROUTING_SCHEMA_VERSION,
+    providers: { scope: "session-only", allowlist: [], preferSessionProvider: true },
+  });
+  expect((await resolveDeskReviewModel(dir, dir, { OPENAI_API_KEY: "fixture" })).provider).toBe("openai");
+  await setRoutingCategory("user", location, "review", { mode: "model", target: { providerId: "openai", modelId: "review-model" } });
+  await expect(resolveDeskReviewModel(dir, dir, { OPENAI_API_KEY: "fixture" })).rejects.toThrow("outside the project's routing scope");
 });
 
 test("the project external policy applies to the provider before model work begins", async () => {

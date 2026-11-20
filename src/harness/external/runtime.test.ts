@@ -489,6 +489,15 @@ describe("regressions found by the live smoke (T19)", () => {
     expect(result.usage?.cost).toBeUndefined();
   });
 
+  test("Antigravity's repeated usage preserves explicit zero cache reads", async () => {
+    const result = await runExternalChild(
+      baseInput({ runtime: { kind: "external", agent: "antigravity-cli", sandbox: "read-only" } }),
+      baseDeps({ spawn: fakeSpawn(transcript("live/antigravity-cli/2026-09-28", "read-only-ok.stream.jsonl")).port }),
+    );
+    expect(result.usage).toEqual({ inputTokens: 13166, outputTokens: 31, cacheReadTokens: 0 });
+    expect(result.costUnits).toBeUndefined();
+  });
+
   test("a healthy run scores zero parse skips for both agents", async () => {
     // The codec's recogniser must reach the supervisor, or `turn.started`
     // (codex) and `rate_limit_event` (claude) each cost a phantom skip and the

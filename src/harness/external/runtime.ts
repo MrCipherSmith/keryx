@@ -664,8 +664,7 @@ async function runAcpBranch(args: {
   }
 
   const { supervised } = ran;
-  const usage = externalReceipt(supervised.events, ran.record.cost === "missing" ? undefined : ran.record.cost);
-  const costUnits = findCostUnits(supervised.events);
+  const { usage, costUnits } = externalReceipt(supervised.events, ran.record.cost === "missing" ? undefined : ran.record.cost);
   const base = {
     argv: ran.record.argv,
     worktreePath,
@@ -718,8 +717,7 @@ function buildOutcome(args: {
 }): ExternalChildOutcome {
   const { cause, outcome, argv, worktreePath, finalMessageOnly } = args;
   const sessionRef = findSessionRef(outcome.events);
-  const usage = externalReceipt(outcome.events);
-  const costUnits = findCostUnits(outcome.events);
+  const { usage, costUnits } = externalReceipt(outcome.events);
   const text = collectAssistantText(outcome.events, finalMessageOnly);
 
   const base = {
@@ -762,10 +760,12 @@ function findSessionRef(events: readonly ExternalEvent[]): string | undefined {
 }
 
 /** The CLI result's terminal usage is a dispatch aggregate, including any prior updates. */
-function externalReceipt(events: readonly ExternalEvent[], accountCost?: NormalizedUsage["cost"]): NormalizedUsage | undefined {
+function externalReceipt(events: readonly ExternalEvent[], accountCost?: NormalizedUsage["cost"]) {
   let receipt: NormalizedUsage | undefined;
+  let costUnits: number | undefined;
   for (const e of events) {
     if (e.kind === "usage") {
+      costUnits = e.costUnits ?? costUnits;
       receipt = {
         ...receipt,
         ...(e.inputTokens !== undefined ? { inputTokens: e.inputTokens } : {}),
@@ -775,18 +775,8 @@ function externalReceipt(events: readonly ExternalEvent[], accountCost?: Normali
       };
     }
   }
-  const usd = findCostUnits(events);
-  const cost = accountCost ?? (usd === undefined ? undefined : { amount: usd, currency: "USD" });
-  return !receipt && !cost ? undefined : { ...receipt, ...(cost ? { cost } : {}) };
-}
-
-/** The last reported cost. Absent stays absent — a missing figure is never zero. */
-function findCostUnits(events: readonly ExternalEvent[]): number | undefined {
-  let cost: number | undefined;
-  for (const event of events) {
-    if (event.kind === "usage" && event.costUnits !== undefined) cost = event.costUnits;
-  }
-  return cost;
+  const cost = accountCost ?? (costUnits === undefined ? undefined : { amount: costUnits, currency: "USD" });
+  return { costUnits, usage: cost ? { ...receipt, cost } : receipt };
 }
 
 /**

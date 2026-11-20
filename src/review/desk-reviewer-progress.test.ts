@@ -76,7 +76,9 @@ test("preserves many simultaneous sessions and distinct retries without inventin
     id: randomUUID(), reviewer: `review-${Math.floor(i / 2)}`, wave: 1, state: i % 2 ? "running" : "failed",
     activity: [{ at: "2026-08-03T09:34:01.002Z", label: "Reviewer started" }],
   }));
-  save(["run", "progress.json"], { ref, reviewerSessions: sessions });
+  save(["run", "progress.json"], { ref, reviewerSessions: [
+    ...sessions, { id: randomUUID(), reviewer: "triage", wave: 1, state: "completed" },
+  ] });
   save(["package", "manifest.json"], { target: { ref, base: baseSha, head: headSha } });
   save(["package", "desktop-dispatch.json"], { calls: sessions.filter((_, i) => i % 2).map(s => ({
     label: s.reviewer, save_result_to: `raw/${s.reviewer}-w1.txt`,

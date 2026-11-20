@@ -1419,14 +1419,13 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
             : labelRaw
           : `sub-${childSeq}`;
 
-      // Wave drivers save raw/<reviewer>-w<N>.txt. Attribute every wave to the same reviewer.
-      const rawReviewer = saveTarget.abs && path.basename(path.dirname(saveTarget.abs)) === "raw"
+      // Unscoped usage-only observers predate Desktop plans and attribute saved results by filename.
+      const usageLabel = !activity && saveTarget.abs && path.basename(path.dirname(saveTarget.abs)) === "raw"
         ? path.basename(saveTarget.abs, ".txt").replace(/-w[1-9]\d*$/, "") : "";
-      const reviewer = reviewerCallerId(rawReviewer || labelRaw, workerId);
-      activity?.start(saveTarget.abs);
+      const fallbackReviewer = reviewerCallerId(usageLabel || labelRaw, workerId);
       const measuredProvider = (provider: string, model: string, baseUrl?: string): ProviderPort => {
         const port = deps.makeProvider(provider, model, baseUrl);
-        return deps.observeProvider?.(port, reviewer, provider, model, activity?.sessionId) ?? port;
+        return deps.observeProvider?.(port, activity?.reviewer ?? fallbackReviewer, provider, model, activity?.sessionId) ?? port;
       };
 
       // --- SubagentStart/SubagentStop helpers (flow 306 / W6, T6). No-ops
@@ -1813,12 +1812,23 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           tiers: tierMap,
         },
       };
+      let expectedModel: { providerId: string; modelId: string } | undefined;
+      if (input.expected_model !== undefined) {
+        const expected = input.expected_model;
+        if (!expected || typeof expected !== "object" || !("provider" in expected) || typeof expected.provider !== "string"
+          || !("model" in expected) || typeof expected.model !== "string" || (externalRuntime !== undefined && deps.runExternal !== undefined)) {
+          emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "model-mismatch", task });
+          return { status: "Denied", isError: true, output: "spawn_subagent: the review plan requires an exact native provider and model." };
+        }
+        expectedModel = { providerId: expected.provider, modelId: expected.model };
+      }
       const attemptId = idSeq();
       const branchId = idSeq();
       const reservationId = idSeq();
       const artifactHash = sha256(task);
       const spawned = spawnSubagent(
         {
+          ...(expectedModel ? { expectedModel } : {}),
           attempt: { attemptId, number: childSeq },
           branchId,
           budgetRequest: {
@@ -1850,7 +1860,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           kind: "upsert",
           label,
           status: "failed",
-          detail: "denied",
+          detail: spawned.kind ?? "denied",
           task,
         });
         return {
@@ -1867,15 +1877,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         provider: parent.providerId,
         model: parent.modelId,
       };
-      if (input.expected_model !== undefined) {
-        const expected = input.expected_model;
-        if (!expected || typeof expected !== "object" || !("provider" in expected) || !("model" in expected)
-          || expected.provider !== runModel.provider || expected.model !== runModel.model || (externalRuntime !== undefined && deps.runExternal !== undefined)) {
-          ledger.release(spawned.reservation.reservationId, { maxRuntimeMs: 0 });
-          emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "model-mismatch", task });
-          return { status: "Denied", isError: true, output: "spawn_subagent: the authorized child model does not match the review plan. Check project review and subagent routing." };
-        }
-      }
+      await activity?.start(deps.cwd, saveTarget.abs);
       const routingRecord = routingReceipt?.decision.status === "selected"
         ? `routing ${routingReceipt.decision.decisionId} → ${runModel.provider}/${runModel.model} ` +
           `[${routingReceipt.decision.assignmentSource}/${routingReceipt.decision.recommendationSource}]`
@@ -1928,8 +1930,9 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           };
         }
         try {
-          const finishUsage = deps.observeExternal?.(reviewer, externalAgentId ?? "external");
+          const finishUsage = deps.observeExternal?.(activity?.reviewer ?? fallbackReviewer, externalAgentId ?? "external");
           const external = await deps.runExternal({ runtime: externalRuntime, task, mode, workerId, label });
+          if (external.status === "Completed") activity?.observeResult(external.output);
           finishUsage?.(external.usage);
           emitFleetEvent({
             kind: "upsert",
@@ -2766,6 +2769,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         // Only a completed child with text is final: a stopped one, or one with no text, never replaces a complete result.
         const saveNote = recordSaveNote(await saveRecord(producedNoText ? "" : childText, { final: status === "Completed" && !producedNoText }), "full result", String(input.save_result_to));
         if (status === "Completed") {
+          activity?.observeResult(childText);
           return { status, isError, output: `${header}--- summary ---\n${boundSummary(folded.text)}${saveNote}` };
         }
         const statusLine = formatStoppedStatusLine(status, turnResult);

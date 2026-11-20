@@ -140,12 +140,9 @@ const KNOWN_RESULT_STATUSES: ReadonlySet<string> = new Set([
 /**
  * Token totals from an `agy` `usage` object.
  *
- * Only `input_tokens`/`output_tokens` are carried. The recorded fixture's own
- * arithmetic rules the other two out as ADDITIONS: `input_tokens (13166) +
- * output_tokens (31) === total_tokens (13197)` exactly, so `cache_read_tokens`
- * (a subset of input processing) and `thinking_tokens` (≤ `output_tokens`, a
- * subset of it) are already counted — adding either would double-count
- * against the CLI's own total. No `costUnits`: the registry declares
+ * Keep cache reads as a separate input subset. The fixture's
+ * `input_tokens (13166) + output_tokens (31) === total_tokens (13197)`
+ * already accounts for cache reads and thinking tokens. No `costUnits`: the registry declares
  * `reportsCost: false`, and `agy`'s usage carries tokens only, never a price.
  */
 function parseUsage(raw: unknown): ExternalEvent | undefined {
@@ -153,11 +150,13 @@ function parseUsage(raw: unknown): ExternalEvent | undefined {
   if (usage === undefined) return undefined;
   const inputTokens = asNumber(usage.input_tokens);
   const outputTokens = asNumber(usage.output_tokens);
-  if (inputTokens === undefined && outputTokens === undefined) return undefined;
+  const cacheReadTokens = asNumber(usage.cache_read_tokens);
+  if (inputTokens === undefined && outputTokens === undefined && cacheReadTokens === undefined) return undefined;
   return {
     kind: "usage",
     ...(inputTokens === undefined ? {} : { inputTokens }),
     ...(outputTokens === undefined ? {} : { outputTokens }),
+    ...(cacheReadTokens === undefined ? {} : { cacheReadTokens }),
   };
 }
 

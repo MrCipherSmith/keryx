@@ -37,8 +37,9 @@ and shows the time of the last successful read when an update fails.
 Open a PR and choose **Start review** to review the base and head commits recorded when
 the card was fetched. The Keryx review panel shows the current phase, the revision and
 the reason the run stopped. You can return to the card later, cancel an
-active review or retry an interrupted one. Two windows requesting the same
-active revision share the run. Manual reviews have a 30-minute time limit and
+active review or retry an interrupted one. Windows and worktrees share an active
+run when the verified GitHub account, PR, and base and head commits match.
+Manual reviews have a 30-minute time limit and
 unlimited tokens by default.
 
 During a run, the wave badge and progress line show how many reviewer assignments have finished. Before the plan is available, the indicator shows that the run is active. Open a reviewer to see its status, model when available and recorded activity. The session includes wave, timing and token usage. Older runs show the evidence saved with their review package.
@@ -72,7 +73,7 @@ On a PR card, open **Automation**, select a mode and choose **Save mode**.
 | Auto · rule name | Use just this rule. Its trigger, reviewer and CI conditions still apply. |
 | Manual only | Skip scheduled reviews for this PR. You can start a review from the card at any time. |
 
-The Automation tab shows why a rule is waiting, started or skipped. Under **Keryx review**, a scheduled attempt records the rule and revision alongside its report. Matching triggers can share an attempt with another rule or with a manual start. Time limits and any configured token limits apply per scheduled attempt. Keryx uses the token usage reported by the provider to decide when to stop.
+The Automation tab shows why a rule is waiting, started or skipped. Under **Keryx review**, a scheduled attempt records the rule and revision alongside its report. Matching triggers can share an attempt with another rule or with a manual start. The rule or manual action that starts an attempt sets its time and token limits. Later matches keep those limits. Keryx uses the token usage reported by the provider to decide when to stop.
 
 ## Install
 

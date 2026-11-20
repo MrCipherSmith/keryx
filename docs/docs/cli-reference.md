@@ -5176,7 +5176,7 @@ requests review of a card’s displayed revision. With the same repository, view
 `status` to read progress and history, or `cancel --id UUID` to stop a specific attempt.
 Manual reviews start without a token limit. For scheduled reviews, omit `budgetTokens` or set it to `null` for unlimited tokens. A positive integer sets the per-run cap, including values above 250,000. Saved rules retain their explicit limits. The time limit is configured independently.
 
-Load a deferred report with `status --id UUID`. A retry creates a fresh attempt after an interrupted review. Results stay on this machine.
+Load a deferred report with `status --id UUID`. A retry creates a fresh attempt after an interrupted review. Keryx stores results locally. A later review can send excerpts from earlier reports and linked Flow evidence to the configured model provider as context.
 
 Agents can read the same project context that a manual or scheduled reviewer receives in its private checkout.
 

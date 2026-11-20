@@ -22,6 +22,7 @@ import {
 import { harnessEnvelopePrefix, runAgentTurn } from "../../../commands/agent";
 import type { NormalizedEvent, NormalizedRequest, ProviderPort, StreamOptions } from "../../provider/types";
 import { approveProjectRouting, setRoutingCategory } from "../../routing/settings";
+import { writeActiveReview } from "../../../review/active-review";
 import { splitUsage } from "../../../review/dispatch-usage";
 import { isEmptyOutput, parseReviewResult } from "../../../review/ledger";
 
@@ -1265,11 +1266,24 @@ test("flow 460 (H): save_result_to carries the child's token use as a KERYX_USAG
   }
 });
 
+async function recordReviewerPlan(root: string, calls: Array<{ label: string; file: string }>) {
+  const pkg = ".metaproject/reviews/test-round";
+  await mkdir(path.join(root, pkg, "raw"), { recursive: true });
+  await writeFile(path.join(root, pkg, "manifest.json"), JSON.stringify({ status: "draft" }));
+  await writeFile(path.join(root, pkg, "desktop-dispatch.json"), JSON.stringify({ calls: calls.map(call =>
+    ({ label: call.label, save_result_to: `${pkg}/raw/${call.file}` })) }));
+  expect(await writeActiveReview(root, { id: "test-round", dir: pkg })).toBe(true);
+  return `${pkg}/raw`;
+}
+
 test("review dispatch telemetry links actual tool activity and usage across waves and retries", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "keryx-review-activity-"));
   const events: ShellEvent[] = [];
   const sink = { emit: (event: ShellEvent) => events.push(event) };
+  let answer: string;
   try {
+    const raw = await recordReviewerPlan(root, [1, 2].map(wave =>
+      ({ label: "review-logic", file: `review-logic-w${wave}.txt` })));
     const tool = createSpawnSubagentTool({
       cwd: root,
       onReviewerActivity: sink.emit,
@@ -1280,12 +1294,13 @@ test("review dispatch telemetry links actual tool activity and usage across wave
         ? toolCalls({ id: "1", name: "get_cwd", input: '{"private":"SECRET_ARGUMENT"}' },
           { id: "2", name: "SECRET_MODEL_GENERATED_NAME" }, { id: "3", name: "private_unregistered_name" },
           { id: "4", name: "get_cwd", input: "{}" })
-        : [{ kind: "text_delta", text: "SECRET_ANSWER" }, { kind: "usage_update", usage: { exact: true, inputTokens: 12, outputTokens: 3 } }, { kind: "model_end" }]).provider,
+        : [{ kind: "text_delta", text: answer }, { kind: "usage_update", usage: { exact: true, inputTokens: 12, outputTokens: 3 } }, { kind: "model_end" }]).provider,
       getDetectedProviders: () => [{ name: "ollama" }],
     });
-    for (const wave of [1, 2, 2]) {
+    for (const [wave, status] of [[1, "DONE"], [2, "BLOCKED"], [2, "NEEDS_CONTEXT"]] as const) {
+      answer = `STATUS: ${status}\n\`\`\`REVIEW_RESULT\n${JSON.stringify({ status, reviewer: "review-logic", slices: ["slice-01"], findings: [], summary: "SECRET_ANSWER" })}\n\`\`\``;
       const offset = events.length;
-      await tool.invoke({ task: "SECRET_TASK", save_result_to: `raw/review-logic-w${wave}.txt` });
+      await tool.invoke({ task: "SECRET_TASK", save_result_to: `${raw}/review-logic-w${wave}.txt` });
       const batch = events.slice(offset);
       const activity = batch.filter(event => event.type === "reviewer_activity");
       expect(activity).toMatchObject([
@@ -1293,7 +1308,7 @@ test("review dispatch telemetry links actual tool activity and usage across wave
         { activity: "tool_end", tool: "get_cwd", ok: false }, { activity: "tool_start", tool: "unknown_tool" },
         { activity: "tool_end", tool: "unknown_tool", ok: false }, { activity: "tool_start", tool: "unknown_tool" },
         { activity: "tool_end", tool: "unknown_tool", ok: false }, { activity: "tool_start", tool: "get_cwd" },
-        { activity: "tool_end", tool: "get_cwd", ok: true }, { activity: "finished", outcome: "completed" },
+        { activity: "tool_end", tool: "get_cwd", ok: true }, { activity: "finished", outcome: status === "DONE" ? "completed" : "partial" },
       ]);
       const sessionId = activity[0]!.sessionId;
       for (const event of activity) {
@@ -1304,6 +1319,13 @@ test("review dispatch telemetry links actual tool activity and usage across wave
         sessionId, model: "test", usage: expect.objectContaining({ inputTokens: 12, outputTokens: 3 }),
       }));
     }
+    const offset = events.length;
+    for (const file of ["notes/raw/review-logic-w1.txt", `${raw}/triage.txt`]) {
+      expect((await tool.invoke({ task: "an auxiliary task", save_result_to: file })).isError).toBe(false);
+    }
+    const auxiliary = events.slice(offset);
+    expect(auxiliary.some(e => e.type === "reviewer_activity")).toBe(false);
+    expect(auxiliary.filter(e => e.type === "request_usage").every(e => !("sessionId" in e))).toBe(true);
     const sessions = events.filter(e => e.type === "reviewer_activity" && e.activity === "started");
     expect(new Set(sessions.map(e => "sessionId" in e && e.sessionId)).size).toBe(3);
     expect(JSON.stringify(events)).not.toContain("SECRET_");
@@ -1318,6 +1340,7 @@ test("review dispatch telemetry closes errors and aborted sessions without expos
   const events: ShellEvent[] = [];
   const parent = new AbortController();
   try {
+    const raw = await recordReviewerPlan(root, [{ label: "review-style", file: "review-style.txt" }]);
     for (const cancel of [false, true]) {
       const started = Promise.withResolvers<void>();
       const tool = createSpawnSubagentTool({
@@ -1330,7 +1353,7 @@ test("review dispatch telemetry closes errors and aborted sessions without expos
           throw new Error("PRIVATE_PROVIDER_FAILURE");
         },
       });
-      const result = tool.invoke({ task: "test", save_result_to: "raw/review-style.txt" }, { signal: parent.signal });
+      const result = tool.invoke({ task: "test", save_result_to: `${raw}/review-style.txt` }, { signal: parent.signal });
       if (cancel) {
         await started.promise;
         parent.abort();

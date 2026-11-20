@@ -46,7 +46,8 @@ export async function resolveDeskReviewModel(cwd: string, configDir?: string, en
   if (!provider?.trim() || !model?.trim() || provider.startsWith("-") || model.startsWith("-") || model === "unknown" || model === "fake-echo") {
     throw new Error("Choose a connected provider and model with /model in Keryx shell, then retry the review.");
   }
-  if ((routing.providers.scope === "session-only" && provider !== saved.provider) ||
+  const sessionProvider = saved.provider ?? (assignment.mode === "baseline" ? provider : undefined);
+  if ((routing.providers.scope === "session-only" && provider !== sessionProvider) ||
       (routing.providers.scope === "allowlist" && !routing.providers.allowlist.includes(provider))) {
     throw new Error("The selected review provider is outside the project's routing scope. Check Keryx routing settings and retry.");
   }

@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { refreshLayers } from "../review/layers";
 import { createLayersFixture, git } from "../review/layers.test-helpers";
-import { prepareBlastInput } from "./review-plan-desktop-context";
+import { createPinnedSourceInput, prepareBlastInput } from "./review-plan-desktop-context";
+import { SUBAGENT_CONTEXT_FILES_MAX_BYTES, SUBAGENT_CONTEXT_FILES_MAX_COUNT } from "../lib/subagent-context";
 import path from "node:path";
 import type { PrContext } from "../review/context-collect";
 import { checkDispatch } from "../review/dispatch-check";
@@ -42,7 +43,11 @@ function manifestOf(slices: SliceEntry[]): SliceManifest {
 function record(name: string, value: unknown) { writeFileSync(path.join(dir, name), JSON.stringify(value)); }
 
 test("fix, new and second-look drivers prepare their own validated contracts and bounded model sizes", async () => {
+  const head = git(root, ["rev-parse", "HEAD"]);
+  const pinned = readFileSync(path.join(root, "src/a.ts"), "utf8");
+  writeFileSync(path.join(root, "src/a.ts"), "working copy differs");
   const slices = [slice("slice-01", 6500, "fix"), slice("slice-02", 1000, "new"), slice("slice-03", 4000, "second-look")];
+  slices[0]!.files.push("src/removed.ts");
   const manifest = manifestOf(slices);
   const finding = { id: "F-001", reviewer: role, severity: "major", problem: "Unexpected fallback", impact: "Wrong value",
     suggested_fix: "Handle missing input", evidence: "fixture assertion", confidence: "high", class_scope: { sites: ["src/a.ts:1"], enumeration_method: "Read the local consumers" } };
@@ -58,12 +63,15 @@ test("fix, new and second-look drivers prepare their own validated contracts and
     overThreshold: false, overReasons: [], planKey: "key", warnings: [], next: "dispatch" };
   const drivers = await writeWaveDrivers({ packageDir: dir, manifest, sliceDir: path.join(dir, "slices"), reviewers: plan.roster });
   const requirements: number[] = [];
-  const payloads: Array<{ is_fix_round: boolean; skill_path: string; prior_findings?: unknown[]; metaproject: { graph: unknown } }> = [];
+  let maxContext = Infinity;
+  const payloads: Array<{ is_fix_round: boolean; skill_path: string; prior_findings?: unknown[]; metaproject: { graph: unknown };
+    review_context: { scope: { pinned_sources?: Array<{ path: string; attachment: string }> }; token_policy: { omissions: string[] } } }> = [];
   for (const s of slices) writeFileSync(path.join(dir, "slices", s.path), "x".repeat(s.bytes));
   const run: PlanDeps["run"] = async args => {
     if (args[0] === "tier") {
-      requirements.push(Number(args[args.indexOf("--input-tokens") + 1]));
-      return { stdout: JSON.stringify({ model }), stderr: "", exitCode: 0 };
+      const tokens = Number(args[args.indexOf("--input-tokens") + 1]);
+      requirements.push(tokens);
+      return { stdout: JSON.stringify({ model: { ...model, dispatchable: tokens <= maxContext } }), stderr: "", exitCode: 0 };
     }
     expect(args[0]).toBe("dispatch-check");
     const payload = JSON.parse(readFileSync(path.join(root, args[args.indexOf("--payload") + 1]!), "utf8"));
@@ -73,7 +81,8 @@ test("fix, new and second-look drivers prepare their own validated contracts and
     payloads.push(payload);
     return { stdout: "", stderr: "", exitCode: checked.ok ? 0 : 1 };
   };
-  const queueFile = await prepareDesktopDispatch(root, plan, base, manifest, drivers, context, run);
+  const prContext = { ...context, headSha: head };
+  const queueFile = await prepareDesktopDispatch(root, plan, base, manifest, drivers, prContext, run);
   const queue = JSON.parse(readFileSync(path.join(root, queueFile), "utf8"));
   expect(queue.blocked).toEqual([]);
   expect(queue.routedOut).toEqual(["review-style"]);
@@ -82,6 +91,11 @@ test("fix, new and second-look drivers prepare their own validated contracts and
   expect(fix.skill_path).toBe(definition);
   expect(fix.prior_findings).toEqual([{ round: 1, finding, claimed_disposition: "unreported" }]);
   expect(fix.metaproject.graph).toBeDefined();
+  const source = fix.review_context.scope.pinned_sources?.find(file => file.path === "src/a.ts");
+  expect(source).toBeDefined();
+  expect(readFileSync(path.join(root, source!.attachment), "utf8")).toBe(pinned);
+  expect(queue.calls[0].context_files).toContain(source!.attachment);
+  expect(fix.review_context.token_policy.omissions).toContain("Pinned source src/removed.ts: no regular file at review head.");
   expect(payloads.filter(p => !p.is_fix_round && !p.prior_findings)).toHaveLength(2);
   expect(new Set(requirements).size).toBe(3);
   expect(Math.max(...requirements)).toBeLessThan(4000);
@@ -90,11 +104,17 @@ test("fix, new and second-look drivers prepare their own validated contracts and
   const blockedDriver = path.join(dir, "drivers", missing + "-w1.json");
   writeFileSync(blockedDriver, JSON.stringify({ reviewer: missing, slices: [], slicePaths: [], result: `raw/${missing}-w1.txt` }));
   const retry = await prepareDesktopDispatch(root, { ...plan, roster: [...plan.roster, missing], dispatches: 4 }, base, manifest,
-    [...drivers, blockedDriver], context, run);
+    [...drivers, blockedDriver], prContext, run);
   const partial = JSON.parse(readFileSync(path.join(root, retry), "utf8"));
   expect(partial.calls).toHaveLength(3);
   expect(partial.blocked).toMatchObject([{ reviewer: missing, driver: missing + "-w1.json" }]);
   expect(partial.routedOut).toEqual(["review-style"]);
+
+  maxContext = requirements[0]! - 1;
+  const smaller = await prepareDesktopDispatch(root, plan, base, manifest, [drivers[0]!], prContext, run);
+  const compact = JSON.parse(readFileSync(path.join(root, smaller), "utf8"));
+  expect(compact.calls[0].context_files).toEqual(queue.calls[0].context_files.slice(0, -1));
+  expect(payloads.at(-1)?.review_context.token_policy.omissions).toContain("Pinned source src/a.ts: model routing refused the larger context.");
 });
 
 test("a 33-call plan uses original slice waves that the host admits and refuses an exhausted wave", async () => {
@@ -121,4 +141,29 @@ test("scope B materializes unchanged callers at the reviewed head in the read-on
   expect(input.files).toEqual([caller]);
   expect(input.attachments.map(file => readFileSync(path.join(root, file), "utf8"))).toEqual(["diff from the PR", pinned]);
   expect(input.bytes).toBe(Buffer.byteLength("diff from the PR" + pinned));
+});
+
+test("pinned source context preserves diff attachments when blob text does not fit or is excluded", async () => {
+  writeFileSync(path.join(root, "src", "large.ts"), " ".repeat(321));
+  writeFileSync(path.join(root, ".env.fixture"), "fixture source excluded from provider attachments");
+  writeFileSync(path.join(root, "src", "binary"), Buffer.from([0, 1, 2]));
+  symlinkSync("a.ts", path.join(root, "src", "link"));
+  git(root, ["add", "--force", "--", "src/large.ts", ".env.fixture", "src/binary", "src/link"]);
+  git(root, ["commit", "-m", "attachment fixture"]);
+  const read = createPinnedSourceInput(root, dir, git(root, ["rev-parse", "HEAD"]));
+  const diff = [".metaproject/slice.diff"];
+  const result = await read(["src/large.ts", ".env.fixture", "src/binary", "src/link", "src/a.ts"],
+    diff, SUBAGENT_CONTEXT_FILES_MAX_BYTES - 320);
+  expect(result.attachments[0]).toBe(diff[0]!);
+  expect(result.sources.map(source => source.path)).toEqual(["src/a.ts"]);
+  expect(result.omissions).toEqual([
+    "Pinned source src/large.ts: does not fit the attachment budget.",
+    "Pinned source .env.fixture: path is excluded from attachments.",
+    "Pinned source src/binary: not UTF-8 source text.",
+    "Pinned source src/link: no regular file at review head.",
+  ]);
+  const full = Array.from({ length: SUBAGENT_CONTEXT_FILES_MAX_COUNT }, (_, i) => `diff-${i}`);
+  expect(await read(["src/a.ts"], full, 0)).toEqual({
+    sources: [], bytes: 0, attachments: full, omissions: ["Pinned source src/a.ts: attachment budget exhausted."],
+  });
 });

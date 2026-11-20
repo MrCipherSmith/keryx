@@ -86,16 +86,19 @@ export function estimateTurnCostUsd(input: {
   readonly cacheWriteTokens?: number;
   readonly userConfigDir?: string;
 }): number | undefined {
+  return estimateTaskCostUsd(
+    readTurnCostProfile(input.providerId, input.modelId, input.userConfigDir),
+    input.providerId,
+    input.inputTokens,
+    input.outputTokens,
+    input.cacheReadTokens,
+    input.cacheWriteTokens,
+  );
+}
+
+export function readTurnCostProfile(providerId: string, modelId: string, userConfigDir?: string): ModelProfile | undefined {
   try {
-    const profile = loadModelProfiles(input.userConfigDir)[profileKey(input.providerId, input.modelId)];
-    return estimateTaskCostUsd(
-      profile,
-      input.providerId,
-      input.inputTokens,
-      input.outputTokens,
-      input.cacheReadTokens,
-      input.cacheWriteTokens,
-    );
+    return loadModelProfiles(userConfigDir)[profileKey(providerId, modelId)];
   } catch {
     // An unreadable profile store means "price unknown", never an error in the turn.
     return undefined;

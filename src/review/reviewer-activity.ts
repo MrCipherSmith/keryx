@@ -14,6 +14,16 @@ export function waveNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
 }
 
+/** A queue label and the recorded raw filename must agree before they identify a wave. */
+export function assignedReviewerWave(reviewer: string, filename: string): number | undefined {
+  if (!reviewerName(reviewer)) return;
+  if (filename === `${reviewer}.txt`) return 1;
+  const match = /^-w([1-9]\d*)\.txt$/.exec(filename.slice(reviewer.length));
+  if (!filename.startsWith(reviewer) || !match) return;
+  const wave = Number(match[1]);
+  return waveNumber(wave) ? wave : undefined;
+}
+
 interface SessionRecord {
   session: DeskReviewerSession;
   requests: Map<string, ReviewUsageCounts>;

@@ -2,7 +2,7 @@
 import { closeSync, constants, fstatSync, lstatSync, openSync, readSync } from "node:fs";
 import path from "node:path";
 import type { DeskReviewerProgress, DeskReviewerSession, DeskRun, DeskRunKey } from "./desk-run-types";
-import { identifier, reviewerName, waveNumber } from "./reviewer-activity";
+import { assignedReviewerWave, identifier, reviewerName, waveNumber } from "./reviewer-activity";
 import { isReviewerResult, parseReviewResult } from "./ledger";
 import { splitUsage } from "./dispatch-usage";
 import { usageCounts, validUsageCounts } from "./run-usage";
@@ -73,7 +73,7 @@ export function readDeskReviewerProgress(directory: string, key: DeskRunKey, run
   const ref = `https://github.com/${key.repo}/pull/${key.number}`.toLowerCase();
   const progress = readObject(directory, ["run", "progress.json"]);
   const ownProgress = typeof progress?.ref === "string" && progress.ref.toLowerCase() === ref ? progress : undefined;
-  const sessions: DeskReviewerSession[] = [];
+  let sessions: DeskReviewerSession[] = [];
   if (Array.isArray(ownProgress?.reviewerSessions)) {
     for (const item of ownProgress.reviewerSessions) {
       const session = observedSession(item, detailed);
@@ -94,7 +94,7 @@ export function readDeskReviewerProgress(directory: string, key: DeskRunKey, run
     if (!isRecord(target) || typeof target.ref !== "string" || target.ref.toLowerCase() !== ref ||
         target.base !== run.baseSha || target.head !== run.headSha) continue;
     const calls = readObject(directory, [...parts, "desktop-dispatch.json"])?.calls;
-    if (!Array.isArray(calls) || !calls.length) continue;
+    if (!Array.isArray(calls)) continue;
     const byRoleWave = new Set(sessions.map(s => `${s.reviewer}:${s.wave}`));
     const queued = new Set<string>();
     let remaining = 4 * 1024 * 1024;
@@ -102,9 +102,8 @@ export function readDeskReviewerProgress(directory: string, key: DeskRunKey, run
       if (!isRecord(call) || !reviewerName(call.label) || typeof call.save_result_to !== "string") continue;
       const reviewer = call.label;
       const file = path.basename(call.save_result_to);
-      const match = /^([\w-]+)-w([1-9]\d*)\.txt$/.exec(file);
-      const wave = file === `${reviewer}.txt` ? 1 : match?.[1] === reviewer ? Number(match[2]) : null;
-      if (!waveNumber(wave)) continue;
+      const wave = assignedReviewerWave(reviewer, file);
+      if (wave === undefined) continue;
       const key = `${reviewer}:${wave}`;
       if (queued.has(key)) continue;
       queued.add(key);
@@ -128,7 +127,11 @@ export function readDeskReviewerProgress(directory: string, key: DeskRunKey, run
       }
       sessions.push(session);
     }
-    if (queued.size === calls.length) planned = sessions.length; // Includes observed retries as individual sessions.
+    if (queued.size === calls.length) {
+      // Old checkpoints could include auxiliary children saving outside the review package.
+      sessions = sessions.filter(session => queued.has(`${session.reviewer}:${session.wave}`));
+      planned = sessions.length; // Includes observed retries of real assignments.
+    }
     break;
   }
   if (!sessions.length) return;
