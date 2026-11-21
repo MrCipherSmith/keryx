@@ -156,11 +156,11 @@ export class RepairCheckout {
     return Boolean(await this.git(["rev-parse", "--verify", "MERGE_HEAD"]).catch(() => ""));
   }
 
-  async push(commit: string) {
+  async push(commit: string, authorize: <T>(act: () => T) => T) {
     if (!sha.test(commit)) throw new Error("Invalid repair commit.");
     await this.git(["merge-base", "--is-ancestor", this.head, commit]);
-    await this.git(["push", "--porcelain", "--no-follow-tags", `https://github.com/${this.headRepo}.git`, `${commit}:${this.branchRef}`], {
+    await authorize(() => this.git(["push", "--porcelain", "--no-follow-tags", `https://github.com/${this.headRepo}.git`, `${commit}:${this.branchRef}`], {
       ...this.env, KERYX_REPAIR_OLD: this.head, KERYX_REPAIR_NEW: commit, KERYX_REPAIR_REF: this.branchRef,
-    }, this.hooks);
+    }, this.hooks));
   }
 }

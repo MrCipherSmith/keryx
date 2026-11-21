@@ -1,16 +1,21 @@
+import { join } from "node:path";
+import { ensureKeryxSubdir, keryxDataDir } from "../lib/config-dir";
+import { withFileLock } from "../lib/fs";
 import { watcherScope } from "./watcher-db";
 import type { ReviewCard } from "./board-types";
 import { readOwnedPullRequest, type OwnedPullRequest } from "./watcher-rebase";
 import { readFailedActionsJob } from "./pr-repair-ci";
+import { isActionableReview, publishRepairReply, readReviewFeedback } from "./pr-repair-feedback";
 import { RepairCheckout } from "./pr-repair-git";
-import { RepairStore, type RepairGrant, type RepairPlan } from "./watcher-repair-store";
+import { RepairStore, type RepairGrant, type RepairPlan, type RepairReply } from "./watcher-repair-store";
 import type { WatcherKey } from "./watcher-types";
 
 type RepairSubject = { project: string; key: WatcherKey; card: ReviewCard; grant: RepairGrant; store: RepairStore };
 const maxSeconds = 240;
 interface RepairTask {
   cause: string;
-  kind: "conflict" | "ci";
+  kind: "conflict" | "ci" | "review";
+  reply?: RepairReply;
   prompt: string;
   evidence: unknown;
   commitMessage: string;
@@ -40,7 +45,22 @@ async function findTask(subject: OwnedPullRequest, { key, card, grant, store }: 
       complete: "CI repair pushed. GitHub Actions will verify the new commit.",
     };
   }
+  if (grant.settings.reviews && hasReviewFeedback(card, key) && subject.pull.mergeable === "MERGEABLE") {
+    const feedback = await readReviewFeedback(subject, key, card.number, candidate => store.seen(grant, candidate));
+    if (feedback) return {
+      ...feedback, kind: "review",
+      prompt: "Apply the reviewer's requested code change when supported by the checked-out code.",
+      commitMessage: "fix: address pull request review feedback",
+      starting: "Applying pull request review feedback in a separate checkout.",
+      complete: "Review fix pushed and an English reply posted on GitHub.",
+    };
+  }
   return null;
+}
+
+function hasReviewFeedback(card: ReviewCard, key: WatcherKey) {
+  return card.watcherReviews?.some(review => review.login.toLowerCase() !== key.viewer.toLowerCase() &&
+    isActionableReview(review.state));
 }
 
 function matchesSource(subject: OwnedPullRequest, grant: RepairGrant) {
@@ -53,6 +73,19 @@ async function readCurrent({ project, key, card, grant }: RepairSubject, head: s
   if (!matchesSource(subject, grant) || subject.pull.headRefOid !== head || subject.pull.baseRefOid !== card.baseSha)
     throw new Error("The pull request source or revision changed.");
   return subject;
+}
+
+async function finishRepair(context: RepairSubject, id: string, plan: RepairPlan, description: string) {
+  const { store, grant, key, card } = context;
+  const directory = ensureKeryxSubdir(["desktop-review"], keryxDataDir());
+  await withFileLock(join(directory, `repair-${id}.lock`), async () => {
+    if (store.active(grant)?.id !== id) return;
+    const current = await readCurrent(context, plan.commit);
+    const authorized = <T>(act: () => T) => store.authorized(grant, current.auth, act);
+    if (plan.reply) await publishRepairReply(current, key, card.number, plan.reply, authorized);
+    authorized(() => undefined);
+    store.event(plan.commit, description, id, "done");
+  }, { timeoutMs: 0 });
 }
 
 async function executeRepair(context: RepairSubject, subject: OwnedPullRequest, id: string, task: RepairTask) {
@@ -72,9 +105,10 @@ async function executeRepair(context: RepairSubject, subject: OwnedPullRequest, 
     const commit = await checkout.commit(task.commitMessage, conflicts);
     if (!commit) throw new Error("There were no repair changes to push.");
     const current = await readCurrent(context, card.headSha);
-    store.plan(id, { commit, ready: false });
-    await store.authorized(grant, current.auth, () => checkout.push(commit));
-    store.event(commit, task.complete, id, "done");
+    const plan = { commit, ready: false, ...(task.reply && { reply: task.reply }) };
+    store.plan(id, plan);
+    await checkout.push(commit, act => store.authorized(grant, current.auth, act));
+    await finishRepair(context, id, plan, task.complete);
   } finally {
     await checkout.dispose();
   }
@@ -93,8 +127,12 @@ export async function repairWatchedPullRequests(project: string, key: WatcherKey
         if (active.state === "prepared" && active.plan) {
           const plan = JSON.parse(active.plan) as RepairPlan;
           if (card.headSha === plan.commit) {
-            await readCurrent({ project, key, card, grant, store }, plan.commit);
-            store.event(plan.commit, "Recovered the pushed automatic repair.", active.id, "done");
+            if (Date.now() - active.claimedAt > 10 * 60_000) {
+              store.event(plan.commit, "The repair was pushed, but GitHub follow-up could not be completed.", active.id, "failed");
+            } else {
+              const description = plan.reply ? "Review fix pushed and an English reply posted on GitHub." : "Automatic repair pushed.";
+              await finishRepair({ project, key, card, grant, store }, active.id, plan, description);
+            }
           } else if (card.headSha !== active.headSha || Date.now() - active.claimedAt > maxSeconds * 1000) {
             store.event(card.headSha, "The prepared repair could not be verified on GitHub.", active.id, "failed");
           }
@@ -103,7 +141,8 @@ export async function repairWatchedPullRequests(project: string, key: WatcherKey
       }
       if (!(grant.settings.conflicts && card.watcherMergeState === "DIRTY") &&
           !(grant.settings.ci && card.ci === "failed" && !store.seen(grant, `ci:${card.headSha}`) &&
-            !store.repairedCiHead(grant, card.headSha))) continue;
+            !store.repairedCiHead(grant, card.headSha)) &&
+          !(grant.settings.reviews && hasReviewFeedback(card, key))) continue;
       const context = { project, key, card, grant, store };
       const subject = await readCurrent(context, card.headSha);
       const task = await findTask(subject, context);
