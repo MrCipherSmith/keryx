@@ -9,17 +9,82 @@
   "id": "511",
   "slug": "desktop-issues-board",
   "title": "Desktop Issues board with linked sessions and managed issue-to-flow preparation",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-11-21T20:10:01.247Z",
-  "updatedAt": "2026-11-21T21:14:53.679Z",
+  "updatedAt": "2026-11-21T22:21:08.341Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:09db6dd8633f902a9c8495c91f68f72caad5fee3c21d3985d41cf4bb6dc39a22",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-11-21T21:57:16.387Z",
+      "note": "Frozen executable criteria and Desktop acceptance passed on ff4b43d3f. evidence: https://github.com/MrCipherSmith/keryx/actions/runs/44954022352/job/136998091380"
+    },
+    "AC2": {
+      "at": "2026-11-21T21:57:16.706Z",
+      "note": "Frozen executable criteria and Desktop acceptance passed on ff4b43d3f. evidence: https://github.com/MrCipherSmith/keryx/actions/runs/44954022352/job/136998091380"
+    },
+    "AC5": {
+      "at": "2026-11-21T21:57:17.341Z",
+      "note": "Frozen executable criteria and Desktop acceptance passed on ff4b43d3f. evidence: https://github.com/MrCipherSmith/keryx/actions/runs/44954022352/job/136998091380"
+    },
+    "AC6": {
+      "at": "2026-11-21T21:57:17.665Z",
+      "note": "Frozen executable criteria and Desktop acceptance passed on ff4b43d3f. evidence: https://github.com/MrCipherSmith/keryx/actions/runs/44954022352/job/136998091380"
+    },
+    "AC7": {
+      "at": "2026-11-21T21:57:17.993Z",
+      "note": "Frozen executable criteria and Desktop acceptance passed on ff4b43d3f. evidence: https://github.com/MrCipherSmith/keryx/actions/runs/44954022352/job/136998091380"
+    },
+    "AC8": {
+      "at": "2026-11-21T21:57:18.422Z",
+      "note": "Frozen executable criteria and Desktop acceptance passed on ff4b43d3f. evidence: https://github.com/MrCipherSmith/keryx/actions/runs/44954022352/job/136998091380"
+    },
+    "AC9": {
+      "at": "2026-11-21T21:57:18.791Z",
+      "note": "Frozen executable criteria and Desktop acceptance passed on ff4b43d3f. evidence: https://github.com/MrCipherSmith/keryx/actions/runs/44954022352/job/136998091380"
+    },
+    "AC10": {
+      "at": "2026-11-21T21:57:19.125Z",
+      "note": "Frozen executable criteria and Desktop acceptance passed on ff4b43d3f. evidence: https://github.com/MrCipherSmith/keryx/actions/runs/44954022352/job/136998091380"
+    },
+    "AC11": {
+      "at": "2026-11-21T21:57:19.462Z",
+      "note": "Frozen executable criteria and Desktop acceptance passed on ff4b43d3f. evidence: https://github.com/MrCipherSmith/keryx/actions/runs/44954022352/job/136998091380"
+    },
+    "AC12": {
+      "at": "2026-11-21T21:57:19.820Z",
+      "note": "Frozen executable criteria and Desktop acceptance passed on ff4b43d3f. evidence: https://github.com/MrCipherSmith/keryx/actions/runs/44954022352/job/136998091380"
+    },
+    "AC13": {
+      "at": "2026-11-21T21:57:20.165Z",
+      "note": "Frozen executable criteria and Desktop acceptance passed on ff4b43d3f. evidence: https://github.com/MrCipherSmith/keryx/actions/runs/44954022352/job/136998091380"
+    },
+    "AC14": {
+      "at": "2026-11-21T21:57:20.704Z",
+      "note": "Frozen executable criteria and Desktop acceptance passed on ff4b43d3f. evidence: https://github.com/MrCipherSmith/keryx/actions/runs/44954022352/job/136998091380"
+    },
+    "AC3": {
+      "at": "2026-11-21T21:57:17.019Z",
+      "note": "Frozen executable criteria and Desktop acceptance passed on ff4b43d3f. evidence: https://github.com/MrCipherSmith/keryx/actions/runs/44954022352/job/136998091380"
+    },
+    "AC15": {
+      "at": "2026-11-21T21:57:22.080Z",
+      "note": "evidence: jobs/analysis--issues-board/verification-run.md. The native QA application reopened the same saved question and session, accepted answers, and prepared one package read back in Shell."
+    },
+    "AC4": {
+      "at": "2026-11-21T22:11:15.374Z",
+      "note": "evidence: jobs/analysis--issues-board/verification-run.md. The native wide splitter responded to the arrow key. In the narrow layout Escape focused the originating issue button and Enter reopened that issue. GitHub CI also exercised both views."
+    },
+    "AC16": {
+      "at": "2026-11-21T22:21:05.163Z",
+      "note": "evidence: https://github.com/MrCipherSmith/keryx/actions/runs/44955430321 and https://github.com/MrCipherSmith/keryx/actions/runs/44955430327. All 28 applicable checks passed at 9775f8fad. Ordinary Shell lifecycle was exercised in its own fixture as recorded in jobs/analysis--issues-board/verification-run.md."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/1280"
   },
   "baseBranch": "main",
   "origin": {
@@ -263,7 +328,7 @@
       "id": "T12",
       "title": "Exercise contracts, recovery and data isolation on GitHub CI",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T8",
         "T10",
@@ -281,39 +346,57 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Frozen contracts, recovery cases, viewer isolation and native UI regression passed on GitHub Actions (job 136998091380)."
     },
     {
       "id": "T13",
       "title": "Verify the native Desktop and Shell handoff on a test issue",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T12"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-21T21:57:21.732Z",
+            "outcome": "started",
+            "detail": "Verify the issue, ordinary session, crash recovery, Shell discovery and Project status against the private fixture."
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Native private fixture: project move and stale write protection, session question and restart, plan and Shell readback, older and ambiguous packages and keyboard return."
     },
     {
       "id": "T14",
       "title": "Review shipped behavior, compatibility and operator guidance",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T13"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-21T22:11:16.302Z",
+            "outcome": "started",
+            "detail": "Reviewed account boundaries, fixed stale navigation and focus, verified ordinary Shell lifecycle, and am collecting final GitHub checks."
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Operator instructions and native verification published with scope boundaries. All applicable CI checks passed on the final implementation."
     }
   ],
   "history": [
@@ -474,6 +557,176 @@
       "at": "2026-11-21T21:14:53.679Z",
       "event": "task-attempt",
       "detail": "T12: started (attempt 1) — Collect GitHub Actions results for every frozen executable criterion and native bridge."
+    },
+    {
+      "at": "2026-11-21T21:51:44.952Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: Passed frozen acceptance command on GitHub for c9c3cf812. https://github.com/MrCipherSmith/keryx/actions/runs/44953401726/job/136996200218 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-21T21:51:45.254Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Passed frozen acceptance command on GitHub for c9c3cf812. https://github.com/MrCipherSmith/keryx/actions/runs/44953401726/job/136996200218 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-21T21:51:45.551Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Passed frozen acceptance command on GitHub for c9c3cf812. https://github.com/MrCipherSmith/keryx/actions/runs/44953401726/job/136996200218 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-21T21:51:45.848Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Passed frozen acceptance command on GitHub for c9c3cf812. https://github.com/MrCipherSmith/keryx/actions/runs/44953401726/job/136996200218 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-21T21:51:46.147Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: Passed frozen acceptance command on GitHub for c9c3cf812. https://github.com/MrCipherSmith/keryx/actions/runs/44953401726/job/136996200218 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-21T21:51:46.450Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: Passed frozen acceptance command on GitHub for c9c3cf812. https://github.com/MrCipherSmith/keryx/actions/runs/44953401726/job/136996200218 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-21T21:51:46.750Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: Passed frozen acceptance command on GitHub for c9c3cf812. https://github.com/MrCipherSmith/keryx/actions/runs/44953401726/job/136996200218 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-21T21:51:47.052Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: Passed frozen acceptance command on GitHub for c9c3cf812. https://github.com/MrCipherSmith/keryx/actions/runs/44953401726/job/136996200218 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-21T21:51:47.355Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: Passed frozen acceptance command on GitHub for c9c3cf812. https://github.com/MrCipherSmith/keryx/actions/runs/44953401726/job/136996200218 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-21T21:51:47.662Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: Passed frozen acceptance command on GitHub for c9c3cf812. https://github.com/MrCipherSmith/keryx/actions/runs/44953401726/job/136996200218 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-21T21:51:47.959Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: Passed frozen acceptance command on GitHub for c9c3cf812. https://github.com/MrCipherSmith/keryx/actions/runs/44953401726/job/136996200218 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-21T21:51:48.257Z",
+      "event": "ac-confirmed",
+      "detail": "AC14: Passed frozen acceptance command on GitHub for c9c3cf812. https://github.com/MrCipherSmith/keryx/actions/runs/44953401726/job/136996200218 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-11-21T21:57:16.387Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: Frozen executable criteria and Desktop acceptance passed on ff4b43d3f. evidence: https://github.com/MrCipherSmith/keryx/actions/runs/44954022352/job/136998091380 (signed: Flow verification agent [stated])"
+    },
+    {
+      "at": "2026-11-21T21:57:16.706Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Frozen executable criteria and Desktop acceptance passed on ff4b43d3f. evidence: https://github.com/MrCipherSmith/keryx/actions/runs/44954022352/job/136998091380 (signed: Flow verification agent [stated])"
+    },
+    {
+      "at": "2026-11-21T21:57:17.020Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Frozen executable criteria and Desktop acceptance passed on ff4b43d3f. evidence: https://github.com/MrCipherSmith/keryx/actions/runs/44954022352/job/136998091380 (signed: Flow verification agent [stated])"
+    },
+    {
+      "at": "2026-11-21T21:57:17.341Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Frozen executable criteria and Desktop acceptance passed on ff4b43d3f. evidence: https://github.com/MrCipherSmith/keryx/actions/runs/44954022352/job/136998091380 (signed: Flow verification agent [stated])"
+    },
+    {
+      "at": "2026-11-21T21:57:17.665Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Frozen executable criteria and Desktop acceptance passed on ff4b43d3f. evidence: https://github.com/MrCipherSmith/keryx/actions/runs/44954022352/job/136998091380 (signed: Flow verification agent [stated])"
+    },
+    {
+      "at": "2026-11-21T21:57:17.993Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: Frozen executable criteria and Desktop acceptance passed on ff4b43d3f. evidence: https://github.com/MrCipherSmith/keryx/actions/runs/44954022352/job/136998091380 (signed: Flow verification agent [stated])"
+    },
+    {
+      "at": "2026-11-21T21:57:18.422Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: Frozen executable criteria and Desktop acceptance passed on ff4b43d3f. evidence: https://github.com/MrCipherSmith/keryx/actions/runs/44954022352/job/136998091380 (signed: Flow verification agent [stated])"
+    },
+    {
+      "at": "2026-11-21T21:57:18.791Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: Frozen executable criteria and Desktop acceptance passed on ff4b43d3f. evidence: https://github.com/MrCipherSmith/keryx/actions/runs/44954022352/job/136998091380 (signed: Flow verification agent [stated])"
+    },
+    {
+      "at": "2026-11-21T21:57:19.125Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: Frozen executable criteria and Desktop acceptance passed on ff4b43d3f. evidence: https://github.com/MrCipherSmith/keryx/actions/runs/44954022352/job/136998091380 (signed: Flow verification agent [stated])"
+    },
+    {
+      "at": "2026-11-21T21:57:19.462Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: Frozen executable criteria and Desktop acceptance passed on ff4b43d3f. evidence: https://github.com/MrCipherSmith/keryx/actions/runs/44954022352/job/136998091380 (signed: Flow verification agent [stated])"
+    },
+    {
+      "at": "2026-11-21T21:57:19.820Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: Frozen executable criteria and Desktop acceptance passed on ff4b43d3f. evidence: https://github.com/MrCipherSmith/keryx/actions/runs/44954022352/job/136998091380 (signed: Flow verification agent [stated])"
+    },
+    {
+      "at": "2026-11-21T21:57:20.165Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: Frozen executable criteria and Desktop acceptance passed on ff4b43d3f. evidence: https://github.com/MrCipherSmith/keryx/actions/runs/44954022352/job/136998091380 (signed: Flow verification agent [stated])"
+    },
+    {
+      "at": "2026-11-21T21:57:20.704Z",
+      "event": "ac-confirmed",
+      "detail": "AC14: Frozen executable criteria and Desktop acceptance passed on ff4b43d3f. evidence: https://github.com/MrCipherSmith/keryx/actions/runs/44954022352/job/136998091380 (signed: Flow verification agent [stated])"
+    },
+    {
+      "at": "2026-11-21T21:57:21.027Z",
+      "event": "task-done",
+      "detail": "T12: Exercise contracts, recovery and data isolation on GitHub CI"
+    },
+    {
+      "at": "2026-11-21T21:57:21.732Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1) — Verify the issue, ordinary session, crash recovery, Shell discovery and Project status against the private fixture."
+    },
+    {
+      "at": "2026-11-21T21:57:22.080Z",
+      "event": "ac-confirmed",
+      "detail": "AC15: evidence: jobs/analysis--issues-board/verification-run.md. The native QA application reopened the same saved question and session, accepted answers, and prepared one package read back in Shell. (signed: Flow verification agent [stated])"
+    },
+    {
+      "at": "2026-11-21T22:11:15.374Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: evidence: jobs/analysis--issues-board/verification-run.md. The native wide splitter responded to the arrow key. In the narrow layout Escape focused the originating issue button and Enter reopened that issue. GitHub CI also exercised both views. (signed: Flow verification agent [stated])"
+    },
+    {
+      "at": "2026-11-21T22:11:15.687Z",
+      "event": "task-done",
+      "detail": "T13: Verify the native Desktop and Shell handoff on a test issue"
+    },
+    {
+      "at": "2026-11-21T22:11:16.302Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — Reviewed account boundaries, fixed stale navigation and focus, verified ordinary Shell lifecycle, and am collecting final GitHub checks."
+    },
+    {
+      "at": "2026-11-21T22:21:05.164Z",
+      "event": "ac-confirmed",
+      "detail": "AC16: evidence: https://github.com/MrCipherSmith/keryx/actions/runs/44955430321 and https://github.com/MrCipherSmith/keryx/actions/runs/44955430327. All 28 applicable checks passed at 9775f8fad. Ordinary Shell lifecycle was exercised in its own fixture as recorded in jobs/analysis--issues-board/verification-run.md. (signed: Flow verification agent [stated])"
+    },
+    {
+      "at": "2026-11-21T22:21:05.484Z",
+      "event": "task-done",
+      "detail": "T14: Review shipped behavior, compatibility and operator guidance"
+    },
+    {
+      "at": "2026-11-21T22:21:08.341Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1280"
     }
   ],
   "acKinds": {
@@ -542,5 +795,315 @@
     "AC16": {
       "kind": "judged"
     }
-  }
+  },
+  "signatures": [
+    {
+      "at": "2026-11-21T21:51:44.952Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:09db6dd8633f902a9c8495c91f68f72caad5fee3c21d3985d41cf4bb6dc39a22"
+    },
+    {
+      "at": "2026-11-21T21:51:45.254Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:09db6dd8633f902a9c8495c91f68f72caad5fee3c21d3985d41cf4bb6dc39a22"
+    },
+    {
+      "at": "2026-11-21T21:51:45.551Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:09db6dd8633f902a9c8495c91f68f72caad5fee3c21d3985d41cf4bb6dc39a22"
+    },
+    {
+      "at": "2026-11-21T21:51:45.848Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:09db6dd8633f902a9c8495c91f68f72caad5fee3c21d3985d41cf4bb6dc39a22"
+    },
+    {
+      "at": "2026-11-21T21:51:46.147Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:09db6dd8633f902a9c8495c91f68f72caad5fee3c21d3985d41cf4bb6dc39a22"
+    },
+    {
+      "at": "2026-11-21T21:51:46.450Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:09db6dd8633f902a9c8495c91f68f72caad5fee3c21d3985d41cf4bb6dc39a22"
+    },
+    {
+      "at": "2026-11-21T21:51:46.750Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:09db6dd8633f902a9c8495c91f68f72caad5fee3c21d3985d41cf4bb6dc39a22"
+    },
+    {
+      "at": "2026-11-21T21:51:47.052Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:09db6dd8633f902a9c8495c91f68f72caad5fee3c21d3985d41cf4bb6dc39a22"
+    },
+    {
+      "at": "2026-11-21T21:51:47.355Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:09db6dd8633f902a9c8495c91f68f72caad5fee3c21d3985d41cf4bb6dc39a22"
+    },
+    {
+      "at": "2026-11-21T21:51:47.662Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC12",
+      "acChecksum": "sha256:09db6dd8633f902a9c8495c91f68f72caad5fee3c21d3985d41cf4bb6dc39a22"
+    },
+    {
+      "at": "2026-11-21T21:51:47.959Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC13",
+      "acChecksum": "sha256:09db6dd8633f902a9c8495c91f68f72caad5fee3c21d3985d41cf4bb6dc39a22"
+    },
+    {
+      "at": "2026-11-21T21:51:48.257Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC14",
+      "acChecksum": "sha256:09db6dd8633f902a9c8495c91f68f72caad5fee3c21d3985d41cf4bb6dc39a22"
+    },
+    {
+      "at": "2026-11-21T21:57:16.387Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "Flow verification agent",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:09db6dd8633f902a9c8495c91f68f72caad5fee3c21d3985d41cf4bb6dc39a22"
+    },
+    {
+      "at": "2026-11-21T21:57:16.706Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "Flow verification agent",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:09db6dd8633f902a9c8495c91f68f72caad5fee3c21d3985d41cf4bb6dc39a22"
+    },
+    {
+      "at": "2026-11-21T21:57:17.019Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "Flow verification agent",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:09db6dd8633f902a9c8495c91f68f72caad5fee3c21d3985d41cf4bb6dc39a22"
+    },
+    {
+      "at": "2026-11-21T21:57:17.341Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "Flow verification agent",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:09db6dd8633f902a9c8495c91f68f72caad5fee3c21d3985d41cf4bb6dc39a22"
+    },
+    {
+      "at": "2026-11-21T21:57:17.665Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "Flow verification agent",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:09db6dd8633f902a9c8495c91f68f72caad5fee3c21d3985d41cf4bb6dc39a22"
+    },
+    {
+      "at": "2026-11-21T21:57:17.993Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "Flow verification agent",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:09db6dd8633f902a9c8495c91f68f72caad5fee3c21d3985d41cf4bb6dc39a22"
+    },
+    {
+      "at": "2026-11-21T21:57:18.422Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "Flow verification agent",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:09db6dd8633f902a9c8495c91f68f72caad5fee3c21d3985d41cf4bb6dc39a22"
+    },
+    {
+      "at": "2026-11-21T21:57:18.791Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "Flow verification agent",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:09db6dd8633f902a9c8495c91f68f72caad5fee3c21d3985d41cf4bb6dc39a22"
+    },
+    {
+      "at": "2026-11-21T21:57:19.125Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "Flow verification agent",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:09db6dd8633f902a9c8495c91f68f72caad5fee3c21d3985d41cf4bb6dc39a22"
+    },
+    {
+      "at": "2026-11-21T21:57:19.462Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "Flow verification agent",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:09db6dd8633f902a9c8495c91f68f72caad5fee3c21d3985d41cf4bb6dc39a22"
+    },
+    {
+      "at": "2026-11-21T21:57:19.820Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "Flow verification agent",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC12",
+      "acChecksum": "sha256:09db6dd8633f902a9c8495c91f68f72caad5fee3c21d3985d41cf4bb6dc39a22"
+    },
+    {
+      "at": "2026-11-21T21:57:20.165Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "Flow verification agent",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC13",
+      "acChecksum": "sha256:09db6dd8633f902a9c8495c91f68f72caad5fee3c21d3985d41cf4bb6dc39a22"
+    },
+    {
+      "at": "2026-11-21T21:57:20.704Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "Flow verification agent",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC14",
+      "acChecksum": "sha256:09db6dd8633f902a9c8495c91f68f72caad5fee3c21d3985d41cf4bb6dc39a22"
+    },
+    {
+      "at": "2026-11-21T21:57:22.080Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "Flow verification agent",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC15",
+      "acChecksum": "sha256:09db6dd8633f902a9c8495c91f68f72caad5fee3c21d3985d41cf4bb6dc39a22"
+    },
+    {
+      "at": "2026-11-21T22:11:15.374Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "Flow verification agent",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:09db6dd8633f902a9c8495c91f68f72caad5fee3c21d3985d41cf4bb6dc39a22"
+    },
+    {
+      "at": "2026-11-21T22:21:05.163Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "Flow verification agent",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC16",
+      "acChecksum": "sha256:09db6dd8633f902a9c8495c91f68f72caad5fee3c21d3985d41cf4bb6dc39a22"
+    }
+  ]
 }
