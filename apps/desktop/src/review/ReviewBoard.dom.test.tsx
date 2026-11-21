@@ -602,7 +602,7 @@ test("details can be resized and stay closed if a removed PR later returns", asy
   const panel = host.querySelector<HTMLElement>(".review-detail-panel")!;
   expect(panel.tagName).toBe("ASIDE");
   const divider = host.querySelector<HTMLElement>('[aria-label="Resize pull request details"]')!;
-  await act(async () => divider.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })));
+  await act(async () => { divider.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })); });
   expect(panel.style.width).toBe("528px");
   cards = [];
   await click(button("Refresh pull requests"));
