@@ -771,7 +771,7 @@ export function useAcpSession(cwd: string) {
     const l = live.current;
     for (const c of Object.values(win.convs)) {
       const next = pendingQueueSend(c, l.reg.turns.has(c.sessionId));
-      if (next && sendPrompt(next.text, c.sessionId)) dispatch({ t: "queueShift", sessionId: c.sessionId });
+      if (next && sendPrompt(next.text, c.sessionId, undefined, false, undefined, next.issueLaunchId)) dispatch({ t: "queueShift", sessionId: c.sessionId });
     }
   }, [win.convs, sendPrompt, dispatch]);
 
@@ -940,7 +940,8 @@ export function useAcpSession(cwd: string) {
       const l = live.current;
       if (!l.client || !l.usable || !await openLoad(l.client, l.gen, sessionId)) throw new Error("Could not open the linked session.");
       if (initialTurn && !sendPrompt(initialTurn.text, sessionId, undefined, false, undefined, initialTurn.launchId)) {
-        throw new Error("The session is busy. Return to the issue and retry preparation when its current turn finishes.");
+        if (!l.reg.turns.has(sessionId)) throw new Error("Reopen the linked session and resume Flow preparation.");
+        dispatch({ t: "queueAdd", sessionId, text: initialTurn.text, issueLaunchId: initialTurn.launchId });
       }
       void refreshSessions();
     },

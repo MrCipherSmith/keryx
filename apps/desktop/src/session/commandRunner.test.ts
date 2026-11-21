@@ -376,6 +376,14 @@ describe("queue state", () => {
     expect(pendingQueueSend(w.convs.s1!, false)?.text).toBe("second");
   });
 
+  test("Flow preparation queued during a conversation retains its launch ID once", () => {
+    const action = { t: "queueAdd", sessionId: "s1", text: "Prepare the Flow", issueLaunchId: "launch" } as const;
+    let w = reducer(reducer(busyConv(), action), action);
+    expect(w.convs.s1!.queue).toHaveLength(1);
+    w = reducer(w, { t: "busy", sessionId: "s1", busy: false });
+    expect(pendingQueueSend(w.convs.s1!, false)?.issueLaunchId).toBe("launch");
+  });
+
   test("a session that is not held sends nothing; blank text is never queued", () => {
     let w = busyConv();
     w = reducer(w, { t: "queueAdd", sessionId: "s1", text: "   " });

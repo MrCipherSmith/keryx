@@ -1,7 +1,7 @@
 import { prepareAvailable, artifactsPrepared } from "./issue-flow-package";
 import { canonicalPath } from "../lib/clone-scope";
 import { assertGitRevision } from "../lib/git-revision";
-import { findIssueFlows, issueSourceUrl } from "../flow/service";
+import { findIssueFlows, issueSourceUrl, readFlow } from "../flow/service";
 import { reviewGitCommonDir } from "../review/board-github";
 import { projectGithubBinding } from "../review/github-account-store";
 import { sessionDir } from "../session";
@@ -48,9 +48,19 @@ async function hydrate(result: IssueWorkspace, bound: BoundIssue, dataDir?: stri
     ...(launch.flow ? { flow: launch.flow } : {}) };
   if (!launch.flow) return result;
   const dir = sessionDir(launch.project.cwd, launch.sessionId, dataDir);
+  const packageState = await readFlow(launch.flow.cwd, launch.flow.flowDir).catch(() => undefined);
+  const source = packageState?.source;
+  if (packageState?.id !== launch.flow.id || source?.type !== "github-issue" ||
+      issueSourceUrl(source.ref ?? "") !== issueSourceUrl(bound.flowSourceUrl ?? launch.issue.url)) {
+    launch.stage = "resume_required";
+    result.problem = { code: "resume_required", message: "Restore the linked Flow package before continuing preparation." };
+    return result;
+  }
+  launch.flow = { ...launch.flow, status: packageState.status };
+  result.session.flow = launch.flow;
   const question = issueQuestion(dir);
   const receipt = issueTurnReceipt(dir);
-  if (receipt && receipt.launchId !== launch.launchId) {
+  if (receipt && receipt.launchId !== launch.launchId || !receipt && launch.initialTurn.state !== "unsent") {
     launch.stage = "launch_outcome_unknown";
     result.problem = { code: "launch_outcome_unknown", message: "Inspect the linked session before resuming preparation." };
   } else if (receipt) {
@@ -65,7 +75,7 @@ async function hydrate(result: IssueWorkspace, bound: BoundIssue, dataDir?: stri
       if (launch.stage === "resume_required") result.problem = { code: "resume_required", message: "Open the linked session to continue from its saved work." };
     }
   } else if (launch.flow.status !== "initializing" || await artifactsPrepared(launch.flow)) launch.stage = "prepared";
-  else result.initialTurn = { launchId: launch.launchId, text: issuePreparationPrompt(launch) };
+  else result.initialTurn = { launchId: launch.launchId, text: issuePreparationPrompt(bound) };
   return result;
 }
 
@@ -109,37 +119,47 @@ export async function issueWorkspace(action: IssueWorkAction, cwd: string, login
       const ref = linked ?? bound.launch.flow ?? result.flows[0] ?? await ports.init({ ...project, baseBranch }, issue);
       if (!result.flows.some(flow => flow.flowDir === ref.flowDir)) result.flows.push(ref);
       bound.launch.flow = ref;
+      bound.flowSourceUrl ??= issue.ref.url;
+      bound.preparationPrompt ??= issuePreparationPrompt(bound);
       if (bound.launch.stage === "session_bound") bound.launch.stage = "flow_bound";
       setSessionFlags(bound.launch.project.cwd, bound.launch.sessionId!, { flow: ref.flowDir }, ports.dataDir);
       saveBinding(file, bound);
     }
-    return hydrate(result, bound, ports.dataDir);
+    const hydrated = await hydrate(result, bound, ports.dataDir);
+    if (action === "open-session") delete hydrated.initialTurn;
+    return hydrated;
   });
 }
 
-export async function issueWorkspaceStages(cwd: string, viewer: IssueViewer, refs: IssueRef[]): Promise<Record<string, IssueLocalStage>> {
+export async function issueWorkspaceStages(cwd: string, viewer: IssueViewer, refs: IssueRef[],
+  ports: { catalog?: typeof issueCheckoutCatalog; authorized?: IssueWorkPorts["authorized"]; dataDir?: string } = {},
+): Promise<Record<string, IssueLocalStage>> {
   const stages: Record<string, IssueLocalStage> = {};
   const groups = new Map<string, IssueRef[]>();
   for (const ref of refs) { const group = groups.get(ref.repositoryId); if (group) group.push(ref); else groups.set(ref.repositoryId, [ref]); }
-  const catalog = await issueCheckoutCatalog(cwd, refs);
+  const catalog = await (ports.catalog ?? issueCheckoutCatalog)(cwd, refs);
   await Promise.all(Array.from(groups.values(), async issues => {
     const first = issues[0]!;
     const urls = new Set(issues.map(ref => issueSourceUrl(ref.url)!));
     for (const project of catalog.get(first.repositoryId) ?? []) {
-      if (!await projectIsAuthorized(project, viewer)) continue;
+      if (!await (ports.authorized ?? projectIsAuthorized)(project, viewer)) continue;
       const flows = await findIssueFlows(project.cwd, urls);
       for (const ref of issues) {
-        const binding = privateJson<BoundIssue>(issueBindingFile(viewer, project, ref));
+        const binding = privateJson<BoundIssue>(issueBindingFile(viewer, project, ref, ports.dataDir));
         const matches = flows.filter(f => issueSourceUrl(f.flow.source.ref ?? "") === issueSourceUrl(ref.url));
         const existing = stages[issueKey(ref)];
-        const workspace = binding && await hydrate({ viewer, issue: ref, projects: [project], flows: [] }, binding);
+        const workspace = binding && await hydrate({ viewer, issue: ref, projects: [project], flows: [] }, binding, ports.dataDir);
         const stage = workspace?.launch?.stage;
         const reason = workspace?.problem?.message;
         if (stage === "awaiting_answer" || stage === "resume_required" || stage === "launch_outcome_unknown" || matches.some(f => f.flow.status === "blocked"))
           stages[issueKey(ref)] = { stage: "needs_answer", reason: reason ?? (workspace?.question ? "Answer the coordinator in Sessions." : "Inspect the blocked Flow.") };
         else if (!existing || existing.stage === "none") {
           const status = matches.find(f => f.flow.status !== "done")?.flow.status ?? matches[0]?.flow.status;
-          stages[issueKey(ref)] = { stage: status === "done" ? "done" : status === "initializing" || stage === "preparing" ? "preparing" : status ? "active" : "none" };
+          stages[issueKey(ref)] = {
+            stage: status === "done" ? "done" : status === "initializing" || stage === "preparing" ? "preparing" : status ? "active" : "none",
+            ...(workspace?.initialTurn ? { canResumePreparation: true } : {}),
+            ...(stage === "prepared" && status === "initializing" ? { reason: "Plan and criteria ready for Freeze." } : {}),
+          };
         }
       }
     }

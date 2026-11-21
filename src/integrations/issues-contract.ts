@@ -21,6 +21,8 @@ export type IssueScope = "assigned" | "created" | "mentioned" | "subscribed";
 export interface IssueLocalStage {
   stage: "none" | "preparing" | "active" | "needs_answer" | "done";
   reason?: string;
+  /** This viewer has a bound package with an initial turn that can still be submitted. */
+  canResumePreparation?: boolean;
 }
 
 export interface IssueSummary {

@@ -34,7 +34,7 @@ Choose a value in the item's **Change Project Status** menu or drag the card to 
 
 - **No access or wrong account.** Select the GitHub account with repository access and verify the checkout's GitHub binding. GitHub can report a missing private issue when access is denied. For a restricted Project, switch Source back to a personal queue.
 - **Offline or rate limited.** A failed refresh can leave the most recent authorized snapshot visible. Read the error and retry after connectivity returns or the stated GitHub limit resets. An access denial clears private board data.
-- **Interrupted preparation.** Reopen the issue using the same account and checkout, then open its linked session and Flow. Read the latest turn, pending question and package before resuming preparation. If another Shell or Desktop window owns the session, finish or disconnect that writer first.
+- **Interrupted preparation.** Reopen the issue using the same account and checkout, then open its linked session and Flow. Read the latest turn, pending question and package before resuming preparation. If the session was busy when Keryx created the package, wait for the current turn to finish and choose **Resume preparation** on the issue. Keryx reuses that package and session. If another Shell or Desktop window owns the session, finish or disconnect that writer first.
 - **Incompatible CLI.** In **Settings → Desktop**, select **Bundled keryx** or a CLI with `keryx issues --help`. Reconnect the session and reopen Issues. A local folder with the right remote is needed for session and Flow actions.
 
 ## Return to the source ticket

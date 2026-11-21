@@ -7,7 +7,7 @@ import { createFlowService, flowsRoot, githubAdapter, readFlow } from "../flow/s
 import { shellHarness, textRound } from "../acp/shell-profile.test-helpers";
 import { listSessions, openSession, persistHistory, sessionDir } from "../session";
 import { readSessionFlags } from "../session/organize";
-import { issueWorkspace, type IssueWorkAction, type IssueWorkPorts, type IssueWorkRequest } from "./issues-launch";
+import { issueWorkspace, issueWorkspaceStages, type IssueWorkAction, type IssueWorkPorts, type IssueWorkRequest } from "./issues-launch";
 import { issueBindingFile, issueContextForSession } from "./issue-session";
 import { acceptIssueTurn, answerIssueQuestion, issueTurnReceipt, rememberIssueQuestion, settleIssueTurn } from "./issue-turn";
 import { issueKey, type IssueDetail, type IssueProjectRef, type IssueViewer } from "./issues-contract";
@@ -106,6 +106,8 @@ test("AC10 a durable coordinator question survives reconnect and its answer is r
   const q = rememberIssueQuestion(dir, bound, ask);
   expect((await run("workspace")).question).toEqual({id:q.id, sessionId:result.session!.sessionId});
   answerIssueQuestion(dir, q, "yes");
+  const other = rememberIssueQuestion(dir, bound, { ...ask, question: "Should an unrelated artifact be kept?" });
+  answerIssueQuestion(dir, other, "no");
   expect(rememberIssueQuestion(dir, bound, ask).answer).toBe("yes");
   expect((await run("workspace")).question).toBeUndefined();
   expect(rememberIssueQuestion(dir, { ...bound,updatedAt:"2026-03-02" }, ask).answer).toBeUndefined();
@@ -123,6 +125,12 @@ test("AC11 concurrent callers and lost package/turn replies recover the same rea
   const dir = sessionDir(project.cwd, workspace.session!.sessionId, dataDir);
   const bound = issueContextForSession(dir,dataDir);
   const first = workspace.initialTurn!;
+  const stages = async () => (await issueWorkspaceStages(project.cwd, viewer, [issue.ref], {
+    catalog: async () => new Map([[issue.ref.repositoryId, [project]]]), authorized: async () => true, dataDir,
+  }))[issueKey(issue.ref)];
+  expect((await stages())?.canResumePreparation).toBe(true);
+  expect((await run("open-session")).initialTurn).toBeUndefined();
+  expect((await run("prepare-flow")).initialTurn).toEqual(first);
   expect(acceptIssueTurn(dir,bound,first.launchId,first.text)).toBe(true);
   expect(acceptIssueTurn(dir,bound,first.launchId,first.text)).toBe(false);
   expect((await run("prepare-flow")).initialTurn).toBeUndefined();
@@ -131,6 +139,7 @@ test("AC11 concurrent callers and lost package/turn replies recover the same rea
   expect((await run("workspace")).problem?.code).toBe("resume_required");
   await writeFile(path.join(dir,"issue-preparation-turn.json"),"{");
   expect((await run("workspace")).problem?.code).toBe("launch_outcome_unknown");
+  expect((await stages())?.canResumePreparation).toBeUndefined();
 });
 
 test("AC11 shell-profile ACP accepts exactly one keyed preparation turn and replays its real session", async () => {

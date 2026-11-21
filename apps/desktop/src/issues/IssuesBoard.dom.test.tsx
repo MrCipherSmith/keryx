@@ -154,3 +154,50 @@ test("AC14 keyboard Project Status control uses observed value and surfaces a co
   expect(host.querySelector('[aria-label="Review"] .flow-card')?.textContent).toContain(issue.title);
   expect(host.textContent).toContain("Another update changed this item to Review");
 });
+
+test("AC11 busy session leaves its Flow openable and its unsent preparation retryable from board, list, and detail", async () => {
+  let bound = false;
+  let accepted = false;
+  let requests = 0;
+  const read = async (_login: string, action: IssuesAction) => {
+    const row = { ...issue, work: { stage: bound ? "preparing" : "none", canResumePreparation: bound && !accepted } };
+    if (action === "list") return page([row]);
+    if (action === "detail") return { viewer, issue: { ...row, body: "The linked issue." } };
+    return page([]);
+  };
+  await render(read, viewer.login, action => {
+    expect(action).toBe("prepare-flow");
+    requests++;
+    if (!bound) { bound = true; throw new Error("The conversation is busy."); }
+    accepted = true;
+  });
+  await click(button("Create Flow for org/sample#3"));
+  expect(host.textContent).toContain("The conversation is busy.");
+  const retrySelector = 'button[aria-label="Resume preparation for org/sample#3"]';
+  expect(host.querySelector(".flow-card " + retrySelector)).not.toBeNull();
+  expect(button("Open Flow for org/sample#3")).toBeDefined();
+  await click(button("List"));
+  expect(host.querySelector("tbody " + retrySelector)).not.toBeNull();
+  await click(host.querySelector<HTMLButtonElement>("tbody .review-list-link")!);
+  await click(host.querySelector<HTMLButtonElement>("aside " + retrySelector)!);
+  expect(requests).toBe(2);
+  expect(host.querySelector(retrySelector)).toBeNull();
+});
+
+test("AC11 source issue can resume the same package and removes the action after admission", async () => {
+  const { IssueOriginDetail } = await import("./IssueOriginDetail");
+  const origin = { flowDir: "007-existing-issue" };
+  let accepted = false;
+  const request: typeof requestIssues = async <T,>(_cwd: string, _account: string, action: IssuesAction) =>
+    (action === "origin" ? { viewer, issue: { ...issue, body: "Linked issue",
+      work: { stage:"preparing", canResumePreparation: !accepted } } } : page([])) as T;
+  const operations: unknown[][] = [];
+  await act(async () => { root.render(createElement(IssueOriginDetail, {
+    cwd: "/fixture", login: viewer.login, origin, request, close: () => {},
+    onWork: async (...args) => { operations.push(args); accepted = true; },
+  })); });
+  await click(button("Resume preparation"));
+  expect(operations).toEqual([["prepare-flow", issue.ref, origin.flowDir]]);
+  expect(host.textContent).not.toContain("Resume preparation");
+  expect(button("Open Flow")).toBeDefined();
+});

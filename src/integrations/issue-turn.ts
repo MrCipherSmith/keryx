@@ -4,12 +4,13 @@ import { createOwnerOnlyFileExclusive, writeOwnerOnlyFileAtomic } from "../lib/c
 import { ASK_USER_CANCEL, type AskUserAnswer, type AskUserRequest } from "../lib/ask-user-contract";
 import { issueDigest } from "./issue-key";
 import { privateJson, type BoundIssue } from "./issue-session";
-import type { IssueLaunch } from "./issues-contract";
 
 interface Receipt { launchId: string; turnId: string; prompt: string; settled?: boolean }
 interface Question { id: string; request: AskUserRequest; answer?: AskUserAnswer }
 
-export function issuePreparationPrompt(launch: IssueLaunch): string {
+export function issuePreparationPrompt(bound: BoundIssue): string {
+  if (bound.preparationPrompt) return bound.preparationPrompt;
+  const { launch } = bound;
   if (!launch.flow) throw new Error("Bind a Flow before preparing it.");
   return [
     `Prepare existing Flow ${launch.flow.id} (${launch.flow.flowDir}) for ${launch.issue.url} in this session.`,
@@ -28,7 +29,7 @@ export function issueTurnReceipt(dir: string): Receipt | undefined {
 
 /** Called by the receiver after taking the session lease. An ambiguous prior write is never retried. */
 export function acceptIssueTurn(dir: string, bound: BoundIssue | undefined, launchId: string, prompt: string): boolean {
-  if (!bound || !bound.launch.flow || bound.launch.launchId !== launchId || issuePreparationPrompt(bound.launch) !== prompt)
+  if (!bound || !bound.launch.flow || bound.launch.launchId !== launchId || issuePreparationPrompt(bound) !== prompt)
     throw new Error("Issue preparation does not match this session and Flow. Refresh the issue.");
   const file = path.join(dir, "issue-preparation-turn.json");
   const receipt: Receipt = { launchId, turnId: randomUUID(), prompt };
@@ -48,15 +49,21 @@ export function issueQuestion(dir: string): Question | undefined {
 }
 
 export function rememberIssueQuestion(dir: string, bound: BoundIssue, request: AskUserRequest): Question {
-  const id = issueDigest(JSON.stringify([bound.launch.launchId, bound.updatedAt, request.question.trim(), request.options, request.irreversible]));
+  const id = issueDigest(JSON.stringify([bound.launch.launchId, bound.updatedAt, request.question.trim(), request.options, request.action,
+    request.irreversible, request.untrustedContent, request.allowFreeform]));
+  const reusable = !request.irreversible && !request.untrustedContent;
   const old = issueQuestion(dir);
-  if (old?.id === id) return old;
-  const question = { id, request };
+  if (old?.id === id && (old.answer === undefined || reusable)) return old;
+  const remembered = reusable ? privateJson<{ answer: AskUserAnswer }>(path.join(dir, `issue-answer-${id}.json`)) : undefined;
+  const question: Question = { id, request, ...remembered };
   writeOwnerOnlyFileAtomic(path.join(dir, "issue-question.json"), JSON.stringify(question));
   return question;
 }
 
 export function answerIssueQuestion(dir: string, question: Question, answer: AskUserAnswer): void {
   if (answer === ASK_USER_CANCEL || issueQuestion(dir)?.id !== question.id) return;
+  if (!question.request.irreversible && !question.request.untrustedContent) {
+    writeOwnerOnlyFileAtomic(path.join(dir, `issue-answer-${question.id}.json`), JSON.stringify({ answer }));
+  }
   writeOwnerOnlyFileAtomic(path.join(dir, "issue-question.json"), JSON.stringify({ ...question, answer }));
 }

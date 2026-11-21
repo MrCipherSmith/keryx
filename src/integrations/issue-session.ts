@@ -13,6 +13,9 @@ export interface BoundIssue {
   /** The independently fetched description is available to the ACP conversation as untrusted external context. */
   body: string;
   updatedAt: string;
+  /** Persisted before dispatch so retries survive title, login and issue URL changes or a client upgrade. */
+  preparationPrompt?: string;
+  flowSourceUrl?: string;
 }
 
 export function issueBindingFile(viewer: IssueViewer, project: IssueProjectRef, issue: IssueDetail["ref"], dataDir?: string): string {

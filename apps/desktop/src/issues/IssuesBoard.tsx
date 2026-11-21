@@ -169,7 +169,16 @@ function Collection({ cwd, login, source, target, prefsKey, sourceControls, clea
     if (activeWork.current) return;
     activeWork.current = true; setWorking(issueKey(ref)); setNotice("");
     try { await onWork(action, ref); if (alive.current) void load(); }
-    catch (cause) { if (alive.current) { const reason = errMessage(cause); if (isAccessError(reason)) accessLost(reason); else setNotice(reason); } }
+    catch (cause) {
+      if (!alive.current) return;
+      const reason = errMessage(cause);
+      if (isAccessError(reason)) accessLost(reason);
+      else {
+        setNotice(reason);
+        // Preparation may bind a package before the session accepts its first turn.
+        if (action === "prepare-flow") void load();
+      }
+    }
     finally { activeWork.current = false; if (alive.current) setWorking(null); }
   };
   const project = snapshot?.project;
@@ -210,6 +219,9 @@ function Collection({ cwd, login, source, target, prefsKey, sourceControls, clea
       <button className={full ? "btn btn-sm" : "icon-btn"} aria-label={flowLabel + " for " + issueName(issue)} title={flowLabel}
         disabled={pending} onClick={() => void act(stage === "none" ? "prepare-flow" : "open-flow", issue.ref)}>
         <Icon name="branch" size={15} />{full && flowLabel}</button>
+      {issue.work?.canResumePreparation && <button className={full ? "btn btn-sm" : "icon-btn"}
+        aria-label={"Resume preparation for " + issueName(issue)} title="Resume preparation" disabled={pending}
+        onClick={() => void act("prepare-flow", issue.ref)}><Icon name="play" size={15} />{full && "Resume preparation"}</button>}
       {project && <StatusMenu row={row} project={project} pending={moving !== null} onMove={value => void move(row, value)} />}
     </div>;
   }
