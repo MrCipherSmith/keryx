@@ -137,6 +137,7 @@ export function useAcpSession(cwd: string) {
   const [fatal, setFatal] = useState<Fatal | null>(null);
   /** The incompatible-keryx dialog was put away; `fatal` itself stays, so the window keeps saying so. */
   const [fatalHidden, setFatalHidden] = useState(false);
+  const [canPrepareIssue, setCanPrepareIssue] = useState(false);
   const [extensions, setExtensions] = useState<readonly string[]>([]);
   /** The keryx this window runs (`acp_start`), for project commands run in a terminal tab. */
   const [keryxPath, setKeryxPath] = useState<string | null>(null);
@@ -446,6 +447,7 @@ export function useAcpSession(cwd: string) {
       l.commandMethod = false;
       l.extensions = [];
       setExtensions([]);
+      setCanPrepareIssue(false);
       l.reg.reset();
       setReviewDrafts([]);
       setFatal(null);
@@ -556,6 +558,7 @@ export function useAcpSession(cwd: string) {
         l.commandMethod = hasCommandExtension(init);
         l.extensions = extensionsOf(init);
         setExtensions(l.extensions);
+        setCanPrepareIssue(init._meta?.keryx?.issuePreparation === true);
 
         const found = init.agentInfo?.version ?? "unknown";
         const profile = init._meta?.keryx?.profile === "shell" ? "shell" : "editor";
@@ -628,7 +631,7 @@ export function useAcpSession(cwd: string) {
 
   /** Starts a turn in the shown session; returns true only when the prompt was accepted (the caller may then clear its draft). */
   const sendPrompt = useCallback(
-    (text: string, target?: string, context?: UserPromptContext, literal = false, replaces?: number): boolean => {
+    (text: string, target?: string, context?: UserPromptContext, literal = false, replaces?: number, issueLaunchId?: string): boolean => {
       const extra = context?.blocks ?? [];
       const l = live.current;
       const client = l.client;
@@ -640,7 +643,7 @@ export function useAcpSession(cwd: string) {
       turn.done = (async () => {
         try {
           const prompt = buildUserPrompt(text, extra, literal);
-          const r = await client.request<{ stopReason?: string }>("session/prompt", { sessionId, prompt });
+          const r = await client.request<{ stopReason?: string }>("session/prompt", { sessionId, prompt, ...(issueLaunchId ? { _meta: { keryx: { issueLaunchId } } } : {}) });
           if (l.client !== client) return;
           const notice = (level: "info" | "warn", t: string) => dispatch({ t: "notice", sessionId, level, text: t });
           if (r?.stopReason === "max_tokens") notice("warn", "Stopped: the model hit its token limit.");
@@ -932,6 +935,15 @@ export function useAcpSession(cwd: string) {
     fatalHidden,
     hideFatal: () => setFatalHidden(true),
     sendPrompt,
+    canPrepareIssue,
+    openIssueSession: async (sessionId: string, initialTurn?: { launchId: string; text: string }) => {
+      const l = live.current;
+      if (!l.client || !l.usable || !await openLoad(l.client, l.gen, sessionId)) throw new Error("Could not open the linked session.");
+      if (initialTurn && !sendPrompt(initialTurn.text, sessionId, undefined, false, undefined, initialTurn.launchId)) {
+        throw new Error("The session is busy. Return to the issue and retry preparation when its current turn finishes.");
+      }
+      void refreshSessions();
+    },
     runCommand,
     /** Show a `/delegate` run's terminal tab; false when it is closed (or not a terminal run). */
     focusDelegateTerminal: (runId: string): boolean => delegates.focus(runId),

@@ -9,6 +9,7 @@ pub mod files;
 pub mod fs;
 pub mod images;
 pub mod gitinfo;
+pub mod issues;
 pub mod locator;
 pub mod navigation;
 pub mod panel_mcp;
@@ -38,6 +39,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .manage(bridge::AppState::default())
+        .manage(issues::IssueTransfers::default())
         .manage(flows::watch::FlowWatchers::default())
         .manage(pty::PtyManager::default())
         .manage(panels::PanelRoots::default())
@@ -127,6 +129,9 @@ pub fn run() {
             pullrequest::pr_info,
             review::github_accounts,
             review::github_login,
+            issues::issues_request,
+            issues::issues_transfer,
+            issues::issues_take_transfer,
             review::review_board,
             review::review_run,
             review::review_publish,

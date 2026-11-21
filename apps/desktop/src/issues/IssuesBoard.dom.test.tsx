@@ -60,7 +60,8 @@ test("board and list open one detail panel; comments load on demand and Flow sta
   await click(trigger);
   const detail = host.querySelector("aside")!;
   expect(calls).toEqual(["list", "detail", "comments"]);
-  expect(detail.textContent?.indexOf("See")).toBeLessThan(detail.textContent!.indexOf("More context"));
+  const content = detail.textContent ?? "";
+  expect(content.includes("See") && content.indexOf("See") < content.indexOf("More context")).toBe(true);
   expect(detail.querySelector('a[href="https://github.com/org/sample/issues/42"]')).not.toBeNull();
   expect(detail.querySelector('a[href="https://github.com/org/sample/blob/HEAD/docs/README.md"]')).not.toBeNull();
   await click(button("Open Flow for org/sample#3"));

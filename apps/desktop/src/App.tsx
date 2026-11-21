@@ -25,6 +25,8 @@ import { SessionReviewActivity } from "./review/SessionReviewActivity";
 import { loadSessionReviewTargets, readSessionReviewLinks, rememberSessionReview, reviewFlowId, reviewSessionTitle, type ReviewComposerTarget, type SessionReviewLink } from "./review/sessionReview";
 import { publishSessionReview, reviewRun } from "./platform/reviewRuns";
 import { modelChoices, providerOf } from "./session/Composer";
+import { IssuesView } from "./issues/IssuesView";
+import { useIssueWork } from "./issues/IssueWork";
 import { FlowsBoard } from "./flows/FlowsBoard";
 import type { LinkedSession } from "./flows/FlowDetail";
 import { sessionFlags } from "./acp/types";
@@ -353,6 +355,9 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       } else if (k === "3") {
         e.preventDefault();
         go("review");
+      } else if (k === "4") {
+        e.preventDefault();
+        go("issues");
       } else if (k === ",") {
         e.preventDefault();
         go("settings");
@@ -454,6 +459,13 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
     && view !== "settings" && !s.fatal && !topAsk && !topPermission && !providers.request && !enrich && palette === null;
   const reviewDisconnected = githubAccount?.configured && !githubAccount.login;
 
+  const issueWork = useIssueWork({
+    cwd, ready: state.phase === "ready", canPrepare: s.canPrepareIssue,
+    showSession: async (id, turn) => { await s.openIssueSession(id, turn); setView("session"); },
+    showFlow: dir => { setLinkedFlow(dir); setView("flows"); },
+    notifyError: message => s.notify("error", message),
+  });
+
   const currentNotice = !reviewDisconnected && reviewNotice?.binding === reviewViewer ? reviewNotice : undefined;
   const [reviewComposer, setReviewComposer] = useState<ReviewComposerTarget>();
   const [reviewLinks, setReviewLinks] = useState(() => readSessionReviewLinks(cwd));
@@ -486,7 +498,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       <span className="truncate">{sessionTitle}</span>
     ) : (
       <span className="truncate">
-        {view === "settings" ? "Settings" : `${basename(cwd)} · ${view === "flows" ? "Flows" : "Pull requests"}`}
+        {view === "settings" ? "Settings" : `${basename(cwd)} · ${view === "flows" ? "Flows" : view === "issues" ? "Issues" : "Pull requests"}`}
       </span>
     );
 
@@ -540,6 +552,11 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
           <FlowsBoard initialOpenDir={linkedFlow} cwd={cwd} flows={flows} linkedSessions={linkedSessions} onOpenSession={(card) => void openSessionWith(card.prUrl ?? `.metaproject/flows/${card.dir}`, card)} onWorkOn={(c, target) => void workOn(c, target)} />
         </div>
       ) : null}
+      {issueWork.chooser}
+      {workView === "issues" && <div className="view" hidden={view !== "issues"}>
+        <IssuesView cwd={cwd} preferred={reviewViewer} onSettings={() => openSettings("integrations")}
+          onWork={(login, action, ref, flowDir) => issueWork.run({login, action, ref, flowDir})} />
+      </div>}
       <div className="view" hidden={view !== "review"}>
         {reviewDisconnected ? (
           <EmptyState title="GitHub is not connected" icon="pr">

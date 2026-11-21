@@ -723,6 +723,16 @@ async function handle(ws: ServerWebSocket<Conn>, cmd: string, args: Json): Promi
     }
     case "github_login":
       throw new Error("In browser dev mode, run `gh auth login --hostname github.com --web` in a terminal, then refresh accounts.");
+    case "issues_request": {
+      const {action, login, request} = args;
+      if (typeof action !== "string" || !["origin","viewer","list","detail","comments","project","move","workspace","open-session","prepare-flow"].includes(action)
+        || typeof login !== "string" || !/^[a-z0-9][a-z0-9_-]{0,99}$/i.test(login)
+        || !request || typeof request !== "object" || Array.isArray(request) || JSON.stringify(request).length > 32768) {
+        throw new Error("Invalid Issues request.");
+      }
+      return runReviewCli(await projectCwd(ws.data, cwd), ["issues", action, "--login", login, "--request", JSON.stringify(request), "--json"],
+        !["move","open-session","prepare-flow"].includes(action));
+    }
     case "review_board": {
       const root = await projectCwd(ws.data, cwd);
       const argv = reviewBoardArgs(args);

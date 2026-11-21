@@ -716,3 +716,6 @@ button { font: inherit; }
 .enrich-numbers, .enrich-row { align-items: flex-start; margin-bottom: var(--sp-3); }
 .enrich-range { display: flex; align-items: center; gap: var(--sp-2); }
 .enrich-numbers input[type="number"] { width: 72px; }
+
+.issues-view { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.issues-account { display: flex; gap: var(--sp-2); align-items: center; padding: var(--sp-2) var(--sp-4); color: var(--fg-muted); font-size: var(--fs-sm); }
