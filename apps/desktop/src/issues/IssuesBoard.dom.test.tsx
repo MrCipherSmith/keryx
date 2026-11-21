@@ -175,7 +175,7 @@ test("AC11 busy session leaves its Flow openable and its unsent preparation retr
   expect(host.textContent).toContain("The conversation is busy.");
   const retrySelector = 'button[aria-label="Resume preparation for org/sample#3"]';
   expect(host.querySelector(".flow-card " + retrySelector)).not.toBeNull();
-  expect(button("Open Flow for org/sample#3")).toBeDefined();
+  expect(button("Open Flow for org/sample#3")).not.toBeUndefined();
   await click(button("List"));
   expect(host.querySelector("tbody " + retrySelector)).not.toBeNull();
   await click(host.querySelector<HTMLButtonElement>("tbody .review-list-link")!);
@@ -199,5 +199,5 @@ test("AC11 source issue can resume the same package and removes the action after
   await click(button("Resume preparation"));
   expect(operations).toEqual([["prepare-flow", issue.ref, origin.flowDir]]);
   expect(host.textContent).not.toContain("Resume preparation");
-  expect(button("Open Flow")).toBeDefined();
+  expect(button("Open Flow")).not.toBeUndefined();
 });
