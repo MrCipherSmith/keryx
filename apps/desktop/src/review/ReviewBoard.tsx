@@ -434,6 +434,8 @@ function RepositoryBoard({ active: tabActive = true, onIndicatorChange, cwd, exp
       </EmptyState>)}
     {tabActive && watcherTarget && subscriptionNumber !== null && <PrSubscriptionDialog key={subscriptionNumber}
       cwd={cwd} target={watcherTarget} command={rulesCommand} number={subscriptionNumber}
+      owned={snapshot?.cards.some(item => item.number === subscriptionNumber && item.state === "open" &&
+        item.author.toLowerCase() === watcherTarget.viewer.toLowerCase()) ?? false}
       watching={watchingTarget !== null} onAccessLost={accessLost}
       onSaved={numbers => setSubscriptions(new Set(numbers))} onClose={() => setSubscriptionNumber(null)} />}
     {tabActive && filtering && <ReviewFilters cards={snapshot?.cards ?? []} filters={filters} onClose={() => setFiltering(false)}

@@ -20,6 +20,7 @@ interface RawCard {
   number: number; title: string; state: "OPEN" | "CLOSED" | "MERGED"; isDraft: boolean;
   author: Person | null; updatedAt: string; headRefOid: string; baseRefOid: string;
   reviewDecision: ReviewCard["decision"];
+  mergeStateStatus?: string;
   recentReviews?: { nodes: ({ id: string; author: Person | null; state: string } | null)[] };
   changedFiles?: number; additions?: number; deletions?: number;
   assignees: Connection<Person>; reviewRequests: Connection<Reviewer>;
@@ -41,7 +42,7 @@ const listQuery = (state: ReviewBoardState, reviewerFields: string, first: numbe
         number title state isDraft author { login } headRefOid baseRefOid updatedAt reviewDecision changedFiles additions deletions
         ${connection("assignees", person)}
         ${connection("reviewRequests", reviewerFields)}
-        ${watcher ? "recentReviews: reviews(last:25, states:[APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED]) { nodes { id author { login } state } }" : ""}
+        ${watcher ? "mergeStateStatus recentReviews: reviews(last:25, states:[APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED]) { nodes { id author { login } state } }" : ""}
         commits(last:1) { nodes { commit { oid statusCheckRollup { state contexts(first:1) { totalCount } } } } }
       }
     }
@@ -160,6 +161,7 @@ export async function listReviewCards(repo: string, repositories: string[], stat
           state: pr.state.toLowerCase() as ReviewCard["state"], draft: pr.isDraft, author: pr.author?.login ?? "",
           assignees: assignees.names, reviewers: reviewers.names, assigneesComplete: assignees.complete, reviewersComplete: reviewers.complete,
           ...(trackRequestIds ? { reviewRequestIds: Object.fromEntries(requestIds),
+            ...(pr.mergeStateStatus && { watcherMergeState: pr.mergeStateStatus }),
             ...(Array.isArray(pr.recentReviews?.nodes) && { watcherReviews: pr.recentReviews.nodes.flatMap(review =>
               review?.id && review.author?.login && review.state
                 ? [{ id: review.id, login: review.author.login, state: review.state }] : []) }),

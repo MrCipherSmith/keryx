@@ -14,6 +14,7 @@ export interface WatcherEvent {
     | "review_request_removed"
     | "review_submitted"
     | "draft_changed"
+    | "rebase"
     | "decision"
     | "ci"
     | "updated";
@@ -30,6 +31,7 @@ export type PrWatchTopic = typeof PR_WATCH_TOPICS[number];
 export interface PrSubscription {
   number: number;
   topics: PrWatchTopic[];
+  rebase?: true;
   activity?: WatcherEvent[];
 }
 

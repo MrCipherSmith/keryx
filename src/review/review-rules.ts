@@ -93,7 +93,7 @@ export function applyReviewRuleAction(
         db.run("DELETE FROM review_rules WHERE watcher=? AND id=?", [scope, action.id]);
       }
     } else if (action.kind === "subscription") {
-      savePrSubscription(db, scope, action.number, action.topics);
+      savePrSubscription(db, scope, action.number, action.topics, action.rebase);
     } else if (action.kind === "mode") {
       if (action.choice.mode === "auto") {
         const rule = db

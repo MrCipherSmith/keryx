@@ -11,8 +11,9 @@ const labels: Record<PrWatchTopic, string> = {
   checks: "CI status",
 };
 
-export function PrSubscriptionDialog({ number, watching, onSaved, onClose, ...rules }: RulesProps & {
+export function PrSubscriptionDialog({ number, owned, watching, onSaved, onClose, ...rules }: RulesProps & {
   number: number;
+  owned: boolean;
   watching: boolean;
   onSaved: (numbers: number[]) => void;
   onClose: () => void;
@@ -21,21 +22,23 @@ export function PrSubscriptionDialog({ number, watching, onSaved, onClose, ...ru
   const saved = snapshot?.subscriptions?.find(item => item.number === number);
   const [draft, setDraft] = useState<PrWatchTopic[] | null>(null);
   const topics = draft ?? saved?.topics ?? PR_WATCH_TOPICS;
+  const [draftRebase, setDraftRebase] = useState<boolean | null>(null);
+  const rebase = owned && (draftRebase ?? saved?.rebase ?? false);
   const available = Array.isArray(snapshot?.subscriptions);
 
-  async function save(selected: readonly PrWatchTopic[]) {
-    if (await request({ kind: "subscription", number, topics: [...selected] })) {
+  async function save(selected: readonly PrWatchTopic[], autoRebase: boolean) {
+    if (await request({ kind: "subscription", number, topics: [...selected], rebase: autoRebase })) {
       const other = snapshot!.subscriptions!.filter(item => item.number !== number).map(item => item.number);
-      onSaved(selected.length ? [...other, number] : other);
+      onSaved(selected.length || autoRebase ? [...other, number] : other);
       onClose();
     }
   }
 
   return <Dialog title={`PR #${number} subscription`} icon="bell" width={500} onClose={saving ? null : onClose} footer={<>
-    {saved && <button type="button" className="btn" disabled={saving} onClick={() => void save([])}>Unsubscribe</button>}
+    {saved && <button type="button" className="btn" disabled={saving} onClick={() => void save([], false)}>Unsubscribe</button>}
     <span className="grow" />
     <button type="button" className="btn" disabled={saving} onClick={onClose}>Cancel</button>
-    <button type="button" className="btn btn-primary" disabled={!available || !topics.length || saving} onClick={() => void save(topics)}>
+    <button type="button" className="btn btn-primary" disabled={!available || (!topics.length && !rebase) || saving} onClick={() => void save(topics, rebase)}>
       {saved ? "Save" : "Subscribe"}
     </button>
   </>}>
@@ -54,6 +57,11 @@ export function PrSubscriptionDialog({ number, watching, onSaved, onClose, ...ru
             {labels[topic]}
           </label>)}
         </fieldset>
+        {owned && <fieldset className="field pr-subscription-topics" disabled={saving}>
+          <legend className="field-label">Automatic branch maintenance</legend>
+          <label><input type="checkbox" checked={rebase} onChange={event => setDraftRebase(event.currentTarget.checked)} /> Rebase when behind the base branch</label>
+          <p className="field-hint">GitHub updates the PR branch when it can rebase cleanly. Conflicts appear in subscription activity.</p>
+        </fieldset>}
         {saved && <section className="watcher-history">
           <h3>Subscription activity</h3>
           {saved.activity?.length ? <ol>{saved.activity.map((event, index) => <li key={`${event.at}-${index}`}>

@@ -21,8 +21,12 @@ export function watcherTransaction<T>(action: (db: Database) => T): T {
     CREATE TABLE IF NOT EXISTS watcher_events (id INTEGER PRIMARY KEY, watcher TEXT NOT NULL, event TEXT NOT NULL);
     CREATE INDEX IF NOT EXISTS recent_watcher_events ON watcher_events(watcher, id DESC);
     CREATE TABLE IF NOT EXISTS review_pr_subscriptions (
-      watcher TEXT NOT NULL, number INTEGER NOT NULL, topics TEXT NOT NULL,
+      watcher TEXT NOT NULL, number INTEGER NOT NULL, topics TEXT NOT NULL, rebase INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (watcher, number)
+    );
+    CREATE TABLE IF NOT EXISTS review_pr_rebase_attempts (
+      watcher TEXT NOT NULL, number INTEGER NOT NULL, baseSha TEXT NOT NULL, headSha TEXT NOT NULL,
+      PRIMARY KEY (watcher, number, baseSha, headSha)
     );
     CREATE TABLE IF NOT EXISTS review_pr_subscription_events (
       id INTEGER PRIMARY KEY, watcher TEXT NOT NULL, number INTEGER NOT NULL, event TEXT NOT NULL

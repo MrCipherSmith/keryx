@@ -9,7 +9,8 @@ import { listReviewCards } from "./board";
 import { boardGraphql, projectGithubConnection } from "./board-github";
 import { projectGithubBinding, saveProjectGithubBinding, verifyProjectGithubAccountIntent } from "./github-account-store";
 import { resolveWatcherCheckout } from "./watcher-project";
-import type { ReviewBoardSnapshot } from "./board-types";
+import { rebaseWatchedPullRequests } from "./watcher-rebase";
+import type { ReviewCard, ReviewBoardSnapshot } from "./board-types";
 import { recordPrSubscriptionEvents } from "./watcher-subscriptions";
 import { observedCards, watcherChanges, type WatchedCard } from "./watcher-events";
 import {
@@ -228,6 +229,7 @@ export async function pollWatcher(
   });
   if (!claimed) return readWatcher(cwd, key);
   let cards: WatchedCard[] | undefined;
+  let branchUpdates: ReviewCard[] = [];
   let failure: string | null = null;
   let recoveryWarning: string | null = null;
   let settled: { links: ReturnType<typeof linkedReviewRuns>; outcomes: ReturnType<typeof scheduledRunOutcomes> } | undefined;
@@ -235,6 +237,7 @@ export async function pollWatcher(
     const board = await fetch(cwd, key);
     validateObservation(board, key);
     cards = observedCards(board.cards);
+    branchUpdates = board.cards.filter(card => card.watcherMergeState === "BEHIND" || card.watcherMergeState === "DIRTY");
     try {
       const links = access((db) => db.query("SELECT 1 FROM watchers WHERE id=? AND lease=? AND state='enabled'").get(id, token)
         ? linkedReviewRuns(db, id) : []);
@@ -291,6 +294,9 @@ export async function pollWatcher(
     }
     return !!cards;
   });
-  if (observed) await dispatchReadyRules(cwd, key, dispatch);
+  if (observed) {
+    if (branchUpdates.length) await rebaseWatchedPullRequests(cwd, key, branchUpdates);
+    await dispatchReadyRules(cwd, key, dispatch);
+  }
   return readWatcher(cwd, key);
 }

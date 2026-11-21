@@ -22,7 +22,7 @@ export type ReviewRuleAction =
   | { kind: "save"; rule: ReviewRule; expected?: ReviewRule | null | undefined; number?: number | undefined }
   | { kind: "delete"; id: string; expected?: ReviewRule | undefined; number?: number | undefined }
   | { kind: "mode"; number: number; choice: ReviewPrMode }
-  | { kind: "subscription"; number: number; topics: PrWatchTopic[] };
+  | { kind: "subscription"; number: number; topics: PrWatchTopic[]; rebase?: boolean | undefined };
 
 export interface ReviewRuleActivity {
   number: number;
