@@ -17,7 +17,7 @@ const checks = () => ({ statusCheckRollup: { contexts: page([
 function fixture(failComments = false): DetailQuery {
   return async (query, vars) => {
     if (query.includes("query ReviewDetailIdentity")) return { viewer: { login: "viewer" }, repository: {
-      id: "repo-id", pullRequest: { id: "pr-id", headRefOid: "abc", commits: { nodes: [{ commit: { id: "commit-id", oid: "abc" } }] } },
+      id: "repo-id", pullRequest: { id: "pr-id", body: "## PR description", headRefOid: "abc", commits: { nodes: [{ commit: { id: "commit-id", oid: "abc" } }] } },
     } };
     if (query.includes("on PullRequestReviewThread")) return { viewer: { login: "viewer" }, node: { comments: page([message("reply", true)]) } };
     if (query.includes("on Commit")) return { viewer: { login: "viewer" }, node: checks() };
@@ -33,6 +33,7 @@ function fixture(failComments = false): DetailQuery {
 describe("readReviewBoardDetail", () => {
   test("paginates discussions and replies, retains self and resolved, separates checks and reviews", async () => {
     const d = await readReviewBoardDetail("org/repo", 1, ".", fixture());
+    expect(d.description).toBe("## PR description");
     expect(d.comments.map(m => m.id)).toEqual(["c1", "c2"]);
     expect(d.threads[0]).toMatchObject({ resolved: true, messages: [messageShape("root", false), messageShape("reply", true)] });
     expect(d.reviews[0]?.state).toBe("CHANGES_REQUESTED");

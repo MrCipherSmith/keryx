@@ -14,6 +14,8 @@ import { writeFileAtomic } from "../lib/fs";
 import { readJsonFileOr } from "../lib/json";
 import { isCapDrop, isReasonedDrop } from "./blast-radius";
 import { computeCoverage } from "./coverage-complete";
+import { roleDispatchWaves } from "./estimate";
+import type { SliceManifest } from "./slice";
 import { hasChunkPlan } from "./chunks";
 import { packageScopeFiles } from "./coverage";
 import { completeHeadGate, isPrBound, type PrLookup } from "./complete-head-gate";
@@ -173,7 +175,18 @@ async function filesChecks(ctx: Context): Promise<{ files: Verdict; radius: Verd
 async function runsMissingResultFile(dir: string, runs: readonly DispatchRun[]): Promise<string[]> {
   if (!(await pathExists(path.join(dir, "raw")))) return [];
   const lost: string[] = [];
+  const routed = runs.some(run => run.routedOut === true);
+  const manifest = routed ? await readJson<SliceManifest>(path.join(dir, "slices/manifest.json")) ??
+    await readJson<SliceManifest>(path.join(dir, "slice-manifest.json")) : undefined;
   for (const run of runs) {
+    if (run.routedOut === true) {
+      try {
+        // Routing has no raw result. Check the package's manifest rather than treating its evidence path as a reply.
+        if (manifest && roleDispatchWaves(manifest, run.reviewer).length === 0) continue;
+      } catch { /* A broken manifest cannot account for a missing result. */ }
+      lost.push(run.reviewer);
+      continue;
+    }
     const evidence = run.rawEvidence?.split("#")[0];
     if (run.status !== "complete" || evidence === undefined || evidence === "") continue;
     if (!(await pathExists(path.join(dir, evidence)))) lost.push(run.reviewer);
@@ -222,7 +235,9 @@ async function reviewersCheck(ctx: Context): Promise<Verdict> {
   const lost = await runsMissingResultFile(ctx.dir, runs);
   const gate = problems.length === 0 ? await coverageGateOf(ctx, dispatch) : { errors: [], note: "" };
   if (problems.length === 0 && unfinished.length === 0 && unplanned.length === 0 && lost.length === 0 && gate.errors.length === 0) {
-    return ok(`${runs.length} reviewer run(s), all complete with their result on disk; ${gate.note}`);
+    const routed = runs.filter(run => run.routedOut === true).length;
+    const skipped = routed ? `; ${routed} reviewer(s) had no assigned slices` : "";
+    return ok(`${runs.length - routed} reviewer run(s), all complete with their result on disk${skipped}; ${gate.note}`);
   }
   return reviewersFailure({ unfinished, unplanned, lost, problems, coverage: gate.errors }, ctx.arg);
 }

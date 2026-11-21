@@ -12,6 +12,8 @@ import { checkDispatch, renderDispatchCheck } from "../review/dispatch-check";
 import { MAX_RETRY_ROUNDS, type ReviewerResult } from "../review/retry-plan";
 import { DEFAULT_SLICE_MAX_BYTES, DEFAULT_WAVE_BYTES, type SliceManifest, manifestSizeProblem, renderSliceSummary, sliceSourceFromDiff, validateSliceMaxBytes, validateWaveBytes } from "../review/slice";
 import { packagePlanGate } from "../review/estimate";
+import { globToRegExp } from "../review/coverage";
+import { collectReviewers } from "../review/reviewers";
 import { packageReviewers, writeWaveDrivers } from "../review/wave-drivers";
 import { RETRY_STATE_NAME, UnreadableInput, commitRetryPlan, evaluateRetry, packageOfManifest, readJsonSource, wholeFileResult, writeSliceFiles } from "../review/retry-eval";
 
@@ -256,7 +258,17 @@ export async function runSlice(args: string[], deps: SliceDeps): Promise<void> {
     delta === undefined
       ? firstRoundCut(source, sizes, routing)
       : deltaRoundCut({ source, delta, prior: readPriorFindings(packageFlag!), sizes, routing, secondLook: await secondLookSource(delta, contextLines, scopeConfig) });
-  const { slices, omissions } = cut;
+  const { omissions } = cut;
+  const { project } = await collectReviewers(process.cwd());
+  const gates = project.map(reviewer => ({
+    name: reviewer.name, paths: reviewer.paths.map(globToRegExp),
+  }));
+  const slices = cut.slices.map(slice => {
+    if (slice.kind === "fix" || slice.kind === "second-look" || gates.length === 0) return slice;
+    const matches = gates.filter(gate => gate.paths.length === 0 ||
+      slice.files.some(file => gate.paths.some(pattern => pattern.test(file)))).map(gate => gate.name);
+    return { ...slice, roles: [...new Set([...(slice.roles ?? []), ...matches])].sort() };
+  });
   const totals = {
     ...cut.totals,
     slices: slices.length,
@@ -272,7 +284,8 @@ export async function runSlice(args: string[], deps: SliceDeps): Promise<void> {
     const base = delta?.range.base ?? round?.range.base ?? ref;
     throw new Error(`review slice refused: empty review range${base === undefined || base === null ? "" : `: base ${String(base).slice(0, 12)} equals head or changes nothing`} (${head === "no-head" ? "no head" : head.slice(0, 12)}); there is nothing to slice. For a merged pull request pass its recorded base (\`review start --base <sha|ref>\` / \`review plan --ref <base>\`).`);
   }
-  const manifest = { ...cut.manifest, host, waveBytes, omissions, totals, slices: slices.map(({ text: _text, ...entry }) => entry) };
+  const manifest = { ...cut.manifest, host, waveBytes, omissions, totals,
+    ...(gates.length > 0 ? { projectRoles: gates.map(gate => gate.name) } : {}), slices: slices.map(({ text: _text, ...entry }) => entry) };
 
   // Placed after the diff is fetched, which can take long: the directory is judged where it is now, right before it is written.
   const packageOut = optionValue(args, "--out") === undefined ? placed("--package") : undefined;

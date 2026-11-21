@@ -592,20 +592,24 @@ test("an offline return from merged history restores only the earlier open query
   expect(host.textContent).not.toContain("Old merged history");
 });
 
-test("a refreshed-away drawer remains closed even if the same PR later returns", async () => {
+test("details can be resized and stay closed if a removed PR later returns", async () => {
   let cards = [pr];
   await render(async () => snapshot(cards), "/project", ++renderKey, undefined, async () => ({
     version: 1, viewer:"ann", repositoryId:"repo1", number: pr.number, headSha:pr.headSha, fetchedAt:pr.updatedAt,
     comments:[],reviews:[],threads:[],checks:[],warnings:[],
   }), async () => ({ version:1, runs:[] }));
   await click(host.querySelector<HTMLElement>(".review-card")!);
-  expect(host.querySelector('[role="dialog"]')).not.toBeNull();
+  const panel = host.querySelector<HTMLElement>(".review-detail-panel")!;
+  expect(panel.tagName).toBe("ASIDE");
+  const divider = host.querySelector<HTMLElement>('[aria-label="Resize pull request details"]')!;
+  await act(async () => { divider.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })); });
+  expect(panel.style.width).toBe("528px");
   cards = [];
   await click(button("Refresh pull requests"));
-  expect(host.querySelector('[role="dialog"]')).toBeNull();
+  expect(host.querySelector(".review-detail-panel")).toBeNull();
   cards = [pr];
   await click(button("Refresh pull requests"));
-  expect(host.querySelector('[role="dialog"]')).toBeNull();
+  expect(host.querySelector(".review-detail-panel")).toBeNull();
 });
 
 test("clearing filters preserves the independently entered search", async () => {

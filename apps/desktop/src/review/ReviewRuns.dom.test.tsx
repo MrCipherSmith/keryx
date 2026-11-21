@@ -237,7 +237,7 @@ test("a closed result from an earlier review scope stays readable and allows a n
   expect(requests.at(-1)).toEqual({ kind: "start", baseSha: pr.baseSha, headSha: pr.headSha });
 });
 
-test("Tab wraps after the publish action and Shift+Tab returns to it", async () => {
+test("docked review actions let Tab and Shift+Tab leave the panel", async () => {
   await show(async () => ({ version: 1, runs: [complete] }), { ...pr, number: 105 });
   await click("View review result");
   const publish = btn("Publish to GitHub");
@@ -246,10 +246,9 @@ test("Tab wraps after the publish action and Shift+Tab returns to it", async () 
     new KeyboardEvent("keydown", { key: "Tab", shiftKey, bubbles: true, cancelable: true }),
   );
   first.focus();
-  expect(tab(true)).toBe(false);
-  expect(document.activeElement).toBe(publish);
-  expect(tab(false)).toBe(false);
-  expect(document.activeElement).toBe(first);
+  expect(tab(true)).toBe(true);
+  publish.focus();
+  expect(tab(false)).toBe(true);
 });
 
 test("a scheduled review shares the card action and identifies its rule and budget in history", async () => {
@@ -647,7 +646,7 @@ test("history opens a specific earlier attempt in a dialog and keeps it selected
   expect(dialog.textContent).not.toContain("another-run");
   await click("Close");
   expect(document.activeElement).toBe(trigger);
-  expect(document.querySelector(".sheet")).not.toBeNull();
+  expect(document.querySelector(".review-detail-panel")).not.toBeNull();
 });
 
 test("review session renders public activity and sends the selected answer for the waiting manual attempt", async () => {

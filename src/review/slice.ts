@@ -70,6 +70,8 @@ export type SliceManifest = {
   /** Total bytes one dispatch may carry. Absent in a manifest written before waves existed. */
   waveBytes?: number;
   source: "diff" | "scoped-diff";
+  /** Project roles whose slice assignments were recorded by this version of the slicer. */
+  projectRoles?: readonly string[];
   slices: SliceEntry[];
   omissions: SliceOmission[];
   totals: {

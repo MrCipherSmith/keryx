@@ -8,8 +8,8 @@ import { INGEST_SCREENED_FILE, type IngestScreened, packageCoverageErrors, resea
 import { describeUnusableResult, holdsResultList, lenientReviewResult } from "./result-parse";
 import { needsContextQuestions, readSliceIds, scopeFingerprint, sliceReadingNotes, type RetryState } from "./retry-plan";
 import { type SliceManifest, packWavesByKind, waveBytesOf } from "./slice";
-import { ALWAYS_ROLE, DEEP_ROLES, ROLES_RUN_WITHOUT_SLICES, ROUTABLE_ROLES, isRoutedManifest } from "./slice-routing";
-import { requiredSlices, sliceGraph, summarizeWaves } from "./waves";
+import { ALWAYS_ROLE, DEEP_ROLES, ROLES_RUN_WITHOUT_SLICES, isRoutedManifest } from "./slice-routing";
+import { hasSliceRoleRouting, requiredSlices, sliceGraph, summarizeWaves } from "./waves";
 import { fixSliceCoverage, priorDispositionsOf } from "./round-split";
 import { type DispatchUsage, type RunUsage, type UsageTotals, isEmptyRecord, splitUsage, usageFrom, usageTotals } from "./dispatch-usage";
 
@@ -712,7 +712,7 @@ function runUsage(mine: readonly RawFile[]): RunUsage | "unknown" {
 
 /** A routable role that slice routing gave no slice, in a routed manifest; the regression reviewer always runs (scope B). */
 function routedOut(manifest: SliceManifest, reviewer: string): boolean {
-  return isRoutedManifest(manifest) && ROUTABLE_ROLES.has(reviewer) && !ROLES_RUN_WITHOUT_SLICES.has(reviewer) && requiredSlices(manifest, reviewer).length === 0;
+  return isRoutedManifest(manifest) && hasSliceRoleRouting(manifest, reviewer) && !ROLES_RUN_WITHOUT_SLICES.has(reviewer) && requiredSlices(manifest, reviewer).length === 0;
 }
 
 function routingHash(manifest: SliceManifest): string {

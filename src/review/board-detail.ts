@@ -8,7 +8,7 @@ export type DetailQuery = (query: string, variables: Record<string, string | num
 
 const IDENTITY = `query ReviewDetailIdentity($owner:String!, $repo:String!, $number:Int!) {
   viewer { login } repository(owner:$owner, name:$repo) {
-    id pullRequest(number:$number) { id headRefOid commits(last:1) { nodes { commit { id oid } } } }
+    id pullRequest(number:$number) { id body headRefOid commits(last:1) { nodes { commit { id oid } } } }
   }
 }`;
 const MESSAGE = "id body author { login } viewerDidAuthor createdAt url";
@@ -104,7 +104,11 @@ export async function readReviewBoardDetail(
   const viewer = requiredText(fields(meta.viewer), "login");
   const headSha = requiredText(pr, "headRefOid");
   const warnings = new Set<string>();
-  let remainingBytes = DETAIL_ENTRY_BYTES;
+  const body = str(pr, "body");
+  const bodyBytes = body === null ? 0 : Buffer.byteLength(JSON.stringify(body));
+  const description = bodyBytes < DETAIL_ENTRY_BYTES ? body : null;
+  if (body !== null && description === null) warnings.add("The PR description is too large to display here. Open the pull request on GitHub to read it.");
+  let remainingBytes = DETAIL_ENTRY_BYTES - (description === null ? 0 : bodyBytes);
 
   async function readPages<T extends { id: string }>(
     read: (cursor?: string) => Promise<unknown>, parse: (node: Fields) => T, label: string,
@@ -202,6 +206,7 @@ export async function readReviewBoardDetail(
   ]);
   return {
     version: 1, viewer, repositoryId: requiredText(repository, "id"), number, fetchedAt: new Date().toISOString(), headSha,
+    ...(description !== null && { description }),
     comments, reviews: reviews.filter(item => item.state !== "PENDING"), threads, checks, warnings: [...warnings],
   };
 }

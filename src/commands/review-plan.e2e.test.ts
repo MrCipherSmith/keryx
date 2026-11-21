@@ -13,6 +13,7 @@ import { reviewCommand } from "./review";
 import { DEFAULT_MAX_DISPATCHES } from "../review/estimate";
 import { commitFiles, git, initRepo } from "../review/git-fixture.test-helpers";
 import { computeReadiness } from "../review/readiness";
+import { requiredReviewers } from "../review/coverage";
 
 /** A child dispatch of `review plan` runs real git in a real repository: a minute is the ceiling, not the expectation. */
 const E2E_TIMEOUT_MS = 60_000;
@@ -81,6 +82,31 @@ describe("plan → ingest with an unplaceable quote → fix commit → plan", ()
     const actualDrivers = (await readdir(path.join(recorded.package, "drivers"))).filter(name => name.endsWith(".json"));
     expect(recorded.dispatches).toBe(actualDrivers.length);
     expect(recorded.slices.new[0]?.roles).toContain("review-testing-practices");
+  }, E2E_TIMEOUT_MS);
+
+  test("an external host plans path-gated project reviewers", async () => {
+    const matched = "review-project-match";
+    const unmatched = "review-project-unmatched";
+    for (const [name, gate] of [[matched, "src/**/*.ts"], [unmatched, "unrelated/**"]] as const) {
+      const skill = path.join(repo, ".metaproject/project-skills/review", name, "SKILL.md");
+      await mkdir(path.dirname(skill), { recursive: true });
+      await writeFile(skill, `---\nname: ${name}\ndescription: Review fixture code.\nmetadata:\n  paths: [${gate}]\n---\nReview.`);
+    }
+    const light = await requiredReviewers(repo, "all", ["src/a.ts"], { depth: "light" });
+    expect(light.required).toContain(matched);
+    expect(light.required).not.toContain(unmatched);
+    await reviewCommand(["plan", "--target", "feature", "--ref", "main", "--host", "other", "--json"]);
+    expect(process.exitCode ?? 0).toBe(0);
+    const reviews = path.join(repo, ".metaproject", "reviews");
+    const name = (await readdir(reviews)).find(entry => existsSync(path.join(reviews, entry, PLAN_FILE)));
+    expect(name).toBeDefined();
+    const out = path.join(reviews, name!);
+    const recorded = JSON.parse(await readFile(path.join(out, PLAN_FILE), "utf8")) as ReviewPlan;
+    expect(recorded.roster).toContain(matched);
+    expect(recorded.roster).not.toContain(unmatched);
+    const driver = JSON.parse(await readFile(path.join(out, "drivers", matched + "-w1.json"), "utf8"));
+    expect(driver.definition).toBe(`.metaproject/project-skills/review/${matched}/SKILL.md`);
+    expect(driver.slices).toEqual(["slice-01"]);
   }, E2E_TIMEOUT_MS);
 
   test("the round with the unplaced quote is recorded, and the plan after the fix is a delta round with a fix slice for the finding", async () => {

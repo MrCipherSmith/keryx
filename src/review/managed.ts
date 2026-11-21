@@ -1,3 +1,4 @@
+import { projectReviewOverlay, retainProjectReportOverlay } from "./report-overlay";
 import { createHash } from "node:crypto";
 import { withCompletionLock } from "./completion-lock";
 import { completionSnapshot } from "./completion-snapshot";
@@ -683,7 +684,9 @@ async function writeManagedReviewPackage(
   await writeFileAtomic(path.join(packageDir, "coverage.md"), renderCoverage(coverage));
   // Flow 460: the round's token spend, as research.json states it (unknown dispatches counted, never 0); a re-ingest
   // replaces the section a report already holds.
-  await writeFileAtomic(path.join(packageDir, "report.md"), withSpendSection(renderReport(report, input.mode), input.research));
+  const { overlay } = input.mode === "ingest" ? await projectReviewOverlay(input.cwd) : {};
+  const recordedReport = retainProjectReportOverlay(overlay, renderReport(report, input.mode));
+  await writeFileAtomic(path.join(packageDir, "report.md"), withSpendSection(recordedReport, input.research));
   // Under the decisions lock, like every other findings.json writer: a premise answer to a re-ingested package
   // rewrites the same file.
   await withOperatorDecisionsLock(packageDir, () => writeFileAtomic(

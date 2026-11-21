@@ -1,8 +1,8 @@
 import type { DeskRun, DeskRunKey } from "../../../../src/review/desk-run-types";
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from "react";
 import { Icon } from "../components/Icon";
 import { useToast } from "../components/Toasts";
-import { Sheet, Spinner } from "../components/ui";
+import { Spinner } from "../components/ui";
 import { absoluteTime, errMessage, relativeTime } from "../lib/format";
 import { openExternal, openPullRequest, type FlowCard } from "../platform/commands";
 import { reviewRun } from "../platform/reviewRuns";
@@ -34,6 +34,8 @@ interface Props {
   repositoryId: string;
   viewer: string;
   card: ReviewCard;
+  width?: number;
+  onResize?: (width: number) => void;
   flow?: FlowCard | undefined;
   projectFlows?: readonly FlowCard[];
   reviewModels?: readonly ReviewLaunchModel[];
@@ -96,6 +98,10 @@ function Discussion({ data }: { data: ReviewDetailSnapshot }) {
   ].sort((a, b) => a.item.createdAt.localeCompare(b.item.createdAt));
 
   return <div className="pr-discussion">
+    {data.description?.trim() && <section className="discussion-description" aria-label="Pull request description">
+      <h3>Description</h3>
+      <DiscussionMarkdown body={data.description} />
+    </section>}
     <div className="discussion-heading"><h3>Conversation</h3>
       {unread.length > 0 && <button className="btn btn-sm" onClick={markRead}>Mark {unread.length} as read</button>}
     </div>
@@ -118,14 +124,33 @@ export function ReviewDetail(props: Props) {
   return <ReviewDetailSheet key={JSON.stringify([props.cwd, props.repo, props.repositoryId, props.viewer, props.card.number])} {...props} />;
 }
 
-function ReviewDetailSheet({ cwd, repo, repositoryId, viewer, card, reviewIntent, openBrowser, onOpenSession, onOpenReviewSession, flow, projectFlows, reviewModels, onOpenFlow, onClose, onAccessLost, load = fetchReviewDetail, runCommand = reviewRun, publishCommand, onRunSnapshot, onRefreshBoard, rulesCommand, onDiscussionLoaded }: Props) {
+function ReviewDetailSheet({ cwd, repo, repositoryId, viewer, card, width = 560, onResize, reviewIntent, openBrowser, onOpenSession, onOpenReviewSession, flow, projectFlows, reviewModels, onOpenFlow, onClose, onAccessLost, load = fetchReviewDetail, runCommand = reviewRun, publishCommand, onRunSnapshot, onRefreshBoard, rulesCommand, onDiscussionLoaded }: Props) {
   const toast = useToast();
+  const panel = useRef<HTMLElement>(null);
+  const closeButton = useRef<HTMLButtonElement>(null);
+  const panelId = useId();
+  const drag = useRef<{ pointerId: number; x: number; width: number } | null>(null);
   const openingLink = useRef(false);
   const mounted = useRef(false);
-  useEffect(() => {
+  useLayoutEffect(() => {
+    const before = document.activeElement as HTMLElement | null;
+    const pane = panel.current;
+    closeButton.current?.focus();
     mounted.current = true;
-    return () => { mounted.current = false; };
+    return () => {
+      mounted.current = false;
+      if (pane?.contains(document.activeElement) && before?.isConnected) before.focus();
+    };
   }, []);
+
+  const currentWidth = () => panel.current?.offsetWidth || width;
+  const maxWidth = () => Math.max(360, (panel.current?.parentElement?.clientWidth || window.innerWidth) - 280);
+  const resize = (next: number) => onResize?.(Math.min(maxWidth(), Math.max(360, next)));
+  function startResize(event: PointerEvent<HTMLDivElement>) {
+    if (event.button !== 0) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    drag.current = { pointerId: event.pointerId, x: event.clientX, width: currentWidth() };
+  }
 
   function followLink(event: MouseEvent<HTMLElement>) {
     if (event.button > 1) return;
@@ -238,13 +263,32 @@ function ReviewDetailSheet({ cwd, repo, repositoryId, viewer, card, reviewIntent
     return () => { live = false; };
   }, [cwd, repo, repositoryId, viewer, card.number, card.headSha, card.updatedAt, refresh, load, onAccessLost, onDiscussionLoaded]);
 
-  return <Sheet label={`Pull request #${card.number}`} onClose={onClose} width={720}>
+  return <aside id={panelId} ref={panel} className="side-panel review-detail-panel" style={{ width }} aria-label={`Pull request #${card.number}`}
+    onKeyDown={event => {
+      if (event.key === "Escape" && !event.defaultPrevented && !event.nativeEvent.isComposing && !(event.target as Element).closest('[role="dialog"]')) {
+        event.preventDefault();
+        onClose();
+      }
+    }}>
+    {onResize && <div className="side-resize review-detail-resize" role="separator" tabIndex={0}
+      aria-orientation="vertical" aria-label="Resize pull request details" aria-controls={panelId}
+      aria-valuemin={360} aria-valuenow={Math.min(maxWidth(), width)} aria-valuemax={maxWidth()}
+      onPointerDown={startResize} onPointerMove={event => {
+        const start = drag.current;
+        if (start?.pointerId === event.pointerId) resize(start.width + start.x - event.clientX);
+      }} onLostPointerCapture={() => { drag.current = null; }}
+      onKeyDown={event => {
+        const keys: Record<string, number> = { ArrowLeft: currentWidth() + 32, ArrowRight: currentWidth() - 32, Home: 360, End: maxWidth() };
+        if (!Object.hasOwn(keys, event.key)) return;
+        event.preventDefault();
+        resize(keys[event.key]!);
+      }} />}
     <header className="sheet-head">
       <div className="sheet-head-row">
         <span className="flow-id">{repo} #{card.number}</span>
         <span className="grow" />
         <ReviewRunHistory runs={local.runs} onSelect={setSessionId} />
-        <button className="icon-btn" onClick={onClose} aria-label="Close details"><Icon name="x" size={16} /></button>
+        <button ref={closeButton} className="icon-btn" onClick={onClose} aria-label="Close details"><Icon name="x" size={16} /></button>
       </div>
       <h2 className="sheet-title">{card.title}</h2>
       <div className="sheet-actions review-detail-actions" onClick={followLink} onAuxClick={followLink}>
@@ -326,5 +370,5 @@ function ReviewDetailSheet({ cwd, repo, repositoryId, viewer, card, reviewIntent
         await local.request({ kind: "status" });
       }}
       onClose={() => setLaunchCard(null)} />}
-  </Sheet>;
+  </aside>;
 }

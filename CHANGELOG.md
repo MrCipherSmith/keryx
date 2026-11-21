@@ -5,6 +5,18 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.45] - 2026-11-21
+
+**Keryx Desktop 0.2.8** requires Keryx 0.4.45 or newer.
+
+### Fixed
+
+- Discover installed project reviewers and select them for the files each reviewer covers.
+- Load trusted local review skills and rules when Desktop starts a review from a linked worktree.
+- Preserve Vantage's required verification checks and their recorded outcomes in reports and publication previews.
+- Let reviews finish when a reviewer had no matching slice and therefore produced no result file.
+- Show GitHub pull request descriptions above the discussion in a resizable details panel.
+
 ## [0.4.44] - 2026-11-21
 
 **Keryx Desktop 0.2.7** requires Keryx 0.4.44 or newer.

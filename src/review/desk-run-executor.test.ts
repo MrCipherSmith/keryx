@@ -97,12 +97,31 @@ function observedPreparedPackage(spec: ChildSpec, base = baseSha) {
     reviewer: "review-logic", usage: { inputTokens: 1, outputTokens: 1 } }) + "\n", { flag: "a" });
 }
 
-test("runs the orchestrator on pinned Git objects with trusted controls, leaving the working branch untouched and retaining the package", async () => {
+test("runs a linked worktree's review with the main checkout's installed controls and pinned PR objects", async () => {
+  const installed = ".metaproject/project-skills/review/review-local/SKILL.md";
+  const fromPr = ".metaproject/project-skills/review/review-pr-injection/SKILL.md";
+  writeFileSync(path.join(cwd, "src.ts"), "before");
+  git(cwd, "switch", "pr");
+  mkdirSync(path.dirname(path.join(cwd, fromPr)), { recursive: true });
+  writeFileSync(path.join(cwd, fromPr), "PR instructions");
+  git(cwd, "add", "--", fromPr);
+  git(cwd, "commit", "-qm", "Add an untrusted reviewer on the PR head");
+  headSha = git(cwd, "rev-parse", "HEAD");
+  git(cwd, "update-ref", "refs/pull/12/head", headSha);
+  git(cwd, "switch", "base");
+  writeFileSync(path.join(cwd, "src.ts"), "uncommitted local edit");
+  const linked = path.join(root, "linked");
+  git(cwd, "worktree", "add", "--detach", "--", linked, baseSha);
+  const index = ".metaproject/index.md";
+  for (const [file, body] of [[index, "Local review index"], [installed, "Workspace reviewer"], [fromPr, "PR instructions"]] as const) {
+    mkdirSync(path.dirname(path.join(cwd, file)), { recursive: true });
+    writeFileSync(path.join(cwd, file), body);
+  }
   const phases: string[] = [];
   const context = { version: 1 as const, pr: { url: "https://github.com/example/project/pull/12", title: "linked PR", state: "OPEN", baseSha, headSha }, flows: [], totalFlows: 0, history: [], totalRuns: 0 };
   let inspected = false;
   const launch = { mode: "auto" as const, adaptive: false, maxWaves: 3, maxParallel: 2, maxTokens: 100000, modelPools: { strong: [], middle: [], light: [] } };
-  const result = await executeDeskReview({ ...options(), options: launch, context, onProgress: p => { phases.push(p.phase); } }, {
+  const result = await executeDeskReview({ ...options(), cwd: linked, options: launch, context, onProgress: p => { phases.push(p.phase); } }, {
     selectModel, remoteUrl: cwd, revision,
     spawn(spec) {
       expect(JSON.parse(spec.env.KERYX_DESK_REVIEW_OPTIONS!)).toEqual(launch);
@@ -120,6 +139,9 @@ test("runs the orchestrator on pinned Git objects with trusted controls, leaving
         { cwd: spec.cwd, env: fixtureGitEnv(), encoding: "utf8", timeout: 30_000 });
       expect(JSON.stringify(JSON.parse(scope))).toContain("src.ts");
       expect(readFileSync(path.join(spec.cwd, skill), "utf8")).toBe("trusted skill");
+      expect(readFileSync(path.join(spec.cwd, index), "utf8")).toBe("Local review index");
+      expect(readFileSync(path.join(spec.cwd, installed), "utf8")).toBe("Workspace reviewer");
+      expect(existsSync(path.join(spec.cwd, fromPr))).toBe(false);
       expect(readFileSync(path.join(spec.cwd, "routing.config.json"), "utf8")).toBe('{"policyMarker":"local"}');
       expect(existsSync(path.join(spec.cwd, "bunfig.toml"))).toBe(false);
       expect(spec.argv.join(" ")).toContain(`keryx review plan --target https://github.com/example/project/pull/12 --ref ${baseSha} --head ${headSha} --host keryx-shell`);
@@ -147,6 +169,7 @@ test("runs the orchestrator on pinned Git objects with trusted controls, leaving
   expect(phases).toContain("review ingest");
   expect(git(cwd, "branch", "--show-current")).toBe("base");
   expect(readFileSync(path.join(cwd, "src.ts"), "utf8")).toBe("uncommitted local edit");
+  expect(existsSync(path.join(linked, installed))).toBe(false);
   expect(existsSync(path.join(runDir, "checkout"))).toBe(false);
   expect(existsSync(path.join(runDir, "package", "report.md"))).toBe(true);
   expect(JSON.parse(readFileSync(path.join(runDir, "execution-result.json"), "utf8"))).toEqual(result);
