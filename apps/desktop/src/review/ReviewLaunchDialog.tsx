@@ -276,6 +276,11 @@ export function ReviewLaunchDialog({ flows, defaultFlow, initialTarget, loadTarg
           </select> : <p className="field-hint">No open pull requests found.</p>}
         </>}
         </>}
+        {card?.changeStats && <div className="review-launch-stats">
+          <span>{card.changeStats.files.toLocaleString()} {card.changeStats.files === 1 ? "file changed" : "files changed"}</span>
+          <span className="review-added" aria-label={`${card.changeStats.additions.toLocaleString()} additions`}>+{card.changeStats.additions.toLocaleString()}</span>
+          <span className="review-deleted" aria-label={`${card.changeStats.deletions.toLocaleString()} deletions`}>−{card.changeStats.deletions.toLocaleString()}</span>
+        </div>}
         <label>Associated Flow
           <select className="select-compact" value={flow} onChange={e => setChosenFlow(e.currentTarget.value)}>
             <option value="">Standalone review</option>

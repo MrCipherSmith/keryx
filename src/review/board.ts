@@ -20,6 +20,7 @@ interface RawCard {
   number: number; title: string; state: "OPEN" | "CLOSED" | "MERGED"; isDraft: boolean;
   author: Person | null; updatedAt: string; headRefOid: string; baseRefOid: string;
   reviewDecision: ReviewCard["decision"];
+  changedFiles?: number; additions?: number; deletions?: number;
   assignees: Connection<Person>; reviewRequests: Connection<Reviewer>;
   commits: { nodes: { commit: { oid: string; statusCheckRollup: { state: string; contexts: { totalCount: number } } | null } }[] };
 }
@@ -36,7 +37,7 @@ const listQuery = (state: ReviewBoardState, reviewerFields: string, first: numbe
     pullRequests(first:${first}, after:$cursor, states:${states[state]}, orderBy:{field:CREATED_AT, direction:DESC}) {
       ${pageFields}
       nodes {
-        number title state isDraft author { login } headRefOid baseRefOid updatedAt reviewDecision
+        number title state isDraft author { login } headRefOid baseRefOid updatedAt reviewDecision changedFiles additions deletions
         ${connection("assignees", person)}
         ${connection("reviewRequests", reviewerFields)}
         commits(last:1) { nodes { commit { oid statusCheckRollup { state contexts(first:1) { totalCount } } } } }
@@ -44,6 +45,13 @@ const listQuery = (state: ReviewBoardState, reviewerFields: string, first: numbe
     }
   }
 }`;
+
+function changeStats({ changedFiles, additions, deletions }: RawCard): ReviewCard["changeStats"] {
+  const count = (value: number | undefined): value is number => value !== undefined && Number.isSafeInteger(value) && value >= 0;
+  return count(changedFiles) && count(additions) && count(deletions)
+    ? { files: changedFiles, additions, deletions }
+    : undefined;
+}
 
 function checkState(pr: RawCard): ReviewCi {
   const commit = pr.commits?.nodes?.[0]?.commit;
@@ -143,7 +151,9 @@ export async function listReviewCards(repo: string, repositories: string[], stat
           readPeople("reviewRequests", reviewerFields, pr.reviewRequests, requestLabel, query, subject, viewer, repositoryId),
         ]);
         if (!assignees.complete || !reviewers.complete) warnings.add("Some assignees or requested reviewers could not be read.");
+        const stats = changeStats(pr);
         return {
+          ...(stats && { changeStats: stats }),
           number: pr.number, title: pr.title, url: `https://github.com/${canonical}/pull/${pr.number}`,
           state: pr.state.toLowerCase() as ReviewCard["state"], draft: pr.isDraft, author: pr.author?.login ?? "",
           assignees: assignees.names, reviewers: reviewers.names, assigneesComplete: assignees.complete, reviewersComplete: reviewers.complete,

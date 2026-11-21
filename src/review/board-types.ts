@@ -18,6 +18,7 @@ export interface ReviewCard {
   addressedReplyIds?: string[];
   number: number;
   title: string;
+  changeStats?: { files: number; additions: number; deletions: number };
   url: string;
   state: Exclude<ReviewBoardState, "all">;
   draft: boolean;

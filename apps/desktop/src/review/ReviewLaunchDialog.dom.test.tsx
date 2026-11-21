@@ -30,7 +30,7 @@ const board: ReviewBoardSnapshot = {
   version: 1, repo: "example/repo", repositoryId: "REPO_ID", viewer: "owner", repositories: ["example/repo"],
   fetchedAt: "2026-11-20", warnings: [],
   cards: [{ number: 14, state: "open", title: "Improve cache", url: "https://github.com/example/repo/pull/14",
-    decision: null, reviewers: [], assignees: [], ci: "none", draft: false, author: "demo", updatedAt: "",
+    changeStats: { files: 3, additions: 12, deletions: 0 }, decision: null, reviewers: [], assignees: [], ci: "none", draft: false, author: "demo", updatedAt: "",
     baseSha: "aaa", headSha: "bbb" }],
 };
 const flow = (id: string, prUrl?: string): FlowCard => ({
@@ -67,6 +67,12 @@ async function pickModel(tier: string, provider: string) {
   await click(option);
 }
 const flowSelector = () => [...document.querySelectorAll("label")].find(l => l.textContent?.startsWith("Associated Flow"))!.querySelector("select")!;
+
+test("the selected PR shows changed files and both line counts", async () => {
+  await render(defaults);
+  const stats = document.querySelector(".review-launch-stats");
+  expect(stats?.textContent).toBe("3 files changed+12−0");
+});
 
 test("effective defaults are shown and require Apply", async () => {
   const calls: unknown[][] = [];
