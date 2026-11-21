@@ -140,7 +140,7 @@ export class DeskRunStore {
   }
 
   openQuestion(runId: string, question: DeskQuestion): void {
-    const reviewer = question.reviewerSessionId !== undefined;
+    const reviewer = question.reviewerSessionId !== undefined || question.reviewContext === true;
     const table = reviewer ? "reviewer_questions" : "review_questions";
     const insert = `INSERT INTO ${table} (run_id, question_id, question, answer)
       SELECT id, ?, ?, NULL FROM runs WHERE id=? AND state='running' AND json_extract(details,'$.source')='manual'

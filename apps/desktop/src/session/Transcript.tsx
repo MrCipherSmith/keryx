@@ -404,10 +404,8 @@ export function Transcript({ items, busy, replaying, empty, reviewActivity, onRu
                 return <UserMessage key={b.item.id} message={b.item.text} context={b.item.context} failed={b.item.failed} itemId={b.item.id} onEdit={onEditMessage} />;
               case "agent":
                 return (
-                  <div key={b.item.id} className={`turn-agent${b.first ? " turn-start" : ""}`}>
-                    {b.first ? <AgentLabel /> : null}
-                    <Markdown text={b.item.text} prLinks={prLinks} className={isLast && streamingAgent ? "is-streaming" : undefined} />
-                  </div>
+                  <AgentMessage key={b.item.id} first={b.first} text={b.item.text} prLinks={prLinks}
+                    streaming={isLast && streamingAgent} />
                 );
               case "thought":
                 return (
@@ -494,11 +492,21 @@ const NoticeRow = memo(function NoticeRow({ item }: { item: Extract<Item, { kind
   );
 });
 
-function AgentLabel() {
+export function AgentMessage({ text, label, first = true, streaming, prLinks, children }: {
+  text: string; label?: string; first?: boolean; streaming?: boolean; prLinks?: PrLinks; children?: ReactNode;
+}) {
+  return <div className={`turn-agent${first ? " turn-start" : ""}`}>
+    {first && <AgentLabel label={label} />}
+    <Markdown text={text} prLinks={prLinks} className={streaming ? "is-streaming" : undefined} />
+    {children}
+  </div>;
+}
+
+function AgentLabel({ label }: { label?: string }) {
   return (
-    <div className="agent-label" aria-hidden>
+    <div className="agent-label" aria-hidden={label === undefined}>
       <BrandMark className="agent-mark" />
-      keryx
+      {label ?? "keryx"}
     </div>
   );
 }

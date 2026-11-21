@@ -4893,7 +4893,10 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         : [{ name: provider }];
       const reviewerProviders = reviewCatalog.some(candidate => candidate.name === provider)
         ? reviewCatalog : [...reviewCatalog, { name: provider }];
-      const askReviewerContext = reviewerRoutingRoot ? desktopReviewerQuestion(agentCwd) : undefined;
+      const askReviewerContext = reviewerRoutingRoot ? desktopReviewerQuestion(agentCwd, process.env, {
+        port: agentProvider, provider, model,
+        onReuse: ({ reviewer }) => { if (reviewer) meter?.emit({ type: "desktop_context_reused", reviewer }); },
+      }) : undefined;
       const spawnTool = createSpawnSubagentTool({
         cwd: agentCwd,
         ...(askReviewerContext ? { askReviewerContext } : {}),

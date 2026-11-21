@@ -543,6 +543,18 @@ test("concurrent reviewer questions retain separate replies and interoperate wit
   }
 });
 
+test("a coordinator context request does not replace a pending decision", () => {
+  const { run } = started();
+  const decision = { id: "decision", question: "Approve the expanded plan?", options: [], allowFreeform: true };
+  const context = { ...decision, id: "context", question: "Which backend revision?", reviewContext: true as const };
+  store.openQuestion(run.id, decision);
+  store.openQuestion(run.id, context);
+  expect(store.pendingQuestions(run.id)).toEqual([decision, context]);
+  store.answerQuestion(key, run.id, context.id, "012ab34");
+  expect(store.questionAnswer(run.id, context.id)).toBe("012ab34");
+  expect(store.pendingQuestions(run.id)).toEqual([decision]);
+});
+
 test("aborting a reviewer waiting for its operator leaves the other live session intact", async () => {
   const { ASK_USER_CANCEL } = await import("../harness/tool/builtin/ask-user-tool");
   const { askDesktopOperator } = await import("./desk-questions");

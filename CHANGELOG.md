@@ -5,6 +5,16 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.46] - 2026-11-21
+
+**Keryx Desktop 0.2.9** requires Keryx 0.4.46 or newer.
+
+### Fixed
+
+- Show review questions and accepted replies in the session transcript. Reply or resume an interrupted review from the normal message composer.
+- Let the Desktop review coordinator ask one question at a time and reuse an operator's answer when another reviewer needs the same evidence.
+- Keep active reviews visible outside the current pull request filters and filter historical pull requests by update period.
+
 ## [0.4.45] - 2026-11-21
 
 **Keryx Desktop 0.2.8** requires Keryx 0.4.45 or newer.

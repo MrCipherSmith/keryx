@@ -12,7 +12,7 @@ function entriesFor(events: TranscriptEvent[]) {
       const previous = entries.at(-1);
       if (previous?.kind === "tools") previous.items.push(item);
       else entries.push({ kind: "tools", items: [item] });
-    } else if (["message", "answer", "error", "status"].includes(item.kind)) {
+    } else if (["message", "question", "answer", "error", "status"].includes(item.kind)) {
       entries.push({ kind: "event", item });
     }
   }
@@ -56,7 +56,7 @@ export function ReviewTranscript({ actor, events, loading, error, truncated }: {
       {events.length ? <ol>{entriesFor(events).map((entry, i) => {
         if (entry.kind === "tools") return <li key={i}><ToolGroup items={entry.items} /></li>;
         const { kind, at, text } = entry.item;
-        const label = kind === "message" ? actor : kind === "answer" ? "Answer" : kind === "error" ? "Error" : "Progress";
+        const label = kind === "message" || kind === "question" ? entry.item.reviewer ?? actor : kind === "answer" ? "Answer" : kind === "error" ? "Error" : "Progress";
         return <li key={i} data-kind={kind}><header><strong>{label}</strong><EventTime at={at} /></header><div>{text}</div></li>;
       })}</ol> : <p className="review-detail-muted">{error ? "Activity unavailable." : loading ? "Loading activity…" : "No activity recorded."}</p>}
     </div>
