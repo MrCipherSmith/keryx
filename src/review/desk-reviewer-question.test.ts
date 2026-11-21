@@ -32,7 +32,7 @@ test("parallel requests for the same evidence wait for one coordinator reply, th
   expect(reused).toEqual(["frontend", "frontend"]);
 });
 
-test("does not reuse a skipped reply, a different explicit revision, or a rejected match", async () => {
+test("remembers a skip but still asks about a different revision or different evidence", async () => {
   const question = "Which backend builds the frame at 012ab34?";
   const differentRevision = "Which backend builds the frame at 098cd76?";
   const asks: string[] = [], candidates: string[][] = [];
@@ -44,11 +44,30 @@ test("does not reuse a skipped reply, a different explicit revision, or a reject
     return undefined;
   });
   expect(await ask(question, backend, signal)).toBeNull();
-  expect(await ask(question, frontend, signal)).toBe("Evidence attached");
+  expect(await ask(question, frontend, signal)).toBeNull();
   expect(await ask(differentRevision, frontend, signal)).toBe("Evidence attached");
   expect(await ask("Which file serializes the progress frame at 012ab34?", frontend, signal)).toBe("Evidence attached");
   expect(candidates).toEqual([[question]]);
-  expect(asks).toHaveLength(4);
+  expect(asks).toHaveLength(3);
+});
+
+test("a repeated request does not ask again after an acknowledgment without evidence", async () => {
+  const initial = "Provide the OpenAPI semantic diff between 15965b9 and cdb6cdb.";
+  const rephrased = "Compare the OpenAPI values at cdb6cdb and 15965b9.";
+  let prompts = 0;
+  let matches = 0;
+  const ask = coordinateReviewerContext(async () => {
+    prompts++;
+    return "Разрешаю";
+  }, async (_question, previous) => {
+    matches++;
+    return previous[0]?.question === initial ? 0 : undefined;
+  });
+  expect(await ask(initial, backend, signal)).toBe("Разрешаю");
+  expect(await ask(rephrased, frontend, signal)).toBe("Разрешаю");
+  expect(await ask(rephrased, backend, signal)).toBe("Разрешаю");
+  expect(prompts).toBe(1);
+  expect(matches).toBe(1);
 });
 
 test("a cancelled reviewer leaves the active question and the rest of the inbox intact", async () => {

@@ -22,6 +22,13 @@ export async function readPinnedReviewSource(cwd: string, head: string, file: st
     ...revisionOperand(head), "--", file], { ...options, maxBuffer: Buffer.byteLength(file) + 80 });
   const blob = /^100(?:644|755) blob ([0-9a-f]{40})\t/.exec(entry)?.[1];
   if (!blob) return;
+  return readPinnedReviewBlob(cwd, blob, bytes, signal);
+}
+
+/** Reads a full blob ID obtained from trusted Git output under a byte and time limit. */
+export async function readPinnedReviewBlob(cwd: string, blob: string, bytes: number, signal?: AbortSignal) {
+  if (!/^[0-9a-f]{40}$/.test(blob)) return;
+  const options = { cwd, env: { ...withoutGitDiscoveryOverrides(process.env), GIT_NO_LAZY_FETCH: "1", GIT_NO_REPLACE_OBJECTS: "1" }, timeout: 8000, signal };
   const { stdout: body } = await git("git", ["cat-file", "blob", ...revisionOperand(blob)],
     { ...options, encoding: "buffer", maxBuffer: bytes });
   return !body.includes(0) && isUtf8(body) ? body : "binary";

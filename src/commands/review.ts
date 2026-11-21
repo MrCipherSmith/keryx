@@ -56,7 +56,7 @@ import { optInRolesFromArgs, optionalRolesLine, packageEnabledRoles, recordEnabl
 import { packageEstimateLine } from "../review/estimate-actual";
 import { CONFIRM_PLAN_TOOL, estimatePackage, planConfirmationFor, planConfirmed, renderEstimate, writePlanConfirmation } from "../review/estimate";
 import { readJsonFileOr } from "../lib/json";
-import type { SliceManifest } from "../review/slice";
+import { structuralJsonPaths, type SliceManifest } from "../review/slice";
 import { printPlanHelp, runPlan } from "./review-plan";
 import { printPlanEvalHelp, runPlanEval } from "./review-plan-eval";
 import { FIRST_FILES } from "../review/coverage-complete";
@@ -3843,7 +3843,11 @@ async function runRequired(args: string[]): Promise<void> {
   if (diffLinesArg !== undefined && !/^\d+$/.test(diffLinesArg)) throw new Error("--diff-lines must be a non-negative integer");
   const retained = (scope?.counts as { changedLinesRetained?: unknown } | undefined)?.changedLinesRetained;
   const changedLines = diffLinesArg !== undefined ? Number(diffLinesArg) : typeof retained === "number" ? retained : scope?.files === undefined ? packageLines : undefined;
-  const files = scope?.files !== undefined ? [...scope.files] : packageFiles;
+  const sliceManifest = packageDir === undefined ? undefined : await readJsonFileOr<SliceManifest | undefined>(path.join(packageDir, "slices", "manifest.json"), undefined);
+  const structured = structuralJsonPaths(sliceManifest);
+  const files = scope?.files !== undefined
+    ? [...new Set([...scope.files, ...structured])]
+    : packageFiles;
   const forceFull = args.includes("--all") ? "--all" : args.includes("--gating") ? "--gating" : undefined;
   const decision = await decideRoundDepth(process.cwd(), depthArg, { files, changedLines, forceFull });
   // The opt-in is the flags plus what the package recorded (`start --style`), so a later `required --package` cannot drop it.
@@ -3861,7 +3865,6 @@ async function runRequired(args: string[]): Promise<void> {
     depth: decision.depth,
   });
   // A delta round's fix slices are read by the reviewers that authored the findings they answer (flow 458): they join the set.
-  const sliceManifest = packageDir === undefined ? undefined : await readJsonFileOr<SliceManifest | undefined>(path.join(packageDir, "slices", "manifest.json"), undefined);
   const fixRoles = sliceManifest !== undefined && Array.isArray(sliceManifest.slices) ? (await installedRosterRoles(process.cwd(), sliceManifest)).filter((role) => !baseSet.required.includes(role)) : [];
   const set = fixRoles.length === 0 ? baseSet : { ...baseSet, required: [...baseSet.required, ...fixRoles].sort() };
   if (packageDir !== undefined) {
@@ -4707,8 +4710,8 @@ const SLICE_DEPS: SliceDeps = { gitDiff, readDiffSource, parseContextLines, reje
  * would make every region report `context_truncated` and hand reviewers less
  * than the configured bound.
  */
-async function gitDiff(ref: string | undefined, contextLines: number, head?: string): Promise<string> {
-  const command = ["git", "diff", "--no-color", `-U${contextLines}`, ...(ref === undefined ? [] : revisionOperand(ref)), ...(ref === undefined || head === undefined ? [] : [assertGitRevision(head)]), "--", ...NOT_REVIEW_PACKAGES];
+async function gitDiff(ref: string | undefined, contextLines: number, head?: string, fullIndex = false): Promise<string> {
+  const command = ["git", "diff", "--no-color", `-U${contextLines}`, ...(fullIndex ? ["--full-index", "--no-ext-diff", "--no-textconv"] : []), ...(ref === undefined ? [] : revisionOperand(ref)), ...(ref === undefined || head === undefined ? [] : [assertGitRevision(head)]), "--", ...NOT_REVIEW_PACKAGES];
   // Committed review/flow packages record a review rather than being reviewed: the same pathspec the delta slicer uses.
   const proc = Bun.spawn(command, { cwd: process.cwd(), stdout: "pipe", stderr: "pipe" });
   const [stdout, stderr, exitCode] = await Promise.all([
