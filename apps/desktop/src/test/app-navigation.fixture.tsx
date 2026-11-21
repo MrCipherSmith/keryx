@@ -174,6 +174,14 @@ function namedButton(label: string) {
   return button;
 }
 
+async function waitForView(ready: () => boolean, description: string) {
+  const deadline = Date.now() + 2500;
+  while (!ready() && Date.now() < deadline) {
+    await React.act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
+  }
+  assert.ok(ready(), description);
+}
+
 async function chooseAccount(login: string) {
   const picker = host.querySelector<HTMLSelectElement>('[role="dialog"] select');
   assert.ok(picker);
@@ -187,6 +195,7 @@ async function chooseAccount(login: string) {
 }
 try {
   await React.act(async () => root.render(<ToastProvider><App /></ToastProvider>));
+  await waitForView(() => host.querySelector(".project-setup") !== null, "The initial setup wizard opened");
   assert.equal(acpStarts, 0, "Folder inspection precedes ACP startup");
   assert.equal(setupActions.at(-1)?.kind, "inspect");
   assert.ok(host.textContent?.includes("Set up Metaproject"));
@@ -196,10 +205,7 @@ try {
   assert.equal(setupCompleted, false, "Preview does not apply");
   await React.act(() => namedButton("Open without setup").click());
   assert.equal(setupActions.some((action) => action.kind === "apply"), false);
-  const deadline = Date.now() + 2500;
-  while (host.querySelector("textarea")?.disabled !== false && Date.now() < deadline) {
-    await React.act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
-  }
+  await waitForView(() => host.querySelector("textarea")?.disabled === false, "ACP session composer is ready");
   const composer = host.querySelector<HTMLTextAreaElement>("textarea");
   assert.ok(composer && !composer.disabled, "ACP session composer is ready");
   assert.ok(host.textContent?.includes("Choose a GitHub account"));
