@@ -121,6 +121,7 @@ function rpcError(code: number, message: string): Error & { code: number } {
 // ---- flows (same JSON as the Rust core, flows-board.md §6) -------------------
 
 interface FlowCard {
+  hasIssue: boolean;
   id: string;
   idValid: boolean;
   dir: string;
@@ -236,6 +237,7 @@ function cardFor(cwd: string, dir: string): { card: FlowCard; state: Json | null
     blocked: false,
     owner: null,
     prUrl: null,
+    hasIssue: false,
     baseBranch: null,
     tasksDone: 0,
     tasksTotal: 0,
@@ -269,6 +271,7 @@ function cardFor(cwd: string, dir: string): { card: FlowCard; state: Json | null
       blocked: status === "blocked",
       owner: str(owner?.value),
       prUrl: str(pr?.url),
+      hasIssue: (state.source as Json | undefined)?.type === "github-issue",
       baseBranch: str(state.baseBranch),
       tasksDone: tasks.filter((t) => t.status === "done").length,
       tasksTotal: tasks.length,
@@ -723,6 +726,16 @@ async function handle(ws: ServerWebSocket<Conn>, cmd: string, args: Json): Promi
     }
     case "github_login":
       throw new Error("In browser dev mode, run `gh auth login --hostname github.com --web` in a terminal, then refresh accounts.");
+    case "issues_request": {
+      const {action, login, request} = args;
+      if (typeof action !== "string" || !["origin","viewer","list","detail","comments","project","move","workspace","open-session","prepare-flow"].includes(action)
+        || typeof login !== "string" || !/^[a-z0-9][a-z0-9_-]{0,99}$/i.test(login)
+        || !request || typeof request !== "object" || Array.isArray(request) || JSON.stringify(request).length > 32768) {
+        throw new Error("Invalid Issues request.");
+      }
+      return runReviewCli(await projectCwd(ws.data, cwd), ["issues", action, "--login", login, "--request", JSON.stringify(request), "--json"],
+        !["move","open-session","prepare-flow"].includes(action));
+    }
     case "review_board": {
       const root = await projectCwd(ws.data, cwd);
       const argv = reviewBoardArgs(args);

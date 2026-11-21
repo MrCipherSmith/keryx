@@ -13,12 +13,13 @@ import { projectHue, projectInitials, type ProjectActivity } from "./projectRail
 import type { LiveProject } from "../platform/projects";
 import type { ReviewTabIndicator } from "../review/ReviewBoard";
 
-export type View = "session" | "flows" | "review" | "settings";
+export type View = "session" | "flows" | "review" | "issues" | "settings";
 
 export const PROJECT_VIEWS = [
   { id: "session", label: "Sessions", icon: "chat", shortcut: `${MOD}1` },
   { id: "flows", label: "Flows", icon: "board", shortcut: `${MOD}2` },
   { id: "review", label: "Pull requests", icon: "pr", shortcut: `${MOD}3` },
+  { id: "issues", label: "Issues", icon: "circleDot", shortcut: `${MOD}4` },
 ] as const;
 
 /**
@@ -46,6 +47,7 @@ interface ShellProps {
   onProjectSettings?: () => void;
   title: ReactNode;
   hasSession?: boolean;
+  onOpenSourceIssue?: () => void;
   status: { tone: "ok" | "busy" | "warn" | "danger" | "idle"; label: string; detail?: string };
   flowsActive: number;
   reviewIndicator?: ReviewTabIndicator;
@@ -270,6 +272,8 @@ function TitleBar(p: ShellProps) {
         {p.view === "session" && <div className="titlebar-session-controls" ref={slotRef("sessionControls")} />}
       </div>
       <div className="titlebar-right" data-tauri-drag-region>
+        {p.view === "session" && p.onOpenSourceIssue && <button className="icon-btn" aria-label="Open source issue"
+          title="Open source issue" onClick={p.onOpenSourceIssue}><Icon name="circleDot" size={15} /></button>}
         <InfoToggle show={p.view === "session"} />
         {p.view === "session" && p.hasSession && <ActivityToggle />}
         <SideToggles />

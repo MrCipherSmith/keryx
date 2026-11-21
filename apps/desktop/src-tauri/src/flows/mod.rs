@@ -41,6 +41,7 @@ pub struct FlowCard {
     pub blocked: bool,
     pub owner: Option<String>,
     pub pr_url: Option<String>,
+    pub has_issue: bool,
     pub base_branch: Option<String>,
     pub tasks_done: usize,
     pub tasks_total: usize,

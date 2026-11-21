@@ -335,6 +335,7 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
 
   // ---- Managed work -----------------------------------------------------
+  { kind: "cli", name: "issues", group: "Managed work", summary: "Browse GitHub issues and projects, open linked sessions and prepare issue flows." },
   { kind: "cli", name: "flow", group: "Managed work", summary: "Agent-first flow lifecycle (Task Manager)." },
   {
     kind: "cli",

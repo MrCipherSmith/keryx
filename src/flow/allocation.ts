@@ -33,6 +33,9 @@ export type AllocationRecord = {
   project: string;
   /** Set when the id was vacated by `flow renumber`; never reused. */
   retired?: boolean;
+  /** Location of an issue-backed package in a sibling worktree. */
+  cwd?: string;
+  issue?: string;
 };
 
 // `gitCommonDir` / `gitToplevel` live in `src/lib/clone-scope.ts` (shared with

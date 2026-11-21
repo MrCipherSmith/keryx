@@ -15,3 +15,54 @@
 - 2026-11-21T20:13:45.605Z - task-done: T2: Implement per plan
 - 2026-11-21T20:13:45.858Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-11-21T20:13:46.106Z - task-done: T4: Self-review and prepare draft PR
+- 2026-11-21T20:56:50.787Z - frozen: 16 criteria; checksum recorded
+- 2026-11-21T20:57:24.575Z - started
+- 2026-11-21T20:57:32.611Z - task-attempt: T5: started (attempt 1) — Define shared contracts, fixtures and compatibility for issue launch.
+- 2026-11-21T20:59:54.623Z - task-done: T5: Define issue identity, viewer scope and launch contracts
+- 2026-11-21T20:59:55.288Z - task-attempt: T6: started (attempt 1) — Account-scoped GitHub issue reader and CLI.
+- 2026-11-21T20:59:55.771Z - task-attempt: T7: started (attempt 1) — Resolve the checkout and durable session identity.
+- 2026-11-21T21:03:49.691Z - task-done: T6: Implement account-scoped issue listing, detail and sync
+- 2026-11-21T21:03:50.308Z - task-attempt: T9: started (attempt 1) — Desktop board, list and resizable issue detail
+- 2026-11-21T21:09:25.357Z - task-done: T7: Resolve issue repository and bind or resume its ACP session
+- 2026-11-21T21:09:25.899Z - task-attempt: T8: started (attempt 1) — Adopt or initialize the package and hand off an idempotent coordinator turn.
+- 2026-11-21T21:09:26.820Z - task-done: T9: Build Issues board, list and resizable detail in Desktop
+- 2026-11-21T21:09:27.096Z - task-attempt: T10: started (attempt 1) — Read GitHub Projects and conditionally update explicit Status choices.
+- 2026-11-21T21:09:27.580Z - task-done: T10: Support selected GitHub Project status and explicit moves
+- 2026-11-21T21:12:22.308Z - task-done: T8: Prepare or adopt an issue Flow with the native orchestrator
+- 2026-11-21T21:12:22.961Z - task-attempt: T11: started (attempt 1) — Connect native issue actions and verified source navigation.
+- 2026-11-21T21:14:52.958Z - task-done: T11: Connect issue actions, Flow progress and the session inbox
+- 2026-11-21T21:14:53.679Z - task-attempt: T12: started (attempt 1) — Collect GitHub Actions results for every frozen executable criterion and native bridge.
+- 2026-11-21T21:51:44.952Z - ac-confirmed: AC1: Passed frozen acceptance command on GitHub for c9c3cf812. https://github.com/MrCipherSmith/keryx/actions/runs/44953401726/job/136996200218 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-11-21T21:51:45.254Z - ac-confirmed: AC2: Passed frozen acceptance command on GitHub for c9c3cf812. https://github.com/MrCipherSmith/keryx/actions/runs/44953401726/job/136996200218 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-11-21T21:51:45.551Z - ac-confirmed: AC5: Passed frozen acceptance command on GitHub for c9c3cf812. https://github.com/MrCipherSmith/keryx/actions/runs/44953401726/job/136996200218 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-11-21T21:51:45.848Z - ac-confirmed: AC6: Passed frozen acceptance command on GitHub for c9c3cf812. https://github.com/MrCipherSmith/keryx/actions/runs/44953401726/job/136996200218 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-11-21T21:51:46.147Z - ac-confirmed: AC7: Passed frozen acceptance command on GitHub for c9c3cf812. https://github.com/MrCipherSmith/keryx/actions/runs/44953401726/job/136996200218 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-11-21T21:51:46.450Z - ac-confirmed: AC8: Passed frozen acceptance command on GitHub for c9c3cf812. https://github.com/MrCipherSmith/keryx/actions/runs/44953401726/job/136996200218 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-11-21T21:51:46.750Z - ac-confirmed: AC9: Passed frozen acceptance command on GitHub for c9c3cf812. https://github.com/MrCipherSmith/keryx/actions/runs/44953401726/job/136996200218 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-11-21T21:51:47.052Z - ac-confirmed: AC10: Passed frozen acceptance command on GitHub for c9c3cf812. https://github.com/MrCipherSmith/keryx/actions/runs/44953401726/job/136996200218 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-11-21T21:51:47.355Z - ac-confirmed: AC11: Passed frozen acceptance command on GitHub for c9c3cf812. https://github.com/MrCipherSmith/keryx/actions/runs/44953401726/job/136996200218 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-11-21T21:51:47.662Z - ac-confirmed: AC12: Passed frozen acceptance command on GitHub for c9c3cf812. https://github.com/MrCipherSmith/keryx/actions/runs/44953401726/job/136996200218 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-11-21T21:51:47.959Z - ac-confirmed: AC13: Passed frozen acceptance command on GitHub for c9c3cf812. https://github.com/MrCipherSmith/keryx/actions/runs/44953401726/job/136996200218 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-11-21T21:51:48.257Z - ac-confirmed: AC14: Passed frozen acceptance command on GitHub for c9c3cf812. https://github.com/MrCipherSmith/keryx/actions/runs/44953401726/job/136996200218 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-11-21T21:57:16.387Z - ac-confirmed: AC1: Frozen executable criteria and Desktop acceptance passed on ff4b43d3f. evidence: https://github.com/MrCipherSmith/keryx/actions/runs/44954022352/job/136998091380 (signed: Flow verification agent [stated])
+- 2026-11-21T21:57:16.706Z - ac-confirmed: AC2: Frozen executable criteria and Desktop acceptance passed on ff4b43d3f. evidence: https://github.com/MrCipherSmith/keryx/actions/runs/44954022352/job/136998091380 (signed: Flow verification agent [stated])
+- 2026-11-21T21:57:17.020Z - ac-confirmed: AC3: Frozen executable criteria and Desktop acceptance passed on ff4b43d3f. evidence: https://github.com/MrCipherSmith/keryx/actions/runs/44954022352/job/136998091380 (signed: Flow verification agent [stated])
+- 2026-11-21T21:57:17.341Z - ac-confirmed: AC5: Frozen executable criteria and Desktop acceptance passed on ff4b43d3f. evidence: https://github.com/MrCipherSmith/keryx/actions/runs/44954022352/job/136998091380 (signed: Flow verification agent [stated])
+- 2026-11-21T21:57:17.665Z - ac-confirmed: AC6: Frozen executable criteria and Desktop acceptance passed on ff4b43d3f. evidence: https://github.com/MrCipherSmith/keryx/actions/runs/44954022352/job/136998091380 (signed: Flow verification agent [stated])
+- 2026-11-21T21:57:17.993Z - ac-confirmed: AC7: Frozen executable criteria and Desktop acceptance passed on ff4b43d3f. evidence: https://github.com/MrCipherSmith/keryx/actions/runs/44954022352/job/136998091380 (signed: Flow verification agent [stated])
+- 2026-11-21T21:57:18.422Z - ac-confirmed: AC8: Frozen executable criteria and Desktop acceptance passed on ff4b43d3f. evidence: https://github.com/MrCipherSmith/keryx/actions/runs/44954022352/job/136998091380 (signed: Flow verification agent [stated])
+- 2026-11-21T21:57:18.791Z - ac-confirmed: AC9: Frozen executable criteria and Desktop acceptance passed on ff4b43d3f. evidence: https://github.com/MrCipherSmith/keryx/actions/runs/44954022352/job/136998091380 (signed: Flow verification agent [stated])
+- 2026-11-21T21:57:19.125Z - ac-confirmed: AC10: Frozen executable criteria and Desktop acceptance passed on ff4b43d3f. evidence: https://github.com/MrCipherSmith/keryx/actions/runs/44954022352/job/136998091380 (signed: Flow verification agent [stated])
+- 2026-11-21T21:57:19.462Z - ac-confirmed: AC11: Frozen executable criteria and Desktop acceptance passed on ff4b43d3f. evidence: https://github.com/MrCipherSmith/keryx/actions/runs/44954022352/job/136998091380 (signed: Flow verification agent [stated])
+- 2026-11-21T21:57:19.820Z - ac-confirmed: AC12: Frozen executable criteria and Desktop acceptance passed on ff4b43d3f. evidence: https://github.com/MrCipherSmith/keryx/actions/runs/44954022352/job/136998091380 (signed: Flow verification agent [stated])
+- 2026-11-21T21:57:20.165Z - ac-confirmed: AC13: Frozen executable criteria and Desktop acceptance passed on ff4b43d3f. evidence: https://github.com/MrCipherSmith/keryx/actions/runs/44954022352/job/136998091380 (signed: Flow verification agent [stated])
+- 2026-11-21T21:57:20.704Z - ac-confirmed: AC14: Frozen executable criteria and Desktop acceptance passed on ff4b43d3f. evidence: https://github.com/MrCipherSmith/keryx/actions/runs/44954022352/job/136998091380 (signed: Flow verification agent [stated])
+- 2026-11-21T21:57:21.027Z - task-done: T12: Exercise contracts, recovery and data isolation on GitHub CI
+- 2026-11-21T21:57:21.732Z - task-attempt: T13: started (attempt 1) — Verify the issue, ordinary session, crash recovery, Shell discovery and Project status against the private fixture.
+- 2026-11-21T21:57:22.080Z - ac-confirmed: AC15: evidence: jobs/analysis--issues-board/verification-run.md. The native QA application reopened the same saved question and session, accepted answers, and prepared one package read back in Shell. (signed: Flow verification agent [stated])
+- 2026-11-21T22:11:15.374Z - ac-confirmed: AC4: evidence: jobs/analysis--issues-board/verification-run.md. The native wide splitter responded to the arrow key. In the narrow layout Escape focused the originating issue button and Enter reopened that issue. GitHub CI also exercised both views. (signed: Flow verification agent [stated])
+- 2026-11-21T22:11:15.687Z - task-done: T13: Verify the native Desktop and Shell handoff on a test issue
+- 2026-11-21T22:11:16.302Z - task-attempt: T14: started (attempt 1) — Reviewed account boundaries, fixed stale navigation and focus, verified ordinary Shell lifecycle, and am collecting final GitHub checks.
+- 2026-11-21T22:21:05.164Z - ac-confirmed: AC16: evidence: https://github.com/MrCipherSmith/keryx/actions/runs/44955430321 and https://github.com/MrCipherSmith/keryx/actions/runs/44955430327. All 28 applicable checks passed at 9775f8fad. Ordinary Shell lifecycle was exercised in its own fixture as recorded in jobs/analysis--issues-board/verification-run.md. (signed: Flow verification agent [stated])
+- 2026-11-21T22:21:05.484Z - task-done: T14: Review shipped behavior, compatibility and operator guidance
+- 2026-11-21T22:21:08.341Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/1280

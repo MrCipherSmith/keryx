@@ -31,7 +31,7 @@ test("the current project owns Sessions, Flows and Review while Settings stays g
     const noop = () => {};
     return (
       <AppShell cwd={cwd} projects={["/dev/alpha", "/dev/beta"]} view={view} onView={onView}
-        title={view} status={{ tone: "ok", label: "Ready" }} flowsActive={2} activity="idle"
+        onOpenSourceIssue={() => onView("issues")} title={view} status={{ tone: "ok", label: "Ready" }} flowsActive={2} activity="idle"
         recents={[]} live={[]} onRemoveProject={noop} onOpenFolder={noop} onSwitchProject={switchProject}
         onNewWindow={noop} onCloseProject={noop} onPalette={noop}>
         <span>{view}</span>
@@ -42,6 +42,12 @@ test("the current project owns Sessions, Flows and Review while Settings stays g
   const left = host.querySelector(".titlebar-left")!;
   expect(left.querySelector(".project-switcher")?.nextElementSibling?.textContent).toBe("session");
   expect(left.querySelector(".titlebar-title")?.hasAttribute("data-tauri-drag-region")).toBe(true);
+  const origin = host.querySelector<HTMLButtonElement>('.titlebar-right > button[aria-label="Open source issue"]')!;
+  expect(left.contains(origin)).toBe(false);
+  expect(origin.hasAttribute("data-tauri-drag-region")).toBe(false);
+  await React.act(() => origin.click());
+  expect(host.querySelector('main nav [aria-current="page"]')?.textContent).toContain("Issues");
+  expect(host.querySelector('button[aria-label="Open source issue"]')).toBeNull();
   const status = host.querySelector('.titlebar-right > [role="status"]')!;
   expect(status.textContent).toBe("Ready");
   expect(status.previousElementSibling?.getAttribute("aria-label")).toBe("Commands and sessions");
@@ -52,12 +58,12 @@ test("the current project owns Sessions, Flows and Review while Settings stays g
   const click = (b: HTMLButtonElement) => React.act(() => b.click());
 
   expect(project().getAttribute("aria-label")).toBe("Project views for alpha");
-  expect(project().querySelectorAll("button")).toHaveLength(3);
+  expect(project().querySelectorAll("button")).toHaveLength(4);
   const globalButtons = [...global.querySelectorAll("button")];
-  for (const section of ["Pull requests", "Flows"]) {
+  for (const section of ["Issues", "Pull requests", "Flows"]) {
     expect(globalButtons.some(b => b.getAttribute("aria-label") === section || b.textContent?.trim().startsWith(section))).toBe(false);
   }
-  for (const section of ["Pull requests", "Flows", "Sessions"]) {
+  for (const section of ["Issues", "Pull requests", "Flows", "Sessions"]) {
     const target = Array.from(project().querySelectorAll("button")).find((b) => b.textContent?.startsWith(section))!;
     await click(target);
     expect(target.getAttribute("aria-current")).toBe("page");
@@ -76,5 +82,10 @@ test("the current project owns Sessions, Flows and Review while Settings stays g
 
 test("App preserves tab state and starts a background review from the originating session", () => {
   const fixture = fileURLToPath(new URL("../test/app-navigation.fixture.tsx", import.meta.url));
+  execFileSync(process.execPath, [fixture], { timeout: 8000, stdio: "pipe" });
+});
+
+test("AC10 a cold-loaded issue session admits every restored question on one coordinator turn", () => {
+  const fixture = fileURLToPath(new URL("../test/issue-question-resume.fixture.tsx", import.meta.url));
   execFileSync(process.execPath, [fixture], { timeout: 8000, stdio: "pipe" });
 });

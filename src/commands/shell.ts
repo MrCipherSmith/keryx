@@ -1,3 +1,4 @@
+import { acceptShellIssuePreparation, issueShellSource, startIssueSessionActivity } from "../session/issues/runtime";
 import { executePlanCommand } from "../session/commands/plan-command";
 import { startShellStateExports } from "../session/shell-state-exports";
 import { startShellStartupTrace } from "../lib/shell-startup-trace";
@@ -2752,12 +2753,15 @@ export async function runAgentRepl(
       if (finalizing) return;
       const abort = new AbortController();
       activeAgentAbort = abort;
+      const externalContext = issueShellSource(slateSession?.dir, operatorLine, history.some(row => row.role === "user" && !row.injected));
+      const finishIssueActivity = startIssueSessionActivity(slateSession?.dir);
       const flight = runAgentTurn(agentIo, deps, history, operatorLine, {
+        ...(externalContext ? { externalContext } : {}),
         ...(looksLikeHcMessage(typedLine) ? { origin: "agent-message" as const } : {}),
         recovery: rich.recovery ?? {},
         signal: AbortSignal.any([abort.signal, activeTurnAbort.signal, ...(rich.signal === undefined ? [] : [rich.signal])]),
         ...(slateSession !== undefined ? { slateSession, pruneArchive: true } : {}),
-      });
+      }).finally(finishIssueActivity);
       activeAgentFlight = flight;
       await flight;
     } catch (error) {
@@ -3889,6 +3893,7 @@ export function chooseShellSurface(
  * that provider's first detected model.
  */
 export interface ShellCommandRuntime {
+  issuePreparation?: { sessionId: string; launchId: string };
   checkVersion?: () => Promise<VersionCheckResult>;
   cacheDir?: string;
   isTty?: boolean;
@@ -3987,6 +3992,8 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
     pendingInitialPrompt = undefined;
     return prompt;
   };
+  const admitInitialPrompt = (prompt: string): boolean => !runtime.issuePreparation
+    || acceptShellIssuePreparation(process.cwd(), runtime.issuePreparation, prompt);
   if (flags.reviewSystemFlag !== undefined) setReviewSystem(flags.reviewSystemFlag);
   if (flags.help) {
     console.log(`Usage: keryx shell [options] [prompt]
@@ -4576,6 +4583,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         // persisted `ShellConfig.turnGuard.enabled` default (off).
         ...(flags.guard === true ? { initialGuardEnabled: true } : {}),
         ...(flags.initialPrompt !== undefined ? { takeInitialPrompt } : {}),
+        ...(runtime.issuePreparation ? { admitInitialPrompt } : {}),
         versionCheck,
       })
     ) {
@@ -4692,8 +4700,6 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
   // `io.lines` (= `sharedLines`) and the held-session choice reads `lineIterator`, so neither can
   // take the task as a menu answer. `takeInitialPrompt()` is empty if the TUI already submitted it.
   const readlineInitialPrompt = oneShotPrompt === undefined ? takeInitialPrompt() : undefined;
-  const replLines: AsyncIterable<string> =
-    oneShotPrompt === undefined ? withInitialLine(readlineInitialPrompt, lineIterator) : sharedLines;
 
   const { io, emitSystem, printHeader, printPrompt, destroy } = createRichIo(sharedLines, versionCheck);
 
@@ -5032,7 +5038,9 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       // thrown error, or any other error) via the `finally` below. Absent
       // `shellHooks` (e.g. `KERYX_HOOKS=off`) both are no-ops, byte-identical
       // to before this task.
-      const runRepl = async (session: ShellSessionOpts): Promise<void> => {
+      const runRepl = async (session: ShellSessionOpts, readlineInitialPrompt: string | undefined): Promise<void> => {
+        const replLines: AsyncIterable<string> =
+          oneShotPrompt === undefined ? withInitialLine(readlineInitialPrompt, lineIterator) : sharedLines;
         if (shellHooks !== undefined) {
           await shellHooks.runtime
             .fire("SessionStart", {
@@ -5079,7 +5087,8 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
               busBox,
               finalizerBox,
             },
-            runRepl,
+            // Admission belongs to the selected session after it has acquired its write lease.
+            (session) => runRepl(session, readlineInitialPrompt !== undefined && admitInitialPrompt(readlineInitialPrompt) ? readlineInitialPrompt : undefined),
             leaseChoiceRuntime,
           ),
         );

@@ -137,6 +137,7 @@ export function useAcpSession(cwd: string) {
   const [fatal, setFatal] = useState<Fatal | null>(null);
   /** The incompatible-keryx dialog was put away; `fatal` itself stays, so the window keeps saying so. */
   const [fatalHidden, setFatalHidden] = useState(false);
+  const [canPrepareIssue, setCanPrepareIssue] = useState(false);
   const [extensions, setExtensions] = useState<readonly string[]>([]);
   /** The keryx this window runs (`acp_start`), for project commands run in a terminal tab. */
   const [keryxPath, setKeryxPath] = useState<string | null>(null);
@@ -335,13 +336,61 @@ export function useAcpSession(cwd: string) {
     [dialogs, dispatch],
   );
 
+  /** Starts a turn in the shown session; returns true only when the prompt was accepted (the caller may then clear its draft). */
+  const sendPrompt = useCallback(
+    (text: string, target?: string, context?: UserPromptContext, literal = false, replaces?: number, issue?: { issueLaunchId: string } | { resumeIssueQuestions: true }): boolean => {
+      const extra = context?.blocks ?? [];
+      const l = live.current;
+      const client = l.client;
+      const sessionId = target ?? l.reg.shown;
+      if (!client || !l.initialized || !sessionId || !l.reg.held.has(sessionId) || l.reg.turns.has(sessionId) || (!text.trim() && extra.length === 0)) return false;
+      const restoringQuestions = !!issue && "resumeIssueQuestions" in issue;
+      if (!restoringQuestions) dispatch({ t: "userSent", sessionId, text, context, ...(replaces !== undefined ? { replaces } : {}) });
+      dispatch({ t: "busy", sessionId, busy: true });
+      const turn = { client } as Turn;
+      l.reg.turns.set(sessionId, turn);
+      turn.done = (async () => {
+        try {
+          const prompt = buildUserPrompt(text, extra, literal);
+          const r = await client.request<{ stopReason?: string }>("session/prompt", { sessionId, prompt, ...(issue ? { _meta: { keryx: issue } } : {}) });
+          if (l.client !== client) return;
+          const notice = (level: "info" | "warn", t: string) => dispatch({ t: "notice", sessionId, level, text: t });
+          if (r?.stopReason === "max_tokens") notice("warn", "Stopped: the model hit its token limit.");
+          else if (r?.stopReason === "max_turn_requests") notice("warn", "Stopped: too many model requests in one turn.");
+          else if (r?.stopReason === "refusal") notice("warn", "The model refused to continue.");
+          else if (r?.stopReason === "cancelled") notice("info", "Stopped.");
+        } catch (e) {
+          if (l.client === client) {
+            if (!restoringQuestions) dispatch({ t: "userSendFailed", sessionId });
+            dispatch({ t: "notice", sessionId, level: "error", text: errMessage(e) });
+          }
+        } finally {
+          if (l.reg.turns.get(sessionId) === turn) l.reg.turns.delete(sessionId);
+          if (l.client === client) {
+            // keryx sends no request for a turn after its prompt reply: anything still queued is stale.
+            dialogs.dropSession(sessionId);
+            dispatch({ t: "busy", sessionId, busy: false });
+            void applyPendingFlow(sessionId).finally(() => void refreshSessions());
+          }
+        }
+      })();
+      return true;
+    },
+    [dialogs, dispatch, refreshSessions, applyPendingFlow],
+  );
+
+  const resumeIssueQuestions = useCallback((sessionId: string) =>
+    sendPrompt("Resume the pending issue questions.", sessionId, undefined, false, undefined, { resumeIssueQuestions: true }),
+  [sendPrompt]);
+
   /**
    * session/load of a session the window does not hold. Its replay lands off screen; the session is
    * shown on success unless the user has switched elsewhere since. A failure changes nothing on screen.
    */
   const openLoad = useCallback(
-    async (client: AcpClient, gen: number, sessionId: string): Promise<boolean> => {
+    async (client: AcpClient, gen: number, sessionId: string, issueScope?: AbortSignal): Promise<boolean> => {
       const l = live.current;
+      if (issueScope?.aborted) return false;
       const plan = l.reg.planSwitch(sessionId);
       if (plan === "show") {
         l.reg.showLocal(sessionId);
@@ -349,10 +398,10 @@ export function useAcpSession(cwd: string) {
         return true;
       }
       if (plan === "pending") {
-        l.reg.wantLoad(sessionId);
+        l.reg.wantLoad(sessionId, issueScope);
         return true;
       }
-      l.reg.beginLoad(sessionId);
+      l.reg.beginLoad(sessionId, issueScope);
       dispatch({ t: "loadStart", sessionId });
       try {
         const [r, archive] = await Promise.all([
@@ -362,17 +411,19 @@ export function useAcpSession(cwd: string) {
         if (l.gen !== gen) return false;
         const show = l.reg.loadDone(sessionId);
         dispatch({ t: "loadDone", sessionId, archive, modes: r?.modes, configOptions: r?.configOptions, show });
+        if (!issueScope?.aborted && r?._meta?.keryx?.pendingIssueQuestions) resumeIssueQuestions(sessionId);
         return true;
       } catch (e) {
         if (l.gen !== gen) return false;
         l.reg.loadFailed(sessionId);
         dispatch({ t: "loadFailed", sessionId });
+        if (issueScope?.aborted) return false;
         if (isLeaseError(e)) setFatal({ kind: "leased", sessionId });
         else dispatch({ t: "banner", level: "error", text: `Could not load the session: ${errMessage(e)}` });
         return false;
       }
     },
-    [cwd, dispatch],
+    [cwd, dispatch, resumeIssueQuestions],
   );
 
   /** session/new. The new session is added and shown unless the user switched elsewhere meanwhile; a failure changes nothing on screen. */
@@ -446,6 +497,7 @@ export function useAcpSession(cwd: string) {
       l.commandMethod = false;
       l.extensions = [];
       setExtensions([]);
+      setCanPrepareIssue(false);
       l.reg.reset();
       setReviewDrafts([]);
       setFatal(null);
@@ -556,6 +608,7 @@ export function useAcpSession(cwd: string) {
         l.commandMethod = hasCommandExtension(init);
         l.extensions = extensionsOf(init);
         setExtensions(l.extensions);
+        setCanPrepareIssue(init._meta?.keryx?.issuePreparation === true);
 
         const found = init.agentInfo?.version ?? "unknown";
         const profile = init._meta?.keryx?.profile === "shell" ? "shell" : "editor";
@@ -625,48 +678,6 @@ export function useAcpSession(cwd: string) {
   );
 
   // ---- user actions -------------------------------------------------------
-
-  /** Starts a turn in the shown session; returns true only when the prompt was accepted (the caller may then clear its draft). */
-  const sendPrompt = useCallback(
-    (text: string, target?: string, context?: UserPromptContext, literal = false, replaces?: number): boolean => {
-      const extra = context?.blocks ?? [];
-      const l = live.current;
-      const client = l.client;
-      const sessionId = target ?? l.reg.shown;
-      if (!client || !l.initialized || !sessionId || !l.reg.held.has(sessionId) || l.reg.turns.has(sessionId) || (!text.trim() && extra.length === 0)) return false;
-      dispatch({ t: "userSent", sessionId, text, context, ...(replaces !== undefined ? { replaces } : {}) });
-      dispatch({ t: "busy", sessionId, busy: true });
-      const turn = { client } as Turn;
-      turn.done = (async () => {
-        try {
-          const prompt = buildUserPrompt(text, extra, literal);
-          const r = await client.request<{ stopReason?: string }>("session/prompt", { sessionId, prompt });
-          if (l.client !== client) return;
-          const notice = (level: "info" | "warn", t: string) => dispatch({ t: "notice", sessionId, level, text: t });
-          if (r?.stopReason === "max_tokens") notice("warn", "Stopped: the model hit its token limit.");
-          else if (r?.stopReason === "max_turn_requests") notice("warn", "Stopped: too many model requests in one turn.");
-          else if (r?.stopReason === "refusal") notice("warn", "The model refused to continue.");
-          else if (r?.stopReason === "cancelled") notice("info", "Stopped.");
-        } catch (e) {
-          if (l.client === client) {
-            dispatch({ t: "userSendFailed", sessionId });
-            dispatch({ t: "notice", sessionId, level: "error", text: errMessage(e) });
-          }
-        } finally {
-          if (l.reg.turns.get(sessionId) === turn) l.reg.turns.delete(sessionId);
-          if (l.client === client) {
-            // keryx sends no request for a turn after its prompt reply: anything still queued is stale.
-            dialogs.dropSession(sessionId);
-            dispatch({ t: "busy", sessionId, busy: false });
-            void applyPendingFlow(sessionId).finally(() => void refreshSessions());
-          }
-        }
-      })();
-      l.reg.turns.set(sessionId, turn);
-      return true;
-    },
-    [dialogs, dispatch, refreshSessions, applyPendingFlow],
-  );
 
   /** Stop the shown session's turn only; every other session keeps running. */
   const cancel = useCallback(() => {
@@ -768,7 +779,7 @@ export function useAcpSession(cwd: string) {
     const l = live.current;
     for (const c of Object.values(win.convs)) {
       const next = pendingQueueSend(c, l.reg.turns.has(c.sessionId));
-      if (next && sendPrompt(next.text, c.sessionId)) dispatch({ t: "queueShift", sessionId: c.sessionId });
+      if (next && sendPrompt(next.text, c.sessionId, undefined, false, undefined, next.issueLaunchId ? { issueLaunchId: next.issueLaunchId } : undefined)) dispatch({ t: "queueShift", sessionId: c.sessionId });
     }
   }, [win.convs, sendPrompt, dispatch]);
 
@@ -932,6 +943,19 @@ export function useAcpSession(cwd: string) {
     fatalHidden,
     hideFatal: () => setFatalHidden(true),
     sendPrompt,
+    canPrepareIssue,
+    openIssueSession: async (sessionId: string, initialTurn?: { launchId: string; text: string }, pendingQuestions = false, issueScope?: AbortSignal) => {
+      const l = live.current;
+      const alreadyHeld = l.reg.held.has(sessionId);
+      if (!l.client || !l.usable || !await openLoad(l.client, l.gen, sessionId, issueScope)) throw new Error("Could not open the linked session.");
+      if (issueScope?.aborted) return;
+      if (alreadyHeld && pendingQuestions && !l.reg.turns.has(sessionId)) resumeIssueQuestions(sessionId);
+      if (initialTurn && !sendPrompt(initialTurn.text, sessionId, undefined, false, undefined, { issueLaunchId: initialTurn.launchId })) {
+        if (!l.reg.turns.has(sessionId)) throw new Error("Reopen the linked session and resume Flow preparation.");
+        dispatch({ t: "queueAdd", sessionId, text: initialTurn.text, issueLaunchId: initialTurn.launchId });
+      }
+      void refreshSessions();
+    },
     runCommand,
     /** Show a `/delegate` run's terminal tab; false when it is closed (or not a terminal run). */
     focusDelegateTerminal: (runId: string): boolean => delegates.focus(runId),

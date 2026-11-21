@@ -467,6 +467,7 @@ describe("AC6 — initialize reports the real version and the profiles; _keryx/i
           "_keryx/delegate_terminal",
         ],
         liveSessions: true,
+        issuePreparation: true,
         minDesktopVersion: MIN_DESKTOP_VERSION,
       });
       const infoId = c.request("_keryx/info", {});

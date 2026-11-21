@@ -57,6 +57,7 @@ the one that describes shipped behaviour.
 - [Let an arbiter answer the orchestrator's questions](guides/review-arbiter.md)
 - [Jev in the delivery loop](guides/jev-in-the-delivery-loop.md)
 - [Get a GitHub and board digest on a schedule](guides/scheduled-digest.md)
+- [Work on a GitHub issue in Desktop](guides/desktop-issues.md)
 - [Take work in from GitHub as cards in Telegram](guides/work-intake.md)
 - [`/goal` — deterministic starts, optional autonomous continuation](guides/goal.md)
 - [Slate for external agents](guides/slate.md)

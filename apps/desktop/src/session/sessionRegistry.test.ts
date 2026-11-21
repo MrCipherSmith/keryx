@@ -55,6 +55,16 @@ describe("switching", () => {
     expect(r.held.has("c")).toBeTrue();
   });
 
+  test("a pending navigation from a revoked Issues account never shows the replay", () => {
+    const r = holding();
+    const scope = new AbortController();
+    r.beginLoad("private");
+    r.wantLoad("private", scope.signal);
+    scope.abort();
+    expect(r.loadDone("private")).toBeFalse();
+    expect(r.shown).toBe("a");
+  });
+
   test("asking again for a session that is loading shows it when it lands", () => {
     const r = holding();
     r.beginLoad("c");

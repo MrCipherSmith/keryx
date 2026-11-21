@@ -31,6 +31,7 @@ import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import type { ServerCatalog } from "../mcp-servers/catalog";
 import type { ServerState } from "../mcp-servers/manager";
 import { createMcpInteractiveTools } from "../mcp-servers/tools";
+import { issueShellAsk } from "../session/issues/runtime";
 import { journaledAskUser } from "../tui/ask-user-bridge";
 import type { AskUserFn } from "../harness/tool/builtin/ask-user-tool";
 import { CALLER_ORCHESTRATOR, withOrchestratorLog } from "../review/orchestrator-log";
@@ -256,7 +257,7 @@ export function buildInteractiveAgentTools(input: InteractiveAgentToolsInput): I
     workspaceShowTool(input.cwd),
     workspaceProposeTool(input.cwd, getSessionDir),
     // Flow 392: the same picker, with the recommendation journal around it.
-    createAskUserTool(input.askUser ?? journaledAskUser(input.cwd)),
+    createAskUserTool(input.askUser ?? issueShellAsk(input.getSessionDir, journaledAskUser(input.cwd))),
     slateReadTool(input.cwd, getSessionDir),
     slateWriteSeedTool(getSessionDir, idSeq, clock),
     // Flow 393: working-memory tools. Offered to the model only by hosts that keep working

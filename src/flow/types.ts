@@ -481,6 +481,7 @@ export type FlowInitInput = {
   cwd: string;
   title?: string | undefined;
   issue?: string | undefined;
+  separateIssueFlow?: boolean;
   slug?: string | undefined;
   /** The branch this flow is told to land on. See `FlowState.baseBranch`. */
   baseBranch?: string | undefined;
@@ -509,6 +510,7 @@ export type FlowInitResult = {
   flow: FlowState;
   dir: string;
   contextNotes: string[];
+  existingCwd?: string;
   /** Why the requested origin was not recorded (missing evidence, invalid kind). Absent when it was recorded or none was asked for. */
   originNote?: string | undefined;
 };

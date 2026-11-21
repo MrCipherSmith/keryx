@@ -12,6 +12,7 @@ type Flows = ReturnType<typeof useFlows>;
 interface Props {
   cwd: string;
   initialOpenDir?: string | null;
+  onOpenIssue?: (dir: string) => void;
   flows: Flows;
   /** Sessions already linked to a flow package, newest first. */
   linkedSessions: (dir: string) => LinkedSession[];
@@ -24,7 +25,7 @@ const LANE_CAP = 30;
 const DONE_CAP = 20;
 const LIST_CAP = 150;
 
-export function FlowsBoard({ cwd, initialOpenDir = null, flows, linkedSessions, onWorkOn, onOpenSession }: Props) {
+export function FlowsBoard({ cwd, initialOpenDir = null, flows, onOpenIssue, linkedSessions, onWorkOn, onOpenSession }: Props) {
   const [query, setQuery] = useState("");
   const [owner, setOwner] = useState<string>("");
   const [view, setView] = useState<"board" | "list">(() => {
@@ -188,6 +189,7 @@ export function FlowsBoard({ cwd, initialOpenDir = null, flows, linkedSessions, 
           key={openCard.dir}
           cwd={cwd}
           card={openCard}
+          onOpenIssue={onOpenIssue}
           version={flows.version}
           onClose={() => setOpenDir(null)}
           linked={linkedSessions(openCard.dir)}

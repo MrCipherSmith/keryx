@@ -1,3 +1,4 @@
+import { issueShellSource, startIssueSessionActivity } from "../session/issues/runtime";
 import { executePlanCommand } from "../session/commands/plan-command";
 import { startShellStateExports } from "../session/shell-state-exports";
 import { createHash } from "node:crypto";
@@ -4528,6 +4529,7 @@ export async function launchTuiAgentShell(opts: {
    * cannot run the same task a second time.
    */
   takeInitialPrompt?: () => string | undefined;
+  admitInitialPrompt?: (prompt: string) => boolean;
 }): Promise<boolean> {
   if (!process.stdout.isTTY) {
     return false;
@@ -11362,13 +11364,17 @@ export async function launchTuiAgentShell(opts: {
         const modelLine = source === undefined
           ? agentShaped && !looksLikeHcMessage(line) ? `${HC_PASTED_HEADER}\n\n${line}` : frameSubmittedLine(line)
           : line;
+        const issueDir = liveSlateSession()?.dir;
+        const externalContext = issueShellSource(issueDir, modelLine, history.some(row => row.role === "user" && !row.injected));
+        const finishIssueActivity = startIssueSessionActivity(issueDir);
         void (turnSignal.aborted ? Promise.resolve() : runAgentTurn(foregroundIo, deps, history, modelLine, {
+        ...(externalContext ? { externalContext } : {}),
         signal: turnSignal,
         recovery: {},
         ...(agentShaped ? { origin: "agent-message" as const } : origin === "operator" ? {} : { origin }),
-        // Flow 387 review r1 F-001: this shell syncs its archive before every history change.
         ...(slateSession !== undefined ? { slateSession, pruneArchive: true } : {}),
       })).finally(() => {
+        finishIssueActivity?.();
         turnUsageSlot.clear(turnUsageSink);
         const accepted = settleForegroundOperation(foregroundOperation, operation);
         if (!accepted) {
@@ -12040,7 +12046,7 @@ export async function launchTuiAgentShell(opts: {
     // `hostStatus.markReady()` and any resume picker / held-session choice, with `runLine`
     // defined — through `runLine`, the very function a typed line + Enter reaches.
     const initialPrompt = opts.takeInitialPrompt?.()?.trim();
-    if (initialPrompt !== undefined && initialPrompt.length > 0) {
+    if (initialPrompt !== undefined && initialPrompt.length > 0 && opts.admitInitialPrompt?.(initialPrompt) !== false) {
       runLine(initialPrompt, "operator", undefined, true);
     }
 

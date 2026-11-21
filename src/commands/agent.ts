@@ -962,6 +962,8 @@ export interface RunAgentTurnOptions {
    * untrusted content from its start, as an agent message does.
    */
   untrustedPrompt?: boolean;
+  /** Host-supplied content, already framed as an external resource, appended separately from the operator's line. */
+  externalContext?: string;
   /**
    * With `untrustedPrompt`: the part of the line the operator wrote. Decisions only the operator may
    * make from their own words (such as asking for an automatic review) read this, never the
@@ -2390,6 +2392,10 @@ export async function runAgentTurn(
   userLine: string,
   options: RunAgentTurnOptions = {},
 ): Promise<RunAgentTurnResult> {
+  if (options.externalContext) {
+    options = { ...options, untrustedPrompt: true, operatorText: options.operatorText ?? userLine };
+    userLine = `${userLine}\n\n${options.externalContext}`;
+  }
   // Flow 347 T17: resolve the control-nudge nonce once for the whole turn and
   // state its marker in the instruction every request of this turn sends
   // (round loop and both wrap-ups read `deps.systemInstruction`).
@@ -2402,7 +2408,7 @@ export async function runAgentTurn(
   }
   // Only the operator's own top-level line can switch the review system on: a child's task text and any
   // non-operator origin (notifications, peers) are model- or peer-written and never carry that authority.
-  if (options.origin === undefined && deps.subagentBudget === undefined && asksForReviewAuto(userLine)) {
+  if (options.origin === undefined && deps.subagentBudget === undefined && asksForReviewAuto(options.untrustedPrompt ? options.operatorText ?? "" : userLine)) {
     setReviewSystem("review-auto");
   }
   // Flow 393 AC5: a host that keeps working memory says so; every other host's instruction is

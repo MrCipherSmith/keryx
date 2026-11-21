@@ -150,6 +150,7 @@ export interface ConfigOption {
 
 /** How the person organised a stored session (`_keryx/session_flags`); ISO times, absent when unset. */
 export interface SessionFlags {
+  hasIssue?: true;
   archivedAt?: string;
   pinnedAt?: string;
   /** The flow package directory this session works on. */
@@ -226,7 +227,7 @@ export interface InitializeResult {
   protocolVersion: number;
   agentInfo?: { name?: string; version?: string } | null;
   agentCapabilities?: Record<string, unknown>;
-  _meta?: { keryx?: { profile?: string; profiles?: string[]; extensions?: string[]; liveSessions?: boolean } } & Meta;
+  _meta?: { keryx?: { profile?: string; profiles?: string[]; extensions?: string[]; liveSessions?: boolean; issuePreparation?: boolean } } & Meta;
 }
 
 /** ext notification: keryx stopped holding a session for this connection (idle cap); a return to it needs session/load. */
@@ -289,6 +290,7 @@ export interface NewSessionResult {
 }
 
 export interface LoadSessionResult {
+  _meta?: { keryx?: { pendingIssueQuestions?: boolean } };
   modes?: SessionModeState | null;
   configOptions?: ConfigOption[] | null;
 }

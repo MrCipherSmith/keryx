@@ -45,6 +45,8 @@ import { moveFlowDirWithReviewRecords } from "../review/flow-move";
 import { acFileUnchangedSinceHead, acRelativePathFor } from "./ac-reseal";
 import { flowStateSchema } from "./schema";
 import { collectContext } from "./context";
+import { findIssueFlows, issueSourceUrl } from "./issue-source";
+export { findIssueFlows, issueSourceUrl } from "./issue-source";
 import { DEFAULT_TASKS } from "./default-tasks";
 import {
   checkConfirmationToken,
@@ -784,6 +786,16 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       // scope, so a sibling worktree cannot mint the same id (flow 116).
       const scope = await resolveAllocationScope(input.cwd);
       return withFileLock(scope.lockPath, async () => {
+        const source = input.issue && issueSourceUrl(input.issue);
+        if (source && !input.separateIssueFlow) {
+          const existing = await findIssueFlows(input.cwd, new Set([source]));
+          if (existing.length > 1) throw new Error("Several Flows match this issue. Select a package in Issues, or use --new for separate work.");
+          if (existing[0]) {
+            const { flow, dir, cwd } = existing[0];
+            return { flow, dir: path.relative(input.cwd, path.join(flowsRoot(cwd), dir)), existingCwd: cwd,
+              contextNotes: ["Existing Flow for this issue. Use --new only to create separate work."] };
+          }
+        }
         // Flow 384: the ledger only knows what THIS clone handed out. A number
         // already spent by a flow folder on a known remote branch is reserved
         // too, so a second clone or an unfetched-branch gap cannot reuse it.
@@ -798,9 +810,13 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         if (await pathExists(absolute)) {
           throw new Error(`Flow directory already exists: ${dir}`);
         }
+        const createdAt = now();
+        const allocation = { id, dir, at: createdAt, project: scope.project,
+          ...(source ? { issue: source, cwd: path.resolve(input.cwd) } : {}) };
+        // Reserve before materialization: sibling worktrees can recover a committed package even if init exits before replying.
+        if (source) await recordAllocation(scope, allocation);
         await mkdir(absolute, { recursive: true });
 
-        const createdAt = now();
         const flow: FlowState = {
           schemaVersion: 1,
           // Opt in this package to the task/review/owner gates. Written at
@@ -870,7 +886,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         await writeFileAtomic(path.join(absolute, "acceptance-criteria.md"), renderAcceptanceCriteria());
         await writeFileAtomic(path.join(absolute, "journal.md"), renderJournal(createdAt));
         await writeFlow(input.cwd, dir, flow);
-        await recordAllocation(scope, { id, dir, at: createdAt, project: scope.project });
+        if (!source) await recordAllocation(scope, allocation);
 
         return {
           flow,

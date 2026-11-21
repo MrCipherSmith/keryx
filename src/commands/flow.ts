@@ -419,6 +419,7 @@ async function runInit(args: string[]): Promise<void> {
     owner: optionValue(args, "--owner"),
     // Flow 299 (AC2): opt this flow into the confirmation gate. The project
     // default (`completion.require_confirmation`) is read by the service.
+    separateIssueFlow: args.includes("--new"),
     requireConfirmation: args.includes("--require-confirmation"),
     // Never inferred: `agent` unless the flag is given, `human` only when it says so.
     outcomeAuthor: outcomeAuthorFlag(args),
@@ -428,7 +429,7 @@ async function runInit(args: string[]): Promise<void> {
     originQuote: textFlag(args, "--quote"),
     originSource: textFlag(args, "--source"),
   });
-  banner("flow init", `Created flow ${result.flow.id}`);
+  banner("flow init", `${result.existingCwd ? "Existing" : "Created"} flow ${result.flow.id}`);
   console.log(`  ${style.green(symbols.ok)} ${style.bold(result.flow.title)}`);
   note(result.dir);
   console.log(`  status: ${flowStatusLabel(result.flow.status)}`);

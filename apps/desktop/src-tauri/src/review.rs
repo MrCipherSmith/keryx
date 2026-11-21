@@ -149,7 +149,7 @@ fn review_project(registered: Option<&str>, requested: &str) -> Result<PathBuf, 
     }
 }
 
-async fn invoke_review(app: AppHandle, view: Webview, cwd: String, args: Vec<String>, read_only: bool) -> Result<Value, String> {
+pub(crate) async fn invoke_review(app: AppHandle, view: Webview, cwd: String, args: Vec<String>, read_only: bool) -> Result<Value, String> {
     let registered = app.state::<ProjectWindows>().cwd_for(view.label());
     invoke_review_at(app, args, read_only, move || review_project(registered.as_deref(), &cwd)).await
 }

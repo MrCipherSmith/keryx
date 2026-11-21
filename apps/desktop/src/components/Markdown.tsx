@@ -1,5 +1,5 @@
 import DOMPurify from "dompurify";
-import { marked } from "marked";
+import { Marked, marked } from "marked";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Menu } from "./Menu";
 import { decoratePrReferences, type PrLinks } from "./prLinks";
@@ -17,11 +17,16 @@ marked.setOptions({ gfm: true, breaks: false });
 const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 // An image in a message is shown as a link (images are not rendered from markup); a local one then gets a
 // thumbnail from the host (see imagePreview.ts).
-marked.use({
+const imageRenderer = ({ href, text }: { href: string; text: string }) =>
+  `<a href="${escapeHtml(href ?? "")}">${escapeHtml(text || href || "image")}</a>`;
+marked.use({ renderer: { image: imageRenderer } });
+
+// Issue bodies come from arbitrary GitHub authors. Only Markdown syntax can produce markup.
+const repositoryMarkdown = new Marked({
+  gfm: true,
   renderer: {
-    image({ href, text }: { href: string; text: string }) {
-      return `<a href="${escapeHtml(href ?? "")}">${escapeHtml(text || href || "image")}</a>`;
-    },
+    image: imageRenderer,
+    html: ({ text }) => escapeHtml(text),
   },
 });
 
@@ -59,6 +64,14 @@ function sanitize(html: string): string {
 
 export function renderMarkdown(src: string): string {
   return sanitize(marked.parse(src, { async: false }) as string);
+}
+
+/** Allows repository-relative hrefs for remote Markdown. Its caller must resolve every link
+ * against the verified remote repository and keep only HTTP(S) before attaching it to the DOM. */
+export function renderRepositoryMarkdown(src: string): string {
+  return DOMPurify.sanitize(repositoryMarkdown.parse(src, { async: false }) as string, {
+    ...SANITIZE, ALLOWED_URI_REGEXP: /^(?:https?:|[#/?]|[^:/?#]+(?:[/?#]|$))/i,
+  }) as string;
 }
 
 export function renderInline(src: string): string {

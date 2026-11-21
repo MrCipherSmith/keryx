@@ -15,6 +15,8 @@ import { sessionDir } from "./paths";
 import { findSession, shortSessionId } from "./store";
 
 export interface SessionFlags {
+  /** Derived from the private link marker, without exposing its issue or owner. */
+  hasIssue?: true;
   /** ISO time the session was archived; absent when it is not. */
   archivedAt?: string;
   /** ISO time the session was pinned; absent when it is not. */
@@ -41,22 +43,24 @@ function isIso(value: unknown): value is string {
 
 /** The flags of the session stored in `dir`; an absent or unreadable file reads as none. */
 export function readSessionFlags(dir: string): SessionFlags {
+  const origin: SessionFlags = existsSync(path.join(dir, "issue-link.json")) ? { hasIssue: true } : {};
   const read = readConfigFile(path.join(dir, FLAGS_FILE));
-  if (!read.ok) return {};
+  if (!read.ok) return origin;
   try {
     const raw = JSON.parse(read.text) as Record<string, unknown>;
     return {
+      ...origin,
       ...(isIso(raw["archivedAt"]) ? { archivedAt: raw["archivedAt"] } : {}),
       ...(isIso(raw["pinnedAt"]) ? { pinnedAt: raw["pinnedAt"] } : {}),
       ...(typeof raw["flow"] === "string" && FLOW_REF.test(raw["flow"]) ? { flow: raw["flow"] } : {}),
     };
   } catch {
-    return {};
+    return origin;
   }
 }
 
 function writeFlags(dir: string, flags: SessionFlags): void {
-  writeOwnerOnlyFileAtomic(path.join(dir, FLAGS_FILE), `${JSON.stringify(flags, null, 2)}\n`);
+  writeOwnerOnlyFileAtomic(path.join(dir, FLAGS_FILE), `${JSON.stringify({ archivedAt: flags.archivedAt, pinnedAt: flags.pinnedAt, flow: flags.flow }, null, 2)}\n`);
 }
 
 /** The project root and directory of a stored session, by its exact id. */
