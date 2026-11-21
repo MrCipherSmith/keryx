@@ -1,3 +1,4 @@
+import type { FlatPickerProvider } from "../harness/routing/table";
 // The ACP agent server loop (flow 285, T7/T8): wires the framer + dispatcher
 // + keryx session/turn handlers over one stdio connection.
 //
@@ -201,6 +202,8 @@ export interface AcpServerOptions {
    * model is the only choice.
    */
   readonly models?: AcpModelSource;
+  /** Live routing evidence, distinct from cached picker choices. */
+  readonly routingProviders?: (force: boolean) => Promise<readonly FlatPickerProvider[]>;
   /**
    * Called after an EXPLICIT model switch (`session/set_config_option` or
    * `/model`) took effect: never per turn, never on a load's restore. The CLI
@@ -1311,6 +1314,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   function refreshModelChoicesAfterProviderChange(): void {
     const source = options.models;
     if (source === undefined || stopping) return;
+    routingRefreshNeeded = true;
     listingGeneration += 1;
     listedChoices = undefined;
     listing = undefined;
@@ -1749,6 +1753,25 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     });
   }
 
+  let routingProviders: readonly FlatPickerProvider[] = [];
+  let routingRefresh: Promise<void> | undefined;
+  let routingRefreshNeeded = false;
+  function refreshRoutingProviders(): Promise<void> {
+    const load = options.routingProviders;
+    if (!load) return Promise.resolve();
+    if (routingRefresh) {
+      return routingRefreshNeeded ? routingRefresh.then(refreshRoutingProviders) : routingRefresh;
+    }
+    const force = routingRefreshNeeded;
+    routingRefreshNeeded = false;
+    return routingRefresh = Promise.resolve().then(() => load(force)).then(providers => {
+      routingProviders = providers;
+    }, () => {
+      routingProviders = [];
+      options.logError("acp: could not refresh the provider catalogue for model routing");
+    }).finally(() => { routingRefresh = undefined; });
+  }
+
   /** Each session's MCP trust grants (`trustedMcpTools`), never persisted; dropped with the session. */
   const mcpGrants = new Map<string, SessionMcpGrants>();
 
@@ -1776,7 +1799,14 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         if (providerId === binding.providerId && modelId === binding.modelId) return binding.provider;
         throw new Error(`keryx acp has no provider factory for ${providerId}/${modelId}; a subagent runs on its parent's model here`);
       },
+      ...(options.routingProviders ? { refreshRoutingProviders } : {}),
       getDetectedProviders: () => {
+        if (options.routingProviders) {
+          const providerId = parent().providerId;
+          return routingProviders.some(entry => entry.name === providerId)
+            ? routingProviders
+            : [{ name: providerId, models: [] }, ...routingProviders];
+        }
         const byProvider = new Map<string, string[]>();
         for (const choice of listedChoices ?? []) byProvider.set(choice.providerId, [...(byProvider.get(choice.providerId) ?? []), choice.modelId]);
         return withSessionProvider(

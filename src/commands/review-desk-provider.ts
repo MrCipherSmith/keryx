@@ -1,6 +1,8 @@
 // Desktop and its detached watcher read the same user credentials and trusted project settings.
 // Selection never requires a terminal, nor does constructing an adapter send a model request.
 import { connectionProviderByName, customCompatProviders, isProviderPlatformSupported, providerByName } from "./providers";
+import { ROUTING_TIERS } from "../harness/routing/model-class";
+import { DESK_MAX_POOL_MODELS, DESK_REVIEW_POOLS, parseDeskReviewOptions, type DeskReviewOptions } from "../review/desk-run-options";
 import { loadRouting } from "../harness/routing/settings";
 import { FakeProvider } from "../harness/provider/fake-provider";
 import { makeProvider } from "../harness/provider/make-provider";
@@ -57,4 +59,19 @@ export async function resolveDeskReviewModel(cwd: string, configDir?: string, en
   }
   makeDeskReviewProvider(provider, model, configDir, env);
   return { provider, model };
+}
+
+/** Resolve empty launch tiers through the same settings as normal model routing. */
+export function resolveDeskReviewOptions(cwd: string, options?: DeskReviewOptions): DeskReviewOptions | undefined {
+  if (options?.orchestrator === false) return options;
+  const routing = loadRouting(cwd);
+  if (!routing.tierRouting || routing.categorySources.review === "project") return options;
+  const modelPools: DeskReviewOptions["modelPools"] = { strong: [], middle: [], light: [] };
+  for (const tier of DESK_REVIEW_POOLS) {
+    const configured = routing.classes[ROUTING_TIERS[tier]].candidates;
+    modelPools[tier] = options?.modelPools[tier].length ? options.modelPools[tier] :
+      configured.filter(candidate => candidate.enabled).sort((a, b) => b.priority - a.priority)
+        .slice(0, DESK_MAX_POOL_MODELS).map(({ target }) => ({ provider: target.providerId, model: target.modelId }));
+  }
+  return parseDeskReviewOptions({ mode: "manual", adaptive: true, ...options, modelPools });
 }

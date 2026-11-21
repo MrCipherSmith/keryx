@@ -724,6 +724,8 @@ export interface SpawnSubagentToolDeps {
    * through rather than mapping it down to bare names.
    */
   getDetectedProviders: () => readonly FlatPickerProvider[];
+  /** Refresh live availability when the host catalogue has aged out. */
+  refreshRoutingProviders?: () => Promise<void>;
   /**
    * Rank hints for tier resolution on the session's provider; the host supplies
    * the operator's `routing profile set --tier` pins here. Absent, the built-in
@@ -1511,6 +1513,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       // Inner paths retain ownership of reservation/slate cleanup.
       try {
       const parent = deps.getParentModel();
+      if (!isExternalRuntimeRequest) await deps.refreshRoutingProviders?.();
       const detected = deps.getDetectedProviders();
       const session = { providerId: parent.providerId, modelId: parent.modelId };
       // The candidate set for tier resolution: whatever runtime detection

@@ -554,3 +554,23 @@ test("flow 468 AC4: withStatusRows keeps an unreachable, timed-out or unsupporte
   // Without the opt-in the old behaviour holds: nothing to show, nothing returned.
   expect(catalogToFlatPickerProviders(catalog)).toEqual([{ name: "groq", models: ["llama-fake"], offline: true, observedAt: "now" }]);
 });
+
+test("routing refreshes stale entries even when another provider made the cache recent", async () => {
+  const dir = emptyCustomProvidersDir();
+  const now = Date.now();
+  const current = new Date(now).toISOString();
+  const stale = new Date(now - 6 * 60_000).toISOString();
+  await saveProviderCatalogCache({ fetchedAt: current, providers: {
+    ollama: { name: "ollama", status: "ok", models: ["stale-model"], fallbackModels: [], fetchedAt: stale },
+  } }, dir);
+  let probes = 0;
+  const deps = {
+    fetch, env: {}, dir, now: () => now,
+    redetect: async () => { probes++; return [{ name: "ollama", models: ["refreshed-model"] }]; },
+  };
+  const options = { ttlMs: 5 * 60_000, checkEntryDates: true };
+  const fresh = await loadOrRefreshProviderCatalogLive(deps, options);
+  expect(catalogToFlatPickerProviders(fresh)).toEqual([{ name: "ollama", models: ["refreshed-model"], observedAt: current }]);
+  await loadOrRefreshProviderCatalogLive(deps, options);
+  expect(probes).toBe(1);
+});

@@ -297,7 +297,11 @@ export async function requestDeskRun(
   }
 }
 
-export async function runDeskWorker(id: string, selectModel: DeskModelSelector) {
+export async function runDeskWorker(
+  id: string,
+  selectModel: DeskModelSelector,
+  resolveOptions: (cwd: string, options?: DeskReviewOptions) => DeskReviewOptions | undefined = (_cwd, options) => options,
+) {
   const store = new DeskRunStore();
   let timer: ReturnType<typeof setInterval> | undefined;
   const controller = new AbortController();
@@ -343,7 +347,9 @@ export async function runDeskWorker(id: string, selectModel: DeskModelSelector) 
           abort();
         }
       }, 500);
-      const previous = store
+      const options = resolveOptions(cwd, run.options);
+      const optionsMatch = deskOptionsKey(options) === deskOptionsKey(run.options);
+      const previous = optionsMatch ? store
         .history(key)
         .runs.find(
           (item) =>
@@ -351,12 +357,13 @@ export async function runDeskWorker(id: string, selectModel: DeskModelSelector) 
             item.scope === DESK_RUN_SCOPE && deskOptionsKey(item.options) === deskOptionsKey(run.options) &&
             item.state === "completed" &&
             item.result?.coverage === "complete",
-        );
+        ) : undefined;
       const context = await collectPrContext(cwd, key, pr, store, undefined, run.options?.flowId);
       const workerRoster = createWorkerRoster(runDir, key, run);
       const out = await executeDeskReview({
         context,
-        ...(run.options ? { options: run.options, budgetTokens: run.options.maxTokens ?? null } : {}),
+        ...(options ? { options } : {}),
+        ...(run.options ? { budgetTokens: run.options.maxTokens ?? null } : {}),
         cwd,
         repo: key.repo,
         number: key.number,

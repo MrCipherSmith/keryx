@@ -76,6 +76,7 @@ export interface RoutingExecutionConfig {
 export interface RoutingConfigLayer {
   readonly schemaVersion: 2;
   readonly classes?: Partial<Record<ModelClass, ModelClassConfig>>;
+  readonly tierRouting?: boolean;
   readonly categories?: Partial<Record<RoutingCategory, RoutingAssignment>>;
   readonly providers?: ProviderRoutingConfig;
   readonly classifier?: ClassifierConfig;
@@ -95,6 +96,7 @@ export interface NormalizedRoutingConfig {
   readonly schemaVersion: 2;
   readonly classes: Readonly<Record<ModelClass, ModelClassConfig>>;
   readonly categories: Readonly<Record<RoutingCategory, RoutingAssignment>>;
+  readonly tierRouting?: boolean;
   readonly categorySources: Readonly<Record<RoutingCategory, "project" | "user" | "builtin">>;
   readonly providers: ProviderRoutingConfig;
   readonly classifier: ClassifierConfig;
@@ -184,7 +186,8 @@ function secretPaths(value: unknown, at = "config"): string[] {
 export function validateRoutingConfigLayer(raw: unknown, options: RoutingNormalizationOptions = {}): RoutingValidationResult {
   const errors: string[] = [];
   if (!isRecord(raw)) return { ok: false, errors: ["routing config must be an object"] };
-  unknownKeys(raw, ["schemaVersion", "classes", "categories", "providers", "classifier", "execution"], "config", errors);
+  unknownKeys(raw, ["schemaVersion", "classes", "tierRouting", "categories", "providers", "classifier", "execution"], "config", errors);
+  if (raw.tierRouting !== undefined && typeof raw.tierRouting !== "boolean") errors.push("tierRouting must be a boolean");
   if (raw.schemaVersion !== 2) errors.push("schemaVersion must be 2");
   errors.push(...secretPaths(raw).map((path) => `${path} must not contain credentials`));
 
@@ -423,17 +426,18 @@ export function normalizeRoutingConfig(layers: RoutingConfigLayers, options: Rou
   })) as Record<ModelClass, ModelClassConfig>;
   assertAcyclicFallbacks(classes);
 
+  const tierRouting = layers.project?.tierRouting ?? layers.user?.tierRouting ?? false;
   const categories = {} as Record<RoutingCategory, RoutingAssignment>;
   const categorySources = {} as Record<RoutingCategory, "project" | "user" | "builtin">;
   for (const category of ROUTING_CATEGORIES) {
     if (layers.project?.categories?.[category] !== undefined) {
       categories[category] = copyAssignment(layers.project.categories[category]);
       categorySources[category] = "project";
-    } else if (layers.user?.categories?.[category] !== undefined) {
+    } else if (!tierRouting && layers.user?.categories?.[category] !== undefined) {
       categories[category] = copyAssignment(layers.user.categories[category]);
       categorySources[category] = "user";
     } else {
-      categories[category] = copyAssignment(BASELINE_ASSIGNMENT);
+      categories[category] = copyAssignment(tierRouting && category !== "review" && category !== "default" ? { mode: "auto" } : BASELINE_ASSIGNMENT);
       categorySources[category] = "builtin";
     }
   }
@@ -451,6 +455,7 @@ export function normalizeRoutingConfig(layers: RoutingConfigLayers, options: Rou
   const normalized = Object.freeze({
     schemaVersion: 2 as const,
     classes: Object.freeze(classes),
+    ...(tierRouting ? { tierRouting } : {}),
     categories: Object.freeze(categories),
     categorySources: Object.freeze(categorySources),
     providers,

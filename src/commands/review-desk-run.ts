@@ -42,8 +42,8 @@ export async function runReviewDesk(args: string[]) {
     },
   });
   if (action === "worker" && Object.keys(v).length === 1 && v.id && uuid.test(v.id)) {
-    const { resolveDeskReviewModel } = await import("./review-desk-provider");
-    await runDeskWorker(v.id, resolveDeskReviewModel);
+    const { resolveDeskReviewModel, resolveDeskReviewOptions } = await import("./review-desk-provider");
+    await runDeskWorker(v.id, resolveDeskReviewModel, resolveDeskReviewOptions);
     return;
   }
   const number = Number(v.number);

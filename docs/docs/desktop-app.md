@@ -13,6 +13,21 @@ background tasks; anything it does not draw yet still works in `keryx shell`.
 The design and its acceptance criteria are in
 `docs/requirements/keryx-desktop-client/`.
 
+## Configure model routing
+
+In **Sessions**, run `/routing` to open the model routing dialog. Use **Add
+model** to choose a connected provider and a model for **Strong**, **Middle**,
+or **Light**. Each tier can contain multiple models, listed in preference
+order. Save to apply your defaults across projects. Approved project
+settings take precedence. An empty tier uses the session model unless the
+project has its own routing settings for that operation.
+
+Subagents use the requested tier and default to Middle. Review orchestrator
+launches use the saved tier lists when the run does not supply its own
+models. The coordinator still follows the selected session model or a
+trusted project override. Existing personal model assignments are offered
+in the dialog as starting values when no class is configured.
+
 ## Set up GitHub for a project
 
 1. Open **Settings → Integrations**, then select **Connect account** under

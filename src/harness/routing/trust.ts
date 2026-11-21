@@ -136,7 +136,7 @@ export function describeLayerForApproval(layer: RoutingConfigLayer): string[] {
   const lines = Object.entries(layer.categories ?? {})
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([category, assignment]) => `${category}: ${describeRoutingAssignment(assignment)}`);
-  for (const key of ["classes", "providers", "classifier", "execution"] as const) {
+  for (const key of ["classes", "tierRouting", "providers", "classifier", "execution"] as const) {
     if (layer[key] !== undefined) lines.push(`${key}: ${JSON.stringify(layer[key])}`);
   }
   return lines;

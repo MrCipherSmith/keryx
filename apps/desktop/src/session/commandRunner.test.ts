@@ -84,6 +84,16 @@ function rig(over: Partial<RunDeps> = {}, reply: (method: string, params: unknow
 
 const cards = (r: Rig) => r.win().convs.s1!.items.filter((i): i is CommandItem => i.kind === "command");
 
+test("Desktop /routing opens its dialog while explicit subcommands still go to ACP", async () => {
+  const r = rig({ commands: [...COMMANDS, cmd("routing", "view")] });
+  r.deps.ui.openRouting = () => r.log.push("routing");
+  expect(await runCommandLine("/routing", r.deps)).toBe(true);
+  expect(r.log).toEqual(["routing"]);
+  expect(r.calls).toHaveLength(0);
+  await runCommandLine("/routing trust", r.deps);
+  expect(r.calls).toEqual([{ method: "_keryx/command", params: { sessionId: "s1", name: "routing", args: "trust" } }]);
+});
+
 describe("commands in flight", () => {
   test("the command is tracked for its session while keryx answers, and untracked after (also on error)", async () => {
     const events: string[] = [];

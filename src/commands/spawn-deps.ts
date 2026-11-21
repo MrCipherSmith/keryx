@@ -23,6 +23,7 @@ export interface SessionSpawnDepsInput {
   /** The host's provider factory; a child on the parent's provider inherits the parent's endpoint. */
   readonly providerFactory: (providerId: string, modelId: string, baseUrl?: string) => ProviderPort;
   /** Credentialed providers a child may route to, with their models (see `getDetectedProviders`). */
+  readonly refreshRoutingProviders?: SpawnSubagentToolDeps["refreshRoutingProviders"];
   readonly getDetectedProviders: SpawnSubagentToolDeps["getDetectedProviders"];
   readonly onFleetEvent?: SpawnSubagentToolDeps["onFleetEvent"];
   readonly hooks?: SpawnSubagentToolDeps["hooks"];
@@ -52,6 +53,7 @@ export function buildSessionSpawnDeps(input: SessionSpawnDepsInput): SpawnSubage
     describeProvider: (providerId, modelId, childBaseUrl) =>
       input.providerFactory(providerId, modelId, baseUrlFor(providerId, childBaseUrl)).describe(),
     getDetectedProviders: input.getDetectedProviders,
+    ...(input.refreshRoutingProviders ? { refreshRoutingProviders: input.refreshRoutingProviders } : {}),
     getRankHints: (providerId) => loadRankHints(providerId),
     // Flow 358: when the size words and version cannot settle a `model_tier`, a one-shot call on
     // the provider's light tier orders the discovered models; any failure keeps the session model.

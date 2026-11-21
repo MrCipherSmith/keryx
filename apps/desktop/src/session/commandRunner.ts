@@ -14,6 +14,7 @@ export interface UiActions {
   mode(arg: string): void;
   model(arg: string): void;
   /** The Providers dialog (`/connect`, `/search-provider`). */
+  openRouting?(): void;
   openProviders(name: string, args: string): void;
   /** Move text into the composer (never sends). */
   fillComposer(text: string): void;
@@ -97,6 +98,10 @@ export async function runCommandLine(line: string, deps: RunDeps, opts: RunOptio
       deps.prepareReview(deps.sessionId, request, opts.display ?? line);
       return true;
     }
+  }
+  if (deps.sessionId && deps.ui.openRouting && /^\/routing\s*$/i.test(line.trim())) {
+    deps.ui.openRouting();
+    return true;
   }
   const found = findCommand(deps.prepareReview ? desktopReviewCommands(deps.commands) : deps.commands, line);
   // Not an advertised command: ordinary text for the model.

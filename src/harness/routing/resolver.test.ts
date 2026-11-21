@@ -78,6 +78,22 @@ test("absolute class selection does not change with the baseline provider", () =
   }
 });
 
+test("tier routing uses the next eligible reviewer model and inherits when the tier is empty", () => {
+  const unavailable = ref("alpha", "expert-offline");
+  const available = ref("beta", "expert-connected");
+  const layer: RoutingConfigLayer = { ...expertLayer([unavailable, available]), tierRouting: true };
+  const req = request({
+    category: "subagents", origin: "subagent", recommendation: { source: "agent", modelClass: "expert" },
+  });
+  const { config, snapshot } = setup(layer, [facts(baseline), facts(unavailable, { availability: "unavailable" }), facts(available)], req);
+  expect(resolveRoutingDecision(req, snapshot, config)).toMatchObject({
+    status: "selected", selection: available, selectedClass: "expert", fallbackReason: "candidate-fallback",
+  });
+  expect(selectionOf(resolveRoutingDecision({
+    ...req, recommendation: { source: "agent", modelClass: "light" },
+  }, snapshot, config))).toEqual(baseline);
+});
+
 test("user override beats project configuration and an agent recommendation", () => {
   const chosen = ref("beta", "pinned");
   const config = normalizeRoutingConfig({

@@ -24,7 +24,7 @@
 
 import { loadOAuthGrant } from "../lib/oauth/grants";
 import { envWithSavedApiKeys } from "../lib/shell-config";
-import { fetchOpenAiCodexModels } from "../commands/subscription-models";
+import { fetchOpenAiCodexCatalog } from "../commands/subscription-models";
 import { detectProviders, type DetectedProvider, type DetectProvidersDeps } from "../commands/select";
 import {
   balanceCapableProvider,
@@ -43,6 +43,7 @@ import {
   type ProviderCatalog,
   type ProviderCatalogEntry,
 } from "./provider-catalog-cache";
+import { refreshModelProfiles } from "./routing/model-profile";
 import type { FlatPickerProvider } from "./routing/table";
 
 export {
@@ -111,7 +112,12 @@ async function buildCatalogEntry(
   }
   if (detected.name === "openai-codex") {
     if (loadOAuthGrant("openai-codex", deps.dir) === undefined) return undefined;
-    const result = await fetchOpenAiCodexModels(deps.fetch, { ...(deps.dir !== undefined ? { configDir: deps.dir } : {}), timeoutMs: deps.timeoutMs ?? CATALOG_FETCH_TIMEOUT_MS });
+    const result = await fetchOpenAiCodexCatalog(deps.fetch, { ...(deps.dir !== undefined ? { configDir: deps.dir } : {}), timeoutMs: deps.timeoutMs ?? CATALOG_FETCH_TIMEOUT_MS });
+    if (result.source === "live") {
+      await refreshModelProfiles(detected.name, result.models, Object.fromEntries(
+        Object.entries(result.contextWindows).map(([model, contextLength]) => [model, { contextLength }]),
+      ), deps);
+    }
     return { name: detected.name, status: classifyModelsStatus(result), models: result.models, fallbackModels: [...detected.models], fetchedAt, label: detected.label ?? "ChatGPT / Codex" };
   }
   const registry = providerByName(detected.name, deps.dir);
@@ -248,15 +254,21 @@ async function detectedOrRedetected(detected: readonly DetectedProvider[], deps:
  * it also drops an older non-empty file, so the next reader detects again
  * instead of being served a catalog the operator has since emptied (flow 468).
  */
+interface CatalogRefreshOptions { force?: boolean; ttlMs?: number; checkEntryDates?: boolean }
+
 async function loadOrRefreshWith(
   deps: ProviderCatalogDeps,
-  opts: { force?: boolean; ttlMs?: number },
+  opts: CatalogRefreshOptions,
   refresh: () => Promise<ProviderCatalog>,
 ): Promise<ProviderCatalog> {
   if (opts.force !== true) {
     const cached = loadProviderCatalogCache(deps.dir);
-    if (isServableCatalog(cached, deps.now ?? Date.now, opts.ttlMs)) {
-      return cached as ProviderCatalog;
+    const now = deps.now ?? Date.now;
+    if (cached && isServableCatalog(cached, now, opts.ttlMs) &&
+        (!opts.checkEntryDates || Object.values(cached.providers).every(entry =>
+          isCatalogFresh({ fetchedAt: entry.fetchedAt, providers: {} }, now, opts.ttlMs)
+        ))) {
+      return cached;
     }
   }
   const fresh = await refresh();
@@ -272,7 +284,7 @@ async function loadOrRefreshWith(
  */
 export async function loadOrRefreshProviderCatalog(
   deps: ProviderCatalogDeps,
-  opts: { force?: boolean; ttlMs?: number } = {},
+  opts: CatalogRefreshOptions = {},
 ): Promise<ProviderCatalog> {
   return loadOrRefreshWith(deps, opts, () => refreshProviderCatalog(deps));
 }
@@ -290,7 +302,7 @@ function isServableCatalog(catalog: ProviderCatalog | undefined, now: () => numb
 export async function loadOrRefreshProviderCatalogFromDetected(
   detected: readonly DetectedProvider[],
   deps: ProviderCatalogDeps,
-  opts: { force?: boolean; ttlMs?: number } = {},
+  opts: CatalogRefreshOptions = {},
 ): Promise<ProviderCatalog> {
   return loadOrRefreshWith(deps, opts, () => refreshProviderCatalogFromDetected(detected, deps));
 }
@@ -304,7 +316,7 @@ export async function loadOrRefreshProviderCatalogFromDetected(
  */
 export async function loadOrRefreshProviderCatalogLive(
   deps: ProviderCatalogDeps & { readonly redetect: () => Promise<readonly DetectedProvider[]> },
-  opts: { force?: boolean; ttlMs?: number } = {},
+  opts: CatalogRefreshOptions = {},
 ): Promise<ProviderCatalog> {
   const { redetect, ...rest } = deps;
   return loadOrRefreshWith(rest, opts, async () => refreshProviderCatalogFromDetected(await redetect(), rest));

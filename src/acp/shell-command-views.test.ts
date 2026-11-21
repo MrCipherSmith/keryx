@@ -13,6 +13,8 @@ import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSy
 import { readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { loadRouting } from "../harness/routing/settings";
+import type { TierSettingsSnapshot } from "../harness/routing/model-class";
 import { ROUTING_CATEGORIES } from "../harness/routing/table";
 import { RECOMMENDED_JEV_PROFILE } from "../review/jev-profile";
 import { loadShellConfig } from "../lib/shell-config";
@@ -109,6 +111,23 @@ describe("every served view command answers a view bare", () => {
 });
 
 describe("/routing", () => {
+  test("Desktop tiers persist several models and reject a stale write", async () => {
+    const host = fakeHost(project(), tempDir("keryx-acp-tier-settings-"));
+    await run(host, "routing", "set subagents baseline");
+    const read = async (): Promise<TierSettingsSnapshot> => JSON.parse((await run(host, "routing", "tiers")).text);
+    const { revision } = await read();
+    const models = [{ provider: "openrouter", model: "vendor/one" }, { provider: "openai", model: "two" }];
+    const save = `tiers ${revision} ${JSON.stringify({ strong: [], middle: models, light: [] }, null, 1)}`;
+    expect((await run(host, "routing", save)).refused).toBeUndefined();
+    expect((await read()).tiers.find(row => row.tier === "middle")?.user).toEqual([
+      { providerId: "openrouter", modelId: "vendor/one" }, { providerId: "openai", modelId: "two" },
+    ]);
+    const config = loadRouting(host.cwd, host.configDir);
+    expect(config.categories.subagents).toEqual({ mode: "auto" });
+    expect(config.classes.standard.candidates.map(candidate => candidate.target.modelId)).toEqual(["vendor/one", "two"]);
+    expect(await run(host, "routing", save)).toMatchObject({ refused: true, text: expect.stringContaining("revision conflict") });
+  });
+
   test("one row per category with its source, a set action, and a form for a model pick", async () => {
     const host = fakeHost(project(), tempDir("keryx-acp-views-config-"));
     const view = viewOf(await run(host, "routing"));
