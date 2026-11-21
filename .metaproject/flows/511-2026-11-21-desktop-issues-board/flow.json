@@ -11,7 +11,7 @@
   "title": "Desktop Issues board with linked sessions and managed issue-to-flow preparation",
   "status": "in-progress",
   "createdAt": "2026-11-21T20:10:01.247Z",
-  "updatedAt": "2026-11-21T21:09:27.096Z",
+  "updatedAt": "2026-11-21T21:09:27.580Z",
   "source": {
     "type": "description",
     "ref": null
@@ -213,7 +213,7 @@
       "id": "T10",
       "title": "Support selected GitHub Project status and explicit moves",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T6",
         "T9"
@@ -230,7 +230,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T11",
@@ -434,6 +435,11 @@
       "at": "2026-11-21T21:09:27.096Z",
       "event": "task-attempt",
       "detail": "T10: started (attempt 1) — Read GitHub Projects and conditionally update explicit Status choices."
+    },
+    {
+      "at": "2026-11-21T21:09:27.580Z",
+      "event": "task-done",
+      "detail": "T10: Support selected GitHub Project status and explicit moves"
     }
   ],
   "acKinds": {

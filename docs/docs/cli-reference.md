@@ -5165,7 +5165,7 @@ rules or memories instead. Unknown runtimes exit `1` without modifying config.
 ## issues
 
 Browse GitHub issues across repositories using an account connected in Settings → Integrations.
-List, detail and comments read as the explicitly selected account. The current directory does not restrict the personal queue.
+Use `viewer` with an empty request object to verify the account identity. List, detail and comments read as the explicitly selected account. The current directory does not restrict the personal queue.
 
 ```bash
 keryx issues list --login LOGIN --request '{"source":"assigned","state":"open"}' --json

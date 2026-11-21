@@ -1,3 +1,4 @@
+import { defaultFilters, groupForRow, mergeRows, visibleRows, type Row } from "../../apps/desktop/src/issues/model";
 import { expect, test } from "bun:test";
 import { issueComments, issueDetail, listIssuePage } from "./issues-board";
 import { authenticatedAccount, IssueGithub, type FetchIssues } from "./issues-github";
@@ -109,6 +110,10 @@ test("AC3 denied, offline, empty and rate limited requests are distinguishable",
     const auth = await account(async () => new Response("", { status }));
     await expect(listIssuePage(auth, { source: "assigned" })).rejects.toThrow(kind);
   }
+  const revoked = await account(async () =>
+    new Response("Resource not accessible", { status: 404, headers: { "x-ratelimit-remaining": "0" } }),
+  );
+  await expect(listIssuePage(revoked, { source: "assigned" })).rejects.toThrow("access:");
   const offline = await account(async () => {
     throw new TypeError("offline");
   });
@@ -132,4 +137,22 @@ test("AC6 authenticated empty descriptions are distinct from access errors and u
   await expect(issueComments(auth, { ...ref, url: "file:///private/demo" })).rejects.toThrow("configuration:");
   const badAccount = new IssueGithub("test-other", async () => json({ login: "other", node_id: "U_other" }));
   await expect(authenticatedAccount("viewer", badAccount)).rejects.toThrow("access:");
+});
+
+test("AC5 GitHub state, Project Status and Keryx stage stay independent on refresh", async () => {
+  const page = await listIssuePage(await account(async () => json([row("a", "I_a"), row("b", "I_b")])), {source: "assigned"});
+  const openDone: Row = { issue: { ...page.items[0]!, work: { stage: "done" } }, optionId: "in-progress" };
+  const closedActive: Row = { issue: { ...page.items[1]!, state: "closed", work: { stage: "active" } } };
+  const selected = issueKey(closedActive.issue.ref);
+  const refreshed = mergeRows([openDone, closedActive], [
+    { ...closedActive, issue: { ...closedActive.issue, work: {stage: "needs_answer", reason: "Choose the execution branch"} } },
+  ]);
+  expect(groupForRow(openDone, false)).toBe("done");
+  expect(groupForRow(openDone, true)).toBe("in-progress");
+  expect(groupForRow(closedActive, false)).toBe("active");
+  expect(visibleRows(refreshed, defaultFilters)).toEqual([openDone]);
+  const shown = visibleRows(refreshed, { ...defaultFilters, state: "all" }).find(r => issueKey(r.issue.ref) === selected)!;
+  expect(groupForRow(shown, false)).toBe("needs_answer");
+  expect(shown.issue.work?.reason).toBe("Choose the execution branch");
+  expect(shown.issue.state).toBe("closed");
 });

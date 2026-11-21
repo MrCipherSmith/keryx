@@ -27,3 +27,4 @@
 - 2026-11-21T21:09:25.899Z - task-attempt: T8: started (attempt 1) — Adopt or initialize the package and hand off an idempotent coordinator turn.
 - 2026-11-21T21:09:26.820Z - task-done: T9: Build Issues board, list and resizable detail in Desktop
 - 2026-11-21T21:09:27.096Z - task-attempt: T10: started (attempt 1) — Read GitHub Projects and conditionally update explicit Status choices.
+- 2026-11-21T21:09:27.580Z - task-done: T10: Support selected GitHub Project status and explicit moves

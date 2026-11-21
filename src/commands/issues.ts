@@ -5,6 +5,10 @@ import {
   issueDetail,
   issueKey,
   listIssuePage,
+  readIssueProject,
+  moveIssueProjectItem,
+  type ProjectRequest,
+  type MoveRequest,
   type IssueRef,
   type IssueSummary,
   type IssueViewer,
@@ -12,7 +16,7 @@ import {
 } from "../integrations/issues/service";
 
 const usage =
-  "keryx issues <list|detail|comments|project|move|workspace|open-session|prepare-flow> --login LOGIN --request JSON --json";
+  "keryx issues <viewer|list|detail|comments|project|move|workspace|open-session|prepare-flow> --login LOGIN --request JSON --json";
 
 export async function issuesCommand(args: string[], cwd = process.cwd()): Promise<void> {
   const [action, ...flags] = args;
@@ -39,12 +43,28 @@ export async function issuesCommand(args: string[], cwd = process.cwd()): Promis
   const account = await connectIssueAccount(cwd, values.login);
   let result;
   switch (action) {
+    case "viewer":
+      result = { viewer: account.viewer };
+      break;
     case "list": {
       const page = await listIssuePage(account, request as unknown as ListIssueRequest);
       await attachStages(cwd, page.viewer, page.items);
       result = page;
       break;
     }
+    case "project": {
+      const page = await readIssueProject(account, request as ProjectRequest);
+      await attachStages(
+        cwd,
+        page.viewer,
+        page.items.map((item) => item.issue),
+      );
+      result = page;
+      break;
+    }
+    case "move":
+      result = await moveIssueProjectItem(account, request as unknown as MoveRequest);
+      break;
     case "detail":
       result = await issueDetail(account, request.ref as IssueRef);
       break;

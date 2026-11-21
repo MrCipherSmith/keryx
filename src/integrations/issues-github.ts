@@ -10,8 +10,14 @@ export type FetchIssues = (url: URL, options: RequestInit) => Promise<Response>;
 
 function failure(response: Response, diagnostic: string): Error {
   if (
+    response.status === 401 ||
+    response.status === 404 ||
+    /FORBIDDEN|NOT_FOUND|INSUFFICIENT_SCOPES|not accessible|permission|could not resolve/i.test(diagnostic)
+  )
+    return new Error(denied);
+  if (
     response.status === 429 ||
-    response.headers.get("x-ratelimit-remaining") === "0" ||
+    (response.status === 403 && response.headers.get("x-ratelimit-remaining") === "0") ||
     /rate.limit|RATE_LIMITED/i.test(diagnostic)
   ) {
     const wait = response.headers.get("retry-after");
@@ -23,11 +29,7 @@ function failure(response: Response, diagnostic: string): Error {
         : "";
     return new Error("rate-limit: GitHub request limit reached." + retry);
   }
-  if (
-    [401, 403, 404].includes(response.status) ||
-    /FORBIDDEN|NOT_FOUND|INSUFFICIENT_SCOPES|not accessible|permission|could not resolve/i.test(diagnostic)
-  )
-    return new Error(denied);
+  if (response.status === 403) return new Error(denied);
   return new Error(invalidResponse);
 }
 
