@@ -1828,12 +1828,12 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         }
         const byProvider = new Map<string, string[]>();
         for (const choice of listedChoices ?? []) byProvider.set(choice.providerId, [...(byProvider.get(choice.providerId) ?? []), choice.modelId]);
-        return withSessionProvider(
+        const fallback = withSessionProvider(
           parent().providerId,
-          [...byProvider].map(([name, models]) => ({
-            name, models, ...(options.routingProviders && { offline: true }),
-          })),
+          [...byProvider].map(([name, models]) => ({ name, models })),
         );
+        // Picker rows can describe models without verifying their availability.
+        return options.routingProviders ? fallback.map(row => ({ ...row, offline: true })) : fallback;
       },
       onFleetEvent: (event) => {
         if (!stopping) writeMessage(notificationMessage(KERYX_ACP_EXTENSION_METHODS.subagent, { sessionId, event }));
