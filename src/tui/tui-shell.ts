@@ -1,4 +1,4 @@
-import { issueShellSource } from "../integrations/issue-session/service";
+import { issueShellSource, startIssueSessionActivity } from "../integrations/issue-session/service";
 import { executePlanCommand } from "../session/commands/plan-command";
 import { startShellStateExports } from "../session/shell-state-exports";
 import { createHash } from "node:crypto";
@@ -11364,6 +11364,7 @@ export async function launchTuiAgentShell(opts: {
           ? agentShaped && !looksLikeHcMessage(line) ? `${HC_PASTED_HEADER}\n\n${line}` : frameSubmittedLine(line)
           : line;
         const issueLine = issueShellSource(slateSession?.dir, modelLine, history.some(row => row.role === "user" && !row.injected));
+        const finishIssueActivity = startIssueSessionActivity(slateSession?.dir);
         void (turnSignal.aborted ? Promise.resolve() : runAgentTurn(foregroundIo, deps, history, issueLine ?? modelLine, {
         ...(issueLine ? { untrustedPrompt: true, operatorText: modelLine } : {}),
         signal: turnSignal,
@@ -11372,6 +11373,7 @@ export async function launchTuiAgentShell(opts: {
         // Flow 387 review r1 F-001: this shell syncs its archive before every history change.
         ...(slateSession !== undefined ? { slateSession, pruneArchive: true } : {}),
       })).finally(() => {
+        finishIssueActivity?.();
         turnUsageSlot.clear(turnUsageSink);
         const accepted = settleForegroundOperation(foregroundOperation, operation);
         if (!accepted) {

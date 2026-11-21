@@ -5,11 +5,10 @@ import { findIssueFlows, issueSourceUrl, readFlow } from "../flow/service";
 import { reviewGitCommonDir } from "../review/board-github";
 import { projectGithubBinding } from "../review/github-account-store";
 import { sessionDir } from "../session";
-import { sessionLeaseState } from "../session/lease";
 import { setSessionFlags } from "../session/organize";
 import { issueCheckoutCatalog, issueCheckouts, selectIssueCheckout } from "./issue-checkouts";
 import { issueBindingFile, privateJson, saveBinding, withIssueBinding, type BoundIssue } from "./issue-session";
-import { issuePreparationPrompt, issueQuestion, issueTurnReceipt } from "./issue-turn";
+import { issuePreparationPrompt, issueQuestion, issueTurnReceipt, issueTurnWorking } from "./issue-turn";
 import { issueKey, type IssueWorkspace, type IssueRef, type IssueViewer, type IssueDetail, type IssueFlowRef,
   type IssueProjectRef, type IssueLocalStage } from "./issues-contract";
 
@@ -68,10 +67,9 @@ async function hydrate(result: IssueWorkspace, bound: BoundIssue, dataDir?: stri
     if (question && question.answer === undefined) {
       launch.stage = "awaiting_answer";
       result.question = { id: question.id, sessionId: launch.sessionId };
-    } else if (await artifactsPrepared(launch.flow)) launch.stage = "prepared";
+    } else if (launch.flow.status !== "initializing" || await artifactsPrepared(launch.flow)) launch.stage = "prepared";
     else {
-      const lease = sessionLeaseState(launch.project.cwd, launch.sessionId, dataDir);
-      launch.stage = !receipt.settled && (lease.state === "live" || lease.state === "mine") ? "preparing" : "resume_required";
+      launch.stage = issueTurnWorking(dir, bound, dataDir) ? "preparing" : "resume_required";
       if (launch.stage === "resume_required") result.problem = { code: "resume_required", message: "Open the linked session to continue from its saved work." };
     }
   } else if (launch.flow.status !== "initializing" || await artifactsPrepared(launch.flow)) launch.stage = "prepared";

@@ -106,7 +106,7 @@ import {
   type AcpSetSessionConfigOptionResponse,
   type AcpStopReason,
 } from "./protocol";
-import { acceptIssueTurn, answerIssueQuestion, issueContextForSession, issueQuestionsToRestore, finishIssueQuestionRecovery, rememberIssueQuestion, settleIssueTurn } from "../integrations/issue-session/service";
+import { acceptIssueTurn, startIssueSessionActivity, answerIssueQuestion, issueContextForSession, issueQuestionsToRestore, finishIssueQuestionRecovery, rememberIssueQuestion, settleIssueTurn } from "../integrations/issue-session/service";
 import { renderAcpPrompt } from "./prompt-content";
 import { AcpSessionRegistry, AcpSessionTranscriptUnreadableError, syncAcpArchive, type AcpSessionState } from "./session";
 import { SessionMcpGrants } from "./mcp-grants";
@@ -2383,6 +2383,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       permissionRequestIds: new Set(),
     };
     activeTurns.set(sessionId, turn);
+    let finishIssueActivity: (() => void) | undefined;
     try {
       // The dials `session/new`/`session/load` started — bounded by each
       // server's handshake budget — must have settled before the turn, or the
@@ -2395,6 +2396,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
           throw new Error(`capability_missing: Issue preparation needs the writable shell coordinator with interactive tools (${missing.join(", ")}).`);
         if (!acceptIssueTurn(state.handle.dir, bound, launchId, rendered.trustedText)) return { stopReason: "end_turn" };
       }
+      if (bound?.launch.flow) finishIssueActivity = startIssueSessionActivity(state.handle.dir, options.dataDir);
       const io = createAcpAgentIo(
         sessionId,
         sendUpdate,
@@ -2521,6 +2523,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       // maps to `cancelled`.)
       return { stopReason: turn.cancelled ? "cancelled" : finishReasonToStopReason(result.finishReason) };
     } finally {
+      if (registry.canPersist(sessionId)) finishIssueActivity?.();
       // Released on EVERY exit path — a normal finish, a thrown error, and a
       // cancelled turn alike — or the session would stay "busy" for the rest
       // of the connection and every later prompt would be refused.

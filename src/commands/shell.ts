@@ -1,4 +1,4 @@
-import { acceptShellIssuePreparation, issueShellSource } from "../integrations/issue-session/service";
+import { acceptShellIssuePreparation, issueShellSource, startIssueSessionActivity } from "../integrations/issue-session/service";
 import { executePlanCommand } from "../session/commands/plan-command";
 import { startShellStateExports } from "../session/shell-state-exports";
 import { startShellStartupTrace } from "../lib/shell-startup-trace";
@@ -2754,13 +2754,14 @@ export async function runAgentRepl(
       const abort = new AbortController();
       activeAgentAbort = abort;
       const issueLine = issueShellSource(slateSession?.dir, operatorLine, history.some(row => row.role === "user" && !row.injected));
+      const finishIssueActivity = startIssueSessionActivity(slateSession?.dir);
       const flight = runAgentTurn(agentIo, deps, history, issueLine ?? operatorLine, {
         ...(issueLine ? { untrustedPrompt: true, operatorText: operatorLine } : {}),
         ...(looksLikeHcMessage(typedLine) ? { origin: "agent-message" as const } : {}),
         recovery: rich.recovery ?? {},
         signal: AbortSignal.any([abort.signal, activeTurnAbort.signal, ...(rich.signal === undefined ? [] : [rich.signal])]),
         ...(slateSession !== undefined ? { slateSession, pruneArchive: true } : {}),
-      });
+      }).finally(finishIssueActivity);
       activeAgentFlight = flight;
       await flight;
     } catch (error) {

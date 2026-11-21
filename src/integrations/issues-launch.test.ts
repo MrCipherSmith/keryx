@@ -132,7 +132,9 @@ test("AC10 cold ACP restores outstanding questions through an admitted prompt an
     // A second worker asks while the coordinator's first dialog is still outstanding.
     rememberIssueQuestion(dir, issueContextForSession(dir,dataDir)!, askAudience);
   } finally { await old.end(); }
-  const resumed = shellHarness({ ...opts, rounds:[textRound("I will apply both decisions.")] });
+  settleIssueTurn(dir);
+  const resumed = shellHarness({ ...opts, storedMode:"ask",
+    rounds:[toolRound("work","shell_exec",{command:"touch coordinator-fixture"}),textRound("I will apply both decisions.")] });
   try {
     await resumed.initialize();
     const load = () => resumed.request("session/load",{cwd:project.cwd, sessionId:id, mcpServers:[]});
@@ -147,7 +149,12 @@ test("AC10 cold ACP restores outstanding questions through an admitted prompt an
     const next = await resumed.waitFor(f => f.method === "_keryx/ask_user" && f.id !== first.id);
     expect(next.params).toMatchObject({question:askAudience.question});
     resumed.respond(next.id,{result:{outcome:"answered",answers:["No"]}});
+    const working = await resumed.waitFor(f => f.method === "session/request_permission");
+    expect((await run("workspace")).launch?.stage).toBe("preparing");
+    resumed.respond(working.id,{result:{outcome:{outcome:"selected",optionId:"allow_once"}}});
     expect((await resumed.waitFor(f => f.id === turn)).result?.["stopReason"]).toBe("end_turn");
+    // The connection continues holding its lease after the model turn finished.
+    expect((await run("workspace")).launch?.stage).toBe("resume_required");
     const replay = resumed.request("session/prompt",params);
     await resumed.waitFor(f => f.id === replay);
     const reopened = load();

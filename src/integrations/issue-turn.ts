@@ -2,8 +2,9 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { createOwnerOnlyFileExclusive, writeOwnerOnlyFileAtomic } from "../lib/config-dir";
 import { ASK_USER_CANCEL, type AskUserAnswer, type AskUserRequest } from "../lib/ask-user-contract";
+import { sessionLeaseState } from "../session/lease";
 import { issueDigest } from "./issue-key";
-import { privateJson, type BoundIssue } from "./issue-session";
+import { issueContextForSession, privateJson, type BoundIssue } from "./issue-session";
 
 interface Receipt { launchId: string; turnId: string; prompt: string; settled?: boolean }
 export interface IssueQuestion { id: string; request: AskUserRequest; answer?: AskUserAnswer; awaitingDelivery?: true }
@@ -42,6 +43,32 @@ export function acceptIssueTurn(dir: string, bound: BoundIssue | undefined, laun
   const already = issueTurnReceipt(dir);
   if (already?.launchId !== launchId || already.prompt !== prompt) throw new Error("launch_outcome_unknown: Inspect the existing turn in Sessions.");
   return false;
+}
+
+interface Activity { launchId: string; generation: string; leaseKey: string; running: boolean }
+
+/** A live lease alone proves only that a session is open. Bind each active coordinator turn to its lease generation. */
+export function issueTurnWorking(dir: string, bound: BoundIssue, dataDir?: string): boolean {
+  const activity = privateJson<Activity>(path.join(dir, "issue-activity.json"));
+  if (!activity?.running || activity.launchId !== bound.launch.launchId || !bound.launch.sessionId) return false;
+  const lease = sessionLeaseState(bound.launch.project.cwd, bound.launch.sessionId, dataDir);
+  return (lease.state === "mine" || lease.state === "live") && !!lease.holder && activity.leaseKey === issueDigest(lease.holder.token);
+}
+
+export function startIssueSessionActivity(dir?: string, dataDir?: string): (() => void) | undefined {
+  if (!dir) return;
+  const bound = issueContextForSession(dir, dataDir);
+  if (!bound?.launch.flow || !bound.launch.sessionId || issueTurnReceipt(dir)?.launchId !== bound.launch.launchId) return;
+  const lease = sessionLeaseState(bound.launch.project.cwd, bound.launch.sessionId, dataDir);
+  if (lease.state !== "mine" || !lease.holder) return;
+  const file = path.join(dir, "issue-activity.json");
+  const activity: Activity = { launchId:bound.launch.launchId, generation:randomUUID(), leaseKey:issueDigest(lease.holder.token), running:true };
+  writeOwnerOnlyFileAtomic(file, JSON.stringify(activity));
+  return () => {
+    if (privateJson<Activity>(file)?.generation === activity.generation && issueTurnWorking(dir, bound, dataDir)) {
+      writeOwnerOnlyFileAtomic(file, JSON.stringify({ ...activity, running:false }));
+    }
+  };
 }
 
 export function settleIssueTurn(dir: string): void {
