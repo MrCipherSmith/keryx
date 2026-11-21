@@ -5,7 +5,7 @@ import { watcherScope } from "./watcher-db";
 import type { ReviewCard } from "./board-types";
 import { readOwnedPullRequest, type OwnedPullRequest } from "./watcher-rebase";
 import { setRepairDraft } from "./pr-repair-draft";
-import { readFailedActionsJob } from "./pr-repair-ci";
+import { readFailedActionsJobs } from "./pr-repair-ci";
 import { isActionableReview, publishRepairReply, readReviewFeedback } from "./pr-repair-feedback";
 import { RepairCheckout } from "./pr-repair-git";
 import { RepairStore, type RepairGrant, type RepairPlan, type RepairReply } from "./watcher-repair-store";
@@ -47,9 +47,9 @@ async function findTask(subject: OwnedPullRequest, { key, card, grant, store }: 
   const cause = `ci:${card.headSha}`;
   if (grant.settings.ci && card.ci === "failed" && subject.pull.mergeable === "MERGEABLE" &&
       !store.seen(grant, cause) && !store.repairedCiHead(grant, card.headSha)) {
-    const evidence = await readFailedActionsJob(subject, key);
+    const evidence = await readFailedActionsJobs(subject, key);
     if (evidence) return {
-      kind: "ci", cause, evidence, prompt: "Fix the source code causing this GitHub Actions failure.",
+      kind: "ci", cause, evidence, prompt: "Fix the source code causing the failed GitHub Actions checks.",
       commitMessage: "fix: repair failing pull request checks",
       starting: "Repairing a failing GitHub Actions check in a separate checkout.",
       complete: "CI repair pushed. GitHub Actions will verify the new commit.",
