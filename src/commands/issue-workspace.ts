@@ -1,7 +1,8 @@
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { createFlowService, githubAdapter } from "../flow/service";
-import { issueWorkspace, readGithubIssue, isIssueRef, type IssueWorkRequest, type IssueWorkAction } from "../integrations/issues/service";
+import { readGithubIssue, isIssueRef } from "../integrations/issues/service";
+import { issueWorkspace, type IssueWorkRequest, type IssueWorkAction } from "../session/issues/issues-launch";
 import { flowServiceDeps } from "./flow";
 
 export async function runIssueWorkspaceCommand(action: IssueWorkAction, argv: string[], cwd = process.cwd()): Promise<void> {

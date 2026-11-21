@@ -1,11 +1,9 @@
-import { issueSourceUrl } from "../flow/issue-source";
-import { listFlowDirs, readFlow } from "../flow/store";
-import { sessionDir } from "../session";
-import { FLOW_REF } from "../session/organize";
+import { issueSourceUrl, listFlowDirs, readFlow } from "../../flow/service";
+import { sessionDir } from "../index";
+import { FLOW_REF } from "../organize";
 import { issueContextForSession } from "./issue-session";
-import { graphSummary, issueDetail, issueFields, type GithubIssue } from "./issues-board";
-import { issueViewerKey, type IssueDetail } from "./issues-contract";
-import { denied, invalidInput, type IssueAccount } from "./issues-github";
+import { issueDetail, readIssueSource, denied, invalidInput, type IssueAccount } from "../../integrations/issues/service";
+import { issueViewerKey, type IssueDetail } from "../../integrations/issue-context/service";
 
 /** Only return source metadata after rechecking access with the named account. */
 export async function readIssueOrigin(cwd: string, account: IssueAccount, request: Record<string, unknown>, dataDir?: string) {
@@ -25,16 +23,7 @@ export async function readIssueOrigin(cwd: string, account: IssueAccount, reques
     if (source?.type === "github-issue" && source.ref) {
       const url = issueSourceUrl(source.ref);
       if (!url) throw new Error(invalidInput);
-      const [, owner, repo, , number] = new URL(url).pathname.split("/");
-      const { repository } = await account.api.graphql<{
-        repository: {issue: (GithubIssue & {body:string; stateReason:string|null}) | null} | null;
-      }>(
-        `query($owner:String!,$repo:String!,$number:Int!) { repository(owner:$owner,name:$repo) { issue(number:$number) { ${issueFields} body stateReason } } }`,
-        { owner, repo, number: Number(number) },
-      );
-      const row = repository?.issue;
-      if (row?.__typename !== "Issue" || issueSourceUrl(row.url) !== url) throw new Error(denied);
-      issue = { ...graphSummary(row), body: row.body, ...(row.stateReason ? { stateReason: row.stateReason } : {}) };
+      issue = await readIssueSource(account, url);
     }
   } else {
     throw new Error(invalidInput);

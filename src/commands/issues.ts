@@ -1,7 +1,7 @@
+import { readIssueOrigin } from "../session/issues/issue-origin";
 import { parseArgs } from "node:util";
 import {
   connectIssueAccount,
-  readIssueOrigin,
   issueComments,
   issueDetail,
   issueKey,
@@ -85,7 +85,7 @@ export async function issuesCommand(args: string[], cwd = process.cwd()): Promis
 }
 
 async function attachStages(cwd: string, viewer: IssueViewer, items: IssueSummary[]) {
-  const { issueWorkspaceStages } = await import("../integrations/issues/service");
+  const { issueWorkspaceStages } = await import("../session/issues/issues-launch");
   const stages = await issueWorkspaceStages(
     cwd,
     viewer,

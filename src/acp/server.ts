@@ -106,7 +106,7 @@ import {
   type AcpSetSessionConfigOptionResponse,
   type AcpStopReason,
 } from "./protocol";
-import { acceptIssueTurn, startIssueSessionActivity, answerIssueQuestion, issueContextForSession, issueQuestionsToRestore, finishIssueQuestionRecovery, rememberIssueQuestion, settleIssueTurn } from "../integrations/issue-session/service";
+import { acceptIssueTurn, startIssueSessionActivity, answerIssueQuestion, issueContextForSession, issueQuestionsToRestore, finishIssueQuestionRecovery, rememberIssueQuestion, settleIssueTurn } from "../session/issues/runtime";
 import { renderAcpPrompt } from "./prompt-content";
 import { AcpSessionRegistry, AcpSessionTranscriptUnreadableError, syncAcpArchive, type AcpSessionState } from "./session";
 import { SessionMcpGrants } from "./mcp-grants";

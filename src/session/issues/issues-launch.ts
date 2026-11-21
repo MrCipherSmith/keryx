@@ -1,16 +1,13 @@
-import { prepareAvailable, artifactsPrepared } from "./issue-flow-package";
-import { canonicalPath } from "../lib/clone-scope";
-import { assertGitRevision } from "../lib/git-revision";
-import { findIssueFlows, issueSourceUrl, readFlow } from "../flow/service";
-import { reviewGitCommonDir } from "../review/board-github";
-import { projectGithubBinding } from "../review/github-account-store";
-import { sessionDir } from "../session";
-import { setSessionFlags } from "../session/organize";
-import { issueCheckoutCatalog, issueCheckouts, selectIssueCheckout } from "./issue-checkouts";
+import { canonicalPath } from "../../lib/clone-scope";
+import { assertGitRevision } from "../../lib/git-revision";
+import { findIssueFlows, issueSourceUrl, readFlow } from "../../flow/service";
+import { sessionDir } from "../index";
+import { setSessionFlags } from "../organize";
+import { prepareAvailable, artifactsPrepared, projectIsAuthorized, issueCheckoutCatalog, issueCheckouts, selectIssueCheckout } from "../../integrations/issues/service";
 import { issueBindingFile, privateJson, saveBinding, withIssueBinding, type BoundIssue } from "./issue-session";
 import { issuePreparationPrompt, issueQuestion, issueTurnReceipt, issueTurnWorking } from "./issue-turn";
 import { issueKey, type IssueWorkspace, type IssueRef, type IssueViewer, type IssueDetail, type IssueFlowRef,
-  type IssueProjectRef, type IssueLocalStage } from "./issues-contract";
+  type IssueProjectRef, type IssueLocalStage } from "../../integrations/issue-context/service";
 
 export type IssueWorkAction = "workspace" | "open-session" | "prepare-flow";
 export interface IssueWorkRequest { ref: IssueRef; selectedCwd?: string; flowDir?: string; baseBranch?: string }
@@ -20,16 +17,6 @@ export interface IssueWorkPorts {
   projects?: typeof issueCheckouts;
   authorized?: (project: IssueProjectRef, viewer: IssueViewer) => Promise<boolean>;
   dataDir?: string;
-}
-
-function projectLoginMatches(project: string, viewer: IssueViewer): boolean {
-  const binding = projectGithubBinding(project);
-  return !binding || binding.login?.toLowerCase() === viewer.login.toLowerCase();
-}
-
-async function projectIsAuthorized(project: IssueProjectRef, viewer: IssueViewer): Promise<boolean> {
-  const common = await reviewGitCommonDir(project.cwd);
-  return !!common && projectLoginMatches(common, viewer);
 }
 
 type Located = Awaited<ReturnType<typeof findIssueFlows>>[number];

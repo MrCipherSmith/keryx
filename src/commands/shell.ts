@@ -1,4 +1,4 @@
-import { acceptShellIssuePreparation, issueShellSource, startIssueSessionActivity } from "../integrations/issue-session/service";
+import { acceptShellIssuePreparation, issueShellSource, startIssueSessionActivity } from "../session/issues/runtime";
 import { executePlanCommand } from "../session/commands/plan-command";
 import { startShellStateExports } from "../session/shell-state-exports";
 import { startShellStartupTrace } from "../lib/shell-startup-trace";

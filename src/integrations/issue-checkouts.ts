@@ -5,7 +5,8 @@ import { promisify } from "node:util";
 import { canonicalPath } from "../lib/clone-scope";
 import { listProjects } from "../lib/project-registry";
 import { reviewGitCommonDir, reviewGitEnvironment, reviewRepositories } from "../review/board-github";
-import type { IssueProjectRef, IssueRef } from "./issues-contract";
+import { projectGithubBinding } from "../review/github-account-store";
+import type { IssueProjectRef, IssueRef, IssueViewer } from "./issues-contract";
 
 const exec = promisify(execFile);
 
@@ -55,4 +56,14 @@ export async function issueCheckouts(cwd: string, issue: IssueRef): Promise<Issu
 export function selectIssueCheckout(candidates: IssueProjectRef[], explicit?: string): IssueProjectRef | undefined {
   if (explicit !== undefined) return candidates.find(project => project.cwd === explicit);
   return candidates.length === 1 ? candidates[0] : undefined;
+}
+
+function projectLoginMatches(project: string, viewer: IssueViewer): boolean {
+  const binding = projectGithubBinding(project);
+  return !binding || binding.login?.toLowerCase() === viewer.login.toLowerCase();
+}
+
+export async function projectIsAuthorized(project: IssueProjectRef, viewer: IssueViewer): Promise<boolean> {
+  const common = await reviewGitCommonDir(project.cwd);
+  return !!common && projectLoginMatches(common, viewer);
 }

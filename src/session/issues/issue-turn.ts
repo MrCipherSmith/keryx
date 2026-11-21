@@ -1,9 +1,9 @@
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { createOwnerOnlyFileExclusive, writeOwnerOnlyFileAtomic } from "../lib/config-dir";
-import { ASK_USER_CANCEL, type AskUserAnswer, type AskUserRequest } from "../lib/ask-user-contract";
-import { sessionLeaseState } from "../session/lease";
-import { issueDigest } from "./issue-key";
+import { createOwnerOnlyFileExclusive, writeOwnerOnlyFileAtomic } from "../../lib/config-dir";
+import { ASK_USER_CANCEL, type AskUserAnswer, type AskUserRequest } from "../../lib/ask-user-contract";
+import { sessionLeaseState } from "../lease";
+import { issueDigest } from "../../integrations/issue-context/service";
 import { issueContextForSession, privateJson, type BoundIssue } from "./issue-session";
 
 interface Receipt { launchId: string; turnId: string; prompt: string; settled?: boolean }

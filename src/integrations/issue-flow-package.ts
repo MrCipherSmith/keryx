@@ -1,6 +1,6 @@
 import path from "node:path";
 import { readFile, access } from "node:fs/promises";
-import { flowsRoot, parseAcKinds, readFlow } from "../flow/service";
+import { flowsRoot, parseAcceptanceCriteria, readFlow } from "../flow/service";
 import type { IssueFlowRef, IssueWorkspace } from "./issues-contract";
 
 export async function prepareAvailable(cwd: string): Promise<IssueWorkspace["problem"]> {
@@ -16,9 +16,9 @@ export async function artifactsPrepared(ref: IssueFlowRef): Promise<boolean> {
   try {
     const [flow, plan, ac] = await Promise.all([readFlow(ref.cwd, ref.flowDir),
       readFile(path.join(root, "plan.md"), "utf8"), readFile(path.join(root, "acceptance-criteria.md"), "utf8")]);
-    const parsed = parseAcKinds(ac);
+    const criteria = parseAcceptanceCriteria(ac);
     return flow.tasks.some(task => task.origin !== "scaffold") && !!plan.trim() && !plan.includes("Chosen approach and why (link brainstorm")
-      && parsed.criteria.length > 0 && parsed.errors.length === 0 && parsed.criteria.every(c => !c.text.includes("<replace"));
+      && criteria.length > 0 && criteria.every(c => c.text && !c.text.includes("<replace"));
   } catch { return false; }
 }
 

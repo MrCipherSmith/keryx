@@ -1,12 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { ensureKeryxSubdir, isDefiniteAbsence, keryxDataDir, readConfigFile, writeOwnerOnlyFileAtomic } from "../lib/config-dir";
-import { withFileLock } from "../lib/fs";
-import { createSession, findSession, sessionDir } from "../session";
-import { readSessionFlags } from "../session/organize";
-import { issueDigest } from "./issue-key";
-import { issueKey, issueSessionKey, issueViewerKey, type IssueDetail, type IssueLaunch, type IssueProjectRef, type IssueViewer } from "./issues-contract";
+import { ensureKeryxSubdir, isDefiniteAbsence, keryxDataDir, readConfigFile, writeOwnerOnlyFileAtomic } from "../../lib/config-dir";
+import { withFileLock } from "../../lib/fs";
+import { createSession, findSession, sessionDir } from "../index";
+import { readSessionFlags } from "../organize";
+import { issueDigest, issueKey, issueSessionKey, issueViewerKey, type IssueDetail, type IssueLaunch, type IssueProjectRef, type IssueViewer } from "../../integrations/issue-context/service";
 
 export interface BoundIssue {
   launch: IssueLaunch;

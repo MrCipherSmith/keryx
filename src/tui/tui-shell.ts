@@ -1,4 +1,4 @@
-import { issueShellSource, startIssueSessionActivity } from "../integrations/issue-session/service";
+import { issueShellSource, startIssueSessionActivity } from "../session/issues/runtime";
 import { executePlanCommand } from "../session/commands/plan-command";
 import { startShellStateExports } from "../session/shell-state-exports";
 import { createHash } from "node:crypto";
@@ -11371,7 +11371,6 @@ export async function launchTuiAgentShell(opts: {
         signal: turnSignal,
         recovery: {},
         ...(agentShaped ? { origin: "agent-message" as const } : origin === "operator" ? {} : { origin }),
-        // Flow 387 review r1 F-001: this shell syncs its archive before every history change.
         ...(slateSession !== undefined ? { slateSession, pruneArchive: true } : {}),
       })).finally(() => {
         finishIssueActivity?.();

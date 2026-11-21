@@ -31,7 +31,7 @@ import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import type { ServerCatalog } from "../mcp-servers/catalog";
 import type { ServerState } from "../mcp-servers/manager";
 import { createMcpInteractiveTools } from "../mcp-servers/tools";
-import { issueShellAsk } from "../integrations/issue-session/service";
+import { issueShellAsk } from "../session/issues/runtime";
 import { journaledAskUser } from "../tui/ask-user-bridge";
 import type { AskUserFn } from "../harness/tool/builtin/ask-user-tool";
 import { CALLER_ORCHESTRATOR, withOrchestratorLog } from "../review/orchestrator-log";

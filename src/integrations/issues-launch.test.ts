@@ -7,9 +7,9 @@ import { createFlowService, flowsRoot, githubAdapter, readFlow } from "../flow/s
 import { shellHarness, textRound, toolRound } from "../acp/shell-profile.test-helpers";
 import { listSessions, openSession, persistHistory, sessionDir } from "../session";
 import { readSessionFlags } from "../session/organize";
-import { issueWorkspace, issueWorkspaceStages, type IssueWorkAction, type IssueWorkPorts, type IssueWorkRequest } from "./issues-launch";
-import { issueBindingFile, issueContextForSession } from "./issue-session";
-import { acceptIssueTurn, answerIssueQuestion, issueTurnReceipt, rememberIssueQuestion, settleIssueTurn } from "./issue-turn";
+import { issueWorkspace, issueWorkspaceStages, type IssueWorkAction, type IssueWorkPorts, type IssueWorkRequest } from "../session/issues/issues-launch";
+import { issueBindingFile, issueContextForSession } from "../session/issues/issue-session";
+import { acceptIssueTurn, answerIssueQuestion, issueTurnReceipt, rememberIssueQuestion, settleIssueTurn } from "../session/issues/issue-turn";
 import { issueKey, type IssueDetail, type IssueProjectRef, type IssueViewer } from "./issues-contract";
 
 const viewer: IssueViewer = { host: "github.com", login: "reader", nodeId: "user-reader" };

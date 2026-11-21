@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { type AskUserFn, ASK_USER_CANCEL } from "../lib/ask-user-contract";
-import { sessionDir } from "../session";
-import { sessionLeaseState } from "../session/lease";
+import { type AskUserFn, ASK_USER_CANCEL } from "../../lib/ask-user-contract";
+import { sessionDir } from "../index";
+import { sessionLeaseState } from "../lease";
 import { acceptIssueTurn, issuePreparationPrompt, rememberIssueQuestion, answerIssueQuestion } from "./issue-turn";
 import { issueContextForSession } from "./issue-session";
 

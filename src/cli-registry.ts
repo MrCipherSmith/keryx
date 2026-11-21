@@ -266,7 +266,7 @@ export function groupsWithKnownSubcommands(): readonly string[] {
  * actually read.
  */
 export const USAGE_BODY = `Usage:
-  keryx issues <list|detail|comments|project|move|workspace|open-session|prepare-flow> --login LOGIN --request JSON --json
+  keryx issues <viewer|origin|list|detail|comments|project|move|workspace|open-session|prepare-flow> --login LOGIN --request JSON --json
   keryx hub <serve|connect|import|sync|submit|pull|fetch> Team Hub prototype (--help for arguments)
   keryx                                        Show CLI usage
   keryx help [group|command]                   Grouped command help by task (--help/-h keep this flat usage)
@@ -547,6 +547,7 @@ Commands:
   schedule  Scheduled agent tasks in the background: create (with confirmation), list, pause, resume, remove
   governance Read-only report over already-recorded spend, confirmations, signatures and gate outcomes
   decisions Recommendation journal: every agent question with options, what was recommended, what the human chose
+  issues    Browse GitHub issues and projects, open linked sessions and prepare issue flows
   intake    GitHub work intake: tickets, reviews, failed CI and PR comments as Telegram cards, with a usefulness report
   research  Part 1 materials: sync the -latest counts, the decisions export and the status page
   product   The product's intent as a derived index, and the intents closed in code that nobody looked back at

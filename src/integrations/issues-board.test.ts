@@ -161,8 +161,8 @@ test("AC3 source links reopen a private session or legacy Flow only after the se
   const { mkdtemp, mkdir, rm, writeFile } = await import("node:fs/promises");
   const { tmpdir } = await import("node:os");
   const { join } = await import("node:path");
-  const { readIssueOrigin } = await import("./issue-origin");
-  const { withIssueBinding } = await import("./issue-session");
+  const { readIssueOrigin } = await import("../session/issues/issue-origin");
+  const { withIssueBinding } = await import("../session/issues/issue-session");
   const { readSessionFlags } = await import("../session/organize");
   const { sessionDir } = await import("../session/paths");
   const root = await mkdtemp(join(tmpdir(), "issue-origin-"));
