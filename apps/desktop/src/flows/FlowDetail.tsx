@@ -31,6 +31,7 @@ type Tab = "overview" | "criteria" | "tasks" | "journal" | "gates";
 interface Props {
   cwd: string;
   card: FlowCard;
+  onOpenIssue?: (dir: string) => void;
   version: number;
   onClose: () => void;
   /** Sessions already linked to this flow, newest first. */
@@ -54,7 +55,7 @@ type Form =
   | { kind: "commands" }
   | { kind: "next"; output: string };
 
-export function FlowDetailSheet({ cwd, card, version, onClose, linked, onWorkOn, onChanged }: Props) {
+export function FlowDetailSheet({ cwd, card, version, onOpenIssue, onClose, linked, onWorkOn, onChanged }: Props) {
   const workBtn = useRef<HTMLButtonElement>(null);
   const [workMenu, setWorkMenu] = useState(false);
   const [detail, setDetail] = useState<FlowDetail | null>(null);
@@ -185,6 +186,7 @@ export function FlowDetailSheet({ cwd, card, version, onClose, linked, onWorkOn,
           ) : null}
         </dl>
         <div className="sheet-actions">
+          {card.hasIssue && onOpenIssue && <button className="btn btn-sm" onClick={() => onOpenIssue(card.dir)}>Open source issue</button>}
           <button
             ref={workBtn}
             className="btn btn-primary"

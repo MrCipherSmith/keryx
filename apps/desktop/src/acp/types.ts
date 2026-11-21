@@ -150,6 +150,7 @@ export interface ConfigOption {
 
 /** How the person organised a stored session (`_keryx/session_flags`); ISO times, absent when unset. */
 export interface SessionFlags {
+  hasIssue?: true;
   archivedAt?: string;
   pinnedAt?: string;
   /** The flow package directory this session works on. */

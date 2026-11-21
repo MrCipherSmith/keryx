@@ -30,3 +30,5 @@
 - 2026-11-21T21:09:27.580Z - task-done: T10: Support selected GitHub Project status and explicit moves
 - 2026-11-21T21:12:22.308Z - task-done: T8: Prepare or adopt an issue Flow with the native orchestrator
 - 2026-11-21T21:12:22.961Z - task-attempt: T11: started (attempt 1) — Connect native issue actions and verified source navigation.
+- 2026-11-21T21:14:52.958Z - task-done: T11: Connect issue actions, Flow progress and the session inbox
+- 2026-11-21T21:14:53.679Z - task-attempt: T12: started (attempt 1) — Collect GitHub Actions results for every frozen executable criterion and native bridge.

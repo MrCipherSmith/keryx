@@ -121,6 +121,7 @@ function rpcError(code: number, message: string): Error & { code: number } {
 // ---- flows (same JSON as the Rust core, flows-board.md §6) -------------------
 
 interface FlowCard {
+  hasIssue: boolean;
   id: string;
   idValid: boolean;
   dir: string;
@@ -236,6 +237,7 @@ function cardFor(cwd: string, dir: string): { card: FlowCard; state: Json | null
     blocked: false,
     owner: null,
     prUrl: null,
+    hasIssue: false,
     baseBranch: null,
     tasksDone: 0,
     tasksTotal: 0,
@@ -269,6 +271,7 @@ function cardFor(cwd: string, dir: string): { card: FlowCard; state: Json | null
       blocked: status === "blocked",
       owner: str(owner?.value),
       prUrl: str(pr?.url),
+      hasIssue: (state.source as Json | undefined)?.type === "github-issue",
       baseBranch: str(state.baseBranch),
       tasksDone: tasks.filter((t) => t.status === "done").length,
       tasksTotal: tasks.length,

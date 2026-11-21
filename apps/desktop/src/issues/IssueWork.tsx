@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { IssueRef, IssueWorkspace } from "../../../../src/integrations/issues-contract";
+import type { IssueFlowRef, IssueRef, IssueWorkspace } from "../../../../src/integrations/issues-contract";
 import { Dialog } from "../components/ui";
 import { isTauri, invoke, listen } from "../platform/backend";
 import { pickFolder } from "../platform/commands";
@@ -8,7 +8,7 @@ import { errMessage } from "../lib/format";
 
 export type WorkAction = "open-session" | "prepare-flow" | "open-flow";
 interface Intent { action: WorkAction; login: string; ref: IssueRef; flowDir?: string }
-interface Choice { intent: Intent; projects?: string[]; flows?: string[] }
+interface Choice { intent: Intent; projects?: string[]; flows?: IssueFlowRef[] }
 interface Host {
   cwd: string;
   ready: boolean;
@@ -38,7 +38,12 @@ export function useIssueWork(host: Host) {
     }
     if (selected && workspace.problem && ["project_required", "project_ambiguous", "account_mismatch"].includes(workspace.problem.code)) throw new Error(workspace.problem.message);
     if (intent.action !== "open-session" && !intent.flowDir && workspace.flows.length > 1) {
-      setChoice({intent, flows:workspace.flows.map(f => f.flowDir)});
+      setChoice({intent, flows:workspace.flows});
+      return;
+    }
+    const linked = workspace.flows.find(f => f.flowDir === (intent.flowDir ?? workspace.launch?.flow?.flowDir)) ?? (workspace.flows.length === 1 ? workspace.flows[0] : undefined);
+    if (intent.action === "prepare-flow" && linked && linked.cwd !== cwd) {
+      await invoke("issues_transfer", {target: linked.cwd, intent: {...intent, flowDir: linked.flowDir}});
       return;
     }
     if (intent.action === "open-flow") {
@@ -82,7 +87,7 @@ export function useIssueWork(host: Host) {
     {choice.projects?.map(path => <button className="btn" key={path} onClick={() => select(path,choice.intent,true)}>{path}</button>)}
     {choice.projects?.length === 0 && <><p>Open a checkout of {choice.intent.ref.owner}/{choice.intent.ref.repo} to work on this issue.</p>
       <button className="btn" onClick={() => void pickFolder().then(path => {if(path) select(path,choice.intent,true);})}>Choose folder…</button></>}
-    {choice.flows?.map(flowDir => <button className="btn" key={flowDir} onClick={() => select(host.cwd,{...choice.intent,flowDir},false)}>{flowDir}</button>)}
+    {choice.flows?.map(flow => <button className="btn" key={flow.cwd + "/" + flow.flowDir} onClick={() => select(flow.cwd,{...choice.intent,flowDir:flow.flowDir},true)}>{flow.flowDir} · {flow.status}</button>)}
   </Dialog>;
   return {run, chooser};
 }

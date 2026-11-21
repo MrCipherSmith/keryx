@@ -49,6 +49,7 @@ export async function issuesCommand(args: string[], cwd = process.cwd()): Promis
       break;
     case "origin":
       result = await readIssueOrigin(cwd, account, request);
+      if (result.issue) await attachStages(cwd, account.viewer, [result.issue]);
       break;
     case "list": {
       const page = await listIssuePage(account, request as unknown as ListIssueRequest);

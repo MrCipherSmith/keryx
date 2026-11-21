@@ -25,6 +25,7 @@ import { SessionReviewActivity } from "./review/SessionReviewActivity";
 import { loadSessionReviewTargets, readSessionReviewLinks, rememberSessionReview, reviewFlowId, reviewSessionTitle, type ReviewComposerTarget, type SessionReviewLink } from "./review/sessionReview";
 import { publishSessionReview, reviewRun } from "./platform/reviewRuns";
 import { modelChoices, providerOf } from "./session/Composer";
+import type { IssueOriginRequest } from "./issues/IssueOriginDetail";
 import { IssuesView } from "./issues/IssuesView";
 import { useIssueWork } from "./issues/IssueWork";
 import { FlowsBoard } from "./flows/FlowsBoard";
@@ -173,6 +174,8 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   const accountRevision = useRef(0);
   const registration = useRef<Promise<void> | null>(null);
+  const [issueOrigin, setIssueOrigin] = useState<IssueOriginRequest | null>(null);
+  const openIssueOrigin = (origin: IssueOriginRequest) => { setIssueOrigin(origin); setView("issues"); };
   const [linkedFlow, setLinkedFlow] = useState<string | null>(null);
   const [palette, setPalette] = useState<string | null>(null);
   const [enrich, setEnrich] = useState(false);
@@ -291,6 +294,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       return;
     }
     setLinkedFlow(null);
+    setIssueOrigin(null);
     setView(v);
     if (v === "session") requestAnimationFrame(() => composer.current?.focus());
   }, [openSettings]);
@@ -495,7 +499,9 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
   // The title bar names the project and the view; the page below keeps only its own toolbar.
   const title =
     view === "session" ? (
-      <span className="truncate">{sessionTitle}</span>
+      <><span className="truncate">{sessionTitle}</span>
+        {sessionFlow && sessionFlags(sessionFlow).hasIssue && <button className="btn btn-sm" onClick={() => openIssueOrigin({sessionId:sessionFlow.sessionId})}>Open source issue</button>}
+      </>
     ) : (
       <span className="truncate">
         {view === "settings" ? "Settings" : `${basename(cwd)} · ${view === "flows" ? "Flows" : view === "issues" ? "Issues" : "Pull requests"}`}
@@ -522,7 +528,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       view={view}
       onView={go}
       onProjectSettings={openProjectSettings}
-      title={view === "session" ? <span className="truncate">{sessionTitle}</span> : title}
+      title={title}
       hasSession={state.sessionId !== null}
       status={status}
       flowsActive={flowsActive}
@@ -549,12 +555,12 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       </div>
       {workView === "flows" ? (
         <div className="view" hidden={view !== "flows"}>
-          <FlowsBoard initialOpenDir={linkedFlow} cwd={cwd} flows={flows} linkedSessions={linkedSessions} onOpenSession={(card) => void openSessionWith(card.prUrl ?? `.metaproject/flows/${card.dir}`, card)} onWorkOn={(c, target) => void workOn(c, target)} />
+          <FlowsBoard onOpenIssue={dir => openIssueOrigin({flowDir:dir})} initialOpenDir={linkedFlow} cwd={cwd} flows={flows} linkedSessions={linkedSessions} onOpenSession={(card) => void openSessionWith(card.prUrl ?? `.metaproject/flows/${card.dir}`, card)} onWorkOn={(c, target) => void workOn(c, target)} />
         </div>
       ) : null}
       {issueWork.chooser}
       {workView === "issues" && <div className="view" hidden={view !== "issues"}>
-        <IssuesView cwd={cwd} preferred={reviewViewer} onSettings={() => openSettings("integrations")}
+        <IssuesView origin={issueOrigin} onCloseOrigin={() => setIssueOrigin(null)} cwd={cwd} preferred={reviewViewer} onSettings={() => openSettings("integrations")}
           onWork={(login, action, ref, flowDir) => issueWork.run({login, action, ref, flowDir})} />
       </div>}
       <div className="view" hidden={view !== "review"}>

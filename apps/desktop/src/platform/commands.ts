@@ -168,6 +168,7 @@ export async function hostKind(): Promise<"tauri" | "browser-dev" | "none"> {
 // ---- flows (docs/requirements/keryx-desktop-client/flows-board.md §6) -----
 
 export interface FlowCard {
+  hasIssue?: boolean;
   id: string;
   /** Whether `id` is 1-9 digits and may appear in a command; false keeps the card visible only. */
   idValid: boolean;
