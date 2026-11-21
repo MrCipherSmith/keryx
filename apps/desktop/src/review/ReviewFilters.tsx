@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Dialog } from "../components/ui";
-import { CI_LABEL, DECISION_LABEL, EMPTY_FILTERS, STATE_LABEL, type Dimension, type Filters } from "./model";
+import { CI_LABEL, DECISION_LABEL, EMPTY_FILTERS, REVIEW_PERIODS, STATE_LABEL, type Dimension, type Filters } from "./model";
 import type { ReviewCard } from "./types";
 
 const DIMENSIONS: Record<Dimension, string> = {
@@ -23,6 +23,7 @@ export function filterSummary(f: Filters): string[] {
       : dim === "decision" ? { ...DECISION_LABEL, ":none": "No decision" } : dim === "author" ? { "": "Unknown author" } : { ":none": "None" };
     result.push(DIMENSIONS[dim] + " · " + (val.map((v) => labels[v] ?? v).join(", ") || "All"));
   }
+  if (f.updatedWithin) result.push(`Updated · Last ${f.updatedWithin} days`);
   return result;
 }
 
@@ -57,6 +58,23 @@ export function ReviewFilters({ cards, filters, onClose, onApply }: Props) {
     </>}>
     <p className="review-filter-hint">Leave a group unchecked to include all values.</p>
     <div className="review-filter-groups">
+      <fieldset className="review-filter-period">
+        <legend>Period</legend>
+        <select aria-label="PR updated within" className="select-compact" value={draft.updatedWithin ?? ""}
+          onChange={event => {
+            const days = Number(event.target.value);
+            const period = REVIEW_PERIODS.find(item => item === days);
+            setDraft(previous => {
+              const next = { ...previous };
+              if (period) next.updatedWithin = period;
+              else delete next.updatedWithin;
+              return next;
+            });
+          }}>
+          <option value="">Any time</option>
+          {REVIEW_PERIODS.map(days => <option key={days} value={days}>Updated in the last {days} days</option>)}
+        </select>
+      </fieldset>
       {(Object.keys(DIMENSIONS) as Dimension[]).map((dim) => <fieldset key={dim}>
         <legend>{DIMENSIONS[dim]}</legend>
         <div className="review-filter-values">

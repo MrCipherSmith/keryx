@@ -71,7 +71,10 @@ export async function collectBoardPages(readPage: (cursor: string | null, repo?:
     cursors.add(cursor);
   }
   if (pieces) warnings.add("Only part of the repository could be loaded. Refresh to retry.");
-  const { replyHints, cardPart: _part, ...header } = first!;
+  const { replyHints, activeReviewCards, cardPart: _part, ...header } = first!;
+  for (const card of activeReviewCards ?? []) {
+    if (!cards.has(card.number)) cards.set(card.number, card);
+  }
   for (const hint of replyHints ?? []) {
     const card = cards.get(hint.number);
     if (card?.state === "open") cards.set(card.number, { ...card, addressedReplyIds: hint.ids });
@@ -85,10 +88,10 @@ function verifyProjectViewer(viewer: string, expectedViewer?: string): void {
   }
 }
 
-export function fetchReviewBoard(cwd: string, state: ReviewBoardState, repo?: string, signal?: AbortSignal, expectedViewer?: string): Promise<ReviewBoardSnapshot> {
+export function fetchReviewBoard(cwd: string, state: ReviewBoardState, repo?: string, signal?: AbortSignal, expectedViewer?: string, updatedSince?: string): Promise<ReviewBoardSnapshot> {
   return collectBoardPages(async (cursor, canonicalRepo) => {
-    const page = await boards.read(JSON.stringify([cwd, expectedViewer, state, canonicalRepo, cursor]),
-      () => invoke("review_board", { cwd, prState: state, repo: canonicalRepo, paged: true, cursor }));
+    const page = await boards.read(JSON.stringify([cwd, expectedViewer, state, canonicalRepo, cursor, updatedSince]),
+      () => invoke("review_board", { cwd, prState: state, repo: canonicalRepo, paged: true, cursor, updatedSince }));
     if (page?.viewer) verifyProjectViewer(page.viewer, expectedViewer);
     return page;
   }, repo, signal);

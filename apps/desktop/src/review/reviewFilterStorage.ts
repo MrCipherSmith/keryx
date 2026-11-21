@@ -1,4 +1,4 @@
-import { CI_LABEL, DECISION_LABEL, EMPTY_FILTERS, STATE_LABEL, type Dimension, type Filters } from "./model";
+import { CI_LABEL, DECISION_LABEL, EMPTY_FILTERS, REVIEW_PERIODS, STATE_LABEL, type Dimension, type Filters } from "./model";
 
 // GitHub's repository node ID is stable across aliases and renames.
 export function reviewFilterKey(cwd: string, repositoryId: string, viewer: string): string {
@@ -18,13 +18,15 @@ export function readReviewFilters(key: string): Filters {
     const record = JSON.parse(value);
     if (record?.version !== 1 || !record.filters || typeof record.filters !== "object" || Array.isArray(record.filters)) return EMPTY_FILTERS;
     const filters = { ...EMPTY_FILTERS };
-    for (const dim of Object.keys(filters) as Dimension[]) {
+    for (const dim of Object.keys(EMPTY_FILTERS) as Dimension[]) {
       if (!Object.hasOwn(record.filters, dim)) continue;
       const values: unknown = record.filters[dim];
       const choices = allowed[dim];
       if (!Array.isArray(values) || !values.every(value => typeof value === "string" && (!choices || choices.has(value)))) return EMPTY_FILTERS;
       filters[dim] = [...new Set<string>(values)];
     }
+    const period = REVIEW_PERIODS.find(days => days === record.filters.updatedWithin);
+    if (period) filters.updatedWithin = period;
     return filters;
   } catch {
     return EMPTY_FILTERS;

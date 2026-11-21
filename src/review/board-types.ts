@@ -53,6 +53,8 @@ export interface ReviewBoardSnapshot {
   cardPart?: { digest: string; index: number; last: boolean; text: string; localReview?: ReviewCard["localReview"]; addressedReplyIds?: string[] };
   /** First transport page only: viewer-scoped reply IDs for PRs on subsequent pages. */
   replyHints?: { number: number; ids: string[] }[];
+  /** First transport page only: verified PRs with active local reviews outside the GitHub page. */
+  activeReviewCards?: ReviewCard[];
   cards: ReviewCard[];
   /** Missing pages or fields. A successful empty list has no warnings. */
   warnings: string[];

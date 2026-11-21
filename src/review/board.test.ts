@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runReviewBoard } from "../commands/review-board";
-import { listReviewCards, verifyScheduledSubject } from "./board";
+import { listActiveReviewCards, listReviewCards, verifyScheduledSubject } from "./board";
 import { configuredRepositories, selectRepository } from "./board-github";
 import { fixtureGitEnv, isolateGitDiscovery } from "./test-git-fixture";
 
@@ -100,6 +100,31 @@ test("a changed head cannot inherit the previous CI; a failed next page keeps co
   const result = await listReviewCards(repo, [repo], "open", queryFrom([page([pr], more), new Error("unavailable: network")]));
   expect(result.cards[0]?.ci).toBe("unknown");
   expect(result.warnings.length).toBeGreaterThan(0);
+});
+
+test("a review period includes the boundary and stops before older PR pages", async () => {
+  const since = "2026-11-18T00:00:00Z";
+  const old = { ...card(3), updatedAt: "2026-11-17T23:59:59Z", assignees: { nodes: [], pageInfo: more } };
+  let requests = 0;
+  const result = await listReviewCards(repo, [repo], "merged", async <T>(query: string) => {
+    expect(query).toContain("field:UPDATED_AT");
+    expect(++requests).toBe(1);
+    return page([card(1), { ...card(2), updatedAt: since }, old], more) as T;
+  }, false, { cursor: null }, Date.parse(since));
+  expect(result.cards.map(pr => pr.number)).toEqual([1, 2]);
+  expect(result.nextCursor).toBeNull();
+  expect(result.warnings).toEqual([]);
+});
+
+test("active review lookup keeps a merged PR and verifies the board identity", async () => {
+  const subject = { repo, repositoryId: "repo-id", viewer: "me" };
+  const response = { viewer: { login: "me" }, repository: { id: "repo-id", p7: { ...card(7), state: "MERGED" } } };
+  const result = await listActiveReviewCards(subject, [7], async <T>(query: string) => {
+    expect(query).toContain("p7:pullRequest(number:7)");
+    return response as T;
+  });
+  expect(result[0]).toMatchObject({ number: 7, state: "merged" });
+  await expect(listActiveReviewCards(subject, [7], queryFrom([{ ...response, viewer: { login: "other" } }]))).rejects.toThrow("access:");
 });
 
 test("reported access loss on a later page is fatal", async () => {

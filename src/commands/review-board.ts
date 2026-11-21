@@ -3,14 +3,14 @@ import { readLinkedFlows } from "../review/pr-context";
 import { decodeBoardCursor, splitBoardCard } from "../review/board-transport";
 import { parseWatcherKey } from "../review/watcher-project";
 import { readBoardBadges } from "../review/board-badge-read";
-import { attachDeskRunBadges, readLocalBadges } from "../review/desk-run-store";
+import { attachDeskRunBadges, readLocalActiveReviewNumbers, readLocalBadges } from "../review/desk-run-store";
 import { parseArgs } from "node:util";
 import { attachAddressedReplies } from "../review/board-addressed-replies";
-import { listReviewCards } from "../review/board";
+import { listActiveReviewCards, listReviewCards } from "../review/board";
 import { readReviewBoardDetail } from "../review/board-detail";
 import { boardGh, boardGraphql, projectGithubConnection, reviewRepositories, selectRepository, withCurrentGithubBinding, type GithubConnection } from "../review/board-github";
 
-export const BOARD_USAGE = "keryx review board --json [--repo owner/name] [--state open|closed|merged|all | --number N]\n  keryx review board --json --repositories\n  keryx review board --json --state STATE --page [--cards-only] [--cursor CURSOR] [--repo owner/name]\n  keryx review board --json --repo owner/name --badge-revisions N:BASE:HEAD[,...] --repository-id ID --viewer LOGIN";
+export const BOARD_USAGE = "keryx review board --json [--repo owner/name] [--state open|closed|merged|all | --number N] [--updated-since ISO_TIMESTAMP]\n  keryx review board --json --repositories\n  keryx review board --json --state STATE --page [--cards-only] [--cursor CURSOR] [--repo owner/name]\n  keryx review board --json --repo owner/name --badge-revisions N:BASE:HEAD[,...] --repository-id ID --viewer LOGIN";
 
 export async function runReviewBoard(args: string[], cwd = process.cwd()): Promise<void> {
   if (args.length === 1 && (args[0] === "--help" || args[0] === "-h")) {
@@ -20,10 +20,15 @@ export async function runReviewBoard(args: string[], cwd = process.cwd()): Promi
   const { values } = parseArgs({ args, strict: true, allowPositionals: false, options: {
     "cards-only": { type: "boolean" }, page: { type: "boolean" }, cursor: { type: "string" }, "badge-revisions": {type: "string"}, viewer: {type: "string"}, "repository-id": {type: "string"},
     json: { type: "boolean" }, repositories: { type: "boolean" }, repo: { type: "string" }, number: { type: "string" }, state: { type: "string" },
+    "updated-since": { type: "string" },
   } });
   const state = values.state ?? "open";
   if (!values.json || (state !== "open" && state !== "closed" && state !== "merged" && state !== "all")) throw new Error(BOARD_USAGE);
   const revisions = values["badge-revisions"];
+  const since = values["updated-since"];
+  const updatedSince = since === undefined ? undefined : Date.parse(since);
+  if (since !== undefined && (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(since) || !Number.isFinite(updatedSince) ||
+      values.repositories || values.number !== undefined || revisions !== undefined)) throw new Error(BOARD_USAGE);
   if ((values["cards-only"] && !values.page) ||
       (values.cursor !== undefined && (!values.page || !values.cursor || values.cursor.length > 4096)) ||
       (values.page && (values.repositories || values.number !== undefined || revisions !== undefined))) throw new Error(BOARD_USAGE);
@@ -64,13 +69,27 @@ export async function runReviewBoard(args: string[], cwd = process.cwd()): Promi
   for (;;) {
     const page = values.page ? { cursor: continuation.cursor, size } : undefined;
     let result;
-    try { result = await listReviewCards(repo, repositories, state, query, false, page); }
+    try { result = await listReviewCards(repo, repositories, state, query, false, page, updatedSince); }
     catch (error) {
       if (!page || size === 1 || !(error instanceof Error) || !error.message.startsWith("unavailable: GitHub page exceeds")) throw error;
       size = Math.ceil(size / 2);
       continue;
     }
     attachDeskRunBadges(result);
+    if (!page?.cursor && !continuation.part) {
+      try {
+        const present = new Set(result.cards.map(card => card.number));
+        const outstanding = readLocalActiveReviewNumbers(result).filter(number => !present.has(number));
+        if (outstanding.length) {
+          const cards = await listActiveReviewCards(result, outstanding, query);
+          const active = attachDeskRunBadges({ ...result, cards }).cards.filter(card => card.localReview?.active);
+          if (active.length) result.activeReviewCards = active;
+        }
+      } catch (error) {
+        if (error instanceof Error && /^(access|configuration):/.test(error.message)) throw error;
+        result.warnings.push("Some active Keryx reviews could not be loaded. Refresh to retry.");
+      }
+    }
     // Check the notification feed once per refresh, including unread candidates beyond page one.
     if (!values["cards-only"] && !page?.cursor && !continuation.part && (state === "open" || state === "all"))
       await attachAddressedReplies(result, async (endpoint, timeoutMs) =>

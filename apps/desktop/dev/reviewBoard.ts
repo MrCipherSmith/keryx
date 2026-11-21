@@ -37,5 +37,11 @@ export function reviewBoardArgs(args: Json): string[] {
     if (args.paged !== true || typeof args.cursor !== "string" || !args.cursor || args.cursor.length > 4096) throw new Error("configuration: Invalid board cursor");
     argv.push("--cursor=" + args.cursor);
   }
+  if (args.updatedSince != null) {
+    if (args.prState == null || typeof args.updatedSince !== "string" || args.updatedSince.length > 24) {
+      throw new Error("configuration: Invalid pull request period");
+    }
+    argv.push("--updated-since=" + args.updatedSince);
+  }
   return argv;
 }

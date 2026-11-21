@@ -36,6 +36,7 @@
 .review-filter-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 168px), 1fr)); gap: var(--sp-4); }
 .review-filter-groups fieldset { min-width: 0; border: 0; margin: 0; padding: 0; }
 .review-filter-groups legend { font-weight: 600; font-size: var(--fs-sm); padding: 0; margin-bottom: var(--sp-1); }
+.review-filter-period { grid-column: 1 / -1; }
 .review-filter-values { max-height: 180px; overflow: auto; }
 .review-filter-values label { display: flex; gap: 6px; align-items: baseline; padding: 3px 0; font-size: var(--fs-sm); overflow-wrap: anywhere; }
 .review-filter-values input { flex: none; accent-color: var(--accent); }

@@ -32,19 +32,20 @@ interface BoardPage {
 }
 
 const states = { open: "[OPEN]", closed: "[CLOSED]", merged: "[MERGED]", all: "[OPEN, CLOSED, MERGED]" } as const;
-const listQuery = (state: ReviewBoardState, reviewerFields: string, first: number, watcher: boolean) => `query($owner: String!, $name: String!, $cursor: String) {
+const cardFields = (reviewerFields: string, watcher: boolean) => `
+  number title state isDraft author { login } headRefOid baseRefOid updatedAt reviewDecision changedFiles additions deletions
+  ${connection("assignees", person)}
+  ${connection("reviewRequests", reviewerFields)}
+  ${watcher ? "mergeStateStatus recentReviews: reviews(last:25, states:[APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED]) { nodes { id author { login } state } }" : ""}
+  commits(last:1) { nodes { commit { oid statusCheckRollup { state contexts(first:1) { totalCount } } } } }
+`;
+const listQuery = (state: ReviewBoardState, reviewerFields: string, first: number, watcher: boolean, byUpdate: boolean) => `query($owner: String!, $name: String!, $cursor: String) {
   viewer { login }
   repository(owner:$owner, name:$name) {
     id nameWithOwner
-    pullRequests(first:${first}, after:$cursor, states:${states[state]}, orderBy:{field:CREATED_AT, direction:DESC}) {
+    pullRequests(first:${first}, after:$cursor, states:${states[state]}, orderBy:{field:${byUpdate ? "UPDATED_AT" : "CREATED_AT"}, direction:DESC}) {
       ${pageFields}
-      nodes {
-        number title state isDraft author { login } headRefOid baseRefOid updatedAt reviewDecision changedFiles additions deletions
-        ${connection("assignees", person)}
-        ${connection("reviewRequests", reviewerFields)}
-        ${watcher ? "mergeStateStatus recentReviews: reviews(last:25, states:[APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED]) { nodes { id author { login } state } }" : ""}
-        commits(last:1) { nodes { commit { oid statusCheckRollup { state contexts(first:1) { totalCount } } } } }
-      }
+      nodes { ${cardFields(reviewerFields, watcher)} }
     }
   }
 }`;
@@ -78,6 +79,21 @@ function reviewerLabel({ requestedReviewer: r }: Reviewer): string | undefined {
 const cannotRetainData = (error: unknown) => error instanceof Error && /^(access|configuration):/.test(error.message);
 
 interface People { names: string[]; complete: boolean }
+
+function cardFromPr(pr: RawCard, repo: string, assignees: People, reviewers: People): ReviewCard {
+  const stats = changeStats(pr);
+  return {
+    ...(stats && { changeStats: stats }),
+    number: pr.number, title: pr.title, url: `https://github.com/${repo}/pull/${pr.number}`,
+    state: pr.state.toLowerCase() as ReviewCard["state"], draft: pr.isDraft, author: pr.author?.login ?? "",
+    assignees: assignees.names, reviewers: reviewers.names, assigneesComplete: assignees.complete, reviewersComplete: reviewers.complete,
+    decision: pr.reviewDecision, ci: checkState(pr), headSha: pr.headRefOid, baseSha: pr.baseRefOid, updatedAt: pr.updatedAt,
+  };
+}
+
+function validPr(pr: RawCard | null): pr is RawCard {
+  return !!pr && Number.isSafeInteger(pr.number) && !!pr.title && ["OPEN", "MERGED", "CLOSED"].includes(pr.state);
+}
 async function readPeople<T>(key: "assignees" | "reviewRequests", fields: string, first: Connection<T>, label: (person: T) => string | undefined,
   query: Query, params: Record<string, string | number>, viewer: string, repositoryId: string): Promise<People> {
   const names = new Set<string>();
@@ -111,7 +127,7 @@ async function readPeople<T>(key: "assignees" | "reviewRequests", fields: string
   }
 }
 
-export async function listReviewCards(repo: string, repositories: string[], state: ReviewBoardState, read: Query, trackRequestIds = false, page?: {cursor: string | null; size?: number}): Promise<ReviewBoardSnapshot> {
+export async function listReviewCards(repo: string, repositories: string[], state: ReviewBoardState, read: Query, trackRequestIds = false, page?: {cursor: string | null; size?: number}, updatedSince?: number): Promise<ReviewBoardSnapshot> {
   const reviewerFields = trackRequestIds ? `id ${reviewer}` : reviewer;
   const [owner, name] = repo.split("/") as [string, string];
   const params = { owner, name };
@@ -127,7 +143,7 @@ export async function listReviewCards(repo: string, repositories: string[], stat
   let nextCursor: string | null = null;
   for (;;) {
     try {
-      const result: BoardPage = await query<BoardPage>(listQuery(state, reviewerFields, page?.size ?? 100, trackRequestIds), cursor ? { ...params, cursor } : params);
+      const result: BoardPage = await query<BoardPage>(listQuery(state, reviewerFields, page?.size ?? 100, trackRequestIds, updatedSince !== undefined), cursor ? { ...params, cursor } : params);
       if (!result.repository?.id || !result.viewer?.login) throw new Error("access: GitHub repository or account is unavailable.");
       if (repositoryId && (repositoryId !== result.repository.id || viewer !== result.viewer.login)) {
         throw new Error("access: GitHub account or repository changed. Refresh the board.");
@@ -137,8 +153,10 @@ export async function listReviewCards(repo: string, repositories: string[], stat
       repositoryId = result.repository.id;
       viewer = result.viewer.login;
       const canonical = result.repository.nameWithOwner;
-      const pageCards = await mapPool(prs.nodes, OVERFLOW_PARENTS, async (pr): Promise<ReviewCard | null> => {
-        if (!pr || !Number.isSafeInteger(pr.number) || !pr.title || !["OPEN", "MERGED", "CLOSED"].includes(pr.state)) {
+      const cutoff = updatedSince === undefined ? -1 : prs.nodes.findIndex(pr => !!pr && Date.parse(pr.updatedAt) < updatedSince);
+      const nodes = cutoff < 0 ? prs.nodes : prs.nodes.slice(0, cutoff);
+      const pageCards = await mapPool(nodes, OVERFLOW_PARENTS, async (pr): Promise<ReviewCard | null> => {
+        if (!validPr(pr)) {
           warnings.add("Some pull requests could not be read.");
           return null;
         }
@@ -154,23 +172,18 @@ export async function listReviewCards(repo: string, repositories: string[], stat
           readPeople("reviewRequests", reviewerFields, pr.reviewRequests, requestLabel, query, subject, viewer, repositoryId),
         ]);
         if (!assignees.complete || !reviewers.complete) warnings.add("Some assignees or requested reviewers could not be read.");
-        const stats = changeStats(pr);
         return {
-          ...(stats && { changeStats: stats }),
-          number: pr.number, title: pr.title, url: `https://github.com/${canonical}/pull/${pr.number}`,
-          state: pr.state.toLowerCase() as ReviewCard["state"], draft: pr.isDraft, author: pr.author?.login ?? "",
-          assignees: assignees.names, reviewers: reviewers.names, assigneesComplete: assignees.complete, reviewersComplete: reviewers.complete,
+          ...cardFromPr(pr, canonical, assignees, reviewers),
           ...(trackRequestIds ? { reviewRequestIds: Object.fromEntries(requestIds),
             ...(pr.mergeStateStatus && { watcherMergeState: pr.mergeStateStatus }),
             ...(Array.isArray(pr.recentReviews?.nodes) && { watcherReviews: pr.recentReviews.nodes.flatMap(review =>
               review?.id && review.author?.login && review.state
                 ? [{ id: review.id, login: review.author.login, state: review.state }] : []) }),
           } : {}),
-          decision: pr.reviewDecision, ci: checkState(pr), headSha: pr.headRefOid, baseSha: pr.baseRefOid, updatedAt: pr.updatedAt,
         };
       }, { stopOnError: true });
       for (const card of pageCards) if (card) cards.set(card.number, card);
-      if (!prs.pageInfo.hasNextPage) break;
+      if (cutoff >= 0 || !prs.pageInfo.hasNextPage) break;
       cursor = prs.pageInfo.endCursor;
       if (!cursor || cursors.has(cursor)) throw new Error("unavailable: GitHub pagination stopped before the last page.");
       cursors.add(cursor);
@@ -182,6 +195,34 @@ export async function listReviewCards(repo: string, repositories: string[], stat
     }
   }
   return { version: 1, repo, repositories, repositoryId, viewer, fetchedAt: new Date().toISOString(), ...(page ? { nextCursor } : {}), cards: [...cards.values()], warnings: [...warnings] };
+}
+
+/** Read PRs with active local runs by number, outside state and date pagination. */
+export async function listActiveReviewCards(
+  snapshot: Pick<ReviewBoardSnapshot, "repo" | "repositoryId" | "viewer">, numbers: number[], query: Query,
+): Promise<ReviewCard[]> {
+  const [owner, name] = snapshot.repo.split("/") as [string, string];
+  const cards: ReviewCard[] = [];
+  for (let i = 0; i < numbers.length; i += 20) {
+    const batch = numbers.slice(i, i + 20).filter(number => Number.isSafeInteger(number) && number > 0);
+    if (!batch.length) continue;
+    const aliases = batch.map(number => `p${number}:pullRequest(number:${number}) { ${cardFields(reviewer, false)} }`).join("\n");
+    const result = await query<{ viewer: Person; repository: ({ id: string } & Record<`p${number}`, RawCard | null>) | null }>(
+      `query ReviewActivePulls($owner:String!, $name:String!) { viewer { login } repository(owner:$owner,name:$name) { id ${aliases} } }`,
+      { owner, name },
+    );
+    if (result.viewer?.login !== snapshot.viewer || result.repository?.id !== snapshot.repositoryId) {
+      throw new Error("access: GitHub account or repository changed. Refresh the board.");
+    }
+    for (const number of batch) {
+      const pr = result.repository[`p${number}`] ?? null;
+      if (!validPr(pr) || pr.number !== number) continue;
+      const assignees = { names: pr.assignees?.nodes.flatMap(p => p ? [p.login] : []) ?? [], complete: pr.assignees?.pageInfo?.hasNextPage === false };
+      const reviewers = { names: pr.reviewRequests?.nodes.flatMap(r => r ? reviewerLabel(r) ?? [] : []) ?? [], complete: pr.reviewRequests?.pageInfo?.hasNextPage === false };
+      cards.push(cardFromPr(pr, snapshot.repo, assignees, reviewers));
+    }
+  }
+  return cards;
 }
 
 /** Read one current PR at the spending boundary, including overflow pages of constrained people.
