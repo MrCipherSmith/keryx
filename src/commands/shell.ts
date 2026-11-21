@@ -3620,7 +3620,7 @@ export interface ShellCliFlags {
  * delivered once in total: a second iterator over the same iterable goes
  * straight to stdin. stdin is not read before the prompt has been handed out.
  */
-export function withInitialLine(initial: string | undefined | (() => string | undefined), rest: AsyncIterator<string>): AsyncIterable<string> {
+export function withInitialLine(initial: string | undefined, rest: AsyncIterator<string>): AsyncIterable<string> {
   if (initial === undefined) return { [Symbol.asyncIterator]: () => rest };
   let sent = false;
   return {
@@ -3628,8 +3628,7 @@ export function withInitialLine(initial: string | undefined | (() => string | un
       next: async () => {
         if (!sent) {
           sent = true;
-          const value = typeof initial === "string" ? initial : initial();
-          if (value !== undefined) return { done: false, value };
+          return { done: false, value: initial };
         }
         return rest.next();
       },
@@ -3991,9 +3990,10 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
   const takeInitialPrompt = (): string | undefined => {
     const prompt = pendingInitialPrompt;
     pendingInitialPrompt = undefined;
-    if (prompt !== undefined && runtime.issuePreparation && !acceptShellIssuePreparation(process.cwd(), runtime.issuePreparation, prompt)) return;
     return prompt;
   };
+  const admitInitialPrompt = (prompt: string): boolean => !runtime.issuePreparation
+    || acceptShellIssuePreparation(process.cwd(), runtime.issuePreparation, prompt);
   if (flags.reviewSystemFlag !== undefined) setReviewSystem(flags.reviewSystemFlag);
   if (flags.help) {
     console.log(`Usage: keryx shell [options] [prompt]
@@ -4583,6 +4583,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         // persisted `ShellConfig.turnGuard.enabled` default (off).
         ...(flags.guard === true ? { initialGuardEnabled: true } : {}),
         ...(flags.initialPrompt !== undefined ? { takeInitialPrompt } : {}),
+        ...(runtime.issuePreparation ? { admitInitialPrompt } : {}),
         versionCheck,
       })
     ) {
@@ -4698,10 +4699,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
   // Flow 481 T7: the positional prompt reaches the REPL alone. The provider/mode pickers read
   // `io.lines` (= `sharedLines`) and the held-session choice reads `lineIterator`, so neither can
   // take the task as a menu answer. `takeInitialPrompt()` is empty if the TUI already submitted it.
-  // Issue launches claim their first turn only when the leased REPL consumes its input.
-  const readlineInitialPrompt = oneShotPrompt === undefined && !runtime.issuePreparation ? takeInitialPrompt() : undefined;
-  const replLines: AsyncIterable<string> =
-    oneShotPrompt === undefined ? withInitialLine(runtime.issuePreparation ? takeInitialPrompt : readlineInitialPrompt, lineIterator) : sharedLines;
+  const readlineInitialPrompt = oneShotPrompt === undefined ? takeInitialPrompt() : undefined;
 
   const { io, emitSystem, printHeader, printPrompt, destroy } = createRichIo(sharedLines, versionCheck);
 
@@ -5040,7 +5038,9 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       // thrown error, or any other error) via the `finally` below. Absent
       // `shellHooks` (e.g. `KERYX_HOOKS=off`) both are no-ops, byte-identical
       // to before this task.
-      const runRepl = async (session: ShellSessionOpts): Promise<void> => {
+      const runRepl = async (session: ShellSessionOpts, readlineInitialPrompt: string | undefined): Promise<void> => {
+        const replLines: AsyncIterable<string> =
+          oneShotPrompt === undefined ? withInitialLine(readlineInitialPrompt, lineIterator) : sharedLines;
         if (shellHooks !== undefined) {
           await shellHooks.runtime
             .fire("SessionStart", {
@@ -5087,7 +5087,8 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
               busBox,
               finalizerBox,
             },
-            runRepl,
+            // Admission belongs to the selected session after it has acquired its write lease.
+            (session) => runRepl(session, readlineInitialPrompt !== undefined && admitInitialPrompt(readlineInitialPrompt) ? readlineInitialPrompt : undefined),
             leaseChoiceRuntime,
           ),
         );

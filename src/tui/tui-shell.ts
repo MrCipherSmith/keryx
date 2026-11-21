@@ -4529,6 +4529,7 @@ export async function launchTuiAgentShell(opts: {
    * cannot run the same task a second time.
    */
   takeInitialPrompt?: () => string | undefined;
+  admitInitialPrompt?: (prompt: string) => boolean;
 }): Promise<boolean> {
   if (!process.stdout.isTTY) {
     return false;
@@ -12045,7 +12046,7 @@ export async function launchTuiAgentShell(opts: {
     // `hostStatus.markReady()` and any resume picker / held-session choice, with `runLine`
     // defined — through `runLine`, the very function a typed line + Enter reaches.
     const initialPrompt = opts.takeInitialPrompt?.()?.trim();
-    if (initialPrompt !== undefined && initialPrompt.length > 0) {
+    if (initialPrompt !== undefined && initialPrompt.length > 0 && opts.admitInitialPrompt?.(initialPrompt) !== false) {
       runLine(initialPrompt, "operator", undefined, true);
     }
 
