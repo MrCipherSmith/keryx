@@ -10,6 +10,8 @@ import type { CoordinatorEvent } from "./desk-run-types";
 export { publicReviewText } from "./desk-public-text";
 
 function projectEvent(event: Record<string, unknown>): CoordinatorEvent | undefined {
+  if (event.type === "desktop_context_reused" && reviewerName(event.reviewer))
+    return { kind: "status", text: publicReviewText(`Shared your earlier reply with ${event.reviewer}.`, 200) };
   if (event.type === "turn_start") return { kind: "status", text: "Coordinator started" };
   if (event.type === "turn_end") {
     if (typeof event.text === "string" && event.text.trim()) return { kind: "message", final: true, text: publicReviewText(event.text, 2000) };
@@ -19,10 +21,16 @@ function projectEvent(event: Record<string, unknown>): CoordinatorEvent | undefi
       ["completed", "partial", "cancelled", "failed"].includes(String(event.outcome))) {
     return { kind: "status", text: publicReviewText(`${event.reviewer} · Wave ${event.wave} · ${event.outcome}`, 200) };
   }
-  if ((event.type === "desktop_question" || event.type === "desktop_answer") && event.reviewerSessionId !== undefined) return;
-  if ((event.type === "assistant" || event.type === "desktop_question" || event.type === "desktop_answer") &&
-      typeof event.text === "string" && event.text.trim()) {
-    return { kind: event.type === "desktop_answer" ? "answer" : "message", text: publicReviewText(event.text, 2000) };
+  if (typeof event.text === "string" && event.text.trim()) {
+    if (event.type === "assistant") return { kind: "message", text: publicReviewText(event.text, 2000) };
+    if (event.type === "desktop_question" || event.type === "desktop_answer") {
+      return {
+        kind: event.type === "desktop_question" ? "question" : "answer",
+        text: publicReviewText(event.text, 2000),
+        ...(reviewerName(event.reviewer) && { reviewer: publicReviewText(event.reviewer, 96) }),
+        ...(typeof event.questionId === "string" && /^[a-f0-9-]{36}$/.test(event.questionId) && { questionId: event.questionId }),
+      };
+    }
   }
   if (event.type !== "tool_call" && event.type !== "tool_result") return;
   if (typeof event.name !== "string" || !/^[\w-]{1,96}$/.test(event.name)) return;

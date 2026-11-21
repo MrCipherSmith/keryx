@@ -9,9 +9,10 @@ import { publicReviewText } from "./desk-public-text";
 import { identifier, reviewerName, waveNumber } from "./reviewer-activity";
 
 export async function askDesktopOperator(
-  runId: string, request: AskUserRequest, owner?: DeskQuestionReviewer | DeskRunStore, signal?: AbortSignal, injected?: DeskRunStore,
+  runId: string, request: AskUserRequest, owner?: DeskQuestionReviewer | { reviewContext: true } | DeskRunStore, signal?: AbortSignal, injected?: DeskRunStore,
 ): Promise<AskUserAnswer> {
-  const scope = owner instanceof DeskRunStore ? undefined : owner;
+  const scope = owner && "reviewerSessionId" in owner ? owner : undefined;
+  const reviewContext = !!owner && "reviewContext" in owner;
   const store = owner instanceof DeskRunStore ? owner : injected ?? new DeskRunStore();
   const id = randomUUID();
   try {
@@ -25,7 +26,7 @@ export async function askDesktopOperator(
     } : undefined;
     const publish = (type: "desktop_question" | "desktop_answer", text: string) => {
       try {
-        appendFileSync(path.join(store.directory(runId), "run", "events.ndjson"), JSON.stringify({ type, ...reviewer, text: publicReviewText(text, 2000) }) + "\n");
+        appendFileSync(path.join(store.directory(runId), "run", "events.ndjson"), JSON.stringify({ type, questionId: id, ...reviewer, text: publicReviewText(text, 2000) }) + "\n");
       } catch { /* A lost transcript event must never drop the operator’s answer. */ }
     };
     if (request.options.length > 32) throw new Error("Offer fewer review choices.");
@@ -34,7 +35,8 @@ export async function askDesktopOperator(
       id: randomUUID(), label: publicReviewText(option.label, 240), description: publicReviewText(option.description, 500),
       ...(option.recommended ? { recommended: true } : {}),
     }));
-    store.openQuestion(runId, { id, ...reviewer, question: publicReviewText(request.question, 2000), options, allowFreeform: request.allowFreeform === true });
+    store.openQuestion(runId, { id, ...reviewer, ...(reviewContext && { reviewContext: true }),
+      question: publicReviewText(request.question, 2000), options, allowFreeform: request.allowFreeform === true });
     publish("desktop_question", request.question);
     for (;;) {
       const answer = store.questionAnswer(runId, id);

@@ -52,6 +52,8 @@ interface Props {
   /** Context that goes out with the next message (page elements picked in the browser panel). */
   attachments?: readonly ComposerAttachment[];
   onRemoveAttachment?: (key: number) => void;
+  replyPlaceholder?: string | undefined;
+  replyDraftKey?: string | undefined;
   /** Context fill for the toolbar gauge; with `onCompact` and `onDetails` it shows its menu. */
   usage?: Usage | null;
   onCompact?: () => void;
@@ -105,14 +107,15 @@ export function modelChoices(option: ConfigOption | undefined): ConfigSelectOpti
 }
 
 export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
-  { sessionId, busy, disabledReason, commands, modes, model, sendKey, onSend, saveImage, saveFile, discardFile, onAttachmentsSent, loadImage, pickAttachmentFolder, searchFiles, onStop, onMode, onModel, onProviders, attachments = [], onRemoveAttachment, usage, onCompact, onDetails },
+  { sessionId, busy, disabledReason, replyPlaceholder, replyDraftKey, commands, modes, model, sendKey, onSend, saveImage, saveFile, discardFile, onAttachmentsSent, loadImage, pickAttachmentFolder, searchFiles, onStop, onMode, onModel, onProviders, attachments = [], onRemoveAttachment, usage, onCompact, onDetails },
   ref,
 ) {
   const [drafts, setDrafts] = useState<Drafts>({});
   // A prefill made before the first session exists waits in the no-session slot; the session inherits it.
   useLayoutEffect(() => setDrafts((d) => adoptNoSessionDraft(d, sessionId)), [sessionId]);
-  const text = draftOf(drafts, sessionId);
-  const setText = (t: string) => setDrafts((d) => withDraft(d, sessionId, t));
+  const draftKey = replyDraftKey ?? sessionId;
+  const text = draftOf(drafts, draftKey);
+  const setText = (t: string) => setDrafts((d) => withDraft(d, draftKey, t));
   const [sel, setSel] = useState(0);
   const listId = useId();
   const [dismissed, setDismissed] = useState(false);
@@ -304,7 +307,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
       if (sentFiles.length > 0) onAttachmentsSent?.(sentFiles);
       for (const p of sentFiles) sentPaths.current.delete(p);
       localDraft.remove(localDraft.items.map((item) => item.path));
-      setDrafts((d) => draftOf(d, sessionId) === text ? withDraft(d, sessionId, "") : d);
+      setDrafts((d) => draftOf(d, draftKey) === text ? withDraft(d, draftKey, "") : d);
     }
   };
 
@@ -514,7 +517,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
         aria-expanded={matches.length > 0 ? true : undefined}
         aria-controls={matches.length > 0 ? listId : undefined}
         aria-activedescendant={matches.length > 0 ? `${listId}-opt-${active}` : undefined}
-        placeholder={disabledReason ?? (busy ? `keryx is working. ${sendKey === "enter" ? "Enter" : `${MOD}Return`} queues your next message` : "Ask keryx, or type / for commands")}
+        placeholder={disabledReason ?? replyPlaceholder ?? (busy ? `keryx is working. ${sendKey === "enter" ? "Enter" : `${MOD}Return`} queues your next message` : "Ask keryx, or type / for commands")}
         onChange={(e) => {
           setText(e.target.value);
           setCaret(e.target.selectionStart ?? e.target.value.length);

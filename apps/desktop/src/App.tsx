@@ -22,7 +22,7 @@ import { UpdateBanner } from "./shell/UpdateBanner";
 import { ReviewBoard, type ReviewTabIndicator } from "./review/ReviewBoard";
 import { ReviewLaunchDialog } from "./review/ReviewLaunchDialog";
 import { SessionReviewActivity } from "./review/SessionReviewActivity";
-import { loadSessionReviewTargets, readSessionReviewLinks, rememberSessionReview, reviewFlowId, reviewSessionTitle } from "./review/sessionReview";
+import { loadSessionReviewTargets, readSessionReviewLinks, rememberSessionReview, reviewFlowId, reviewSessionTitle, type ReviewComposerTarget, type SessionReviewLink } from "./review/sessionReview";
 import { publishSessionReview, reviewRun } from "./platform/reviewRuns";
 import { modelChoices, providerOf } from "./session/Composer";
 import { FlowsBoard } from "./flows/FlowsBoard";
@@ -455,7 +455,11 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
   const reviewDisconnected = githubAccount?.configured && !githubAccount.login;
 
   const currentNotice = !reviewDisconnected && reviewNotice?.binding === reviewViewer ? reviewNotice : undefined;
+  const [reviewComposer, setReviewComposer] = useState<ReviewComposerTarget>();
   const [reviewLinks, setReviewLinks] = useState(() => readSessionReviewLinks(cwd));
+  const linkReviewContinuation = useCallback((link: SessionReviewLink) => {
+    setReviewLinks(rememberSessionReview(cwd, link));
+  }, [cwd]);
   const openReviewWorkspace = useCallback(async (key: DeskRunKey, run: DeskRun) => {
     const prior = readSessionReviewLinks(cwd).find(link => link.id === run.id && link.key.repositoryId === key.repositoryId &&
       link.key.viewer.toLowerCase() === key.viewer.toLowerCase() && state.sessions.some(session =>
@@ -465,6 +469,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
     if (prior) await s.loadSession(id);
     else setReviewLinks(rememberSessionReview(cwd, {
       id: run.id, sessionId: id, key, revision: { baseSha: run.baseSha, headSha: run.headSha },
+      prompt: `Review https://github.com/${key.repo}/pull/${key.number}`,
     }));
     setView("session");
   }, [cwd, s, state.sessions]);
@@ -524,9 +529,10 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       {/* The session view stays mounted so the transcript and draft survive view switches. */}
       <div className="view" hidden={view !== "session"}>
         <SessionView ref={composer} s={s} cwd={cwd} projectName={basename(cwd)} onGoFlows={() => go("flows")} onGoSettings={() => go("settings")} narrow={narrow} onProviders={providers.openProviders}
-          reviewLinks={reviewLinks}
+          reviewLinks={reviewLinks} reviewComposer={reviewDisconnected ? undefined : reviewComposer}
           reviewActivity={!reviewDisconnected && sessionReviews.length ? <SessionReviewActivity cwd={cwd} links={sessionReviews} visible={view === "session"}
-            onContinuation={link => setReviewLinks(rememberSessionReview(cwd, link))} /> : undefined}
+            onComposerTarget={setReviewComposer} focusComposer={() => composer.current?.focus()}
+            onContinuation={linkReviewContinuation} /> : undefined}
           githubAccount={githubAccount?.eligible ? githubAccount : undefined} onProjectSettings={openProjectSettings} />
       </div>
       {workView === "flows" ? (

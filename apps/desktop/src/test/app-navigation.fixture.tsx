@@ -9,9 +9,18 @@ const cwd = "/dev/project-navigation";
 let offline = false;
 const reads: string[] = [];
 const starts: unknown[] = [];
+const replies: unknown[] = [];
+let refuseReply = true;
 const calls: string[] = [];
 const runId = "e968ba9b-c8a3-438f-a5c8-93625e427905";
 const prUrl = "https://github.com/org/project/pull/12";
+const question = (id: string, reviewer: string, text: string) => ({
+  id, reviewer, question: text, options: [], allowFreeform: true,
+});
+let questions = [
+  question("question-logic", "review-logic", "Which revision should I inspect?"),
+  question("question-contract", "review-pr-contract", "Where is the backend contract?"),
+];
 const run = {
   id: runId, source: "manual", state: "running", phase: "Dispatching reviewers", reason: "",
   baseSha: "b".repeat(40), headSha: "a".repeat(40), createdAt: "2026-11-20T00:00:00Z",
@@ -72,7 +81,16 @@ mockIPC(async (cmd, args) => {
         starts.push(action);
         return { version: 1, runs: [run], startedRunId: runId };
       }
-      return { version: 1, runs: action.activityId === runId ? [run] : [] };
+      if (action.kind === "answer") {
+        replies.push(action);
+        if (refuseReply) {
+          refuseReply = false;
+          throw new Error("unavailable: Review reply could not be sent.");
+        }
+        questions = questions.filter(q => q.id !== (action as { questionId?: string }).questionId);
+      }
+      return { version: 1, runs: starts.length && (action.activityId === runId || action.kind === "answer")
+        ? [{ ...run, pendingQuestions: questions }] : [] };
     }
     case "review_watcher": return { version: 1, state:"disabled", events:[] };
     default: return null;
@@ -206,8 +224,28 @@ try {
   await React.act(() => apply.click());
   assert.deepEqual(starts, [{ kind: "start", baseSha: run.baseSha, headSha: run.headSha,
     options: { mode: "auto", adaptive: true, maxParallel: 10, modelPools: { strong: [], middle: [], light: [] }, flowId: "505" } }]);
-  assert.match(host.textContent ?? "", /\[Review #12\] Wave 1 started/);
-  assert.ok(!current.disabled, "The originating composer remains editable");
+  assert.match(host.textContent ?? "", /2 questions are waiting for a reply/);
+  assert.equal(host.querySelectorAll(".session-review-activity textarea").length, 0);
+  assert.equal(current.placeholder, "Reply to review-logic");
+  const contractReply = host.querySelector<HTMLButtonElement>('[aria-label="Respond to review-pr-contract"] button');
+  assert.ok(contractReply);
+  await React.act(() => contractReply.click());
+  assert.equal(current.placeholder, "Reply to review-pr-contract");
+  const note = "Read the pinned contract in the backend checkout.";
+  await React.act(() => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(current, note);
+    current.dispatchEvent(new Event("input", { bubbles:true }));
+  });
+  await React.act(() => send.click());
+  assert.equal(current.value, note, "A failed send keeps the draft for the same review question");
+  assert.match(host.textContent ?? "", /Review reply could not be sent/);
+  await React.act(() => send.click());
+  const reply = { kind: "answer", id: runId, questionId: "question-contract", answer: note };
+  assert.deepEqual(replies, [reply, reply]);
+  assert.match(host.textContent ?? "", /1 question is waiting for a reply/);
+  assert.ok([...host.querySelectorAll(".session-review-activity .turn-user")].some(row => row.textContent?.includes(note)));
+  assert.equal(current.placeholder, "Reply to review-logic");
+  assert.equal(current.value, "");
   assert.ok(!calls.includes("session/prompt"), "Review status is not submitted as a prompt");
   await go("Pull requests");
   assert.match(host.textContent ?? "", /Keryx review in progress/);

@@ -63,3 +63,11 @@ export function rememberSessionReview(cwd: string, link: SessionReviewLink): Ses
 export function reviewSessionTitle(title: string | null | undefined, link?: SessionReviewLink) {
   return link && (!title || title === "New session") ? "Review #" + link.key.number : title;
 }
+
+export interface ReviewComposerTarget {
+  sessionId: string;
+  placeholder: string;
+  draftKey: string;
+  disabledReason?: string;
+  send: (text: string) => Promise<boolean>;
+}

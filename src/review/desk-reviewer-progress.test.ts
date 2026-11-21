@@ -184,19 +184,24 @@ test("details recover a finished reviewer's public result and context request wh
   expect(readDeskReviewerProgress(directory, key, run, false)?.sessions[0]).toEqual(session);
 });
 
-test("coordinator activity shows public turn output and selected tool metadata", () => {
+test("coordinator activity shows public turns, reviewer questions and their answers", () => {
+  const questionId = randomUUID();
   const rows = [
     { type: "turn_start", prompt: "PRIVATE" },
     { type: "tool_call", name: "read_file", input: JSON.stringify({ path: "/PRIVATE/plan.json", ignored: "PRIVATE" }) },
     { type: "tool_result", name: "read_file", output: "PRIVATE" },
     { type: "reasoning", text: "PRIVATE" },
     { type: "reviewer_activity", activity: "finished", reviewer: "review-layout", wave: 1, outcome: "partial", extra: "PRIVATE" },
+    { type: "desktop_question", questionId, reviewerSessionId: "PRIVATE", reviewer: "review-layout", text: "Which viewport?" },
+    { type: "desktop_answer", questionId, reviewerSessionId: "PRIVATE", reviewer: "review-layout", text: "The compact layout." },
     { type: "assistant", text: "Checked the decision" }, { type: "turn_end", text: "Checked the decision" },
   ];
   save(["run", "events.ndjson"], rows.map(row => JSON.stringify(row)).join("\n") + "\n");
   expect(coordinatorActivity(directory)).toEqual([
     { kind: "status", text: "Coordinator started" }, { kind: "tool", text: "Started read_file · plan.json" },
     { kind: "result", text: "read_file finished" }, { kind: "status", text: "review-layout · Wave 1 · partial" },
+    { kind: "question", questionId, reviewer: "review-layout", text: "Which viewport?" },
+    { kind: "answer", questionId, reviewer: "review-layout", text: "The compact layout." },
     { kind: "message", text: "Checked the decision", final: true },
   ]);
 });

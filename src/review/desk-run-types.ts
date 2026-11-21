@@ -85,12 +85,15 @@ export interface DeskQuestionReviewer {
 export interface DeskQuestion extends Partial<DeskQuestionReviewer> {
   id: string;
   question: string;
+  reviewContext?: true;
   options: { id: string; label: string; description: string; recommended?: boolean }[];
   allowFreeform: boolean;
 }
 export interface CoordinatorEvent {
-  kind: "message" | "tool" | "result" | "error" | "answer" | "status";
+  kind: "message" | "question" | "tool" | "result" | "error" | "answer" | "status";
   text: string;
+  questionId?: string;
+  reviewer?: string;
   final?: true;
 }
 export const DESK_REVIEW_ACTIONS = ["complete", "close", "archive", "restore", "delete"] as const;

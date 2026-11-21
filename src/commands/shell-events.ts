@@ -29,6 +29,7 @@ type RequestIdentity = RequestOwner & { provider: string; model?: string; reques
 
 export type ShellEvent =
   | ReviewerActivityEvent
+  | { readonly type: "desktop_context_reused"; readonly reviewer: string }
   | ({ type: "request_start" } & RequestIdentity)
   | ({ type: "request_usage"; usage: ReviewUsageCounts } & RequestIdentity)
   | { readonly type: "turn_start"; readonly prompt: string; readonly provider: string; readonly model: string }
@@ -89,6 +90,9 @@ export function serializeShellEvent(event: ShellEvent, fieldLimit: number = FIEL
     case "request_usage":
       redacted = { ...event, ...(event.model ? { model: safe(event.model) } : {}), provider: safe(event.provider),
         ...(event.participant === "reviewer" ? { reviewer: safe(event.reviewer) } : {}) };
+      break;
+    case "desktop_context_reused":
+      redacted = { ...event, reviewer: safe(event.reviewer) };
       break;
     case "turn_start":
       redacted = { ...event, prompt: safe(event.prompt) };
