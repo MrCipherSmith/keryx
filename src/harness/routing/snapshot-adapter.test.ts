@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { catalogToFlatPickerProviders, catalogToRoutingProviders } from "../provider-catalog";
+import { catalogToFlatPickerProviders } from "../provider-catalog";
 import { normalizeRoutingConfig } from "./config";
 import { resolveRoutingDecision } from "./resolver";
 import type { ModelProfile } from "./model-profile";
@@ -223,7 +223,7 @@ test("routing uses profiles only when native model listing is unsupported", () =
   const profiles = { [profileKey(model.providerId, model.modelId)]: profile(model.providerId, model.modelId) };
   const config = normalizeRoutingConfig({});
   const selection = (status: "not-supported" | "timeout", fetchedAt: string = SNAPSHOT_META.observedAt) => {
-    const providers = catalogToRoutingProviders({
+    const providers = catalogToFlatPickerProviders({
       fetchedAt: SNAPSHOT_META.observedAt,
       providers: { anthropic: { name: "anthropic", status, models: [], fallbackModels: [model.modelId], fetchedAt } },
     });

@@ -76,7 +76,7 @@ export async function withCatalogRefreshLock(
     return await withFileLock(`${catalogFile(dir)}.refresh.lock`, () => {
       acquired = true;
       return refresh();
-    }, { timeoutMs: 25_000, retryMs: 50 });
+    }, { timeoutMs: 25_000, retryMs: 50, staleMs: 15_000 });
   } catch (error) {
     // A read-only config directory still permits live detection. A contended
     // lock must never trigger another probe or supply expired routing facts.

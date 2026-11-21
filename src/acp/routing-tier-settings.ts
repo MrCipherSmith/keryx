@@ -25,6 +25,7 @@ function models(config: ModelClassConfig): ModelRef[] {
 export function describeTierSettings(settings: RoutingSettings): TierSettingsSnapshot {
   return {
     revision: settings.revision,
+    enabled: settings.user.layer?.tierRouting ?? true,
     notices: settings.notices,
     personalOverrides: Object.keys(settings.user.layer?.categories ?? {}).length > 0,
     projectOverrides: settings.layers.project !== undefined,
@@ -43,14 +44,16 @@ export function describeTierSettings(settings: RoutingSettings): TierSettingsSna
 }
 
 export async function saveTierSettings(location: RoutingLocation, revision: string, raw: unknown) {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw) || typeof Reflect.get(raw, "replaceOverrides") !== "boolean") {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("Invalid routing tiers request.");
+  const enabled: unknown = Reflect.get(raw, "enabled");
+  const replaceOverrides: unknown = Reflect.get(raw, "replaceOverrides");
+  if (typeof enabled !== "boolean" || typeof replaceOverrides !== "boolean" || (replaceOverrides && !enabled)) {
     throw new Error("Invalid routing tiers request.");
   }
   const modelPools: unknown = Reflect.get(raw, "modelPools");
   if (!modelPools || typeof modelPools !== "object" || Object.keys(modelPools).some(tier => !ROUTING_TIER_IDS.some(value => value === tier))) {
     throw new Error("Invalid routing model pools.");
   }
-  const replaceOverrides = Reflect.get(raw, "replaceOverrides") === true;
   const current = readRoutingSettings(location);
   const user = current.user.layer;
   const classes = { ...user?.classes };
@@ -83,6 +86,6 @@ export async function saveTierSettings(location: RoutingLocation, revision: stri
   }
   return updateRoutingLayer({
     ...location, scope: "user", expectedRevision: revision,
-    next: { ...user, schemaVersion: 2, tierRouting: true, classes, ...(replaceOverrides ? { categories: {} } : {}) },
+    next: { ...user, schemaVersion: 2, tierRouting: enabled, classes, ...(replaceOverrides ? { categories: {} } : {}) },
   });
 }

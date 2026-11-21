@@ -118,7 +118,7 @@ describe("/routing", () => {
     const { revision } = await read();
     const models = [{ provider: "openrouter", model: "vendor/one" }, { provider: "openai", model: "two" }];
     const modelPools = { strong: [], middle: models, light: [] };
-    const save = `tiers ${revision} ${JSON.stringify({ modelPools, replaceOverrides: false }, null, 1)}`;
+    const save = `tiers ${revision} ${JSON.stringify({ modelPools, enabled: true, replaceOverrides: false }, null, 1)}`;
     expect((await run(host, "routing", save)).refused).toBeUndefined();
     expect((await read()).tiers.find(row => row.tier === "middle")?.user).toEqual([
       { providerId: "openrouter", modelId: "vendor/one" }, { providerId: "openai", modelId: "two" },
@@ -129,11 +129,16 @@ describe("/routing", () => {
     expect(await run(host, "routing", save)).toMatchObject({ refused: true, text: expect.stringContaining("revision conflict") });
     const old = await read();
     expect(old.personalOverrides).toBe(true);
-    expect((await run(host, "routing", `tiers ${old.revision} ${JSON.stringify({ modelPools, replaceOverrides: true })}`)).refused).toBeUndefined();
+    expect((await run(host, "routing", `tiers ${old.revision} ${JSON.stringify({ modelPools, enabled: true, replaceOverrides: true })}`)).refused).toBeUndefined();
     expect((await read()).personalOverrides).toBe(false);
     expect(loadRouting(host.cwd, host.configDir).categories).toMatchObject({
       subagents: { mode: "auto" }, review: { mode: "baseline" }, default: { mode: "baseline" },
     });
+    const active = await read();
+    expect((await run(host, "routing", `tiers ${active.revision} ${JSON.stringify({ modelPools, enabled: false, replaceOverrides: false })}`)).refused).toBeUndefined();
+    expect((await read()).enabled).toBe(false);
+    expect(loadRouting(host.cwd, host.configDir).categories.subagents).toEqual({ mode: "baseline" });
+    expect(loadRouting(host.cwd, host.configDir).classes.standard.candidates).toHaveLength(2);
   });
 
   test("one row per category with its source, a set action, and a form for a model pick", async () => {

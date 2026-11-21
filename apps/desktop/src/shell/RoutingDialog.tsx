@@ -32,6 +32,7 @@ export function RoutingDialog({ sessionId, models, rpc, onClose }: Props) {
   const [pools, setPools] = useState<Pools>(emptyPools);
   const [open, setOpen] = useState<RoutingTier>();
   const [error, setError] = useState("");
+  const [enabled, setEnabled] = useState(false);
   const [replaceOverrides, setReplaceOverrides] = useState(false);
   const [saving, setSaving] = useState(false);
   const [reload, setReload] = useState(0);
@@ -57,6 +58,7 @@ export function RoutingDialog({ sessionId, models, rpc, onClose }: Props) {
       const next = emptyPools();
       for (const row of snapshot.tiers) next[row.tier] = modelChoices(row.user);
       setPools(next);
+      setEnabled(snapshot.enabled);
       setSettings(snapshot);
     }).catch(reason => { if (!cancelled) setError(errMessage(reason)); });
     return () => { cancelled = true; active.current = false; };
@@ -68,7 +70,7 @@ export function RoutingDialog({ sessionId, models, rpc, onClose }: Props) {
     setSaving(true);
     setError("");
     try {
-      await routingRequest(rpc, sessionId, `tiers ${settings.revision} ${JSON.stringify({ modelPools: pools, replaceOverrides })}`);
+      await routingRequest(rpc, sessionId, `tiers ${settings.revision} ${JSON.stringify({ modelPools: pools, enabled, replaceOverrides: enabled && replaceOverrides })}`);
       if (active.current) onClose();
     } catch (reason) {
       if (active.current) setError(errMessage(reason));
@@ -88,8 +90,12 @@ export function RoutingDialog({ sessionId, models, rpc, onClose }: Props) {
       <div className="review-launch-body">
         {settings ? <>
           <p className="field-hint">These are your defaults across projects. Add models in preference order. Empty tiers use the session model.</p>
+          <label className="review-launch-adaptive">
+            <input type="checkbox" checked={enabled} disabled={saving} onChange={event => setEnabled(event.currentTarget.checked)} />
+            Use model tiers for tasks without an explicit routing rule
+          </label>
           {settings.personalOverrides && <label className="review-launch-adaptive">
-            <input type="checkbox" checked={replaceOverrides} disabled={saving}
+            <input type="checkbox" checked={enabled && replaceOverrides} disabled={saving || !enabled}
               onChange={event => setReplaceOverrides(event.currentTarget.checked)} />
             Replace previous personal routing overrides with these tiers
           </label>}

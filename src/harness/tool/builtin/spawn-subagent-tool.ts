@@ -1822,7 +1822,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
             const authenticatedSession = modelRefKey(target) === modelRefKey(session);
             const dispatchProfile = profiles[profileKey(target.providerId, target.modelId)];
             if (!authenticatedSession) {
-              const explicitlyUnavailable = currentProvider?.offline === true
+              const explicitlyUnavailable = (currentProvider?.offline === true && !currentProvider.profileOnly)
                 || currentProvider?.listUnavailable !== undefined
                 || (currentProvider?.models !== undefined && !currentProvider.models.includes(target.modelId));
               if (explicitlyUnavailable || selectedAvailability !== "available") {

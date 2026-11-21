@@ -41,6 +41,7 @@ export const ROUTING_TIERS = {
 
 export interface TierSettingsSnapshot {
   readonly revision: string;
+  readonly enabled: boolean;
   readonly notices: readonly string[];
   readonly projectOverrides: boolean;
   readonly projectTrustRequired: boolean;

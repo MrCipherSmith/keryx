@@ -243,7 +243,7 @@ test("catalogToFlatPickerProviders: unreachable/timeout/not-supported fall back 
   });
   expect(flat).toEqual([
     { name: "groq", models: ["llama-3.3-70b-versatile"], offline: true, observedAt: "now" },
-    { name: "anthropic", models: ["claude-sonnet-5"], offline: true, observedAt: "now" },
+    { name: "anthropic", models: ["claude-sonnet-5"], offline: true, observedAt: "now", profileOnly: true },
   ]);
 });
 

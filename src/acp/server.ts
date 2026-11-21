@@ -1782,7 +1782,6 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       if (!routingRefreshNeeded) routingProviders = providers;
     }, () => {
       routingForceRetry = force;
-      routingProviders ??= [];
       options.logError("acp: could not refresh the provider catalogue for model routing");
     }).finally(() => {
       routingRefreshFinishedAt = Date.now();
@@ -1831,7 +1830,9 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         for (const choice of listedChoices ?? []) byProvider.set(choice.providerId, [...(byProvider.get(choice.providerId) ?? []), choice.modelId]);
         return withSessionProvider(
           parent().providerId,
-          [...byProvider].map(([name, models]) => ({ name, models })),
+          [...byProvider].map(([name, models]) => ({
+            name, models, ...(options.routingProviders && { offline: true }),
+          })),
         );
       },
       onFleetEvent: (event) => {

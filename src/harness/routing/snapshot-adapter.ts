@@ -86,7 +86,7 @@ function observedAvailability(
   nowMs: number,
   ttlMs: number,
 ): RoutingModelFacts["availability"] {
-  if (provider.offline === true || !Number.isFinite(nowMs)) return "unknown";
+  if ((provider.offline === true && !provider.profileOnly) || !Number.isFinite(nowMs)) return "unknown";
   const profileAvailability = freshModelProfileAvailability(profile, new Date(nowMs).toISOString(), ttlMs);
   const catalogObservedAt = provider.observedAt === undefined ? NaN : Date.parse(provider.observedAt);
   const freshCatalog = Number.isFinite(catalogObservedAt)
@@ -102,8 +102,8 @@ function observedAvailability(
 /**
  * Adapts the live provider picker catalogue to the pure v2 resolver snapshot.
  * Facts the catalogue cannot establish are supplied by the caller's policy
- * boundary. An offline catalogue row remains unknown even when its stored
- * profile was previously available.
+ * boundary. A failed probe stays unknown. A current provider without a
+ * listing endpoint can use the model profile to establish availability.
  */
 export function buildCatalogRoutingSnapshot(options: BuildCatalogRoutingSnapshotOptions): RoutingSnapshot {
   const ttlMs = options.availabilityTtlMs ?? ROUTING_AVAILABILITY_TTL_MS;

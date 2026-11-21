@@ -357,25 +357,15 @@ export function catalogToFlatPickerProviders(catalog: ProviderCatalog, opts: { w
     }
     // unreachable | timeout | not-supported
     if (entry.fallbackModels.length > 0) {
-      out.push({ name: entry.name, models: entry.fallbackModels, offline: true, observedAt: entry.fetchedAt });
+      out.push({
+        name: entry.name, models: entry.fallbackModels, offline: true, observedAt: entry.fetchedAt,
+        ...(entry.status === "not-supported" && { profileOnly: true }),
+      });
     } else if (opts.withStatusRows === true) {
       out.push({ name: entry.name, models: [], listUnavailable: describeCatalogStatus(entry.status), observedAt: entry.fetchedAt });
     }
   }
   return out;
-}
-
-/**
- * Native providers without a catalogue endpoint retain the existing model
- * profile checks. A failed live probe still carries its offline/auth status.
- */
-export function catalogToRoutingProviders(catalog: ProviderCatalog): FlatPickerProvider[] {
-  return catalogToFlatPickerProviders(catalog, { withStatusRows: true }).map(row => {
-    const entry = catalog.providers[row.name];
-    return row.offline && entry?.status === "not-supported"
-      ? { name: row.name, models: entry.fallbackModels, observedAt: entry.fetchedAt, profileOnly: true }
-      : row;
-  });
 }
 
 /** One short phrase for a catalog status, for a notice/status line. */

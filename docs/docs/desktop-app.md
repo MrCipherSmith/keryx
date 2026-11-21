@@ -18,7 +18,9 @@ The design and its acceptance criteria are in
 In **Sessions**, run `/routing` to open the model routing dialog. Use **Add
 model** to choose a connected provider and a model for **Strong**, **Middle**,
 or **Light**. Each tier can contain multiple models, listed in preference
-order. Save to apply your defaults across projects. Approved project
+order. **Use model tiers for tasks without an explicit routing rule** controls
+whether the pools apply. Turn it off to keep the lists for later. Save to
+apply your defaults across projects. Approved project
 settings take precedence. An empty tier uses the session model unless the
 project has its own routing settings for that operation. Use `/routing status`
 to inspect project routing and review any pending approval.
