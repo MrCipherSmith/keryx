@@ -396,7 +396,8 @@ describe("AC3: shell_job_kill kills the entire process group, including an outli
     // sleep — deterministic regardless of scheduler jitter, and fails fast
     // with a clear error if the shell never got to fork/echo at all.
     let grandchildPid: number | undefined;
-    let buffered = "";
+    // start() consumes output already present when it returns.
+    let buffered = started.output;
     const deadline = Date.now() + 3_000;
     while (Date.now() < deadline) {
       const read = registry.readOutput(started.jobId);
